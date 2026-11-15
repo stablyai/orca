@@ -170,3 +170,53 @@ describe('one pane of a terminal tab', () => {
     ).toMatchObject({ providerSessionId: 'thread-next' })
   })
 })
+
+it('keeps relay provenance through provider-only checkpoints without borrowing a foreign reply', () => {
+  makeState()
+  const paneKey = 'term-1:11111111-1111-4111-8111-111111111111'
+  const providerSession = {
+    key: 'session_id' as const,
+    id: 'shared',
+    transcriptPath: '/home/u/shared.jsonl'
+  }
+  const report = (connectionId: string, receivedAt: number) =>
+    applyProviderSessionOnlyUpdate({
+      store: useAppStore.getState(),
+      batch: undefined,
+      paneKey,
+      routing: { tabId: 'term-1', worktreeId: WORKTREE_ID, connectionId: null },
+      data: {
+        paneKey,
+        connectionId,
+        receivedAt,
+        stateStartedAt: receivedAt,
+        state: 'done',
+        prompt: '',
+        agentType: 'claude',
+        providerSession,
+        providerSessionOnly: true
+      }
+    })
+  report('wsl:Ubuntu', 1)
+  expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]).toMatchObject({
+    wslDistro: 'Ubuntu'
+  })
+  useAppStore.setState((state) => ({
+    sleepingAgentSessionsByPaneKey: {
+      ...state.sleepingAgentSessionsByPaneKey,
+      [paneKey]: {
+        ...state.sleepingAgentSessionsByPaneKey[paneKey]!,
+        lastAssistantMessage: 'Ubuntu reply'
+      }
+    }
+  }))
+  report('wsl:Ubuntu', 2)
+  expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]).toMatchObject({
+    wslDistro: 'Ubuntu',
+    lastAssistantMessage: 'Ubuntu reply'
+  })
+  report('wsl:Debian', 3)
+  const debian = useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]!
+  expect(debian).toMatchObject({ wslDistro: 'Debian' })
+  expect(debian).not.toHaveProperty('lastAssistantMessage')
+})

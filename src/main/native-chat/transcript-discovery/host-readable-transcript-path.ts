@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs'
+import { isWslUserActFor } from '../../wsl/discovery/wsl-user-act-scope'
 import { isAbsolute, posix } from 'node:path'
 import { isWslUncPath, parseWslUncPath, toWindowsWslPath } from '../../../shared/wsl-paths'
 import {
@@ -222,6 +223,7 @@ export async function toHostReadableTranscriptPath(
     // Provider attestation does not prove the distro’s share is still available.
     if (
       isWslUncPath(candidate) &&
+      !isWslUserActFor(exactWslDistro) &&
       (deps.wslSnapshot
         ? filterPathsToWslDistros([candidate], deps.wslSnapshot.runningDistros)
         : await filterPathsToRunningWslDistrosAsync([candidate])

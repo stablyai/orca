@@ -27,6 +27,10 @@ import {
 } from '../../agent-hooks/identity/agent-identity-worker-protocol'
 import type { ResolvedAgentConversation } from './agent-conversation-address'
 import { AgentConversationRefusal } from './agent-conversation-refusal'
+import { runAsWslUserAct } from '../../wsl/filesystem/wsl-unc-access-gate'
+import { runWslExe } from '../../wsl/execution/wsl-exe-process'
+import { buildWslExecArgs } from '../../../shared/wsl-login-shell-command'
+import { readWslDistroRunningState } from '../../wsl/discovery/wsl-background-distro-gate'
 
 type ReadRequest = { limit?: number }
 
@@ -134,14 +138,31 @@ async function readTerminalTranscript(
       `Orca can't read ${tuiAgentDisplayName(key.agent) ?? key.agent} agent ${orcaSessionId}'s transcript because its saved location doesn't identify which WSL distro holds it. Run \`orca agent show ${orcaSessionId}\` to find any open terminal for this agent and view it there.`
     )
   }
-  const transcript = await readWorkerTranscript({
-    agent: key.agent,
-    sessionId: providerSession.id,
-    transcriptPath: providerSession.transcriptPath,
-    // The key's own distro keeps a WSL agent's guest path on that guest.
-    ...(key.wslDistro ? { wslDistro: key.wslDistro } : {}),
-    limit
-  })
+  const read = () =>
+    readWorkerTranscript({
+      agent: key.agent,
+      sessionId: providerSession.id,
+      transcriptPath: providerSession.transcriptPath,
+      // The key's own distro keeps a WSL agent's guest path on that guest.
+      ...(key.wslDistro ? { wslDistro: key.wslDistro } : {}),
+      limit
+    })
+  const transcript =
+    process.platform === 'win32' && key.wslDistro
+      ? await runAsWslUserAct(key.wslDistro, async () => {
+          try {
+            if ((await readWslDistroRunningState(key.wslDistro)) !== 'running') {
+              await runWslExe(buildWslExecArgs(key.wslDistro, ['true']), undefined, 60_000)
+            }
+          } catch {
+            throw new AgentConversationRefusal(
+              CODES.noTranscript,
+              `Orca couldn't start WSL distro ${key.wslDistro} to read ${tuiAgentDisplayName(key.agent) ?? key.agent} agent ${orcaSessionId}. Start that distro in WSL, then run agent read again.`
+            )
+          }
+          return read()
+        })
+      : await read()
   if (!transcript.ok) {
     throw new AgentConversationRefusal(
       CODES.noTranscript,

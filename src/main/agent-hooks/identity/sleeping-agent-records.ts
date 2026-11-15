@@ -1,4 +1,5 @@
-import { isWslUncPath, parseWslUncPath } from '../../../shared/wsl-paths'
+import { isWslUncPath } from '../../../shared/wsl-paths'
+import { savedRecordWslDistro } from '../../../shared/agent-session/lifecycle/saved-agent-summary'
 import { WSL_HOOK_RELAY_CONNECTION_PREFIX } from '../../../shared/wsl-hook-relay-contract'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import { sameProviderKey, type AgentProviderKey } from './agent-provider-key'
@@ -50,15 +51,11 @@ function isGuestTranscriptPath(path: string | undefined): boolean {
  *  before Orca kept it, the distro its WSL UNC transcript path names. '' for a native agent;
  *  undefined when the record can't say, which on Windows is any other guest path. */
 function sleepingRecordDistro(record: SleepingAgentSighting, windows: boolean): string | undefined {
-  if (record.wslDistro !== undefined) {
-    return record.wslDistro
+  const proven = savedRecordWslDistro(record)
+  if (proven !== undefined) {
+    return proven
   }
-  const path = record.providerSession.transcriptPath
-  const unc = path ? parseWslUncPath(path) : null
-  if (unc) {
-    return unc.distro
-  }
-  return windows && isGuestTranscriptPath(path) ? undefined : ''
+  return windows && isGuestTranscriptPath(record.providerSession.transcriptPath) ? undefined : ''
 }
 
 /** The provider conversation a saved record names, qualified by where it ran, as its live
@@ -140,6 +137,9 @@ export function sleepingRecordWithoutDistro<T extends SleepingAgentSighting>(
   key: AgentProviderKey,
   windows: boolean
 ): T | null {
+  if (!windows || key.wslDistro === '') {
+    return null
+  }
   for (const [paneKey, record] of sleepingByProviderSession(records).get(key.providerSessionId) ??
     []) {
     if (

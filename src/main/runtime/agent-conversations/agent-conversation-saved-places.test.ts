@@ -84,6 +84,12 @@ vi.mock('../orchestration/workers/transcripts/worker-transcript-read', async (lo
   }
 })
 
+vi.mock('../../wsl/execution/wsl-exe-process', () => ({ runWslExe: async () => '' }))
+vi.mock('../../wsl/discovery/wsl-background-distro-gate', async (load) => ({
+  ...(await load<Record<string, unknown>>()),
+  readWslDistroRunningState: async () => 'stopped'
+}))
+
 const { AgentHookServer } = await import('../../agent-hooks/server/agent-hook-server')
 const { listAgentConversations, showAgentConversation } = await import('./agent-conversation-list')
 const { readAgentConversation } = await import('./agent-conversation-read')
@@ -362,6 +368,10 @@ it('keeps two agents named, titled and with their last reply from sleep through 
     a: { state: 'asleep', ...named.a },
     b: { state: 'waiting', ...named.b }
   })
+
+  expect(
+    await showAgentConversation(reopened.runtime, { kind: 'terminal', orcaSessionId: ids.b })
+  ).toMatchObject({ places: [{ title: 'Reply with ORBIT', lastAssistantMessage: 'ORBIT' }] })
 
   // Visiting tab a mounts it; the window saves its own live record, which has no reply.
   await wakeTab(reopened, PANE.a)
@@ -696,4 +706,115 @@ it('gives a record from a direct SSH relay no ID or place on this host', async (
 
   expect((await app.list()).a).toBeUndefined()
   expect(app.server.identityClient.idsOfKeysKeys).toBe(0)
+})
+
+it('replaces foreign-scope checkpoints through accepted hooks and the saved-record writer', async () => {
+  const root = directory()
+  const worktreeId = `${REPO_ID}::${directory()}`
+  const app = await openApp(root, worktreeId, () => workspaceSession(worktreeId))
+  const checkpoint = async (connectionId: string | null, reply?: string) => {
+    const event = normalizeHookPayload(
+      createHookListenerState(),
+      'claude',
+      buildBody(
+        {
+          hook_event_name: 'Stop',
+          session_id: 'shared-session',
+          transcript_path: GUEST_PATH,
+          ...(reply ? { last_assistant_message: reply } : {})
+        },
+        { paneKey: PANE.a, tabId: 'tab-a', worktreeId }
+      ),
+      'production'
+    )!
+    app.server.ingestRemote(event, connectionId)
+    const row = app.row(PANE.a)!
+    app.runtime.recordHookStatusResume({ ...row, worktreeId })
+    await app.runtime.readSavedResumeSource(worktreeId, PANE.a)
+    await app.store.flushPendingOrThrowAsync()
+    return app.store.getWorkspaceSession().sleepingAgentSessionsByPaneKey![PANE.a]!
+  }
+  // Same provider id and path, distinct execution owners. SSH has no distro marker.
+  expect(await checkpoint('ssh-a', 'A reply')).toMatchObject({
+    connectionId: 'ssh-a',
+    lastAssistantMessage: 'A reply'
+  })
+  expect(await checkpoint('ssh-b', 'B reply')).toMatchObject({
+    connectionId: 'ssh-b',
+    lastAssistantMessage: 'B reply'
+  })
+  const onB = app.store.getWorkspaceSession().sleepingAgentSessionsByPaneKey![PANE.a]!
+  expect(await checkpoint('ssh-b', 'B reply')).toBe(onB)
+  expect(await checkpoint('ssh-b')).toBe(onB)
+  expect(await checkpoint('ssh-a')).toMatchObject({ connectionId: 'ssh-a' })
+  expect(
+    app.store.getWorkspaceSession().sleepingAgentSessionsByPaneKey![PANE.a]
+  ).not.toHaveProperty('lastAssistantMessage', 'B reply')
+  expect(await checkpoint(null, 'Native reply')).toMatchObject({
+    connectionId: null,
+    wslDistro: '',
+    lastAssistantMessage: 'Native reply'
+  })
+  expect(await checkpoint('wsl:Ubuntu', 'Ubuntu reply')).toMatchObject({
+    connectionId: null,
+    wslDistro: 'Ubuntu',
+    lastAssistantMessage: 'Ubuntu reply'
+  })
+  // An older saved checkpoint lacks provenance; the next identical hook must attest it.
+  await app.commit((session) => {
+    delete session.sleepingAgentSessionsByPaneKey![PANE.a]!.wslDistro
+    return session
+  })
+  expect(await checkpoint('wsl:Ubuntu', 'Ubuntu reply')).toMatchObject({
+    wslDistro: 'Ubuntu',
+    lastAssistantMessage: 'Ubuntu reply'
+  })
+  const onUbuntu = app.store.getWorkspaceSession().sleepingAgentSessionsByPaneKey![PANE.a]!
+  expect(await checkpoint('wsl:Ubuntu', 'Ubuntu reply')).toBe(onUbuntu)
+  expect(await checkpoint('wsl:Ubuntu')).toBe(onUbuntu)
+  expect(await checkpoint('wsl:Debian', 'Debian reply')).toMatchObject({
+    connectionId: null,
+    wslDistro: 'Debian',
+    lastAssistantMessage: 'Debian reply'
+  })
+  await app.quit()
+  const reopened = await openApp(root, worktreeId)
+  expect(
+    reopened.store.getWorkspaceSession().sleepingAgentSessionsByPaneKey![PANE.a]
+  ).toMatchObject({ wslDistro: 'Debian', lastAssistantMessage: 'Debian reply' })
+})
+
+it('does not attribute a legacy guest record to a known native ID or read its file', async () => {
+  const root = directory()
+  const worktreeId = `${REPO_ID}::${directory()}`
+  const ids = await sleptScopes(root, worktreeId)
+  const app = await openApp(root, worktreeId)
+  const guest = structuredClone(
+    app.store.getWorkspaceSession().sleepingAgentSessionsByPaneKey![
+      makePaneKey('tab-ubuntu', LEAF.b)
+    ]!
+  )
+  delete guest.wslDistro
+  for (const scope of SCOPES) {
+    app.server.dropStatusEntry(makePaneKey(scope.tab, scope.leaf), {
+      preserveResumeIdentity: false
+    })
+  }
+  await app.commit((session) => ({ ...session, sleepingAgentSessionsByPaneKey: undefined }))
+  await app.commit((session) => ({
+    ...session,
+    sleepingAgentSessionsByPaneKey: { [guest.paneKey]: guest }
+  }))
+  await onWindows(async () => {
+    expect(
+      await showAgentConversation(app.runtime, {
+        kind: 'terminal',
+        orcaSessionId: ids['tab-native']!
+      })
+    ).toEqual({ kind: 'terminal', orcaSessionId: ids['tab-native'], places: [] })
+    await expect(readById(app.runtime, ids['tab-native']!)).rejects.toThrow(
+      'no transcript location'
+    )
+  })
+  expect(transcripts.reads).toBe(0)
 })

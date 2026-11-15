@@ -2,6 +2,7 @@ import {
   isWslHookRelayConnectionId,
   WSL_HOOK_RELAY_CONNECTION_PREFIX
 } from '../../wsl-hook-relay-contract'
+import { parseWslUncPath } from '../../wsl-paths'
 import { agentProviderSessionsEqual, type SleepingAgentSessionRecord } from './agent-session-resume'
 
 /** Where a hook row's agent ran, as a saved record keeps it: its WSL relay's distro, '' for a
@@ -40,14 +41,35 @@ type SavedSummary = Pick<
 
 const SUMMARY_FIELDS = ['lastAssistantMessage', 'terminalTitle', 'wslDistro'] as const
 
-/** One conversation in one execution scope. A distro a writer couldn't tell is no evidence of
- *  another, but two different ones are two conversations. */
+/** The WSL distro a saved record proves it ran in: the one it saved, else, for a record saved
+ *  before Orca kept one, the distro its WSL UNC transcript path names. */
+export function savedRecordWslDistro(
+  record: Pick<SleepingAgentSessionRecord, 'wslDistro' | 'providerSession'>
+): string | undefined {
+  const path = record.providerSession.transcriptPath
+  return record.wslDistro ?? (path ? parseWslUncPath(path)?.distro : undefined)
+}
+
+/** Whether the next record keeps the previous execution scope. Missing next evidence can
+ *  retain an attested scope; newly supplied evidence must replace an unknown checkpoint. */
+export function sameSavedScope(a: SavedConversation, b: SavedConversation): boolean {
+  if ((a.connectionId ?? null) !== (b.connectionId ?? null)) {
+    return false
+  }
+  if ((a.connectionId ?? null) !== null) {
+    return true
+  }
+  const left = savedRecordWslDistro(a)
+  const right = savedRecordWslDistro(b)
+  return right === undefined || left === right
+}
+
+/** One conversation in one execution scope. */
 function sameSavedConversation(a: SavedConversation, b: SavedConversation): boolean {
   return (
     a.agent === b.agent &&
     agentProviderSessionsEqual(a.agent, a.providerSession, b.providerSession) &&
-    (a.connectionId ?? null) === (b.connectionId ?? null) &&
-    (a.wslDistro === undefined || b.wslDistro === undefined || a.wslDistro === b.wslDistro)
+    sameSavedScope(a, b)
   )
 }
 

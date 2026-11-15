@@ -15,6 +15,7 @@ import { InProcessAgentIdentityClient } from '../../agent-hooks/identity/agent-i
 import type { AgentIdentityClient } from '../../agent-hooks/identity/agent-identity-worker-client'
 import { buildBody } from '../../agent-hooks/server/testing/server.test-fixtures'
 import type * as HookServerModule from '../../agent-hooks/server/agent-hook-server'
+import { RuntimeOrchestrationSenderNames } from '../orchestration/mailbox/senders/runtime-orchestration-sender-names'
 
 /** The real hook server and its SQL identity store behind `agent list` and `agent show`. */
 const hooks = vi.hoisted(() => {
@@ -430,3 +431,44 @@ it('keeps out an answer for a saved agent removed while it was asked', async () 
 
   expect(server.identityClient.idsOfKeysKeys).toBe(3)
 })
+
+it.each([100, 1_000])(
+  'names %i asleep agents in one workspace from one index of its tabs',
+  async (count) => {
+    await started()
+    const records: Record<string, SleepingAgentSessionRecord> = {}
+    let idReads = 0
+    const tabs = Array.from({ length: count }, (_, index) => {
+      records[pane(index)] = record(index, `session-${index}`, '')
+      return {
+        get id() {
+          idReads++
+          return `tab-${index}`
+        },
+        title: `Fix the parser bug ${index}`,
+        customTitle: null
+      }
+    })
+    const host = {
+      ...runtime(records),
+      orchestrationSenderNames: new RuntimeOrchestrationSenderNames({
+        getDb: () => null,
+        getHandleRecord: () => undefined,
+        getPtyAgents: () => undefined,
+        getTerminalPaneKey: () => null,
+        getWorkspaceSession: () => ({ tabsByWorktree: { [WORKTREE]: tabs } }),
+        getGeneratedTitlesEnabled: () => false,
+        getAgentStatusSnapshotForPane: () => undefined,
+        getTrackedTitle: () => null
+      })
+    }
+
+    const listed = await listAgentConversations(host, 10)
+
+    expect(listed.agents.map((row) => row.title)).toEqual(
+      Array.from({ length: count }, (_, index) => `Fix the parser bug ${index}`)
+    )
+    // Indexed once: a few reads per tab, never one scan of the tabs per row.
+    expect(idReads).toBeLessThanOrEqual(3 * count)
+  }
+)

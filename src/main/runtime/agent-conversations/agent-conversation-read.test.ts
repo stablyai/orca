@@ -1,10 +1,11 @@
-import { expect, it, vi } from 'vitest'
+import { beforeEach, expect, it, vi } from 'vitest'
 import type { RpcContext } from '../rpc/core'
 import { readAgentConversation } from './agent-conversation-read'
 import type { ResolvedAgentConversation } from './agent-conversation-address'
 
 const terminal = vi.hoisted(() => ({
   source: vi.fn(),
+  start: vi.fn(),
   read: vi.fn()
 }))
 vi.mock('../../agent-hooks/server/agent-hook-server', () => ({
@@ -14,6 +15,16 @@ vi.mock('../orchestration/workers/transcripts/worker-transcript-read', () => ({
   canReadWorkerTranscript: () => true,
   readWorkerTranscript: terminal.read
 }))
+
+vi.mock('../../wsl/execution/wsl-exe-process', () => ({ runWslExe: terminal.start }))
+vi.mock('../../wsl/discovery/wsl-background-distro-gate', () => ({
+  readWslDistroRunningState: async () => 'stopped',
+  noteWslDistroWoken: () => {}
+}))
+beforeEach(() => {
+  vi.clearAllMocks()
+  terminal.start.mockResolvedValue('')
+})
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the terminal read passes the context only to the mocked hook server.
 const ctx = { runtime: { readLocalSleepingAgentSessions: () => ({}) } } as unknown as RpcContext
@@ -67,3 +78,32 @@ it.each([
     }
   }
 )
+
+it('names the attested distro and next step when that distro cannot start', async () => {
+  const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
+  Object.defineProperty(process, 'platform', { value: 'win32' })
+  try {
+    terminal.source.mockResolvedValue({
+      key: {
+        executionHost: 'local',
+        wslDistro: 'Ubuntu',
+        agent: 'claude',
+        providerSessionId: 'p',
+        locator: ''
+      },
+      providerSession: { key: 'session_id', id: 'p', transcriptPath: '/home/qa/p.jsonl' }
+    })
+    terminal.start.mockRejectedValue(new Error('failed'))
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this terminal read uses only its id.
+    const agent = {
+      kind: 'terminal',
+      orcaSessionId: 'claude_dd9b33e3'
+    } as unknown as ResolvedAgentConversation
+    await expect(readAgentConversation(ctx, agent, {})).rejects.toMatchObject({
+      code: 'agent_no_transcript'
+    })
+    expect(terminal.read).not.toHaveBeenCalled()
+  } finally {
+    Object.defineProperty(process, 'platform', platform)
+  }
+})

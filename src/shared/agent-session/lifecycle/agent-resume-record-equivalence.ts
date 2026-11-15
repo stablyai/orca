@@ -4,6 +4,7 @@ import {
   agentProviderSessionsEqual
 } from './agent-session-resume'
 import { agentMainAgentVerdict } from '../../agent-status/lifecycle/agent-main-agent-verdict'
+import { sameSavedScope } from './saved-agent-summary'
 
 export function launchConfigsEqual(
   a: SleepingAgentLaunchConfig | undefined,
@@ -43,6 +44,7 @@ export function sleepingRecordsEquivalentIgnoringCaptureTime(
     existing.terminalTitle === next.terminalTitle &&
     existing.lastAssistantMessage === next.lastAssistantMessage &&
     existing.wslDistro === next.wslDistro &&
+    sameSavedScope(existing, next) &&
     agentMainAgentVerdict(existing) === agentMainAgentVerdict(next) &&
     existing.origin === next.origin &&
     launchConfigsEqual(existing.launchConfig, next.launchConfig)
@@ -63,8 +65,7 @@ export function recoveryRecordMatches(
     existing.worktreeId === next.worktreeId &&
     existing.tabId === next.tabId &&
     existing.state === next.state &&
-    // A writer that can't tell the distro keeps the saved one; a different one is a new session.
-    (next.wslDistro === undefined || existing.wslDistro === next.wslDistro) &&
+    sameSavedScope(existing, next) &&
     agentMainAgentVerdict(existing) === agentMainAgentVerdict(next) &&
     agentProviderSessionsEqual(existing.agent, existing.providerSession, next.providerSession) &&
     // Why: effort and permission mode are not session identity, but a stale value would resume wrong.

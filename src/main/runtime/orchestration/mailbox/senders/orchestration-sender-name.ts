@@ -1,3 +1,4 @@
+import type { RuntimeWorktreeAgentSource } from '../../../workspaces/process-listing/runtime-worktree-agent-source'
 import { senderDispatchLaunch } from './sender-dispatch-launch'
 import { readWorkerTerminalHostScope } from '../../../../../shared/orchestration/workers/worker-terminal-host-scope'
 import { crewDisplayName } from '../../crew/crew-rules'
@@ -24,6 +25,17 @@ import {
 } from '../../addressing/session-lineage/structured-session-lineage'
 import { logWorkerLaunchObservationFailure } from '../../workers/launch/worker-launch-observation'
 
+export type AgentRowNamingSource = Pick<
+  RuntimeWorktreeAgentSource,
+  | 'paneKey'
+  | 'tabId'
+  | 'worktreeId'
+  | 'ptyId'
+  | 'terminalHandle'
+  | 'agentType'
+  | 'providerSessionId'
+>
+
 export type SenderHookRow = Pick<
   AgentStatusIpcPayload,
   | 'paneKey'
@@ -47,7 +59,8 @@ export type MirroredTabs = {
   >
 }
 
-type MirroredTerminalTab = Pick<TerminalTab, 'id'> & Partial<ConversationNameTab>
+export type MirroredTerminalTab = Pick<TerminalTab, 'id'> & Partial<ConversationNameTab>
+
 type MirroredChatTab = Pick<Tab, 'contentType' | 'entityId' | 'customLabel' | 'label'>
 
 export type SenderNamingLayout = {

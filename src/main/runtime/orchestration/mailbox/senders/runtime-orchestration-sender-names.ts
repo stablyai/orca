@@ -17,19 +17,20 @@ import {
   orchestrationSenderName,
   structuredChatNaming,
   captureMirroredTabs,
+  type AgentRowNamingSource,
   type MirroredTabs,
   type SenderHookRow,
   type SenderNamingLayout,
   type SenderNamingSources,
   type TerminalSenderNaming
 } from './orchestration-sender-name'
+import { mirroredTabIndex } from './mirrored-tab-index'
 import { agentMessageSender, observeSenderSnapshot } from './agent-message-sender'
 import {
   type AgentSessionRecordReader,
   readAgentSessionRecordStore
 } from '../../addressing/session-lineage/structured-session-lineage'
 import { terminalHostConnectionMatches } from '../../workers/transcripts/worker-provider-session'
-import type { RuntimeWorktreeAgentSource } from '../../../workspaces/process-listing/runtime-worktree-agent-source'
 
 type RuntimeSenderNameDeps = {
   getDb: () => OrchestrationDb | null
@@ -58,11 +59,6 @@ type RuntimeSenderNameDeps = {
 }
 
 type SessionLookup = RuntimeSenderNameDeps['getWorkspaceSession']
-
-type AgentRowNamingSource = Pick<
-  RuntimeWorktreeAgentSource,
-  'paneKey' | 'tabId' | 'worktreeId' | 'ptyId' | 'agentType' | 'providerSessionId'
->
 
 export class RuntimeOrchestrationSenderNames {
   private readonly launchInstallation: { database: OrchestrationDb | null } = { database: null }
@@ -137,15 +133,10 @@ export class RuntimeOrchestrationSenderNames {
 
   /** Names one worktree.ps pass's rows as desktop's compact row does; null keeps the phone's message fallback. */
   agentRowNamer(): (source: AgentRowNamingSource) => string | null {
-    // A pass reads the setting and each worktree's session at most once, however many rows it lists.
+    // A pass reads the setting and each worktree's session and tabs at most once, however many
+    // rows it lists, so naming every row is linear in the rows.
     let generatedTitlesEnabled: boolean | undefined
-    const sessions = new Map<string, MirroredTabs | null | undefined>()
-    const session: SessionLookup = (worktreeId) => {
-      if (!sessions.has(worktreeId)) {
-        sessions.set(worktreeId, this.deps.getWorkspaceSession(worktreeId))
-      }
-      return sessions.get(worktreeId)
-    }
+    const { session, readTab } = mirroredTabIndex(this.deps.getWorkspaceSession)
     const chatSources = this.chatSources(session)
     return (source) => {
       const { tabId, worktreeId } = source
@@ -157,8 +148,17 @@ export class RuntimeOrchestrationSenderNames {
         const chat = structuredChatNaming(chatSessionId, chatSources)
         return chat ? chat.ownName || chat.fallback : null
       }
-      const record = { worktreeId, tabId, ptyId: source.ptyId ?? null }
-      const pane = this.paneNaming(record, source.paneKey, session)
+      const record = {
+        worktreeId,
+        tabId,
+        ptyId:
+          source.ptyId ??
+          (source.terminalHandle
+            ? this.deps.getHandleRecord(source.terminalHandle)?.ptyId
+            : null) ??
+          null
+      }
+      const pane = this.paneNaming(record, source.paneKey, session, readTab)
       generatedTitlesEnabled ??= this.deps.getGeneratedTitlesEnabled()
       return pane.tab
         ? getAgentRowConversationName(

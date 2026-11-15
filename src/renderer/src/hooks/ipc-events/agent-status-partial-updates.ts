@@ -1,4 +1,8 @@
 import { RESUMABLE_TUI_AGENTS } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import {
+  hookConnectionWslDistro,
+  statusEntryWslDistro
+} from '../../../../shared/agent-session/lifecycle/saved-agent-summary'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { ProgramStatusFacet } from '../../../../shared/program-status/facet'
 import type { AppState } from '@/store/types'
@@ -59,7 +63,10 @@ export function applyProviderSessionOnlyUpdate(args: {
     agent,
     providerSession: data.providerSession,
     timing: { updatedAt: data.receivedAt },
-    routing,
+    routing: {
+      ...routing,
+      ...statusEntryWslDistro(hookConnectionWslDistro(data.connectionId), undefined, agent)
+    },
     metadata:
       data.launchToken || data.launchConfig !== undefined
         ? {

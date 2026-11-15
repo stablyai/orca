@@ -70,6 +70,8 @@ export class SessionSnapshotOperations {
     hostId?: string | null
   ): void {
     const resolved = resolveHostId(hostId)
+    // The window's last snapshot replaces saved places like any save, so it keeps their summary.
+    session = this.keepingSavedAgentSummaries(session, resolved)
     if (resolved === LOCAL_EXECUTION_HOST_ID) {
       this.assertSnapshotAdmission()
       setLocalWorkspaceSession(this, session, true)

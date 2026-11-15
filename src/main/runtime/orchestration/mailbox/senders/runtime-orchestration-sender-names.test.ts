@@ -1,3 +1,10 @@
+import { agentConversationPlaces } from '../../../agent-conversations/agent-conversation-list'
+import { agentHookServer } from '../../../../agent-hooks/server/agent-hook-server'
+import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import {
+  structuredAgentSessionPaneKey,
+  structuredAgentSessionTabId
+} from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { acceptedAnswerSender } from './accepted-answer-sender'
 
 import { OrcaRuntimeService } from '../../../orca-runtime'
@@ -31,7 +38,6 @@ import { RuntimeOrchestrationSenderNames } from './runtime-orchestration-sender-
 
 import { structuredMailSource } from '../structured-mail/structured-mail-source'
 
-import '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import '../../../rpc/methods/orchestration/worker/follow-up/worker-earlier-work'
 
 const hostRef = vi.hoisted((): { current: unknown } => ({ current: null }))
@@ -220,4 +226,71 @@ it('uses exact saved custody for follow-up dispatch identity and refuses a later
     .prepare('UPDATE dispatch_contexts SET process_incarnation = ? WHERE id = ?')
     .run('p:2', next.id)
   expect(names().sender(`dispatch:${next.id}`).agent).toBeUndefined()
+})
+
+it('shows a live chat with the same canonical name and accepted reply as its list row', async () => {
+  const tabId = structuredAgentSessionTabId(CHAT)
+  const paneKey = structuredAgentSessionPaneKey(tabId, CHAT)
+  session.unifiedTabs = {
+    [WORKTREE]: [
+      { contentType: 'agent-session', entityId: CHAT, customLabel: 'Renamed chat', label: 'Claude' }
+    ]
+  }
+  const row: AgentStatusIpcPayload = {
+    paneKey,
+    tabId,
+    worktreeId: WORKTREE,
+    connectionId: null,
+    receivedAt: 1,
+    stateStartedAt: 1,
+    state: 'done',
+    prompt: '',
+    agentType: 'claude',
+    structuredHost: 'owned',
+    lastAssistantMessage: 'MANGO'
+  }
+  const status = vi.spyOn(agentHookServer, 'getPublicStatusSnapshotForPane').mockReturnValue([row])
+  try {
+    const record = agentSessionConversationView(records.get(CHAT)!)
+    const naming = names()
+    const places = await agentConversationPlaces(
+      {
+        getWorkspaceLabel: () => ({ workspace: 'main', repo: 'repo' }),
+        readLocalSleepingAgentSessions: () => ({}),
+        orchestrationSenderNames: naming
+      },
+      {
+        kind: 'chat',
+        orcaSessionId: CHAT,
+        record,
+        store: { getRecord: () => record, listRecords: () => [record] }
+      }
+    )
+    expect(places).toMatchObject([
+      { kind: 'chat', title: 'Renamed chat', lastAssistantMessage: 'MANGO' }
+    ])
+    status.mockImplementation((key) => (key === 'parent:leaf' ? [{ ...row, paneKey: key }] : [row]))
+    const childPlaces = await agentConversationPlaces(
+      {
+        getWorkspaceLabel: () => ({ workspace: 'main', repo: 'repo' }),
+        readLocalSleepingAgentSessions: () => ({}),
+        orchestrationSenderNames: naming,
+        getAgentStatusOrchestrationContextForPaneKey: () => ({
+          taskId: 'child-task',
+          dispatchId: 'child-dispatch',
+          parentPaneKey: 'parent:leaf',
+          displayName: 'Child task'
+        })
+      },
+      {
+        kind: 'chat',
+        orcaSessionId: CHAT,
+        record,
+        store: { getRecord: () => record, listRecords: () => [record] }
+      }
+    )
+    expect(childPlaces).toMatchObject([{ title: 'Child task', lastAssistantMessage: 'MANGO' }])
+  } finally {
+    status.mockRestore()
+  }
 })

@@ -1,4 +1,5 @@
 import { replaceRecordEntries } from '@/store/keyed-record-transitions'
+import { withSavedSummary } from '../../../../../shared/agent-session/lifecycle/saved-agent-summary'
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
 import type {
@@ -103,31 +104,35 @@ export function createAgentStatusProviderSessionActions(
             agentType: agent,
             providerSession
           })
-          const record: SleepingAgentSessionRecord = {
-            paneKey,
-            ...(tabId ? { tabId } : {}),
-            worktreeId,
-            agent,
-            providerSession,
-            prompt: '',
-            // Why: durable process/session identity, not visible turn state; a non-done value keeps cold restore eligible.
-            state: preservesCompletedRecoveryRecord ? 'done' : 'working',
-            capturedAt: updatedAt,
-            updatedAt,
-            ...(existingStatus?.terminalTitle
-              ? { terminalTitle: existingStatus.terminalTitle }
-              : existingRecord?.terminalTitle
-                ? { terminalTitle: existingRecord.terminalTitle }
-                : {}),
-            ...(routing?.connectionId !== undefined
-              ? { connectionId: routing.connectionId }
-              : existingRecord?.connectionId !== undefined
-                ? { connectionId: existingRecord.connectionId }
-                : {}),
-            ...(launchConfig ? { launchConfig: copyLaunchConfig(launchConfig) } : {}),
-            ...(preservesCompletedRecoveryRecord ? agentVerdictFields(existingRecord) : {}),
-            origin: preservesQuitOrigin ? 'quit' : 'live'
-          }
+          const record: SleepingAgentSessionRecord = withSavedSummary(
+            {
+              paneKey,
+              ...(tabId ? { tabId } : {}),
+              worktreeId,
+              agent,
+              providerSession,
+              prompt: '',
+              // Why: durable process/session identity, not visible turn state; a non-done value keeps cold restore eligible.
+              state: preservesCompletedRecoveryRecord ? 'done' : 'working',
+              capturedAt: updatedAt,
+              updatedAt,
+              ...(existingStatus?.terminalTitle
+                ? { terminalTitle: existingStatus.terminalTitle }
+                : existingRecord?.terminalTitle
+                  ? { terminalTitle: existingRecord.terminalTitle }
+                  : {}),
+              ...(routing?.connectionId !== undefined
+                ? { connectionId: routing.connectionId }
+                : existingRecord?.connectionId !== undefined
+                  ? { connectionId: existingRecord.connectionId }
+                  : {}),
+              ...(routing?.wslDistro !== undefined ? { wslDistro: routing.wslDistro } : {}),
+              ...(launchConfig ? { launchConfig: copyLaunchConfig(launchConfig) } : {}),
+              ...(preservesCompletedRecoveryRecord ? agentVerdictFields(existingRecord) : {}),
+              origin: preservesQuitOrigin ? 'quit' : 'live'
+            },
+            existingRecord
+          )
           removedLiveStatus = existingStatus !== undefined
           const nextLive = removedLiveStatus
             ? { ...s.agentStatusByPaneKey }

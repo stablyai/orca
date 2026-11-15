@@ -145,7 +145,11 @@ function runtimeOver(
 ) {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a real runtime prototype; the label and place code read only the store and catalog cache assigned here.
   const runtime = Object.create(Selectors.prototype) as RuntimeWorkspaceSelectors
-  return Object.assign(runtime, { store, resolvedWorktrees: cache })
+  return Object.assign(runtime, {
+    store,
+    resolvedWorktrees: cache,
+    orchestrationSenderNames: { agentRowNamer: () => () => null }
+  })
 }
 
 async function show(runtime: RuntimeWorkspaceSelectors, connectionId: string | null) {

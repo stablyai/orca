@@ -164,10 +164,11 @@ export function liveResumeRecordChange(
   if (!existing || !recoveryRecordMatches(existing, live)) {
     return { set: live }
   }
-  // An unchanged recovery state still saves the conversation's newer reply.
-  return live.lastAssistantMessage && live.lastAssistantMessage !== existing.lastAssistantMessage
-    ? { set: { ...existing, lastAssistantMessage: live.lastAssistantMessage } }
-    : null
+  if (!live.lastAssistantMessage || live.lastAssistantMessage === existing.lastAssistantMessage) {
+    return null
+  }
+  // Recovery equality already qualifies the conversation and execution scope.
+  return { set: { ...existing, lastAssistantMessage: live.lastAssistantMessage } }
 }
 
 /** Quit captures keep running agents resumable; periodic capture must not replace a quit record. Null leaves the existing record. */

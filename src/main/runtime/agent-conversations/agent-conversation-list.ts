@@ -22,6 +22,7 @@ import type { ExecutionHostId } from '../../../shared/execution-host'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type { RuntimeOrchestrationSenderNames } from '../orchestration/mailbox/senders/runtime-orchestration-sender-names'
 import { connectionEvidenceHostId } from '../workspaces/process-listing/runtime-worktree-summary-paths'
+import type { AgentStatusOrchestrationContext } from '../../../shared/agent-status/contracts/agent-status-types'
 
 type ListFilter = { worktreeId?: string; state?: AgentListState }
 
@@ -33,6 +34,9 @@ type AgentPlaceRuntime = {
   readLocalSleepingAgentSessions(): Readonly<Record<string, SleepingAgentSessionRecord>>
   /** Names a saved pane as a live row is named: its saved tab's names, then its own title. */
   orchestrationSenderNames: Pick<RuntimeOrchestrationSenderNames, 'agentRowNamer'>
+  getAgentStatusOrchestrationContextForPaneKey?(
+    paneKey: string
+  ): AgentStatusOrchestrationContext | undefined
 }
 
 type PaneNamer = ReturnType<RuntimeOrchestrationSenderNames['agentRowNamer']>
@@ -254,7 +258,8 @@ async function openPlaces(
       (place) => place.paneKey
     )
   }
-  return paneKeys.flatMap((paneKey) =>
+  const name = runtime.orchestrationSenderNames.agentRowNamer()
+  const places = paneKeys.flatMap((paneKey) =>
     agentHookServer.getPublicStatusSnapshotForPane(paneKey).flatMap((status) => {
       const { worktreeId } = status
       const ours =
@@ -264,6 +269,12 @@ async function openPlaces(
       // The place's own host, from the row's connection evidence, so a same-id workspace on
       // another host never lends its name.
       const hostId = connectionEvidenceHostId(status.connectionId)
+      const orchestration = runtime.getAgentStatusOrchestrationContextForPaneKey?.(status.paneKey)
+      const sharesParentTab = orchestration?.parentPaneKey
+        ? agentHookServer
+            .getPublicStatusSnapshotForPane(orchestration.parentPaneKey)
+            .some((parent) => parent.tabId === status.tabId)
+        : false
       return worktreeId && ours
         ? [
             {
@@ -275,7 +286,20 @@ async function openPlaces(
               ...(runtime.getWorkspaceLabel(worktreeId, hostId) ?? { workspace: worktreeId }),
               hostId,
               paneKey: status.paneKey,
-              title: null,
+              title:
+                (sharesParentTab
+                  ? null
+                  : name({
+                      paneKey: status.paneKey,
+                      tabId: status.tabId ?? parsePaneKey(status.paneKey)?.tabId,
+                      worktreeId,
+                      terminalHandle: status.terminalHandle,
+                      agentType: status.agentType ?? null,
+                      providerSessionId: status.providerSession?.id
+                    })) ??
+                orchestration?.displayName ??
+                orchestration?.taskTitle ??
+                null,
               lastAssistantMessage: status.lastAssistantMessage ?? null,
               updatedAt: status.evidenceObservedAt ?? status.receivedAt
             }
@@ -283,4 +307,22 @@ async function openPlaces(
         : []
     })
   )
+  const saved = runtime.readLocalSleepingAgentSessions()
+  const borrowing = places.flatMap((row) => {
+    const record =
+      row.kind === 'terminal' && !row.lastAssistantMessage ? saved[row.paneKey] : undefined
+    return record ? [{ row, record }] : []
+  })
+  if (borrowing.length > 0) {
+    const ids = await agentHookServer.sleepingTerminalAgentIds(
+      saved,
+      borrowing.map(({ record }) => record)
+    )
+    borrowing.forEach(({ row, record }, index) => {
+      if (ids[index] === row.orcaSessionId) {
+        row.lastAssistantMessage = record.lastAssistantMessage ?? null
+      }
+    })
+  }
+  return places
 }
