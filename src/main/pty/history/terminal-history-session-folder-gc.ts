@@ -103,7 +103,8 @@ function cachedKnownSiblingPresent(
   worktreePath: string,
   scan: SessionFolderGcScan
 ): Promise<boolean> {
-  const parentKey = pathKey(dirname(worktreePath))
+  // No case folding: on a case-sensitive volume a differently-cased parent is another folder.
+  const parentKey = resolve(dirname(worktreePath))
   let present = scan.presentByParentKey.get(parentKey)
   if (!present) {
     const siblings = knownPathsByParentKey(scan).get(parentKey) ?? []
@@ -128,19 +129,17 @@ function knownPathsByParentKey(scan: SessionFolderGcScan): Map<string, string[]>
       }
     }
     for (const path of known) {
-      const key = pathKey(dirname(path))
-      byParent.set(key, [...(byParent.get(key) ?? []), path])
+      const key = resolve(dirname(path))
+      const siblings = byParent.get(key)
+      if (siblings) {
+        siblings.push(path)
+      } else {
+        byParent.set(key, [path])
+      }
     }
     scan.knownPathsByParentKey = byParent
   }
   return scan.knownPathsByParentKey
-}
-
-function pathKey(path: string): string {
-  const resolved = resolve(path)
-  return process.platform === 'win32' || process.platform === 'darwin'
-    ? resolved.toLowerCase()
-    : resolved
 }
 
 function isDirectory(path: string): Promise<boolean> {
