@@ -14,6 +14,7 @@ const setOverage =
   vi.fn<(args: { enabled: boolean; spendCapCents?: number }) => Promise<OrcaBillingOverageResult>>()
 const billingStatus = vi.fn<() => Promise<OrcaBillingStatusResult>>()
 vi.mock('@/lib/orca-cloud/open-cloud-console', () => ({ openCloudConsole: vi.fn() }))
+vi.mock('@/components/billing/plans/plans-dialog-store', () => ({ openPlansDialog: vi.fn() }))
 
 const openPortal = vi.fn(() => Promise.resolve({ status: 'opened' as const }))
 
@@ -147,8 +148,8 @@ describe('billing blocker on the creating sheet (JA-21)', () => {
     expect(onContinue).not.toHaveBeenCalled()
   })
 
-  it('no plan: Compare plans opens billing in the browser, and returning re-checks once', async () => {
-    const { openCloudConsole } = await import('@/lib/orca-cloud/open-cloud-console')
+  it('no plan: Compare plans opens the plans dialog, and returning re-checks once', async () => {
+    const { openPlansDialog } = await import('@/components/billing/plans/plans-dialog-store')
     billingStatus.mockResolvedValue({
       status: 'ok',
       entitlement: { ...sampleTeam, canStartSandbox: true }
@@ -156,7 +157,7 @@ describe('billing blocker on the creating sheet (JA-21)', () => {
     const { onContinue } = renderBlocker('plan')
     expect(screen.getByRole('heading', { name: 'Choose a plan' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Compare plans' }))
-    expect(openCloudConsole).toHaveBeenCalledWith('billing')
+    expect(openPlansDialog).toHaveBeenCalledOnce()
     act(() => {
       window.dispatchEvent(new Event('focus'))
     })

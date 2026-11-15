@@ -6,9 +6,9 @@ import {
   orcaCloudCanStart
 } from './orca-cloud-run-target-access'
 
-const openCloudConsole = vi.fn()
-vi.mock('@/lib/orca-cloud/open-cloud-console', () => ({
-  openCloudConsole: (section: string) => openCloudConsole(section)
+const openPlansDialog = vi.fn()
+vi.mock('@/components/billing/plans/plans-dialog-store', () => ({
+  openPlansDialog: () => openPlansDialog()
 }))
 
 function denied(
@@ -29,7 +29,7 @@ function denied(
 
 describe('Orca Cloud run-target access by role', () => {
   beforeEach(() => {
-    openCloudConsole.mockReset()
+    openPlansDialog.mockReset()
   })
 
   it('carries the role on no plan, so members are not sent to plans they cannot buy', () => {
@@ -38,7 +38,7 @@ describe('Orca Cloud run-target access by role', () => {
     expect(owner).toEqual({ state: 'no-plan', lapsed: false, canManageBilling: true })
     expect(member).toEqual({ state: 'no-plan', lapsed: true, canManageBilling: false })
     expect(getOrcaCloudPick(member)).toEqual({ kind: 'blocked' })
-    expect(openCloudConsole).not.toHaveBeenCalled()
+    expect(openPlansDialog).not.toHaveBeenCalled()
   })
 
   it('sends an owner or admin to billing in the browser', () => {
@@ -47,7 +47,7 @@ describe('Orca Cloud run-target access by role', () => {
     if (pick.kind === 'act') {
       pick.run()
     }
-    expect(openCloudConsole).toHaveBeenCalledWith('billing')
+    expect(openPlansDialog).toHaveBeenCalledTimes(1)
   })
 
   it('blocks members at the spend cap and lets owners act', () => {
