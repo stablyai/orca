@@ -10,6 +10,8 @@ export type PromptCacheCommandFinishedHold = {
   onCommandFinished: () => void
   /** A new command (133;C) means whatever the read finds is not the held session. */
   discard: () => void
+  /** The agent exited: a pending read would find a relaunch, not the held session. */
+  end: () => void
   /** A live process read; the held session survives only if the agent it was held for still runs. */
   onForegroundRead: (agent: TerminalAgent | null) => void
   /** The pane's entry, or the held one while its read is pending. */
@@ -45,6 +47,10 @@ export function createPromptCacheCommandFinishedHold(args: {
     },
     discard: () => {
       held = null
+    },
+    end: () => {
+      held = null
+      args.setCacheTimerStartedAt(paneKey, null)
     },
     onForegroundRead: (agent) => {
       const restore = held

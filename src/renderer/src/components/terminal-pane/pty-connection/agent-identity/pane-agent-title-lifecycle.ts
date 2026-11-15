@@ -66,7 +66,7 @@ export function installPaneAgentTitleLifecycle(session: ConnectPanePtySession): 
     session.clearCommandInferredPaneAgent()
     session.requestKnownWindowsShiftEnterReconfirmation()
     // Title returned to the shell: end the cache session; process/PTY lifecycle owns actual agent-row removal.
-    session.deps.setCacheTimerStartedAt(session.cacheKey, null)
+    session.promptCacheCommandFinishedHold.end()
     session.clearTitleOnlyInterruptTimer()
     // Why: title reversion alone is not process death. The process/PTY tracker
     // owns removing agent rows when the TUI actually exits.

@@ -270,6 +270,13 @@ export function installCommandInferredPaneAgent(session: ConnectPanePtySession):
       return
     }
     if (payload.state === 'waiting' || payload.state === 'blocked') {
+      // A child's prompt can land after the lead's idle title; only a still-'requested' entry starts.
+      if (leadTurnEndedUnderChildWork(payload)) {
+        startSuppressedTitlePromptCacheCountdown(
+          pending.title,
+          payload.agentType ?? pending.agentType
+        )
+      }
       session.suppressNativeWindowsIdleCodexFocusReports = false
       session.queueAgentIdleTerminalModeReset()
     }

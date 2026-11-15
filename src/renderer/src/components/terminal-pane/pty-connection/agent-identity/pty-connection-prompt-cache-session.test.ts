@@ -180,6 +180,26 @@ describe('prompt cache countdown follows the agent session', () => {
     expect(mockStoreState.cacheTimerByKey).not.toHaveProperty(PANE_KEY)
   })
 
+  it('does not restore a held session for a Claude relaunched through an alias before the read', async () => {
+    const dispatch = await connectClaudePane()
+    dispatch(
+      { kind: 'title', normalizedTitle: '✳ Claude Code', rawTitle: '✳ Claude Code' },
+      { kind: 'agent-working' }
+    )
+    vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('claude')
+
+    dispatch(
+      { kind: 'command-finished', exitCode: 0 },
+      { kind: 'title', normalizedTitle: '', rawTitle: '' },
+      { kind: 'agent-exited' },
+      { kind: 'title', normalizedTitle: '✳ Claude Code', rawTitle: '✳ Claude Code' }
+    )
+    await vi.advanceTimersByTimeAsync(400)
+    await flushAsyncTicks()
+
+    expect(mockStoreState.cacheTimerByKey).not.toHaveProperty(PANE_KEY)
+  })
+
   // Background shells fold to monitoring; a working background subagent folds to plain working.
   const claudeRow = (
     mainAgentState: 'working' | 'done',
@@ -220,6 +240,22 @@ describe('prompt cache countdown follows the agent session', () => {
 
     mockStoreState.agentStatusByPaneKey[PANE_KEY] = claudeRow('done')
     dispatchAgentHookTerminalLifecycle(PANE_KEY, claudeRow('done'))
+
+    expect(mockStoreState.cacheTimerByKey[PANE_KEY]).toEqual(expect.any(Number))
+  })
+
+  it('counts down when a background subagent waits for input after the idle title', async () => {
+    const dispatch = await connectClaudePane()
+    const { dispatchAgentHookTerminalLifecycle } =
+      await import('../../agent-completion/agent-hook-terminal-lifecycle')
+    dispatch({ kind: 'agent-working' })
+    mockStoreState.agentStatusByPaneKey[PANE_KEY] = claudeRow('working', 'agent-work')
+    dispatch(claudeIdle)
+    expect(mockStoreState.cacheTimerByKey[PANE_KEY]).toBe('requested')
+
+    const waitingRow: AgentStatusEntry = { ...claudeRow('done', 'agent-work'), state: 'waiting' }
+    mockStoreState.agentStatusByPaneKey[PANE_KEY] = waitingRow
+    dispatchAgentHookTerminalLifecycle(PANE_KEY, waitingRow)
 
     expect(mockStoreState.cacheTimerByKey[PANE_KEY]).toEqual(expect.any(Number))
   })

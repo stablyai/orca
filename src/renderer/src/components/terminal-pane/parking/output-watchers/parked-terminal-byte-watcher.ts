@@ -218,7 +218,7 @@ export function startParkedTerminalByteWatcher(
     },
     onAgentExited: (): void => {
       // Why: title reverting to a plain shell means the agent session ended; end it so the countdown doesn't survive in the sidebar while parked.
-      useAppStore.getState().setCacheTimerStartedAt(paneKey, null)
+      commandStatusPolicy.promptCacheHold.end()
     }
   }
 
