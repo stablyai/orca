@@ -5,10 +5,7 @@ import { join, relative } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
 import { renameFileWithWindowsRetryAsync } from '../../../../shared/file-write/windows-retry-file-operations'
 import { MERGE_PENDING_SUFFIX, lstatIfPresent } from '../../../filesystem/merged-directory-link'
-import {
-  COMPRESSED_ROLLOUT_SUFFIX,
-  rolloutTwinPath
-} from '../rollouts/codex-rollout-compressed-twin'
+import { listRolloutTwinPairs, rolloutTwinPath } from '../rollouts/codex-rollout-compressed-twin'
 import { parseCodexRolloutThreadId } from '../rollouts/codex-rollout-thread-id'
 
 /**
@@ -137,6 +134,17 @@ function isCurrentManifest(value: unknown): value is CodexHistoryCleanupManifest
     value.version === MANIFEST_VERSION &&
     'rollouts' in value &&
     Array.isArray(value.rollouts) &&
+    value.rollouts.every(
+      (rollout: unknown) =>
+        typeof rollout === 'object' &&
+        rollout !== null &&
+        'path' in rollout &&
+        typeof rollout.path === 'string' &&
+        'bytes' in rollout &&
+        typeof rollout.bytes === 'number' &&
+        'mtimeMs' in rollout &&
+        typeof rollout.mtimeMs === 'number'
+    ) &&
     'databases' in value &&
     Array.isArray(value.databases) &&
     'storeTwinPairs' in value &&
@@ -262,25 +270,10 @@ async function databasesLeftBehind(
 /** Plain-form paths of store rollouts present in both forms; names only, no file reads. */
 async function storeTwinPairs(storeHome: string): Promise<string[]> {
   const pairs: string[] = []
-  const walk = async (folder: string): Promise<void> => {
-    const entries = await readEntries(folder)
-    const names = new Set(entries.map((entry) => entry.name))
-    for (const entry of entries) {
-      if (entry.isDirectory()) {
-        await walk(join(folder, entry.name))
-      } else if (
-        entry.name.endsWith(COMPRESSED_ROLLOUT_SUFFIX) &&
-        names.has(rolloutTwinPath(entry.name)) &&
-        parseCodexRolloutThreadId(entry.name)
-      ) {
-        pairs.push(toManifestPath(storeHome, join(folder, rolloutTwinPath(entry.name))))
-      }
-    }
-  }
   for (const folder of HISTORY_FOLDERS) {
-    await walk(join(storeHome, folder))
+    pairs.push(...(await listRolloutTwinPairs(join(storeHome, folder))))
   }
-  return pairs.sort()
+  return pairs.map((path) => toManifestPath(storeHome, path)).sort()
 }
 
 /**

@@ -52,30 +52,37 @@ export async function isRolloutTwinKeptFromStore(from: string, to: string): Prom
   return from.endsWith(COMPRESSED_ROLLOUT_SUFFIX) || !plainWins(self, storeTwin)
 }
 
-/** Whether a folder holds both forms of a rollout, so it must merge file by file. */
-export async function holdsRolloutTwins(folder: string): Promise<boolean> {
+/** Plain-form paths of the rollouts under `folder` present in both forms, at most `limit`. */
+export async function listRolloutTwinPairs(folder: string, limit = Infinity): Promise<string[]> {
   let entries: Dirent[]
   try {
     entries = await readdir(folder, { withFileTypes: true })
   } catch (error) {
     if (isDefinitiveAbsence(error)) {
-      return false
+      return []
     }
     throw error
   }
   const names = new Set(entries.map((entry) => entry.name))
+  const pairs: string[] = []
   for (const entry of entries) {
+    if (pairs.length >= limit) {
+      break
+    }
     if (entry.isDirectory()) {
-      if (await holdsRolloutTwins(join(folder, entry.name))) {
-        return true
-      }
+      pairs.push(...(await listRolloutTwinPairs(join(folder, entry.name), limit - pairs.length)))
     } else if (
       entry.name.endsWith(COMPRESSED_ROLLOUT_SUFFIX) &&
       names.has(rolloutTwinPath(entry.name)) &&
       parseCodexRolloutThreadId(entry.name)
     ) {
-      return true
+      pairs.push(join(folder, rolloutTwinPath(entry.name)))
     }
   }
-  return false
+  return pairs
+}
+
+/** Whether a folder holds both forms of a rollout, so it must merge file by file. */
+export async function holdsRolloutTwins(folder: string): Promise<boolean> {
+  return (await listRolloutTwinPairs(folder, 1)).length > 0
 }

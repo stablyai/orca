@@ -215,6 +215,10 @@ export class WslCodexAccountHistoryLaunches {
     }
     const pass = (this.tails.get(distroKey) ?? Promise.resolve())
       .then(async () => {
+        // Quit doesn't await history work, so a pass queued before it must not start guest work.
+        if (isCodexAccountHistoryWorkStopping()) {
+          return
+        }
         if (this.settledThisRun.get(key) === target.shared) {
           this.retryFailedHeal(distroKey)
           return
@@ -231,7 +235,7 @@ export class WslCodexAccountHistoryLaunches {
             this.oweHeal(distroKey, { target, output })
           }
           if (target.shared && (output?.result === 'shared' || output?.result === 'incomplete')) {
-            this.owedChecks.set(key, target)
+            this.owedChecks.set(key, { ...target })
           }
         } finally {
           this.activePasses.set(distroKey, (this.activePasses.get(distroKey) ?? 1) - 1)
@@ -318,12 +322,16 @@ export class WslCodexAccountHistoryLaunches {
     const [key, target] = owed
     this.checks.add(distroKey)
     // An unfinished check resumes on a later launch, never in a loop now.
+    // A pass that finished meanwhile owes a fresh check; only this run's request is settled.
+    const settle = (): void => {
+      if (this.owedChecks.get(key) === target) {
+        this.owedChecks.delete(key)
+      }
+    }
     void checkInGuest(target, this.dependencies)
-      .then(() => {
-        this.owedChecks.delete(key)
-      })
+      .then(settle)
       .catch((error: unknown) => {
-        this.owedChecks.delete(key)
+        settle()
         console.warn('[codex-account-history] Checking WSL left-behind history failed:', error)
       })
       .finally(() => {

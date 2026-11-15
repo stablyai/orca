@@ -28,7 +28,7 @@ export class CodexAccountHistoryPasses {
   private readonly settledThisRun = new Map<string, boolean>()
   private activePasses = 0
   // Homes whose left-behind rollouts still await a content check, checked once no pass runs.
-  private readonly owedChecks = new Map<string, string>()
+  private readonly owedChecks = new Map<string, { accountHome: string }>()
   private checking = false
   private startedPasses = 0
   private readonly passProgress = {
@@ -102,7 +102,7 @@ export class CodexAccountHistoryPasses {
         this.settledThisRun.set(key, true)
       }
       if (result === 'shared' || result === 'incomplete') {
-        this.owedChecks.set(key, accountHome)
+        this.owedChecks.set(key, { accountHome })
       }
     } catch (error) {
       onWarning(error)
@@ -118,20 +118,26 @@ export class CodexAccountHistoryPasses {
     if (next.done) {
       return
     }
-    const [key, accountHome] = next.value
+    const [key, request] = next.value
+    // A pass that finished meanwhile owes a fresh check; only this run's request is settled.
+    const settle = (): void => {
+      if (this.owedChecks.get(key) === request) {
+        this.owedChecks.delete(key)
+      }
+    }
     this.checking = true
     void checkCodexHistoryLeftBehind({
-      accountHome,
+      accountHome: request.accountHome,
       storeHome: getSystemCodexHomePath(),
       shouldStop: () => this.activePasses > 0 || isCodexAccountHistoryWorkStopping()
     })
       .then((finished) => {
         if (finished) {
-          this.owedChecks.delete(key)
+          settle()
         }
       })
       .catch((error: unknown) => {
-        this.owedChecks.delete(key)
+        settle()
         console.warn('[codex-account-history] Checking left-behind history failed:', error)
       })
       .finally(() => {
