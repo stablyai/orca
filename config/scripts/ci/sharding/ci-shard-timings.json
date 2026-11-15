@@ -602,8 +602,6 @@
       "src/main/artifacts/artifact-cloud-recovery.test.ts": 495,
       "src/main/artifacts/artifact-cloud-service-races.test.ts": 566,
       "src/main/artifacts/artifact-cloud-service.test.ts": 985,
-      "src/main/artifacts/artifact-create-intent-store.test.ts": 352,
-      "src/main/artifacts/artifact-recovery-directory-fsync.test.ts": 87,
       "src/main/artifacts/artifact-share-record-store.test.ts": 192,
       "src/main/automations/automation-dispatch-host-fence.test.ts": 2592,
       "src/main/automations/automation-owner-fencing.test.ts": 2028,
