@@ -7402,7 +7402,10 @@
           "b4e9d3f2a1c5": "Se importaron {{value0}} cookies de {{value1}} a {{value2}}.",
           "c5a273a809": "Desde {{value0}}",
           "80bffd32bf": "Importar cookies",
-          "bd7d68f138": "Desde archivo…"
+          "bd7d68f138": "Desde archivo…",
+          "4054c458e1": "Borrar las cookies predeterminadas",
+          "3b662becd5": "¿Borrar las cookies del perfil predeterminado?",
+          "f159cf5a3e": "Es posible que se cierre tu sesión en sitios de este perfil."
         },
         "BrowserUseComputerUseNotice": {
           "79209b37b9": "Si importar cookies no encaja, Computer Use puede controlar apps locales y usar sesiones de navegador existentes donde aplique. Instala el skill Orca Computer Use; macOS también requiere permisos de privacidad.",
@@ -22997,6 +23000,8 @@
       "tabCloseAll": "Cerrar todas las pestañas del editor",
       "tabRename": "Renombrar pestaña activa",
       "tabReopenClosed": "Reabrir pestaña cerrada",
+      "tabMoveLeft": "Mover pestaña activa a la izquierda",
+      "tabMoveRight": "Mover pestaña activa a la derecha",
       "tabNextSameType": "Pestaña siguiente (mismo tipo)",
       "tabPreviousSameType": "Pestaña anterior (mismo tipo)",
       "tabNextAllTypes": "Pestaña siguiente (todos los tipos)",
