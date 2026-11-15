@@ -15,7 +15,7 @@ import { resolveBareAgentLaunchCommand } from './runtime-agent-launch-resolution
 import {
   buildExecutionHostAgentStartupPlan,
   planExecutionHostStartupWithPromptCandidate
-} from '../../../opencode/opencode-model-startup-plan'
+} from '../../../opencode/model-launch/opencode-model-startup-plan'
 import { agentPromptRidesLaunchCommand } from '../../../../shared/agent-launch/startup/tui-agent-startup'
 import {
   launchHostProvesAgentInFront,

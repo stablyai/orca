@@ -1,14 +1,12 @@
 import * as z from 'zod'
 import {
-  DEVICE_STORE_MAX_VALUE_LENGTH,
-  encodeDeviceStoreValue
-} from '../device-store/device-store-value-codec'
-import {
   durableDraftRow,
-  durableDraftRowKey,
+  fitsDeviceStore,
   pageDraftRowBackend,
   resetDurableDraftRowsForTests,
-  type DurableDraftRow
+  workspaceDraftRowKey,
+  type DurableDraftRow,
+  type WorkspaceDraftScope
 } from './durable-draft-rows'
 
 /** Unsaved edits to a file or Markdown tab, with the hash of the host's version they were made against. */
@@ -26,29 +24,12 @@ type Slot = {
 }
 const slots = new Map<string, Slot>()
 
-/** The host and remote runtime a worktree lives on, so two hosts' same-named documents never share edits. */
-export type DocumentEditScope = { hostId: string; executionHost?: string; worktreeId: string }
-
-function scopedId(scope: DocumentEditScope, id: string): string {
-  return `${scope.hostId}:${scope.executionHost ?? ''}:${id}`
+export function markdownTabDraftKey(scope: WorkspaceDraftScope, tabId: string): string {
+  return workspaceDraftRowKey('markdownTab', scope, tabId)
 }
 
-export function markdownTabDraftKey(scope: DocumentEditScope, tabId: string): string {
-  return durableDraftRowKey('markdownTab', scope.worktreeId, scopedId(scope, tabId))
-}
-
-export function fileEditDraftKey(scope: DocumentEditScope, path: string): string {
-  return durableDraftRowKey('fileEdit', scope.worktreeId, scopedId(scope, path))
-}
-
-// A value past the store's cap would be refused and leave older edits behind, so it is not kept at all.
-function fitsDeviceStore(draft: DocumentEditDraft): boolean {
-  const json = JSON.stringify(draft)
-  // At most 3 UTF-8 bytes per code unit, gzip barely grows any input, base64 adds a third: most documents skip the encode.
-  if (json.length * 4 + 1024 <= DEVICE_STORE_MAX_VALUE_LENGTH) {
-    return true
-  }
-  return encodeDeviceStoreValue(draft).length <= DEVICE_STORE_MAX_VALUE_LENGTH
+export function fileEditDraftKey(scope: WorkspaceDraftScope, path: string): string {
+  return workspaceDraftRowKey('fileEdit', scope, path)
 }
 
 function slotFor(key: string): Slot {

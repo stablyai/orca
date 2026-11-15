@@ -1,0 +1,221 @@
+import { getDefaultSettings } from '../../../../../shared/constants'
+import path from 'node:path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { useAppStore } from '@/store/index'
+import type { AppState } from '@/store/types'
+import { activateAndRevealWorktree } from './worktree-activation'
+import { waitForWorktreeAgentActivationGateForTests } from './worktree-agent-activation-gate'
+import { makeCreatedAgentWorktree as makeWorktree } from '@/lib/workspace/activation/worktree-activation-created-agent.test-fixture'
+import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
+
+// Main's answer to the window's layout commands, as a switch-on build sends them.
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
+  (
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+)
+
+// Unresumable husks retain scrollback and get one replacement/provider session; live or cold-restorable panes get none (run6-review-pr-11959).
+
+const initialAppStoreState = useAppStore.getState()
+
+const LEAF_ID = '22222222-2222-4222-8222-222222222222'
+const HUSK_TAB_ID = 'husk-tab-1'
+
+function baseState(worktree: ReturnType<typeof makeWorktree>): Partial<AppState> {
+  return {
+    repos: [
+      {
+        id: 'repo-1',
+        path: path.join(path.sep, 'workspace', 'repo'),
+        displayName: 'repo',
+        badgeColor: '#000000',
+        addedAt: 0
+      }
+    ],
+    worktreesByRepo: { 'repo-1': [worktree] },
+    activeRepoId: 'repo-1',
+    activeView: 'terminal',
+    workspaceSessionReady: true,
+    terminalStartupRestorationReady: true,
+    tabsByWorktree: {},
+    unifiedTabsByWorktree: {},
+    groupsByWorktree: {},
+    layoutByWorktree: {},
+    activeGroupIdByWorktree: {},
+    openFiles: [],
+    browserTabsByWorktree: {},
+    activeFileIdByWorktree: {},
+    activeBrowserTabIdByWorktree: {},
+    activeTabTypeByWorktree: {},
+    activeTabIdByWorktree: {},
+    tabBarOrderByWorktree: {},
+    pendingStartupByTabId: {},
+    automaticAgentResumeClaimsByTabId: {},
+    agentStatusByPaneKey: {},
+    sleepingAgentSessionsByPaneKey: {},
+    ptyIdsByTabId: {},
+    terminalLayoutsByTabId: {},
+    settings: {
+      ...getDefaultSettings(''),
+      agentCmdOverrides: {}
+    },
+    markWorktreeVisited: vi.fn(),
+    recordWorktreeVisit: vi.fn(),
+    refreshGitHubForWorktreeIfStale: vi.fn(),
+    revealWorktreeInSidebar: vi.fn()
+  }
+}
+
+function seedHuskTab(
+  state: Partial<AppState>,
+  worktreeId: string,
+  ptyBinding: string | null
+): void {
+  state.tabsByWorktree = {
+    [worktreeId]: [{ id: HUSK_TAB_ID, title: 'Codex', ptyId: null } as never]
+  }
+  state.unifiedTabsByWorktree = {
+    [worktreeId]: [
+      {
+        id: `unified-${HUSK_TAB_ID}`,
+        contentType: 'terminal',
+        entityId: HUSK_TAB_ID,
+        groupId: 'group-1'
+      } as never
+    ]
+  }
+  state.groupsByWorktree = {
+    [worktreeId]: [
+      {
+        id: 'group-1',
+        activeTabId: `unified-${HUSK_TAB_ID}`,
+        tabOrder: [`unified-${HUSK_TAB_ID}`],
+        recentTabIds: []
+      } as never
+    ]
+  }
+  state.activeGroupIdByWorktree = { [worktreeId]: 'group-1' }
+  state.terminalLayoutsByTabId = {
+    [HUSK_TAB_ID]: {
+      root: { type: 'leaf', leafId: LEAF_ID },
+      activeLeafId: LEAF_ID,
+      ...(ptyBinding ? { ptyIdsByLeafId: { [LEAF_ID]: ptyBinding } } : {})
+    } as never
+  }
+}
+
+function seedSleepingRecord(worktreeId: string, sessionId: string): void {
+  const paneKey = makePaneKey(HUSK_TAB_ID, LEAF_ID)
+  useAppStore.setState((s) => ({
+    sleepingAgentSessionsByPaneKey: {
+      ...s.sleepingAgentSessionsByPaneKey,
+      [paneKey]: {
+        paneKey,
+        tabId: HUSK_TAB_ID,
+        worktreeId,
+        agent: 'codex' as const,
+        providerSession: { key: 'session_id' as const, id: sessionId },
+        prompt: 'resume prior task',
+        state: 'working' as const,
+        origin: 'quit' as const,
+        capturedAt: 1000,
+        updatedAt: 1000,
+        terminalTitle: 'Codex'
+      }
+    }
+  }))
+}
+
+afterEach(() => {
+  useAppStore.setState(initialAppStoreState, true)
+})
+
+describe('preserved-pane replacement contract on workspace activation', () => {
+  it('appends exactly one replacement tab for a husk pane and retains the husk across repeats', async () => {
+    const worktree = { ...makeWorktree(), createdWithAgent: undefined }
+    const state = baseState(worktree)
+    // Hibernation cleared the pane's PTY binding: the husk cannot resume in place.
+    seedHuskTab(state, worktree.id, null)
+    useAppStore.setState(state)
+    seedSleepingRecord(worktree.id, 'codex-session-A')
+
+    activateAndRevealWorktree(worktree.id)
+    await waitForWorktreeAgentActivationGateForTests(worktree.id)
+
+    const afterFirst = useAppStore.getState()
+    const tabsAfterFirst = afterFirst.tabsByWorktree[worktree.id] ?? []
+    expect(tabsAfterFirst.map((tab) => tab.id)).toContain(HUSK_TAB_ID)
+    expect(tabsAfterFirst).toHaveLength(2)
+    const replacement = tabsAfterFirst.find((tab) => tab.id !== HUSK_TAB_ID)!
+    expect(afterFirst.automaticAgentResumeClaimsByTabId[replacement.id]?.providerSession).toEqual({
+      key: 'session_id',
+      id: 'codex-session-A'
+    })
+    expect(afterFirst.consumeTabStartupCommand(replacement.id)?.resumeProviderSession).toEqual({
+      key: 'session_id',
+      id: 'codex-session-A'
+    })
+
+    // Reopening must not fork more tabs or launch another resume.
+    activateAndRevealWorktree(worktree.id)
+    activateAndRevealWorktree(worktree.id)
+    const afterRepeats = useAppStore.getState()
+    expect(afterRepeats.tabsByWorktree[worktree.id]).toHaveLength(2)
+  })
+
+  it('does not fork a NON-group-active restorable pane into a replacement tab', async () => {
+    const worktree = { ...makeWorktree(), createdWithAgent: undefined }
+    const state = baseState(worktree)
+    seedHuskTab(state, worktree.id, 'pty-old-1')
+    // The husk is hidden behind another active tab but still mounts keep-alive for in-place cold restore.
+    state.tabsByWorktree = {
+      [worktree.id]: [
+        { id: HUSK_TAB_ID, title: 'Codex', ptyId: null } as never,
+        { id: 'other-tab-1', title: 'shell', ptyId: null } as never
+      ]
+    }
+    state.unifiedTabsByWorktree = {
+      [worktree.id]: [
+        {
+          id: `unified-${HUSK_TAB_ID}`,
+          contentType: 'terminal',
+          entityId: HUSK_TAB_ID,
+          groupId: 'group-1'
+        } as never,
+        {
+          id: 'unified-other-tab-1',
+          contentType: 'terminal',
+          entityId: 'other-tab-1',
+          groupId: 'group-1'
+        } as never
+      ]
+    }
+    state.groupsByWorktree = {
+      [worktree.id]: [
+        {
+          id: 'group-1',
+          activeTabId: 'unified-other-tab-1',
+          tabOrder: [`unified-${HUSK_TAB_ID}`, 'unified-other-tab-1'],
+          recentTabIds: []
+        } as never
+      ]
+    }
+    state.activeTabIdByWorktree = { [worktree.id]: 'other-tab-1' }
+    state.activeTabTypeByWorktree = { [worktree.id]: 'terminal' }
+    useAppStore.setState(state)
+    seedSleepingRecord(worktree.id, 'codex-session-D')
+
+    activateAndRevealWorktree(worktree.id)
+    activateAndRevealWorktree(worktree.id)
+    await waitForWorktreeAgentActivationGateForTests(worktree.id)
+
+    const after = useAppStore.getState()
+    expect(after.tabsByWorktree[worktree.id]?.map((tab) => tab.id)).toEqual([
+      HUSK_TAB_ID,
+      'other-tab-1'
+    ])
+    // Keep the record with its cold-restoring pane or pane and replacement both resume it.
+    expect(after.sleepingAgentSessionsByPaneKey[makePaneKey(HUSK_TAB_ID, LEAF_ID)]).toBeDefined()
+  })
+})

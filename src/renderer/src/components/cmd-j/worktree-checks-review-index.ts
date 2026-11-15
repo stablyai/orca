@@ -1,13 +1,13 @@
-import { resolveWorktreeBranchLabel } from '@/lib/worktree-default-display-name'
+import { resolveWorktreeBranchLabel } from '@/lib/workspace/display/worktree-default-display-name'
 import { resolvePaletteRepoForWorktree } from '@/lib/workspace/search/palette-repo-resolution'
-import { getGitHubPRCacheKey } from '../../../../shared/github/github-cache-key'
+import { getGitHubPRCacheKey } from '../../../../shared/github/cache/github-cache-key'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review/hosted-review-cache-identity'
 import type { AppState } from '@/store/types'
 import type { HostedReviewInfo } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { isGitHubPRSuppressed } from '../../../../shared/worktree/github-pr-suppression'
-import { selectChecksPanelReview } from '../right-sidebar/checks-panel/checks-panel-review'
+import { isGitHubPRSuppressed } from '../../../../shared/worktree/hosted-review/github-pr-suppression'
+import { selectChecksPanelReview } from '../right-sidebar/checks-panel/review-state/checks-panel-review'
 
 type WorktreeChecksReviewIndexArgs = {
   worktrees: readonly Worktree[]

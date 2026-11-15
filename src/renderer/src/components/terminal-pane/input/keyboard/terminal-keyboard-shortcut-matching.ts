@@ -8,7 +8,7 @@ import type {
   KeybindingPlatform,
   TerminalShortcutPolicy
 } from '../../../../../../shared/keybindings/types'
-import { isFindQueryTooLarge } from '@/lib/find-query-bounds'
+import { isFindQueryTooLarge } from '@/lib/text-search/find-query-bounds'
 
 export function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {

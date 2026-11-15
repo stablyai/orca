@@ -1,8 +1,8 @@
-import { track } from '@/lib/telemetry'
+import { track } from '@/diagnostics/telemetry/telemetry'
 import {
   buildNestedRepoImportActionTelemetry,
   type NestedRepoTelemetryRuntimeKind
-} from '../../../../../../shared/nested-repo-telemetry'
+} from '../../../../../../shared/telemetry/nested-repo-telemetry'
 import type { NestedRepoScanResult } from '../../../../../../shared/project-group-types'
 
 export function trackNestedFolderOpen(args: {

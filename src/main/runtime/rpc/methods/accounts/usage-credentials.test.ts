@@ -16,7 +16,7 @@ vi.mock('node:os', async (importOriginal) => {
   return { ...actual, homedir: () => home.dir }
 })
 // Why: the CLI sign-in probe reads platform credential stores this test must not touch.
-vi.mock('../../../../rate-limits/zcode-usage-fetcher', () => ({
+vi.mock('../../../../rate-limits/providers/zcode/zcode-usage-fetcher', () => ({
   hasZcodeCliPlanCredentials: () => false
 }))
 

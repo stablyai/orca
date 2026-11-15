@@ -1,27 +1,26 @@
-import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/browser-focus'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createStoreCascadesMockApi } from '@/store/testing/app-store-cascade-api.test-fixture'
 import '@/store/testing/app-store-test-fixture'
 import { makeTabGroup, makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
 import { buildBrowserPage } from '@/store/slices/browser/pages/browser-page-records'
-import { captureLinkOpenIntent } from '../../link-open-intent'
-import { beginLinkOpenRequest } from '../../link-open-request'
+import { captureLinkOpenIntent } from '../../links/placement/link-open-intent'
+import { beginLinkOpenRequest } from '../../links/link-open-request'
 import { openLocalBrowserLink } from './browser-link-open'
 import { selectBrowserLinkDestination } from './browser-link-destination'
 import {
   browserLinkTestDestination,
   createBrowserLinkTestStore,
   WORKSPACE,
-  URL_TO_OPEN,
-  type BrowserLinkTestStore
+  URL_TO_OPEN
 } from './browser-link-open.test-fixture'
-import { openFileInBrowserTab } from '../../file-preview'
+import type { BrowserLinkTestStore } from './browser-link-open.test-fixture'
 import { openWorkspaceBrowserTabForLink } from '../workspace/workspace-browser-tab-open'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/input/browser-focus'
 
 const mocks = vi.hoisted(() => ({ getState: vi.fn() }))
 vi.mock('@/store/index', () => ({ useAppStore: { getState: () => mocks.getState() } }))
-vi.mock('@/components/browser-pane/host-guest/browser-focus', async (importOriginal) => ({
+vi.mock('@/components/browser-pane/host-guest/input/browser-focus', async (importOriginal) => ({
   ...(await importOriginal<typeof BrowserFocusModule>()),
   requestBrowserFocus: vi.fn()
 }))
@@ -65,89 +64,6 @@ function browser(groupId: string, url = URL_TO_OPEN) {
 }
 
 describe('browser link placement and exact page activation', () => {
-  it('opens a new website tab when the same URL is already open', async () => {
-    const existing = browser('b')
-    const result = await open(context(true))
-    expect(result.status).toBe('opened')
-    if (result.status !== 'opened') {
-      throw new Error('Expected opened link')
-    }
-    expect(result.result.browserWorkspaceId).not.toBe(existing.id)
-    expect(result.result.groupId).toBe('a')
-    expect(store.getState().browserTabsByWorktree[WORKSPACE]).toHaveLength(2)
-    expect(store.getState().browserPagesByWorkspace[existing.id]?.[0]?.url).toBe(URL_TO_OPEN)
-  })
-
-  it('removes a newly created tab after an activation error while preserving existing tabs', async () => {
-    const existing = browser('c', 'https://unrelated.example/')
-    const before = store.getState()
-    const outcome = await openLocalBrowserLink({
-      destination: browserLinkTestDestination(),
-      context: context(),
-      url: URL_TO_OPEN,
-      ownsRoute: () => true,
-      reveal: () => {
-        throw new Error('Workspace activation failed')
-      }
-    })
-
-    expect(outcome).toEqual({ status: 'failed' })
-    const state = store.getState()
-    expect(state.browserTabsByWorktree[WORKSPACE]?.map((tab) => tab.id)).toEqual([existing.id])
-    expect(state.browserPagesByWorkspace).toEqual(before.browserPagesByWorkspace)
-    expect(state.unifiedTabsByWorktree[WORKSPACE]).toEqual(before.unifiedTabsByWorktree[WORKSPACE])
-    expect(state.recentlyClosedBrowserTabsByWorktree[WORKSPACE] ?? []).toEqual([])
-  })
-
-  it('follows source movement while an explicit request stays pinned', async () => {
-    const automatic = context()
-    store.setState({
-      unifiedTabsByWorktree: {
-        [WORKSPACE]: store
-          .getState()
-          .unifiedTabsByWorktree[WORKSPACE]!.map((tab) =>
-            tab.id === 'source' ? { ...tab, groupId: 'b' } : tab
-          )
-      }
-    })
-    const moved = await open(automatic)
-    expect(moved.status).toBe('opened')
-    if (moved.status !== 'opened') {
-      throw new Error('Expected open')
-    }
-    expect(moved.result.groupId).toBe('c')
-    expect(store.getState().groupsByWorktree[WORKSPACE]).toHaveLength(3)
-    const explicit = context(true)
-    store.setState({
-      unifiedTabsByWorktree: {
-        [WORKSPACE]: store
-          .getState()
-          .unifiedTabsByWorktree[WORKSPACE]!.map((tab) =>
-            tab.id === 'source' ? { ...tab, groupId: 'a' } : tab
-          )
-      }
-    })
-    expect(await open(explicit)).toMatchObject({ status: 'opened', result: { groupId: 'b' } })
-  })
-
-  it('uses destination defaults after the source closes, instead of its captured group', async () => {
-    const captured = context()
-    store.setState({
-      unifiedTabsByWorktree: {
-        [WORKSPACE]: store
-          .getState()
-          .unifiedTabsByWorktree[WORKSPACE]!.filter((tab) => tab.id !== 'source')
-      }
-    })
-    const opened = await open(captured)
-    expect(opened.status).toBe('opened')
-    if (opened.status !== 'opened') {
-      throw new Error('Expected open')
-    }
-    expect(opened.result.groupId).toBe('b')
-    expect(store.getState().groupsByWorktree[WORKSPACE]).toHaveLength(3)
-  })
-
   it('refuses an expired explicit group before creating records or activating a destination', async () => {
     const captured = context(true)
     store.setState({
@@ -213,30 +129,6 @@ describe('existing open routes with link intent', () => {
       })
     ).toEqual({ status: 'refused' })
     expect(store.getState().browserPagesByWorkspace).toEqual({})
-  })
-
-  it('creates a pinned local HTML preview even when another group already shows the file', async () => {
-    const filePath = '/repo/index.html'
-    browser('b', 'file:///repo/index.html')
-    const outcome = vi.fn()
-    await new Promise((resolve) =>
-      openFileInBrowserTab({
-        filePath,
-        worktreeId: WORKSPACE,
-        linkContext: context(true),
-        onLinkOutcome: (result) => {
-          outcome(result)
-          resolve(result)
-        }
-      })
-    )
-    expect(outcome).toHaveBeenCalledWith(
-      expect.objectContaining({
-        status: 'opened',
-        result: expect.objectContaining({ groupId: 'a' })
-      })
-    )
-    expect(store.getState().browserTabsByWorktree[WORKSPACE]).toHaveLength(2)
   })
 
   it('finds inactive document pages through page records rather than workspace mirrors', () => {

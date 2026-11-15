@@ -1,5 +1,3 @@
-import type { AcpOwnershipReader } from '../journal/acp-ownership-reader'
-import { z } from 'zod'
 import { BoundedMap } from '../../../shared/bounded-map'
 import type { ProviderTimelineEvent } from '../../native-chat/agent-session-timeline/provider-timeline-event'
 import {
@@ -20,6 +18,7 @@ import { acpTurnEndEvents, AcpPromptTurns } from './acp-prompt-turns'
 import { translateAcpRequest } from '../requests/acp-timeline-requests'
 import { ACP_SUBSTANTIVE_UPDATES, acpSessionUpdate } from './acp-session-update'
 import { AcpSubagents } from './acp-subagents'
+import { AcpChildSessions } from './acp-child-sessions'
 import { AcpTimelineOwnership } from './acp-timeline-ownership'
 import { AcpTurnFailures } from './acp-turn-failures'
 import { acpAuthenticationRequired, acpPromptErrorDetail } from '../turns/acp-prompt-failure'
@@ -27,13 +26,10 @@ import type { AcpTextDrop } from './acp-turn-messages'
 import type { PromptResponse } from '../generated/acp-protocol.generated'
 import type { NativeChatSubagentState } from '../../../shared/native-chat/native-chat-types'
 
-const requestSessionSchema = z.object({ sessionId: z.string() })
-
 export type AcpTimelineTranslatorOptions = {
   sessionId: string
   dialect?: AcpDialect
   agentName?: string
-  ownership?: AcpOwnershipReader
   onTextDropped?: (drop: AcpTextDrop) => void
 }
 
@@ -46,6 +42,7 @@ export class AcpTimelineTranslator {
   private readonly backgroundTasks: AcpBackgroundTaskTimeline
   /** Drained by the lane in journal order. */
   readonly subagents = new AcpSubagents()
+  readonly children: AcpChildSessions
   private readonly ownership: AcpTimelineOwnership
   private readonly started = new BoundedMap<string, true>({ maxEntries: 128 })
   private readonly failures: AcpTurnFailures
@@ -54,7 +51,7 @@ export class AcpTimelineTranslator {
   protected activeTurn?: string
 
   constructor(private readonly options: AcpTimelineTranslatorOptions) {
-    this.ownership = new AcpTimelineOwnership(options.ownership)
+    this.ownership = new AcpTimelineOwnership()
     this.dialect = options.dialect ?? GENERIC_ACP_DIALECT
     this.providerSessionId = options.sessionId
     this.injectsPromptIdentity = this.dialect.injectedPromptIdentity === true
@@ -63,6 +60,8 @@ export class AcpTimelineTranslator {
       this.ownership.tools.join(callId)
     )
     this.prompts = new AcpPromptTurns(options.sessionId, this.dialect, options.agentName)
+    const tools = this.ownership.tools
+    this.children = new AcpChildSessions(options.sessionId, this.dialect, this.subagents, tools)
   }
 
   dispose(): void {
@@ -164,17 +163,12 @@ export class AcpTimelineTranslator {
     if (this.ownership.disposed) {
       return []
     }
-    const session = requestSessionSchema.safeParse(params)
-    if (session.success && session.data.sessionId !== this.options.sessionId) {
-      const id = session.data.sessionId
-      const child = acpNotificationEnvelopeSchema.safeParse(params)
-      if (this.loading || !this.subagents.has(id) || !child.success || child.data._meta?.isReplay) {
-        return []
-      }
-      const state = this.dialect.subagentSessionEnd?.(method, params)
-      return state ? this.reconcileSubagent(id, state, at) : []
-    }
     const extension = this.dialect.notification?.(method, params, at)
+    const open = this.prompts.current?.opened ? this.prompts.current.turn : this.activeTurn
+    const child = this.children.notification(method, params, extension, this.loading, open, at)
+    if (child) {
+      return child
+    }
     if (extension?.disposition === 'ignore') {
       return []
     }
@@ -195,8 +189,7 @@ export class AcpTimelineTranslator {
       (update !== undefined && ACP_SUBSTANTIVE_UPDATES.includes(update.sessionUpdate)) ||
       extension?.end !== undefined ||
       extension?.started === true
-    const offeredTurn =
-      providerTurn ?? (this.prompts.current?.opened ? this.prompts.current.turn : this.activeTurn)
+    const offeredTurn = providerTurn ?? open
     const operation = this.ownership.operation()
     const owner = update
       ? this.ownership.messages.owner(offeredTurn, update, operation.settled)
@@ -218,8 +211,7 @@ export class AcpTimelineTranslator {
     this.ownership.messages.observe(owner.turn, update)
     const join = {
       thread: this.options.sessionId,
-      ...(turn === undefined ? {} : { turn }),
-      ...(owner.scope ? { scope: owner.scope } : {})
+      ...(turn === undefined ? {} : { turn })
     }
     if (extension?.backgroundTasks) {
       const tasks = extension.backgroundTasks.filter((task) => !this.subagents.has(task.taskId))
@@ -261,8 +253,7 @@ export class AcpTimelineTranslator {
           dialect: this.dialect,
           backgroundTasks: this.backgroundTasks,
           subagents: this.subagents,
-          messageKey,
-          scope: owner.scope
+          messageKey
         })
       ]
     }

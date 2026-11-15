@@ -21,8 +21,8 @@ vi.mock('ws', async () => {
 })
 
 import { SocksProxyAgent } from 'socks-proxy-agent'
-import { RelayControlClient } from './relay-control-client'
-import { CloudRelayTransport } from '../rpc/relay-transport'
+import { RelayControlClient } from './control-channel/relay-control-client'
+import { CloudRelayTransport } from '../rpc/transports/relay-transport'
 
 const PROXY_VARS = [
   'HTTP_PROXY',

@@ -10,7 +10,7 @@ import {
 import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { CodexSession } from '../session-lifecycle/codex-structured-session-state'
 import { readCodexAutoSandbox } from '../launch/codex-structured-auto-sandbox'
-import { codexStructuredPermissionPolicy } from '../../../../shared/codex-permission-policy'
+import { codexStructuredPermissionPolicy } from '../../../../shared/agent-launch/permissions/codex-permission-policy'
 import type { CodexSandboxPolicy } from '../launch/codex-structured-sandbox-policy'
 
 type PermissionHost = {

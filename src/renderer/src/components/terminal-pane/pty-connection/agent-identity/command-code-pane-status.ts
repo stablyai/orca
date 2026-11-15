@@ -6,7 +6,7 @@ import {
   setCommandCodeDoneSettleExecutor
 } from '../../agent-completion/command-code/command-code-done-settle'
 import { canCommandCodeOutputOwnPane } from '../../agent-completion/command-code/command-code-output-ownership'
-import { rendererAgentStatusObservations } from '@/lib/renderer-agent-status-observations'
+import { rendererAgentStatusObservations } from '@/lib/agent-status/evidence/renderer-agent-status-observations'
 
 export function bindCommandCodeOutputStatus(session: ConnectPanePtySession): void {
   session.canApplyCommandCodeOutputStatus = (): boolean => {
@@ -15,8 +15,7 @@ export function bindCommandCodeOutputStatus(session: ConnectPanePtySession): voi
     return canCommandCodeOutputOwnPane({
       foregroundAgent: foreground?.agent,
       shellForeground: foreground?.shellForeground,
-      paneOwnerAgent: session.getAuthoritativePaneAgent(),
-      retainedPaneOwnerAgent: state.retainedAgentsByPaneKey[session.cacheKey]?.agentType
+      paneOwnerAgent: session.getAuthoritativePaneAgent()
     })
   }
 

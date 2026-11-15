@@ -3,8 +3,8 @@ import {
   gitlabMergeRequestHeadLocalRef,
   reviewHeadRemoteRefComponent
 } from '../../../../shared/review-head-tracking-ref'
-import { isTransientReviewHeadFetchError } from '../../../git/fetch-error-classification'
-import { fetchGitLabMergeRequestHeadRef } from '../../../gitlab/mr-head-tracking-ref'
+import { isTransientReviewHeadFetchError } from '../../../git/remotes/fetch-error-classification'
+import { fetchGitLabMergeRequestHeadRef } from '../../../gitlab/merge-requests/mr-head-tracking-ref'
 import { reviewStartPointFailure } from '../../../../shared/review-start-point-failure-copy'
 type GitExec = (args: string[]) => Promise<{ stdout: string }>
 

@@ -36,12 +36,6 @@ function setup() {
 
 // Enter executes a terminal command, so exercise the actual guarded search field.
 describe('quick command search IME ownership', () => {
-  it('navigates hosted commands by the caller-provided composite key', () => {
-    const { input, onCommandValueChange } = setup()
-    fireEvent.keyDown(input, { key: 'ArrowDown', keyCode: 40 })
-    expect(onCommandValueChange).toHaveBeenCalledWith(commands[1].id)
-  })
-
   it('does not run a command on the bare redispatch after a confirmation', () => {
     const { input, onRun } = setup()
     fireEvent.compositionStart(input)

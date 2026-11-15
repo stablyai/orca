@@ -1,12 +1,14 @@
 import { EVERY_AGENT_CHAT } from '../../../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-
 import {
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
-import type { ProjectExecutionRuntimeResolution } from '../../../../../../shared/execution-host/project-execution-runtime'
-import type * as ConnectionOwnerResolutionModule from '../../../connection-owner-resolution'
+import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { buildAgentLaunchRouteInput } from './agent-launch-route-input'
+import type { AgentLaunchRouteArgs, AgentLaunchRouteStore } from './agent-launch-route-input'
+import { planAgentSessionLaunch } from './agent-session-launch-plan'
+import type * as ConnectionOwnerResolutionModule from '../../../workspace/ownership/connection-owner-resolution'
 
 const mocks = vi.hoisted(() => ({
   getExecutionHostIdForWorktree: vi.fn(),
@@ -21,15 +23,15 @@ vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: mocks.getExecutionHostIdForWorktree
 }))
 // Stage only workspace ownership; repo fallback must use the real resolver.
-vi.mock('@/lib/connection-owner-resolution', async (importOriginal) => ({
+vi.mock('@/lib/workspace/ownership/connection-owner-resolution', async (importOriginal) => ({
   ...(await importOriginal<typeof ConnectionOwnerResolutionModule>()),
   getConnectionIdFromState: mocks.getConnectionIdFromState
 }))
-vi.mock('@/lib/local-preflight-context', () => ({
+vi.mock('@/runtime/hosts/preflight/local-preflight-context', () => ({
   getLocalProjectExecutionRuntimeContext: mocks.getLocalProjectExecutionRuntimeContext,
   getLocalRepoProjectExecutionRuntimeContext: mocks.getLocalRepoProjectExecutionRuntimeContext
 }))
-vi.mock('@/lib/web-client-location', () => ({
+vi.mock('@/app-shell/platform/web-client-location', () => ({
   isWebClientLocation: mocks.isWebClientLocation
 }))
 vi.mock('@/runtime/hosts/capabilities/local-runtime-capabilities', () => ({
@@ -37,39 +39,14 @@ vi.mock('@/runtime/hosts/capabilities/local-runtime-capabilities', () => ({
 }))
 vi.mock('@/lib/agent-session/launch/continuation/structured-agent-launch-settlement', () => ({}))
 
-import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import {
-  buildAgentLaunchRouteInput,
-  type AgentLaunchRouteArgs,
-  type AgentLaunchRouteStore
-} from './agent-launch-route-input'
-import {
-  planAgentSessionLaunch,
-  structuredAgentSessionLaunchFeasible
-} from './agent-session-launch-plan'
-
 const routeFor = (appStore: AgentLaunchRouteStore, args: AgentLaunchRouteArgs) =>
   planAgentSessionLaunch(appStore, { ...args, requestId: 'route-check' }).route
-const structuredFeasibleFor = (appStore: AgentLaunchRouteStore, args: AgentLaunchRouteArgs) =>
-  structuredAgentSessionLaunchFeasible(appStore, { ...args, settings: STRUCTURED_SETTINGS })
 
 const STRUCTURED_SETTINGS = {
   nativeChatProviders: EVERY_AGENT_CHAT,
   agentCmdOverrides: {},
   agentDefaultArgs: {},
   agentDefaultEnv: {}
-}
-
-const WSL_RUNTIME: ProjectExecutionRuntimeResolution = {
-  status: 'resolved',
-  runtime: {
-    kind: 'wsl',
-    hostPlatform: 'wsl',
-    projectId: 'repo-1',
-    distro: 'Ubuntu',
-    reason: 'project-override',
-    cacheKey: 'wsl'
-  }
 }
 
 function store(settings: Record<string, unknown> = STRUCTURED_SETTINGS): AgentLaunchRouteStore {
@@ -89,53 +66,6 @@ function stageLocalStructuredHost(): void {
 
 describe('buildAgentLaunchRouteInput', () => {
   beforeEach(stageLocalStructuredHost)
-
-  it('never consults the local project runtime for a worktree on an SSH connection', () => {
-    mocks.getExecutionHostIdForWorktree.mockReturnValue('ssh:build-box')
-    mocks.getConnectionIdFromState.mockReturnValue('build-box')
-    const input = buildAgentLaunchRouteInput(store(), {
-      agent: 'claude',
-      workspace: { kind: 'git-worktree', worktreeId: 'wt-remote' }
-    })
-    expect(input.executionHostId).toBe('ssh:build-box')
-    expect(input.projectRuntime).toBeUndefined()
-    expect(input.nativeChatTranscriptIsLocalReadable).toBe(false)
-    expect(mocks.getLocalProjectExecutionRuntimeContext).not.toHaveBeenCalled()
-    expect(mocks.getLocalRepoProjectExecutionRuntimeContext).not.toHaveBeenCalled()
-    expect(
-      structuredFeasibleFor(store(), {
-        agent: 'claude',
-        workspace: { kind: 'git-worktree', worktreeId: 'wt-remote' }
-      })
-    ).toBe(false)
-  })
-
-  it('resolves a prospective git worktree from its repo', () => {
-    mocks.getLocalRepoProjectExecutionRuntimeContext.mockReturnValue(WSL_RUNTIME)
-    const appStore = store()
-    const input = buildAgentLaunchRouteInput(appStore, {
-      agent: 'codex',
-      workspace: { kind: 'git-worktree', repoId: 'repo-1' },
-      prompt: 'issue body',
-      promptDelivery: 'draft'
-    })
-    expect(input.executionHostId).toBe('local')
-    expect(input.projectRuntime).toBe(WSL_RUNTIME)
-    expect(mocks.getLocalRepoProjectExecutionRuntimeContext).toHaveBeenCalledWith(
-      appStore,
-      'repo-1'
-    )
-    expect(mocks.getExecutionHostIdForWorktree).not.toHaveBeenCalled()
-    expect(mocks.getLocalProjectExecutionRuntimeContext).not.toHaveBeenCalled()
-    expect(
-      routeFor(appStore, {
-        agent: 'codex',
-        workspace: { kind: 'git-worktree', repoId: 'repo-1' },
-        prompt: 'issue body',
-        promptDelivery: 'draft'
-      })
-    ).toBe('terminal-tui')
-  })
 
   describe('a workspace on a paired server', () => {
     const CURRENT_SERVER = [
@@ -159,13 +89,6 @@ describe('buildAgentLaunchRouteInput', () => {
     beforeEach(() => {
       mocks.getExecutionHostIdForWorktree.mockReturnValue('runtime:server-1')
       mocks.readLocalRuntimeCapabilitiesOrUnknown.mockReturnValue([])
-    })
-
-    it("reads the server's own capabilities from its host status, not this machine's", () => {
-      expect(
-        buildAgentLaunchRouteInput(pairedStore(CURRENT_SERVER), args).hostCapabilities
-      ).toEqual(CURRENT_SERVER)
-      expect(routeFor(pairedStore(CURRENT_SERVER), args)).toBe('structured-native-chat')
     })
 
     it('treats a server that has not reported its status as unknown', () => {

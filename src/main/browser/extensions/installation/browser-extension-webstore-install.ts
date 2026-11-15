@@ -1,9 +1,10 @@
+import { recordBrowserExtensionInstalled } from '../../../telemetry/browser-extensions-banner'
 import { randomUUID } from 'node:crypto'
 import { rename, rm, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve } from 'node:path'
 import type { InstalledBrowserExtension } from '../../../../shared/browser/extensions/browser-extension-types'
 import { BROWSER_EXTENSION_ORIGINAL_MANIFEST_FILE } from '../../../../shared/browser/extensions/browser-extension-worker-api'
-import { browserSessionRegistry } from '../../sessions/browser-session-registry'
+import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import {
   readBrowserExtensionArchive,
   writeBrowserExtensionArchive
@@ -157,6 +158,7 @@ export async function commitStagedWebStoreExtension(
       await reloadBrowserExtensionWhereEnabled(record)
     }
     if (enableInProfileId) {
+      browserSessionRegistry.attachExtensions(enableInProfileId)
       await loadBrowserExtensionIntoProfile(enableInProfileId, record)
       browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
         withExtensionEnabled(byProfile, enableInProfileId, extensionId, true)
@@ -178,6 +180,9 @@ export async function commitStagedWebStoreExtension(
   }
   if (getHeldBrowserExtensionUpdate(extensionId)?.version === record.version) {
     forgetHeldBrowserExtensionUpdate(extensionId)
+  }
+  if (!previous) {
+    recordBrowserExtensionInstalled('web_store')
   }
   notifyBrowserExtensionListChanged()
   return record

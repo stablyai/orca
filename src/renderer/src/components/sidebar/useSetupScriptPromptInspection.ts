@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { inspectSetupScriptPromptState } from '@/lib/setup-script-prompt'
+import { inspectSetupScriptPromptState } from '@/runtime/repo-hooks/setup-script-prompt'
 import {
   checkRuntimeHooks,
   inspectRuntimeSetupScriptImports

@@ -6,7 +6,7 @@ import {
   BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY,
   BROWSER_SCREENCAST_RUNTIME_CAPABILITY
-} from '../../browser-runtime-capabilities'
+} from '../runtime/browser-runtime-capabilities'
 import type { BrowserClientHostPlacementPreference } from './browser-client-host-placement'
 
 /** Every capability a runtime must advertise before this client can host its browser pages. */

@@ -11,7 +11,7 @@ import {
 } from './tab-group-panel-split-target'
 import { isPaneDropData, isTabDragData, type TabDragItemData } from './tab-drag-data'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { dropTabThroughLayoutOwner } from './tab-group-layout-owner-commands'
+import { dropTabThroughLayoutOwner, reorderTabInGroup } from './tab-group-layout-owner-commands'
 import { moveTabToGroup } from '../tab-bar/tab-move-to-pane-column'
 
 type AppState = ReturnType<typeof useAppStore.getState>
@@ -22,14 +22,12 @@ export function commitTabDragDrop({
   worktreeId,
   dragGeometryRef,
   dropUnifiedTab,
-  reorderUnifiedTabs,
   finishDrag
 }: {
   event: DragEndEvent
   worktreeId: string
   dragGeometryRef: RefObject<TabGroupPanelGeometrySnapshot | null>
   dropUnifiedTab: AppState['dropUnifiedTab']
-  reorderUnifiedTabs: AppState['reorderUnifiedTabs']
   finishDrag: (restoreSnapshot: boolean, activeData?: TabDragItemData) => void
 }): void {
   const activeData = event.active.data.current
@@ -125,8 +123,7 @@ export function commitTabDragDrop({
         const nextOrder = targetGroup.tabOrder.filter((id) => id !== activeData.unifiedTabId)
         nextOrder.splice(nextIndex, 0, activeData.unifiedTabId)
         if (
-          ORCA_LAYOUT_OWNER_IS_MAIN &&
-          dropTabThroughLayoutOwner(worktreeId, {
+          reorderTabInGroup(worktreeId, {
             kind: 'reorder',
             tabId: activeData.unifiedTabId,
             groupId: overData.groupId,
@@ -136,14 +133,6 @@ export function commitTabDragDrop({
           finishDrag(true)
           return
         }
-        reorderUnifiedTabs(overData.groupId, nextOrder)
-        mirrorWebRuntimeTabMove({
-          kind: 'reorder',
-          worktreeId,
-          tabId: activeData.unifiedTabId,
-          targetGroupId: overData.groupId,
-          tabOrder: nextOrder
-        })
       }
     } else {
       const moved = moveTabToGroup(

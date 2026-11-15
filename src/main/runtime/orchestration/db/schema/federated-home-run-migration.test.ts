@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from '../orchestration-db'
 import { SCHEMA_VERSION, federatedStubHomeRunId } from '../contract-constants'
-import { importFederatedControlMessage } from '../../federation/relay/federation-control-message'
+import { importFederatedControlMessage } from '../../legacy-remote/federation-control-message'
 
 describe('federated home Run migration', () => {
   let db: OrchestrationDb

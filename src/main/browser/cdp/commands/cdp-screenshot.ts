@@ -1,12 +1,14 @@
+import {
+  holdPaintUntilCdpCaptureSettles,
+  holdPaintUntilSettled,
+  type CapturePaintHold
+} from '../debugger/guest-paint-hold'
 import type { WebContents } from 'electron'
 import { sendGuestCdpCommand } from '../debugger/guest-cdp-command'
 import {
   assertRemoteCliPageAccess,
   readRemoteCliAdmittedPage
 } from '../../routing/input-ownership/remote-cli-page-admission'
-
-/** Draws a hidden guest while a capture or agent input needs its frames; returns its release. */
-export type CapturePaintHold = () => () => void
 
 export const SCREENSHOT_TIMEOUT_MS = 8000
 // Probe offsets leave time for the original capture to finish before the deadline.
@@ -139,7 +141,8 @@ export function withTimeout<T>(
 // Undrawn pages can leave captures pending; cheap probes trigger a frame for the original request.
 function captureUntilDrawn(
   webContents: WebContents,
-  params: Record<string, unknown>
+  params: Record<string, unknown>,
+  holdPaint: CapturePaintHold
 ): Promise<{ data: string } | null> {
   return new Promise((resolve, reject) => {
     let settled = false
@@ -175,12 +178,12 @@ function captureUntilDrawn(
       } catch {
         // Guest teardown can reject repaint requests; still try CDP.
       }
-      return sendGuestCdpCommand(webContents, 'Page.captureScreenshot', requestParams).then(
-        (result) => {
-          const data = isRecord(result) ? result.data : undefined
-          return typeof data === 'string' ? { data } : undefined
-        }
-      )
+      return holdPaintUntilCdpCaptureSettles(webContents, holdPaint, () =>
+        sendGuestCdpCommand(webContents, 'Page.captureScreenshot', requestParams)
+      ).then((result) => {
+        const data = isRecord(result) ? result.data : undefined
+        return typeof data === 'string' ? { data } : undefined
+      })
     }
     const deadline = setTimeout(() => finish(() => resolve(null)), SCREENSHOT_TIMEOUT_MS)
     let probes: NodeJS.Timeout[] = []
@@ -225,11 +228,15 @@ export async function captureFullPageScreenshot(
     if (!clip) {
       throw new Error('Unable to determine full-page screenshot bounds')
     }
-    const frame = await captureUntilDrawn(webContents, {
-      format,
-      captureBeyondViewport: true,
-      clip
-    })
+    const frame = await captureUntilDrawn(
+      webContents,
+      {
+        format,
+        captureBeyondViewport: true,
+        clip
+      },
+      holdPaint
+    )
     if (!frame) {
       throw new Error(SCREENSHOT_TIMEOUT_MESSAGE)
     }
@@ -271,13 +278,13 @@ export async function captureScreenshot(
 
   const release = holdPaint()
   try {
-    const frame = await captureUntilDrawn(webContents, screenshotParams)
+    const frame = await captureUntilDrawn(webContents, screenshotParams, holdPaint)
     if (frame) {
       return frame
     }
     const fallback = await readRemoteCliAdmittedPage(webContents.id, () =>
       withTimeout(
-        Promise.resolve().then(() => webContents.capturePage()),
+        holdPaintUntilSettled(holdPaint, () => webContents.capturePage()),
         FALLBACK_CAPTURE_TIMEOUT_MS,
         SCREENSHOT_TIMEOUT_MESSAGE
       )

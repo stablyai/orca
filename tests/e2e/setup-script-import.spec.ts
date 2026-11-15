@@ -145,10 +145,16 @@ async function expectSettingsCommandValue(
   await expect(container.getByRole('textbox', { name })).toHaveValue(value, { timeout: 10_000 })
 }
 
-async function saveReviewedSetupScript(page: Page): Promise<void> {
+async function saveReviewedSetupScript(
+  page: Page,
+  skippedFields: readonly string[] = []
+): Promise<void> {
   await page.getByRole('button', { name: 'Review setup script' }).click()
   const dialog = page.getByRole('dialog', { name: 'Review setup script' })
   await expect(dialog).toBeVisible()
+  for (const field of skippedFields) {
+    await expect(dialog.getByText(field, { exact: true })).toBeVisible()
+  }
   await dialog.getByRole('button', { name: 'Save local setup' }).click()
   await expect(dialog).toBeHidden()
 }
@@ -165,15 +171,13 @@ test.describe('Setup script import prompt', () => {
 
     await expect(
       orcaPage.getByText(
-        /Found a setup command in\s*Superset \(\.superset\/config\.json \+1\)\. Save it to run for new worktrees\./
+        /Found a setup script in\s*\.superset\/config\.json and \.superset\/config\.local\.json\./
       )
     ).toBeVisible({ timeout: 15_000 })
 
-    await saveReviewedSetupScript(orcaPage)
+    await saveReviewedSetupScript(orcaPage, ['cwd', 'config.local.run'])
 
-    await expect(
-      orcaPage.getByText('2 unsupported fields skipped. Saved the setup command.')
-    ).toBeVisible()
+    await expect(orcaPage.getByText('Saved the setup command.')).toBeVisible()
 
     const localCommands = await openImportedSetupSettingsFromToast(orcaPage, repoId)
     await expectSettingsCommandValue(
@@ -192,11 +196,9 @@ test.describe('Setup script import prompt', () => {
     const repoPath = createCmuxSetupRepo(testInfo.outputPath('cmux-setup-repo'))
     const repoId = await addAndActivateRepo(orcaPage, repoPath)
 
-    await expect(
-      orcaPage.getByText(
-        /Found a setup command in\s*cmux \(\.cmux\/cmux\.json\)\. Save it to run for new worktrees\./
-      )
-    ).toBeVisible({ timeout: 15_000 })
+    await expect(orcaPage.getByText(/Found a setup script in\s*\.cmux\/cmux\.json\./)).toBeVisible({
+      timeout: 15_000
+    })
 
     await saveReviewedSetupScript(orcaPage)
 

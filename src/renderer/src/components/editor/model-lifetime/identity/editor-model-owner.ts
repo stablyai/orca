@@ -1,7 +1,7 @@
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
-import '@/lib/editor-file-operation-owner'
-import { resolveEditorOwnerRoute } from '@/lib/editor-file-operation-provenance'
+import type { WorktreeOperationRouteState } from '@/lib/workspace/ownership/worktree-operation-route'
+import '@/lib/editor/file-operations/editor-file-operation-owner'
+import { resolveEditorOwnerRoute } from '@/lib/editor/file-operations/editor-file-operation-provenance'
 import {
   isDetachedEditorBufferId,
   type EditorBufferViewIndex

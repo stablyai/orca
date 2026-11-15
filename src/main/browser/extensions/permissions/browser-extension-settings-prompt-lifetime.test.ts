@@ -23,9 +23,10 @@ vi.mock('electron', () => ({
   webContents: { fromId: () => null }
 }))
 vi.mock('../../guest-lifecycle/manager/browser-manager', () => ({ browserManager: {} }))
-vi.mock('../../sessions/browser-session-registry', () => ({
+vi.mock('../../sessions/profiles/browser-session-registry', () => ({
   browserSessionRegistry: {
     getProfile: () => ({ label: 'Work' }),
+    attachExtensions: () => {},
     getEnabledExtensionIds: () => [],
     updateEnabledExtensionIds: vi.fn()
   }

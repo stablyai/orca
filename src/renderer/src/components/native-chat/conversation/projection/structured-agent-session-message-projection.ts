@@ -6,8 +6,9 @@ import {
   type StructuredAgentSessionOptimisticMessage,
   projectStructuredAgentSessionMessages as projectMessages
 } from '../../../../../../shared/agent-session/view/structured-agent-session-message-projection'
-import { createStructuredQuestionProjection } from '../../../../../../shared/structured-agent-question-projection'
-import { projectStructuredAgentStartItem } from '../../../../../../shared/structured-agent-start-projection'
+import { createStructuredAgentSessionMessageProjection } from '../../../../../../shared/agent-session/view/structured-agent-session-message-stream'
+import { createStructuredQuestionProjection } from '../../../../../../shared/native-chat/transcript/messages/structured-agent-question-projection'
+import { projectStructuredAgentStartItem } from '../../../../../../shared/native-chat/transcript/messages/structured-agent-start-projection'
 
 export const desktopStructuredTranscript = createStructuredQuestionProjection(
   projectStructuredAgentStartItem
@@ -20,4 +21,9 @@ export function projectStructuredAgentSessionMessages(
   submissions: readonly AgentJournalSubmission[]
 ) {
   return projectMessages(items, optimistic, submissions, desktopStructuredTranscript.messages)
+}
+
+/** One mounted chat's messages across journal commits. */
+export function createDesktopStructuredAgentSessionMessageProjection() {
+  return createStructuredAgentSessionMessageProjection(desktopStructuredTranscript.messages)
 }

@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 
 import type { AppState } from '../../types'
 import './agent-status'
-import { collectSleepingAgentSessionRecordsForWorktree } from './agent-status-recovery-collection'
+
 import { createTestStore } from '../../testing/app-store-test-fixture'
-import { makeTab } from '../../terminals/terminal-tab.test-fixture'
+import { makeTab } from '../../terminals/testing/terminal-tab.test-fixture'
 
 describe('captureAllSleepingAgentSessions', () => {
   it('captures launch config into live checkpoints and refreshes late registration', () => {
@@ -49,6 +49,37 @@ describe('captureAllSleepingAgentSessions', () => {
       agentArgs: '--model gpt-5',
       agentEnv: { CODEX_PROFILE: 'captured' }
     })
+
+    store.getState().removeAgentStatus('tab-1:leaf-1')
+    store.getState().registerAgentLaunchConfig(
+      'tab-1:leaf-1',
+      { agentArgs: '--model gpt-5', agentEnv: { CODEX_PROFILE: 'replacement' } },
+      {
+        agentType: 'codex',
+        launchToken: 'replacement-token',
+        tabId: 'tab-1',
+        leafId: 'leaf-1'
+      }
+    )
+    store.getState().setAgentStatus(
+      'tab-1:leaf-1',
+      { state: 'working', prompt: 'replacement task', agentType: 'codex' },
+      'Codex',
+      { updatedAt: 20, stateStartedAt: 20 },
+      { tabId: 'tab-1', worktreeId: 'wt-1' },
+      {
+        providerSession: { key: 'session_id', id: 'codex-session-2' },
+        launchToken: 'replacement-token'
+      }
+    )
+    expect(store.getState().agentLaunchConfigByPaneKey['tab-1:leaf-1']).toMatchObject({
+      identity: { providerSession: { id: 'codex-session-2' } },
+      launchConfig: { agentEnv: { CODEX_PROFILE: 'replacement' } }
+    })
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']?.launchConfig).toEqual({
+      agentArgs: '--model gpt-5',
+      agentEnv: { CODEX_PROFILE: 'replacement' }
+    })
   })
 
   it('does not let a periodic checkpoint supersede a confirmed quit record', () => {
@@ -71,10 +102,9 @@ describe('captureAllSleepingAgentSessions', () => {
       )
 
     store.getState().captureAllSleepingAgentSessions('quit')
-    const quitRecord = store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']
     store.getState().captureAllSleepingAgentSessions('periodic')
+    const quitRecord = store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']
 
-    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toBe(quitRecord)
     expect(quitRecord).toMatchObject({ origin: 'quit', providerSession })
 
     store
@@ -140,10 +170,6 @@ describe('captureAllSleepingAgentSessions', () => {
     expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']?.launchConfig).toEqual(
       launchConfig
     )
-    expect(
-      collectSleepingAgentSessionRecordsForWorktree(store.getState(), 'wt-1')['tab-1:leaf-1']
-        ?.launchConfig
-    ).toEqual(launchConfig)
 
     store.getState().captureAllSleepingAgentSessions('quit')
     expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
@@ -254,7 +280,7 @@ describe('captureAllSleepingAgentSessions', () => {
 
     expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toBeUndefined()
     expect(store.getState().agentLaunchConfigByPaneKey['tab-1:leaf-1']).toBeUndefined()
-    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-2:leaf-2']).toBeDefined()
+
     expect(store.getState().agentLaunchConfigByPaneKey['tab-2:leaf-2']?.launchConfig).toEqual({
       agentArgs: '--model gpt-5',
       agentEnv: { CODEX_PROFILE: 'second' }

@@ -1,5 +1,5 @@
-import type { RuntimeMobileSessionTabsResult } from '../../../../../../shared/runtime-session-contracts'
-import { e2eConfig } from '@/lib/e2e-config'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { e2eConfig } from '@/app-shell/startup/e2e-config'
 
 type BrowserCreationFaultSnapshot = {
   armed: boolean

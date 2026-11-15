@@ -1,6 +1,6 @@
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
-import { resolveOwner } from '@/lib/resolve-owner'
-import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
+import { resolveOwner } from '@/lib/workspace/ownership/resolve-owner'
+import type { WorktreeOperationRouteState } from '@/lib/workspace/ownership/worktree-operation-route'
 
 /** Where a notebook's kernel would run: kernels exist only on this computer. */
 export type NotebookExecutionHost = 'local' | 'remote' | 'unresolved'

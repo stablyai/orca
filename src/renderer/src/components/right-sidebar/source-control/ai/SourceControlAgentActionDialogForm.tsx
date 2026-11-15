@@ -17,8 +17,8 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-import type { AgentCatalogEntry } from '@/lib/agent-catalog'
-import { cn } from '@/lib/utils'
+import type { AgentCatalogEntry } from '@/lib/agent-catalog/agent-catalog'
+import { cn } from '@/lib/class-names'
 import type { SourceControlLaunchActionId } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import type { SourceControlAiWriteTarget } from '../../../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'

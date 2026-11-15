@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { RuntimeHostStatusOwner } from './runtime-host-status-owner'
 import { runtimeHostStatusFailure, type RuntimeHostStatusResponse } from './runtime-host-status'
-import type { RuntimeStatus } from '../../runtime-session-contracts'
+import type { RuntimeStatus } from '../session-graph/runtime-session-contracts'
 
 const owners: RuntimeHostStatusOwner[] = []
 beforeEach(() => vi.useFakeTimers())
@@ -132,4 +132,28 @@ it('cancelling one reader leaves the shared request available to other readers',
   expect(request.mock.calls[0][0].aborted).toBe(false)
   pending.resolve(success())
   expect((await remaining).ok).toBe(true)
+})
+
+it('does not let one failed boot probe keep a host unavailable (#16516)', async () => {
+  const { owner, request } = createOwner()
+  request.mockResolvedValueOnce(runtimeHostStatusFailure('runtime_unavailable', 'host asleep'))
+  await owner.refresh()
+  expect(owner.read().verification).toBe('unavailable')
+  await vi.advanceTimersByTimeAsync(3_000)
+  expect(owner.read()).toMatchObject({
+    verification: 'verified',
+    status: { runtimeId: 'host-1' }
+  })
+})
+
+it('re-verifies a persistent host when its transport returns, without another explicit probe', async () => {
+  const { owner, request } = createOwner(true)
+  owner.connectionChanged('ready')
+  await owner.refresh()
+  owner.connectionChanged('disconnected')
+  expect(owner.read().verification).toBe('unavailable')
+  owner.connectionChanged('ready')
+  await vi.advanceTimersByTimeAsync(0)
+  expect(owner.read().verification).toBe('verified')
+  expect(request).toHaveBeenCalledTimes(2)
 })

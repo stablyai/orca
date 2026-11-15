@@ -96,6 +96,8 @@ export type ProjectHostSetupCloneArgs = {
   hostId: ExecutionHostId
   url: string
   destination: string
+  /** Folder created under destination; defaults to the repository name from the URL. */
+  folderName?: string
   displayName?: string
 }
 

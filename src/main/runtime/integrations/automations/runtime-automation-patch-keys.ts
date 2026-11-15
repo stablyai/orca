@@ -16,5 +16,7 @@ export const RUNTIME_AUTOMATION_PATCH_KEYS = [
   'rrule',
   'dtstart',
   'enabled',
-  'missedRunGraceMinutes'
+  'missedRunGraceMinutes',
+  // Set only in process (a plugin's ownership ending); RPC params never carry it.
+  'createdBy'
 ] as const

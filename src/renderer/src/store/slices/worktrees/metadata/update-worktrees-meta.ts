@@ -10,7 +10,7 @@ import {
   getFolderWorkspaceMetaUpdates
 } from '../listing/detected-worktree-meta'
 import { persistWorktreeMeta } from './worktree-meta-persist'
-import { withPendingSidebarRowWrites } from '@/lib/sidebar-pending-layer'
+import { withPendingSidebarRowWrites } from '@/components/sidebar/sidebar-feed/sidebar-pending-layer'
 import { isRuntimeSelectorNotFoundError } from '../listing/runtime-worktree-rpc-errors'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'

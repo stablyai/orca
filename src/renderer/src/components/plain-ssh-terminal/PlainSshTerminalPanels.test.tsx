@@ -5,7 +5,7 @@ import '@testing-library/jest-dom/vitest'
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SshManagedServerStatus } from '../../../../shared/ssh-types'
+import type { SshManagedServerStatus } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import type {
   PlainSshTerminalEvent,
   PlainSshTerminalOpenResult

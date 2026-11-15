@@ -12,8 +12,8 @@ on:
       - 'src/main/managed-server/**'
       - 'src/main/ssh/migration-source/**'
       - 'src/main/persistence/migrating-orcad-catalog/**'
-      - 'src/main/orcad/orcad-artifact-materializer.ts'
-      - 'src/main/orcad/orcad-host-unavailable.ts'
+      - 'src/main/orcad/artifact-slots/orcad-artifact-materializer.ts'
+      - 'src/main/orcad/diagnostics/orcad-host-unavailable.ts'
       - 'src/main/node-runtime/**'
       - 'src/main/ssh/remote-exec/**'
       - 'src/main/ssh/remote-host/**'
@@ -23,8 +23,8 @@ on:
       - 'src/wsl-guest/**'
       - 'src/packages/process-host/**'
       - 'pnpm-workspace.yaml'
-      - 'src/shared/node-runtime-pin.ts'
-      - 'src/shared/orcad-artifacts.ts'
+      - 'src/shared/node-runtime/node-runtime-pin.ts'
+      - 'src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts'
       - 'config/scripts/build-orcad-*.mjs'
       - 'config/scripts/orcad-distribution/prebuilds/build-orcad-*.mjs'
       - 'config/scripts/orcad-distribution/template/build-orcad-*.mjs'
@@ -38,7 +38,7 @@ on:
       - 'config/scripts/native-build/windows/build-windows-cli-launcher.mjs'
       - 'config/scripts/native-build/windows/windows-rust-executable-build.mjs'
       - 'native/windows-cli-launcher/**'
-      - 'src/main/orcad/orcad-cli-launcher.ts'
+      - 'src/main/orcad/serve-startup/orcad-cli-launcher.ts'
       - '.github/actions/prepare-windows-cli-launcher/**'
       - 'config/patches/node-pty*'
       - 'config/patches/@vscode__windows-process-tree*'
@@ -46,7 +46,8 @@ on:
       - 'config/scripts/windows-process-tree-prepared-addon*.mjs'
       - 'config/scripts/native-build/windows/windows-process-tree-prepared-addon*.mjs'
       - 'config/scripts/native-build/windows/windows-process-tree-gyp-rebuild.mjs'
-      - 'src/shared/windows-breakaway-launch*.ts'
+      - 'src/shared/remote-runtime/orcad-lifecycle/windows-breakaway-launch.ts'
+      - 'src/main/orcad/runtime-launch/windows-breakaway-launcher*.ts'
       - 'src/main/ipc/ssh/ssh-host-server-*.ts'
       # The deploy runs over this SSH transport.
       - 'src/main/ssh/connection/**'
@@ -62,7 +63,6 @@ on:
       - 'src/shared/shell/launch/shell-argument-quoting.ts'
       - '!src/**/*.test.ts'
       - 'src/main/managed-server/host-state/orcad-windows-host-lane.test.ts'
-      - 'tests/e2e/ssh-orcad-auto-convert.spec.ts'
       - 'tests/e2e/helpers/orcad-convert-host.ts'
       - 'tests/e2e/helpers/orcad-convert-flow.ts'
       - 'tests/e2e/helpers/orcad-upgrade-profile.ts'
@@ -78,7 +78,7 @@ on:
   workflow_dispatch:
     inputs:
       cells:
-        description: Comma-separated cell ids from src/main/ssh/hostile-host-test-support/ssh-windows-host-cells.ts; empty runs the default set (orcad-cli-* cells run only when named).
+        description: Comma-separated cells orcad-cmd, orcad-powershell, or orcad-cli-managed; empty runs the two shell cells.
         required: false
         default: ''
       preparation_mode:
@@ -144,7 +144,7 @@ jobs:
         with:
           persist-credentials: false
           # Keep complete server/test trees; missing future imports fail the unchanged builds.
-          # All of src: the orcad-convert cell builds the full e2e app and the bundled CLI.
+          # All of src: the managed CLI cell builds the full e2e app and bundled CLI.
           # mobile: the template ships the mobile web page, which builds from mobile/.
           # cloud: config/tsconfig.vitest-transform.json references the cloud projects, so vitest needs them.
           sparse-checkout: |
@@ -156,7 +156,7 @@ jobs:
             resources
             tests
             src
-      - name: Self-test the provisioning scripts before touching the machine
+      - name: Parse the provisioning scripts before touching the machine
         shell: pwsh
         run: |
           foreach($file in @(Get-ChildItem -Recurse -Filter *.ps1 config/ci/windows-ssh-provider)){
@@ -164,7 +164,6 @@ jobs:
             [Management.Automation.Language.Parser]::ParseFile($file.FullName,[ref]$tokens,[ref]$errors)|Out-Null
             if($errors.Count){throw "PowerShell parse failed: $($file.FullName)"}
           }
-          & config/ci/windows-ssh-provider/preview-ssh/test-preview-diagnostics.ps1
       # ARM inbox servicing can finish while the independent Node artifacts are prepared.
       - name: Prepare the Windows inbox SSH capability
         id: inbox-capability
@@ -242,10 +241,8 @@ jobs:
           New-Item -ItemType Directory -Force -Path $receipts | Out-Null
           $cells=@($env:CELLS -split ',' | ForEach-Object {$_.Trim()} | Where-Object {$_})
           if(-not $cells.Count){$cells=@('orcad-cmd','orcad-powershell')}
-          # One Windows host runs the app-level conversion; it is last because it switches native modules.
-          if(-not $env:CELLS -and '${{ matrix.arch }}' -eq 'x64' -and '${{ matrix.server }}' -eq 'inbox'){$cells+='orcad-convert'}
           # App cells reach the managed server through an SSH local forward, which provisioning grants to the last accounts only.
-          $appCellIds=@('orcad-convert','orcad-cli-managed','orcad-cli-convert')
+          $appCellIds=@('orcad-cli-managed')
           $cells=@($cells | Where-Object {$appCellIds -notcontains $_})+@($cells | Where-Object {$appCellIds -contains $_})
           $forwarding=@($cells | Where-Object {$appCellIds -contains $_}).Count
           $archive=''

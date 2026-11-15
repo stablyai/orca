@@ -16,7 +16,7 @@ import {
 } from '../../../shared/file-write/file-write-disk-precondition'
 import { readlink, realpath, stat, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, normalize, resolve } from 'node:path'
-import { runKeyedSerializedOperation } from '../../cli/keyed-promise-queue'
+import { runKeyedSerializedOperation } from '../../../shared/concurrency/keyed-serialized-operations'
 import { serializedParentDirectoryKey } from '../../filesystem/destination-serialized-local-rename'
 import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
 import {

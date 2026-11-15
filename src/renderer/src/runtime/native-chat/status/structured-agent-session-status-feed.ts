@@ -17,7 +17,7 @@ import {
 } from '../../../../../shared/agent-session/view/agent-session-status-snapshot-fold'
 import { AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/agent-session-attention-capabilities'
 import { runtimeEnvironmentSupportsCapability } from '../../rpc/compatibility/runtime-capability-proof'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { subscribeStructuredAgentSessionStatus } from '../requests/structured-agent-session-subscriptions'
 import {
   createStructuredAgentSessionStatusDispatch,
@@ -25,12 +25,10 @@ import {
   type StructuredAgentSessionStatusChange
 } from './structured-agent-session-status-dispatch'
 
-export type StructuredAgentSessionStatusSnapshot = AgentSessionStatusSnapshot
-
 export type StructuredAgentSessionStatusFeedOwner = {
   activate: () => () => void
   /** The live map, updated in place: read entries, never use its identity as a change signal. */
-  getSnapshot: () => StructuredAgentSessionStatusSnapshot
+  getSnapshot: () => AgentSessionStatusSnapshot
   getNamingSnapshot: () => AgentSessionConversationNames
   getAssociationRevision: () => number
   getSessionSleepState: (sessionId: string) => number | null | undefined

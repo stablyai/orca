@@ -1,7 +1,6 @@
 import { retireRemovedWorktreeCommitDrafts } from '@/lib/source-control/drafts/source-control-commit-draft-session'
-import type { AppState } from '../../../types'
 import { forgetCombinedDiffViewsForWorktrees } from '@/components/editor/combined-diff/remember-view/combined-diff-view-cache'
-import type { WorktreePurgeTarget, WorktreePurgeTargets } from './worktree-purge-target'
+import { forgetDisplayedPanesForWorktrees } from '@/components/sidebar/worktree-card-slot-pane-index'
 import { forgetHugeRepoWarningDismissalsForWorktrees } from '@/lib/source-control/warnings/source-control-huge-repo-warning-dismissals'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { pruneHostedReviewLinkMutationGenerations } from '../metadata/hosted-review-link-mutation'
@@ -10,9 +9,9 @@ import { createWorktreePurgeOmitters } from './worktree-purge-omitters'
 import { omitSleepingAgentSessionsForWorktrees } from './sleeping-agent-session-omission'
 import { removeDeleteStatesForWorktreeIds } from './worktree-delete-state'
 import { omitRecordKeys } from './record-key-omission'
-import { removeWorktreeVisitEntriesForTargets } from '@/lib/worktree-visit-recency'
-import { forgetAmbiguousOwnerWarnings } from '@/lib/ambiguous-owner-warning'
-import { forgetWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
+import { removeWorktreeVisitEntriesForTargets } from '@/lib/workspace/activation/worktree-visit-recency'
+import { forgetAmbiguousOwnerWarnings } from '@/lib/workspace/ownership/ambiguous-owner-warning'
+import { forgetWorktreeSleepIntent } from '@/lib/workspace/sleep/worktree-sleep-intent'
 import { removeWorktreeLayout } from '../../tabs/worktree-layout-lifecycle'
 import {
   cancelStructuredLaunchesForWorktrees,
@@ -21,8 +20,12 @@ import {
 import { buildWorktreePurgeSurfacePatch } from './worktree-purge-surface-patch'
 import { noticeRemovedUnsavedFiles } from './removed-workspace-unsaved-files'
 import { mergeEditorBufferKeepRequests } from '../../editor/buffers/editor-buffer-kept'
-import { buildHostTwinPurgeState, collectHostTwinPurgeScopes } from './host-twin-worktree-purge'
+import { buildHostTwinPurgeState } from './host-twin-worktree-purge'
+import { collectHostTwinPurgeScopes } from './host-twin-purge-scopes'
 import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
+import type { AppState } from '../../../types'
+import type { WorktreePurgeTarget, WorktreePurgeTargets } from './worktree-purge-target'
+import { removeWorkspaceUnreadState } from '../../workspace-attention/workspace-unread-removal'
 
 /**
  * Builds a bulk cleanup patch and clears auxiliary warning records without requiring individual
@@ -71,9 +74,11 @@ export function buildWorktreePurgeState(
     ),
     ...[...twinScopes].flatMap(([hostId, twins]) => [...twins.keys()].map((id) => ({ id, hostId })))
   ]
+  forgetDisplayedPanesForWorktrees(hostKeys)
   const next = { ...s, ...patch }
   return {
     ...patch,
+    ...removeWorkspaceUnreadState(next, hostKeys),
     lastVisitedAtByWorktreeId: removeWorktreeVisitEntriesForTargets(
       next.lastVisitedAtByWorktreeId,
       hostKeys
@@ -92,6 +97,7 @@ export function buildFullWorktreePurgeState(
   changedPaneKeys?: Set<string>
 ): Partial<AppState> {
   const worktreeIdSet = new Set(normalizedTargets.map((target) => target.id))
+  forgetDisplayedPanesForWorktrees(normalizedTargets.map(({ id }) => ({ id })))
   forgetCombinedDiffViewsForWorktrees(worktreeIdSet)
   // Why: bulk purges bypass close actions, so provisional ownership must die before tab state does.
   const cancelledSessionIds = cancelStructuredLaunchesForWorktrees(worktreeIdSet)
@@ -155,6 +161,10 @@ export function buildFullWorktreePurgeState(
 
   return {
     editorBufferKeepRequest,
+    ...removeWorkspaceUnreadState(
+      s,
+      [...worktreeIdSet].map((id) => ({ id }))
+    ),
     ...removeWorktreeLayout(s, {
       worktreeIds: worktreeIdSet,
       tabIds: doomed.doomedTabIds,

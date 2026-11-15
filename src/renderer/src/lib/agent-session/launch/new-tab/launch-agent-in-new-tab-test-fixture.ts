@@ -2,14 +2,14 @@ import { settleAgentLaunchPaneStart } from '../pane/agent-launch-pane-start'
 import { beforeEach, vi } from 'vitest'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import type { AppState } from '@/store/types'
-import type { pasteDraftWhenAgentReady } from '../../../agent-paste-draft'
-import type { waitForAgentReady } from '../../../agent-ready-wait'
-import type { track } from '../../../telemetry'
+import type { pasteDraftWhenAgentReady } from '../../messaging/paste/agent-paste-draft'
+import type { waitForAgentReady } from '../../messaging/paste/agent-ready-wait'
+import type { track } from '../../../../diagnostics/telemetry/telemetry'
 import type { toast } from 'sonner'
 import type { createWebRuntimeSessionTerminal } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-creation'
 import type { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import type { Project } from '../../../../../../shared/project-types'
-import type * as LaunchAgentKindModule from '../../../../../../shared/agent-kind'
+import type * as LaunchAgentKindModule from '../../../../../../shared/agent-status/identity/agent-kind'
 
 export const mockCreateTab = vi.fn<(...args: Parameters<AppState['createTab']>) => { id: string }>()
 export function queuedStartups() {
@@ -139,20 +139,17 @@ vi.mock('@/components/tab-bar/reconcile-order', () => ({
   )
 }))
 
-vi.mock('@/lib/agent-paste-draft', () => ({
+vi.mock('@/lib/agent-session/messaging/paste/agent-paste-draft', () => ({
   pasteDraftWhenAgentReady: mockPasteDraftWhenAgentReady
 }))
 
-vi.mock('@/lib/agent-ready-wait', () => ({
+vi.mock('@/lib/agent-session/messaging/paste/agent-ready-wait', () => ({
   waitForAgentReady: mockWaitForAgentReady
 }))
 
-vi.mock('@/lib/telemetry', () => ({
-  track: mockTrack,
-  tuiAgentToAgentKind: mockLaunchAgentKind
-}))
+vi.mock('@/diagnostics/telemetry/telemetry', () => ({ track: mockTrack }))
 const mockLaunchAgentKind = vi.hoisted(() => (agent: string) => agent)
-vi.mock('../../../../../../shared/agent-kind', async (importOriginal) => ({
+vi.mock('../../../../../../shared/agent-status/identity/agent-kind', async (importOriginal) => ({
   ...(await importOriginal<typeof LaunchAgentKindModule>()),
   tuiAgentToAgentKind: mockLaunchAgentKind
 }))

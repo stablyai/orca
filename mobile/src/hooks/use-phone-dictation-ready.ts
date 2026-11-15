@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
-import { useOnDeviceSpeech } from '../platform/on-device-speech'
+import { useOnDeviceSpeech } from '../platform/speech/on-device-speech'
 import { chooseMobileDictationRoute } from './mobile-dictation-device-engine'
 
 // Whether a tap now would dictate on the phone itself. The ref answers inside a tap; the state re-renders the mic.

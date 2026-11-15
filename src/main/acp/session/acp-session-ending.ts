@@ -24,6 +24,7 @@ export function closeAcpSessionJournal(
     return
   }
   session.events?.observeExit?.(session.turns.heldSends)
+  session.historyCatchUp?.abort()
   session.journalClosed = reason
   session.prompts.clear()
   session.turns.end(reason, cause)
@@ -41,16 +42,15 @@ export function endAcpStructuredSession(
   if (session.ended) {
     return
   }
+  // Publishing the ending can re-enter cleanup, so attribution comes from before it.
+  const failureClose = session.failureClose
   session.ended = true
   session.events?.observeExit?.(undefined, observedAt)
   session.exitObservedAt = observedAt
   const stderr = session.connection.stderrTail()
   const how = providerExitStatusText(session.connection.exitStatus)
-  // Process exit can follow stream loss; keep that earlier reason when stderr is absent.
-  const lead =
-    session.journalClosed !== null && !stderr
-      ? session.journalClosed
-      : `${session.spec.agent} ACP agent exited`
+  // Orca's own close (stream loss, refusal) names the cause; the agent's stderr stays beside it.
+  const lead = failureClose ?? session.journalClosed ?? `${session.spec.agent} ACP agent exited`
   const reason = session.closeRequested
     ? `${session.spec.agent} ACP agent closed by Orca`
     : `${lead}${how ? ` ${how}` : ''}${stderr ? `: ${stderr}` : ''}`
@@ -77,6 +77,7 @@ export function endAcpStructuredSession(
       ? agentSessionFailureFact('hostFault')
       : agentSessionFailureFact('providerExited', detail ? { detail } : {}),
     cause: session.closeRequested ? 'requested-close' : 'unexpected-exit',
+    ...(failureClose !== null && !session.closeRequested ? { closedByOrca: true as const } : {}),
     fence: session.fence,
     acquisitionGeneration: session.acquisitionGeneration,
     observedAt

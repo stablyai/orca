@@ -6,6 +6,7 @@ import type {
 import type { EmulatorSessionState } from './emulator-bridge-types'
 import type { EmulatorBackend } from './backends/emulator-backend'
 import { withTimeout } from '../../shared/promise-timeout-fallback'
+import { deriveAvccUrlFromStreamUrl } from './serve-sim-detached-session'
 
 const DEVICE_LISTING_BUDGET_MS = 5_000
 
@@ -60,6 +61,13 @@ export class EmulatorSessionRegistry {
 
   getSession(key: string): EmulatorSessionState | undefined {
     return this.sessions.get(key)
+  }
+
+  getIosVideoStreamUrl(key: string): string | null {
+    const session = this.sessions.get(key)
+    return session?.backend === 'ios'
+      ? (deriveAvccUrlFromStreamUrl(session.streamUrl) ?? null)
+      : null
   }
 
   toSessionInfo(session: EmulatorSessionState): EmulatorSessionInfo {

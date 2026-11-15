@@ -1,9 +1,9 @@
 import { hideRetainedHostWhileGuestIsBlank } from './browser-client-page-retained-elements'
-import { isWebviewDragPassthroughActive } from './host-guest/webview-drag-passthrough'
+import { isWebviewDragPassthroughActive } from './host-guest/drag/webview-drag-passthrough'
 import {
   isBrowserPageRemotelyViewed,
   onBrowserRemoteViewerChange
-} from '../../lib/pane-manager/browser-remote-viewer-store'
+} from '../../runtime/browser/ownership/browser-remote-viewer-store'
 import type { BrowserClientRetainedRendererPage } from './browser-client-page-retained-state'
 
 export function syncBrowserClientPagePaintRetention(page: BrowserClientRetainedRendererPage): void {

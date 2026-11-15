@@ -213,9 +213,25 @@ export function useVirtualizedScrollAnchor<
       targetOffset: scrollOffsetRef.current,
       scrollOffsetRef
     })
-    const recordRequestedAnchor = (): void => {
+    const recordRequestedAnchor = (event: Event): void => {
       cancelMountRestore()
       pendingRestoreRef.current = false
+      cancelScheduledRecord()
+      if (event instanceof CustomEvent && event.detail?.cancelRestore === true) {
+        anchorRef.current = null
+        scrollOffsetRef.current = el.scrollTop
+        const targetOffset: unknown = event.detail.targetOffset
+        if (typeof targetOffset === 'number' && targetOffset !== el.scrollTop) {
+          programmaticScrollMarksRef.current?.mark(targetOffset)
+        }
+        return
+      }
+      if (event instanceof CustomEvent && event.detail?.deferDomMeasurement === true) {
+        scrollOffsetRef.current = el.scrollTop
+        recordVirtualScrollAnchorRef.current(el.scrollTop)
+        scheduleRecordAnchor()
+        return
+      }
       recordCurrentAnchor()
     }
 

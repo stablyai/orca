@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import type { SourceControlGroupOrder } from '../../../../../shared/ui-chrome-types'
 import type { SourceControlAiSettingsPatch } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
@@ -88,10 +88,7 @@ export function SourceControlGroupOrderSetting({
 }): React.JSX.Element {
   const t = useTranslate()
   const value = normalizeSourceControlGroupOrder(settings.sourceControlGroupOrder)
-  const title = t(
-    'auto.components.settings.GitPane.sourceControlGroupOrderTitle',
-    'Source Control Group Order'
-  )
+  const title = t('auto.components.settings.GitPane.53a0daed73', 'Source control group order')
   const description = t(
     'auto.components.settings.GitPane.sourceControlGroupOrderDescription',
     'Choose whether Staged Changes or Changes appear first in Source Control.'
@@ -146,6 +143,7 @@ export function GitPane({
   settingsSearchQuery
 }: GitPaneProps): React.JSX.Element | null {
   const t = useTranslate()
+  const branchPrefixInputId = useId()
   const storeSearchQuery = useAppStore((s) => s.settingsSearchQuery)
   const searchQuery = settingsSearchQuery ?? storeSearchQuery
   const keepLocalMainUpToDateTitle = getKeepLocalMainUpToDateTitle(t)
@@ -165,7 +163,7 @@ export function GitPane({
 
   const visibleSections = [
     matchesSettingsSearch(searchQuery, {
-      title: t('auto.components.settings.GitPane.330f584b50', 'Branch Prefix'),
+      title: t('auto.components.settings.GitPane.7826f35f63', 'Branch prefix'),
       description: t(
         'auto.components.settings.GitPane.1ffaadf0a0',
         'Prefix added to branch names when creating worktrees.'
@@ -178,7 +176,7 @@ export function GitPane({
     }) ? (
       <SearchableSetting
         key="branch-prefix"
-        title={t('auto.components.settings.GitPane.330f584b50', 'Branch Prefix')}
+        title={t('auto.components.settings.GitPane.7826f35f63', 'Branch prefix')}
         description={t(
           'auto.components.settings.GitPane.1ffaadf0a0',
           'Prefix added to branch names when creating worktrees.'
@@ -187,7 +185,9 @@ export function GitPane({
         className="space-y-3 py-3"
       >
         <div className="space-y-0.5">
-          <Label>{t('auto.components.settings.GitPane.330f584b50', 'Branch Prefix')}</Label>
+          <Label htmlFor={branchPrefixInputId}>
+            {t('auto.components.settings.GitPane.7826f35f63', 'Branch prefix')}
+          </Label>
           <p className="text-xs text-muted-foreground">
             {t(
               'auto.components.settings.GitPane.1ec5c91e1d',
@@ -207,7 +207,7 @@ export function GitPane({
               }`}
             >
               {option === 'git-username'
-                ? t('auto.components.settings.GitPane.a182c5125e', 'Git Username')
+                ? t('auto.components.settings.GitPane.d12c81a103', 'Git username')
                 : option === 'custom'
                   ? t('auto.components.settings.GitPane.1f32ba27a6', 'Custom')
                   : t('auto.components.settings.GitPane.3d172725cc', 'None')}
@@ -216,6 +216,7 @@ export function GitPane({
         </div>
         {isBranchPrefixInputMode && (
           <Input
+            id={branchPrefixInputId}
             value={branchPrefixInputValue}
             onChange={(e) => {
               const next = e.target.value
@@ -288,10 +289,7 @@ export function GitPane({
       </SearchableSetting>
     ) : null,
     matchesSettingsSearch(searchQuery, {
-      title: t(
-        'auto.components.settings.GitPane.sourceControlGroupOrderTitle',
-        'Source Control Group Order'
-      ),
+      title: t('auto.components.settings.GitPane.53a0daed73', 'Source control group order'),
       description: t(
         'auto.components.settings.GitPane.sourceControlGroupOrderDescription',
         'Choose whether Staged Changes or Changes appear first in Source Control.'

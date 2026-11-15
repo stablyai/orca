@@ -7,13 +7,6 @@ import {
   type ExecutionHostId
 } from '../../../../../shared/execution-host'
 
-export function getCatalogOwnerHostId(owner: {
-  connectionId?: string | null
-  executionHostId?: string | null
-}): ExecutionHostId {
-  return getRepoExecutionHostId(owner)
-}
-
 export function buildCatalogOwnerIndex<
   T extends { id: string; connectionId?: string | null; executionHostId?: string | null }
 >(
@@ -22,11 +15,11 @@ export function buildCatalogOwnerIndex<
   const next = new Map<string, { kind: 'resolved'; owner: T } | { kind: 'ambiguous' }>()
   for (const record of records) {
     const id = record.id
-    const hostId = getCatalogOwnerHostId(record)
+    const hostId = getRepoExecutionHostId(record)
     const current = next.get(id)
     if (!current) {
       next.set(id, { kind: 'resolved', owner: record })
-    } else if (current.kind === 'resolved' && getCatalogOwnerHostId(current.owner) !== hostId) {
+    } else if (current.kind === 'resolved' && getRepoExecutionHostId(current.owner) !== hostId) {
       next.set(id, { kind: 'ambiguous' })
     }
     next.set(`${id}\0${hostId}`, {

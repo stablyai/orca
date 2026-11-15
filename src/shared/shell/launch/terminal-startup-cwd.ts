@@ -5,7 +5,7 @@ import {
   resolveRuntimePath
 } from '../../cross-platform-path'
 import { parseWorkspaceKey } from '../../workspace-scope'
-import { parseWslUncPath } from '../../wsl-paths'
+import { parseWslUncPath } from '../../file-access/wsl-paths'
 import { splitWorktreeIdForFilesystem } from '../../worktree/id'
 
 export type TerminalStartupCwdMissingDirFallback = {

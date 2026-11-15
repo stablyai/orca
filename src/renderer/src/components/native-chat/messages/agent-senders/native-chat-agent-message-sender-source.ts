@@ -5,11 +5,11 @@ import {
   createWorktreeAgentRowsCache,
   startWorktreeAgentRowsCachePass,
   selectWorktreeAgentRowsCached
-} from '@/components/dashboard/worktree-agent-rows-cache'
+} from '@/components/dashboard/rows/worktree-agent-rows-cache'
 import { createWorktreeAgentFreshnessSelector } from '@/components/sidebar/workspace-card/activity/worktree-agent-freshness-selector'
 import '@/components/sidebar/workspace-card/activity/worktree-agent-row-selectors'
 import { selectWorktreeAgentOrchestration as selectRuntimeAgentOrchestrationForWorktree } from '@/components/sidebar/workspace-card/activity/worktree-agent-orchestration-index'
-import { agentRowDisplayDotState } from '@/lib/agent-row-dot-state'
+import { agentRowDisplayDotState } from '@/lib/agent-status/presentation/agent-row-dot-state'
 import { resolveRowProgramStatus } from '@/lib/program-status/agent-row-presentation'
 import {
   agentMessageSenderView,

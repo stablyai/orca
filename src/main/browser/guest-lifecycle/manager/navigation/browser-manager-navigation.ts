@@ -1,5 +1,5 @@
 import { getBrowserProcessUserAgentIdentity } from '../../../identity/browser-process-user-agent'
-import type { BrowserSessionRequestUserAgentResolver } from '../../../identity/browser-session-ua'
+import type { BrowserSessionRequestUserAgentResolver } from '../../../identity/requests/browser-session-ua'
 import { isGoogleAuthUrl } from '../../../identity/browser-google-auth-ua'
 import {
   desktopUserAgentMetadata,

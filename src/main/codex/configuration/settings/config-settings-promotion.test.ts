@@ -14,7 +14,7 @@ import {
 import { homedir, tmpdir } from 'node:os'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
-import type * as CodexFsUtils from '../../../codex-accounts/fs-utils'
+import type * as CodexFsUtils from '../../../filesystem/atomic-file-publication'
 
 // Bypass platform-specific socket paths so asserted config bytes stay host-independent.
 vi.mock('../shared-server/codex-daemon-socket-path-guard', async (importOriginal) => ({
@@ -35,7 +35,7 @@ vi.mock('node:os', async (importOriginal) => {
   }
 })
 
-vi.mock('../../../codex-accounts/fs-utils', async (importOriginal) => {
+vi.mock('../../../filesystem/atomic-file-publication', async (importOriginal) => {
   const actual = await importOriginal<typeof CodexFsUtils>()
   return {
     ...actual,

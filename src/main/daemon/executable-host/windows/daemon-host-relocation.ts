@@ -284,7 +284,7 @@ export function collectPinnedDaemonVersions(runtimeDir: string): PinnedDaemonVer
       }
     }
     const parsed = parseDaemonPidFile(contents)
-    // Empty records can parse as PID 0 during publication; they must veto pruning instead of appearing legacy.
+    // Records are empty during publication; a torn record must veto pruning instead of appearing legacy.
     if (!parsed || !Number.isInteger(parsed.pid) || parsed.pid <= 0) {
       return {
         status: 'unverifiable',

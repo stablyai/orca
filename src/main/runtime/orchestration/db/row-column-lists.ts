@@ -1,6 +1,11 @@
 import type { AttemptObservationStorageRow } from './attempt-observation-store'
 import type {
+  DeliveryRow,
   DispatchContextRow,
+  FederatedDispatchRow,
+  LegacyAdoptionRow,
+  MessageRow,
+  MutationReceiptRow,
   RemoteDispatchAttachmentRow,
   RunRow,
   TaskRow
@@ -147,3 +152,79 @@ export const ATTEMPT_OBSERVATION_FACT_COLUMN_LIST = selectColumns(ATTEMPT_OBSERV
 export const REMOTE_DISPATCH_ATTACHMENT_COLUMN_LIST = selectColumns(
   REMOTE_DISPATCH_ATTACHMENT_COLUMNS
 )
+
+/** A projection naming every `Row` column; leaving one out fails compilation. */
+function everyColumnOf<Row>() {
+  return <const Columns extends readonly (keyof Row & string)[]>(
+    columns: Columns & (Exclude<keyof Row, Columns[number]> extends never ? unknown : never)
+  ): string => selectColumns(columns)
+}
+
+export const MESSAGE_COLUMN_LIST = everyColumnOf<MessageRow>()([
+  'id',
+  'run_id',
+  'delivery_contract',
+  'from_handle',
+  'to_handle',
+  'subject',
+  'body',
+  'type',
+  'priority',
+  'thread_id',
+  'payload',
+  'read',
+  'sequence',
+  'created_at',
+  'delivered_at',
+  'sender_pane_key',
+  'answer_sender_snapshot',
+  'pointer_enter_pending',
+  'pointer_pty_id',
+  'pointer_process_incarnation'
+])
+
+export const DELIVERY_COLUMN_LIST = everyColumnOf<DeliveryRow>()([
+  'id',
+  'run_id',
+  'mailbox_handle',
+  'consumer_generation',
+  'message_ids',
+  'status',
+  'created_at',
+  'acknowledged_at'
+])
+
+export const MUTATION_RECEIPT_COLUMN_LIST = everyColumnOf<MutationReceiptRow>()([
+  'caller_fingerprint',
+  'request_id',
+  'method',
+  'payload_hash',
+  'state',
+  'receipt',
+  'created_at',
+  'updated_at'
+])
+
+export const LEGACY_ADOPTION_COLUMN_LIST = everyColumnOf<LegacyAdoptionRow>()([
+  'source_run_id',
+  'adopted_run_id',
+  'scheduler_state_lost',
+  'adopted_at'
+])
+
+export const FEDERATED_DISPATCH_COLUMN_LIST = everyColumnOf<FederatedDispatchRow>()([
+  'dispatch_id',
+  'environment_id',
+  'environment_name',
+  'peer_fingerprint',
+  'remote_runtime_epoch',
+  'protocol_version',
+  'remote_worktree_id',
+  'remote_terminal_handle',
+  'to_home_imported_sequence',
+  'to_home_acknowledged_sequence',
+  'home_auto_release_at',
+  'home_auto_release_state',
+  'created_at',
+  'updated_at'
+])
