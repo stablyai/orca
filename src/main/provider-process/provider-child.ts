@@ -40,3 +40,6 @@ export function notifyProviderChild(child: EventEmitter, event: string, ...args:
     `provider ${event}`
   )
 }
+
+/** Late transport errors must not retain a launch's closure scope. */
+export function ignoreProviderTransportError(): void {}

@@ -1,3 +1,4 @@
+import { ignoreProviderTransportError } from './provider-child'
 import { PassThrough, type Readable } from 'node:stream'
 import type { ChildProcess } from 'node:child_process'
 import { PROVIDER_OUTPUT_DRAIN_TIMEOUT_MS } from './provider-process-supervisor'
@@ -15,8 +16,8 @@ export function pipeDirectProviderOutput(
   }
   raw.stdout?.on('error', stdoutError)
   raw.stderr?.on('error', stderrError)
-  stdout.on('error', () => {})
-  stderr.on('error', () => {})
+  stdout.on('error', ignoreProviderTransportError)
+  stderr.on('error', ignoreProviderTransportError)
   // Protocol peers see EOF after group cleanup and drain, including readers attached after exit.
   raw.stdout?.pipe(stdout, { end: false })
   raw.stderr?.pipe(stderr, { end: false })

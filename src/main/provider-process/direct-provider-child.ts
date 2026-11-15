@@ -3,7 +3,8 @@ import { EventEmitter } from 'node:events'
 import { Duplex, PassThrough, Readable, Writable } from 'node:stream'
 import { constants } from 'node:os'
 import { withTimeout } from '../../shared/promise-timeout-fallback'
-import { notifyProviderChild, type ProviderChild } from './provider-child'
+import type { ProviderChild } from './provider-child'
+import { ignoreProviderTransportError, notifyProviderChild } from './provider-child'
 import type { ProviderSpawnSpec } from './provider-process-supervisor'
 import { publishProviderOwnership, providerOwnershipDirectory } from './provider-ownership-journal'
 import { readBootstrapStatus, withProviderBootstrapDeadline } from './provider-bootstrap-status'
@@ -91,9 +92,9 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
     raw.once('error', onError)
     this.releaseRaw = () => {
       raw.off('error', onError)
-      raw.on('error', () => {})
+      raw.on('error', ignoreProviderTransportError)
       this.gate?.off('error', gateError)
-      this.gate?.on('error', () => {})
+      this.gate?.on('error', ignoreProviderTransportError)
       releaseInput()
       releaseOutput()
     }

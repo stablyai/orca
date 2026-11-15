@@ -26,18 +26,7 @@ const spec: ProviderSpawnSpec = {
   sigtermGraceMs: 3_000
 }
 
-function launch(index: number) {
-  const raw = new ChildProcess()
-  const parentPid = 7_000_000 + index * 3
-  Object.defineProperty(raw, 'pid', { value: parentPid })
-  raw.stdin = new PassThrough()
-  const stdout = new PassThrough()
-  const stderr = new PassThrough()
-  raw.stdout = stdout
-  raw.stderr = stderr
-  const status = new PassThrough()
-  const outcome = new PassThrough()
-  const gate = new PassThrough()
+function createControl() {
   const control = new Duplex({
     read() {},
     write(chunk, _encoding, done) {
@@ -50,6 +39,22 @@ function launch(index: number) {
       done()
     }
   })
+  return control
+}
+
+function launch(index: number) {
+  const raw = new ChildProcess()
+  const parentPid = 7_000_000 + index * 3
+  Object.defineProperty(raw, 'pid', { value: parentPid })
+  raw.stdin = new PassThrough()
+  const stdout = new PassThrough()
+  const stderr = new PassThrough()
+  raw.stdout = stdout
+  raw.stderr = stderr
+  const status = new PassThrough()
+  const outcome = new PassThrough()
+  const gate = new PassThrough()
+  const control = createControl()
   Object.assign(raw, { stdio: [raw.stdin, raw.stdout, raw.stderr, control, gate, status, outcome] })
   status.write(
     `${JSON.stringify({ leaderPid: parentPid + 1, watcherPid: parentPid + 2, bootId: 'test-boot' })}\n`

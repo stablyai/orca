@@ -1,3 +1,4 @@
+import { ignoreProviderTransportError } from './provider-child'
 import type { Readable } from 'node:stream'
 
 export type ProviderControlCompletion = 'group-absent' | 'group-unverifiable'
@@ -17,7 +18,7 @@ export function readProviderControlCompletion(
       stream.off('end', onEnd)
       stream.off('close', onClose)
       stream.off('error', onClose)
-      stream.on('error', () => {})
+      stream.on('error', ignoreProviderTransportError)
       completed(completion)
     }
   }

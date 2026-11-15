@@ -1,3 +1,4 @@
+import { ignoreProviderTransportError } from './provider-child'
 import type { ChildProcess } from 'node:child_process'
 import type { PassThrough } from 'node:stream'
 
@@ -13,7 +14,7 @@ export function pipeDirectProviderInput(
   const onClose = (): void => {
     input.destroy()
   }
-  input.on('error', () => {})
+  input.on('error', ignoreProviderTransportError)
   raw.stdin?.once('close', onClose)
   if (raw.stdin?.destroyed) {
     onClose()
@@ -27,7 +28,7 @@ export function pipeDirectProviderInput(
     raw.stdin?.off('close', onClose)
     raw.stdin?.off('finish', onFinish)
     raw.stdin?.off('error', onError)
-    raw.stdin?.on('error', () => {})
+    raw.stdin?.on('error', ignoreProviderTransportError)
     input.unpipe(raw.stdin ?? undefined)
     raw.stdin?.destroy()
   }
