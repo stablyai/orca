@@ -301,6 +301,8 @@ export function MobileNativeChatPageList({
         const s = scroller()
         const by = s ? mobileNativeChatRowOffset(s, key) : undefined
         if (s && by !== undefined) {
+          // The tap ended any scroll; growth right after must correct to this row, not re-read a displaced one.
+          readerScrolledAt.current = 0
           write(s, s.scrollTop + by)
           notePlace(s)
         }
