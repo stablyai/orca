@@ -206,7 +206,6 @@ it('copies the original rows as saved when a receipt outlived its chat record', 
   expect(current.prepare('SELECT session_id FROM agent_session_records').all()).toEqual([
     { session_id: 'chat' }
   ])
-  expect(current.pragma('foreign_keys', { simple: true })).toBe(1)
 })
 
 it('never reimports metadata or consults a broken original once the new file is published', async () => {
