@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto'
-import { existsSync } from 'node:fs'
 import type Database from '../../../sqlite/sync-database'
 import type { SqliteRow } from '../../../sqlite/sqlite-statement'
 import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
@@ -33,12 +32,12 @@ export const JOURNAL_LEGACY_REVISIONS_KEPT = 'journal.legacy-revisions-kept.v1'
  */
 export function reconcileJournalLegacySource(stateDirectory: string, db: Database.Database): void {
   const sourcePath = journalDatabasePath(stateDirectory)
-  if (!existsSync(sourcePath)) {
-    return
-  }
   // Captured before reading, so a write during this pass is never taken as absorbed. Until every
   // chat here carries its revision (files converted before revisions were kept), each launch reads.
   const captured = captureJournalLegacySourceReceipt(sourcePath)
+  if (captured.disposition === 'no-source-at-initialization') {
+    return
+  }
   const receipt = JSON.stringify(captured)
   const kept = readMeta(db, JOURNAL_LEGACY_REVISIONS_KEPT) !== undefined
   const unchanged =
@@ -92,7 +91,7 @@ type Adoption = {
 
 /** True when every chat was absorbed; a failed chat is logged and retried next launch. */
 function absorbChats(source: Database.Database, db: Database.Database): boolean {
-  const adoption = readAdoption(source, db)
+  let adoption = readAdoption(source, db)
   runJournalTransaction(db, () => {
     for (const [sessionId, claims] of adoption.claims) {
       insertClaims(db, sessionId, claims)
@@ -106,6 +105,8 @@ function absorbChats(source: Database.Database, db: Database.Database): boolean 
       absorbChat(source, db, String(id), adoption)
     } catch (error) {
       complete = false
+      // The failed chat's transaction rolled back; reread what this file now holds.
+      adoption = readAdoption(source, db)
       console.warn('[agent-session-journal] keeping an older Orca chat failed', error)
     }
   }
