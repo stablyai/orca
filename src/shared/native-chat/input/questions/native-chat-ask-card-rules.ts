@@ -37,12 +37,17 @@ export function askAcceptsEmptyAnswer(
   return input?.allowEmpty === true && question?.options.length === 0
 }
 
-/** Proceed advances, or submits on the last question; an empty final Skip dismisses, while empty Enter keeps the prompt. */
+/** Proceed advances, or submits on the last question; an empty final Skip dismisses, while empty Enter keeps the prompt.
+ * A required question still unanswered (`waitsForAnswer`) stays put, unless nothing at all is answered on the last step. */
 export function askConfirmAction(args: {
   isLast: boolean
   anyAnswered: boolean
   fromKeyboard?: boolean
+  waitsForAnswer?: boolean
 }): 'proceed' | 'cancel' | 'stay' {
+  if (args.waitsForAnswer && (!args.isLast || args.anyAnswered)) {
+    return 'stay'
+  }
   if (!args.isLast || args.anyAnswered) {
     return 'proceed'
   }

@@ -208,7 +208,7 @@ export function MobileNativeChatAsk({
   }
 
   const confirm = (): void => {
-    const action = askConfirmAction({ isLast, anyAnswered: anyAnswered() })
+    const action = askConfirmAction({ isLast, anyAnswered: anyAnswered(), waitsForAnswer })
     if (action === 'cancel') {
       void cancel()
     } else if (action === 'proceed') {
@@ -221,13 +221,12 @@ export function MobileNativeChatAsk({
   const otherSelected = (selections[index] ?? []).includes(OTHER)
   const freeTextInput = freeTextInputs?.[index]
   const currentAnswered = isAnswered(index)
-  const confirmLabel = askConfirmLabel(currentAnswered, isLast, anyAnswered())
+  // A required question offers Next or Submit, never Skip, and waits until it is answered.
+  const waitsForAnswer = q.required === true && !currentAnswered
+  const confirmLabel = askConfirmLabel(currentAnswered || waitsForAnswer, isLast, anyAnswered())
   const confirmSkips = confirmLabel === 'skip'
-  // Submit is idle on the required question it would only return to.
-  const submitBlocked =
-    isLast &&
-    anyAnswered() &&
-    askUnansweredRequired(prompt.questions, (i) => isAnswered(i)) === index
+  const confirmBlocked =
+    askConfirmAction({ isLast, anyAnswered: anyAnswered(), waitsForAnswer }) === 'stay'
 
   return (
     <View style={styles.card}>
@@ -350,11 +349,11 @@ export function MobileNativeChatAsk({
           style={({ pressed }) => [
             styles.next,
             confirmSkips && styles.nextSkip,
-            submitBlocked && styles.nextBlocked,
+            confirmBlocked && styles.nextBlocked,
             pressed && pressedStyle
           ]}
           onPress={confirm}
-          disabled={submitting || submitBlocked}
+          disabled={submitting || confirmBlocked}
         >
           <Text style={[styles.nextText, confirmSkips && styles.nextSkipText]}>
             {confirmLabels(t)[confirmLabel]}

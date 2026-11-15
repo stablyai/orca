@@ -137,10 +137,10 @@ export function NativeChatQuestionCard({
     answerFor(qi, sel, oth).length > 0 || acceptsEmpty(qi)
   const currentAnswered = answeredAt(index)
   const anyAnswered = prompt.questions.some((_, i) => answeredAt(i))
-  const confirmLabel = askConfirmLabel(currentAnswered, isLast, anyAnswered)
-  // Submit is idle on the required question it would only return to.
-  const submitBlocked =
-    isLast && anyAnswered && askUnansweredRequired(prompt.questions, (i) => answeredAt(i)) === index
+  // A required question offers Next or Submit, never Skip, and waits until it is answered.
+  const waitsForAnswer = q.required === true && !currentAnswered
+  const confirmLabel = askConfirmLabel(currentAnswered || waitsForAnswer, isLast, anyAnswered)
+  const confirmBlocked = askConfirmAction({ isLast, anyAnswered, waitsForAnswer }) === 'stay'
   const currentTypedAnswerChosen = typedAnswerChosen(index)
 
   const submitAll = (sel: number[][], oth: string[]): void => {
@@ -204,7 +204,7 @@ export function NativeChatQuestionCard({
 
   const confirm = (fromKeyboard = false): void => {
     autoAdvance.cancel()
-    const action = askConfirmAction({ isLast, anyAnswered, fromKeyboard })
+    const action = askConfirmAction({ isLast, anyAnswered, fromKeyboard, waitsForAnswer })
     if (action === 'proceed') {
       advanceOrSubmit(selections, otherText)
     } else if (action === 'cancel') {
@@ -415,7 +415,7 @@ export function NativeChatQuestionCard({
               enterHint={
                 currentAnswered && !isSubmitting && !q.multiSelect && !freeTextInput?.multiline
               }
-              disabled={isSubmitting || submitBlocked}
+              disabled={isSubmitting || confirmBlocked}
               onConfirm={() => confirm()}
             />
           </div>
