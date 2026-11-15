@@ -25,7 +25,6 @@ export type WorkspaceDecisionDetails = {
   terminalTabCount: number
   liveTerminalCount: number
   activeAgentCount: number
-  completedAgentCount: number
   openEditorFileCount: number
   dirtyEditorBufferCount: number
   browserTabCount: number
@@ -48,7 +47,6 @@ export type WorkspaceDecisionInputs = {
   agentStatusByPaneKey: Record<string, AgentStatusEntry>
   migrationUnsupportedByPtyId: Record<string, MigrationUnsupportedPtyEntry>
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
-  retainedAgentsByPaneKey: Record<string, { worktreeId: string; entry: AgentStatusEntry }>
   openFiles: readonly { id: string; worktreeId: string; isDirty: boolean }[]
   editorDrafts: Record<string, string>
   browserTabsByWorktree: Record<string, unknown[]>
@@ -219,9 +217,6 @@ export function getWorkspaceDecisionDetails(
       ptyIdsByTabId: inputs.ptyIdsByTabId,
       now: inputs.now
     }),
-    completedAgentCount: Object.values(inputs.retainedAgentsByPaneKey).filter(
-      (entry) => entry.worktreeId === worktree.worktreeId && entry.entry.state === 'done'
-    ).length,
     openEditorFileCount: openFiles.length,
     dirtyEditorBufferCount,
     browserTabCount: inputs.browserTabsByWorktree[worktree.worktreeId]?.length ?? 0,
