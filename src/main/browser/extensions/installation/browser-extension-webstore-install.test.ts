@@ -12,9 +12,10 @@ import type * as InstallModule from './browser-extension-webstore-install'
 
 const state = vi.hoisted(() => {
   const enabled: Record<string, string[]> = {}
+  const gate: { removeGate: Promise<void> | null } = { removeGate: null }
   return {
     userData: '',
-    removeGate: null as Promise<void> | null,
+    ...gate,
     enabled,
     load: vi.fn(
       async (_profileId: string, _extension: InstalledBrowserExtension): Promise<unknown> => ({})

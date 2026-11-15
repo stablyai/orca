@@ -7,7 +7,10 @@ import {
 } from './browser-extension-execution-authority'
 
 type Script = { id: string; js?: string[]; world?: string; matches?: string[] }
-const native = vi.hoisted(() => ({ run: vi.fn(), scripts: [] as Record<string, unknown>[] }))
+const native = vi.hoisted(() => {
+  const scripts: Record<string, unknown>[] = []
+  return { run: vi.fn(), scripts }
+})
 vi.mock('./browser-extension-native-page', () => ({
   runBrowserExtensionNativePage: (options: { code: string }) => native.run(options)
 }))

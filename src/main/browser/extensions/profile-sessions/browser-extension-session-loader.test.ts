@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => {
   /** Holds prepareBrowserExtensionDirectory until released, to land a load late. */
   const prepareGate: { held: Promise<void> | null } = { held: null }
   const storage: { path: string | null } = { path: null }
+  const preparedPaths: string[] = []
+  const profiles: { id: string }[] = []
   return {
     enabled: new Map<string, string[]>(),
     profileForSession: 'default',
@@ -24,9 +26,9 @@ const mocks = vi.hoisted(() => {
     storage,
     prepareGate,
     prepareCalls: 0,
-    preparedPaths: [] as string[],
+    preparedPaths,
     missingPaths: new Set<string>(),
-    profiles: [] as { id: string }[],
+    profiles,
     prepared,
     loaded,
     registrationListeners,
