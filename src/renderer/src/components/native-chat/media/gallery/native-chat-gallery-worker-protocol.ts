@@ -4,6 +4,7 @@ import type { NativeChatGalleryWireToken } from './native-chat-gallery-transfer'
 
 export type NativeChatGalleryWorkerCommand =
   | { type: 'begin'; scopeKey: string }
+  | { type: 'restore'; entries: readonly NativeChatGalleryEntry[] }
   | {
       type: 'put'
       groups: readonly {

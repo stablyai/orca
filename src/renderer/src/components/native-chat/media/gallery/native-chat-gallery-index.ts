@@ -116,6 +116,8 @@ export class NativeChatGalleryIndex {
             this.metrics.reusedGroups++
             this.appendGroup(handle)
           }
+        } else if (request.type === 'restore') {
+          this.identities.restore(request.entries)
         } else if (request.type === 'release') {
           for (const handle of request.handles) {
             const group = this.groups.get(handle)
@@ -135,6 +137,7 @@ export class NativeChatGalleryIndex {
             }
           }
         } else {
+          this.identities.discardUnused()
           return { ...identity, type: 'ready', order: this.order, metrics: this.metrics }
         }
       }

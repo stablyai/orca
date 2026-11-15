@@ -6,18 +6,35 @@ import {
 import type { NativeChatGallerySurface } from './native-chat-gallery-surfaces'
 
 type GalleryEntryOwner = {
-  key: string
   scopeKey: string
   surfaceId: string
   slotKey: string
   ownerId: string
   role: string
 }
-export type NativeChatGalleryEntry = GalleryEntryOwner &
+type GalleryEntryContent = GalleryEntryOwner &
   (
     | { kind: 'file'; source: string; block: NativeChatImageRefBlock; occurrence: number }
     | ({ kind: 'document' } & NativeChatDocumentImage)
   )
+export type NativeChatGalleryEntry = GalleryEntryContent & { key: string }
+
+export function nativeChatGalleryEntryKey(entry: GalleryEntryContent): string {
+  if (entry.kind === 'document') {
+    return JSON.stringify([
+      entry.surfaceId,
+      entry.origin,
+      entry.source,
+      entry.alt,
+      entry.linkedHref ?? null
+    ])
+  }
+  return JSON.stringify([
+    entry.surfaceId,
+    JSON.stringify([entry.source, entry.block.path, entry.block.alt]),
+    entry.occurrence
+  ])
+}
 
 export function nativeChatGallerySurfaceId(
   scopeKey: string,
@@ -41,18 +58,10 @@ export function nativeChatGalleryEntries(
   }
   if (surface.kind === 'document') {
     const images = documentImages ?? nativeChatDocumentImages(surface)
-    return images.map((image) => ({
-      ...owner,
-      ...image,
-      kind: 'document',
-      key: JSON.stringify([
-        surfaceId,
-        image.origin,
-        image.source,
-        image.alt,
-        image.linkedHref ?? null
-      ])
-    }))
+    return images.map((image) => {
+      const entry = { ...owner, ...image, kind: 'document' as const }
+      return { ...entry, key: nativeChatGalleryEntryKey(entry) }
+    })
   }
   const occurrences = new Map<string, number>()
   const entries: NativeChatGalleryEntry[] = []
@@ -64,14 +73,14 @@ export function nativeChatGalleryEntries(
     const identity = JSON.stringify([source, block.path, block.alt])
     const occurrence = occurrences.get(identity) ?? 0
     occurrences.set(identity, occurrence + 1)
-    entries.push({
+    const entry = {
       ...owner,
-      kind: 'file',
+      kind: 'file' as const,
       source,
       block,
-      occurrence,
-      key: JSON.stringify([surfaceId, identity, occurrence])
-    })
+      occurrence
+    }
+    entries.push({ ...entry, key: nativeChatGalleryEntryKey(entry) })
   }
   return entries
 }

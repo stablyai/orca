@@ -50,9 +50,14 @@ export class NativeChatGalleryClient {
   private running = false
   private queued: Job | null = null
   private active: Job | null = null
+  private readyEntries: NativeChatGalleryEntry[] = []
+  private restoreIdentities = true
   private readonly channel = new NativeChatGalleryWorkerClient(
     (revision) => revision === this.revision,
-    () => this.cache.clear()
+    () => {
+      this.cache.clear()
+      this.restoreIdentities = true
+    }
   )
 
   constructor(private readonly onProgress?: (completedSlots: number) => void) {}
@@ -69,6 +74,9 @@ export class NativeChatGalleryClient {
     this.queued?.resolve(null)
     return new Promise((resolve, reject) => {
       this.queued = { revision: ++this.revision, snapshot, resolve, reject }
+      if (this.active) {
+        this.release(new Error('Gallery revision superseded'))
+      }
       void this.pump()
     })
   }
@@ -79,6 +87,7 @@ export class NativeChatGalleryClient {
     this.queued?.resolve(null)
     this.queued = null
     this.active?.resolve(null)
+    this.readyEntries = []
     this.release(new Error('Gallery closed'))
   }
 
@@ -217,6 +226,15 @@ export class NativeChatGalleryClient {
       return null
     }
     await this.request(job, { type: 'begin', scopeKey: snapshot.scopeKey })
+    if (this.restoreIdentities && revision === this.revision) {
+      if (this.readyEntries.length) {
+        const restored = await this.request(job, { type: 'restore', entries: this.readyEntries })
+        if (restored?.type !== 'ack' || revision !== this.revision) {
+          return null
+        }
+      }
+      this.restoreIdentities = false
+    }
     if (!(await this.releaseRetired(job))) {
       return null
     }
@@ -251,7 +269,11 @@ export class NativeChatGalleryClient {
       return null
     }
     const entries = await this.cache.assemble(result.order, () => revision === this.revision)
-    return entries ? { type: 'ready', revision, entries, metrics: result.metrics } : null
+    if (!entries || revision !== this.revision) {
+      return null
+    }
+    this.readyEntries = entries
+    return { type: 'ready', revision, entries, metrics: result.metrics }
   }
 
   private async pump(): Promise<void> {

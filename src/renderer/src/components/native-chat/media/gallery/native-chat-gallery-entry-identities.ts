@@ -1,5 +1,6 @@
 import { createNonSecureContextUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import type { NativeChatGalleryEntry } from './native-chat-gallery-entries'
+import { nativeChatGalleryEntryKey } from './native-chat-gallery-entries'
 
 type Identity = { key: string; users: number }
 
@@ -8,14 +9,34 @@ export class NativeChatGalleryEntryIdentities {
   private readonly prefix = createNonSecureContextUuid()
   private sequence = 0
   private readonly identities = new Map<string, Identity>()
+  private readonly restoredKeys = new Set<string>()
+
+  restore(entries: readonly NativeChatGalleryEntry[]): void {
+    for (const entry of entries) {
+      this.restoredKeys.add(entry.key)
+      this.identities.set(nativeChatGalleryEntryKey(entry), { key: entry.key, users: 0 })
+    }
+  }
+
+  discardUnused(): void {
+    for (const [key, identity] of this.identities) {
+      if (identity.users === 0) {
+        this.identities.delete(key)
+      }
+    }
+  }
 
   retain(entry: NativeChatGalleryEntry): NativeChatGalleryEntry {
     let identity = this.identities.get(entry.key)
     if (!identity) {
-      if (!Number.isSafeInteger(++this.sequence)) {
-        throw new Error('Gallery identity space was exhausted')
-      }
-      identity = { key: `${this.prefix}:${this.sequence}`, users: 0 }
+      let key: string
+      do {
+        if (!Number.isSafeInteger(++this.sequence)) {
+          throw new Error('Gallery identity space was exhausted')
+        }
+        key = `${this.prefix}:${this.sequence}`
+      } while (this.restoredKeys.has(key))
+      identity = { key, users: 0 }
       this.identities.set(entry.key, identity)
     }
     identity.users++
@@ -33,5 +54,6 @@ export class NativeChatGalleryEntryIdentities {
 
   clear(): void {
     this.identities.clear()
+    this.restoredKeys.clear()
   }
 }
