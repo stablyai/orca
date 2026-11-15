@@ -161,6 +161,23 @@ describe('ACP history catch-up', () => {
     expect(await fixture.rig.rows()).toEqual(rows)
   })
 
+  it('skips Devin extension notifications replayed between its session updates', async () => {
+    const { fixture, catchUp } = await setup(DEVIN_ACP_DIALECT, 'client-message-id')
+    await catchUp([
+      { method: '_cognition.ai/mcp/serversChanged', params: { sessionId: NAMESPACE } },
+      replayUpdate('user_message_chunk', {
+        content: { type: 'text', text: 'Reply with exactly: PONG' },
+        _meta: { 'cognition.ai/clientMessageId': 'cm-1', 'cognition.ai/eventId': '1' }
+      }),
+      { method: '_cognition.ai/output', params: { sessionId: NAMESPACE } },
+      replayUpdate('agent_message_chunk', {
+        content: { type: 'text', text: 'PONG' },
+        _meta: { 'cognition.ai/eventId': '2' }
+      })
+    ])
+    expect(userTexts(await fixture.rig.rows())).toEqual(['Reply with exactly: PONG'])
+  })
+
   it('leaves a Devin turn the chat ran alone, named by its prompt result', async () => {
     const { fixture, catchUp } = await setup(DEVIN_ACP_DIALECT, 'client-message-id')
     await chatSend(fixture, 'A:1', 'Reply with exactly: PONG')

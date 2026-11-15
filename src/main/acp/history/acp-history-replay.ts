@@ -160,8 +160,13 @@ export function acpHistoryTurns(
   for (const frame of frames) {
     check()
     const parsed = frameSchema.safeParse(frame.params)
+    // Agent extension notifications (Devin's mcp/serversChanged, output) carry no update;
+    // Grok's do, under its own method names, and they are turn content.
     if (!parsed.success) {
-      throw new Error('unrecognised-history-frame')
+      if (frame.method === 'session/update') {
+        throw new Error('unrecognised-history-frame')
+      }
+      continue
     }
     const { update, _meta: meta } = parsed.data
     if (update.sessionUpdate === 'user_message_chunk') {

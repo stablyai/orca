@@ -243,6 +243,26 @@ export function buildPrimaryCommitMessageAgentSpecs({
         }
       ],
       defaultModelId: 'default'
+    },
+    devin: {
+      id: 'devin',
+      modelFlag: [{ aliases: ['--model'] }],
+      effortFlag: [],
+      label: 'Devin',
+      binary: 'devin',
+      promptDelivery: 'argv',
+      buildArgs: ({ prompt, model }) => [
+        '--print',
+        // Print mode cannot answer the workspace-trust prompt.
+        '--respect-workspace-trust',
+        'false',
+        ...(model && model !== 'default' ? ['--model', model] : []),
+        prompt
+      ],
+      singletonOptions: [['--model']],
+      modelSource: 'static',
+      models: [{ id: 'default', label: 'Config default' }],
+      defaultModelId: 'default'
     }
   }
 }
