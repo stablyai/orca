@@ -1,7 +1,5 @@
-import {
-  openTestAgentSessionDatabase,
-  withTestAgentSessionDatabase
-} from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { openTestAgentSessionDatabase } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { withTestAgentSessionDatabase } from '../../runtime/agent-session/records/agent-session-record-store-persistence.test-fixture'
 import { readTestJournalSnapshot } from '../../native-chat/agent-session-journal/journal-observation.test-support'
 import { prWatchStorage } from './pr-watch-storage'
 import { mkdtemp, rm } from 'node:fs/promises'

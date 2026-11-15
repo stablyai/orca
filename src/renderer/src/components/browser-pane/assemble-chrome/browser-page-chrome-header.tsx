@@ -1,14 +1,14 @@
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'react'
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
 import type { ShareableBrowserArtifactFile } from '../describe-page/browser-artifact-upload'
-import type { GrabModeHook } from '../annotate/useGrabMode'
+import type { GrabModeHook } from '../annotate/grab/useGrabMode'
 import { BrowserPageToolbar } from './browser-page-toolbar'
 import { BrowserPageDownloadList } from '../navigate/browser-page-download-list'
-import { BrowserPageChromeBanners } from './browser-page-chrome-banners'
+import { BrowserPageChromeBanners } from './feedback/browser-page-chrome-banners'
 import type { useBrowserPageReloadActions } from '../navigate/use-browser-page-reload-actions'
 import type { useBrowserPageNavigationDownloads } from '../navigate/use-browser-page-navigation-downloads'
-import type { useBrowserPageGrabAnnotations } from '../annotate/use-browser-page-grab-annotations'
-import type { useBrowserPageAnnotationSend } from '../annotate/use-browser-page-annotation-send'
+import type { useBrowserPageGrabAnnotations } from '../annotate/grab/use-browser-page-grab-annotations'
+import type { useBrowserPageAnnotationSend } from '../annotate/delivery/use-browser-page-annotation-send'
 
 export function BrowserPageChromeHeader({
   chromeHeaderRef,

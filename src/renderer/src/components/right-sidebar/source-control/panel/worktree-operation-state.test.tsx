@@ -4,7 +4,7 @@ import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-quali
 import { act, cleanup, renderHook } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { makeRepo, makeWorktree } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { useSourceControlCommitAction } from '../commit/use-commit-action'

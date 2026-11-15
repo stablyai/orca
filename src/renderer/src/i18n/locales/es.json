@@ -183,6 +183,7 @@
         "fontFamily": "Fuente",
         "fontFamilyDescription": "Fuente de los mensajes, la actividad y el cuadro de mensaje.",
         "inheritFont": "Misma fuente que el IDE",
+        "systemFont": "Fuente del sistema",
         "fontPreviewLabel": "Vista previa de la fuente del chat",
         "fontPreview": "El veloz zorro marrón salta sobre el perro perezoso.",
         "title": "Interfaz de chat",
@@ -3266,6 +3267,7 @@
             "1e4b81d892": "Thump",
             "86af8d938c": "Bong",
             "80f7cc95b3": "Dos tonos",
+            "silent": "Silencioso",
             "017abebfa6": "Valor predeterminado del sistema"
           }
         }
@@ -3462,8 +3464,7 @@
             "stop_command_description": "Al cerrar esta terminal, se detendrá el comando que se está ejecutando en ella.",
             "dont_ask_again": "No volver a preguntar para terminales en ejecución",
             "stop_agent_confirm": "Detener agente",
-            "stop_command_confirm": "Detener y cerrar",
-            "automatic_resume_warning": "Esta terminal no se reanudará automáticamente. Cancele y ponga el espacio de trabajo en suspensión para reanudarlo más tarde."
+            "stop_command_confirm": "Detener y cerrar"
           },
           "MobileDriverOverlay": {
             "c6460cf584": "Recuperar control",
@@ -4146,7 +4147,6 @@
             "c8857b40f7": "Actualizar datos de uso",
             "75ded02687": "Administrar cuentas…",
             "ff0fbe9311": "Activo",
-            "7657e3db9c": "Cuenta del Codex",
             "38b5647724": "Uso de Codex",
             "ba55303942": "Abrir detalles de Codex y cambiar de cuenta",
             "c35af53b73": "Iniciar sesión",
@@ -4154,7 +4154,6 @@
             "5c938d39ac": "semana",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "d450654fa2": "Cuenta de Claude",
             "11e2354daf": "Uso de Claude",
             "3dd7ddfae1": "Abrir detalles de Claude y cambiar de cuenta",
             "59c6e7b4e0": "Las sesiones visibles se reinician ahora. Las demás se reinician cuando su worktree se activa.",
@@ -4425,7 +4424,8 @@
             "compact": "Compact",
             "footerDetailAria": "Usage footer detail",
             "detailedTooltip": "Uso completo con barras, etiquetas y porcentajes",
-            "compactTooltip": "Uso condensado: un resumen por proveedor"
+            "compactTooltip": "Uso condensado: un resumen por proveedor",
+            "notChecked": "Sin comprobar"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "Updating {{value0}}/{{value1}}",
@@ -4576,13 +4576,6 @@
             "activeAgents_one": "{{count}} agente activo",
             "activeAgents_other": "{{count}} agentes activos",
             "activeAgents_many": "{{count}} agentes activos",
-            "completedAgents_one": "{{count}} agente completado",
-            "completedAgents_other": "{{count}} agentes completados",
-            "completedAgents_many": "{{count}} agentes completados",
-            "activeAndCompletedAgents": "{{active}}, {{completed}}",
-            "completedAgentsRetained_one": "{{count}} agente completado conservado",
-            "completedAgentsRetained_other": "{{count}} agentes completados conservados",
-            "completedAgentsRetained_many": "{{count}} agentes completados conservados",
             "noTrackedAgents": "No hay agentes registrados en ejecución",
             "noTerminalTabs": "No hay pestañas de terminal",
             "liveTerminalTabs_one": "{{live}} en ejecución de {{count}} pestaña de terminal",
@@ -4642,12 +4635,17 @@
           "AccountSwitchList": {
             "used": "Usado",
             "left": "Restante",
-            "reset": "Restablecimiento"
+            "reset": "Restablecimiento",
+            "accounts": "Cuentas"
           },
           "InlineUsageBars": {
             "now": "ahora",
             "resetsNow": "se restablece ahora",
             "resetsIn": "se restablece en {{duration}}"
+          },
+          "UsageDisplayToggle": {
+            "showRemaining": "Mostrar uso restante",
+            "showUsed": "Mostrar uso consumido"
           }
         }
       },
@@ -19709,7 +19707,8 @@
         "safetyReviewApproved": "{{agent}} aprobó esta acción. Ver detalles.",
         "safetyReview": "{{agent}} notificó una advertencia de revisión de seguridad. Ver detalles.",
         "truncatedResponse": "Respuesta del proveedor truncada (tamaño original: {{bytes}} bytes).",
-        "forkedFrom": "Rama creada desde"
+        "forkedFrom": "Rama creada desde",
+        "forkedFromUnknown": "Rama creada desde otro chat"
       },
       "providerFrame": {
         "byteCount_one": "{{count}} byte",
@@ -20022,7 +20021,12 @@
         "failed": "{{agent}} no pudo crear una rama de este chat",
         "hostUnsupported": "Este host ejecuta una versión anterior de Orca. Actualiza Orca en el host y vuelve a intentarlo.",
         "failedDetail": "Tu chat no ha cambiado. Inténtalo de nuevo.",
-        "commandWorking": "No se puede crear una rama mientras {{agent}} responde. Vuelve a ejecutar /fork cuando termine."
+        "commandWorking": "No se puede crear una rama mientras {{agent}} responde. Vuelve a ejecutar /fork cuando termine.",
+        "mark": "Rama ·",
+        "markedName": "{{mark}} {{name}}",
+        "accessibleName": "Rama: {{name}}",
+        "sourceTooltip": "Rama de {{name}}",
+        "unknownSourceTooltip": "Rama de otro chat"
       },
       "cardKindHidden": {
         "description": "Puedes cambiar esto en cualquier momento en",
@@ -20154,7 +20158,7 @@
               "repo": "Repositorio",
               "blocker": "Bloqueo",
               "comment": "Comentario",
-              "retainedAgents": "Agentes finalizados"
+              "finishedAgents": "Agentes finalizados"
             },
             "idleDays": "Inactivo {{value0}}d+",
             "neverVisited": "Nunca visitado",
@@ -20221,7 +20225,7 @@
           "pinned": "Fijado",
           "unread": "Sin leer",
           "comment": "Tiene comentario",
-          "retainedDoneAgents": "Transcripciones de agente finalizadas",
+          "finishedAgents": "Agentes finalizados",
           "contextPresence": "Pestañas, terminales y comentarios abiertos",
           "completelyEmpty": "Nada más que perder",
           "noMatches": "Ningún espacio de trabajo coincide con estos filtros.",

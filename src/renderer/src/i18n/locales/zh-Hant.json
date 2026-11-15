@@ -624,6 +624,7 @@
         "fontKeywordTypeface": "字體",
         "fontKeywordTypography": "排版",
         "inheritFont": "與 IDE 字型相同",
+        "systemFont": "系統字型",
         "fontPreviewLabel": "聊天字型預覽",
         "fontPreview": "敏捷的棕色狐狸躍過懶狗。",
         "title": "聊天介面",
@@ -3701,6 +3702,7 @@
             "1e4b81d892": "撲通",
             "86af8d938c": "咚",
             "80f7cc95b3": "二音",
+            "silent": "靜音",
             "017abebfa6": "系統預設值"
           }
         }
@@ -3889,7 +3891,6 @@
         },
         "pane": {
           "CloseTerminalDialog": {
-            "automatic_resume_warning": "該終端機不會自動恢復。取消並將工作區置於睡眠狀態以便稍後恢復。",
             "1d1a7a9c1f": "取消",
             "stop_agent_title": "停止此代理程式？",
             "stop_command_title": "停止執行中的命令？",
@@ -4550,7 +4551,6 @@
             "c8857b40f7": "重新整理用量資料",
             "75ded02687": "管理帳戶…",
             "ff0fbe9311": "目前",
-            "7657e3db9c": "Codex 帳戶",
             "38b5647724": "Codex 用量執行環境",
             "ba55303942": "開啟 Codex 詳情和帳戶切換器",
             "c35af53b73": "登入",
@@ -4558,7 +4558,6 @@
             "5c938d39ac": "週",
             "54e8d6bb2d": "Fable",
             "a79c64f87e": "Fable",
-            "d450654fa2": "Claude 帳戶",
             "11e2354daf": "Claude 用量執行環境",
             "3dd7ddfae1": "開啟 Claude 詳情和帳戶切換器",
             "59c6e7b4e0": "可見工作階段將立即重新啟動。其他工作階段會在其工作樹變為作用中狀態時重新啟動。",
@@ -4829,7 +4828,8 @@
             "compact": "精簡",
             "detailedTooltip": "完整用量資訊，包含長條圖、標籤和百分比",
             "compactTooltip": "精簡用量資訊：每個供應商顯示一項摘要",
-            "footerDetailAria": "用量頁尾詳細資訊"
+            "footerDetailAria": "用量頁尾詳細資訊",
+            "notChecked": "未檢查"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "正在更新 {{value0}}/{{value1}}",
@@ -4951,9 +4951,6 @@
             "ahead": "領先 {{ahead}}",
             "behind": "落後 {{behind}}",
             "activeAgents_other": "{{count}} 個作用中的代理程式",
-            "completedAgents_other": "{{count}} 個已完成的代理程式",
-            "activeAndCompletedAgents": "{{active}}、{{completed}}",
-            "completedAgentsRetained_other": "保留了 {{count}} 個已完成的代理程式",
             "noTrackedAgents": "沒有追蹤中的代理程式正在執行",
             "noTerminalTabs": "沒有終端機分頁",
             "liveTerminalTabs_other": "{{count}} 個終端機分頁中有 {{live}} 個執行中",
@@ -4999,12 +4996,17 @@
           "AccountSwitchList": {
             "used": "已用",
             "left": "剩餘",
-            "reset": "重設"
+            "reset": "重設",
+            "accounts": "帳戶"
           },
           "InlineUsageBars": {
             "now": "現在",
             "resetsNow": "現在重設",
             "resetsIn": "{{duration}}後重設"
+          },
+          "UsageDisplayToggle": {
+            "showRemaining": "顯示剩餘用量",
+            "showUsed": "顯示已用用量"
           }
         }
       },
@@ -19209,7 +19211,8 @@
         "safetyReviewApproved": "{{agent}} 已核准此操作。查看詳細資訊。",
         "safetyReview": "{{agent}} 回報了安全審查警告。查看詳細資訊。",
         "truncatedResponse": "供應商回應已截斷（原始大小：{{bytes}} 位元組）。",
-        "forkedFrom": "分支來源"
+        "forkedFrom": "分支來源",
+        "forkedFromUnknown": "分支來源：另一個聊天"
       },
       "composer": {
         "planMode": "規劃",
@@ -19915,7 +19918,12 @@
         "failed": "{{agent}} 無法從此聊天建立分支",
         "hostUnsupported": "此主機執行的是舊版 Orca。請更新主機上的 Orca 後再試一次。",
         "failedDetail": "聊天未變更。請再試一次。",
-        "commandWorking": "{{agent}} 回覆期間無法建立分支。回覆結束後，請再次執行 /fork。"
+        "commandWorking": "{{agent}} 回覆期間無法建立分支。回覆結束後，請再次執行 /fork。",
+        "mark": "分支 ·",
+        "markedName": "{{mark}} {{name}}",
+        "accessibleName": "分支：{{name}}",
+        "sourceTooltip": "{{name}} 的分支",
+        "unknownSourceTooltip": "另一個聊天的分支"
       },
       "cardKindHidden": {
         "description": "你可以隨時在此處變更",
@@ -20031,7 +20039,7 @@
           "pinned": "已固定",
           "unread": "未讀",
           "comment": "有留言",
-          "retainedDoneAgents": "已完成的代理程式對話紀錄",
+          "finishedAgents": "已完成的代理程式",
           "contextPresence": "開啟中的分頁、終端機、留言",
           "completelyEmpty": "沒有需要保留的內容",
           "noWorkspaces": "未找到工作區。",
@@ -20149,7 +20157,7 @@
               "comment": "留言",
               "prunable": "可修剪",
               "locked": "已鎖定",
-              "retainedAgents": "已完成的代理程式"
+              "finishedAgents": "已完成的代理程式"
             }
           },
           "forceDeleteRisk_other": "{{count}} 個工作區目前存在風險，可能需要強制刪除",

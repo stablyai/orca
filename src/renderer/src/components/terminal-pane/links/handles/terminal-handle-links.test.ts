@@ -18,7 +18,7 @@ const mocks = vi.hoisted(() => ({
     ptyIdsByTabId: {},
     terminalLayoutsByTabId: {},
     agentStatusByPaneKey: {},
-    retainedAgentsByPaneKey: {},
+
     runtimeAgentOrchestrationByPaneKey: {},
     setActiveWorktree: vi.fn(),
     markWorktreeVisited: vi.fn(),
@@ -41,7 +41,7 @@ vi.mock('@/lib/workspace/tabs/activate-tab-and-focus-pane', () => ({
   activateTabAndFocusPane: mocks.activateTabAndFocusPane
 }))
 
-vi.mock('@/components/floating-terminal/floating-workspace-panel-reveal', () => ({
+vi.mock('@/components/floating-terminal/workspace/floating-workspace-panel-reveal', () => ({
   revealFloatingWorkspacePanel: mocks.revealFloatingWorkspacePanel
 }))
 
@@ -203,7 +203,6 @@ describe('createTerminalHandleLinkProvider', () => {
     mocks.storeState.ptyIdsByTabId = {}
     mocks.storeState.terminalLayoutsByTabId = {}
     mocks.storeState.agentStatusByPaneKey = {}
-    mocks.storeState.retainedAgentsByPaneKey = {}
     mocks.storeState.runtimeAgentOrchestrationByPaneKey = {}
     vi.stubGlobal('window', {
       api: {

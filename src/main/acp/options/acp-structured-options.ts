@@ -1,4 +1,4 @@
-import { acpSelectChoices } from './acp-select-choices'
+import { acpListedModels, acpSelectChoices } from './acp-select-choices'
 import { acpInitializeForkSupport } from '../capabilities/acp-fork-support'
 import type {
   AgentSessionModelOption,
@@ -37,6 +37,7 @@ export class AcpStructuredOptions {
     private readonly dialect: Pick<
       AcpDialect,
       | 'modelEfforts'
+      | 'familyEfforts'
       | 'withheldCommands'
       | 'effortChangesModel'
       | 'clampsUnlistedEffort'
@@ -244,20 +245,15 @@ export class AcpStructuredOptions {
         }))
       : []
     const currentModel = (modelOption?.currentValue ?? this.models?.currentModelId) || undefined
-    const listed: { id: string; label: string; description?: string }[] = modelOption
-      ? acpSelectChoices(modelOption).map((choice) => ({
-          id: choice.value,
-          label: choice.name,
-          ...(choice.description ? { description: choice.description } : {})
-        }))
-      : (this.models?.availableModels.map((model) => ({
-          id: model.modelId,
-          label: model.name,
-          ...(model.description ? { description: model.description } : {})
-        })) ?? [])
+    const listed = acpListedModels(modelOption, this.models)
     const models: AgentSessionModelOption[] = listed.map((model) => {
       const info = this.models?.availableModels.find((entry) => entry.modelId === model.id)
-      const advertised = info ? this.dialect.modelEfforts?.(info) : undefined
+      // The running model's live menu outranks variants advertised for its family.
+      const advertised = info
+        ? this.dialect.modelEfforts?.(info)
+        : model.id === currentModel
+          ? undefined
+          : this.dialect.familyEfforts?.(model.id, this.models?.availableModels ?? [])
       // A current-session menu supplies no negative evidence about an unobserved model.
       const sessionMenu =
         model.id === currentModel

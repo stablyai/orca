@@ -15,7 +15,7 @@ import { captureHostStructuredAgentSessionWork } from '../../../../native-chat/a
 import { nextStructuredQueuedMessage } from '../../../../native-chat/agent-session-wire/delivery/structured-agent-session-queued-gate'
 import { idOf } from '../../../rpc/orchestration/callers/session.test-fixture'
 import { operationId } from './structured-chat-coordinator-fake-codex-fixture'
-import { withTestAgentSessionDatabase } from '../../../agent-session/records/agent-session-record-store-test-harness'
+import { withTestAgentSessionDatabase } from '../../../agent-session/records/agent-session-record-store-persistence.test-fixture'
 import { createStructuredMailboxPointerHost } from '../../mailbox/structured-pointer/structured-mailbox-pointer-host'
 import {
   COORDINATOR,

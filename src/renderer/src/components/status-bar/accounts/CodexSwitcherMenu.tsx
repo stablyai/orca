@@ -7,8 +7,8 @@ import {
   AccountRuntimeToggle,
   CodexRestartStatusPrompt
 } from '../composition/StatusBarAccountControls'
+import { AccountUsageGauge } from './AccountUsageGauge'
 import {
-  InlineUsageBars,
   InlineUsageSignInAction,
   InlineUsageSkeleton,
   isUnavailableInactiveUsage
@@ -119,13 +119,15 @@ export function CodexSwitcherMenu({
     inactiveUsage: (typeof rows)[number]['inactiveUsage']
   ): React.ReactNode {
     if (active && activeUsage) {
-      return <InlineUsageBars limits={activeUsage} isFetching={activeUsage.status === 'fetching'} />
+      return (
+        <AccountUsageGauge limits={activeUsage} isFetching={activeUsage.status === 'fetching'} />
+      )
     }
     if (inactiveUsage?.isFetching && !inactiveUsage.rateLimits) {
       return <InlineUsageSkeleton />
     }
     return inactiveUsage?.rateLimits ? (
-      <InlineUsageBars limits={inactiveUsage.rateLimits} isFetching={inactiveUsage.isFetching} />
+      <AccountUsageGauge limits={inactiveUsage.rateLimits} isFetching={inactiveUsage.isFetching} />
     ) : null
   }
 
@@ -192,7 +194,7 @@ export function CodexSwitcherMenu({
       />
       {open ? <CodexRestartStatusPrompt /> : null}
       <AccountSwitchSection
-        heading={t('auto.components.status.bar.StatusBar.7657e3db9c', 'Codex Account')}
+        heading={t('auto.components.status.bar.AccountSwitchList.accounts', 'Accounts')}
         targets={selectedGroup?.targets ?? []}
         panelShowsActiveAccount={activeUsage !== null}
         onOpenSettings={() => {
