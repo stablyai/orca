@@ -15,7 +15,7 @@ import { collectHiddenChildAgentPaneKeys } from './activity-thread-child-agent'
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
   getPairedDeviceIdsByEnvironment
-} from '../../../../shared/workspace-creator-visibility'
+} from '../../../../shared/workspace-view/workspace-creator-visibility'
 import { filterThreadsByActivityScope, resolveActivityScopeRepoIds } from './activity-scope-filter'
 import {
   createActivityThreadSearchMatcher,

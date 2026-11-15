@@ -7,7 +7,7 @@ import {
   NODE_RUNTIME_ASSETS,
   NODE_RUNTIME_PIN,
   SERVER_TARGETS
-} from '../../../../src/shared/node-runtime-pin.ts'
+} from '../../../../src/shared/node-runtime/node-runtime-pin.ts'
 import { orcadNodeRuntimeRelativePath } from '../../../../src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts'
 import { ORCAD_PREBUILDS_DIR } from './build-orcad-prebuilds.mjs'
 import { findSlotProblems, readManifest } from './orcad-prebuild-slot-contents.mjs'

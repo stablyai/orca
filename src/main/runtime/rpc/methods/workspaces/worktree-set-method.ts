@@ -1,6 +1,6 @@
 import { WorktreeSet } from '../../../../../shared/rpc-contract/workspaces/worktree-params'
 import { displayNameUpdatePinsLabel } from '../../../../../shared/worktree/metadata/display-name-provenance'
-import { getWorkspaceStatusWarning } from '../../../../../shared/workspace-status-warning'
+import { getWorkspaceStatusWarning } from '../../../../../shared/workspace/status/workspace-status-warning'
 import { defineMethod } from '../../core'
 
 export const WORKTREE_SET_METHOD = defineMethod({

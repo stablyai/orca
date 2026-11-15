@@ -8,8 +8,11 @@ import {
 } from '../../../../../shared/execution-host'
 
 import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../../../../shared/project-group-types'
-import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import type { ProjectGroup } from '../../../../../shared/project/groups/project-group-types'
+import {
+  folderWorkspaceKey,
+  parseWorkspaceKey
+} from '../../../../../shared/workspace/identity/workspace-scope'
 import {
   findIndexedFolderWorkspaceOwner,
   findIndexedProjectGroupOwner

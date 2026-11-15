@@ -1,6 +1,6 @@
 /** Read live pairing revisions/repo tables at use time; cached values can fence against a re-paired authority or a project that moved hosts. */
 
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { LegacyAutomationPartitionContext } from '../../../../../shared/automations/ownership/automation-legacy-list-partition'
 import type { StableAutomationAuthorityRef } from '../../../../../shared/automations/ownership/automation-owner-ref'
 import { automationAuthorityCatalogKey } from './automation-host-catalog-types'

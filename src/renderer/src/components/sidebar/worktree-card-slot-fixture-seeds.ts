@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type {
   HostedReviewInfo,
   HostedReviewState

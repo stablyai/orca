@@ -1,4 +1,4 @@
-import { WorkspaceHookSettingsSchema } from '../../../shared/workspace-hook-settings-schema'
+import { WorkspaceHookSettingsSchema } from '../../../shared/workspace-setup/hooks/workspace-hook-settings-schema'
 import { z } from 'zod'
 import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import { TaskSourceContextSchema } from '../../../shared/work-items/task-source-context-schema'

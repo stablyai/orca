@@ -12,7 +12,7 @@ import {
   type PaneTarget
 } from './workspace-unread-characterization-fixture'
 import { completeAgentTurn } from './workspace-unread-characterization-driver'
-import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { makeFolderWorkspace } from '../../folder-workspaces/folder-workspace.test-fixture'
 import { isWorkspaceFlagSet } from './workspace-unread-flag-reads'
 import { selectAgentRowsUnread } from '@/components/sidebar/workspace-card/activity/worktree-card-agent-ack-inputs'

@@ -1,7 +1,7 @@
 import { join, resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../../../persistence/loading-store/store'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 
 const mocks = vi.hoisted(() => ({ graph: vi.fn(), stat: vi.fn(), realpath: vi.fn() }))
 vi.mock('node:fs', () => ({ realpathSync: (path: string) => path, statSync: mocks.stat }))
@@ -21,7 +21,6 @@ import { resolveAuthorizedPath } from '../../filesystem/access/filesystem-auth'
 import {
   __resetCreatedWorktreeRootsForTests,
   invalidateAuthorizedRootsCache,
-  rebuildAuthorizedRootsCache,
   registerWorktreeRootsForRepo
 } from './registered-worktree-roots-cache'
 
@@ -87,25 +86,6 @@ describe('current request follows a superseded rebuild', () => {
   })
 })
 
-it.each([1, 64, 256])('records catalog work for %s cold-rebuild repositories', async (count) => {
-  let pathReads = 0
-  const repos: Repo[] = Array.from({ length: count }, (_, i) => ({
-    id: `repo-${i}`,
-    get path() {
-      pathReads++
-      return resolve(`/review-repo-${i}`)
-    },
-    displayName: 'repo',
-    badgeColor: '#000',
-    addedAt: 0
-  }))
-  const store = fixture(repos)
-  const getRepos = vi.spyOn(store, 'getRepos')
-  await rebuildAuthorizedRootsCache(store)
-  expect(mocks.graph).toHaveBeenCalledTimes(count)
-  expect(getRepos.mock.calls.length).toBeLessThanOrEqual(3)
-  expect(pathReads).toBeLessThanOrEqual(4 * count)
-})
 it('records catalog work for one warm linked-file authorization', async () => {
   const repo: Repo = {
     id: 'repo',

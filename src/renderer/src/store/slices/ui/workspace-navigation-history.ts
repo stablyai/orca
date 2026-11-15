@@ -9,7 +9,7 @@ import {
   getTaskSourceCacheScope,
   type TaskSourceContext
 } from '../../../../../shared/work-items/task-source-context'
-import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import {
   automationsPageLocationKey,
   isAutomationsHistoryEntry,

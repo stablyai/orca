@@ -1,6 +1,6 @@
 /** Each process scans the repos it owns: desktop main over IPC, every paired or SSH host's own server over RPC. */
 import type { AppState } from '../../types'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import {
   getRepoExecutionHostId,
   parseRoutableExecutionHostId,

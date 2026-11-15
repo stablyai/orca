@@ -5,7 +5,7 @@ import {
   loadWindowsSecurity,
   WINDOWS_FILE_READ_EXECUTE,
   type WindowsSecurity
-} from '../../../shared/windows-security-addon'
+} from '../../../shared/secure-storage/windows-security-addon'
 
 /** ALL RESTRICTED APPLICATION PACKAGES: the grant that cleared electron/electron#51761. */
 export const RESTRICTED_APP_PACKAGES_SID = 'S-1-15-2-2'

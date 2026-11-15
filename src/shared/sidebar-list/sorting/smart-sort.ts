@@ -1,5 +1,5 @@
 import type { AgentStatusRows } from '../../agent-status/contracts/agent-status-rows'
-import type { Repo } from '../../repo-types'
+import type { Repo } from '../../repository/repo-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../worktree/types'
 import type { MigrationUnsupportedPtyEntry } from '../../agent-status/contracts/agent-status-ipc-payload'

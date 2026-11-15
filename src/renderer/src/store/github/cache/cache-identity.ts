@@ -21,7 +21,7 @@ import {
   repoCacheKeyHostId,
   type RuntimeFocusSettings
 } from '../../../../../shared/github/cache/github-cache-key'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { CacheEntry } from './cache-model'
 

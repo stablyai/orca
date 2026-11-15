@@ -20,7 +20,7 @@ import type {
 } from './worktree-slice-types'
 import { isRuntimeMethodNotFoundError } from './runtime-worktree-rpc-errors'
 import { toLegacyDetectedWorktreeResult } from './worktree-host-ownership'
-import { isWorktreeScanFailureKind } from '../../../../../../shared/worktree-scan-failure'
+import { isWorktreeScanFailureKind } from '../../../../../../shared/worktree/catalog/worktree-scan-failure'
 
 /** The listing host is the one the caller asked about, never the focused one. */
 export function detectedWorktreeTarget(executionHostId: ExecutionHostId): RuntimeClientTarget {

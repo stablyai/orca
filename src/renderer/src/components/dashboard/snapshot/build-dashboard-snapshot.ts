@@ -9,7 +9,7 @@ import {
   type DashboardSnapshot,
   type DashboardWorkspace
 } from '../../../../../shared/dashboard-snapshot'
-import type { RepoIcon } from '../../../../../shared/repo-icon'
+import type { RepoIcon } from '../../../../../shared/repository/appearance/repo-icon'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import {
   resolveDashboardCardTerminalInput,

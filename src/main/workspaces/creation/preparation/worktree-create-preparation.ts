@@ -8,8 +8,8 @@ import { worktreePreparationGit } from '../../../git/worktrees/creation/worktree
 import { mkdir } from 'node:fs/promises'
 import { posix, win32 } from 'node:path'
 import type { ProjectRuntimeResolutionStore } from '../../execution-host/local-project-runtime-resolution'
-import type { Repo } from '../../../../shared/repo-types'
-import { isFolderRepo } from '../../../../shared/repo-kind'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
 import type {
   PreparedCheckoutMissReason,

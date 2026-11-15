@@ -13,7 +13,7 @@ import { overlayEnvironmentVariables } from '../../../../shared/shell/launch/env
 import {
   catalogListingDirectory,
   envWithPathRelativeTo
-} from '../../../../shared/node-cli-command-resolution'
+} from '../../../../shared/shell/command-resolution/node-cli-command-resolution'
 import type { AgentSessionAccountKind } from '../../../../shared/agent-session/agent-session-availability'
 import { AgentModelCatalogUnavailableError } from '../../../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
 import { isMissingProviderExecutable } from '../../../provider-process/provider-executable-missing'

@@ -1,7 +1,7 @@
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../src/shared/execution-host'
-import { getLogicalRepoOrderRankById } from '../../../../src/shared/project-section-order'
+import { getLogicalRepoOrderRankById } from '../../../../src/shared/sidebar-list/sections/project-section-order'
 import type { ProjectOrderBy } from '../../../../src/shared/ui-chrome-types'
-import type { ServedProjectSections } from '../../../../src/shared/project-section-catalog-schema'
+import type { ServedProjectSections } from '../../../../src/shared/sidebar-list/catalog/project-section-catalog-schema'
 import {
   NO_PROJECT_SECTION_CATALOG,
   type ProjectSectionCatalog

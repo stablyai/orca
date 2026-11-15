@@ -1,5 +1,5 @@
 import type { AppState } from '@/store/types'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { HostAuthority } from '../../../../../shared/execution-host/host-authority'
 import {
   getRepoExecutionHostId,
@@ -7,7 +7,7 @@ import {
   parseExecutionHostId
 } from '../../../../../shared/execution-host'
 import { getFolderFileConnectionOwnerFromState } from '../../workspace/ownership/connection-owner-resolution'
-import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import {
   assertEditorFileOperationCurrent,
   getExpectedSshConnectionGeneration,

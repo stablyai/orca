@@ -7,14 +7,14 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { isGitRepoKind } from '../../../../../../shared/repo-kind'
+import { isGitRepoKind } from '../../../../../../shared/repository/repo-kind'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   importNewExternalWorktreeInboxPaths,
   type NewExternalWorktreesInboxActionState
 } from '../../worktree-list/listing/new-external-worktrees-inbox-actions'
 import WorktreeVisibilityHelpPopover from './WorktreeVisibilityHelpPopover'
-import { getRepoHostIdentity } from '../../../../../../shared/repo-host-identity'
+import { getRepoHostIdentity } from '../../../../../../shared/repository/repo-host-identity'
 import {
   resolveWorktreeVisibilityHostTarget,
   useWorktreeVisibilityHostActions
@@ -29,7 +29,10 @@ import {
 import WorktreeVisibilitySourceList from '../sources/WorktreeVisibilitySourceList'
 import type { WorktreeVisibilitySourceRow } from '../sources/WorktreeVisibilitySourceList'
 import type { WorktreeVisibilitySourceAddResult } from '../sources/WorktreeVisibilitySourceAddForm'
-import type { CustomWorktreeVisibilitySource, Repo } from '../../../../../../shared/repo-types'
+import type {
+  CustomWorktreeVisibilitySource,
+  Repo
+} from '../../../../../../shared/repository/repo-types'
 import {
   MAX_CUSTOM_WORKTREE_VISIBILITY_SOURCES,
   effectiveCustomWorktreeSourceVisibility,

@@ -10,7 +10,7 @@ import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { DirectSshAuthority } from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 import type { HostQualifiedDetectedWorktreeResult } from '../../../../../../shared/detected-worktree-provider-contract'
-import type { ProjectHostSetup } from '../../../../../../shared/project-types'
+import type { ProjectHostSetup } from '../../../../../../shared/project/project-types'
 import type {
   WorkspaceLineage,
   WorktreeLineage

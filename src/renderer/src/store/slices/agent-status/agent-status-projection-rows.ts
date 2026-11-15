@@ -9,7 +9,7 @@ import { buildExplicitWorktreeAgentRows } from '@/components/sidebar/workspace-c
 import { tabFromWorktreeAttributedStatusEntry } from '@/components/sidebar/workspace-card/activity/worktree-agent-row-fallback-tab'
 import { agentEntrySessionStartedAt } from '../../../../../shared/agent-session/lifecycle/resume/agent-session-start-time'
 import { isAgentStatusFresh } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
-import { applyAgentPaneActivityFlags } from '../../../../../shared/worktree-status-rollup'
+import { applyAgentPaneActivityFlags } from '../../../../../shared/worktree/row-display/worktree-status-rollup'
 import { resolveAttention, IDLE } from '../../../../../shared/sidebar-list/sorting/smart-attention'
 import { classifyPaneKeyLiveness } from './agent-status-capacity-eviction'
 import {

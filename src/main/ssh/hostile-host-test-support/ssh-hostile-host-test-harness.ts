@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { setAppEnvironment } from '../../../shared/app-environment'
-import { removeTreeSync } from '../../../shared/windows-transient-lock-removal'
+import { removeTreeSync } from '../../../shared/file-write/windows-transient-lock-removal'
 import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { SshConnection } from '../connection/ssh-connection'
 

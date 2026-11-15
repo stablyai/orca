@@ -3,13 +3,16 @@
 import { act, type CSSProperties, type MouseEvent, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type {
   WorkspaceLineage,
   WorktreeLineage
 } from '../../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
-import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../../shared/workspace-scope'
+import {
+  folderWorkspaceKey,
+  worktreeWorkspaceKey
+} from '../../../../../shared/workspace/identity/workspace-scope'
 
 type MockStoreState = {
   activeWorktreeId: string | null

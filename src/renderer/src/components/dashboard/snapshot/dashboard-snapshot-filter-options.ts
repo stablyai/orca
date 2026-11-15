@@ -1,6 +1,6 @@
 import type { AppState } from '@/store/types'
 import type { DashboardFilterOptions } from '../../../../../shared/dashboard-snapshot'
-import { DEFAULT_WORKSPACE_STATUSES } from '../../../../../shared/workspace-status-defaults'
+import { DEFAULT_WORKSPACE_STATUSES } from '../../../../../shared/workspace/status/workspace-status-defaults'
 import { boundedLabel } from './dashboard-card-labels'
 import type { ActiveDashboardWorkspace } from './dashboard-snapshot-workspaces'
 import { translateWorkspaceBoardStatusLabel } from '@/components/sidebar/workspace-board-status-label'

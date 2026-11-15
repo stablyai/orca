@@ -1,5 +1,5 @@
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { PRWatchWorkspace } from '../../github/pr-watch/pr-watch-types'
 import { hostedReviewSshConnectionId } from '../../source-control/hosted-review-execution-host'
 import type { ProjectRuntimeResolutionStore } from '../../workspaces/execution-host/local-project-runtime-resolution'

@@ -1,5 +1,5 @@
 import { getSystemPrefersDark } from '@/lib/terminal/appearance/terminal-theme'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import {
   collectAmbiguousTerminalTabIds,
   graphState,

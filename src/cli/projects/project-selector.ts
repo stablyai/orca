@@ -1,5 +1,5 @@
 import { normalizeExecutionHostId } from '../../shared/execution-host'
-import type { Project, ProjectHostSetup } from '../../shared/project-types'
+import type { Project, ProjectHostSetup } from '../../shared/project/project-types'
 import { normalizeTypedName } from '../../shared/typed-name-normalization'
 import type { RuntimeClient } from '../runtime/client'
 import { RuntimeClientError } from '../runtime/connection/types'

@@ -7,7 +7,7 @@
  */
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
-import { getRepoHostIdentityForParts } from '../../../../shared/repo-host-identity'
+import { getRepoHostIdentityForParts } from '../../../../shared/repository/repo-host-identity'
 import type {
   ManualRepoOrderEntry,
   VisibleWorkspaceHostIds,

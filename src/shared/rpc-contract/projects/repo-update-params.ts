@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { normalizeRepoSourceControlAiOverrides } from '../../source-control/ai/settings/source-control-ai-repo-settings'
-import { normalizeRepoBadgeColor } from '../../repo-badge-color'
-import { sanitizeRepoIcon } from '../../repo-icon'
+import { normalizeRepoBadgeColor } from '../../repository/appearance/repo-badge-color'
+import { sanitizeRepoIcon } from '../../repository/appearance/repo-icon'
 import { normalizeGhAccountBinding } from '../../github/accounts/account-binding'
 import { normalizeJiraProjectReference } from '../../jira/jira-project-reference'
 import {

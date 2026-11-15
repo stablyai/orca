@@ -9,7 +9,7 @@ import type {
 } from '../../../src/renderer/src/lib/pane-manager/pane-manager-types'
 import type { GlobalSettings } from '../../../src/shared/global-settings-types'
 import type { BrowserWorkspace } from '../../../src/shared/browser/workspaces/browser-workspace-types'
-import type { Repo } from '../../../src/shared/repo-types'
+import type { Repo } from '../../../src/shared/repository/repo-types'
 import type { WorkspaceVisibleTabType } from '../../../src/shared/tab-types'
 import type { TerminalTab } from '../../../src/shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../src/shared/worktree/types'
