@@ -16,6 +16,8 @@ import {
 } from '../orca-profiles/cloud-auth/profile-cloud-index'
 import { signOutCloudSession } from '../orca-profiles/cloud-session/profile-cloud-session-owner'
 import { saveOrcaCloudSession } from '../orca-profiles/cloud-session/profile-cloud-session-store'
+import { signOutCurrentOrcaProfile } from '../orca-profiles/cloud-auth/profile-cloud-service'
+import { getArtifactShareRecord } from './artifact-share-record-store'
 import { ArtifactCloudService } from './artifact-cloud-service'
 
 const createdPaths: string[] = []
@@ -155,6 +157,51 @@ afterEach(async () => {
 })
 
 describe('a rate-limited artifact request whose account changes during the wait', () => {
+  it('does not replay while the real sign-out is still waiting on remote logout', async () => {
+    const signin = await signIn()
+    const artifactMethods: string[] = []
+    const artifactResponses = [limited(), created()]
+    let finishLogout: (response: Response) => void = () => {}
+    let logoutRequests = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string | URL, init: RequestInit) => {
+        if (String(url).includes('/v1/artifacts')) {
+          artifactMethods.push(init.method ?? 'GET')
+          const next = artifactResponses.shift()
+          if (!next) {
+            throw new Error('unexpected extra artifact request')
+          }
+          return next
+        }
+        logoutRequests++
+        return new Promise<Response>((resolve) => {
+          finishLogout = resolve
+        })
+      })
+    )
+
+    const outcome = signin.artifacts.share(writeRequest).catch((caught: unknown) => caught)
+    await untilRetryScheduled()
+    const signingOut = signOutCurrentOrcaProfile(signin.userDataPath)
+    await vi.advanceTimersByTimeAsync(30_000)
+
+    expect(String(await outcome)).toContain('Signed out of Orca while waiting to retry')
+    expect(artifactMethods).toEqual(['POST'])
+    expect(logoutRequests).toBe(1)
+    finishLogout(Response.json({}))
+    await expect(signingOut).resolves.toMatchObject({ status: 'signed-out' })
+    expect(artifactMethods).toEqual(['POST'])
+    expect(
+      getArtifactShareRecord(signin.profileId, signin.userDataPath, writeRequest.sourceKey, {
+        cloudUserId: cloudA.userId,
+        cloudProfileId: cloudA.cloudProfileId,
+        cloudOrganizationId: '',
+        apiOrigin: apiUrl
+      })
+    ).toBeNull()
+  })
+
   it('does not create the artifact after the user signs out', async () => {
     const signin = await signIn()
     const fetches = stubFetch(limited(), created())
