@@ -7,6 +7,7 @@ export type BrowserGuestDiscardProtection = {
   reason:
     | 'clean'
     | 'edits'
+    | 'post'
     | 'audio'
     | 'frames'
     | 'capture'

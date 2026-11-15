@@ -7,6 +7,7 @@ export {
   registerBrowserSessionNotificationGrant
 } from './browser-guest-idle-protection'
 import { randomUUID } from 'node:crypto'
+import { observeBrowserGuestRequests } from '../../../sessions/requests/browser-session-web-request-observer'
 import {
   BROWSER_GUEST_PROTECTION_CHALLENGE,
   BROWSER_GUEST_PROTECTION_REPORT,
@@ -18,6 +19,7 @@ type ProtectionOwner = {
   dirty: boolean | null
   navigating: boolean
   currentEdited: boolean
+  currentPost: boolean
   mediaGranted: boolean
   unavailable: boolean
   // Null until the private observer reports them for the current challenge.
@@ -54,6 +56,10 @@ export function readBrowserGuestDiscardProtection(
   }
   if (owner.dirty) {
     return result('protected', 'edits')
+  }
+  // A freed page keeps only its URL, so reopening a POST result would silently GET another page.
+  if (owner.currentPost) {
+    return result('protected', 'post')
   }
   if (owner.pictureInPicture === null || owner.pdf === null) {
     return result('unknown', 'observer')
@@ -99,6 +105,7 @@ export function installBrowserGuestDiscardProtection(
     unavailable: false,
     navigating: false,
     currentEdited: false,
+    currentPost: false,
     mediaGranted: false,
     pictureInPicture: null,
     pdf: null
@@ -181,10 +188,21 @@ export function installBrowserGuestDiscardProtection(
     publish()
   }
   // Only the current document protects; restored back/forward entries reload on demand.
+  let pendingMethod: string | null = null
+  const stopRequests = observeBrowserGuestRequests(guest.id, (session, event, details) => {
+    if (
+      event === 'onBeforeRequest' &&
+      details.resourceType === 'mainFrame' &&
+      session === guest.session
+    ) {
+      pendingMethod = details.method
+    }
+  })
   const navigation = (
     details: Electron.Event<Electron.WebContentsDidStartNavigationEventParams>
   ): void => {
     if (details.isMainFrame && !details.isSameDocument) {
+      pendingMethod = null
       owner.navigating = true
       invalidate()
     } else if (!details.isMainFrame) {
@@ -193,6 +211,7 @@ export function installBrowserGuestDiscardProtection(
   }
   const committed = (): void => {
     owner.currentEdited = false
+    owner.currentPost = pendingMethod !== null && pendingMethod !== 'GET'
     owner.mediaGranted = false
     publish()
   }
@@ -236,6 +255,7 @@ export function installBrowserGuestDiscardProtection(
   guest.on('did-navigate', committed)
   guest.on('did-navigate-in-page', inPageNavigation)
   return () => {
+    stopRequests()
     stopIdleProtection()
     if (owners.get(guest) === owner) {
       owners.delete(guest)

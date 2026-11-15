@@ -7,6 +7,7 @@ import {
   registerBrowserSessionNotificationGrant,
   setBrowserGuestSemanticVisibility
 } from './browser-guest-discard-protection'
+import { reportBrowserSessionWebRequest } from '../../../sessions/requests/browser-session-web-request-observer'
 import { BROWSER_GUEST_PROTECTION_REPORT } from '../../../../../shared/browser/guest-lifecycle/browser-guest-discard-protection'
 
 it('protects only the current document, never earlier history', () => {
@@ -36,13 +37,22 @@ it('protects only the current document, never earlier history', () => {
       { generation, dirty, pictureInPicture: false, contentType: 'text/html' }
     )
   }
-  const navigate = (next: string, status = 200): void => {
+  const navigate = (next: string, status = 200, method = 'GET'): void => {
     url = next
     guest.emit('did-start-navigation', {
       url,
       frame: mainFrame,
       isMainFrame: true,
       isSameDocument: false
+    })
+    reportBrowserSessionWebRequest(guest.session, 'onBeforeRequest', {
+      id: 1,
+      url,
+      method,
+      frame: guest.mainFrame,
+      resourceType: 'mainFrame',
+      webContentsId: 7,
+      timestamp: 0
     })
     guest.emit('did-navigate', {}, url, status, 'OK')
     guest.emit('dom-ready')
@@ -96,7 +106,9 @@ it('protects only the current document, never earlier history', () => {
     expect(readBrowserGuestDiscardProtection(guest).reason).toBe('edits')
     guest.emit('did-navigate-in-page', {}, 'https://example.test/after-frame#step', true)
     expect(readBrowserGuestDiscardProtection(guest).reason).toBe('edits')
-    // A non-2xx page and any earlier edited page stay restorable from history.
+    navigate('https://example.test/result', 200, 'POST')
+    expect(readBrowserGuestDiscardProtection(guest).reason).toBe('post')
+    // Earlier edited and POST pages, and non-2xx pages, do not keep the current page.
     navigate('https://example.test/missing', 404)
     expect(readBrowserGuestDiscardProtection(guest).protection).toBe('discardable')
     report(true)
