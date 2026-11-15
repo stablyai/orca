@@ -183,3 +183,41 @@ it('keeps every chat and turn an older Orca saved after a downgrade, without cha
     records: 4
   })
 })
+
+it('fills in revisions for chats converted before they were kept, then still keeps later turns', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-legacy-reconcile-'))
+  cleanup.push(() => rmSync(root, { recursive: true, force: true }))
+  const { db: original } = openJournalDatabase(journalDatabasePath(root))
+  cleanup.push(() => original.close())
+  olderOrcaChat(original, 'converted', rows)
+  original.pragma('wal_checkpoint(TRUNCATE)')
+  const first = await upgrade(root)
+  expect(await first.convert('converted')).toBe('epoch')
+  // As a build from before revisions were kept left it.
+  first.db.exec(`DELETE FROM agent_session_store_meta WHERE key LIKE 'journal.legacy-revision%'`)
+  await first.close()
+
+  const unchanged = await upgrade(root)
+  expect(unchanged.db.prepare('SELECT session_id FROM agent_session_records').all()).toEqual([
+    { session_id: 'converted' }
+  ])
+  await unchanged.close()
+
+  runJournalTransaction(original, () => {
+    insertJournalRow(original, 'converted', turn('older-turn', tip + 1))
+  })
+  original.pragma('wal_checkpoint(TRUNCATE)')
+  const later = await upgrade(root)
+  cleanup.push(later.close)
+  const copies = later.db
+    .prepare("SELECT session_id FROM agent_session_records WHERE session_id!='converted'")
+    .all()
+    .map((row) => String(row.session_id))
+  expect(copies).toHaveLength(1)
+  expect(items(later.db, copies[0]!)).toContain('older-turn')
+  expect(
+    later.db
+      .prepare("SELECT value FROM agent_session_store_meta WHERE key='session_tabs_recorded'")
+      .get()
+  ).toEqual({ value: '1' })
+})

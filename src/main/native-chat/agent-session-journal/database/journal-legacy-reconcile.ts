@@ -9,6 +9,7 @@ import {
   insertJournalDomainImportPage
 } from '../journal-domain-import-rows'
 import { runJournalTransaction } from './journal-database'
+import { AGENT_SESSION_TABS_RECORDED } from '../../../runtime/agent-session/records/agent-session-record-rows'
 import { journalDatabasePath } from './journal-host-database'
 import {
   journalLegacyChatRevision,
@@ -18,11 +19,10 @@ import {
 } from './journal-legacy-source'
 import {
   captureJournalLegacySourceReceipt,
-  JOURNAL_LEGACY_SOURCE_RECEIPT,
-  type JournalLegacySourceReceipt
+  JOURNAL_LEGACY_SOURCE_RECEIPT
 } from './journal-legacy-source-receipt'
 
-/** Set once every converted chat in this file carries the original revision it shows. */
+/** Set after a pass absorbed every original chat, so each chat here carries its revision. */
 export const JOURNAL_LEGACY_REVISIONS_KEPT = 'journal.legacy-revisions-kept.v1'
 
 /**
@@ -36,18 +36,21 @@ export function reconcileJournalLegacySource(stateDirectory: string, db: Databas
   if (!existsSync(sourcePath)) {
     return
   }
-  // Captured before reading, so a write during this pass is never taken as absorbed.
-  const receipt = captureJournalLegacySourceReceipt(sourcePath)
+  // Captured before reading, so a write during this pass is never taken as absorbed. Until every
+  // chat here carries its revision (files converted before revisions were kept), each launch reads.
+  const captured = captureJournalLegacySourceReceipt(sourcePath)
+  const receipt = JSON.stringify(captured)
   const kept = readMeta(db, JOURNAL_LEGACY_REVISIONS_KEPT) !== undefined
   const unchanged =
-    receipt.disposition !== 'uncertifiable' &&
-    sameSource(readMeta(db, JOURNAL_LEGACY_SOURCE_RECEIPT), receipt, kept)
+    captured.disposition !== 'uncertifiable' &&
+    readMeta(db, JOURNAL_LEGACY_SOURCE_RECEIPT) === receipt
   if (unchanged && kept) {
     return
   }
   const source = openJournalLegacySource(sourcePath)
   try {
     if (unchanged) {
+      // Converted before revisions were kept, and nothing written since: each chat is current.
       keepCurrentRevisions(source, db)
     } else if (!absorbChats(source, db)) {
       // A failed chat leaves the original unabsorbed, so the next launch retries it.
@@ -57,35 +60,18 @@ export function reconcileJournalLegacySource(stateDirectory: string, db: Databas
     source.close()
   }
   runJournalTransaction(db, () => {
-    writeMeta(db, JOURNAL_LEGACY_SOURCE_RECEIPT, JSON.stringify(receipt))
+    writeMeta(db, JOURNAL_LEGACY_SOURCE_RECEIPT, receipt)
     writeMeta(db, JOURNAL_LEGACY_REVISIONS_KEPT, '1')
   })
 }
 
-/** Before revisions were kept, a receipt named a nonempty WAL by its size alone. */
-function sameSource(
-  absorbed: string | undefined,
-  receipt: JournalLegacySourceReceipt,
-  exact: boolean
-): boolean {
-  if (exact || receipt.disposition !== 'copied-source' || receipt.wal.kind === 'empty') {
-    return absorbed === JSON.stringify(receipt)
-  }
-  const { kind, size } = receipt.wal
-  return absorbed === JSON.stringify({ ...receipt, wal: { kind, size } })
-}
-
-/** Unchanged since the last pass: chats converted before revisions were kept show the current one. */
 function keepCurrentRevisions(source: Database.Database, db: Database.Database): void {
   runJournalTransaction(db, () => {
-    for (const { session_id: id } of db
-      .prepare('SELECT session_id FROM journal_chat_state WHERE epoch IS NOT NULL')
+    for (const { session_id: id } of source
+      .prepare('SELECT session_id FROM agent_session_records')
       .all()) {
-      const revision = journalLegacyChatRevision(source, String(id))
-      if (
-        revision !== null &&
-        readMeta(db, journalLegacyChatRevisionKey(String(id))) === undefined
-      ) {
+      if (readMeta(db, journalLegacyChatRevisionKey(String(id))) === undefined) {
+        const revision = journalLegacyChatRevision(source, String(id)) ?? 'null'
         recordJournalLegacyChatRevision(db, String(id), revision)
       }
     }
@@ -101,6 +87,7 @@ type Adoption = {
   tabbed: Set<string>
   takenTabs: Set<string>
   nextPosition: number
+  tabsRecorded: boolean
 }
 
 /** True when every chat was absorbed; a failed chat is logged and retried next launch. */
@@ -131,7 +118,9 @@ function readAdoption(source: Database.Database, db: Database.Database): Adoptio
     .prepare('SELECT upload_id,session_id,claimed_at FROM agent_session_attachment_claims')
     .all()) {
     const id = String(claim.session_id)
-    claims.set(id, [...(claims.get(id) ?? []), claim])
+    const list = claims.get(id) ?? []
+    list.push(claim)
+    claims.set(id, list)
   }
   const tabs = db.prepare('SELECT tab_id,session_id FROM agent_session_tabs').all()
   const tail = db.prepare('SELECT COALESCE(MAX(position),-1) AS tail FROM agent_session_tabs').get()
@@ -145,7 +134,8 @@ function readAdoption(source: Database.Database, db: Database.Database): Adoptio
     claims,
     tabbed: new Set(tabs.map((row) => String(row.session_id))),
     takenTabs: new Set(tabs.map((row) => String(row.tab_id))),
-    nextPosition: Number(tail?.tail ?? -1) + 1
+    nextPosition: Number(tail?.tail ?? -1) + 1,
+    tabsRecorded: readMeta(db, AGENT_SESSION_TABS_RECORDED) !== undefined
   }
 }
 
@@ -184,25 +174,26 @@ function adoptChat(
     source.prepare('SELECT record_json FROM agent_session_records WHERE session_id=?').get(id)!
       .record_json
   )
+  const known = db.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?').get(as)
   // A copy takes its own id and leaves the original's /clear successor to the original.
   db.prepare(`INSERT INTO agent_session_records(session_id,record_json) VALUES(?1,
     CASE WHEN ?1=?3 THEN ?2 ELSE json_remove(json_set(?2,'$.sessionId',?1,'$.lease.sessionId',?1),
       '$.conversationCommand') END)
     ON CONFLICT(session_id) DO UPDATE SET record_json=excluded.record_json`).run(as, record, id)
-  if (!adoption.tabbed.has(as)) {
+  // A chat new to this file gets a tab; one it already holds keeps the visibility it has here.
+  if (!known) {
+    if (!adoption.tabsRecorded) {
+      recordTabIndex(db, adoption)
+    }
     const saved = as === id ? adoption.savedTabs.get(id) : undefined
-    const tab =
+    addTab(
+      db,
+      adoption,
+      as,
       saved !== undefined && !adoption.takenTabs.has(saved)
         ? saved
         : structuredAgentSessionTabId(as)
-    db.prepare('INSERT INTO agent_session_tabs(tab_id,session_id,position) VALUES(?,?,?)').run(
-      tab,
-      as,
-      adoption.nextPosition
     )
-    adoption.nextPosition += 1
-    adoption.tabbed.add(as)
-    adoption.takenTabs.add(tab)
   }
   const session = source
     .prepare('SELECT workspace_id FROM journal_sessions WHERE session_id=?')
@@ -215,6 +206,34 @@ function adoptChat(
   if (as !== id) {
     insertClaims(db, as, adoption.claims.get(id) ?? [])
   }
+}
+
+/**
+ * A file that never recorded its tab index shows chats by the ids its clients pass in, which a
+ * kept chat can't be among. Recording the index with every chat here shown keeps what was shown.
+ */
+function recordTabIndex(db: Database.Database, adoption: Adoption): void {
+  for (const { session_id: id } of db
+    .prepare('SELECT session_id FROM agent_session_records')
+    .all()) {
+    addTab(db, adoption, String(id), structuredAgentSessionTabId(String(id)))
+  }
+  writeMeta(db, AGENT_SESSION_TABS_RECORDED, '1')
+  adoption.tabsRecorded = true
+}
+
+function addTab(db: Database.Database, adoption: Adoption, sessionId: string, tab: string): void {
+  if (adoption.tabbed.has(sessionId) || adoption.takenTabs.has(tab)) {
+    return
+  }
+  db.prepare('INSERT INTO agent_session_tabs(tab_id,session_id,position) VALUES(?,?,?)').run(
+    tab,
+    sessionId,
+    adoption.nextPosition
+  )
+  adoption.nextPosition += 1
+  adoption.tabbed.add(sessionId)
+  adoption.takenTabs.add(tab)
 }
 
 /** The original's version of a converted chat it moved past becomes a second chat beside it. */
