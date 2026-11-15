@@ -1,5 +1,5 @@
 // PC-3b: the Orca Cloud pane strip for an agent that isn't set up yet. The launch holds; "Set up
-// once" runs the same one-time setup as Settings › Accounts › Orca Cloud (S0) right in the pane,
+// once" runs the same one-time setup as Settings › Orca Cloud › Cloud agent sign-ins (S0) right in the pane,
 // and once it's saved the strip offers "Start {{agent}}". Pure: the strip renders what this returns.
 import type { Translate } from '@/i18n/use-translate'
 import {

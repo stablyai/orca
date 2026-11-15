@@ -1,6 +1,6 @@
 // The "Set up Orca Cloud" panel's Agent row (cloud-start G). It replaces the old "Add an agent /
 // Later" hint: it says how the composer's agent will sign in, links to the one-time setup in
-// Settings → Agent accounts, and never blocks Start or signs in per sandbox.
+// Settings → Cloud agent sign-ins, and never blocks Start or signs in per sandbox.
 import { useEffect } from 'react'
 import { openOrcaCloudSignInSheet } from '@/components/settings/agent-accounts/sign-in-sheet/orca-cloud-sign-in-sheet-store'
 import { CircleCheck, CircleDashed, Info, TriangleAlert } from 'lucide-react'
@@ -47,8 +47,8 @@ export function orcaCloudAgentRowCopy(
     case 'notSetUp':
       return {
         detail: t(
-          'orcaCloudAgentRow.notSetUp',
-          '{{agent}} isn’t set up for Orca Cloud yet. Set it up once in Settings → Agent accounts.',
+          'orcaCloudAgentRow.notSetUpCloudSignIns',
+          '{{agent}} isn’t set up for Orca Cloud yet. Set it up once in Settings → Cloud agent sign-ins.',
           { agent }
         ),
         action: {
@@ -59,8 +59,8 @@ export function orcaCloudAgentRowCopy(
     case 'expired':
       return {
         detail: t(
-          'orcaCloudAgentRow.expired',
-          'Your {{agent}} sign-in for Orca Cloud expired. Renew it once in Settings → Agent accounts.',
+          'orcaCloudAgentRow.expiredCloudSignIns',
+          'Your {{agent}} sign-in for Orca Cloud expired. Renew it once in Settings → Cloud agent sign-ins.',
           { agent }
         ),
         action: {
@@ -79,8 +79,8 @@ export function orcaCloudAgentRowCopy(
     case 'signedOut':
       return {
         detail: t(
-          'orcaCloudAgentRow.signedOut',
-          '{{agent}}: set up once in Settings → Agent accounts after you sign in',
+          'orcaCloudAgentRow.signedOutCloudSignIns',
+          '{{agent}}: set up once in Settings → Cloud agent sign-ins after you sign in',
           { agent }
         ),
         status: t('orcaCloudAgentRow.optional', 'Optional')

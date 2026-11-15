@@ -1,5 +1,5 @@
 // PC-3b: what the "not set up" strip's buttons do. Set up once runs S0's setup for the agent (the
-// same flow as Settings › Accounts › Orca Cloud); Start releases the held launch. Cancel during a
+// same flow as Settings › Orca Cloud › Cloud agent sign-ins); Start releases the held launch. Cancel during a
 // setup stops only that setup: the launch stays held on "Set up once", and a setup finished from
 // anywhere (here or Settings) turns the strip into "Start". Cancel with no setup running gives up
 // the held launch and opens a plain shell, like cancelling any held launch (RR-a).

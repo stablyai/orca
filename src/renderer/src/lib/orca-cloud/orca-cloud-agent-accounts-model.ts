@@ -1,4 +1,4 @@
-// What S0 (Settings › Agent accounts › Orca Cloud) and the composer's Agent row show for each agent,
+// What S0 (Settings › Orca Cloud › Cloud agent sign-ins) and the composer's Agent row show for each agent,
 // derived from GET /v1/agent-credentials + /v1/agent-sources and the setup running on this computer.
 import type { CloudEffectiveSecret } from '../../../../shared/cloud-secrets/cloud-secrets-wire'
 import {

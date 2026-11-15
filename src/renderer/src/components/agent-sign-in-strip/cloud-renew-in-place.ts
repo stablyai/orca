@@ -110,7 +110,7 @@ export function cloudRenewInPlaceActions(args: {
   setup: OrcaCloudAgentSetup
   /** The surface's own actions, used outside the renewal (Restart, a renewed strip's ×). */
   surface: CloudStripActions
-  /** "Renew in Settings": the same renewal in Settings › Accounts › Orca Cloud. */
+  /** "Renew in Settings": the same renewal in Settings › Orca Cloud › Cloud agent sign-ins. */
   openSettings: () => void
   copyText: (text: string) => void
   openLink: (url: string) => void
@@ -147,10 +147,10 @@ export function cloudRenewInPlaceActions(args: {
   }
 }
 
-/** "Renew in Settings": Settings › Accounts › Orca Cloud, where the same renewal runs. */
+/** "Renew in Settings": Settings › Orca Cloud › Cloud agent sign-ins, where the same renewal runs. */
 export function openOrcaCloudAccountsSettings(): void {
   const store = useAppStore.getState()
-  store.openSettingsTarget({ pane: 'accounts', repoId: null, sectionId: 'orca-cloud' })
+  store.openSettingsTarget({ pane: 'cloud-agent-sign-ins', repoId: null })
   store.openSettingsPage()
 }
 

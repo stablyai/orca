@@ -16,10 +16,10 @@ import {
   useOrcaCloudSignInSheetOpen
 } from './orca-cloud-sign-in-sheet-store'
 
-function openAllAgentAccounts(): void {
+function openCloudAgentSignInsSettings(): void {
   closeOrcaCloudSignInSheet()
   const store = useAppStore.getState()
-  store.openSettingsTarget({ pane: 'accounts', repoId: null, sectionId: 'orca-cloud' })
+  store.openSettingsTarget({ pane: 'cloud-agent-sign-ins', repoId: null })
   store.openSettingsPage()
 }
 
@@ -55,9 +55,9 @@ export function OrcaCloudSignInSheetView({
         <button
           type="button"
           className="text-muted-foreground underline underline-offset-2 hover:text-foreground focus-visible:outline-[var(--focus-ring)]"
-          onClick={openAllAgentAccounts}
+          onClick={openCloudAgentSignInsSettings}
         >
-          {t('orcaCloudSignInSheet.allAccounts', 'All agent accounts')}
+          {t('orcaCloudSignInSheet.openCloudSettings', 'Open in Orca Cloud settings')}
         </button>
       </nav>
     </SheetContent>
