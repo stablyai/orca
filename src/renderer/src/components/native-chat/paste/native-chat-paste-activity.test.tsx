@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { Blob, resolveObjectURL } from 'node:buffer'
+import { Blob as NodeBlob, resolveObjectURL } from 'node:buffer'
 import { URL as NodeURL } from 'node:url'
 import { Activity, StrictMode, useState } from 'react'
 import { act, fireEvent, render } from '@testing-library/react'
@@ -36,7 +36,13 @@ function Composer() {
 }
 
 it('keeps a pending image readable across chat switches and releases it when the chat closes', async () => {
-  const createUrl = vi.spyOn(URL, 'createObjectURL').mockImplementation(NodeURL.createObjectURL)
+  vi.stubGlobal('Blob', NodeBlob)
+  const createUrl = vi.spyOn(URL, 'createObjectURL').mockImplementation((blob) => {
+    if (!(blob instanceof NodeBlob)) {
+      throw new Error('Expected a native blob')
+    }
+    return NodeURL.createObjectURL(blob)
+  })
   const revokeUrl = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(NodeURL.revokeObjectURL)
   const pane = (visible: boolean) => (
     <StrictMode>
@@ -66,5 +72,6 @@ it('keeps a pending image readable across chat switches and releases it when the
     view.unmount()
     createUrl.mockRestore()
     revokeUrl.mockRestore()
+    vi.unstubAllGlobals()
   }
 })
