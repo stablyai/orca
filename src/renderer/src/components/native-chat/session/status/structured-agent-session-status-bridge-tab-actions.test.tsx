@@ -95,6 +95,8 @@ describe('StructuredAgentSessionStatusBridge with tab actions', () => {
     mocks.supportsCapability.mockResolvedValue(true)
     mocks.store?.setState({
       agentStatusByPaneKey: {},
+      agentConversationsByPaneKey: {},
+      terminalLayoutsByTabId: {},
       structuredChatSleptAtByPaneKey: {},
       structuredSessionLaunchDirectoryByTabId: {},
       unifiedTabsByWorktree: {},
@@ -174,7 +176,20 @@ describe('StructuredAgentSessionStatusBridge with tab actions', () => {
       agentSessionAgent: 'codex',
       executionHostId: 'local'
     }))
-    useAppStore.setState({ unifiedTabsByWorktree: { 'wt-1': tabs } })
+    useAppStore.setState({
+      unifiedTabsByWorktree: { 'wt-1': tabs },
+      terminalLayoutsByTabId: Object.fromEntries(
+        tabs.map((tab) => {
+          const leafId = structuredAgentSessionPaneKey(tab.id, tab.entityId).slice(
+            tab.id.length + 1
+          )
+          return [
+            tab.id,
+            { root: { type: 'leaf', leafId }, activeLeafId: leafId, expandedLeafId: null }
+          ]
+        })
+      )
+    })
     render(<StructuredAgentSessionStatusBridge />)
     await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledOnce())
     vi.useFakeTimers()
@@ -209,7 +224,7 @@ describe('StructuredAgentSessionStatusBridge with tab actions', () => {
       act(() =>
         feed().emit({ type: 'status', session: { ...sessions[0], status: 'idle', updatedAt: 3 } })
       )
-      expect(statusFor('chat-0', 'session-0')?.state).toBe('idle')
+      expect(statusFor('chat-0', 'session-0')?.state).toBe('done')
       act(() => feed().emit({ type: 'status', session: { ...sessions[0], updatedAt: 4 } }))
       expect(statusFor('chat-0', 'session-0')?.state).toBe('working')
     } finally {
