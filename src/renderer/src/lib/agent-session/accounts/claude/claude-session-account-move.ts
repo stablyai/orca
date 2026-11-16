@@ -33,6 +33,7 @@ import type {
 import type { ClaudePaneLookups } from './claude-queued-restart-records'
 import {
   claudeSwitchCandidatePanes,
+  hasSleepingSession,
   type ClaudeSwitchCandidatePane
 } from './claude-switch-candidate-panes'
 
@@ -235,7 +236,10 @@ export async function findClaudeSwitchSessions(args: {
     const candidate = toCandidate(row.pane)
     if (row.running === 'unchecked' && row.group === 'onAccount') {
       unchecked.push(candidate)
-    } else if (row.running === 'unchecked') {
+    } else if (
+      row.running === 'unchecked' &&
+      (row.pane.entry || row.pane.session || hasSleepingSession(state, row.pane))
+    ) {
       uncheckedOthers.push(candidate)
     }
     if (row.running !== true) {

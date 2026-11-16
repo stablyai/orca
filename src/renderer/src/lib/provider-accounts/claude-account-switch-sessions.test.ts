@@ -608,7 +608,7 @@ it.each(['ask', 'restart', 'keep'] as const)(
   }
 )
 
-it('counts a pane no lookup named as not moved under restart-all when Claude or an unreadable process runs there', async () => {
+it('counts a pane no lookup named as not moved under restart-all only when Claude is confirmed there', async () => {
   seed('restart-all', { 1: FOLDERS['acct-a'], 2: null, 3: null, 4: null })
   dropStatus(2, 3, 4)
   stubLookups(() => null)
@@ -626,7 +626,7 @@ it('counts a pane no lookup named as not moved under restart-all when Claude or 
   expect(pending()).toEqual({ 'pty-1': 'claude' })
   expect(toast.success).toHaveBeenCalledWith(
     'accounts.claude.switchSessions.restartingOne',
-    expect.objectContaining({ description: 'accounts.claude.switchSessions.notMovedOther:2' })
+    expect.objectContaining({ description: 'accounts.claude.switchSessions.notMovedOne' })
   )
 })
 
