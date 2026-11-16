@@ -1,4 +1,4 @@
-import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
 
 export type WatchRootArgs = { worktreePath: string; connectionId: string | undefined }
 

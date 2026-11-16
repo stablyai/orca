@@ -1,11 +1,11 @@
 import { writeFileSync } from 'node:fs'
 import { reportSecurePathHardening as report } from './secure-path-hardening-report'
-import { loadWindowsSecurity, type WindowsSecurity } from '../windows-security-addon'
+import { loadWindowsSecurity, type WindowsSecurity } from './windows-security-addon'
 import {
   findPrivateDaclViolation,
   findSecureDaclViolation,
   hardenedDaclSddl
-} from '../windows-secure-dacl'
+} from './windows-secure-dacl'
 
 /** Restrict directories off-thread because propagation walks all descendants; report failures and resolve false for retry. */
 export function restrictWindowsDirectory(dirPath: string): Promise<boolean> {

@@ -1,4 +1,4 @@
-import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
 import type { ClaudeUsagePersistedFile, ClaudeUsagePersistedState } from './types'
 import { encodeClaudeUsagePersistedFiles } from './persisted-token-columns'
 import { writeClaudeUsageJson, readClaudeUsageJson } from './source-cache-compression'

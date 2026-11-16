@@ -1,4 +1,4 @@
-import { parseWslUncPath } from '../wsl-paths'
+import { parseWslUncPath } from '../file-access/wsl-paths'
 
 /**
  * `git: 'windows-host'` keeps terminals and agents in WSL but runs Orca's own Git on Windows: for a

@@ -6,7 +6,7 @@ import {
   type ParsedTerminalFileLink
 } from '../terminal/links/terminal-links'
 import { ROOTED_PATH_START_PATTERN } from '../terminal/links/terminal-file-link-detection-ranges'
-import { preferLongestNonOverlappingMatches } from '../longest-non-overlapping-matches'
+import { preferLongestNonOverlappingMatches } from '../text/longest-non-overlapping-matches'
 
 /**
  * A chat link's mdast `data` says where it came from: Orca found the path in plain text, or the

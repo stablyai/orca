@@ -1,5 +1,5 @@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
-import type { CodexUsageDailyPoint } from '../../../../shared/codex-usage-types'
+import type { CodexUsageDailyPoint } from '../../../../shared/agent-usage/analytics/codex-usage-types'
 import { getIntlLocale } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 

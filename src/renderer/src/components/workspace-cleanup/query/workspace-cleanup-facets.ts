@@ -6,7 +6,7 @@ import {
   getWorkspaceCleanupCandidateHostId,
   getWorkspaceCleanupHostIdentity
 } from '../../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
-import { getWorkspaceStatus } from '../../../../../shared/workspace-statuses'
+import { getWorkspaceStatus } from '../../../../../shared/workspace/status/workspace-statuses'
 import {
   canQueueWorkspaceCleanupCandidate,
   WORKSPACE_CLEANUP_BULK_SELECT_EXCLUSIONS,

@@ -10,7 +10,7 @@ import type {
   NotificationSoundPathResult,
   NotificationSoundResult,
   StructuredNotificationRead
-} from '../../../shared/notification-settings-types'
+} from '../../../shared/notifications/notification-settings-types'
 import type { AgentSessionExecutionLocation } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { PreloadApi } from '../../api-types'
 

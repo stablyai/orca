@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { SearchSubprocessLineAccumulator } from '../../../../shared/search-subprocess-lines'
+import { SearchSubprocessLineAccumulator } from '../../../../shared/process-streams/search-subprocess-lines'
 import { killSourceControlAgentProcess } from '../../../text-generation/execution/source-control-agent-termination'
 import { spawnSupervisedAgent } from '../../../text-generation/execution/source-control-supervised-agent-spawn'
 import {

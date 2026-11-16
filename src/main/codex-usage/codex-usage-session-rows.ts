@@ -3,7 +3,7 @@ import type {
   CodexUsageRange,
   CodexUsageScope,
   CodexUsageSessionRow
-} from '../../shared/codex-usage-types'
+} from '../../shared/agent-usage/analytics/codex-usage-types'
 import type { CodexUsagePersistedState } from './types'
 import {
   getFilteredDaily,

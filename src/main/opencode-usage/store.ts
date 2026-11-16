@@ -11,7 +11,7 @@ import type {
   OpenCodeUsageSessionRow,
   OpenCodeUsageSnapshot,
   OpenCodeUsageSummary
-} from '../../shared/opencode-usage-types'
+} from '../../shared/agent-usage/analytics/opencode-usage-types'
 import type { UsageStoreHost } from '../usage/usage-store-host'
 import type {
   OpenCodeUsageDailyAggregate,

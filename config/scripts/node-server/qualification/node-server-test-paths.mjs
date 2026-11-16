@@ -21,7 +21,6 @@ export function nodeServerTestPaths({
     'src/main/orcad/instance-lock/orcad-instance-lock.test.ts',
     'src/main/orcad/instance-lock/orcad-process-start-time.test.ts',
     'src/main/orcad/host-lifecycle/managed-stop/orcad-managed-stop.test.ts',
-    'src/main/orcad/host-lifecycle/managed-stop/orcad-managed-stop-cancellation.test.ts',
     // The directory, not a prefix: its siblings are POSIX-host unit tests pr.yml already runs.
     'src/main/daemon/pty-subprocess/conpty-startup-input-reader.ts',
     'src/main/daemon/pty-subprocess/daemon-pty-physical-owner.ts',

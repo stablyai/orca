@@ -3,7 +3,7 @@ import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../src/shared/global-settings-types'
-import type { RuntimeClientEvent } from '../../src/shared/runtime-client-events'
+import type { RuntimeClientEvent } from '../../src/shared/remote-runtime/session-graph/runtime-client-events'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
 // The host is the real settings controller over an in-memory profile store, publishing its real
@@ -62,7 +62,7 @@ afterEach(async () => {
   act(() => root.unmount())
   document.body.replaceChildren()
   const { _resetPRAutoRefreshCadencesForTests } =
-    await import('../../src/shared/review-refresh-policy')
+    await import('../../src/shared/source-control/hosted-review/review-refresh-policy')
   const { _resetHostPRAutoRefreshCadenceGenerationsForTests } =
     await import('../../src/renderer/src/store/github/refresh/remote-host-pr-auto-refresh-cadence')
   _resetPRAutoRefreshCadencesForTests()
@@ -139,7 +139,7 @@ it('converges after a real late write response revokes a later settings event re
   const { _hostPRAutoRefreshReadsInFlightForTests } =
     await import('../../src/renderer/src/store/github/refresh/remote-host-pr-auto-refresh-cadence-sync')
   const { getKnownPRAutoRefreshCadenceForHost } =
-    await import('../../src/shared/review-refresh-policy')
+    await import('../../src/shared/source-control/hosted-review/review-refresh-policy')
   const { PRAutoRefreshSetting } =
     await import('../../src/renderer/src/components/settings/source-control/PRAutoRefreshSetting')
   const subscription = await subscribeRuntimeClientEvents('env-a', () => {})

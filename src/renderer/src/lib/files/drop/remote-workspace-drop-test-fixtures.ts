@@ -1,7 +1,7 @@
 import { useAppStore } from '@/store/index'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { getDefaultSettings } from '../../../../../shared/constants'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { TabGroup } from '../../../../../shared/tab-types'
 
 export const SSH_WORKTREE_PATH = '/home/me/wt-ssh'

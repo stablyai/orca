@@ -5,7 +5,7 @@ import {
   queueWorkspaceDelete
 } from '../../runtime/workspaces/lifecycle/workspace-lifecycle-commands'
 import { getEffectiveHooks } from '../../workspace-hooks/hooks'
-import { errorMessage } from '../../../shared/error-message'
+import { errorMessage } from '../../../shared/errors/error-message'
 import {
   evaluateWorkspaceCleanup,
   type WorkspaceCleanupEvaluation

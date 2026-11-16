@@ -2,7 +2,7 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createEmptyRateLimitState } from '../../../../shared/rate-limit-state-factory'
+import { createEmptyRateLimitState } from '../../../../shared/agent-usage/rate-limits/rate-limit-state-factory'
 import type { UsageHistoryRow } from '../../../../shared/usage-history-types'
 import type { AppState } from '../../store/types'
 import type { UsageHistorySource } from './use-usage-history'

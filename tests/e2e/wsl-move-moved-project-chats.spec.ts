@@ -19,7 +19,7 @@ import { wslMoveCutoverFixture } from '../../src/main/persistence/__fixtures__/w
 import { seedWslMoveCutover } from '../../src/main/persistence/__fixtures__/wsl-mover/wsl-move-journal-seeding'
 import { seedTestAgentSessionRecordStore } from '../../src/main/runtime/agent-session/records/agent-session-record-store-persistence.test-fixture'
 import { structuredAgentSessionTabId } from '../../src/shared/agent-session/view/structured-agent-session-projection'
-import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../src/shared/wsl-host-internal-gate'
+import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../src/shared/remote-runtime/wsl-hosts/wsl-host-internal-gate'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture

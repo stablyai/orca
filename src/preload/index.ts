@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import { HIDDEN_WINDOW_FRAME_PUMP_STOP_CHANNEL } from '../shared/hidden-window-frame-pump'
+import { HIDDEN_WINDOW_FRAME_PUMP_STOP_CHANNEL } from '../shared/app-lifecycle/windows/hidden-window-frame-pump'
 import { installHiddenWindowFramePump } from './renderer/hidden-window-frame-pump'
 import type { PreloadApi } from './api-types'
 import { installBrowserFindListener } from './renderer/renderer-runtime'

@@ -14,7 +14,7 @@ import {
 } from '../../../../../shared/execution-host'
 import { isRepoHidden } from '../../../../../shared/hidden-projects'
 import { getRepoRowIdentity } from '@/store/repos/repo-host-identity'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import { setProjectHidden } from './set-project-hidden'
 
 function selectHiddenRepos(repos: readonly Repo[]): Repo[] {

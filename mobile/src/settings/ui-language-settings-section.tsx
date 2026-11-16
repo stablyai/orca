@@ -1,6 +1,6 @@
 import { ListRow } from '../components/list/ListGroup'
-import { SUPPORTED_UI_LOCALES } from '../../../src/shared/ui-locale'
-import { UI_LANGUAGE_NATIVE_NAMES, UI_LANGUAGE_SYSTEM } from '../../../src/shared/ui-language'
+import { SUPPORTED_UI_LOCALES } from '../../../src/shared/i18n/ui-locale'
+import { UI_LANGUAGE_NATIVE_NAMES, UI_LANGUAGE_SYSTEM } from '../../../src/shared/i18n/ui-language'
 import { isMobilePseudoLocalizationEnabled, setMobilePseudoLocalization } from '../i18n/mobile-i18n'
 import {
   resolveMobileUiLocale,

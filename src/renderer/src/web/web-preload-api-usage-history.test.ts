@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { USAGE_HISTORY_RUNTIME_CAPABILITY } from '../../../shared/usage-history-rpc'
-import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import {
   installBrowserGlobals,
   writeStoredRuntimeEnvironment

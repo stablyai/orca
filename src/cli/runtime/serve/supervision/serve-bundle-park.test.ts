@@ -1,3 +1,4 @@
+import '../../../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 import { mkdir, mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -9,8 +10,8 @@ import {
   formatBundleIdentity,
   parkRecordPath,
   type ServeParkRecord
-} from '../../../../shared/serve-bundle-coordination'
-import { openServeBundlePark } from '../../../../shared/serve-bundle-park'
+} from '../../../../shared/remote-runtime/serve-supervisor/serve-bundle-coordination'
+import { openServeBundlePark } from '../../../../shared/remote-runtime/serve-supervisor/serve-bundle-park'
 import { superviseServeService } from './serve-supervised-service'
 import { createSupervisedParkWatch } from './serve-supervised-park-watch'
 

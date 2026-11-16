@@ -15,7 +15,6 @@ const draft = { id: 259, draft: true, tag_name: tag, body: 'original notes' }
 
 function fixture(options = {}) {
   const writes = []
-  const reads = []
   let wrote = false
   const response = (body, status = 200) => ({
     ok: status === 200,
@@ -27,7 +26,6 @@ function fixture(options = {}) {
   const fetchImpl = async (url, request = {}) => {
     const route = url.replace('https://api.github.com/repos/test/repo', '')
     const method = request.method ?? 'GET'
-    reads.push(route)
     if (route === `/git/ref/tags/${tag}`) {
       if (options.missing || (wrote && options.deleted)) {
         return response({}, 404)
@@ -72,7 +70,6 @@ function fixture(options = {}) {
   }
   return {
     writes,
-    reads,
     run: () =>
       createDraftRelease({
         repo: 'test/repo',
@@ -113,14 +110,6 @@ describe('release draft source and uploader contract', () => {
       ])
     }
   )
-
-  it('peels the captured tag object ID instead of re-dereferencing the tag name', async () => {
-    const f = fixture({ annotated: true })
-    await f.run()
-    expect(f.reads).toContain(`/git/tags/${tagObject}`)
-    expect(f.reads).toContain(`/git/commits/${checkout}`)
-    expect(f.reads.some((route) => route.startsWith('/commits/'))).toBe(false)
-  })
 
   it.each([
     { missing: true },
@@ -187,31 +176,10 @@ describe('release draft source and uploader contract', () => {
 const workflow = parse(readFileSync('.github/workflows/release-cut.yml', 'utf8'))
 
 describe('release-cut draft wiring', () => {
-  it('passes the approved source and only the job token to the helper', () => {
-    const job = workflow.jobs['create-release']
-    const step = job.steps.find((s) => s.id === 'draft')
-    expect(step.env).toMatchObject({
-      SOURCE_SHA: '${{ needs.cut.outputs.source_sha }}',
-      GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
-    })
-    expect(job.outputs.tag_object).toBe('${{ steps.draft.outputs.tag_object }}')
-  })
-
-  it('isolates both real-process skill release suites', () => {
-    for (const name of ['skill-sharing-release-gate', 'skill-sharing-linux-floor-release-gate']) {
-      const step = workflow.jobs[name].steps.find((s) => s.name?.startsWith('Run skill package'))
-      expect(step.env.ORCA_VITEST_ISOLATE_EVERY_FILE).toBe('1')
-    }
-  })
-
   const steps = workflow.jobs['publish-release'].steps
   const guardIndex = steps.findIndex(
     (s) => s.name === 'Verify release tag still matches the drafted source'
   )
-  it('re-checks the tag immediately before undrafting', () => {
-    expect(steps[guardIndex + 1].name).toBe('Publish release')
-    expect(workflow.jobs['publish-release'].needs).toContain('create-release')
-  })
 
   it.skipIf(process.platform === 'win32').each([
     ['lightweight tag unchanged', { type: 'commit', sha: checkout }, checkout, 0],

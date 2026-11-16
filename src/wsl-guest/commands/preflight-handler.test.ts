@@ -1,6 +1,6 @@
 import type * as WslAvailability from '../../main/wsl/discovery/wsl-availability'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
+import { buildPosixCommandPathLookupScript } from '../../shared/shell/command-resolution/posix-command-path-lookup'
 
 const { execFileAsyncMock, runProcessMock } = vi.hoisted(() => ({
   execFileAsyncMock: vi.fn(),

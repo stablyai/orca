@@ -14,7 +14,7 @@ import {
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { StructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import type { RpcContext } from '../../core'
-import { STARTUP_CWD_FALLBACK_SENTENCE } from '../../../../../shared/startup-cwd-fallback'
+import { STARTUP_CWD_FALLBACK_SENTENCE } from '../../../../../shared/shell/launch/startup-cwd-fallback'
 import { structuredCallerFor } from '../structured-sessions/creation/structured-agent-session-gate'
 import { createStructuredAgentSessionForWorktree } from '../structured-sessions/creation/structured-agent-session-create'
 import { structuredAgentRuntimeMetadata } from '../../../agent-session/installation/structured-agent-runtime-metadata'

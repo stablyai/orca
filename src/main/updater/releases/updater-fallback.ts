@@ -1,9 +1,9 @@
-import type { UpdateStatus } from '../../../shared/update-status-types'
+import type { UpdateStatus } from '../../../shared/updater/update-status-types'
 import {
   compareAppVersions,
   isPrereleaseAppVersion,
   isValidAppVersion
-} from '../../../shared/app-version'
+} from '../../../shared/app-lifecycle/identity/app-version'
 
 export const compareVersions = compareAppVersions
 export const isPrereleaseVersion = isPrereleaseAppVersion

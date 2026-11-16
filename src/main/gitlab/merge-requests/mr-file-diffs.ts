@@ -1,4 +1,4 @@
-import type { GitLabMRFile } from '../../../shared/gitlab-types'
+import type { GitLabMRFile } from '../../../shared/gitlab/gitlab-types'
 import { encodedProject } from '../projects/project-path-encoding'
 import { glabHostnameArgs, glabRepoExecOptions } from '../projects/gitlab-project-ref-resolution'
 import { glabExecFileAsync } from '../../git/command-runner/hosted-cli/glab-exec-file'

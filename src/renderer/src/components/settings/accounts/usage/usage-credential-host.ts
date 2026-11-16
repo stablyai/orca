@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { UsageCredentialsHostOutdatedError } from '@/runtime/provider-accounts/usage/runtime-usage-credentials-client'
 
 /** Save keys on the host whose usage poller reads them. */

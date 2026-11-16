@@ -1,6 +1,6 @@
 import { getRemoteRuntimeTerminalHandle } from '@/runtime/hosted-terminals/identity/remote-runtime-pty-owner'
-import { parseAppSshPtyId } from '../../../../../../../shared/ssh-pty-id'
-import { admitRemoteForegroundEvidence } from '../../../../../../../shared/remote-foreground-evidence-admission'
+import { parseAppSshPtyId } from '../../../../../../../shared/remote-runtime/ssh/ssh-pty-id'
+import { admitRemoteForegroundEvidence } from '../../../../../../../shared/terminal/pty/foreground/remote-foreground-evidence-admission'
 import {
   type TerminalProcessInspection as RuntimeTerminalProcessInspection,
   isClientOnlyUnverifiableInspection

@@ -1,7 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { DashboardCardHostKind } from '../../../../../shared/dashboard-snapshot'
-import { parseAppSshPtyId } from '../../../../../shared/ssh-pty-id'
+import { parseAppSshPtyId } from '../../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 /** Remote snapshot absence cannot prove pane exit because the client does not own the PTY; see docs/reference/ssh-execution-boundary.md. */

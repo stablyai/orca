@@ -1,5 +1,5 @@
 import { readFileSync, statSync } from 'node:fs'
-import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesystem-absence'
 import { AgentTokenUsageReporter } from '../reporting/token-usage/agent-token-usage-reporter'
 import { join, parse } from 'node:path'
 import {

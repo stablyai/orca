@@ -1,4 +1,7 @@
-import type { BackendConnectionPurpose, UsageAction } from '../../shared/backend-service-contract'
+import type {
+  BackendConnectionPurpose,
+  UsageAction
+} from '../../shared/backend/backend-service-contract'
 import type { UsageHistoryProvider } from '../../shared/usage-history-types'
 import type { UsageHistorySnapshot, UsageSnapshotQuery } from '../../shared/usage-history-rpc'
 

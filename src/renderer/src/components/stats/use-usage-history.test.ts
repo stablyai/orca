@@ -1,9 +1,9 @@
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { CodexUsageSnapshot } from '../../../../shared/codex-usage-types'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import type { BackendConnectionListener } from '../../../../shared/backend-service-contract'
+import type { CodexUsageSnapshot } from '../../../../shared/agent-usage/analytics/codex-usage-types'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import type { BackendConnectionListener } from '../../../../shared/backend/backend-service-contract'
 import { USAGE_HISTORY_RUNTIME_CAPABILITY } from '../../../../shared/usage-history-rpc'
 import { useUsageHistory } from './use-usage-history'
 

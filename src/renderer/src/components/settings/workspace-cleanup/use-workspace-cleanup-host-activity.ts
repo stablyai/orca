@@ -7,9 +7,9 @@ import {
   runtimeTargetForOwnerEnvironment
 } from '@/runtime/rpc/targets/runtime-client-target'
 import { onWorkspaceCleanupRunFinished } from '@/components/workspace-cleanup/events/workspace-cleanup-run-finished-window-event'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import { hasRuntimeRpcErrorCode } from '../../../../../shared/runtime-rpc-error-code'
-import { errorMessage } from '../../../../../shared/error-message'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { hasRuntimeRpcErrorCode } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
+import { errorMessage } from '../../../../../shared/errors/error-message'
 import {
   hasEnabledWorkspaceCleanupRule,
   type WorkspaceCleanupRules

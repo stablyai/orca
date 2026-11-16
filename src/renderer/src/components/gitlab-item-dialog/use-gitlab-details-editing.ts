@@ -3,7 +3,7 @@ import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import type { GitLabMRUpdate, GitLabWorkItem } from '../../../../shared/gitlab-types'
+import type { GitLabMRUpdate, GitLabWorkItem } from '../../../../shared/gitlab/gitlab-types'
 import {
   formatGitLabLabelDraft,
   normalizeGitLabLabels,

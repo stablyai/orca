@@ -1,3 +1,5 @@
+import { RuntimeAgentStatusSources } from './runtime-agent-status-sources'
+
 import type * as Calls from './runtime-host-service-calls'
 import type { RuntimeConstructionBindings as HostBindings } from './runtime-construction-dependencies'
 
@@ -5,7 +7,6 @@ import type { LegacyWorkerRecoveryCandidate } from '../orchestration/terminal-au
 
 import type { LegacyWorkerTerminalRecoveryPlan } from '../orchestration/terminal-authority/release/orchestration-legacy-worker-terminal-recovery'
 
-import { OrcaRuntimeWithAgentProviderSessionRows } from './runtime-agent-provider-session-rows'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-path-identity'
 import {
@@ -42,7 +43,7 @@ import { ClaudeAgentTeamsService } from '../terminal/agent-teams/claude-agent-te
 import { teardownFolderWorkspacePtys } from '../workspaces/removal/folder-workspace-pty-teardown'
 import { countRepoTerminalsNotKnownExited } from '../workspaces/removal/project-removal-impact'
 
-export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithAgentProviderSessionRows {
+export abstract class OrcaRuntimeWithPreservedBranchCleanup extends RuntimeAgentStatusSources {
   protected abstract finishGroupFolderCreation: Calls.FinishGroupFolderCreation
   declare acquireFileWatcherRemoval: Calls.AcquireFileWatcherRemoval
   protected abstract tryGetWorkspaceSessionHostIdForWorktree(
@@ -104,12 +105,6 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
   protected terminalSideEffectLocalConsumerAvailable = false
 
   protected terminalSideEffectConsumerAvailable = false
-
-  readonly getAgentStatusSnapshotFn!: HostBindings['getAgentStatusSnapshot'] | null
-
-  protected readonly structuredAgentStatusSinkFn!: HostBindings['structuredAgentStatusSink'] | null
-
-  readonly readObservedAgentStatusPaneIdentityFn!: HostBindings['readObservedAgentStatusPaneIdentity']
 
   readTerminalClientUse(ptyId: string): 'used' | 'unused' | 'unknown' {
     return readRunTerminalClientUse(this, ptyId)

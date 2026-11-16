@@ -1,4 +1,4 @@
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { UsageHistoryProvider } from '../../../../shared/usage-history-types'
 import {
   USAGE_HISTORY_RUNTIME_CAPABILITY,
@@ -12,8 +12,8 @@ import {
   fetchProviderAccountsSnapshot,
   type ProviderAccountsSnapshot
 } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
-import type { ManagedDataAccountsState } from '../../../../shared/managed-account-types'
-import type { BackendConnectionPurpose } from '../../../../shared/backend-service-contract'
+import type { ManagedDataAccountsState } from '../../../../shared/agent-accounts/managed-account-types'
+import type { BackendConnectionPurpose } from '../../../../shared/backend/backend-service-contract'
 
 const HISTORY_REFRESH_TIMEOUT_MS = 15 * 60_000
 

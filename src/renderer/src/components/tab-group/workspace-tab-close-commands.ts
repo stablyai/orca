@@ -1,5 +1,5 @@
 import { editorContentIsReferenced } from '@/store/slices/editor/tabs/workspace-editor-files'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
 import type { Tab } from '../../../../shared/tab-types'
 import { useAppStore } from '../../store'
 import { needsSavePromptOnClose } from '@/store/slices/editor/buffers/editor-buffer-close-rule'

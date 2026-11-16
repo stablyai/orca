@@ -2,10 +2,10 @@ import { lookupGitHubWorkItemByOwnerRepoForSource } from '@/lib/work-items/githu
 import { useAppStore } from '@/store/index'
 import type { GitHubIssueOrPRLink } from '../../../../../../shared/github/repositories/links'
 import type { GitHubWorkItem } from '../../../../../../shared/github/work-items/work-item-types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { githubRepoIdentityKey } from '../../../../../../shared/github/repositories/repository-identity-key'
 import { buildTaskSourceContextFromRepo } from '../../../../../../shared/work-items/task-source-context'
-import type { HostAuthorityKey } from '../../../../../../shared/host-authority'
+import type { HostAuthorityKey } from '../../../../../../shared/execution-host/host-authority'
 import { createHoverPreviewCache } from './native-chat-hover-preview-cache'
 import type { GitHubPreviewRouteStore } from './native-chat-github-route-store'
 import {

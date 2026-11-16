@@ -1,5 +1,5 @@
 import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
-import type { ClassifiedError } from '../../../shared/classified-error'
+import type { ClassifiedError } from '../../../shared/errors/classified-error'
 import type {
   GetGitLabRateLimitResult,
   GitLabAssignableUser,
@@ -22,7 +22,7 @@ import type {
   ListMergeRequestsResult,
   MRInfo,
   MRListState
-} from '../../../shared/gitlab-types'
+} from '../../../shared/gitlab/gitlab-types'
 
 export type GitLabRepoSelectorArgs = {
   repoPath: string

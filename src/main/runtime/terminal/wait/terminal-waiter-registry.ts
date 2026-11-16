@@ -1,4 +1,4 @@
-import type { RuntimeTerminalWait } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalWait } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { TerminalWaiter } from './terminal-waiter'
 
 /** Waits keyed by the terminal they follow; the handle they were asked through only labels the result. */

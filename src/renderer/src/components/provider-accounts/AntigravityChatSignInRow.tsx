@@ -1,6 +1,6 @@
 import { AntigravityChatAuthForm } from './AntigravityChatAuthForm'
 import type { ReactNode } from 'react'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { AntigravityChatAccountRow } from './AntigravityChatSignInAction'
 import { useAntigravityChatSignInControls } from './use-antigravity-chat-sign-in'
 

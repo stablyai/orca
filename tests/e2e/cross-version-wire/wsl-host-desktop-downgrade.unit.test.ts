@@ -5,8 +5,8 @@
 
 import { beforeAll, describe, expect, it } from 'vitest'
 import { AGENT_SESSION_ACCOUNT_ENV_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/agent-session-create-capabilities'
-import { RUNTIME_CAPABILITIES } from '../../../src/shared/protocol-version'
-import { readWslHostWindowsDriveRefusal } from '../../../src/shared/wsl-host-windows-drive-refusal'
+import { RUNTIME_CAPABILITIES } from '../../../src/shared/remote-runtime/protocol/protocol-version'
+import { readWslHostWindowsDriveRefusal } from '../../../src/shared/remote-runtime/wsl-hosts/wsl-host-windows-drive-refusal'
 import type { RpcAnyMethodDeclaration, RpcRequest } from '../../../src/main/runtime/rpc/core'
 import type { mapRuntimeError } from '../../../src/main/runtime/rpc/responses/rpc-response'
 import {

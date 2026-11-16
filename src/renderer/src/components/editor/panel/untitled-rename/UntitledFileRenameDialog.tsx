@@ -14,6 +14,7 @@ import { getRelativePathInsideRoot } from '@/lib/path'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
+import { splitUntitledFileName } from './untitled-file-rename-path'
 
 type UntitledFileRenameDialogProps = {
   open: boolean
@@ -35,13 +36,12 @@ export function UntitledFileRenameDialog({
   onConfirm
 }: UntitledFileRenameDialogProps): React.JSX.Element {
   const t = useTranslate()
-  const baseName = currentName.replace(/\.md$/, '')
-  const [name, setName] = useState(baseName)
+  const [name, setName] = useState('')
   const [dir, setDir] = useState(worktreePath)
   const [error, setError] = useState<string | null>(null)
   const nameInputRef = useRef<HTMLInputElement>(null)
   const focusFrameRef = useRef<number | null>(null)
-  const [seededOpenState, setSeededOpenState] = useState({ open: false, baseName, worktreePath })
+  const [seededOpenState, setSeededOpenState] = useState({ open: false, currentName, worktreePath })
   const mountedRef = useMountedRef()
 
   const displayError = externalError ?? error
@@ -68,17 +68,19 @@ export function UntitledFileRenameDialog({
   if (open) {
     if (
       !seededOpenState.open ||
-      seededOpenState.baseName !== baseName ||
+      seededOpenState.currentName !== currentName ||
       seededOpenState.worktreePath !== worktreePath
     ) {
-      setSeededOpenState({ open: true, baseName, worktreePath })
-      setName(baseName)
+      setSeededOpenState({ open: true, currentName, worktreePath })
+      setName(splitUntitledFileName(currentName).stem)
       setDir(worktreePath)
       setError(null)
     }
   } else if (seededOpenState.open) {
-    setSeededOpenState({ open: false, baseName, worktreePath })
+    // Why: the parent clears currentName on close; keep the saved suffix through the fade-out.
+    setSeededOpenState({ ...seededOpenState, open: false })
   }
+  const { extension } = splitUntitledFileName(seededOpenState.currentName)
 
   const handleBrowse = useCallback(async () => {
     const picked = await window.api.shell.pickDirectory({ defaultPath: dir || worktreePath })
@@ -93,8 +95,10 @@ export function UntitledFileRenameDialog({
   }, [dir, mountedRef, worktreePath])
 
   const handleSubmit = useCallback(() => {
-    const trimmedName = name.trim().replace(/\.md$/, '')
-    if (!trimmedName) {
+    const typedName = name.trim()
+    const stem =
+      extension && typedName.endsWith(extension) ? typedName.slice(0, -extension.length) : typedName
+    if (!stem) {
       setError(
         translate(
           'auto.components.editor.UntitledFileRenameDialog.nameEmpty',
@@ -103,7 +107,7 @@ export function UntitledFileRenameDialog({
       )
       return
     }
-    if (/[/\\]/.test(trimmedName)) {
+    if (/[/\\]/.test(stem)) {
       setError(
         translate(
           'auto.components.editor.UntitledFileRenameDialog.nameHasSeparators',
@@ -135,10 +139,10 @@ export function UntitledFileRenameDialog({
       return
     }
 
-    const fileName = `${trimmedName}.md`
+    const fileName = `${stem}${extension}`
     const relativePath = relDir ? `${relDir}/${fileName}` : fileName
     onConfirm(relativePath)
-  }, [name, dir, worktreePath, onConfirm])
+  }, [name, dir, extension, worktreePath, onConfirm])
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
@@ -161,8 +165,8 @@ export function UntitledFileRenameDialog({
           </DialogTitle>
           <DialogDescription className="text-xs">
             {t(
-              'auto.components.editor.UntitledFileRenameDialog.e365f3c638',
-              'Name your markdown file and pick a folder.'
+              'auto.components.editor.UntitledFileRenameDialog.description',
+              'Name your file and pick a folder.'
             )}
           </DialogDescription>
         </DialogHeader>
@@ -192,9 +196,9 @@ export function UntitledFileRenameDialog({
                 className="h-8 text-sm"
                 aria-invalid={!!displayError}
               />
-              <span className="text-xs text-muted-foreground shrink-0">
-                {t('auto.components.editor.UntitledFileRenameDialog.2d7d39dc63', '.md')}
-              </span>
+              {extension && (
+                <span className="text-xs text-muted-foreground shrink-0">{extension}</span>
+              )}
             </div>
           </div>
           <div>

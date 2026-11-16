@@ -208,6 +208,4 @@ describe('KiroHookService', () => {
     expect(Object.keys(remote.hooks).sort()).toEqual([...KIRO_HOOK_EVENTS].sort())
     expect(readAgent('stale').hooks).toBeUndefined()
   })
-
-  // Check command shapes everywhere; windows-hook-payload-delivery.test.ts executes them under Kiro's shells.
 })

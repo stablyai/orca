@@ -1,9 +1,9 @@
-import type { BackendConnectionPurpose } from '../../../../shared/backend-service-contract'
+import type { BackendConnectionPurpose } from '../../../../shared/backend/backend-service-contract'
 import type { UsageFailure } from '../../store/slices/usage/usage-provider-types'
 import { mergeUsageFailure } from '../../store/slices/usage/usage-provider-slice-state'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { UsageHistoryProvider, UsageHistoryRow } from '../../../../shared/usage-history-types'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { ProviderAccountsSnapshot } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import {
   resolveUsageHistoryTarget,

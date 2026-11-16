@@ -1,7 +1,7 @@
-import type { ClaudeUsageSnapshot } from './claude-usage-types'
-import type { CodexUsageSnapshot } from './codex-usage-types'
-import type { MuseUsageSnapshot } from './muse-usage-types'
-import type { OpenCodeUsageSnapshot } from './opencode-usage-types'
+import type { ClaudeUsageSnapshot } from './agent-usage/analytics/claude-usage-types'
+import type { CodexUsageSnapshot } from './agent-usage/analytics/codex-usage-types'
+import type { MuseUsageSnapshot } from './agent-usage/analytics/muse-usage-types'
+import type { OpenCodeUsageSnapshot } from './agent-usage/analytics/opencode-usage-types'
 import type { UsageHistoryRange } from './usage-history-types'
 
 export const USAGE_HISTORY_RUNTIME_CAPABILITY = 'usage.history.v1' as const

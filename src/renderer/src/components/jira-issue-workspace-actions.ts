@@ -8,8 +8,8 @@ import type {
   JiraIssueUpdate,
   JiraMutationResult
 } from '../../../shared/jira/jira-types'
-import { applyJiraIssueKeyCasing } from '../../../shared/workspace-name'
-import type { WorkspaceSeedNameOptions } from '../../../shared/workspace-name'
+import { applyJiraIssueKeyCasing } from '../../../shared/workspace/naming/workspace-name'
+import type { WorkspaceSeedNameOptions } from '../../../shared/workspace/naming/workspace-name'
 import { getJiraIssueKeyCasingSeedOptions } from '@/lib/work-items/jira/jira-issue-key-casing'
 import { buildJiraIssuePrompt } from './jira-prompt-templates'
 import {

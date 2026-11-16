@@ -1,5 +1,6 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -131,7 +132,7 @@ export function makeActivityResult(args: {
 
   return buildActivityEvents({
     chatNames: new Map(),
-    agentStatusByPaneKey: args.entries ?? {},
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries(args.entries ?? {})),
     tabsByWorktree: {
       [worktree.id]: args.tabs ?? [tab]
     },

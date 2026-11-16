@@ -1,4 +1,4 @@
-import { hasAppEnvironment } from '../../shared/app-environment'
+import { hasAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { getManagedDataAccountService } from '../managed-data-accounts/service'
 import { resolveOpenCodeDataDirectory } from '../opencode/accounts/opencode-data-directory'
 import type { UsageAccountRoot } from '../usage/usage-account-attribution'

@@ -23,34 +23,45 @@ export type EnvironmentRemoveResult = {
   removed: PublicKnownRuntimeEnvironment
 }
 
-export function addEnvironmentFromPairingCode(
+export async function addEnvironmentFromPairingCode(
   userDataPath: string,
   args: { name: string; pairingCode: string; now?: number }
-): KnownRuntimeEnvironment {
-  return translateStoreError(() => addEnvironmentFromPairingCodeInStore(userDataPath, args))
+): Promise<KnownRuntimeEnvironment> {
+  return await translateStoreError(
+    async () => await addEnvironmentFromPairingCodeInStore(userDataPath, args)
+  )
 }
 
-export function removeEnvironment(userDataPath: string, selector: string): KnownRuntimeEnvironment {
-  return translateStoreError(() => removeEnvironmentFromStore(userDataPath, selector))
-}
-
-export function resolveEnvironment(
+export async function removeEnvironment(
   userDataPath: string,
   selector: string
-): KnownRuntimeEnvironment {
-  return translateStoreError(() => resolveEnvironmentFromStore(userDataPath, selector))
+): Promise<KnownRuntimeEnvironment> {
+  return await translateStoreError(
+    async () => await removeEnvironmentFromStore(userDataPath, selector)
+  )
 }
 
-export function resolveEnvironmentPairingOffer(
+export async function resolveEnvironment(
   userDataPath: string,
   selector: string
-): PairingOffer {
-  return translateStoreError(() => resolveEnvironmentPairingOfferFromStore(userDataPath, selector))
+): Promise<KnownRuntimeEnvironment> {
+  return await translateStoreError(
+    async () => await resolveEnvironmentFromStore(userDataPath, selector)
+  )
 }
 
-function translateStoreError<TResult>(fn: () => TResult): TResult {
+export async function resolveEnvironmentPairingOffer(
+  userDataPath: string,
+  selector: string
+): Promise<PairingOffer> {
+  return await translateStoreError(
+    async () => await resolveEnvironmentPairingOfferFromStore(userDataPath, selector)
+  )
+}
+
+async function translateStoreError<TResult>(fn: () => Promise<TResult>): Promise<TResult> {
   try {
-    return fn()
+    return await fn()
   } catch (error) {
     if (error instanceof RuntimeEnvironmentStoreError) {
       throw new RuntimeClientError(toRuntimeClientErrorCode(error.code), error.message)

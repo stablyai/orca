@@ -10,8 +10,8 @@ import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-clie
 import {
   normalizeBrowserNavigationUrl,
   redactKagiSessionToken
-} from '../../../../../shared/browser-url'
-import type { BrowserLoadError } from '../../../../../shared/browser-workspace-types'
+} from '../../../../../shared/browser/navigation/browser-url'
+import type { BrowserLoadError } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import '../../../../../shared/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
 import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from '../host-guest/recovery/browser-page-guest-recovery'

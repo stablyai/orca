@@ -28,7 +28,7 @@ import {
   extractContentText,
   normalizeTitleText
 } from '../../parsing/session-scanner-text-normalization'
-import { extractString } from '../../../../shared/trimmed-string'
+import { extractString } from '../../../../shared/text/trimmed-string'
 import { parseJsonObject } from '../../parsing/session-json-object'
 import { numberValue } from '../../parsing/session-scanner-token-values'
 
@@ -72,8 +72,9 @@ export async function parseKimiSessionFile(
 
   accumulator.title = normalizeTitleText(extractString(stateRecord.title) ?? '')
   accumulator.fallbackTitle = normalizeTitleText(extractString(stateRecord.lastPrompt) ?? '')
-  updateTimeline(accumulator, extractString(stateRecord.createdAt))
-  updateTimeline(accumulator, extractString(stateRecord.updatedAt))
+  // Older Kimi state stores ISO strings; v2 state stores epoch milliseconds.
+  updateTimeline(accumulator, stateRecord.createdAt)
+  updateTimeline(accumulator, stateRecord.updatedAt)
 
   await consumeKimiWireTranscript(
     accumulator,

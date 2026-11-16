@@ -12,11 +12,11 @@ import { getRuntimeBrowserPageRegistry } from '../browser/client-pages/runtime-b
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import { buildHeadlessMobileSessionTerminalTabs } from '../terminal/surface/mobile-session-terminal-projection'
 import { buildHeadlessMobileSessionEditorTabs } from './headless-editor-tabs'
-import type { RuntimeMobileSessionSnapshotTab } from '../../../shared/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileSessionSnapshotTab } from '../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type {
   RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionTabsSnapshot
-} from '../../../shared/runtime-session-contracts'
+} from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   collectHeadlessParentTabOrder,
   getHeadlessMobileSessionGroupId,
@@ -287,6 +287,9 @@ export abstract class OrcaRuntimeWithHydrateHeadlessMobileSessionTabsFromWorkspa
         existing !== undefined &&
         !this.isHeadlessBuiltMobileSessionPublicationBase(existing.publicationEpoch)
       const rebuiltSnapshot: RuntimeMobileSessionTabsSnapshot = {
+        ...(mergedIntoRendererPublication
+          ? { browserPageInventory: existing.browserPageInventory }
+          : {}),
         worktree: existing?.worktree ?? entryWorktreeId,
         publicationEpoch: mergedIntoRendererPublication
           ? this.getMergedMobileSessionPublicationEpoch(existing, tabs)

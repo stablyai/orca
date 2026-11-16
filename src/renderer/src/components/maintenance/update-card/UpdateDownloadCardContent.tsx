@@ -1,6 +1,6 @@
 import { Minus } from 'lucide-react'
-import type { ChangelogData } from '../../../../../shared/update-status-types'
-import { getReleaseNotesUrlForVersion } from '../../../../../shared/release-channel'
+import type { ChangelogData } from '../../../../../shared/updater/update-status-types'
+import { getReleaseNotesUrlForVersion } from '../../../../../shared/updater/release-channel'
 import { Button } from '../../ui/button'
 import { Progress } from '../../ui/progress'
 import { useTranslate } from '@/i18n/use-translate'

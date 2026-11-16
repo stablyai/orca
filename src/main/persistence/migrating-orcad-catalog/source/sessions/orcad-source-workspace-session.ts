@@ -38,7 +38,7 @@ import {
 import { withoutOrcadMigrationDrafts } from '../worktrees/orcad-source-draft-rename'
 import { hasClosedTerminalTabRecord } from '../../../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
-import { normalizeWorkspaceSessionKeyToWorkspaceId } from '../../../../../shared/workspace-scope'
+import { normalizeWorkspaceSessionKeyToWorkspaceId } from '../../../../../shared/workspace/identity/workspace-scope'
 import { orcadMigrationSessionPartitions } from './orcad-source-session-partitions'
 import { collectDuplicateOrcadMigrationSessionIdentities } from './orcad-source-duplicate-session-identities'
 import {

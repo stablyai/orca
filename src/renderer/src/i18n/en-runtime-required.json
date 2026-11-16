@@ -330,6 +330,8 @@
       },
       "github": {
         "PRFilterSections": {
+          "authorCount_one": "{{count}} author",
+          "authorCount_other": "{{count}} authors",
           "labelCount_one": "{{count}} label",
           "labelCount_other": "{{count}} labels"
         },
@@ -1602,6 +1604,11 @@
     }
   },
   "components": {
+    "RepositoryBrowserProfileSection": {
+      "keywordCookies": "cookies",
+      "keywordProfile": "browser profile",
+      "keywordSignIn": "sign in"
+    },
     "native-chat": {
       "approval": {
         "allow": "Allow",
@@ -1839,6 +1846,16 @@
         "settingsRejected": "Codex could not apply the selected model and effort. This goal change was not sent. Check the selection and try again.",
         "settingsUnconfirmed": "Codex did not confirm the selected model and effort. This goal change was not sent. Check the chat and try again.",
         "stopUnconfirmed": "Codex could not confirm Stop. Check the chat before continuing."
+      },
+      "mcp": {
+        "status": {
+          "tools_one": "{{count}} tool",
+          "tools_other": "{{count}} tools"
+        },
+        "summary": {
+          "needsAuth_one": "{{count}} needs sign-in",
+          "needsAuth_other": "{{count}} need sign-in"
+        }
       },
       "notices": {
         "compaction": "Context compacted",
@@ -2123,6 +2140,10 @@
         "change": {
           "description_one": "This change makes 1 more workspace match right now. It'll be deleted a few seconds after you apply it.",
           "description_other": "This change makes {{count}} more workspaces match right now. They'll be deleted a few seconds after you apply it."
+        },
+        "disableIgnoredFiles": {
+          "matches_one": "Without pinning, {{count}} additional workspace will be deleted a few seconds after you turn off protection.",
+          "matches_other": "Without pinning, {{count}} additional workspaces will be deleted a few seconds after you turn off protection."
         },
         "enable": {
           "description_one": "1 workspace matches right now. It'll be deleted a few seconds after you turn this on.",

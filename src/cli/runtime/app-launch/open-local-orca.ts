@@ -1,7 +1,7 @@
-import type { CliStatusResult } from '../../../shared/runtime-session-contracts'
+import type { CliStatusResult } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { launchOrcaApp } from '../launch'
 import { RuntimeClientError, RuntimeRpcFailureError } from '../connection/types'
-import type { RuntimeRpcSuccess } from '../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcSuccess } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 
 type ReadStatus = () => Promise<RuntimeRpcSuccess<CliStatusResult>>
 type OpenWindowInBackground = (options: {

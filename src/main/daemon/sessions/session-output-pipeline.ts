@@ -3,8 +3,8 @@ import { SessionOutputPlane } from './session-output-plane'
 import { TerminalShellRecoveryBarrier } from '../shell-readiness/terminal-shell-recovery-barrier'
 import { release } from 'node:os'
 import type { SessionOptions } from './session-options'
-import { windowsPtyForOwnerBackend } from '../../../shared/xterm-conpty-options'
-import { createWslGuestRootObserver } from '../../../shared/wsl-guest-root-marker'
+import { windowsPtyForOwnerBackend } from '../../../shared/terminal/pty/native-process/xterm-conpty-options'
+import { createWslGuestRootObserver } from '../../../shared/shell/wsl/wsl-guest-root-marker'
 
 /** Couple barrier emissions and snapshot ownership so neither can lag the output plane. */
 export function createSessionOutputPipeline(
