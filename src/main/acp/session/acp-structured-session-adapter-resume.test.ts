@@ -287,7 +287,7 @@ describe('temporary saved-session restore failures', () => {
       const requests: string[] = []
       const rig = await openAcpAdapterRig({
         ...resume,
-        spec: { ...GROK, resumePreference: method },
+        spec: { ...GROK, resumePreference: method === 'resume' ? 'resume' : undefined },
         initialize: RESUMES,
         script: (agent) => {
           agent.on('session/new', (frame) => {
