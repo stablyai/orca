@@ -19,10 +19,10 @@ import {
 import { runGitProbeOnHost } from '../../../workspaces/catalog/repo-git-remote-identity'
 
 const HOME_CHECKOUT_ROOTS = ['git', 'orca', 'src', 'code', 'projects', 'repos', 'dev', 'work']
-// root/<owner>/<repo> is the deepest common layout; deeper trees cost more than they find.
-const ROOT_SCAN_DEPTH = 1
-const ROOT_SCAN_TIMEOUT_MS = 3_000
-const ROOT_SCAN_MAX_CANDIDATES = 150
+// Reaches root/<group>/<owner>/<repo>/<checkout>; checkouts are never descended into, so depth stays cheap.
+const ROOT_SCAN_DEPTH = 3
+const ROOT_SCAN_TIMEOUT_MS = 5_000
+const ROOT_SCAN_MAX_CANDIDATES = 300
 const MAX_REMOTE_PROBES = 60
 const REMOTE_PROBE_CONCURRENCY = 6
 const REMOTE_PROBE_TIMEOUT_MS = 3_000
@@ -115,13 +115,19 @@ export async function findExistingCheckouts(
 ): Promise<ExistingCheckoutSuggestion[]> {
   const names = existingCheckoutFolderNames(args.projectName, args.remoteUrl)
   const isNamed = (path: string): boolean => names.has(basename(path).toLowerCase())
-  const isCandidate =
-    args.kind === 'git'
-      ? async (path: string) => (await hasGitMarker(path)) && (await isPrimaryCheckout(path))
-      : async (path: string) => isNamed(path)
+  // Any git marker stops descent so worktrees are not walked; only primary checkouts are kept.
+  const isCandidate = args.kind === 'git' ? hasGitMarker : async (path: string) => isNamed(path)
   const roots = checkoutRootsFor(args.workspaceDir, args.extraRoots ?? [])
   const found = (await Promise.all(roots.map((root) => scanRoot(root, isCandidate)))).flat()
-  const unique = [...new Map(found.map((repo) => [repo.path, repo])).values()]
+  const deduped = [...new Map(found.map((repo) => [repo.path, repo])).values()]
+  const unique =
+    args.kind === 'git'
+      ? (
+          await mapWithConcurrency(deduped, REMOTE_PROBE_CONCURRENCY, async (repo) =>
+            (await isPrimaryCheckout(repo.path)) ? repo : null
+          )
+        ).filter((repo): repo is NestedRepoCandidate => repo !== null)
+      : deduped
   const probeRemotes = args.kind === 'git' && Boolean(args.remoteUrl)
   // Same-named checkouts are the likeliest remote matches, so they are probed first.
   const ordered = unique.sort(
