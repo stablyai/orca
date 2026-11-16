@@ -1,6 +1,6 @@
 import type { AppState } from '@/store/types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
-import { authorityKey } from '../../../../../shared/host-authority'
+import { authorityKey } from '../../../../../shared/execution-host/host-authority'
 import { isExecutionHostAliasForWorktree } from '../../workspace/ownership/worktree-execution-host-alias'
 import { resolveOwner } from '../../workspace/ownership/resolve-owner'
 

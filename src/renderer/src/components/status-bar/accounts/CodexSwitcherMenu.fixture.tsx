@@ -1,13 +1,13 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { getDefaultSettings } from '../../../../../shared/constants'
-import type { CodexManagedAccount } from '../../../../../shared/managed-account-types'
-import { createEmptyRateLimitState } from '../../../../../shared/rate-limit-state-factory'
+import type { CodexManagedAccount } from '../../../../../shared/agent-accounts/managed-account-types'
+import { createEmptyRateLimitState } from '../../../../../shared/agent-usage/rate-limits/rate-limit-state-factory'
 import { setRendererUiLanguage } from '@/i18n/i18n'
 import type {
   InactiveAccountUsage,
   ProviderRateLimits,
   RateLimitWindow
-} from '../../../../../shared/rate-limit-types'
+} from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
 import { CodexSwitcherMenu } from './CodexSwitcherMenu'
 import {

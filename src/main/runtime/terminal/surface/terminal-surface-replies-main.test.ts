@@ -26,7 +26,7 @@ describe('terminal replies from main (switch on)', () => {
   it('keep answering after the window closes', async () => {
     const { runtime } = surfaceRuntime()
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mountedLeaves: MOUNTED })
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [], mountedLeaves: MOUNTED })
 
     runtime.markGraphUnavailable(1)
 
@@ -54,7 +54,7 @@ describe('terminal replies from main (switch on)', () => {
   it("close a tab by an unbound pane's handle, stopping the tab's other terminals", async () => {
     const { runtime, store, setSession, killed } = surfaceRuntime()
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mountedLeaves: MOUNTED })
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [], mountedLeaves: MOUNTED })
     const session = store.getSession()
     const layout = session.terminalLayoutsByTabId[SURFACE_TAB_ID]!
     setSession({
@@ -84,7 +84,7 @@ describe('terminal replies from main (switch on)', () => {
   it('close one pane of a split by its handle in main, leaving its sibling', async () => {
     const { runtime, store, killed } = surfaceRuntime()
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mountedLeaves: MOUNTED })
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [], mountedLeaves: MOUNTED })
     const listed = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
     const second = listed.terminals.find((terminal) => terminal.ptyId === 'pty-b')!
 

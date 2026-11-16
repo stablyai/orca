@@ -10,7 +10,7 @@ import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecy
 import type { AgentSessionAttachParams, AttachedJournal } from './structured-agent-session-attach'
 import type { JournalReplacementItem } from '../../agent-session-journal/context-epochs/journal-epoch-replacement'
 import { prepareLegacyTranscriptImport } from '../../agent-session-journal/history-import/journal-legacy-import'
-import { throwIfSignalAborted } from '../../../../shared/abort-signal-reason'
+import { throwIfSignalAborted } from '../../../../shared/concurrency/abort-signal-reason'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 
 export async function prepareCreateTranscript(

@@ -14,7 +14,7 @@ import { openDesktopStructuredSession } from '@/lib/agent-session/open/activate-
 import { findStructuredAgentSessionTab } from '@/lib/agent-session/structured-agent-session-tab-activation'
 import { flashFocusedPaneRim } from '@/components/terminal-pane/input/focus/focused-pane-rim-flash'
 import { translate } from '@/i18n/i18n'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { findOriginalAiVaultSessionPane } from './ai-vault-original-pane'
 import {
   createLazyAiVaultOriginalPaneIndex,

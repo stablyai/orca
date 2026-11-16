@@ -1,5 +1,5 @@
-import type { AppEnvironment } from '../../shared/app-environment'
-import type { BackendBootstrap } from '../../shared/backend-service-contract'
+import type { AppEnvironment } from '../../shared/app-lifecycle/app-environment'
+import type { BackendBootstrap } from '../../shared/backend/backend-service-contract'
 
 export function createDesktopBackendEnvironment(config: BackendBootstrap) {
   return createNodeServiceEnvironment({

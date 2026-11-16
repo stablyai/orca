@@ -1,7 +1,7 @@
 import React from 'react'
 import { CodexResetCredits, CodexResetConfirmation } from './CodexResetCredits'
 import { DropdownMenuItem, DropdownMenuLabel } from '@/components/ui/dropdown-menu'
-import type { ProviderRateLimits } from '../../../../../shared/rate-limit-types'
+import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   AccountRuntimeToggle,

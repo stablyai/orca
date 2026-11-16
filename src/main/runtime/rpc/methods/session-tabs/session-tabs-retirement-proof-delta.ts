@@ -1,7 +1,7 @@
-import '../../../../../shared/protocol-version'
-import { SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY } from '../../../../../shared/session-tabs-runtime-capabilities'
-import type { RuntimeCapability } from '../../../../../shared/protocol-version'
-import type { RuntimeMobileSessionRetiredTerminalSurface } from '../../../../../shared/runtime-session-contracts'
+import '../../../../../shared/remote-runtime/protocol/protocol-version'
+import { SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
+import type { RuntimeCapability } from '../../../../../shared/remote-runtime/protocol/protocol-version'
+import type { RuntimeMobileSessionRetiredTerminalSurface } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { retirementProofKey as proofKey } from '../../../../../shared/workspace-layout/terminal-surfaces/terminal-retirement-proof-ledger'
 
 type ProofCarrier = {

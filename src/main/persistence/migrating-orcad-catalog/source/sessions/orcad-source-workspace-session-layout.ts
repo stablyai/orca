@@ -1,5 +1,5 @@
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
-import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import {
   orcadMigrationOwnerMatchesScope,
   type OrcadMigrationSourceScope

@@ -10,7 +10,7 @@ import {
   isClientHostedBrowserSourcePage,
   openClientHostedUrlBesideBrowserPage
 } from '@/lib/browser/palette/open-client-hosted-link-beside-page'
-import { redactKagiSessionToken } from '../../../../shared/browser-url'
+import { redactKagiSessionToken } from '../../../../shared/browser/navigation/browser-url'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { useAppStore } from '../../store/index'
 import { findPage } from '../../store/slices/browser/pages/browser-page-records'

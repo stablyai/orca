@@ -1,10 +1,10 @@
-import type { BaseRefSearchResult } from '../../../../shared/repo-types'
+import type { BaseRefSearchResult } from '../../../../shared/repository/repo-types'
 import {
   clampRepoSearchRefsLimit,
   clampRepoSearchRefsScanLimit,
   REPO_SEARCH_REFS_DEFAULT_LIMIT,
   isRepoSearchRefsRequestLimit
-} from '../../../../shared/repo-search-limits'
+} from '../../../../shared/git/refs/repo-search-limits'
 import { searchBranchRefSnapshot, snapshotRemoteNames } from '../snapshot/branch-ref-snapshot'
 import { searchLegacyBaseRefDetails } from './repo-legacy-ref-search'
 import type { LocalGitExecOptions } from './repo-default-base-ref'

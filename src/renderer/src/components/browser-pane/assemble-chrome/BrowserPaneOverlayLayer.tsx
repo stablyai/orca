@@ -3,7 +3,7 @@ import { registerBrowserOverlaySlotViewport } from '../host-guest/viewport/brows
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../../store/index'
 import { resolveBrowserWorkspaceOwner } from '@/lib/browser/workspace/browser-workspace-source-resolution'
-import type { BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
+import type { BrowserWorkspace } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import type { Tab, TabGroup } from '../../../../../shared/tab-types'
 import BrowserPane from './browser-workspace-pane'
 import { DeferredBrowserContent } from './DeferredBrowserContent'

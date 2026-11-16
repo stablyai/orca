@@ -1,4 +1,4 @@
-import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
+import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import {
   classifyTerminalCreationFailure,
   readTerminalStartFailure,
@@ -9,10 +9,10 @@ import {
  * Readiness alone never authorizes writing: the foreground guard must still admit the agent. */
 
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type { RuntimeTerminalWait } from '../../../../shared/runtime-terminal-contracts'
-import { resolveDraftPasteReadyTimeoutMs } from '../../../../shared/draft-paste-ready-timeout'
+import type { RuntimeTerminalWait } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import { resolveDraftPasteReadyTimeoutMs } from '../../../../shared/agent-launch/startup/readiness/draft-paste-ready-timeout'
 import { TUI_AGENT_CONFIG } from '../../../../shared/agent-launch/catalog/tui-agent-config'
-import { draftPasteReadySignalHasMarker } from '../../../../shared/draft-paste-ready-scanner'
+import { draftPasteReadySignalHasMarker } from '../../../../shared/agent-launch/startup/readiness/draft-paste-ready-scanner'
 import { nameOnlyIdleNeedsCorroboration } from './tui-idle-evidence'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import {

@@ -3,7 +3,7 @@ import {
   MAX_SSH_RELAY_GRACE_PERIOD_SECONDS,
   MIN_SSH_RELAY_GRACE_PERIOD_SECONDS,
   SSH_REMOTE_RUNTIMES
-} from '../../ssh-types'
+} from '../../remote-runtime/ssh/ssh-types'
 import { OptionalString, requiredString } from '../rpc-param-primitives'
 
 export const SshTarget = z.object({

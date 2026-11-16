@@ -8,7 +8,7 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import type { SshRemotePtyLease } from '../../../shared/ssh-types'
+import type { SshRemotePtyLease } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { isTerminalLeafId, parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { findCrossHostPaneTabIds, withoutPaneTabIds } from './cross-host-pane-tab-ids'
 import {

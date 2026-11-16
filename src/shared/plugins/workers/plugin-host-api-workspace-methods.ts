@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'
 import { PLUGIN_COMMAND_ALIAS_ACTION_IDS } from '../contributions/plugin-command-actions'
-import { parseWorkspaceKey } from '../../workspace-scope'
+import { parseWorkspaceKey } from '../../workspace/identity/workspace-scope'
 import { spec, WORKER_ONLY } from './plugin-host-method-spec'
 
 /**

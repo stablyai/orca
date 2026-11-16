@@ -1,7 +1,10 @@
-import { OMP_MODEL_LIST_ARGS, parseOmpModelList } from '../../../omp-model-list-probe'
+import {
+  OMP_MODEL_LIST_ARGS,
+  parseOmpModelList
+} from '../../../agent-session/options/model-catalog/omp-model-list-probe'
 import type { TuiAgent } from '../../../agent-launch/catalog/tui-agent'
 import { isTuiAgentEnabled } from '../../../agent-launch/catalog/tui-agent-selection'
-import { labelFromModelId } from '../../../model-id-label'
+import { labelFromModelId } from '../../../agent-session/options/model-catalog/model-id-label'
 import { buildPrimaryCommitMessageAgentSpecs } from './commit-message-agent-specs-primary'
 import { buildSecondaryCommitMessageAgentSpecs } from './commit-message-agent-specs-secondary'
 import {

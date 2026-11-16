@@ -1,6 +1,6 @@
 import { SshHostNotServedError } from '../providers/ssh-host-not-served-error'
 import { detectWslCommandsOnPath } from '../ipc/preflight-wsl-agent-detection'
-import { detectCommandsInInstallDirs } from '../../shared/local-agent-install-dir-detection'
+import { detectCommandsInInstallDirs } from '../../shared/agent-launch/installation/local-agent-install-dir-detection'
 import {
   getPreflightWslTarget,
   type PreflightRuntimeContext
@@ -8,7 +8,7 @@ import {
 import { findCommandsOnLocalPath } from '../ipc/command-path/command-path-resolver'
 import { buildLocalPreflightEnv } from '../ipc/preflight-local-env'
 import { readGuestWindowsDriveMounts } from '../ipc/wsl-guest-windows-drive-path'
-import { hasPathSeparatorToken } from '../../shared/managed-agent-command-token'
+import { hasPathSeparatorToken } from '../../shared/agent-launch/installation/managed-agent-command-token'
 
 export async function detectAgentCommandsOnHost(
   commands: readonly string[],

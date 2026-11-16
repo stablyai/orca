@@ -10,7 +10,7 @@ import type {
   EnrichedDetectedPort,
   PortForwardEntry,
   UnrestoredPortForward
-} from '../../../../../shared/ssh-types'
+} from '../../../../../shared/remote-runtime/ssh/ssh-types'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { openWorkspaceBrowserTab } from '@/lib/browser/workspace/workspace-browser-tab-open'

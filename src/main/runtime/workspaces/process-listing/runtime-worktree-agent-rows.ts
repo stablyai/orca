@@ -7,7 +7,7 @@ import { runtimeWorktreeAgentRowForked } from './runtime-worktree-agent-row-fork
 import type {
   RuntimeWorktreeAgentRow,
   RuntimeWorktreePsSummary
-} from '../../../../shared/runtime-worktree-contracts'
+} from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import type {
   AgentListPublication,
   AgentListVerdict

@@ -36,7 +36,7 @@ import {
   sharesWorktreeLineageBoundary,
   type WorktreeLineageBoundary
 } from '../../../../../shared/resolved-worktree-lineage'
-import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import type {
   WorkspaceLineage,
   WorktreeLineage

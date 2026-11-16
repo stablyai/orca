@@ -10,7 +10,7 @@ import {
   getLinearIssueWorkspaceName,
   getLinkedWorkItemWorkspaceName,
   getLinkedWorkItemSuggestedName
-} from '../../../../shared/workspace-name'
+} from '../../../../shared/workspace/naming/workspace-name'
 import '@/lib/workspace/creation/new-workspace'
 import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 

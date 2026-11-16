@@ -5,7 +5,6 @@ import original from '../mobile/vitest.config.ts'
 const nodeFiles = [
   'scripts/check-tests-typecheck-incremental-cache.test.ts',
   'src/mock-server-key-pair.test.ts',
-  'src/mobile-release/prepare-android-release-script.test.ts',
   'src/navigation/query-string-named-exports.test.ts',
   'src/terminal/document/native-document-bundle.test.ts',
   'src/transport/encryption/mobile-e2ee-v2-client-session.test.ts',

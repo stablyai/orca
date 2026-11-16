@@ -1,5 +1,5 @@
 import { EXIT_SETTLE_MS } from './wsl-orcad-liveness-evidence'
-import type { OrcadTerminalCensus } from '../../../shared/orcad-terminal-census'
+import type { OrcadTerminalCensus } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
 import type { SystemPowerLifecycleListener } from '../../power/system-power-lifecycle'
 import type { WslRunningDistrosRead } from '../discovery/wsl-background-distro-gate'
 import type { WslGuestIdentity } from '../execution/wsl-guest-process-identity'
@@ -34,7 +34,7 @@ export type WslOrcadLivenessDependencies = {
   openWatch: (connection: WslOrcadConnection) => Promise<WslOrcadWatch>
   collectCensus: (connection: WslOrcadConnection) => Promise<OrcadTerminalCensus>
   /** A WSL project or terminal the user can see is open on this distro. */
-  hasUserVisibleWork: (distro: string) => boolean
+  hasUserVisibleWork: (distro: string) => boolean | Promise<boolean>
   /** E9: recovery reconnects only into a distro confirmed running right before it spawns. */
   requireRunning?: (distro: string) => Promise<boolean>
   deferUntilRunning: (distro: string, key: string, task: () => unknown) => void

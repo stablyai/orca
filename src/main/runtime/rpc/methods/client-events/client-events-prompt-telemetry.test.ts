@@ -2,7 +2,7 @@ import { expect, it } from 'vitest'
 import {
   STRUCTURED_CHAT_PROMPT_TELEMETRY_CLIENT_CAPABILITY,
   STRUCTURED_CHAT_START_TELEMETRY_CLIENT_CAPABILITY
-} from '../../../../../shared/structured-chat-dispatch-telemetry'
+} from '../../../../../shared/agent-session/requests/structured-chat-dispatch-telemetry'
 import { recordStructuredChatPromptAccepted } from '../../../../telemetry/structured-chat-dispatch'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { eraseRpcMethods, isStreamingMethod, type RpcContext } from '../../core'

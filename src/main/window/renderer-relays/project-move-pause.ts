@@ -5,8 +5,11 @@ import {
   projectMovePauseResponseSchema,
   type ProjectMovePauseRequest,
   type ProjectMovePauseResponse
-} from '../../../shared/project-move-pause'
-import type { WorkspaceSleepOutcome, WorkspaceSleepRequest } from '../../../shared/workspace-sleep'
+} from '../../../shared/project/move/project-move-pause'
+import type {
+  WorkspaceSleepOutcome,
+  WorkspaceSleepRequest
+} from '../../../shared/workspace/lifecycle/workspace-sleep'
 import { addFanoutListener, addFanoutListeners } from '../../runtime/events/event-listener-fanout'
 
 type SleepRuntime = {

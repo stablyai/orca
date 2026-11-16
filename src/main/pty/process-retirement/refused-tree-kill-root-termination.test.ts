@@ -17,7 +17,7 @@ import {
   hasAppEnvironment,
   setAppEnvironment,
   type AppEnvironment
-} from '../../../shared/app-environment'
+} from '../../../shared/app-lifecycle/app-environment'
 import { installMainProcessTreeKillGate } from './own-chromium-tree-kill-guard'
 import { setProcessTreeKillGate } from '@orca/process-host/process-tree-kill-gate'
 import { resetSelfInitiatedTreeKillLogForTest } from '../../crash-reporting/process-exits/self-initiated-tree-kill-log'

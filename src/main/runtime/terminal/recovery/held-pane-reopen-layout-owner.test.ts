@@ -1,6 +1,6 @@
 // Reopen replaces a newer terminal service, then binds the held pane and clears its published status.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { NEWER_DAEMON_HOLD_ERROR } from '../../../../shared/newer-daemon-hold'
+import { NEWER_DAEMON_HOLD_ERROR } from '../../../../shared/terminal/daemon/newer-daemon-hold'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import type * as DaemonHoldModule from '../../../daemon/providers/routing/daemon-newer-protocol-hold'
 import { committingSpawn } from '../../orca-runtime-tests/bind-first-pane.test-fixture'
@@ -58,7 +58,7 @@ async function heldPaneRuntime() {
     getForegroundProcess: async () => null,
     listProcesses: async () => []
   })
-  runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+  await runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
   await expect(runtime.ensureRestoredPaneStarted(PANE)).rejects.toThrow(NEWER_DAEMON_HOLD_ERROR)
   return { runtime, spawn, getSession, setSession, desktopStream }
 }

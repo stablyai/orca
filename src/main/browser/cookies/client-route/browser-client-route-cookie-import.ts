@@ -1,11 +1,11 @@
 import type {
   BrowserCookieImportResult,
   BrowserSessionProfileSource
-} from '../../../../shared/browser-workspace-types'
+} from '../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   browserCookieImportFailure,
   type BrowserCookieImportFailure
-} from '../../../../shared/browser-cookie-import-failure-copy'
+} from '../../../../shared/browser/cookies/browser-cookie-import-failure-copy'
 import { detectInstalledBrowsers, selectBrowserProfile } from '../sources/browser-cookie-detection'
 import { importCookiesFromBrowser } from '../browser-cookie-import'
 import { importCookiesFromFile } from '../imports/import-cookie-file'

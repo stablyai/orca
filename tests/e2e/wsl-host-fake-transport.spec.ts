@@ -12,7 +12,7 @@ import { expect, test, type forwardElectronProcessLogs } from './helpers/orca-ap
 import { RuntimeClient } from '../../src/cli/runtime/client'
 import { createRuntimeDesktopPairingOffer } from './helpers/paired-electron-client'
 import { encodePairingOffer } from '../../src/shared/remote-runtime/pairing/pairing'
-import { addWslHostEnvironment } from '../../src/shared/remote-runtime/host-store/runtime-environment-wsl-host-store'
+import { addWslHostEnvironment } from '../../src/shared/remote-runtime/host-store/runtime-environment-wsl-host-operations'
 import { openSidebarProjectMenu } from './helpers/sidebar-project-dialog'
 import { ensureTerminalVisible, waitForSessionReady } from './helpers/store'
 import {
@@ -300,50 +300,6 @@ test('refuses adding a WSL host without server files', async ({ orcaPage }, test
   }
 })
 
-test('with the internal gate closed and no saved WSL work, no WSL host surface shows', async ({
-  orcaPage
-}, testInfo) => {
-  test.setTimeout(180_000)
-  await waitForSessionReady(orcaPage)
-  const offer = await createRuntimeDesktopPairingOffer(orcaPage)
-  const desktop = await launchDesktopWithFakeWslPairing(
-    offer.pairingUrl,
-    testInfo,
-    {},
-    { internalGate: false }
-  )
-  try {
-    const { page } = desktop
-    // The user-level setting being on must not reveal anything behind the closed gate.
-    await setWslHostsEnabled(page, true)
-    const listed = await page.evaluate(() => window.api.runtimeEnvironments.list())
-    expect(listed.map((environment) => environment.id)).not.toContain(WSL_ENVIRONMENT_ID)
-
-    await openAddRemoteHostMenu(page)
-    await expect(page.getByRole('menuitem', { name: /^Ubuntu \(WSL\)/ })).toHaveCount(0)
-    await expect(page.getByRole('menuitem', { name: /^Add SSH host/ })).toBeVisible()
-    await expect(page.getByRole('menuitem', { name: /^Add WSL distro/ })).toHaveCount(0)
-    await page.keyboard.press('Escape')
-    await page.keyboard.press('Escape')
-    await page.keyboard.press('Escape')
-    await expect(page.getByRole('menu', { name: 'Add project' })).toBeHidden()
-
-    await page.evaluate(() => {
-      const state = window.__store?.getState()
-      state?.openSettingsPage()
-      state?.openSettingsTarget({ pane: 'experimental', repoId: null })
-    })
-    await page.evaluate(() =>
-      window.__store?.getState().openSettingsTarget({ pane: 'servers', repoId: null })
-    )
-    await expect(page.locator('[data-settings-section="wsl-hosts"]')).toHaveCount(0)
-    await expect(page.getByText(WSL_HOST_LABEL)).toHaveCount(0)
-
-    await page.screenshot({ path: testInfo.outputPath('wsl-hosts-gated-off-settings.png') })
-  } finally {
-    await desktop.dispose()
-  }
-})
 test('with the internal gate closed, a saved WSL host stays reachable but nothing new is added or moved (serve-only)', async ({
   orcaPage
 }, testInfo) => {

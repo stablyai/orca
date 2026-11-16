@@ -1,5 +1,5 @@
 /** Run real managed-orcad deployment against container/loopback host constraints in ssh-hostile-hosts.yml. */
-import type { NodeRuntimeTarget } from '../../../shared/node-runtime-pin'
+import type { NodeRuntimeTarget } from '../../../shared/node-runtime/node-runtime-pin'
 import type { OrcadHostUnavailableReason } from '../../orcad/diagnostics/orcad-host-unavailable'
 
 /** Every shimmed toolchain command appends its name here; a managed deploy must leave it empty. */

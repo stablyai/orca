@@ -5,7 +5,7 @@ import { TabsContent } from '@/components/ui/tabs'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
-import type { GitLabMRApprovalState, GitLabWorkItem } from '../../../../shared/gitlab-types'
+import type { GitLabMRApprovalState, GitLabWorkItem } from '../../../../shared/gitlab/gitlab-types'
 import {
   dedupeGitLabUsers,
   gitLabUserKey,

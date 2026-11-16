@@ -51,6 +51,8 @@ const ART_TYPE_BY_CATEGORY: Readonly<Record<string, PluginCatalogType>> = {
   languages: 'syntax',
   'language-packs': 'interface-language',
   localization: 'interface-language',
+  i18n: 'interface-language',
+  translations: 'interface-language',
   keybindings: 'instructions',
   commands: 'instructions',
   'vm-recipes': 'instructions',

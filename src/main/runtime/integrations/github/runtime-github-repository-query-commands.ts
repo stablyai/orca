@@ -1,7 +1,7 @@
 import type { GhAccountBinding } from '../../../../shared/github/accounts/account-binding'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import type { ListWorkItemsResult } from '../../../../shared/github/work-items/work-item-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { LocalProjectGhExecOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import { countWorkItems } from '../../../github/client/list/count-work-items'
 import { getWorkItem, getWorkItemByOwnerRepo } from '../../../github/client/fetch/get-work-item'

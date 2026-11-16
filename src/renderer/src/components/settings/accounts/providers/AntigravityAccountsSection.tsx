@@ -5,13 +5,16 @@ import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { callAntigravityAccounts } from '@/runtime/provider-accounts/sign-in/runtime-antigravity-accounts-client'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { useManagedRuntimeInstall } from '@/runtime/hosts/installation/use-managed-runtime-install'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type {
   AntigravityAccountState,
   AntigravityAccountTarget
-} from '../../../../../../shared/antigravity-account-types'
-import type { ProviderRateLimits, RateLimitState } from '../../../../../../shared/rate-limit-types'
-import { localAccountRuntimeTargetKey } from '../../../../../../shared/local-account-runtime'
+} from '../../../../../../shared/agent-accounts/antigravity/antigravity-account-types'
+import type {
+  ProviderRateLimits,
+  RateLimitState
+} from '../../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { localAccountRuntimeTargetKey } from '../../../../../../shared/agent-accounts/local-account-runtime'
 import { Button } from '../../../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
 import { ManagedRuntimeInstallRow } from '../../../managed-runtime/ManagedRuntimeInstallRow'

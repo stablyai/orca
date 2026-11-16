@@ -2,7 +2,7 @@
 import { stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
-import { splitOpenCodeSqliteCandidate } from '../../../shared/opencode-sqlite-session-path'
+import { splitOpenCodeSqliteCandidate } from '../../../shared/agent-session/lifecycle/provider-handles/opencode-sqlite-session-path'
 import { SessionParseCacheDatabase } from './session-parse-cache-database'
 import { importLegacySessionParseCacheJson } from './session-parse-cache-legacy-json'
 import {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { ProviderRateLimits } from '../../../../../shared/rate-limit-types'
+import type { CodexRateLimitAccountsState } from '../../../../../shared/agent-accounts/managed-account-types'
+import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { useAppStore } from '../../../store/index'
 import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
 import { useActiveAccountOwner } from '@/runtime/provider-accounts/ownership/use-active-account-owner'
@@ -8,6 +9,7 @@ import {
   emptyCodexAccountsState,
   selectCodexProviderAccount
 } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
+import { useProviderAccountList } from './use-provider-account-list'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   markLiveCodexSessionsForRestart,
@@ -17,7 +19,7 @@ import {
   getWindowsTerminalCapabilityOwnerKey,
   useWindowsTerminalCapabilities
 } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
-import { getCodexResetProjection } from './codex-switcher-projection'
+import { getCodexOwnerUsageProjection, getCodexResetProjection } from './codex-switcher-projection'
 import { getCodexAccountSyncKey } from './provider-account-sync-key'
 import {
   getCodexStatusRuntimeKey,
@@ -34,11 +36,12 @@ import {
   resolveCodexStatusAccountState
 } from './status-bar-codex-accounts'
 import { signInCodexAccount } from './codex-sign-in-action'
-import { useProviderAccountList } from './use-provider-account-list'
 import {
   getUsageOwnerHostScope,
   type OwnerUsageRateLimits
 } from '../usage/use-owner-usage-rate-limits'
+
+const EMPTY_CODEX_ACCOUNTS: CodexRateLimitAccountsState = emptyCodexAccountsState()
 
 export function useCodexSwitcherController(
   codex: ProviderRateLimits,
@@ -51,6 +54,8 @@ export function useCodexSwitcherController(
   const [isSwitching, setIsSwitching] = useState(false)
   const [isRedeemingReset, setIsRedeemingReset] = useState(false)
   const [reauthenticatingAccountId, setReauthenticatingAccountId] = useState<string | null>(null)
+  // Why: pending-action flags outlive an owner change; the list hook's guard is per owner.
+  const mountedRef = useRef(true)
   const menuOpenRef = useRef(open)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
@@ -63,26 +68,20 @@ export function useCodexSwitcherController(
   const localRateLimits = useAppStore((s) => s.rateLimits)
   const settings = useAppStore((s) => s.settings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
-  const { target: activeOwnerTarget, wslHostDistro } = useActiveAccountOwner(
-    defaultScopeHost(settings)
-  )
+  const { target: focusedTarget, wslHostDistro } = useActiveAccountOwner(defaultScopeHost(settings))
   const usageOwner = ownerUsage?.remoteOwner
   const runtimeTarget = useMemo(
-    () => (usageOwner === undefined ? activeOwnerTarget : getUsageOwnerHostScope(usageOwner)),
-    [usageOwner, activeOwnerTarget]
+    () => (usageOwner === undefined ? focusedTarget : getUsageOwnerHostScope(usageOwner)),
+    [usageOwner, focusedTarget]
   )
   const activeRuntimeEnvironmentId = runtimeTargetEnvironmentId(runtimeTarget)
   const hasActiveRuntimeEnvironment = activeRuntimeEnvironmentId !== null
-  const usageState = ownerUsage?.rateLimits
-  const inactiveCodexAccounts = hasActiveRuntimeEnvironment
-    ? usageState?.codex?.usageMetadata?.unverifiableOwner
-      ? []
-      : (usageState?.inactiveCodexAccounts ?? [])
-    : localRateLimits.inactiveCodexAccounts
-  const codexTarget: CodexStatusRuntimeTarget = hasActiveRuntimeEnvironment
-    ? (usageState?.codexTarget ?? { runtime: 'host', wslDistro: null })
-    : localRateLimits.codexTarget
-  const activeUsage = hasActiveRuntimeEnvironment ? (usageState?.codex ?? null) : codex
+  const { inactiveCodexAccounts, codexTarget, activeUsage } = getCodexOwnerUsageProjection(
+    codex,
+    localRateLimits,
+    ownerUsage?.rateLimits,
+    hasActiveRuntimeEnvironment
+  )
   const providerAccountHostLabel = hasActiveRuntimeEnvironment
     ? (runtimeEnvironments.find((environment) => environment.id === activeRuntimeEnvironmentId)
         ?.name ?? t('auto.components.status.bar.StatusBar.remoteServerLabel', 'Remote server'))
@@ -94,21 +93,31 @@ export function useCodexSwitcherController(
     runtimeTarget
   )
   const codexAccountSyncKey = useAppStore((s) => getCodexAccountSyncKey(s.settings))
-  const { accounts, setAccounts, mountedRef } = useProviderAccountList(
+  const {
+    accounts,
+    setAccounts,
+    loadAccounts,
+    mountedRef: ownerMountedRef
+  } = useProviderAccountList(
     'codex',
     runtimeTarget,
     codexAccountSyncKey,
-    emptyCodexAccountsState(),
+    EMPTY_CODEX_ACCOUNTS,
     false,
     !hasActiveRuntimeEnvironment
   )
   const accountState = resolveCodexStatusAccountState(
     settings,
-    hasActiveRuntimeEnvironment
-      ? (ownerUsage?.accounts?.codex ?? emptyCodexAccountsState())
-      : accounts,
+    hasActiveRuntimeEnvironment ? (ownerUsage?.accounts?.codex ?? EMPTY_CODEX_ACCOUNTS) : accounts,
     activeRuntimeEnvironmentId
   )
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   useEffect(() => {
     menuOpenRef.current = open
@@ -130,9 +139,7 @@ export function useCodexSwitcherController(
         wslDistro: target.wslDistro
       })
       recordFeatureInteraction('codex-account-switching')
-      if (mountedRef.current) {
-        setAccounts(next)
-      }
+      setAccounts(next)
       // Why: remote selections live on the server; local GlobalSettings are untouched, so refetching is pure churn.
       if (!hasActiveRuntimeEnvironment) {
         await fetchSettings()
@@ -178,6 +185,7 @@ export function useCodexSwitcherController(
       fetchSettings,
       isSwitching,
       mountedRef,
+      ownerMountedRef,
       reauthenticatingAccountId,
       recordFeatureInteraction,
       setAccounts,
@@ -185,13 +193,10 @@ export function useCodexSwitcherController(
     })
 
   const handleSelectRuntime = async (group: CodexStatusSwitchGroup): Promise<void> => {
-    if (hasActiveRuntimeEnvironment) {
-      return
-    }
     const currentKey = getCodexStatusRuntimeKey(
       normalizeCodexStatusRuntimeTarget(accountState, toCodexStatusRuntimeTarget(codexTarget))
     )
-    if (group.key === currentKey) {
+    if (hasActiveRuntimeEnvironment || group.key === currentKey) {
       return
     }
     try {
@@ -247,11 +252,17 @@ export function useCodexSwitcherController(
   const handleOpenChange = useCallback(
     (nextOpen: boolean): void => {
       setOpen(nextOpen)
+      if (nextOpen) {
+        // A remote host's renames and removals change no local settings; reread on open.
+        void loadAccounts().catch((error: unknown) =>
+          console.error('Failed to load Codex accounts for status bar:', error)
+        )
+      }
       if (nextOpen && !hasActiveRuntimeEnvironment) {
         void fetchInactiveCodexAccountUsage()
       }
     },
-    [fetchInactiveCodexAccountUsage, hasActiveRuntimeEnvironment]
+    [fetchInactiveCodexAccountUsage, hasActiveRuntimeEnvironment, loadAccounts]
   )
 
   const selectedRuntimeKey = getCodexStatusRuntimeKey(

@@ -11,7 +11,7 @@ import {
 import type { LocalFileAccess } from '../../../shared/file-access/local-file-access'
 import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
 import { resolveLocalDroppedPathsForAgent } from '../dropped-path-resolution'
-import type { SshMutationExpectation } from '../../../shared/ssh-types'
+import type { SshMutationExpectation } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { assertSshMutationExpectation } from '../../ssh/connection/authority/ssh-connection-generation'
 import { renameLocalPathSerializedByDestination } from '../../filesystem/destination-serialized-local-rename'
 import { assertNotExists, rethrowWithUserMessage } from './filesystem-create-path-guards'
@@ -219,21 +219,21 @@ export function registerFilesystemMutationHandlers(store: Store): void {
     'fs:uploadExternalFileToRuntime',
     async (event, args: RuntimeUploadFileStreamRequest): Promise<{ byteLength: number }> => {
       const userDataPath = app.getPath('userData')
-      // Resolve selectors to the environment ID used by manual-disconnect checks.
-      const request = {
-        ...args,
-        environmentId: resolveEnvironment(userDataPath, args.environmentId).id
-      }
-      // Main-owned uploads must abort when the requesting renderer reloads or closes.
       const lifetime = abortWhenRendererGone(event.sender)
+      let request: RuntimeUploadFileStreamRequest | undefined
       try {
+        request = {
+          ...args,
+          environmentId: (await resolveEnvironment(userDataPath, args.environmentId)).id
+        }
+        lifetime.signal.throwIfAborted()
         return await streamExternalFileToRuntime({
           ...request,
           userDataPath,
           signal: lifetime.signal
         })
       } catch (error) {
-        if (lifetime.signal.aborted) {
+        if (lifetime.signal.aborted && request) {
           // The renderer cannot clean up its temp path after it disappears.
           await sweepAbandonedRuntimeUploadTempPath(userDataPath, request)
         }

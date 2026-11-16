@@ -191,6 +191,10 @@ export function fakeClaude(
         connection.calls.push({ subtype: 'stop_task', params: { taskId } })
         routed('stop_task', { taskId })
       },
+      backgroundTask: async (toolUseId) => {
+        connection.calls.push({ subtype: 'background_tasks', params: { toolUseId } })
+        return (await routed('background_tasks', { toolUseId })) === true
+      },
       send: async (message, beforeDispatch) => {
         await beforeDispatch?.()
         connection.sent.push(message)

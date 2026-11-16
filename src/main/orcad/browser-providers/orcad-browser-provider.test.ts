@@ -1,157 +1,75 @@
-import { chmod, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { runProcess, spawnProcess } from '@orca/process-host'
-import { agentBrowserCommandOf } from '../../browser/agent-browser/testing/agent-browser-bridge-test-harness'
+import { spawnProcess } from '@orca/process-host'
+import { macCoordinationRoot } from '../../../shared/remote-runtime/serve-supervisor/serve-bundle-coordination'
 import {
-  resolveInstalledElectronExecutable,
-  resolveOrcadBrowserProvider
-} from './orcad-browser-provider'
-import {
-  runtimeBrowserUnavailableCause,
-  setRuntimeBrowserUnavailableCause
-} from '../../runtime/browser/installation/runtime-browser-commands-factory'
+  commitServeSupervisorParkOnQuit,
+  releaseServeSupervisorPark
+} from '../../updater/lifecycle/serve-supervisor-install-park'
+import { resolveOrcadBrowserProvider, type OrcadBrowserProvider } from './orcad-browser-provider'
 
 vi.mock('@orca/process-host', () => ({
   runProcess: vi.fn(),
-  spawnProcess: vi.fn()
+  spawnProcess: vi.fn(() => {
+    throw new Error('spawned')
+  })
 }))
 
-type BrowserState = {
-  activeTabId: string
-  tabs: { active: boolean; tabId: string; title: string; url: string }[]
-}
-
-const runProcessMock = vi.mocked(runProcess)
 const spawnProcessMock = vi.mocked(spawnProcess)
-let root: string
-let screenshotPath: string
-let browserState: BrowserState
 
-function success(data: unknown) {
-  return Promise.resolve({
-    code: 0,
-    signal: null,
-    stdout: JSON.stringify({ success: true, data, error: null }),
-    stderr: '',
-    timedOut: false
+// Windows resolves the home directory from USERPROFILE, so the park could not be redirected there.
+describe.skipIf(process.platform === 'win32')('orcad Electron browser helper', () => {
+  let root: string
+  let executable: string
+  let provider: OrcadBrowserProvider | null = null
+  const originalHome = process.env.HOME
+  const originalPlatform = process.platform
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), 'orcad-browser-provider-'))
+    // Install parks exist only for macOS app bundles.
+    Object.defineProperty(process, 'platform', { value: 'darwin' })
+    // The install park lives under the user's Library; keep it inside this test.
+    process.env.HOME = root
+    const bundle = join(root, 'Applications', 'Orca.app')
+    executable = join(bundle, 'Contents', 'MacOS', 'Orca')
+    await mkdir(join(bundle, 'Contents', 'MacOS'), { recursive: true })
+    await writeFile(join(bundle, 'Contents', 'Info.plist'), 'v1')
+    spawnProcessMock.mockClear()
   })
-}
 
-function installAgentBrowserMock(): void {
-  runProcessMock.mockImplementation(async (spec) => {
-    const command = agentBrowserCommandOf(spec.args ?? [], spec.input)
-    if (command[0] === 'open') {
-      const active = browserState.tabs.find((tab) => tab.tabId === browserState.activeTabId)!
-      active.url = command[1]
-      active.title = command[1] === 'about:blank' ? '' : 'Fixture page'
-      return success({ url: active.url, title: active.title })
-    }
-    if (command[0] === 'tab' && command.length === 1) {
-      return success({
-        tabs: browserState.tabs.map((tab) => ({
-          ...tab,
-          active: tab.tabId === browserState.activeTabId
-        }))
-      })
-    }
-    if (command[0] === 'tab' && command.length === 2) {
-      browserState.activeTabId = command[1]
-      return success({ tabId: command[1] })
-    }
-    if (command[0] === 'eval') {
-      return success({ result: 'Fixture page', origin: 'https://fixture.test/' })
-    }
-    if (command[0] === 'screenshot') {
-      return success({ path: screenshotPath })
-    }
-    if (command.join(' ') === 'snapshot -i --delta') {
-      return success({ snapshot: { kind: 'unchanged', revision: 2, baseRevision: 1 } })
-    }
-    if (command[0] === 'close') {
-      return success({ closed: true })
-    }
-    throw new Error(`Unexpected agent-browser command: ${command.join(' ')}`)
+  afterEach(async () => {
+    vi.useRealTimers()
+    await provider?.stop()
+    provider = null
+    await releaseServeSupervisorPark()
+    process.env.HOME = originalHome
+    Object.defineProperty(process, 'platform', { value: originalPlatform })
+    await rm(root, { recursive: true, force: true })
   })
-}
 
-beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'orcad-browser-provider-'))
-  screenshotPath = join(root, 'fixture.png')
-  await writeFile(screenshotPath, Buffer.from('fixture-image'))
-  browserState = {
-    activeTabId: 't1',
-    tabs: [{ active: true, tabId: 't1', title: '', url: 'about:blank' }]
-  }
-  runProcessMock.mockReset()
-  spawnProcessMock.mockReset()
-  installAgentBrowserMock()
-  setRuntimeBrowserUnavailableCause(null)
-})
+  it('waits for the new bundle when the desktop is installing an update on quit', async () => {
+    await commitServeSupervisorParkOnQuit(executable, macCoordinationRoot(root))
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] })
 
-afterEach(async () => {
-  await rm(root, { recursive: true, force: true })
-})
-
-describe.skipIf(process.platform === 'win32')('resolveInstalledElectronExecutable', () => {
-  async function writeExecutable(path: string, content: Buffer | string): Promise<void> {
-    await mkdir(join(path, '..'), { recursive: true })
-    await writeFile(path, content)
-    await chmod(path, 0o755)
-  }
-
-  it('rejects a symlink to the bash CLI shim and picks the install-dir binary', async () => {
-    const shim = join(root, 'share', 'orca-ide-shim')
-    const link = join(root, 'bin', 'orca-ide')
-    const electron = join(root, 'opt', 'Orca', 'orca-ide')
-    await writeExecutable(shim, '#!/usr/bin/env bash\nexec true\n')
-    await mkdir(join(link, '..'), { recursive: true })
-    await symlink(shim, link)
-    await writeExecutable(electron, Buffer.from([0x7f, 0x45, 0x4c, 0x46, 0]))
-
-    await expect(resolveInstalledElectronExecutable([link, electron])).resolves.toBe(electron)
-    await expect(resolveInstalledElectronExecutable([link])).resolves.toBeNull()
-  })
-})
-
-describe('resolveOrcadBrowserProvider', () => {
-  it('reports an ORCA_BROWSER_EXECUTABLE path that does not exist', async () => {
-    const missing = join(root, 'absent-chromium')
-
-    await expect(
-      resolveOrcadBrowserProvider({
-        userDataPath: root,
-        environment: { ORCA_BROWSER_EXECUTABLE: missing },
-        resolveInstalledElectronExecutable: async () => null,
-        resolveAgentBrowserBinary: () => '/agent-browser'
-      })
-    ).resolves.toBeNull()
-    expect(runtimeBrowserUnavailableCause()).toEqual({
-      reason: 'executable_not_found',
-      detail: missing
+    provider = await resolveOrcadBrowserProvider({
+      userDataPath: join(root, 'orcad'),
+      environment: {},
+      resolveInstalledElectronExecutable: async () => executable
     })
+    await vi.advanceTimersByTimeAsync(3_000)
+    expect(spawnProcessMock).not.toHaveBeenCalled()
+    expect(provider?.kind).toBe('electron')
+
+    // ShipIt swapped the bundle: Info.plist changed.
+    await writeFile(join(root, 'Applications', 'Orca.app', 'Contents', 'Info.plist'), 'v2-new')
+    await vi.advanceTimersByTimeAsync(1_000)
+    await vi.waitFor(() =>
+      expect(spawnProcessMock).toHaveBeenCalledWith(
+        expect.objectContaining({ program: executable })
+      )
+    )
   })
-
-  it.skipIf(process.platform === 'win32')(
-    'separates a non-executable ORCA_BROWSER_EXECUTABLE from a missing one',
-    async () => {
-      const executable = join(root, 'unchmodded-chromium')
-      await writeFile(executable, '')
-      await chmod(executable, 0o644)
-
-      await expect(
-        resolveOrcadBrowserProvider({
-          userDataPath: root,
-          environment: { ORCA_BROWSER_EXECUTABLE: executable },
-          resolveInstalledElectronExecutable: async () => null,
-          resolveAgentBrowserBinary: () => '/agent-browser'
-        })
-      ).resolves.toBeNull()
-      expect(runtimeBrowserUnavailableCause()).toEqual({
-        reason: 'executable_not_executable',
-        detail: executable
-      })
-    }
-  )
 })

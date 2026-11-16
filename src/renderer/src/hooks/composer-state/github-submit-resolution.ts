@@ -42,7 +42,7 @@ import {
   lookupSmartGitHubSubmitItem
 } from '@/lib/work-items/github/smart-github-submit'
 import { getForkPushWarning } from '../fork-push-warning'
-import { isGitRepoKind } from '../../../../shared/repo-kind'
+import { isGitRepoKind } from '../../../../shared/repository/repo-kind'
 import { buildTaskSourceContextFromRepo } from '../../../../shared/work-items/task-source-context'
 import {
   lookupGitHubWorkItemForSource,

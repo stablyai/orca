@@ -16,7 +16,7 @@ import {
   isSshConnectInFlight,
   useSshConnectInFlight
 } from '@/ssh/ssh-connect-in-flight'
-import type { SshConnectionStatus } from '../../../../../shared/ssh-types'
+import type { SshConnectionStatus } from '../../../../../shared/remote-runtime/ssh/ssh-types'
 
 export async function connectSshTargetFromStatusMenu(targetId: string): Promise<void> {
   if (isSshConnectInFlight(targetId)) {

@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { bindPtyConnectionTestMocks } from '../test-fixtures/pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
@@ -178,17 +179,19 @@ export function registerPtyConnectionMainSideEffectAuthorityTests(): void {
         )
         transportFactoryQueue.push(transport)
         const paneKey = makePaneKey('tab-1', LEAF_1)
-        mockStoreState.agentStatusByPaneKey = {
-          [paneKey]: {
-            paneKey,
-            state: 'done',
-            prompt: 'hi',
-            updatedAt: 1000,
-            stateStartedAt: 1000,
-            agentType: 'codex',
-            stateHistory: []
-          }
-        }
+        mockStoreState.agentStatusByPaneKey = acceptedAgentStatuses(
+          Object.entries({
+            [paneKey]: {
+              paneKey,
+              state: 'done',
+              prompt: 'hi',
+              updatedAt: 1000,
+              stateStartedAt: 1000,
+              agentType: 'codex',
+              stateHistory: []
+            }
+          })
+        )
 
         connectPanePty(
           createPane(1) as never,
@@ -229,7 +232,9 @@ export function registerPtyConnectionMainSideEffectAuthorityTests(): void {
         mockStoreState.tabsByWorktree = {
           'wt-1': [{ id: 'tab-1', ptyId: null, launchAgent: 'claude' }]
         }
-        mockStoreState.agentStatusByPaneKey[paneKey] = claudeStatus
+        mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
+          [paneKey, claudeStatus]
+        ])
         mockStoreState.paneForegroundAgentByPaneKey[paneKey] = {
           agent: 'claude',
           shellForeground: false
@@ -255,7 +260,7 @@ export function registerPtyConnectionMainSideEffectAuthorityTests(): void {
         vi.advanceTimersByTime(2000)
 
         expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
-        expect(mockStoreState.agentStatusByPaneKey[paneKey]).toBe(claudeStatus)
+        expect(mockStoreState.agentStatusByPaneKey.get(paneKey)!).toBe(claudeStatus)
       })
 
       it('keeps Command Code working when a working fact lands before the done settles', async () => {
@@ -297,7 +302,7 @@ export function registerPtyConnectionMainSideEffectAuthorityTests(): void {
         })
         vi.advanceTimersByTime(2000)
 
-        expect(mockStoreState.agentStatusByPaneKey[paneKey]).toMatchObject({
+        expect(mockStoreState.agentStatusByPaneKey.get(paneKey)!).toMatchObject({
           state: 'working',
           prompt: 'Run a slow command',
           agentType: 'command-code'

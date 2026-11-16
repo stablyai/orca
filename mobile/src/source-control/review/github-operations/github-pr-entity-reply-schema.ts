@@ -1,6 +1,10 @@
 import { normalizePRCheckHeadSha } from '../../../../../src/shared/github/checks/pr-check-head'
 import * as z from 'zod'
-import { openEnum, salvagedOptional, salvagingArray } from '../../../../../src/shared/zod-salvage'
+import {
+  openEnum,
+  salvagedOptional,
+  salvagingArray
+} from '../../../../../src/shared/validation/zod-salvage'
 import type {
   GitHubReaction,
   PRComment

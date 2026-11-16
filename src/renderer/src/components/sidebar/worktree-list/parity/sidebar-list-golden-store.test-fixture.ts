@@ -1,8 +1,8 @@
 import { getDefaultSettings } from '../../../../../../shared/constants'
-import type { Project, ProjectHostSetup } from '../../../../../../shared/project-types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Project, ProjectHostSetup } from '../../../../../../shared/project/project-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { DetectedWorktree, Worktree } from '../../../../../../shared/worktree/types'
-import { cloneDefaultWorkspaceStatuses } from '../../../../../../shared/workspace-statuses'
+import { cloneDefaultWorkspaceStatuses } from '../../../../../../shared/workspace/status/workspace-statuses'
 import type { PendingWorktreeCreation } from '@/lib/workspace/creation/pending-worktree-creation'
 import type { AppState } from '@/store/types'
 import {

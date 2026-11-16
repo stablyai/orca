@@ -6,11 +6,11 @@ import type {
   NativeChatTurnLifecycle
 } from '../../shared/native-chat/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat/native-chat-agent-support'
-import { errorMessage } from '../../shared/error-message'
+import { errorMessage } from '../../shared/errors/error-message'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
 import { openTranscriptReadStream } from './transcript-filesystem/wsl-transcript-fs-access'
 import { wslTranscriptFsRefusal } from './transcript-filesystem/wsl-transcript-fs-error'
-import { decodeClaudeTranscriptLine } from './transcript-decoding/transcript-line-decoders-claude'
+import { decodeClaudeChatTranscriptLine } from './transcript-decoding/transcript-line-decoders-claude'
 import { decodeCodexTranscriptLine } from './transcript-decoding/transcript-line-decoders-codex'
 import { decodeGrokTranscriptLine } from './transcript-decoding/transcript-line-decoders-grok'
 import { decodeOmpTranscriptLine } from './transcript-decoding/transcript-line-decoders-omp'
@@ -59,7 +59,11 @@ export async function readNativeChatTranscript(
     const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
     if (transcriptAgent === 'claude') {
       return {
-        messages: await readTranscript(filePath, decodeClaudeTranscriptLine, options.sourceOrder)
+        messages: await readTranscript(
+          filePath,
+          decodeClaudeChatTranscriptLine,
+          options.sourceOrder
+        )
       }
     }
     if (transcriptAgent === 'codex') {

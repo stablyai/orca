@@ -7,8 +7,8 @@
  * outside Orca with no wake after it keeps the old root until the next noticed stop or wake.
  */
 import { runProcess } from '@orca/process-host'
-import { buildPosixStdoutFence } from '../../../shared/posix-stdout-fence'
-import { buildWslExecArgs } from '../../../shared/wsl-login-shell-command'
+import { buildPosixStdoutFence } from '../../../shared/shell/launch/posix-stdout-fence'
+import { buildWslExecArgs } from '../../../shared/shell/wsl/wsl-login-shell-command'
 import {
   onWslDistroGateNote,
   wasWslDistroLastSeenRunningSettled

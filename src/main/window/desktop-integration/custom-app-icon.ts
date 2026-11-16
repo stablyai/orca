@@ -8,7 +8,7 @@ import {
   CUSTOM_APP_ICON_MIN_SIDE,
   type CustomAppIconImportFailureCode,
   type CustomAppIconImportResult
-} from '../../../shared/app-icon'
+} from '../../../shared/app-lifecycle/identity/app-icon'
 import { readRasterImageDimensions } from '../../../shared/file-preview/raster-image-dimensions'
 import { getCanonicalUserDataPath } from '../../persistence/loading-store/user-data-path'
 
