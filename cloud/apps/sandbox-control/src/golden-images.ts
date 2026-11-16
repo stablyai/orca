@@ -409,6 +409,18 @@ export function entryPointsBehind(image: { stamp: number; marker: boolean } | nu
   return image !== null && !image.marker && image.stamp < VM_SCRIPTS_STAMP
 }
 
+/**
+ * GH-AS-MEMBER: images from before the gh wrapper keep the real gh at tools/bin/gh, ahead of bin/ on every agent
+ * PATH, so the wrapper never ran. Moves it off PATH and links tools/bin/gh to the wrapper (the provision layout).
+ * Idempotent. ORCA_HOME/SUDO overridable for tests.
+ */
+export const GH_WRAPPER_LAYOUT = [
+  'h="${ORCA_HOME:-/opt/orca}"; s="${SUDO-sudo}"',
+  'if [ -f "$h/tools/bin/gh" ] && [ ! -L "$h/tools/bin/gh" ]; then',
+  '  $s mkdir -p "$h/tools/gh/bin" && $s mv -f "$h/tools/bin/gh" "$h/tools/gh/bin/gh" && $s ln -sfn ../../bin/gh "$h/tools/bin/gh"',
+  'fi'
+].join('\n')
+
 export async function installEntryPoints(deps: { provider: Pick<SandboxProviderApi, 'runCommand'> }, sessionId: string): Promise<void> {
   const env = provisionEnv({ manifest: MANIFEST, provisionScript: PROVISION_SCRIPT, vmScripts: VM_SCRIPT_SOURCES, vmScriptsStamp: VM_SCRIPTS_STAMP, buildId: 'sync' })
   const scriptEnv = Object.fromEntries(Object.entries(env).filter(([key]) => key.startsWith('ORCA_VM_SCRIPT_')))
@@ -420,6 +432,7 @@ export async function installEntryPoints(deps: { provider: Pick<SandboxProviderA
     '  sudo install -o root -g root -m 0755 "/tmp/$name.new" "/opt/orca/bin/$name"',
     '  rm -f "/tmp/$name.new"',
     'done',
+    GH_WRAPPER_LAYOUT,
     // Marks this set of entry points as installed (ensureEntryPoints skips the install next time).
     `sudo rm -f /opt/orca/bin/.entry-points-* && sudo touch /opt/orca/bin/.entry-points-${entryPointsVersion()}`,
     // Records which scripts the image now carries (an older Worker never reinstalls over them).
