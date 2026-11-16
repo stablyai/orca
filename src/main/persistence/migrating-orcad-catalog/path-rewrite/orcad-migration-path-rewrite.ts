@@ -155,16 +155,14 @@ function rewriteOwnerKey(value: string, rewriter: OrcadMigrationPathRewriter): s
 
 function rewritePtySessionId(value: string, rewriter: OrcadMigrationPathRewriter): string {
   const physicalId = decodeSavedLocalPtyId(value)
-  if (physicalId !== value) {
-    return `local|${rewritePtySessionId(physicalId, rewriter)}`
-  }
-  const at = value.lastIndexOf(PTY_SESSION_ID_SEPARATOR)
+  const prefix = physicalId === value ? '' : 'local|'
+  const at = physicalId.lastIndexOf(PTY_SESSION_ID_SEPARATOR)
   if (at <= 0) {
     return value
   }
-  const owner = value.slice(0, at)
+  const owner = physicalId.slice(0, at)
   const mapped = rewriteOwnerKey(owner, rewriter)
-  return mapped === owner ? value : `${mapped}${value.slice(at)}`
+  return mapped === owner ? value : `${prefix}${mapped}${physicalId.slice(at)}`
 }
 
 function rewriteEditorFileId(value: string, rewriter: OrcadMigrationPathRewriter): string {

@@ -1,4 +1,4 @@
-import { decodeSavedLocalPtyReference } from './loaded-local-terminal-ids'
+import { decodeSavedLocalPtyReference } from '../../restoring-sessions/saved-local-terminal-ids'
 import { normalizePersistedMobileClientTabSelections } from '../../../runtime/client/navigation/client-session-tab-selection-persistence'
 import type { SshRemotePtyLease } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { normalizeFeatureInteractionTelemetryBuckets } from '../../../../shared/feature-education/interactions/feature-interactions'

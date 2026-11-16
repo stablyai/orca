@@ -1,5 +1,7 @@
-import { decodeLoadedLocalTerminalIds } from './loaded-local-terminal-ids'
-import { decodeSavedLocalPtyId } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
+import {
+  decodeSavedLocalTerminalIds,
+  decodeSavedLocalAutomationRun
+} from '../../restoring-sessions/saved-local-terminal-ids'
 import type { PersistedState } from '../../../../shared/persisted-state-types'
 import {
   normalizeProjectHostSetupRows,
@@ -37,7 +39,7 @@ export function normalizeLoadedLocalSession(
     // Persist salvaged state so corrupt entries do not recur on every launch.
     markNeedsSave()
   }
-  const session = decodeLoadedLocalTerminalIds(result.value)
+  const session = decodeSavedLocalTerminalIds(result.value)
   if (session !== result.value) {
     markNeedsSave()
   }
@@ -74,15 +76,11 @@ export function normalizeLoadedAutomationRuns(
     markNeedsSave()
   }
   return runs.map((run) => {
-    if (typeof run.terminalPtyId !== 'string') {
-      return run
+    const decoded = decodeSavedLocalAutomationRun(run)
+    if (decoded !== run) {
+      markNeedsSave()
     }
-    const terminalPtyId = decodeSavedLocalPtyId(run.terminalPtyId)
-    if (terminalPtyId === run.terminalPtyId) {
-      return run
-    }
-    markNeedsSave()
-    return { ...run, terminalPtyId }
+    return decoded
   })
 }
 

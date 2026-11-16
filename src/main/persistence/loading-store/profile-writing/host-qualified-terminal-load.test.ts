@@ -1,4 +1,16 @@
 import {
+  prepareOrcadMigrationWorkspaceSession,
+  applyPreparedOrcadMigrationWorkspaceSession
+} from '../../migrating-orcad-catalog/destination/orcad-destination-workspace-session'
+import {
+  prepareOrcadMigrationAutomationState,
+  applyPreparedOrcadMigrationAutomationState
+} from '../../migrating-orcad-catalog/destination/orcad-destination-automation-state'
+import {
+  DORMANT_AUTOMATION,
+  DORMANT_AUTOMATION_RUN
+} from '../../migrating-orcad-catalog/catalog-commit/persistence-orcad-migration-catalog-fixture'
+import {
   closeTestStores,
   createSqliteTestStore,
   readPersistedStateJson,
@@ -151,4 +163,37 @@ it('loads a newer local saved binding as the same physical terminal and saves th
   ).toBe('local|opaque-server-handle')
   expect(saved.automationRuns[0].terminalPtyId).toBe('repo::/a|b@@saved')
   expect(saved.legacyPaneKeyAliasEntries[0].ptyId).toBe('repo::/a|b@@saved')
+})
+
+it('decodes saved catalog references before importing them into a running store', () => {
+  const state = getDefaultPersistedState(tmpdir())
+  const incoming = {
+    ...state.workspaceSession,
+    terminalSurfaceTombstonesByPaneKey: {
+      retired: {
+        ptyId: 'local|repo::/a@@retired',
+        incarnationId: 'inc',
+        worktreeId: 'repo::/a',
+        parentTabId: 'tab',
+        leafId: '10000000-0000-4000-8000-000000000001',
+        retiredAt: 1
+      }
+    }
+  }
+  applyPreparedOrcadMigrationWorkspaceSession(
+    prepareOrcadMigrationWorkspaceSession(incoming, state),
+    state
+  )
+  applyPreparedOrcadMigrationAutomationState(
+    prepareOrcadMigrationAutomationState(
+      [DORMANT_AUTOMATION],
+      [{ ...DORMANT_AUTOMATION_RUN, terminalPtyId: 'local|pty-history' }],
+      state
+    ),
+    state
+  )
+  expect(state.workspaceSession.terminalSurfaceTombstonesByPaneKey?.retired.ptyId).toBe(
+    'repo::/a@@retired'
+  )
+  expect(state.automationRuns[0].terminalPtyId).toBe('pty-history')
 })

@@ -1,5 +1,5 @@
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
-import { decodeSavedLocalPtyId } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
+import { decodeSavedLocalPtyId } from '../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 
 export function decodeSavedLocalPtyReference<T extends { ptyId: string | null }>(row: T): T {
   if (row.ptyId === null) {
@@ -27,10 +27,8 @@ function mapChangedRecord<T>(
   return changed ? next : source
 }
 
-/** Run only for the loaded local partition; remote handles and their host remain opaque. */
-export function decodeLoadedLocalTerminalIds(
-  session: WorkspaceSessionState
-): WorkspaceSessionState {
+/** Run only for a local saved partition; remote handles and their host remain opaque. */
+export function decodeSavedLocalTerminalIds(session: WorkspaceSessionState): WorkspaceSessionState {
   const tabsByWorktree = mapChangedRecord(session.tabsByWorktree, (tabs) => {
     const next = tabs.map(decodeSavedLocalPtyReference)
     return next.some((tab, index) => tab !== tabs[index]) ? next : tabs
@@ -62,4 +60,14 @@ export function decodeLoadedLocalTerminalIds(
     closedTerminalPanesByPaneKey,
     terminalSurfaceTombstonesByPaneKey
   }
+}
+
+export function decodeSavedLocalAutomationRun<T extends { terminalPtyId: string | null }>(
+  run: T
+): T {
+  if (typeof run.terminalPtyId !== 'string') {
+    return run
+  }
+  const terminalPtyId = decodeSavedLocalPtyId(run.terminalPtyId)
+  return terminalPtyId === run.terminalPtyId ? run : { ...run, terminalPtyId }
 }
