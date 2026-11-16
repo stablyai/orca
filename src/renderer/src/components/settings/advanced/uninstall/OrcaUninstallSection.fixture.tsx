@@ -5,6 +5,7 @@ import type {
   OrcaUninstallPlan
 } from '../../../../../../shared/uninstall/orca-uninstall-types'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
+import { useTranslate } from '@/i18n/use-translate'
 import { OrcaUninstallPanel } from './OrcaUninstallSection'
 import type { OrcaUninstallModel, OrcaUninstallPhase } from './use-orca-uninstall'
 
@@ -104,10 +105,11 @@ function model(
 }
 
 function Frame({ value }: { value: OrcaUninstallModel }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="settings-view-shell bg-background p-8 text-foreground">
       <div>
-        <SettingsGroup title="Uninstall">
+        <SettingsGroup title={t('settings.uninstall.groupTitle', 'Uninstall')}>
           <OrcaUninstallPanel model={value} />
         </SettingsGroup>
       </div>
