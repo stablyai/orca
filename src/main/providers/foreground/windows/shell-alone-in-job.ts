@@ -7,6 +7,7 @@ import {
 } from '../../../../shared/process-observation/tables/process-table-index'
 
 const MSYS_BASH_IMAGE = 'bash.exe'
+const WSL_IMAGE = 'wsl.exe'
 
 /** Git Bash launcher/MSYS exec stubs form a live unbranched bash chain; commands add a non-bash leaf or branch.
  * Builtin-only/nested bash remains indistinguishable from idle. Optional console proof excludes detached orphans;
@@ -63,8 +64,13 @@ export async function isWindowsShellAloneInJob(
 /** Fails closed when the table cannot show the shell; a child older than its parent carries a reused ppid. */
 function hasLiveDescendant(shellPid: number, rows: readonly WindowsProcessIdentityRow[]): boolean {
   const index = getProcessTableIndex(rows)
-  if (!index.byPid.get(shellPid)?.name) {
+  const shellName = index.byPid.get(shellPid)?.name.toLowerCase()
+  if (!shellName) {
     return true
+  }
+  // An idle wsl.exe always keeps its own helpers (inner wsl.exe, wslhost.exe, conhost.exe); the guest owns WSL work.
+  if (shellName === WSL_IMAGE) {
+    return false
   }
   return (
     collectDescendantsFromIndex(index, shellPid, (row) =>

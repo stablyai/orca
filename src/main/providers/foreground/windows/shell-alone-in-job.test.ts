@@ -33,6 +33,22 @@ describe('isWindowsShellAloneInJob with a shell-only job', () => {
     expect(await aloneWith([SHELL, olderThanShell])).toBe(true)
   })
 
+  it('keeps an idle WSL shell idle despite its own helper processes', async () => {
+    const wsl = { pid: 100, ppid: 50, name: 'wsl.exe', creationTimeMs: 1_000 }
+    const helpers = [
+      { pid: 201, ppid: 100, name: 'wsl.exe', creationTimeMs: 1_100 },
+      { pid: 202, ppid: 201, name: 'conhost.exe', creationTimeMs: 1_200 },
+      { pid: 203, ppid: 201, name: 'wslhost.exe', creationTimeMs: 1_300 }
+    ]
+
+    expect(
+      await isWindowsShellAloneInJob(100, 'C:\\Windows\\System32\\wsl.exe', new Set([100]), async () => [
+        wsl,
+        ...helpers
+      ])
+    ).toBe(true)
+  })
+
   it('does not call the shell idle when the table cannot show it', async () => {
     expect(await aloneWith([])).toBe(false)
   })
