@@ -15,7 +15,7 @@ export type BrowserClientRetainedRendererPage = {
   rejectMount: (error: Error) => void
   attachTimer: ReturnType<typeof setTimeout>
   onAttached: EventListener
-  onReady: EventListener
+  releasePreparation: () => void
   onDestroyed: EventListener
   onRendererGone: EventListener
   onLoadCommit: (event: Electron.LoadCommitEvent) => void

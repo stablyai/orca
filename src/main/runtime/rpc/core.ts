@@ -10,7 +10,7 @@ import type {
   PairingGetEndpointsResult,
   PairingProvisionRelayParams
 } from '../../../shared/remote-runtime/relay/mobile-relay-credential-contract'
-import type { RuntimeCapability } from '../../../shared/protocol-version'
+import type { RuntimeCapability } from '../../../shared/remote-runtime/protocol/protocol-version'
 import type {
   MobileRelayHostsListResult,
   MobileRelayHostWorktreesResult
@@ -22,7 +22,7 @@ import type {
 import type { OrchestrationCompatibilityEvidence } from '../../../shared/orchestration/orchestration-compatibility-evidence'
 import type { OrchestrationEntryCaller } from '../orchestration/addressing/orchestration-caller-identity'
 import type { RpcCallerIdentity } from './callers/rpc-caller-identity'
-import type { OrcadPeerDesktopsResult } from '../../../shared/orcad-peer-desktops-contract'
+import type { OrcadPeerDesktopsResult } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-peer-desktops-contract'
 import type { RpcBinarySender } from './transports/rpc-binary-sender'
 import type { RpcMethodPermission } from './callers/rpc-method-permission'
 import type { OrcadFeatureRequirement } from './startup/orcad-readiness'
@@ -169,7 +169,7 @@ export type RpcContext = {
   deviceSelf?: DeviceSelfRpcContext
   // Available only on a desktop relay for its configured servers.
   mobileRelayHosts?: {
-    list(): MobileRelayHostsListResult
+    list(): MobileRelayHostsListResult | Promise<MobileRelayHostsListResult>
     worktrees(hostId: string): Promise<MobileRelayHostWorktreesResult>
   }
   // Authenticated runtime devices see which other desktops share this server.

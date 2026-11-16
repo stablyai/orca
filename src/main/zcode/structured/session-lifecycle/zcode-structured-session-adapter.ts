@@ -194,7 +194,7 @@ export class ZcodeStructuredSessionAdapter implements StructuredAgentSessionAdap
     if (!session || session.ended) {
       return { cancelled: false }
     }
-    const liveTurnId = input.resolveLiveTurnId?.() ?? session.lane?.openTurnId ?? null
+    const liveTurnId = (await input.resolveLiveTurnId?.()) ?? session.lane?.openTurnId ?? null
     if (liveTurnId === null || (input.turnId !== undefined && input.turnId !== liveTurnId)) {
       return { cancelled: false, refusal: { turnNotRunning: true } }
     }

@@ -5,7 +5,7 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DeveloperPermissionRequestResult } from '../../../../../shared/developer-permissions-types'
-import type { SpeechModelManifest } from '../../../../../shared/speech-types'
+import type { SpeechModelManifest } from '../../../../../shared/speech/speech-types'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { getDefaultVoiceSettings } from '../../../../../shared/constants'
 

@@ -9,11 +9,11 @@ import {
   type ViewStyle
 } from 'react-native'
 import { ChevronDown } from 'lucide-react-native'
-import { useReducedMotionEnabled } from '../../platform/use-reduced-motion'
+import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
 import { colors, pressedStyle, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { useWorkingSweep } from '../use-working-motion'
+import { useWorkingSweep } from '../motion/use-working-motion'
 
 export const NAV_BAR_HEIGHT = 52
 

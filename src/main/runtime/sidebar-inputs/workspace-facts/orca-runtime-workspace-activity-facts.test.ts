@@ -1,6 +1,6 @@
 // Runs on plain Node, as orcad does: the producer and its runtime wiring import no Electron.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { AgentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import { OrcaRuntimeService } from '../../orca-runtime'
 
@@ -52,9 +52,9 @@ describe('runtime workspace activity facts', () => {
     vi.useRealTimers()
   })
 
-  it('reads a terminal whose host lost contact as unverifiable, not live', () => {
+  it('reads a terminal whose host lost contact as unverifiable, not live', async () => {
     const runtime = createRuntime()
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         { tabId: 'tab-1', worktreeId: WT, title: 'Terminal', activeLeafId: LEAF, layout: null }
       ],
@@ -71,12 +71,12 @@ describe('runtime workspace activity facts', () => {
     expect(runtime.getWorkspaceActivityFacts().facts[WT]?.terminal).toBe('live')
   })
 
-  it('reads agent status from the hook-server store it is attached to', () => {
+  it('reads agent status from the hook-server store it is attached to', async () => {
     const runtime = createRuntime()
     const server = new AgentHookServer()
     const detach = runtime.workspaceActivityFacts.attachAgentStatusStore(server)
     try {
-      runtime.syncWindowGraph(1, {
+      await runtime.syncWindowGraph(1, {
         tabs: [
           { tabId: 'tab-1', worktreeId: WT, title: 'Terminal', activeLeafId: LEAF, layout: null }
         ],

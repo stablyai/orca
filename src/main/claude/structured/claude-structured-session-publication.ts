@@ -1,5 +1,5 @@
 import { withAgentSessionCreatePhase } from '../../observability/agent-session-instrumentation'
-import { agentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
+import { agentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { CLAUDE_STRUCTURED_AGENT } from './claude-structured-agent-definition'
 import { randomUUID } from 'node:crypto'
 import { refreshClaudeStructuredSessionOptions } from './launch/claude-structured-session-options'
@@ -197,7 +197,8 @@ export async function publishClaudeSessionAttempt({
   callbacks,
   sessions,
   exits,
-  recordPhase
+  recordPhase,
+  snapshotCurrent
 }: {
   sessionId: string
   session: ClaudeSession
@@ -206,8 +207,10 @@ export async function publishClaudeSessionAttempt({
   sessions: ReadonlyMap<string, ClaudeSession>
   exits: ReadonlyMap<string, ClaudeSessionExit>
   recordPhase: StructuredAgentSessionAcquireInput['recordPhase']
+  snapshotCurrent?: () => Promise<void>
 }): Promise<void> {
   await withAgentSessionCreatePhase('publish', recordPhase, async () => {
+    await snapshotCurrent?.()
     callbacks.publish(session)
     attempt.published = true
     attempt.delivery.flush()

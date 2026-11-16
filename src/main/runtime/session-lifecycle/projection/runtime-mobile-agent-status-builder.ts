@@ -10,7 +10,7 @@ import {
   type HostTurnEndFacts
 } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import {
   ptyStatusEvidenceAt,
   renewRuntimeMobileAgentStatusFromPtyTitle,
@@ -205,11 +205,15 @@ export function buildRuntimeMobileAgentStatus(
         tabId: tab.parentTabId,
         terminalTitle,
         ...providerSession,
-        ...(liveRow.programStatus ? { programStatus: liveRow.programStatus } : {})
+        ...(liveRow.programStatus ? { programStatus: liveRow.programStatus } : {}),
+        ...(liveRow.paneSleep ? { paneSleep: liveRow.paneSleep } : {})
       },
       ownerAgent,
       ownerOptions
     )
+    if (liveRow.paneSleep) {
+      return { agentStatus: liveStatus }
+    }
     // A live question outranks only the shell title that currently obscures it.
     const renewedStatus = renewRuntimeMobileAgentStatusFromPtyTitle(liveStatus, pty, {
       preserveQuestionUnderShellTitle: true

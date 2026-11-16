@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { connectRuntimeHostAndReloadProjects } from '@/components/status-bar/runtime-environment-explicit-connect'
+import { connectRuntimeHostAndReloadProjects } from '@/components/status-bar/host-connections/runtime-environment-explicit-connect'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useTranslate } from '@/i18n/use-translate'
 import { startWslHostAndReloadProjects } from '@/runtime/hosts/wsl/wsl-host-user-start'

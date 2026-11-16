@@ -121,12 +121,13 @@ export function submitHookLaneCompletion(
   const segment = done?.stateStartedAt
   // Why: sent only while the pane still shows this end and the lane keeps hook authority.
   const isCurrent = (): boolean => {
-    const row = useAppStore.getState().agentStatusByPaneKey[paneKey]
+    const row = useAppStore.getState().agentStatusByPaneKey.get(paneKey)
     return (
-      row?.state === 'done' &&
-      row.stateStartedAt === segment &&
-      row.turnEndedAt === done?.turnEndedAt &&
-      lane.keepsAuthority()
+      lane.keepsAuthority() &&
+      (!row ||
+        (row.state === 'done' &&
+          row.stateStartedAt === segment &&
+          row.turnEndedAt === done?.turnEndedAt))
     )
   }
   let requests = requestsByPaneKey.get(paneKey)

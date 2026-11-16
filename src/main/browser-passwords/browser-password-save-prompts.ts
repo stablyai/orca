@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type {
   BrowserPasswordSavePrompt,
   BrowserPasswordSavePromptResponse
-} from '../../shared/browser-passwords-types'
+} from '../../shared/browser/passwords/browser-passwords-types'
 import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
 import type { BrowserPasswordSucceededLogin } from './browser-password-login-tracker'
 import { decideBrowserPasswordSave } from './browser-password-save-decision'

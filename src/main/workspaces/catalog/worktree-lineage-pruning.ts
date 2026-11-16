@@ -1,9 +1,12 @@
 import { randomUUID } from 'node:crypto'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../shared/worktree/lineage-types'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
-import { isWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
+import {
+  isWorkspaceKey,
+  parseWorkspaceKey
+} from '../../../shared/workspace/identity/workspace-scope'
 import { splitWorktreeId } from '../../../shared/worktree/id'
 import { worktreeRetentionPathComparisonKey } from './worktree-retention-path-comparison'
 import type { Store } from '../../persistence/loading-store/store'
@@ -92,7 +95,11 @@ export function pruneLineageForMissingRepoWorktrees(
     )
   )
   const isLive = (worktreeId: string): boolean => {
-    if (liveIds.has(worktreeId) || preservedMetadataCandidateIds?.has(worktreeId)) {
+    if (
+      liveIds.has(worktreeId) ||
+      preservedMetadataCandidateIds?.has(worktreeId) ||
+      store.getWorktreeMeta(worktreeId)?.archivedCheckout
+    ) {
       return true
     }
     const worktreePath = splitWorktreeId(worktreeId)?.worktreePath

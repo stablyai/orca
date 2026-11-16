@@ -3,7 +3,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalThreadGoal
 } from './journal/agent-session-journal-types'
-import type { AgentSessionOptionsResult } from './options/agent-session-options-result'
+import type { AgentSessionOptionsResult } from './options/protocol/agent-session-options-result'
 
 /** What clears a goal only the agent's own /goal changes. */
 export const AGENT_OWNED_THREAD_GOAL_CLEAR_COMMAND = '/goal clear'

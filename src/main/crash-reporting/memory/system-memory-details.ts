@@ -1,4 +1,4 @@
-import type { CrashReportDetailValue } from '../../../shared/crash-reporting'
+import type { CrashReportDetailValue } from '../../../shared/crash-reporting/crash-reporting'
 import type { SwapVolumeFreeSpace } from './swap-volume-free-space'
 
 // Post-exit memory can look healthier; pre-gone samples retain earlier pressure evidence.

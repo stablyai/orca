@@ -2,7 +2,7 @@ import { legacyBaseRefSearchResult } from '../../../../src/shared/base-ref-searc
 import type { GitHubWorkItem } from '../../../../src/shared/github/work-items/work-item-types'
 import type { GitLabWorkItem } from '../../../../src/shared/gitlab-types'
 import type { LinearIssue } from '../../../../src/shared/linear/issue-types'
-import type { BaseRefSearchResult } from '../../../../src/shared/repo-types'
+import type { BaseRefSearchResult } from '../../../../src/shared/repository/repo-types'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { JiraIssue, JiraSiteSelection } from '../../../../src/shared/jira/jira-types'
 import { getJiraIssueSearchQuery } from '../../../../src/shared/new-workspace/smart-workspace-source-results'
@@ -11,7 +11,7 @@ import {
   buildJiraTextMatchJql
 } from '../../../../src/shared/jira/jira-search-input-jql'
 import { jiraIssueSearchRead } from '../../tasks/providers/jira/mobile-jira-operations'
-import { repoBaseRefSearchRead } from '../../source-control/mobile-repo-base-ref-operations'
+import { repoBaseRefSearchRead } from '../../source-control/branches/mobile-repo-base-ref-operations'
 import {
   githubWorkItemSearchRead,
   gitlabWorkItemSearchRead,

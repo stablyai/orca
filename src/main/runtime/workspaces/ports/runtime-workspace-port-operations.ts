@@ -5,7 +5,7 @@ import type {
   WorkspacePortKillResult,
   WorkspacePortProbe,
   WorkspacePortScanResult
-} from '../../../../shared/workspace-ports'
+} from '../../../../shared/workspace/ports/workspace-ports'
 import {
   filterWorkspacePortProbes,
   killWorkspacePort,

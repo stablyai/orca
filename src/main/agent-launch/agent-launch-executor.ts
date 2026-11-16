@@ -1,4 +1,4 @@
-import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
+import type { RuntimeTerminalCreate } from '../../shared/terminal/runtime/runtime-terminal-create-contract'
 import { decideAgentLaunchIntentMode } from './agent-launch-intent-mode'
 /** Structured launches create the workspace without an agent, then ask its host for chat support.
  * The host needs the created workspace to answer; a definitive refusal starts a terminal agent. */
@@ -100,7 +100,8 @@ export async function openAgentLaunch(
   }
 
   const launch =
-    intent.target.kind === 'create-worktree' && preflight.mode === 'structured'
+    (intent.target.kind === 'create-worktree' && preflight.mode === 'structured') ||
+    intent.target.kind === 'create-folder-workspace'
       ? beginCreatedWorkspaceLaunch(runtime, intent.agent)
       : undefined
   let placed: Awaited<ReturnType<typeof resolveWorkspace>> | undefined
@@ -233,14 +234,14 @@ async function resolveWorkspace(
     throw new Error('agent_launch_workspace_factory_required')
   }
   execution.onStage?.('worktree_create')
-  if (intent.target.kind === 'create-folder-workspace') {
-    if (!workspaces.createFolderWorkspace) {
-      throw new Error('agent_launch_workspace_factory_required')
-    }
-    const created = await workspaces.createFolderWorkspace({ create: intent.target.create })
-    return { ...created, startupTerminalHandle: undefined }
+  const createWorkspace =
+    intent.target.kind === 'create-folder-workspace'
+      ? workspaces.createFolderWorkspace?.bind(workspaces)
+      : workspaces.createWorktree.bind(workspaces)
+  if (!createWorkspace) {
+    throw new Error('agent_launch_workspace_factory_required')
   }
-  const created = await workspaces.createWorktree({
+  const created = await createWorkspace({
     // Reserved fields must come from the launch intent, not a stale create payload.
     create: withoutReservedAgentCreateFields(intent.target.create),
     ...(onWorkspaceCreated ? { onWorkspaceCreated } : {}),

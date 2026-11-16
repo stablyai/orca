@@ -13,11 +13,11 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
-import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import {
   isIdleWorkspaceActivity,
   type WorkspaceActivityFacts
-} from '../../../../../../shared/sidebar-list/workspace-activity-facts'
+} from '../../../../../../shared/sidebar-list/feed-facts/workspace-activity-facts'
 
 /** The window's own activity facts, from the same store slices the sidebar filter reads. */
 export function readWindowWorkspaceActivityFacts(

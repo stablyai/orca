@@ -12,7 +12,10 @@ export type FocusExistingMainWindowResult = 'focused' | 'opened' | 'pending'
 export type FocusExistingMainWindowOptions = {
   app: Pick<App, 'focus' | 'isReady'>
   getWindow: () => BrowserWindow | null
-  openWindow: () => BrowserWindow
+  // Structural: the web project typechecks this file and can't reach main-window-contracts.
+  openWindow: (options?: { revealInBackground?: boolean }) => BrowserWindow | Promise<BrowserWindow>
+  /** `orca open` asked: show the window if needed, never take the foreground. */
+  background?: boolean
   /** False while some other path must own the first window; the reopen is dropped, not queued. */
   canOpenWindow?: () => boolean
   platform?: NodeJS.Platform
@@ -82,8 +85,21 @@ function activateWindow(
   window: BrowserWindow,
   app: Pick<App, 'focus'>,
   platform: NodeJS.Platform,
-  setTimer: FocusTimer
+  setTimer: FocusTimer,
+  background: boolean
 ): void {
+  if (background) {
+    // A minimized window stays minimized: restoring it would pull the user's attention.
+    if (
+      !window.isDestroyed() &&
+      !window.isVisible() &&
+      !window.isMinimized() &&
+      !isWindowlessLaunch()
+    ) {
+      window.showInactive()
+    }
+    return
+  }
   safelyFocusApp(app)
   safelyRevealWindow(window)
   // Windows reinforcement raises windows over other work; suppress it during background launches.
@@ -109,32 +125,41 @@ function openWindowWithRetry(
   >,
   platform: NodeJS.Platform,
   setTimer: FocusTimer,
-  attempt: number
-): BrowserWindow | null {
-  try {
-    return opts.openWindow()
-  } catch (error) {
+  attempt: number,
+  background: boolean
+): BrowserWindow | null | Promise<BrowserWindow | null> {
+  const failed = (error: unknown): null => {
     opts.warn?.('[window] Failed to reopen main window for second-instance launch', error)
     if (attempt >= REOPEN_MAX_ATTEMPTS) {
       return null
     }
     setTimer(() => {
-      // openWindow constructs each time; adopt windows created by concurrent/partially failed attempts to avoid orphaning duplicates.
       const existing = opts.getWindow()
       if (existing && !existing.isDestroyed()) {
-        activateWindow(existing, opts.app, platform, setTimer)
+        activateWindow(existing, opts.app, platform, setTimer, background)
         return
       }
-      // Opening may have become forbidden (e.g. quit teardown) since this retry was scheduled.
       if (opts.canOpenWindow?.() === false) {
         return
       }
-      const window = openWindowWithRetry(opts, platform, setTimer, attempt + 1)
-      if (window) {
-        activateWindow(window, opts.app, platform, setTimer)
+      const window = openWindowWithRetry(opts, platform, setTimer, attempt + 1, background)
+      if (window instanceof Promise) {
+        void window.then((ready) => {
+          if (ready && !background) {
+            activateWindow(ready, opts.app, platform, setTimer, false)
+          }
+        })
+      } else if (window && !background) {
+        activateWindow(window, opts.app, platform, setTimer, false)
       }
     }, REOPEN_RETRY_DELAY_MS)
     return null
+  }
+  try {
+    const window = opts.openWindow(background ? { revealInBackground: true } : undefined)
+    return window instanceof Promise ? window.catch(failed) : window
+  } catch (error) {
+    return failed(error)
   }
 }
 
@@ -143,6 +168,7 @@ export function focusExistingMainWindow(
 ): FocusExistingMainWindowResult {
   const platform = opts.platform ?? process.platform
   const setTimer = opts.setTimeout ?? setTimeout
+  const background = opts.background === true
   let window = opts.getWindow()
   let openedWindow = false
 
@@ -150,13 +176,25 @@ export function focusExistingMainWindow(
     if (!opts.app.isReady() || opts.canOpenWindow?.() === false) {
       return 'pending'
     }
-    window = openWindowWithRetry(opts, platform, setTimer, 1)
+    const opening = openWindowWithRetry(opts, platform, setTimer, 1, background)
+    if (opening instanceof Promise) {
+      void opening.then((ready) => {
+        if (ready && !background) {
+          activateWindow(ready, opts.app, platform, setTimer, false)
+        }
+      })
+      return 'pending'
+    }
+    window = opening
     if (!window) {
       return 'pending'
     }
     openedWindow = true
   }
 
-  activateWindow(window, opts.app, platform, setTimer)
+  // A window opened in the background reveals itself inactive on first paint.
+  if (!(openedWindow && background)) {
+    activateWindow(window, opts.app, platform, setTimer, background)
+  }
   return openedWindow ? 'opened' : 'focused'
 }

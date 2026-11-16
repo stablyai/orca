@@ -1,4 +1,7 @@
-import { loadWindowsSecurity, WINDOWS_FILE_ALL_ACCESS } from '../../shared/windows-security-addon'
+import {
+  loadWindowsSecurity,
+  WINDOWS_FILE_ALL_ACCESS
+} from '../../shared/secure-storage/windows-security-addon'
 
 const USER_DIRECTORY_GRANT = { inheritable: true, replace: true } as const
 

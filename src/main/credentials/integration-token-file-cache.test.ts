@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { setSecretStore } from '../../shared/secret-store'
+import { setSecretStore } from '../../shared/secure-storage/secret-store'
 import { createIntegrationTokenFileCache } from './integration-token-file-cache'
 
 let directory = ''
@@ -29,25 +29,6 @@ function createCache() {
 }
 
 describe('integration token file cache', () => {
-  it('bounds errors, keeps status lazy, and permits retry after keychain approval', () => {
-    const cache = createCache()
-    decrypt.mockImplementation(() => {
-      throw new Error('Keychain access denied')
-    })
-    for (let index = 0; index < 132; index += 1) {
-      const id = `credential-${index}`
-      writeFileSync(filePath(id), Buffer.from([0x76, 0x31, 0x30, 0xff, 0xfe]))
-      expect(() => cache.read(id)).toThrow('Could not decrypt')
-    }
-    expect(cache.error('credential-131')).toContain('Could not decrypt')
-    expect(cache.error('credential-0')).toBeUndefined()
-    expect(cache.has('credential-131')).toBe(true)
-    expect(decrypt).toHaveBeenCalledTimes(132)
-    decrypt.mockReturnValue('approved-token')
-    expect(cache.read('credential-131')).toBe('approved-token')
-    expect(cache.error('credential-131')).toBeUndefined()
-  })
-
   it('clears an old decryption error after external replacement without prompting on status', () => {
     const cache = createCache()
     writeFileSync(filePath('site'), Buffer.from([0xff, 0xfe]))

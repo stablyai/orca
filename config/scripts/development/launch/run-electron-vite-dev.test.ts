@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, readlinkSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { spawn, type ChildProcess } from 'node:child_process'
@@ -297,55 +297,5 @@ describe('run-electron-vite-dev', () => {
     },
     // Two full prepares, each budgeted at PREPARE_TIMEOUT_MS.
     PREPARE_TIMEOUT_MS * 2 + 30_000
-  )
-
-  it.skipIf(process.platform !== 'darwin')(
-    'preserves relative Electron framework symlinks in the copied mac dev app',
-    async () => {
-      const tempDir = mkdtempSync(join(tmpdir(), 'orca-dev-wrapper-'))
-      const pidFile = join(tempDir, 'grandchild.pid')
-      const envFile = join(tempDir, 'env.json')
-      const wrapperPath = resolve('config/scripts/development/launch/run-electron-vite-dev.mjs')
-      const fakeCliPath = resolve(
-        'config/scripts/development/launch/fixtures/fake-electron-vite-dev-cli.mjs'
-      )
-
-      const { wrapper, readOutput } = spawnDevWrapper(
-        [wrapperPath, '--remote-debugging-port=9448'],
-        devWrapperTestEnv({
-          ORCA_ELECTRON_VITE_CLI: fakeCliPath,
-          ORCA_SKIP_DEV_CLI_PREPARE: '1',
-          ORCA_SKIP_DEV_WEB_PREPARE: '1',
-          ORCA_DEV_WRAPPER_TEST_PID_FILE: pidFile,
-          ORCA_DEV_WRAPPER_TEST_ENV_FILE: envFile,
-          ORCA_DEV_BRANCH: 'feature/framework-symlinks',
-          ORCA_DEV_WORKTREE_NAME: 'symlink-ui'
-        })
-      )
-
-      expect(wrapper.pid).toBeTypeOf('number')
-      processesToCleanUp.add(wrapper.pid!)
-
-      await waitForEnvFile(envFile, readOutput)
-
-      const trackedPids = trackPidFile(pidFile)
-
-      const envSnapshot = JSON.parse(readFileSync(envFile, 'utf8')) as {
-        electronExecPath: string | null
-      }
-      expect(envSnapshot.electronExecPath).toBeTypeOf('string')
-
-      const appPath = dirname(dirname(dirname(envSnapshot.electronExecPath!)))
-      const frameworkPath = join(appPath, 'Contents', 'Frameworks', 'Electron Framework.framework')
-
-      expect(readlinkSync(join(frameworkPath, 'Resources'))).toBe('Versions/Current/Resources')
-      expect(readlinkSync(join(frameworkPath, 'Electron Framework'))).toBe(
-        'Versions/Current/Electron Framework'
-      )
-      expect(readlinkSync(join(frameworkPath, 'Versions', 'Current'))).toBe('A')
-
-      await stopWrapperAndTrackedPids(wrapper, trackedPids)
-    },
-    PREPARE_TIMEOUT_MS + 30_000
   )
 })

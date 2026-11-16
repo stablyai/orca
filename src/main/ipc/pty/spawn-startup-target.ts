@@ -1,16 +1,16 @@
 import {
   isWslShellName,
   type LocalWindowsTerminalRuntimeOptions
-} from '../../../shared/local-windows-terminal-runtime'
+} from '../../../shared/shell/launch/local-windows-terminal-runtime'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/execution-host/project-execution-runtime'
-import type { StartupCwdFallback } from '../../../shared/startup-cwd-fallback'
+import type { StartupCwdFallback } from '../../../shared/shell/launch/startup-cwd-fallback'
 import {
   resolveTerminalStartupCwd,
   type TerminalStartupCwdMissingDirFallback
 } from '../../../shared/shell/launch/terminal-startup-cwd'
 import type { TerminalWorkspaceLaunchScope } from '../../runtime/orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
-import { isWslUncPath, toWindowsWslPath } from '../../../shared/wsl-paths'
-import type { CodexAccountSelectionTarget } from '../../../shared/codex-selection-lane'
+import { isWslUncPath, toWindowsWslPath } from '../../../shared/file-access/wsl-paths'
+import type { CodexAccountSelectionTarget } from '../../../shared/agent-accounts/codex/codex-selection-lane'
 import { resolveWslSessionContext } from '../../daemon/pty-subprocess/wsl-session-context'
 import {
   resolvePlainTerminalWorkspace,

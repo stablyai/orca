@@ -12,7 +12,7 @@ import {
 } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-error'
 import { asRecord } from '../../parsing/session-record-fields'
-import { extractString } from '../../../../shared/trimmed-string'
+import { extractString } from '../../../../shared/text/trimmed-string'
 import { KimiSessionIndexCache } from './session-scanner-kimi-index-cache'
 
 export function resolveKimiSessionsDir(override?: string): string {

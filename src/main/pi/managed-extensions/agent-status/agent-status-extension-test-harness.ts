@@ -11,6 +11,7 @@ export type HookContext = {
   ui?: {
     setEditorText?: (text: string) => void
     notify?: (message: string, level: string) => void
+    setStatus?: (key: string, text: string | undefined) => void
     onTerminalInput?: (handler: (data: string) => { consume?: boolean } | undefined) => () => void
   }
   isIdle?: () => boolean

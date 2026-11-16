@@ -21,7 +21,7 @@ vi.mock('../../filesystem/host-tree-removal', () => ({
   removeHostTree: removeHostTreeMock
 }))
 
-import * as eventLoopYield from '../../../shared/event-loop-yield'
+import * as eventLoopYield from '../../../shared/concurrency/event-loop-yield'
 import {
   cancelPendingHistoryTreeRemovalRetries,
   flushPendingWorktreeHistoryDeletions

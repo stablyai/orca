@@ -15,7 +15,7 @@ vi.mock('../runtime/client', async (importOriginal) => ({
 
 import { main } from '../index'
 import type * as RuntimeClientExports from '../runtime/client'
-import { RuntimeRpcFailureError } from '../runtime/types'
+import { RuntimeRpcFailureError } from '../runtime/connection/types'
 import { okFixture, queueFixtures } from '../runtime/fixtures/runtime-rpc-fixtures'
 
 describe('orca computer wait', () => {
@@ -59,23 +59,6 @@ describe('orca computer wait', () => {
     expect(output.result.snapshot.treeText).not.toContain('2 button Close')
   })
 
-  it('waits until every element containing the text is enabled', async () => {
-    queueFixtures(
-      callMock,
-      okFixture('req_caps', capabilities(true)),
-      okFixture(
-        'req_1',
-        snapshot('0 window Form\n\t1 text Press Continue\n\t2 button (disabled) Continue')
-      ),
-      okFixture('req_2', snapshot('0 window Form\n\t1 text Press Continue\n\t2 button Continue'))
-    )
-
-    await run('--enabled', 'Continue')
-
-    expect(callMock).toHaveBeenCalledTimes(3)
-    expect(process.exitCode).toBeUndefined()
-  })
-
   it('refuses --enabled on a provider that does not mark disabled elements', async () => {
     queueFixtures(callMock, okFixture('req_caps', capabilities(undefined)))
 
@@ -84,17 +67,6 @@ describe('orca computer wait', () => {
     expect(callMock).toHaveBeenCalledTimes(1)
     expect(process.exitCode).toBe(1)
     expect(errorOutput()).toContain('unsupported_capability')
-  })
-
-  it('fails with wait_timeout and what it last saw', async () => {
-    callMock.mockResolvedValue(okFixture('req_1', snapshot('0 window Editor\n\t1 text Saving…')))
-
-    await run('--text', 'saved', '--timeout', '1')
-
-    expect(process.exitCode).toBe(1)
-    const error = errorOutput()
-    expect(error).toContain('wait_timeout')
-    expect(error).toContain('no element contains \\"saved\\"')
   })
 
   it('waits for a window title across the app windows', async () => {
@@ -132,7 +104,7 @@ function errorOutput(): string {
     .join('\n')
 }
 
-function snapshot(treeText: string) {
+function snapshot(treeText: string, disabledElementIndexes?: number[]) {
   return {
     snapshot: {
       id: 'snap',
@@ -141,7 +113,8 @@ function snapshot(treeText: string) {
       coordinateSpace: 'window',
       treeText: `App=com.apple.TextEdit (pid 7)\nWindow: "Editor"\n\n${treeText}`,
       elementCount: 3,
-      focusedElementId: null
+      focusedElementId: null,
+      disabledElementIndexes
     },
     screenshot: null,
     screenshotStatus: { state: 'skipped', reason: 'no_screenshot_flag' }

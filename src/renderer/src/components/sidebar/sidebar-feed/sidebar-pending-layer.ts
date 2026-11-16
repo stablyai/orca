@@ -1,18 +1,18 @@
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../shared/sidebar-inputs-switch'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
 import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
-import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { getFolderWorkspaceWorktreeHostId } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
-import type { Repo } from '../../../../../shared/repo-types'
-import type { SidebarFeedDomains } from '../../../../../shared/sidebar-list/sidebar-feed-domains'
+import type { Repo } from '../../../../../shared/repository/repo-types'
+import type { SidebarFeedDomains } from '../../../../../shared/sidebar-list/feed/sidebar-feed-domains'
 import {
   buildPairedServerRows,
   type PairedServerWorkspaceRow
-} from '../../../../../shared/sidebar-list/paired-server-rows'
+} from '../../../../../shared/sidebar-list/feed-facts/paired-server-rows'
 import {
   buildWorkspaceRows,
   type WorkspaceRow
-} from '../../../../../shared/sidebar-list/workspace-rows'
+} from '../../../../../shared/sidebar-list/feed-facts/workspace-rows'
 import type { WorktreeLineage } from '../../../../../shared/worktree/lineage-types'
 import type { WorktreeMeta } from '../../../../../shared/worktree/meta-types'
 import type { Worktree } from '../../../../../shared/worktree/types'

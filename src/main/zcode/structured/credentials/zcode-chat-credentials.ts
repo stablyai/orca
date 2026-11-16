@@ -3,7 +3,7 @@ import {
   readZcodeV2PlanCredential,
   localZcodeCredentialHost
 } from '../../zcode-v2-plan-credentials'
-import type { ZcodePlanSite } from '../../../../shared/zcode-plan-sites'
+import type { ZcodePlanSite } from '../../../../shared/agent-accounts/usage-credentials/zcode-plan-sites'
 
 // Headless zcode app-servers have no account models until their host pushes an entitled account
 // snapshot and answers runtime-header asks with real credentials (the desktop host's own job).

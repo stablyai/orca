@@ -1,4 +1,4 @@
-import type { MemorySnapshot } from '../../shared/process-stats-types'
+import type { MemorySnapshot } from '../../shared/diagnostics/process-stats-types'
 import type { CommandHandler } from '../dispatch/dispatch'
 import { formatMemorySnapshot } from './memory-snapshot-format'
 import { printResult } from '../output/command-result-output'

@@ -1,4 +1,5 @@
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import { publishPresentationRecords } from './presentation-record-drafts'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
   WebSessionTabsBatchContext,
   WebSessionTabsSnapshotApplyOptions,
@@ -58,7 +59,6 @@ export function applyWebSessionTabsSnapshots(
   const nextState = { ...state }
   const batchContext: WebSessionTabsBatchContext = {
     changedAgentPaneKeys,
-    agentPaneKeysByTabId: null,
     changedRecords: new Set(),
     openFilesIndex: null
   }
@@ -83,6 +83,7 @@ export function applyWebSessionTabsSnapshots(
   for (const recordKey of batchContext.changedRecords) {
     mutableMergedPatch[recordKey] = mutableNextState[recordKey]
   }
+  publishPresentationRecords(batchContext, mergedPatch)
   return Object.keys(mergedPatch).length === 0 ? state : mergedPatch
 }
 

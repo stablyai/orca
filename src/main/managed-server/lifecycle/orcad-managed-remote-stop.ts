@@ -30,7 +30,7 @@ import {
   type OrcadManagedStopCompletion,
   type OrcadManagedStopContext,
   type OrcadManagedStopRequest
-} from '../../../shared/orcad-stop-request'
+} from '../../../shared/remote-runtime/orcad-lifecycle/orcad-stop-request'
 
 const LOCK_RECORD_MAX_BYTES = 64 * 1024
 

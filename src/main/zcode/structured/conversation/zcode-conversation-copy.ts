@@ -1,8 +1,6 @@
 import { homedir } from 'node:os'
-import type {
-  AgentSessionRewindFork,
-  AgentSessionRewindReason
-} from '../../../../shared/agent-session/lifecycle/agent-session-rewind'
+import type { AgentSessionRewindFork } from '../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
+import type { AgentSessionRewindReason } from '../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind-reasons'
 import type { AiVaultConversationCopy } from '../../../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import { spawnZcodeAppServerConnection } from '../../app-server/zcode-app-server-connection'
 import type { ZcodeAppServerConnection } from '../../app-server/zcode-app-server-connection-types'

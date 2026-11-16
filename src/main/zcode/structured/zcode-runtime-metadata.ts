@@ -1,6 +1,6 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { agentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
+import { agentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { supportsSupervisedProviderChildLocation } from '../../provider-process/supervised-provider-child-location'
 import { zcodeModelCatalogDiscovery } from '../../runtime/agent-session/model-catalog/structured-agent-model-catalog-discovery'
 import type { StructuredAgentRuntimeMetadata } from '../../runtime/agent-session/installation/structured-agent-runtime-registration-types'

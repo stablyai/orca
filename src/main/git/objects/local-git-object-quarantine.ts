@@ -1,12 +1,12 @@
 import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
-import type { GitAdmissionTier } from '../../../shared/rpc-contract/git-admission-tier-params'
+import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
 import {
   createGitObjectQuarantine,
   inheritedObjectStore,
   pathApiForGitPath,
   type GitObjectsDirectory
 } from '../../../shared/git/objects/git-object-quarantine'
-import { toLinuxPath, toWindowsWslPath } from '../../../shared/wsl-paths'
+import { toLinuxPath, toWindowsWslPath } from '../../../shared/file-access/wsl-paths'
 import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
 import { usesHostGitForWslLinkedWorktree } from '../command-runner/host-routing/wsl-linked-worktree-git-routing'
 import { readRepoCommonDirFromGit } from '../worktrees/catalog/worktree-list-reader'

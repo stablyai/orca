@@ -1,10 +1,10 @@
 import type { AgentType } from '../agent-status/contracts/agent-status-types'
-import type { SkillDiscoverySource } from '../skills'
+import type { SkillDiscoverySource } from '../skills/discovery/skills'
 import {
   getAgentSlashCommands,
   type NativeChatCommandReply,
   type SlashCommandSuggestion
-} from './input/native-chat-slash-commands'
+} from './input/commands/native-chat-slash-commands'
 
 export type NativeChatAgentProfile = {
   skillPrefix: '$' | '/'
@@ -52,6 +52,12 @@ const NATIVE_CHAT_AGENT_PROFILES: Partial<Record<AgentType, NativeChatAgentProfi
   },
   opencode: OPENCODE_PROFILE,
   opencode2: OPENCODE_PROFILE,
+  // ACP reports built-in commands but no skills; the server never reads Gemini CLI's ~/.gemini/skills.
+  antigravity: {
+    skillPrefix: '/',
+    skillSourceOwner: 'antigravity',
+    keepsScannedSkills: true
+  },
   grok: {
     skillPrefix: '/',
     skillSourceOwner: 'grok'

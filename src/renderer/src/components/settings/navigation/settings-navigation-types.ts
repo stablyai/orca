@@ -2,7 +2,7 @@ import type { ComponentType } from 'react'
 import type { LucideProps } from 'lucide-react'
 import type { SettingsSearchEntry } from '@/components/settings/search/settings-search'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 export type SettingsNavIcon = ComponentType<LucideProps>
 export type SettingsNavInstallStatus =
@@ -15,6 +15,7 @@ export type SettingsNavInstallStatus =
 
 const SETTINGS_NAV_TARGETS = [
   'general',
+  'workspace-cleanup',
   'integrations',
   'accounts',
   'browser',

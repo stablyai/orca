@@ -1,5 +1,5 @@
-import type { AntigravityAccountState } from '../../shared/antigravity-account-types'
-import type { ManagedDataAccountsState } from '../../shared/managed-account-types'
+import type { AntigravityAccountState } from '../../shared/agent-accounts/antigravity/antigravity-account-types'
+import type { ManagedDataAccountsState } from '../../shared/agent-accounts/managed-account-types'
 
 type AccountsBlock = {
   accounts: readonly { id: string; email: string; needsSignIn?: true }[]

@@ -1,30 +1,18 @@
-import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import type { JournalLoad } from '../../native-chat/agent-session-journal/replay/journal-open'
-import { isProviderTimelineTurnInNamespace } from '../../native-chat/agent-session-timeline/provider-timeline-identity'
+/** Saved facts a resume decision reads by name, without opening or restoring the chat's journal. */
+export type AcpSavedSessionReads = {
+  /** Whether any saved turn belongs to the provider session with this native id. */
+  hasProviderTurn(sessionId: string, nativeId: string): Promise<boolean>
+}
 
-/** Missing journals count as empty; read errors or damaged/newer journals cannot prove no exchange. */
-export function nothingExchangedOn(
-  readJournal: (sessionId: string) => JournalLoad | null,
+/** Unreadable journals cannot prove no exchange. */
+export async function nothingExchangedOn(
+  reads: AcpSavedSessionReads,
   sessionId: string,
   nativeId: string
-): boolean {
-  let load: JournalLoad | null
+): Promise<boolean> {
   try {
-    load = readJournal(sessionId)
+    return !(await reads.hasProviderTurn(sessionId, nativeId))
   } catch {
     return false
   }
-  if (!load) {
-    return true
-  }
-  if (load.damage || load.newer) {
-    return false
-  }
-  for (const item of load.state.items.values()) {
-    const turn = readAgentJournalTurn(item.body)
-    if (turn && isProviderTimelineTurnInNamespace(turn.turnId, nativeId)) {
-      return false
-    }
-  }
-  return true
 }

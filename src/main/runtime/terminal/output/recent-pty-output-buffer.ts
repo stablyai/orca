@@ -1,4 +1,4 @@
-import { ownRetainedString } from '../../../../shared/own-retained-string'
+import { ownRetainedString } from '../../../../shared/text/own-retained-string'
 
 export const RECENT_PTY_OUTPUT_LIMIT = 64 * 1024
 

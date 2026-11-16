@@ -4,7 +4,7 @@ import {
   linearCommentWrittenSchema,
   taskCommentWrittenSchema
 } from './task-item-comment-reply-schema'
-import { githubPrMutationConfirmationSchema as reviewThreadResolvedSchema } from '../../source-control/review/github-pr-mutation-reply-schema'
+import { githubPrMutationConfirmationSchema as reviewThreadResolvedSchema } from '../../source-control/review/github-operations/github-pr-mutation-reply-schema'
 
 // Accepted comment envelopes may fail in-band; callers keep provider-specific fallback copy.
 

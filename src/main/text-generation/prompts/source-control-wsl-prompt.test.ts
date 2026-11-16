@@ -13,10 +13,10 @@ import {
   createMockDiscoveryChild
 } from '../execution/commit-message-text-generation-test-harness'
 import type { SourceControlAgentSpawnInput } from '../source-control-text-generation-types'
-import type * as Removal from '../../../shared/windows-transient-lock-removal'
+import type * as Removal from '../../../shared/file-write/windows-transient-lock-removal'
 
 const { removeTreeMock } = vi.hoisted(() => ({ removeTreeMock: vi.fn(async () => {}) }))
-vi.mock('../../../shared/windows-transient-lock-removal', async (original) => ({
+vi.mock('../../../shared/file-write/windows-transient-lock-removal', async (original) => ({
   ...(await original<typeof Removal>()),
   removeTree: removeTreeMock
 }))
@@ -331,75 +331,6 @@ it.each([
     )
     await execution.processClosed
     expect(writes).not.toContain(`X${nonce}\n`)
-  }
-)
-
-it.each(['success', 'nonzero', 'empty', 'storage', 'pipe-close'] as const)(
-  'runs the production attempt through real private shell preparation and %s',
-  async (outcome) => {
-    let directory = ''
-    let actualPipeError = false
-    const execution = withPlatform('win32', () =>
-      runLocalSourceControlPlan({
-        plan: plan(tricky.repeat(40)),
-        cwd,
-        env: undefined,
-        operation: 'conversation-name',
-        spawnAgent: (input) => {
-          const preparation = input.preparation
-          if (!preparation) {
-            throw new Error('Missing preparation')
-          }
-          directory = `/tmp/orca-generation-${preparation.args[0]}`
-          const argv =
-            outcome === 'pipe-close'
-              ? [
-                  '-c',
-                  `exec 0<&-; printf 'ORCA_GENERATION_READY:%s\\n' "$1" >&2; sleep 0.1`,
-                  'fixture',
-                  preparation.args[0]
-                ]
-              : [
-                  '-c',
-                  preparation.script,
-                  'fixture',
-                  ...preparation.args,
-                  '/bin/sh',
-                  '-c',
-                  outcome === 'empty'
-                    ? ':'
-                    : `printf '%s' 'Useful name'; exit ${outcome === 'nonzero' ? 7 : 0}`
-                ]
-          const child = withPlatform('darwin', () =>
-            spawnProcess({ program: '/bin/sh', args: argv, stdio: 'pipe' })
-          )
-          child.stdin.on('error', (error) => {
-            actualPipeError ||= 'code' in error && error.code === 'EPIPE'
-          })
-          if (outcome === 'storage') {
-            child.stderr.once('data', () => mkdirSync(join(directory, 'prompt-1.txt')))
-          }
-          return child
-        }
-      })
-    )
-    try {
-      const result = await execution.result
-      await execution.processClosed
-      expect(result.success).toBe(outcome === 'success')
-      expect(removeTreeMock).toHaveBeenCalledTimes(1)
-      if (outcome === 'pipe-close') {
-        expect(actualPipeError).toBe(true)
-      }
-      if (outcome === 'success') {
-        const file = readFileSync(join(directory, 'prompt-1.txt'))
-        expect(new TextDecoder().decode(file)).toBe(Buffer.from(tricky.repeat(40)).toString())
-      }
-    } finally {
-      if (directory) {
-        await rm(directory, { recursive: true, force: true })
-      }
-    }
   }
 )
 

@@ -5,7 +5,7 @@ import type {
   BrowserTabShowResult,
   BrowserTabSwitchResult
 } from '../../../../shared/browser/runtime/runtime-browser-contracts'
-import type { BrowserCertificateProceedResult } from '../../../../shared/browser-workspace-types'
+import type { BrowserCertificateProceedResult } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   browserCertificateTrustController,
   browserManager
@@ -14,6 +14,7 @@ import { BrowserError } from '../../../browser/browser-error'
 import { publishSwitchedBrowserSessionTab } from './browser-tab-create-publication'
 import type {
   BrowserCommandTargetParams,
+  BrowserAnswerAdmission,
   RuntimeBrowserCommandHost
 } from '../commands/browser-command-contracts'
 import type { RuntimeBrowserCommandTargets } from '../commands/browser-command-targets'
@@ -50,23 +51,15 @@ export class RuntimeBrowserTabQueries {
       ? (await this.host.resolveBrowserWorkspace(params.worktree)).id
       : undefined
     const clientPages = this.host.getRuntimeBrowserPageRegistry().listPages(workspaceId)
-    let bridgeWorktreeId = workspaceId
-    if (this.host.getAgentBrowserBridge()) {
-      try {
-        bridgeWorktreeId = await this.targets.resolveBrowserWorktreeId(params.worktree)
-      } catch (error) {
-        if (clientPages.length === 0) {
-          throw error
-        }
-      }
-    }
-    return { tabs: this.catalog.listLogicalBrowserTabs(bridgeWorktreeId, clientPages) }
+    return { tabs: this.catalog.listLogicalBrowserTabs(workspaceId, clientPages) }
   }
 
   async browserProceedCertificate(
-    params: { challengeId: string } & BrowserCommandTargetParams
+    params: { challengeId: string } & BrowserCommandTargetParams,
+    admit?: BrowserAnswerAdmission
   ): Promise<BrowserCertificateProceedResult> {
-    const target = await this.targets.resolveBrowserCommandTarget(params)
+    const resolved = await this.targets.resolveBrowserCommandTarget(params)
+    const target = typeof admit === 'function' ? admit(resolved) : resolved
     if (!target.browserPageId) {
       return { ok: false, reason: 'missing' }
     }
@@ -150,7 +143,7 @@ export class RuntimeBrowserTabQueries {
       this.host
         .getRuntimeBrowserPageRegistry()
         .activatePage(clientPage.browserPageId, clientPage.placement)
-      publishSwitchedBrowserSessionTab(this.host, {
+      await publishSwitchedBrowserSessionTab(this.host, {
         placementKind: 'client',
         browserPageId: clientPage.browserPageId,
         worktreeId: clientPage.workspaceId,
@@ -166,14 +159,11 @@ export class RuntimeBrowserTabQueries {
           ? (await this.host.resolveBrowserWorkspace(params.worktree)).id
           : undefined
     const result = await bridge.tabSwitch(undefined, worktreeId, selected.browserPageId)
-    this.host.getRuntimeBrowserPageRegistry().deactivateGlobal()
-    if (worktreeId) {
-      this.host.getRuntimeBrowserPageRegistry().deactivateWorkspace(worktreeId)
-    }
+    this.host.getRuntimeBrowserPageRegistry().yieldSelection(worktreeId)
     // Scope focus to the owning worktree; never switch the user's workspace.
     const focusWorktreeId =
       worktreeId ?? browserManager.getWorktreeIdForTab(result.browserPageId) ?? undefined
-    publishSwitchedBrowserSessionTab(this.host, {
+    await publishSwitchedBrowserSessionTab(this.host, {
       placementKind: 'bridge',
       browserPageId: result.browserPageId,
       worktreeId: focusWorktreeId,

@@ -1,4 +1,4 @@
-import type { TaskPageGitHubListStateModel } from './use-task-page-github-list-state'
+import type { TaskPageGitHubListStateModel } from './listing/use-task-page-github-list-state'
 import { useAppStore } from '@/store/index'
 import { getWorkItemRepo } from '@/lib/work-items/work-item-repo-row'
 import { githubTaskBinding } from '@/lib/work-items/github/github-task-observation'
@@ -6,11 +6,11 @@ import { useState, useMemo, useLayoutEffect, useCallback, useEffect } from 'reac
 import type { ItemDialogTab } from '@/components/github/github-work-item-identity'
 import { stripRepoQualifiers } from '../../../../../shared/work-items/task-query'
 import { createTaskPageDialogWorkItemReader } from '@/components/task-page/task-page-dialog-work-item'
-import { useTaskPageWorkItemsCacheSelection } from './use-task-page-work-items-cache-selection'
+import { useTaskPageWorkItemsCacheSelection } from './cache/use-task-page-work-items-cache-selection'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import type { GitLabWorkItem } from '../../../../../shared/gitlab-types'
 import { getTaskPageRepoSourceContext } from '../../../lib/work-items/task-repo-source-context'
-import { startGitHubListScrollRestore } from './task-page-github-list-scroll-restore'
+import { startGitHubListScrollRestore } from './listing/task-page-github-list-scroll-restore'
 
 function getTaskPageScrollTop(
   scrollRef: React.RefObject<HTMLElement | null>,

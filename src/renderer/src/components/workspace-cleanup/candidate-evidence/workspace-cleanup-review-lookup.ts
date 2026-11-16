@@ -8,10 +8,10 @@ import type {
   HostedReviewInfo,
   HostedReviewProvider
 } from '../../../../../shared/source-control/hosted-review/hosted-review-contracts'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import type { WorkspaceCleanupCandidate } from '../../../../../shared/workspace-cleanup/workspace-cleanup'
-import { isGitHubPRSuppressed } from '../../../../../shared/worktree/github-pr-suppression'
+import { isGitHubPRSuppressed } from '../../../../../shared/worktree/hosted-review/github-pr-suppression'
 import './workspace-cleanup-host-indexes'
 import { getWorkspaceCleanupCandidateHostId } from '../../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'

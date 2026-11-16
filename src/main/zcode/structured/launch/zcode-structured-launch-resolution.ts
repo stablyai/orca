@@ -1,6 +1,6 @@
-import { agentSessionProviderHandleChainHead } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
-import { agentSessionProviderHandleKey } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { pendingAgentSessionRewindFork } from '../../../../shared/agent-session/lifecycle/agent-session-rewind'
+import { agentSessionProviderHandleChainHead } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
+import { agentSessionProviderHandleKey } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
+import { pendingAgentSessionRewindFork } from '../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 import {
   resolveStructuredAgentCommand,
   type StructuredAgentCommand

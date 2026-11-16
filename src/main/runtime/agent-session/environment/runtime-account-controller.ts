@@ -1,5 +1,5 @@
 import type { ClaudeAccountService } from '../../../claude-accounts/service'
-import { hasAppEnvironment } from '../../../../shared/app-environment'
+import { hasAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
 import { getManagedDataAccountService } from '../../../managed-data-accounts/service'
 import type {
   ClaudeAccountSignIn,
@@ -8,21 +8,21 @@ import type {
   CodexRateLimitAccountsState,
   ManagedDataAccountProvider,
   ManagedDataAccountsState
-} from '../../../../shared/managed-account-types'
+} from '../../../../shared/agent-accounts/managed-account-types'
 import type { CodexAccountService } from '../../../codex-accounts/service'
 import type { CodexResetCreditRejectedBeforeProviderReason } from '../../../codex-accounts/account-management/codex-account-service-types'
-import type { CodexAccountSelectionTarget } from '../../../../shared/codex-selection-lane'
+import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
 import type { RateLimitService } from '../../../rate-limits/service/rate-limit-service'
 import type {
   HostAccountSignInChannel,
   HostAccountSignInProvider,
   HostAccountSignInStatus
-} from '../../../../shared/host-account-sign-in-types'
+} from '../../../../shared/agent-accounts/host-account-sign-in-types'
 import type {
   CodexRateLimitResetOutcome,
   RateLimitState
-} from '../../../../shared/rate-limit-types'
-import type { CodexResetCreditExpectedScope } from '../../../../shared/codex-reset-credit-scope'
+} from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { CodexResetCreditExpectedScope } from '../../../../shared/agent-accounts/codex/codex-reset-credit-scope'
 import type { CommitMessageAgentEnvironmentResolvers } from '../../../text-generation/execution/commit-message-agent-environment'
 import {
   getClaudeSelectionTargetForAccount,

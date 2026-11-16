@@ -1,7 +1,8 @@
+import type { WorktreeLineageSource } from '../../../../../../shared/sidebar-list/worktree-lineage-range'
 import type { DraggedWorktreeCopies } from '../../worktree-list/drag/dragged-worktree-copies'
 import type React from 'react'
 
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { WorkspaceStatus, Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeCardPrDisplay } from '../review/worktree-card-pr-display'
 import { translate } from '@/i18n/i18n'
@@ -37,9 +38,11 @@ export type WorktreeCardProps = {
   lineageChildCount?: number
   lineageChildWorktreeIds?: readonly string[]
   lineageCollapsed?: boolean
+  /** Workspaces nested under this one; the 2.0 card rolls up their latest time and, when collapsed, their exceptions. */
+  lineageDescendantIdentities?: WorktreeLineageSource
   lineageChildren?: React.ReactNode
   lineageChildrenStyle?: React.CSSProperties
-  onLineageToggle?: (event: React.MouseEvent<HTMLButtonElement>) => void
+  onLineageToggle?: (event: React.MouseEvent<HTMLElement>) => void
   isLineageDropTarget?: boolean
   onActivate?: () => void
   onWorktreeCardClick?: () => void

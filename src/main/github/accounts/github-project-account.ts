@@ -1,10 +1,10 @@
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 import { getConnectionExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import { normalizeGhAccountBinding } from '../../../shared/github/accounts/account-binding'
-import { isGitRepoKind } from '../../../shared/repo-kind'
+import { isGitRepoKind } from '../../../shared/repository/repo-kind'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
-import { parseWslUncPath } from '../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 import {
   resolveLocalProjectRuntimesForRepos,
   type ProjectRuntimeResolutionStore
@@ -86,4 +86,17 @@ export function resolveGitHubProjectAccount(context: GitHubRepoContext) {
   return matches.length === 1
     ? { ghAccount: normalizeGhAccountBinding(matches[0].ghAccount) ?? undefined }
     : null
+}
+
+/** Policy observes project ownership changes without resolving every workspace's account. */
+export function githubPRPolicyProjects(): { source: object | null; selection: string } {
+  return {
+    source,
+    selection: JSON.stringify(
+      source?.store
+        .getRepos()
+        .map((repo) => [repo.id, repo.path, getStoredRepoExecutionHostId(repo), repo.ghAccount]) ??
+        []
+    )
+  }
 }

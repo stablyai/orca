@@ -4,7 +4,7 @@ import {
   type StructuredAgentCommandSettings,
   type StructuredAgentResolutionOperation
 } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
-import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
+import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { isMissingProviderExecutable } from '../../../provider-process/provider-executable-missing'
 import { isAgentSessionPreSpawnError } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import { AGENT_MODEL_CATALOG_PROBE_TIMEOUT_MS } from '../../../native-chat/agent-model-catalog/agent-model-catalog-probe-runner'

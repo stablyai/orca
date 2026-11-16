@@ -2,7 +2,7 @@ import type {
   NestedRepoScanResult,
   ProjectGroup,
   ProjectGroupImportMode
-} from '../../shared/project-group-types'
+} from '../../shared/project/groups/project-group-types'
 import {
   getRuntimePathBasename,
   isPathInsideOrEqual,
