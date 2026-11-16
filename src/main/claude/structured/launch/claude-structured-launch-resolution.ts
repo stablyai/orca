@@ -26,6 +26,8 @@ import {
   type ClaudeEnvDeps
 } from './claude-structured-child-env'
 import { claudeStructuredLaunchArgs } from './claude-structured-launch-args'
+import { claudeInChromeDefaultArgs } from '../../configuration/claude-in-chrome-default'
+import { claudeConfigDirEnvPatch } from './claude-config-dir-pin'
 import type {
   ClaudeCliFlagCheck,
   ClaudeCliFlagSupport
@@ -268,6 +270,11 @@ export function claudeStructuredLaunchPart(
     )
     const accountRecipe = await prepareClaudeLaunchAccount(router, env, accountHome.path)
     const launchHome = accountRecipe.home
+    // Read the config of the account directory the spawn pins, as session acquisition does.
+    const chromeArgs = await claudeInChromeDefaultArgs(
+      { ...env, ...claudeConfigDirEnvPatch(launchHome, { env }) },
+      configured.extraArgs
+    )
     const resumesTranscript = resumedWithoutRouter ?? (await resumes(launchHome))
     if (fork?.throughEntryId && !resumesTranscript) {
       // Fork sources must pass the same account-history check as resumes.
@@ -296,7 +303,8 @@ export function claudeStructuredLaunchPart(
             ...configured.extraArgs,
             ...CLAUDE_STRUCTURED_BASE_OPTIONS.extraArgs,
             ...permission.extraArgs,
-            ...thinkingDisplayArgs
+            ...thinkingDisplayArgs,
+            ...chromeArgs
           },
           // Claude owns where a resumed conversation continues; the stored leaf is Orca's bookkeeping.
           ...(resumesTranscript
