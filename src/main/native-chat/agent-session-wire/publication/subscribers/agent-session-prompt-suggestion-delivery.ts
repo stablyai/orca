@@ -22,7 +22,8 @@ export class AgentSessionPromptSuggestionDelivery {
   constructor(private readonly port: PromptSuggestionDeliveryPort) {}
 
   publish(sessionId: string, suggestion: AgentSessionPromptSuggestion | null): void {
-    if ((this.bySession.get(sessionId)?.id ?? null) === (suggestion?.id ?? null)) {
+    // A clear always goes out: a reader may hold one this map already evicted.
+    if (suggestion && this.bySession.get(sessionId)?.id === suggestion.id) {
       return
     }
     rememberLatestPerSession(this.bySession, sessionId, suggestion)
