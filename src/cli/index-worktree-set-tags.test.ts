@@ -42,7 +42,7 @@ vi.mock('child_process', async () => {
 
 import { main } from './index'
 import { buildWorktree, okFixture, queueFixtures } from './runtime/fixtures/runtime-rpc-fixtures'
-import { WORKTREE_TAGS_RUNTIME_CAPABILITY } from '../shared/remote-runtime/protocol/protocol-version'
+import { WORKTREE_TAGS_RUNTIME_CAPABILITY } from '../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import { useWorktreeAwarenessEnvironment } from './index-test-harness'
 
 describe('orca worktree set tags', () => {

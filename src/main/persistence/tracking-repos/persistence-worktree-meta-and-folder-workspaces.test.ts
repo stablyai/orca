@@ -14,6 +14,7 @@ import { tmpdir } from 'node:os'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
+import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),
@@ -82,7 +83,6 @@ describe('Store', () => {
       worktreeMeta: { wt1: expect.not.objectContaining({ tags: expect.anything() }) }
     })
   })
-
 
   it('drops corrupt worktreeMeta entries while still normalizing valid siblings', async () => {
     writeDataFile({

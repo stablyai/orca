@@ -1,6 +1,6 @@
 import { normalizeWorktreeTags } from '../../shared/worktree/metadata/worktree-tags'
 import { getRepeatedStringFlag, rejectValuelessFlag } from '../arguments/flags'
-import { WORKTREE_TAGS_RUNTIME_CAPABILITY } from '../../shared/remote-runtime/protocol/protocol-version'
+import { WORKTREE_TAGS_RUNTIME_CAPABILITY } from '../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RuntimeClient } from '../runtime/client'
 import { RuntimeClientError } from '../runtime/connection/types'

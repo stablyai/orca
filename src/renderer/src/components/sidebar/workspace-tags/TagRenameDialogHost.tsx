@@ -1,5 +1,5 @@
 import React, { useSyncExternalStore } from 'react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { ProjectGroupNameDialog } from '../worktree-list/rows/ProjectGroupNameDialog'
 import { useWorkspaceTagCommands } from './use-workspace-tag-commands'
 import { stopRepoHeaderMenuEvent } from '../worktree-list/rows/header-event-guards'
@@ -25,6 +25,7 @@ export function openTagRenameDialog(tag: string): void {
 }
 
 export function TagRenameDialogHost(): React.JSX.Element {
+  const t = useTranslate()
   const tag = useSyncExternalStore(
     subscribe,
     () => renamingTag,
@@ -42,14 +43,14 @@ export function TagRenameDialogHost(): React.JSX.Element {
     >
       <ProjectGroupNameDialog
         open={tag !== null}
-        title={translate('auto.components.sidebar.tagHeader.renameTitle', 'Rename Tag')}
-        description={translate(
+        title={t('auto.components.sidebar.tagHeader.renameTitle', 'Rename Tag')}
+        description={t(
           'auto.components.sidebar.tagHeader.renameDescription',
           'Renames the tag on every workspace that has it. Using an existing name merges the two tags.'
         )}
         initialName={tag ?? ''}
-        confirmLabel={translate('auto.components.sidebar.tagHeader.renameConfirm', 'Rename')}
-        nameLabel={translate('auto.components.sidebar.tagHeader.nameLabel', 'Tag Name')}
+        confirmLabel={t('auto.components.sidebar.tagHeader.renameConfirm', 'Rename')}
+        nameLabel={t('auto.components.sidebar.tagHeader.nameLabel', 'Tag Name')}
         onOpenChange={(open) => {
           if (!open) {
             setRenamingTag(null)
