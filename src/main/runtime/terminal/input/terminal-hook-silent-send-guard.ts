@@ -13,7 +13,7 @@ export abstract class OrcaRuntimeWithHookSilentSendGuard extends OrcaRuntimeWith
     const row = selectLatestAgentStatusRow({
       handles: new Set([handle, ...this.getExistingTerminalHandlesForPtyId(ptyId)]),
       paneKey,
-      hookRows: paneKey ? (this.publicPaneStatusFn?.(paneKey) ?? []) : []
+      hookRows: this.publicPaneStatusFn?.(paneKey ?? '', handle) ?? []
     })
     // Every identity counts: launch identity can outlive its agent, and a wrapper such as node hides the foreground one.
     return (

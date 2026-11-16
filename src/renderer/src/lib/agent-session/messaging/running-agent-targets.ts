@@ -4,6 +4,7 @@ import type {
   AgentType
 } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
+import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { makePaneKey, parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { structuredAgentSessionPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { isStructuredTab } from '../../../../../shared/agent-session/view/structured-agent-session-tab'
@@ -202,6 +203,11 @@ function resolveLeafTitle(
 
 const NO_GUARDED_HOSTS: ReadonlySet<string> = new Set()
 
+/** launchAgent names the tab's original PTY locally; a paired tab's ptyId follows its active pane, so any pane may be the launched one. */
+export function launchAgentMayOwnPane(tab: Pick<TerminalTab, 'ptyId'>, ptyId: string): boolean {
+  return ptyId === tab.ptyId || isRemoteRuntimePtyId(ptyId)
+}
+
 /** Why a pane that may run an agent whose hooks report working through approval menus can't take a paste and Enter now. */
 export function hookSilentAgentSendRefusal(
   state: RunningAgentTargetState,
@@ -210,9 +216,9 @@ export function hookSilentAgentSendRefusal(
   entry: Pick<AgentStatusEntry, 'state' | 'agentType'> | null | undefined,
   leafTitle: string | null
 ): string | undefined {
-  // Every identity counts: a row another agent left behind can't vouch for the one running now. launchAgent names only the tab's original PTY.
+  // Every identity counts: a row another agent left behind can't vouch for the one running now.
   const sendState = hookSilentPaneSendState(entry, [
-    ptyId === tab.ptyId ? tab.launchAgent : null,
+    launchAgentMayOwnPane(tab, ptyId) ? tab.launchAgent : null,
     leafTitle === null ? null : resolveTerminalTitleAgentType(leafTitle)
   ])
   if (sendState === 'none') {
@@ -237,7 +243,8 @@ export function terminalPaneSendRefusal(
   leafId: string
 ): string | undefined {
   const tab = state.tabsByWorktree[worktreeId]?.find((candidate) => candidate.id === tabId)
-  const ptyId = state.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId?.[leafId]
+  // A leaf whose binding hasn't arrived yet is checked against the tab's PTY rather than skipped.
+  const ptyId = state.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId?.[leafId] ?? tab?.ptyId
   if (!tab || !ptyId) {
     return undefined
   }
