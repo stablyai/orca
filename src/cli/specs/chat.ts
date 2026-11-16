@@ -23,7 +23,7 @@ export const CHAT_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'Reads the chat journal as transcript lines: user and assistant messages, tool calls with state and output heads, diffs, status rows, and turn lifecycle.',
       '--session takes the chat session id `orca agent launch` or `orca chat list` prints; a structured paneKey resolves too. Run inside a chat, it defaults to that chat; with --environment it is required.',
-      "Default --direction tail returns the newest page. --direction before|after requires --cursor from an earlier read's footer. While hasNewer is true, continue with window.nextCursor. Poll with liveCursor only after hasNewer is false, because liveCursor skips rows that a limited after page has not returned. On a cursor reset the reply carries reset plus a bounded tail.",
+      "Default --direction tail returns the newest page. --direction before|after requires --cursor from an earlier read's footer. For after pages, continue with window.nextCursor while hasNewer is true; for before pages, while hasOlder is true. Poll with liveCursor only after hasNewer is false, because liveCursor skips rows that a limited after page has not returned. On a cursor reset the reply carries reset plus a bounded tail.",
       'Rows a subagent produced are prefixed [agentId]; [truncated] marks cut tool output and [shortened] a message the host trimmed for transport. Use `orca search` to locate a session by content, then read it here.'
     ],
     examples: [
