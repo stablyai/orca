@@ -49,6 +49,12 @@ final class KeyboardContentionTests: XCTestCase {
         // A key press that came after the helper's own input is the user's.
         afterOwnKeys.secondsSinceUserKeyDown = 0.1
         XCTAssertEqual(refusal(afterOwnKeys), .userTyping(secondsAgo: 0.1))
+        // A key press well before the helper's own input is the user's too, while it is still recent.
+        afterOwnKeys.secondsSinceUserKeyDown = 1.3
+        XCTAssertEqual(refusal(afterOwnKeys), .userTyping(secondsAgo: 1.3))
+        // The helper's last key down lands just before it records the input.
+        afterOwnKeys.secondsSinceUserKeyDown = 0.32
+        XCTAssertNil(refusal(afterOwnKeys))
     }
 
     func testSecureInputRefusesKeysThatShareTheUsersKeyboard() {

@@ -1429,9 +1429,10 @@ final class Provider {
             // Why: refuse before the clipboard is replaced, so clipboard history never records text that was not sent.
             try requireBackgroundInputReachable(snapshot, input: "paste")
         }
-        // Why: refuse before the clipboard is replaced, as above.
-        try requireUncontendedInput(snapshot, foreground: isForegroundRequest(params), sendsKeys: true)
         let insertion = TextInput.Insertion(into: focused, text: text)
+        // Why: refuse before the clipboard is replaced, as above; check after the insertion's reads so typing that
+        // starts during them is caught here rather than after the clipboard already holds the text.
+        try requireUncontendedInput(snapshot, foreground: isForegroundRequest(params), sendsKeys: true)
         try Input.withPasteboardText(text) {
             try deliverKeys(pasteKeys, snapshot: snapshot, params: params)
         }

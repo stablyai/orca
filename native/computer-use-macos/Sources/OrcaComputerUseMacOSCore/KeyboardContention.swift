@@ -6,7 +6,7 @@ import Foundation
 public enum KeyboardContention {
     /// The user's last key press counts as active typing for this long.
     public static let userTypingQuietPeriod: TimeInterval = 2.0
-    /// A key press this close after the helper's own input is taken to be that input, not the user's.
+    /// A key press this close to the helper's own input (either side) is taken to be that input, not the user's.
     static let ownInputTolerance: TimeInterval = 0.05
     public static let secureInputPIDKey = "kCGSSessionSecureInputPID"
 
@@ -51,9 +51,10 @@ public enum KeyboardContention {
         guard sharesUserKeyboard, conditions.secondsSinceUserKeyDown < userTypingQuietPeriod else {
             return nil
         }
-        // Why: foreground keys the helper posted itself can show up as the session's latest key press.
+        // Why: foreground keys the helper posted itself can show up as the session's latest key press. Only a key
+        // press that lines up with that input is exempt; one clearly before or after it is the user's.
         if let ownInput = conditions.secondsSinceOwnInput,
-           conditions.secondsSinceUserKeyDown >= ownInput - ownInputTolerance {
+           abs(conditions.secondsSinceUserKeyDown - ownInput) <= ownInputTolerance {
             return nil
         }
         return .userTyping(secondsAgo: conditions.secondsSinceUserKeyDown)
