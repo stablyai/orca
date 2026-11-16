@@ -121,6 +121,18 @@ describe('ACP process-owning connection', () => {
     await expect(connection.close()).resolves.toBe(true)
   })
 
+  it('redacts credentials the agent printed from the stderr its exit reports (#41170)', async () => {
+    const { connection, child } = fixture()
+    await connection.start(start)
+    const rejected = connection.prompt([...prompt]).catch((error: unknown) => String(error))
+    child.stderr.write('OPENROUTER_API_KEY=sk-or-v1-0123456789abcdef0123456789abcdef\n')
+    child.emit('exit', 1, null)
+    child.emit('close', 1, null)
+    const reason = await rejected
+    expect(reason).not.toContain('0123456789abcdef')
+    expect(connection.stderrTail()).not.toContain('0123456789abcdef')
+  })
+
   it('ends a turn signed out at a sign-in prompt line and never retains its URL', async () => {
     const said: string[] = []
     const onExit = vi.fn((error: Error) => said.push(error.message))

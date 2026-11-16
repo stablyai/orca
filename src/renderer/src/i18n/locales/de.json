@@ -19521,6 +19521,7 @@
         "availableAfterSessionStarts": "Nach dem Sitzungsstart verfügbar.",
         "optionUpdateFailed": "Option konnte nicht aktualisiert werden",
         "optionValue": {
+          "none": "Keine",
           "fast": "Schnell",
           "minimal": "Minimal",
           "low": "Niedrig",

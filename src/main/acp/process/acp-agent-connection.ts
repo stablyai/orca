@@ -23,6 +23,7 @@ import {
 } from '../transport/acp-errors'
 import { resolveAcpPeerOptions, type AcpPeerOptions } from '../transport/acp-peer-limits'
 import { AcpSessionRuntime } from '../protocol/acp-session-runtime'
+import { redactString } from '../../observability/redactor'
 import type { AcpSessionRuntimeOptions } from '../protocol/acp-session-runtime-options'
 
 export type AcpSignInWatch = {
@@ -195,13 +196,14 @@ export class AcpAgentConnection extends AcpSessionRuntime {
       const expected = lifecycle.closing
       const finish = (): void => {
         clearTimeout(lifecycle.outputEndTimer)
-        const detail = managed.stderrTail().trim() || `${launch.command} exited`
+        const stderr = this.stderrTail()
+        const detail = stderr || `${launch.command} exited`
         // Only an exit Orca neither caused nor preceded with its own refusal leaves calls unanswered.
         const error = withProviderSpawnAbsence(
           lifecycle.error ??
             (expected
               ? new AcpConnectionClosedError(detail)
-              : new AcpAgentExitedError(detail, managed.stderrTail().trim())),
+              : new AcpAgentExitedError(detail, stderr)),
           managed.spawnAbsence
         )
         withLostProviderOutcome(error, exit)
@@ -250,8 +252,9 @@ export class AcpAgentConnection extends AcpSessionRuntime {
     return this.exited && (result?.tree === 'unverifiable' || result?.tree === 'live')
   }
 
+  /** Redacted, since it reaches chat errors and saved chats; sign-in watching reads raw lines. */
   stderrTail(): string {
-    return this.managed.stderrTail().trim()
+    return redactString(this.managed.stderrTail()).trim()
   }
 
   /** Requires advertised session listing support. */
