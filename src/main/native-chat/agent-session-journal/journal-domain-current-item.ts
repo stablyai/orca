@@ -27,8 +27,7 @@ import {
 import { invalidateJournalDomainQueue } from './journal-domain-queue-revision'
 import { readAgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-body-admission'
 import { AgentSessionJournalError } from './writing/journal-write-guards'
-import { journalStoredItemRow } from './journal-stored-output-rows'
-import { readJournalStoredItem } from './journal-stored-output-rows'
+import { journalStoredItemRow, readJournalStoredItem } from './journal-stored-output-rows'
 
 export type JournalDomainCurrentItemWrite = {
   item: AgentJournalRenderItem
