@@ -4,7 +4,7 @@ import type { GitStatusEntry } from '../../../../../shared/git/status/git-status
 export type GitHeadBaseline = string[] | null
 
 const MAX_CACHED_BASELINES = 32
-const settledBaselines = new Map<string, GitHeadBaseline>()
+const settledBaselines = new Map<string, string[]>()
 const inFlightBaselines = new Map<string, Promise<GitHeadBaseline>>()
 
 const NEW_FILE_STATUSES: ReadonlySet<GitStatusEntry['status']> = new Set([
@@ -59,7 +59,7 @@ export function peekGitHeadBaseline(key: string): GitHeadBaseline | undefined {
   return settledBaselines.get(key)
 }
 
-/** Failed reads are not cached, so the next key change or remount retries. */
+/** Failed and null reads are not cached, so the next key change or remount retries. */
 export function loadGitHeadBaseline(
   key: string,
   read: () => Promise<GitHeadBaseline>
@@ -71,6 +71,10 @@ export function loadGitHeadBaseline(
   const promise = read()
     .then((baseline) => {
       settledBaselines.delete(key)
+      // Why: binary and render-limit nulls can come from the working copy, which the key does not track.
+      if (baseline === null) {
+        return baseline
+      }
       settledBaselines.set(key, baseline)
       const oldest = settledBaselines.keys().next()
       if (settledBaselines.size > MAX_CACHED_BASELINES && !oldest.done) {
