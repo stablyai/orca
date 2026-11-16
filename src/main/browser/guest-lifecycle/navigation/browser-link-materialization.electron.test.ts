@@ -181,11 +181,4 @@ describe('production link bridge, store and mounted guest', () => {
     expect(await page.evaluate('window.probeApi.fixture.guests()')).toEqual([])
     expect(receipts.some((receipt) => receipt.path === '/removed-page')).toBe(false)
   })
-
-  it.todo(
-    'rejects removed source tabs, profile switches and deleted profiles without a tab, mount, default fallback or destination request'
-  )
-  it.todo(
-    'validates main-owned document/registration claims during delayed IPC consumption, async validation and deferred mount'
-  )
 })

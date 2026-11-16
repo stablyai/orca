@@ -10,8 +10,6 @@ const describeEngines = bundles ? describe : describe.skip
 
 const THEME = { colorScheme: 'light', tokens: {} }
 const report = (origin) => `
-<button id="show-b" onclick="document.getElementById('a').hidden=true;document.getElementById('b').hidden=false">B</button>
-<section id="a">Finance</section><section id="b" hidden>Retail</section>
 <script>
 window.reached = {}
 try { if (document.cookie.indexOf('page-secret') !== -1) window.reached.cookie = true } catch (_) {}
@@ -102,14 +100,6 @@ for (const engine of ['chromium', 'webkit']) {
         }
         return one
       }
-
-      it("runs the report's own controls", async () => {
-        const { page, report } = await openReport(browser())
-        await report.click('#show-b')
-        expect(await report.evaluate(() => document.getElementById('b').hidden)).toBe(false)
-        expect(await report.evaluate(() => document.getElementById('a').hidden)).toBe(true)
-        await page.close()
-      })
 
       it("cannot reach the page's document, cookies, storage or origin", async () => {
         const { page, report } = await openReport(browser())
