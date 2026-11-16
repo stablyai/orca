@@ -2,6 +2,12 @@
 // workspace already stored as `team` acts private everywhere (owner only, plus org admins' metadata).
 import { describe, expect, it } from 'vitest'
 import { generateGrantRecipientKey } from '../../../../src/main/cloud-workspaces/sealed-grant-node'
+import { sweepHeldTeamGrants } from '../src/grants'
+import { lifecycleDeps } from '../src/index'
+import { resolveSandboxSecrets } from '../src/secrets'
+import { sharedWorkspaceMode } from '../src/shared-workspace'
+import { getSandbox } from '../src/store'
+import { configureTeamSharing } from '../src/team-sharing'
 import { createHarness } from './harness'
 
 async function held(teamSharing: 'off' | undefined = 'off') {
@@ -70,4 +76,41 @@ describe('TEAM_SHARING held (the default)', () => {
     expect(list.body.teamSharing).toBe(true)
     expect(list.body.workspaces.map((w: { id: string; visibility: string }) => [w.id, w.visibility])).toEqual([[created.body.sandbox.id, 'team']])
   })
+
+  it('the sweep revokes teammates’ grants on a held team workspace; credentials stay shared until it has', async () => {
+    // Shared while sharing was on: Bob holds a device grant.
+    const h = await createHarness({ SECRETS_KEK: Buffer.alloc(32, 7).toString('base64') })
+    const alice = await h.token('alice', 'acme', 'sandbox', { org_role: 'member' })
+    const created = await h.call('POST', '/v1/sandboxes', {
+      bearer: alice,
+      body: { workspaceId: 'ws-1', machineSize: 'standard', repo: { url: 'https://github.com/acme/app' }, visibility: 'team' }
+    })
+    const id = created.body.sandbox.id as string
+    const grant = await h.call('POST', `/v1/team/workspaces/${id}/grants`, {
+      bearer: await h.token('bob', 'acme', 'sandbox', { org_role: 'member' }),
+      body: { recipientPublicKeyB64: generateGrantRecipientKey().publicKeyB64, deviceLabel: 'b', deviceKind: 'desktop' }
+    })
+    expect(grant.status).toBe(200)
+    // Now held.
+    h.env.TEAM_SHARING = undefined
+    configureTeamSharing(h.env)
+    const db = h.env.SANDBOX_DB
+    const row = (await getSandbox(db, id))!
+    // Bob's grant is still active: shared mode (no personal credentials), though it acts private.
+    expect(await sharedWorkspaceMode(db, row)).toBe(true)
+    expect((await h.call('PUT', '/v1/secrets/personal/MY_TOKEN', { bearer: alice, body: { value: 'personal-value' } })).status).toBe(200)
+    const life = (await lifecycleDeps(h.env, h.deps))!
+    const keyring = await life.secrets!.keyring
+    expect((await resolveSandboxSecrets(db, keyring, row)).env.MY_TOKEN).toBeUndefined()
+    expect(await sweepHeldTeamGrants(life)).toEqual({ workspaces: 1, revoked: 1, queued: 0 })
+    expect(h.raw.prepare('SELECT status, revoke_reason FROM workspace_grants WHERE user_id = ?').get('bob')).toEqual({ status: 'revoked', revoke_reason: 'team_sharing_held' })
+    // Cleared: it is the owner's alone, so it acts private for credentials too.
+    expect(await sharedWorkspaceMode(db, row)).toBe(false)
+    expect((await resolveSandboxSecrets(db, keyring, row)).env.MY_TOKEN).toBe('personal-value')
+    // Nothing left to sweep; and with sharing on again, nothing is swept at all.
+    expect(await sweepHeldTeamGrants(life)).toEqual({ workspaces: 0, revoked: 0, queued: 0 })
+    configureTeamSharing({ TEAM_SHARING: 'on' })
+    expect(await sharedWorkspaceMode(db, row)).toBe(true)
+  })
 })
+

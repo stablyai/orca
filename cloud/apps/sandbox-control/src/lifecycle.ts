@@ -8,7 +8,7 @@ import { codexPlaceholder } from './codex-credentials'
 /** Where Codex refreshes its ChatGPT login. */
 export const CODEX_AUTH_HOST = 'auth.openai.com'
 import { parseStoredCodex } from './codex-credentials'
-import { isSharedWorkspace } from './shared-workspace'
+import { sharedWorkspaceMode } from './shared-workspace'
 import { deleteAgentSourcesForSandbox } from './agent-sources'
 import { signOutAgentsBeforeDelete } from './agent-signout'
 import type { EntitlementClient, MachineSize } from './entitlements'
@@ -429,11 +429,12 @@ export async function firewallInputsFor(deps: LifecycleDeps, row: SandboxRow): P
   }
   const keyring = deps.secrets.keyring
   const accounts: FirewallAccount[] = []
+  const shared = await sharedWorkspaceMode(deps.db, row)
   for (const route of egressAccountRoutes(row)) {
     if (!classes.has(route.agent)) {
       continue
     }
-    const applies = route.owner === row.user_id && !isSharedWorkspace(row) && Boolean(deps.secrets.accountProviders?.[route.agent])
+    const applies = route.owner === row.user_id && !shared && Boolean(deps.secrets.accountProviders?.[route.agent])
     const stored = applies ? await readUsableAgentCredential(deps.db, keyring, row.user_id, route.agent, deps.now()).catch(() => null) : null
     if (route.agent === 'codex') {
       const tokens = stored ? parseStoredCodex(stored) : null

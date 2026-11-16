@@ -138,7 +138,8 @@ import { pushCredentialToSandbox, refreshAfterSecretChange, refreshSandboxEnv } 
 import { credentialPushTargets, markCredentialChanged, pushCredentialChange, pushPendingCredentialChanges, type CredentialChange, type PushDeps } from './credential-outbox'
 import { markExpiredAccountCredentials, refreshGitHubUserTokens } from './credential-refresh'
 import type { CredentialAgent } from './agent-credential-names'
-import { ACCOUNT_PROVIDERS, accountProvider, claudeAccount, isSharedWorkspace } from './account-providers'
+import { ACCOUNT_PROVIDERS, accountProvider, claudeAccount } from './account-providers'
+import { sharedWorkspaceMode } from './shared-workspace'
 import { handleAccountRequestSucceeded, handleAccountUnauthorized, runScheduledAccountChecks, verifyAccountCredential } from './agent-credential-checks'
 import { codexBrokerTick, handleCodexBrokerRoute, type BrokerDeps } from './codex-broker'
 import { codexAccount, parseStoredCodex, refreshCodexLeases, storeCodexLogin } from './codex-credentials'
@@ -208,7 +209,8 @@ import {
   recordOwnerDeviceForCreate,
   revokeForAccessChange,
   revokeGrantsForDeviceSession,
-  revokeOne
+  revokeOne,
+  sweepHeldTeamGrants
 } from './grants'
 import { getOrgPrompts, putOrgPrompts } from './org-prompts'
 import {
@@ -476,7 +478,7 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
                 scheduleEnvRefresh(env, deps, row)
                 return signedOut('account_owner_changed')
               }
-              if (isSharedWorkspace(row)) {
+              if (await sharedWorkspaceMode(env.SANDBOX_DB, row)) {
                 scheduleEnvRefresh(env, deps, row)
                 return signedOut('account_not_shared')
               }
@@ -2801,6 +2803,9 @@ function errorResponse(error: unknown): Response {
   return fail('internal_error', 500)
 }
 
+/** TEAM-SHARING hold: whether this isolate has run the held-grants sweep yet (a value, never a promise). */
+let heldSweepRan = false
+
 export default {
   fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     return handleRequest(request, env, { waitUntil: (work) => ctx.waitUntil(work.catch(() => undefined)) })
@@ -2837,6 +2842,17 @@ export default {
     )
     const fifthMinute = new Date(controller.scheduledTime).getUTCMinutes() % 5 === 0
     ctx.waitUntil(credentialTick(env, fifthMinute))
+    // TEAM-SHARING hold: every fifth minute, and on an isolate's first run (so right after a deploy).
+    if (!teamSharingEnabled() && (fifthMinute || !heldSweepRan)) {
+      heldSweepRan = true
+      ctx.waitUntil(
+        lifecycleDeps(env, {}).then(async (life) => {
+          const swept = life ? await sweepHeldTeamGrants(life).catch(() => null) : null
+          // Counts only.
+          console.log(JSON.stringify({ event: 'team_sharing_held_sweep', ...(swept ?? { failed: true }) }))
+        })
+      )
+    }
     if (env.AGENT_ACCOUNTS_CODEX === 'on') {
       ctx.waitUntil(codexTick(env, fifthMinute))
     }

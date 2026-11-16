@@ -7,6 +7,7 @@
 //   DELETE /v1/team/workspaces/:id/grants/:grantId   grantee, workspace owner or org admin
 // Revocation removes the device from orcad's registry (orca-sandbox-revoke); while the sandbox is
 // not running it is queued and applied at the next boot before orcad starts.
+import { teamSharingEnabled } from './team-sharing'
 import { z } from 'zod'
 import type { SandboxCaller } from './auth'
 import { isDeviceSessionLive } from './device-sessions'
@@ -258,6 +259,40 @@ export async function revokeForAccessChange(
     .bind(row.id, row.user_id)
     .all<GrantRow>()
   return revokeGrants(deps, row, results, { by, reason: mode === 'non_owner' ? 'workspace_private' : 'owner_changed' })
+}
+
+/**
+ * TEAM-SHARING hold (team-sharing.ts): while sharing is held, a workspace stored as `team` acts private, so
+ * every device grant but its owner's goes, the way making it private revokes them (reason team_sharing_held).
+ * Transferred workspaces keep their own rules. Bounded per run; the next run takes the rest.
+ */
+export async function sweepHeldTeamGrants(deps: LifecycleDeps): Promise<{ workspaces: number; revoked: number; queued: number }> {
+  const out = { workspaces: 0, revoked: 0, queued: 0 }
+  if (teamSharingEnabled()) {
+    return out
+  }
+  const { results } = await deps.db
+    .prepare(
+      `SELECT g.* FROM workspace_grants g JOIN sandboxes s ON s.id = g.sandbox_id
+       WHERE g.status IN ('issuing', 'active') AND g.user_id <> s.user_id AND s.ownership_transferred_at IS NULL AND s.status <> 'destroyed'
+       ORDER BY g.sandbox_id LIMIT 500`
+    )
+    .all<GrantRow>()
+  const bySandbox = new Map<string, GrantRow[]>()
+  for (const grant of results) {
+    bySandbox.set(grant.sandbox_id, [...(bySandbox.get(grant.sandbox_id) ?? []), grant])
+  }
+  for (const [sandboxId, grants] of bySandbox) {
+    const row = await getSandbox(deps.db, sandboxId)
+    if (!row) {
+      continue
+    }
+    const result = await revokeGrants(deps, row, grants, { by: 'system', reason: 'team_sharing_held' }).catch(() => ({ revoked: 0, queued: 0 }))
+    out.workspaces++
+    out.revoked += result.revoked
+    out.queued += result.queued
+  }
+  return out
 }
 
 /** A member left the org (auth push) or a phone session ended (W8): revoke everywhere. */

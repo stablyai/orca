@@ -13,7 +13,7 @@ import { createKeyring, type Keyring, type SealFormat, type SecretBinding } from
 import { createKekUnwrapper, SecretsKmsError } from './secrets-kms'
 import { AUTH_IAT_BACKDATE_MS } from './member-changes'
 import { BASE_URL_NAMES, baseUrlHost } from './provider-env'
-import { isSharedWorkspace } from './shared-workspace'
+import { isSharedWorkspace, sharedWorkspaceMode } from './shared-workspace'
 import type { SandboxRow } from './store'
 import { secretLog } from './secret-log'
 import {
@@ -196,12 +196,15 @@ function repoOwner(accountId: string, repo: string): string {
  * never its owner's personal ones, the same rule as personal accounts (D13). Fails closed: only a row
  * known to be private counts as unshared.
  */
-export function ownersForSandbox(row: Pick<SandboxRow, 'account_id' | 'user_id' | 'repo_url' | 'visibility' | 'ownership_transferred_at'>) {
+export function ownersForSandbox(
+  row: Pick<SandboxRow, 'account_id' | 'user_id' | 'repo_url' | 'visibility' | 'ownership_transferred_at'>,
+  shared: boolean = isSharedWorkspace(row)
+) {
   const repo = normalizeRepo(row.repo_url)
   return {
     org: ORG_ACCOUNT.test(row.account_id) ? row.account_id : null,
     // The one definition of "shared" (visibility, or ever transferred to another owner).
-    personal: isSharedWorkspace(row) ? null : personalOwner(row.user_id, row.account_id.startsWith('dev:')),
+    personal: shared ? null : personalOwner(row.user_id, row.account_id.startsWith('dev:')),
     repo: repo ? repoOwner(row.account_id, repo) : null
   }
 }
@@ -362,7 +365,7 @@ export async function resolveSandboxSecrets(
   keyring: Keyring,
   row: Pick<SandboxRow, 'id' | 'account_id' | 'user_id' | 'repo_url' | 'visibility' | 'ownership_transferred_at'>
 ): Promise<ResolvedSecrets> {
-  const owners = ownersForSandbox(row)
+  const owners = ownersForSandbox(row, await sharedWorkspaceMode(db, row))
   const pairs: [SecretScope, string][] = []
   if (owners.personal) {
     pairs.push(['personal', owners.personal])
