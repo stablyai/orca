@@ -23,14 +23,21 @@ for (const surface of ['file', 'combined']) {
     const worktreeId = await addAndActivateRepo(orcaPage, fixture.repoPath)
     const note = await orcaPage.evaluate(
       async ({ worktreeId, filePath }) => {
-        return window.__store!.getState().addDiffComment({
-          worktreeId,
-          filePath,
-          source: 'diff',
-          lineNumber: 450,
-          body: 'Jump to this unchanged line',
-          side: 'modified'
-        })
+        return window.__store!.getState().addDiffComment(
+          {
+            kind: 'worktree',
+            worktreeId,
+            authority: { endpoint: { kind: 'self' }, at: 'local' }
+          },
+          {
+            worktreeId,
+            filePath,
+            source: 'diff',
+            lineNumber: 450,
+            body: 'Jump to this unchanged line',
+            side: 'modified'
+          }
+        )
       },
       { worktreeId, filePath: fixture.relativePath }
     )

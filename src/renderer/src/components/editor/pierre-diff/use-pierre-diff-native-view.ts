@@ -44,82 +44,85 @@ export function usePierreDiffNativeView(
   // it — a window anchored at mount expires before a slow or remote view ever attaches.
   const sawFirstGroupRun = useRef(false)
   const lastSnapshot = useRef<PierreNativeViewState | undefined>(undefined)
-  const schedule = useCallback(() => {
-    if (frame.current !== null || !pending.current || Date.now() > deadline.current) {
-      return
-    }
-    frame.current = requestAnimationFrame(() => {
-      frame.current = null
-      const current = view.current,
-        saved = pending.current
-      if (!current || !saved || !current.host.isConnected) {
+  const schedule = useCallback(
+    function scheduleRestore() {
+      if (frame.current !== null || !pending.current || Date.now() > deadline.current) {
         return
       }
-      if (latest.current.editable && !editorRef.current) {
-        schedule()
-        return
-      }
-      const group = current.host.closest<HTMLElement>('[data-tab-group-body-id]')
-      if (
-        saved.selection &&
-        group &&
-        group.dataset.tabGroupBodyId !== latest.current.activeGroupId
-      ) {
-        current.instance.setCodeScrollLeft(saved.scrollLeft)
-        return
-      }
-      const selected = readPierreNativeSelection(
-        current.host,
-        latest.current.fileDiff,
-        latest.current.editable
-      )
-      // NOTE: do not pre-activate deleted-text mode here. setDeletedTextSelectionActive(true)
-      // calls #setEditorActiveLineSafe(null) -> InteractionManager.renderSelection(), and that
-      // re-render collapses the range this loop is restoring, so convergence is never reached.
-      // restorePierreNativeSelection activates the mode immediately before applying the range,
-      // which is the correct and only place it belongs.
-      // Convergence deliberately does not require deleted-text mode: a read-only surface has no
-      // Editor to set it, so checking it would spin until the deadline. Every path that can reach
-      // convergence with a deletions range has already run restore, which sets the mode.
-      if (
-        current.instance.getCodeScrollLeft() === saved.scrollLeft &&
-        JSON.stringify(selected) === JSON.stringify(saved.selection)
-      ) {
-        pending.current = undefined
-        return
-      }
-      current.instance.setCodeScrollLeft(saved.scrollLeft)
-      const restored =
-        !saved.selection ||
-        restorePierreNativeSelection(
+      frame.current = requestAnimationFrame(() => {
+        frame.current = null
+        const current = view.current,
+          saved = pending.current
+        if (!current || !saved || !current.host.isConnected) {
+          return
+        }
+        if (latest.current.editable && !editorRef.current) {
+          scheduleRestore()
+          return
+        }
+        const group = current.host.closest<HTMLElement>('[data-tab-group-body-id]')
+        if (
+          saved.selection &&
+          group &&
+          group.dataset.tabGroupBodyId !== latest.current.activeGroupId
+        ) {
+          current.instance.setCodeScrollLeft(saved.scrollLeft)
+          return
+        }
+        const selected = readPierreNativeSelection(
           current.host,
           latest.current.fileDiff,
-          saved.selection,
-          current.instance,
-          editorRef.current
+          latest.current.editable
         )
-      if (restored === 'stale') {
-        pending.current = undefined
-        return
-      }
-      if (restored) {
-        // Editor initialization may replace the selected nodes on its next frame.
-        schedule()
-      } else if (saved.selection) {
-        const { range, side } = saved.selection
-        scrollPierreDiffToLine({
-          host: current.host,
-          container: current.host.closest('.scrollbar-editor'),
-          side,
-          lineNumber: range.startLineNumber,
-          linePosition: current.instance.getLinePosition?.(range.startLineNumber, side),
-          hunkIndex: 0,
-          hunkCount: 0
-        })
-        schedule()
-      }
-    })
-  }, [editorRef])
+        // NOTE: do not pre-activate deleted-text mode here. setDeletedTextSelectionActive(true)
+        // calls #setEditorActiveLineSafe(null) -> InteractionManager.renderSelection(), and that
+        // re-render collapses the range this loop is restoring, so convergence is never reached.
+        // restorePierreNativeSelection activates the mode immediately before applying the range,
+        // which is the correct and only place it belongs.
+        // Convergence deliberately does not require deleted-text mode: a read-only surface has no
+        // Editor to set it, so checking it would spin until the deadline. Every path that can reach
+        // convergence with a deletions range has already run restore, which sets the mode.
+        if (
+          current.instance.getCodeScrollLeft() === saved.scrollLeft &&
+          JSON.stringify(selected) === JSON.stringify(saved.selection)
+        ) {
+          pending.current = undefined
+          return
+        }
+        current.instance.setCodeScrollLeft(saved.scrollLeft)
+        const restored =
+          !saved.selection ||
+          restorePierreNativeSelection(
+            current.host,
+            latest.current.fileDiff,
+            saved.selection,
+            current.instance,
+            editorRef.current
+          )
+        if (restored === 'stale') {
+          pending.current = undefined
+          return
+        }
+        if (restored) {
+          // Editor initialization may replace the selected nodes on its next frame.
+          scheduleRestore()
+        } else if (saved.selection) {
+          const { range, side } = saved.selection
+          scrollPierreDiffToLine({
+            host: current.host,
+            container: current.host.closest('.scrollbar-editor'),
+            side,
+            lineNumber: range.startLineNumber,
+            linePosition: current.instance.getLinePosition?.(range.startLineNumber, side),
+            hunkIndex: 0,
+            hunkCount: 0
+          })
+          scheduleRestore()
+        }
+      })
+    },
+    [editorRef]
+  )
   useLayoutEffect(() => {
     // Why: switching back to this tab group is a fresh restore occasion, not render churn, so it
     // gets a fresh ceiling. A background group deliberately defers its restore here (see the

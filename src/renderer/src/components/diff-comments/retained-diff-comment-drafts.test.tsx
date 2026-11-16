@@ -14,7 +14,11 @@ function renderDraft(onCancel: () => void = () => {}) {
       onSubmit={async () => true}
     />
   )
-  return screen.getByRole('textbox') as HTMLTextAreaElement
+  const textarea = screen.getByRole('textbox')
+  if (!(textarea instanceof HTMLTextAreaElement)) {
+    throw new Error('expected the note textarea')
+  }
+  return textarea
 }
 
 describe('retained note drafts', () => {

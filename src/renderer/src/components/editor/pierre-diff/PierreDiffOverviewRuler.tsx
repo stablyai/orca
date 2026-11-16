@@ -2,7 +2,7 @@ import {
   DIFF_SECTION_HEADER_HEIGHT,
   DIFF_SECTION_PADDING_HEIGHT
 } from '../diff/sections/diff-section-layout'
-import { memo, useEffect, useMemo, useState, type RefObject } from 'react'
+import { memo, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import type { DiffSection } from '../diff/sections/diff-section-types'
@@ -39,6 +39,7 @@ export const PierreDiffOverviewRuler = memo(function PierreDiffOverviewRuler({
 }): React.JSX.Element | null {
   const whitespace = useAppStore((state) => state.settings?.diffShowWhitespace)
   const [parsed, setParsed] = useState<ReadonlyMap<string, ParsedSection>>(new Map())
+  const parsedCache = useRef<ReadonlyMap<string, ParsedSection>>(new Map())
   const [viewport, setViewport] = useState<{
     parent: HTMLElement
     height: number
@@ -66,7 +67,7 @@ export const PierreDiffOverviewRuler = memo(function PierreDiffOverviewRuler({
         }
         const original = section.originalContent
         const modified = section.modifiedContent
-        const previous = parsed.get(section.key)
+        const previous = parsedCache.current.get(section.key)
         if (
           previous?.original === original &&
           previous.modified === modified &&
@@ -98,13 +99,12 @@ export const PierreDiffOverviewRuler = memo(function PierreDiffOverviewRuler({
         }
       }
       if (!controller.signal.aborted) {
+        parsedCache.current = next
         setParsed(next)
       }
     })()
     return () => controller.abort()
-    // parsed is a previous-result cache; publishing it must not launch another pass.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sections, sideBySide, whitespace])
+  }, [sections, sideBySide, whitespace, layout])
   const totalSize = combined?.virtualizer.getTotalSize()
   const measurements = combined?.virtualizer.measurementsCache
   useEffect(() => {

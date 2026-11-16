@@ -60,9 +60,25 @@ function SearchButton({
   )
 }
 
-export function PierreDiffSearchBar(props: PierreDiffSearchBarProps) {
+export function PierreDiffSearchBar({
+  inputRef,
+  query,
+  side,
+  replacement,
+  replaceOpen,
+  canReplace,
+  canNavigate,
+  canReplaceAll,
+  status,
+  onQuery,
+  onSide,
+  onReplacement,
+  onToggleReplace,
+  onReplace,
+  onNavigate,
+  onClose
+}: PierreDiffSearchBarProps) {
   const t = useTranslate()
-  const { query, onQuery } = props
   return (
     <div className="sticky top-0 z-20 h-0" data-diff-search>
       <div
@@ -70,17 +86,17 @@ export function PierreDiffSearchBar(props: PierreDiffSearchBarProps) {
         onKeyDown={(event) => event.stopPropagation()}
       >
         <div className="flex items-center gap-1">
-          {props.canReplace && (
+          {canReplace && (
             <SearchButton
               label={t('auto.components.editor.RichMarkdownSearchBar.9cdc38be33', 'Toggle replace')}
-              aria-expanded={props.replaceOpen}
-              onClick={props.onToggleReplace}
+              aria-expanded={replaceOpen}
+              onClick={onToggleReplace}
             >
-              {props.replaceOpen ? <ChevronDown /> : <ChevronRight />}
+              {replaceOpen ? <ChevronDown /> : <ChevronRight />}
             </SearchButton>
           )}
           <Input
-            ref={props.inputRef}
+            ref={inputRef}
             aria-label={t('editor.diff.search.findLabel', 'Find in diff')}
             placeholder={t('editor.diff.search.find', 'Find')}
             value={query.text}
@@ -93,11 +109,11 @@ export function PierreDiffSearchBar(props: PierreDiffSearchBarProps) {
               }
               if (event.key === 'Enter') {
                 event.preventDefault()
-                props.onNavigate(event.shiftKey ? -1 : 1)
+                onNavigate(event.shiftKey ? -1 : 1)
               }
               if (event.key === 'Escape') {
                 event.preventDefault()
-                props.onClose()
+                onClose()
               }
             }}
           />
@@ -128,21 +144,21 @@ export function PierreDiffSearchBar(props: PierreDiffSearchBarProps) {
           ))}
           <SearchButton
             label={t('auto.components.editor.MarkdownPreview.1febd97f5c', 'Previous match')}
-            disabled={!props.canNavigate}
-            onClick={() => props.onNavigate(-1)}
+            disabled={!canNavigate}
+            onClick={() => onNavigate(-1)}
           >
             <ChevronUp />
           </SearchButton>
           <SearchButton
             label={t('auto.components.editor.MarkdownPreview.b42c41bd0d', 'Next match')}
-            disabled={!props.canNavigate}
-            onClick={() => props.onNavigate(1)}
+            disabled={!canNavigate}
+            onClick={() => onNavigate(1)}
           >
             <ChevronDown />
           </SearchButton>
           <SearchButton
             label={t('auto.components.editor.MarkdownPreview.12052c639c', 'Close search')}
-            onClick={props.onClose}
+            onClick={onClose}
           >
             <X />
           </SearchButton>
@@ -153,54 +169,54 @@ export function PierreDiffSearchBar(props: PierreDiffSearchBarProps) {
               ['deletions', t('auto.components.editor.ImageDiffViewer.57aac3979a', 'Original')],
               ['additions', t('auto.components.editor.ImageDiffViewer.a651be62b0', 'Modified')]
             ] as const
-          ).map(([side, label]) => (
+          ).map(([searchSide, label]) => (
             <Button
-              key={side}
-              variant={props.side === side ? 'secondary' : 'ghost'}
+              key={searchSide}
+              variant={side === searchSide ? 'secondary' : 'ghost'}
               size="xs"
-              aria-pressed={props.side === side}
-              onClick={() => props.onSide(side)}
+              aria-pressed={side === searchSide}
+              onClick={() => onSide(searchSide)}
             >
               {label}
             </Button>
           ))}
           <span className="ml-auto px-1 text-xs text-muted-foreground" role="status">
-            {props.status}
+            {status}
           </span>
         </div>
-        {props.canReplace && props.replaceOpen && (
+        {canReplace && replaceOpen && (
           <div className="flex items-center gap-1">
             <Input
               aria-label={t('editor.diff.search.replaceLabel', 'Replace in diff')}
               placeholder={t('auto.components.editor.RichMarkdownSearchBar.fd97c7e585', 'Replace')}
-              value={props.replacement}
+              value={replacement}
               density="compact"
-              onChange={(event) => props.onReplacement(event.target.value)}
+              onChange={(event) => onReplacement(event.target.value)}
               onKeyDown={(event) => {
                 if (isImeCompositionKeyDown(event)) {
                   return
                 }
                 if (event.key === 'Enter') {
                   event.preventDefault()
-                  props.onReplace(false)
+                  onReplace(false)
                 }
                 if (event.key === 'Escape') {
                   event.preventDefault()
-                  props.onClose()
+                  onClose()
                 }
               }}
             />
             <SearchButton
               label={t('auto.components.editor.RichMarkdownSearchBar.fd97c7e585', 'Replace')}
-              disabled={!props.canNavigate}
-              onClick={() => props.onReplace(false)}
+              disabled={!canNavigate}
+              onClick={() => onReplace(false)}
             >
               <Replace />
             </SearchButton>
             <SearchButton
               label={t('auto.components.editor.RichMarkdownSearchBar.c2884f5e95', 'Replace all')}
-              disabled={!props.canReplaceAll}
-              onClick={() => props.onReplace(true)}
+              disabled={!canReplaceAll}
+              onClick={() => onReplace(true)}
             >
               <ReplaceAll />
             </SearchButton>

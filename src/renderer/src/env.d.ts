@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+import './monaco-unicode-tables'
 
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { OnboardingFeatureSetupDeps } from '@/components/onboarding/onboarding-feature-setup'
@@ -70,20 +71,6 @@ declare module 'monaco-editor/esm/vs/base/common/uri.js' {
 declare module 'monaco-editor/esm/vs/editor/common/standalone/standaloneEnums.js' {
   export const EditorOption: typeof editor.EditorOption
   export const MouseTargetType: typeof editor.MouseTargetType
-}
-
-// Monaco's unicode tables, reachable without evaluating the editor bundle or its NLS labels.
-declare module 'monaco-editor/esm/vs/base/common/strings.js' {
-  export class AmbiguousCharacters {
-    static getInstance(locales: Set<string>): AmbiguousCharacters
-    static getLocales(): string[]
-    isAmbiguous(codePoint: number): boolean
-    getConfusableCodePoints(): Set<number>
-  }
-  export class InvisibleCharacters {
-    static isInvisibleCharacter(codePoint: number): boolean
-    static get codePoints(): Set<number>
-  }
 }
 
 declare module 'monaco-editor/esm/vs/editor/common/core/range.js' {

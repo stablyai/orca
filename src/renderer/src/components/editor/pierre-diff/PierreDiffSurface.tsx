@@ -45,7 +45,7 @@ import { usePierreDiffNoteNavigation } from './use-pierre-diff-note-navigation'
 import { usePierreDiffNoteSelection } from './use-pierre-diff-note-selection'
 import { PierreDiffNarrowLayoutContext } from './pierre-diff-layout'
 import { canCommentOnPierreRange } from './pierre-diff-comment-range'
-import { withPierreDiffEditState } from './pierre-diff-edit-state'
+import { usePierreDiffEditState } from './pierre-diff-edit-state'
 import { shouldAutoFocusPierreDiffHost, shouldFocusPierreDiffHost } from './pierre-diff-host-focus'
 
 export type PierreDiffInstance = PierreFileDiff<PierreDiffAnnotationData> &
@@ -310,33 +310,33 @@ export function PierreDiffSurface({
     [comments, filePath, pendingComment, fileDiff.additionLines.length, modifiedContent]
   )
   const createTokenizer = usePierrePluginTokenizer(filePath, language ?? 'plaintext')
-  const editorOptions = useMemo<EditorOptions<'file-diff', PierreDiffAnnotationData, undefined>>(
-    () =>
-      withPierreDiffEditState(
-        {
-          createTokenizer,
-          onAttach: (editor) => {
-            editorRef.current = editor
-            const host = containerRef.current
-            // Host focus lands in layout before Pierre queues onAttach. If we still
-            // own it, move to the editor so Changes-mode typing works without a click.
-            if (autoFocusHost && host && document.activeElement === host) {
-              editor.focus({ preventScroll: true })
-            }
-          },
-          onComplete: () => {
-            editorRef.current = null
-          },
-          onChange: (event) => {
-            if (isEditable) {
-              onEditChangeRef.current?.(event.file)
-            }
-          }
-        },
-        isEditable ? editStateKey : undefined,
-        fileDiff
-      ),
-    [autoFocusHost, isEditable, editStateKey, fileDiff, createTokenizer]
+  const editorCallbacks = useMemo<EditorOptions<'file-diff', PierreDiffAnnotationData, undefined>>(
+    () => ({
+      createTokenizer,
+      onAttach: (editor) => {
+        editorRef.current = editor
+        const host = containerRef.current
+        // Host focus lands in layout before Pierre queues onAttach. If we still
+        // own it, move to the editor so Changes-mode typing works without a click.
+        if (autoFocusHost && host && document.activeElement === host) {
+          editor.focus({ preventScroll: true })
+        }
+      },
+      onComplete: () => {
+        editorRef.current = null
+      },
+      onChange: (event) => {
+        if (isEditable) {
+          onEditChangeRef.current?.(event.file)
+        }
+      }
+    }),
+    [autoFocusHost, isEditable, createTokenizer]
+  )
+  const editorOptions = usePierreDiffEditState(
+    editorCallbacks,
+    isEditable ? editStateKey : undefined,
+    fileDiff
   )
   const renderAnnotation = useCallback(
     (annotation: PierreDiffCommentAnnotation) =>

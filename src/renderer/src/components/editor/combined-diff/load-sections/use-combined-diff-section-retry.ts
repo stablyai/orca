@@ -93,7 +93,6 @@ export function useCombinedDiffSectionRetry({
       setSections
     ]
   )
-  retrySectionRef.current = retrySection
 
   // Revalidate in place; clearing content first rebuilds Monaco even for identical refetches and stalls rebases.
   const requestSectionReload = useCallback(
@@ -145,7 +144,6 @@ export function useCombinedDiffSectionRetry({
       registryLiveRef
     ]
   )
-  requestSectionReloadRef.current = requestSectionReload
 
   // Why: a row can go clean via save or undo. Reloading on every clean costs a whole
   // `git diff`; only the rows that actually refused a reload need one.
@@ -163,7 +161,19 @@ export function useCombinedDiffSectionRetry({
     },
     [deferredReloadKeysRef, requestSectionReload, sectionsRef]
   )
-  retryDeferredSectionReloadRef.current = retryDeferredSectionReload
+
+  useLayoutEffect(() => {
+    retrySectionRef.current = retrySection
+    requestSectionReloadRef.current = requestSectionReload
+    retryDeferredSectionReloadRef.current = retryDeferredSectionReload
+  }, [
+    retrySectionRef,
+    retrySection,
+    requestSectionReloadRef,
+    requestSectionReload,
+    retryDeferredSectionReloadRef,
+    retryDeferredSectionReload
+  ])
 
   useLayoutEffect(() => {
     const deferred = deferredReloadKeysRef.current

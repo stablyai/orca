@@ -1,5 +1,5 @@
 import { getShadowRootSelection } from '@/lib/shadow-root-selection'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { resolveFindAgainShortcut, type Editor } from '@pierre/diffs/edit'
 import type { FileDiffMetadata } from '@pierre/diffs'
 import { useTranslate } from '@/i18n/use-translate'
@@ -42,20 +42,36 @@ export function usePierreDiffFind({
   const [revision, setRevision] = useState(0)
   const [selection, setSelection] = useState<{ request: object; index: number }>()
   const enabled = open && query.text.length > 0
-  const source = useMemo(
-    () => ({
-      revision,
-      text: !enabled
-        ? null
-        : side === 'deletions'
-          ? fileDiff.deletionLines.join('')
-          : (editorRef.current?.getText() ?? fileDiff.additionLines.join(''))
-    }),
-    [enabled, side, fileDiff, revision, editorRef]
-  )
+  const [source, setSource] = useState<{
+    fileDiff: FileDiffMetadata
+    side: DiffSearchSide
+    revision: number
+    text: string
+  } | null>(null)
+  useLayoutEffect(() => {
+    setSource(
+      enabled
+        ? {
+            fileDiff,
+            side,
+            revision,
+            text:
+              side === 'deletions'
+                ? fileDiff.deletionLines.join('')
+                : (editorRef.current?.getText() ?? fileDiff.additionLines.join(''))
+          }
+        : null
+    )
+  }, [enabled, side, fileDiff, revision, editorRef])
   const request = useMemo(
-    () => (source.text === null ? null : { ...source, text: source.text, query, replacement }),
-    [source, query, replacement]
+    () =>
+      enabled &&
+      source?.fileDiff === fileDiff &&
+      source.side === side &&
+      source.revision === revision
+        ? { revision: source.revision, text: source.text, query, replacement }
+        : null,
+    [enabled, source, fileDiff, side, revision, query, replacement]
   )
   const result = usePierreDiffSearchResults(request)
   const matches = result?.matches

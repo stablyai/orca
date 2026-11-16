@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import type { FileDiffMetadata } from '@pierre/diffs'
 import type { EditorFactory } from '@pierre/diffs/react'
 import { Editor, EditStateManager, type EditorOptions } from '@pierre/diffs/edit'
@@ -22,6 +23,17 @@ export function withPierreDiffEditState(
     requests.set(options, { scope, fileDiff })
   }
   return options
+}
+
+export function usePierreDiffEditState(
+  options: EditorOptions<'file-diff', PierreDiffAnnotationData, undefined>,
+  scope: string | undefined,
+  fileDiff: FileDiffMetadata
+) {
+  return useMemo(
+    () => withPierreDiffEditState({ ...options }, scope, fileDiff),
+    [options, scope, fileDiff]
+  )
 }
 
 function forgetDormant(key: string): void {

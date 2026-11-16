@@ -25,6 +25,8 @@ src/renderer/src/components/use-terminal-controller.ts
 
 # Caches keyed on a TanStack virtualizer, which mutates in place (hazard virtualizer-in-memo-block).
 src/renderer/src/components/editor/combined-diff/scroll-viewport/combined-diff-section-list.tsx
+src/renderer/src/components/editor/pierre-diff/PierreDiffProviders.tsx
+src/renderer/src/components/editor/pierre-diff/PierreDiffOverviewRuler.tsx
 src/renderer/src/components/editor/markdown-preview/search/use-markdown-preview-search-reveal.ts
 src/renderer/src/components/editor/markdown-preview/viewport/use-markdown-preview-scroll-anchor.ts
 src/renderer/src/components/github-item-dialog/inspect-pull-request/pr-files-combined-diff-body.tsx
