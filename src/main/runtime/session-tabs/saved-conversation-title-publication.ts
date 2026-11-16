@@ -3,7 +3,7 @@ import { StructuredConversationLabelChanges } from './structured-conversation-la
 import { retitleStructuredConversationTabs } from './structured-conversation-tab-title'
 import { savedWorkspaceCatalog } from '../../persistence/profile-save-domains'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 import { structuredChatDisplayName } from '../../../shared/agent-session/view/structured-chat-row-name'
 import { agentSessionRecordShownName } from '../agent-session/records/agent-session-record-shown-name'
 import type { ExecutionHostId } from '../../../shared/execution-host'

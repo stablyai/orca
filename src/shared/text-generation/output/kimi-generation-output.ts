@@ -2,7 +2,7 @@ import { z } from 'zod'
 import {
   textGenerationFailure,
   type TextGenerationFailureFields
-} from '../../text-generation-failure-copy'
+} from '../text-generation-failure-copy'
 import type { GenerationOutputParse } from './opencode-generation-output'
 
 const messageSchema = z.discriminatedUnion('role', [

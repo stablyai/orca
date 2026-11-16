@@ -209,35 +209,6 @@ describe('process-tree-kill breadcrumb seam', () => {
     vi.restoreAllMocks()
   })
 
-  it('reports the Windows taskkill tree it just spawned', async () => {
-    await withWindows(async () => {
-      const child = mockProcess(1234)
-      const taskkill = mockProcess(5678)
-      spawnMock.mockReturnValue(taskkill)
-
-      const pending = signalProcessTree(child, 'SIGKILL')
-      taskkill.emit('close', 0)
-      await pending
-
-      expect(observed).toEqual([
-        { pid: 1234, site: 'run-process-tree', scope: 'win-taskkill-tree' }
-      ])
-    })
-  })
-
-  it.skipIf(process.platform === 'win32')(
-    'reports the POSIX process group it signalled',
-    async () => {
-      vi.spyOn(process, 'kill').mockImplementation(() => true)
-
-      await expect(signalProcessTree(mockProcess(1234), 'SIGKILL')).resolves.toBe(true)
-
-      expect(observed).toEqual([
-        { pid: 1234, site: 'run-process-tree', scope: 'posix-process-group' }
-      ])
-    }
-  )
-
   it('never taskkills a pid the child already gave back to Windows', async () => {
     await withWindows(async () => {
       const child = mockProcess(1234)

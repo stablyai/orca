@@ -14,7 +14,7 @@ import {
   isWorkspaceOwnedBySomeoneElse
 } from '../../workspace-view/workspace-creator-visibility'
 import { getWorktreeHostIdentity } from '../../worktree/host-qualified-identity'
-import { hiddenProjectRowFacts, indexHiddenProjects } from '../../hidden-projects'
+import { hiddenProjectRowFacts, indexHiddenProjects } from '../../project/catalog/hidden-projects'
 import { collectActiveRowKeys } from '../selection/active-workspace'
 import {
   buildFeedHostOptions,

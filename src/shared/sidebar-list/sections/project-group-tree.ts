@@ -14,7 +14,7 @@ import {
   withRepoSectionDisplayLabels,
   type ActivityItem
 } from './project-section-order'
-import { compareRootProjectEntries } from '../../root-project-order'
+import { compareRootProjectEntries } from './root-project-order'
 import { compareCodePoints, compareSidebarText } from '../sorting/text-order'
 
 type GroupedProjectEntry = ProjectSectionEntry<

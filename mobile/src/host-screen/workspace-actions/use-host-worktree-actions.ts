@@ -7,7 +7,7 @@ import {
 } from '../../worktree/personal-project-opening'
 import { useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../src/shared/sidebar-inputs-switch'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../src/shared/sidebar-list/feed/sidebar-inputs-switch'
 
 import { floatingWorkspaceSessionPath } from '../../session/floating-workspace'
 import { holdSessionLeave } from '../../session/session-leave-guard'

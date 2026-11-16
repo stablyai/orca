@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultUIState } from '../../../src/shared/constants'
 import { projectHostSetupProjectionFromRepos } from '../../../src/shared/project/host-setup/project-host-setup-projection'
-import { buildMobileProjectSectionCatalog } from '../../../src/shared/mobile-project-sections-contract'
+import { buildMobileProjectSectionCatalog } from '../../../src/shared/sidebar-list/catalog/mobile-project-sections-contract'
 import { ProjectSectionCatalogSchema } from '../../../src/shared/sidebar-list/catalog/project-section-catalog-schema'
 import { RecordProjectOpenParams } from '../../../src/shared/rpc-contract/personal-project-order-params'
 import { mutatePersonalProjectOrder } from '../../../src/shared/personal-project-order-writes'

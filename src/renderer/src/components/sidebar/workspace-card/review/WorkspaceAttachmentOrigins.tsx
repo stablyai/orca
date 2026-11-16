@@ -9,7 +9,7 @@ import { terminalLayoutContainsLeaf } from '../../../../../../shared/workspace-s
 import { activateTabAndFocusPane } from '@/lib/workspace/tabs/activate-tab-and-focus-pane'
 import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import type { WorkspaceAttachment, Worktree } from '../../../../../../shared/worktree/types'
-import type { Tab } from '../../../../../../shared/tab-types'
+import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { getWorkspaceAttachmentOriginKey } from '../../../../../../shared/workspace-attachments/workspace-attachment-origins'
 import { useStructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-name-observation'
 import { projectedStructuredChatTabName } from '@/runtime/native-chat/naming/structured-chat-tab-name'

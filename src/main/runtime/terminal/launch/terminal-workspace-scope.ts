@@ -3,7 +3,7 @@ import { OrcaRuntimeWithBrowserWorkspaceRouting } from '../../browser/client-pag
 import {
   floatingWorkspaceToWorktree,
   isFloatingWorkspaceSelector
-} from '../../../../shared/floating-workspace-worktree'
+} from '../../../../shared/workspace/identity/floating-workspace-worktree'
 import { resolveFloatingTerminalCwd } from '../../../ipc/floating-workspace-directory'
 import type { BrowserNetworkExecutionHost } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
 import {

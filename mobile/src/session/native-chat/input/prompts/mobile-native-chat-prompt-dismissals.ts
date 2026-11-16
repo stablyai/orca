@@ -1,4 +1,4 @@
-import { createPromptDismissalStore } from '../../../../../../src/shared/prompt-dismissal-store'
+import { createPromptDismissalStore } from '../../../../../../src/shared/native-chat/input/prompt-dismissal-store'
 
 export type MobileNativeChatPromptDismissal = {
   sessionKey: string | null

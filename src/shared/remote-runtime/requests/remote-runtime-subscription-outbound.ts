@@ -1,6 +1,6 @@
 import WebSocket from 'ws'
 import { RemoteRuntimeClientError } from '../remote-runtime-client-error'
-import { createWsOutboundBackpressureQueue } from '../../ws-outbound-backpressure-queue'
+import { createWsOutboundBackpressureQueue } from '../../network/websocket/ws-outbound-backpressure-queue'
 
 export type RemoteRuntimeOutboundSocketMemory = {
   canSend: (bytes: number, alreadyRetained?: boolean) => boolean
