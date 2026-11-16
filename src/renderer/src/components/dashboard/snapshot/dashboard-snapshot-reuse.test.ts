@@ -6,6 +6,7 @@ import type { AgentStatusEntry } from '../../../../../shared/agent-status/contra
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { buildDashboardSnapshot } from './build-dashboard-snapshot'
 import { createDashboardSnapshotReuse } from './dashboard-snapshot-reuse'
+import { i18n } from '@/i18n/i18n'
 import * as cardHost from './dashboard-snapshot-workspaces'
 
 const NOW = 1_000_000_000
@@ -145,5 +146,69 @@ describe('dashboard incremental snapshot contract', () => {
       )
     }
     expect(visits).toEqual([2, 2])
+  })
+  it('keeps same-ID workspaces distinct across hosts and invalidates every occurrence', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(NOW)
+    const store = fleet(2)
+    const local = store.getState().worktreesByRepo.r[0]
+    store.setState({
+      repos: [
+        ...store.getState().repos,
+        {
+          id: 'remote',
+          path: '/remote',
+          displayName: 'Remote',
+          badgeColor: '#000',
+          addedAt: NOW,
+          executionHostId: 'runtime:env-1'
+        }
+      ],
+      worktreesByRepo: {
+        ...store.getState().worktreesByRepo,
+        remote: [
+          { ...local, repoId: 'remote', displayName: 'Remote twin', hostId: 'runtime:env-1' }
+        ]
+      }
+    })
+    const reuse = createDashboardSnapshotReuse()
+    const input = () => ({ ...store.getState(), chatNames: names })
+    const expected = buildDashboardSnapshot(input(), NOW)
+    expect(expected.workspaces?.map((workspace) => workspace.repoId)).toEqual(['r', 'r', 'remote'])
+    expect(buildDashboardSnapshot(input(), NOW, { reuse })).toEqual(expected)
+    expect(buildDashboardSnapshot(input(), NOW, { reuse })).toEqual(expected)
+    update(store, makePaneKey('t0', LEAF), 'waiting')
+    expect(buildDashboardSnapshot(input(), NOW, { reuse })).toEqual(
+      buildDashboardSnapshot(input(), NOW)
+    )
+  })
+
+  it('invalidates reused labels when active translation resources change without a store write', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(NOW)
+    const store = fleet(2)
+    const reuse = createDashboardSnapshotReuse()
+    const input = () => ({ ...store.getState(), chatNames: names })
+    const language = i18n.language
+    const original = structuredClone(i18n.getResourceBundle(language, 'translation'))
+    const previous = buildDashboardSnapshot(input(), NOW, { reuse })
+    try {
+      i18n.addResourceBundle(
+        language,
+        'translation',
+        {
+          auto: {
+            components: { sidebar: { workspaceBoardStatus: { todo: 'Changed catalog value' } } }
+          }
+        },
+        true,
+        true
+      )
+      update(store, makePaneKey('t0', LEAF), 'waiting')
+      const full = buildDashboardSnapshot(input(), NOW)
+      expect(full.filterOptions).not.toEqual(previous.filterOptions)
+      expect(buildDashboardSnapshot(input(), NOW, { reuse })).toEqual(full)
+    } finally {
+      i18n.removeResourceBundle(language, 'translation')
+      i18n.addResourceBundle(language, 'translation', original)
+    }
   })
 })

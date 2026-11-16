@@ -17,7 +17,8 @@ import {
 } from './dashboard-card-context'
 import {
   collectActiveDashboardWorkspaces,
-  dashboardCardMapWorkspaceMetadata
+  dashboardCardMapWorkspaceMetadata,
+  type ActiveDashboardWorkspace
 } from './dashboard-snapshot-workspaces'
 import { boundedLabel } from './dashboard-card-labels'
 import { buildDashboardSnapshotCard } from './dashboard-snapshot-card'
@@ -110,7 +111,7 @@ export function buildDashboardSnapshot(
     dirtyWorktrees && reuse
       ? reuse.activeWorktrees
       : collectActiveDashboardWorkspaces(state, includeCardDetails)
-  const nextWorkspaces = new Map<string, DashboardWorkspaceBuild>()
+  const nextWorkspaces = new Map<ActiveDashboardWorkspace, DashboardWorkspaceBuild>()
   const filterOptions =
     dirtyWorktrees && reuse
       ? reuse.filterOptions
@@ -122,7 +123,7 @@ export function buildDashboardSnapshot(
     const { repo, worktree } = workspace
     const worktreeId = worktree.id
     const parentWorktreeId = worktree.parentWorktreeId
-    const previous = dirtyWorktrees ? reuse?.workspaces.get(worktreeId) : undefined
+    const previous = dirtyWorktrees ? reuse?.workspaces.get(workspace) : undefined
     if (previous && !dirtyWorktrees!.has(worktreeId)) {
       cards.push(...previous.cards)
       if (workspaces && previous.workspace && workspaces.length < DASHBOARD_MAX_MAP_WORKSPACES) {
@@ -131,7 +132,7 @@ export function buildDashboardSnapshot(
       if (previous.cards.length) {
         repoIconsByRepoId[workspace.projectId] = workspace.repoIcon
       }
-      nextWorkspaces.set(worktreeId, previous)
+      nextWorkspaces.set(workspace, previous)
       continue
     }
     const firstCard = cards.length
@@ -211,7 +212,7 @@ export function buildDashboardSnapshot(
       cards.push(card)
       nextRows.set(row.paneKey, { row, status, activationStatus, card })
     }
-    nextWorkspaces.set(worktreeId, {
+    nextWorkspaces.set(workspace, {
       cards: cards.slice(firstCard),
       rows: nextRows,
       context,
@@ -223,20 +224,31 @@ export function buildDashboardSnapshot(
       reuse.owners.clear()
     } else {
       for (const worktreeId of dirtyWorktrees) {
-        for (const [key, row] of reuse.workspaces.get(worktreeId)?.rows ?? []) {
-          for (const source of row.row.activationPaneKey
-            ? [key, row.row.activationPaneKey]
-            : [key]) {
-            const owners = reuse.owners.get(source)
-            owners?.delete(worktreeId)
-            if (!owners?.size) {
-              reuse.owners.delete(source)
+        for (const workspace of reuse.workspacesById.get(worktreeId) ?? []) {
+          for (const [key, row] of reuse.workspaces.get(workspace)?.rows ?? []) {
+            for (const source of row.row.activationPaneKey
+              ? [key, row.row.activationPaneKey]
+              : [key]) {
+              const owners = reuse.owners.get(source)
+              owners?.delete(worktreeId)
+              if (!owners?.size) {
+                reuse.owners.delete(source)
+              }
             }
           }
         }
       }
     }
-    for (const [worktreeId, built] of nextWorkspaces) {
+    if (!dirtyWorktrees) {
+      reuse.workspacesById.clear()
+      for (const workspace of activeWorktrees) {
+        const occurrences = reuse.workspacesById.get(workspace.worktree.id) ?? []
+        occurrences.push(workspace)
+        reuse.workspacesById.set(workspace.worktree.id, occurrences)
+      }
+    }
+    for (const [workspace, built] of nextWorkspaces) {
+      const worktreeId = workspace.worktree.id
       if (dirtyWorktrees && !dirtyWorktrees.has(worktreeId)) {
         continue
       }

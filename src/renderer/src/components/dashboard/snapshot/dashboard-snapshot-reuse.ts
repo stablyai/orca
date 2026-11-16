@@ -8,6 +8,7 @@ import type { AgentStatusProjection } from '@/store/slices/agent-status/agent-st
 import type { DashboardAgentRow } from '../rows/dashboard-agent-row'
 import type { DashboardSnapshotInput } from './build-dashboard-snapshot'
 import type { DashboardCardContext } from './dashboard-card-context'
+import { getTranslationScope } from '@/i18n/i18n'
 import type { ActiveDashboardWorkspace } from './dashboard-snapshot-workspaces'
 
 export type DashboardWorkspaceBuild = {
@@ -30,7 +31,8 @@ export type DashboardSnapshotReuse = {
   projection?: AgentStatusProjection
   cursor: number
   activeWorktrees: ActiveDashboardWorkspace[]
-  workspaces: Map<string, DashboardWorkspaceBuild>
+  workspaces: Map<ActiveDashboardWorkspace, DashboardWorkspaceBuild>
+  workspacesById: Map<string, ActiveDashboardWorkspace[]>
   owners: Map<string, Set<string>>
   filterOptions: DashboardSnapshot['filterOptions']
 }
@@ -41,6 +43,7 @@ export function createDashboardSnapshotReuse(): DashboardSnapshotReuse {
     cursor: 0,
     activeWorktrees: [],
     workspaces: new Map(),
+    workspacesById: new Map(),
     owners: new Map(),
     filterOptions: undefined
   }
@@ -49,6 +52,7 @@ export function createDashboardSnapshotReuse(): DashboardSnapshotReuse {
 /** Every non-status input invalidates host, review, title and workspace context together. */
 export function dashboardSnapshotReuseInputs(state: DashboardSnapshotInput): unknown[] {
   return [
+    getTranslationScope(),
     state.chatNames,
     state.repos,
     state.worktreesByRepo,
