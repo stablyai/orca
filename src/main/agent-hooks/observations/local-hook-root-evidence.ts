@@ -6,7 +6,10 @@ import {
 } from './local-tmux-managed-pty'
 import { createLocalHookRootEvidenceReader } from '../../../shared/agent-hook-listener/presence/hook-process-root-evidence-reader'
 import { readPaneTmuxHost } from '../../../shared/agent-hook-listener/presence/hook-process-root-evidence'
-import { readSelectedRows, readTerminalRows } from '../../../shared/tmux-host-attachment-probe'
+import {
+  readSelectedRows,
+  readTerminalRows
+} from '../../../shared/agent-hook-listener/presence/tmux-host-attachment-probe'
 import { getPtyIdForPaneKey } from '../../ipc/pty/pane/key-state'
 import { getLocalPtyProvider } from '../../ipc/pty/provider/registry'
 
