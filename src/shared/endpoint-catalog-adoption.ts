@@ -8,10 +8,10 @@ import {
   normalizeProjectHostSetupRow,
   normalizeProjectHostSetupRows,
   normalizeProjectRows
-} from './project-catalog-row-normalization'
-import type { ProjectHostSetupProjection } from './project-host-setup-projection'
-import type { Project, ProjectHostSetup } from './project-types'
-import type { Repo } from './repo-types'
+} from './project/catalog/project-catalog-row-normalization'
+import type { ProjectHostSetupProjection } from './project/host-setup/project-host-setup-projection'
+import type { Project, ProjectHostSetup } from './project/project-types'
+import type { Repo } from './repository/repo-types'
 import type { RuntimeClientTarget } from './remote-runtime/host-catalog/runtime-client-target'
 
 export function adoptEndpointRepo(target: RuntimeClientTarget, repo: Repo): Repo {

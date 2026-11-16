@@ -5,7 +5,7 @@ import type { GitHubWorkItem } from '../../../../../shared/github/work-items/wor
 import type { GitLabWorkItem } from '../../../../../shared/gitlab-types'
 import type { JiraIssue, JiraSite } from '../../../../../shared/jira/jira-types'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
-import type { BaseRefSearchResult } from '../../../../../shared/repo-types'
+import type { BaseRefSearchResult } from '../../../../../shared/repository/repo-types'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type {
   SmartNameMode,

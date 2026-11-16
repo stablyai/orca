@@ -10,8 +10,8 @@ import { WORKTREE_CREATE_EXACT_NAME_TAKEN_CODE } from '../../../../../shared/new
 import { hasRuntimeRpcErrorCode } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import { WORKTREE_CREATE_EXACT_NAME_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
-import type { Repo } from '../../../../../shared/repo-types'
-import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
+import type { Repo } from '../../../../../shared/repository/repo-types'
+import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 
 const SETUP_DECISION_REQUIRED = 'Setup decision required for this repository'
 

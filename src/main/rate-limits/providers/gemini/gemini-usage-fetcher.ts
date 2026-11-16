@@ -2,7 +2,7 @@ import { getMainHttpClient } from '../../../network/http-client'
 import type {
   ProviderRateLimits,
   UsageRateLimitFailureKind
-} from '../../../../shared/rate-limit-types'
+} from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import {
   loadProjectId,
   readAuthJson,

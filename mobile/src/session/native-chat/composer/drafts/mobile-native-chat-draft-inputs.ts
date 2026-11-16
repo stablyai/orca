@@ -1,5 +1,5 @@
 import { useCallback, useSyncExternalStore } from 'react'
-import { createNonSecureContextUuid as createUuidV4 } from '../../../../../../src/shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createUuidV4 } from '../../../../../../src/shared/identifiers/non-secure-context-uuid'
 import { pickedSkillsInText } from '../../../../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
 import type { AgentJournalSkillRef } from '../../../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import type { PendingNativeChatImage } from '../attachments/mobile-native-chat-image-attachment'

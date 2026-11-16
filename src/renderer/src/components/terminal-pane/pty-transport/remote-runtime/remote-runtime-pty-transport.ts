@@ -64,7 +64,7 @@ import type {
   RuntimeTerminalShow
 } from '../../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { RuntimeTerminalSend } from '../../../../../../shared/terminal/runtime/runtime-terminal-send-contract'
-import { SAVED_RESUME_ORIGIN_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
+import { SAVED_RESUME_ORIGIN_RUNTIME_CAPABILITY } from '../../../../../../shared/remote-runtime/protocol/protocol-version'
 import { TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY } from '../../../../../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import { agentResumeHostAuthorityCapability } from '../../../../runtime/hosted-terminals/creation/agent-launch/agent-resume-host-authority-capability'
 import {
@@ -118,7 +118,7 @@ import { RemoteRuntimePtyRecoveryState } from './recovery/remote-runtime-pty-rec
 import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './recovery/remote-runtime-pty-recovery-limits'
 import { registerRemoteRuntimePtyControlReadyReviver } from './recovery/remote-runtime-pty-control-ready-revivers'
 import type { RemoteRuntimePtyRecoveryPhase } from './recovery/remote-runtime-pty-recovery-state'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import {
   createAgentSessionCreateOperation,
   withAgentSessionCreateOperationId

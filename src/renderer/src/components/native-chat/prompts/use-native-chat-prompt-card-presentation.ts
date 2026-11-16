@@ -1,6 +1,6 @@
 import { useNativeChatPaneLifetimeEffect } from '../pane/ownership/native-chat-pane-lifetime'
+import { useAgentStatus } from '@/runtime/agent-status/use-agent-status'
 import { useCallback, useLayoutEffect, useMemo, useRef, useSyncExternalStore } from 'react'
-import { useAppStore } from '../../../store/index'
 import {
   nativeChatCardDismissKey,
   nativeChatPromptDismissalMatches,
@@ -44,9 +44,7 @@ export function useNativeChatPromptCardPresentation({
   transcriptSettled?: boolean
   dismissAsync?: () => void
 }): NativeChatPromptCardPresentation {
-  const startedAt = useAppStore((s) =>
-    nativeChatPromptWaitStartedAt(card, s.agentStatusByPaneKey[paneKey])
-  )
+  const startedAt = nativeChatPromptWaitStartedAt(card, useAgentStatus(paneKey))
   const content = nativeChatCardDismissKey(card)
   const promptKey = nativeChatPromptOccurrenceKey(card, content, startedAt)
   const scopeKey = JSON.stringify([paneKey, targetPtyId])

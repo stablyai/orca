@@ -279,7 +279,7 @@ export async function callFederatedWorkerShow(
     agentWait?: RuntimeTerminalInteractiveWait | null
   }
 }> {
-  const server = resolvePinnedFederatedServer(runtime, federated)
+  const server = await resolvePinnedFederatedServer(runtime, federated)
   return (await runtime.callOrchestrationWorkerServer(
     server.environmentId,
     'orchestration.federationShow',

@@ -1,4 +1,7 @@
-import { type WorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
+import {
+  type WorkspaceKey,
+  parseWorkspaceKey
+} from '../../../shared/workspace/identity/workspace-scope'
 import { rebuildRepoBackedProjectState } from './profile-project-state-file'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import {

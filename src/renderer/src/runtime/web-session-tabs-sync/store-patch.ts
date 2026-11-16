@@ -46,8 +46,6 @@ export function applyWebSessionTabsStorePatch(
     .map(({ worktreeId }) => worktreeId)
 ): HostSessionMirrorSettle {
   let mirroredAgentStatusChanged = false
-  // Zustand commits before notifying subscribers, so a completed producer has landed even if a subscriber throws.
-  let patchCommitted = false
   const acceptedNotificationStatuses: {
     paneKey: string
     worktreeId: string
@@ -78,7 +76,7 @@ export function applyWebSessionTabsStorePatch(
             continue
           }
           const remapped = remapHostAgentStatus(surface, snapshot.worktree)
-          const accepted = remapped ? nextAgentStatuses[remapped.paneKey] : undefined
+          const accepted = remapped ? nextAgentStatuses.get(remapped.paneKey) : undefined
           const turnCompletedAt = remapped
             ? normalizeTurnCompletedAtField(surface.turnCompletedAt, remapped.state)
             : undefined
@@ -95,7 +93,7 @@ export function applyWebSessionTabsStorePatch(
             !remapped ||
             (!clientOwnedNotification &&
               (!accepted ||
-                accepted === state.agentStatusByPaneKey[remapped.paneKey] ||
+                accepted === state.agentStatusByPaneKey.get(remapped.paneKey) ||
                 !agentStatusEntryEqual(accepted, remapped)))
           ) {
             continue
@@ -113,7 +111,7 @@ export function applyWebSessionTabsStorePatch(
             continue
           }
           const currentClientStateStartedAt = clientOwnedNotification
-            ? state.agentStatusByPaneKey[notificationStatus.paneKey]?.stateStartedAt
+            ? state.agentStatusByPaneKey.get(notificationStatus.paneKey)?.stateStartedAt
             : undefined
           let localStateStartedAt = currentClientStateStartedAt
           if (
@@ -170,7 +168,7 @@ export function applyWebSessionTabsStorePatch(
                   turnEndedAt: notificationStatus.turnEndedAt
                 },
                 notificationStatus.state,
-                state.agentStatusByPaneKey[notificationStatus.paneKey]
+                state.agentStatusByPaneKey.get(notificationStatus.paneKey)
               ))
           if (!notifyCompletion && notificationStatus.state !== 'working') {
             if (notificationStatus.state === 'done') {
@@ -204,18 +202,10 @@ export function applyWebSessionTabsStorePatch(
         (patch.unifiedTabsByWorktree ?? state.unifiedTabsByWorktree)[key] ?? []
       )
     }
-    patchCommitted = true
     return patch
   }
 
-  try {
-    useAppStore.getState().updateAgentStatusState(runStorePatch)
-  } catch (error) {
-    if (!patchCommitted) {
-      throw error
-    }
-    console.warn('[web-session-tabs-sync] a store subscriber failed after the patch landed:', error)
-  }
+  useAppStore.getState().updateAgentStatusState(runStorePatch)
 
   for (const { environmentId, source, decision } of hostMirrorVerdict.frames) {
     if (decision.apply && source) {

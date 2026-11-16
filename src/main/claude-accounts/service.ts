@@ -2,7 +2,7 @@ import type {
   ClaudeAccountSignIn,
   ClaudeRateLimitAccountsState,
   ClaudeSignInRequest
-} from '../../shared/managed-account-types'
+} from '../../shared/agent-accounts/managed-account-types'
 import { ClaudeAccountRegistration } from './sign-in/claude-account-registration'
 import {
   ClaudeAccountSelection,
@@ -13,7 +13,7 @@ import {
 import { runClaudeCommandProcess } from './sign-in/claude-command-process'
 import { runClaudeLoginSession } from './sign-in/claude-login-session'
 import { runClaudePastedCodeLogin } from './sign-in/claude-pasted-code-login'
-import type { HostAccountSignInChannel } from '../../shared/host-account-sign-in-types'
+import type { HostAccountSignInChannel } from '../../shared/agent-accounts/host-account-sign-in-types'
 import type { ClaudeRuntimeAuthService } from './runtime-auth-service'
 import type { ClaudeAccountSelectionTarget } from './selection/runtime-selection'
 

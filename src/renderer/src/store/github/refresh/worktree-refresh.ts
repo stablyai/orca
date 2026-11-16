@@ -25,7 +25,7 @@ import { resolvePRBranchFallback } from '../../../../../shared/github/pull-reque
 import { selectWorktreesByRepo } from '../../workspaces/catalog/workspace-record-fields'
 import type { AppState } from '../../types'
 import type { GitHubPRRefreshCandidate } from '../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 
 export function findWorktreeById(

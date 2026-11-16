@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { salvagedOptional, salvagingArray } from '../../../../src/shared/zod-salvage'
+import { salvagedOptional, salvagingArray } from '../../../../src/shared/validation/zod-salvage'
 import {
   prFlag,
   prText

@@ -18,7 +18,7 @@ import type { AgentStartupPlan } from '../../../../shared/agent-launch/startup/t
 
 import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import '@/diagnostics/telemetry/telemetry'
-import { tuiAgentToAgentKind } from '../../../../shared/agent-kind'
+import { tuiAgentToAgentKind } from '../../../../shared/agent-status/identity/agent-kind'
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { translate } from '@/i18n/i18n'
 import { requireExecutionHostPlatform } from '@/runtime/hosts/platform/execution-host-facts'

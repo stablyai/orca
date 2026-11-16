@@ -5,7 +5,7 @@ import { withinAgentModelCatalogRead } from '../../agent-model-catalog/agent-mod
 import { AGENT_MODEL_CATALOG_PICKER_WAIT_MS } from '../../agent-model-catalog/agent-model-catalog-listing-waiters'
 import {
   independentAgentModelCatalog,
-  usesModelSpecificAcpEfforts
+  fillsLiveModelsFromCatalog
 } from '../../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 import {
   readStructuredAgentSessionOptionsAtRest,
@@ -137,13 +137,15 @@ export async function readStructuredAgentSessionOptions(
     capabilities?.contextUsage ? session.journal.reads.contextUsage() : undefined
   ])
   const contextFloor = floor ? { contextFloor: floor } : {}
-  if (live && usesModelSpecificAcpEfforts(agent)) {
+  if (live && fillsLiveModelsFromCatalog(agent)) {
+    const listed = restingOptions.inventory.origin === 'unknown' ? null : restingOptions.inventory
     options = {
       ...options,
-      models: fillUnknownModelEfforts(
-        options.models,
-        restingOptions.inventory.origin === 'unknown' ? [] : restingOptions.inventory.models
-      )
+      models: fillUnknownModelEfforts(options.models, listed?.models ?? []),
+      // A current model without Fast must not hide it for the listed models that have it.
+      ...(!options.fastModeSupport && listed?.fastModeSupport
+        ? { fastModeSupport: listed.fastModeSupport }
+        : {})
     }
   }
   const resting = live ? restingOptions : null
@@ -169,7 +171,10 @@ export async function readStructuredAgentSessionOptions(
     ...options.current,
     ...(model !== undefined ? { model } : {}),
     effort: saved.effort ?? options.current.effort,
-    fastMode: selected.current.fastMode ?? options.current.fastMode,
+    // A running model's Fast says nothing about another selected model, which keeps its own default.
+    fastMode:
+      selected.current.fastMode ??
+      (model === options.current.model ? options.current.fastMode : undefined),
     // The saved tier as the shared speed rule runs it under the saved model.
     ...(context.deps.agents.definition(agent)?.restingOptions.acceptsKey('interactionMode')
       ? {

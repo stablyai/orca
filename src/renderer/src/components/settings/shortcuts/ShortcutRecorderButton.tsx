@@ -6,7 +6,7 @@ import {
   ModifierDoubleTapDetector,
   modifierFromKeyEvent,
   toModifierDoubleTapEvent
-} from '../../../../../shared/modifier-double-tap-detector'
+} from '../../../../../shared/keybindings/modifier-double-tap-detector'
 import { cn } from '../../../lib/class-names'
 import { ShortcutKeyCombo } from '../../ShortcutKeyCombo'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'

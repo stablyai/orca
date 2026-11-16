@@ -2,7 +2,7 @@ import type {
   BrowserCertificateFailure,
   BrowserPage,
   BrowserWorkspace
-} from '../../../../shared/browser-workspace-types'
+} from '../../../../shared/browser/workspaces/browser-workspace-types'
 
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import {

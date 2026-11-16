@@ -1,6 +1,6 @@
 import type { RuntimeMobileSessionBrowserTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import { sameRuntimeBrowserPlacement } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
-import { browserLoadErrorsEqual } from '../../../../shared/browser-load-failure'
+import { browserLoadErrorsEqual } from '../../../../shared/browser/navigation/browser-load-failure'
 
 // JSON equality depended on key order and discarded undefined; compare client-visible fields structurally.
 export function headlessBrowserTabsUnchanged(

@@ -1,6 +1,6 @@
 import type { SshPendingPtyKill } from './ssh-pending-pty-kill'
 import type { OrcadSshProvisioningIntent } from '../orcad-lifecycle/orcad-ssh-provisioning'
-import type { NodeDistMirrorAttempt } from '../../node-dist-mirror'
+import type { NodeDistMirrorAttempt } from '../../node-runtime/node-dist-mirror'
 
 export const MIN_SSH_RELAY_GRACE_PERIOD_SECONDS = 60
 export const MAX_SSH_RELAY_GRACE_PERIOD_SECONDS = 7 * 24 * 60 * 60

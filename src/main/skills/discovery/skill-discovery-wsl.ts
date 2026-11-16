@@ -4,7 +4,7 @@ import {
   type WslSkillDiscoveryObservation
 } from './skill-discovery-wsl-observation'
 import { posix as pathPosix } from 'node:path'
-import type { SkillDiscoveryResult, SkillSourceKind } from '../../../shared/skills'
+import type { SkillDiscoveryResult, SkillSourceKind } from '../../../shared/skills/discovery/skills'
 import { quotePosixShell as quoteBashString } from '../../../shared/shell/launch/shell-argument-quoting'
 import { runWslProcess } from '../../wsl/execution/wsl-runner'
 import { buildSkillDiscoverySources, type SkillScanRoot } from './skill-discovery-sources'
@@ -15,8 +15,8 @@ import {
   CLAUDE_SYNC_SCRATCH_DIRECTORY_NAMES,
   SKILL_STAGING_GLOB
 } from '../filesystem/skill-transaction-staging-names'
-import { skillFileMaxDepth } from '../../../shared/skill-discovery-depth'
-import { bundledSkillNames } from '../../../shared/bundled-skill-names'
+import { skillFileMaxDepth } from '../../../shared/skills/discovery/skill-discovery-depth'
+import { bundledSkillNames } from '../../../shared/skills/bundled/bundled-skill-names'
 
 const MAX_MARKDOWN_BYTES = 256 * 1024
 const WSL_SCAN_TIMEOUT_MS = 10_000

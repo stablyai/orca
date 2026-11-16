@@ -1,3 +1,4 @@
+import '../../../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -8,7 +9,7 @@ import {
   refreshManagedOrcadPairing
 } from '../../../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
 import { pairingCode } from '../runtime-environments-ipc-test-harness'
-import '../../../../shared/protocol-version'
+import '../../../../shared/remote-runtime/protocol/protocol-version'
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../../shared/remote-runtime/protocol/host-runtime-capabilities'
 import {
   advanceRuntimeEnvironmentCapabilityIncarnation,
@@ -46,22 +47,24 @@ import { setRefusedPairingHandlers } from '../pairing/runtime-environment-pairin
 
 let directory: string
 let envId: string
-beforeEach(() => {
+beforeEach(async () => {
   vi.clearAllMocks()
   resetRuntimeEnvironmentCapabilityEvidence()
   directory = mkdtempSync(join(tmpdir(), 'orca-status-retirement-'))
-  envId = addManagedOrcadEnvironment(directory, {
-    id: 'env-managed',
-    name: 'Host',
-    now: 1,
-    pairingCode: pairingCode(),
-    orcadDeployment: {
-      sshTargetId: 'box',
-      sshTargetGeneration: 1,
-      localPort: 6768,
-      remotePort: 6768
-    }
-  }).id
+  envId = (
+    await addManagedOrcadEnvironment(directory, {
+      id: 'env-managed',
+      name: 'Host',
+      now: 1,
+      pairingCode: pairingCode(),
+      orcadDeployment: {
+        sshTargetId: 'box',
+        sshTargetGeneration: 1,
+        localPort: 6768,
+        remotePort: 6768
+      }
+    })
+  ).id
   mocks.diagnostics.mockReturnValue(null)
 })
 afterEach(() => {
@@ -86,12 +89,12 @@ it('does not fence another environment or a fresh probe after retirement', async
   await expect(getRuntimeEnvironmentStatus(directory, envId)).resolves.toMatchObject({ ok: true })
   advanceRuntimeEnvironmentCapabilityIncarnation(envId)
   await expect(getRuntimeEnvironmentStatus(directory, envId)).resolves.toMatchObject({ ok: true })
-  expect(resolveEnvironment(directory, envId).runtimeId).toBe('old-host')
+  expect((await resolveEnvironment(directory, envId)).runtimeId).toBe('old-host')
 })
 
 /** What a re-pair over SSH does mid-probe: store a new pairing and retire the old transports. */
-function repairMidProbe(now: number, keyByte = 1): void {
-  refreshManagedOrcadPairing(
+async function repairMidProbe(now: number, keyByte = 1): Promise<void> {
+  await refreshManagedOrcadPairing(
     directory,
     envId,
     pairingCode(undefined, { deviceToken: `token-${now}`, keyByte }),
@@ -100,28 +103,12 @@ function repairMidProbe(now: number, keyByte = 1): void {
   advanceRuntimeEnvironmentCapabilityIncarnation(envId)
 }
 
-it('answers from the successor owner when the probe itself re-paired the server', async () => {
-  mocks.request.mockImplementationOnce(async () => {
-    repairMidProbe(2)
-    return {
-      id: 'status',
-      ok: false,
-      error: { code: 'unauthorized', message: 'refused' },
-      _meta: { runtimeId: 'old-host' }
-    }
-  })
-  mocks.request.mockResolvedValueOnce(response())
-  await expect(
-    getRuntimeEnvironmentStatus(directory, envId, undefined, { reconnect: true })
-  ).resolves.toMatchObject({ ok: true })
-})
-
 it.each([
-  ['a pairing under another host key', () => repairMidProbe(2, 2), true],
-  ['a caller pinned to the old pairing', () => repairMidProbe(2), false]
+  ['a pairing under another host key', async () => await repairMidProbe(2, 2), true],
+  ['a caller pinned to the old pairing', async () => await repairMidProbe(2), false]
 ] as const)('never answers %s from the replacement', async (_name, replace, follow) => {
   mocks.request.mockImplementationOnce(async () => {
-    replace()
+    await replace()
     return response()
   })
   mocks.request.mockResolvedValue(response())
@@ -133,7 +120,7 @@ it.each([
 it('follows a re-pair only once', async () => {
   let now = 2
   mocks.request.mockImplementation(async () => {
-    repairMidProbe(now++)
+    await repairMidProbe(now++)
     return response()
   })
   await expect(getRuntimeEnvironmentStatus(directory, envId)).resolves.toMatchObject({

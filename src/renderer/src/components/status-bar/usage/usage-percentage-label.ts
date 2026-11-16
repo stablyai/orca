@@ -3,7 +3,7 @@ import type { Translate } from '@/i18n/use-translate'
 import {
   getDisplayedUsagePercentage,
   type UsagePercentageDisplay
-} from '../../../../../shared/usage-percentage-display'
+} from '../../../../../shared/agent-usage/display/usage-percentage-display'
 
 export function formatUsagePercentageLabel(
   usedPercent: number,

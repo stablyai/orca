@@ -9,7 +9,7 @@ import type {
   TerminalTab
 } from '../terminal-tab-types'
 import type { WorkspaceSessionState } from '../../workspace-session/workspace-session-state-types'
-import { folderWorkspaceKey } from '../../workspace-scope'
+import { folderWorkspaceKey } from '../../workspace/identity/workspace-scope'
 
 export const GIT_KEY = 'repo-1::/Users/dev/orca'
 export const FOLDER_KEY = folderWorkspaceKey('notes-1')

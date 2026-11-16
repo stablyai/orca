@@ -1,3 +1,7 @@
+import {
+  acceptedAgentStatuses,
+  type AcceptedAgentStatuses
+} from '@/store/slices/agent-status/accepted-agent-statuses'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentStatusEntry,
@@ -18,7 +22,7 @@ const ROUTING = { connectionId: null }
 
 type MockStoreState = {
   tabsByWorktree: Record<string, { id: string; launchAgent?: AgentType }[]>
-  agentStatusByPaneKey: Record<string, AgentStatusEntry | undefined>
+  agentStatusByPaneKey: AcceptedAgentStatuses
   paneForegroundAgentByPaneKey: Record<string, PaneForegroundAgentEntry>
   agentLaunchConfigByPaneKey: Record<string, { identity: { agentType?: AgentType } } | undefined>
   runtimePaneTitlesByTabId: Record<string, Record<number, string | undefined>>
@@ -49,7 +53,7 @@ vi.mock('@/lib/workspace/ownership/connection-owner-resolution', () => ({
 function makeMockStoreState(): MockStoreState {
   return {
     tabsByWorktree: { [WORKTREE_ID]: [{ id: TAB_ID }] },
-    agentStatusByPaneKey: {},
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
 
     paneForegroundAgentByPaneKey: {},
     agentLaunchConfigByPaneKey: {},
@@ -134,11 +138,16 @@ describe('createParkedTerminalCommandStatusPolicy', () => {
   })
 
   it('settles a still-working Command Code row to done after the settle window', async () => {
-    mockStoreState.agentStatusByPaneKey[PANE_KEY] = makeStatusEntry({
-      state: 'working',
-      prompt: 'Fix the spinner',
-      agentType: 'command-code'
-    })
+    mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
+      [
+        PANE_KEY,
+        makeStatusEntry({
+          state: 'working',
+          prompt: 'Fix the spinner',
+          agentType: 'command-code'
+        })
+      ]
+    ])
     const policy = await createPolicy(PTY_ID_LOCAL)
 
     policy.onCommandCodeDone('Fix the spinner')
@@ -161,11 +170,16 @@ describe('createParkedTerminalCommandStatusPolicy', () => {
   })
 
   it('cancels a pending done settle when a working repaint arrives', async () => {
-    mockStoreState.agentStatusByPaneKey[PANE_KEY] = makeStatusEntry({
-      state: 'working',
-      prompt: 'Fix the spinner',
-      agentType: 'command-code'
-    })
+    mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
+      [
+        PANE_KEY,
+        makeStatusEntry({
+          state: 'working',
+          prompt: 'Fix the spinner',
+          agentType: 'command-code'
+        })
+      ]
+    ])
     const policy = await createPolicy(PTY_ID_LOCAL)
 
     policy.onCommandCodeDone('Fix the spinner')
@@ -179,11 +193,16 @@ describe('createParkedTerminalCommandStatusPolicy', () => {
 
   // Reveal inherits the settle deadline; flushing early would make the same-prompt guard reject a genuine working repaint.
   it('dispose hands the pending settle to the remounted pane instead of completing it early', async () => {
-    mockStoreState.agentStatusByPaneKey[PANE_KEY] = makeStatusEntry({
-      state: 'working',
-      prompt: 'Fix the spinner',
-      agentType: 'command-code'
-    })
+    mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
+      [
+        PANE_KEY,
+        makeStatusEntry({
+          state: 'working',
+          prompt: 'Fix the spinner',
+          agentType: 'command-code'
+        })
+      ]
+    ])
     const policy = await createPolicy(PTY_ID_LOCAL)
     const { setCommandCodeDoneSettleExecutor } =
       await import('../../agent-completion/command-code/command-code-done-settle')
@@ -201,11 +220,16 @@ describe('createParkedTerminalCommandStatusPolicy', () => {
 
   // A revealed pane’s working repaint before the inherited deadline must still cancel completion.
   it('lets a working repaint after the handoff cancel the transferred settle', async () => {
-    mockStoreState.agentStatusByPaneKey[PANE_KEY] = makeStatusEntry({
-      state: 'working',
-      prompt: 'Fix the spinner',
-      agentType: 'command-code'
-    })
+    mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
+      [
+        PANE_KEY,
+        makeStatusEntry({
+          state: 'working',
+          prompt: 'Fix the spinner',
+          agentType: 'command-code'
+        })
+      ]
+    ])
     const policy = await createPolicy(PTY_ID_LOCAL)
     const { cancelCommandCodeDoneSettle, setCommandCodeDoneSettleExecutor } =
       await import('../../agent-completion/command-code/command-code-done-settle')
@@ -222,11 +246,16 @@ describe('createParkedTerminalCommandStatusPolicy', () => {
   })
 
   it('dispose does not flush a settle a working repaint already cancelled', async () => {
-    mockStoreState.agentStatusByPaneKey[PANE_KEY] = makeStatusEntry({
-      state: 'working',
-      prompt: 'Fix the spinner',
-      agentType: 'command-code'
-    })
+    mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
+      [
+        PANE_KEY,
+        makeStatusEntry({
+          state: 'working',
+          prompt: 'Fix the spinner',
+          agentType: 'command-code'
+        })
+      ]
+    ])
     const policy = await createPolicy(PTY_ID_LOCAL)
 
     policy.onCommandCodeDone('Fix the spinner')
@@ -238,11 +267,16 @@ describe('createParkedTerminalCommandStatusPolicy', () => {
   })
 
   it('dispose after the settle fired writes done exactly once', async () => {
-    mockStoreState.agentStatusByPaneKey[PANE_KEY] = makeStatusEntry({
-      state: 'working',
-      prompt: 'Fix the spinner',
-      agentType: 'command-code'
-    })
+    mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
+      [
+        PANE_KEY,
+        makeStatusEntry({
+          state: 'working',
+          prompt: 'Fix the spinner',
+          agentType: 'command-code'
+        })
+      ]
+    ])
     const policy = await createPolicy(PTY_ID_LOCAL)
 
     policy.onCommandCodeDone('Fix the spinner')

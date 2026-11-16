@@ -2,7 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../../../store/index'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import type { DiscoveredSkill, SkillDiscoveryResult } from '../../../../../../shared/skills'
+import type {
+  DiscoveredSkill,
+  SkillDiscoveryResult
+} from '../../../../../../shared/skills/discovery/skills'
 import { getNativeChatAgentProfile } from '../../../../../../shared/native-chat/native-chat-agent-profiles'
 import { isNativeChatSkillForAgent } from '../../../../../../shared/native-chat/input/commands/native-chat-skill-visibility'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'

@@ -4,7 +4,7 @@ import {
   clipboardImageSizeWithinEdge,
   encodeClipboardImageWithinLimit,
   type ClipboardImageDimensions
-} from '../../../../src/shared/clipboard-image'
+} from '../../../../src/shared/clipboard/clipboard-image'
 import { base64DecodedByteLength } from '../../../../src/shared/agent-session/agent-session-attachments'
 import { detectImageFileSignature } from '../../../../src/shared/image-file-signature'
 import { decodeBase64Bytes } from '../../transport/encryption/base64-byte-codec'

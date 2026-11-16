@@ -249,6 +249,7 @@
     "message": {
       "copyMessage": "复制消息",
       "forkFromResponse": "从此回复创建分支",
+      "scrollMessageToTop": "将此消息滚动到顶部",
       "forkFromResponseHint": "新聊天将包含本轮结束前的完整回复"
     },
     "messageActionsSheet": {
@@ -2830,12 +2831,14 @@
       "title": "外观"
     },
     "browserSettingsScreen": {
+      "askEachTime": "每次询问",
+      "askEachTimeDescription": "每次选择 Orca 浏览器、手机浏览器或复制链接",
       "desktopBrowser": "桌面 Orca 浏览器",
       "desktopBrowserDescription": "在已配对桌面通过串流提供的浏览器中打开",
-      "linksDescription": "选择点按终端输出中的 HTTP(S) 链接时使用的浏览器",
+      "terminalAndChatLinksDescription": "选择点按终端输出和聊天中的网页链接时使用的浏览器",
       "linksHeading": "链接",
       "loadFailed": "无法加载浏览器偏好设置。请重试",
-      "openTerminalLinks": "打开终端链接",
+      "openLinks": "打开链接",
       "phoneBrowser": "手机浏览器",
       "phoneBrowserDescription": "在此手机的 Safari、Chrome 或其他浏览器中打开",
       "saveFailed": "无法保存浏览器偏好设置。请重试",

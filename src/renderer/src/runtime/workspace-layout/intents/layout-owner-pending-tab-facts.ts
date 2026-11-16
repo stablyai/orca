@@ -1,6 +1,9 @@
 // Pending opens supply window-only labels/browser facts until main’s frame draws them; main owns layout, so frame builds temporarily treat these facts as stored content.
 
-import type { BrowserPage, BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
+import type {
+  BrowserPage,
+  BrowserWorkspace
+} from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   BROWSER_TAB_LAYOUT_FIELDS,
   BROWSER_TAB_WORKSPACE_FIELDS,

@@ -1,4 +1,7 @@
-import { formatOrcaSessionAddress, isOrcaSessionId } from '../../../../shared/orca-session-address'
+import {
+  formatOrcaSessionAddress,
+  isOrcaSessionId
+} from '../../../../shared/agent-session/identity/orca-session-address'
 import type { RefObject } from 'react'
 import type { NativeChatComposerHandle } from '../native-chat/composer/native-chat-composer-types'
 import { LazyOrchestrationCrewPanel } from './LazyOrchestrationCrewPanel'

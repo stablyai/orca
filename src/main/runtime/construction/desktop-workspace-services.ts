@@ -52,9 +52,9 @@ export function installDesktopWorkspaceVmWaker(
     noteOpened: (workspaceId) => runtime.noteWorkspaceReopened(workspaceId),
     holdOpen: (workspaceId, suspended, timeoutMs, signal) =>
       runtime.holdWorkspaceVmOpen(workspaceId, suspended, timeoutMs, signal),
-    openEnvironment: (selector) => {
+    openEnvironment: async (selector) => {
       const root = getRuntimeEnvironmentRegistryRoot()
-      return openRecipeVmEnvironment(root, resolveEnvironment(root, selector))
+      return openRecipeVmEnvironment(root, await resolveEnvironment(root, selector))
     }
   })
   // A sleeping VM's SSH host takes no background login until its workspace wakes (#36363).

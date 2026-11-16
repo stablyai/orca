@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
-import { browserPageZoomLevelToPercent } from '../../../../shared/browser-page-zoom'
+import { browserPageZoomLevelToPercent } from '../../../../shared/browser/site-settings/browser-page-zoom'
 import { BrowserSiteDisplayController } from './browser-site-display-controller'
 import {
   configureBrowserSiteDisplayStore,

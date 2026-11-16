@@ -1,4 +1,4 @@
-import type * as NodeCliCommandResolutionModule from '../../shared/node-cli-command-resolution'
+import type * as NodeCliCommandResolutionModule from '../../shared/shell/command-resolution/node-cli-command-resolution'
 import type * as ProcessHostModule from '@orca/process-host'
 import type { ProcessSpec } from '@orca/process-host/process-spec'
 import { EventEmitter } from 'node:events'
@@ -42,12 +42,15 @@ vi.mock('../../main/claude-accounts/runtime-auth/keychain', () => ({
   writeActiveClaudeKeychainCredentials: writeKeychainMock
 }))
 // PATH assertions must exercise the real withCliRuntimeOnPath filesystem probes.
-vi.mock('../../shared/node-cli-command-resolution', async (importOriginal) => ({
-  ...(await importOriginal<typeof NodeCliCommandResolutionModule>()),
-  getVersionManagerBinPaths: getVersionManagerBinPathsMock,
-  resolveCliCommand: resolveCliCommandMock
-}))
-vi.mock('../../shared/windows-console-input', () => ({
+vi.mock(
+  '../../shared/shell/command-resolution/node-cli-command-resolution',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof NodeCliCommandResolutionModule>()),
+    getVersionManagerBinPaths: getVersionManagerBinPathsMock,
+    resolveCliCommand: resolveCliCommandMock
+  })
+)
+vi.mock('./windows-console-input', () => ({
   stdioForWindowsInteractiveChild: stdioForWindowsInteractiveChildMock
 }))
 

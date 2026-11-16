@@ -113,7 +113,9 @@ export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends O
       providerSession: request.providerSession,
       record: record && worktreeIdsEqual(record.worktreeId, worktreeId) ? record : undefined,
       liveRow: sourcePaneKey
-        ? this.getAgentProviderSessionSnapshotFn?.().find((row) => row.paneKey === sourcePaneKey)
+        ? this.getAgentProviderSessionRowsForPaneFn?.(sourcePaneKey).find(
+            (row) => row.paneKey === sourcePaneKey
+          )
         : undefined
     })
   }

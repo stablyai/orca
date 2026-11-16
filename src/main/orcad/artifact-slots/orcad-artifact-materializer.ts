@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { chmod, copyFile, mkdir, readFile, rename, rm, utimes, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { getAppEnvironment } from '../../../shared/app-environment'
-import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
+import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
 import {
   ORCAD_MOBILE_WEB_DIR,
   ORCAD_MOBILE_WEB_MANIFEST,
@@ -19,7 +19,10 @@ import {
   orcadTemplatePackagedRipgrep,
   orcadTemplateTargetFilenames
 } from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
-import { pinnedNodeRuntimeAsset, type NodeRuntimeTarget } from '../../../shared/node-runtime-pin'
+import {
+  pinnedNodeRuntimeAsset,
+  type NodeRuntimeTarget
+} from '../../../shared/node-runtime/node-runtime-pin'
 import { findOrcadCachePath } from '../../node-runtime/orcad-cache-path'
 import type { PinnedRuntimeMaterializeOptions } from '../../node-runtime/pinned-runtime-materializer'
 import { readOrcadArtifactVerificationRecord } from './orcad-artifact-verification-record'

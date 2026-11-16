@@ -5,7 +5,7 @@ import { buildWslExecArgs } from '../../../shared/shell/wsl/wsl-login-shell-comm
 import {
   commandLineLength,
   MAX_COMMAND_LINE_CHARS
-} from '../../../shared/windows-command-line-budget'
+} from '../../../shared/shell/launch/windows-command-line-budget'
 import type { OrcadHostTransport } from '../../managed-server/install/orcad-host-transport'
 import type { RemoteCommandChannel } from '../../managed-server/install/remote-install-transport'
 import {

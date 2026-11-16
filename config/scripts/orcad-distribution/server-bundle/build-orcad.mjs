@@ -55,7 +55,10 @@ import {
   orcadRipgrepArtifact
 } from '../../../../src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts'
 import { computeOrcadFullVersion } from './orcad-artifact-version.mjs'
-import { NODE_RUNTIME_ASSETS, NODE_RUNTIME_PIN } from '../../../../src/shared/node-runtime-pin.ts'
+import {
+  NODE_RUNTIME_ASSETS,
+  NODE_RUNTIME_PIN
+} from '../../../../src/shared/node-runtime/node-runtime-pin.ts'
 import { findSlotProblems, readManifest } from '../prebuilds/orcad-prebuild-slot-contents.mjs'
 import { orcadAgentBrowserNativeName } from '../../../../src/shared/remote-runtime/orcad-distribution/orcad-agent-browser-name.ts'
 import { runProcessSync } from '@orca/process-host'

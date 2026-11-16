@@ -3,7 +3,7 @@ import type {
   WorkspaceLineage,
   WorktreeLineage
 } from '../../../../../../shared/worktree/lineage-types'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import {
   getRepoExecutionHostId,
   type ExecutionHostId

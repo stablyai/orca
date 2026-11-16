@@ -1441,7 +1441,7 @@
             "33290e88ed": "Не удалось подключить профиль",
             "9fcb07a796": "Профиль подключён",
             "2f6c78a039": "Не удалось обновить авторизацию профиля",
-            "a37b5e6d37": "Выход из профиля выполнен",
+            "a37b5e6d37": "Выполнен выход из учётной записи Orca",
             "83600521e7": "Не удалось выйти",
             "76deec8f58": "Не удалось переключить организацию",
             "7d4bc516ee": "Не удалось переключить профиль",
@@ -2018,6 +2018,15 @@
       "workspacePortBrowserOpen": {
         "systemBrowserHint": "{{shortcut}}+щелчок, чтобы открыть в системном браузере",
         "tooltip": "{{label}}. {{hint}}"
+      },
+      "worktreePaletteEvidence": {
+        "workspaceComment": "Комментарий рабочего пространства",
+        "createdByAutomation": "Создано автоматизацией",
+        "linkedTask": "Связанная задача",
+        "pullRequest": "Пул-реквест",
+        "mergeRequest": "Запрос на слияние",
+        "linkedIssue": "Связанная задача",
+        "listeningPort": "Прослушиваемый порт"
       }
     },
     "hooks": {
@@ -3712,6 +3721,10 @@
           "labelCount_few": "{{count}} метки",
           "labelCount_many": "{{count}} меток",
           "labelCount_other": "{{count}} метки",
+          "authorCount_one": "{{count}} автор",
+          "authorCount_few": "{{count}} автора",
+          "authorCount_many": "{{count}} авторов",
+          "authorCount_other": "{{count}} автора",
           "allStates": "Все",
           "filterPullRequests": "Фильтр пул-реквестов",
           "filterIssues": "Фильтр задач",
@@ -4133,7 +4146,8 @@
             "remoteTerminalClosed": "Удалённый терминал закрыт.",
             "ptyAllocationLimit": "Система не может выделить больше устройств pty. Закройте неиспользуемые терминалы в Orca или других программах и повторите попытку.",
             "terminalProcessLimit": "Система не может запустить ещё один процесс терминала. Закройте неиспользуемые терминалы или процессы и повторите попытку.",
-            "hostTerminalCap": "На этом компьютере уже запущено максимальное разрешённое Orca число терминалов. Закройте ненужный терминал и повторите попытку."
+            "hostTerminalCap": "На этом компьютере уже запущено максимальное разрешённое Orca число терминалов. Закройте ненужный терминал и повторите попытку.",
+            "copyErrorDetails": "Копировать сведения об ошибке"
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "Достигнут лимит консолей Git Bash",
@@ -5063,7 +5077,8 @@
             "detailedTooltip": "Полные данные с полосами, подписями и процентами",
             "compactTooltip": "Сжатый вид: одна сводка на провайдера",
             "footerDetailAria": "Сведения об использовании в нижней части панели",
-            "notChecked": "Не проверено"
+            "notChecked": "Не проверено",
+            "modelWeeklyLimit": "Недельный лимит {{model}}: {{usage}}"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "Обновление {{value0}}/{{value1}}",
@@ -13555,7 +13570,8 @@
           "catalog": "Каталог",
           "clear": "Сбросить фильтры",
           "themes": "Темы",
-          "languages": "Языки",
+          "codeLanguages": "Языки программирования",
+          "translations": "Переводы",
           "icons": "Значки",
           "commands": "Команды и панели",
           "catalogLabel": "Фильтр по каталогу",
@@ -17029,10 +17045,9 @@
           "725868c75d": "Выбрать папку",
           "5e7f0d8a80": "Выбор папки недоступен для удалённых файлов",
           "30099dca46": "Папка",
-          "2d7d39dc63": ".md",
           "c8ac7868e6": "имя файла",
           "b6ed807cc6": "Название",
-          "e365f3c638": "Назовите файл Markdown и выберите папку.",
+          "description": "Назовите файл и выберите папку.",
           "674b046582": "Сохранить как",
           "nameEmpty": "Имя не может быть пустым",
           "nameHasSeparators": "Имя не может содержать разделители пути",
@@ -20631,7 +20646,7 @@
       "queuedMessages": {
         "steer": "Сейчас",
         "send": "Отправить",
-        "steerHint": "Отправить сообщение, не прерывая работу модели",
+        "steerHint": "Отправить сейчас, пока агент продолжает работу",
         "sendHint": "Отправить это сообщение сейчас",
         "delete": "Удалить",
         "moreActions": "Другие действия",
@@ -21273,7 +21288,8 @@
       "TerminalContextMenu": {
         "copySessionId": "Копировать ID сессии",
         "copySessionIdSuccess": "ID сессии скопирован",
-        "copySessionIdError": "Не удалось скопировать ID сессии"
+        "copySessionIdError": "Не удалось скопировать ID сессии",
+        "copySessionIdUnavailable": "Нет ID сессии для копирования"
       },
       "hostFile": {
         "updateHostForOutsideFiles": "Обновите Orca на {{value0}}, чтобы открывать файлы вне рабочих пространств"
@@ -23337,6 +23353,7 @@
       "chatFind": "Найти в чате",
       "editorFind": "Найти в редакторе",
       "editorReplace": "Заменить в редакторе",
+      "editorToggleChangesView": "Включить или выключить просмотр изменений",
       "fileExplorerCopyPath": "Скопировать путь к файлу",
       "fileExplorerCopyRelativePath": "Скопировать относительный путь к файлу",
       "fileExplorerDelete": "Удалить файл",
@@ -23367,6 +23384,7 @@
       "tabMoveRight": "Переместить активную вкладку вправо",
       "terminalClear": "Очистить активную панель",
       "terminalClosePane": "Закрыть активную панель",
+      "terminalCopySessionId": "Копировать ID сессии",
       "terminalCopySelection": "Скопировать выделенный текст терминала",
       "terminalEqualizePaneSizes": "Выровнять размеры панелей",
       "terminalExpandPane": "Развернуть / свернуть панель",

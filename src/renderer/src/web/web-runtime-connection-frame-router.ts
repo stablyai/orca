@@ -6,7 +6,7 @@ import type {
   PairedE2EEAuthReply,
   PairedE2EEClientHandshake
 } from '../../../shared/remote-runtime/e2ee/paired-e2ee-client-handshake'
-import { WEB_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/web-runtime-client-capabilities'
+import { WEB_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/remote-runtime/protocol/web-runtime-client-capabilities'
 import type { WebRuntimeAuthPlan } from './web-runtime-credential-source'
 import type { WebRuntimeTransportSubscription } from './web-runtime-subscription-contract'
 

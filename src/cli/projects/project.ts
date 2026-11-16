@@ -9,7 +9,7 @@ import type {
   ProjectHostSetupResult,
   ProjectHostSetupUpdateArgs,
   ProjectHostSetupUpdateResult
-} from '../../shared/project-types'
+} from '../../shared/project/project-types'
 import { getSshTargetIdForExecutionHost, type ExecutionHostId } from '../../shared/execution-host'
 import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { PROJECT_HOST_SETUP_HOST_TARGET_RUNTIME_CAPABILITY } from '../../shared/remote-runtime/protocol/worktree-runtime-capabilities'

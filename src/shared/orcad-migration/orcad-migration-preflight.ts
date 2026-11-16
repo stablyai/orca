@@ -1,5 +1,5 @@
 import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
-import type { Repo } from '../repo-types'
+import type { Repo } from '../repository/repo-types'
 import type { SavedPortForward, SshRemotePtyLease } from '../remote-runtime/ssh/ssh-types'
 
 export const ORCAD_MIGRATION_DEPENDENCY_KINDS = [

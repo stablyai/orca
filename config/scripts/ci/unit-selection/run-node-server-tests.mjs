@@ -8,7 +8,7 @@ import {
   ORCAD_SERVER_ENTRY_FILENAME,
   ORCAD_VERSION_FILENAME
 } from '../../../../src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts'
-import { NODE_RUNTIME_PIN } from '../../../../src/shared/node-runtime-pin.ts'
+import { NODE_RUNTIME_PIN } from '../../../../src/shared/node-runtime/node-runtime-pin.ts'
 import {
   ORCAD_PROFILE_PREFLIGHT_FLAG,
   parseOrcadProfilePreflight

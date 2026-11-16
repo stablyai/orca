@@ -1,13 +1,13 @@
 import {
   projectGroupHookOwner,
   projectGroupHookTrustKey
-} from '../../../../../../shared/workspace-hook-owner'
+} from '../../../../../../shared/workspace-setup/hooks/workspace-hook-owner'
 import type { AppState } from '@/store/types'
 import {
   getRepoExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
-import { isFolderRepo } from '../../../../../../shared/repo-kind'
+import { isFolderRepo } from '../../../../../../shared/repository/repo-kind'
 import type { SetupDecision } from '../../../../../../shared/worktree/create-types'
 import type { ApprovedSetupHashes } from '../../../../../../shared/worktree/creation/approved-setup-hashes'
 import { approvedOrcaHookContentHashes } from '../../../../../../shared/orca-hook-trust-entries'

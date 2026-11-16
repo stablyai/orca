@@ -13,7 +13,7 @@ import {
 import { spawnSystemSshCommand } from '../system-ssh-command'
 import { isWindowsRemoteHost, type RemoteHostPlatform } from '../../remote-host/ssh-remote-platform'
 import { powerShellCommand } from '../../remote-exec/ssh-remote-powershell'
-import { quotePowerShellLiteral as powerShellLiteral } from '../../../../shared/powershell-native-argument'
+import { quotePowerShellLiteral as powerShellLiteral } from '../../../../shared/shell/launch/powershell-native-argument'
 import {
   awaitWithSystemSshAbort,
   throwIfAborted,

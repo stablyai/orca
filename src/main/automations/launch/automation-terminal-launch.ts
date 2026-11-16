@@ -1,5 +1,5 @@
 import { automationTerminalLaunchInputs } from '../../../shared/automations/launch/automation-launch-setup'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
 import { automationRunFailure } from '../../../shared/automations/history/automation-run-failure-copy'
 // Automations observe PTYs, so launch terminal agents regardless of the chat default.

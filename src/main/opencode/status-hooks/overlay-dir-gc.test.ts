@@ -10,7 +10,7 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { setAppEnvironment } from '../../../shared/app-environment'
+import { setAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 
 import { OPENCODE_OVERLAY_MANIFEST_FILE } from './opencode-overlay-manifest'
 import { OPENCODE_DIR_GC_MIN_AGE_MS, sweepOrphanedOpenCodeDirs } from './overlay-dir-gc'

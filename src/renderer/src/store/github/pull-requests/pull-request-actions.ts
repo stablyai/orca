@@ -19,7 +19,7 @@ import {
   prRequestGenerations,
   type InflightPR
 } from '../requests/request-coordination'
-import { sharedPromiseSettlementWaiters } from '../../../../../shared/promise-settlement-waiters'
+import { sharedPromiseSettlementWaiters } from '../../../../../shared/concurrency/promise-settlement-waiters'
 import { getGitHubSourceTarget, settingsForGitHubRepoOwner } from '../work-items/work-item-routing'
 import { captureLinkedReviewClearScope, clearLinkedReview } from './linked-review-clear'
 import { shouldClearDivergedLinkedMergedPR } from '../../../../../shared/github/pull-requests/refresh/linked-pr-staleness'

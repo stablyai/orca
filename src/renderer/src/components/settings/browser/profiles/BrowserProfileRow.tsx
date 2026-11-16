@@ -4,7 +4,7 @@ import { emitBrowserCookieImportToast } from '@/lib/browser/cookies/browser-cook
 import type {
   BrowserCookieImportSummary,
   BrowserSessionProfile
-} from '../../../../../../shared/browser-workspace-types'
+} from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import { Button } from '../../../ui/button'
 import {
   DropdownMenu,

@@ -1,5 +1,5 @@
 import { join, resolve } from 'node:path'
-import type { BundledSkillOp } from '../../../shared/bundled-skill-plan'
+import type { BundledSkillOp } from '../../../shared/skills/bundled/bundled-skill-plan'
 import type { BundledSkillSource } from './bundled-skill-sources'
 import {
   hasCloudReceipt,

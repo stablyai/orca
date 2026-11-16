@@ -3,7 +3,7 @@ import {
   DesktopBrowserBridgeEvent,
   type DesktopBrowserBridgeRequest,
   type DesktopBrowserBridgeResultParams
-} from '../../../shared/desktop-browser-bridge-protocol'
+} from '../../../shared/browser/client-hosting/desktop-browser-bridge-protocol'
 import type { RemoteRuntimeTransportSubscription } from '../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
 import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { DesktopBrowserBridgeOutcome } from './desktop-browser-bridge-executor'

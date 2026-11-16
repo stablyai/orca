@@ -4,8 +4,8 @@ import {
   NODE_RUNTIME_PIN,
   NODE_RUNTIME_WINDOWS_MINIMUM_BUILD,
   nodeRuntimeExecutablePath
-} from '../../../shared/node-runtime-pin'
-import type { NodeRuntimeTarget } from '../../../shared/node-runtime-pin'
+} from '../../../shared/node-runtime/node-runtime-pin'
+import type { NodeRuntimeTarget } from '../../../shared/node-runtime/node-runtime-pin'
 import { ORCAD_NODE_RUNTIME_WINDOWS_EXECUTABLE } from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import {
   REMOTE_NODE_RUNTIME_EXIT_PREFIX,
@@ -18,7 +18,7 @@ import {
   REMOTE_WINDOWS_BUILD_UNSUPPORTED
 } from './orcad-remote-node-runtime-report'
 import { powerShellCommand } from '../../ssh/remote-exec/ssh-remote-powershell'
-import { quotePowerShellLiteral as powerShellLiteral } from '../../../shared/powershell-native-argument'
+import { quotePowerShellLiteral as powerShellLiteral } from '../../../shared/shell/launch/powershell-native-argument'
 
 function windowsPath(...segments: string[]): string {
   return segments

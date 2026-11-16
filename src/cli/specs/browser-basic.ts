@@ -1,7 +1,7 @@
 import type { CommandSpec } from '../discovery/command-spec'
 import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli-argument-boundary'
 import { withBrowserPageTarget } from './browser-page-target'
-import { BROWSER_WAIT_DEFAULT_TIMEOUT_MS } from '../../shared/browser-wait-timeout'
+import { BROWSER_WAIT_DEFAULT_TIMEOUT_MS } from '../../shared/browser/automation/browser-wait-timeout'
 
 export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = withBrowserPageTarget([
   {
@@ -63,8 +63,10 @@ export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = withBrowserPageTarget(
   {
     path: ['fill'],
     summary: 'Clear and fill a browser input by ref',
-    usage: 'orca fill --element <ref> --value <text> [--worktree <selector>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'element', 'value', 'worktree']
+    usage:
+      'orca fill --element <ref> (--value <text> | --value-stdin) [--worktree <selector>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'element', 'value', 'value-stdin', 'worktree'],
+    notes: ['--value-stdin drops one trailing newline and rejects empty input.']
   },
   {
     path: ['type'],

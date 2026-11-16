@@ -3,9 +3,12 @@ import {
   formatRateLimitWindowChipLabel,
   formatWindowLabel
 } from './rate-limit-window-localized-label'
-import { CURSOR_MODELS_BUCKET_NAME } from '../../../../../shared/cursor-usage-buckets'
-import type { ProviderRateLimits, RateLimitWindow } from '../../../../../shared/rate-limit-types'
-import { clampUsedPercent } from '../../../../../shared/usage-percentage-display'
+import { CURSOR_MODELS_BUCKET_NAME } from '../../../../../shared/agent-usage/rate-limits/cursor-usage-buckets'
+import type {
+  ProviderRateLimits,
+  RateLimitWindow
+} from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { clampUsedPercent } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import { getWindowSections } from './provider-usage-panel'
 import { USAGE_URGENT_PERCENT } from './usage-health-tone'
 
@@ -35,11 +38,6 @@ export function providerPrimaryMaxUsed(p: ProviderRateLimits, t?: Translate): nu
     : -1
 }
 
-/** True when the provider reported usage, but only for scoped windows, so there is no headline. */
-export function hasOnlyScopedUsage(p: ProviderRateLimits, t?: Translate): boolean {
-  return usedSections(p, t).length > 0 && primarySections(p, t).length === 0
-}
-
 // Buckets (Gemini Flash/Pro) keep their model name; windows use their duration.
 export function shortUsageLabel(
   p: ProviderRateLimits,
@@ -61,9 +59,27 @@ export function shortUsageLabel(
     : formatWindowLabel(section.window.windowMinutes)
 }
 
-/** Tightest primary window; scoped windows never stand in for a missing primary reading. */
-export function getTightestUsageSection(p: ProviderRateLimits, t?: Translate): UsageSection | null {
-  const sections = primarySections(p, t)
+/**
+ * Which windows a headline may come from. 'primary' (roster, account rows) skips Fable/MCP so they
+ * never stand in for a missing primary reading; 'all' (status bar) keeps its original any-window pick.
+ */
+export type UsageHeadlineScope = 'primary' | 'all'
+
+function headlineSections(
+  p: ProviderRateLimits,
+  t: Translate | undefined,
+  scope: UsageHeadlineScope
+): UsageSection[] {
+  return scope === 'all' ? usedSections(p, t) : primarySections(p, t)
+}
+
+/** Most-consumed window within the scope. */
+export function getTightestUsageSection(
+  p: ProviderRateLimits,
+  t?: Translate,
+  scope: UsageHeadlineScope = 'primary'
+): UsageSection | null {
+  const sections = headlineSections(p, t, scope)
   if (sections.length === 0) {
     return null
   }
@@ -76,30 +92,42 @@ export function getTightestUsageSection(p: ProviderRateLimits, t?: Translate): U
   return { ...tightest, label: shortUsageLabel(p, tightest, true) }
 }
 
-export function getUsageHeadlineSection(p: ProviderRateLimits, t?: Translate): UsageSection | null {
+export function getUsageHeadlineSection(
+  p: ProviderRateLimits,
+  t?: Translate,
+  scope: UsageHeadlineScope = 'primary'
+): UsageSection | null {
   if (p.provider === 'cursor') {
-    const primary = primarySections(p, t).find(
+    const primary = headlineSections(p, t, scope).find(
       (section) => section.label === CURSOR_MODELS_BUCKET_NAME
     )
     if (primary) {
       return { ...primary, label: shortUsageLabel(p, primary, true) }
     }
   }
-  return getTightestUsageSection(p, t)
+  return getTightestUsageSection(p, t, scope)
+}
+
+/** The most-used scoped (Fable/MCP) window at or above minUsedPercent, labeled for the roster. */
+export function getTopScopedSection(
+  p: ProviderRateLimits,
+  t?: Translate,
+  minUsedPercent = 0
+): UsageSection | null {
+  const scoped = usedSections(p, t).filter(
+    (s) =>
+      isScopedUsageWindow(p, s.window) && clampUsedPercent(s.window.usedPercent) >= minUsedPercent
+  )
+  if (scoped.length === 0) {
+    return null
+  }
+  const top = scoped.reduce((a, b) =>
+    clampUsedPercent(b.window.usedPercent) > clampUsedPercent(a.window.usedPercent) ? b : a
+  )
+  return { ...top, label: shortUsageLabel(p, top) }
 }
 
 /** The most-used scoped window once it is nearly spent, so the roster can flag it beside the headline. */
 export function getUrgentScopedSection(p: ProviderRateLimits, t?: Translate): UsageSection | null {
-  const urgent = usedSections(p, t).filter(
-    (s) =>
-      isScopedUsageWindow(p, s.window) &&
-      clampUsedPercent(s.window.usedPercent) >= USAGE_URGENT_PERCENT
-  )
-  if (urgent.length === 0) {
-    return null
-  }
-  const top = urgent.reduce((a, b) =>
-    clampUsedPercent(b.window.usedPercent) > clampUsedPercent(a.window.usedPercent) ? b : a
-  )
-  return { ...top, label: shortUsageLabel(p, top) }
+  return getTopScopedSection(p, t, USAGE_URGENT_PERCENT)
 }

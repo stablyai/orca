@@ -4,7 +4,7 @@ import type {
   BundledSkillOp,
   BundledSkillPlan,
   BundledSkillPlanEntry
-} from '../../../shared/bundled-skill-plan'
+} from '../../../shared/skills/bundled/bundled-skill-plan'
 import type { BundledSkillSource } from './bundled-skill-sources'
 import {
   hasCloudReceipt,
