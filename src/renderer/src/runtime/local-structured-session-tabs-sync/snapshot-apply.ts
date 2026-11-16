@@ -14,7 +14,8 @@ import {
   noteRetiredValue,
   sameSessionTabsPublicationLineage
 } from '../web-session-tabs-sync/publisher-identity-fences'
-import { knownStructuredSessionWorktreeIds } from '../native-chat/local-sessions/local-structured-session-tab-retirement'
+import { isKnownStructuredSessionWorktree } from '../native-chat/local-sessions/local-structured-session-tab-retirement'
+import { structuralValuesEqual } from '../../../../shared/collections/structural-value-equality'
 import {
   localStructuredSessionEpochHistoryByWorktree,
   localStructuredSessionVersionByWorktree
@@ -61,6 +62,20 @@ export type StructuredSessionSnapshotApplyOptions = {
   framesDraw?: (worktreeId: string) => boolean
   /** Collects host titles for drawn chat tabs, applied as content after the store patch. */
   onDrawnChatLabel?: (change: DrawnChatLabel) => void
+  /** Stream frames: one that repeats the last applied frame at a newer version only advances the cursor. */
+  skipVersionOnlyRepeats?: boolean
+}
+
+function differsOnlyInVersion(
+  applied: RuntimeMobileSessionTabsResult | undefined,
+  next: RuntimeMobileSessionTabsResult
+): boolean {
+  if (!applied) {
+    return false
+  }
+  const { snapshotVersion: _applied, ...appliedContent } = applied
+  const { snapshotVersion: _next, ...nextContent } = next
+  return structuralValuesEqual(appliedContent, nextContent)
 }
 
 export function applyStructuredSessionTabSnapshots(
@@ -177,29 +192,36 @@ export function applyLocalStructuredSessionTabSnapshots<
         options.onAcceptedAgentSession?.(snapshot.worktree, tab.sessionId)
       }
     }
-    // Runs for a drawn workspace too: its tab-id, focus and close-intent ledgers still follow the host.
-    const patch = applyWebSessionTabsSnapshot(
-      next,
-      projectLocalStructuredSessionTabs(effectiveSnapshot),
-      owner,
-      now,
-      {
-        contentScope: 'agent-session',
-        preserveLocalLayout: true,
-        terminalPtyMode: 'local'
-      },
-      changedAgentPaneKeys
-    )
-    if (options.framesDraw?.(snapshot.worktree)) {
-      // Main's frames own this workspace's tabs, so the patch (tab structure only here) is dropped.
-      for (const change of drawnChatLabelChanges(
-        next.unifiedTabsByWorktree[snapshot.worktree] ?? [],
-        effectiveSnapshot
-      )) {
-        options.onDrawnChatLabel?.(change)
+    const versionOnlyRepeat =
+      options.skipVersionOnlyRepeats === true &&
+      prior?.publicationEpoch === snapshot.publicationEpoch &&
+      differsOnlyInVersion(prior.applied, effectiveSnapshot)
+    const drawn = options.framesDraw?.(snapshot.worktree) === true
+    if (!versionOnlyRepeat) {
+      // Runs for a drawn workspace too: its tab-id, focus and close-intent ledgers still follow the host.
+      const patch = applyWebSessionTabsSnapshot(
+        next,
+        projectLocalStructuredSessionTabs(effectiveSnapshot),
+        owner,
+        now,
+        {
+          contentScope: 'agent-session',
+          preserveLocalLayout: true,
+          terminalPtyMode: 'local'
+        },
+        changedAgentPaneKeys
+      )
+      if (drawn) {
+        // Main's frames own this workspace's tabs, so the patch (tab structure only here) is dropped.
+        for (const change of drawnChatLabelChanges(
+          next.unifiedTabsByWorktree[snapshot.worktree] ?? [],
+          effectiveSnapshot
+        )) {
+          options.onDrawnChatLabel?.(change)
+        }
+      } else {
+        next = patch === next ? next : ({ ...next, ...patch } as State)
       }
-    } else {
-      next = patch === next ? next : ({ ...next, ...patch } as State)
     }
     if (isWorktreeRetraction(effectiveSnapshot)) {
       // Retraction removes rows but is not a publication: recording it would retire this consumer/publisher renderer’s lifetime epoch. Retain version cursor against pre-close replies; rebuilt entries mint fresh epochs. Preserve retired tombstones but clear current so the next lineage cannot retire our lifetime epoch one cycle later. Clearing all history would admit dead-epoch stragglers across lineages.
@@ -210,11 +232,18 @@ export function applyLocalStructuredSessionTabSnapshots<
           retired: history.retired
         })
       }
+      if (prior?.applied) {
+        localStructuredSessionVersionByWorktree.set(snapshot.worktree, {
+          publicationEpoch: prior.publicationEpoch,
+          snapshotVersion: prior.snapshotVersion
+        })
+      }
       continue
     }
     localStructuredSessionVersionByWorktree.set(snapshot.worktree, {
       publicationEpoch: snapshot.publicationEpoch,
-      snapshotVersion: snapshot.snapshotVersion
+      snapshotVersion: snapshot.snapshotVersion,
+      ...(options.skipVersionOnlyRepeats && !drawn ? { applied: effectiveSnapshot } : {})
     })
     localStructuredSessionEpochHistoryByWorktree.set(
       snapshot.worktree,
@@ -222,13 +251,13 @@ export function applyLocalStructuredSessionTabSnapshots<
     )
   }
   // Deleted worktrees must release publisher cursors instead of retaining them for renderer lifetime.
-  const knownWorktreeIds = knownStructuredSessionWorktreeIds(next)
+  const isKnown = isKnownStructuredSessionWorktree(next)
   for (const worktreeId of localStructuredSessionVersionByWorktree.keys()) {
-    if (!knownWorktreeIds.has(worktreeId)) {
+    if (!isKnown(worktreeId)) {
       localStructuredSessionVersionByWorktree.delete(worktreeId)
       localStructuredSessionEpochHistoryByWorktree.delete(worktreeId)
     }
   }
-  forgetRetiredEpochRepairsOutside(knownWorktreeIds)
+  forgetRetiredEpochRepairsOutside(isKnown)
   return next
 }
