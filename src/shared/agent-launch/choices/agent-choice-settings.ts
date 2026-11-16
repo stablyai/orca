@@ -1,4 +1,4 @@
-import { findOptionOccurrence } from '../../command-option-occurrence'
+import { findOptionOccurrence } from '../../cli/command-option-occurrence'
 import {
   agentRequiredValueOptions,
   removeAgentArgOption

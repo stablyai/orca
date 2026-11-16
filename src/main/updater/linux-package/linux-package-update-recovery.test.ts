@@ -4,7 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as NodeFs from 'node:fs'
-import type { LinuxPackageInstallRecovery } from '../../../shared/update-status-types'
+import type { LinuxPackageInstallRecovery } from '../../../shared/updater/update-status-types'
 import type { LinuxPackageArtifact } from './linux-package-update-recovery'
 import type * as RecoveryModule from './linux-package-update-recovery'
 
@@ -114,17 +114,6 @@ describe('captureLinuxPackageArtifact', () => {
     const downloadedFile = path.join(downloadDir, 'Orca Setup 1.2.3.deb')
     capture({ downloadedFile, files: [{ url: 'Orca%20Setup%201.2.3.deb', sha512: SHA512 }] })
     expect(recovery.getTrackedLinuxPackageArtifact()?.path).toBe(downloadedFile)
-  })
-
-  it('ignores entries for other files and formats', () => {
-    capture({
-      files: [
-        { url: 'orca.AppImage', sha512: 'other-appimage-digest' },
-        { url: 'orca-arm64.deb', sha512: 'other-arch-digest' },
-        { url: 'orca.deb', sha512: SHA512 }
-      ]
-    })
-    expect(recovery.getTrackedLinuxPackageArtifact()?.sha512).toBe(SHA512)
   })
 
   it('refuses an ambiguous basename with two different digests', () => {

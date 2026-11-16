@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 import { OrcaRuntimeService } from '../orca-runtime'
 import { RpcDispatcher } from '../rpc/dispatcher'
@@ -54,14 +54,14 @@ function snapshot(
   }
 }
 
-function publishGraph(
+async function publishGraph(
   runtime: OrcaRuntimeService,
   worktree = WORKTREE,
   additionalSnapshots: RuntimeMobileSessionTabsSnapshot[] = [],
   ptyId = 'pty-existing',
   binding: 'direct' | 'layout' = 'direct'
-): void {
-  runtime.syncWindowGraph(1, {
+): Promise<void> {
+  await runtime.syncWindowGraph(1, {
     tabs: [
       {
         tabId: 'tab',
@@ -83,6 +83,12 @@ function publishGraph(
     ],
     mobileSessionTabs: [snapshot(worktree, ptyId, binding), ...additionalSnapshots]
   })
+}
+
+// Desktop frames prepare sender identity first; wait for the scheduled pass to deliver.
+async function senderFramesDelivered(runtime: OrcaRuntimeService): Promise<void> {
+  await new Promise<void>((resolve) => queueMicrotask(resolve))
+  await runtime['agentProjections'].senders.withPreparedPublication(() => undefined, false)
 }
 
 describe('session tab workspace path aliases', () => {
@@ -107,7 +113,7 @@ describe('session tab workspace path aliases', () => {
       })
     )
 
-    publishGraph(runtime)
+    await publishGraph(runtime)
 
     await vi.waitFor(() =>
       expect(messages).toContainEqual(
@@ -150,7 +156,7 @@ describe('session tab workspace path aliases', () => {
       { connectionId: 'alias-connection' }
     )
 
-    publishGraph(runtime)
+    await publishGraph(runtime)
 
     await vi.waitFor(() => expect(frames.some((frame) => frame.type === 'updated')).toBe(true))
     expect(frames.map((frame) => frame.worktree)).toEqual(frames.map(() => ALIAS))
@@ -175,14 +181,16 @@ it('rejects ambiguous later aliases while retaining an exact host spelling', asy
       (reply) => frames.push(JSON.parse(reply).result),
       { connectionId: 'ambiguous-alias' }
     )
-    publishGraph(runtime, WORKTREE, [snapshot('repo::g:/git/example', 'pty-other')])
+    await publishGraph(runtime, WORKTREE, [snapshot('repo::g:/git/example', 'pty-other')])
     runtime.onMobileSessionTabsChanged(() => {}, undefined, 'mobile')()
+    await senderFramesDelivered(runtime)
     expect(frames.filter((frame) => frame.type === 'updated')).toEqual([])
-    publishGraph(runtime, ALIAS, [
+    await publishGraph(runtime, ALIAS, [
       snapshot(WORKTREE),
       snapshot('repo::g:/git/example', 'pty-other')
     ])
     runtime.onMobileSessionTabsChanged(() => {}, undefined, 'mobile')()
+    await senderFramesDelivered(runtime)
     expect(
       frames.filter((frame) => frame.type === 'updated').map((frame) => frame.worktree)
     ).toEqual([ALIAS])

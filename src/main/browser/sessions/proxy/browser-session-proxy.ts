@@ -1,5 +1,5 @@
 import { session, type Session } from 'electron'
-import type { BrowserSessionProfile } from '../../../../shared/browser-workspace-types'
+import type { BrowserSessionProfile } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   applyProxySettingsToSession,
   awaitProxySessionApplication

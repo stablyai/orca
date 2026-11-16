@@ -9,7 +9,7 @@ import {
   type DashboardSnapshot,
   type DashboardWorkspace
 } from '../../../../../shared/dashboard-snapshot'
-import type { RepoIcon } from '../../../../../shared/repo-icon'
+import type { RepoIcon } from '../../../../../shared/repository/appearance/repo-icon'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import {
   resolveDashboardCardTerminalInput,
@@ -19,14 +19,6 @@ import { readDashboardClientHost } from './dashboard-client-host'
 import { dashboardCardParentPaneKey } from '../rows/agent-row-lineage'
 import { lastEnteredDoneAt } from '../rows/agent-finished-timestamp'
 import { selectTerminalLayoutsForWorktree } from '../../sidebar/workspace-card/activity/worktree-agent-row-selectors'
-import '../../sidebar/workspace-card/activity/worktree-agent-orchestration-batch'
-import { EMPTY_WORKTREE_AGENT_ORCHESTRATION } from '../../sidebar/workspace-card/activity/worktree-agent-orchestration-index'
-import {
-  finishWorktreeAgentRowsCachePass,
-  selectWorktreeAgentRowsCached,
-  startWorktreeAgentRowsCachePass,
-  type WorktreeAgentRowsCache
-} from '../rows/worktree-agent-rows-cache'
 import { selectRuntimePaneTitlesForWorktree } from '../../sidebar/workspace-card/activity/worktree-card-status-inputs'
 import {
   resolveDashboardCardContext,
@@ -45,7 +37,6 @@ import {
 } from './dashboard-card-labels'
 import { buildDashboardSnapshotFilterOptions } from './dashboard-snapshot-filter-options'
 import { groupSubagentsByParentPaneKey } from './dashboard-subagent-cards'
-import { selectDashboardOrchestration } from './dashboard-orchestration-selection'
 import { dashboardRowBucketProjection, readAgentRowTurnRecords } from '../rows/dashboard-row-bucket'
 import type { Translate } from '@/i18n/use-translate'
 
@@ -56,7 +47,6 @@ export type DashboardSnapshotState = Pick<
   | 'worktreesByRepo'
   | 'tabsByWorktree'
   | 'agentStatusByPaneKey'
-  | 'retainedAgentsByPaneKey'
   | 'migrationUnsupportedByPtyId'
   | 'runtimeAgentOrchestrationByPaneKey'
   | 'terminalLayoutsByTabId'
@@ -87,10 +77,6 @@ export function buildDashboardSnapshot(
   options: {
     includeCardDetails?: boolean
     includeFilterOptions?: boolean
-    /** Cache only row derivation; review/host/status inputs still require fresh card assembly. */
-    rowsCache?: WorktreeAgentRowsCache
-    /** Freshness token for rowsCache (agentStatusEpoch); required for the cache to be safe. */
-    rowsGeneration?: unknown
   } = {},
   t?: Translate
 ): DashboardSnapshot {
@@ -108,13 +94,6 @@ export function buildDashboardSnapshot(
     options.includeFilterOptions === false
       ? undefined
       : buildDashboardSnapshotFilterOptions(state, activeWorktrees)
-  const { singletonOrchestration, orchestrationByWorktree } = selectDashboardOrchestration(
-    state,
-    activeWorktrees
-  )
-  if (options.rowsCache) {
-    startWorktreeAgentRowsCachePass(options.rowsCache)
-  }
 
   for (const workspace of activeWorktrees) {
     const { repo, worktree } = workspace
@@ -123,17 +102,7 @@ export function buildDashboardSnapshot(
     const terminalLayoutsByTabId = selectTerminalLayoutsForWorktree(state, worktreeId)
     const paneTitlesByTabId = selectRuntimePaneTitlesForWorktree(state, worktreeId)
 
-    const rows = selectWorktreeAgentRowsCached({
-      state,
-      worktreeId,
-      orchestration:
-        singletonOrchestration ??
-        orchestrationByWorktree?.get(worktreeId) ??
-        EMPTY_WORKTREE_AGENT_ORCHESTRATION,
-      now,
-      generation: options.rowsGeneration,
-      cache: options.rowsCache
-    })
+    const rows = state.agentStatusByPaneKey.projection.list(worktreeId)
     const subagentsByParentPaneKey = includeCardDetails
       ? groupSubagentsByParentPaneKey(rows)
       : undefined
@@ -265,10 +234,6 @@ export function buildDashboardSnapshot(
         ...(terminalInput ? { terminalInput } : {})
       })
     }
-  }
-
-  if (options.rowsCache) {
-    finishWorktreeAgentRowsCachePass(options.rowsCache)
   }
 
   return {

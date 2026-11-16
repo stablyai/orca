@@ -7,7 +7,7 @@ import {
   settleEditorPathMove
 } from '@/components/editor/file-ownership/editor-path-move-inflight'
 import { remapOpenEditorTabsForPathChange } from '@/lib/editor/file-operations/remap-open-editor-tabs-for-path-change'
-import { isPathInsideOrEqual } from '../../../../../shared/cross-platform-path'
+import { isPathInsideOrEqual } from '../../../../../shared/file-access/cross-platform-path'
 import { verifyLatchedMoveDestinations } from '@/hooks/useEditorExternalWatch'
 import { notifyHostOfMirroredEditorClose } from '@/runtime/web-session-tabs-sync/closing/close-mirrored-editor-tab'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'

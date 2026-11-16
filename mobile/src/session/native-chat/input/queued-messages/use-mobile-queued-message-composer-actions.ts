@@ -3,7 +3,7 @@ import type {
   AgentSessionQueuedMessage,
   AgentSessionQueuedMessageMoveResult
 } from '../../../../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
-import type { DragReorderMove } from '../../../../components/drag-reorder-positions'
+import type { DragReorderMove } from '../../../../components/reorder/drag-reorder-positions'
 import type { MobileStructuredAgentMutate } from '../../agent-session/use-mobile-structured-agent-mutation'
 
 type QueuedMessages = readonly AgentSessionQueuedMessage[] | null | undefined

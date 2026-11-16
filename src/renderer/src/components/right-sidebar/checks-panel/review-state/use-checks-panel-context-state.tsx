@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useAppStore } from '@/store/index'
 import { useNow } from '@/hooks/use-now'
-import { isFolderRepo } from '../../../../../../shared/repo-kind'
+import { isFolderRepo } from '../../../../../../shared/repository/repo-kind'
 import { getGitHubPRCacheKey } from '../../../../../../shared/github/cache/github-cache-key'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review/hosted-review-cache-identity'
 import { isStaleMergedGitHubReviewForHead } from '@/store/slices/hosted-review/hosted-review-cache-state'

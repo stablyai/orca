@@ -1,6 +1,7 @@
 export type CodexDisplayAccount = {
   id: string
   email: string
+  displayName?: string
   workspaceLabel?: string | null
 }
 
@@ -43,5 +44,9 @@ export function getCodexAccountDisplayLabel(
   accounts: readonly CodexDisplayAccount[]
 ): string {
   const detail = getCodexAccountDisplayDetail(account, accounts)
+  const name = account.displayName?.trim()
+  if (name) {
+    return `${name} (${detail ? `${account.email} · ${detail}` : account.email})`
+  }
   return detail ? `${account.email} (${detail})` : account.email
 }

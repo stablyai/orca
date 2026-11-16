@@ -12,9 +12,9 @@ import { RefreshCw } from 'lucide-react'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import type { WslHostDistro } from '../../../../../../shared/wsl-host-types'
+import type { WslHostDistro } from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import { getWslHostServerFilesMissingLabel } from '../../wsl-host-row-status'
-import { wslSetVersion2Command } from '../../../../../../shared/wsl-host-failure-copy'
+import { wslSetVersion2Command } from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-host-failure-copy'
 
 export function wslDistroStateLabel(distro: WslHostDistro, t: Translate = translate): string {
   if (distro.version === 1) {

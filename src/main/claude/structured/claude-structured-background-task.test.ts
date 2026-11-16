@@ -5,7 +5,7 @@ describe('moving a running Claude call into the background', () => {
   it('targets the invoking call before a task row exists, then retains the background task until its own ending', async () => {
     const run = await producer()
     const connection = run.claude.connections[0]!
-    connection.backgroundTasks = async (toolUseId) => {
+    connection.backgroundTask = async (toolUseId) => {
       expect(toolUseId).toBe('toolu_build')
       run.send(
         system('task_started', {
@@ -47,7 +47,7 @@ describe('moving a running Claude call into the background', () => {
   it('refuses a completed call, another turn, another acquisition, or another lease without detaching new work', async () => {
     const run = await producer()
     const connection = run.claude.connections[0]!
-    connection.backgroundTasks = async () => {
+    connection.backgroundTask = async () => {
       throw new Error('stale action reached the provider')
     }
     run.send(toolUse('toolu_old', 'Bash', { command: 'pnpm test' }))
@@ -66,7 +66,7 @@ describe('moving a running Claude call into the background', () => {
   it('offers only root foreground Bash and agent calls, preserving the provider refusal when it has just finished', async () => {
     const run = await producer()
     const connection = run.claude.connections[0]!
-    connection.backgroundTasks = async () => false
+    connection.backgroundTask = async () => false
     run.send(toolUse('toolu_read', 'Read', { file_path: 'package.json' }))
     run.send(toolUse('toolu_background', 'Bash', { command: 'pnpm test', run_in_background: true }))
     run.send(toolUse('toolu_nested', 'Bash', { command: 'pnpm test' }, 'parent-agent'))

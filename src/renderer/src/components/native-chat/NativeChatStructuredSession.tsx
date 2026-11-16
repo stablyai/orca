@@ -367,6 +367,8 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
               isVisible={props.isVisible}
               turnId={controller.turnId}
               workingStartedAt={controller.workingStartedAt}
+              target={props.target}
+              focusComposer={focusComposer}
             />
           )}
           {composerShown || subagentOpen ? null : <NativeChatPromptSlotNotices notices={notices} />}
@@ -405,9 +407,6 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
       <LinkActionPopover request={linkActionRequest} onClose={closeLinkActions} />
     </div>
   )
-  return (
-    <NativeChatLinkClickContext value={onLinkClick}>
-      {nativeChatForegroundTasks(props.sessionId, controller, root)}
-    </NativeChatLinkClickContext>
-  )
+  const content = nativeChatForegroundTasks(props.sessionId, controller, root)
+  return <NativeChatLinkClickContext value={onLinkClick}>{content}</NativeChatLinkClickContext>
 }

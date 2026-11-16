@@ -6,7 +6,7 @@ import { getHostedReviewCacheKey } from '@/store/slices/hosted-review/hosted-rev
 import { hostedReviewInfoFromGitHubPRInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-github'
 import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { getWorktreeGitIdentityDisplay } from '../../../../../../shared/worktree/row-display/git-identity-display'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import { getDetachedWorkspaceReviewRequest } from './workspace-detached-review-request'

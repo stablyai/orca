@@ -13,7 +13,7 @@ import {
 } from '../../../../../../../shared/agent-session/failures/agent-session-write-failure'
 import { structuredAgentSessionPayloadFingerprint } from '../../../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import { structuredSessionOperationId } from './structured-agent-session-operation-id'
-import type { RuntimeClientTarget } from '../../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import { supportsStructuredAgentSessionQuietRepeatedStop } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'

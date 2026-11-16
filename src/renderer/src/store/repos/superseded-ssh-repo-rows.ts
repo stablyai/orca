@@ -1,8 +1,8 @@
 import { inheritLaunchReadoptions } from '@/components/native-chat/drafts/native-chat-launch-draft-continuity'
-import type { SshRepoReadoption } from '../../../../shared/ssh-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { SshRepoReadoption } from '../../../../shared/remote-runtime/ssh/ssh-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { getRepoExecutionHostId, toSshExecutionHostId } from '../../../../shared/execution-host'
-import { getRepoHostIdentityForParts } from '../../../../shared/repo-host-identity'
+import { getRepoHostIdentityForParts } from '../../../../shared/repository/repo-host-identity'
 
 export type SshRepoReconciliation = {
   repos: readonly Repo[]

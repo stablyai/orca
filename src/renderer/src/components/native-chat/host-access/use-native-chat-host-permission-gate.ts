@@ -3,7 +3,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { hostPermissionRefusedText } from '@/lib/agent-session/launch/structured-agent-session-launch-permission-notice'
 import { useStructuredChatHostPermissionVerdict } from '@/runtime/native-chat/host-capabilities/structured-chat-host-permission'
 import { useAppStore } from '@/store/index'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { NativeChatComposerNotice } from '@/components/native-chat/composer/controls/native-chat-composer-notice'
 
 export type NativeChatHostPermissionGate = {

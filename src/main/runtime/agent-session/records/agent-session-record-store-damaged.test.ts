@@ -13,10 +13,8 @@ import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-se
 import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import type { AgentSessionReserveRequest } from '../ownership/agent-session-reservation-admission'
-import {
-  editPersistedTestAgentSessionStore,
-  openTestAgentSessionRecordStore
-} from './agent-session-record-store-test-harness'
+import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
+import { editPersistedTestAgentSessionStore } from './agent-session-record-store-persistence.test-fixture'
 import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 
 const NOW = 1_800_000_000_000

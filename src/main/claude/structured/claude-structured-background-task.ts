@@ -5,7 +5,7 @@ export function claudeForegroundTasks(
   session: ClaudeSession | undefined
 ): AgentSessionForegroundTask[] {
   const turnId = session?.translator?.currentTurnId
-  if (!session || !turnId || !session.connection.backgroundTasks || session.connection.closed) {
+  if (!session || !turnId || session.connection.closed) {
     return []
   }
   return (session.translator?.foregroundToolIds?.() ?? [])
@@ -42,5 +42,5 @@ export async function backgroundClaudeTask(
   ) {
     return false
   }
-  return session.connection.backgroundTasks?.(input.toolUseId, { timeoutMs }) ?? false
+  return session.connection.backgroundTask(input.toolUseId, { timeoutMs })
 }

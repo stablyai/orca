@@ -1,18 +1,18 @@
 import { randomUUID } from 'node:crypto'
 import { app } from 'electron'
 import { z } from 'zod'
-import { SKILL_INSTALL_UPDATE_REQUIRED_MESSAGE } from '../../shared/skill-install-capability'
+import { SKILL_INSTALL_UPDATE_REQUIRED_MESSAGE } from '../../shared/skills/capabilities/skill-install-capability'
 import {
   SkillBundleInstallPreviewRequestSchema,
   SkillBundleInstallPreviewSchema
-} from '../../shared/skill-bundle-install-contract'
+} from '../../shared/skills/installation/skill-bundle-install-contract'
 import {
   ManagedSkillInstallListSchema,
   SkillInstallDestinationSchema,
   SkillInstallPreviewSchema,
   SkillInstallResultSchema,
   SkillPackageIdentitySchema
-} from '../../shared/skill-install-contract'
+} from '../../shared/skills/installation/skill-install-contract'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import {
   supportsSkillRuntimeBundleInstall,

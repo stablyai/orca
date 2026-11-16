@@ -24,7 +24,7 @@ import {
 } from '@/store/workspaces/catalog/workspace-record-fields'
 import { getFolderWorkspaceWorktree } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { resolveExactWorktreeRoute } from '@/lib/workspace/ownership/worktree-owner-route'
-import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import {
   getAutomationRunViewState,
   type AutomationRunWorkspaceRecord

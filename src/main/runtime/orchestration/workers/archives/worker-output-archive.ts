@@ -7,7 +7,7 @@ import {
   type ExactWorkerProviderSession,
   type OrchestrationWorkerReadFallbackReason
 } from '../../../../../shared/orchestration/workers/orchestration-worker-output'
-import { isWslHookRelayConnectionId } from '../../../../../shared/wsl-hook-relay-contract'
+import { isWslHookRelayConnectionId } from '../../../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import type { WorkerTerminalReleaseRuntime } from '../../terminal-authority/release/worker-terminal-release-runtime'
 import type {
   WorkerTerminalArchiveKind,

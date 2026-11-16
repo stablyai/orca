@@ -1,6 +1,6 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
-import type { SkillDiscoveryTarget } from '../../../../shared/skills'
+import type { SkillDiscoveryTarget } from '../../../../shared/skills/discovery/skills'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { LocalAgentRuntime } from '../../lib/skills/runtime/skill-runtime-command'

@@ -11,7 +11,6 @@ import { openTurn } from './host/testing/structured-agent-session-claude-stop-co
 
 it('delivers a running root Bash action before its result and removes it when it ends', async () => {
   const connection = fixture.claude.connections[0]!
-  connection.backgroundTasks = async () => true
   await openTurn(connection)
   let pane: StructuredAgentSessionState = EMPTY_STRUCTURED_AGENT_SESSION
   const close = await fixture.host.subscribe({

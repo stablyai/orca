@@ -1,6 +1,6 @@
 import type { ConfirmationDialogContextValue } from '@/components/confirmation-dialog-context'
 import { translate } from '@/i18n/i18n'
-import { isTrashDeleteFailure } from '../../../../../../shared/trash-delete-failure'
+import { isTrashDeleteFailure } from '../../../../../../shared/file-access/trash-delete-failure'
 
 type DeleteWithPermanentFallbackParams = {
   name: string

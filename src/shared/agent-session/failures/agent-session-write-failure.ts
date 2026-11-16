@@ -8,7 +8,7 @@ import {
 import type { AgentSessionRewindReason } from '../lifecycle/rewind/agent-session-rewind-reasons'
 import type { AgentSessionArgumentProblem } from '../agent-session-argument-problem'
 import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
-import type { CodexInstallationProblem } from '../../codex-cli-installation'
+import type { CodexInstallationProblem } from '../../agent-launch/startup/codex-cli-installation'
 import type { AgentCliInstallationProblem } from '../../agent-launch/catalog/agent-cli-installation-problem'
 import type { AgentSessionExpiredAttachment } from './agent-session-expired-attachments'
 import {

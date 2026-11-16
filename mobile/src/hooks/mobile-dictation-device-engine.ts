@@ -1,7 +1,7 @@
 import type {
   BridgeSpeechFailure,
   BridgeSpeechRead
-} from '../mobile-web-shell/bridge/bridge-speech-verbs'
+} from '../mobile-web-shell/bridge/native-capabilities/bridge-speech-verbs'
 import type { OnDeviceSpeech } from '../platform/speech/on-device-speech-contract'
 import { DICTATION_CAPTURE_DRAIN_INTERVAL_MS } from '../platform/audio-capture/dictation-capture-contract'
 import { translate } from '../i18n/mobile-i18n'

@@ -25,7 +25,7 @@ import {
   stripGrokUserQueryEnvelope
 } from './session-scanner-grok-user-text'
 import { asRecord } from '../../parsing/session-record-fields'
-import { extractString } from '../../../../shared/trimmed-string'
+import { extractString } from '../../../../shared/text/trimmed-string'
 import { parseJsonObject } from '../../parsing/session-json-object'
 import { normalizeTitleText } from '../../parsing/session-scanner-text-normalization'
 import { numberValue } from '../../parsing/session-scanner-token-values'

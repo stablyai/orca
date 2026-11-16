@@ -20,7 +20,7 @@ import {
   hasAppEnvironment,
   setAppEnvironment,
   type AppEnvironment
-} from '../../../../../../../shared/app-environment'
+} from '../../../../../../../shared/app-lifecycle/app-environment'
 import { getWorkerTerminalAutoReleaseScheduler } from '../../../../../orchestration/terminal-authority/release/worker-terminal-auto-release-scheduler'
 
 type WorkerStartOptions = { terminal?: string; agent?: TuiAgent }

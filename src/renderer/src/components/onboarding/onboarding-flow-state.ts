@@ -4,10 +4,10 @@ import { translate } from '@/i18n/i18n'
 import {
   ONBOARDING_FINAL_STEP,
   ONBOARDING_FLOW_VERSION
-} from '../../../../shared/onboarding-defaults'
-import type { EventProps } from '../../../../shared/telemetry-events'
+} from '../../../../shared/onboarding/onboarding-defaults'
+import type { EventProps } from '../../../../shared/telemetry/telemetry-event-classification'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { OnboardingState } from '../../../../shared/onboarding-state-types'
+import type { OnboardingState } from '../../../../shared/onboarding/onboarding-state-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { STEPS, type AgentSurface } from './use-onboarding-flow-types'
 import type { ThemeLookSettings } from './onboarding-theme-look-settings'

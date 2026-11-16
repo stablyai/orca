@@ -1,8 +1,8 @@
 import {
-  withTestAgentSessionDatabase,
   openTestAgentSessionRecordStore,
   openTestAgentSessionDatabase
 } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { withTestAgentSessionDatabase } from '../../../../runtime/agent-session/records/agent-session-record-store-persistence.test-fixture'
 import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'

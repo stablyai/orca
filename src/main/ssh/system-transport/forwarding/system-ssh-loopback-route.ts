@@ -5,7 +5,7 @@ import {
   signalProcessTree
 } from '@orca/process-host/process-tree-termination'
 import { createSshOperationAbortError } from '../../connection/ssh-exec-options'
-import type { SshTarget } from '../../../../shared/ssh-types'
+import type { SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import type { SshResolvedConfig } from '../../config/ssh-g-config-resolution'
 import { admitSystemSshLoopbackRoute } from './system-ssh-loopback-route-admission'
 import {

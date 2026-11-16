@@ -33,7 +33,7 @@ import {
   buildBackgroundTaskGroups,
   buildBackgroundTaskGroupsFromViews
 } from '../../../../../../src/shared/background-task-roster'
-import { AGENT_WORKING_COLOR, AgentStateDot } from '../../../../components/AgentStateDot'
+import { AGENT_WORKING_COLOR, AgentStateDot } from '../../../../agents/presentation/AgentStateDot'
 import { useNow } from '../../../../hooks/use-now'
 import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
@@ -46,7 +46,7 @@ import {
 import {
   mobileAgentChildRowName,
   mobileAgentChildRowText
-} from '../../../../worktree/mobile-agent-child-row-text'
+} from '../../../../worktree/agent-lineage/mobile-agent-child-row-text'
 import { trayStripStyles as strip } from './mobile-native-chat-tray-strip-styles'
 import { MobileNativeChatForegroundTaskAction } from '../MobileNativeChatForegroundTaskAction'
 
@@ -236,7 +236,7 @@ function MobileNativeChatBackgroundTasksImpl({
             {groups.length > 0 ? (
               groups.map((group) => (
                 <View key={group.kind} style={styles.group}>
-                  <Text style={styles.groupLabel}>{backgroundTaskGroupLabel(group.kind, say)}</Text>
+                  <Text style={strip.groupLabel}>{backgroundTaskGroupLabel(group.kind, say)}</Text>
                   {group.tasks.map((entry) => (
                     <TaskRow
                       key={entry.row.id}
@@ -330,14 +330,6 @@ const styles = themedStyleSheet(() => ({
     paddingHorizontal: spacing.md,
     paddingTop: spacing.xs,
     paddingBottom: spacing.xs
-  },
-  groupLabel: {
-    color: colors.textMuted,
-    fontSize: 10,
-    fontFamily: typography.monoFamily,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-    paddingBottom: spacing.xs / 2
   },
   row: {
     minHeight: 32,

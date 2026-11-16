@@ -1,4 +1,4 @@
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import React from 'react'
 import { FileText, GitPullRequest, Lock } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'

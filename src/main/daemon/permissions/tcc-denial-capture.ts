@@ -3,17 +3,17 @@
 import { homedir } from 'node:os'
 import { runProcess } from '@orca/process-host'
 import { join } from 'node:path'
-import type { MacTccFolderClass } from '../../../shared/daemon-adoption-telemetry'
+import type { MacTccFolderClass } from '../../../shared/telemetry/daemon-adoption-telemetry'
 import {
   bucketElapsed,
   bucketGoodReadCount,
   bucketHelperAge,
   type FullDiskAccessValue,
   type HelperOrigin
-} from '../../../shared/daemon-tcc-denial-capture'
-import { LOCAL_BUILD_COMPATIBILITY_CONTRACT } from '../../../shared/local-build-compatibility-contract'
-import type { DeveloperPermissionStatus } from '../../../shared/developer-permissions-types'
-import type { EventProps } from '../../../shared/telemetry-events'
+} from '../../../shared/terminal/daemon/daemon-tcc-denial-capture'
+import { LOCAL_BUILD_COMPATIBILITY_CONTRACT } from '../../../shared/remote-runtime/orcad-distribution/local-build-compatibility-contract'
+import type { DeveloperPermissionStatus } from '../../../shared/app-lifecycle/permissions/developer-permissions-types'
+import type { EventProps } from '../../../shared/telemetry/telemetry-event-classification'
 import { msSinceWakeSignal } from '../../power/wake-signal-clock'
 import { isTelemetryEnabled, track } from '../../telemetry/client'
 import { inspectMacProcessCodeIdentity } from '../executable-host/macos/daemon-mac-code-identity'

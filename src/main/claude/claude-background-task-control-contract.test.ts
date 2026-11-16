@@ -54,7 +54,7 @@ it.each([true, false])(
       }
     })
     connections.push(connection)
-    expect(await connection.backgroundTasks?.('toolu_running_build', { timeoutMs: 5000 })).toBe(
+    expect(await connection.backgroundTask('toolu_running_build', { timeoutMs: 5000 })).toBe(
       backgrounded
     )
     const report: { controlRequests: { request: unknown }[]; userMessages: unknown[] } = JSON.parse(

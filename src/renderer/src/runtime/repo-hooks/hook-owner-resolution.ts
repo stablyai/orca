@@ -2,7 +2,7 @@ import type { AppState } from '@/store/types'
 import {
   projectGroupHookOwner,
   projectGroupHookTrustKey
-} from '../../../../shared/workspace-hook-owner'
+} from '../../../../shared/workspace-setup/hooks/workspace-hook-owner'
 import {
   getRepoExecutionHostId,
   toRuntimeExecutionHostId,

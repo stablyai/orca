@@ -195,7 +195,8 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     support: threadGoalSupport,
     reported: reportedThreadGoal,
     mutate,
-    send
+    send,
+    agent
   })
   const transcriptPending = useMemo(
     () => pendingSendsOutsideQueuedCards(pending, queuedMessageIds, isWorking),

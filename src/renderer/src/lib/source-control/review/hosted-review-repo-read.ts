@@ -5,7 +5,7 @@ import type {
   HostedReviewForBranchArgs,
   HostedReviewInfo
 } from '../../../../../shared/source-control/hosted-review/hosted-review-contracts'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 
 export function readHostedReviewForRepo(
   repo: Repo,

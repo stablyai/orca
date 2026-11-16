@@ -1,6 +1,6 @@
 import { getIndexedReposById } from '@/store/repos/repository-catalog-index'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
-import { isFolderRepo } from '../../../../../shared/repo-kind'
+import { isFolderRepo } from '../../../../../shared/repository/repo-kind'
 import type { UISlice } from '@/store/slices/ui/ui-slice-contract'
 import { toast } from 'sonner'
 import type { AppState } from '@/store/types'

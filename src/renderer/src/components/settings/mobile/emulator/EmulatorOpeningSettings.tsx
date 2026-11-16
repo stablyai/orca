@@ -1,5 +1,5 @@
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
-import { getEmulatorOpeningMode } from '../../../../../../shared/emulator-opening-preferences'
+import { getEmulatorOpeningMode } from '../../../../../../shared/emulator/emulator-opening-preferences'
 import { SettingsRow } from '../../form-controls/SettingsFormControls'
 import { MOBILE_EMULATOR_SETTING_ANCHORS } from './mobile-emulator-search'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'

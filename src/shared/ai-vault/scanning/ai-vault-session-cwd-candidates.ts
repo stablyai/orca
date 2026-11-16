@@ -1,6 +1,6 @@
 import { sessionFileExecutionNamespace } from './ai-vault-scope-cwd-match'
 import type { AiVaultSession } from '../contracts/ai-vault-types'
-import { normalizeRuntimePathForComparison } from '../../cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../file-access/cross-platform-path'
 
 type CwdCandidate = {
   normalizedPath: string
