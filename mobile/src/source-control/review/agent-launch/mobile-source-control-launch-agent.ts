@@ -1,5 +1,5 @@
 import type { GlobalSettings } from '../../../../../src/shared/global-settings-types'
-import type { Repo } from '../../../../../src/shared/repo-types'
+import type { Repo } from '../../../../../src/shared/repository/repo-types'
 import type {
   SourceControlActionRecipe,
   SourceControlLaunchActionId

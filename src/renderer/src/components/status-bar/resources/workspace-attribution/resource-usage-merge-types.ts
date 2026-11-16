@@ -1,5 +1,5 @@
-import type { BrowserWorkspace } from '../../../../../../shared/browser-workspace-types'
-import type { WorktreeMemory } from '../../../../../../shared/process-stats-types'
+import type { BrowserWorkspace } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
+import type { WorktreeMemory } from '../../../../../../shared/diagnostics/process-stats-types'
 import type {
   TerminalLayoutSnapshot,
   TerminalTab

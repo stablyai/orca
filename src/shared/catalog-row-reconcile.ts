@@ -1,4 +1,4 @@
-import { structuralValuesEqual } from './structural-value-equality'
+import { structuralValuesEqual } from './collections/structural-value-equality'
 
 /** Reuse equal rows/unchanged arrays to preserve memo/subscriber identity; getIdentity must be unique in next and match the producing merge’s dedupe key. */
 export function reconcileCatalogRows<T>(

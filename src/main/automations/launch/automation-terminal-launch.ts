@@ -1,5 +1,5 @@
 import { automationTerminalLaunchInputs } from '../../../shared/automations/launch/automation-launch-setup'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
 import { automationRunFailure } from '../../../shared/automations/history/automation-run-failure-copy'
 // Automations observe PTYs, so launch terminal agents regardless of the chat default.
@@ -7,7 +7,7 @@ import { automationRunFailure } from '../../../shared/automations/history/automa
 import type { AgentLaunchSurfaceExecution } from '../../agent-launch/agent-launch-execution'
 import { openAgentLaunch } from '../../agent-launch/agent-launch-executor'
 import { tuiAgentDisplayName } from '../../../shared/agent-launch/catalog/tui-agent-display-names'
-import type { RuntimeTerminalCreate } from '../../../shared/runtime-terminal-create-contract'
+import type { RuntimeTerminalCreate } from '../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import type { Automation } from '../../../shared/automations/automation-definition'
 import type { AutomationRun } from '../../../shared/automations/history/automation-run'
 import { findReusableAutomationRun } from '../../../shared/automations/history/automation-session-reuse'

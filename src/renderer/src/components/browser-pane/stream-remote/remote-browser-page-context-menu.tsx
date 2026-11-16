@@ -5,7 +5,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import {
   redactKagiSessionToken,
   resolveRemoteFailureExternalUrl
-} from '../../../../../shared/browser-url'
+} from '../../../../../shared/browser/navigation/browser-url'
 import { isRemoteBrowserPageMissingError } from './remote-browser-stream-errors'
 import type { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
 import type { RemoteBrowserOperationToken } from './remote-browser-stream-tokens'

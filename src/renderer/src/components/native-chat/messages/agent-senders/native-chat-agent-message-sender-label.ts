@@ -20,7 +20,7 @@ import {
 } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { getKnownExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import type { AppState } from '@/store/types'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { AgentMessageSender } from '../../../../../../shared/agent-session/agent-session-message-source'
 import type { Tab } from '../../../../../../shared/tab-types'
 

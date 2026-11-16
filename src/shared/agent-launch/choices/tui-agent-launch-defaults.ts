@@ -22,7 +22,7 @@ import {
   type AgentStartupShell
 } from '../startup/tui-agent-startup-shell'
 import type { TuiAgent } from '../catalog/tui-agent'
-import { resolveLocalWindowsAgentStartupShell } from '../../windows-terminal-shell'
+import { resolveLocalWindowsAgentStartupShell } from '../../shell/launch/windows-terminal-shell'
 
 const UNSUPPORTED_TUI_AGENT_ARGS: Partial<Record<TuiAgent, readonly string[]>> = {
   opencode: ['--dangerously-skip-permissions'],

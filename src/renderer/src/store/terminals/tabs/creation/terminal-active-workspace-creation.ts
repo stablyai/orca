@@ -1,6 +1,6 @@
 import type { TabSplitTarget } from '../../../slices/tabs/tabs-slice-contract'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { resolveWorktreeOperationRouteResult } from '@/lib/workspace/ownership/worktree-operation-route'

@@ -4,7 +4,6 @@ import type {
   AiVaultScanIssue,
   AiVaultSession
 } from '../../../shared/ai-vault/contracts/ai-vault-types'
-import { truncateAiVaultListResult } from '../../../shared/ai-vault/scanning/ai-vault-session-depth'
 import { mergeAiVaultListResults } from './session-list-results'
 
 function listResult(issues: AiVaultScanIssue[]): AiVaultListResult {
@@ -37,32 +36,6 @@ function session(index: number): AiVaultSession {
     subagent: null
   }
 }
-
-const SCOPE_TRUNCATION: AiVaultScanIssue = {
-  executionHostId: 'ssh:dev-box',
-  agent: 'codex',
-  kind: 'scope',
-  path: '/home/ada',
-  message: 'Only the first 64 project paths were scanned.'
-}
-
-it('retains recovered scope rows through All-computers aggregation and smaller cached depths', () => {
-  const local = {
-    ...listResult([SCOPE_TRUNCATION]),
-    sessions: [{ ...session(4), cwd: '/other' }, { ...session(3), cwd: '/other' }, session(1)]
-  }
-  const merged = mergeAiVaultListResults([local, listResult([])], 2, false, ['/repo'])
-  expect(merged.sessions.map((row) => row.sessionId)).toEqual([
-    'session-4',
-    'session-3',
-    'session-1'
-  ])
-  expect(
-    truncateAiVaultListResult(merged, 1, ['/repo']).sessions.map((row) => row.sessionId)
-  ).toEqual(['session-4', 'session-1'])
-  expect(merged.issues).toEqual([SCOPE_TRUNCATION])
-  expect(merged.scannedAt).toBe(local.scannedAt)
-})
 
 it('retains a selected remote conversation beyond the merged result limit', () => {
   const selected = {

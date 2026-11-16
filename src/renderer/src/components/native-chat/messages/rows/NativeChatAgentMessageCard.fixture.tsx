@@ -1,11 +1,14 @@
-import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
+import {
+  acceptedAgentStatuses,
+  type AcceptedAgentStatuses
+} from '@/store/slices/agent-status/accepted-agent-statuses'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
 import type { AgentMessageSource } from '../../../../../../shared/agent-session/agent-session-message-source'
 import { NativeChatAgentMessageCard } from './NativeChatAgentMessageCard'
 import { MessageRow } from './NativeChatMessageRow'
-import { projectStructuredAgentStartItem } from '../../../../../../shared/structured-agent-start-projection'
+import { projectStructuredAgentStartItem } from '../../../../../../shared/native-chat/transcript/messages/structured-agent-start-projection'
 import { NativeChatUserMessageRow } from './NativeChatUserMessageRow'
 import { orchestrationMailFixture } from '../../../../../../shared/agent-session/orchestration-mail.test-fixture'
 
@@ -124,26 +127,31 @@ function cards() {
     </div>
   )
 }
-const agentStatusByPaneKey: Record<string, AgentStatusEntry> = {}
+let agentStatusByPaneKey: AcceptedAgentStatuses = acceptedAgentStatuses(Object.entries({}))
 for (const [id, agentType, state] of [
   ['sender', 'codex', 'done'],
   ['progress', 'claude', 'working']
 ] as const) {
   const paneKey = `${id}:11111111-1111-4111-8111-111111111111`
-  agentStatusByPaneKey[paneKey] = {
-    paneKey,
-    worktreeId: workspace,
-    terminalHandle: `term_${id}`,
-    agentType,
-    state,
-    prompt: 'Parser worker',
-    updatedAt: 1_800_000_000_000,
-    stateStartedAt: 1_800_000_000_000,
-    stateHistory: [],
-    ...(state === 'working'
-      ? { programStatus: { state, progress: 40, observedAt: 1_800_000_000_000 } }
-      : {})
-  }
+  agentStatusByPaneKey = agentStatusByPaneKey.replace([
+    [
+      paneKey,
+      {
+        paneKey,
+        worktreeId: workspace,
+        terminalHandle: `term_${id}`,
+        agentType,
+        state,
+        prompt: 'Parser worker',
+        updatedAt: 1_800_000_000_000,
+        stateStartedAt: 1_800_000_000_000,
+        stateHistory: [],
+        ...(state === 'working'
+          ? { programStatus: { state, progress: 40, observedAt: 1_800_000_000_000 } }
+          : {})
+      }
+    ]
+  ])
 }
 const store = {
   activeWorktreeId: workspace,

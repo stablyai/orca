@@ -4,7 +4,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { encodePairingOffer } from '../pairing/pairing'
-import { addEnvironmentFromPairingCode, listEnvironments } from './runtime-environment-store'
+import {
+  addEnvironmentFromPairingCode,
+  listEnvironments
+} from './runtime-environment-store-operations'
 import {
   getRuntimeEnvironmentSidecarPath,
   writeRuntimeEnvironmentSidecarEntry
@@ -12,7 +15,7 @@ import {
 import {
   linkVerifiedRuntimeEnvironmentSshAccess,
   prepareRuntimeEnvironmentSshAccessLink
-} from './runtime-environment-ssh-access-store'
+} from './runtime-environment-ssh-access-operations'
 import { readPersistedEnvironmentStore } from './runtime-environment-store-file'
 import { shippedBuildRewrite } from './runtime-environment-shipped-store.test-fixture'
 

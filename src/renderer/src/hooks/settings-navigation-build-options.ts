@@ -1,6 +1,6 @@
 import type { ProjectGroupSettingsEntry } from './use-supported-group-hook-settings'
-import type { ProjectGroupingModel } from '../../../shared/project-section-grouping'
-import type { Repo } from '../../../shared/repo-types'
+import type { ProjectGroupingModel } from '../../../shared/sidebar-list/sections/project-section-grouping'
+import type { Repo } from '../../../shared/repository/repo-types'
 
 export type SettingsNavigationBuildOptions = {
   isMac: boolean

@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import type { BrowserSessionProfile } from '../../../../shared/browser-workspace-types'
+import type { BrowserSessionProfile } from '../../../../shared/browser/workspaces/browser-workspace-types'
 
 export type PendingBrowserCookieImport =
   | string

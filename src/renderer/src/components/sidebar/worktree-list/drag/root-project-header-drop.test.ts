@@ -3,8 +3,8 @@ import type {
   HostHeaderRow
 } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
 import { describe, expect, it } from 'vitest'
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import {
   getRootProjectHeaderCountByOccurrenceKey,
   getRootProjectHeaderDragKeys,

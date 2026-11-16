@@ -2,7 +2,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import '../../../shared/workspace-scope'
+import '../../../shared/workspace/identity/workspace-scope'
 import '../../persistence/profile-state/documents/profile-state-documents'
 import { getOrcaProfileStateDatabaseFile } from '../profile-storage-paths'
 import { getOtherProfileWorktreeIdsForHistoryGc } from './other-profile-workspace-catalog'
@@ -63,7 +63,8 @@ describe('getOtherProfileWorktreeIdsForHistoryGc', () => {
 
     expect(getOtherProfileWorktreeIdsForHistoryGc(root)).toEqual({
       unreadableProfiles: 1,
-      ids: new Set()
+      ids: new Set(),
+      repoIds: new Set()
     })
   })
 

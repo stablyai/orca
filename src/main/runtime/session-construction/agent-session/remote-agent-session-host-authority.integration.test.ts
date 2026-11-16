@@ -11,7 +11,7 @@ import type {
   RuntimeEnsureAgentSessionResult,
   RuntimeEnsureAgentSessionRequest
 } from '../../../../shared/agent-session/agent-session-host-authority'
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { SubprocessHandle } from '../../../daemon/sessions/session-subprocess-handle'
 import { TerminalHost } from '../../../daemon/terminal-host/terminal-host'
 import { OrcaRuntimeService } from '../../orca-runtime'

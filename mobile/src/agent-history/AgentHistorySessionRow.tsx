@@ -1,4 +1,6 @@
 import { useMemo } from 'react'
+import { MobileForkMarkedName } from '../session/fork/MobileForkMarkedName'
+import { mobileForkAccessibleName } from '../session/fork/mobile-fork-marked-name'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { ChevronDown, Play } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
@@ -51,7 +53,7 @@ export function AgentHistorySessionRow({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityState={{ expanded }}
-      accessibilityLabel={card.title}
+      accessibilityLabel={card.forked ? mobileForkAccessibleName(card.title) : card.title}
       accessibilityHint={
         expanded
           ? t('agentHistory.sessionHistoryList.hidePreview', 'Hides the recent messages.')
@@ -66,7 +68,7 @@ export function AgentHistorySessionRow({
           <View style={styles.main}>
             <View style={styles.titleRow}>
               <Text style={styles.title} numberOfLines={1}>
-                {card.title}
+                {card.forked ? <MobileForkMarkedName name={card.title} /> : card.title}
               </Text>
               {card.timeAgo ? <Text style={styles.timeAgo}>{card.timeAgo}</Text> : null}
               <DisclosureChevron expanded={expanded} collapsedDeg={0} expandedDeg={180}>

@@ -1,4 +1,4 @@
-import type { OrcaHooks } from '../../../../../shared/orca-yaml-hook-types'
+import type { OrcaHooks } from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
 import {
   getProjectHostSetupSelectionKey,
   type NeedsSetupProjectHostOption,

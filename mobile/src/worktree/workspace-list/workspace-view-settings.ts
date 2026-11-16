@@ -1,8 +1,8 @@
 // Sync phone view settings through the shared ui.get/ui.set store so edits converge across clients.
 
 import type { WorkspaceStatusDefinition } from '../../../../src/shared/worktree/types'
-import { withDefaultWorkspaceStatuses } from '../../../../src/shared/workspace-statuses'
-import { DEFAULT_WORKSPACE_STATUSES } from '../../../../src/shared/workspace-status-defaults'
+import { withDefaultWorkspaceStatuses } from '../../../../src/shared/workspace/status/workspace-statuses'
+import { DEFAULT_WORKSPACE_STATUSES } from '../../../../src/shared/workspace/status/workspace-status-defaults'
 import {
   NO_WORKSPACE_ROW_FILTERS,
   WORKSPACE_ROW_FILTER_KEYS,

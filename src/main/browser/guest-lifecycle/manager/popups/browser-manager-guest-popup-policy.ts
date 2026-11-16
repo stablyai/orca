@@ -2,7 +2,7 @@ import { shell } from 'electron'
 import {
   normalizeExternalBrowserUrl,
   redactKagiSessionToken
-} from '../../../../../shared/browser-url'
+} from '../../../../../shared/browser/navigation/browser-url'
 import {
   trackBrowserGuestInputGesture,
   type ObservedBrowserGuestGesture
@@ -173,14 +173,16 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
   requestExternalAppLaunch(
     guest: Electron.WebContents,
     rawUrl: string | undefined,
-    requestingUrl: () => string | null
+    requestingUrl: () => string | null,
+    pageInitiated?: boolean
   ): boolean {
     // Credit the requesting frame, not the trusted top-level site.
     return requestBrowserExternalAppLaunch({
       requester: guest,
       target: this.resolvePagePromptTarget(guest),
       rawUrl,
-      requestingUrl
+      requestingUrl,
+      pageInitiated
     })
   }
 

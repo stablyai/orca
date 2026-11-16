@@ -1,3 +1,4 @@
+import { scanLocalAiVaultSessionsAsIssue } from './ai-vault-local-scan'
 import {
   captureRuntimeAiVaultProjectionDependency,
   type AiVaultProjectionDependency
@@ -14,6 +15,7 @@ import {
   mergeAiVaultListResults
 } from '../../ai-vault/listing/session-list-results'
 import type { AiVaultDeleteSessionArgs } from '../../../shared/ai-vault/contracts/ai-vault-session-deletion'
+
 import {
   AI_VAULT_SCOPE_PATHS_MAX_COUNT,
   isAiVaultScanCancelledError,
@@ -60,12 +62,13 @@ import {
 } from '../../ai-vault/structured-sessions/structured-session-ownership'
 import { allHostsRuntimeScanTimeoutMs } from './ai-vault-all-host-timeouts'
 import { registerAiVaultScanProgressBroadcast } from './ai-vault-scan-progress-broadcast'
-import { scanLocalAiVaultSessionsAsIssue } from './ai-vault-local-scan'
 
 type AiVaultHandlerOptions = AiVaultSessionSources &
   AiVaultResumeHandlerOptions & {
     getUserDataPath?: () => string
-    getActiveRuntimeAiVaultHostInfos?: () => readonly RuntimeAiVaultHostInfo[]
+    getActiveRuntimeAiVaultHostInfos?: () =>
+      | readonly RuntimeAiVaultHostInfo[]
+      | Promise<readonly RuntimeAiVaultHostInfo[]>
     scanRuntimeAiVaultSessions?: RuntimeAiVaultScanner
     resolveRuntimeAiVaultSessionTitles?: RuntimeAiVaultSessionTitleResolver
   }
@@ -94,10 +97,10 @@ async function listAiVaultSessions(
   const executionHostScope = requestedExecutionHostScope(args?.executionHostScope)
   const hostScope: AiVaultScanHostScope =
     executionHostScope === 'all'
-      ? { scope: executionHostScope, runtimeHosts: getActiveRuntimeAiVaultHostInfosResult() }
+      ? { scope: executionHostScope, runtimeHosts: await getActiveRuntimeAiVaultHostInfosResult() }
       : { scope: executionHostScope }
   const parsedHost = parseRoutableExecutionHostId(executionHostScope)
-  const dependency = captureRuntimeAiVaultProjectionDependency(
+  const dependency = await captureRuntimeAiVaultProjectionDependency(
     hostScope.scope === 'all'
       ? hostScope.runtimeHosts.hostInfos.map((host) => host.environmentId)
       : parsedHost?.kind === 'runtime'
@@ -219,7 +222,9 @@ async function scanAiVaultSessionsByHostScope(
   })
 }
 
-export function getActiveRuntimeAiVaultHostInfosResult(): AiVaultHostDiscoveryResult<RuntimeAiVaultHostInfo> {
+export async function getActiveRuntimeAiVaultHostInfosResult(): Promise<
+  AiVaultHostDiscoveryResult<RuntimeAiVaultHostInfo>
+> {
   return discoverAiVaultHosts(() => handlerOptions.getActiveRuntimeAiVaultHostInfos?.() ?? [], {
     path: 'runtime environments',
     fallbackMessage: 'Runtime hosts are unavailable.'

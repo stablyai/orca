@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store/index'
-import { isGitRepoKind } from '../../../../shared/repo-kind'
+import { isGitRepoKind } from '../../../../shared/repository/repo-kind'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { checkRuntimeHooks } from '@/runtime/repo-hooks/runtime-hooks-client'
 import { getLocalPreflightContext } from '@/runtime/hosts/preflight/local-preflight-context'

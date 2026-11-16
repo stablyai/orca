@@ -1,7 +1,7 @@
 import type { BrowserClientAutomationMethod } from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import type { BrowserClientHostCommandEvent } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import { requiresBrowserClientFileChannel } from '../../../../shared/browser/client-hosting/browser-client-file-channel-methods'
-import { normalizeBrowserNavigationUrl } from '../../../../shared/browser-url'
+import { normalizeBrowserNavigationUrl } from '../../../../shared/browser/navigation/browser-url'
 import { executeBrowserClientUploadCommand } from '../../client-hosts/file-transfers/browser-client-upload-command'
 import type { BrowserClientFileChannelTransport } from '../../client-hosts/file-transfers/browser-client-file-channel-transport'
 import type { BrowserClientUploadStaging } from '../../client-hosts/file-transfers/browser-client-upload-staging'

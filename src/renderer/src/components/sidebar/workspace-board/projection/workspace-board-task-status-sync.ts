@@ -12,7 +12,7 @@ import type {
   WorkspaceStatusDefinition,
   Worktree
 } from '../../../../../../shared/worktree/types'
-import { getWorkspaceStatus } from '../../../../../../shared/workspace-statuses'
+import { getWorkspaceStatus } from '../../../../../../shared/workspace/status/workspace-statuses'
 
 export type WorkspaceBoardTaskStatusSyncResult = {
   updated: number

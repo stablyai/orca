@@ -1,6 +1,6 @@
 import { settingsRead } from '../../../settings/mobile-settings-read-operations'
 import { useRef, useState, type Dispatch, type SetStateAction } from 'react'
-import type { PersistedTrustedOrcaHooks } from '../../../../../src/shared/orca-yaml-hook-types'
+import type { PersistedTrustedOrcaHooks } from '../../../../../src/shared/workspace-setup/orca-yaml-hook-types'
 import type { RetiredNameRegistry } from '../../../../../src/shared/worktree/naming/retired-name-registry'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import { folderCreateBusyMessage, uncertainCreateMessage } from './new-workspace-create-copy'
@@ -39,7 +39,7 @@ import {
 import { isRpcDeliveryUnknown } from '../../../transport/rpc/rpc-delivery-ambiguity'
 import type { OrcaHookTrustPrompt } from '../../../components/hook-trust/OrcaHookTrustDrawer'
 import type { NewWorktreeDrawerView } from '../modal/use-new-worktree-drawer-navigation'
-import { suggestCreatureNameForPaths as getSuggestedCreatureName } from '../../../../../src/shared/worktree-name-suggestion'
+import { suggestCreatureNameForPaths as getSuggestedCreatureName } from '../../../../../src/shared/worktree/naming/worktree-name-suggestion'
 
 type CreateOptions = {
   setupOverride?: Exclude<WorkspaceCreateSetupDecision, 'inherit'>

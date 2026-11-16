@@ -1,8 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  _resetPRAutoRefreshCadencesForTests,
+  setPRAutoRefreshCadenceForHost
+} from '../../../../../../shared/source-control/hosted-review/review-refresh-policy'
+import {
   createVisibleHostedReviewRefreshScheduler,
   type VisibleHostedReviewRefreshTarget
 } from './visible-hosted-review-refresh-scheduler'
+import { followOwningHostCadence } from './owning-host-cadence-replan'
 
 const schedulers: ReturnType<typeof createVisibleHostedReviewRefreshScheduler>[] = []
 
@@ -38,26 +43,6 @@ describe('visible hosted review scheduler', () => {
       scheduler.dispose()
     }
     vi.useRealTimers()
-  })
-
-  it('retrieves a deferred completion with an ordinary timer read and resets on a head change', async () => {
-    const refresh = vi.fn(async () => ({ succeeded: true, retryAfterMs: 10_000 }))
-    const row = target({ fetchedAt: Date.now() - 120_000, refresh })
-    const scheduler = setup([row])
-    await vi.advanceTimersByTimeAsync(0)
-    expect(refresh.mock.calls[0]).toEqual([true, expect.any(AbortSignal), 'discovery'])
-    await vi.advanceTimersByTimeAsync(10_000)
-    expect(refresh.mock.calls[1]).toEqual([false, expect.any(AbortSignal), 'timer'])
-    scheduler.update([{ ...row, revision: 'new-head|' }])
-    await vi.advanceTimersByTimeAsync(10_000)
-    expect(refresh.mock.calls[2]).toEqual([true, expect.any(AbortSignal), 'discovery'])
-  })
-
-  it('keeps successful same-age cache replies on the normal interval without a receipt', async () => {
-    const refresh = vi.fn(async () => ({ succeeded: true }))
-    setup([target({ fetchedAt: Date.now() - 120_000, refresh })])
-    await vi.advanceTimersByTimeAsync(120_000)
-    expect(refresh.mock.calls[1]).toEqual([false, expect.any(AbortSignal), 'timer'])
   })
 
   it.each(['remove', 'hide', 'dispose'])(
@@ -98,27 +83,49 @@ describe('visible hosted review scheduler', () => {
   )
 })
 
-it('limits refocus discovery to opted-in open GitHub rows and the existing stopped interval', async () => {
-  vi.useFakeTimers()
-  vi.setSystemTime(1_000_000)
-  const github = target({
-    key: 'github',
-    fetchedAt: Date.now(),
-    intervalMs: 120_000,
-    refreshOnForeground: true
-  })
-  const closed = target({ key: 'closed', fetchedAt: Date.now(), intervalMs: 900_000 })
-  const other = target({ key: 'other', fetchedAt: Date.now(), intervalMs: 120_000 })
-  const stopped = target({ key: 'stopped', fetchedAt: Date.now(), intervalMs: null })
-  const scheduler = setup([github, closed, other, stopped])
-  scheduler.setVisible(false)
-  await vi.advanceTimersByTimeAsync(130_000)
-  scheduler.setVisible(true)
-  await vi.advanceTimersByTimeAsync(0)
-  expect(github.refresh).toHaveBeenCalledWith(true, expect.any(AbortSignal), 'discovery')
-  expect(stopped.refresh).toHaveBeenCalledWith(true, expect.any(AbortSignal), 'discovery')
-  expect(closed.refresh).not.toHaveBeenCalled()
-  expect(other.refresh).toHaveBeenCalledWith(false, expect.any(AbortSignal), 'timer')
-  scheduler.dispose()
-  vi.useRealTimers()
+describe('replanning on a host’s cadence change', () => {
+  afterEach(() => _resetPRAutoRefreshCadencesForTests())
+
+  it.each([750, 7500])(
+    'builds no rows for a cadence change and re-plans only the changed host’s targets beside %i others',
+    (rows) => {
+      const aTargets = Array.from({ length: rows }, (_, row) =>
+        target({
+          key: `a-${row}`,
+          cadenceHost: 'env-a',
+          intervalMs: 120_000,
+          foregroundIntervalMs: 120_000
+        })
+      )
+      const bTarget = target({
+        key: 'b',
+        cadenceHost: 'env-b',
+        intervalMs: 120_000,
+        foregroundIntervalMs: 120_000
+      })
+      const build = vi.fn(() => [...aTargets, bTarget])
+      const applied: (readonly VisibleHostedReviewRefreshTarget[])[] = []
+      const following = followOwningHostCadence(build, (targets) => applied.push(targets))
+      following.update()
+
+      setPRAutoRefreshCadenceForHost('env-b', 'minimal')
+      expect(build).toHaveBeenCalledTimes(1)
+      const replanned = applied.at(-1)!
+      expect(replanned.slice(0, rows).every((row, index) => row === aTargets[index])).toBe(true)
+      expect(replanned[rows]).toMatchObject({ key: 'b', cadence: 'minimal', intervalMs: 1_200_000 })
+
+      setPRAutoRefreshCadenceForHost('env-b', 'minimal')
+      setPRAutoRefreshCadenceForHost('env-c', 'off')
+      expect(applied).toHaveLength(2)
+
+      setPRAutoRefreshCadenceForHost('env-a', 'reduced')
+      expect(applied.at(-1)![0]).toMatchObject({ cadence: 'reduced', intervalMs: 600_000 })
+      expect(applied.at(-1)![rows]).toBe(replanned[rows])
+
+      following.dispose()
+      setPRAutoRefreshCadenceForHost('env-b', 'off')
+      expect(applied).toHaveLength(3)
+      expect(build).toHaveBeenCalledTimes(1)
+    }
+  )
 })

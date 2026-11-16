@@ -1,4 +1,4 @@
-import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
+import type { RuntimeWorktreeAgentRow } from '../../../src/shared/worktree/catalog/runtime-worktree-contracts'
 import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
 import type { ConversationHistory } from './project-conversations'
 

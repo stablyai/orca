@@ -163,7 +163,7 @@ function capabilityStrings(module: Record<string, unknown>): readonly string[] {
 
 async function loadWorkingTreeBuild(): Promise<AgentSessionWireBuild> {
   const [protocol, dispatcher, methodRegistry] = await Promise.all([
-    import('../../../src/shared/protocol-version'),
+    import('../../../src/shared/remote-runtime/protocol/protocol-version'),
     import('../../../src/main/runtime/rpc/dispatcher'),
     import('../../../src/main/runtime/rpc/methods/rpc-method-registry')
   ])

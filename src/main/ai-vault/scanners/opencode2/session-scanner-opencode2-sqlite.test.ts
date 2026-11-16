@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import Database from '../../../sqlite/sync-database'
-import { buildOpenCodeSqliteCandidatePath } from '../../../../shared/opencode-sqlite-session-path'
+import { buildOpenCodeSqliteCandidatePath } from '../../../../shared/agent-session/lifecycle/provider-handles/opencode-sqlite-session-path'
 import { listOpenCode2SqliteSessions } from './session-scanner-opencode2-sqlite-list'
 
 import {

@@ -73,6 +73,7 @@ export function HostConversations({
       buildProjectSectionCatalog(
         controller.projectCatalog,
         [...controller.sectionsResult.repoById.values()],
+        state.hostProjectGroups,
         state.view.filters.visibleHostIds,
         controller.projectOrderBy
       ),
@@ -80,6 +81,7 @@ export function HostConversations({
       controller.projectCatalog,
       controller.sectionsResult.repoById,
       controller.projectOrderBy,
+      state.hostProjectGroups,
       state.view
     ]
   )

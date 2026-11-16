@@ -8,7 +8,7 @@ vi.mock('./ssh-config-parser', async (importOriginal) => ({
   loadUserSshConfig: loadUserSshConfigMock
 }))
 
-import { SSH_CONFIG_HOST_RESULT_LIMIT } from '../../../shared/ssh-types'
+import { SSH_CONFIG_HOST_RESULT_LIMIT } from '../../../shared/remote-runtime/ssh/ssh-types'
 import {
   invalidateUserSshConfigHostCache,
   listUserSshConfigHostSummaries,

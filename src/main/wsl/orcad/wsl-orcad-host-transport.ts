@@ -1,11 +1,11 @@
 import { once } from 'node:events'
 import { spawnProcess } from '@orca/process-host'
 import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
-import { buildWslExecArgs } from '../../../shared/wsl-login-shell-command'
+import { buildWslExecArgs } from '../../../shared/shell/wsl/wsl-login-shell-command'
 import {
   commandLineLength,
   MAX_COMMAND_LINE_CHARS
-} from '../../../shared/windows-command-line-budget'
+} from '../../../shared/shell/launch/windows-command-line-budget'
 import type { OrcadHostTransport } from '../../managed-server/install/orcad-host-transport'
 import type { RemoteCommandChannel } from '../../managed-server/install/remote-install-transport'
 import {
@@ -21,11 +21,11 @@ import { uploadDirectoryIntoWsl, wslGuestSourcePath } from '../filesystem/wsl-di
 import { resolveWslExecutablePath } from '../execution/wsl-executable-path'
 import { noteWslDistroLaunched } from '../discovery/wsl-background-distro-gate'
 import { readWslDistroRegistryIdShared } from '../discovery/wsl-distro-registry-id'
-import { ORCAD_WSL_DISTRO_GUID_ENV } from '../../../shared/orcad-server-launch-env'
+import { ORCAD_WSL_DISTRO_GUID_ENV } from '../../../shared/remote-runtime/serve-supervisor/orcad-server-launch-env'
 import {
   ORCAD_IDLE_TIMEOUT_ENV,
   WSL_ORCAD_IDLE_EXIT_TIMEOUT_MS
-} from '../../../shared/orcad-idle-exit'
+} from '../../../shared/remote-runtime/orcad-lifecycle/orcad-idle-exit'
 import type { WslOrcadHostTarget } from './wsl-orcad-host-target'
 
 export type WslOrcadHostTransport = OrcadHostTransport & {

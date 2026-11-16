@@ -1,4 +1,4 @@
-import type { IssueSourcePreference } from '../../../../shared/repo-types'
+import type { IssueSourcePreference } from '../../../../shared/repository/repo-types'
 import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
 import { classifyGhError } from '../../api/gh-error-classification'
 import {

@@ -9,7 +9,7 @@ import { createCallbacks, createTarget } from './testing/ssh-connection-test-fix
 import { SshConnection } from './ssh-connection'
 import { resolveWithSshG } from '../config/ssh-g-config-resolution'
 import { RECONNECT_BACKOFF_MS } from './ssh-connection-timing'
-import '../../../shared/ssh-types'
+import '../../../shared/remote-runtime/ssh/ssh-types'
 
 vi.mock('../authentication/ssh2-module-load', async () =>
   (await import('./testing/ssh-connection-test-client')).createSsh2LoaderModule()

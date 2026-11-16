@@ -12,7 +12,7 @@ import {
 import { connect, createServer } from 'node:net'
 import { tmpdir, userInfo } from 'node:os'
 import { join } from 'node:path'
-import type { SshTarget } from '../../../../shared/ssh-types'
+import type { SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import type { SystemSshBuildArgsOptions } from '../system-ssh-args'
 
 const SSHD = '/usr/sbin/sshd'

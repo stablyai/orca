@@ -2,7 +2,7 @@ import { githubProjectHost } from '../../../../../shared/github/projects/project
 import type { GitHubProjectRow } from '../../../../../shared/github/projects/project-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
-import type { RepoHostTarget } from '../../../../../shared/repo-host-identity'
+import type { RepoHostTarget } from '../../../../../shared/repository/repo-host-identity'
 
 export function buildProjectWorkItem(
   row: GitHubProjectRow,

@@ -11,7 +11,7 @@ import {
 } from './structured-agent-session-host-test-data.test-fixture'
 import { HOUR, weekly } from './structured-agent-session-usage-limit-fleet.test-fixture'
 import { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'
-import type { ProviderRateLimits } from '../../../../../shared/rate-limit-types'
+import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { UsageLimitAccountScope } from '../../recovery/structured-agent-session-usage-limit-account-hold'
 
 const DAY = 24 * HOUR

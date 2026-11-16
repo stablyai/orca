@@ -9,15 +9,15 @@ import {
   recordSessionScanIssue,
   scanIssueTextFromError
 } from '../../../parsing/session-scan-issues'
-import { throwIfSignalAborted } from '../../../../../shared/abort-signal-reason'
-import { openCodeTranscriptPageLimit } from '../../../../../shared/opencode-transcript-page-limit'
+import { throwIfSignalAborted } from '../../../../../shared/concurrency/abort-signal-reason'
+import { openCodeTranscriptPageLimit } from '../../../../../shared/agent-session/lifecycle/provider-handles/opencode-transcript-page-limit'
 import type { SessionFileCandidate } from '../../../session-scanner-types'
 import type { OpenCodeSqliteCaptureValue } from './session-scanner-opencode-sqlite-worker-protocol'
 import { OpenCodeSqliteWorkerClient } from './session-scanner-opencode-sqlite-worker-client'
 import {
   buildOpenCodeSqliteCandidatePath,
   splitOpenCodeSqliteCandidate
-} from '../../../../../shared/opencode-sqlite-session-path'
+} from '../../../../../shared/agent-session/lifecycle/provider-handles/opencode-sqlite-session-path'
 import {
   mapOpenCodeWslSession,
   openCodeWslClient,

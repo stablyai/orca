@@ -17,6 +17,7 @@ import {
   ptyForceKillTimers,
   ptyPhysicalExits,
   ptyProcesses,
+  ptyReportsChildExitStatus,
   ptyShutdownOperations,
   ptyTerminationMode,
   ptyLoadGeneration,
@@ -205,7 +206,8 @@ async function shutdownTrackedPty(
     await killWithDescendantSweep(proc.pid, signalRoot, {
       ownsRoot: () => ptyProcesses.get(id) === proc,
       terminateOwnedTree: () => terminatePtyJob(proc),
-      terminateDescendants: terminateShutdownDescendants,
+      terminateDescendants: (snapshot) =>
+        terminateShutdownDescendants(snapshot, ptyReportsChildExitStatus.get(id) === false),
       // Group SIGKILL must wait out the SIGTERM grace so agents can run exit hooks (Claude SessionEnd).
       awaitEscalation: () => operation.immediate
     })

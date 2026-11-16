@@ -11,7 +11,7 @@ import {
   readHostStructuredAgentsForRuntime,
   subscribeHostStructuredAgents
 } from './host-structured-agents'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 /** Whether a chat may carry images: what its session's options report said, else what its host
  *  registered for the agent, else what every build has always sent the agents it ships. An unlisted
@@ -47,13 +47,4 @@ export function useHostStructuredAgent(
     [agent, executionHostId, runtimeId]
   )
   return useAppViewExternalStore(subscribeHostStructuredAgents, read, read)
-}
-
-/** `reported` is the session's options answer: absent before it lands and from an older host. */
-export function useStructuredAgentAcceptsImages(
-  target: RuntimeClientTarget,
-  agent: string,
-  reported: boolean | undefined
-): boolean {
-  return structuredAgentAcceptsImages(useHostStructuredAgent(target, agent), agent, reported)
 }

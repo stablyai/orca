@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
-import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Project, ProjectHostSetup } from '../../../../shared/project/project-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 
 import './project-host-routing'
 import '../host-catalog/endpoint-catalog-adoption'

@@ -4,13 +4,13 @@ import type { SelectedSourceControlActionRecipe } from '../../../../../../shared
 import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
-import type { LaunchSource } from '../../../../../../shared/telemetry-events'
+import type { LaunchSource } from '../../../../../../shared/telemetry/schemas/telemetry-property-schemas'
 import type {
   SourceControlLaunchActionId,
   SourceControlActionRecipe
 } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import type { SourceControlAiWriteTarget } from '../../../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchChoice } from '@/lib/agent-session/launch/routing/agent-menu-selection'
 import { buildSourceControlAgentDeliveryPlan } from './buildSourceControlAgentDeliveryPlan'

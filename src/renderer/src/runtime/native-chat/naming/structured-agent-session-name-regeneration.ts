@@ -8,7 +8,7 @@ import '../../rpc/compatibility/runtime-capability-proof'
 import '../../hosts/capabilities/local-runtime-capabilities'
 import '../../rpc/subscriptions/runtime-rpc-subscribe'
 import '../requests/structured-agent-session-request-timeouts'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 /** Asks the owning host to name the chat again; the status feed carries the outcome. */
 export async function regenerateStructuredAgentSessionName(

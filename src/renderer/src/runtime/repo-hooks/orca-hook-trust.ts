@@ -1,4 +1,4 @@
-import { sha256 } from '../../../../shared/sha256'
+import { sha256 } from '../../../../shared/hashing/sha256'
 
 export async function hashOrcaHookScript(content: string): Promise<string> {
   const normalized = content.trim()

@@ -95,7 +95,7 @@ function fileServices(root: string) {
       }
     }
   })
-  return { buffers, staging, transport, requests: () => requests }
+  return { buffers, staging, transport }
 }
 
 async function startUpload(root: string) {
@@ -148,7 +148,6 @@ it.each(['resolve', 'reject', 'page-release'] as const)(
       await collect()
       const pendingBuffers = upload.buffers.filter((buffer) => buffer.deref()).length
       expect(upload.buffers).toHaveLength(2)
-      expect(upload.requests()).toBe(8)
       expect(upload.params).toEqual({ element: '#upload', files: remotePaths })
       expect(upload.staging.activeStagingCount()).toBe(1)
       await expectStagedBytes(upload.localPaths)

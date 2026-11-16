@@ -9,7 +9,7 @@ import {
   hasSleepableWorkspaceActivity,
   useWorkspaceLineageMenuActions
 } from './workspace-lineage-menu-actions'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { getDeleteStateForWorktreeHost } from '../deletion/worktree-delete-state-host-match'
 import {
   EMPTY_AGENT_STATUS_BY_PANE_KEY,

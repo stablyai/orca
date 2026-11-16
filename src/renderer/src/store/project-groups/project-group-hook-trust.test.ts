@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from '../testing/app-store-test-fixture'
 afterEach(() => vi.unstubAllGlobals())
-import { createProjectGroup } from '../../../../shared/project-groups'
-import { projectGroupHookTrustKey } from '../../../../shared/workspace-hook-owner'
+import { createProjectGroup } from '../../../../shared/project/groups/project-groups'
+import { projectGroupHookTrustKey } from '../../../../shared/workspace-setup/hooks/workspace-hook-owner'
 import { hydrateTrustedOrcaHooks } from '../slices/ui/ui-slice-hydration-sanitizers'
 
 const list = vi.fn()

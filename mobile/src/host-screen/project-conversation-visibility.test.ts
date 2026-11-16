@@ -1,4 +1,4 @@
-import { projectHostSetupProjectionFromRepos } from '../../../src/shared/project-host-setup-projection'
+import { projectHostSetupProjectionFromRepos } from '../../../src/shared/project/host-setup/project-host-setup-projection'
 import { getWorktreeRowIdentity } from '../worktree/row-presentation/worktree-host-row-identity'
 import { expect, it } from 'vitest'
 import { buildProjectConversations, projectConversationTarget } from './project-conversations'
@@ -111,6 +111,7 @@ it('maps canonical host-local keys to registered project sections with mobile vi
       repos: [repo],
       projectOrderBy: 'manual',
       repoOrder: undefined,
+      projectGroups: [],
       grouping: { projects: projection.projects, projectHostSetups: projection.setups }
     }
   })

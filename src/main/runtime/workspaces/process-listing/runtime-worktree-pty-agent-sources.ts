@@ -8,7 +8,7 @@ import {
   parsePaneKey
 } from '../../../../shared/workspace-layout/stable-pane-id'
 import { agentVerdictFields } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
-import { isLocalHookConnectionId } from '../../../../shared/wsl-hook-relay-contract'
+import { isLocalHookConnectionId } from '../../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
 import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { structuredAgentSessionIdFromTabId } from '../../../../shared/agent-session/view/structured-agent-session-tab-id'

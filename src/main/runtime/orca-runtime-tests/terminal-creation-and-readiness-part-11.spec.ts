@@ -12,7 +12,7 @@ describe('OrcaRuntimeService', () => {
   it('keeps cursor pagination stable across a CUU redraw of the live screen', async () => {
     const runtime = new OrcaRuntimeService(store)
     const liveScreen = new HeadlessEmulator({ cols: 80, rows: 24 })
-    syncSinglePty(runtime)
+    await syncSinglePty(runtime)
 
     const [terminal] = (await runtime.listTerminals()).terminals
     const initialOutput = 'A\r\nB\r\nC\r\n'
@@ -51,7 +51,7 @@ describe('OrcaRuntimeService', () => {
 
   it('records completed transcript lines before later CUU redraws in the same PTY chunk', async () => {
     const runtime = new OrcaRuntimeService(store)
-    syncSinglePty(runtime)
+    await syncSinglePty(runtime)
 
     const [terminal] = (await runtime.listTerminals()).terminals
     runtime.onPtyData('pty-1', 'A\r\nB\r\nC\r\n\x1b[2A\x1b[2K\x1b[1GB2\r\n', 100)
@@ -67,7 +67,7 @@ describe('OrcaRuntimeService', () => {
 
   it('keeps huge ANSI cursor movement params bounded in retained previews', async () => {
     const runtime = new OrcaRuntimeService(store)
-    syncSinglePty(runtime)
+    await syncSinglePty(runtime)
 
     const [terminal] = (await runtime.listTerminals()).terminals
     const infinityParam = '9'.repeat(400)

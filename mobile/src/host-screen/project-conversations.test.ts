@@ -231,6 +231,7 @@ describe('projects containing conversations', () => {
           setupMethod: 'imported-existing-folder'
         }))
       },
+      projectGroups: [],
       repoOrder: new Map(repos.map((repo, index) => [repo.id, index])),
       projectOrderBy: 'recent'
     }

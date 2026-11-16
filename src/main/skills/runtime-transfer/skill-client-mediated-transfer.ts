@@ -1,12 +1,12 @@
 import { open } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
-import type { SkillPackageIdentity } from '../../../shared/skill-install-contract'
-import type { SkillBundlePackageIdentity } from '../../../shared/skill-bundle-install-contract'
+import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { SkillPackageIdentity } from '../../../shared/skills/installation/skill-install-contract'
+import type { SkillBundlePackageIdentity } from '../../../shared/skills/installation/skill-bundle-install-contract'
 import {
   SKILL_UPLOAD_CHUNK_MAX_BYTES,
   SkillUploadBeginResultSchema
-} from '../../../shared/skill-upload-session-contract'
+} from '../../../shared/skills/sharing/skill-upload-session-contract'
 import { callRuntimeEnvironment } from '../../ipc/runtime-environments/requests/runtime-environment-transport-routing'
 import { downloadSkillPackageGrant } from '../package-download/skill-package-download'
 import { startSkillPhaseOperation } from '../observability/skill-operation-observability'

@@ -1,4 +1,4 @@
-import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../../../../../shared/clipboard-text'
+import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../../../../../shared/clipboard/clipboard-text'
 import type { TerminalInputKind } from '../../../../../../shared/terminal/input/terminal-input-kind'
 
 export const PTY_PRECONNECT_INPUT_MAX_ENTRIES = 1024

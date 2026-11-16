@@ -1,4 +1,4 @@
-import type { SessionMemory } from '../../../../../../shared/process-stats-types'
+import type { SessionMemory } from '../../../../../../shared/diagnostics/process-stats-types'
 import { parsePaneKey as parseStablePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { getWorktreePathBasenameFromId } from '../../../../../../shared/worktree/id'
 import { translate } from '@/i18n/i18n'

@@ -1,23 +1,25 @@
-import type { ExtraUsageBalance, ProviderRateLimits } from '../../../../../shared/rate-limit-types'
-import type { UsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
-import { clampUsedPercent } from '../../../../../shared/usage-percentage-display'
-import { formatCreditCount } from '../../../../../shared/credit-count-format'
-import { formatCurrencyAmount } from '../../../../../shared/currency-format'
+import type {
+  ExtraUsageBalance,
+  ProviderRateLimits
+} from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { UsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
+import {
+  clampUsedPercent,
+  getDisplayedUsagePercentage
+} from '../../../../../shared/agent-usage/display/usage-percentage-display'
+import { formatCreditCount } from '../../../../../shared/agent-usage/display/credit-count-format'
+import { formatCurrencyAmount } from '../../../../../shared/agent-usage/display/currency-format'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
+import { getUsageHealthTone, PLAIN_USAGE_BAR_CLASS, usageBarClass } from './usage-health-tone'
 
-export const USAGE_WARNING_PERCENT = 60
-export const USAGE_URGENT_PERCENT = 80
+// Why no green: this is overage spend against a money cap, not an allowance; only warn near the cap.
+type SpendBarTone = 'plain' | 'warning' | 'urgent'
 
-export function barColor(usedPct: number): string {
-  if (usedPct < USAGE_WARNING_PERCENT) {
-    return 'bg-muted-foreground/40'
-  }
-  if (usedPct < USAGE_URGENT_PERCENT) {
-    return 'bg-yellow-500'
-  }
-  return 'bg-red-500'
+function getSpendBarTone(spentPct: number): SpendBarTone {
+  const tone = getUsageHealthTone(spentPct)
+  return tone === 'healthy' ? 'plain' : tone
 }
 
 export function getExtraUsageLabel(
@@ -134,15 +136,20 @@ export function ProviderExtraUsageSection({
   }
 
   const spentPct = clampUsedPercent(balance.spentPercent ?? 0)
+  const tone = getSpendBarTone(spentPct)
   const spent = formatCurrencyAmount(balance.spent ?? 0, balance.currencyCode)
   const limit = formatCurrencyAmount(balance.spendLimit ?? 0, balance.currencyCode)
   return (
     <div className="space-y-1">
       <div className={`font-medium ${textClass}`}>{label}</div>
-      <div className={`h-[6px] w-full overflow-hidden rounded-full ${emptyBarClass}`}>
+      <div
+        data-usage-bar
+        data-usage-tone={tone}
+        className={`h-[6px] w-full overflow-hidden rounded-full ${emptyBarClass}`}
+      >
         <div
-          className={`h-full rounded-full ${barColor(spentPct)} transition-all duration-300`}
-          style={{ width: `${spentPct}%` }}
+          className={`h-full rounded-full ${tone === 'plain' ? PLAIN_USAGE_BAR_CLASS : usageBarClass(spentPct)} transition-all duration-300`}
+          style={{ width: `${getDisplayedUsagePercentage(spentPct, usagePercentageDisplay)}%` }}
         />
       </div>
       <div className={`flex justify-between ${mutedClass}`}>

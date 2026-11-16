@@ -1,5 +1,7 @@
 // The CLI loads these paths after electron-vite replaces out/main.
 export const CLI_MAIN_ENTRY_NAMES = [
+  'worker-threads/worker-thread-entry-path',
+  'worker-threads/worker-thread-spawn',
   'agent-hooks/installation/managed-agent-hook-controls',
   'gitlab/projects/project-ref-parser',
   'orca-profiles/profile-index-store',
@@ -13,6 +15,7 @@ export const CLI_MAIN_ENTRY_NAMES = [
   'orcad/profile-state/orcad-host-identity-reset',
   'plugins/artifacts/plugin-artifact-validation',
   'plugins/artifacts/plugin-content-hash',
+  'plugins/artifacts/plugin-host-call-validation',
   'plugins/catalog/plugin-catalog-release-entry',
   // `orca vm env doctor` runs its checks in the CLI process.
   'environment-doctor/environment-doctor',

@@ -10,7 +10,7 @@ import { isStructuredTab } from '../../../../../shared/agent-session/view/struct
 import { resolvePaneAgentActivity } from '@/lib/agent-status/evidence/pane-agent-evidence'
 import type { AgentMessageTarget } from './agent-message-target'
 import { detectAgentSendTitleStatus } from './agent-send-title-status'
-import { resolveRuntimePaneTitleLeafResolution } from '../../../../../shared/runtime-pane-title-leaf-id'
+import { resolveRuntimePaneTitleLeafResolution } from '../../../../../shared/workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
 
 export type RunningAgentTargetState = Pick<
   AppState,
@@ -96,7 +96,7 @@ function deriveTerminalAgentSendTargets(
   const tabsById = new Map(tabs.map((tab) => [tab.id, tab]))
   const targets: TerminalAgentSendTarget[] = []
 
-  for (const [paneKey, entry] of Object.entries(state.agentStatusByPaneKey)) {
+  for (const [paneKey, entry] of Array.from(state.agentStatusByPaneKey.entries())) {
     const parsed = parsePaneKey(paneKey)
     if (!parsed) {
       continue
@@ -170,7 +170,7 @@ function deriveStructuredAgentSendTargets(
       continue
     }
     const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
-    const entry = state.agentStatusByPaneKey[paneKey] ?? null
+    const entry = state.agentStatusByPaneKey.get(paneKey) ?? null
     if ((entry !== null) !== (status === 'with-status')) {
       continue
     }

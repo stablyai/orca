@@ -19,7 +19,7 @@ import {
 } from '../../parsing/session-scanner-accumulator'
 import { addSessionContent } from '../../parsing/session-scanner-messages'
 import { arrayValue, asRecord } from '../../parsing/session-record-fields'
-import { extractString } from '../../../../shared/trimmed-string'
+import { extractString } from '../../../../shared/text/trimmed-string'
 import { parseJsonObject } from '../../parsing/session-json-object'
 import { extractContentText } from '../../parsing/session-scanner-text-normalization'
 import { tokenTotal } from '../../parsing/session-scanner-token-values'

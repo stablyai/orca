@@ -14,7 +14,7 @@ import { projectConversationTitle } from '../../../src/shared/project-conversati
 import {
   buildProjectGroupingIndex,
   getProjectGroupingForRepo
-} from '../../../src/shared/project-section-grouping'
+} from '../../../src/shared/sidebar-list/sections/project-section-grouping'
 import type { ProjectSectionCatalog } from '../worktree/workspace-list/workspace-list-sections'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../src/shared/execution-host'
 import { structuredAgentSessionPaneKey } from '../../../src/shared/agent-session/view/structured-agent-session-projection'

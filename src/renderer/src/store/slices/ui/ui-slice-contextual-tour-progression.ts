@@ -1,6 +1,6 @@
 import type { AppState } from '../../types'
-import type { FeatureInteractionId } from '../../../../../shared/feature-interactions'
-import { getContextualTour } from '../../../../../shared/contextual-tours'
+import type { FeatureInteractionId } from '../../../../../shared/feature-education/interactions/feature-interaction-catalog'
+import { getContextualTour } from '../../../../../shared/feature-education/contextual-tours/contextual-tours'
 import { isPausedActionTour } from './ui-slice-tour-actions'
 import {
   getNextVisibleContextualTourStepIndex,
