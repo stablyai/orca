@@ -1,4 +1,4 @@
-import { lstat, readdir, stat } from 'node:fs/promises'
+import { lstat, opendir, stat } from 'node:fs/promises'
 import { basename, dirname, join, relative } from 'node:path'
 import type { AiVaultSession } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import {
@@ -50,7 +50,7 @@ export function createWorkspaceHistoryOwner(
     if (!known) {
       // An unmounted volume or unreadable root proves nothing; an empty one may be a bare mount point.
       known = stat(root)
-        .then(async (stats) => stats.isDirectory() && (await readdir(root)).length > 0)
+        .then(async (stats) => stats.isDirectory() && (await hasAnyEntry(root)))
         .catch(() => false)
       rootPresence.set(root, known)
     }
@@ -114,6 +114,16 @@ export function createWorkspaceHistoryOwner(
       }
     }
     return false
+  }
+}
+
+// Reads one entry, not the whole root: deletes re-prove the root for every session.
+async function hasAnyEntry(folder: string): Promise<boolean> {
+  const dir = await opendir(folder)
+  try {
+    return (await dir.read()) !== null
+  } finally {
+    await dir.close()
   }
 }
 

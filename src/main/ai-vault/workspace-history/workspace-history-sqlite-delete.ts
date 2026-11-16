@@ -47,6 +47,7 @@ export async function deleteWorkspaceHistorySqliteSessions(
         outcome.kept.push(sessionId)
         continue
       }
+      throwIfAiVaultScanCancelled(signal)
       try {
         db.exec('BEGIN IMMEDIATE')
       } catch {

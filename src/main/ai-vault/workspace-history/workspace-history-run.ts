@@ -147,6 +147,7 @@ export async function runWorkspaceHistory(
       result.inUse++
       continue
     }
+    throwIfAiVaultScanCancelled(signal)
     const files = removals
       .filter((removal) => removal.kind === 'file')
       .map((removal) => removal.path)
