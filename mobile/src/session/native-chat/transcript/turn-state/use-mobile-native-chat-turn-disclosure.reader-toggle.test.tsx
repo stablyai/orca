@@ -16,7 +16,11 @@ describe('useMobileNativeChatTurnDisclosure', () => {
   it('lets the reader explicitly collapse a turn retained when older history supplies its opener', () => {
     const messages: NativeChatMessage[] = [
       userMessage('opener'),
-      { ...userMessage('reading'), role: 'assistant' },
+      {
+        ...userMessage('reading'),
+        role: 'assistant',
+        blocks: [{ type: 'tool-call', callId: 'read', name: 'Read', input: { path: '/tmp/file' } }]
+      },
       { ...userMessage('answer'), role: 'assistant' }
     ]
     const settledTurns = new Map([['opener', { startedAt: 1, workedSeconds: 10 }]])
