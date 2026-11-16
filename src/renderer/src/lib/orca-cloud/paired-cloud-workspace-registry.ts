@@ -1,4 +1,4 @@
-// PAIRED-STATUS: registers each PAIRED cloud workspace's own row with the cloud workspace store, so
+// Registers each PAIRED cloud workspace's own row with the cloud workspace store, so
 // its status (state word, hovercard, archive, git-setup) reads through main's paired path like an
 // owned one. A paired row is the workspace's own row on a "<name> (cloud)" server that main marked
 // `orcaCloudPaired` in the runtime catalog; this desktop has no runtime record for it.
@@ -36,7 +36,7 @@ type RegistryState = {
 /**
  * Sidebar id → server environment id, for every paired cloud workspace's own row: per project on a
  * paired server, the workspace's linked worktree (a teammate's shared workspace, where the base
- * checkout is hidden, PAIRED-REGISTRY-ROW), else its main checkout (a GitHub-only workspace).
+ * checkout is hidden), else its main checkout (a GitHub-only workspace).
  */
 export function pairedCloudWorkspacesFromState(state: RegistryState): Record<string, string> {
   const paired = new Set(

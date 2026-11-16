@@ -1,4 +1,4 @@
-// PAIRED-WAKE: a paired cloud workspace wakes through the control plane and on intent (focus, hover)
+// A paired cloud workspace wakes through the control plane and on intent (focus, hover)
 // exactly like an owned one: same candidate rules, quiet when predictive, refusals reported.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -97,7 +97,7 @@ describe('waking a paired workspace', () => {
     expect(getCloudWorkspaceSnapshot().ids.has(ROW)).toBe(false)
   })
 
-  it('holds typing from the press, before the bindings read answers (PAIRED-WAKE-TYPE-THROUGH)', async () => {
+  it('holds typing from the press, before the bindings read answers', async () => {
     resetWakeInputForTests()
     let answer: (value: Record<string, CloudWorkspaceBinding>) => void = () => undefined
     window.api.cloudWorkspaces.environmentBindings = () =>
@@ -108,7 +108,7 @@ describe('waking a paired workspace', () => {
     // Still reading the bindings: the first keys typed now are held, not sent to the asleep server.
     expect(isWorkspaceWaking(ROW)).toBe(true)
     // ...and it already shows as waking, so the surface lets typing through instead of covering the
-    // pane asleep (inert) until the read answers: keys typed in that first second were lost (n49/n51).
+    // pane asleep (inert) until the read answers: keys typed in that first second were lost.
     expect(getCloudWorkspaceSnapshot().wake[ROW]?.phase).toBe('waking')
     expect(
       captureWakeInput(
@@ -162,7 +162,7 @@ describe('waking a paired workspace', () => {
   })
 })
 
-describe('opening a paired workspace (n38 gate: Sleep, then open the row, and it wakes)', () => {
+describe('opening a paired workspace (Sleep, then open the row, and it wakes)', () => {
   it('opening an asleep paired row wakes it, with the waking overlay', async () => {
     expect(await wakePairedCloudWorkspaceIfAsleep(ROW)).toEqual({ ok: true })
     expect(wake).toHaveBeenCalledWith('sbx_gh')
@@ -189,7 +189,7 @@ describe('opening a paired workspace (n38 gate: Sleep, then open the row, and it
   })
 })
 
-describe('the first open right after Sleep (n38 GATE: it sat in "Reconnecting…" instead of waking)', () => {
+describe('the first open right after Sleep (it sat in "Reconnecting…" instead of waking)', () => {
   it('a cached "ready" from before the Sleep does not stop the wake: the open reads status fresh', async () => {
     // The cache still says running (read moments before Sleep); the server says asleep.
     seedCloudWorkspaceSnapshot({
@@ -229,7 +229,7 @@ describe('the first open right after Sleep (n38 GATE: it sat in "Reconnecting…
   })
 })
 
-describe('the waking overlay for a paired wake (PAIRED-WAKING-OVERLAY)', () => {
+describe('the waking overlay for a paired wake', () => {
   it('stays "waking"/"connecting" until the VM reports running, then ready (not when the request returns)', async () => {
     let polls = 0
     wake.mockImplementationOnce(async () => {

@@ -1,4 +1,4 @@
-// Agent API keys and the user's Orca account (D12). While signed in, a saved key is also written to
+// Agent API keys and the user's Orca account. While signed in, a saved key is also written to
 // the personal Cloud secret of the same variable, and this computer's vault stays the sealed cache
 // that non-Cloud launches read. Cloud secrets are write-only, so the sync is one way: desktop → account.
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'

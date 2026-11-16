@@ -1,4 +1,4 @@
-// S3 words (§7 annotation 4). The Orca Cloud cells reuse the panel and build-sheet wording.
+// "Sign-ins by host" words (§7 annotation 4). The Orca Cloud cells reuse the panel and build-sheet wording.
 import type { Translate } from '@/i18n/use-translate'
 import { formatDate } from '../orca-cloud-account-row-shell'
 import { keyOptionLabel, productName } from '../orca-cloud-accounts-copy'
@@ -84,7 +84,7 @@ export function overviewCellText(
   }
 }
 
-/** Why "API key overrides sign-in" matters (design-squad): who pays, and how to use the sign-in. */
+/** Why "API key overrides sign-in" matters: who pays, and how to use the sign-in. */
 export function apiKeyOverridesDetail(agent: 'claude' | 'codex', t: Translate): string {
   return t(
     'agentHostPanel.host.apiKeyOverridesDetail',

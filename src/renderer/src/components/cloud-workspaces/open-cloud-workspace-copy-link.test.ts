@@ -91,7 +91,7 @@ describe('copy cloud workspace link', () => {
     warn.mockRestore()
   })
 
-  it('SHARE-LINKS-HOLD: with share links held, nothing is copied and no toast shows', async () => {
+  it('with share links held, nothing is copied and no toast shows', async () => {
     shareLinks.on = false
     try {
       await expect(copyCloudWorkspaceLink('sbx_held')).resolves.toBe(false)

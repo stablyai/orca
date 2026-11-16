@@ -7,7 +7,7 @@
 // - a failed rebuild leaves the active build in place and shows the usual "update failed" state, and is
 //   not retried for the same golden (the attempt is recorded by its base_snapshot_id);
 // - rate-limited: a few starts per tick and a cap on builds in flight across all accounts.
-// ENV-BUILD-CHURN: goldens rotate per merge that touches the VM (every ~15 min on dev), so rebuilding
+// Goldens rotate per merge that touches the VM (every ~15 min on dev), so rebuilding
 // every environment on every rotation cost each team build hours for our image updates. Now:
 // - eager only for environments used in the last `recentMs` (7 d; never recorded counts as used), and
 //   at most once per `minIntervalMs` (24 h; 6 h on dev), always to the newest golden;
@@ -15,7 +15,7 @@
 // - an environment below the security floor (environment-security.ts) is rebuilt regardless;
 // - refresh builds are metered internally, never charged to the team (reportBuildUsage).
 // Staleness is exact: environment_builds.base_snapshot_id is the golden snapshot each build started from.
-// Regions (U17): an environment lives in its recorded region while that region is served, else the
+// Regions: an environment lives in its recorded region while that region is served, else the
 // default (environmentRegion), so a build is compared with that region's golden. A build from another
 // region (iad1 before pdx1 became the default, for an environment that records none) is stale by that
 // rule and is rebuilt where the environment lives; its workspaces boot in the build's own region until

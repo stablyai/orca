@@ -1,4 +1,4 @@
-// EGRESS-COMPILE: every live policy write goes through applySandboxPolicy (design §2, §7.1).
+// Every live policy write goes through applySandboxPolicy (design §2, §7.1).
 import { describe, expect, it, vi } from 'vitest'
 import { lifecycleDeps } from '../src/index'
 import { applySandboxPolicy, type LifecycleDeps } from '../src/lifecycle'
@@ -34,7 +34,7 @@ async function setup() {
   return { h, id, life, row, box, failing }
 }
 
-describe('applySandboxPolicy (EGRESS-COMPILE)', () => {
+describe('applySandboxPolicy', () => {
   it('compiles the whole policy (the git route too), stamps a generation and returns the token expiry', async () => {
     const t = await setup()
     t.box().policy = { allow: {} }
@@ -101,7 +101,7 @@ describe('egressSwapModeFor', () => {
   })
 })
 
-describe('review F2: a stale compile can never be the last write to land', () => {
+describe('a stale compile can never be the last write to land', () => {
   it('a newer writer claimed while ours was in flight: ours writes again from current state', async () => {
     const t = await setup()
     const writes: string[] = []

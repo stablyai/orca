@@ -1,4 +1,4 @@
-// V3-08: Landing signed out of Orca. Cloud builds with projects show the "Cloud workspaces · Sign in"
+// Landing signed out of Orca. Cloud builds with projects show the "Cloud workspaces · Sign in"
 // card; without projects, and in local builds, Landing is unchanged. Signed in, Landing is
 // upstream's, and Add project opens the sidebar's Add project menu.
 import type { Repo } from '../../../../shared/repository/repo-types'
@@ -54,7 +54,7 @@ export const cloudSessionEndedWithProjects = defineFixture({
   render: home
 })
 
-/** Cloud build, signed out, no projects: unchanged (the welcome screen is V3-05, not built). */
+/** Cloud build, signed out, no projects: unchanged (a welcome screen is not built yet). */
 export const cloudSignedOutNoProjects = defineFixture({
   width: 760,
   setup: build(true),

@@ -239,7 +239,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
       t
     ]
   )
-  // Orca Cloud: "Account & billing" only when there is billing to show (Neil).
+  // Orca Cloud: "Account & billing" only when there is billing to show.
   const hasOrcaBilling = useAppStore(hasOrcaBillingAccount)
   return useMemo(() => labelAccountBilling(sections, hasOrcaBilling), [sections, hasOrcaBilling])
 }

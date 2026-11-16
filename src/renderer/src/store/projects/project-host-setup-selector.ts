@@ -33,7 +33,7 @@ export function getProjectHostSetupProjectionFromState(
   if (!projects || !catalogSetups) {
     return getDerivedProjection(repos)
   }
-  // Asleep Orca Cloud workspaces keep their project until their runtime's catalog loads (RA-9).
+  // Asleep Orca Cloud workspaces keep their project until their runtime's catalog loads.
   const setups = withAsleepCloudProjectSetups(
     repos,
     projects,

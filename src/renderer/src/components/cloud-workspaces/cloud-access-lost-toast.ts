@@ -1,4 +1,4 @@
-// EP-8: this computer's pairing to a cloud workspace was refused and Orca Cloud won't grant it again:
+// This computer's pairing to a cloud workspace was refused and Orca Cloud won't grant it again:
 // the account can no longer open the workspace (it was made private, reassigned, or the member
 // removed). Say so once, with the one fix: remove it from this computer. Other devices aren't affected.
 import { toast } from 'sonner'

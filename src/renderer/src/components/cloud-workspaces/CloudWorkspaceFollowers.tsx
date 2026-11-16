@@ -1,4 +1,4 @@
-// PARITY-FOLLOW: who is on a cloud workspace, beside its W-123 chip in the top bar. The creator
+// Who is on a cloud workspace, beside its W-123 chip in the top bar. The creator
 // comes first, then the people following it, then anyone else looking at it now. Someone viewing
 // gets a ring in their own color; typing adds the pulsing dot the picker rows use. "Follow" keeps a
 // teammate's workspace in the sidebar's Following section until it is unfollowed.
@@ -93,7 +93,7 @@ export function CloudWorkspaceFollowers({
   /** Opens the teammate's profile. */
   onOpenMember?: (userId: string) => void
   /**
-   * GH-ACTING-LINE: who pushes and PRs go out as, said in the acting member's tooltip (or the first
+   * Who pushes and PRs go out as, said in the acting member's tooltip (or the first
    * avatar's when it's Orca's bot). Words only: no action here.
    */
   acting?: { text: string; userId: string | null } | null

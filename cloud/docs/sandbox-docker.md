@@ -1,4 +1,4 @@
-# Docker in Orca Cloud workspaces (PARITY-DOCKER)
+# Docker in Orca Cloud workspaces
 
 Every Orca Cloud workspace can run Docker. `docker`, `docker compose` and `docker buildx` work as on a laptop. The first time they're used, Docker is installed in the workspace.
 
@@ -17,7 +17,7 @@ Every Orca Cloud workspace can run Docker. `docker`, `docker compose` and `docke
   - the `local` log driver with size caps;
   - the `mirror.gcr.io` registry mirror, because Docker Hub's anonymous pull limit is per IP and sandboxes share egress IPs.
 - **Failures:** a failed install or start says so in one line and names the log, `/tmp/orca-dockerd.log`.
-- **Follow-up (P2):** opting Docker into an environment snapshot, so a team's workspaces start with it installed.
+- **Follow-up:** opting Docker into an environment snapshot, so a team's workspaces start with it installed.
 
 ## Sleep and wake
 
@@ -37,7 +37,7 @@ Every Orca Cloud workspace can run Docker. `docker`, `docker compose` and `docke
   ```
 
   Alternatively, point `NODE_EXTRA_CA_CERTS` or `SSL_CERT_FILE` at the mounted file. Public hosts and image pulls don't need it.
-- **Planned helper:** a P3 follow-up (`orca docker-run`) will mount the certificate automatically.
+- **Planned helper:** a follow-up (`orca docker-run`) will mount the certificate automatically.
 - **Metadata:** cloud metadata addresses (169.254.169.254) are refused from containers, as from the VM.
 
 ## Turning it off

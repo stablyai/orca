@@ -50,10 +50,10 @@ export function getWorkspaceVmLifecycleAction(
 }
 
 /**
- * PAIRED-LIFECYCLE: a paired cloud workspace (one this desktop opened or created from a GitHub-only
+ * A paired cloud workspace (one this desktop opened or created from a GitHub-only
  * project) has no VM record here, so its lifecycle item comes from the control plane's status:
  * asleep offers Wake, waking shows Waking…, anything else keeps the plain Sleep items (which reach
- * the sandbox). Before this an asleep paired row offered Sleep and never Wake (n79).
+ * the sandbox). Before this an asleep paired row offered Sleep and never Wake.
  */
 export function getPairedCloudLifecycleAction(
   state: HostedWorkspaceStatus['state'] | undefined,
@@ -122,7 +122,7 @@ export function WorkspaceVmLifecycleMenuItems({
   const t = useTranslate()
   // Orca Cloud speaks the product's lifecycle verbs (sleep / wake), never "Suspend/Resume VM".
   const cloud = useIsCloudWorkspace(worktreeId)
-  // ARCHIVED-DEAD-ACTIONS: an archived cloud workspace (owned or paired) can't sleep or wake;
+  // An archived cloud workspace (owned or paired) can't sleep or wake;
   // Unarchive is its one lifecycle action, so neither Sleep nor Wake is offered here.
   const archived = useCloudWorkspace((state) =>
     isArchivedCloudStatus(state.status[worktreeId]?.status)
@@ -132,7 +132,8 @@ export function WorkspaceVmLifecycleMenuItems({
     paired
       ? getPairedCloudLifecycleAction(
           state.status[worktreeId]?.status?.state,
-          state.wake[worktreeId]?.phase === 'waking' || state.wake[worktreeId]?.phase === 'connecting'
+          state.wake[worktreeId]?.phase === 'waking' ||
+            state.wake[worktreeId]?.phase === 'connecting'
         )
       : null
   )
@@ -180,7 +181,7 @@ export function WorkspaceVmLifecycleMenuItems({
   )
   // Sleep and Suspend VM are one action on a running VM. A VM still asleep or waking keeps Sleep
   // only while it has restored panels to close; otherwise Sleep would sit there disabled. Not on
-  // Orca Cloud (Neil): there that "Sleep" read as a second, contradictory item beside Wake; the
+  // Orca Cloud: there that "Sleep" read as a second, contradictory item beside Wake; the
   // cloud row has exactly one lifecycle item, Sleep or Wake.
   return cloud || (replacesSleep && (action === 'suspend' || !hasSleepableActivity)) ? (
     vmItem

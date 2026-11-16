@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// RA-11b: right after a wake or app start main doesn't know the sandbox yet, so the first per-workspace
+// Right after a wake or app start main doesn't know the sandbox yet, so the first per-workspace
 // Source read answers not_found. It retries when main's sandbox records change, not a minute later.
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -40,7 +40,7 @@ afterEach(() => {
   resetCloudRunningSignoutForTest()
 })
 
-describe('useWorkspaceUsesAccount after a wake (RA-11b)', () => {
+describe('useWorkspaceUsesAccount after a wake', () => {
   it('retries a not_found read as soon as main reports its sandbox records changed', async () => {
     workspaceSources.mockResolvedValueOnce({ ok: false, error: { code: 'not_found' } })
     const { result } = renderHook(() => useWorkspaceUsesAccount('env-1', 'claude', true, 1))

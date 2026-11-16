@@ -1,4 +1,4 @@
-// PAIRED-SLEEP: Sleep on a paired cloud workspace puts its sandbox to sleep through the control plane;
+// Sleep on a paired cloud workspace puts its sandbox to sleep through the control plane;
 // this desktop's own sandboxes keep the ordinary Sleep (their VM suspends), local rows are untouched.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -46,7 +46,7 @@ afterEach(() => {
   resetCloudWorkspaceIdentityForTests()
 })
 
-describe('PAIRED-SLEEP', () => {
+describe('Sleep on a paired cloud workspace', () => {
   it('a paired cloud workspace: its sandbox sleeps through the control plane', async () => {
     rows.set('wt-paired', { id: 'wt-paired', hostId: 'runtime:env-paired', isMainWorktree: true })
     const sleep = stub(async () => ({ ok: true, value: undefined }))
@@ -88,7 +88,7 @@ describe('PAIRED-SLEEP', () => {
     expect(sleep).not.toHaveBeenCalled()
   })
 
-  it("a teammate's shared workspace: its registered linked row sleeps the sandbox (SHARED-MEMBER-SLEEP-HANG)", async () => {
+  it("a teammate's shared workspace: its registered linked row sleeps the sandbox", async () => {
     rows.set('wt-linked', { id: 'wt-linked', hostId: 'runtime:env-paired', isMainWorktree: false })
     pairedRegistry['wt-linked'] = 'env-paired'
     const sleep = stub(async () => ({ ok: true, value: undefined }))

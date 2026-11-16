@@ -9,7 +9,7 @@ import { copyOwnerRequest, ownerRequestLabel } from './owner-request'
 
 const REPO_URL = 'https://github.com/stablyai/orca-plugins'
 
-describe('Copy request for an owner (REQUEST-COPY-SHARE)', () => {
+describe('Copy request for an owner', () => {
   beforeEach(() => {
     Object.defineProperty(globalThis, 'window', {
       configurable: true,

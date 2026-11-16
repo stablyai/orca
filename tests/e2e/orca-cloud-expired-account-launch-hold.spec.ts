@@ -1,4 +1,4 @@
-// RA-1: on Orca Cloud (a paired web host), a Claude launch from the real New tab menu holds on the
+// On Orca Cloud (a paired web host), a Claude launch from the real New tab menu holds on the
 // account-recovery strip when the Orca-account sign-in expired; the agent never starts on the host.
 import { existsSync, readFileSync, rmSync } from 'node:fs'
 import type { Page } from '@stablyai/playwright-test'

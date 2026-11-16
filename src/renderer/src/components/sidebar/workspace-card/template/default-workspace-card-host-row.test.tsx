@@ -4,7 +4,7 @@ import { CARD_PRIMITIVES } from './card-primitives'
 import { cardElement, compileCardTemplate } from './card-template-compiler'
 import { DEFAULT_WORKSPACE_CARD_TEMPLATE } from './default-workspace-card'
 
-// The default card's own vars, read through a probe that prints the two JA-13 decisions.
+// The default card's own vars, read through a probe that prints its host, identity and branch.
 const probe = compileCardTemplate(
   {
     ...DEFAULT_WORKSPACE_CARD_TEMPLATE,
@@ -86,7 +86,7 @@ function facts(host: Host, title: string, style = 'new') {
 const read = (f: ReturnType<typeof facts>): string =>
   renderToStaticMarkup(<>{probe.render(f, null).content}</>)
 
-describe('default workspace card host row (JA-13)', () => {
+describe('default workspace card host row', () => {
   it('names the host only on the exception: Orca Cloud yes, this computer no', () => {
     expect(read(facts({ kind: 'runtime', contextLabel: 'Orca Cloud' }, 'x'))).toContain(
       'Orca Cloud|'
@@ -126,7 +126,7 @@ const line2Probe = compileCardTemplate(
 const line2 = (f: ReturnType<typeof facts>): string =>
   renderToStaticMarkup(<>{line2Probe.render(f, null).content}</>)
 
-describe('CLOUD-ROW-DUP-TAG: no host pill on an Orca Cloud row', () => {
+describe('no host pill on an Orca Cloud row', () => {
   const cloud = { kind: 'runtime', contextLabel: 'Orca Cloud', cloud: true }
 
   it('an owned or paired cloud row has no host pill; its cloud mark names the host', () => {

@@ -97,7 +97,7 @@ describe('git as the sender', () => {
     expect(await t.proxied('github.com', '/acme/other.git/git-receive-pack', gitBasicAuthorization(alicePh))).toEqual({ status: 403, body: 'path_not_allowed' })
     expect(await t.proxied('github.com', '/acme/app.git/../other.git/info/refs', gitBasicAuthorization(alicePh))).toEqual({ status: 403, body: 'path_not_allowed' })
     expect((await t.proxied('api.github.com', '/repos/acme/app/pulls', `Bearer ${alicePh}`)).status).toBe(200)
-    // GH-AS-MEMBER: outside the repository the member's gh goes out on the App's installation token, never theirs.
+    // Outside the repository the member's gh goes out on the App's installation token, never theirs.
     expect((await t.proxied('api.github.com', '/user/repos', `Bearer ${alicePh}`)).status).toBe(200)
     expect(t.upstream.at(-1)!.authorization).toBe('Bearer ghs_app')
     // A teammate without a grant has no route at all, even if connected.
@@ -127,7 +127,7 @@ describe('git as the sender', () => {
     expect(await t.proxied('github.com', '/acme/app.git/info/refs', bobPh)).toEqual({ status: 403, body: 'placeholder_missing' })
   })
 
-  it('GIT-COAUTHOR: an owner whose identity cannot be used is sent as a co-author only, never a token', async () => {
+  it('an owner whose identity cannot be used is sent as a co-author only, never a token', async () => {
     const t = await setup()
     await t.seed('alice', 'alice-gh', 11)
     const row = (await getSandbox(t.h.env.SANDBOX_DB, t.id))!
@@ -146,7 +146,7 @@ describe('git as the sender', () => {
     expect(t.h.vercel.commands.some((c) => c.command === MEMBERS_COMMAND)).toBe(false)
   })
 
-  it('the owner acts as themselves without a send, with no expiry (GH-AS-MEMBER)', async () => {
+  it('the owner acts as themselves without a send, with no expiry (gh as the member)', async () => {
     const t = await setup()
     await t.seed('alice', 'alice-gh', 11, false)
     const ph = gitBasicAuthorization(await memberPlaceholder(t.id, 'alice'))
@@ -159,7 +159,7 @@ describe('git as the sender', () => {
   })
 })
 
-describe('GIT-ACTOR: githubActing and you on the workspace view (list and detail)', () => {
+describe('githubActing and you on the workspace view (list and detail)', () => {
   const detail = async (t: Awaited<ReturnType<typeof setup>>, user: string) =>
     (await t.h.call('GET', `/v1/team/workspaces/${t.id}`, { bearer: await t.as(user) })).body.workspace
   const listed = async (t: Awaited<ReturnType<typeof setup>>, user: string) =>

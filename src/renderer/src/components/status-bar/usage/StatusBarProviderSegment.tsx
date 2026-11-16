@@ -273,8 +273,8 @@ export function ProviderSegment({
   }
 
   if (p.usageMetadata?.ownerNotSetUp) {
-    // Why calm: "Not configured on Orca Cloud" sat in the bar for good in every cloud workspace
-    // (JA-07/NS-03). Same quiet "--" as a failed read; the reason stays on hover and in the card.
+    // Why calm: "Not configured on Orca Cloud" sat in the bar for good in every cloud workspace.
+    // Same quiet "--" as a failed read; the reason stays on hover and in the card.
     const reason = getProviderUsageErrorMessage(p, t)
     return (
       <span

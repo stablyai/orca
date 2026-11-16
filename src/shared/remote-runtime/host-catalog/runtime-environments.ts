@@ -162,9 +162,9 @@ export type PublicKnownRuntimeEnvironment = Omit<KnownRuntimeEnvironment, 'endpo
   endpoints: PublicRuntimeAccessEndpoint[]
   /** Digest of the host's persisted E2EE public key, which its pairing handshake proves. */
   hostKeyFingerprint?: string
-  /** This server is a paired Orca Cloud workspace's sandbox (PAIRED-AWARE). */
+  /** This server is a paired Orca Cloud workspace's sandbox. */
   orcaCloudPaired?: true
-  /** The Orca account its pairing was made under; absent on pairings saved before LC-1. */
+  /** The Orca account its pairing was made under; absent on pairings saved by older versions. */
   orcaCloudPairedAccountId?: string
 }
 

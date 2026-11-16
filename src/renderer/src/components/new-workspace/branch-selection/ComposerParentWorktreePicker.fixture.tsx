@@ -77,5 +77,5 @@ export const parentOnAnotherMachine = defineFixture({
   }
 })
 
-/** Closed, for keyboard walks: Tab focus must not open the picker (DS-22). */
+/** Closed, for keyboard walks: Tab focus must not open the picker. */
 export const parentPickerClosed = defineFixture({ ...parentOnAnotherMachine, interact: undefined })

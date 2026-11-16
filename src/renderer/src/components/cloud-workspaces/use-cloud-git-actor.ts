@@ -1,4 +1,4 @@
-// GH-ACTING-LINE: who the cloud workspace a worktree belongs to acts as on GitHub (its
+// Who the cloud workspace a worktree belongs to acts as on GitHub (its
 // `githubActing` and the viewer's `you`), for the source control panel (one read per workspace). Re-read when Orca is focused,
 // when a shared workspace's hour lapses (`until`), and every two minutes while mounted, since
 // another member sending also changes it.

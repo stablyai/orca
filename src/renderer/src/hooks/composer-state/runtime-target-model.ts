@@ -61,7 +61,7 @@ export type ComposerRuntimeTargetModel = {
   ephemeralVmsEnabled: boolean
   /** Orca Cloud for this project, from main; drives the picker's sign-in/upsell row. */
   orcaCloudAvailability: OrcaCloudAvailability
-  /** RUNON-STICKY: why a picked Orca Cloud didn't carry over to the newly picked project. */
+  /** Why a picked Orca Cloud didn't carry over to the newly picked project. */
   orcaCloudDropped: OrcaCloudDropReason | null
   ephemeralVmRecipes: OrcaVmRecipe[]
   selectedEphemeralVmRecipeId: string | null

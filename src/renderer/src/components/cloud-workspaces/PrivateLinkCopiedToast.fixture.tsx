@@ -1,4 +1,4 @@
-// SHARE-LINK-PRIVATE: Copy link on a private cloud workspace, for its owner (Share with team) and
+// Copy link on a private cloud workspace, for its owner (Share with team) and
 // for someone who can't share it.
 import { useEffect } from 'react'
 import { toast } from 'sonner'

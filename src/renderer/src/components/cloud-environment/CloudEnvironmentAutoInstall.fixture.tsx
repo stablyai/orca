@@ -1,4 +1,4 @@
-// AUTO-ENV-DEPS-LABEL: an automatic environment's lockfile install, on the active build's header.
+// An automatic environment's lockfile install, on the active build's header.
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import {
   FIXTURE_NOW,

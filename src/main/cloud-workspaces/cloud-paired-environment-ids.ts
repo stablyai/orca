@@ -1,4 +1,4 @@
-// Which saved servers are PAIRED Orca Cloud workspaces (PAIRED-AWARE). Opening a cloud workspace this
+// Which saved servers are PAIRED Orca Cloud workspaces. Opening a cloud workspace this
 // desktop didn't create (another device, a teammate's, a link, or one started from a GitHub-only repo)
 // pairs this device as a "<name> (cloud)" server and records sandbox -> environment in the bindings
 // file. The runtime catalog marks those servers so every Orca Cloud check treats them like this
@@ -22,7 +22,7 @@ let readActiveAccountId: () => string | null = () => null
 let cachedAccount: { generation: number; accountId: string | null } | null = null
 
 /**
- * PAIRED-ACCOUNT-FILTER: the active Orca account ("org:<id>" or "user:<id>", the same id the
+ * The active Orca account ("org:<id>" or "user:<id>", the same id the
  * bindings are stamped with). Set once at startup by the pairings module.
  */
 export function setCloudPairingActiveAccountReader(read: () => string | null): void {
@@ -64,14 +64,14 @@ export function noteCloudPairingBindings(
 
 /**
  * A binding this account may act through: stamped with the active account, or unstamped (saved
- * before LC-1; the prune stamps it once the active team's list shows it). Another account's binding
+ * by an older version; the prune stamps it once the active team's list shows it). Another account's binding
  * never resolves: the control plane would refuse it with a confusing error.
  */
 export function isCloudPairingForActiveAccount(accountId: string | null): boolean {
   return accountId === null || accountId === activeAccountId()
 }
 
-/** Paired environment id -> its sandbox id, for the active account only (PAIRED-ACCOUNT-FILTER). */
+/** Paired environment id -> its sandbox id, for the active account only. */
 export function cloudPairedSandboxesByEnvironment(): ReadonlyMap<string, string> {
   const result = new Map<string, string>()
   for (const [environmentId, pairing] of pairingByEnvironment) {

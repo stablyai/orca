@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// JA-25 follow-up (Neil): the Run on menu's Orca Cloud row no longer shows "N sandbox hours left".
+// The Run on menu's Orca Cloud row no longer shows "N sandbox hours left".
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'

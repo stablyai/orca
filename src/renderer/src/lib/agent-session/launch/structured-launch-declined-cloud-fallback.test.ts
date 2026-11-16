@@ -1,4 +1,4 @@
-// CLOUD-HELD-SURFACE: an Orca Cloud create now opens a chat on the strength of the image's
+// An Orca Cloud create now opens a chat on the strength of the image's
 // capabilities. If the VM refuses the chat after all (an older image), the launch falls back to the
 // agent's terminal (on a cloud host, the held terminal with its strip), logged, never a dead end.
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'

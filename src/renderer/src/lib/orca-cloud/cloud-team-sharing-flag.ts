@@ -1,4 +1,4 @@
-// TEAM-SHARING-HOLD (Neil): sharing cloud workspaces with the team is held for a future release. The
+// Sharing cloud workspaces with the team is held for a future release. The
 // code stays; the desktop offers none of it unless the account's capabilities turn on
 // `cloudTeamSharing` (absent = off, so an older or unaware control plane never brings it back):
 // - Share with team / Make private (sidebar, the cloud list, the workspace panel);

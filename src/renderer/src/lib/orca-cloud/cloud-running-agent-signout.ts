@@ -1,6 +1,6 @@
-// RA-11: an Orca Cloud pane whose agent is already running when its Orca-account sign-in expires or
-// is revoked. State 1 ("expired") shows on every such pane; one Renew (S0) clears it everywhere and
-// the panes that showed it move to state 2 ("renewed": Restart, never automatic) until restarted,
+// An Orca Cloud pane whose agent is already running when its Orca-account sign-in expires or
+// is revoked. State 1 ("expired") shows on every such pane; one Renew (Cloud agent sign-ins)
+// clears it everywhere and the panes that showed it move to state 2 ("renewed": Restart, never automatic) until restarted,
 // dismissed, or the agent's next turn ends cleanly on its own. Decided from the Orca account (the
 // same read the build sheet uses), never from terminal output.
 import { useEffect, useSyncExternalStore } from 'react'
@@ -82,7 +82,7 @@ export function cloudRunningStrip(args: {
   held: boolean
   now: number
   /**
-   * D13: does this pane's workspace run the agent on the person's own account? false for a shared
+   * Does this pane's workspace run the agent on the person's own account? false for a shared
    * workspace or a key-sourced one, null while unread or unreadable (then no strip: fail quiet).
    */
   usesAccount: boolean | null
@@ -93,7 +93,7 @@ export function cloudRunningStrip(args: {
   revision: number
   /**
    * A structured chat's status never records turnEndedAt: its "done since" (stateStartedAt) dates
-   * the clean turn end instead (CHAT-BANNERS B2).
+   * the clean turn end instead.
    */
   turnEndedFallback?: boolean
 }): CloudRunningStrip | null {
@@ -200,7 +200,7 @@ type SourceRead = { usesAccount: boolean | null; at: number } | 'pending'
 const sourceReads = new Map<string, SourceRead>()
 const SOURCE_READ_MS = 10 * 60_000
 
-/** Pure: whether a workspace's Sources view runs the agent on the person's own account (D13). */
+/** Pure: whether a workspace's Sources view runs the agent on the person's own account. */
 export function workspaceUsesAccount(view: AgentSourcesView, agent: HostAgentSignInAgent): boolean {
   if (view.sharedWorkspace === true) {
     return false
@@ -217,7 +217,7 @@ export function workspaceUsesAccount(view: AgentSourcesView, agent: HostAgentSig
  * The pane's workspace Source for the agent, read once per workspace (cached 10 min) and only while
  * `wanted` (the account just went expired). Never polled; a failed read stays null (no strip).
  */
-// RA-11b: main learns a sandbox (its record, which the Source read resolves through) only after a wake
+// Main learns a sandbox (its record, which the Source read resolves through) only after a wake
 // or app start has reattached it; a read before that answers not_found. Retry the failed reads when
 // main's sandbox records change, not on the next minute's account read.
 let runtimesRevision = 0

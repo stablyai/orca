@@ -1,4 +1,4 @@
-// ENV-BUILD-CHURN (d): a golden built from a manifest with a higher `securityLevel` carries a fix every
+// A golden built from a manifest with a higher `securityLevel` carries a fix every
 // environment must get. An environment build that started from a golden below the highest level in its
 // region is "below the floor": the refresh rebuilds it whatever its use or last refresh, and no create
 // boots from it (lifecycle.ts boots the current golden and clones instead, plus one rebuild).

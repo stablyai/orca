@@ -42,9 +42,9 @@ export type VmBuildFailureActions = {
   onContactSupport: () => void
   onConnectGitHub: () => void
   onPushToGitHub: () => void
-  /** CLONE-ACCESS-ERROR: back to the draft with the Project picker open. */
+  /** Back to the draft with the Project picker open. */
   onChooseAnotherRepo?: () => void
-  /** CLONE-ACCESS-ERROR: what GitHub says about Orca's access to the refused repository. */
+  /** What GitHub says about Orca's access to the refused repository. */
   cloneAccess?: CloneAccessHandlers
 }
 

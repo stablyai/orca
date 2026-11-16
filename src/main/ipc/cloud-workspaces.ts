@@ -254,7 +254,7 @@ export function registerCloudWorkspacesHandlers(
       return !s ? NOT_CONFIGURED : INVALID
     }
     const result = await s.destroy(parsed.data.id)
-    // Deleted from here: its pairing or own record, server and projects go now (LC-1, LC-2).
+    // Deleted from here: its pairing or own record, server and projects go now.
     if (result.ok) {
       await settleDeleted(parsed.data.id)
     }
@@ -264,7 +264,7 @@ export function registerCloudWorkspacesHandlers(
     'cloudWorkspaces:localWorkspaces',
     async () => (await getService())?.localWorkspaces() ?? []
   )
-  // A window resolves only the active account's pairings (PAIRED-ACCOUNT-FILTER).
+  // A window resolves only the active account's pairings.
   handle('cloudWorkspaces:environmentBindings', () => readActiveAccountBindings())
   handle('cloudWorkspaces:bindEnvironment', async (args) => {
     const parsed = z

@@ -1,4 +1,4 @@
-// The delete dialog's Orca Cloud variant (DS-07): it names the sandbox and its disk, offers
+// The delete dialog's Orca Cloud variant: it names the sandbox and its disk, offers
 // Archive instead, and deletes an asleep sandbox without waking it or a Force step (this dialog is
 // the confirmation that its uncommitted changes go with it). One whose repo has an archive hook is
 // woken for the hook first, and the dialog says so.
@@ -104,7 +104,7 @@ export function DeleteCloudWorkspaceHeader({
   )
 }
 
-/** ARCHIVE-HOOK: an asleep workspace whose repo has a hook is woken for it before the delete. */
+/** An asleep workspace whose repo has a hook is woken for it before the delete. */
 function useArchiveHookNeedsWake(workspaceId: string): boolean {
   const [needsWake, setNeedsWake] = useState(false)
   useEffect(() => {

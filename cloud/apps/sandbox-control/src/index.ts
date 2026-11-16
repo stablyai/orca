@@ -301,7 +301,7 @@ export type Deps = {
 }
 
 /**
- * RESUME-STUCK: a wake outlives its request. A client that quits mid-wake cancels the request, not
+ * A wake outlives its request. A client that quits mid-wake cancels the request, not
  * the wake (ctx.waitUntil), so the row reaches `running` (or back to `suspended`) instead of
  * staying `resuming`.
  */
@@ -329,13 +329,13 @@ function workspaceConfig(env: Env, deps: Deps): WorkspaceConfig {
   }
 }
 
-/** Where golden builds upload their runtime bundle (ENV-STALE); absent when not configured. */
+/** Where golden builds upload their runtime bundle; absent when not configured. */
 function runtimeBundleConfig(env: Env): { baseUrl: string; secret: string } | undefined {
   const baseUrl = publicOrigin(env)
   return env.RUNTIME_BUNDLES && env.CONTROL_PLANE_TOKEN && baseUrl ? { baseUrl, secret: env.CONTROL_PLANE_TOKEN } : undefined
 }
 
-/** The region's active golden as a runtime bundle plus a short-lived download URL (ENV-STALE boot step). */
+/** The region's active golden as a runtime bundle plus a short-lived download URL (for the boot step that updates a stale orcad). */
 function runtimeRefreshFor(env: Env): LifecycleDeps['runtimeRefresh'] {
   const config = runtimeBundleConfig(env)
   const store = env.RUNTIME_BUNDLES
@@ -383,7 +383,7 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
     identity: async (row, userId) => {
       const keyring = keyringFor(env)
       const now = (deps.now ?? Date.now)()
-      // GH-AS-MEMBER: the owner always acts (member-git.ts memberMayAct).
+      // Member gh: the owner always acts (member-git.ts memberMayAct).
       return keyring && memberGit(row.account_id) && memberMayAct(row, userId)
         ? memberGitIdentity(env.SANDBOX_DB, await keyring, githubConnect(env, deps), row.account_id, userId, now)
         : null
@@ -420,7 +420,7 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
     forgetAccountCredential(userId, 'codex')
     await refreshOwnersSandboxes(env, deps, userId, 'codex')
   }
-  // CODEX-PLACEHOLDER-REFRESH: Codex in the sandbox refreshing its placeholder login (POST /oauth/token, no
+  // Codex in the sandbox refreshing its placeholder login (POST /oauth/token, no
   // placeholder header: the policy forwards it by path). It gets the placeholder back, never a real token,
   // and the real one is refreshed here (single-flight per person, rate-limited by the lease).
   const codexRefreshRoutes = (row: SandboxRow): ProxiedRoute[] => {
@@ -447,7 +447,7 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
       }
     ]
   }
-  // D10/D13: re-decided per request, so a Source change, renewal, revocation, kill switch or the workspace
+  // Re-decided per request, so a Source change, renewal, revocation, kill switch or the workspace
   // becoming shared applies to the next request with no restart.
   const accountRoutes = (row: SandboxRow, host: string): ProxiedRoute[] =>
     egressAccountRoutes(row)
@@ -459,7 +459,7 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
           return []
         }
         let real: string | null = null
-        // RS-2: this sign-in is in question (a check failed); a real request here confirms or clears it.
+        // This sign-in is in question (a check failed); a real request here confirms or clears it.
         let suspect = false
         return [
           {
@@ -499,7 +499,7 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
             // Reached only after the real credential was swapped in and sent (denied or unswapped requests
             // never get here).
             onUpstreamStatus: (status, request) => {
-              // RS-2: a real request the provider accepted (not a 401, not a server failure) clears "needs
+              // A real request the provider accepted (not a 401, not a server failure) clears "needs
               // check". Only while it's in question, so a healthy account costs no writes.
               if (suspect && !provider.onUnauthorized && status !== 401 && status < 500) {
                 suspect = false
@@ -600,7 +600,7 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
         {
           header: 'authorization',
           placeholders: githubPlaceholderHeaders(row),
-          // APPROVALS-REFUSED: the App's token never approves a pull request (it would count as a review).
+          // The App's token never approves a pull request (it would count as a review).
           readsBody: approvalCheckReadsBody,
           credential: async (request) =>
             unnormalizedWrite(request.method, request.path)
@@ -963,7 +963,7 @@ function fail(error: string, status: number, reason?: string): Response {
   return json(reason ? { error, reason } : { error }, status)
 }
 
-/** CREATE-STEP-WATCH: logs a step still pending after 10 s and, once the create starts, every step's time. */
+/** Logs a step still pending after 10 s and, once the create starts, every step's time. */
 export function createStepWatch(enabled: boolean, now: () => number = Date.now) {
   const started = now()
   const steps: Record<string, number> = {}
@@ -1078,7 +1078,7 @@ export async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps
         env.SESSION_DEADLINE_MS && devOnly(env) ? Number(env.SESSION_DEADLINE_MS) : undefined
     }
   }
-  // ENV-BUILD-CHURN: every environment boot records the use; a stale one refreshes lazily.
+  // Every environment boot records the use; a stale one refreshes lazily.
   life.environmentUsed = async (environmentId) => {
     await touchEnvironment(env.SANDBOX_DB, environmentId, life.now())
     return refreshEnvironment(buildDeps(life, deps, env), environmentId, { minIntervalMs: refreshOptions(env).minIntervalMs })
@@ -1249,7 +1249,7 @@ export function egressPlaceholderMode(value: string | undefined): boolean | Read
   return false
 }
 
-/** GIT-ACTOR (git-actor.ts): GH-AS-MEMBER on, and member git on for the account. */
+/** For git-actor.ts: whether GH_AS_MEMBER is on, and member git is on for the account. */
 function githubActingOptions(env: Env): GithubActingOptions {
   const memberGit = memberGitEnabled(env)
   return {
@@ -1360,7 +1360,7 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
     if (error instanceof PlatformHostSuffixesConfigError) {
       return platformHostsMisconfigured(error)
     }
-    // A stale-org token anywhere in routing (ORG-TOKEN-STALE): the desktop re-mints once and retries.
+    // A stale-org token anywhere in routing: the desktop re-mints once and retries.
     if (error instanceof OrgMismatchError) {
       return orgMismatchResponse()
     }
@@ -1412,7 +1412,7 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
       if (!env.VERCEL_TEAM_ID || !env.VERCEL_PROJECT_ID) {
         return fail('not_configured', 503)
       }
-      // Second lock (EGRESS-SWAP-FAIL-CLOSED): with no proxy URL configured nothing should forward here, and rows
+      // Second lock: with no proxy URL configured nothing should forward here, and rows
       // may carry withheld-key routes; never swap a real credential in that state.
       if (egressProxyMissing({ egressProxyUrl: env.EGRESS_PROXY_URL, environment: env.SANDBOX_ENV })) {
         return fail('egress_proxy_missing', 503)
@@ -1538,7 +1538,7 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
         return json({ stored: true, expiresAt: minted.expiresAt })
       }
       if (url.pathname === '/v1/internal/dev/codex-login' && request.method === 'POST' && devOnly(env)) {
-        // Dev rehearsal only (EGRESS-REFRESH): store a Codex login for a throwaway identity, so the central
+        // Dev rehearsal only: store a Codex login for a throwaway identity, so the central
         // refresher can be exercised with a near-expiry or bogus token without a real ChatGPT sign-in.
         const body = DevCodexLoginSchema.safeParse(await readJson(request))
         const keyring = keyringFor(env)
@@ -1577,7 +1577,7 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
       if (platform.error) {
         return platformHostsMisconfigured(platform.error)
       }
-      // EGRESS-SWAP-FAIL-CLOSED: without the proxy no key reaches an agent and open egress is off.
+      // Without the proxy no key reaches an agent and open egress is off.
       if (egressProxyMissing({ egressProxyUrl: env.EGRESS_PROXY_URL, environment: env.SANDBOX_ENV })) {
         console.error(JSON.stringify({ event: 'config_error', variable: 'EGRESS_PROXY_URL', environment: env.SANDBOX_ENV }))
         return json({ error: 'egress_proxy_missing', keySwap: 'off' }, 503)
@@ -1693,7 +1693,7 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
         return fail('forbidden', 403, 'device_session')
       }
       if (await tokenMintedBeforeMemberChange(env.SANDBOX_DB, caller)) {
-        // ORG-TOKEN-STALE: minted before this member's role changed; the desktop re-mints and retries.
+        // Minted before this member's role changed; the desktop re-mints and retries.
         return fail('unauthorized', 401, 'stale_token')
       }
       if (request.method !== 'GET') {
@@ -1722,7 +1722,7 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
         return fail('forbidden', 403, 'device_session')
       }
       if (await tokenMintedBeforeMemberChange(env.SANDBOX_DB, caller)) {
-        // ORG-TOKEN-STALE: minted before this member's role changed; the desktop re-mints and retries.
+        // Minted before this member's role changed; the desktop re-mints and retries.
         return fail('unauthorized', 401, 'stale_token')
       }
       if (url.pathname === '/v1/github/installations' && request.method === 'GET') {
@@ -1800,7 +1800,7 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
         return fail('forbidden', 403, 'device_session')
       }
       if (await tokenMintedBeforeMemberChange(env.SANDBOX_DB, caller)) {
-        // ORG-TOKEN-STALE: minted before this member's role changed; the desktop re-mints and retries.
+        // Minted before this member's role changed; the desktop re-mints and retries.
         return fail('unauthorized', 401, 'stale_token')
       }
       const { secrets, secretsUnavailable } = await secretsState(env)
@@ -1927,7 +1927,7 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
     if (!match) {
       return fail('not_found', 404)
     }
-    // CREATE-STEP-WATCH: creates hung 180 s with no log and no row (n73). Name the step a create waits in.
+    // Creates hung 180 s with no log and no row. Name the step a create waits in.
     const watch = createStepWatch(request.method === 'POST' && !match[1])
     const caller = await watch.step('auth', authenticateDesktop(env, request, (deps.now ?? Date.now)()))
     if (!caller) {
@@ -1957,7 +1957,7 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
         return fail('not_found', 404)
       }
       if (await watch.step('stale_token', tokenMintedBeforeMemberChange(life.db, caller))) {
-        // ORG-TOKEN-STALE: never create (and bill) with a token minted before a role change.
+        // Never create (and bill) with a token minted before a role change.
         return fail('unauthorized', 401, 'stale_token')
       }
       await watch.step('create_token', consumeCreateToken(life.db, life.config.guardrails!, caller.accountId, life.now()))
@@ -1967,10 +1967,10 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
         return fail('invalid_request', 400)
       }
       // Idempotency-Key (one per Create press): a re-sent create with the same key and body answers
-      // with the sandbox the first one made, for 24 h, instead of starting another (PC-8).
+      // with the sandbox the first one made, for 24 h, instead of starting another.
       let timings: Ready['timings']
       try {
-        // EP-5: a create outlives its request (ctx.waitUntil), like a wake. A desktop that cancels mid-create
+        // A create outlives its request (ctx.waitUntil), like a wake. A desktop that cancels mid-create
         // disconnects; the create still finishes (or fails and frees its VM) and stores its answer, so the
         // cancel's replay gets the sandbox to delete instead of 409 `idempotency_in_progress` for minutes.
         const response = await outlivingRequest(
@@ -1995,7 +1995,7 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
                 deferMemberGit: true
               })
             } catch (error) {
-              // EP-5: cancelled (its owner deleted it mid-create). Kept under the key: a replay of the
+              // Cancelled (its owner deleted it mid-create). Kept under the key: a replay of the
               // cancelled create answers this instead of making a new sandbox.
               if (error instanceof LifecycleError && error.reason === CREATE_CANCELLED) {
                 return { status: 409, body: { error: 'conflict', reason: CREATE_CANCELLED } }
@@ -2148,7 +2148,7 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
       case 'POST env/refresh':
         return json({ applied: await refreshSandboxEnv(life, row) })
       case 'POST git/access':
-        // LIVE-GIT-ACCESS: a GitHub App install after boot reaches the running VM without a restart.
+        // A GitHub App install after boot reaches the running VM without a restart.
         return json(await applyLiveGitAccess(life, row))
       case 'GET egress/hosts':
         return json({ hosts: egressUserHosts(row) })
@@ -2302,7 +2302,7 @@ async function internalInstallUrl(env: Env, deps: Deps, url: URL): Promise<Respo
     if (!access.connect) {
       return fail('not_configured', 503)
     }
-    // N5: a GitHub identity auth verified from the user's GitHub sign-in (billing passes it on).
+    // A GitHub identity auth verified from the user's GitHub sign-in (billing passes it on).
     const githubUserId = Number(url.searchParams.get('githubUserId') ?? NaN)
     const githubLogin = url.searchParams.get('githubLogin') ?? ''
     const githubUser =
@@ -2435,7 +2435,7 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
   const route = `${request.method} ${action ?? ''}${grantId ? ' :grant' : ''}`
   const view = async (r = row) => (await workspaceViews(db, caller, [r], clock(), githubActingOptions(env)))[0]
   if (route === 'GET ') {
-    // TEAM-SHARING hold: the capability rides on the single-workspace answer too (panels and link opens read it).
+    // The capability rides on the single-workspace answer too (panels and link opens read it).
     return json({ workspace: await view(), teamSharing: false })
   }
   if (route === 'GET read-snapshot') {
@@ -2501,7 +2501,7 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
         }
       }
       const current = (await getSandbox(env.SANDBOX_DB, row.id)) ?? row
-      // TRANSFER-SLOW-N60: the desktop's confirmation waits for this whole request, so a completed
+      // The desktop's confirmation waits for this whole request, so a completed
       // hand-off logs how long each part took (owner-transfer-timing.ts).
       const timer = createStepTimer(clock)
       const confirmNewOwner = deps.teamMembership ?? createTeamMembershipCheck(env)
@@ -2521,7 +2521,7 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
           : { row: current, revoke: 'none' }
       const transferred = patched.row.user_id !== current.user_id
       if (transferred) {
-        // OWNER-TRANSFER. patchWorkspace stopped the VM and then wrote the owner and the mark
+        // An owner transfer: patchWorkspace stopped the VM and then wrote the owner and the mark
         // together. End what acted for the previous owner: the share links, the in-VM API token,
         // and the proxy's cached copy of the keys this workspace's sessions were using.
         forgetProviderEnv(row.id)
@@ -2822,7 +2822,7 @@ export default {
           // Counts only; no ids, tokens or pairing material.
           const summary = await reconcile(life)
           console.log(JSON.stringify({ event: 'reconcile', ...summary }))
-          // Internal fair-use review (U22): retry sessions whose CPU the stop couldn't read yet.
+          // Internal fair-use review: retry sessions whose CPU the stop couldn't read yet.
           const cpu = await sweepSessionCpu(life.db, life.provider, life.now())
           if (cpu.checked > 0) {
             console.log(JSON.stringify({ event: 'session_cpu_sweep', ...cpu }))
@@ -2862,7 +2862,7 @@ export default {
 } satisfies ExportedHandler<Env>
 
 /**
- * Codex (flag S2): every minute, broker logins move on; every fifth, the lease refresher renews due tokens
+ * Codex (AGENT_ACCOUNTS_CODEX): every minute, broker logins move on; every fifth, the lease refresher renews due tokens
  * (kept fresh while the kill switch is on, so turning it off again just works) and leaked brokers go.
  */
 export async function codexTick(env: Env, fifthMinute: boolean, deps: Deps = {}): Promise<void> {
@@ -2889,7 +2889,7 @@ export async function codexTick(env: Env, fifthMinute: boolean, deps: Deps = {})
 }
 
 /**
- * EGRESS-REFRESH (credential-refresh.ts): every minute, expired sign-ins are recorded and pending credential
+ * Credential refresh (credential-refresh.ts): every minute, expired sign-ins are recorded and pending credential
  * changes are pushed to running sandboxes' policies; every fifth, member GitHub tokens are refreshed ahead of
  * expiry and Claude sign-ins in use get their scheduled check (needs-check only, never a revoke). (Codex: codexTick; GitHub App
  * installation tokens: reconcile.) Counts only reach the log.
@@ -2939,7 +2939,7 @@ export async function credentialTick(env: Env, fifthMinute: boolean, deps: Deps 
   }
 }
 
-/** ENV-BUILD-CHURN: the refresh's limits, from the Worker's vars (unset or invalid: the defaults). */
+/** The refresh's limits, from the Worker's vars (unset or invalid: the defaults). */
 export function refreshOptions(env: Pick<Env, 'ENV_REFRESH_MIN_INTERVAL_HOURS' | 'ENV_REFRESH_MAX_IN_FLIGHT' | 'ENV_REFRESH_MAX_STARTS' | 'ENV_REFRESH_RECENT_DAYS'>): GoldenRefreshOptions {
   const positive = (value: string | undefined): number | undefined => {
     const n = Number(value)
@@ -3045,7 +3045,7 @@ async function agentSourcesRoute(request: Request, url: URL, env: Env, deps: Dep
   }
 }
 
-// CODEX-RELAY: one ID-token source per isolate and relay config (the token is cached for its hour).
+// One ID-token source per isolate and relay config (the token is cached for its hour).
 let relayIdTokens: { key: string; source: () => Promise<string> } | null = null
 function chatgptRelayFetch(env: Env, egressFetch: typeof fetch | undefined): typeof fetch | undefined {
   if (!env.CHATGPT_RELAY_URL || !env.CHATGPT_RELAY_SERVICE_ACCOUNT) {

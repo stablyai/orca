@@ -198,7 +198,7 @@ describe('reconciliation (ENTITLEMENTS_MODE=on)', () => {
   })
 })
 
-describe('EP-9: a portal cancel (cancel_at) on one of two teams of the same owner', () => {
+describe('a portal cancel (cancel_at) on one of two teams of the same owner', () => {
   it('shows the cancelling team its own plan ending on cancel_at; the other team is untouched', async () => {
     const h = await createHarness()
     const as = async (org: string) => ({ authorization: `Bearer ${await h.desktopToken({ sub: 'owner', org, orgRole: 'owner', email: 'o@example.com' })}` })

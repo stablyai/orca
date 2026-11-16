@@ -1,4 +1,4 @@
-// ARCHIVE-HOOK: before Orca archives or deletes an Orca Cloud workspace, the repo's orca.yaml
+// Before Orca archives or deletes an Orca Cloud workspace, the repo's orca.yaml
 // `scripts.archive` runs in the still-running VM (the control plane runs it, up to 2 min), so what
 // the workspace started elsewhere (a preview database branch, say) stops billing. Its output and
 // status show in a toast. A failure never silently blocks: the person sees the output and chooses

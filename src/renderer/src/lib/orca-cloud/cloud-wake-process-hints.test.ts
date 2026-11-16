@@ -35,7 +35,7 @@ describe('detectForegroundCommand', () => {
     expect(detectForegroundCommand(['$ npm test', 'ok', '$ git st'])).toBeNull()
   })
 
-  // JA-15: Claude's input placeholder was offered as `Rerun Try "create a util logging.py that..."`.
+  // Claude's input placeholder was offered as `Rerun Try "create a util logging.py that..."`.
   it('never offers an agent TUI input line as a command', () => {
     const claudeInputBox = [
       'ubuntu@sbx:~/project$ claude',
@@ -62,7 +62,7 @@ describe('detectForegroundCommand', () => {
     })
   })
 
-  // WAKE-RERUN (cut 68321452c97c): `sleep 900` prints nothing, so its prompt line is the last text.
+  // `sleep 900` prints nothing, so its prompt line is the last text.
   it('a silent command still running (cursor below its prompt line) is offered', () => {
     const tail = ['ubuntu@ik-wake:~/orca/workspaces/Hello-World/ik-wake$ sleep 900', '']
     expect(detectForegroundCommand(tail, { cursorBelowText: true })).toEqual({
@@ -98,7 +98,7 @@ describe('detectForegroundCommand', () => {
   })
 })
 
-// JA-15 P2 (RA-WAKE P3): a Claude pane offered `Rerun Try "create a util logging.py that..."`.
+// A Claude pane was offered `Rerun Try "create a util logging.py that..."`.
 describe('wakeHintForPane', () => {
   const claudeAtInput = [
     'ubuntu@sbx:~/project$ . /tmp/orca-launch-3f9a.sh',
@@ -199,7 +199,7 @@ describe('wake process hints', () => {
     expect(endsAtShellPrompt([])).toBe(false)
   })
 
-  // WAKE-RERUN: the pane as integration-keeper left it, `sleep 900` typed and Enter pressed.
+  // A pane with `sleep 900` typed and Enter pressed.
   const xterm = (lines: string[], cursorRow: number) => ({
     buffer: {
       active: {
@@ -240,7 +240,7 @@ describe('wake process hints', () => {
   })
 })
 
-describe('scrollbackPaneKind (WAKE-SCROLLBACK)', () => {
+describe('scrollbackPaneKind', () => {
   const claudeScreen = ['$ claude', '────────', '> Try "fix lint"', '────────', '  ? for shortcuts']
 
   it('an agent still on screen, or a full-screen app, restores only its scrollback', () => {

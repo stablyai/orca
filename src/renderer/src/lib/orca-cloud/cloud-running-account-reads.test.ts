@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// END-PASS CHAT-RENEW latency: a running cloud pane re-reads the account on window focus, so a
+// Revoke latency: a running cloud pane re-reads the account on window focus, so a
 // revoke made while the window sat behind another app shows as soon as the person comes back.
 import { renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'

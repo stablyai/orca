@@ -63,7 +63,7 @@ export function selectWorktreeActivityPtyIds(
 
 export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
   const tabs = useAppStore((s) => s.tabsByWorktree[worktreeId] ?? EMPTY_TABS)
-  // Tabs Sleep put to rest stay in the layout but are not activity (NEW-01).
+  // Tabs Sleep put to rest stay in the layout but are not activity.
   const browserTabs = useAppStore((s) =>
     s.asleepBrowserWorktreeIds?.[worktreeId]
       ? EMPTY_BROWSER_TABS

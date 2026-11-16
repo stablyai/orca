@@ -14,7 +14,7 @@ async function serviceAccount() {
   return JSON.stringify({ client_email: 'relay-invoker@p.iam.gserviceaccount.com', private_key: await exportPKCS8(privateKey) })
 }
 
-describe('relayingFetch (CODEX-RELAY)', () => {
+describe('relayingFetch', () => {
   it('sends chatgpt.com through the relay with an ID token beside, never instead of, the ChatGPT credential', async () => {
     const seen: { url: string; headers: Headers }[] = []
     const fetchImpl = (async (input: RequestInfo | URL, init?: RequestInit) => {

@@ -84,7 +84,7 @@ export default function RunTargetRowList({
               icon={<HostRowIcon hostId={row.option.hostId} />}
               label={row.option.label}
               detail=""
-              // JA-10: no raw paths in the menu. The folder name, with the full path on hover.
+              // No raw paths in the menu. The folder name, with the full path on hover.
               detailNode={<span title={row.option.path}>{folderName(row.option.path)}</span>}
               armed={isArmed}
               current={row.option === selectedHost}

@@ -123,7 +123,7 @@ function fromSandbox(row: z.infer<typeof SandboxViewSchema>): CloudWorkspace {
     readSnapshotAt: null
   }
 }
-// Lists archived rows as `archived` rather than folding them into `suspended` (W2 lifecycle).
+// Lists archived rows as `archived` rather than folding them into `suspended`.
 const FEATURES = { 'x-orca-sandbox-features': 'archive' }
 
 /**

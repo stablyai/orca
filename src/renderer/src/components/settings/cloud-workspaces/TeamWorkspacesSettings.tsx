@@ -1,5 +1,5 @@
 // Settings › Workspaces: every cloud workspace on the team, for owners and admins to manage
-// (Neil, HOME-1: the listing comes back only here). Open, Sleep and Archive use the same flows as
+// (the listing is only here). Open, Sleep and Archive use the same flows as
 // the sidebar and "Open cloud workspace…"; an action the control plane would refuse is not shown.
 import { useCloudTeamSharingEnabled } from '@/lib/orca-cloud/cloud-team-sharing-flag'
 import React, { useEffect, useMemo, useState } from 'react'
@@ -169,7 +169,7 @@ export function TeamWorkspacesSettings({ orgId }: { orgId: string | null }): Rea
                 <th className="px-2 py-2 font-medium">
                   {t('settings.teamWorkspaces.colLastActive', 'Last active')}
                 </th>
-                {/* TEAM-SHARING-HOLD: no Access column while sharing is held (all private). */}
+                {/* No Access column while sharing is held (all private). */}
                 {teamSharing ? (
                   <th className="px-2 py-2 font-medium">
                     {t('settings.teamWorkspaces.colAccess', 'Access')}

@@ -166,7 +166,7 @@ export const cloudStarting = frame(
   T0 + 3_000
 )
 
-// N-01: past 5 s the running "Start sandbox" names what it waits on (one frame per stage).
+// Past 5 s the running "Start sandbox" names what it waits on (one frame per stage).
 export const cloudStageProject = frame(
   entry({ phase: 'preparing', provisioningLog: '', phaseLog: [] }, CLOUD_RECIPE),
   null,
@@ -179,7 +179,7 @@ export const cloudStagePlan = frame(
   T0 + 12_000
 )
 
-// JA-21: after an inline billing fix the create continues from "Checking your plan…" at once.
+// After an inline billing fix the create continues from "Checking your plan…" at once.
 export const cloudContinuingAfterFix = frame(
   entry({ provisioningLog: '[orca-cloud] checking-entitlement' }, CLOUD_RECIPE),
   null,
@@ -380,7 +380,7 @@ function LiveBuild(): React.JSX.Element {
 
 export const live = defineFixture({ width: 760, render: () => <LiveBuild /> })
 
-// Orca Cloud › Secrets (S2): the environment's names this person doesn't get a value for.
+// Orca Cloud › Secrets: the environment's names this person doesn't get a value for.
 
 const cloudBuilding = entry(
   { environmentCheck: { status: 'running', startedAt: T0 + 4_800 }, provisioningLog: LOG },
@@ -399,7 +399,7 @@ export const secretsMember = secretsFrame(
   secretsRow(secretsData('member', { missing: ['STRIPE_TEST_KEY', 'DATABASE_URL'] }))
 )
 export const secretsBuildOnlyTeam = secretsFrame(secretsRow(secretsData('member', { built: true })))
-/** SEC-5: the same form for a shared workspace (missing-secrets sheet): no Personal to offer. */
+/** The same form for a shared workspace (missing-secrets sheet): no Personal to offer. */
 export const secretsSharedMember = secretsFrame(secretsRow(secretsData('member', { shared: true })))
 export const secretsSharedRepoWriter = secretsFrame(
   secretsRow(

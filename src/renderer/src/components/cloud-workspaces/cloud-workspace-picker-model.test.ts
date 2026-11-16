@@ -117,7 +117,7 @@ describe('what the picker lists', () => {
     expect(rows('nothing like this')).toEqual([])
   })
 
-  it('TEAM-SHARING-HOLD: no Team scope on a team while sharing is held; Open lists your own', () => {
+  it('no Team scope on a team while sharing is held; Open lists your own', () => {
     teamSharing.on = false
     try {
       expect(initialPickerControls(true).scope).toBe('mine')

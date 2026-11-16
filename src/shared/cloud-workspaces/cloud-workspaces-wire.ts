@@ -63,14 +63,14 @@ export const CloudWorkspaceSchema = z.object({
   fromRoutine: z.boolean().optional().catch(undefined),
   // The routine that started it, for routine runs (shown as "Routine · <name>").
   routineName: z.string().max(200).nullable().optional().catch(undefined),
-  // Who follows it (oldest first) and whether the caller does (PARITY-FOLLOW). Older control planes
+  // Who follows it (oldest first) and whether the caller does. Older control planes
   // omit them.
   followers: z.array(Id).max(500).optional().catch(undefined),
   following: z.boolean().optional().catch(undefined),
-  // OWNER-TRANSFER: set once its owner was ever changed (a workspace made from one inherits it).
+  // Set once its owner was ever changed (a workspace made from one inherits it).
   // From then on it runs like a shared workspace for good. Older control planes omit it.
   ownershipTransferredAt: z.number().nullable().optional().catch(undefined),
-  // GIT-ACTOR: who pushes and PRs go out as right now (the control plane's own rule: the only person, or a shared
+  // Who pushes and PRs go out as right now (the control plane's own rule: the only person, or a shared
   // workspace's latest sender within the window; else the Orca bot). `until`: when a shared workspace's window
   // lapses (re-read then). Approvals always, and merges in shared workspaces, still go out as the bot. Present only
   // on rows the caller may open; older control planes omit it.
@@ -125,7 +125,7 @@ export const CloudWorkspaceListResponseSchema = z.object({
   routineRuns: CloudWorkspaceRoutineRunsSchema.optional().catch(undefined)
 })
 export const CloudWorkspaceResponseSchema = z.object({ workspace: CloudWorkspaceSchema })
-/** PUT/DELETE /v1/team/workspaces/:id/follow (PARITY-FOLLOW). */
+/** PUT/DELETE /v1/team/workspaces/:id/follow. */
 export const CloudWorkspaceFollowSchema = z.object({
   following: z.boolean(),
   followers: z.array(Id)

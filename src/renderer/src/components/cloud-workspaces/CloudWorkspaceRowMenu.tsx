@@ -120,7 +120,7 @@ export function CloudWorkspaceRowMenu({
     : []
   // Focus returns to ⋯ on close; after a mouse open that would leave a ring nobody asked for.
   const openedByPointer = useRef(false)
-  // The same action list the sidebar menu renders (JA-14).
+  // The same action list the sidebar menu renders.
   const groups = cloudWorkspaceActionGroups({
     surface: 'list',
     status: w.status,
@@ -187,7 +187,7 @@ export function CloudWorkspaceRowMenu({
             <DropdownMenuShortcut>↵</DropdownMenuShortcut>
           </DropdownMenuItem>
         )}
-        {/* TEAM-SHARING-HOLD: share links only while team sharing is on. */}
+        {/* Share links only while team sharing is on. */}
         {teamSharing ? (
           <DropdownMenuItem onSelect={() => actions.copyLink(w)}>
             <Link2 />
@@ -248,7 +248,7 @@ export function CloudWorkspaceRowMenu({
         {canManage && (
           <>
             <DropdownMenuSeparator />
-            {/* TEAM-SHARING-HOLD: no Share with team / Make private while sharing is held. */}
+            {/* No Share with team / Make private while sharing is held. */}
             {!teamSharing ? null : w.visibility === 'private' ? (
               <DropdownMenuItem onSelect={() => actions.patch(w, { visibility: 'team' })}>
                 <Users />

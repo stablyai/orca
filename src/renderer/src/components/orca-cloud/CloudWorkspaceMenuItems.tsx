@@ -30,7 +30,7 @@ import { useCloudWorkspaceRecord } from './use-cloud-workspace-record'
 const noop = (): void => {}
 
 /**
- * The sidebar's rows from the shared cloud workspace action list (JA-14): Lifecycle (Restart,
+ * The sidebar's rows from the shared cloud workspace action list: Lifecycle (Restart,
  * Archive or Unarchive; Sleep and Delete stay where the sidebar already has them) and Share
  * (Copy workspace link, Share with team or Make private), the same actions as Home's menu.
  */
@@ -44,7 +44,7 @@ export function CloudWorkspaceMenuItems({
   /** "Move to this computer", in the top group right after Restart (the sidebar passes it). */
   moveItem?: React.ReactNode
 }): React.JSX.Element | null {
-  // PAIRED-ARCHIVE: a paired row gets the same lifecycle rows (each action decides for itself).
+  // A paired row gets the same lifecycle rows (each action decides for itself).
   const view = useCloudWorkspaceView(worktreeId, { pairedRows: true })
   if (!view.isCloud) {
     return null
@@ -206,7 +206,7 @@ async function setVisibility(
   reload()
 }
 
-/** "Workspace link", first in the sidebar's Copy submenu for a cloud workspace (JA-14). */
+/** "Workspace link", first in the sidebar's Copy submenu for a cloud workspace. */
 export function CloudCopyWorkspaceLinkItem({
   worktreeId,
   hostId
@@ -216,7 +216,7 @@ export function CloudCopyWorkspaceLinkItem({
 }): React.JSX.Element | null {
   const t = useTranslate()
   const { workspace, loaded } = useCloudWorkspaceRecord(worktreeId, hostId ?? null)
-  // SHARE-LINKS-HOLD: no way to produce a share link while it's held.
+  // No way to produce a share link while it's held.
   const shareLinks = useCloudTeamSharingEnabled()
   // Not asked yet: disabled in place rather than appearing a moment later.
   if ((!workspace && loaded) || !shareLinks) {

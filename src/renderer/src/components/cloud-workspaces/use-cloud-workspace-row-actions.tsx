@@ -80,7 +80,7 @@ export function useCloudWorkspaceRowActions({
   const [confirm, setConfirm] = useState<PendingConfirm | null>(null)
   const { readingId, readingRef, setReadingId, readWake, setReadWake } = useCloudReadPanel()
   const ownerChange = useCloudWorkspaceOwnerChange({ directory, selfId, replace, refresh })
-  // EP-6-FLAKE: the row's spinner shows this open; the open's toast waits while the picker is up and
+  // The row's spinner shows this open; the open's toast waits while the picker is up and
   // shows at once if it closes mid-open.
   useEffect(() => (openingId ? showCloudWorkspaceOpenInPicker(openingId) : undefined), [openingId])
 
@@ -123,7 +123,7 @@ export function useCloudWorkspaceRowActions({
         return
       }
       if (change.ownerUserId) {
-        // OWNER-TRANSFER: always asked first, and made from the confirmation (it stays open
+        // Always asked first, and made from the confirmation (it stays open
         // while the workspace goes to sleep, and shows a refusal in place).
         setConfirm({ kind: 'owner', workspace: w, ownerUserId: change.ownerUserId })
         return

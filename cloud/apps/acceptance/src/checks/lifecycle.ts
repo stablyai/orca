@@ -1,4 +1,4 @@
-// W2 lifecycle + W3 networking checks on a dedicated workspace (status, OOM, wake, archive,
+// Lifecycle and networking checks on a dedicated workspace (status, OOM, wake, archive,
 // share links, SSH keys, ports). Share-link cold load is also benchmarked here (n >= 10).
 import { execFile } from 'node:child_process'
 import { generateKeyPairSync } from 'node:crypto'

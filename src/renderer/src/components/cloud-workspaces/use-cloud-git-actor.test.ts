@@ -1,4 +1,4 @@
-// GH-ACTING-LINE: one read per workspace, deduped; re-read when forced (the window lapsing).
+// One read per workspace, deduped; re-read when forced (the window lapsing).
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { refreshCloudGitActor } from './use-cloud-git-actor'
 

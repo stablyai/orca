@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test'
 
-// AC-3 (agent-accounts spec §5b, redesign §5): the cloud build sheet's Agents row keeps the height
-// it mounted with through every later state, so nothing below it moves. Measured layout shift is 0.
+// The cloud build sheet's Agents row keeps the height it mounted with through every later state,
+// so nothing below it moves. Measured layout shift is 0 (agent-accounts spec §5b, redesign §5).
 
 type Model = Record<string, unknown> & { kind: string }
 

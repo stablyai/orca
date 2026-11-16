@@ -56,7 +56,7 @@ function pickerCopy(
     case 'open':
       return {
         title: t('components.cloudWorkspaces.picker.title', 'Open cloud workspace'),
-        // TEAM-SHARING-HOLD: nothing is shared by teammates while sharing is held.
+        // Nothing is shared by teammates while sharing is held.
         description: cloudTeamSharingEnabled()
           ? t(
               'components.cloudWorkspaces.picker.description',
@@ -267,7 +267,7 @@ export function CloudWorkspacePicker({
           <RefreshCw className={cn(reading && 'motion-safe:animate-spin')} />
         </Button>
       </div>
-      {/* T4: the team's trial ran out; running sandboxes sleep until a plan starts. */}
+      {/* The team's trial ran out; running sandboxes sleep until a plan starts. */}
       <OrcaCloudTrialUsedUpBanner />
       <div
         aria-busy={stale || loading}

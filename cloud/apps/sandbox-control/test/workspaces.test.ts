@@ -307,7 +307,7 @@ describe('workspace grants (E2EE pairing through the control plane)', () => {
     const moved = await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${t.id}`, { ownerUserId: 'bob' })
     expect(moved.body.workspace).toMatchObject({ ownerUserId: 'bob', createdBy: 'alice', status: 'suspended' })
     expect(moved.body.workspace.ownershipTransferredAt).toEqual(expect.any(Number))
-    // OWNER-TRANSFER: the hand-off stops the VM, so the previous owner's devices are revoked
+    // The hand-off stops the VM, so the previous owner's devices are revoked
     // at its next boot (queued), before orcad starts, instead of inside a VM that kept running.
     expect(moved.body.revoked).toEqual({ revoked: 0, queued: 1 })
     expect((await t.req(t.alice, 'POST', `/v1/sandboxes/${t.id}/resume`)).status).toBe(404)

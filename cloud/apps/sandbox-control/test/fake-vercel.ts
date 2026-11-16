@@ -26,7 +26,7 @@ type FakeBox = {
   /** Extra exposed ports beyond orcad's (updatePorts / create params). */
   ports: number[]
   policy: NetworkPolicy
-  /** The persistent record's policy once PATCHed (A4); the create's otherwise. */
+  /** The persistent record's policy once PATCHed; the create's otherwise. */
   recordPolicy?: NetworkPolicy
   /** orcad's recipe line for the current boot, once the start command ran. */
   orcadReady?: string
@@ -359,7 +359,7 @@ export function createFakeVercel(now: () => number): FakeVercel {
         return fake.runtimeMissing ? { exitCode: 1, stdout: '', stderr: '' } : { exitCode: 0, stdout: `${fake.buildResult}\n`, stderr: '' }
       }
       if (params.command === 'bash' && params.args?.[2] === 'orca-agent-signout') {
-        // orca-agent-signout run by source (A9); tests override through commandHandler.
+        // orca-agent-signout run by source; tests override through commandHandler.
         return { exitCode: 0, stdout: '{"loggedOut":2,"left":0}\n', stderr: '' }
       }
       if (params.command === '/opt/orca/bin/orca-image-wipe') {

@@ -11,7 +11,7 @@ beforeEach(() => window.localStorage.clear())
 
 const noop = (): void => {}
 
-describe('SidebarFollowingSection (PARITY-FOLLOW)', () => {
+describe('SidebarFollowingSection', () => {
   it('is hidden when nothing is followed', () => {
     const { container } = render(
       <TooltipProvider>

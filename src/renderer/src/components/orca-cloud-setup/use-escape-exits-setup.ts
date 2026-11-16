@@ -13,7 +13,7 @@ function escapeBelongsToOverlay(): boolean {
 }
 
 /**
- * RR-b / JA-01: Escape on the visible setup page leaves setup exactly like its ×, so the pending
+ * Escape on the visible setup page leaves setup exactly like its ×, so the pending
  * start is cancelled. Without it the page stayed (hidden or not) and a sign-in finishing later
  * auto-started the saved create.
  */

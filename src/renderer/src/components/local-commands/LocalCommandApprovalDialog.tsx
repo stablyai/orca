@@ -166,7 +166,7 @@ export function LocalCommandApprovalDialogView({
           )}
         </p>
       ) : null}
-      {/* TEAM-SHARING-HOLD: no teammates can message while sharing is held. */}
+      {/* No teammates can message while sharing is held. */}
       {prompt.shared && teamSharing ? (
         <p className="text-xs text-muted-foreground">
           {t(

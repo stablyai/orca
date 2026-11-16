@@ -1,4 +1,4 @@
-// The hosts S3 lists, from what the renderer already holds (no probe, no connect). Orca Cloud
+// The hosts "Sign-ins by host" lists, from what the renderer already holds (no probe, no connect). Orca Cloud
 // sandboxes are left out: one "Orca Cloud" row stands for all of them.
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'

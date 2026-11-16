@@ -1,4 +1,4 @@
-// PAIRED-STATUS: a paired cloud workspace's own row gets its status through main's paired path,
+// A paired cloud workspace's own row gets its status through main's paired path,
 // without joining the owned ids (owned-only flows such as the VM sleep key on those).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -44,15 +44,20 @@ describe('which rows are paired cloud workspaces', () => {
     ).toEqual({ [PAIRED_ROW]: 'env-gh' })
   })
 
-  it("a teammate's shared workspace: its linked worktree, never the hidden base checkout (PAIRED-REGISTRY-ROW)", () => {
-    const linked = 'gh::/home/vercel/ws/Hello-World/endpass-n44'
+  it("a teammate's shared workspace: its linked worktree, never the hidden base checkout", () => {
+    const linked = 'gh::/home/vercel/ws/Hello-World/feature-branch'
     expect(
       pairedCloudWorkspacesFromState({
         runtimeEnvironments: environments,
         worktreesByRepo: {
           gh: [
             { id: PAIRED_ROW, hostId: 'runtime:env-gh', isMainWorktree: true, branch: 'master' },
-            { id: linked, hostId: 'runtime:env-gh', isMainWorktree: false, branch: 'endpass-n44' }
+            {
+              id: linked,
+              hostId: 'runtime:env-gh',
+              isMainWorktree: false,
+              branch: 'feature-branch'
+            }
           ],
           box: [box],
           local: [local]

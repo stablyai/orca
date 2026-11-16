@@ -1,4 +1,4 @@
-// GH-AS-MEMBER: which GitHub GraphQL requests may carry a member's own user token. A member's token reaches
+// Member gh (GH_AS_MEMBER): which GitHub GraphQL requests may carry a member's own user token. A member's token reaches
 // more than the workspace repository, so it is used only for an allowlist of authorship mutations whose every
 // target resolves to the workspace repository; everything else (queries, other mutations) stays on the App's
 // installation token, which is scoped to that repository already. The document is parsed with graphql-js
@@ -32,7 +32,7 @@ export type MemberGraphqlVerdict =
 type Variables = Record<string, unknown>
 
 export function classifyGraphqlRequest(body: string): MemberGraphqlVerdict {
-  // Review L4: a body with a repeated top-level key could parse differently here and at GitHub.
+  // A body with a repeated top-level key could parse differently here and at GitHub.
   if ((body.match(/"(query|variables|operationName)"\s*:/g) ?? []).length !== new Set(body.match(/"(query|variables|operationName)"\s*:/g) ?? []).size) {
     return { member: false, reason: 'duplicate_keys' }
   }
@@ -64,7 +64,7 @@ export function classifyGraphqlRequest(body: string): MemberGraphqlVerdict {
   if (operation.directives && operation.directives.length > 0) {
     return { member: false, reason: 'directives' }
   }
-  // Review M1: GitHub applies a variable's default when the request omits it; that value would be invisible here.
+  // GitHub applies a variable's default when the request omits it; that value would be invisible here.
   if (operation.variableDefinitions?.some((definition) => definition.defaultValue !== undefined)) {
     return { member: false, reason: 'variable_defaults' }
   }
@@ -128,7 +128,7 @@ export function classifyGraphqlRequest(body: string): MemberGraphqlVerdict {
     if (!input || typeof input !== 'object' || Array.isArray(input)) {
       return { member: false, reason: 'unresolved_input' }
     }
-    // Review L3: updatePullRequest's projectIds reach owner-level Projects outside the repository.
+    // updatePullRequest's projectIds reach owner-level Projects outside the repository.
     if ((input as Record<string, unknown>).projectIds !== undefined) {
       return { member: false, reason: 'outside_repo_input' }
     }
@@ -149,7 +149,7 @@ export function classifyGraphqlRequest(body: string): MemberGraphqlVerdict {
 }
 
 /**
- * Review M2: an approval never carries a member's identity, in any workspace (an agent approving as its
+ * An approval never carries a member's identity, in any workspace (an agent approving as its
  * sender defeats "review by someone else"); it goes out on the installation token, so branch protection
  * still applies. Event compared case-insensitively, failing toward the installation token.
  */
@@ -160,7 +160,7 @@ export function approves(fields: readonly { name: string; input: Record<string, 
   )
 }
 
-/** Review M2: a merge carries a member's identity only in a workspace one person can use. */
+/** A merge carries a member's identity only in a workspace one person can use. */
 export function merges(fields: readonly { name: string }[]): boolean {
   return fields.some((field) => field.name === 'mergePullRequest')
 }

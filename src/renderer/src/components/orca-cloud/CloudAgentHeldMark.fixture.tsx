@@ -26,7 +26,7 @@ function accounts(claude: 'none' | 'active' | 'revoked') {
   } as const
 }
 
-// A cloud workspace row whose Claude waits on its pane's strip (N-03). HELD-STALE-COVERED: the mark
+// A cloud workspace row whose Claude waits on its pane's strip. The mark
 // follows the hold's reason as the account changes under it (set up here, then revoked).
 function seed(scenario: Scenario): void {
   const restored = scenario === 'restored'
@@ -82,11 +82,11 @@ const markFixture = (scenario: Scenario) =>
 
 export const sidebarRowMark = markFixture('notSetUp')
 /**
- * V3-01: a launch put back after a restart that only waits for Start: the muted play mark, never
+ * A launch put back after a restart that only waits for Start: the muted play mark, never
  * the amber key (the account here is covered: no "not set up").
  */
 export const sidebarRowMarkNotStarted = markFixture('restored')
-/** HELD-STALE-COVERED: set up in this session, waiting for Start: muted play (not the amber key). */
+/** Set up in this session, waiting for Start: muted play (not the amber key). */
 export const sidebarRowMarkSetUp = markFixture('setUp')
-/** HELD-STALE-COVERED: the sign-in was revoked under the hold: the key, "sign-in expired". */
+/** The sign-in was revoked under the hold: the key, "sign-in expired". */
 export const sidebarRowMarkExpired = markFixture('expired')

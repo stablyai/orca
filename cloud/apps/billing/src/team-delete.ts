@@ -1,4 +1,4 @@
-// Auth's team delete (TEAM-DELETE, EP-10) asks billing about the team's subscription and, for a
+// Auth's team delete asks billing about the team's subscription and, for a
 // subscription that is already set to end, cancels it now so the team can go. Both routes take
 // the membership-sync token (auth -> billing), never a desktop token.
 //   GET  /v1/internal/accounts/:accountId/subscription            -> state for the delete check

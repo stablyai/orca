@@ -117,7 +117,7 @@ export function installCloudWorkspaceLinks(): () => void {
     return () => {}
   }
   cleanups.push(installCloudWorkspaceSync())
-  // EP-8: a server that refuses this computer for good says so, with one fix.
+  // A server that refuses this computer for good says so, with one fix.
   cleanups.push(installCloudAccessLostNotice())
   cleanups.push(
     api.onOpenLink((link) => {

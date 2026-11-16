@@ -1,4 +1,4 @@
-// GH-CREATE-CANCEL: a create cancelled in flight never leaves a sandbox running, for the owned
+// A create cancelled in flight never leaves a sandbox running, for the owned
 // create and the GitHub-only create alike (both use createSandboxWithProgress).
 import { describe, expect, it, vi } from 'vitest'
 import { EnvironmentProviderError } from '../environment-providers/environment-provider-driver'
@@ -63,7 +63,7 @@ describe('reclaimCancelledCreate', () => {
     expect(api.destroy).not.toHaveBeenCalled()
   })
 
-  it('EP-5: while the first create still runs (409), deletes the sandbox it is making by workspace id, then waits for the create to answer', async () => {
+  it('while the first create still runs (409), deletes the sandbox it is making by workspace id, then waits for the create to answer', async () => {
     const api = client()
     api.create
       .mockRejectedValueOnce(new EnvironmentProviderError('conflict', 'idempotency_in_progress'))
@@ -82,7 +82,7 @@ describe('reclaimCancelledCreate', () => {
     expect(api.create).toHaveBeenCalledTimes(2)
   })
 
-  it('EP-5 (n48): a create that went on with a new row after the delete is swept too, never reported done early', async () => {
+  it('a create that went on with a new row after the delete is swept too, never reported done early', async () => {
     const api = client()
     // In progress (the first row is listed and deleted); then the key answers a sandbox of its own;
     // the sweep still finds the row the create's own retry made, and deletes it.
@@ -97,7 +97,7 @@ describe('reclaimCancelledCreate', () => {
     expect(api.destroy.mock.calls.map(([id]) => id)).toEqual(['sbx_1', 'sbx_2', 'sbx_3'])
   })
 
-  it('EP-5: a straggler that will not delete is not reported deleted', async () => {
+  it('a straggler that will not delete is not reported deleted', async () => {
     const api = client()
     api.list.mockResolvedValue([{ ...READY.sandbox, id: 'sbx_stuck', status: 'creating' }])
     api.destroy.mockImplementation(async (id: string) =>
@@ -108,7 +108,7 @@ describe('reclaimCancelledCreate', () => {
     )
   })
 
-  it('EP-5: an unreadable list is not taken for an empty workspace', async () => {
+  it('an unreadable list is not taken for an empty workspace', async () => {
     const api = client()
     api.list.mockRejectedValue(new EnvironmentProviderError('unavailable', 'down'))
     expect(await reclaimCancelledCreate(api, BODY, 'create:k1', { ...quiet, attempts: 2 })).toBe(
@@ -116,7 +116,7 @@ describe('reclaimCancelledCreate', () => {
     )
   })
 
-  it('EP-5: a delete the control plane does not answer with destroyed is not confirmed', async () => {
+  it('a delete the control plane does not answer with destroyed is not confirmed', async () => {
     const api = client()
     api.destroy.mockImplementation(async (id: string) => ({ id, status: 'destroying' }))
     expect(await reclaimCancelledCreate(api, BODY, 'create:k1', { ...quiet, attempts: 2 })).toBe(
@@ -124,7 +124,7 @@ describe('reclaimCancelledCreate', () => {
     )
   })
 
-  it('EP-5: 409 with nothing listed yet keeps replaying until the create answers', async () => {
+  it('409 with nothing listed yet keeps replaying until the create answers', async () => {
     const api = client()
     api.create.mockRejectedValueOnce(
       new EnvironmentProviderError('conflict', 'idempotency_in_progress')
@@ -177,7 +177,7 @@ describe('createSandboxWithProgress cancel', () => {
     expect(api.create).toHaveBeenCalledTimes(1)
   })
 
-  it('EP-5: a cancel whose sandbox could not be confirmed deleted says so (reason), not a plain cancel', async () => {
+  it('a cancel whose sandbox could not be confirmed deleted says so (reason), not a plain cancel', async () => {
     const api = client()
     const controller = new AbortController()
     const create: ReclaimClient['create'] = async (_body, signal) => {
@@ -201,7 +201,7 @@ describe('createSandboxWithProgress cancel', () => {
     }
   })
 
-  it('EP-5: cancelled as it answered and the delete failed: not confirmed', async () => {
+  it('cancelled as it answered and the delete failed: not confirmed', async () => {
     const api = client()
     const controller = new AbortController()
     api.create.mockImplementationOnce(async () => {

@@ -124,7 +124,7 @@ export const opsChecks: Record<string, Check> = {
   'ops.cleanup': async (ctx) => {
     // Runs last: everything this run created must be gone at Vercel (sandboxes and snapshots).
     const { failed } = await ctx.sandboxes.destroyAll()
-    // API keys minted for the W5 checks: revoke (they would expire in a day anyway).
+    // API keys minted for the public API checks: revoke (they would expire in a day anyway).
     for (const r of ctx.run.file.resources.filter((x) => x.kind === 'other' && x.id.startsWith('key_') && !x.destroyedAt)) {
       const d = await control.as(ctx.solo, 'DELETE', `/v1/api-keys/${r.id}`)
       if (d.status < 300 || d.status === 404) {

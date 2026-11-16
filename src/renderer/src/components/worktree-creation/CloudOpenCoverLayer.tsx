@@ -41,7 +41,7 @@ function useBody(): typeof CloudOpenCoverBodyComponent | null {
 
 /**
  * Keeps the Orca Cloud start screen over a just-created workspace until its terminal's PTY is
- * attached (JA-12), so "Open workspace" goes straight to a live prompt with no blank pane between.
+ * attached, so "Open workspace" goes straight to a live prompt with no blank pane between.
  */
 export function CloudOpenCoverLayer({
   reserveCollapsedSidebarHeaderSpace

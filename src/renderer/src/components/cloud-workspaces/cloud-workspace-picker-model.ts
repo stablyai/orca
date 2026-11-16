@@ -16,7 +16,7 @@ export type CloudWorkspacePickerControls = {
 }
 
 /**
- * TEAM-SHARING-HOLD: with sharing held there is nothing of a teammate's to open, so "Open cloud
+ * With sharing held there is nothing of a teammate's to open, so "Open cloud
  * workspace…" has no Team scope and lists your own.
  */
 function teamScope(hasOrg: boolean): boolean {

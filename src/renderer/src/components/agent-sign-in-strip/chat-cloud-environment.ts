@@ -1,4 +1,4 @@
-// END-PASS CHAT-RENEW: which Orca Cloud environment a structured chat runs on, for every chat-side
+// Which Orca Cloud environment a structured chat runs on, for every chat-side
 // cloud check. A host-mirrored chat tab carries `runtime:<environment>`; a chat tab the desktop made
 // itself may not, so its workspace's runtime owner names the environment (the sidebar row's own rule).
 import type { AppState } from '@/store/types'

@@ -1,5 +1,5 @@
-// SECRETS-EFFECTIVE-SHARED: the effective view can answer for a workspace shared with the team, which
-// gets no personal secrets (SEC-5), so Settings never shows a personal value winning there.
+// The effective view can answer for a workspace shared with the team, which
+// gets no personal secrets, so Settings never shows a personal value winning there.
 import { describe, expect, it } from 'vitest'
 import { createHarness } from './harness'
 

@@ -118,9 +118,9 @@ function ProjectAndHostPreview({
   cloudDropped
 }: {
   folderOnly?: boolean
-  /** RUNON-STICKY: a picked Orca Cloud didn't carry over to this project. */
+  /** A picked Orca Cloud didn't carry over to this project. */
   cloudDropped?: OrcaCloudDropReason
-  /** Back from GitHub's access page (REPO-ACCESS-REFRESH). */
+  /** Back from GitHub's access page. */
   githubHandoff?: 'waiting' | 'timed-out'
   /** Offers Orca Cloud with this entitlement. */
   orcaCloud?: OrcaCloudRunTargetAccess
@@ -192,7 +192,7 @@ export const folderOnly = defineFixture({
 export const projectMenu = defineFixture({
   ...closed,
   interact: (frame) => {
-    // Focus alone never opens the list (DS-22); a click does.
+    // Focus alone never opens the list; a click does.
     const field = frame.querySelector<HTMLInputElement>('[aria-label="Project"][role="combobox"]')
     field?.focus()
     field?.click()
@@ -201,7 +201,7 @@ export const projectMenu = defineFixture({
 export const hostMenu = defineFixture({
   ...closed,
   interact: (frame) => {
-    // Focus alone never opens the list (DS-22); a click does.
+    // Focus alone never opens the list; a click does.
     const field = frame.querySelector<HTMLInputElement>('[aria-label="Run on"][role="combobox"]')
     field?.focus()
     field?.click()
@@ -257,7 +257,7 @@ export const githubHandoffTimedOut = defineFixture({
   render: () => <ProjectAndHostPreview orcaCloud={entitled} githubHandoff="timed-out" />
 })
 
-// RUNON-STICKY: Orca Cloud was picked, then a project that can't run on it.
+// Orca Cloud was picked, then a project that can't run on it.
 export const cloudDroppedElsewhere = defineFixture({
   ...closed,
   render: () => <ProjectAndHostPreview orcaCloud={entitled} cloudDropped="elsewhere" />

@@ -82,7 +82,7 @@ export function CloudMissingSecretRow({
         </span>
         {expanded ? null : !canAdd ? (
           <span className="ms-auto text-end text-xs text-muted-foreground">
-            {/* SEC-5: the workspace's owner can't fill it with a Personal value either, so only
+            {/* The workspace's owner can't fill it with a Personal value either, so only
                 owners and admins (Repository or Shared) can. */}
             {t('agentHostPanel.keys.askAdmin', 'Ask an owner or admin to add one.')}
           </span>

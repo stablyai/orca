@@ -60,7 +60,7 @@ function valueInput(): HTMLInputElement {
   return screen.getByLabelText('Value for NPM_TOKEN')
 }
 
-describe('S4-b secret request card', () => {
+describe('secret request card', () => {
   beforeEach(() => {
     vi.useFakeTimers({
       now: NOW,
@@ -100,7 +100,7 @@ describe('S4-b secret request card', () => {
     expect(screen.getByText(/Commands in this workspace can read it as \$NPM_TOKEN/)).toBeTruthy()
   })
 
-  it('in a shared workspace never offers Personal (SEC-5): says who can add it instead', async () => {
+  it('in a shared workspace never offers Personal: says who can add it instead', async () => {
     workspaceSharing.mockResolvedValue({
       ok: true,
       value: { shared: true, ownerName: 'Ada', isOwner: false }

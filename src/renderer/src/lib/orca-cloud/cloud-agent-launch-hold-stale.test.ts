@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
-// HELD-STALE-COVERED: a held launch re-decides on every account change, and Start never trusts the
-// cached read. Real repro (m4air, #568 proof P3b): set up -> "Start Claude" -> the sign-in is revoked
+// A held launch re-decides on every account change, and Start never trusts the
+// cached read. Real repro: set up -> "Start Claude" -> the sign-in is revoked
 // -> the strip still said "Start Claude", and Start launched Claude onto the revoked account.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OrcaCloudAgentsStatus } from '../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
@@ -72,7 +72,7 @@ async function setUpHold(paneKey: string): Promise<{ outcome: () => string }> {
   return { outcome: () => outcome }
 }
 
-describe('HELD-STALE-COVERED', () => {
+describe('a held launch whose coverage changed since it was held', () => {
   it('setup finished here: "is set up · Start" (muted, not the amber key), and it waits for Start', async () => {
     const hold = await setUpHold('tab:s1')
     setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'active' }))
@@ -134,7 +134,7 @@ describe('HELD-STALE-COVERED', () => {
     expect(hold.outcome()).toBe('pending')
   })
 
-  it('in-session expired -> sign-in removed -> set up again: waits for Start, never auto-starts (PC-3b)', async () => {
+  it('in-session expired -> sign-in removed -> set up again: waits for Start, never auto-starts', async () => {
     setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'expired' }))
     let outcome = 'pending'
     void holdCloudAgentLaunch({ paneKey: 'tab:s6', agent: 'claude', prompt: null }).then((o) => {

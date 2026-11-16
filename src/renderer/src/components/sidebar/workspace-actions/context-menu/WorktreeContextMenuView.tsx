@@ -86,7 +86,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
   const t = useTranslate()
   usePrimeCloudEnvironmentIds()
   usePrimeCloudRowBindings()
-  // Paired rows too (PAIRED-CHROME): a workspace opened here but created elsewhere is still cloud.
+  // Paired rows too: a workspace opened here but created elsewhere is still cloud.
   const isCloud = useIsCloudHostRow(worktree)
   const sleepRefusedHint = usePairedSleepRefusalHint(worktree.id)
   const sleepItems = (
@@ -208,7 +208,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
                 : t('auto.components.sidebar.WorktreeContextMenu.f50603c6b2', 'Mark Unread')}
             </DropdownMenuItem>
           )}
-          {/* Cloud rows end with Delete, alone (JA-14 Danger group); local rows keep it here. */}
+          {/* Cloud rows end with Delete, alone (the Danger group); local rows keep it here. */}
           {isCloud ? null : <WorktreeContextMenuDeleteItems model={model} />}
           <DropdownMenuSeparator />
           {!isMultiContext && (
@@ -251,7 +251,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
                   ) : undefined
                 }
               />
-              {/* Nesting and project groups are this computer's arrangement; not for cloud (JA-14). */}
+              {/* Nesting and project groups are this computer's arrangement; not for cloud. */}
               {isCloud ? null : <WorktreeLineageSubMenu model={model} />}
               {isCloud ? null : <WorktreeProjectGroupSubMenu model={model} />}
             </>

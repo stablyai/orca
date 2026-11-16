@@ -7,7 +7,7 @@ const identity = (remoteUrl: string) => ({
 })
 
 describe('orcaCloudGitHubRepoUrl', () => {
-  it('reads the GitHub repository from the remote with no network call (D3)', () => {
+  it('reads the GitHub repository from the remote with no network call', () => {
     expect(orcaCloudGitHubRepoUrl(identity('git@github.com:acme/web.git'))).toBe(
       'https://github.com/acme/web'
     )
@@ -31,7 +31,7 @@ describe('repoAccessState', () => {
 
 describe('orcaCloudGitHubSetupRow', () => {
   const base = { repoName: 'acme/billing', owner: 'acme', loading: false }
-  it('D1: needed, with an install action', () => {
+  it('needed, with an install action', () => {
     expect(
       orcaCloudGitHubSetupRow({ ...base, state: 'needs-install', access: 'missing' })
     ).toMatchObject({
@@ -43,7 +43,7 @@ describe('orcaCloudGitHubSetupRow', () => {
       blocksStart: true
     })
   })
-  it('D2: waiting for an owner on GitHub', () => {
+  it('waiting for an owner on GitHub', () => {
     expect(
       orcaCloudGitHubSetupRow({ ...base, state: 'pending-approval', access: 'requested' })
     ).toMatchObject({
@@ -56,7 +56,7 @@ describe('orcaCloudGitHubSetupRow', () => {
       blocksStart: true
     })
   })
-  it('D3: not on GitHub outranks everything and links to the push guide', () => {
+  it('not on GitHub outranks everything and links to the push guide', () => {
     const row = orcaCloudGitHubSetupRow({
       repoName: 'scratch',
       loading: false,

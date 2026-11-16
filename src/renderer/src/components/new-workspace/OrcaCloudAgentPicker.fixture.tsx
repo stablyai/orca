@@ -74,8 +74,8 @@ export const fallback = defineFixture({
   )
 })
 
-/** JA-22: each row says whether a cloud workspace can run it as-is (inside the open menu only). */
-// No status means ready (design-squad): Claude, OpenCode and Copilot carry none here.
+/** Each row says whether a cloud workspace can run it as-is (inside the open menu only). */
+// No status means ready: Claude, OpenCode and Copilot carry none here.
 const STATUS: ReadonlyMap<TuiAgent, string> = new Map<TuiAgent, string>([
   ['codex', 'Not set up'],
   ['gemini', 'Not set up'],
@@ -88,7 +88,7 @@ export const openWithStatus = defineFixture({
   interact: open
 })
 
-/** Closed: nothing changes on the button (Neil). */
+/** Closed: nothing changes on the button. */
 export const closedWithStatus = defineFixture({
   width: 480,
   render: () => <Picker agent="claude" statusLabels={STATUS} />

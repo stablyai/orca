@@ -14,7 +14,7 @@ const cache = new WeakMap<
  * An Orca Cloud workspace's repo lives on its sandbox's runtime, and so does the setup that files it
  * under its project. While the sandbox is asleep (after a restart) the runtime's catalog never loads,
  * so the sidebar only has a placeholder repo named after the workspace folder, and the workspace
- * fell out of its project into a group of its own (RA-9). The local VM record still knows the
+ * fell out of its project into a group of its own. The local VM record still knows the
  * project it was started for: stand in a setup for it until the runtime answers with its own.
  */
 export function withAsleepCloudProjectSetups(

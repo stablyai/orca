@@ -26,7 +26,7 @@ export type PendingConfirm =
   | { kind: 'owner'; workspace: CloudWorkspace; ownerUserId: string }
   /** Archiving a teammate's running workspace stops their agents. */
   | { kind: 'archive'; workspace: CloudWorkspace }
-  /** Deleting from the team list: the sandbox and its disk go (DS-07 copy). */
+  /** Deleting from the team list: the sandbox and its disk go. */
   | { kind: 'delete'; workspace: CloudWorkspace }
 
 /** Teammates who would lose access: here now, or holding an active device grant. */
@@ -102,7 +102,7 @@ export function CloudWorkspaceConfirmDialog({
   selfId: string | null
   /** Team owner or admin: still manages every workspace after giving one away. */
   canAdmin: boolean
-  /** OWNER-TRANSFER: the change is being made (the workspace goes to sleep first, so it takes a while). */
+  /** The change is being made (the workspace goes to sleep first, so it takes a while). */
   busy?: boolean
   /** Why the last try changed nothing, shown in place so the person can try again. */
   error?: string | null
@@ -157,7 +157,7 @@ export function CloudWorkspaceConfirmDialog({
             </DialogDescription>
           ) : (
             <>
-              {/* OWNER-TRANSFER: what the change does, before who manages it afterwards. */}
+              {/* What the change does, before who manages it afterwards. */}
               <ul className="list-disc space-y-1 pl-5 text-left text-sm text-muted-foreground">
                 {ownerChangeConsequences(
                   w.ownerUserId === selfId ? null : memberName(directory, w.ownerUserId, selfId, t),

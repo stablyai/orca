@@ -94,7 +94,7 @@ export type Viewer = { userId: string; accountId: string; orgId?: string }
 /**
  * Team membership seam. Today the owning account *is* the team: `org:<id>` (or `dev:org:<id>`)
  * sandboxes are visible to every member of that org, `user:<id>` sandboxes only to their owner.
- * TODO(W4): replace with the org registry (membership, per-workspace visibility, removed members).
+ * TODO: replace with the org registry (membership, per-workspace visibility, removed members).
  */
 export type TeamDirectory = {
   isMember(viewer: Viewer, accountId: string): Promise<boolean>
@@ -323,7 +323,7 @@ export async function handleShareRoute(method: string, pathname: string, ctx: Sh
   if (!sandbox || sandbox.account_id !== ctx.caller.accountId || sandbox.status === 'destroyed') {
     return notFound
   }
-  // Workspaces are their creator's (W4/W5 access rule): only the owner shares one or sees its links;
+  // Workspaces are their creator's (the per-member access rule): only the owner shares one or sees its links;
   // an org admin may also see and turn off its links.
   const owner = sandbox.user_id === ctx.caller.userId
   const orgAdmin = ctx.caller.orgId !== undefined && (ctx.caller.orgRole === 'owner' || ctx.caller.orgRole === 'admin')

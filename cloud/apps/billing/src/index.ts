@@ -93,7 +93,7 @@ import type { BillingCaller } from './auth'
 
 // Orca Cloud auth (MEMBERSHIP_SYNC_TOKEN), deleting a team:
 //   GET  /v1/internal/accounts/:accountId/subscription -> {status, open, cancelling, endsAt, periodEnd}
-//   POST /v1/internal/accounts/:accountId/subscription/cancel-now -> {canceled} (EP-10, team delete)
+//   POST /v1/internal/accounts/:accountId/subscription/cancel-now -> {canceled} (team delete)
 const TEAM_SUBSCRIPTION_PATH = /^\/v1\/internal\/accounts\/(org:[A-Za-z0-9_.:-]{1,150})\/subscription(\/cancel-now)?$/
 const MAX_JSON_BYTES = 16 * 1024
 
@@ -317,7 +317,7 @@ export async function handleRequest(request: Request, env: Env, ctx: ExecutionCo
     const subscriptionMatch = TEAM_SUBSCRIPTION_PATH.exec(url.pathname)
     if (subscriptionMatch && request.method === 'GET' && !subscriptionMatch[2]) {
       // Auth, before deleting a team: a team with an open subscription can't be deleted, or Stripe
-      // would keep charging an account nobody can reach, unless it is already set to end (EP-10).
+      // would keep charging an account nobody can reach, unless it is already set to end.
       if (!(await authenticateMembershipSync(env, request))) {
         return json({ error: 'unauthorized' }, 401)
       }
@@ -394,7 +394,7 @@ export async function handleRequest(request: Request, env: Env, ctx: ExecutionCo
       }
 
       case 'POST /v1/billing/trial': {
-        // Any member may start the team's trial the first time they pick Orca Cloud (spec B1).
+        // Any member may start the team's trial the first time they pick Orca Cloud.
         const caller = await authenticateDesktop(env, request)
         if (!caller) {
           return json({ error: 'unauthorized' }, 401)
@@ -418,7 +418,7 @@ export async function handleRequest(request: Request, env: Env, ctx: ExecutionCo
       }
 
       case 'POST /v1/billing/team-plans': {
-        // Other teams' plan state for "Switch to <team>" (cloud start B2); read-only, own token.
+        // Other teams' plan state for "Switch to <team>"; read-only, own token.
         const caller = await authenticateDesktop(env, request)
         if (!caller) {
           return json({ error: 'unauthorized' }, 401)

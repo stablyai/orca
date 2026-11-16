@@ -173,7 +173,7 @@ export async function removeRecipeWorkspace(
   const environmentId = runtime.runtimeEnvironmentId
   const isOrcaCloud = runtime.recipe?.provider === 'orca-cloud'
   if (isOrcaCloud && (runtime.recipe?.destroyDisabled || runtime.cleanupStatus === 'disabled')) {
-    // REG-12: nothing would destroy the sandbox, so refuse before touching anything.
+    // Nothing would destroy the sandbox, so refuse before touching anything.
     throw new RecipeWorkspaceRemovalError(CLOUD_DELETE_NOT_SENT, CLOUD_DELETE_NOT_SENT_NO_DESTROY, {
       runtimeId: runtime.id
     })
@@ -201,7 +201,7 @@ export async function removeRecipeWorkspace(
           )
         : undefined
     }
-    // REG-12: deleting an Orca Cloud workspace means deleting its sandbox, so prove the sandbox is
+    // Deleting an Orca Cloud workspace means deleting its sandbox, so prove the sandbox is
     // its alone before touching anything. A refusal then really deleted nothing (Try again is safe).
     if (isOrcaCloud) {
       const others = await otherWorkspaces()

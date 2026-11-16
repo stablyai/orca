@@ -18,7 +18,7 @@ export const EARLIER: Record<string, string> = {
   'rollover.gap': 'Pro 2026-11-09: 12.2 s via dev Worker, 17.3 s at shortened cap',
   'desktop.createToTerminal': 'Desktop dogfood 2026-11-09: 8-12 s'
 }
-export const CONDUCTOR: Record<string, string> = {
+export const PEER: Record<string, string> = {
   'create.api': '0.80: "1.5-3x faster sandbox start" (no absolute number published)',
   'create.usable': 'not published',
   'wake.firstEcho': 'not published; wake on open, files kept, processes lost',

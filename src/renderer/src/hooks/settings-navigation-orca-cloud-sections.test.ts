@@ -58,7 +58,7 @@ describe('Orca Cloud settings group', () => {
   it('adds Workspaces for a team owner or admin only; team and admin have no page', () => {
     const ids = (patch: Parameters<typeof options>[0]) =>
       buildOrcaCloudSettingsSections(options(patch)).map((section) => section.id)
-    // HOME-1: the team's workspace list is an admin management view, never a member page.
+    // The team's workspace list is an admin management view, never a member page.
     expect(ids({})).not.toContain('cloud-workspaces')
     expect(ids({ isOrcaTeamAdmin: false })).not.toContain('cloud-workspaces')
     const admin = ids({ isOrcaTeamAdmin: true })
@@ -105,7 +105,7 @@ describe('Orca Cloud settings group', () => {
   })
 })
 
-describe('one Orca Cloud group (JA-16)', () => {
+describe('one Orca Cloud group', () => {
   const nav = (id: string, group: SettingsNavSection['group']): SettingsNavSection => ({
     id,
     title: id,

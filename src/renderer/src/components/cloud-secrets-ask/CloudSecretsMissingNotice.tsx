@@ -98,7 +98,7 @@ function CloudSecretsAskDialogBody({
   repoKey: string
 }): React.JSX.Element {
   const t = useTranslate()
-  // The workspace's runtime environment, so a shared one isn't offered Personal values (SEC-5).
+  // The workspace's runtime environment, so a shared one isn't offered Personal values.
   const runtimeEnvironmentId = useAppStore((state) =>
     runtimeEnvironmentIdOrLocalUnlessTwin(state, workspaceId)
   )

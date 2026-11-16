@@ -201,7 +201,7 @@ export async function workspaceViews(
     readSnapshotTimes(db, ids),
     rows.length > 0 ? slugForAccount(db, caller.accountId) : Promise.resolve(null),
     followersFor(db, ids),
-    // GIT-ACTOR: who pushes and PRs go out as, only on rows the caller may open.
+    // Who pushes and PRs go out as, only on rows the caller may open.
     acting ? githubActingFor(db, caller, rows, now, acting) : Promise.resolve(new Map<string, GithubActingView>())
   ])
   const followersOf = (row: SandboxRow) => visibleFollowers(row, canSee(caller, row), follows.get(row.id) ?? [])
@@ -245,7 +245,7 @@ export async function workspaceViews(
       cost: costView(row, compute.get(row.id) ?? 0, now),
       access,
       presence: live.map((p) => ({ userId: p.user_id, clientId: p.client_id, state: p.state, chatId: p.chat_id, at: p.updated_at })),
-      // Who follows it (oldest first), and whether the caller does (PARITY-FOLLOW).
+      // Who follows it (oldest first), and whether the caller does.
       followers,
       following: followers.includes(caller.userId),
       // Display names (token `name` claim) for the ids above; the roster wins where it has one.
@@ -264,7 +264,7 @@ const ListQuery = z.object({
   repo: z.string().min(1).max(2048).optional(),
   section: z.string().min(1).max(64).optional(),
   archived: z.enum(['exclude', 'include', 'only']).default('exclude'),
-  /** Routine runs stay off Home unless asked for (`include`), like Conductor's routine filter. */
+  /** Routine runs stay off Home unless asked for (`include`), like a routine filter. */
   routines: z.enum(['exclude', 'include']).default('exclude')
 })
 
@@ -409,7 +409,7 @@ export async function patchWorkspace(
     if (!row.account_id.includes('org:')) {
       throw new WorkspaceError('invalid_request', 'personal_account')
     }
-    // OWNER-TRANSFER: never onto a workspace that is booting or stopping. Its environment may have
+    // Never onto a workspace that is booting or stopping. Its environment may have
     // been resolved for the previous owner, and what their boot started would run on under the new one.
     if (row.status !== 'running' && row.status !== 'suspended' && row.status !== 'archived') {
       throw new WorkspaceError('conflict', `sandbox_${row.status}`)

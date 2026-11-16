@@ -1,4 +1,4 @@
-// GH-ACTING-LINE under Commit/Push in a cloud workspace's source control panel.
+// Who pushes and PRs go out as, under Commit/Push in a cloud workspace's source control panel.
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import type { CloudGitActing } from '@/components/cloud-workspaces/cloud-git-acting-copy'
 import { CloudGitActingNoticeView } from './cloud-git-acting-notice'

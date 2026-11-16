@@ -28,7 +28,7 @@ function Probe({ account, id }: { account: string | null; id: string }): React.J
   return <span data-testid={id}>{live ? live.map((w) => w.title).join(',') : 'none'}</span>
 }
 
-describe('useTeamWorkspacesLive (PARITY-FOLLOW)', () => {
+describe('useTeamWorkspacesLive', () => {
   it('shares one team read between surfaces', async () => {
     const view = render(
       <>

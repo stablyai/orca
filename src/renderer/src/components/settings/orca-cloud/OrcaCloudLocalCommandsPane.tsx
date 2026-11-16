@@ -26,7 +26,7 @@ function workspaceDetail(
   t: Translate,
   teamSharing = cloudTeamSharingEnabled()
 ): string {
-  // TEAM-SHARING-HOLD: no mention of sharing while team sharing is held.
+  // No mention of sharing while team sharing is held.
   const shared = teamSharing && row.shared
   if (row.isOwner === false) {
     return t('localCommands.settings.notOwner', 'Only the workspace owner can turn this on.')

@@ -1,4 +1,4 @@
-// RA-11d: a pane's agent relaunched by the host (Restart of a pane with no agent session yet: the desktop
+// A pane's agent relaunched by the host (Restart of a pane with no agent session yet: the desktop
 // stops the PTY, then the pane's reconnect asks the host to create the agent again) came back with the
 // host's default args, dropping the ones the original launch used (`--model opus --effort high`). The host
 // remembers the explicit agent args and launch preferences each placed launch used, and a later create

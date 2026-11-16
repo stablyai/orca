@@ -3,7 +3,7 @@ import { withLocalTitles } from './cloud-workspace-local-titles'
 import { cloudWorkspaceTitle } from './open-cloud-workspace'
 import { workspace } from './cloud-workspaces.test-fixture'
 
-describe('team list names a workspace, not its repo (RA-13)', () => {
+describe('team list names a workspace, not its repo', () => {
   const untitled = workspace({
     id: 'sbx_1',
     workspaceId: 'orca-1',

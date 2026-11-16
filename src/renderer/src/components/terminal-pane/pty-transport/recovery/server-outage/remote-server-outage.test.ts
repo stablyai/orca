@@ -18,7 +18,7 @@ function state(activeOrgId: string): AppState {
     runtimeEnvironments: [
       {
         id: 'pick',
-        name: 'endpass-pick (cloud)',
+        name: 'feature-pick (cloud)',
         orcaCloudPaired: true,
         orcaCloudPairedAccountId: 'org:eval'
       }
@@ -29,7 +29,7 @@ function state(activeOrgId: string): AppState {
   } as unknown as AppState
 }
 
-describe('reconnect banner scope (STALE-RUN-TARGET)', () => {
+describe('reconnect banner scope', () => {
   it("announces the active team's cloud workspace reconnecting", () => {
     expect(selectRetryingOutageEnvironmentId(state('eval'), 'wt-pick')).toBe('pick')
   })

@@ -1,4 +1,4 @@
-// PARITY-FOLLOW: the sidebar's Following section, under the nav and above Projects, for a team
+// The sidebar's Following section, under the nav and above Projects, for a team
 // account only: teammates' cloud workspaces this member follows; a row opens the workspace, its
 // hover action unfollows. (The team list moved to the web console.)
 import React, { useCallback, useState } from 'react'

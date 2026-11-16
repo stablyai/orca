@@ -1,5 +1,5 @@
-// EGRESS firewall mode (design §1, §3, §4, §7): the firewall swaps the values itself; the egress proxy keeps
-// only the cases it can't do (W1 Cursor's filtered exchange, W2 the Copilot PAT's prefix scope, W3 members).
+// Firewall swap mode (design §1, §3, §4, §7): the firewall swaps the values itself; the egress proxy keeps
+// only the cases it can't do (Cursor's filtered exchange, the Copilot PAT's prefix scope, members).
 import { describe, expect, it } from 'vitest'
 import { lifecycleDeps } from '../src/index'
 import { githubPlaceholderHeaders, githubPlaceholderToken, policyConfigHash } from '../src/lifecycle'
@@ -41,7 +41,7 @@ async function setup(overrides: Record<string, string> = {}) {
 const claims = (rules: { match?: { headers?: { value: { exact?: string } }[] } }[], placeholder: string) =>
   rules.filter((rule) => rule.match?.headers?.some((header) => header.value.exact === placeholder))
 
-describe('EGRESS firewall mode', () => {
+describe('firewall swap mode', () => {
   it('model keys are swapped by the firewall in every header form, then the 403; the proxy is not involved', async () => {
     const { secret, create } = await setup()
     expect((await secret('ANTHROPIC_API_KEY', ANTHROPIC_KEY)).status).toBe(200)
@@ -61,7 +61,7 @@ describe('EGRESS firewall mode', () => {
     const git = gitBasicAuthorization(githubPlaceholderToken(row))
     expect(claims(rules('github.com'), git)[0]).toMatchObject({ transform: [{ headers: { authorization: gitBasicAuthorization(APP_TOKEN) } }] })
     const [bearer, token] = githubPlaceholderHeaders(row)
-    // APPROVALS-REFUSED: the firewall swaps reads only (GET/HEAD); anything else, any method, goes to the proxy.
+    // The firewall swaps reads only (GET/HEAD); anything else, any method, goes to the proxy.
     for (const [placeholder, scheme] of [[bearer!, 'Bearer'], [token!, 'token']] as const) {
       const [swap, forward] = claims(rules('api.github.com'), placeholder)
       expect(swap).toMatchObject({ match: { path: { startsWith: '/' }, method: ['GET', 'HEAD'] }, transform: [{ headers: { authorization: `${scheme} ${APP_TOKEN}` } }] })
@@ -70,7 +70,7 @@ describe('EGRESS firewall mode', () => {
     }
   })
 
-  it('W1: Cursor’s key exchange stays on the egress proxy (its reply is filtered), never in the policy', async () => {
+  it('Cursor’s key exchange stays on the egress proxy (its reply is filtered), never in the policy', async () => {
     const { secret, create, h } = await setup()
     await secret('CURSOR_API_KEY', CURSOR_KEY)
     const { rules, box } = await create()
@@ -102,7 +102,7 @@ describe('EGRESS firewall mode', () => {
     expect(JSON.stringify(box().policy.allow['api.anthropic.com'])).not.toContain(ANTHROPIC_KEY)
   })
 
-  it('APPROVALS-REFUSED: with the App token on the firewall, only GET/HEAD are swapped; every other method goes to the proxy', async () => {
+  it('with the App token on the firewall, only GET/HEAD are swapped; every other method goes to the proxy', async () => {
     const { egressPolicy } = await import('../src/lifecycle')
     const { h } = await setup()
     const life = (await lifecycleDeps(h.env, h.deps))!
@@ -151,8 +151,8 @@ describe('EGRESS firewall mode', () => {
   })
 })
 
-describe('review fixes (F1–F3)', () => {
-  it('F1: a Copilot PAT never becomes a firewall transform, on any host', async () => {
+describe('review fixes', () => {
+  it('a Copilot PAT never becomes a firewall transform, on any host', async () => {
     const { secret, create } = await setup()
     const pat = 'github_pat_REAL_for_tests_000000000000000000000000000000'
     expect((await secret('COPILOT_GITHUB_TOKEN', pat)).status).toBe(200)
@@ -165,7 +165,7 @@ describe('review fixes (F1–F3)', () => {
     }
   })
 
-  it('F3: only a config change that removes access counts as narrowing', async () => {
+  it('only a config change that removes access counts as narrowing', async () => {
     const { configChangeNarrows } = await import('../src/lifecycle')
     const cfg = (mode: string, classes: string[], accounts: Record<string, boolean>, preset = 'open') => JSON.stringify({ h: 'x', mode, classes, accounts, preset })
     const base = cfg('firewall', ['claude', 'model_key'], { claude: true, codex: true })
@@ -176,7 +176,7 @@ describe('review fixes (F1–F3)', () => {
     // Widening or neutral: a new class, a provider turned on, an allowlist-only change (same summary).
     expect(configChangeNarrows(base, cfg('firewall', ['claude', 'codex', 'model_key'], { claude: true, codex: true }))).toBe(false)
     expect(configChangeNarrows(base, base)).toBe(false)
-    // A pre-F3 bare-hash stamp is retried, not failed closed; unreadable history is.
+    // An older bare-hash stamp is retried, not failed closed; unreadable history is.
     expect(configChangeNarrows('402ed84513da7fac4ec3506d', base)).toBe(false)
     expect(configChangeNarrows('{broken', base)).toBe(true)
   })

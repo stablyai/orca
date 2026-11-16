@@ -210,7 +210,7 @@ describe('project move renderer completion', () => {
       records: []
     })
     await f.persist()
-    // Sleep keeps the tabs (NEW-01); only their pages are dropped.
+    // Sleep keeps the tabs; only their pages are dropped.
     expect(mocks.state.shutdownWorktreeBrowsers).not.toHaveBeenCalled()
     expect(mocks.evictGuests).toHaveBeenCalledWith('wt')
     expect(f.responses.at(-1)).toMatchObject({

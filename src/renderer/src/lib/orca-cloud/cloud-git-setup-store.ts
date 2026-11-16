@@ -1,4 +1,4 @@
-// GIT-SETUP: the window's per-workspace strip state beside the cloud workspace store. Whether git
+// The window's per-workspace strip state beside the cloud workspace store. Whether git
 // setup failed comes from the status read; this keeps what the person did about it: dismissed the
 // strip for this app session (a wake brings it back), or restarted without it being fixed.
 import { useSyncExternalStore } from 'react'

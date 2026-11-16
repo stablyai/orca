@@ -1,4 +1,4 @@
-// GH-AS-MEMBER: which GraphQL requests may carry a member's own token (parsed, never regex).
+// gh as the member: which GraphQL requests may carry a member's own token (parsed, never regex).
 import { describe, expect, it } from 'vitest'
 import { classifyGraphqlRequest, repositoryIdOfNode } from '../src/github-graphql-pin'
 
@@ -32,11 +32,11 @@ describe('classifyGraphqlRequest', () => {
       [req('mutation { ... on Query { addComment(input: {subjectId: "PR_1"}) { clientMutationId } } }'), 'fragment_type'],
       [req('this is { not graphql'), 'unparsable'],
       ['not json', 'unreadable_body'],
-      // Review M1: an omitted variable with a default would be invisible here but applied by GitHub.
+      // An omitted variable with a default would be invisible here but applied by GitHub.
       [req('mutation ($pr: ID = "PR_other") { addPullRequestReviewThread(input: { pullRequestReviewId: "PRR_in", pullRequestId: $pr }) { clientMutationId } }'), 'variable_defaults'],
-      // Review L3: owner-level Projects reach outside the repository.
+      // Owner-level Projects reach outside the repository.
       [req('mutation { updatePullRequest(input: { pullRequestId: "PR_1", projectIds: ["P"] }) { clientMutationId } }'), 'outside_repo_input'],
-      // Review L4: repeated top-level keys.
+      // Repeated top-level keys.
       ['{"query":"mutation { addComment(input: {subjectId: \\"PR_1\\"}) { clientMutationId } }","query":"query { viewer { login } }"}', 'duplicate_keys']
     ]
     for (const [body, reason] of cases) {

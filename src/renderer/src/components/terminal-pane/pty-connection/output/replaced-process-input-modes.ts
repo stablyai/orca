@@ -12,7 +12,7 @@ export function bindReplacedProcessInputModes(session: ConnectPanePtySession): v
 
   session.groundInputModesForNewProcess = (): void => {
     session.inputModeOwnerIncarnationId = null
-    // WAKE-SCROLLBACK: the ground releases DEC 2026; a woken cloud pane with pre-sleep output to put
+    // The ground releases DEC 2026; a woken cloud pane with pre-sleep output to put
     // back re-holds rendering here, at the new terminal's bind, so no clear before its restore is
     // ever painted (the restore releases it).
     session.writeInputModeGround(

@@ -16,7 +16,7 @@ export function createTerminalRightClickPasteCapture({
     if (!isTerminalRightClickPasteGesture(event, rightClickToPaste)) {
       return
     }
-    // SETUP-PASTE: right-click paste is the terminal's only when the click is on the terminal.
+    // A right-click paste is the terminal's only when the click is on the terminal.
     if (pasteBelongsToPaneControl(event.target)) {
       return
     }

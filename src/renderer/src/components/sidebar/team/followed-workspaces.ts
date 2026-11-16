@@ -1,4 +1,4 @@
-// PARITY-FOLLOW: the workspaces this member follows, from the team workspace list's live read.
+// The workspaces this member follows, from the team workspace list's live read.
 import type { CloudWorkspace } from '../../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 import { formatWorkspaceNumber } from '../../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 import { repoLabel } from '@/components/cloud-workspaces/cloud-workspace-format'
@@ -28,14 +28,14 @@ function followedStatus(w: CloudWorkspace): SidebarFollowedWorkspace['status'] {
   return w.status === 'creating' || w.status === 'resuming' ? 'waking' : 'asleep'
 }
 
-/** Teammates' workspaces this member follows, most recently active first (PARITY-FOLLOW). */
+/** Teammates' workspaces this member follows, most recently active first. */
 export function followedWorkspaces(
   workspaces: readonly CloudWorkspace[] | null,
   selfId: string | null
 ): SidebarFollowedWorkspace[] {
   return (
     (workspaces ?? [])
-      // Your own is the current owner's: a workspace handed to you leaves Following (FOLLOW-OWN-AFTER-TRANSFER).
+      // Your own is the current owner's: a workspace handed to you leaves Following.
       .filter((w) => w.following === true && w.ownerUserId !== selfId)
       .sort((a, b) => b.lastActivityAt - a.lastActivityAt)
       .map((w) => ({

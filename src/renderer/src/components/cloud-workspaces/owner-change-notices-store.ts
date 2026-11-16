@@ -1,4 +1,4 @@
-// OWNER-TRANSFER notices this desktop shows: the previous owner's (kept by the control plane, one
+// Notices this desktop shows: the previous owner's (kept by the control plane, one
 // per hand-off, until they dismiss it or 90 days pass) and the new owner's (worked out here from
 // the team's workspace list and shown once per hand-off).
 import { useSyncExternalStore } from 'react'
@@ -60,7 +60,7 @@ function madeHereKey(sandboxId: string): string {
   return `orca.ownerChange.madeHere:${sandboxId}`
 }
 
-/** TRANSFER-TOAST-OTHER-DEVICE: this device is the one that gave the workspace away. */
+/** This device is the one that gave the workspace away. */
 export function markOwnerChangeMadeHere(
   storage: Pick<Storage, 'setItem'> | null,
   sandboxId: string
@@ -73,7 +73,7 @@ export function markOwnerChangeMadeHere(
 }
 
 /**
- * TRANSFER-TOAST-OTHER-DEVICE: which of your notices this device shows. One about a change
+ * Which of your notices this device shows. One about a change
  * someone else made is for you wherever you are signed in. "You made X the owner" is the result
  * of something you did, so it shows only on the device you did it on; elsewhere it would be an
  * echo of an action nobody took there.

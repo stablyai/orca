@@ -1,6 +1,6 @@
-// Repositories Orca Cloud can reach on GitHub that have no clone on this computer (cloud-start D4,
-// N12): the Project picker lists them under "On GitHub · Orca Cloud only" while Orca Cloud is
-// picked, because a sandbox clones from GitHub anyway.
+// Repositories Orca Cloud can reach on GitHub that have no clone on this computer: the Project
+// picker lists them under "On GitHub · Orca Cloud only" while Orca Cloud is picked, because a
+// sandbox clones from GitHub anyway.
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
 import type { HostedGithubRepositoriesResponse } from '../../../../shared/hosted-sandbox/hosted-github-wire'
@@ -33,7 +33,7 @@ async function fetchPages(after: Listing): Promise<Listing> {
   for (let page = 0; page < PAGES_PER_LOAD; page += 1) {
     const result = await window.api.orcaCloudWorkspace.listGitHubRepositories({ cursor })
     if (!result.ok) {
-      // GH-LIST-MISSING: a failed first page used to resolve as an empty list, cached for 5 min,
+      // A failed first page used to resolve as an empty list, cached for 5 min,
       // and an empty list hides the GitHub section: it looked like there were no repositories.
       if (page === 0) {
         throw new RepositoriesUnavailable(result.message ?? result.code)
@@ -161,7 +161,7 @@ export function useOrcaCloudGitHubRepositories(
       enabled && listing
         ? selectCloudOnlyRepositories(
             listing.repos,
-            // Clones on this computer only: one on a remote server can still start (RUNON-NO-NEW-SANDBOX).
+            // Clones on this computer only: one on a remote server can still start.
             repos
               .filter(
                 (repo) => parseExecutionHostId(getRepoExecutionHostId(repo))?.kind !== 'runtime'

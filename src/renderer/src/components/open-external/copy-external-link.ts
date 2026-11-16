@@ -1,4 +1,4 @@
-// "Copy link" for buttons that open a page in the user's browser (Neil's rule: every such button
+// "Copy link" for buttons that open a page in the user's browser (every such button
 // offers it, so a sign-in or billing link can go to an incognito window or another browser profile).
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'

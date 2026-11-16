@@ -3,7 +3,7 @@ import { translate } from '@/i18n/i18n'
 import { agentsSummary } from './CloudAgentsAndSecretsLink'
 
 describe('agentsSummary', () => {
-  it('uses the NP-3 wording, grouped by source', () => {
+  it('uses the ready-line wording, grouped by source', () => {
     expect(
       agentsSummary(
         [

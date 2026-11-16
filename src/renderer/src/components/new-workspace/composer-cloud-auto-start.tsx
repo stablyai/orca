@@ -1,4 +1,4 @@
-// The composer's side of the Orca Cloud setup page (composer-redo): the snapshot the page keeps for
+// The composer's side of the Orca Cloud setup page: the snapshot the page keeps for
 // Back and for its auto-start, and the hidden composer that submits once setup is done.
 import React, { useEffect, useState } from 'react'
 import { Dialog } from '@/components/ui/dialog'

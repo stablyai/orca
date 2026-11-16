@@ -7,7 +7,7 @@ const PROXY = 'https://cp.example.dev/v1/egress/proxy'
 const deps = (environment: string, egressProxyUrl?: string) =>
   ({ config: { environment, goldenSnapshotId: 'snap', defaultRegion: 'iad1', ...(egressProxyUrl ? { egressProxyUrl } : {}) } }) as unknown as LifecycleDeps
 
-describe('E3-PROD-GUARD: open egress never runs without the egress proxy in a deployed env', () => {
+describe('open egress never runs without the egress proxy in a deployed env', () => {
   afterEach(() => vi.restoreAllMocks())
 
   it('dev or prod without EGRESS_PROXY_URL falls back to limited and logs it', () => {
@@ -41,7 +41,7 @@ describe('E3-PROD-GUARD: open egress never runs without the egress proxy in a de
   })
 })
 
-describe('GH-ANON-403: member identities never 403 anonymous git to github.com', () => {
+describe('member identities never 403 anonymous git to github.com', () => {
   const d = () => deps('dev', PROXY)
   const members = ['orca-mph-a']
   const denies = (rules: unknown[] | undefined) => (rules ?? []).some((rule) => JSON.stringify(rule).includes('"statusCode":403'))

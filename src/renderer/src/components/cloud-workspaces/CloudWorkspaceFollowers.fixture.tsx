@@ -1,4 +1,4 @@
-// PARITY-FOLLOW (design review): the top bar's people on a cloud workspace, beside W-123.
+// The top bar's people on a cloud workspace, beside W-123.
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { CloudWorkspaceFollowers, workspaceFollowerEntries } from './CloudWorkspaceFollowers'
 import { DIRECTORY, presence, SELF_ID } from './cloud-workspaces.test-fixture'

@@ -1,4 +1,4 @@
-// The Idempotency-Key a GitHub-only Orca Cloud create sends (GH-CREATE-SHEET). One per creation.
+// The Idempotency-Key a GitHub-only Orca Cloud create sends. One per creation.
 // A Retry after a lost answer (the control plane never replied) resends the same key, so the server
 // hands back the sandbox the first attempt may have made instead of starting a second one. A Retry
 // after an answered failure is a new attempt with its own key: the server already released a key

@@ -194,7 +194,7 @@ describe('Orca Cloud surfaces', () => {
     expect(container.textContent).toMatch(/Connecting…\s*4s/)
   })
 
-  it('type-through never takes focus from the terminal; a covering wake still does (n53)', () => {
+  it('type-through never takes focus from the terminal; a covering wake still does', () => {
     const terminal = document.createElement('textarea')
     document.body.appendChild(terminal)
     terminal.focus()

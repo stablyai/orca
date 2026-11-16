@@ -9,7 +9,7 @@ import {
   T0
 } from './vm-build-sheet-fixture-support'
 
-// CLONE-ACCESS-ERROR: GitHub refused the clone of stablyai/orca-plugins. The card names the cause and
+// GitHub refused the clone of stablyai/orca-plugins. The card names the cause and
 // fixes access, by what GitHub says about Orca's access now.
 
 const REPO = 'https://github.com/stablyai/orca-plugins.git'

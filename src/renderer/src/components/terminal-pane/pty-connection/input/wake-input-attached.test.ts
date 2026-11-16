@@ -1,4 +1,4 @@
-// PAIRED-WAKE-TYPE-THROUGH: held typing goes in only once the pane is attached to the woken terminal.
+// Held typing goes in only once the pane is attached to the woken terminal.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { isAttachedForWakeInput, type WakeInputTransport } from './wake-input-attached'
 import {

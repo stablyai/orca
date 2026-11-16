@@ -1,4 +1,4 @@
-// PARITY-FOLLOW: persistent Follow on a team workspace (Conductor's Following section and
+// Persistent Follow on a team workspace (a Following section and
 // follower avatars).
 //   PUT    /v1/team/workspaces/:id/follow   -> {following: true, followers}
 //   DELETE /v1/team/workspaces/:id/follow   -> {following: false, followers}

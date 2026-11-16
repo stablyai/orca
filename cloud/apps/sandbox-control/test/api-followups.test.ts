@@ -84,7 +84,7 @@ describe('teammate names', () => {
     try {
       h.raw.exec("ALTER TABLE sandboxes ADD COLUMN visibility TEXT NOT NULL DEFAULT 'private'")
     } catch {
-      // present once W4's migration is in the test schema
+      // present once the multiplayer migration is in the test schema
     }
     const ada = await h.token('ada', 'acme', 'sandbox', { orgRole: 'owner', name: 'Ada Lovelace' })
     const bob = await h.token('bob', 'acme', 'sandbox', { orgRole: 'member', name: 'Bob Byte' })

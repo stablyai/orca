@@ -1,8 +1,8 @@
-// CREATE-STEP-WATCH: creates hung 180 s with no log and no row (n73); the steps before the create log.
+// Creates hung 180 s with no log and no row; the steps before the create log.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createStepWatch } from '../src/index'
 
-describe('CREATE-STEP-WATCH', () => {
+describe('create step watch', () => {
   afterEach(() => {
     vi.useRealTimers()
     vi.restoreAllMocks()

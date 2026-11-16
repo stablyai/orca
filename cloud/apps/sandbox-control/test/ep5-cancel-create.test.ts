@@ -1,4 +1,4 @@
-// EP-5: a desktop that cancels a create mid-request disconnects. The create used to die with the
+// A desktop that cancels a create mid-request disconnects. The create used to die with the
 // request (Workers cancel it), leaving the row `creating` and the Idempotency-Key pending, so every
 // cancel replay answered 409 until the 5 min sweep. The create now outlives its request
 // (ctx.waitUntil), so the replay gets the sandbox to delete; a delete that lands while the create
@@ -35,7 +35,7 @@ async function setup() {
   return { h, background, open, row, untilCreating, liveVms }
 }
 
-describe('EP-5: cancelling a create mid-request', () => {
+describe('cancelling a create mid-request', () => {
   it('the create outlives its request, so the replay gets the sandbox instead of 409 in progress', async () => {
     const t = await setup()
     const first = t.h.call('POST', '/v1/sandboxes', { body: create, headers: key })
@@ -73,7 +73,7 @@ describe('EP-5: cancelling a create mid-request', () => {
     expect(t.liveVms()).toEqual([])
   })
 
-  // EP-5 on n48: the desktop deleted the pooled row mid-create; the create (now outliving its request)
+  // Seen on a dev build: the desktop deleted the pooled row mid-create; the create (now outliving its request)
   // took the failed adopt/boot for a bad pooled VM and retried with a fresh row that ran to the end.
   it('a delete during a pooled create wins: no retry with a new row, nothing left running', async () => {
     const background: Promise<unknown>[] = []

@@ -31,7 +31,7 @@ export type OpenOutcome =
   | { ok: true; worktreeId: string | null; hostId?: string }
   /**
    * `unknownServerError`: the wake failed on the server for no known reason (shared copy).
-   * `notified`: a toast already said what happened (EP-6-FLAKE); the caller shows nothing more.
+   * `notified`: a toast already said what happened; the caller shows nothing more.
    */
   | {
       ok: false
@@ -41,7 +41,7 @@ export type OpenOutcome =
       notified?: true
     }
 
-/** EP-6-FLAKE: a refusal that has its own toast: still starting (timeout) or gone (not found). */
+/** A refusal that has its own toast: still starting (timeout) or gone (not found). */
 export function openFailureKind(error: string | undefined): OpenFeedbackFailure | undefined {
   if (error === 'timeout') {
     return 'timeout'
@@ -70,7 +70,7 @@ export function cloudWorkspaceTitle(
 }
 
 /**
- * The workspace's row on its server: with `branch`, the worktree on that branch (EP-6: never the
+ * The workspace's row on its server: with `branch`, the worktree on that branch (never the
  * sandbox's base checkout while the workspace has its own); without, the first row on the server.
  */
 export function firstWorktreeOnHost(hostId: string, branch?: string | null): string | null {
@@ -108,7 +108,7 @@ async function connectAndReveal(
   environmentId: string,
   name: string,
   options: OpenCloudWorkspaceOptions = {},
-  /** The workspace's branch: its own worktree is the one to open (EP-6). */
+  /** The workspace's branch: its own worktree is the one to open. */
   branch: string | null = null
 ): Promise<OpenOutcome> {
   options.onHost?.(toRuntimeExecutionHostId(environmentId))
@@ -205,7 +205,7 @@ async function pairAndReveal(
     const environments = await window.api.runtimeEnvironments.list()
     const saved = environments.some((e) => e.id === binding.environmentId)
     if (saved) {
-      // PAIRED-WAKE: an existing pairing connects straight to the VM, which a sleeping one can't
+      // An existing pairing connects straight to the VM, which a sleeping one can't
       // answer; wake it first (billing refusals read like a teammate's grant refusal below).
       const refused = await wakeIfAsleep(workspace)
       if (refused) {
@@ -282,7 +282,7 @@ async function openOnce(
       const local = (await window.api.cloudWorkspaces.localWorkspaces()).find(
         (l) => l.sandboxId === workspace.id
       )
-      // Only with this window's row: a record alone (after a re-sign-in) would reveal nothing (REG-8b).
+      // Only with this window's row: a record alone (after a re-sign-in) would reveal nothing.
       if (local && hasLocalSidebarRow(local)) {
         activateAndRevealWorktree(
           local.worktreeId,

@@ -15,7 +15,7 @@ import {
 export function useWorktreeCloudAgentHold(worktreeId: string): CloudAgentHold | null {
   const holds = useCloudAgentHolds()
   const tabIds = useAppStore((state) => state.tabsByWorktree[worktreeId])
-  // A structured chat's hold is keyed by its own tab (CHAT-BANNERS).
+  // A structured chat's hold is keyed by its own tab.
   const chatTabs = useAppStore((state) => state.unifiedTabsByWorktree[worktreeId])
   if (holds.length === 0 || (!tabIds?.length && !chatTabs?.length)) {
     return null
@@ -25,7 +25,7 @@ export function useWorktreeCloudAgentHold(worktreeId: string): CloudAgentHold | 
 }
 
 /**
- * N-03 (design-squad): the sidebar row's mark for a workspace whose agent waits on its pane's strip
+ * The sidebar row's mark for a workspace whose agent waits on its pane's strip
  * ("Set up once" or a sign-in renewal). It replaces the toast that followed the user around: away
  * from the workspace this mark is the signal; in it, the strip asks.
  */
@@ -68,7 +68,7 @@ export function CloudAgentHeldMark({
           data-cloud-agent-held={hold.reason}
           className={cn(
             'inline-flex size-3.5 shrink-0 items-center justify-center',
-            // V3-01: a restored launch waiting for Start is no alarm: muted, not the amber key.
+            // A restored launch waiting for Start is no alarm: muted, not the amber key.
             waiting ? 'text-muted-foreground' : 'text-status-warning-text'
           )}
         >

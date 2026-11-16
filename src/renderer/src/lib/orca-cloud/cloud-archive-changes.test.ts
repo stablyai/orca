@@ -1,5 +1,5 @@
-// Every archive, unarchive and delete from this desktop tells Home's archived count to read again
-// (ARCHIVE-REACH), so a cached 0 never hides "Show archived" for its 5-minute TTL.
+// Every archive, unarchive and delete from this desktop tells Home's archived count to read again,
+// so a cached 0 never hides "Show archived" for its 5-minute TTL.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cloudArchiveVersion } from './cloud-archive-changes'
 import { archiveCloudWorkspace, unarchiveCloudWorkspace } from './orca-cloud-workspace-actions'

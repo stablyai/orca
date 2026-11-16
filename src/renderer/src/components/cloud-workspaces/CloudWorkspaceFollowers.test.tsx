@@ -8,7 +8,7 @@ import { DIRECTORY, presence, SELF_ID } from './cloud-workspaces.test-fixture'
 
 afterEach(() => cleanup())
 
-describe('workspaceFollowerEntries (PARITY-FOLLOW)', () => {
+describe('workspaceFollowerEntries', () => {
   it('lists the creator, then followers, then visitors, each once, with live state', () => {
     expect(
       workspaceFollowerEntries({
@@ -28,7 +28,7 @@ describe('workspaceFollowerEntries (PARITY-FOLLOW)', () => {
   })
 })
 
-describe('CloudWorkspaceFollowers (PARITY-FOLLOW)', () => {
+describe('CloudWorkspaceFollowers', () => {
   const entries = workspaceFollowerEntries({
     creatorId: 'user_grace',
     followers: ['user_linus', 'user_mae', 'user_alan', SELF_ID],

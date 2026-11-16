@@ -30,7 +30,7 @@ export function renderOrcaCloudSettingsSections(
     /** Replaces the nav's plain-text description on the page. */
     description?: React.ReactNode
   }[] = [
-    // S0, moved here from Settings › Agent accounts (which keeps a link row to this page).
+    // Cloud agent sign-ins, moved here from Settings › Agent accounts (which keeps a link row to this page).
     {
       id: 'cloud-agent-sign-ins',
       pane: <OrcaCloudAccountsSection hideHeader />,

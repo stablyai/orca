@@ -1,4 +1,4 @@
-// Ask for the gone-sandbox prune now instead of at the next 10-minute relist (LC-2). A sandbox
+// Ask for the gone-sandbox prune now instead of at the next 10-minute relist. A sandbox
 // deleted elsewhere (Home, another desktop, the CLI, the control plane) otherwise kept its row as
 // "Orca Cloud · Couldn't start" until then, or for good when the app didn't stay open that long.
 // The prune itself still needs proof: a list miss plus one confirming read (not found/destroyed).

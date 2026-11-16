@@ -103,7 +103,7 @@ afterEach(() => {
 })
 
 describe('ProjectCombobox', () => {
-  // Regression: D4's cloud-only rows once used a `github:` key prefix, which swallowed every
+  // Regression: the cloud-only GitHub rows once used a `github:` key prefix, which swallowed every
   // GitHub project (ids are `github:<owner>/<repo>`) so picking one did nothing.
   it('commits a GitHub project, with or without cloud-only repositories listed', () => {
     for (const cloudRepos of [
@@ -159,7 +159,7 @@ describe('ProjectCombobox', () => {
     expect(onValueChange).not.toHaveBeenCalled()
   })
 
-  // PROJ-MENU: a short "GitHub" header, one line per repository, and the cloud-only fact in each
+  // A short "GitHub" header, one line per repository, and the cloud-only fact in each
   // row's accessible name (never only in the badge).
   it('lists cloud-only repositories under "GitHub", one line each, named for screen readers', () => {
     act(() => {

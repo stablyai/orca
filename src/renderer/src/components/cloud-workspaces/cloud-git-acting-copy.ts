@@ -1,4 +1,4 @@
-// GH-ACTING-LINE: who a cloud workspace's pushes and PRs go out as right now, in words. The control
+// Who a cloud workspace's pushes and PRs go out as right now, in words. The control
 // plane decides (the only person, else a shared workspace's latest sender within the hour, else
 // Orca's bot) and says so in the workspace's `githubActing`; this only puts it into words.
 // Nothing when it's absent (an older control plane, a row the caller can't open), or for `off` /
@@ -55,7 +55,11 @@ export function gitActingLine(answer: CloudGitActing | null, t: Translate): GitA
       }
     case 'transferred':
       // A workspace that changed owners is the App's on GitHub for good: connecting wouldn't change it.
-      return { text: t('cloudGitActing.bot', 'Pushes and PRs go out as Orca bot'), connect: false, userId: null }
+      return {
+        text: t('cloudGitActing.bot', 'Pushes and PRs go out as Orca bot'),
+        connect: false,
+        userId: null
+      }
     case 'sender_not_connected':
     case 'reconnect':
       return {
@@ -68,8 +72,5 @@ export function gitActingLine(answer: CloudGitActing | null, t: Translate): GitA
 
 /** The caveat that holds whatever the line says: approvals are refused inside a workspace. */
 export function gitActingCaveat(t: Translate): string {
-  return t(
-    'cloudGitActing.caveat',
-    'Approve pull requests on GitHub. Workspaces can’t approve.'
-  )
+  return t('cloudGitActing.caveat', 'Approve pull requests on GitHub. Workspaces can’t approve.')
 }

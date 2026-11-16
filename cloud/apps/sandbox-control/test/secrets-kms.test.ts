@@ -372,7 +372,7 @@ describe('secret store with SECRETS_KEK_SOURCE=kms', () => {
   })
 })
 
-describe('WORKER-XREQ-PROMISE: no request ever waits on another request’s KMS load', () => {
+describe('no request ever waits on another request’s KMS load', () => {
   it('two loads at once on a cold isolate each call KMS; once one has a keyring, later calls reuse it', async () => {
     const env = { ...kmsEnv(), SECRETS_KEK_WRAPPED: kms.wrap(K1, 'k1'), SECRETS_KEK_ID: 'k1', SECRETS_KMS_KEY: KEY_NAME } as unknown as Env
     // A source no earlier test loaded: a cold keyring.

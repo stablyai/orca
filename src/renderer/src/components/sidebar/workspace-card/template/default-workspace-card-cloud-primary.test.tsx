@@ -1,4 +1,4 @@
-// PAIRED-BADGE: the "primary" badge and star the LIVE card template draws (default-workspace-card.json
+// The "primary" badge and star the LIVE card template draws (default-workspace-card.json
 // through the element registry) are gated on the cloud row check, so an Orca Cloud workspace's own
 // checkout (owned, or paired from birth) never reads as a repo's primary checkout. #560 put this gate
 // in a header nothing rendered; this test goes through the registry the sidebar actually uses.

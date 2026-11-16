@@ -3,7 +3,7 @@ import { cloudWokeActionFor, runCloudWokeAction } from './cloud-wake-hint-action
 
 const pane = { tabId: 'tab-1', leafId: 'leaf-1', worktreeId: 'wt-1' }
 
-describe('the woke-up strip action (JA-15)', () => {
+describe('the woke-up strip action', () => {
   it('a Claude pane runs the shared agent Restart and types nothing into the pane', () => {
     const sendInput = vi.fn()
     const restart = vi.fn()

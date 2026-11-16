@@ -1,4 +1,4 @@
-// ENV-STALE: a workspace booted from an environment build snapshot (or resumed from an older image) runs the
+// A workspace booted from an environment build snapshot (or resumed from an older image) runs the
 // orcad that image was built with, so VM fixes never reached it. Each golden build now publishes its orcad and
 // in-VM CLI as a commit-pinned bundle; at boot and wake, a sandbox whose orcad is behind the region's active
 // golden installs that bundle before orcad starts.

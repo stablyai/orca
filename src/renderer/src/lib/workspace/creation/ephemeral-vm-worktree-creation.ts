@@ -59,7 +59,7 @@ async function prepareEphemeralVmRecipeRequest(
     vmEnvironmentId: undefined
   })
   if (recipe.provider === 'orca-cloud') {
-    // CREATE-GH-STEP: asked alongside Start sandbox, so it adds nothing when access is fine.
+    // The GitHub access step: asked alongside Start sandbox, so it adds nothing when access is fine.
     beginCloudCreateGitHubAccess(
       creationId,
       orcaCloudGitHubRepoUrl(store.repos.find((repo) => repo.id === recipe.sourceRepoId))
@@ -203,7 +203,7 @@ async function prepareEphemeralVmRecipeRequest(
     return null
   }
   if (recipe.provider === 'orca-cloud') {
-    // CREATE-GH-STEP: held here, before Open workspace, while the GitHub step asks for access.
+    // The GitHub access step: held here, before Open workspace, while the GitHub step asks for access.
     const github = await gateCloudCreateOnGitHubAccess(creationId)
     if (!github.proceed || !useAppStore.getState().pendingWorktreeCreations[creationId]) {
       notePhase(creationId, 'failed')
@@ -312,7 +312,7 @@ function cloudCreateIdempotency(recipeId: string, creationId: string): { idempot
   return key ? { idempotencyKey: key } : {}
 }
 
-/** N-01: reports a create phase to main's app log (no-op in the web client). */
+/** Reports a create phase to main's app log (no-op in the web client). */
 function notePhase(creationId: string, phase: CloudCreateRendererPhase): void {
   window.api.ephemeralVm.notePhase?.({ provisionId: creationId, phase })
 }

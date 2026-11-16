@@ -93,7 +93,7 @@ export const reassignAsAdmin = defineFixture({
     )
 })
 
-/** Archiving a teammate's running workspace from the team list stops their agents (DS-01). */
+/** Archiving a teammate's running workspace from the team list stops their agents. */
 export const archiveTeammateRunning = defineFixture({
   width: 640,
   render: () =>
@@ -116,7 +116,7 @@ export const archiveTeammateRunning = defineFixture({
     )
 })
 
-/** Deleting a workspace from the team list (one this computer doesn't run): DS-07 copy. */
+/** Deleting a workspace from the team list (one this computer doesn't run). */
 export const deleteFromTeamList = defineFixture({
   width: 640,
   render: () =>

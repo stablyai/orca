@@ -2,7 +2,7 @@
 // result per feature (with the run it came from), benchmarks, gaps, cost and the resource ledger.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { relative } from 'node:path'
-import { CONDUCTOR, EARLIER } from './bench'
+import { EARLIER, PEER } from './bench'
 import { CATALOG, SECTIONS, type Feature } from './catalog'
 import { config } from './env'
 import { loadRuns, percentile, type CheckResult, type Resource, type RunFile } from './run-state'
@@ -70,7 +70,7 @@ function evidenceHtml(result: CheckResult, run: RunFile): string {
 }
 
 /** Independent-audit caps (findings.json auditCaps): a check that passes on a weaker bar than the
- * Conductor column is shown as partial, with the reason, until the stronger proof exists. */
+ * Peer column is shown as partial, with the reason, until the stronger proof exists. */
 function auditCap(id: string): string | null {
   return (loadFindings() as { auditCaps?: Record<string, string> }).auditCaps?.[id] ?? null
 }
@@ -87,7 +87,7 @@ function featureRow(f: Feature, hit: { result: CheckResult; run: RunFile } | und
   const detail = (cap ? `<b>Audit cap (partial):</b> ${esc(cap)}<br>` : '') + (hit ? esc(hit.result.detail) : `No check result yet; waiting on <b>${esc(f.owner)}</b>.`)
   return `<tr><th>${esc(f.feature)}<div class="small muted"><code>${esc(f.id)}</code> · ${esc(f.priority)} · ${esc(f.owner)}</div></th>
 <td class="${s.cls} c">${s.label}</td><td>${detail}</td><td>${hit ? evidenceHtml(hit.result, hit.run) : ''}</td>
-<td>${esc(f.conductor)}</td><td>${f.better ? esc(f.better) : ''}</td></tr>`
+<td>${esc(f.peer)}</td><td>${f.better ? esc(f.better) : ''}</td></tr>`
 }
 
 function benchTable(runs: RunFile[]): string {
@@ -105,9 +105,9 @@ function benchTable(runs: RunFile[]): string {
     const n = b?.samples.length ?? 0
     return `<tr><th><code>${esc(name)}</code></th><td class="c">${n}</td><td class="c ${n >= 10 ? '' : 'w'}">${b ? sec(percentile(b.samples, 50)) : 'pending'}</td>
 <td class="c">${b ? sec(percentile(b.samples, 95)) : ''}</td><td class="c">${b && b.samples.length >= 20 ? sec(percentile(b.samples, 99)) : ''}</td><td class="c">${b ? `${sec(Math.min(...b.samples))} – ${sec(Math.max(...b.samples))}` : ''}</td>
-<td>${esc(CONDUCTOR[name] ?? '')}</td><td>${esc(EARLIER[name] ?? '')}</td><td class="small">${b ? `run ${esc(b.run.runId)}${b.note ? `<br>${esc(b.note)}` : ''}` : ''}</td></tr>`
+<td>${esc(PEER[name] ?? '')}</td><td>${esc(EARLIER[name] ?? '')}</td><td class="small">${b ? `run ${esc(b.run.runId)}${b.note ? `<br>${esc(b.note)}` : ''}` : ''}</td></tr>`
   })
-  return `<div class="tablewrap"><table><thead><tr><th>Metric</th><th>n</th><th>p50</th><th>p95</th><th>p99 (n≥20)</th><th>min – max</th><th>Conductor (documented)</th><th>Our earlier numbers</th><th>Source</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`
+  return `<div class="tablewrap"><table><thead><tr><th>Metric</th><th>n</th><th>p50</th><th>p95</th><th>p99 (n≥20)</th><th>min – max</th><th>Peer (documented)</th><th>Our earlier numbers</th><th>Source</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`
 }
 
 function ledgerTable(runs: RunFile[]): string {
@@ -161,7 +161,7 @@ img{max-width:260px;border:1px solid var(--border);border-radius:4px}.kpi span{d
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style></head><body><main>
 <h1>Orca Cloud evaluation report</h1>
-<p class="sub">Generated ${esc(new Date().toISOString().slice(0, 16).replace('T', ' '))}Z by <code>cloud/apps/acceptance</code> (branch <code>cloud/w9-eval</code>) from ${runs.length} run(s) in <code>acceptance-runs/</code>.
+<p class="sub">Generated ${esc(new Date().toISOString().slice(0, 16).replace('T', ' '))}Z by <code>cloud/apps/acceptance</code> from ${runs.length} run(s) in <code>acceptance-runs/</code>.
 Real Vercel Sandbox VMs (team lovecast, Pro, iad1) via the DEV control plane <code>${esc(config.controlPlaneUrl)}</code> and DEV billing <code>${esc(config.billingUrl)}</code>; Stripe TEST mode only.
 Parity bar: <a href="conductor-parity-matrix.html">conductor-parity-matrix.html</a>. Each row shows the most recent result for that feature and the run it came from.</p>
 <div class="callout kpi"><b>Status (${CATALOG.length} features):</b>
@@ -174,7 +174,7 @@ Parity bar: <a href="conductor-parity-matrix.html">conductor-parity-matrix.html<
 <b>Last run:</b> ${lastRun ? `${esc(lastRun.runId)} (${esc(lastRun.startedAt.slice(0, 16))}Z, target ${esc(lastRun.target.integrationSha ?? lastRun.target.desktopRef ?? 'API only')})` : 'none'} ·
 <b>Eval cost so far:</b> ≈ $${cost.usd.toFixed(2)} Vercel compute (${cost.vcpuHours.toFixed(2)} vCPU-h, upper bound at list price) · <b>Leaked resources:</b> ${leaked.length === 0 ? '0 ✅' : `<span style="color:var(--bad-fg)">${leaked.length}</span>`}</div>
 <h2>Features</h2>
-<div class="tablewrap"><table><thead><tr><th>Feature</th><th>Status</th><th>Result</th><th>Evidence</th><th>Conductor</th><th>Better than Conductor</th></tr></thead><tbody>${sections}</tbody></table></div>
+<div class="tablewrap"><table><thead><tr><th>Feature</th><th>Status</th><th>Result</th><th>Evidence</th><th>Peer</th><th>Better than the peer</th></tr></thead><tbody>${sections}</tbody></table></div>
 <h2>Benchmarks</h2>
 <p class="small muted">Nearest-rank percentiles. Definitions: <code>create.api</code> = POST /v1/sandboxes until orcad is ready (golden snapshot boot + private repo clone);
 <code>create.usable</code> adds the user's client connecting (orca CLI, E2EE handshake); <code>*.firstEcho</code> adds registering the project, opening a PTY and seeing a typed command echoed

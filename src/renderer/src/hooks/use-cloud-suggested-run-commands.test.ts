@@ -7,7 +7,7 @@ const lines = (text: string): string[] =>
     'command' in entry.command ? entry.command.command : ''
   )
 
-describe('cloud Run menu suggestions (JA-31)', () => {
+describe('cloud Run menu suggestions', () => {
   it('suggests test, typecheck, lint, build, dev from package.json, in that order', () => {
     const pkg = JSON.stringify({
       scripts: { dev: 'vite', lint: 'eslint .', typecheck: 'tsc', test: 'vitest', other: 'x' }

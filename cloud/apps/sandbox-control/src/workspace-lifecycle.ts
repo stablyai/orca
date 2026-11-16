@@ -62,7 +62,7 @@ const ARCHIVE_DRAIN_SECONDS = 60
  * surface (scheduler, toasts, plans); must equal billing's plan `idleSleepMinutes` (test-enforced).
  */
 export const DEFAULT_IDLE_SLEEP_MINUTES = ORCA_CLOUD_IDLE_SLEEP_MINUTES
-// A legacy `large` row is the same 8 vCPU box as standard and billing counts it 1x (U18).
+// A legacy `large` row is the same 8 vCPU box as standard and billing counts it 1x.
 // Billing's overage price (the shared constant); every size counts 1x. COST_CENTS_PER_HOUR can override.
 export const DEFAULT_CENTS_PER_HOUR: Record<MachineSize, number> = {
   standard: ORCA_CLOUD_OVERAGE_CENTS_PER_HOUR,

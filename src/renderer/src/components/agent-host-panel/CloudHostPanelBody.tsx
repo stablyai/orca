@@ -1,5 +1,5 @@
 // The panel on an Orca Cloud host: section 1 from the Orca account, sections 2–3 from Cloud secrets
-// (W6's CloudPanelSections) with the A6 offer for keys only on this computer. Every read goes to the
+// (CloudPanelSections) with the offer for keys only on this computer. Every read goes to the
 // control plane; the sandbox is never asked, so an asleep one stays asleep.
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
@@ -158,7 +158,7 @@ export function useCloudHostPanelBody(
     />
   )
   // Signed out of Orca: one notice in section 1; Cloud secrets can't be read either.
-  // W6's two sections under section 1.
+  // The two Cloud secrets sections under section 1.
   const cloudSections =
     load.kind === 'signedOut' ? null : (
       <>

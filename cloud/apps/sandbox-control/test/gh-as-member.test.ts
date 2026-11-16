@@ -1,4 +1,4 @@
-// GH-AS-MEMBER: gh in the VM carries the sender's placeholder; on api.github.com the Worker signs with the
+// gh as the member: gh in the VM carries the sender's placeholder; on api.github.com the Worker signs with the
 // member's own token only for REST under the workspace repo and for allowlisted mutations pinned to it.
 import { SignJWT, createLocalJWKSet, exportJWK, generateKeyPair } from 'jose'
 import { describe, expect, it } from 'vitest'
@@ -88,7 +88,7 @@ const createPr = (repositoryId: string) => ({
   variables: { input: { repositoryId, baseRefName: 'main', headRefName: 'f', title: 't' } }
 })
 
-describe('GH-AS-MEMBER on api.github.com', () => {
+describe('gh as the member on api.github.com', () => {
   it('gh pr create in the workspace repo goes out as the member', async () => {
     const t = await setup()
     expect((await t.api('/graphql', 'POST', createPr('R_app'))).status).toBe(200)
@@ -129,7 +129,7 @@ const sentBy = (t: Awaited<ReturnType<typeof setup>>, user: string, at: number) 
 const MERGE = { query: 'mutation { mergePullRequest(input: { pullRequestId: "PR_in" }) { clientMutationId } }' }
 const COMMENT = { query: 'mutation { addComment(input: { subjectId: "PR_in", body: "x" }) { clientMutationId } }' }
 
-describe('APPROVALS-REFUSED: no approval leaves a workspace; merges are the owner’s', () => {
+describe('no approval leaves a workspace; merges are the owner’s', () => {
   it('an approval through the owner’s gh is refused (403, never sent); comments and other reviews are the owner', async () => {
     const t = await setup()
     const before = t.upstream.length
@@ -168,7 +168,7 @@ describe('APPROVALS-REFUSED: no approval leaves a workspace; merges are the owne
     expect((await app('/repos/acme/app/pulls/7/reviews', { event: 'APPROVE' })).status).toBe(403)
     expect((await app('/graphql', { query: 'mutation { addPullRequestReview(input: { pullRequestId: "PR_x", event: APPROVE }) { clientMutationId } }' })).status).toBe(403)
     expect(t.upstream.length).toBe(before)
-    // Review G2/G4: an escaped path or a dismissal is refused too.
+    // An escaped path or a dismissal is refused too.
     expect((await app('/repos/acme/app/pulls/7/%72eviews', { event: 'APPROVE' })).status).toBe(403)
     expect((await t.api('/repos/acme/app/pulls/7/reviews/3/dismissals', 'PUT', { message: 'x' }, `Bearer orca-ph-${t.id}`)).status).toBe(403)
     expect((await t.api('/repos/acme/app/pulls/7/%72eviews', 'POST', { event: 'APPROVE' })).status).toBe(403)

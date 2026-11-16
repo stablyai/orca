@@ -28,7 +28,7 @@ import { useCloudSetupFlow } from './use-cloud-setup-flow'
 const SETTLE_MS = 1_500
 
 /**
- * The × leaves setup. Nothing starts later (JA-01): the page and its auto-start go away, and the
+ * The × leaves setup. Nothing starts later: the page and its auto-start go away, and the
  * on-disk draft is dropped. The draft stays one click away in a toast, as a filled composer.
  */
 export function exitCloudSetup(request: CloudSetupPageRequest): void {
@@ -92,7 +92,7 @@ function ActiveCloudSetupPage({
   const agentLabel = isOrcaCloudAccountAgent(request.agent) ? agentName(request.agent, t) : null
   // Rows can all read done for a moment right after a sign-in, before billing, GitHub and agent
   // accounts answer for the new account. Done must hold for SETTLE_MS before "All set". A hidden
-  // page never starts on its own (RR-b): it waits at "All set" for Start.
+  // page never starts on its own: it waits at "All set" for Start.
   const done = flow.action === 'done'
   const { starting, heldForStart, start } = useCloudSetupAutoStart({
     done,

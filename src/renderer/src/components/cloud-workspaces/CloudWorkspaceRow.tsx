@@ -276,7 +276,7 @@ export function CloudWorkspaceRow({
         </span>
       </button>
 
-      {/* TEAM-SHARING-HOLD: who's here only exists on a shared workspace. */}
+      {/* Who's here only exists on a shared workspace. */}
       {teamSharing ? (
         <PresenceStack
           presence={w.presence}

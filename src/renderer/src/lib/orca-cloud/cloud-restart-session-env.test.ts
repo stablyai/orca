@@ -17,7 +17,7 @@ const { withOrcaCloudSessionEnv, ORCA_CLOUD_SESSION_ENV_REFRESH } =
   await import('./cloud-restart-session-env')
 const PANE = { tabId: 't1', leafId: 'l1' }
 
-describe('withOrcaCloudSessionEnv (RA-11 restart)', () => {
+describe('withOrcaCloudSessionEnv (account restart)', () => {
   it('refreshes the cloud shell’s session env before the relaunch, once', () => {
     const out = withOrcaCloudSessionEnv({ command: "claude '--resume' 's1'", x: 1 }, PANE)
     expect(out).toEqual({

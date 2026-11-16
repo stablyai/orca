@@ -15,7 +15,7 @@ async function limited() {
   return { h, id: body.sandbox.id as string }
 }
 
-describe('a malformed ORCA_PLATFORM_HOST_SUFFIXES (PLATFORM-SUFFIX-GUARDS)', () => {
+describe('a malformed ORCA_PLATFORM_HOST_SUFFIXES', () => {
   it('fails the health route a post-deploy smoke hits, with the code only; the log names the bad entry', async () => {
     const h = await createHarness()
     expect(await h.call('GET', '/v1/health')).toMatchObject({ status: 200, body: { ok: true } })

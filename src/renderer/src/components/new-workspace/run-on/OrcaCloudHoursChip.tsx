@@ -1,4 +1,4 @@
-// The build sheet's "Trial · 2 sandbox hours left" chip (A7, O4): which hours this start spends.
+// The build sheet's "Trial · 2 sandbox hours left" chip: which hours this start spends.
 import React from 'react'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { useOrcaCloudRunTargetAccess } from '../orca-cloud-billing-cache'

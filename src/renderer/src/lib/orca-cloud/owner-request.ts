@@ -1,6 +1,6 @@
-// "Copy request for an owner" (REQUEST-COPY-SHARE): someone who can't install the Orca GitHub App
+// "Copy request for an owner": someone who can't install the Orca GitHub App
 // copies a message for an owner of the repository's org, with the install page that preselects
-// the repository. Shared by the refused-clone card (CLONE-ACCESS-ERROR) and the push notice.
+// the repository. Shared by the refused-clone card and the push notice.
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'

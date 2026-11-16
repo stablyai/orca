@@ -33,7 +33,7 @@ function page(...names: string[]) {
   }
 }
 
-describe('GH-LIST-MISSING: the GitHub list is never silently empty', () => {
+describe('the GitHub list is never silently empty', () => {
   beforeEach(() => {
     auth.identity = 'profile\0owner\0org\0owner'
     invalidateOrcaCloudGitHubRepositories()

@@ -109,7 +109,7 @@ export async function resumeEphemeralVmWorkspace(
   }
   // Opening takes over a wake started on intent: its progress and any failure now show.
   claimPredictiveWake(worktreeId)
-  // A PAIRED cloud workspace has no VM record here: the control plane wakes it (PAIRED-WAKE).
+  // A PAIRED cloud workspace has no VM record here: the control plane wakes it.
   if (worktreeId in getCloudWorkspaceSnapshot().paired) {
     const { wakePairedCloudWorkspaceIfAsleep } = await import('@/lib/orca-cloud/paired-cloud-wake')
     return wakePairedCloudWorkspaceIfAsleep(worktreeId)

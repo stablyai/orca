@@ -24,7 +24,7 @@ export function CloudWorkspaceRowBadges({
 }): React.JSX.Element {
   const t = useTranslate()
   const revealOpen = revealNumber
-  // TEAM-SHARING-HOLD: every workspace is private while sharing is held; no badge says so.
+  // Every workspace is private while sharing is held; no badge says so.
   const teamSharing = useCloudTeamSharingEnabled()
   return (
     <>

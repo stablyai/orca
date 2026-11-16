@@ -87,7 +87,7 @@ export function useNativeChatStructuredPaneNotices({
     onRechecked
   })
   const availability = useNativeChatAvailabilityNotice({
-    // V3-01b: a chat held on its Orca Cloud strip says what to do there, not the generic sign-in.
+    // A chat held on its Orca Cloud strip says what to do there, not the generic sign-in.
     unavailable: useCloudHeldChatUnavailable(props.sessionId, controller.unavailable),
     setup,
     agent: props.agent,

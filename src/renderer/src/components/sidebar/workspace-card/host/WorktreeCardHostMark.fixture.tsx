@@ -133,7 +133,7 @@ export const localOnly = defineFixture({
   render: () => <Rows rows={localRows.map((worktree) => ({ worktree, repo: local }))} />
 })
 
-/** SLEEP-IN-PROGRESS: asleep, its read-only copy still saving (beside one already asleep). */
+/** Asleep, its read-only copy still saving (beside one already asleep). */
 export const savingReadOnlyCopy = defineFixture({
   width: 320,
   store: {

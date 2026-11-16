@@ -1,4 +1,4 @@
-// SHARED-MEMBER-SLEEP-HANG: a member on a teammate's shared cloud workspace sees Sleep disabled with
+// A member on a teammate's shared cloud workspace sees Sleep disabled with
 // who can do it; a refusal that still happens (role changed mid-session) is a warning toast.
 import { useEffect } from 'react'
 import { toast } from 'sonner'
@@ -23,7 +23,7 @@ export const memberSleepDisabled = defineFixture({
       <DropdownMenu open modal={false}>
         <DropdownMenuTrigger asChild>
           <button type="button" className="text-sm">
-            endpass-shared
+            shared-feature
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-64">
@@ -47,7 +47,7 @@ function RefusedToast(): React.JSX.Element {
   useEffect(() => {
     // After the Toaster has mounted: a toast raised before it subscribes is not shown.
     const timer = window.setTimeout(
-      () => showPairedSleepRefusedToast('endpass-shared', 'fixture'),
+      () => showPairedSleepRefusedToast('shared-feature', 'fixture'),
       100
     )
     return () => {

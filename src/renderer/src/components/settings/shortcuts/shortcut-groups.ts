@@ -35,7 +35,7 @@ export function groupDefinitions(
   const hiddenAgentActionIds = new Set<KeybindingActionId>(
     disabledAgentTabActionIds(disabledTuiAgents)
   )
-  // SHARE-LINKS-HOLD: no ⌘⌥⇧L entry while share links are held.
+  // No ⌘⌥⇧L entry while share links are held.
   if (!cloudTeamSharingEnabled()) {
     hiddenAgentActionIds.add(CLOUD_SHARE_LINK_ACTION_ID)
   }

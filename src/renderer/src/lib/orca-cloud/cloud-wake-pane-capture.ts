@@ -1,5 +1,5 @@
 // What a cloud terminal pane notes while its workspace is asleep (or waking), before the woken
-// terminal attaches: the Rerun hint (JA-15 / WAKE-RERUN) and its pre-sleep output (WAKE-SCROLLBACK).
+// terminal attaches: the Rerun hint and its pre-sleep output.
 import type { Terminal } from '@xterm/xterm'
 import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'

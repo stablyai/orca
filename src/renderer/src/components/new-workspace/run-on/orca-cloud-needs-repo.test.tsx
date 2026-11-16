@@ -14,7 +14,7 @@ afterEach(() => {
   cleanup()
 })
 
-describe('Orca Cloud on a plain-folder project (RR-c1)', () => {
+describe('Orca Cloud on a plain-folder project', () => {
   it('waits for a GitHub repository only while Orca Cloud is on a folder with none picked', () => {
     const base = {
       cloudSelected: true,
@@ -81,7 +81,7 @@ describe('Orca Cloud on a plain-folder project (RR-c1)', () => {
   })
 })
 
-describe('RR-c1 submit-time validation (useNeedsRepoSubmitGuard)', () => {
+describe('submit-time validation (useNeedsRepoSubmitGuard)', () => {
   it('before Create: no error; Create (button or ⌘↵, one handler) never submits; the error shows', () => {
     const submit = vi.fn()
     const { result } = renderHook(() => useNeedsRepoSubmitGuard({ hasRepos: true }, submit))

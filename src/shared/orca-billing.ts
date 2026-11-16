@@ -198,7 +198,7 @@ export type OrcaBillingOverageResult =
   | { status: 'cap-too-high' }
   | { status: 'failed'; error: string }
 
-/** Another team the signed-in user is on, and its plan state (cloud start B2, "Switch to <team>"). */
+/** Another team the signed-in user is on, and its plan state ("Switch to <team>"). */
 export type OrcaBillingTeamPlan = {
   orgId: string
   plan: string | null
@@ -228,7 +228,7 @@ export type OrcaBillingTrialClaimResult =
   | { status: 'signed-out' }
   /** The trial can't be granted (abuse limits, already used, or the team had a plan). */
   | { status: 'unavailable' }
-  /** A personal account: setup creates a team first (O1). */
+  /** A personal account: setup creates a team first. */
   | { status: 'team-required' }
   | { status: 'failed'; error: string }
 

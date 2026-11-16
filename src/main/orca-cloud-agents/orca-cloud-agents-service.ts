@@ -1,4 +1,4 @@
-// The one-time Orca Cloud agent setup on this computer (spec §5 S0). Holds each agent's setup step,
+// The one-time Orca Cloud agent setup on this computer. Holds each agent's setup step,
 // runs Claude's setup-token or the Codex broker, and stores the result in the Orca account. Replies
 // and broadcasts carry states and codes only: no token, no CLI output, no server message.
 import {
@@ -160,7 +160,7 @@ export function createOrcaCloudAgentsService(deps: OrcaCloudAgentsServiceDeps) {
       isSignInUrl: (url) => isProviderSignInUrl('claude', url),
       onSetup: (setup) => update('claude', setup),
       onToken: async (token) => {
-        // RS-5: no label: this computer's Claude Code email may be another account's; the server names it.
+        // No label: this computer's Claude Code email may be another account's; the server names it.
         await storeClaude(token, null, owner)
       },
       onDone: () => {
@@ -348,7 +348,7 @@ export function createOrcaCloudAgentsService(deps: OrcaCloudAgentsServiceDeps) {
     workspaceSources: (workspaceId: string): Promise<OrcaCloudAgentsResult<AgentSourcesView>> =>
       attempt((client) => client.sources(undefined, workspaceId)),
 
-    /** The per-workspace override (S1-b). It applies at the next request (D10). */
+    /** The per-workspace override. It applies at the next request. */
     setWorkspaceSource: (
       agent: OrcaCloudAccountAgent,
       source: AgentSource,

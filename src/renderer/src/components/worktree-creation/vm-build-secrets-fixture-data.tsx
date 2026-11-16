@@ -1,4 +1,4 @@
-// Builders for the build sheet's Secrets row fixtures (S2), on the Orca Cloud sheet.
+// Builders for the build sheet's Secrets row fixtures, on the Orca Cloud sheet.
 import React from 'react'
 import type { CloudSecretsCaller } from '../../../../shared/cloud-secrets/cloud-secrets-wire'
 import type { CloudSecretsAskData } from '../cloud-secrets-ask/cloud-secrets-ask-model'

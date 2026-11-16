@@ -1,4 +1,4 @@
-// PARITY-FOLLOW: the sidebar's Following section for a team account, under the nav and above
+// The sidebar's Following section for a team account, under the nav and above
 // Projects, from the shared live read of the team's workspaces. A personal account shows nothing.
 // The team list itself lives in the web console.
 import React, { useMemo } from 'react'

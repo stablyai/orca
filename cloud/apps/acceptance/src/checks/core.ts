@@ -39,7 +39,7 @@ export const coreChecks: Record<string, Check> = {
   },
 
   'sub.size': async (ctx) => {
-    // Conductor parity: 8 vCPU / 16 GB for everyone. Standard is 8/16 since core U18 (#194); the old
+    // Peer parity: 8 vCPU / 16 GB for everyone. Standard is 8/16 since #194; the old
     // `large` value maps to Standard.
     const p = await ctx.primary()
     const r = await ctx.exec(p.sandbox.session!.id, 'nproc; awk "/MemTotal/{print int(\\$2/1024/1024+0.5)}" /proc/meminfo')
@@ -53,7 +53,7 @@ export const coreChecks: Record<string, Check> = {
     const ok = cpus === 8 && (memGb ?? 0) >= 15 && large.status === 200 && largeSize === 'standard'
     return {
       status: ok ? 'pass' : 'fail',
-      detail: `standard = ${cpus} vCPU / ${memGb} GB (Conductor: 8 / 16); machineSize 'large' -> ${large.status} as '${largeSize}'; xlarge -> ${xl.status} (${xl.body?.error})`,
+      detail: `standard = ${cpus} vCPU / ${memGb} GB (peer: 8 / 16); machineSize 'large' -> ${large.status} as '${largeSize}'; xlarge -> ${xl.status} (${xl.body?.error})`,
       evidence: [log('nproc/mem', r.stdout)]
     }
   },
@@ -64,7 +64,7 @@ export const coreChecks: Record<string, Check> = {
     const [size, avail] = r.stdout.trim().split(/\s+/).map((v) => Number.parseInt(v, 10))
     return {
       status: (size ?? 0) >= 60 ? 'pass' : (size ?? 0) >= 30 ? 'partial' : 'fail',
-      detail: `disk ${size} GB (${avail} GB free). Conductor: 64 GB. Low-disk banner is desktop UI (W1 #47), driven by status.metrics.diskUsedBytes.`,
+      detail: `disk ${size} GB (${avail} GB free). Peer: 64 GB. Low-disk banner is desktop UI (#47), driven by status.metrics.diskUsedBytes.`,
       evidence: [log('df', r.stdout)]
     }
   },

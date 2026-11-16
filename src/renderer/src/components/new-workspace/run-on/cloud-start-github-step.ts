@@ -1,6 +1,6 @@
-// The setup panel's GitHub row (D1–D3) from np4-github's repository-access check, in the panel's
-// CloudSetupStep shape. D1 is fixed by the primary button ("Give access and start"); D2 (an owner
-// must approve on GitHub) and D3 (no GitHub remote) block a start, so ⌘↵ runs on this computer.
+// The setup panel's GitHub row from the repository-access check, in the panel's CloudSetupStep
+// shape. Missing access is fixed by the primary button ("Give access and start"); an owner who
+// must approve on GitHub, or no GitHub remote, blocks a start, so ⌘↵ runs on this computer.
 import type { OrcaCloudGitHubSetupRow } from '@/lib/orca-cloud/orca-cloud-github-setup-row'
 import type { CloudSetupStep } from './cloud-start-model'
 
@@ -33,7 +33,7 @@ export function toGitHubSetupStep(
     case 'failed':
       return {
         ...shared,
-        // D3 isn't a step that failed; the row explains itself, with no status word.
+        // No GitHub remote isn't a step that failed; the row explains itself, with no status word.
         status: row.status ?? '',
         state: 'failed',
         need: 'github',

@@ -11,7 +11,7 @@ import type { RecipeForwardedEnvSummary } from '../../../../shared/ephemeral-vm-
 const NAMES_IN_LINE = 3
 
 /**
- * P-4 (agent accounts spec §4, Q9): recipe create scripts get this computer's environment, or only
+ * Agent accounts spec §4: recipe create scripts get this computer's environment, or only
  * what the recipe's passEnv allows (`summary.narrowed`). A warning only; names, never values.
  * `summary` null while loading, undefined when unavailable.
  */

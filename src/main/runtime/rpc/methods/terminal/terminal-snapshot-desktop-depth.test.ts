@@ -43,7 +43,7 @@ function historyRowsIn(
 const desktop = [DESKTOP_SUBSCRIBE_SCROLLBACK_ROWS, DESKTOP_SNAPSHOT_BYTE_BUDGET] as const
 const mobile = [MOBILE_SUBSCRIBE_SCROLLBACK_ROWS, MOBILE_SNAPSHOT_BYTE_BUDGET] as const
 
-describe('desktop-depth subscribe snapshots (N-02)', () => {
+describe('desktop-depth subscribe snapshots', () => {
   it('a desktop subscriber gets the whole history a local terminal keeps (seq 1 2000)', async () => {
     const { runtime } = pane(2000, 5)
     const snapshot = await serializeBudgetedMobileSnapshot(runtime, 'pty', undefined, ...desktop)

@@ -72,7 +72,7 @@ function setup() {
   return { viewport, terminal, xtermStops, frames, remove, atBottomRemount }
 }
 
-describe('listenForWakeScroll (WAKE-SCROLLBACK-SCROLL)', () => {
+describe('listenForWakeScroll', () => {
   it("records the line from a wheel on xterm's viewport, which stops the wheel's propagation", () => {
     const { viewport, terminal, xtermStops, frames, atBottomRemount } = setup()
     const wheel = new WheelEvent('wheel', { deltaY: -400, bubbles: true, cancelable: true })

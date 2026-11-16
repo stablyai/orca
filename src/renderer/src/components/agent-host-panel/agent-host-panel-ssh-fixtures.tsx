@@ -1,5 +1,5 @@
 // AgentHostPanel fixtures for a classic SSH host (no Orca server): status and code sign-in over
-// SSH exec (spec §4 annotations 4–5, Q8). Re-exported from AgentHostPanel.fixture.tsx.
+// SSH exec (spec §4 annotations 4–5). Re-exported from AgentHostPanel.fixture.tsx.
 import React from 'react'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import type { AgentApiKeySummary } from '../../../../shared/agent-api-keys/agent-api-key-catalog'

@@ -59,7 +59,7 @@ describe('billing client', () => {
     expect(seen[0]?.init?.redirect).toBe('error')
   })
 
-  describe('EP-9: the token is for the team this device shows', () => {
+  describe('the token is for the team this device shows', () => {
     beforeEach(() => resetBillingExplicitOrgForTests())
 
     it("asks auth for this device's team explicitly and accepts a token for it", async () => {

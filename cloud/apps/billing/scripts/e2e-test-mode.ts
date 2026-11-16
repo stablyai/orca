@@ -477,7 +477,7 @@ for (const [name, card, threeDS] of [
   await stripe('POST', `/v1/checkout/sessions/${session.id}/expire`).catch(() => undefined)
 }
 
-// ---- 9b. One-time trial (N11): no card, 1 at a time, metered until used up, once per user ----
+// ---- 9b. One-time trial: no card, 1 at a time, metered until used up, once per user ----
 const orgT = `e2e-${runId}-trial`
 const accountT = `org:${orgT}`
 const offered = await entitlement(orgT)

@@ -1,4 +1,4 @@
-// GH-CREATE-NO-ROW: a create with no project here yet (a GitHub-only Orca Cloud create) has a
+// A create with no project here yet (a GitHub-only Orca Cloud create) has a
 // pending row atop the list when grouped by project, as in every other grouping; a create with a
 // project still sits atop its own project.
 import { describe, expect, it } from 'vitest'

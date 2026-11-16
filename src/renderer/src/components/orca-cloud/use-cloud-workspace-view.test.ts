@@ -27,7 +27,7 @@ afterEach(() => {
   useAppStore.setState({ ephemeralVmRuntimesByWorkspaceId: {} })
 })
 
-describe('cloud workspace state right after Sleep (RA-13)', () => {
+describe('cloud workspace state right after Sleep', () => {
   it('reads asleep from the local VM record while the last status read still says ready', () => {
     act(() => {
       seedCloudWorkspaceSnapshot({

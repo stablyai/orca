@@ -3,7 +3,7 @@ import { presence, SELF_ID, workspace } from '../../cloud-workspaces/cloud-works
 import { followOffer } from '../../cloud-workspaces/CloudWorkspacePeople'
 import { followedWorkspaces, workspaceDisplayLabel } from './followed-workspaces'
 
-describe('followedWorkspaces (PARITY-FOLLOW)', () => {
+describe('followedWorkspaces', () => {
   it("lists teammates' workspaces you follow, most recently active first, with who's here", () => {
     const rows = followedWorkspaces(
       [
@@ -57,7 +57,7 @@ describe('followedWorkspaces (PARITY-FOLLOW)', () => {
   })
 })
 
-describe('followOffer (PARITY-FOLLOW)', () => {
+describe('followOffer', () => {
   it("offers Follow on a teammate's workspace, never on your own or from an older control plane", () => {
     const grace = { createdBy: 'user_grace', ownerUserId: 'user_grace' }
     expect(followOffer(workspace({ ...grace, following: false }), SELF_ID)).toBe(false)
@@ -66,7 +66,7 @@ describe('followOffer (PARITY-FOLLOW)', () => {
     expect(followOffer(workspace(grace), SELF_ID)).toBeNull()
   })
 
-  it('follows the current owner after a hand-off, not the creator (FOLLOW-OWN-AFTER-TRANSFER)', () => {
+  it('follows the current owner after a hand-off, not the creator', () => {
     // Created by Grace, handed to me: mine now, so no Follow.
     const handedToMe = workspace({
       createdBy: 'user_grace',

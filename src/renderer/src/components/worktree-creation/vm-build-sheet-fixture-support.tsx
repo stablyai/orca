@@ -124,7 +124,7 @@ export function stubBillingRole(
   plan: Record<string, unknown> = {}
 ): void {
   // A team with overage on at a $25 cap (so the spend-cap blocker suggests $50); no plan numbers
-  // unless the fixture gives them (ENTITLEMENTS-C).
+  // unless the fixture gives them.
   const entitlement = {
     ...sampleTeam,
     canManageBilling,

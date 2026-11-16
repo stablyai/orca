@@ -72,7 +72,7 @@ export function SidebarAccountMenu(): React.JSX.Element {
   const mountedRef = useMountedRef()
 
   const identity = getAccountMenuIdentity(authStatus)
-  // The plan's hours are the team's, so they sit on the team row below, not under your name (JA-32).
+  // The plan's hours are the team's, so they sit on the team row below, not under your name.
   const billingResult = useBillingState().result
   const usage = accountMenuUsageLines(billingResult, t, locale)
   const visibleItems = selectVisibleAccountMenuItems(registeredItems, authStatus)
@@ -99,7 +99,7 @@ export function SidebarAccountMenu(): React.JSX.Element {
     if (open) {
       // Warm while users read the menu so feedback is loaded before selection.
       void loadSidebarFeedbackDialog().catch(() => {})
-      // JA-07: the team row's hours must match Plan & billing, so re-read if the cached answer is
+      // The team row's hours must match Plan & billing, so re-read if the cached answer is
       // over a minute old (hours tick down while sandboxes run).
       if (
         authStatus?.state === 'connected' &&

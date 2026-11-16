@@ -1,4 +1,4 @@
-// GH-SOLO regression (orca-plugins#89): the server acts as the owner (memberMayAct), but the VM picked a member
+// Regression for a solo owner (orca-plugins#89): the server acts as the owner (memberMayAct), but the VM picked a member
 // only from an attested sender. Codex typed into directly in a terminal has none, so gh and git went out as the
 // bot. The VM now acts as the owner (the solo mark) with no sender.
 import { execFileSync, spawnSync } from 'node:child_process'

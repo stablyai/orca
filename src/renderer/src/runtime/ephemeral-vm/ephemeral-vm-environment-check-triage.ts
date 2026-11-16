@@ -1,5 +1,5 @@
 // Which environment-check results stop an Orca Cloud create, and which only become a notice in the
-// opened workspace. Peers (Conductor, Capy, Codex, Cursor) open the workspace and surface problems
+// opened workspace. Other tools open the workspace and surface problems
 // there; only a sandbox nobody can work in should hold the create on the build sheet.
 import type { EnvironmentDoctorCheck } from '../../../../shared/workspace-setup/environment-doctor/environment-doctor-types'
 
@@ -17,7 +17,7 @@ const FATAL_CHECK_IDS: ReadonlySet<string> = new Set([
 /**
  * Each kind has its own plain words (CloudSetupNotices). `disk`: little free space; `tool`: a CLI the
  * repository needs isn't installed. A check with no kind of its own never shows as the doctor's
- * bare label (ENV-NOTICE-ACTIONS).
+ * bare label.
  */
 export type CloudSetupNoticeKind = 'environmentHeld' | 'push' | 'fetch' | 'setup' | 'disk' | 'tool'
 
@@ -27,14 +27,14 @@ export type CloudSetupNotice = {
   id: string
   kind: CloudSetupNoticeKind
   check: EnvironmentDoctorCheck
-  /** 'environmentHeld': the environment whose setup didn't run here (ENV-BUILD-CHURN). */
+  /** 'environmentHeld': the environment whose setup didn't run here. */
   environmentId?: string
 }
 
 const ENVIRONMENT_HELD = /^\[orca-cloud\] environment-held ([A-Za-z0-9_-]{1,64})$/m
 
 /**
- * ENV-BUILD-CHURN: the create's log says its environment was held back (its build is below the
+ * The create's log says its environment was held back (its build is below the
  * security floor): the workspace started without the environment's setup.
  */
 export function environmentHeldNotice(
@@ -108,7 +108,7 @@ function noticeKind(
       return check.status === 'fail' ? 'push' : null
     case 'git.fetch':
       // Reaching origin needs the sandbox's GitHub credential (swapped in by egress); a fresh sandbox
-      // can miss it for a moment, so the workspace confirms before saying so (ENV-ORIGIN-TOAST).
+      // can miss it for a moment, so the workspace confirms before saying so.
       return check.status === 'fail' ? 'fetch' : null
     case 'setup.run':
       return options.setupRunsOnCreate ? null : 'setup'

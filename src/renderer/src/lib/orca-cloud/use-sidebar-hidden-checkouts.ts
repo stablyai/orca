@@ -25,17 +25,17 @@ type CloudScopeState = Pick<AppState, 'runtimeEnvironments'> &
  * otherwise (another team's, or one whose team is not known yet). Newline-joined so the selector
  * compares by value.
  *
- * A PAIRED server (`orcaCloudPaired`, PAIRED-NO-ROW) of the active account is `~host`: its owner is
+ * A PAIRED server (`orcaCloudPaired`) of the active account is `~host`: its owner is
  * never in `cloudAccountIdByEnvironmentId` (that knows this desktop's own runtimes only), and on a
  * GitHub-only create its primary checkout IS the workspace's row. So its primary hides only beside a
- * linked worktree of the same project (EP-6: a teammate's shared workspace listed "master" too). A
- * paired server stamped with ANOTHER account (PAIRED-ACCOUNT-FILTER) is `-host`, like another team's
- * owned sandbox; one saved before pairings were stamped is `~host` until the prune stamps it.
+ * linked worktree of the same project (otherwise a teammate's shared workspace listed "master" too).
+ * A paired server stamped with ANOTHER account is `-host`, like another team's owned sandbox;
+ * one saved before pairings were stamped is `~host` until the prune stamps it.
  */
 export function selectOrcaCloudHostScopeKey(state: CloudScopeState): string {
   const active = orcaCloudAccountId(state.orcaProfileAuthStatus?.cloud)
   const owners = state.cloudAccountIdByEnvironmentId ?? {}
-  // GH-CREATE-NO-ROW: a GitHub-only create's pending row stands for its server's rows until the
+  // A GitHub-only create's pending row stands for its server's rows until the
   // hand-off removes it; both change in one store update, so the row never shows twice.
   const handingOff = Object.values(state.pendingWorktreeCreations ?? {}).flatMap((entry) =>
     entry.request.githubSource && entry.pairingHostId ? [`-${entry.pairingHostId}`] : []
@@ -76,7 +76,7 @@ export function parseOrcaCloudHostScopeKey(key: string): {
 let hiddenCache: { key: string; ids: ReadonlySet<string> } | null = null
 
 /**
- * STALE-RUN-TARGET: the Orca Cloud hosts the sidebar scopes out (another team's sandbox, owned or
+ * The Orca Cloud hosts the sidebar scopes out (another team's sandbox, owned or
  * PAIRED). Run on and the reconnect banner use the same rule, so a team switch never leaves another
  * team's workspace listed as a place to run, or announced as reconnecting, where it can't be used.
  */
@@ -102,8 +102,8 @@ export function useSidebarHiddenCheckouts(): HiddenVmCheckouts {
 }
 
 /**
- * TEAM-SWITCH-STALE-PANE: runtime servers without another team's cloud sandboxes, so the status bar's
- * host list and count follow the same team scope as the sidebar (n57: "3 hosts" after the switch).
+ * Runtime servers without another team's cloud sandboxes, so the status bar's
+ * host list and count follow the same team scope as the sidebar (not "3 hosts" after a team switch).
  */
 export function withoutHiddenHostEnvironments<E extends { id: string }>(
   environments: readonly E[],

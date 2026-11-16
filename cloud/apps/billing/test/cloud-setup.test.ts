@@ -102,7 +102,7 @@ describe('cloud setup sessions', () => {
     expect(created.body.url).toMatch(/^https:\/\/auth\.test\/cloud\/setup\/start\?/)
     expect(session).toBe(created.body.id)
 
-    // Personal account: the team step is added (O1) and is the active one.
+    // Personal account: the team step is added and is the active one.
     expect((await poll(session)).body.steps).toEqual([
       { id: 'account', state: 'done' },
       { id: 'team', state: 'active' },
@@ -163,7 +163,7 @@ describe('cloud setup sessions', () => {
     expect(finished.error).toBeNull()
   })
 
-  it('sends a team whose trial is used up through T3 Checkout that returns to the setup pages', async () => {
+  it('sends a team whose trial is used up through the plan page and Checkout, which return to the setup pages', async () => {
     const { h, trials, create, poll, pages } = await setup()
     trials.trials.set('org:o1', { includedSeconds: 7200, usedSeconds: 7200, exhausted: true })
     const owner = { authorization: `Bearer ${await h.desktopToken({ sub: 'u1', org: 'o1', orgRole: 'owner' })}` }
@@ -254,7 +254,7 @@ describe('cloud setup sessions', () => {
   })
 })
 
-describe('team-first checkout (O1/N4)', () => {
+describe('team-first checkout', () => {
   it('refuses a personal-account Checkout with team_required', async () => {
     const h = await createHarness()
     const solo = await h.desktopToken({ sub: 'u3' })

@@ -1,4 +1,4 @@
-// PARITY-FOLLOW: one shared read of the team's cloud workspaces (with live presence) for the
+// One shared read of the team's cloud workspaces (with live presence) for the
 // surfaces that show who is where: the sidebar's Team list and the top bar's people. Mounted
 // surfaces share one poller per account, so several of them cost one request per beat.
 import { useEffect, useSyncExternalStore } from 'react'
@@ -98,7 +98,7 @@ export function patchTeamWorkspaceLive(id: string, patch: Partial<CloudWorkspace
 }
 
 /**
- * Follow or unfollow (PARITY-FOLLOW). The live list updates from the server's answer; a refusal
+ * Follow or unfollow. The live list updates from the server's answer; a refusal
  * leaves it as it was and resolves false (the caller says so).
  */
 export async function setCloudWorkspaceFollow(id: string, follow: boolean): Promise<boolean> {

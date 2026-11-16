@@ -1,4 +1,4 @@
-# CODEX-RELAY: the ChatGPT relay. chatgpt.com refuses Cloudflare Workers' egress, so the sandbox-control
+# The ChatGPT relay. chatgpt.com refuses Cloudflare Workers' egress, so the sandbox-control
 # Worker's egress proxy sends chatgpt.com requests through this Cloud Run service (cloud/apps/chatgpt-relay).
 # It forwards to chatgpt.com only, on the Codex paths the Worker allows, and streams the answers back.
 # Only the invoker service account (held by the Worker as CHATGPT_RELAY_SERVICE_ACCOUNT) may call it.

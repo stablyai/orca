@@ -1,8 +1,8 @@
-// PC-3b: what the "not set up" strip's buttons do. Set up once runs S0's setup for the agent (the
+// What the "not set up" strip's buttons do. Set up once runs the one-time setup for the agent (the
 // same flow as Settings › Orca Cloud › Cloud agent sign-ins); Start releases the held launch. Cancel during a
 // setup stops only that setup: the launch stays held on "Set up once", and a setup finished from
 // anywhere (here or Settings) turns the strip into "Start". Cancel with no setup running gives up
-// the held launch and opens a plain shell, like cancelling any held launch (RR-a).
+// the held launch and opens a plain shell, like cancelling any held launch.
 import {
   releaseCloudAgentHold,
   startCloudAgentHold
@@ -26,7 +26,7 @@ export function cloudSetupStripActions(args: {
   openLink: (url: string) => void
   useApiKey: () => void
   /**
-   * CHAT-CANCEL-ERROR: a structured chat has no plain shell to fall back to, so Cancel only stops a
+   * A structured chat has no plain shell to fall back to, so Cancel only stops a
    * running setup and the chat stays held on its strip. Closing the chat gives the launch up.
    */
   keepHoldOnCancel?: boolean
@@ -45,7 +45,7 @@ export function cloudSetupStripActions(args: {
         args.copyText(action.code)
         args.openLink(action.url)
       } else if (action.kind === 'start') {
-        // HELD-STALE-COVERED: Start reads the account again; a revoked sign-in shows Renew instead.
+        // Start reads the account again; a revoked sign-in shows Renew instead.
         void startCloudAgentHold(holdKey)
       } else if (action.kind === 'signInInsideWorkspace') {
         // Remembered for this person and agent. The saved reply releases every launch held on "Set up

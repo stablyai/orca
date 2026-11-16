@@ -73,7 +73,7 @@ function renderBlocker(
   return { onContinue, onBackToDraft }
 }
 
-describe('billing blocker on the creating sheet (JA-21)', () => {
+describe('billing blocker on the creating sheet', () => {
   it('out of hours: Turn on with a $25 cap saves overage and continues the create', async () => {
     setOverage.mockResolvedValue({ status: 'ok', entitlement: sampleTeam })
     const { onContinue } = renderBlocker('hoursUsed')
@@ -172,7 +172,7 @@ describe('billing blocker on the creating sheet (JA-21)', () => {
     ['trial_unavailable', true, 'This account or team already used its trial.'],
     [null, true, 'Your team needs a plan to use Orca Cloud.']
   ] as const)(
-    'no plan (%s, admin=%s): only a plan that existed has "ended" (EP-11)',
+    'no plan (%s, admin=%s): only a plan that existed has "ended"',
     (reason, admin, body) => {
       renderBlocker('plan', { reason, canManageBilling: admin })
       expect(screen.getByText(body)).toBeTruthy()

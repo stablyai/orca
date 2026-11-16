@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { shouldAbandonCloudHold } from './CloudAgentSignInStripPortals'
 
-describe('NOACCT-MISLABEL: when a held launch is given up', () => {
+describe('when a held launch is given up', () => {
   it('keeps waiting while its workspace is just off screen (pane unmounted, tab open)', () => {
     expect(shouldAbandonCloudHold({ paneConnected: false, tabOpen: true })).toBe(false)
   })

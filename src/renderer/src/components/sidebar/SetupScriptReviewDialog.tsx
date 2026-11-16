@@ -26,7 +26,7 @@ export type SetupScriptReviewDialogProps = {
   /** Imported run actions; saved with setup and started from the Run button. */
   runActions?: string | null
   skippedFields: readonly string[]
-  /** PARITY-DNF: Amazon Linux install lines translated to apt-get, and what to check. */
+  /** Amazon Linux install lines translated to apt-get, and what to check. */
   ubuntuNote?: UbuntuNote | null
   provenance: string | null
   isSaving: boolean

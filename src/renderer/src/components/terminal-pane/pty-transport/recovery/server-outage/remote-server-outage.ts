@@ -14,7 +14,7 @@ export function selectRetryingOutageEnvironmentId(
   worktreeId: string | null | undefined
 ): string | null {
   const environmentId = selectWorkspaceRuntimeEnvironmentId(state, worktreeId)
-  // STALE-RUN-TARGET: another team's cloud workspace is out of scope here (same rule as the
+  // Another team's cloud workspace is out of scope here (same rule as the
   // sidebar), so its dropped connection is not announced; it is checked again on its own team.
   if (
     !environmentId ||

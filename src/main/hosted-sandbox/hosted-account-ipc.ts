@@ -1,5 +1,5 @@
 // Account-level Orca Cloud calls for the window: product config (measured timings), GitHub connect,
-// repository access (cloud-start N2) and the repositories the account's GitHub installations reach.
+// repository access and the repositories the account's GitHub installations reach.
 import { ipcMain, shell } from 'electron'
 import { ORCA_CLOUD_WORKSPACE_CHANNELS as CH } from '../../shared/hosted-sandbox/cloud-workspace-api'
 import type { HostedSandboxConfigResponse } from '../../shared/hosted-sandbox/hosted-sandbox-wire'
@@ -140,7 +140,7 @@ export function registerHostedAccountHandlers(
     }
     try {
       const answer = await client.githubRepoAccess(target)
-      // A public repository that can't push gets an install page too (CREATE-GH-STEP).
+      // A public repository that can't push gets an install page too.
       const installs =
         answer.access === 'missing' ||
         (answer.access === 'public' &&
@@ -172,9 +172,9 @@ export function registerHostedAccountHandlers(
     }
   })
 
-  // D4: a repository the account's GitHub installations reach, with no clone here. The sandbox
+  // A repository the account's GitHub installations reach, with no clone here. The sandbox
   // clones it; nothing touches this computer's disk. With a provision id the window shows the build
-  // sheet: progress streams on the build log channel and Cancel aborts it (GH-CREATE-SHEET).
+  // sheet: progress streams on the build log channel and Cancel aborts it.
   ipcMain.handle(CH.createFromGitHub, async (event, args?: CreateFromGitHubArgs) => {
     const slug = typeof args?.repoUrl === 'string' ? githubRepoSlug(args.repoUrl) : null
     if (!slug) {

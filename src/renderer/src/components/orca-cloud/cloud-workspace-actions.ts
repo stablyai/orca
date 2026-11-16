@@ -126,7 +126,7 @@ export function runArchiveWithUndo(
     reportFailure?: () => boolean
     /** The copy synced to this computer, which goes with the archive (said in the toast). */
     localCopy?: { hasLocalCopy: boolean; editedHere: number }
-    /** ARCHIVE-HOOK: it sleeps and will be woken for its archive hook; the toast offers Skip. */
+    /** It sleeps and will be woken for its archive hook; the toast offers Skip. */
     onSkipHookWake?: () => void
   }
 ): Promise<boolean> {
@@ -250,7 +250,7 @@ export async function runArchiveCloudWorkspace(
     cloudArchiveHookNeedsWake(target)
   ])
   // A Delete that started while the preview was read found no queued archive to cancel yet:
-  // the workspace is going away, so this archive never queues (INT-T1).
+  // the workspace is going away, so this archive never queues.
   if (isCloudWorkspaceDeleting(workspaceId)) {
     return
   }

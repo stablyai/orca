@@ -1,4 +1,4 @@
-// SEC-4: customer-visible activity for cloud secrets (migration 0054_secret_events.sql).
+// customer-visible activity for cloud secrets (migration 0054_secret_events.sql).
 //   GET /v1/secrets/activity?view=personal[&cursor=…][&limit=…]  -> {events, nextCursor}
 // Each create, update and delete is recorded in the same D1 transaction as the write, so a change
 // never lands without its record. A record holds who, when, the scope and the variable NAME. It never

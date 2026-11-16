@@ -1,4 +1,4 @@
-// PARITY-FOLLOW: Following in the sidebar, between the nav and Projects.
+// Following in the sidebar, between the nav and Projects.
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { DIRECTORY, SELF_ID } from '../../cloud-workspaces/cloud-workspaces.test-fixture'
 import { SidebarFollowingSection, type SidebarFollowedWorkspace } from './SidebarFollowingSection'

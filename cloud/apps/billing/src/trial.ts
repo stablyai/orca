@@ -1,4 +1,4 @@
-// One-time trial (spec N11, decision O7): 2 sandbox hours per new team, no card, no Stripe.
+// One-time trial: 2 sandbox hours per new team, no card, no Stripe.
 // - Granted explicitly (POST /v1/billing/trial, or grantTrial() from the setup session), never as a
 //   side effect of reading entitlements, and only to a team (org:) that has never had a
 //   subscription or a trial.
@@ -147,7 +147,7 @@ async function hashKey(kind: ClaimKind, value: string): Promise<string> {
 
 const GITHUB_ID = /^\d{1,20}$/
 
-/** Trials belong to teams (O1): 'org:<id>', or 'dev:org:<id>' for dev operator accounts. */
+/** Trials belong to teams: 'org:<id>', or 'dev:org:<id>' for dev operator accounts. */
 export function isTeamAccount(accountId: string): boolean {
   return /^(dev:)?org:/.test(accountId)
 }
@@ -261,7 +261,7 @@ export async function grantTrial(
 ): Promise<GrantOutcome> {
   const db = env.BILLING_DB
   if (!isTeamAccount(input.accountId)) {
-    // O1: trials and plans belong to a team; setup creates one first.
+    // Trials and plans belong to a team; setup creates one first.
     return { ok: false, reason: 'team_required' }
   }
   const existing = await trialRow(db, input.accountId)

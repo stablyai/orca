@@ -72,7 +72,7 @@ describe('Orca Cloud host scope', () => {
   })
 })
 
-describe('a paired-from-birth cloud workspace (PAIRED-NO-ROW)', () => {
+describe('a paired-from-birth cloud workspace', () => {
   it('keeps its sidebar row: its paired server is neither hidden nor primary-scoped', () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the selector reads only these fields.
     const state = {
@@ -86,7 +86,7 @@ describe('a paired-from-birth cloud workspace (PAIRED-NO-ROW)', () => {
     const hosts = parseOrcaCloudHostScopeKey(selectOrcaCloudHostScopeKey(state))
     expect(hosts.hiddenHostIds.has('runtime:gh')).toBe(false)
     expect(hosts.primaryHostIds.has('runtime:gh')).toBe(false)
-    // EP-6: paired-scoped, so its base clone hides only beside a linked worktree.
+    // Paired-scoped, so its base clone hides only beside a linked worktree.
     expect(hosts.pairedHostIds.has('runtime:gh')).toBe(true)
     // The owned sandboxes are still scoped by team exactly as before.
     expect([...hosts.hiddenHostIds]).toEqual(['runtime:b', 'runtime:unfiled'])
@@ -98,7 +98,7 @@ describe('a paired-from-birth cloud workspace (PAIRED-NO-ROW)', () => {
   })
 })
 
-describe('paired workspaces scoped by account (PAIRED-ACCOUNT-FILTER)', () => {
+describe('paired workspaces scoped by account', () => {
   const paired = (accountId?: string) => ({
     id: 'gh',
     name: 'orca-sandbox-push-test (cloud)',
@@ -115,7 +115,7 @@ describe('paired workspaces scoped by account (PAIRED-ACCOUNT-FILTER)', () => {
     return parseOrcaCloudHostScopeKey(selectOrcaCloudHostScopeKey(state))
   }
 
-  it("the active team's paired-from-birth row stays visible, never primary-scoped (no PAIRED-NO-ROW)", () => {
+  it("the active team's paired-from-birth row stays visible, never primary-scoped (its row never goes missing)", () => {
     const hosts = hostsFor('team-one', paired('org:team-one'))
     expect(hosts.hiddenHostIds.has('runtime:gh')).toBe(false)
     expect(hosts.primaryHostIds.has('runtime:gh')).toBe(false)
@@ -131,7 +131,7 @@ describe('paired workspaces scoped by account (PAIRED-ACCOUNT-FILTER)', () => {
   })
 })
 
-describe('GH-CREATE-NO-ROW hand-off', () => {
+describe('GitHub-only create pending row hand-off', () => {
   it('hides the server a GitHub-only create is pairing to until its pending row hands off', () => {
     const pairing = (pairingHostId?: string) =>
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the selector reads only these fields.
@@ -154,14 +154,14 @@ describe('GH-CREATE-NO-ROW hand-off', () => {
   })
 })
 
-describe('hidden cloud hosts for Run on and the reconnect banner (STALE-RUN-TARGET)', () => {
+describe('hidden cloud hosts for Run on and the reconnect banner', () => {
   const state = (activeOrgId: string) => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the selector reads only these fields.
     return {
       runtimeEnvironments: [
         {
           id: 'pick',
-          name: 'endpass-pick (cloud)',
+          name: 'feature-pick (cloud)',
           orcaCloudPaired: true,
           orcaCloudPairedAccountId: 'org:eval'
         }
@@ -186,7 +186,7 @@ describe('hidden cloud hosts for Run on and the reconnect banner (STALE-RUN-TARG
   })
 })
 
-describe('the status bar host list after a team switch (TEAM-SWITCH-STALE-PANE)', () => {
+describe('the status bar host list after a team switch', () => {
   it("drops another team's cloud servers and keeps the rest", () => {
     const envs = [{ id: 'eval' }, { id: 'acme' }, { id: 'ssh-box' }]
     expect(withoutHiddenHostEnvironments(envs, new Set(['runtime:eval']))).toEqual([

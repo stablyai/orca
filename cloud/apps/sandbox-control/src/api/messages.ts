@@ -111,7 +111,7 @@ async function settle(
 }
 
 /**
- * What the agent is typed: a teammate's message names its sender (W4: agents address them and
+ * What the agent is typed: a teammate's message names its sender (agents address them and
  * commit as them via `orca-git-as`); nobody can type a leading envelope to impersonate someone else.
  */
 export async function agentText(db: D1Database, workspace: { user_id: string; account_id: string }, sentBy: string, body: string): Promise<string> {

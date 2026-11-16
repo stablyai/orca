@@ -1,4 +1,4 @@
-// W9 simulator run for life.read-asleep-phone: the Orca mobile app shows a SLEEPING workspace's
+// Simulator run for life.read-asleep-phone: the Orca mobile app shows a SLEEPING workspace's
 // "Latest from this workspace" without waking it. Driven in phases so the sim steps (CDP identity
 // install, deep link, screenshot) run between them; see run-read-asleep-sim.sh.
 //   tsx mobile/read-asleep-sim.ts enroll     device session (Ed25519 phone key) for the owner; writes the identity file (0600)

@@ -10,7 +10,7 @@ const snapshot = (ids: string[], paired: Record<string, string>): CloudWorkspace
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the checks read only ids and paired.
   ({ ids: new Set(ids), paired }) as unknown as CloudWorkspaceSnapshot
 
-describe('PAIRED-CHROME row checks', () => {
+describe('row checks', () => {
   it('a status row is an owned or a paired cloud workspace', () => {
     const s = snapshot(['owned'], { paired: 'env-1' })
     expect(isCloudStatusRow(s, 'owned')).toBe(true)
@@ -27,7 +27,7 @@ describe('PAIRED-CHROME row checks', () => {
   })
 })
 
-describe('ARCHIVED-DEAD-ACTIONS archived status', () => {
+describe('archived status', () => {
   it('archived by state or by an archive record; anything else is not', () => {
     const status = (fields: { state: string; archive: { archivedAt: number } | null }) =>
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the check reads only state and archive.

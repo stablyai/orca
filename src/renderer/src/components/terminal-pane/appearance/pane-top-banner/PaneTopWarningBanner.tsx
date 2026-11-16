@@ -64,7 +64,7 @@ export function PaneBannerLearnMore({ onClick }: { onClick: () => void }): React
 type PaneTopBannerTone = 'warning' | 'neutral' | 'accent'
 
 const TONE_CLASSES: Record<PaneTopBannerTone, { stripClass: string; iconClass: string }> = {
-  // GA-P3t: the shared banner severity look (fills and borders that hold up on white panes).
+  // The shared banner severity look (fills and borders that hold up on white panes).
   warning: {
     stripClass: cn(BANNER_TONE.warning.surface, BANNER_TONE.warning.border),
     iconClass: BANNER_TONE.warning.icon

@@ -1,4 +1,4 @@
-// SHARE-LINK-PRIVATE: Copy link says when teammates can't open the link yet, and offers Share with
+// Copy link says when teammates can't open the link yet, and offers Share with
 // team to whoever can; a team workspace keeps the plain "Workspace link copied".
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 

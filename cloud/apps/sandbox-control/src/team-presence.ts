@@ -1,4 +1,4 @@
-// Teammate profiles and Pokes (Conductor 0.91 parity).
+// Teammate profiles and Pokes.
 //   GET  /v1/team/members/:userId/profile?utcOffsetMin=<-840..840>
 //   POST /v1/team/members/:userId/poke
 //   GET  /v1/team/pokes                 the caller's unseen pokes (last 24 h) and their opt-in

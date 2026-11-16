@@ -1,4 +1,4 @@
-// Repo-scope write check for the S4-b secret request card (use-secret-request-card.ts), split out to keep that
+// Repo-scope write check for the secret request card (use-secret-request-card.ts), split out to keep that
 // hook under the file-length limit.
 /** Whether this person can write the workspace repo's scope; asked once per repo per session. */
 const repoWriteCache = new Map<string, Promise<boolean>>()

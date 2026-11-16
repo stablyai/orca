@@ -169,7 +169,7 @@ function EffectiveTab({
 }): React.JSX.Element {
   const t = useTranslate()
   const { effective, reload } = useCloudSecretsEffective(api, repo, mode === 'shared')
-  // SEC-5: a shared workspace gets no personal secrets. Say so where a personal value would matter.
+  // A shared workspace gets no personal secrets. Say so where a personal value would matter.
   const personalInPlay =
     effective.status === 'ready' &&
     effective.value.secrets.some(

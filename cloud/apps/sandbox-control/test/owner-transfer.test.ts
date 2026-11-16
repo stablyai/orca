@@ -1,4 +1,4 @@
-// OWNER-TRANSFER (P0). Handing a workspace to another owner used to accept any user id and rebuild
+// Handing a workspace to another owner used to accept any user id and rebuild
 // a running VM's environment for them at once, so their personal secrets and agent account landed
 // in a VM the previous owner had just been using. Now:
 //   - the new owner must be in the team, by auth's live answer; anything but a clear yes refuses;
@@ -479,7 +479,7 @@ describe('what acted for the previous owner', () => {
     expect(await connectedMembers(db, await t.row())).toEqual(['mallory'])
     expect(memberMayAct(await t.row(), 'mallory')).toBe(true)
     await t.transfer(t.mallory, 'mia')
-    // The disk is the previous owner's: whatever they left there must not act as the new owner (same as D13).
+    // The disk is the previous owner's: whatever they left there must not act as the new owner (same rule as shared workspaces).
     expect(await connectedMembers(db, await t.row())).toEqual([])
     expect(memberMayAct(await t.row(), 'mia')).toBe(false)
     expect(memberMayAct(await t.row(), 'mallory')).toBe(false)
@@ -706,7 +706,7 @@ describe('telling the previous owner', () => {
   })
 })
 
-describe('how long a hand-off took (TRANSFER-SLOW-N60)', () => {
+describe('how long a hand-off took', () => {
   const timingLines = () => logs.filter((line) => line.includes('"owner_transfer_timing"')).map((line) => JSON.parse(line) as Record<string, unknown>)
 
   it('logs one line per completed hand-off: step names and milliseconds, nothing else', async () => {

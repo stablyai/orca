@@ -117,7 +117,7 @@ export async function checkGit(
 }
 
 /**
- * Why `git ls-remote` failed, from git's own words (GH-FETCH-REASON), so the workspace can say
+ * Why `git ls-remote` failed, from git's own words, so the workspace can say
  * whether it's access (nothing to wait for) or the network (Check again). `remoteDenied`: 401/403 or
  * no credential to send. `remoteNotFound`: GitHub's answer for a private repo it won't confirm, too.
  * `remoteUnreachable`: DNS, connect, TLS or a timeout. Unknown wording carries no code.

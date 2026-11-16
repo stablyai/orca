@@ -167,7 +167,7 @@ describe('cloud toast stack (DS-q)', () => {
   })
 
   it('re-issues a card whose copy changed in place, so sonner measures its new height', () => {
-    // Neil: the GitHub App push notice sank on hover and popped back (sonner sized it to its old,
+    // The GitHub App push notice sank on hover and popped back (sonner sized it to its old,
     // shorter height when the stack expanded).
     showCloudToast(AGENT, agentView('Short.'), {}, 0)
     const internal = cloudToastInternalId(AGENT)
@@ -190,7 +190,7 @@ describe('cloud toast stack (DS-q)', () => {
     expect(sonner.custom).not.toHaveBeenCalled()
   })
 
-  describe('workspace scope (N-03)', () => {
+  describe('workspace scope', () => {
     const W1 = 'w1'
     const inWorkspace = (id: string | null) => ({ activeView: 'terminal', activeWorktreeId: id })
 

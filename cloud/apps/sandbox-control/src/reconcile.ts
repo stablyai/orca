@@ -81,7 +81,7 @@ export async function reconcile(deps: LifecycleDeps): Promise<ReconcileSummary> 
     // Design §7.2/§4.5: an operator input changed since this policy was applied, or its last write failed.
     const config = row.session_id ? await policyConfigHash(deps, row) : null
     if (row.session_id && (row.policy_stale_at != null || (row.policy_config_hash ?? null) !== config)) {
-      // Review F3: only a change that removes access fails closed; a first stamp or a widening change retries.
+      // Only a change that removes access fails closed; a first stamp or a widening change retries.
       const reason =
         row.policy_stale_at != null || row.policy_config_hash == null
           ? 'stale_retry'
@@ -93,7 +93,7 @@ export async function reconcile(deps: LifecycleDeps): Promise<ReconcileSummary> 
       })
     }
   }
-  // A4: stopped records that may still hold firewall values (a failed scrub, a timeout, the deploy sweep).
+  // Stopped records that may still hold firewall values (a failed scrub, a timeout, the deploy sweep).
   for (const row of await rowsToScrub(deps.db)) {
     await guard(() => scrubStoppedRecord(deps, row))
   }
@@ -164,7 +164,7 @@ async function reconcileRunning(deps: LifecycleDeps, row: SandboxRow, summary: R
     }
   }
   if (row.github_token_expires_at !== null && row.session_id && row.github_token_expires_at - now < GITHUB_TOKEN_ROTATE_AHEAD_MS) {
-    // EGRESS-REFRESH: the installation token (1 h) rotates in the running policy well before it expires. A new
+    // The installation token (1 h) rotates in the running policy well before it expires. A new
     // token never revokes the old one, so requests in flight on the old one finish undisturbed.
     // A malformed ORCA_PLATFORM_HOST_SUFFIXES leaves the live policy as it is; usage still settles below.
     const git = await refreshGitCredentials(deps, row, row.session_id).catch((error: unknown) => {

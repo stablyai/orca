@@ -1,4 +1,4 @@
-// #503 follow-up (design-squad): a commit that goes out under the workspace identity (Orca Cloud's
+// #503 follow-up: a commit that goes out under the workspace identity (Orca Cloud's
 // name) says once per session how to use your own: connect GitHub in Settings → Account.
 // Pushes and read-only git never say it; orca-git-as's own fallback line is replaced by it.
 import { spawnSync } from 'node:child_process'

@@ -76,7 +76,7 @@ function capture(terminal: Terminal, leafId: string, agentPane = false): void {
   captureWakeScrollback(leafId, terminal, { sleptAt: SLEPT_AT, agentPane, maxRows: 5000 })
 }
 
-describe('WAKE-SCROLLBACK', () => {
+describe('pre-sleep scrollback across a wake', () => {
   it('a shell pane: `seq 1 2000` above the divider, the woken prompt right below, pinned to the bottom', async () => {
     const terminal = pane()
     const seq = Array.from({ length: 2000 }, (_, index) => String(index + 1)).join('\r\n')
@@ -216,7 +216,8 @@ describe('WAKE-SCROLLBACK', () => {
     expect(text(terminal)).toEqual(['$'])
   })
 
-  // m4air run: by "asleep" a resubscribe had replaced 2000 rows with the host's 1000-row snapshot.
+  // Seen in a real run: by "asleep" a resubscribe had replaced 2000 rows with the host's 1000-row
+  // snapshot.
   it('captures once per sleep (at going to sleep): a later look at a replaced buffer changes nothing', async () => {
     const terminal = pane(10)
     const seq = Array.from({ length: 2000 }, (_, index) => String(index + 1)).join('\r\n')
@@ -321,11 +322,11 @@ describe('WAKE-SCROLLBACK', () => {
     const started = performance.now()
     await noteBeforeCloudReplay('leaf-10k', terminal, 'remote:env@@t', () => true)
     const elapsed = performance.now() - started
-    console.info(`[WAKE-SCROLLBACK] pre-replay copy of a 10k-line pane: ${elapsed.toFixed(1)} ms`)
+    console.info(`[wake scrollback] pre-replay copy of a 10k-line pane: ${elapsed.toFixed(1)} ms`)
     expect(elapsed).toBeLessThan(2000)
   })
 
-  // m4air (c): waking remounts the pane at the bottom; the place the person scrolled to comes back.
+  // Waking remounts the pane at the bottom; the place the person scrolled to comes back.
   it('a scroll made while waking survives the remount and is put back after the restore', async () => {
     const before = pane(5)
     await write(before, Array.from({ length: 50 }, (_, index) => `row ${index}`).join('\r\n'))
@@ -340,7 +341,7 @@ describe('WAKE-SCROLLBACK', () => {
     expect(active.getLine(active.viewportY)!.translateToString(true).trimEnd()).toBe('row 12')
   })
 
-  // REG-13: the preview the person scrolled had 33 more rows above their line than the restore
+  // The preview the person scrolled had 33 more rows above their line than the restore
   // writes back (1922 came back as 1955); the line they read is found again by its text.
   it('a scroll made while waking stays on the same line when the restore shifts rows', async () => {
     const lines = Array.from({ length: 2000 }, (_, index) => String(index + 1))
@@ -384,7 +385,7 @@ describe('WAKE-SCROLLBACK', () => {
   })
 })
 
-// WAKE-DIVIDER-WIDTH: the divider never wraps; the longest form that fits, decided at write time.
+// The divider never wraps; the longest form that fits, decided at write time.
 const SGR_CODES = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g')
 
 describe('wakeDividerLine widths', () => {

@@ -1,4 +1,4 @@
-// SHARE-LINKS-HOLD: ⌘⌥⇧L (Copy cloud workspace link) is listed in Settings › Shortcuts and its
+// ⌘⌥⇧L (Copy cloud workspace link) is listed in Settings › Shortcuts and its
 // search only while share links are on.
 import { describe, expect, it, vi } from 'vitest'
 

@@ -1,5 +1,5 @@
 // image/vm/orca-sandbox-env run for real (bash), against a scratch HOME: the Codex account placeholder
-// login (contract D11) and the managed ~/.codex/config.toml staying stable across refreshes.
+// login and the managed ~/.codex/config.toml staying stable across refreshes.
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -44,7 +44,7 @@ function scratch() {
 }
 
 describe('orca-sandbox-env: Codex via the Orca account', () => {
-  it('Codex never refreshes the placeholder itself, keeps HTTPS at the system layer, and has plugins off (CODEX-FIREWALL-SWAP)', () => {
+  it('Codex never refreshes the placeholder itself, keeps HTTPS at the system layer, and has plugins off', () => {
     const { run, file, systemConfig } = scratch()
     run({ ORCA_CODEX_AUTH_PLACEHOLDER: codexPlaceholder({ id: 'sbx_1' }) })
     expect(JSON.parse(file('.codex/auth.json')!).last_refresh).toBe('2099-01-01T00:00:00Z')
@@ -136,9 +136,9 @@ describe('orca-sandbox-env: Codex via the Orca account', () => {
   })
 })
 
-// G9: ~/.claude.json pre-approves ANTHROPIC_API_KEY by its last 20 characters. Only an Orca placeholder's tail may be
+// ~/.claude.json pre-approves ANTHROPIC_API_KEY by its last 20 characters. Only an Orca placeholder's tail may be
 // written; a real key (placeholders off) leaves nothing of itself on disk, and an older image's tail is scrubbed.
-describe('orca-sandbox-env: Claude Code API-key approval (G9)', () => {
+describe('orca-sandbox-env: Claude Code API-key approval', () => {
   const PLACEHOLDER = 'orca-ph-anthropic-api-key-sbx_0123456789abcdef'
   const REAL = 'sk-ant-api03-REALkey-fake-for-tests-0000-TAILTAILTAIL1234'
   const claude = (file: (path: string) => string | null) => JSON.parse(file('.claude.json') ?? '{}')

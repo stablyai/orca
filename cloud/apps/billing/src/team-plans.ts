@@ -1,4 +1,4 @@
-// Cloud start B2: a user signed in on their personal account (or another team) may belong to a
+// A user signed in on their personal account (or another team) may belong to a
 // team that already has a plan. The desktop offers "Switch to <team>" instead of a purchase, so it
 // needs each listed team's plan state, read with the caller's own billing token and NO credential
 // for those teams. Membership (live provider roster) and the team's billing flag come from Orca

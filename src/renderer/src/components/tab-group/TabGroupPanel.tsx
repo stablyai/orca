@@ -329,7 +329,7 @@ export default function TabGroupPanel({
         </div>
       )}
 
-      {/* GIT-SETUP: under the tab row, above the panes; once per workspace, in the top-left group
+      {/* Under the tab row, above the panes; once per workspace, in the top-left group
           whatever has focus, so it never moves between splits. */}
       {reserveCollapsedSidebarHeaderSpace ? <CloudGitSetupStrip worktreeId={worktreeId} /> : null}
       <div

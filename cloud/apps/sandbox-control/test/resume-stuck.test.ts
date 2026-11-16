@@ -1,4 +1,4 @@
-// RESUME-STUCK: a resume whose client quits mid-wake used to leave the row `resuming`, and every
+// A resume whose client quits mid-wake used to leave the row `resuming`, and every
 // later resume answered 409 until the 15 min cron or a Restart. The wake now outlives the request
 // (ctx.waitUntil), a resume joins a wake already in flight, and a stale one is adopted.
 import { describe, expect, it } from 'vitest'

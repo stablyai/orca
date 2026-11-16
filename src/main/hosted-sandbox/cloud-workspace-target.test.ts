@@ -15,7 +15,7 @@ afterEach(() => {
   noteCloudPairingBindings({})
 })
 
-describe('Restart for a paired cloud workspace (PAIRED-WAKE 2/2)', () => {
+describe('Restart for a paired cloud workspace', () => {
   it('restarts its sandbox, reconnects only its server, and reports waking → connecting → ready', async () => {
     noteCloudPairingBindings({
       sbx_gh: { environmentId: 'env-gh' },

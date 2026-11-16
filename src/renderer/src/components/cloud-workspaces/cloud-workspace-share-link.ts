@@ -48,7 +48,7 @@ export async function copyCloudWorkspaceLink(
   chatId?: string | null,
   options: { quiet?: boolean } = {}
 ): Promise<boolean> {
-  // SHARE-LINKS-HOLD: nothing is copied while share links are held.
+  // Nothing is copied while share links are held.
   if (!cloudTeamSharingEnabled()) {
     return false
   }
@@ -68,7 +68,7 @@ export async function copyCloudWorkspaceLink(
   if (options.quiet) {
     return true
   }
-  // SHARE-LINK-PRIVATE: a private workspace's link opens for its owner only. Known from the copy's
+  // A private workspace's link opens for its owner only. Known from the copy's
   // own lookup (or the cache); an unknown visibility keeps the plain toast.
   const known = cloudWorkspaceIdentity(id)
   const visibility = known?.visibility ?? (await lookUpWorkspace(id))?.visibility

@@ -49,9 +49,9 @@ function section(
   })
 }
 
-/** PROJ-MENU option A: "GitHub" header, one line per repository, lock when private, cloud badge. */
+/** The "GitHub" header, one line per repository, lock when private, cloud badge. */
 export const mixed = section({ current: 'stablyai/orca' })
 export const badgeTooltip = section({ tooltip: true })
-/** GH-LIST-MISSING: GitHub's list couldn't be read; the section stays, with Retry. */
+/** GitHub's list couldn't be read; the section stays, with Retry. */
 export const unavailable = section({ unavailable: true })
 export const unavailableRetrying = section({ unavailable: true, retrying: true })

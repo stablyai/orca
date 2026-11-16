@@ -1,4 +1,4 @@
-// SEC-6c: the only log sink for code that handles secret values (secrets.ts, session-env.ts,
+// The only log sink for code that handles secret values (secrets.ts, session-env.ts,
 // env-refresh.ts, egress-proxy.ts, secret-events.ts). Lines are structured JSON with names and
 // counts by design; this layer is the backstop when a field slips through anyway, for example an
 // error message or upstream body that quotes a key. Two passes over the serialized line:

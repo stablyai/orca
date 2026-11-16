@@ -46,7 +46,7 @@ export function TeamMfaSidebarBanner(): React.JSX.Element | null {
           action: {
             label: t('auto.components.teamMfa.setUp', 'Set up two-factor'),
             primary: true,
-            // A plain button: toasts no longer carry a Copy link chevron (AUTH-ONLY-COPY-LINK).
+            // A plain button: toasts no longer carry a Copy link chevron.
             // The sidebar card and Settings, Account keep the split button.
             onClick: () => {
               void window.api.shell.openUrl(toast.setupUrl)

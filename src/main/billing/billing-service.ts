@@ -111,7 +111,7 @@ function prepare(userDataPath: string): Ready {
           call(
             // The team this device shows, from the same profile whose session this is (a local
             // profile switch mid-call must not pair one profile's session with another's team);
-            // never auth's shared "active team" (EP-9).
+            // never auth's shared "active team".
             await mintBillingToken(
               endpoints,
               session.accessToken,
@@ -186,7 +186,7 @@ export async function getOrcaBillingStatus(userDataPath: string): Promise<OrcaBi
   }
 }
 
-/** Plan state for other teams the signed-in user is on (cloud start B2); never switches teams. */
+/** Plan state for other teams the signed-in user is on; never switches teams. */
 export async function getOrcaBillingTeamPlans(
   userDataPath: string,
   orgIds: readonly string[]

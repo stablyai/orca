@@ -189,7 +189,7 @@ export const repoMember = defineFixture({
   )
 })
 
-/** EP-4: the tooltip on a bare "••••", one row per reason. */
+/** The tooltip on a bare "••••", one row per reason. */
 function HintRow({ name, canSeeHints }: { name: string; canSeeHints: boolean }): React.JSX.Element {
   return (
     <div className="flex items-center gap-3 rounded-md border border-border/60 px-3 py-2 pt-12">

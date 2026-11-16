@@ -33,7 +33,7 @@ export type CloudOfflineViewProps = {
   onKeepAwake?: () => void
   /** Kept on screen right after Sleep: nothing here wakes it but "Wake to continue". */
   viewOnly?: boolean
-  /** SLEEP-IN-PROGRESS: its copy is still being saved, or never arrived (never the empty lines). */
+  /** Its copy is still being saved, or never arrived (never the empty lines). */
   copySave?: 'saving' | 'failed' | null
 }
 
@@ -153,7 +153,7 @@ export function CloudWorkspaceOfflineView(props: CloudOfflineViewProps): React.J
                 ) : (
                   <div className="flex flex-col gap-3">
                     {snapshot.terminals.map((terminal, index) => {
-                      // The tab's title, else "Terminal N": never the terminal's internal id (RA-13).
+                      // The tab's title, else "Terminal N": never the terminal's internal id.
                       const title =
                         terminal.title && !terminal.title.startsWith('term_')
                           ? terminal.title
@@ -173,7 +173,7 @@ export function CloudWorkspaceOfflineView(props: CloudOfflineViewProps): React.J
                             </span>
                           </figcaption>
                           <pre
-                            // Greyed: this is what it printed before the sleep, not live output (JA-15).
+                            // Greyed: this is what it printed before the sleep, not live output.
                             className="max-h-72 overflow-auto scrollbar-sleek bg-background px-3 py-2 font-mono text-xs leading-5 text-muted-foreground"
                             tabIndex={0}
                             aria-label={t(

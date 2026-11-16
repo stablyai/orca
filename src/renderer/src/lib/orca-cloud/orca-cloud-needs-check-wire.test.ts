@@ -1,4 +1,4 @@
-// RS-2: a sign-in whose auth check failed ("needs check") reaches the desktop as `expired` plus
+// A sign-in whose auth check failed ("needs check") reaches the desktop as `expired` plus
 // `needsCheck: true`. Every desktop, old ones included, then shows the Renew strip; an unknown state would
 // have read as 'none' ("isn't set up"). The wire never sends a state an old desktop could read as active.
 import { describe, expect, it } from 'vitest'
@@ -14,7 +14,7 @@ const wire = {
   providerEnabled: { claude: true, codex: true }
 }
 
-describe('RS-2 "needs check" on the wire', () => {
+describe('"needs check" on the wire', () => {
   it('parses as expired (needsCheck tolerated), never usable', () => {
     const parsed = AgentCredentialsResponseSchema.parse(wire)
     expect(parsed.claude.state).toBe('expired')

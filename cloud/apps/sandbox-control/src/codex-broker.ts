@@ -1,4 +1,4 @@
-// Codex broker (agent-accounts spec A2, contract D11, flag S2): a person signs Codex in once, in a short-lived
+// Codex broker (behind AGENT_ACCOUNTS_CODEX): a person signs Codex in once, in a short-lived
 // broker sandbox, and the control plane keeps the login (codex-credentials.ts).
 //   POST /v1/agent-credentials/codex/broker      -> {brokerId, verificationUrl, userCode}
 //   GET  /v1/agent-credentials/codex/broker/:id  -> {status: 'pending'|'active'|'failed', error?}
@@ -370,7 +370,7 @@ export async function handleCodexBrokerRoute(
   options: { enabled: boolean; deps: BrokerDeps | null; caller: Pick<SandboxCaller, 'userId' | 'accountId'> }
 ): Promise<Response> {
   const json = (body: unknown, status = 200) => Response.json(body, { status, headers: { 'cache-control': 'no-store' } })
-  // Flag S2 off or the kill switch on: no new logins (a stored one is left alone; DELETE still works).
+  // Codex accounts off or the kill switch on: no new logins (a stored one is left alone; DELETE still works).
   if (!options.enabled) {
     return json({ error: 'not_found' }, 404)
   }

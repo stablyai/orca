@@ -42,7 +42,7 @@ export type CloudWorkspacesApi = {
   list: (query: CloudWorkspaceListQuery) => Promise<CloudWorkspaceListResult>
   get: (id: string) => Promise<CloudWorkspacesResult<CloudWorkspace>>
   patch: (id: string, patch: CloudWorkspacePatch) => Promise<CloudWorkspacesResult<CloudWorkspace>>
-  /** Follow or unfollow a team workspace (PARITY-FOLLOW): the caller's state and its followers. */
+  /** Follow or unfollow a team workspace: the caller's state and its followers. */
   follow: (id: string, follow: boolean) => Promise<CloudWorkspacesResult<CloudWorkspaceFollow>>
   /** Resolves either link form; a slug link for another org fails with reason `other_org` and its `orgId`. */
   resolveLink: (
@@ -102,14 +102,14 @@ export type CloudWorkspacesApi = {
   pokeInbox: () => Promise<CloudWorkspacesResult<PokeInbox>>
   setPokesEnabled: (enabled: boolean) => Promise<CloudWorkspacesResult<boolean>>
   markPokesSeen: (ids: string[]) => Promise<CloudWorkspacesResult<void>>
-  /** OWNER-TRANSFER: the workspace goes to sleep first, so this can take a while. */
+  /** The workspace goes to sleep first, so this can take a while. */
   changeOwner: (id: string, ownerUserId: string) => Promise<CloudWorkspacesResult<OwnerChange>>
   /** Notices for you as a previous owner, in the team you are signed in to. */
   ownerNotices: () => Promise<CloudWorkspacesResult<OwnerChangeNotice[]>>
   dismissOwnerNotice: (id: string) => Promise<CloudWorkspacesResult<void>>
   onOpenLink: (callback: (link: string) => void) => () => void
   /**
-   * EP-8: a cloud workspace's server refused this computer and Orca Cloud won't grant it again (the
+   * A cloud workspace's server refused this computer and Orca Cloud won't grant it again (the
    * account can no longer open it).
    */
   onAccessLost: (

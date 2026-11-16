@@ -1,4 +1,4 @@
-// S0 states (agent-accounts spec §5): settings/agent-accounts/OrcaCloudAccounts:<state>.
+// Cloud agent sign-ins states (agent-accounts spec §5): settings/agent-accounts/OrcaCloudAccounts:<state>.
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import type { OrcaCloudAccountRow } from '@/lib/orca-cloud/orca-cloud-agent-accounts-model'
 import type { OrcaCloudAgentAccountsLoad } from '@/lib/orca-cloud/orca-cloud-agent-accounts-store'
@@ -60,7 +60,7 @@ function fixture(
   })
 }
 
-// RS-5: a Claude credential is always labelled "Claude subscription" (the approved account can't be known).
+// A Claude credential is always labelled "Claude subscription" (the approved account can't be known).
 const CLAUDE_ACTIVE: OrcaCloudAccountRow = {
   kind: 'active',
   label: 'Claude subscription',
@@ -159,7 +159,7 @@ export const removeConfirm = fixture({ claude: CLAUDE_ACTIVE, codex: CODEX_TEAM 
   confirmRemove: 'claude'
 })
 
-/** RA-5: Remove… from an expired row's ⋯ confirms like the active row. */
+/** Remove… from an expired row's ⋯ confirms like the active row. */
 export const expiredRemoveConfirm = fixture(
   { claude: { kind: 'expired', keyKind: null, covered: false }, codex: CODEX_TEAM },
   READY,

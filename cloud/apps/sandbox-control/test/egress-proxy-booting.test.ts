@@ -1,4 +1,4 @@
-// CLONE-BEFORE-RUNNING: a booting VM uses its credential routes before the control plane records it
+// A booting VM uses its credential routes before the control plane records it
 // running (the create's clone of an App-installed private repo, a wake's git). The egress proxy
 // refused every row that wasn't `running`, so those clones got `remote: sandbox_not_running` (403)
 // and a fresh workspace opened empty. It now serves creating/resuming rows too, only for the sandbox
@@ -81,7 +81,7 @@ async function setup() {
   return { h, gitFetch, duringStart, upstream }
 }
 
-describe('CLONE-BEFORE-RUNNING: the egress proxy serves a booting VM its own routes', () => {
+describe('the egress proxy serves a booting VM its own routes', () => {
   it("create: the prelude clone's git is swapped while the row is still creating", async () => {
     const t = await setup()
     const seen: { status: SandboxStatus | null; answer: { status: number; body: string } }[] = []

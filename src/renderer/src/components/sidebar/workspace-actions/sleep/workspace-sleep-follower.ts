@@ -154,7 +154,7 @@ export function followWorkspaceSleep(
       restoreSidebarPosition()
     }
     if (!options.keepBrowserTabs) {
-      // Sleep never changes the tab layout (NEW-01): the tabs, their order and the active one stay;
+      // Sleep never changes the tab layout: the tabs, their order and the active one stay;
       // only their pages are dropped, and each reloads in place when shown after the wake.
       sleepWorktreeBrowserTabs(worktreeId)
     }

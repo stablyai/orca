@@ -27,7 +27,7 @@ export type CloudWokeAction =
  * reboot, so the process is gone. A strip at the top of the pane (it reserves its height, so it
  * never covers terminal rows) says so and offers it back: Rerun for a shell command, or Restart
  * for an agent (its input box is never a command). It never acts by itself, and it goes away once
- * the person types in the pane (JA-15).
+ * the person types in the pane.
  */
 export function CloudWokeProcessesNotice({
   action,

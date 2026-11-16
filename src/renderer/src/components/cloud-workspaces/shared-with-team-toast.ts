@@ -2,7 +2,7 @@ import { toast } from 'sonner'
 import type { Translate } from '@/i18n/use-translate'
 
 /**
- * "Shared with your team", with the one thing that changes for the owner (SEC-5): their personal
+ * "Shared with your team", with the one thing that changes for the owner: their personal
  * secrets stop being injected once teammates can open the workspace.
  */
 export function toastSharedWithTeam(t: Translate): void {

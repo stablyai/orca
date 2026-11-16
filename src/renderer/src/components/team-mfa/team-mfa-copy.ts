@@ -27,7 +27,7 @@ export function teamMfaSurface(policy: OrcaTeamMfaPolicy | null): 'none' | 'bann
   return policy.self === 'pending' ? 'banner' : 'none'
 }
 
-/** From this many days before the deadline the notice stops being quiet (design-squad). */
+/** From this many days before the deadline the notice stops being quiet. */
 export const MFA_URGENT_DAYS = 3
 
 /**

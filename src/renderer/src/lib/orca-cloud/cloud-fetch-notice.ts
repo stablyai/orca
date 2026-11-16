@@ -1,4 +1,4 @@
-// ENV-ORIGIN-TOAST: a sandbox reaches origin through its GitHub credential, which the egress layer
+// A sandbox reaches origin through its GitHub credential, which the egress layer
 // swaps in for a placeholder. Right after a create that can miss for a moment, and the doctor's
 // `git ls-remote origin HEAD` says "Cannot reach remote". The workspace checks again before saying
 // anything, and when it still can't reach GitHub the line has a Check again action.

@@ -3,7 +3,7 @@ import { requestCloudGonePrune, setCloudGonePruneRunner } from './cloud-gone-pru
 
 afterEach(() => setCloudGonePruneRunner(null))
 
-describe('requestCloudGonePrune (LC-2)', () => {
+describe('requestCloudGonePrune', () => {
   it('runs the prune now instead of at the next relist, at most once per 30 s', async () => {
     const run = vi.fn(async () => {})
     setCloudGonePruneRunner(run)

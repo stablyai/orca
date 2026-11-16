@@ -29,7 +29,7 @@ function scratch() {
     }).trim()
 }
 
-describe('VM gh wrapper (GH-AS-MEMBER)', () => {
+describe('VM gh wrapper (gh as the member)', () => {
   it('finds the real gh past itself and runs it as before when the switch is off or no agent turn is known', () => {
     const run = scratch()
     expect(run({})).toBe('real gh token=orca-ph-sbx_workspace args=pr create --fill')

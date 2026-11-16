@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// TEAM-SHARING-HOLD: the approval dialog says nothing about teammates while team sharing is held.
+// The approval dialog says nothing about teammates while team sharing is held.
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'

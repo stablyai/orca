@@ -1,4 +1,4 @@
-// N-02 backstop for full-depth snapshots (5000 rows / 2 MB). A desktop asks for one only when a
+// Backstop for full-depth snapshots (5000 rows / 2 MB). A desktop asks for one only when a
 // pane mount holds no local copy of the terminal (fresh mount, app reopen), and names that mount.
 // - Per mount: a mount that keeps asking (a reconnect storm before its first history landed) gets
 //   at most one per interval; the rest get the 1000-row cut, which fills a reconnecting pane's gap.

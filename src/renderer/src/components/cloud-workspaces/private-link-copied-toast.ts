@@ -1,4 +1,4 @@
-// SHARE-LINK-PRIVATE: Copy link on a private cloud workspace. The link is on the clipboard, but a
+// Copy link on a private cloud workspace. The link is on the clipboard, but a
 // teammate who opens it is refused, so the toast says so and, for whoever can share it, offers
 // Share with team right there (the same visibility change as the menu's Share with team).
 import { toast } from 'sonner'

@@ -25,7 +25,7 @@ const base: CloudWorkspaceActionInput = {
 const flat = (input: Partial<CloudWorkspaceActionInput>) =>
   cloudWorkspaceActionGroups({ ...base, ...input }).map((g) => `${g.id}:${g.actions.join(',')}`)
 
-describe('one action list for every surface (JA-14)', () => {
+describe('one action list for every surface', () => {
   it('the list: Open, Share, Lifecycle, Danger in that order, with Restart', () => {
     expect(flat({})).toEqual([
       'open:open,copyLink,copyWorkspaceLink',
@@ -58,7 +58,7 @@ describe('one action list for every surface (JA-14)', () => {
     expect(flat({ canManage: false })).toEqual(['open:open,copyLink,copyWorkspaceLink'])
   })
 
-  it('TEAM-SHARING-HOLD: no Share with team or Make private while sharing is held', () => {
+  it('no Share with team or Make private while sharing is held', () => {
     teamSharing.on = false
     try {
       for (const visibility of ['private', 'team'] as const) {

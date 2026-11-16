@@ -9,7 +9,7 @@ const base: RuntimeCreateAgentSessionRequest = {
   placement: { tabId: 'tab-1', leafId: 'leaf-1' }
 }
 
-describe('RA-11d: a bare relaunch of a pane reuses its original launch args', () => {
+describe('a bare relaunch of a pane reuses its original launch args', () => {
   it("reuses the create launch's args and preferences for the same pane and agent", () => {
     const memory = new PaneLaunchArgsMemory()
     memory.apply({

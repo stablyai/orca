@@ -1,4 +1,4 @@
-// Dev-only redacted provider-policy audit and the A4 scrub primitive (egress-docs probe 2).
+// Dev-only redacted provider-policy audit and the stopped-record scrub primitive.
 import { describe, expect, it } from 'vitest'
 import { policyFacts } from '../src/operator'
 import { createHarness } from './harness'
