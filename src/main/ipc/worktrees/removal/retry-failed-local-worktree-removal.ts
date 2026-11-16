@@ -1,4 +1,7 @@
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import { retryFailedWorktreeRemoval } from '../../../workspaces/removal/worktree-background-removal'
 import { interruptedLocalWorktreeRemovalJob } from '../../../runtime/workspaces/removal/runtime-interrupted-local-worktree-removal'

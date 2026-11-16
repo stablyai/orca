@@ -7,6 +7,6 @@ import { automationRunErrorText } from './automation-run-error-copy'
 export function getAutomationRunContent(run: AutomationRun, t: Translate = translate): string {
   return getSharedAutomationRunContent(
     { ...run, error: automationRunErrorText(run) },
-    t('auto.components.automations.runContent.noOutput', 'No output content available.')
+    t('auto.components.automations.runContent.noOutput', 'No output.')
   )
 }

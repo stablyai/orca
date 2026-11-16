@@ -9,7 +9,7 @@ import { getAppPtyId } from './provider/registry'
 import { ptyOwnership, ptyIncarnationById } from './provider/ownership-state'
 import { attachOnlyViewOf } from './pane/attach-only-view'
 import { pendingRuntimePaneCreatesByOwnerKey } from './pane/spawn-reservation'
-import { getConnectionExecutionHostId } from '../../../shared/execution-host'
+import { getConnectionExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { ensureWslHookRelayForReattach } from '../../agent-hooks/wsl-relay/wsl-hook-relay-reattach'
 
 export async function beginPtySpawn(

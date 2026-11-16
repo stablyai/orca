@@ -1,6 +1,9 @@
 import type { Worktree, WorktreeHeadIdentity } from '../../../shared/worktree/types'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
-import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../shared/execution-host/execution-host'
+import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
 
 export type WorktreeHeadIdentityApplyDeps = {
   getWorktreesForRepo: (repoId: string) => Worktree[] | undefined
@@ -11,7 +14,10 @@ export type WorktreeHeadIdentityApplyDeps = {
   ) => void
 }
 
-function findWorktreeByPath(worktrees: Worktree[], worktreePath: string): Worktree | undefined {
+export function findWorktreeByPath<T extends Worktree>(
+  worktrees: readonly T[],
+  worktreePath: string
+): T | undefined {
   const exact = worktrees.find((worktree) => worktree.path === worktreePath)
   if (exact) {
     return exact

@@ -2,8 +2,8 @@ import type {
   AgentSessionModelOption,
   AgentSessionOptionChoice
 } from '../../../../shared/agent-session/agent-session-wire'
-import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/agent-session-options-result'
-import { effectiveServiceTier } from '../../../../shared/agent-session/options/structured-agent-session-effective-tier'
+import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/protocol/agent-session-options-result'
+import { effectiveServiceTier } from '../../../../shared/agent-session/options/reconciliation/structured-agent-session-effective-tier'
 import type { CodexAppServerConnection } from '../../app-server/codex-app-server-connection-types'
 import {
   assertStructuredAgentResolutionCurrent,
@@ -154,16 +154,17 @@ export async function listCodexModelPages(
 
 export async function fetchCodexModelCatalogListing(input: {
   connection: Pick<CodexAppServerConnection, 'request'>
-  timeoutMs?: number
+  timeoutMs?: number | null
   deadlineMs?: number
   cwd?: string
   operation?: StructuredAgentResolutionOperation
+  publish?: (listing: CodexModelCatalogListing) => void
 }): Promise<CodexModelCatalogListing> {
   const deadline = Math.min(
     input.operation?.deadline ?? Infinity,
     input.deadlineMs === undefined ? Infinity : Date.now() + input.deadlineMs
   )
-  const remainingTimeout = (): number | undefined => {
+  const remainingTimeout = (): number | null | undefined => {
     assertStructuredAgentResolutionCurrent(input.operation)
     if (!Number.isFinite(deadline)) {
       return input.timeoutMs
@@ -182,6 +183,11 @@ export async function fetchCodexModelCatalogListing(input: {
         return response
       })
   )
+  assertStructuredAgentResolutionCurrent(input.operation)
+  if (parsedModels.length === 0) {
+    return { models: [], complete: false }
+  }
+  input.publish?.({ models: parsedModels, complete: false })
   const configured = await readCodexConfiguredLaunchDefaults(
     input.connection,
     remainingTimeout(),

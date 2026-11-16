@@ -6,10 +6,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY } from '../../../shared/delegated-mobile-device-contract'
+import { DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY } from '../../../shared/remote-runtime/pairing/delegated-mobile-device-contract'
 import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing'
 import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
-import { RUNTIME_PROTOCOL_VERSION } from '../../../shared/protocol-version'
+import { RUNTIME_PROTOCOL_VERSION } from '../../../shared/remote-runtime/protocol/protocol-version'
 import { sendRemoteRuntimeRequestOnSocket } from '../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import {
   runtimeEnvironmentStatusFromSnapshot,

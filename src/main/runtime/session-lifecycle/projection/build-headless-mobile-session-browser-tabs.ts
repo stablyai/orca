@@ -5,15 +5,15 @@ import { OrcaRuntimeWithPersistTerminalSurfaceRetirements } from '../../session-
 import type {
   RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionTerminalTab
-} from '../../../../shared/runtime-mobile-session-tab-contracts'
+} from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
-} from '../../../../shared/runtime-session-contracts'
-import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
+} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { parseAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import { getRuntimeBrowserPageRegistry } from '../../browser/client-pages/runtime-browser-page-registry'
 import { holdAgentSessionInventory } from '../../agent-session/structured-agent-session-inventory-hold'
-import type { Tab } from '../../../../shared/tab-types'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import {
   captureTerminalCloseRequest,
   resolveTerminalCloseTarget,
@@ -27,7 +27,7 @@ import type {
 } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-surface-close-target'
 import { retireTerminalSurfacesFromSnapshot } from '../../terminal/surface/mobile-session-terminal-retirement'
 import type { PtyControllerInventory } from '../../terminal/lifecycle/runtime-pty-controller-contract'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/workspace/identity/floating-workspace-id'
 import { captureAcknowledgedTerminalTabRetirement } from '../../terminal/surface/workspace-session-terminal-tab-retirement-identity'
 import { closeLeafOrTab } from '../../../persistence/terminal-topology/terminal-topology-commit'
 import { markAgentLaunchesClosedByUser } from '../../../agent-launch/agent-launch-pane-attachment'

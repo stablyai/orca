@@ -4,9 +4,9 @@ import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
-import { errorMessage } from '../../../../../shared/error-message'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
+import { errorMessage } from '../../../../../shared/errors/error-message'
 import {
   WORKSPACE_CLEANUP_RULE_KEYS,
   hasEnabledWorkspaceCleanupRule,
@@ -105,7 +105,7 @@ export function WorkspaceCleanupSettingsPane({
     updateSettings
   )
   const rules = hostRules.state === 'ready' ? hostRules.rules : null
-  const { hostReport, preview, cleaningUp, cleanUpNow, previewRules, cachedPreview, adoptPreview } =
+  const { hostReport, preview, cleaningUp, cleanUpNow, previewRules, adoptPreview } =
     useWorkspaceCleanupHostActivity(owner, rules)
   const matches = useMemo(() => summarizeMatches(preview), [preview])
   const [pendingRule, setPendingRule] = useState<WorkspaceCleanupRuleKey | null>(null)
@@ -200,7 +200,7 @@ export function WorkspaceCleanupSettingsPane({
       finishChange(false)
       return
     }
-    if (request && checked.rows.length > 0) {
+    if (request && (checked.rows.length > 0 || request.kind === 'disable-ignored-files')) {
       setPendingRule(null)
       setPendingChange({ ...request, rows: checked.rows, change })
       return
@@ -228,21 +228,20 @@ export function WorkspaceCleanupSettingsPane({
     rows: WorkspaceCleanupPreviewRow[]
     nextPreview: WorkspaceCleanupPreview
   } | null> => {
-    // Project rules can delete with every global rule off, so the current rules are always read,
-    // from the page's own preview when it already covers them.
-    const previews = await Promise.all([
-      previewRules(nextRules),
-      cachedPreview(latest) ?? previewRules(latest)
-    ]).catch((error: unknown) => {
-      toast.error(
-        t(
-          'components.settings.workspaceCleanup.previewFailed',
-          "Couldn't check which workspaces this change matches."
-        ),
-        { description: errorMessage(error) }
-      )
-      return null
-    })
+    // Read fresh: a cached baseline can predate files that now protect a workspace. Project rules
+    // can delete with every global rule off, so the current rules are always read.
+    const previews = await Promise.all([previewRules(nextRules), previewRules(latest)]).catch(
+      (error: unknown) => {
+        toast.error(
+          t(
+            'components.settings.workspaceCleanup.previewFailed',
+            "Couldn't check which workspaces this change matches."
+          ),
+          { description: errorMessage(error) }
+        )
+        return null
+      }
+    )
     return previews
       ? { rows: newRemovals(previews[0], previews[1]), nextPreview: previews[0] }
       : null
@@ -273,7 +272,10 @@ export function WorkspaceCleanupSettingsPane({
       return
     }
     const nextRules = change.change(latest)
-    const checked = await previewNewRemovals(latest, nextRules)
+    const checked =
+      change.kind === 'disable-ignored-files' && !hasEnabledWorkspaceCleanupRule(nextRules)
+        ? { rows: [], nextPreview: null }
+        : await previewNewRemovals(latest, nextRules)
     if (!checked || !mountedRef.current) {
       return
     }
@@ -386,7 +388,9 @@ export function WorkspaceCleanupSettingsPane({
                     keepWhen: keepIgnored ? 'any-local-files' : 'uncommitted'
                   }),
                   // Keeping more can only delete less; letting ignored files go asks first.
-                  keepIgnored ? null : { kind: 'change', ruleTitle: search.keepIgnoredFiles.title }
+                  keepIgnored
+                    ? null
+                    : { kind: 'disable-ignored-files', ruleTitle: search.keepIgnoredFiles.title }
                 )
               }}
             />

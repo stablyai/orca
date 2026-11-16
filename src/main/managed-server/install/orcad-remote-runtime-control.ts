@@ -1,4 +1,4 @@
-import { ORCAD_STARTUP_READINESS_TIMEOUT_MS } from '../../../shared/orcad-profile-preflight'
+import { ORCAD_STARTUP_READINESS_TIMEOUT_MS } from '../../../shared/remote-runtime/orcad-distribution/orcad-profile-preflight'
 import {
   orcadLaunchCommand,
   parseOrcadReadinessOutput,
@@ -20,7 +20,7 @@ import {
   parseOrcadReadinessWaitOutput
 } from './orcad-remote-readiness-wait'
 import type { OrcadHostTransport } from './orcad-host-transport'
-import { errorMessage } from '../../../shared/error-message'
+import { errorMessage } from '../../../shared/errors/error-message'
 import {
   execCommand,
   isSshCommandExitError,

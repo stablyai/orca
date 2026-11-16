@@ -1,6 +1,7 @@
 import type { BrowserWindow } from 'electron'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { notifyWorktreesChanged } from './worktree-remote'
+import { runWorktreeChangeInvalidators } from './worktrees/listing/worktree-change-invalidators'
 
 type WorktreeCatalogRemoteClientNotifier = Pick<
   OrcaRuntimeService,
@@ -20,6 +21,16 @@ export function notifyWatchedWorktreeCatalogChanged(
   repoId: string
 ): void {
   notifyWorktreesChanged(mainWindow, repoId)
+  notifyRemoteClientsOfWatchedCatalogChange(repoId)
+}
+
+/** Listed heads moved without structure: stale owners must rescan, but the local renderer patches its rows. */
+export function notifyWatchedWorktreeHeadsMoved(repoId: string): void {
+  runWorktreeChangeInvalidators(repoId)
+  notifyRemoteClientsOfWatchedCatalogChange(repoId)
+}
+
+function notifyRemoteClientsOfWatchedCatalogChange(repoId: string): void {
   try {
     remoteClientNotifier?.notifyWorktreeCatalogChangedForRemoteClients(repoId)
   } catch (error) {

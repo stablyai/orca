@@ -1,6 +1,6 @@
 import { normalizePersistedMobileClientTabSelections } from '../../../runtime/client/navigation/client-session-tab-selection-persistence'
-import type { SshRemotePtyLease } from '../../../../shared/ssh-types'
-import { normalizeFeatureInteractionTelemetryBuckets } from '../../../../shared/feature-interactions'
+import type { SshRemotePtyLease } from '../../../../shared/remote-runtime/ssh/ssh-types'
+import { normalizeFeatureInteractionTelemetryBuckets } from '../../../../shared/feature-education/interactions/feature-interactions'
 import { normalizeFolderWorkspaceDiffComments } from '../../../workspaces/catalog/folder-workspace-diff-comments'
 import { normalizeFolderWorkspaces } from '../../../../shared/folder-workspaces/folder-workspaces'
 import { normalizeOrcadMigrationEvictedReceipts } from '../../../../shared/orcad-migration/orcad-migration-evicted-receipts'
@@ -19,7 +19,7 @@ import {
   normalizeLegacyPaneKeyAliasEntries,
   normalizeMigrationUnsupportedPtyEntries
 } from '../../restoring-sessions/pane-alias-normalization'
-import type { PersistedState } from '../../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import type { PreparedLoadedTerminalSettings } from './prepare-loaded-terminal-settings'
 import type { PreparedLoadedProfileSettings } from './prepare-loaded-profile-settings'
 import { normalizeLoadedGlobalSettings } from './normalize-loaded-global-settings'

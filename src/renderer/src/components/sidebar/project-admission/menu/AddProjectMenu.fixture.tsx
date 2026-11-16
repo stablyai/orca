@@ -1,6 +1,6 @@
 import React from 'react'
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
-import { getDefaultSettings } from '../../../../../../shared/constants'
+import { getDefaultSettings } from '../../../../../../shared/orca-profiles/constants'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { NewWorkspaceProjectOption } from '@/lib/workspace/creation/new-workspace-project-options'
 import type { ProjectHostSetupOption } from '@/lib/workspace/creation/project-host-setup-options'

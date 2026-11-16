@@ -1,10 +1,11 @@
 import { useState } from 'react'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import { resolveNativeChatAppearanceSettings } from '../../../../../../shared/native-chat/native-chat-appearance-settings'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   NATIVE_CHAT_APPEARANCE_ROOT_CLASS,
-  useNativeChatAppearanceStyle
+  useNativeChatAppearanceStyle,
+  usesNativeChatSystemFont
 } from '../../../native-chat/appearance/native-chat-appearance-style'
 import { FontAutocomplete } from '../fonts/FontAutocomplete'
 import { SettingsRow } from '../../form-controls/SettingsFormControls'
@@ -43,7 +44,9 @@ export function ChatFontFamilySetting({
       fontFamily: previewFamily ?? appearance.fontFamily
     }
   })
-  const defaultLabel = t('settings.appearance.chat.inheritFont', 'Same as IDE font')
+  const defaultLabel = usesNativeChatSystemFont(settings)
+    ? t('settings.appearance.chat.systemFont', 'System font')
+    : t('settings.appearance.chat.inheritFont', 'Same as IDE font')
 
   return (
     <SearchableSetting id={entry.targetSectionId} {...entry} forceVisible={forceVisible}>

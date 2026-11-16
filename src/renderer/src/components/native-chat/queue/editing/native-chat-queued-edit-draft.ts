@@ -3,14 +3,14 @@ import { withoutImageReference } from '../../../../../../shared/native-chat/nati
 import {
   imageReferencesToPromptMarkers,
   promptMarkersToImageReferences
-} from '../../../../../../shared/native-chat/transcript/native-chat-image-transcript-markers'
+} from '../../../../../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 import {
   queuedEditKeptImages,
   queuedMessageEditableText,
   type QueuedMessageEdit
-} from '../../../../../../shared/queued-message-edit'
+} from '../../../../../../shared/native-chat/input/queued-messages/queued-message-edit'
 import { pickedSkillsInText } from '../../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
-import { createNonSecureContextUuid as createUuidV4 } from '../../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createUuidV4 } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import { promptSkillRefs } from '../../composer/editor/native-chat-prompt-document'
 import {
   promptTextContent,

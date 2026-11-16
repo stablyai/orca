@@ -4,7 +4,7 @@ import { mainAgentTurnInterrupted } from '../../../../shared/agent-status/lifecy
 import { agentTurnEndedOnPurpose } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { AGENT_DONE_QUIET_MS } from '../../../../shared/agent-status/lifecycle/agent-transitions'
-import { isPiCompatibleAgentType } from '../../../../shared/pi-agent-kind'
+import { isPiCompatibleAgentType } from '../../../../shared/agent-launch/catalog/pi-agent-kind'
 
 export type TerminalAgentTurnNewsItem = {
   paneKey: string
@@ -71,7 +71,10 @@ export class TerminalAgentTurnNews<Prepared> {
     ) {
       return
     }
-    this.cancelPending(paneKey)
+    // Departure retracts occupancy; an accepted finish still owns its queued delivery.
+    if (change.to !== 'rest') {
+      this.cancelPending(paneKey)
+    }
     if (transition === 'prompt-submitted' || change.to === 'rest') {
       this.finishedTurnByPane.delete(paneKey)
     }

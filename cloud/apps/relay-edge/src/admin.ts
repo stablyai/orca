@@ -4,6 +4,8 @@
 //   POST /__admin/assign  { userId, relayHostId, cellId, assignmentEpoch, devices? }
 //   POST /__admin/export  { relayHostId }  freezes the host for the move away (409 while connected)
 //   POST /__admin/erase   { userId, relayHostId }
+//   POST /__admin/verify  { relayHostId, kind, tokenHash }  read-only: is this phone credential valid
+//                         here? (devices paired or rotated on the edge are not in Postgres)
 //   POST /__admin/drain   { relayHostId }  sends the host's live control back to the director
 // Replay: a token with a `jti` (16-128 chars) is single use, enforced by the target host's object
 // (admin-jti.ts; a repeat is 409 `replay`). Transitional: a token without one is still accepted
@@ -21,7 +23,7 @@ import type { AdminReplayGuard } from './admin-jti'
 
 export const ADMIN_AUDIENCE = 'orca-relay-edge-admin'
 export const ADMIN_PURPOSE = 'edge-admin'
-export type AdminOp = 'assign' | 'export' | 'erase' | 'drain'
+export type AdminOp = 'assign' | 'export' | 'erase' | 'drain' | 'verify'
 
 const HOST_ID = /^[A-Za-z0-9_-]{16}$/
 const ADMIN_BODY_MAX = 256 * 1024
@@ -64,6 +66,20 @@ export type AssignBody = z.infer<typeof AssignBodySchema>
 
 export const ExportBodySchema = z.object({ relayHostId: z.string().regex(HOST_ID) }).strict()
 export const DrainBodySchema = z.object({ relayHostId: z.string().regex(HOST_ID) }).strict()
+// The credential's SHA-256 (base64url), as stored: the director never sends the token itself.
+export const VerifyBodySchema = z
+  .object({
+    relayHostId: z.string().regex(HOST_ID),
+    kind: z.enum(['resume', 'invite']),
+    tokenHash: z.string().regex(/^[A-Za-z0-9_-]{43}$/)
+  })
+  .strict()
+export type VerifyBody = z.infer<typeof VerifyBodySchema>
+export type VerifyResult =
+  | { outcome: 'verified'; userId: string; relayDeviceId: string; assignmentEpoch: number }
+  | { outcome: 'none' }
+  | { outcome: 'not_here' }
+
 export const EraseBodySchema = z.object({ userId: z.string().min(1), relayHostId: z.string().regex(HOST_ID) }).strict()
 
 async function sha256B64url(bytes: ArrayBuffer): Promise<string> {

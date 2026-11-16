@@ -1,10 +1,10 @@
 import { resolve } from 'node:path'
-import { getRepoExecutionHostId } from '../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type {
   GitHubPRRefreshCandidate,
   GitHubPRRefreshEnqueueResult
 } from '../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import {
   notePRRefreshValidationDenial,

@@ -1,10 +1,10 @@
 import { MessageChannel, type MessagePort } from 'node:worker_threads'
 import { afterEach, expect, it, vi } from 'vitest'
-import { BackendPortRpc, type BackendPort } from '../../../../../shared/backend-port-rpc'
+import { BackendPortRpc, type BackendPort } from '../../../../../shared/backend/backend-port-rpc'
 import {
   BACKEND_CONNECTION_CHANGED,
   BACKEND_PORT_DELIVERY
-} from '../../../../../shared/backend-service-contract'
+} from '../../../../../shared/backend/backend-service-contract'
 
 const electron = vi.hoisted(() => ({
   handlers: new Map<string, (...args: unknown[]) => void>(),

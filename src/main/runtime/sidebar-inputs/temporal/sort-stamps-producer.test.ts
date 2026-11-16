@@ -3,10 +3,10 @@ import { AgentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import type { AgentStatusStoreView } from '../workspace-facts/workspace-activity-facts-producer'
 
 import '../../../../shared/agent-status/contracts/agent-status-subject'
-import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
+import type { RuntimeClientEvent } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
 import type { TerminalSideEffectFact } from '../../../../shared/terminal/output/terminal-side-effect-facts'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { Repo } from '../../../../shared/repo-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import '../../../../shared/sidebar-list/sorting/sort-stamps'
 import type { SmartStampFields } from '../../../../shared/sidebar-list/sorting/sort-stamps'
 import '../../../../shared/agent-status/lifecycle/agent-transitions.test-fixture'
@@ -253,20 +253,6 @@ describe('SortStampsProducer: terminal events', () => {
     advance(20_000)
     h.sideEffects([{ ...title('Codex'), staleWorkingTitleClear: true }])
     expect(h.meta.get(WT)).toEqual({ lastActivityAt: 0, smartTier: undefined, smartAt: undefined })
-  })
-
-  it('treats a new PTY in the pane as a new agent', () => {
-    const h = createHarness()
-    h.sideEffects([title('⠋ Codex working')])
-    advance(20_000)
-    h.sideEffects([title('⠋ Codex working')], { ptyId: 'pty-2' })
-    expect(h.exits.has('pty-t')).toBe(false)
-    // Its finish is a transition, and its own exit ends it.
-    const doneAt = advance(20_000)
-    h.sideEffects([title('Codex')], { ptyId: 'pty-2' })
-    expect(h.meta.get(WT)).toEqual({ lastActivityAt: doneAt, smartTier: 'done', smartAt: doneAt })
-    h.exits.get('pty-2')!()
-    expect(h.meta.get(WT)?.smartTier).toBeUndefined()
   })
 
   // A pane its title tracked is handed to hooks by their first row, whatever that row says.

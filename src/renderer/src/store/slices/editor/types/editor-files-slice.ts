@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 import type { CheckRunDetailsTabPatch } from '@/components/editor/check-details/actions/check-run-details-tab'
 import type {
@@ -6,14 +6,14 @@ import type {
   ConflictReviewEntry,
   ConflictReviewState,
   OpenCheckRunDetailsState
-} from '../../../../../../shared/editor-tab-view-types'
+} from '../../../../../../shared/editor/views/editor-tab-view-types'
 import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary,
   GitCommitCompareSummary
 } from '../../../../../../shared/git/diff/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
-import type { WorkspaceVisibleTabType } from '../../../../../../shared/tab-types'
+import type { WorkspaceVisibleTabType } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type {
   BranchCompareLike,
   ClosedEditorTabSnapshot,

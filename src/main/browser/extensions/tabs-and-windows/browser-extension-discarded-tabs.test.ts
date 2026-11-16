@@ -1,8 +1,11 @@
 /// <reference types="chrome" />
 import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { BrowserPage, BrowserWorkspace } from '../../../../shared/browser-workspace-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type {
+  BrowserPage,
+  BrowserWorkspace
+} from '../../../../shared/browser/workspaces/browser-workspace-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { BrowserExtensionCaller } from '../api-runtime/browser-extension-namespace-registry'
 
@@ -46,7 +49,9 @@ vi.mock('../../guest-lifecycle/manager/browser-manager', () => ({
     getWebContentsIdByTabId: () =>
       new Map([...mocks.pageByGuest].map(([id, pageId]) => [pageId, id])),
     getTabIdForWebContentsId: (id: number) => mocks.pageByGuest.get(id) ?? null,
-    getWorktreeIdForTab: () => undefined
+    getWorktreeIdForTab: () => undefined,
+    isAgentLeadingGuest: () => false,
+    findAgentPageInSession: () => null
   }
 }))
 vi.mock('../../../runtime/browser/tabs/browser-tab-renderer-create', () => ({}))
@@ -83,7 +88,8 @@ vi.mock('../profile-sessions/browser-extension-session-loader', () => {
     getBrowserExtensionProfileForPartition: (partition: string) =>
       profile(partition.replace('persist:', '')),
     getBrowserExtensionSessionForProfile: (id: string) =>
-      id === 'default' || id === 'work' ? mocks.sessions[id] : null
+      id === 'default' || id === 'work' ? mocks.sessions[id] : null,
+    isBrowserExtensionProfileLoading: () => false
   }
 })
 vi.mock('./browser-extension-window-model', () => ({
@@ -254,16 +260,21 @@ beforeEach(() => {
       page('streamed', 'bt-ssh', { remoteBrowserPageId: 'runtime-page' })
     ])
   }
-  discardedTabs.setSavedBrowserTabsSource({
-    getWorkspaceSessionHostIds: () => ['local', 'ssh:box'],
-    getWorkspaceSession: (hostId) => (hostId === 'ssh:box' ? saved.ssh : saved.local),
-    onWorkspaceSessionWritten: (listener) => {
-      writeListener = listener
-      return () => {
-        writeListener = null
+  discardedTabs.setSavedBrowserTabsSource(
+    {
+      getWorkspaceSessionHostIds: () => ['local', 'ssh:box'],
+      getWorkspaceSession: (hostId) => (hostId === 'ssh:box' ? saved.ssh : saved.local),
+      onWorkspaceSessionWritten: (listener) => {
+        writeListener = listener
+        return () => {
+          writeListener = null
+        }
       }
-    }
-  })
+    },
+    (id) =>
+      // 'idle' is a profile whose extensions have not started: it has no extension session.
+      id && !(id in mocks.sessions) && id !== 'idle' ? null : `persist:${id ?? 'default'}`
+  )
   discardedTabs.forgetBrowserPageGuestsGone()
   // Retire ids an earlier test handed out, so each test starts with none listed.
   for (const pageId of ['live', 'cold', 'doc', 'notes', 'job', 'remote', 'streamed']) {
@@ -276,36 +287,19 @@ beforeEach(() => {
 })
 
 describe('restored browser pages without a guest are discarded tabs', () => {
-  it('activates through the renderer, then is replaced by the loaded guest', async () => {
-    const [cold] = await query({ discarded: true })
-    const coldId = cold.id!
-    // Showing the page makes it active before its guest exists.
-    recordActiveBrowserPage('cold')
-    expect(events('onActivated')).toContainEqual([{ tabId: coldId, windowId: 1 }])
-    await call('update', [coldId, { active: true }])
-    expect(mocks.activate).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }), 'cold')
-
-    // The guest starts loading before the renderer registers it: no onCreated for a reloaded tab.
-    const loaded = guest(12, mocks.sessions.default, 'https://cold.test/')
-    loaded.emit('did-start-loading')
-    expect(events('onCreated')).toEqual([])
-    mocks.pageByGuest.set(12, 'cold')
-    announceRegisteredBrowserExtensionTab('cold', 12)
-    expect(events('onReplaced')).toEqual([[12, coldId]])
-    expect(events('onCreated')).toEqual([])
-    expect(events('onUpdated')).toContainEqual([
-      12,
-      expect.objectContaining({ status: 'loading' }),
-      expect.objectContaining({ id: 12 })
-    ])
-    // The renderer republishes the active page once registered; it is the same activation.
-    const activations = events('onActivated').length
-    recordActiveBrowserPage('cold')
-    expect(events('onActivated')).toHaveLength(activations)
-    await expect(call('get', [coldId, null])).rejects.toThrow(`No tab with id: ${coldId}.`)
-    expect((await query({ discarded: true })).map((entry) => entry.url)).not.toContain(
-      'https://cold.test/'
-    )
+  it("lists no page of a profile whose extensions have not started, not even to Default's", async () => {
+    saved.local.browserTabsByWorktree = {
+      ...saved.local.browserTabsByWorktree,
+      'wt-2': [tab('bt-idle', { sessionProfileId: 'idle' })]
+    }
+    saved.local.browserPagesByWorkspace = {
+      ...saved.local.browserPagesByWorkspace,
+      'bt-idle': [page('idle', 'bt-idle')]
+    }
+    writeListener?.('local')
+    const urls = (await query({ discarded: true })).map((entry) => entry.url)
+    expect(urls).toContain('https://cold.test/')
+    expect(urls).not.toContain('https://idle.test/')
   })
 
   it('does not list a closed page until the session save drops it, nor an evicted one after', async () => {

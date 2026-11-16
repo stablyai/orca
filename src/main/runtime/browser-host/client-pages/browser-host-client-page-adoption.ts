@@ -4,7 +4,7 @@ import type { BrowserHostLeaseState } from '../leases/browser-host-lease-records
 import type {
   RuntimeBrowserClientPlacement,
   RuntimeBrowserPlacement
-} from '../../../../shared/runtime-browser-placement'
+} from '../../../../shared/browser/client-hosting/runtime-browser-placement'
 import type { BrowserHostRuntimePageIntent } from '../reconciliation/browser-host-page-reconciliation-plan'
 
 /** Restart-adoptable inventory requires the workspace needed by its runtime record. */

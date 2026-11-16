@@ -1,4 +1,4 @@
-import { REMOTE_VIEWER_CLIPBOARD_ENV } from '../../../shared/remote-viewer-clipboard-env'
+import { REMOTE_VIEWER_CLIPBOARD_ENV } from '../../../shared/clipboard/remote-viewer-clipboard-env'
 
 // Wrappers consume the feature env before user config so children cannot inherit the selection.
 

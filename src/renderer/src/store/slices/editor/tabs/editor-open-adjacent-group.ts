@@ -1,7 +1,11 @@
 import { pickAdjacentLinkOpenGroupId } from '@/lib/links/placement/adjacent-link-open-group'
 import { isEditorTabContentType } from './editor-tab-content-type'
 import type { EditorTabContentType } from './editor-tab-content-type'
-import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../../../shared/tab-types'
+import type {
+  Tab,
+  TabGroup,
+  TabGroupLayoutNode
+} from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 
 type AdjacentEditorOpenInput = {
   layout: TabGroupLayoutNode

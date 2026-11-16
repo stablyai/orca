@@ -2,14 +2,14 @@ import type { AgentSessionBackgroundTask } from '../../../../shared/agent-sessio
 import {
   boundCodexCommandDescription,
   codexChildCommandDescription
-} from '../../../../shared/codex-child-command-description'
+} from '../../../../shared/agent-hook-listener/providers/codex/codex-child-command-description'
 import type { CodexBackgroundTaskEvent } from './codex-background-task-frames'
 import { readRecord, readString } from '../../app-server/codex-item-field-readers'
 import '../items/codex-structured-item-translation'
 import { readCodexThreadItem } from '../items/codex-thread-item-identity'
 import type { CodexAbandonedCommand } from '../prompts/codex-prompt-registry'
 import { readCodexTurnId } from '../../app-server/codex-structured-thread-facts'
-import { codexPrimaryCommandTaskId } from '../../../../shared/structured-session-foreground-commands'
+import { codexPrimaryCommandTaskId } from '../../../../shared/agent-session/view/structured-session-foreground-commands'
 
 const MAX_SETTLED_COMMANDS = 128
 

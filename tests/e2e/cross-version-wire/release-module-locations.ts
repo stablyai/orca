@@ -30,9 +30,9 @@ function checkoutTree(root: string): ReleaseTree {
 
 /**
  * Where the release under `root` defines the module a suite names. Suites name main's path; a
- * release cut before a folder move ships the module elsewhere under the same source root, so the
- * one file there with its name is that module. Missing or ambiguous names pass through and fail
- * at import, naming the path the suite asked for.
+ * release cut before a folder move ships the module elsewhere under the same source root (`src/*`
+ * or `mobile/src`), so the one file there with its name is that module. Missing or ambiguous names
+ * pass through and fail at import, naming the path the suite asked for.
  */
 export function releaseModuleLocation(
   root: string,
@@ -44,8 +44,14 @@ export function releaseModuleLocation(
     .split('\\')
     .join('/')
   const sourceRoot = named.split('/').slice(0, 2).join('/')
-  if (tree.exists(named) || !sourceRoot.startsWith('src/')) {
+  if (tree.exists(named) || !(sourceRoot.startsWith('src/') || sourceRoot === 'mobile/src')) {
     return named
+  }
+  if (named === 'src/main/runtime/rpc/responses/rpc-response.ts') {
+    const legacyResponse = posix.join(posix.dirname(named), '..', 'errors.ts')
+    if (tree.exists(legacyResponse)) {
+      return legacyResponse
+    }
   }
   if (named === 'src/main/runtime/rpc/methods/rpc-method-registry.ts') {
     const legacyRegistry = 'src/main/runtime/rpc/methods/index.ts'

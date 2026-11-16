@@ -2,7 +2,7 @@ import type { DraggedWorktreeCopies } from '../drag/dragged-worktree-copies'
 import React from 'react'
 import { cn } from '@/lib/class-names'
 import type { AppState } from '@/store/types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { isActiveSidebarWorkspace } from '../../../../../../shared/sidebar-list/selection/active-workspace'
@@ -140,6 +140,7 @@ export function renderWorktreeItemRow(
         lineageChildCount={itemRow.lineageChildCount}
         lineageChildWorktreeIds={itemRow.lineageChildWorktreeIds}
         lineageCollapsed={itemRow.lineageCollapsed}
+        lineageDescendantIdentities={itemRow.lineageDescendantIdentities}
         onLineageToggle={
           itemRow.lineageGroupKey ? ctx.getLineageToggleHandler(itemRow.lineageGroupKey) : undefined
         }

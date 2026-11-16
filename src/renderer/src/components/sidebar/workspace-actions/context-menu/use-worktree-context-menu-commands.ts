@@ -2,7 +2,7 @@ import { useCallback } from 'react'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { getRepoWorkspaceCreationTargetHint } from '@/lib/workspace/creation/project-host-workspace-target'
 import { resolveReviewRepository } from '@/lib/source-control/review/review-owner'
 import {
@@ -21,7 +21,7 @@ import {
   preserveDeleteSiblingPosition
 } from './worktree-context-menu-policy'
 import type { useAppStore } from '@/store/index'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
 
 function resolveChildWorktreeRepository(repos: readonly Repo[], worktree: Worktree): Repo | null {
@@ -53,6 +53,7 @@ export function useWorktreeContextMenuCommands(args: {
   setWorktreesPinnedAndReveal: ReturnType<
     typeof useAppStore.getState
   >['setWorktreesPinnedAndReveal']
+  showsUnread: boolean
   sleepableWorktrees: readonly Worktree[]
   subtreeSleepableWorktrees: readonly Worktree[]
   updateWorktreeMeta: ReturnType<typeof useAppStore.getState>['updateWorktreeMeta']
@@ -74,7 +75,7 @@ export function useWorktreeContextMenuCommands(args: {
   const handleToggleRead = useCallback(() => {
     args.setWorkspaceUnreadByUser(
       args.worktree.id,
-      !args.worktree.isUnread,
+      !args.showsUnread,
       args.worktree.hostId ?? 'local'
     )
   }, [args])

@@ -13,7 +13,7 @@ import type { MobileRelayCredentialBundle } from '../../host-credentials/mobile-
 import type { RelayReconnectController } from './mobile-relay-reconnect-controller'
 import type { StableLogicalRpcClient } from '../connection/stable-logical-rpc-client'
 import type { MobileRelayEndpoint } from '../../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
-import { RELAY_HOST_CLOSE_REASON } from '../../../../src/shared/relay-host-close-reason'
+import { RELAY_HOST_CLOSE_REASON } from '../../../../src/shared/remote-runtime/relay/relay-host-close-reason'
 
 type EstablishResult = { ok: true } | { ok: false; error: Error }
 

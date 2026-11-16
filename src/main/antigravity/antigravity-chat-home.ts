@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { ANTIGRAVITY_ACP_HOME } from '../../shared/antigravity-session-origin'
+import { ANTIGRAVITY_ACP_HOME } from '../../shared/agent-session/lifecycle/provider-handles/antigravity-session-origin'
 
 /** GEMINI_HOME of Orca's managed Antigravity chat, under the host's state directory. */
 export const ANTIGRAVITY_CHAT_HOME_FOLDER = 'antigravity-chat'

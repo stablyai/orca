@@ -1,4 +1,7 @@
-import type { SshTargetCreateInput, SshTargetUpdateInput } from '../../../../../../shared/ssh-types'
+import type {
+  SshTargetCreateInput,
+  SshTargetUpdateInput
+} from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 import {
   getSshTargetDraftConnectionFields,
   type EditingTarget

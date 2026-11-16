@@ -15,8 +15,8 @@ import { conditionalAiVaultListResult } from '../../../../ai-vault/listing/sessi
 import { restampAiVaultListResult } from '../../../../ai-vault/listing/session-list-results'
 import { copyStructuredChatConversation } from '../../../../ai-vault/structured-sessions/structured-chat-conversation-copy'
 import type { AiVaultPrepareSessionResumeArgs } from '../../../../../shared/ai-vault/resume/ai-vault-resume-preparation'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
-import { isWslUncPath } from '../../../../../shared/wsl-paths'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
+import { isWslUncPath } from '../../../../../shared/file-access/wsl-paths'
 import { describeAiVaultScanError } from '../../../../../shared/ai-vault/scanning/ai-vault-scan-error-message'
 import {
   assertLegacyAiVaultResumeAllowed,

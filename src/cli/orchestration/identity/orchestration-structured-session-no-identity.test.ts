@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ORCA_STRUCTURED_SESSION_ENV } from '../../../shared/structured-session-marker'
+import { ORCA_STRUCTURED_SESSION_ENV } from '../../../shared/agent-launch/environment/structured-session-marker'
 
 const callMock = vi.hoisted(() => vi.fn())
 const getTerminalHandleMock = vi.hoisted(() => vi.fn())

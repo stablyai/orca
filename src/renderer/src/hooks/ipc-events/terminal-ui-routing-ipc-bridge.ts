@@ -15,6 +15,7 @@ import { focusTerminalInitiatedTab } from './terminal-command-state'
 import { applyRuntimePaneTitle } from './terminal-pane-title-ipc-bridge'
 import { isStructuredAgentSessionHostTabId } from '../../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 import { LOCAL_STRUCTURED_SESSION_OWNER } from '@/runtime/native-chat/local-sessions/local-structured-session-owner'
+import { endSidebarListKeyboardNavigation } from '@/lib/text-input/focus/editable-focus-preservation'
 import {
   recordWebSessionFocusIntent,
   resolveWebSessionVisibleTabId
@@ -120,7 +121,8 @@ export function routeRuntimeTerminalSplitRequest(request: RuntimeTerminalSplitRe
     command: request.command,
     sourceLeafId: request.sourceLeafId,
     telemetrySource: request.telemetrySource,
-    newLeafId: request.newLeafId
+    newLeafId: request.newLeafId,
+    ...(request.activate === false ? { activate: false } : {})
   }
   if (hasRegisteredRuntimeTerminalTab(request.tabId, worktreeId)) {
     dispatchTerminalPaneSplitRequest(detail)
@@ -157,6 +159,7 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
         scrollToBottomIfOutputSinceLastView
       }) => {
         const store = useAppStore.getState()
+        endSidebarListKeyboardNavigation()
         revealWorkspaceSurface(store, worktreeId)
         store.setActiveTab(tabId)
         if (ackPaneKeyOnSuccess || flashFocusedPane || scrollToBottomIfOutputSinceLastView) {

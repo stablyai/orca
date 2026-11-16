@@ -1,4 +1,4 @@
-import type { ClassifiedError } from '../../../../../shared/classified-error'
+import type { ClassifiedError } from '../../../../../shared/errors/classified-error'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
 import type { GitHubPRRefreshAlias } from '../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import type { GitHubProjectViewError } from '../../../../../shared/github/projects/project-result-types'

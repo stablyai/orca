@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
-import { getDefaultWorkspaceSession } from '../../../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/constants'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type {
   TerminalLayoutSnapshot,
@@ -8,7 +8,7 @@ import type {
 } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import './pty-recorded-surface-topology'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { bindPaneFirst } from '../../orca-runtime-tests/bind-first-pane.test-fixture'
 import { partialRuntimeStore } from '../../orca-runtime-tests/runtime-store-partial-fixture'
 
@@ -111,7 +111,7 @@ export function registerTerminalListSurfaceLostOrphanTests(): void {
   }
 
   /** Both PTYs stay live on the host throughout; only the graph changes. */
-  function makeRuntime(session?: WorkspaceSessionState): OrcaRuntimeService {
+  async function makeRuntime(session?: WorkspaceSessionState): Promise<OrcaRuntimeService> {
     const store = makeStore(session)
     const runtime = new OrcaRuntimeService(partialRuntimeStore(store))
     storesByRuntime.set(runtime, store)
@@ -128,7 +128,7 @@ export function registerTerminalListSurfaceLostOrphanTests(): void {
     bindPaneFirst(runtime, pane('tab-kept', KEPT_LEAF, KEPT_PTY))
     bindPaneFirst(runtime, pane('tab-dropped', DROPPED_LEAF, DROPPED_PTY))
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [tab('tab-kept', KEPT_LEAF), tab('tab-dropped', DROPPED_LEAF)],
       leaves: [
         leaf('tab-kept', KEPT_LEAF, KEPT_PTY),
@@ -139,11 +139,11 @@ export function registerTerminalListSurfaceLostOrphanTests(): void {
   }
 
   /** The restart republishes a graph that kept one pane and dropped the other. */
-  function dropOnePane(runtime: OrcaRuntimeService): void {
+  async function dropOnePane(runtime: OrcaRuntimeService): Promise<void> {
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
       unbindDroppedPane(runtime)
     }
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [tab('tab-kept', KEPT_LEAF)],
       leaves: [leaf('tab-kept', KEPT_LEAF, KEPT_PTY)]
     })
@@ -169,8 +169,8 @@ export function registerTerminalListSurfaceLostOrphanTests(): void {
   describe('terminal inventory after a pane is dropped', () => {
     it('does not let the inventory restore un-drop a pane the graph dropped', async () => {
       // Inventory refresh replays persisted pane keys; stamping that replay as fresh graph evidence would erase the orphan being reported.
-      const runtime = makeRuntime(sessionStillHoldingBothPanes())
-      dropOnePane(runtime)
+      const runtime = await makeRuntime(sessionStillHoldingBothPanes())
+      await dropOnePane(runtime)
 
       const first = await runtime.listTerminals(`id:${WORKTREE_ID}`)
       const second = await runtime.listTerminals(`id:${WORKTREE_ID}`)
@@ -185,8 +185,8 @@ export function registerTerminalListSurfaceLostOrphanTests(): void {
     it.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)(
       "keeps a pane main's layout still binds attached when a window graph drops it",
       async () => {
-        const runtime = makeRuntime()
-        runtime.syncWindowGraph(1, {
+        const runtime = await makeRuntime()
+        await runtime.syncWindowGraph(1, {
           tabs: [tab('tab-kept', KEPT_LEAF)],
           leaves: [leaf('tab-kept', KEPT_LEAF, KEPT_PTY)]
         })
@@ -199,7 +199,7 @@ export function registerTerminalListSurfaceLostOrphanTests(): void {
     )
 
     it('does not call every pane orphaned when the graph goes away', async () => {
-      const runtime = makeRuntime()
+      const runtime = await makeRuntime()
       // Unavailable graphs clear leaf maps but prove no pane absence; do not orphan every live terminal.
       runtime.markGraphUnavailable(1)
 
@@ -211,8 +211,8 @@ export function registerTerminalListSurfaceLostOrphanTests(): void {
     })
 
     it('keeps naming the dropped pane after the graph goes away', async () => {
-      const runtime = makeRuntime()
-      dropOnePane(runtime)
+      const runtime = await makeRuntime()
+      await dropOnePane(runtime)
       runtime.markGraphUnavailable(1)
 
       const { terminals } = await runtime.listTerminals(`id:${WORKTREE_ID}`)

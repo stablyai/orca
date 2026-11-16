@@ -2,7 +2,7 @@ import type {
   RuntimeBrowserClientPlacement,
   RuntimeBrowserPlacement,
   RuntimeBrowserServerPlacement
-} from '../../../../shared/runtime-browser-placement'
+} from '../../../../shared/browser/client-hosting/runtime-browser-placement'
 import {
   assertBrowserHostPlacementIdentity,
   assertBrowserPageGeneration,

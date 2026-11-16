@@ -1,6 +1,6 @@
 import { expect, it, onTestFinished, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
-import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { agentSessionRecordFixture } from '../testing/agent-session-record-test-fixture'
 import { createAgentModelCatalogService } from './agent-model-catalog-service'
 import { AgentModelCatalogStore } from './agent-model-catalog-store'
@@ -137,7 +137,7 @@ it('keeps one listing for a workspace on the same folder when another workspace 
   expect(await a).toMatchObject({ models: [{ id: 'other' }] })
 })
 
-it('ends a shorter reader at its own deadline, and a stalled refresh lists nothing after its budget', async () => {
+it('ends a shorter reader while scope resolution remains current', async () => {
   vi.useFakeTimers()
   onTestFinished(() => {
     vi.useRealTimers()
@@ -163,9 +163,7 @@ it('ends a shorter reader at its own deadline, and a stalled refresh lists nothi
   // Its readers are gone, but the refresh runs on its own budget.
   expect(h.service.snapshot({ agent: 'codex', sessionId: 'b' })).toHaveProperty('listingInProgress')
   await vi.advanceTimersByTimeAsync(29_000)
-  expect(h.service.snapshot({ agent: 'codex', sessionId: 'b' })).not.toHaveProperty(
-    'listingInProgress'
-  )
+  expect(h.service.snapshot({ agent: 'codex', sessionId: 'b' })).toHaveProperty('listingInProgress')
   gate.resolve()
   await vi.advanceTimersByTimeAsync(0)
   expect(h.run).not.toHaveBeenCalled()
@@ -177,7 +175,8 @@ it('holds readers of a stalled refresh only to their own deadlines, and starts n
     vi.useRealTimers()
   })
   const h = harness()
-  h.folder.gate = Promise.withResolvers<void>()
+  const gate = Promise.withResolvers<void>()
+  h.folder.gate = gate
   void h.service.demand({ agent: 'codex', sessionId: 'a', deadline: Date.now() + 1_000 })
   const b = h.service.read({
     agent: 'codex',
@@ -187,7 +186,7 @@ it('holds readers of a stalled refresh only to their own deadlines, and starts n
   })
   await vi.advanceTimersByTimeAsync(30_000)
   // b's deadline ended its wait; a reader leaving never restarts the work.
-  expect(await b).toEqual({ origin: 'unknown' })
+  expect(await b).toMatchObject({ origin: 'unknown', listingInProgress: true, waitExpired: true })
   expect(h.recordWorkspacePath).toHaveBeenCalledOnce()
   const c = h.service.read({
     agent: 'codex',
@@ -195,8 +194,10 @@ it('holds readers of a stalled refresh only to their own deadlines, and starts n
     waitForListing: true,
     deadline: Date.now() + 30_000
   })
-  await vi.waitFor(() => expect(h.run).toHaveBeenCalledOnce())
-  expect(h.recordWorkspacePath).toHaveBeenCalledTimes(2)
+  await vi.advanceTimersByTimeAsync(15_000)
+  gate.resolve()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(h.recordWorkspacePath).toHaveBeenCalledOnce()
   h.discovery.resolve(listing('fresh'))
   await vi.advanceTimersByTimeAsync(0)
   expect(await c).toMatchObject({ models: [{ id: 'fresh' }] })
@@ -226,26 +227,32 @@ it("keeps the folder's defaults when they arrive after a shorter last reader lef
   expect(await a).toMatchObject({ models: [{ id: 'listed', isDefault: true }] })
 })
 
-it("keeps the listing when the folder's settings stall, naming no default, within the reader's budget", async () => {
+it('delivers inventory before slow folder defaults, then delivers the proven default', async () => {
   vi.useFakeTimers()
   onTestFinished(() => {
     vi.useRealTimers()
   })
   const h = harness(agent)
-  h.folder.settings = Promise.withResolvers<void>()
-  void h.service.demand({ agent, sessionId: 'a', deadline: Date.now() + 1_000 })
-  let answer: unknown
-  void h.service
-    .read({ agent, sessionId: 'b', waitForListing: true, deadline: Date.now() + 30_000 })
-    .then((result) => {
-      answer = result
-    })
-  await vi.waitFor(() => expect(h.run).toHaveBeenCalledOnce())
+  const settings = Promise.withResolvers<void>()
+  h.folder.settings = settings
+  const first = h.service.read({ agent, sessionId: 'b', waitForListing: true })
+  await vi.advanceTimersByTimeAsync(0)
   h.discovery.resolve(listing('listed'))
-  await vi.advanceTimersByTimeAsync(30_000)
-  // Whether the project picks its own model stays unknown, so the account's default isn't named.
-  expect(answer).toMatchObject({ models: [{ id: 'listed', isDefault: false }] })
-  expect(answer).not.toHaveProperty('listingInProgress')
+  await vi.advanceTimersByTimeAsync(0)
+  expect(await first).toMatchObject({
+    models: [{ id: 'listed', isDefault: false }],
+    listingInProgress: true
+  })
+  let next: unknown
+  const follow = h.service.read({ agent, sessionId: 'b', waitForListing: true }).then((result) => {
+    next = result
+  })
+  await vi.advanceTimersByTimeAsync(1_000)
+  expect(next).toBeUndefined()
+  settings.resolve()
+  await follow
+  expect(next).toMatchObject({ models: [{ id: 'listed', isDefault: true }] })
+  expect(next).not.toHaveProperty('listingInProgress')
 })
 
 it("never lets a moved folder's late settings describe the folder it moved to", async () => {

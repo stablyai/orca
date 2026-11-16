@@ -2,10 +2,10 @@ import {
   getConnectionIdForWorktreeCopy,
   getConnectionIdFromState
 } from '@/lib/workspace/ownership/connection-owner-resolution'
-import { normalizeExecutionHostId } from '../../../../../../shared/execution-host'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { normalizeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { useAppStore } from '@/store/index'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import { buildAgentResumeStartupPlan } from '../../../../../../shared/agent-launch/startup/tui-agent-resume-startup'
 import {
   resolveRuntimeHostReportedPlatform,
@@ -19,10 +19,10 @@ import {
 } from '@/lib/agent-session/resume/sleeping-record-execution-host-scope'
 import { resolveResumeLaunchRecipe } from '../../../../../../shared/agent-launch/choices/resume-launch-recipe'
 import {
-  agentProviderSessionsEqual,
   isResumableTuiAgent,
   normalizeAgentProviderSession
 } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { agentProviderSessionsEqual } from '../../../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 
 import type { HeldPaneReopenOutcome } from '../../session-restore/newer-daemon/newer-daemon-hold-state'
 import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
@@ -35,7 +35,7 @@ type AppState = ReturnType<typeof useAppStore.getState>
 
 /** The agent session a cold restore of this pane would resume; read-only, so pre-spawn checks can share it. */
 export function findColdRestoreResumeSource(session: ConnectPanePtySession, state: AppState) {
-  const entry = state.agentStatusByPaneKey[session.cacheKey]
+  const entry = state.agentStatusByPaneKey.get(session.cacheKey)
   const sleepingRecordEntry = session.getSleepingRecordForPane(state)
   const sleepingRecord = sleepingRecordEntry?.record
   const liveEntry = entry && entry.state !== 'done' ? entry : null

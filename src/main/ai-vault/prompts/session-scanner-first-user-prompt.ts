@@ -1,8 +1,8 @@
-import { isKnownHarnessInjectedUserTurnText } from '../../../shared/harness-injected-user-turns'
+import { isKnownHarnessInjectedUserTurnText } from '../../../shared/agent-session/journal/harness-injected-user-turns'
 import { getFirstUserPromptCaptureMode } from './session-scanner-first-user-prompt-capture'
 import { stripGrokUserQueryEnvelope } from '../scanners/grok/session-scanner-grok-user-text'
 // Import directly to avoid a cycle through the session-scanner-values re-export.
-import { sliceAtCodeUnitLimit } from '../../../shared/surrogate-safe-text-slice'
+import { sliceAtCodeUnitLimit } from '../../../shared/text/surrogate-safe-text-slice'
 
 // Bound pathological pastes without applying the much smaller list-preview cap.
 const FULL_FIRST_USER_PROMPT_SAFETY_LIMIT = 256 * 1024

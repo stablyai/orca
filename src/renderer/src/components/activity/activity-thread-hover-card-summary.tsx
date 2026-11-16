@@ -12,9 +12,12 @@ import { useTranslate } from '@/i18n/use-translate'
 import { formatClipboardFilePath } from '@/lib/clipboard/clipboard-file-path'
 import { getWorktreeRowLocalPathOpenOwner } from '@/lib/workspace/ownership/worktree-row-open-in-owner'
 import { cn } from '@/lib/class-names'
-import { getWorktreeExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
+import {
+  getWorktreeExecutionHostId,
+  parseExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
+import { getHostDisplayLabelOverrides } from '../../../../shared/execution-host/host-setting-overrides'
 import CommentMarkdown from '../sidebar/CommentMarkdown'
 import { getTranslatedExecutionHostLabel } from '../sidebar/execution-host-label'
 import {

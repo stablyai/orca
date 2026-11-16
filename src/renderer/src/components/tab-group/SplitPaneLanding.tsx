@@ -17,7 +17,7 @@ import {
   getSimulatorTabForWorktree
 } from '@/lib/simulator/tabs/ensure-simulator-tab'
 import { useFileListWorktree } from '@/store/workspaces/selection/use-selected-worktree'
-import { useMeasuredWidth } from '@/components/right-sidebar/right-sidebar-measured-width'
+import { useMeasuredWidth } from '@/components/right-sidebar/layout/right-sidebar-measured-width'
 import { Button } from '@/components/ui/button'
 import {
   Command,

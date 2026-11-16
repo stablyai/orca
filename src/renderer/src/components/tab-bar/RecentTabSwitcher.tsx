@@ -4,15 +4,15 @@ import { FileText, GitGraph, GitCompare, Globe2, TerminalSquare } from 'lucide-r
 import { useAppStore } from '../../store/index'
 import { activateCyclableTab } from '../../hooks/ipc-tab-switch'
 import { getShortcutPlatform } from '../../hooks/useShortcutLabel'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/workspace/identity/floating-workspace-id'
 import {
   activateFloatingWorkspaceCyclableTab,
   isFloatingWorkspacePanelFocused
-} from '@/components/floating-terminal/floating-workspace-terminal-actions'
+} from '@/components/floating-terminal/workspace/floating-workspace-terminal-actions'
 import {
   isRecentTabSwitcherCommitRelease,
   matchesRecentTabSwitcherChord
-} from '../../../../shared/window-shortcut-policy'
+} from '../../../../shared/keybindings/window-shortcut-policy'
 import {
   buildRecentTabSwitcherModel,
   getNextRecentTabSwitcherIndex,

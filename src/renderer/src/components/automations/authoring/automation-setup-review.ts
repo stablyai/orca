@@ -11,7 +11,7 @@ import type { Automation } from '../../../../../shared/automations/automation-de
 import type { AutomationUsageSummary } from '../../../../../shared/automations/history/automation-usage-summary'
 import { getAutomationRunRepoId } from '../../../../../shared/automations/history/automation-run-identity'
 import type { SetupDecision, SetupTrustMismatch } from '../../../../../shared/worktree/create-types'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 
 /** Runs create from the automation's base, so approve the orca.yaml there, not the project checkout's. */
 export function approveAutomationSetup(

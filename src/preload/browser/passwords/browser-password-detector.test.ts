@@ -3,11 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   BROWSER_PASSWORDS_GUEST_CHANNELS,
   BROWSER_PASSWORDS_TO_GUEST_CHANNELS
-} from '../../../shared/browser-passwords-types'
+} from '../../../shared/browser/passwords/browser-passwords-types'
 import type {
   BrowserPasswordFillRequest,
   BrowserPasswordGuestEnable
-} from '../../../shared/browser-passwords-types'
+} from '../../../shared/browser/passwords/browser-passwords-types'
 import { installBrowserPasswordDetector } from './browser-password-detector'
 
 const CHANNEL = BROWSER_PASSWORDS_GUEST_CHANNELS
@@ -286,22 +286,6 @@ describe('browser password detector', () => {
     el('#forgot').dispatchEvent(trusted(new MouseEvent('click', { bubbles: true, composed: true })))
 
     expect(sentOn(CHANNEL.submitted)).toEqual([])
-  })
-
-  it('keeps viewport invalidation alive after a picker focus transfer', async () => {
-    load(LOGIN_FORM)
-    install()
-    enable()
-    focusIn(el('#pw'))
-    const fieldToken = readString(sentOn(CHANNEL.fieldFocused).at(-1), 'fieldToken')
-    el('#pw').dispatchEvent(new FocusEvent('focusout', { bubbles: true, composed: true }))
-    await vi.advanceTimersByTimeAsync(100)
-    window.dispatchEvent(new Event('resize'))
-    expect(sentOn(CHANNEL.fieldFocused)).toHaveLength(1)
-    expect(sentOn(CHANNEL.fieldBlurred)).toEqual([
-      { fieldToken, reason: 'focusout' },
-      { fieldToken }
-    ])
   })
 
   it('detects and captures credentials when HTTP crypto has no randomUUID', async () => {

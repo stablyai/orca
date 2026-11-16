@@ -1,5 +1,5 @@
 import type { GhAccountBinding } from '../../../shared/github/accounts/account-binding'
-import type { AppStarSource } from '../../../shared/gh-star-source'
+import type { AppStarSource } from '../../../shared/github/repositories/gh-star-source'
 import type { GhAuthDiagnostic } from '../../../shared/github/accounts/auth-types'
 import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../shared/github/checks/check-types'
@@ -14,7 +14,7 @@ import type {
   GitHubPRRefreshEnqueueResult,
   GitHubPRRefreshEvent,
   GitHubPRRefreshReason,
-  PRRefreshOutcome
+  PRSnapshotReply
 } from '../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../shared/github/repositories/repository-identity'
 import type {
@@ -52,7 +52,7 @@ export type GithubPullRequestApi = {
     candidate: GitHubPRRefreshCandidate
     reason?: GitHubPRRefreshReason
     userRefresh?: boolean
-  }) => Promise<PRRefreshOutcome>
+  }) => Promise<PRSnapshotReply>
   enqueuePRRefresh: (args: {
     candidate: GitHubPRRefreshCandidate
     reason: GitHubPRRefreshReason

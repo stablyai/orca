@@ -2,7 +2,7 @@ import type {
   AgentHookRelayEnvelope,
   AgentHookUnavailableEnvelope
 } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
-import type { TmuxManagedPty } from '../../../shared/tmux-agent-hook-contract'
+import type { TmuxManagedPty } from '../../../shared/agent-hook-listener/presence/tmux-agent-hook-contract'
 import type { HookRootEvidenceReader } from '../../../shared/agent-hook-listener/presence/hook-process-root-evidence'
 
 export type RelayHookForward = (envelope: AgentHookRelayEnvelope) => void

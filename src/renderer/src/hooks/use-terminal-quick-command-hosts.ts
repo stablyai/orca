@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useShallow } from 'zustand/react/shallow'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type { TerminalQuickCommand } from '../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../shared/execution-host'
-import { getHostDisplayLabelOverrides } from '../../../shared/host-setting-overrides'
+} from '../../../shared/execution-host/execution-host'
+import { getHostDisplayLabelOverrides } from '../../../shared/execution-host/host-setting-overrides'
 import { buildExecutionHostRegistry } from '../../../shared/execution-host/execution-host-registry'
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { useAppStore } from '@/store'

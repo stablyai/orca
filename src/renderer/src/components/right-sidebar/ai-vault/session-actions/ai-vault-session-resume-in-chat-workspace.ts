@@ -7,11 +7,11 @@ import {
 import { resolveStructuredAgentSessionOwner } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { useAppStore } from '@/store/index'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
-import { normalizeExecutionHostId } from '../../../../../../shared/execution-host'
+import { normalizeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   adoptsCliConversations,
   CLI_CONVERSATION_ADOPTING_AGENTS
-} from '../../../../../../shared/structured-agent-cli-conversation-adoption'
+} from '../../../../../../shared/agent-session/view/structured-agent-cli-conversation-adoption'
 import {
   STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RESUME_LINKED_CWD_RUNTIME_CAPABILITY

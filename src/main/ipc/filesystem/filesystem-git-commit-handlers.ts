@@ -7,7 +7,7 @@ import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-w
 import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
 import { requireReachableGitRoute } from '../../providers/execution-host-provider-dispatch'
-import { getConnectionExecutionHostId } from '../../../shared/execution-host'
+import { getConnectionExecutionHostId } from '../../../shared/execution-host/execution-host'
 
 export function registerFilesystemGitCommitHandlers(context: FilesystemHandlerContext): void {
   const { store } = context

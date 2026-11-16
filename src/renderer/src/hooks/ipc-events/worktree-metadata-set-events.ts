@@ -3,8 +3,8 @@ import {
   getRepoExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
-import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
+} from '../../../../shared/execution-host/execution-host'
+import type { RuntimeClientEvent } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
 import { readWorkspaceMetadataSet } from '../../../../shared/worktree/metadata/workspace-metadata-set'
 import { useAppStore } from '../../store'
 import {

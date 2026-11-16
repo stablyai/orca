@@ -4,15 +4,15 @@ import type {
   NativeChatMessage,
   NativeChatSubagentEntry
 } from '../../../../../../shared/native-chat/native-chat-types'
-import type { NativeChatTurnStatus } from '../../../../../../shared/native-chat/transcript/native-chat-turn-status'
-import { isNativeChatRowInLiveWorkingTurn } from '../../../../../../shared/native-chat/transcript/native-chat-live-turn-membership'
-import { nativeChatTurnBarRows } from '../../../../../../shared/native-chat/transcript/native-chat-turn-grouping'
+import type { NativeChatTurnStatus } from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-status'
+import { isNativeChatRowInLiveWorkingTurn } from '../../../../../../shared/native-chat/transcript/turns/native-chat-live-turn-membership'
+import { nativeChatTurnBarRows } from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-grouping'
 import {
   nativeChatTurnFold,
   nativeChatTurnFoldRow
-} from '../../../../../../shared/native-chat/transcript/native-chat-turn-fold'
-import { nativeChatRowRendersContent } from '../../../../../../shared/native-chat/transcript/native-chat-row-content'
-import { nativeChatGeneratedImageAnswers } from '../../../../../../shared/native-chat/transcript/native-chat-generated-image-answers'
+} from '../../../../../../shared/native-chat/transcript/folding/native-chat-turn-fold'
+import { nativeChatRowRendersContent } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
+import { nativeChatGeneratedImageAnswers } from '../../../../../../shared/native-chat/transcript/images/native-chat-generated-image-answers'
 import { nativeChatMarkdownImageSources } from '../../markdown/native-chat-markdown-image-sources'
 import {
   estimateNativeChatRowHeight,
@@ -23,8 +23,8 @@ import type { NativeChatResolvedPrompt } from '../../../../../../shared/native-c
 import type { NativeChatTurnDiff } from '../../../../../../shared/native-chat/tools/native-chat-turn-diffs'
 import type { NativeChatOpenedPullRequest } from '../../../../../../shared/native-chat/tools/native-chat-opened-pull-requests'
 import type { NativeChatSubagentHead } from '../../subagents/native-chat-subagent-scope'
-import { compareNativeChatDisplayMessages as compareMessages } from '../../../../../../shared/native-chat/transcript/native-chat-message-order'
-import { isGeneratedImageOperation } from '../../../../../../shared/native-chat/native-chat-generated-image'
+import { compareNativeChatDisplayMessages as compareMessages } from '../../../../../../shared/native-chat/transcript/messages/native-chat-message-order'
+import { isImageOperation } from '../../../../../../shared/native-chat/native-chat-generated-image'
 import {
   nativeChatRowRendersProse,
   nativeChatRowSpeaksOrActs
@@ -267,7 +267,7 @@ export function buildNativeChatTranscript(
       continue
     }
     if (
-      !slot.message.blocks.some(isGeneratedImageOperation) &&
+      !slot.message.blocks.some(isImageOperation) &&
       nativeChatAgentRowWords(slot.message, t).length > 0
     ) {
       lastWordsByTurn.set(slot.turnKey, slot)

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { RotateCw } from 'lucide-react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import {
   hostWindowMaterial,
   resolveWindowMaterial,
@@ -8,7 +8,7 @@ import {
   windowMaterialPreference,
   type WindowMaterial,
   type WindowMaterialHost
-} from '../../../../../shared/window-material'
+} from '../../../../../shared/app-lifecycle/windows/window-material'
 import { Button } from '../../ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
 import { SettingsRow } from '../form-controls/SettingsFormControls'

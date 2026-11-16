@@ -6,8 +6,8 @@ import type {
   CreateVenvResult,
   PythonEnvironment,
   PythonEnvironments
-} from '../../shared/notebook-kernel-types'
-import { venvInterpreterSegments } from '../../shared/notebook-venv-location'
+} from '../../shared/editor/notebooks/notebook-kernel-types'
+import { venvInterpreterSegments } from '../../shared/editor/notebooks/notebook-venv-location'
 
 const PROBE = 'import sys, platform; print(sys.executable); print(platform.python_version())'
 const PROBE_TIMEOUT_MS = 10_000

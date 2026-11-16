@@ -1,5 +1,5 @@
-import { readableWslDistroHoldText } from '../../shared/wsl-distro-stopped-hold'
-import { parseWslUncPath } from '../../shared/wsl-paths'
+import { readableWslDistroHoldText } from '../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
+import { parseWslUncPath } from '../../shared/file-access/wsl-paths'
 
 const FOLDER_UNAVAILABLE_PREFIX = 'folder_workspace_path_unavailable:'
 

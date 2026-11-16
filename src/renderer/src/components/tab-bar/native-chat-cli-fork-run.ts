@@ -1,8 +1,8 @@
 import { useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store/index'
 import { readIpcErrorMessage } from '@/runtime/errors/ipc-error'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { prepareNativeChatCliFork } from '@/lib/agent-session/resume/cli-fork/native-chat-cli-fork-preparation'
 import type { NativeChatCliForkSubject } from '@/lib/agent-session/resume/cli-fork/native-chat-cli-fork-preparation'
 import {
@@ -29,7 +29,7 @@ import { moveStructuredAgentLaunchDraft } from '@/lib/agent-session/launch/struc
 import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
 import type { AppState } from '@/store/types'
 import type { AiVaultAgent } from '../../../../shared/ai-vault/contracts/ai-vault-types'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout/terminal-tab-types'
 
 const pending = new Map<string, AbortController>()
@@ -64,7 +64,7 @@ function rememberForkOrigin(
     }
     const leafId = launchedLeafId(state.terminalLayoutsByTabId[terminalTabId]?.root)
     const fork = leafId
-      ? state.agentStatusByPaneKey[`${terminalTabId}:${leafId}`]?.providerSession?.id
+      ? state.agentStatusByPaneKey.get(`${terminalTabId}:${leafId}`)?.providerSession?.id
       : undefined
     if (fork) {
       forkOrigins.set(forkOriginKey(origin.workspaceId, fork), origin)

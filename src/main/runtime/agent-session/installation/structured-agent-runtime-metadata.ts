@@ -1,4 +1,4 @@
-import { agentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
+import { agentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { applyStructuredCodexWorkspaceTrust } from '../../../agent-launch/trust/agent-workspace-trust-spawn'
 import { ACP_LAUNCH_SPECS } from '../../../acp/launch/acp-launch-registry'
 import type { AcpLaunchSpec } from '../../../acp/launch/acp-launch-contract'
@@ -11,7 +11,7 @@ import { CODEX_STRUCTURED_AGENT } from '../../../codex/structured/launch/codex-s
 import { CLAUDE_STRUCTURED_AGENT } from '../../../claude/structured/claude-structured-agent-definition'
 import { CLAUDE_CLI_CONVERSATIONS } from '../../../claude/claude-cli-conversations'
 import { CODEX_CLI_CONVERSATIONS } from '../../../codex/history/journal-views/codex-cli-conversations'
-import { isNativeLocalLocation as supportsCodexStructuredLocation } from '../../../../shared/execution-host'
+import { isNativeLocalLocation as supportsCodexStructuredLocation } from '../../../../shared/execution-host/execution-host'
 import { supportsClaudeStructuredLocation } from '../../../claude/structured/launch/claude-structured-location-support'
 import { supportsAcpStructuredLocation } from '../../../acp/session/acp-structured-location-support'
 import { PI_RPC_RUNTIME_METADATA } from '../../../pi/rpc-runtime-metadata'
@@ -52,7 +52,8 @@ function acpChatProgram(spec: AcpLaunchSpec): StructuredAgentChatProgram {
       ? {
           hostAlternative: async (shellEnv, settings) =>
             (await selectAcpHostAccountHome(spec, shellEnv, getProfileUserDataPath(), settings)) !==
-            null
+            null,
+          ...(managedRuntime ? { onlyHostAlternative: () => managedRuntime.pin() === null } : {})
         }
       : {})
   }

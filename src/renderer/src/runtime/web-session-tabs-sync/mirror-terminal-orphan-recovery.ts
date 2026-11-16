@@ -1,6 +1,6 @@
 import { carryBrowserInitializationReceipt } from './browser-initialization-presentation'
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { recoverWebSessionTerminalOrphansBeforeApply } from '../hosted-terminals/recovery/web-session-terminal-orphan-recovery'
 import { isFrameDrawnServerWorkspace } from './frame-drawn-server-workspace-set'
 

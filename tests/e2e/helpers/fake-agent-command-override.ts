@@ -2,7 +2,7 @@ import {
   quoteStartupArg,
   resolveStartupShell
 } from '../../../src/shared/agent-launch/startup/tui-agent-startup-shell'
-import { resolveLocalWindowsAgentStartupShell } from '../../../src/shared/windows-terminal-shell'
+import { resolveLocalWindowsAgentStartupShell } from '../../../src/shared/shell/launch/windows-terminal-shell'
 
 /** Specs must apply this through `updateSettings`; the override below is quoted for it. */
 export const FAKE_AGENT_WINDOWS_SHELL = 'powershell.exe'

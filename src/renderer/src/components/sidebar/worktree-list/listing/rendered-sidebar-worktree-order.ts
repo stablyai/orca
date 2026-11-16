@@ -5,12 +5,12 @@ import {
 import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { AppState } from '@/store/types'
-import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-setting-overrides'
+import { getHostDisplayLabelOverrides } from '../../../../../../shared/execution-host/host-setting-overrides'
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   getLocalExecutionHostLabel,
   getSettingsFocusedExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
 import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { getProjectHostSetupProjectionFromState } from '@/store/projects/project-host-setup-selector'
@@ -28,7 +28,7 @@ import {
 } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
 import { orderHostSectionOptions } from '../../../../../../shared/sidebar-list/hosts/host-section-order'
 import { buildSidebarHostOptions } from '../controls/sidebar-host-options'
-import { getLogicalRepoOrderRankById } from '../../../../../../shared/project-section-order'
+import { getLogicalRepoOrderRankById } from '../../../../../../shared/sidebar-list/sections/project-section-order'
 import { getRenderedWorktreesInSidebarOrder } from '../navigation/worktree-sidebar-row-preference'
 import { selectWorktreeListReviewCacheInputs } from './review-cache-inputs'
 import {

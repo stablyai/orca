@@ -7,12 +7,15 @@ import {
   getFeatureWallMediaTile,
   type FeatureWallWorkflow,
   type FeatureWallWorkflowId
-} from '../../../../shared/feature-wall-workflows'
-import { getAgentsSteps, type AgentsStepId } from '../../../../shared/agents-orchestration-steps'
-import { getWorkbenchSteps, type WorkbenchStepId } from '../../../../shared/workbench-steps'
-import { getReviewSteps, type ReviewStepId } from '../../../../shared/review-steps'
-import type { FeatureWallOpenSourceTelemetry } from '../../../../shared/telemetry-property-schemas'
-import type { FeatureWallTourDepthSummary } from '../../../../shared/feature-wall-tour-depth'
+} from '../../../../shared/feature-education/explore/feature-wall-workflows'
+import { getAgentsSteps } from '../../../../shared/feature-education/explore/agents-orchestration-steps'
+import type { AgentsStepId } from '../../../../shared/feature-education/explore/agents-orchestration-steps'
+import { getWorkbenchSteps } from '../../../../shared/feature-education/explore/workbench-steps'
+import type { WorkbenchStepId } from '../../../../shared/feature-education/explore/workbench-steps'
+import { getReviewSteps } from '../../../../shared/feature-education/explore/review-steps'
+import type { ReviewStepId } from '../../../../shared/feature-education/explore/review-steps'
+import type { FeatureWallOpenSourceTelemetry } from '../../../../shared/telemetry/schemas/telemetry-property-schemas'
+import type { FeatureWallTourDepthSummary } from '../../../../shared/feature-education/explore/feature-wall-tour-depth'
 import { track } from '@/diagnostics/telemetry/telemetry'
 import { useAppStore } from '@/store/index'
 import { useFeatureWallTourSkills } from './tour/use-feature-wall-tour-skills'

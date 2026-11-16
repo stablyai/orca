@@ -1,15 +1,15 @@
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import {
   normalizeWorkspaceSessionKeyToWorkspaceId,
   normalizeWorkspaceSessionKeyToWorkspaceId as normalizeWorkspaceSessionKeyToWorktreeId
-} from '../../../../../shared/workspace-scope'
+} from '../../../../../shared/workspace/identity/workspace-scope'
 import {
   adoptStrandedHostPartitionSession,
   partitionRowsTheWriteWontReturn,

@@ -45,7 +45,7 @@ import {
 } from '@/lib/workspace/catalog/repo-ssh-connection'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 
 export function useHostRuntimeEffects(input: HostRuntimeEffectsInput) {
   const {

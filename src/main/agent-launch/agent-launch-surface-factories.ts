@@ -1,4 +1,4 @@
-import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
+import type { RuntimeTerminalCreate } from '../../shared/terminal/runtime/runtime-terminal-create-contract'
 /**
  * The factories `executeAgentLaunch` is handed: how a surface and a workspace are BUILT once the
  * executor has decided which. Separate from the executor because they are the contract each caller
@@ -10,7 +10,7 @@ import type {
   AgentLaunchPrompt,
   AgentLaunchMode
 } from '../../shared/agent-launch/contracts/agent-launch-intent'
-import type { StructuredAgentId } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { StructuredAgentId } from '../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { StructuredAgentSessionFirstMessage } from '../../shared/agent-session/structured-agent-session-create'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchParams } from '../../shared/rpc-contract/agent-launch/agent-launch-params'

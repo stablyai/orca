@@ -1,5 +1,5 @@
 import { parseWorkerTerminalHostScope } from '../../../../../../../shared/orchestration/workers/worker-terminal-host-scope'
-import type { RuntimeTerminalInteractiveWait } from '../../../../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalInteractiveWait } from '../../../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { WorkerTerminalReleaseRuntime } from '../../../../../orchestration/terminal-authority/release/worker-terminal-release-runtime'
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 import type { OrchestrationFleetWorker } from '../../../../../../../shared/orchestration/fleet/orchestration-fleet-projection'
@@ -11,7 +11,7 @@ import type {
   FederatedDispatchRow,
   WorkerDispatchRow
 } from '../../../../../orchestration/db/orchestration-records'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../../shared/workspace-layout/layout-owner-switch'
 import { exposeDispatchContext } from './dispatch-context-exposure'
 import { resolvePinnedFederatedServer } from '../../../../../orchestration/legacy-remote-home/pinned-federated-server'
 
@@ -279,7 +279,7 @@ export async function callFederatedWorkerShow(
     agentWait?: RuntimeTerminalInteractiveWait | null
   }
 }> {
-  const server = resolvePinnedFederatedServer(runtime, federated)
+  const server = await resolvePinnedFederatedServer(runtime, federated)
   return (await runtime.callOrchestrationWorkerServer(
     server.environmentId,
     'orchestration.federationShow',

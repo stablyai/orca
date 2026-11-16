@@ -1,5 +1,8 @@
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
-import { toRuntimeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
+import {
+  toRuntimeExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import type { AppState } from '@/store/types'
 import {
   listWslHostWindowsPathAccess,

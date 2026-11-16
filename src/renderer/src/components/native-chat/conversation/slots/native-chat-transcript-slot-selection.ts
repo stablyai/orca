@@ -2,7 +2,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { nativeChatMessagesWaitingBehindLiveTurn } from '../../../../../../shared/native-chat/transcript/native-chat-messages-waiting-behind-live-turn'
+import { nativeChatMessagesWaitingBehindLiveTurn } from '../../../../../../shared/native-chat/transcript/turns/native-chat-messages-waiting-behind-live-turn'
 import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
 
 export function nativeChatSlotKey(slot: NativeChatTranscriptSlot): string {

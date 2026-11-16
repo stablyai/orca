@@ -6,7 +6,7 @@ import {
   resolveNativeChatTranscriptAgent,
   type NativeChatTranscriptAgent
 } from '../../shared/native-chat/native-chat-agent-support'
-import { isWslUncPath } from '../../shared/wsl-paths'
+import { isWslUncPath } from '../../shared/file-access/wsl-paths'
 import { forEachSessionFile } from '../ai-vault/discovery/session-scanner-discovery'
 import {
   claudeProjectsHostDirs,
@@ -18,7 +18,7 @@ import { resolveOrcaManagedCodexHomePath } from '../codex/configuration/homes/co
 import {
   findGrokChatHistoryBySessionId,
   resolveGrokSessionsDir
-} from '../../shared/grok-session-paths'
+} from '../../shared/agent-hook-listener/providers/grok/grok-session-paths'
 import {
   hostAdditionalCodexHomePaths,
   needsWslHostResolution,

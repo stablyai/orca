@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getDefaultWorkspaceSession } from '../constants'
+import { getDefaultWorkspaceSession } from '../orca-profiles/constants'
 import {
   assertOrcadMigrationScrollbackReferences,
   parseOrcadMigrationSnapshotChunkResult,

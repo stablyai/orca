@@ -1,7 +1,7 @@
 // Rank Cmd+J engine results together for the new-tab omnibox.
 
 import { capPaletteSection } from '../cmd-j/palette-section-render-cap'
-import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
+import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard/clipboard-text'
 import type { PaletteDocumentRank } from '../../../../shared/palette-match/palette-document'
 import {
   comparePaletteEntityRanks,
@@ -10,7 +10,10 @@ import {
   type PaletteActivityRank,
   type PaletteSearchContext
 } from '../../../../shared/palette-match/palette-ranking'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import {
   searchBrowserPages,
   type BrowserPaletteSearchResult,

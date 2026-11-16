@@ -1,5 +1,5 @@
 import { expect, type Mock } from 'vitest'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 import { collectLeafIds } from '../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
 import type {
   LayoutApplyOutcome,

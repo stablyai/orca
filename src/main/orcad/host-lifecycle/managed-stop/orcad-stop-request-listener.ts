@@ -5,7 +5,7 @@ import {
   ORCAD_STOP_REQUEST_FILENAME,
   type OrcadManagedStopContext,
   type OrcadManagedStopRequest
-} from '../../../../shared/orcad-stop-request'
+} from '../../../../shared/remote-runtime/orcad-lifecycle/orcad-stop-request'
 import {
   orcadManagedStopRequestPath,
   validateOrcadManagedStopRequest

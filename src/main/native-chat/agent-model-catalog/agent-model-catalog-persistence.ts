@@ -15,7 +15,7 @@ import {
   type AgentModelCatalogEntry,
   type AgentModelCatalogListing
 } from './agent-model-catalog-entry'
-import { isStructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { isStructuredAgentId } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { isRecord } from '../../../shared/agent-status/child-work/agent-status-child-work-value-guards'
 
 // Older catalogs lack serviceTiers and cannot safely construct Fast requests.
@@ -81,6 +81,7 @@ function parseModel(value: unknown): AgentSessionModelOption | null {
     ...(typeof row.supportsFastMode === 'boolean'
       ? { supportsFastMode: row.supportsFastMode }
       : {}),
+    ...(typeof row.defaultFastMode === 'boolean' ? { defaultFastMode: row.defaultFastMode } : {}),
     ...(typeof row.supportsAutoMode === 'boolean'
       ? { supportsAutoMode: row.supportsAutoMode }
       : {}),

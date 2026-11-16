@@ -1,0 +1,312 @@
+import { describe, expect, it, vi } from 'vitest'
+import { RuntimeRpcCallQueueOverloadError, RuntimeRpcCallQueuePool } from './runtime-rpc-call-queue'
+
+describe('runtime RPC call queue', () => {
+  it('limits background calls while allowing foreground runtime work through', async () => {
+    const queue = new RuntimeRpcCallQueuePool(2, 1)
+    const started: string[] = []
+    const pending: ((value: string) => void)[] = []
+    const enqueuePending = (method: string, label: string): Promise<string> =>
+      queue.enqueue('web-runtime', method, async () => {
+        started.push(label)
+        return await new Promise<string>((resolve) => pending.push(resolve))
+      })
+
+    const background1 = enqueuePending('github.prForBranch', 'background-1')
+    const background2 = enqueuePending('hostedReview.forBranch', 'background-2')
+    await vi.waitFor(() => expect(started).toEqual(['background-1']))
+
+    const foreground = queue.enqueue('web-runtime', 'terminal.send', async () => {
+      started.push('foreground')
+      return 'foreground'
+    })
+    await expect(foreground).resolves.toBe('foreground')
+    expect(started).toEqual(['background-1', 'foreground'])
+
+    pending.shift()?.('background-1')
+    await expect(background1).resolves.toBe('background-1')
+    await vi.waitFor(() => expect(started).toEqual(['background-1', 'foreground', 'background-2']))
+
+    pending.shift()?.('background-2')
+    await expect(background2).resolves.toBe('background-2')
+  })
+
+  it('runs foreground calls while worktree deletes wait, still bounding the deletes', async () => {
+    const queue = new RuntimeRpcCallQueuePool(2, 1)
+    const started: string[] = []
+    const pending: (() => void)[] = []
+    const deletes = ['rm-1', 'rm-2', 'rm-3'].map((label) =>
+      queue.enqueue('web-runtime', 'worktree.rm', async () => {
+        started.push(label)
+        await new Promise<void>((resolve) => pending.push(resolve))
+        return label
+      })
+    )
+    await vi.waitFor(() => expect(started).toEqual(['rm-1', 'rm-2']))
+
+    const listing = queue.enqueue('web-runtime', 'worktree.list', async () => 'listed')
+    await expect(listing).resolves.toBe('listed')
+    expect(started).toEqual(['rm-1', 'rm-2'])
+
+    pending.shift()?.()
+    await expect(deletes[0]).resolves.toBe('rm-1')
+    await vi.waitFor(() => expect(started).toEqual(['rm-1', 'rm-2', 'rm-3']))
+    pending.shift()?.()
+    pending.shift()?.()
+    await expect(Promise.all(deletes)).resolves.toEqual(['rm-1', 'rm-2', 'rm-3'])
+  })
+
+  it('runs foreground calls while model catalog reads wait on a host listing', async () => {
+    const queue = new RuntimeRpcCallQueuePool(8, 2)
+    const release: (() => void)[] = []
+    const waits = Array.from({ length: 8 }, () =>
+      queue.enqueue('web-runtime', 'agentSession.modelCatalog', async () => {
+        await new Promise<void>((resolve) => release.push(resolve))
+        return 'listed'
+      })
+    )
+    await vi.waitFor(() => expect(release).toHaveLength(8))
+
+    const send = queue.enqueue('web-runtime', 'agentSession.send', async () => 'sent')
+    await expect(send).resolves.toBe('sent')
+
+    for (const resolve of release) {
+      resolve()
+    }
+    await expect(Promise.all(waits)).resolves.toEqual(Array(8).fill('listed'))
+  })
+
+  it('keeps terminal input moving while byte-range reads fill their own small lane', async () => {
+    const queue = new RuntimeRpcCallQueuePool(8, 2)
+    const release: (() => void)[] = []
+    const reads = Array.from({ length: 6 }, () =>
+      queue.enqueue('web-runtime', 'files.readChunk', async () => {
+        await new Promise<void>((resolve) => release.push(resolve))
+        return 'chunk'
+      })
+    )
+    // Two at a time, however many viewers ask.
+    await vi.waitFor(() => expect(release).toHaveLength(2))
+
+    const send = queue.enqueue('web-runtime', 'terminal.send', async () => 'sent')
+    await expect(send).resolves.toBe('sent')
+    expect(release).toHaveLength(2)
+
+    for (let finished = 0; finished < 6; finished += 1) {
+      await vi.waitFor(() => expect(release.length).toBeGreaterThan(0))
+      expect(release.length).toBeLessThanOrEqual(2)
+      release.shift()?.()
+    }
+    await expect(Promise.all(reads)).resolves.toEqual(Array(6).fill('chunk'))
+  })
+
+  it('frees the queue slot when a runtime call throws synchronously', async () => {
+    const queue = new RuntimeRpcCallQueuePool(1, 1)
+    const first = queue.enqueue('web-runtime', 'status.get', () => {
+      throw new Error('invalid stored runtime pairing')
+    })
+
+    await expect(first).rejects.toThrow('invalid stored runtime pairing')
+
+    const second = queue.enqueue('web-runtime', 'status.get', async () => 'second')
+    await expect(second).resolves.toBe('second')
+  })
+
+  it('removes an aborted call before it starts', async () => {
+    const queue = new RuntimeRpcCallQueuePool(1, 1)
+    let releaseFirst: () => void = () => {}
+    const first = queue.enqueue('runtime-a', 'status.get', async () => {
+      await new Promise<void>((resolve) => {
+        releaseFirst = resolve
+      })
+    })
+    const controller = new AbortController()
+    const run = vi.fn(async () => 'cancelled')
+    const cancelled = queue.enqueue('runtime-a', 'status.get', run, 1, controller.signal)
+
+    controller.abort()
+    await expect(cancelled).rejects.toMatchObject({ name: 'AbortError' })
+    expect(run).not.toHaveBeenCalled()
+
+    releaseFirst()
+    await expect(first).resolves.toBeUndefined()
+    await expect(
+      queue.enqueue('runtime-a', 'status.get', async () => 'recovered', 1)
+    ).resolves.toBe('recovered')
+  })
+
+  it('preserves queued background ordering across large bursts', async () => {
+    const queue = new RuntimeRpcCallQueuePool(1, 1)
+    const started: number[] = []
+    let releaseFirst: () => void = () => {}
+    const first = queue.enqueue('web-runtime', 'github.prForBranch', async () => {
+      started.push(0)
+      await new Promise<void>((resolve) => {
+        releaseFirst = resolve
+      })
+      return 0
+    })
+    const rest = Array.from({ length: 70 }, (_, index) =>
+      queue.enqueue('web-runtime', 'github.prForBranch', async () => {
+        const value = index + 1
+        started.push(value)
+        return value
+      })
+    )
+
+    await vi.waitFor(() => expect(started).toEqual([0]))
+    releaseFirst()
+
+    await expect(Promise.all([first, ...rest])).resolves.toEqual(
+      Array.from({ length: 71 }, (_, index) => index)
+    )
+    expect(started).toEqual(Array.from({ length: 71 }, (_, index) => index))
+  })
+
+  it('rejects per-selector overload and accepts work after the queue drains', async () => {
+    const queue = new RuntimeRpcCallQueuePool(1, 1, 2, 10)
+    let releaseFirst: () => void = () => {}
+    const first = queue.enqueue('runtime-a', 'status.get', async () => {
+      await new Promise<void>((resolve) => {
+        releaseFirst = resolve
+      })
+      return 'first'
+    })
+    const second = queue.enqueue('runtime-a', 'status.get', async () => 'second')
+    const third = queue.enqueue('runtime-a', 'status.get', async () => 'third')
+
+    await expect(queue.enqueue('runtime-a', 'status.get', async () => 'overflow')).rejects.toEqual(
+      expect.objectContaining({
+        code: 'runtime_rpc_queue_overloaded',
+        scope: 'selector'
+      })
+    )
+
+    releaseFirst()
+    await expect(Promise.all([first, second, third])).resolves.toEqual(['first', 'second', 'third'])
+    await expect(queue.enqueue('runtime-a', 'status.get', async () => 'recovered')).resolves.toBe(
+      'recovered'
+    )
+  })
+
+  it('caps queued calls across selectors and recovers after draining', async () => {
+    const queue = new RuntimeRpcCallQueuePool(1, 1, 10, 2)
+    const releases: (() => void)[] = []
+    const blockers = ['runtime-a', 'runtime-b'].map((selector) =>
+      queue.enqueue(selector, 'status.get', async () => {
+        await new Promise<void>((resolve) => releases.push(resolve))
+      })
+    )
+    const queuedA = queue.enqueue('runtime-a', 'status.get', async () => 'queued-a')
+    const queuedB = queue.enqueue('runtime-b', 'status.get', async () => 'queued-b')
+
+    const overload = queue.enqueue('runtime-c', 'status.get', async () => 'overflow')
+    await expect(overload).rejects.toBeInstanceOf(RuntimeRpcCallQueueOverloadError)
+    await expect(overload).rejects.toMatchObject({ scope: 'global' })
+
+    releases.splice(0).forEach((release) => release())
+    await expect(Promise.all([...blockers, queuedA, queuedB])).resolves.toEqual([
+      undefined,
+      undefined,
+      'queued-a',
+      'queued-b'
+    ])
+    await expect(queue.enqueue('runtime-c', 'status.get', async () => 'recovered')).resolves.toBe(
+      'recovered'
+    )
+  })
+
+  it('caps retained call bytes across active and queued work, then recovers', async () => {
+    const queue = new RuntimeRpcCallQueuePool(1, 1, 10, 10, 10)
+    let releaseFirst: () => void = () => {}
+    let firstStarted = false
+    const first = queue.enqueue(
+      'runtime-a',
+      'status.get',
+      async () => {
+        firstStarted = true
+        await new Promise<void>((resolve) => {
+          releaseFirst = resolve
+        })
+        return 'first'
+      },
+      10
+    )
+
+    await vi.waitFor(() => expect(firstStarted).toBe(true))
+    await expect(
+      queue.enqueue('runtime-b', 'status.get', async () => 'overflow', 1)
+    ).rejects.toMatchObject({ scope: 'memory' })
+
+    releaseFirst()
+    await expect(first).resolves.toBe('first')
+    await expect(
+      queue.enqueue('runtime-b', 'status.get', async () => 'recovered', 10)
+    ).resolves.toBe('recovered')
+  })
+})
+
+it('keeps actions and status runnable while timed PR snapshots wait', async () => {
+  const pool = new RuntimeRpcCallQueuePool()
+  const release = Promise.withResolvers<void>()
+  const started: string[] = []
+  const timers = [0, 1, 2].map((row) =>
+    pool.enqueue(
+      'host',
+      'github.prForBranch',
+      async () => {
+        started.push(`timer-${row}`)
+        await release.promise
+      },
+      0,
+      undefined,
+      { reason: 'swr' }
+    )
+  )
+  expect(started).toEqual(['timer-0', 'timer-1'])
+  for (const reason of ['manual', 'active', 'post-push', 'visible', undefined, 'swr']) {
+    await expect(
+      pool.enqueue('host', 'github.prForBranch', async () => 'current', 0, undefined, {
+        reason,
+        userRefresh: reason === 'swr'
+      })
+    ).resolves.toBe('current')
+  }
+  await expect(pool.enqueue('host', 'git.status', async () => 'clean')).resolves.toBe('clean')
+  await expect(pool.enqueue('host', 'hostedReview.forBranch', async () => 'review')).resolves.toBe(
+    'review'
+  )
+  expect(started).toEqual(['timer-0', 'timer-1'])
+  release.resolve()
+  await Promise.all(timers)
+  expect(started).toEqual(['timer-0', 'timer-1', 'timer-2'])
+})
+
+it('shares pending and byte limits across ordinary and timed PR lanes and removes cancelled calls', async () => {
+  const pool = new RuntimeRpcCallQueuePool(1, 1, 1, 5, 4)
+  const release = Promise.withResolvers<void>()
+  const active = pool.enqueue('host', 'github.prForBranch', () => release.promise, 1, undefined, {
+    reason: 'swr'
+  })
+  const controller = new AbortController()
+  const queued = pool.enqueue(
+    'host',
+    'github.prForBranch',
+    async () => 'unused',
+    1,
+    controller.signal,
+    { reason: 'swr' }
+  )
+  await expect(pool.enqueue('host', 'git.status', async () => 'overflow')).rejects.toMatchObject({
+    scope: 'selector'
+  })
+  const cancelled = expect(queued).rejects.toMatchObject({ name: 'AbortError' })
+  controller.abort()
+  await cancelled
+  await expect(pool.enqueue('host', 'git.status', async () => 'clean', 3)).resolves.toBe('clean')
+  await expect(pool.enqueue('host', 'git.status', async () => 'oversize', 4)).rejects.toMatchObject(
+    { scope: 'memory' }
+  )
+  release.resolve()
+  await active
+})

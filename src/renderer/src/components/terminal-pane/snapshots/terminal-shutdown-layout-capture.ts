@@ -10,7 +10,7 @@ import { serializeWithAbsoluteCursor } from '../../../../../shared/terminal/repl
 import {
   getUtf8ByteLength,
   isUtf8ByteLengthWithinLimit
-} from '../../../../../shared/utf8-byte-limits'
+} from '../../../../../shared/text/utf8-byte-limits'
 
 const MAX_BUFFER_BYTES = TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT
 

@@ -222,6 +222,33 @@ describe('chat-image requests', () => {
       ).toBe('denied')
     }
   )
+
+  it.skipIf(process.platform === 'win32')(
+    'show an image-named link to an extensionless file only when its bytes are an image',
+    async () => {
+      const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0])
+      await writeFile(join(outside, 'photo'), png)
+      await writeFile(join(outside, 'notes'), 'outside notes\n')
+      await symlink(join(outside, 'photo'), join(outside, 'photo.jpg'))
+      await symlink(join(outside, 'notes'), join(outside, 'notes.jpg'))
+      const store = makeStore({})
+
+      const imagePath = await resolveLocalFileRequestPath(
+        join(outside, 'photo.jpg'),
+        CHAT_IMAGE,
+        store
+      )
+      await expect(readLocalFileContent(imagePath, { imageBySignature: true })).resolves.toEqual({
+        content: png.toString('base64'),
+        isBinary: true,
+        isImage: true,
+        mimeType: 'image/png'
+      })
+      expect(
+        await settles(resolveLocalFileRequestPath(join(outside, 'notes.jpg'), CHAT_IMAGE, store))
+      ).toBe('denied')
+    }
+  )
 })
 
 describe('project-folder-link listings', () => {
