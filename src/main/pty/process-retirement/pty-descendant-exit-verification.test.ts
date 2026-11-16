@@ -24,6 +24,31 @@ describe('descendant exit verification across partial process-table reads', () =
 
   afterEach(() => vi.useRealTimers())
 
+  it.each([
+    [true, 'exited'],
+    [undefined, 'live']
+  ] as const)(
+    'distinguishes an exited unreaped child (%s) from a stopped survivor',
+    async (zombie, verdict) => {
+      const target = row(20)
+      const snapshot = collectDescendantRows(10, [row(10, 1), target], CAPTURED_AT)
+      let killed = false
+      const pending = terminateDescendantSnapshotWithVerdict(snapshot, {
+        readTable: async () => capture([{ ...target, ...(killed ? { zombie } : {}) }]),
+        sendSignal: (_pid, signal) => {
+          if (signal === 'SIGKILL') {
+            killed = true
+          }
+        },
+        requireIdentityBeforeSignal: true,
+        graceMs: 0,
+        verifyMs: 200
+      })
+      await vi.advanceTimersByTimeAsync(300)
+      await expect(pending).resolves.toBe(verdict)
+    }
+  )
+
   it('signals a descendant omitted from the first identity read when it reappears', async () => {
     const first = row(20)
     const later = row(30)
@@ -137,6 +162,30 @@ describe('descendant exit verification across partial process-table reads', () =
       [30, 'SIGTERM'],
       [20, 'SIGKILL'],
       [30, 'SIGKILL']
+    ])
+  })
+
+  it('hangs up a lone SIGTERM-ignoring shell instead of waiting out the grace', async () => {
+    const shell = row(20)
+    const snapshot = collectDescendantRows(10, [row(10, 1), shell], CAPTURED_AT)
+    let shellHungUp = false
+    const sendSignal = vi.fn((_pid: number, signal: NodeJS.Signals) => {
+      shellHungUp ||= signal === 'SIGHUP'
+    })
+    const pending = terminateDescendantSnapshotWithVerdict(snapshot, {
+      readTable: async () => capture(shellHungUp ? [] : [shell]),
+      sendSignal,
+      requireIdentityBeforeSignal: true,
+      shellPid: shell.pid,
+      graceMs: 10_000,
+      verifyMs: 2_000
+    })
+    await vi.advanceTimersByTimeAsync(500)
+
+    await expect(pending).resolves.toBe('exited')
+    expect(sendSignal.mock.calls).toEqual([
+      [20, 'SIGTERM'],
+      [20, 'SIGHUP']
     ])
   })
 

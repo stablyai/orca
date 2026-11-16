@@ -1,7 +1,7 @@
-import type { ClassifiedError } from '../../../shared/classified-error'
+import type { ClassifiedError } from '../../../shared/errors/classified-error'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../shared/github/repositories/repository-identity'
 import type { IssueInfo } from '../../../shared/github/pull-requests/pull-request-types'
-import type { IssueSourcePreference } from '../../../shared/repo-types'
+import type { IssueSourcePreference } from '../../../shared/repository/repo-types'
 import { mapIssueInfo } from '../api/github-read-response'
 import type { LocalGitExecOptions } from '../repositories/github-repository-identity'
 import {

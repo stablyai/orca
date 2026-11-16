@@ -23,9 +23,12 @@ import type {
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 
-import { type ExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
+import {
+  type ExecutionHostId,
+  parseExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 
 export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRuntimeWithStopTerminalsForWorktree {
@@ -90,17 +93,19 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
   }
 
   protected readonly sleepResumeRecords: WorktreeSleepResumeRecorder = {
-    capture: (worktreeId, ptyIds) =>
-      captureWorktreeSleepResumeRecords({
+    capture: (worktreeId, ptyIds) => {
+      const paneKeysByPtyId = new Map(
+        [...ptyIds].map((ptyId) => [ptyId, this.collectAgentStatusPaneKeysForPty(ptyId)])
+      )
+      return captureWorktreeSleepResumeRecords({
         worktreeId,
-        paneKeysByPtyId: new Map(
-          [...ptyIds].map((ptyId) => [ptyId, this.collectAgentStatusPaneKeysForPty(ptyId)])
-        ),
+        paneKeysByPtyId,
         launchByPtyId: new Map([...ptyIds].map((ptyId) => [ptyId, this.ptysById.get(ptyId)])),
-        readRows: () => this.getAgentProviderSessionSnapshotFn?.() ?? [],
+        readRowsForPane: (paneKey) => this.getAgentProviderSessionRowsForPaneFn?.(paneKey) ?? [],
         checkAgentPresence: this.checkHookAgentPresenceFn,
         capturedAt: Date.now()
-      }),
+      })
+    },
     persist: async (worktreeId, capture, stoppedPtyIds) => {
       const commit = (): Promise<void> =>
         this.commitWorkspaceSessionEdit(

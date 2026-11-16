@@ -1,4 +1,4 @@
-import { abortSignalReason } from '../../abort-signal-reason'
+import { abortSignalReason } from '../../concurrency/abort-signal-reason'
 import { REMOTE_RUNTIME_MAX_PREPARED_RPC_BYTES } from '../remote-runtime-memory-limits'
 
 const DEFAULT_REMOTE_RUNTIME_CALL_CONCURRENCY = 8

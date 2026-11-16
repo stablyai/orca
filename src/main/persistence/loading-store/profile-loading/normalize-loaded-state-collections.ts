@@ -1,8 +1,8 @@
-import type { PersistedState } from '../../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import {
   normalizeProjectHostSetupRows,
   normalizeProjectRows
-} from '../../../../shared/project-catalog-row-normalization'
+} from '../../../../shared/project/catalog/project-catalog-row-normalization'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { parseWorkspaceSessionSalvaging } from '../../../../shared/workspace-session/workspace-session-salvage'
 import {

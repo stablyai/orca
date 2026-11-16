@@ -4,9 +4,9 @@ import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
-import { errorMessage } from '../../../../../shared/error-message'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
+import { errorMessage } from '../../../../../shared/errors/error-message'
 import {
   WORKSPACE_CLEANUP_RULE_KEYS,
   hasEnabledWorkspaceCleanupRule,

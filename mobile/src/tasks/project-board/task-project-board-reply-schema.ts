@@ -1,6 +1,10 @@
 import * as z from 'zod'
 import type { GitHubProjectOwnerType } from '../../../../src/shared/github/projects/project-types'
-import { hostUnionArms, salvagedOptional, salvagingArray } from '../../../../src/shared/zod-salvage'
+import {
+  hostUnionArms,
+  salvagedOptional,
+  salvagingArray
+} from '../../../../src/shared/validation/zod-salvage'
 import {
   assignableUserListSchema,
   detailCheckListSchema,

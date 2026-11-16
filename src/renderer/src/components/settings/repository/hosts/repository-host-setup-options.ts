@@ -1,12 +1,12 @@
 import {
   getExecutionHostLabel,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import type { ExecutionHostRegistryEntry } from '../../../../../../shared/execution-host/execution-host-registry-entry'
 import type {
   ProjectHostSetup,
   ProjectHostSetupState
-} from '../../../../../../shared/project-types'
+} from '../../../../../../shared/project/project-types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { translateHostDisplayLabel } from '../../../sidebar/execution-host-label'

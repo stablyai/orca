@@ -13,7 +13,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { CopyTextButton } from '@/components/clipboard/CopyTextButton'
 import { isAgentLaunchOnlyError } from '../launch-outcome/agent-launch-pane-notice-text'
-import { hasClientEnvironmentFooter } from '../../../../../shared/client-environment-info'
+import { hasClientEnvironmentFooter } from '../../../../../shared/feedback/client-environment-info'
 import {
   failedSpawnEnvironmentFooter,
   withoutTerminalSpawnIssueRequest

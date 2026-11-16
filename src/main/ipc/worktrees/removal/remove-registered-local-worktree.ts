@@ -1,12 +1,12 @@
 import { worktreeRemovalLifetime } from '../../../workspaces/removal/worktree-removal-lifetime'
 import { assertRegisteredLocalWorktreePreflight } from './registered-local-worktree-preflight'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import {
   nativeWindowsMarkerMissing,
   usesNativeWindowsRemoval
 } from '../../../git/worktrees/removal/windows-worktree-removal'
 import { pruneGitWorktrees } from '../../../git/worktrees/removal/worktree-prune-guard'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import type { GitPushTarget, GitWorktreeInfo } from '../../../../shared/worktree/types'
 import { assertWorktreeUnlockedForRemoval } from '../../../../shared/worktree/removal/removal'

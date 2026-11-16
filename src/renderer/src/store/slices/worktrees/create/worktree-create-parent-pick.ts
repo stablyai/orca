@@ -6,8 +6,8 @@ import {
   folderWorkspaceKey,
   parseWorkspaceKey,
   worktreeWorkspaceKey
-} from '../../../../../../shared/workspace-scope'
-import type { WorkspaceKey } from '../../../../../../shared/workspace-scope'
+} from '../../../../../../shared/workspace/identity/workspace-scope'
+import type { WorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import {
   getIndexedAllWorktrees,
   getIndexedWorktreesById
@@ -17,8 +17,8 @@ import {
   isWorktreeHostIdentity
 } from '../../../../../../shared/worktree/host-qualified-identity'
 import { resolveReviewRepository } from '@/lib/source-control/review/review-owner'
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { findFolderWorkspaceRecord } from '../../../folder-workspaces/folder-workspace-record-index'
 import {
   selectFolderWorkspaces,

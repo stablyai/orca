@@ -1,4 +1,4 @@
-import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import {
   folderWorkspaceToWorktree,
   getFolderWorkspaceHostIdentity
@@ -6,7 +6,7 @@ import {
 import {
   getWorktreeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import {

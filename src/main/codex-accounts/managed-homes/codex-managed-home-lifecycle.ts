@@ -1,6 +1,7 @@
-import { mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
-import { dirname, join, resolve, sep } from 'node:path'
-import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absence'
+import { mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync, type Dirent } from 'node:fs'
+import { readdir, rm } from 'node:fs/promises'
+import { join, resolve, sep } from 'node:path'
+import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesystem-absence'
 import {
   WINDOWS_RM_MAX_RETRIES,
   WINDOWS_RM_RETRY_DELAY_MS
@@ -13,10 +14,84 @@ import type {
   ManagedCodexHomeLocation
 } from '../account-management/codex-account-service-types'
 import { writeFileAtomically } from '../../filesystem/atomic-file-publication'
+import { MERGE_PENDING_SUFFIX, removeDirectoryLink } from '../../filesystem/merged-directory-link'
+import {
+  CODEX_DATABASE_FILE,
+  HISTORY_CLEANUP_MANIFEST,
+  PRE_SHARE_DATABASES_DIR,
+  SET_ASIDE_ROLLOUTS_DIR
+} from '../../codex/history/shared-store/codex-account-history-cleanup-manifest'
 import { ManagedCodexHomeTemporarilyUnavailableError } from './host-codex-managed-home-ownership'
 import type { CodexManagedHomePath } from './codex-managed-home-path'
 
 const WSL_MANAGED_HOME_TIMEOUT_MS = 5_000
+
+// Codex recorded the account's conversations under its own path in the shared index, a home
+// that was busy at every launch may still hold its only copy, and a merge keeps conflicting
+// copies (and set-aside rollout forms, listed in the cleanup manifest) beside the links; all of
+// it outlives the login. A home that was shared (it has the manifest) keeps its own databases
+// too: deleting them waits for a later release that has seen the shared store work.
+const KEPT_HISTORY = [
+  'sessions',
+  'archived_sessions',
+  SET_ASIDE_ROLLOUTS_DIR,
+  HISTORY_CLEANUP_MANIFEST,
+  PRE_SHARE_DATABASES_DIR
+]
+const KEEP_ON_REMOVAL_SCRIPT = [
+  'set -u',
+  'home=$1',
+  'kept() {',
+  '  case "${1##*/}" in',
+  '    *.orca-profile-merge) return 0 ;;',
+  `    ${KEPT_HISTORY.join(' | ')}) return 0 ;;`,
+  `    *.sqlite | *.sqlite-wal | *.sqlite-shm) [ -f "$home/${HISTORY_CLEANUP_MANIFEST}" ] ;;`,
+  '    *) return 1 ;;',
+  '  esac',
+  '}',
+  'any_kept=0',
+  'for entry in "$home"/* "$home"/.[!.]* "$home"/..?*; do',
+  '  if kept "$entry"; then any_kept=1; fi',
+  'done',
+  'if [ "$any_kept" = 0 ]; then',
+  '  rm -rf -- "$home"',
+  '  rmdir -- "${home%/*}" 2>/dev/null || true',
+  '  exit 0',
+  'fi',
+  // GNU rm removes a link itself, never what it points to.
+  'for entry in "$home"/* "$home"/.[!.]* "$home"/..?*; do',
+  '  if [ -e "$entry" ] || [ -L "$entry" ]; then kept "$entry" || rm -rf -- "$entry"; fi',
+  'done'
+].join('\n')
+
+/**
+ * Deletes the login and private state but keeps shared history; true when anything was kept.
+ * Links are removed one by one first, so no recursive delete ever meets a Windows junction.
+ */
+async function removeManagedHomeKeepingSharedHistory(home: string): Promise<boolean> {
+  const entries = await readdir(home, { withFileTypes: true })
+  const sharedOnce = entries.some((entry) => entry.name === HISTORY_CLEANUP_MANIFEST)
+  const kept = (entry: Dirent): boolean =>
+    KEPT_HISTORY.includes(entry.name) ||
+    entry.name.endsWith(MERGE_PENDING_SUFFIX) ||
+    (sharedOnce && entry.isFile() && CODEX_DATABASE_FILE.test(entry.name))
+  for (const entry of entries.filter((candidate) => !kept(candidate))) {
+    const path = join(home, entry.name)
+    if (entry.isSymbolicLink()) {
+      // Never recurse through a link (a Windows junction included).
+      await removeDirectoryLink(path)
+      continue
+    }
+    await rm(path, {
+      recursive: true,
+      force: true,
+      maxRetries: WINDOWS_RM_MAX_RETRIES,
+      retryDelay: WINDOWS_RM_RETRY_DELAY_MS
+    })
+  }
+  // Read again: history a writer created meanwhile must not fall to the whole-home removal.
+  return (await readdir(home, { withFileTypes: true })).some(kept)
+}
 
 function removeManagedHomeTreeSync(targetPath: string): void {
   // Retry transient Windows locks held by login descendants to avoid orphaning the home.
@@ -99,20 +174,35 @@ export class CodexManagedHomeLifecycle {
       return
     }
 
+    const wslHome = parseWslUncPath(managedHomePath)
+    if (wslHome) {
+      // Never walk a guest tree from Windows: a Linux link must not be followed over 9P.
+      try {
+        const result = await runWslProcess({
+          distro: wslHome.distro,
+          loginPath: 'none',
+          script: KEEP_ON_REMOVAL_SCRIPT,
+          args: [wslHome.linuxPath],
+          shell: 'bash',
+          timeoutMs: WSL_MANAGED_HOME_TIMEOUT_MS
+        })
+        if (result.code !== 0 || result.timedOut) {
+          throw new Error(`WSL cleanup exited with ${result.timedOut ? 'a timeout' : result.code}`)
+        }
+      } catch (error) {
+        console.warn('[codex-accounts] Failed to remove managed home:', error)
+      }
+      return
+    }
+
     try {
+      if (await removeManagedHomeKeepingSharedHistory(managedHomePath)) {
+        return
+      }
       removeManagedHomeTreeSync(managedHomePath)
     } catch (error) {
       // Cleanup failures must not mask the original error.
       console.warn('[codex-accounts] Failed to remove managed home:', error)
-      return
-    }
-
-    if (parseWslUncPath(managedHomePath)) {
-      try {
-        removeManagedHomeTreeSync(dirname(managedHomePath))
-      } catch {
-        // Best-effort cleanup
-      }
       return
     }
 

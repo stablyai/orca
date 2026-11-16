@@ -1,22 +1,22 @@
 // Sync phone view settings through the shared ui.get/ui.set store so edits converge across clients.
 
 import type { WorkspaceStatusDefinition } from '../../../../src/shared/worktree/types'
-import { withDefaultWorkspaceStatuses } from '../../../../src/shared/workspace-statuses'
-import { DEFAULT_WORKSPACE_STATUSES } from '../../../../src/shared/workspace-status-defaults'
+import { withDefaultWorkspaceStatuses } from '../../../../src/shared/workspace/status/workspace-statuses'
+import { DEFAULT_WORKSPACE_STATUSES } from '../../../../src/shared/workspace/status/workspace-status-defaults'
 import {
   NO_WORKSPACE_ROW_FILTERS,
   WORKSPACE_ROW_FILTER_KEYS,
   WORKSPACE_ROW_FILTER_UI_FIELDS
 } from '../../../../src/shared/workspace-view/workspace-row-filters'
 import { resolveVisibleWorkspaceHostIds } from '../../../../src/shared/workspace-view/workspace-host-visibility'
-import type { PersistedUIState } from '../../../../src/shared/persisted-ui-state-types'
+import type { PersistedUIState } from '../../../../src/shared/orca-profiles/persisted-ui-state-types'
 import type { WORKSPACE_VIEW_UI_FIELDS } from '../../../../src/shared/workspace-view/workspace-view-ui-fields'
 import type { FilterState } from './workspace-list-types'
 import type {
   AgentActivityDisplayMode,
   ProjectOrderBy,
   WorktreeCardProperty
-} from '../../../../src/shared/ui-chrome-types'
+} from '../../../../src/shared/ui-chrome/ui-chrome-types'
 import { DEFAULT_WORKTREE_CARD_PROPERTIES } from '../../../../src/shared/worktree/row-display/card-properties'
 import {
   WORKSPACE_GROUP_BY_CHOICES,

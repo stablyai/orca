@@ -5,8 +5,11 @@ import {
 import '../../workspace/ownership/workspace-catalog-owner-index'
 import { findIndexedRepoOwner } from '../../workspace/ownership/repo-owner-index'
 import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
-import type { Tab } from '../../../../../shared/tab-types'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { defaultAgentChatLabel } from '../../../../../shared/agent-session/agent-session-chat-label'
 import { structuredAgentSessionTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
@@ -25,7 +28,7 @@ import {
   structuredAgentSessionTargetForHost
 } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { holdFrameDrawnProvisionalChatTab } from '../../../store/workspace-layout/frames/frame-drawn-chat-tab-placement'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import {
   openAgentSessionTabThroughLayoutOwner,
   type OpenedAgentSessionTab

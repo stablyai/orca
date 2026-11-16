@@ -2,7 +2,7 @@ import type { RuntimeStore } from '../../../runtime/construction/runtime-store-c
 import {
   getPRAutoRefreshCadence,
   setPRAutoRefreshCadence
-} from '../../../../shared/review-refresh-policy'
+} from '../../../../shared/source-control/hosted-review/review-refresh-policy'
 import { retimePRRefreshesForCadence } from './pr-refresh-coordinator'
 
 /** Apply this host's PR auto-refresh setting to every main-process poller, now and on change.

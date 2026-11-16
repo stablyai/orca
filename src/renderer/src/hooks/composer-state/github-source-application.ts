@@ -25,7 +25,7 @@ import '@/lib/workspace/creation/new-workspace'
 import {
   getLinkedWorkItemWorkspaceName,
   getLinkedWorkItemSuggestedName
-} from '../../../../shared/workspace-name'
+} from '../../../../shared/workspace/naming/workspace-name'
 import { shouldApplyWorkspaceSourceAutoName } from '../../../../shared/new-workspace/workspace-source'
 
 export function useGitHubSourceApplication(input: GitHubSourceApplicationInput) {

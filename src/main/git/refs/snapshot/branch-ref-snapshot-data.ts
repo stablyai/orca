@@ -1,4 +1,4 @@
-import type { BaseRefSearchResult } from '../../../../shared/repo-types'
+import type { BaseRefSearchResult } from '../../../../shared/repository/repo-types'
 import { branchRefLabel } from '../../../../shared/git/refs/branch-ref-label'
 import { isSafeGitRefName } from '../../../../shared/git/status/git-status-upstream-ref'
 import { isRemoteHeadRef } from '../../../../shared/source-control/hosted-review/hosted-review-refs'

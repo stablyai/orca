@@ -56,7 +56,8 @@ export async function dispatchMobileStructuredCommand(input: {
       input.text,
       input.controller.changeThreadGoal !== undefined,
       input.controller.agent,
-      input.controller.snapshot
+      input.controller.snapshot,
+      input.controller.openMcpPanel !== undefined
     )
   ) {
     return input.pending.current ? 'rejected' : null

@@ -1,7 +1,7 @@
 /** Share settings defaults and per-launch feasibility between renderer tab launches and orchestration workers to prevent drift. */
 
 import { isAgentSessionHandleProvider } from '../../agent-session/lifecycle/provider-handles/agent-session-provider-handle'
-import { parseExecutionHostId } from '../../execution-host'
+import { parseExecutionHostId } from '../../execution-host/execution-host'
 import type { ProjectExecutionRuntimeResolution } from '../../execution-host/project-execution-runtime'
 import {
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,

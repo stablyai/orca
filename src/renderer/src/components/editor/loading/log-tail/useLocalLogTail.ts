@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from 'react'
-import type { LocalLogTailChangedPayload } from '../../../../../../shared/local-log-tail-types'
+import type { LocalLogTailChangedPayload } from '../../../../../../shared/file-content/local-log-tail-types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { FileContent } from '../editor-panel-content-types'
 import { LocalLogTailDecoder } from './local-log-tail-decoder'

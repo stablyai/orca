@@ -1,5 +1,5 @@
 /** Before Add persists its record, removal/disable/startup cannot find the connection or detached holder. Every unsuccessful Add must release both here. */
-import { errorMessage } from '../../../shared/error-message'
+import { errorMessage } from '../../../shared/errors/error-message'
 import type { WslHostAddResult } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import { OrcadHostUnsupportedError } from '../../orcad/diagnostics/orcad-host-unavailable'
 import type { WslHostConnector } from './wsl-host-connector-contract'

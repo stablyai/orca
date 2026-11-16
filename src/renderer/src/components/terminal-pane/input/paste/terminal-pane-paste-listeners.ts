@@ -1,14 +1,14 @@
 import { useAppStore } from '../../../../store/index'
 import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import { resolveTerminalPasteRuntimeEnvironmentId } from './terminal-paste-runtime'
-import '../../../../../../shared/keybindings'
+
 import { keybindingMatchesAction } from '../../../../../../shared/keybindings/matching'
 import {
   firesNativePasteEvent,
   getClipboardEventText,
   isClipboardEventPasteRequired
 } from '../../clipboard/terminal-clipboard-event-paste'
-import { assertClipboardTextWithinLimitWithYield } from '../../../../../../shared/clipboard-text'
+import { assertClipboardTextWithinLimitWithYield } from '../../../../../../shared/clipboard/clipboard-text'
 import { pasteTerminalClipboard } from '../../clipboard/terminal-clipboard-paste'
 import { APP_MENU_PASTE_EVENT } from '@/lib/clipboard/menu/app-menu-paste'
 import {

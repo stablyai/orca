@@ -4,13 +4,14 @@ import { homedir } from 'node:os'
 import { delimiter, isAbsolute } from 'node:path'
 import type { AgentSessionAgentAvailability } from '../../../../shared/agent-session/agent-session-agent-availability'
 import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { onManagedRuntimeReleasesChanged } from '../../../node-runtime/managed-runtime-installation'
 import { onAgentsRefreshedOnHost } from '../../../preflight/agents-refreshed-on-host'
 import {
   observeStructuredAgentLaunch,
   resolveHostStructuredAgentLaunchEnvironment,
+  structuredAgentHostAlternativeReady,
   type LaunchEnvironmentSettings
 } from './structured-agent-launch-support'
 import {
@@ -50,10 +51,16 @@ const HOST_LOCATION: AgentSessionExecutionLocation = {
 type HealthRuntime = Parameters<typeof observeStructuredAgentLaunch>[2]
 
 async function observeHostAgent(
-  { definition: { agent }, supportsLocation }: StructuredAgentRuntimeMetadata,
+  { definition: { agent }, supportsLocation, chatProgram }: StructuredAgentRuntimeMetadata,
   runtime: HealthRuntime
 ): Promise<AgentSessionAgentAvailability> {
-  if (!supportsLocation(HOST_LOCATION)) {
+  if (chatProgram?.onlyHostAlternative?.() && supportsLocation(HOST_LOCATION)) {
+    const ready = await structuredAgentHostAlternativeReady(agent, runtime).catch(() => null)
+    if (ready !== false) {
+      return { agent, state: ready ? 'available' : 'unknown' }
+    }
+  }
+  if (!supportsLocation(HOST_LOCATION) || chatProgram?.onlyHostAlternative?.()) {
     const reason = structuredChatUnavailableOnPlatform(agent, process.platform)
       ? 'windows'
       : 'agent'

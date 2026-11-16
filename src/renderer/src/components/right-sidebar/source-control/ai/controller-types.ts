@@ -5,7 +5,7 @@ import type {
   GitStatusEntry
 } from '../../../../../../shared/git/status/git-status-types'
 import type { SourceControlRenderSettings } from '../listing/use-worktree-context'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 export type SourceControlAiStoreSnapshot = Pick<AppState, 'settings' | 'repos'> &

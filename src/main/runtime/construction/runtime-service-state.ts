@@ -43,7 +43,7 @@ import { terminalHistoryLastOutput } from '../terminal/output/tail/terminal-hist
 import type { RuntimeSkillCommands } from '../integrations/skill/runtime-skill-command-surface'
 import { RuntimeTerminalStreamConsumers } from '../terminal/output/runtime-terminal-stream-consumers'
 import type { RecentPtyOutputBuffer } from '../terminal/output/recent-pty-output-buffer'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 import { mainListsEveryPane } from '../terminal/surface/main-terminal-surfaces'
 import { TUI_IDLE_QUIESCENCE_MS } from '../terminal/wait/terminal-idle-policy'
 import { readScreenClearingBlockedTail } from '../terminal/wait/blocked-tail-screen-clear'
@@ -167,6 +167,10 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
   })
 
   protected readonly openCodeRunLifetime = new OpenCodeRunLifetimeStatus({
+    isStopping: (ptyId) =>
+      this.intentionalPtyStops
+        .claimExit(ptyId, this.ptysById.get(ptyId)?.incarnationId)
+        .includes('reversible'),
     isObservablePty: (ptyId) => {
       const pty = this.ptysById.get(ptyId)
       // SSH/WSL foregrounds belong to the host/guest, not this process.

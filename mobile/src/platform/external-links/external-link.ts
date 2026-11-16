@@ -1,6 +1,11 @@
 import { Linking } from 'react-native'
 
 // Catch both synchronous Linking validation and rejected open promises; either can fail a tap, and neither may escape its handler. The page sibling forwards through native.
+/** Linking takes any URL here; only the page's shell bridge refuses some. */
+export function canOpenExternalLink(_url: string): boolean {
+  return true
+}
+
 export function openExternalLink(url: string): void {
   try {
     void Linking.openURL(url).catch((error: unknown) => {

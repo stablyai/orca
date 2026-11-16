@@ -1,6 +1,6 @@
-import { relativePathInsideRoot } from '../../../../shared/cross-platform-path'
-import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
-import type { Repo } from '../../../../shared/repo-types'
+import { relativePathInsideRoot } from '../../../../shared/file-access/cross-platform-path'
+import { toRuntimeExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../shared/worktree/types'
 import {
   callRuntimeEnvelope,

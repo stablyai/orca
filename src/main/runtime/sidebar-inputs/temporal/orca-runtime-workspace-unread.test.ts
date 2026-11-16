@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { AgentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { RpcDispatcher } from '../../rpc/dispatcher'
@@ -21,7 +21,9 @@ import {
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 
-vi.mock('../../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
+vi.mock('../../../../shared/sidebar-list/feed/sidebar-inputs-switch', () => ({
+  ORCA_SIDEBAR_INPUTS_IS_MAIN: true
+}))
 
 const WT = 'repo-1::/tmp/worktree-a'
 const SSH_WT = 'repo-ssh::/home/me/worktree-b'

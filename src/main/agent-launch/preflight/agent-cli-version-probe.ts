@@ -2,7 +2,10 @@ import {
   assertStructuredAgentResolutionCurrent,
   type StructuredAgentResolutionOperation
 } from '../../native-chat/agent-launch/structured-agent-command-resolution'
-import { compareAppVersions, parseCliVersion } from '../../../shared/app-version'
+import {
+  compareAppVersions,
+  parseCliVersion
+} from '../../../shared/app-lifecycle/identity/app-version'
 import { runProcess } from '@orca/process-host'
 import type { ProcessSpec } from '@orca/process-host/process-spec'
 

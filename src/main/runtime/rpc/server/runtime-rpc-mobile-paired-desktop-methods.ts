@@ -1,4 +1,4 @@
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 
 /** Phone methods the relaying Mac always answers itself, even when the call names a server. */
 export const PAIRED_DESKTOP_METHODS = [
@@ -44,6 +44,8 @@ export const PAIRED_DESKTOP_METHODS = [
   // The desktop's accounts pane, Linear and project pickers target its active runtime, not a workspace's host.
   'accounts.consumeCodexResetCredit',
   'accounts.list',
+  'accounts.renameClaude',
+  'accounts.renameCodex',
   'accounts.selectClaude',
   'accounts.selectCodex',
   'accounts.selectCodexForTarget',

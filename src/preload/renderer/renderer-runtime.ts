@@ -5,16 +5,16 @@ import {
   prepareAndInvokeAppRestart,
   registerRendererRestartIpcRelays
 } from './restart/renderer-restart-wiring'
-import { createUpdaterQuitAbortRelay } from '../../shared/renderer-restart-preparation'
+import { createUpdaterQuitAbortRelay } from '../../shared/app-lifecycle/shutdown/renderer-restart-preparation'
 import {
   formatShutdownCheckpointFailureReason,
   ORCA_NATIVE_UNLOAD_FAILED_EVENT,
   publishShutdownCheckpointFailureReason
-} from '../../shared/renderer-shutdown-events'
+} from '../../shared/app-lifecycle/shutdown/renderer-shutdown-events'
 import {
   ORCA_APP_RESTART_ABORTED_EVENT,
   ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT
-} from '../../shared/updater-renderer-events'
+} from '../../shared/updater/updater-renderer-events'
 export async function awaitBeforeUnloadCheckpoint(): Promise<void> {
   const result = (await ipcRenderer.invoke('app:await-before-unload-checkpoint')) as {
     ok?: unknown

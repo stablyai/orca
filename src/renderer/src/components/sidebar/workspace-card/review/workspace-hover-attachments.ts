@@ -1,7 +1,7 @@
 import type { WorkspaceAttachment, Worktree } from '../../../../../../shared/worktree/types'
 import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
 import { getWorkspaceAttachmentKey } from '../../../../../../shared/workspace-attachments/workspace-attachment-normalization'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { getActiveWorkspaceReviewKey } from '../metadata/worktree-attachment-editing'
 import type {
   WorktreeCardIssueDisplay,

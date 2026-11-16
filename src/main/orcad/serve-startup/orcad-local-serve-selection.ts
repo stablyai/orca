@@ -30,7 +30,7 @@ import {
   type AppImageNodeRuntime
 } from '../../node-runtime/appimage-bundled-node-runtime'
 import { serveProfileHasSshTargets } from '../profile-state/serve-profile-ssh-targets'
-import { errorMessage } from '../../../shared/error-message'
+import { errorMessage } from '../../../shared/errors/error-message'
 
 const NATIVE_PREFLIGHT_TIMEOUT_MS = 30_000
 

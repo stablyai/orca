@@ -15,7 +15,7 @@ import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'
 import {
   findIndexedWorktreeOwnerForHost,
@@ -42,7 +42,7 @@ import {
   getExplicitRuntimeEnvironmentIdForFolderWorkspace,
   getNestedSshTargetIdForFolderWorkspace
 } from './folder-workspace-runtime-owner'
-import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { warnAmbiguousOwnerOnce } from './ambiguous-owner-warning'
 import { hostRouteForAuthority } from '@/runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'

@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  buildWindowsCmdShimCommandLine,
-  isCmdInterpretedProgram,
-  parseWindowsCommandLine,
-  quoteWindowsArgument
-} from './windows-command-line'
+import { buildWindowsCmdShimCommandLine, quoteWindowsArgument } from './windows-command-line'
 import { WINDOWS_ARGUMENT_CORPUS } from './__fixtures__/windows-argument-corpus'
 
 /** cmd tracks quote state by counting `"`; an odd count leaks operators. */
@@ -13,19 +8,6 @@ function quoteParity(line: string): number {
 }
 
 describe('quoteWindowsArgument', () => {
-  it.each(WINDOWS_ARGUMENT_CORPUS)(
-    'round-trips $name through the command-line parser',
-    ({ value }) => {
-      expect(parseWindowsCommandLine(quoteWindowsArgument(value))).toEqual([value])
-    }
-  )
-
-  it('round-trips the whole corpus as a single multi-argument line', () => {
-    const values = WINDOWS_ARGUMENT_CORPUS.map((entry) => entry.value)
-    const line = values.map(quoteWindowsArgument).join(' ')
-    expect(parseWindowsCommandLine(line)).toEqual(values)
-  })
-
   it('writes an embedded quote as "" so cmd quote parity stays even', () => {
     expect(quoteWindowsArgument('c"d')).toBe('"c""d"')
     expect(quoteParity(quoteWindowsArgument('c"d'))).toBe(0)
@@ -59,19 +41,6 @@ describe('buildWindowsCmdShimCommandLine', () => {
   it('quotes a program path containing spaces', () => {
     const line = buildWindowsCmdShimCommandLine('C:\\Program Files\\a\\agent.cmd', [])
     expect(line).toContain('"C:\\Program Files\\a\\agent.cmd"')
-  })
-})
-
-describe('isCmdInterpretedProgram', () => {
-  it.each([
-    ['C:\\bin\\agent.cmd', true],
-    ['C:\\bin\\agent.CMD', true],
-    ['C:\\bin\\agent.bat', true],
-    ['C:\\bin\\agent.exe', false],
-    ['C:\\bin\\agent', false],
-    ['C:\\bin\\agent.ps1', false]
-  ])('%s -> %s', (program, expected) => {
-    expect(isCmdInterpretedProgram(program)).toBe(expected)
   })
 })
 

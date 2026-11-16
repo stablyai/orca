@@ -224,6 +224,13 @@ export function NativeChatToolRunMembers({
 
   // A following reader whose pane shows again goes back to the end.
   const wasVisibleRef = useRef(isVisible)
+  useLayoutEffect(
+    () => () => {
+      wasVisibleRef.current = false
+      isVisibleRef.current = false
+    },
+    []
+  )
   useLayoutEffect(() => {
     if (wasVisibleRef.current !== isVisible) {
       wasVisibleRef.current = isVisible

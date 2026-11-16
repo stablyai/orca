@@ -3,7 +3,7 @@ import {
   configureRemoteAiVaultSessionDelete,
   deleteHostAiVaultSession
 } from '../../ai-vault/deletion/host-session-delete'
-import { parseRoutableExecutionHostId } from '../../../shared/execution-host'
+import { parseRoutableExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type {
   AiVaultDeleteSessionArgs,
   AiVaultDeleteSessionResult

@@ -35,12 +35,12 @@ function effortOption(
   }
 }
 
-function fastModeOption(): CatalogOption {
+function fastModeOption(defaultValue: boolean): CatalogOption {
   return {
     id: 'fastMode',
     label: 'Fast mode',
     category: 'mode',
-    kind: { type: 'boolean', defaultValue: false },
+    kind: { type: 'boolean', defaultValue },
     apply: {}
   }
 }
@@ -92,7 +92,7 @@ export function discoveredModel(
       ...(serviceTier
         ? [serviceTier]
         : sessionSupportsFastMode && model.supportsFastMode === true
-          ? [fastModeOption()]
+          ? [fastModeOption(model.defaultFastMode === true)]
           : [])
     ]
   }

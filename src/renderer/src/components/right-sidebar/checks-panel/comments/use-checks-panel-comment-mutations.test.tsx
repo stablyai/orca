@@ -5,7 +5,7 @@ import type { SetStateAction } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import type { PRComment } from '../../../../../../shared/github/comments/comment-types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { useChecksPanelCommentMutations } from './use-checks-panel-comment-mutations'
 

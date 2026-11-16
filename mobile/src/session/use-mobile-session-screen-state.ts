@@ -3,7 +3,7 @@ import { useTerminalSplitLayout } from '../terminal/session/pane-layout/use-term
 import { createLiveInputCapture } from '../terminal/session/input-controls/live-input-capture'
 import { Animated } from 'react-native'
 import type { MobileAnimatedValue } from '../platform/animated-handles'
-import type { MobileTerminalLinkOpenMode } from '../storage/preferences'
+import { DEFAULT_LINK_OPEN_MODE, type MobileLinkOpenMode } from '../storage/preferences'
 import type { TerminalKeyboardAvoidanceMetrics } from '../terminal/webview/terminal-webview-contract'
 import {
   getDefaultTerminalAccessoryBuiltInIds,
@@ -13,7 +13,7 @@ import type { CustomKey } from '../terminal/key-input/terminal-custom-keys'
 import type { AppliedSnapshotMarker } from './tabs/session-tab-snapshot-gate'
 import { useWorktreeSessionTabsLoaded } from '../terminal/session/creation/use-initial-session-terminal-autocreate'
 import { createMobileSessionCreateWarningState } from './tabs/mobile-session-create-warning-state'
-import type { DiffComment } from '../../../src/shared/diff-comment-types'
+import type { DiffComment } from '../../../src/shared/file-review/diff-comment-types'
 import type { DiffNotesDelivery } from '../source-control/review/review-notes/mobile-review-comment-state'
 import type {
   DirtyMarkdownDraft,
@@ -39,8 +39,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const [terminalsLoaded, setTerminalsLoaded] = useWorktreeSessionTabsLoaded(worktreeId)
   const [terminalTextScale, setTerminalTextScale] = useState(1)
   const terminalTextScaleRevisionRef = useRef(0)
-  const [terminalLinkOpenMode, setTerminalLinkOpenMode] =
-    useState<MobileTerminalLinkOpenMode>('orca-browser')
+  const [linkOpenMode, setLinkOpenMode] = useState<MobileLinkOpenMode>(DEFAULT_LINK_OPEN_MODE)
   const [liveInputCapture] = useState(createLiveInputCapture)
   const [activeHandle, setActiveHandle] = useState<string | null>(null)
   const [coveredStreamRevision, setCoveredStreamRevision] = useState(0)
@@ -119,8 +118,8 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     terminalTextScale,
     setTerminalTextScale,
     terminalTextScaleRevisionRef,
-    terminalLinkOpenMode,
-    setTerminalLinkOpenMode,
+    linkOpenMode,
+    setLinkOpenMode,
     liveInputCapture,
     setLiveInputCapture: liveInputCapture.set,
     activeHandle,

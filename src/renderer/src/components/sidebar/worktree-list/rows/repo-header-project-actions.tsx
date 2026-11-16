@@ -31,15 +31,17 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { getRepositoryIconSectionId } from '@/components/settings/repository/repository-settings-targets'
 import { WslMoveProjectMenuItem } from '@/components/wsl-move/WslMoveProjectMenuItem'
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
-import type { Repo } from '../../../../../../shared/repo-types'
-import type { WorktreeVisibilityDefaults } from '../../../../../../shared/global-settings-types'
-import { isGitRepoKind } from '../../../../../../shared/repo-kind'
+import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
+import type {
+  Repo,
+  WorktreeVisibilityDefaults
+} from '../../../../../../shared/repository/repo-types'
+import { isGitRepoKind } from '../../../../../../shared/repository/repo-kind'
 import '../../../../../../shared/worktree/visibility/ownership'
 import {
   effectiveExternalWorktreeVisibility,
   isLegacyRepoForExternalWorktreeVisibility
-} from '../../../../../../shared/external-worktree-visibility'
+} from '../../../../../../shared/worktree/visibility/external-worktree-visibility'
 import { REPO_HEADER_ACTION_BUTTON_CLASS } from './repo-header-action-button-class'
 import { setProjectHidden } from '../../hidden-projects/set-project-hidden'
 import { getRepoHeaderCreateState } from './repo-header-create-state'

@@ -5,7 +5,7 @@ import {
   selectRepoSshGateInput
 } from '@/lib/workspace/catalog/repo-ssh-connection'
 import type { AppState } from '@/store/types'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 
 type Gate = ReturnType<typeof selectRepoSshGateInput>
 const NO_GATE: Gate = { connectionId: null, status: null }

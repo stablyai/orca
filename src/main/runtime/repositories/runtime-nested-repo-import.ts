@@ -1,19 +1,19 @@
 import { randomUUID } from 'node:crypto'
 import { realpath } from 'node:fs/promises'
 import { isAbsolute } from 'node:path'
-import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/repo-badge-color'
-import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
+import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/repository/appearance/repo-badge-color'
+import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
 import type {
   NestedRepoScanResult,
   ProjectGroupImportMode,
   ProjectGroupImportResult
-} from '../../../shared/project-group-types'
-import type { Repo } from '../../../shared/repo-types'
+} from '../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import {
   getRepoDialableSshTargetId,
   getRepoExecutionHostId,
   getRepoRoutingConnectionId
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import { awaitWindowsHostGitEnvironmentReady } from '../../git/command-runner/host-routing/windows-host-git-environment'
 import { getRepoName } from '../../git/repositories/repository-name'
 import { isGitRepoAsync } from '../../git/repositories/discovery/repo-detection'

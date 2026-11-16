@@ -10,7 +10,7 @@ import type {
   StructuredAgentSessionResumeSource
 } from '../../../../../shared/agent-session/structured-agent-session-create'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { StructuredLaunchAttempt } from './structured-agent-session-launch-request'
 
 import type { StructuredAgentSessionCreateGate } from './structured-agent-session-launch-errors'

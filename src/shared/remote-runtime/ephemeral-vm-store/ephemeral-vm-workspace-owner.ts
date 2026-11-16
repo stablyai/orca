@@ -1,11 +1,11 @@
 import { splitWorktreeId } from '../../worktree/id'
-import { normalizeRuntimePathForComparison } from '../../cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../file-access/cross-platform-path'
 import {
   getEphemeralVmRecipeResultCheckoutMode,
   getEphemeralVmRecipeResultProjectRoot
 } from '../ephemeral-vm-recipes/ephemeral-vm-recipes'
 import type { EphemeralVmRuntimeRecord } from './ephemeral-vm-runtimes'
-import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../../execution-host'
+import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../../execution-host/execution-host'
 
 /** A workspace id alone can name unrelated checkouts on different hosts. */
 export function findEphemeralVmWorkspaceOwner(

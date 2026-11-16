@@ -4,7 +4,7 @@ import type {
   RuntimeSpeechModelSummary,
   RuntimeSpeechSetupState
 } from '../../../shared/worktree/catalog/runtime-worktree-contracts'
-import { getDefaultVoiceSettings } from '../../../shared/constants'
+import { getDefaultVoiceSettings } from '../../../shared/orca-profiles/constants'
 import { dictationShortcutModeSettings } from '../../../shared/speech/dictation/dictation-shortcut-mode'
 import {
   getCatalogModel,
@@ -26,7 +26,7 @@ import {
   hasOpenAiSpeechApiKey
 } from '../../speech/openai-api-key-store'
 import { saveVerifiedOpenAiSpeechApiKey } from '../../speech/openai-api-key-verification'
-import type { SecretAtRestProtection } from '../../../shared/secret-at-rest-protection'
+import type { SecretAtRestProtection } from '../../../shared/secure-storage/secret-at-rest-protection'
 
 export type OpenAiSpeechKeyStatus = {
   configured: boolean

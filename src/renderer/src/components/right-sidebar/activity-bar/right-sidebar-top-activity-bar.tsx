@@ -2,7 +2,7 @@ import React from 'react'
 import type {
   ActiveRightSidebarTab,
   ActivityBarPosition
-} from '../../../../../shared/ui-chrome-types'
+} from '../../../../../shared/ui-chrome/ui-chrome-types'
 import type { CheckStatus as CoarseCheckStatus } from '../../../../../shared/github/pull-requests/pull-request-types'
 type CheckStatus = CoarseCheckStatus | 'cancelled'
 import { cn } from '@/lib/class-names'

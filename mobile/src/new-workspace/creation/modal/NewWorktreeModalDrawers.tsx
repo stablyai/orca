@@ -1,5 +1,5 @@
 import { View } from 'react-native'
-import { getRepoExecutionHostId } from '../../../../../src/shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../src/shared/execution-host/execution-host'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import type { SmartModeAvailabilityInput } from '../../source-selection/mobile-smart-source-modes'
 import type { PasteRepoCandidate } from '../../source-selection/smart-source-paste-intent'

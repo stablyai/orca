@@ -1,11 +1,11 @@
-import type { Repo } from '../repo-types'
+import type { Repo } from '../repository/repo-types'
 import type { WorkspaceSessionState } from './workspace-session-state-types'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../workspace/identity/floating-workspace-id'
 import { getRepoIdFromWorktreeId } from '../worktree/id'
 import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from '../terminal/replay/terminal-scrollback-limits'
-import { clampUtf8TextTail, isUtf8ByteLengthWithinLimit } from '../utf8-byte-limits'
-import { parseExecutionHostId } from '../execution-host'
-import { ownRetainedString } from '../own-retained-string'
+import { clampUtf8TextTail, isUtf8ByteLengthWithinLimit } from '../text/utf8-byte-limits'
+import { parseExecutionHostId } from '../execution-host/execution-host'
+import { ownRetainedString } from '../text/own-retained-string'
 
 export type RepoConnection = Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>
 

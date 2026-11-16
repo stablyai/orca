@@ -3,7 +3,7 @@ import type {
   TerminalQuickCommand,
   TerminalQuickCommandScope
 } from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {
   getTerminalQuickCommandAction,
@@ -12,7 +12,7 @@ import {
   supportsTerminalAgentQuickCommand
 } from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { getTerminalQuickCommandBodySize } from '../../../../shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
 import {
   Dialog,
   DialogContent,

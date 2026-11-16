@@ -1,4 +1,4 @@
-import { normalizeRuntimePathForComparison } from '../../../cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../file-access/cross-platform-path'
 import { routeNativeChatHref } from '../../native-chat-href-routing'
 import {
   isGeneratedImageOperation,
@@ -142,7 +142,7 @@ export function nativeChatGeneratedImageAnswers(
       producers.set(message.agentId, segment)
     }
     const facts = nativeChatTurnFoldRow(message, turnKey, false)
-    if (facts.sendsBack) {
+    if (facts.endsAnswer) {
       finish(segment)
       segment = { images: [], answer: undefined }
       producers.set(message.agentId, segment)

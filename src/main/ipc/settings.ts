@@ -3,8 +3,8 @@ import { confirmBrowserPasswordOwner } from '../browser-passwords/browser-passwo
 import { getClaudeAgentViewService } from '../claude/agent-view/agent-view-service'
 import { app, BrowserWindow, ipcMain, nativeTheme } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
-import type { GlobalSettings } from '../../shared/global-settings-types'
-import type { PersistedState } from '../../shared/persisted-state-types'
+import type { GlobalSettings } from '../../shared/settings/global-settings-types'
+import type { PersistedState } from '../../shared/orca-profiles/persisted-state-types'
 import { listSystemFontFamilies } from '../window/desktop-integration/system-fonts'
 import { registerSettingsImportHandlers } from './settings-import-handlers'
 import { setMainUiLanguage } from '../i18n/main-i18n'
@@ -25,8 +25,8 @@ import { applyBrowserSessionProxies } from '../browser/sessions/proxy/browser-se
 import { applyProxyToElectronUpdaterSession } from '../updater/lifecycle/electron-updater-proxy-session'
 import { browserSessionRegistry } from '../browser/sessions/profiles/browser-session-registry'
 import { sanitizeNetworkSettings } from './network-settings-sanitization'
-import { normalizeAppIconId } from '../../shared/app-icon'
-import { normalizeUiLanguage } from '../../shared/ui-language'
+import { normalizeAppIconId } from '../../shared/app-lifecycle/identity/app-icon'
+import { normalizeUiLanguage } from '../../shared/i18n/ui-language'
 import { applyAppIcon } from '../window/desktop-integration/app-icon'
 import { registerCustomAppIconHandlers } from './custom-app-icon'
 import { normalizeTerminalCustomThemes } from '../../shared/terminal-themes/terminal-custom-themes'
@@ -45,7 +45,7 @@ import {
 import {
   computerAwakeSettingsForMode,
   normalizeComputerAwakeMode
-} from '../../shared/computer-awake-mode'
+} from '../../shared/app-lifecycle/computer-awake-mode'
 import { resolveAiVaultSearchSettings } from '../../shared/ai-vault/search/ai-vault-search-settings'
 import { applySessionSearchSettingsChange } from '../ai-vault-search/session-search-enablement'
 import { getRuntimeEnvironmentRegistryRoot } from './runtime-environments/catalog/runtime-environment-registry-root'
