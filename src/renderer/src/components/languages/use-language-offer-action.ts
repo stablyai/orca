@@ -22,15 +22,18 @@ export function useLanguageOfferAction(onboarding = false) {
   const accept = async (offer: DeviceLanguageOffer): Promise<boolean> => {
     setAccepting(offer)
     setLastAttempt(offer)
+    // Why no `finally`: React Compiler cannot compile try/finally, so clear on both paths.
     try {
       if (offer.installed) {
         await uiSelection.choose(normalizeUiLanguage(offer.installed.id), offer.name)
       } else if (offer.catalog) {
         await packSelection.install(offer.catalog)
       }
-    } finally {
+    } catch (error) {
       setAccepting(null)
+      throw error
     }
+    setAccepting(null)
     const current = useAppStore.getState().settings?.uiLanguage
     return current === (offer.installed ?? offer.catalog)?.id
   }
