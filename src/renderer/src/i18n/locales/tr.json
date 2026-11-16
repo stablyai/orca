@@ -21129,7 +21129,8 @@
     "shared": {
       "useDaemonActions": {
         "restartFailed": "Terminal hizmeti yeniden başlatılamadı.",
-        "killAllSessionsDescription": "Açık sekmesi olmayanlar dahil her terminal oturumunu ve ajanlarını sonlandırır. Kaydedilmemiş çalışmalar kaybolur."
+        "killAllSessionsDescription": "Açık sekmesi olmayanlar dahil her terminal oturumunu ve ajanlarını sonlandırır. Kaydedilmemiş çalışmalar kaybolur.",
+        "someSessionsUnchecked": "Some sessions couldn’t be checked."
       }
     },
     "sidebar": {

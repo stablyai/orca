@@ -21125,7 +21125,8 @@
     "shared": {
       "useDaemonActions": {
         "restartFailed": "Impossible de redémarrer le service du terminal.",
-        "killAllSessionsDescription": "Termine chaque session de terminal et ses agents, y compris ceux sans onglet ouvert. Le travail non enregistré est perdu."
+        "killAllSessionsDescription": "Termine chaque session de terminal et ses agents, y compris ceux sans onglet ouvert. Le travail non enregistré est perdu.",
+        "someSessionsUnchecked": "Some sessions couldn’t be checked."
       }
     },
     "sidebar": {

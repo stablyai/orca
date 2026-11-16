@@ -21626,7 +21626,8 @@
     "shared": {
       "useDaemonActions": {
         "restartFailed": "ターミナルサービスを再起動できませんでした。",
-        "killAllSessionsDescription": "すべてのターミナルセッションとその Agent を終了します（タブが開いていないものも含む）。未保存の作業は失われます。"
+        "killAllSessionsDescription": "すべてのターミナルセッションとその Agent を終了します（タブが開いていないものも含む）。未保存の作業は失われます。",
+        "someSessionsUnchecked": "Some sessions couldn’t be checked."
       }
     },
     "sidebar": {

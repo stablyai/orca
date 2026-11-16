@@ -19,6 +19,12 @@ beforeEach(() => {
   statuses.set(`tab-1:${leaf}`, agent)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only terminal inventory and agent evidence are read by the preflight.
   state = {
+    repos: [{ id: 'repo-1', path: '/tmp/project' }],
+    worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1' }] },
+    detectedWorktreesByRepo: {},
+    runtimeEnvironments: [],
+    runtimeEnvironmentCatalogHydrated: true,
+    removedRuntimeEnvironmentIds: new Set(),
     tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }, { id: 'tab-2' }] },
     unifiedTabsByWorktree: {},
     ptyIdsByTabId: { 'tab-1': ['pty-1'], 'tab-2': ['pty-2'] },

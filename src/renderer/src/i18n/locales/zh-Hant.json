@@ -20670,7 +20670,8 @@
     "shared": {
       "useDaemonActions": {
         "restartFailed": "無法重新啟動終端機服務。",
-        "killAllSessionsDescription": "結束所有終端機工作階段及其代理程式，包括沒有開啟分頁的工作階段。未儲存的工作將會遺失。"
+        "killAllSessionsDescription": "結束所有終端機工作階段及其代理程式，包括沒有開啟分頁的工作階段。未儲存的工作將會遺失。",
+        "someSessionsUnchecked": "Some sessions couldn’t be checked."
       }
     },
     "sidebar": {

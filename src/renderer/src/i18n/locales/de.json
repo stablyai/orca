@@ -20988,7 +20988,8 @@
     "shared": {
       "useDaemonActions": {
         "restartFailed": "Der Terminaldienst konnte nicht neu gestartet werden.",
-        "killAllSessionsDescription": "Beendet jede Terminalsitzung und ihre Agenten, auch solche ohne geöffneten Tab. Nicht gespeicherte Arbeit geht verloren."
+        "killAllSessionsDescription": "Beendet jede Terminalsitzung und ihre Agenten, auch solche ohne geöffneten Tab. Nicht gespeicherte Arbeit geht verloren.",
+        "someSessionsUnchecked": "Some sessions couldn’t be checked."
       }
     },
     "sidebar": {

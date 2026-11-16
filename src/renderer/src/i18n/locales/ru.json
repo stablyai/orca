@@ -21666,7 +21666,8 @@
     "shared": {
       "useDaemonActions": {
         "restartFailed": "Не удалось перезапустить службу терминалов.",
-        "killAllSessionsDescription": "Завершает все сеансы терминала и их агентов, включая сеансы без открытой вкладки. Несохранённая работа будет потеряна."
+        "killAllSessionsDescription": "Завершает все сеансы терминала и их агентов, включая сеансы без открытой вкладки. Несохранённая работа будет потеряна.",
+        "someSessionsUnchecked": "Some sessions couldn’t be checked."
       }
     },
     "sidebar": {

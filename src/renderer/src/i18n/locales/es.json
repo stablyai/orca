@@ -20848,7 +20848,8 @@
     "shared": {
       "useDaemonActions": {
         "restartFailed": "No se pudo reiniciar el servicio de terminal.",
-        "killAllSessionsDescription": "Termina todas las sesiones de terminal y sus agentes, incluidas las que no tienen una pestaña abierta. Se pierde el trabajo sin guardar."
+        "killAllSessionsDescription": "Termina todas las sesiones de terminal y sus agentes, incluidas las que no tienen una pestaña abierta. Se pierde el trabajo sin guardar.",
+        "someSessionsUnchecked": "Some sessions couldn’t be checked."
       }
     },
     "sidebar": {

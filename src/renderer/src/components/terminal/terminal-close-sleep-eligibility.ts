@@ -2,6 +2,10 @@ import type { AppState } from '@/store/types'
 import { findWorktreeById } from '@/store/github/refresh/worktree-refresh'
 import { selectEphemeralVmWorkspaceRuntime } from '@/store/slices/ephemeral-vm/ephemeral-vm-lifecycle'
 import {
+  resolveTerminalHostOwnership,
+  resolveTerminalPtyOwner
+} from '@/lib/workspace/ownership/terminal-worktree-route'
+import {
   isResumableTuiAgent,
   normalizeAgentProviderSession
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
@@ -22,6 +26,12 @@ export function canSleepInsteadOfClosingTab(
   const host = worktree ? parseExecutionHostId(worktree.hostId ?? null) : null
   const hostKind = worktree?.hostId ? host?.kind : 'local'
   if (!worktree || (hostKind !== 'local' && hostKind !== 'ssh')) {
+    return false
+  }
+  if (
+    resolveTerminalPtyOwner(state, args.worktreeId).kind !== 'non-runtime' ||
+    resolveTerminalHostOwnership(state, args.worktreeId, 'teardown').kind !== 'local-or-ssh'
+  ) {
     return false
   }
   if (selectEphemeralVmWorkspaceRuntime(state, args.worktreeId)) {

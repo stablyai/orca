@@ -22593,7 +22593,8 @@
     "shared": {
       "useDaemonActions": {
         "restartFailed": "Não foi possível reiniciar o serviço do terminal.",
-        "killAllSessionsDescription": "Encerra todas as sessões de terminal e seus agentes, inclusive as sem aba aberta. O trabalho não salvo é perdido."
+        "killAllSessionsDescription": "Encerra todas as sessões de terminal e seus agentes, inclusive as sem aba aberta. O trabalho não salvo é perdido.",
+        "someSessionsUnchecked": "Some sessions couldn’t be checked."
       }
     },
     "sidebar": {

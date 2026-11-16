@@ -22003,7 +22003,8 @@
     "shared": {
       "useDaemonActions": {
         "restartFailed": "无法重新启动终端服务。",
-        "killAllSessionsDescription": "结束所有终端会话及其代理，包括没有打开标签页的会话。未保存的工作将会丢失。"
+        "killAllSessionsDescription": "结束所有终端会话及其代理，包括没有打开标签页的会话。未保存的工作将会丢失。",
+        "someSessionsUnchecked": "Some sessions couldn’t be checked."
       }
     },
     "ui": {

@@ -23033,7 +23033,8 @@
     "shared": {
       "useDaemonActions": {
         "restartFailed": "Couldn’t restart the terminal service.",
-        "killAllSessionsDescription": "Ends every terminal session and its agents, including ones with no open tab. Unsaved work is lost."
+        "killAllSessionsDescription": "Ends every terminal session and its agents, including ones with no open tab. Unsaved work is lost.",
+        "someSessionsUnchecked": "Some sessions couldn’t be checked."
       }
     },
     "ui": {

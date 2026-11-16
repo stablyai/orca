@@ -1,9 +1,36 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
+import { useEffect } from 'react'
+import { toast } from 'sonner'
+import { Toaster } from '../ui/sonner'
 import {
   DaemonActionDialog,
+  useDaemonActions,
   type DaemonActionKind,
   type DaemonActionsApi
 } from './useDaemonActions'
+
+function IncompleteCleanupResult(): React.JSX.Element {
+  const { runKillAll } = useDaemonActions()
+  useEffect(() => {
+    void runKillAll()
+  }, [runKillAll])
+  return <Toaster />
+}
+
+export const incompleteInventory = defineFixture({
+  width: 640,
+  setup: () => {
+    toast.dismiss()
+    Object.assign(window.api.pty.management, {
+      killAll: () => Promise.resolve({ killedCount: 0, remainingCount: 0, listingIncomplete: true })
+    })
+  },
+  render: () => (
+    <div className="h-[400px] bg-background">
+      <IncompleteCleanupResult />
+    </div>
+  )
+})
 
 function api(
   pending: DaemonActionKind,

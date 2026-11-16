@@ -1,8 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
 import { canSleepInsteadOfClosingTab } from './terminal-close-sleep-eligibility'
+import { resolveTerminalPtyOwner } from '@/lib/workspace/ownership/terminal-worktree-route'
 
-const worktrees = vi.hoisted(() => new Map<string, { id: string; hostId?: string }>())
+const worktrees = vi.hoisted(
+  () => new Map<string, { id: string; hostId?: string; runtimeOwnerEnvironmentId?: string }>()
+)
 vi.mock('@/store/github/refresh/worktree-refresh', () => ({
   findWorktreeById: (_state: unknown, id: string) => worktrees.get(id) ?? null
 }))
@@ -11,9 +14,28 @@ const LEAF = '11111111-1111-4111-8111-111111111111'
 const PANE_KEY = `tab-1:${LEAF}`
 const SESSION = { key: 'session_id', id: 'claude-session-1' } as const
 
-function stateWith(entry: Record<string, unknown>, vmWorkspace = false): AppState {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the eligibility check reads only these three slices; a renamed slice fails the test.
+function stateWith(
+  entry: Record<string, unknown>,
+  vmWorkspace = false,
+  repoHostId?: string
+): AppState {
+  const worktree = worktrees.get('wt-1')
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the named workspace, ownership, layout and agent slices are read.
   return {
+    repos: [
+      {
+        id: 'repo-1',
+        path: '/tmp/project',
+        connectionId: worktree?.hostId?.startsWith('ssh:') ? 'devbox-2' : undefined,
+        executionHostId: repoHostId
+      }
+    ],
+    worktreesByRepo: { 'repo-1': [{ ...worktree, repoId: 'repo-1' }] },
+    detectedWorktreesByRepo: {},
+    runtimeEnvironments: [{ id: 'env-1' }],
+    runtimeEnvironmentCatalogHydrated: true,
+    removedRuntimeEnvironmentIds: new Set(),
+    settings: { activeRuntimeEnvironmentId: null },
     agentStatusByPaneKey: new Map([[PANE_KEY, entry]]),
     terminalLayoutsByTabId: { 'tab-1': { ptyIdsByLeafId: { [LEAF]: 'pty-1' } } },
     ephemeralVmRuntimesByWorkspaceId: vmWorkspace ? { 'wt-1': { id: 'vm-1' } } : {}
@@ -29,8 +51,29 @@ function eligible(state: AppState): boolean {
 }
 
 describe('canSleepInsteadOfClosingTab', () => {
-  it('refuses a busy PTY with no mapped pane even when another busy agent can resume', () => {
+  it('uses terminal ownership for SSH aliases and legacy rows owned by a paired runtime', () => {
+    const resumable = { agentType: 'claude', providerSession: SESSION }
+    worktrees.set('wt-1', {
+      id: 'wt-1',
+      hostId: 'ssh:devbox-2',
+      runtimeOwnerEnvironmentId: 'env-1'
+    })
+    const alias = stateWith(resumable)
+    expect(resolveTerminalPtyOwner(alias, 'wt-1')).toEqual({
+      kind: 'runtime',
+      environmentId: 'env-1'
+    })
+    expect(eligible(alias)).toBe(false)
     worktrees.set('wt-1', { id: 'wt-1' })
+    const legacy = stateWith(resumable, false, 'runtime:env-1')
+    expect(resolveTerminalPtyOwner(legacy, 'wt-1')).toEqual({
+      kind: 'runtime',
+      environmentId: 'env-1'
+    })
+    expect(eligible(legacy)).toBe(false)
+  })
+  it('refuses a busy PTY with no mapped pane even when another busy agent can resume', () => {
+    worktrees.set('wt-1', { id: 'wt-1', hostId: 'local' })
     expect(
       canSleepInsteadOfClosingTab(stateWith({ agentType: 'claude', providerSession: SESSION }), {
         worktreeId: 'wt-1',
@@ -40,7 +83,7 @@ describe('canSleepInsteadOfClosingTab', () => {
     ).toBe(false)
   })
   it('requires a supported agent and a provider session before offering sleep', () => {
-    worktrees.set('wt-1', { id: 'wt-1' })
+    worktrees.set('wt-1', { id: 'wt-1', hostId: 'local' })
     const resumable = { agentType: 'claude', providerSession: SESSION }
     expect(eligible(stateWith(resumable))).toBe(true)
 

@@ -73,14 +73,29 @@ function showKillAllTerminalSurfacesResult(summary: KillAllTerminalSurfacesSumma
             value2: summary.daemon.remainingCount
           }
         )
-  const description = [surfaceDescription, daemonDescription].filter(Boolean).join(' ')
+  const inventoryWarning =
+    summary.daemon.status === 'fulfilled' && summary.daemon.listingIncomplete
+      ? translate(
+          'components.shared.useDaemonActions.someSessionsUnchecked',
+          'Some sessions couldn’t be checked.'
+        )
+      : null
+  const description = [
+    [surfaceDescription, daemonDescription].filter(Boolean).join(' '),
+    inventoryWarning
+  ]
+    .filter(Boolean)
+    .join('\n')
+  const noticeOptions = inventoryWarning
+    ? { description, classNames: { description: 'whitespace-pre-line' } }
+    : { description }
   if (summary.daemon.status === 'rejected') {
     toast.error(
       translate(
         'auto.components.shared.useDaemonActions.1f0d8ac762',
         'Terminal cleanup finished with errors.'
       ),
-      { description }
+      noticeOptions
     )
     return
   }
@@ -90,17 +105,17 @@ function showKillAllTerminalSurfacesResult(summary: KillAllTerminalSurfacesSumma
         'auto.components.shared.useDaemonActions.1f0d8ac762',
         'Terminal cleanup finished with errors.'
       ),
-      { description }
+      noticeOptions
     )
     return
   }
-  if (summary.daemon.remainingCount > 0) {
+  if (summary.daemon.remainingCount > 0 || summary.daemon.listingIncomplete) {
     toast.warning(
       translate(
         'auto.components.shared.useDaemonActions.80b6ea14cf',
         'Terminal cleanup finished with warnings.'
       ),
-      { description }
+      noticeOptions
     )
     return
   }
@@ -123,7 +138,7 @@ function showKillAllTerminalSurfacesResult(summary: KillAllTerminalSurfacesSumma
           'auto.components.shared.useDaemonActions.d9657ac204',
           'Terminal session shutdown requested.'
         ),
-    { description }
+    noticeOptions
   )
 }
 
