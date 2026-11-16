@@ -72,9 +72,12 @@ export abstract class AgentHookServerPaneSleep extends AgentHookServerAuthorityF
   settleTerminalPaneSleep(paneKey: string, ptyId: string, incarnationId?: string): boolean {
     const resolved = this.resolvePaneKeyAlias(paneKey)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this server stores enriched accepted rows in the listener's base-typed cache.
+    const legacy = this.state.lastStatusByPaneKey.get(resolved) as
+      | EnrichedAgentHookEventPayload
+      | undefined
     const identity = this.paneAgentIdentity(resolved)
     const previous: EnrichedAgentHookEventPayload | undefined =
-      (this.state.lastStatusByPaneKey.get(resolved) as EnrichedAgentHookEventPayload | undefined) ??
+      legacy ??
       this.getTmuxSelectedStatus(resolved) ??
       (identity
         ? {

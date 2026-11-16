@@ -42,9 +42,10 @@ import type {
   StatusRowMutationListener
 } from './server-types'
 import { RevisionedMap } from './revisioned-map'
-import { forgetAgentExit, type AgentExitEvidence } from './agent-exit-evidence'
+import { recordAgentExit, forgetAgentExit, type AgentExitEvidence } from './agent-exit-evidence'
 import { paneAgentIdentity, type PaneAgentIdentity } from './pane-agent-identity'
 import { toAgentStatusIpcPayload } from './server-status-identity'
+import type { AgentProcessPresence } from '../../../shared/agent-status/process/agent-process-presence'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 
 export abstract class AgentHookServerState extends AgentHookServerStateContract {
@@ -71,9 +72,10 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
   ): PaneAgentIdentity | null {
     const resolved = this.resolvePaneKeyAlias(paneKey)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this server stores enriched accepted rows in the listener's base-typed cache.
-    const row =
-      (this.state.lastStatusByPaneKey.get(resolved) as EnrichedAgentHookEventPayload | undefined) ??
-      this.getTmuxSelectedStatus(resolved)
+    const legacy = this.state.lastStatusByPaneKey.get(resolved) as
+      | EnrichedAgentHookEventPayload
+      | undefined
+    const row = legacy ?? this.getTmuxSelectedStatus(resolved)
     if (!row) {
       savedRecord ??= this.terminalPaneLifecycle?.readSavedRecord?.(resolved)
     }
@@ -88,6 +90,21 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
       ...(exit ? { exitedAt: exit.at } : {}),
       ended: row?.agentPresence?.ended === true
     })
+  }
+
+  protected recordPaneAgentExit(paneKey: string, endedPresence: AgentProcessPresence): void {
+    const paneKeys = new Set([this.resolvePaneKeyAlias(paneKey), paneKey])
+    for (const [aliasKey, alias] of this.legacyPaneKeyAliases) {
+      if (alias.stablePaneKey === this.resolvePaneKeyAlias(paneKey)) {
+        paneKeys.add(aliasKey)
+      }
+    }
+    const exitedAt = Date.now()
+    recordAgentExit(this.agentExitedAtByPaneKey, paneKeys, endedPresence, exitedAt)
+    for (const key of paneKeys) {
+      this.terminalPaneLifecycle?.retireSavedRecord?.(key, exitedAt)
+    }
+    this.scheduleStatusPersist()
   }
 
   /** A stopping pane's agent keeps its row for the sleep gate, whatever shape it rests in. */

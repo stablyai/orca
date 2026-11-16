@@ -28,15 +28,13 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
     }
     this.forgetAgentExitBefore(paneKey, event.launchedAt)
     const previous = this.state.lastStatusByPaneKey.get(paneKey)
+    const sameConversation =
+      previous?.payload.agentType === event.agentType &&
+      agentProviderSessionsEqual(event.agentType, previous?.providerSession, event.providerSession)
     if (
       previous &&
       !previous.agentPresence?.ended &&
-      ((previous.payload.agentType === event.agentType &&
-        agentProviderSessionsEqual(
-          event.agentType,
-          previous.providerSession,
-          event.providerSession
-        )) ||
+      (sameConversation ||
         (previous.providerSessionOnly !== true &&
           'receivedAt' in previous &&
           typeof previous.receivedAt === 'number' &&

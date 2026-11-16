@@ -1,6 +1,8 @@
 import { paneAgentIdentity } from '../../agent-hooks/server/pane-agent-identity'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { AgentProviderSessionMetadata } from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import type {
+  SleepingAgentSessionRecord,
+  AgentProviderSessionMetadata
+} from '../../../shared/agent-session/lifecycle/agent-session-resume'
 
 import type { RuntimeConstructionBindings as HostBindings } from './runtime-construction-dependencies'
 
@@ -28,6 +30,20 @@ export abstract class RuntimeAgentStatusSources extends OrcaRuntimeWithTerminalD
           savedRecord,
           worktreeId: savedRecord?.worktreeId
         })
+  }
+
+  protected paneAgentStatuses(
+    rows: readonly AgentStatusIpcPayload[] = this.getAgentProviderSessionSnapshotFn?.() ??
+      this.getAgentStatusSnapshotFn?.() ??
+      []
+  ): AgentStatusIpcPayload[] {
+    return rows.flatMap((row) => {
+      if (row.structuredHost) {
+        return [row]
+      }
+      const identity = this.readPaneAgentIdentity(row.paneKey, undefined, row)
+      return identity && !identity.ended ? [identity.status] : []
+    })
   }
 
   readonly getAgentStatusSnapshotFn!: HostBindings['getAgentStatusSnapshot'] | null

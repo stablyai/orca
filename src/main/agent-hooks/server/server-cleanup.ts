@@ -16,7 +16,7 @@ import { worktreeIdsEqual } from '../../../shared/worktree/id'
 import { isLocalHookConnectionId } from '../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 
-import { endedPresenceOf, recordAgentExit } from './agent-exit-evidence'
+import { endedPresenceOf } from './agent-exit-evidence'
 
 export type EndedProcessReconciliationOptions = {
   endedPresence?: AgentProcessPresence
@@ -141,19 +141,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
               }
           : undefined)
       if (endedPresence) {
-        // Cleanup drops aliases, but readers may still hold either key.
-        const paneKeys = new Set([resolvedPaneKey, paneKey])
-        for (const [aliasKey, alias] of this.legacyPaneKeyAliases) {
-          if (alias.stablePaneKey === resolvedPaneKey) {
-            paneKeys.add(aliasKey)
-          }
-        }
-        const exitedAt = Date.now()
-        recordAgentExit(this.agentExitedAtByPaneKey, paneKeys, endedPresence, exitedAt)
-        for (const key of paneKeys) {
-          this.terminalPaneLifecycle?.retireSavedRecord?.(key, exitedAt)
-        }
-        this.scheduleStatusPersist()
+        this.recordPaneAgentExit(paneKey, endedPresence)
       }
       if (!this.hasLiveClaimsForPaneKey(resolvedPaneKey)) {
         untouched.push(resolvedPaneKey)

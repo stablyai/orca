@@ -1,3 +1,5 @@
+import { resumedAcceptedTurn } from './pane-agent-turn-continuity'
+import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import { RelaySessionGenerations } from './server-relay-sessions'
 
 import type { EnrichedAgentHookEventPayload } from './server-types'
@@ -7,6 +9,24 @@ import { ClaudeOwedNotificationExpiryTimers } from '../../../shared/agent-hook-l
 import { AgentHookServerStatusApplication } from './server-status-application'
 
 export abstract class AgentHookServerStatusRowMutation extends AgentHookServerStatusApplication {
+  protected preserveResumedAcceptedTurn(
+    previous: EnrichedAgentHookEventPayload | undefined,
+    incoming: AgentHookEventPayload,
+    before: EnrichedAgentHookEventPayload | undefined
+  ): EnrichedAgentHookEventPayload | null | undefined {
+    const resumed = previous && resumedAcceptedTurn(previous, incoming)
+    if (!resumed) {
+      return null
+    }
+    if (!this.writeLegacyStatusRow(resumed)) {
+      return undefined
+    }
+    this.runtimeObservedStatusPaneKeys.add(resumed.paneKey)
+    this.commitStatusRowMutation(before, resumed)
+    this.scheduleStatusPersist()
+    return resumed
+  }
+
   protected readonly claudeOwedNotificationExpiry = new ClaudeOwedNotificationExpiryTimers(
     this.state
   )

@@ -1,6 +1,8 @@
 import type { paneAgentIdentity } from '../../agent-hooks/server/pane-agent-identity'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { AgentProviderSessionMetadata } from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import type {
+  SleepingAgentSessionRecord,
+  AgentProviderSessionMetadata
+} from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { CliWriterObservation } from '../../agent-hooks/server/cli-writer-observation'
 import type { ExecutionHostScope } from '../../../shared/execution-host'
 import type { IPtyProvider } from '../../providers/pty/provider-contract'
