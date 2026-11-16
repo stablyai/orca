@@ -2,6 +2,9 @@ import { BROWSER_CLIENT_PROFILE_SWITCH_CAPABILITY } from '../../../../shared/bro
 import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { app } from 'electron'
+import { isOrcaCloudRuntimeEnvironment } from '../../../hosted-sandbox/cloud-desktop-keys'
+import { connectNativeBrowserNetworkTarget } from '../../network/execution-routes/browser-network-execution-route'
+import { openExecutionRouteSocketAsDuplex } from '../../network/tunnels/execution-route-socket-duplex'
 import {
   BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY,
   BROWSER_CLIENT_EXPECT_URL_HOST_CAPABILITY
@@ -263,6 +266,15 @@ function createNetworkRoutes(
         connection,
         lease: authority,
         executionHost,
+        // CLOUD-BROWSER-DIRECT: public sites from this desktop; only the sandbox's own loopback through it.
+        ...(isOrcaCloudRuntimeEnvironment(app.getPath('userData'), environmentId)
+          ? {
+              loopbackOnly: {
+                connectPublic: (target) =>
+                  openExecutionRouteSocketAsDuplex(connectNativeBrowserNetworkTarget(target))
+              }
+            }
+          : {}),
         executionHostRevision: executionHost.kind === 'native' ? executionHost.revision : 0,
         onError: reportBrowserClientHostError,
         // Retire the host after bounded recovery fails so its pages cannot keep issuing doomed requests.
