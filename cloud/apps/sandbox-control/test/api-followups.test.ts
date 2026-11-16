@@ -79,7 +79,7 @@ describe('Idempotency-Key on workspace create', () => {
 })
 
 describe('teammate names', () => {
-  it('labels keys, audit entries and messages with the member name from their token, and names the sender to the agent', async () => {
+  it('labels keys, audit entries and messages with the member name from their token', async () => {
     const h = await harness()
     try {
       h.raw.exec("ALTER TABLE sandboxes ADD COLUMN visibility TEXT NOT NULL DEFAULT 'private'")
@@ -95,15 +95,14 @@ describe('teammate names', () => {
     expect(audit[0].actor).toMatchObject({ userId: 'bob', userName: 'Bob Byte' })
 
     const ws = (await h.call('POST', '/v1/workspaces', { bearer: ada, body: {} })).body.workspace
-    h.raw.prepare("UPDATE sandboxes SET visibility = 'team' WHERE id = ?").run(ws.id)
     h.vercel.commandHandler = (params) =>
       params.args?.includes('agent') ? { exitCode: 0, stdout: JSON.stringify({ ok: true, result: { outcome: { kind: 'terminal', handle: 'term_n1' } } }), stderr: '' } : undefined
-    await h.call('POST', `/v1/workspaces/${ws.id}/messages`, { bearer: bob, body: { text: 'hello' } })
+    await h.call('POST', `/v1/workspaces/${ws.id}/messages`, { bearer: ada, body: { text: 'hello' } })
     await h.settle()
     const launch = h.vercel.commands.filter((c) => c.args?.includes('agent')).at(-1)!
-    expect(launch.args!.at(-1)).toBe('--prompt=[orca-sender name="Bob Byte" id="bob"]\nhello')
+    expect(launch.args!.at(-1)).toBe('--prompt=hello')
     const messages = (await h.call('GET', `/v1/workspaces/${ws.id}/messages`, { bearer: ada })).body.messages
-    expect(messages[0]).toMatchObject({ sentBy: 'bob', sentByName: 'Bob Byte' })
+    expect(messages[0]).toMatchObject({ sentBy: 'ada', sentByName: 'Ada Lovelace' })
   })
 })
 

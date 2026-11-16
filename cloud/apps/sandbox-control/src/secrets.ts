@@ -13,7 +13,7 @@ import { createKeyring, type Keyring, type SealFormat, type SecretBinding } from
 import { createKekUnwrapper, SecretsKmsError } from './secrets-kms'
 import { AUTH_IAT_BACKDATE_MS } from './member-changes'
 import { BASE_URL_NAMES, baseUrlHost } from './provider-env'
-import { isSharedWorkspace, sharedWorkspaceMode } from './shared-workspace'
+import { isSharedWorkspace } from './shared-workspace'
 import type { SandboxRow } from './store'
 import { secretLog } from './secret-log'
 import {
@@ -191,19 +191,15 @@ function repoOwner(accountId: string, repo: string): string {
 
 /**
  * The owners whose secrets a sandbox session receives.
- * SEC-5: a workspace shared with teammates runs their shells too, so anything in its env is theirs to
- * read (and a placeholder is theirs to spend). It gets the team's and the repository's secrets only,
- * never its owner's personal ones, the same rule as personal accounts (D13). Fails closed: only a row
- * known to be private counts as unshared.
+ * SEC-5: a workspace that ever changed hands (OWNER-TRANSFER) gets the team's and the repository's secrets
+ * only, never its owner's personal ones, the same rule as personal accounts (D13).
  */
-export function ownersForSandbox(
-  row: Pick<SandboxRow, 'account_id' | 'user_id' | 'repo_url' | 'visibility' | 'ownership_transferred_at'>,
-  shared: boolean = isSharedWorkspace(row)
-) {
+export function ownersForSandbox(row: Pick<SandboxRow, 'account_id' | 'user_id' | 'repo_url' | 'ownership_transferred_at'>) {
+  const shared = isSharedWorkspace(row)
   const repo = normalizeRepo(row.repo_url)
   return {
     org: ORG_ACCOUNT.test(row.account_id) ? row.account_id : null,
-    // The one definition of "shared" (visibility, or ever transferred to another owner).
+    // The one definition of "shared" (ever transferred to another owner).
     personal: shared ? null : personalOwner(row.user_id, row.account_id.startsWith('dev:')),
     repo: repo ? repoOwner(row.account_id, repo) : null
   }
@@ -363,9 +359,9 @@ export type ResolvedSecrets = { env: Record<string, string>; scopes: Record<stri
 export async function resolveSandboxSecrets(
   db: D1Database,
   keyring: Keyring,
-  row: Pick<SandboxRow, 'id' | 'account_id' | 'user_id' | 'repo_url' | 'visibility' | 'ownership_transferred_at'>
+  row: Pick<SandboxRow, 'id' | 'account_id' | 'user_id' | 'repo_url' | 'ownership_transferred_at'>
 ): Promise<ResolvedSecrets> {
-  const owners = ownersForSandbox(row, await sharedWorkspaceMode(db, row))
+  const owners = ownersForSandbox(row)
   const pairs: [SecretScope, string][] = []
   if (owners.personal) {
     pairs.push(['personal', owners.personal])

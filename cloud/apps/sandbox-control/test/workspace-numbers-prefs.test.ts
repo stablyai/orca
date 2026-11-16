@@ -123,11 +123,11 @@ describe('slug links', () => {
     const resolved = await t.req(t.alice, 'GET', '/v1/team/links/resolve?org=acme&n=1&c=s:abc')
     expect(resolved.status).toBe(200)
     expect(resolved.body).toMatchObject({ workspace: { id, number: 1 }, chatId: 's:abc' })
-    // Private to Alice: Bob sees nothing until she shares it.
+    // Alice's alone: Bob sees nothing, a row still stored as team included.
     expect((await t.req(t.bob, 'GET', '/v1/team/links/resolve?org=acme&n=1')).status).toBe(404)
-    await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${id}`, { visibility: 'team' })
-    expect((await t.req(t.bob, 'GET', '/v1/team/links/resolve?org=acme&n=1')).body.workspace.id).toBe(id)
-    expect((await t.req(t.bob, 'GET', '/v1/team/links/resolve?org=acme&n=2')).status).toBe(404)
+    t.h.raw.prepare("UPDATE sandboxes SET visibility = 'team' WHERE id = ?").run(id)
+    expect((await t.req(t.bob, 'GET', '/v1/team/links/resolve?org=acme&n=1')).status).toBe(404)
+    expect((await t.req(t.alice, 'GET', '/v1/team/links/resolve?org=acme&n=2')).status).toBe(404)
     // Another org: not found, but says which org so a member of both can switch.
     const other = await t.req(t.eve, 'GET', '/v1/team/links/resolve?org=acme&n=1')
     expect(other.status).toBe(404)

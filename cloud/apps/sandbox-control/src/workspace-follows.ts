@@ -6,7 +6,6 @@
 // visible to the whole team). A private workspace's only viewer is its owner, so a teammate's old
 // follow of a workspace that turned private is never shown and never counts. Archived workspaces
 // may still be followed: they stay browsable.
-import { effectiveVisibility } from './team-sharing'
 import type { SandboxCaller } from './auth'
 import type { SandboxRow } from './store'
 
@@ -43,7 +42,7 @@ export function visibleFollowers(
   if (!seen) {
     return []
   }
-  return effectiveVisibility(row) === 'team' ? [...followers] : followers.filter((id) => id === row.user_id)
+  return followers.filter((id) => id === row.user_id)
 }
 
 /** The caller must be able to see the row (the route checks canSee first). */

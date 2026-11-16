@@ -10,7 +10,8 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mintApiKey, WORKSPACE_TOKEN_SCOPES } from '../src/api/keys'
-import { connectedMembers } from '../src/member-git'
+import { connectedMembers, memberMayAct } from '../src/member-git'
+import { MEMBERS_COMMAND } from '../src/lifecycle'
 import { ENV_COMMAND, START_COMMAND } from '../src/sandbox-vm-commands'
 import { ownersForSandbox } from '../src/secrets'
 import { createStepTimer, ownerTransferTimingLine } from '../src/owner-transfer-timing'
@@ -466,7 +467,7 @@ describe('what acted for the previous owner', () => {
     }
   })
 
-  it("the owner's GitHub identity has no entry of its own on a transferred workspace", async () => {
+  it('a transferred workspace never acts as anyone on GitHub (the App does): not the new owner, not the previous', async () => {
     const t = await setup()
     const db = t.h.env.SANDBOX_DB
     const connect = (userId: string) =>
@@ -475,30 +476,30 @@ describe('what acted for the previous owner', () => {
         .run(userId, userId)
     connect('mallory')
     connect('mia')
-    // Before: the owner counts with no grant.
     expect(await connectedMembers(db, await t.row())).toEqual(['mallory'])
+    expect(memberMayAct(await t.row(), 'mallory')).toBe(true)
     await t.transfer(t.mallory, 'mia')
-    // After: nobody without a grant, the new owner included.
+    // The disk is the previous owner's: whatever they left there must not act as the new owner (same as D13).
     expect(await connectedMembers(db, await t.row())).toEqual([])
-    // With an active grant she counts, exactly like any member of a shared workspace.
-    t.h.raw
-      .prepare(`INSERT INTO workspace_grants (id, sandbox_id, account_id, user_id, device_kind, device_label, status, created_at) VALUES ('g1', ?, 'org:acme', 'mia', 'desktop', 'Mia', 'active', 1)`)
-      .run(t.id)
-    expect(await connectedMembers(db, await t.row())).toEqual(['mia'])
+    expect(memberMayAct(await t.row(), 'mia')).toBe(false)
+    expect(memberMayAct(await t.row(), 'mallory')).toBe(false)
+    // Its next boot installs no member identity and no solo mark: git and gh are the App's.
+    t.h.vercel.commands.length = 0
+    expect((await t.h.call('POST', `/v1/sandboxes/${t.id}/resume`, { bearer: t.mia })).status).toBe(200)
+    const sync = t.h.vercel.commands.filter((c) => c.command === MEMBERS_COMMAND).at(-1)
+    expect(sync?.env.ORCA_SOLO_MEMBER).toBeUndefined()
+    expect(sync ? JSON.parse(Buffer.from(sync.env.ORCA_MEMBERS_B64!, 'base64').toString()) : []).toEqual([])
   })
 })
 
 describe('everything else is unchanged', () => {
-  it('a workspace that was never handed over keeps its owner’s personal secrets (private) or none (shared)', async () => {
+  it('a workspace that was never handed over keeps its owner’s personal secrets, a row still stored as team included', async () => {
     const t = await setup()
     expect(isSharedWorkspace(await t.row())).toBe(false)
     expect(lastEnv(t.h).DB_PASSWORD).toBe(MAL_VALUE)
-    expect((await t.h.call('PATCH', `/v1/team/workspaces/${t.id}`, { bearer: t.mallory, body: { visibility: 'team' } })).status).toBe(200)
-    expect(await t.row()).toMatchObject({ ownership_transferred_at: null, status: 'running', visibility: 'team' })
-    // Sharing still rebuilds the running env at once, without the owner's personal secrets.
-    expect(lastEnv(t.h, ENV_COMMAND)).not.toHaveProperty('DB_PASSWORD')
-    expect((await t.h.call('PATCH', `/v1/team/workspaces/${t.id}`, { bearer: t.mallory, body: { visibility: 'private' } })).status).toBe(200)
-    expect(lastEnv(t.h, ENV_COMMAND).DB_PASSWORD).toBe(MAL_VALUE)
+    expect((await t.h.call('PATCH', `/v1/team/workspaces/${t.id}`, { bearer: t.mallory, body: { visibility: 'team' } })).status).toBe(400)
+    t.h.raw.prepare("UPDATE sandboxes SET visibility = 'team' WHERE id = ?").run(t.id)
+    expect(isSharedWorkspace(await t.row())).toBe(false)
   })
 
   it('the migration marks workspaces whose owner is not their creator, and no others', async () => {

@@ -129,7 +129,7 @@ const sentBy = (t: Awaited<ReturnType<typeof setup>>, user: string, at: number) 
 const MERGE = { query: 'mutation { mergePullRequest(input: { pullRequestId: "PR_in" }) { clientMutationId } }' }
 const COMMENT = { query: 'mutation { addComment(input: { subjectId: "PR_in", body: "x" }) { clientMutationId } }' }
 
-describe('review M2: approvals never as a member; merges only in a one-person workspace', () => {
+describe('review M2: approvals never as the owner; merges are theirs', () => {
   it('an approval goes out on the installation token even when the owner is alone; comments and other reviews are the member', async () => {
     const t = await setup()
     for (const body of [
@@ -159,7 +159,7 @@ describe('review M2: approvals never as a member; merges only in a one-person wo
     expect(t.upstream.at(-1)!.authorization).toBe(`Bearer ${MEMBER_TOKEN}`)
   })
 
-  it('merges (GraphQL, PR merge, branch merge) are the owner alone, the installation token once shared', async () => {
+  it('merges (GraphQL, PR merge, branch merge) are the owner’s; a stray grant or send changes nothing', async () => {
     const t = await setup()
     const mergeAll = async () => {
       const seen: (string | null)[] = []
@@ -172,49 +172,24 @@ describe('review M2: approvals never as a member; merges only in a one-person wo
       return seen
     }
     expect(await mergeAll()).toEqual(Array(3).fill(`Bearer ${MEMBER_TOKEN}`))
+    // Leftovers from before sharing was removed: a teammate grant row and their later send.
     grantBob(t)
-    sentBy(t, 'alice', t.h.now())
-    expect(await mergeAll()).toEqual(Array(3).fill(APP))
-    // A comment is still the latest sender's own.
-    await t.api('/graphql', 'POST', COMMENT)
-    expect(t.upstream.at(-1)!.authorization).toBe(`Bearer ${MEMBER_TOKEN}`)
-  })
-})
-
-describe('shared-workspace cap: 60 min by default', () => {
-  it("the latest sender acts for 60 min after their send, then the bot; a one-person workspace isn't capped", async () => {
-    const t = await setup()
-    sentBy(t, 'alice', t.h.now() - 10 * 60 * 60_000)
-    await t.api('/graphql', 'POST', COMMENT)
-    expect(t.upstream.at(-1)!.authorization).toBe(`Bearer ${MEMBER_TOKEN}`)
-    grantBob(t)
-    sentBy(t, 'alice', t.h.now() - 61 * 60_000)
-    await t.api('/graphql', 'POST', COMMENT)
-    expect(t.upstream.at(-1)!.authorization).toBe(APP)
-    sentBy(t, 'alice', t.h.now() - 59 * 60_000)
+    sentBy(t, 'bob', t.h.now())
+    expect(await mergeAll()).toEqual(Array(3).fill(`Bearer ${MEMBER_TOKEN}`))
     await t.api('/graphql', 'POST', COMMENT)
     expect(t.upstream.at(-1)!.authorization).toBe(`Bearer ${MEMBER_TOKEN}`)
   })
 })
 
 describe('memberMayAct (identity rule)', () => {
-  it('the only person who can use a workspace always acts; in a shared one, the latest sender until another sends', async () => {
+  it('the owner always acts, with no send and no expiry; no one else ever does', async () => {
     const t = await setup()
-    const db = t.h.env.SANDBOX_DB
-    const row = (await getSandbox(db, t.id))!
-    // Alone: no send needed, no expiry.
-    expect(await memberMayAct(db, row, 'alice', t.h.now(), null)).toBe(true)
-    expect(await memberMayAct(db, row, 'mallory', t.h.now(), null)).toBe(false)
-    // Shared with bob.
-    t.h.raw.prepare(`INSERT INTO workspace_grants (id, sandbox_id, account_id, user_id, device_kind, device_label, status, created_at) VALUES ('g1', ?, 'org:acme', 'bob', 'desktop', 'Bob', 'active', 1)`).run(t.id)
-    expect(await memberMayAct(db, row, 'alice', t.h.now(), null)).toBe(false)
-    t.h.raw.prepare('INSERT INTO workspace_member_sends (sandbox_id, user_id, sent_at) VALUES (?, ?, ?)').run(t.id, 'alice', t.h.now() - 10 * 60 * 60_000)
-    expect(await memberMayAct(db, row, 'alice', t.h.now(), null)).toBe(true)
-    expect(await memberMayAct(db, row, 'bob', t.h.now(), null)).toBe(false)
-    // An optional cap bounds the shared case.
-    expect(await memberMayAct(db, row, 'alice', t.h.now(), 60 * 60_000)).toBe(false)
-    t.h.raw.prepare('INSERT INTO workspace_member_sends (sandbox_id, user_id, sent_at) VALUES (?, ?, ?)').run(t.id, 'bob', t.h.now())
-    expect(await memberMayAct(db, row, 'alice', t.h.now(), null)).toBe(false)
-    expect(await memberMayAct(db, row, 'bob', t.h.now(), null)).toBe(true)
+    const row = (await getSandbox(t.h.env.SANDBOX_DB, t.id))!
+    expect(memberMayAct(row, 'alice')).toBe(true)
+    expect(memberMayAct(row, 'bob')).toBe(false)
+    grantBob(t)
+    sentBy(t, 'bob', t.h.now())
+    expect(memberMayAct(row, 'alice')).toBe(true)
+    expect(memberMayAct(row, 'bob')).toBe(false)
   })
 })

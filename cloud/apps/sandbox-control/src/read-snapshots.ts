@@ -9,7 +9,6 @@
 // the control plane at runtime chooses the recipient keys and drives the VM, so it is trusted not to
 // add its own key (same as relaying grant keys). Access mirrors canOpen at read time, and pruning
 // (removal, private, revoke) deletes wrapped keys at once, without the VM.
-import { effectiveVisibility } from './team-sharing'
 import { z } from 'zod'
 import type { SandboxCaller } from './auth'
 import { ensureEntryPoints } from './golden-images'
@@ -198,22 +197,21 @@ export async function deleteReadSnapshot(db: D1Database, sandboxId: string): Pro
   ])
 }
 
-/** The live keys allowed to open this workspace right now (owner; every member when team-visible). */
+/** The live keys allowed to open this workspace right now: its owner's (workspaces are never shared). */
 export async function readerKeysFor(db: D1Database, row: SandboxRow, now: number): Promise<{ id: string; public_key: string }[]> {
   if (row.archived_at !== null) {
     return []
   }
-  const team = effectiveVisibility(row) === 'team'
   const { results } = await db
     .prepare(
       `SELECT k.id, k.public_key FROM reader_keys k
        LEFT JOIN device_sessions d ON d.id = k.device_session_id
-       WHERE k.account_id = ? AND k.revoked_at IS NULL ${team ? '' : 'AND k.user_id = ?'}
+       WHERE k.account_id = ? AND k.revoked_at IS NULL AND k.user_id = ?
          -- A phone key counts only while its device session is live (not revoked, not expired).
          AND (k.device_session_id IS NULL OR (d.revoked_at IS NULL AND d.expires_at > ?))
        ORDER BY (k.user_id = ?) DESC, k.last_seen_at DESC LIMIT ?`
     )
-    .bind(...(team ? [row.account_id] : [row.account_id, row.user_id]), now, row.user_id, MAX_READ_RECIPIENTS)
+    .bind(row.account_id, row.user_id, now, row.user_id, MAX_READ_RECIPIENTS)
     .all<{ id: string; public_key: string }>()
   return results
 }
@@ -339,9 +337,9 @@ export async function captureReadSnapshot(deps: LifecycleDeps, row: SandboxRow, 
       .bind(row.id)
   ]
   await deps.db.batch(statements)
-  // The workspace may have been made private while sealing: re-apply the current rule.
+  // The workspace may have changed hands while sealing: re-apply the current rule (its owner only).
   const current = await deps.db.prepare('SELECT * FROM sandboxes WHERE id = ?').bind(row.id).first<SandboxRow>()
-  if (current && effectiveVisibility(current) !== 'team') {
+  if (current) {
     await pruneReadSnapshotToOwner(deps.db, current)
   }
   return done({
@@ -387,8 +385,8 @@ export async function readSnapshotTimes(db: D1Database, ids: readonly string[]):
 }
 
 export async function getReadSnapshot(db: D1Database, caller: SandboxCaller, row: SandboxRow, keyId: string | null, now: number) {
-  // Belt and braces over canOpen: a private workspace's snapshot opens only for its owner.
-  if (!canOpen(caller, row) || (effectiveVisibility(row) !== 'team' && !isOwner(caller, row))) {
+  // Belt and braces over canOpen: a snapshot opens only for its owner.
+  if (!canOpen(caller, row) || !isOwner(caller, row)) {
     throw new WorkspaceError('not_found')
   }
   if (!keyId || !KEY_ID.test(keyId)) {

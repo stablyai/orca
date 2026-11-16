@@ -1,6 +1,5 @@
 // Sandbox lifecycle: one persistent provider sandbox per Orca workspace, with an Orca-owned lease,
 // a forced stop before the provider's 24h cap, usage metering and write-ahead rows.
-import { teamSharingEnabled } from './team-sharing'
 import { accountProvider } from './account-providers'
 import { readUsableAgentCredential } from './agent-credentials'
 import { CODEX_FIREWALL_ALL_PATHS, CODEX_FIREWALL_PATHS } from './codex-paths'
@@ -8,7 +7,7 @@ import { codexPlaceholder } from './codex-credentials'
 /** Where Codex refreshes its ChatGPT login. */
 export const CODEX_AUTH_HOST = 'auth.openai.com'
 import { parseStoredCodex } from './codex-credentials'
-import { sharedWorkspaceMode } from './shared-workspace'
+import { isSharedWorkspace } from './shared-workspace'
 import { deleteAgentSourcesForSandbox } from './agent-sources'
 import { signOutAgentsBeforeDelete } from './agent-signout'
 import type { EntitlementClient, MachineSize } from './entitlements'
@@ -26,7 +25,7 @@ import { applyQueuedRevokes } from './grant-revokes'
 import { ENTRY_POINTS_PROBE, ensureEntryPoints, entryPointsBehind, installEntryPoints, parseEntryPointsProbe } from './golden-images'
 import { RUNTIME_REFRESH_SCRIPT, type RuntimeBundle } from './runtime-bundles'
 import { memberPlaceholder, type MemberGitIdentity } from './github-user-tokens'
-import { connectedMembers, memberCoauthors, memberGitConfigs, soloMember } from './member-git'
+import { connectedMembers, memberCoauthors, memberGitConfigs } from './member-git'
 import type { RetentionConfig } from './retention'
 import { ProviderError, type ProviderSandboxState, type SandboxProviderApi } from './sandbox-provider'
 import { egressAccountRoutes, egressSecretHosts, placeholderValues, secretPlaceholder, type SecretEgressHost } from './secret-egress'
@@ -429,7 +428,7 @@ export async function firewallInputsFor(deps: LifecycleDeps, row: SandboxRow): P
   }
   const keyring = deps.secrets.keyring
   const accounts: FirewallAccount[] = []
-  const shared = await sharedWorkspaceMode(deps.db, row)
+  const shared = isSharedWorkspace(row)
   for (const route of egressAccountRoutes(row)) {
     if (!classes.has(route.agent)) {
       continue
@@ -1247,22 +1246,15 @@ export async function syncMemberGit(deps: LifecycleDeps, row: SandboxRow, sessio
   }
 }
 
-/**
- * GH-SOLO: before another person's device is paired, the VM stops treating the workspace as one person's
- * (orca-git-identity would otherwise act as the owner for that device's agents too). The members sync after
- * the grant writes it back if it still holds.
- */
-export const DROP_SOLO_SCRIPT = 'rm -f /etc/orca/members/solo'
-
 /** Throws when the VM did not take the identities; on success the VM's setup reads ready. */
 async function installMemberGit(deps: LifecycleDeps, row: SandboxRow, sessionId: string): Promise<number> {
   await ensureEntryPoints(deps, sessionId)
   await refreshGitCredentials(deps, row, sessionId)
   const configs = await memberGitConfigs({ db: deps.db, identity: deps.memberIdentity! }, row)
   const coauthors = await memberCoauthors(deps.db, row, new Set(configs.map((config) => config.userId)))
-  // GH-SOLO: the only person who can use the workspace acts as themselves in the VM with no attested sender
-  // (a TUI typed into directly has none), as the egress proxy already allows (memberMayAct).
-  const solo = await soloMember(deps.db, row)
+  // GH-SOLO: the owner acts as themselves in the VM with no attested sender (only the owner can use a
+  // workspace), as the egress proxy does (memberMayAct). Only when their identity (or co-author line) is installed.
+  const solo = [...configs, ...coauthors].some((member) => member.userId === row.user_id) ? row.user_id : null
   const encode = (value: unknown) => btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify(value))))
   const result = await deps.provider.runCommand(sessionId, {
     command: MEMBERS_COMMAND,
@@ -1273,14 +1265,6 @@ async function installMemberGit(deps: LifecycleDeps, row: SandboxRow, sessionId:
   })
   if (result.exitCode !== 0) {
     throw new Error(`members_exit_${result.exitCode}`)
-  }
-  // GH-SOLO: a grant may have started between the read above and the VM write (it drops the mark first, and
-  // this write could have put it back). Re-check now; if it no longer holds, drop it, failing closed.
-  if (solo && (await soloMember(deps.db, row)) !== solo) {
-    const dropped = await deps.provider.runCommand(sessionId, { command: 'bash', args: ['-c', DROP_SOLO_SCRIPT], sudo: true, timeoutMs: 15_000 })
-    if (dropped.exitCode !== 0) {
-      throw new Error(`drop_solo_exit_${dropped.exitCode}`)
-    }
   }
   if (row.git_setup_failed_at) {
     await deps.db.prepare('UPDATE sandboxes SET git_setup_failed_at = NULL WHERE id = ?').bind(row.id).run()
@@ -1460,7 +1444,7 @@ export async function createSandbox(
         name: request.title ?? null,
         // A personal account has no team: its workspaces are always private. So is every one while team sharing
         // is held (team-sharing.ts).
-        visibility: request.visibility === 'team' && caller.accountId.includes('org:') && teamSharingEnabled() ? 'team' : 'private',
+        visibility: 'private',
         section: request.section ?? null,
         ownership_transferred_at: request.ownershipTransferredAt ?? null
       },

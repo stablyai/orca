@@ -23,14 +23,14 @@ async function team() {
 }
 
 describe('teammate profiles', () => {
-  it('shows a teammate only their team workspaces and a 0–4 heatmap, never amounts', async () => {
+  it('shows a teammate none of their workspaces (never shared) and a 0–4 heatmap, never amounts', async () => {
     const t = await team()
     const shared = await t.req(t.alice, 'POST', '/v1/sandboxes', { workspaceId: 'ws-1', machineSize: 'standard', title: 'Shared' })
     const secret = await t.req(t.alice, 'POST', '/v1/sandboxes', { workspaceId: 'ws-2', machineSize: 'standard', title: 'Secret' })
     expect(shared.status).toBe(200)
     const sharedId = shared.body.sandbox.id as string
     const secretId = secret.body.sandbox.id as string
-    await t.req(t.alice, 'PATCH', `/v1/team/workspaces/${sharedId}`, { visibility: 'team' })
+    t.h.raw.prepare("UPDATE sandboxes SET visibility = 'team' WHERE id = ?").run(sharedId)
     const now = t.h.now()
     // Two hours of sandbox time yesterday on the private one, half an hour today on the shared one.
     const outbox = t.h.raw.prepare(
@@ -40,17 +40,17 @@ describe('teammate profiles', () => {
     outbox.run('u1', secretId, accountId, now - DAY - 2 * HOUR, now - DAY)
     outbox.run('u2', sharedId, accountId, now - 30 * MIN, now)
 
-    // Not shared until Alice turns on "Pokes and activity"; workspaces she shared still show.
+    // Not shared until Alice turns on "Pokes and activity"; none of her workspaces show (never shared).
     const hidden = (await t.req(t.bob, 'GET', '/v1/team/members/alice/profile?utcOffsetMin=0')).body.profile
     expect(hidden).toMatchObject({ usage: null, pokes: { enabled: false, teammateEnabled: false } })
-    expect(hidden.recentWorkspaces).toHaveLength(1)
+    expect(hidden.recentWorkspaces).toHaveLength(0)
     await t.req(t.alice, 'PUT', '/v1/team/pokes/settings', { enabled: true })
 
     const seen = await t.req(t.bob, 'GET', '/v1/team/members/alice/profile?utcOffsetMin=0')
     expect(seen.status).toBe(200)
     const profile = seen.body.profile
     expect(profile).toMatchObject({ userId: 'alice', self: false, name: 'Alice Doe', pokes: { enabled: false, teammateEnabled: true } })
-    expect(profile.recentWorkspaces.map((w: { id: string }) => w.id)).toEqual([sharedId])
+    expect(profile.recentWorkspaces).toEqual([])
     expect(profile.usage.own).toBeNull()
     expect(profile.usage.levels).toHaveLength(182)
     expect(profile.usage.activeDays).toBe(2)

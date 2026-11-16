@@ -1,10 +1,9 @@
-// Per-member workspace access for the public API and MCP, mirroring W4's team-workspace rule
-// (cloud/w4-multiplayer src/workspaces.ts canSee/canOpen): a workspace belongs to the member who
-// made it and is private unless its visibility is `team`. Being in the same org is never enough.
-//   read     status/list metadata              owner · team-visible · org admin (metadata only)
-//   open     sessions list, messages, wake,    owner · team-visible, not archived (W4's canOpen;
-//            message the agent                 a teammate's message carries who sent it)
-//   owner    session screens, unarchive        owner only (W4: pairing/screen material)
+// Per-member workspace access for the public API and MCP, the same rule as the desktop registry
+// (src/workspaces.ts canSee/canOpen): a workspace belongs to its owner and is never shared. Being in the same
+// org is never enough.
+//   read     status/list metadata              owner · org admin (metadata only)
+//   open     sessions list, messages, wake      owner, not archived
+//   owner    session screens, unarchive        owner only
 //   manage   sleep, archive, destroy           owner · org admin
 // API keys, OAuth tokens and workspace tokens all act as the member who created them.
 import { canOpen as w4CanOpen, canSee as w4CanSee, isOrgAdmin as w4IsOrgAdmin, isOwner } from '../workspaces'
@@ -26,7 +25,7 @@ function withinTokenReach(caller: ApiCaller, row: WorkspaceRow): boolean {
   return caller.via !== 'workspace' || row.id === caller.sandboxId || row.origin_ref === caller.sandboxId
 }
 
-/** W4's rule: owner, or every org member when visibility is `team`. */
+/** The registry's rule: the owner only. */
 export function canSee(caller: ApiCaller, row: WorkspaceRow): boolean {
   return withinTokenReach(caller, row) && w4CanSee(caller, row)
 }

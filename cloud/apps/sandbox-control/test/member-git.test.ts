@@ -106,59 +106,35 @@ describe('git as the sender', () => {
     expect(await t.proxied('github.com', '/acme/app.git/git-receive-pack', gitBasicAuthorization(bobPh))).toEqual({ status: 403, body: 'placeholder_missing' })
   })
 
-  it('adds a member to the policy and the VM git configs when they get a grant, and drops them on revoke', async () => {
+  it('the VM gets the owner’s config only: a teammate can’t pair, so never gets a route or a config', async () => {
     const t = await setup()
     await t.seed('alice', 'alice-gh', 11)
-    // Bob's send comes after Alice's: in a shared workspace the latest sender acts (memberMayAct).
-    t.h.advance(1_000)
     await t.seed('bob', 'bob-gh', 22)
-    const bob = await t.as('bob')
     const issued = await t.h.call('POST', `/v1/team/workspaces/${t.id}/grants`, {
-      bearer: bob,
+      bearer: await t.as('bob'),
       body: { recipientPublicKeyB64: generateGrantRecipientKey().publicKeyB64, deviceLabel: 'b', deviceKind: 'desktop' }
     })
-    expect(issued.status).toBe(200)
+    expect(issued.status).toBe(404)
+    // A restart re-syncs member identities.
+    expect((await t.h.call('POST', `/v1/sandboxes/${t.id}/restart`, { bearer: await t.as('alice') })).status).toBe(200)
     const box = [...t.h.vercel.boxes.values()][0]!
     const bobPh = gitBasicAuthorization(await memberPlaceholder(t.id, 'bob'))
-    const githubRules = JSON.stringify(box.policy.allow['github.com'])
-    expect(githubRules).toContain(bobPh)
+    expect(JSON.stringify(box.policy.allow['github.com'])).not.toContain(bobPh)
     const sync = t.h.vercel.commands.filter((c) => c.command === MEMBERS_COMMAND).at(-1)!
     const members = JSON.parse(Buffer.from(sync.env.ORCA_MEMBERS_B64!, 'base64').toString())
-    // orca-git-identity maps orcad's attested sender device to the member (bob's grant device here).
-    expect(members.find((m: { userId: string }) => m.userId === 'bob').deviceIds).toEqual([
-      [...t.h.vercel.boxes.values()][0]!.devices.at(-1)
-    ])
-    expect(members.map((m: { userId: string; email: string }) => [m.userId, m.email])).toEqual([
-      ['alice', '11+alice-gh@users.noreply.github.com'],
-      ['bob', '22+bob-gh@users.noreply.github.com']
-    ])
+    expect(members.map((m: { userId: string; email: string }) => [m.userId, m.email])).toEqual([['alice', '11+alice-gh@users.noreply.github.com']])
     expect(JSON.stringify(members)).not.toContain('ghs_')
-    expect((await t.proxied('github.com', '/acme/app.git/info/refs', bobPh)).status).toBe(200)
-
-    await t.h.call('DELETE', `/v1/team/workspaces/${t.id}/grants/${issued.body.grant.id}`, { bearer: bob })
-    expect(JSON.stringify(box.policy.allow['github.com'])).not.toContain(bobPh)
     expect(await t.proxied('github.com', '/acme/app.git/info/refs', bobPh)).toEqual({ status: 403, body: 'placeholder_missing' })
   })
 
-  it('GIT-COAUTHOR: a connected member whose identity cannot be used is sent as a co-author only, never a token', async () => {
+  it('GIT-COAUTHOR: an owner whose identity cannot be used is sent as a co-author only, never a token', async () => {
     const t = await setup()
     await t.seed('alice', 'alice-gh', 11)
-    t.h.advance(1_000)
-    await t.seed('bob', 'bob-gh', 22)
-    const bob = await t.as('bob')
-    const issued = await t.h.call('POST', `/v1/team/workspaces/${t.id}/grants`, {
-      bearer: bob,
-      body: { recipientPublicKeyB64: generateGrantRecipientKey().publicKeyB64, deviceLabel: 'b', deviceKind: 'desktop' }
-    })
-    expect(issued.status).toBe(200)
-    const sync = t.h.vercel.commands.filter((c) => c.command === MEMBERS_COMMAND).at(-1)!
-    // Both usable: no co-authors.
-    expect(JSON.parse(Buffer.from(sync.env.ORCA_COAUTHORS_B64!, 'base64').toString())).toEqual([])
     const row = (await getSandbox(t.h.env.SANDBOX_DB, t.id))!
-    const coauthors = await memberCoauthors(t.h.env.SANDBOX_DB, row, new Set(['alice']))
-    expect(coauthors).toEqual([
-      { userId: 'bob', coauthor: 'bob-gh name <22+bob-gh@users.noreply.github.com>', deviceIds: [[...t.h.vercel.boxes.values()][0]!.devices.at(-1)] }
-    ])
+    // Usable: no co-author.
+    expect(await memberCoauthors(t.h.env.SANDBOX_DB, row, new Set(['alice']))).toEqual([])
+    const coauthors = await memberCoauthors(t.h.env.SANDBOX_DB, row, new Set())
+    expect(coauthors).toEqual([{ userId: 'alice', coauthor: 'alice-gh name <11+alice-gh@users.noreply.github.com>', deviceIds: expect.any(Array) }])
     expect(JSON.stringify(coauthors)).not.toContain('ghs_')
   })
 
@@ -170,15 +146,15 @@ describe('git as the sender', () => {
     expect(t.h.vercel.commands.some((c) => c.command === MEMBERS_COMMAND)).toBe(false)
   })
 
-  it('the only person who can use the workspace acts as themselves without a send, with no expiry (GH-AS-MEMBER)', async () => {
+  it('the owner acts as themselves without a send, with no expiry (GH-AS-MEMBER)', async () => {
     const t = await setup()
     await t.seed('alice', 'alice-gh', 11, false)
     const ph = gitBasicAuthorization(await memberPlaceholder(t.id, 'alice'))
     expect((await t.proxied('github.com', '/acme/app.git/git-receive-pack', ph)).status).toBe(200)
     t.h.advance(31 * 60_000)
     expect((await t.proxied('github.com', '/acme/app.git/git-receive-pack', ph)).status).toBe(200)
-    // A teammate's send changes nothing for a workspace they can't use (no grant).
-    expect((await t.h.call('POST', `/v1/team/workspaces/${t.id}/sent`, { bearer: await t.as('bob') })).status).toBe(200)
+    // A teammate's send changes nothing (the owner always acts).
+    expect((await t.h.call('POST', `/v1/team/workspaces/${t.id}/sent`, { bearer: await t.as('bob') })).status).toBe(404)
     expect((await t.proxied('github.com', '/acme/app.git/git-receive-pack', ph)).status).toBe(200)
   })
 })
@@ -189,7 +165,7 @@ describe('GIT-ACTOR: githubActing and you on the workspace view (list and detail
   const listed = async (t: Awaited<ReturnType<typeof setup>>, user: string) =>
     (await t.h.call('GET', '/v1/team/workspaces', { bearer: await t.as(user) })).body.workspaces.find((w: { id: string }) => w.id === t.id)
 
-  it('solo: the owner once connected, uncapped; "off" with GH_AS_MEMBER off', async () => {
+  it('the owner once connected; reconnect when expired; "off" with GH_AS_MEMBER off', async () => {
     const t = await setup(undefined, { GH_AS_MEMBER: 'on' })
     expect(await detail(t, 'alice')).toMatchObject({ githubActing: { actingAs: 'bot', reason: 'sender_not_connected' }, you: { connected: false } })
     await t.seed('alice', 'alice-gh', 11, false)
@@ -203,31 +179,17 @@ describe('GIT-ACTOR: githubActing and you on the workspace view (list and detail
     const off = await setup()
     await off.seed('alice', 'alice-gh', 11, false)
     expect((await detail(off, 'alice')).githubActing).toEqual({ actingAs: 'bot', reason: 'off' })
+    // A transferred workspace is the App's on GitHub, whoever owns it now.
+    t.h.raw.prepare('UPDATE sandboxes SET ownership_transferred_at = 1 WHERE id = ?').run(t.id)
+    expect((await detail(t, 'alice')).githubActing).toEqual({ actingAs: 'bot', reason: 'transferred' })
   })
 
-  it('shared: the latest sender until the 60 min window lapses (until), then window_expired', async () => {
+  it('a teammate sees nothing; a row still stored as team stays the owner’s', async () => {
     const t = await setup(undefined, { GH_AS_MEMBER: 'on' })
     await t.seed('alice', 'alice-gh', 11, false)
-    const bob = await t.as('bob')
-    const issued = await t.h.call('POST', `/v1/team/workspaces/${t.id}/grants`, {
-      bearer: bob,
-      body: { recipientPublicKeyB64: generateGrantRecipientKey().publicKeyB64, deviceLabel: 'b', deviceKind: 'desktop' }
-    })
-    expect(issued.status).toBe(200)
-    expect((await detail(t, 'bob')).githubActing).toEqual({ actingAs: 'bot', reason: 'no_sender_yet' })
-    await t.sent('alice')
-    const sentAt = t.h.now()
-    const shared = await detail(t, 'bob')
-    expect(shared.githubActing).toEqual({ actingAs: 'member', userId: 'alice', login: 'alice-gh', until: sentAt + 60 * 60_000 })
-    // Bob isn't connected: only he is shown the connect prompt.
-    expect(shared.you).toEqual({ connected: false })
-    t.h.advance(1_000)
-    await t.sent('bob')
-    expect((await detail(t, 'alice')).githubActing).toEqual({ actingAs: 'bot', reason: 'sender_not_connected' })
-    t.h.advance(1_000)
-    await t.sent('alice')
-    t.h.advance(61 * 60_000)
-    expect((await detail(t, 'alice')).githubActing).toEqual({ actingAs: 'bot', reason: 'window_expired' })
+    t.h.raw.prepare("UPDATE sandboxes SET visibility = 'team' WHERE id = ?").run(t.id)
+    expect((await t.h.call('GET', `/v1/team/workspaces/${t.id}`, { bearer: await t.as('bob') })).status).toBe(404)
+    expect((await detail(t, 'alice')).githubActing).toEqual({ actingAs: 'member', userId: 'alice', login: 'alice-gh' })
   })
 
   it('the list reads a fixed number of times whatever its size (no per-row lookups)', async () => {
@@ -241,11 +203,11 @@ describe('GIT-ACTOR: githubActing and you on the workspace view (list and detail
     const row = (await getSandbox(db, t.id))!
     // Four rows of the same owner (ids differ): a list of any size.
     const results = [row, ...[1, 2, 3].map((n) => ({ ...row, id: `${row.id}-copy${n}` }))]
-    const options = { enabled: () => true, sharedMaxMs: 60 * 60_000 }
+    const options = { enabled: () => true }
     const views = await githubActingViews(counting, results as never, 'alice', t.h.now(), options)
     expect([...views.values()].map((v) => v.githubActing)).toEqual(Array(4).fill({ actingAs: 'member', userId: 'alice', login: 'alice-gh' }))
-    // grants + sends + one connections read for the account.
-    expect(reads).toBe(3)
+    // One connections read for the account.
+    expect(reads).toBe(1)
   })
 })
 

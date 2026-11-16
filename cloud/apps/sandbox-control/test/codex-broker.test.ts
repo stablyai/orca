@@ -375,13 +375,13 @@ describe('Codex account in workspaces (D10, D13)', () => {
     expect(tokenCalls).toHaveLength(1)
   })
 
-  it('never swaps a personal Codex login into a workspace shared with teammates (D13)', async () => {
+  it('never swaps a personal Codex login into a workspace in shared mode (ever transferred, D13)', async () => {
     const { h, as, signIn, lastEnv, proxied } = await setup()
     const mia = await as('mia', 'acme', 'member')
     await signIn(mia)
     const created = await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-1', machineSize: 'standard' }, bearer: mia })
     const id: string = created.body.sandbox.id
-    await h.env.SANDBOX_DB.prepare(`UPDATE sandboxes SET visibility = 'team' WHERE id = ?`).bind(id).run()
+    await h.env.SANDBOX_DB.prepare(`UPDATE sandboxes SET ownership_transferred_at = 1 WHERE id = ?`).bind(id).run()
     const refused = await proxied(id, 'chatgpt.com', { authorization: `Bearer ${codexPlaceholder({ id })}` })
     // RS-4: still a 403 (a 401 would start Codex's own token refresh), now with words Codex prints.
     expect(refused.status).toBe(403)

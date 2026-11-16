@@ -134,13 +134,13 @@ describe('create answers before member git setup', () => {
     expect(after.body.sandbox.gitSetup).toBeUndefined()
   })
 
-  it('a member who is not the creator gets their identity when they connect, before that call answers', async () => {
+  it('pairing another of the owner’s devices re-syncs identities before that call answers', async () => {
     const t = await setup()
     const created = await t.create()
     const id: string = created.body.sandbox.id
     await t.settle()
     const before = t.membersRuns().length
-    const bob = await t.as('bob')
+    const bob = await t.as('alice')
     const { generateGrantRecipientKey } = await import('../../../../src/main/cloud-workspaces/sealed-grant-node')
     const issued = await t.h.call('POST', `/v1/team/workspaces/${id}/grants`, {
       bearer: bob,

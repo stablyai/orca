@@ -1,6 +1,6 @@
-// GH-SOLO regression (orca-plugins#89): in a workspace only one person can use, the server acts as that person
-// (memberMayAct), but the VM picked a member only from an attested sender. Codex typed into directly in a
-// terminal has none, so gh and git went out as the bot. Now the VM acts as the solo member with no sender too.
+// GH-SOLO regression (orca-plugins#89): the server acts as the owner (memberMayAct), but the VM picked a member
+// only from an attested sender. Codex typed into directly in a terminal has none, so gh and git went out as the
+// bot. The VM now acts as the owner (the solo mark) with no sender.
 import { execFileSync, spawnSync } from 'node:child_process'
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -8,10 +8,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 import { generateGrantRecipientKey } from '../../../../src/main/cloud-workspaces/sealed-grant-node'
-import { GRANT_COMMAND } from '../src/grants'
-import { DROP_SOLO_SCRIPT, MEMBERS_COMMAND } from '../src/lifecycle'
-import { soloMember } from '../src/member-git'
-import { getSandbox } from '../src/store'
+import { MEMBERS_COMMAND } from '../src/lifecycle'
 import { createHarness } from './harness'
 
 const IDENTITY = fileURLToPath(new URL('../image/vm/orca-git-identity', import.meta.url).href)
@@ -84,65 +81,19 @@ async function workspace(extra: Record<string, string> = {}) {
   return { h, as, id, connect, grant, syncs, restart }
 }
 
-describe('the control plane marks a workspace solo only while one person can use it', () => {
-  it('sends ORCA_SOLO_MEMBER for the owner alone; drops the mark before pairing anyone else, then sends none', async () => {
+describe('the control plane marks the owner solo (only the owner can use a workspace)', () => {
+  it('sends ORCA_SOLO_MEMBER for the connected owner; none before they connect; a teammate can never pair', async () => {
     const t = await workspace()
+    await t.restart()
+    expect(t.syncs().at(-1)?.env.ORCA_SOLO_MEMBER).toBeUndefined()
     await t.connect('alice', 11)
     await t.restart()
     expect(t.syncs().at(-1)!.env.ORCA_SOLO_MEMBER).toBe('alice')
-    const before = t.h.vercel.commands.length
-    expect((await t.grant('bob')).status).toBe(200)
-    const after = t.h.vercel.commands.slice(before)
-    const drop = after.findIndex((c) => c.command === 'bash' && c.args?.includes(DROP_SOLO_SCRIPT))
-    const pair = after.findIndex((c) => c.command === GRANT_COMMAND)
-    expect(drop).toBeGreaterThanOrEqual(0)
-    expect(drop).toBeLessThan(pair)
-    expect(t.syncs().at(-1)!.env.ORCA_SOLO_MEMBER).toBeUndefined()
-  })
-
-  it('review HIGH: shared with the cap off, a grantee who sent last is never marked solo (the owner has no grant row)', async () => {
-    const t = await workspace({ MEMBER_GIT_SHARED_MAX_MINUTES: '0' })
-    await t.connect('alice', 11)
     await t.connect('bob', 22)
-    expect((await t.grant('bob')).status).toBe(200)
-    expect((await t.h.call('POST', `/v1/team/workspaces/${t.id}/sent`, { bearer: await t.as('bob') })).status).toBe(200)
+    expect((await t.grant('bob')).status).toBe(404)
     await t.restart()
-    expect(t.syncs().at(-1)!.env.ORCA_SOLO_MEMBER).toBeUndefined()
-    expect(await soloMember(t.h.env.SANDBOX_DB, (await getSandbox(t.h.env.SANDBOX_DB, t.id))!)).toBeNull()
-  })
-
-  it('review medium: a grant that starts while the members write is in flight drops the mark again after it', async () => {
-    const t = await workspace()
-    await t.connect('alice', 11)
-    // Bob's grant row appears (issuing) between the sync's read and its VM write.
-    t.h.vercel.commandHandler = (params) => {
-      if (params.command === MEMBERS_COMMAND) {
-        t.h.raw
-          .prepare(`INSERT INTO workspace_grants (id, sandbox_id, account_id, user_id, device_kind, device_label, status, created_at) VALUES ('grt_race', ?, 'org:acme', 'bob', 'desktop', 'b', 'issuing', 1)`)
-          .run(t.id)
-        return { exitCode: 0, stdout: '{"members":1,"devices":0}\n', stderr: '' }
-      }
-      return undefined
-    }
-    const before = t.h.vercel.commands.length
-    await t.restart()
-    const after = t.h.vercel.commands.slice(before)
-    const write = after.findIndex((c) => c.command === MEMBERS_COMMAND && c.env.ORCA_SOLO_MEMBER === 'alice')
-    const drop = after.findIndex((c, i) => i > write && c.command === 'bash' && c.args?.includes(DROP_SOLO_SCRIPT))
-    expect(write).toBeGreaterThanOrEqual(0)
-    expect(drop).toBeGreaterThan(write)
-  })
-
-  it('a teammate whose grant is still being revoked (device not yet unpaired) keeps it from being solo', async () => {
-    const t = await workspace()
-    await t.connect('alice', 11)
-    t.h.raw
-      .prepare(`INSERT INTO workspace_grants (id, sandbox_id, account_id, user_id, device_kind, device_label, status, created_at) VALUES ('grt_out', ?, 'org:acme', 'bob', 'desktop', 'b', 'revoking', 1)`)
-      .run(t.id)
-    const row = (await getSandbox(t.h.env.SANDBOX_DB, t.id))!
-    expect(await soloMember(t.h.env.SANDBOX_DB, row)).toBeNull()
-    t.h.raw.prepare(`UPDATE workspace_grants SET status = 'revoked' WHERE id = 'grt_out'`).run()
-    expect(await soloMember(t.h.env.SANDBOX_DB, row)).toBe('alice')
+    expect(t.syncs().at(-1)!.env.ORCA_SOLO_MEMBER).toBe('alice')
+    const members = JSON.parse(Buffer.from(t.syncs().at(-1)!.env.ORCA_MEMBERS_B64!, 'base64').toString())
+    expect(members.map((m: { userId: string }) => m.userId)).toEqual(['alice'])
   })
 })
-

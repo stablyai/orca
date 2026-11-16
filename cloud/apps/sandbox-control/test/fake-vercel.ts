@@ -1,6 +1,5 @@
 // In-memory Vercel Sandbox with the behaviours the bake-off measured: stop = reboot from an automatic
 // snapshot, resume keeps the name and route, and delete leaves automatic snapshots behind.
-import { DROP_SOLO_SCRIPT } from '../src/lifecycle'
 import { createCipheriv, createPublicKey, diffieHellman, generateKeyPairSync, hkdfSync, randomBytes } from 'node:crypto'
 import { GRANT_COMMAND } from '../src/grants'
 import { REVOKE_COMMAND } from '../src/grant-revokes'
@@ -408,10 +407,6 @@ export function createFakeVercel(now: () => number): FakeVercel {
           box.files.set(SCRIPTS_STAMP_PATH, `${stamp}\n`)
         }
         return { exitCode: 0, stdout: 'synced\n', stderr: '' }
-      }
-      // GH-SOLO: dropping the one-person mark before a grant (rm -f: always succeeds in a VM).
-      if (script === DROP_SOLO_SCRIPT) {
-        return { exitCode: 0, stdout: '', stderr: '' }
       }
       if (params.command === DRAIN_COMMAND) {
         return { exitCode: 0, stdout: '', stderr: '' }
