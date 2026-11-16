@@ -3,6 +3,7 @@ import '@testing-library/jest-dom/vitest'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import type { WorkerDockRowView } from './dock/WorkerDockRow'
 import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
 
 afterEach(cleanup)
@@ -27,7 +28,7 @@ it('opens a command through its command route and retains capability-gated untar
         expanded
         onExpandedChange={() => {}}
         onStop={stop}
-        onShowCommand={command}
+        onShowProviderDetails={command}
         onShowAgent={agent}
       />
     </TooltipProvider>
@@ -41,4 +42,59 @@ it('opens a command through its command route and retains capability-gated untar
   expect(agent).not.toHaveBeenCalled()
   fireEvent.click(screen.getByRole('button', { name: /^Stop$/ }))
   expect(stop).toHaveBeenCalledWith()
+})
+
+it('opens a retained agent invocation as captured details instead of a reused provider view', () => {
+  const details = vi.fn()
+  const agent = vi.fn()
+  const row: WorkerDockRowView = {
+    id: 'invocation-1',
+    dispatchId: 'invocation-1',
+    source: 'source',
+    kind: 'agent',
+    providerId: 'shell-7',
+    name: 'Old agent',
+    title: 'Verify the journal',
+    model: null,
+    state: 'failed',
+    changedAt: 100,
+    startedAt: 0,
+    reason: 'Original failure.',
+    settlement: 'first-failure',
+    resultId: null,
+    stoppable: false,
+    ownerActionsAvailable: true
+  }
+  render(
+    <TooltipProvider>
+      <NativeChatBackgroundTasksStatus
+        tasks={[]}
+        settledTasks={[]}
+        supportsTaskStop={false}
+        offersStopAll={false}
+        stoppingTaskIds={new Set()}
+        stoppingAll={false}
+        indicatorActive={false}
+        isVisible
+        expanded
+        onExpandedChange={() => {}}
+        onStop={() => {}}
+        workerRows={new Map([[row.id, row]])}
+        workerIdentities={[row]}
+        onShowProviderDetails={details}
+        onShowAgent={agent}
+      />
+    </TooltipProvider>
+  )
+  const opener = screen.getByRole('button', { name: /^Old agent ·/ })
+  fireEvent.click(opener)
+  expect(details).toHaveBeenCalledWith(
+    expect.objectContaining({
+      kind: 'agent',
+      settlement: 'first-failure',
+      reason: 'Original failure.'
+    }),
+    opener
+  )
+  expect(agent).not.toHaveBeenCalled()
 })

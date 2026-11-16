@@ -15,7 +15,7 @@ import type { AgentSessionHistoryResult } from '../../../../../../../shared/agen
 import type { NativeChatBackgroundTaskBlock } from '../../../../../../../shared/native-chat/native-chat-types'
 import type { WorkerDockRowView } from './WorkerDockRow'
 
-export function WorkerDockCommandDialog({
+export function WorkerDockProviderDetailsDialog({
   row,
   opener,
   sessionId,
@@ -101,10 +101,15 @@ export function WorkerDockCommandDialog({
         ) : (
           <p className="text-sm text-muted-foreground">
             {row.reason ??
-              t(
-                'components.native-chat.workerDock.commandOutputPending',
-                'Command output is not available yet.'
-              )}
+              (row.kind === 'command'
+                ? t(
+                    'components.native-chat.workerDock.commandOutputPending',
+                    'Command output is not available yet.'
+                  )
+                : t(
+                    'components.native-chat.workerDock.resultUnavailable',
+                    'Worker result unavailable'
+                  ))}
           </p>
         )}
       </DialogContent>

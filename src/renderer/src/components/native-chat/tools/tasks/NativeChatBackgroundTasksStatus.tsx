@@ -90,7 +90,7 @@ export function NativeChatBackgroundTasksStatus(liveProps: {
   onStop: (taskId?: string) => void
   /** Open a listed agent's own view. */
   onShowAgent?: (providerId: string) => void
-  onShowCommand?: (row: WorkerDockRowView, opener: HTMLElement) => void
+  onShowProviderDetails?: (row: WorkerDockRowView, opener: HTMLElement) => void
   /** The agent whose view the pane shows. */
   currentAgentId?: string | null
   workerRows?: ReadonlyMap<string, WorkerDockRowView>
@@ -260,8 +260,8 @@ export function NativeChatBackgroundTasksStatus(liveProps: {
         onOpen={(row, opener) => {
           if (row.kind === 'worker') {
             props.onOpenWorker?.(row, opener)
-          } else if (row.kind === 'command') {
-            props.onShowCommand?.(row, opener)
+          } else if (row.kind === 'command' || row.settlement) {
+            props.onShowProviderDetails?.(row, opener)
           } else if (row.providerId) {
             props.onShowAgent?.(row.providerId)
           }
