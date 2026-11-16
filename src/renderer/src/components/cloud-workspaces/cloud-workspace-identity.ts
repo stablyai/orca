@@ -12,6 +12,8 @@ export type CloudWorkspaceIdentity = {
   title: string | null
   /** What this account may do with it (PAIRED-ARCHIVE: only its creator archives a sandbox). */
   access?: CloudWorkspace['access']
+  /** SHARE-LINK-PRIVATE: whether teammates can open the copied link yet. */
+  visibility?: CloudWorkspace['visibility']
   /**
    * OWNER-TRANSFER: who owns it, and when its owner was first changed (null: never). A workspace
    * made from one inherits the time, so one made later was never handed over itself.
@@ -42,6 +44,7 @@ function sameIdentity(a: CloudWorkspaceIdentity | undefined, b: CloudWorkspaceId
     a.link === b.link &&
     a.title === b.title &&
     a.access === b.access &&
+    a.visibility === b.visibility &&
     a.ownerUserId === b.ownerUserId &&
     a.createdAt === b.createdAt &&
     a.ownershipTransferredAt === b.ownershipTransferredAt
@@ -58,6 +61,7 @@ export function rememberCloudWorkspaces(workspaces: readonly CloudWorkspace[]): 
       link: w.link ?? null,
       title: w.title,
       access: w.access,
+      visibility: w.visibility,
       ownerUserId: w.ownerUserId,
       createdAt: w.createdAt,
       ownershipTransferredAt: w.ownershipTransferredAt ?? null
