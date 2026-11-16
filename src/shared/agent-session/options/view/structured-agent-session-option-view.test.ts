@@ -511,4 +511,42 @@ describe('Pi supported selection apart from saved intent', () => {
     })
     expect(effort(unknown)).toMatchObject({ settable: false, kind: { currentValue: 'off' } })
   })
+
+  it('retains prior known efforts when live options omit current.model from models', () => {
+    const seed = structuredAgentSessionSeedCatalog('antigravity')!
+    const prior = applyStructuredAgentSessionModelCatalog(
+      createStructuredAgentSessionOptionState('antigravity', seed),
+      seed,
+      {
+        origin: 'probe',
+        fetchedAt: 1,
+        models: [
+          {
+            id: 'claude-opus-5-5',
+            label: 'Claude Opus 5.5',
+            isDefault: false,
+            efforts: levels('low', 'medium', 'high')
+          }
+        ]
+      },
+      { newLaunch: false }
+    )
+    const live = applyStructuredAgentSessionOptions(prior, seed, {
+      models: [
+        {
+          id: 'gemini-4-hydrogen',
+          label: 'Gemini 4 Hydrogen',
+          isDefault: false,
+          efforts: levels('low', 'xhigh')
+        }
+      ],
+      current: { model: 'claude-opus-5-5', effort: 'high' }
+    })
+    const effortOption = structuredAgentSessionShownSnapshot(live).find(
+      (entry) => entry.id === 'effort'
+    )
+    expect(
+      effortOption?.kind.type === 'select' ? effortOption.kind.choices.map((c) => c.value) : []
+    ).toEqual(['low', 'medium', 'high'])
+  })
 })

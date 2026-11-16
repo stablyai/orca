@@ -49,7 +49,8 @@ export function structuredAgentSessionOptionCatalog(
       id: result.current.model,
       label: labelFromModelId(result.current.model),
       description: result.current.model,
-      options: seed.unknownModelOptions ?? []
+      options: seed.unknownModelOptions ?? [],
+      ...(retainsModelSpecificAcpEfforts(agent) ? { effortsKnown: false as const } : {})
     })
   }
   return { ...seed, models, defaultModelIsCliDefault: true }
@@ -188,13 +189,10 @@ export function applyStructuredAgentSessionOptions(
   }
   const installed = usesInstalledAgentModelCatalog(state.record.agent, launch.coherentCatalog)
   const keepCatalog = installed || result.modelsKnown === false
-  let answeredCatalog = structuredAgentSessionOptionCatalog(seed, result, state.record.agent)
-  if (retainsModelSpecificAcpEfforts(state.record.agent)) {
-    answeredCatalog = {
-      ...answeredCatalog,
-      models: fillUnknownCatalogEfforts(answeredCatalog.models, state.catalog?.models ?? [])
-    }
-  }
+  const raw = structuredAgentSessionOptionCatalog(seed, result, state.record.agent)
+  const answeredCatalog = retainsModelSpecificAcpEfforts(state.record.agent)
+    ? { ...raw, models: fillUnknownCatalogEfforts(raw.models, state.catalog?.models ?? []) }
+    : raw
   // Catalog defaults supply picker context without claiming the chat chose them.
   replaceStructuredAgentSessionAnsweredValues(
     state.record,
