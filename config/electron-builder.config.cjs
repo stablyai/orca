@@ -363,6 +363,10 @@ module.exports = {
     'out/main/skills/bundled-skill-install/bundled-skill-local-host.js',
     'out/main/skills/bundled-skill-install/bundled-skill-installation.js',
     'out/main/startup/network-compatibility/http1-compatibility-marker.js',
+    // `orca uninstall` runs the app's cleanup in the CLI process.
+    'out/main/uninstall/orca-{install-identity,uninstall-cleanup}.js',
+    'out/main/cli/cli-installer.js',
+    'out/main/backend/node-service-environment.js',
     'out/main/daemon-entry.js',
     'out/main/session-scanner-service-entry.js',
     'out/main/wsl-transcript-fs-process-entry.js',
