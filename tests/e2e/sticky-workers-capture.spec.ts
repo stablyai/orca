@@ -142,6 +142,7 @@ test('captures the worker strip in an isolated hidden native chat', async ({
       await page.setViewportSize({ width, height })
       await chat.composer.focus()
       await page.mouse.move(5, 5)
+      await expect(page.locator('[data-slot="tooltip-content"]')).toHaveCount(0)
       await page.evaluate(() => {
         for (const element of document.querySelectorAll(
           '[data-native-chat-worker-dock], [data-native-chat-background-tasks] [role="region"], [aria-label="Queued worker questions"]'
@@ -182,6 +183,20 @@ test('captures the worker strip in an isolated hidden native chat', async ({
         })
         await stopTarget.focus()
         await expect(stopTarget).toBeFocused()
+        await page.keyboard.press('Escape')
+      }
+      if (scenario === 'remote' && width === 900) {
+        const remoteStop = strip.getByRole('button', { name: /^Stop ORCA-1 ·/ })
+        await remoteStop.focus()
+        await remoteStop.hover()
+        await expect(page.getByRole('tooltip')).toContainText('computer it runs on')
+        await page.screenshot({
+          path: join(
+            root,
+            'shots',
+            `${phase}-${scene}-owner-policy-${theme}-${width}x${height}.png`
+          )
+        })
         await page.keyboard.press('Escape')
       }
       if (scenario === 'asks-20') {
