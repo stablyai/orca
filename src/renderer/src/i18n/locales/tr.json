@@ -144,7 +144,11 @@
         "restartGaveUp_other": "{{count}} denemeden sonra {{distro}} içindeki Orca sunucusu yeniden başlatılamadı",
         "serviceUnconfirmed": "WSL hizmeti dağıtımın çalışıp çalışmadığını doğrulamadı.",
         "peerCheckFailed": "Orca tarafından WSL ana makinesine bu bilgisayardaki başka bir Orca'nın onu hâlâ kullanıp kullanmadığı sorulamadı: {{detail}}",
-        "removalUnrecorded": "Bu kaldırma işleminden sonra nelerin çalışmaya devam ettiği Orca tarafından kaydedilemedi: {{detail}}"
+        "removalUnrecorded": "Bu kaldırma işleminden sonra nelerin çalışmaya devam ettiği Orca tarafından kaydedilemedi: {{detail}}",
+        "installLockWait_one": "Bu dağıtımdaki başka bir Orca kurulumunun bitmesi bekleniyor. Bitmezse Orca yaklaşık {{count}} dakika içinde devralır.",
+        "installLockWait_other": "Bu dağıtımdaki başka bir Orca kurulumunun bitmesi bekleniyor. Bitmezse Orca yaklaşık {{count}} dakika içinde devralır.",
+        "installLockWaitGivesUp_one": "Bu dağıtımdaki başka bir Orca kurulumunun bitmesi bekleniyor. Bitmezse Orca yaklaşık {{count}} dakika içinde beklemeyi bırakır.",
+        "installLockWaitGivesUp_other": "Bu dağıtımdaki başka bir Orca kurulumunun bitmesi bekleniyor. Bitmezse Orca yaklaşık {{count}} dakika içinde beklemeyi bırakır."
       }
     },
     "agentSummary": {

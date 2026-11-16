@@ -22515,7 +22515,9 @@
         "restartGaveUp_other": "尝试 {{count}} 次后仍无法重启 {{distro}} 中的 Orca 服务器",
         "serviceUnconfirmed": "WSL 服务未确认该发行版是否正在运行",
         "peerCheckFailed": "Orca 无法向 WSL 主机询问此电脑上的另一个 Orca 是否仍在使用该主机：{{detail}}",
-        "removalUnrecorded": "Orca 无法记录此次移除后仍在运行的内容：{{detail}}"
+        "removalUnrecorded": "Orca 无法记录此次移除后仍在运行的内容：{{detail}}",
+        "installLockWait_other": "正在等待此发行版中的另一个 Orca 安装完成。如果未完成，Orca 将在约 {{count}} 分钟后接管。",
+        "installLockWaitGivesUp_other": "正在等待此发行版中的另一个 Orca 安装完成。如果未完成，Orca 将在约 {{count}} 分钟后停止等待。"
       }
     },
     "agentSummary": {

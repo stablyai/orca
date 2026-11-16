@@ -144,7 +144,11 @@
         "restartGaveUp_other": "Der Orca-Server in {{distro}} konnte nach {{count}} Versuchen nicht neu gestartet werden",
         "serviceUnconfirmed": "Der WSL-Dienst hat nicht bestätigt, ob die Distribution läuft.",
         "peerCheckFailed": "Orca konnte den WSL-Host nicht fragen, ob eine andere Orca-Instanz auf diesem Computer ihn noch nutzt: {{detail}}",
-        "removalUnrecorded": "Orca konnte nicht erfassen, was nach dem Entfernen noch läuft: {{detail}}"
+        "removalUnrecorded": "Orca konnte nicht erfassen, was nach dem Entfernen noch läuft: {{detail}}",
+        "installLockWait_one": "Warte, bis eine andere Orca-Installation in dieser Distribution fertig ist. Andernfalls übernimmt Orca in etwa {{count}} Minute.",
+        "installLockWait_other": "Warte, bis eine andere Orca-Installation in dieser Distribution fertig ist. Andernfalls übernimmt Orca in etwa {{count}} Minuten.",
+        "installLockWaitGivesUp_one": "Warte, bis eine andere Orca-Installation in dieser Distribution fertig ist. Andernfalls hört Orca in etwa {{count}} Minute auf zu warten.",
+        "installLockWaitGivesUp_other": "Warte, bis eine andere Orca-Installation in dieser Distribution fertig ist. Andernfalls hört Orca in etwa {{count}} Minuten auf zu warten."
       }
     },
     "agentSummary": {

@@ -20740,7 +20740,9 @@
         "restartGaveUp_other": "{{count}}회 시도 후에도 {{distro}}의 Orca 서버를 다시 시작하지 못했습니다",
         "serviceUnconfirmed": "WSL 서비스가 배포판의 실행 여부를 확인해 주지 않았습니다.",
         "peerCheckFailed": "Orca가 WSL 호스트에 이 컴퓨터의 다른 Orca가 아직 사용 중인지 확인을 요청하지 못했습니다: {{detail}}",
-        "removalUnrecorded": "Orca가 이번 제거 후에도 계속 실행 중인 항목을 기록하지 못했습니다: {{detail}}"
+        "removalUnrecorded": "Orca가 이번 제거 후에도 계속 실행 중인 항목을 기록하지 못했습니다: {{detail}}",
+        "installLockWait_other": "이 배포판에서 다른 Orca 설치가 끝나기를 기다리는 중입니다. 끝나지 않으면 약 {{count}}분 후 Orca가 이어받습니다.",
+        "installLockWaitGivesUp_other": "이 배포판에서 다른 Orca 설치가 끝나기를 기다리는 중입니다. 끝나지 않으면 약 {{count}}분 후 Orca가 대기를 멈춥니다."
       }
     },
     "agentSummary": {
