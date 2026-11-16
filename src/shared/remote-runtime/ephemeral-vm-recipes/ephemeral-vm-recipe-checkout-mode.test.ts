@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getEphemeralVmRecipeCheckoutModeFailure } from './ephemeral-vm-recipe-checkout-mode'
-import type { OrcaVmRecipe } from '../../orca-yaml-hook-types'
+import type { OrcaVmRecipe } from '../../workspace-setup/orca-yaml-hook-types'
 
 const defaultRecipe: OrcaVmRecipe = {
   id: 'cloud-sandbox',

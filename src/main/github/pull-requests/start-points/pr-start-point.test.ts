@@ -14,7 +14,7 @@ vi.mock('../../client/fetch/get-work-item', () => ({
 }))
 
 import { resolveGitHubPrStartPoint } from './pr-start-point'
-import { reviewHeadRemoteRefComponent } from '../../../../shared/review-head-tracking-ref'
+import { reviewHeadRemoteRefComponent } from '../../../../shared/worktree/hosted-review/review-head-tracking-ref'
 
 const ORIGIN_URL = 'git@github.com:acme/orca.git'
 const ORIGIN_COMPONENT = reviewHeadRemoteRefComponent('origin', ORIGIN_URL)

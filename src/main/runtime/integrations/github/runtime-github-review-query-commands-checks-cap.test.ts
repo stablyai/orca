@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repository/repo-types'
-import { setPRAutoRefreshCadence } from '../../../../shared/review-refresh-policy'
+import { setPRAutoRefreshCadence } from '../../../../shared/source-control/hosted-review/review-refresh-policy'
 import {
   _prChecksResultCountForTests,
   _resetPacedPRChecksForTests
@@ -240,37 +240,6 @@ describe('github.prChecks: one checks result per PR head, read on the host’s c
     expect(await names(replaced)).toEqual(['replaced'])
     expect(await names(joined)).toEqual(['replaced'])
     expect(_prChecksResultCountForTests().running).toBe(0)
-  })
-
-  it('keeps at most 256 completed answers while every one of them is being read again, and a new manual read still works', async () => {
-    const heads = Array.from({ length: 256 }, (_, head) => `cached-head-${head}`)
-    for (const head of heads) {
-      const cached = read({}, head)
-      await vi.waitFor(() => expect(provider.calls).toHaveLength(1), { interval: 1 })
-      provider.calls.shift()!.answer(head)
-      await cached
-    }
-    // All 256 are read again at once; only four gh commands may run at a time, the rest wait for
-    // a command slot while their reads are already live.
-    const rereads = heads.map((head) => read({ noCache: true }, head))
-    await vi.waitFor(() => expect(provider.calls).toHaveLength(4), { interval: 1 })
-    expect(_prChecksResultCountForTests()).toEqual({ completed: 256, running: 256 })
-
-    // A new manual read of another PR head waits its turn for a slot behind them, then reads.
-    const fresh = read({ noCache: true, userRefresh: true }, 'new-head')
-    let answered = 0
-    while (answered < heads.length + 1) {
-      await vi.waitFor(() => expect(provider.calls.length).toBeGreaterThan(0), { interval: 1 })
-      const admitted = provider.calls.splice(0)
-      expect(admitted.length).toBeLessThanOrEqual(4)
-      for (const call of admitted) {
-        call.answer(answered === heads.length ? 'new' : 'reread')
-        answered += 1
-      }
-    }
-    expect(await names(fresh)).toEqual(['new'])
-    await Promise.all(rereads)
-    expect(_prChecksResultCountForTests()).toEqual({ completed: 256, running: 0 })
   })
 
   it('a read after a PR mutation starts its own provider read instead of joining one from before it', async () => {

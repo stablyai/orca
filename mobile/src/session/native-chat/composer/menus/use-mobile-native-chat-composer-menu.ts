@@ -1,4 +1,4 @@
-import { prepareQueuedMessageEditText } from '../../../../../../src/shared/queued-message-edit-command'
+import { prepareQueuedMessageEditText } from '../../../../../../src/shared/native-chat/input/queued-messages/queued-message-edit-command'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   applyMentionSuggestion,

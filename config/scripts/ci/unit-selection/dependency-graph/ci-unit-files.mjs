@@ -43,8 +43,6 @@ export const UNIT_EXCLUDE = [
   'src/shared/shell/wsl/fish-wsl-cwd-report.node-pty.test.ts',
   'src/main/wsl/filesystem/wsl-sh-cwd-report.node-pty.test.ts',
   'src/shared/terminal/pty/ingress/pty-reply-echo-shapes.node-pty.test.ts',
-  'src/shared/shell/launch/startup-shell-portability.live-shell.test.ts',
-  'src/shared/shell/command-resolution/posix-command-path-lookup.test.ts',
   'tests/e2e/relay-region-correction.unit.test.ts',
   'src/main/browser/cookies/browser-google-cookie-clear.electron.test.ts',
   // Electron probes with in-process deadlines; the package job runs them serially.

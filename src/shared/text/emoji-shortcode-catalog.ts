@@ -94,3 +94,9 @@ function hexcodeToEmoji(hexcode: string): string {
     .map((codepoint) => String.fromCodePoint(Number.parseInt(codepoint, 16)))
     .join('')
 }
+
+export function containsEmoji(input: string): boolean {
+  return /[\p{Emoji_Presentation}\p{Extended_Pictographic}\p{Regional_Indicator}\u20e3]/u.test(
+    input
+  )
+}

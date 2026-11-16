@@ -2,7 +2,7 @@ import type { WebSocket } from 'ws'
 import {
   createWsOutboundBackpressureQueue,
   type WsOutboundBackpressureQueue
-} from '../../../../../shared/ws-outbound-backpressure-queue'
+} from '../../../../../shared/network/websocket/ws-outbound-backpressure-queue'
 import type { DesktopMobileE2EEV2Session } from './mobile-e2ee-v2-desktop-session'
 import {
   mobileE2EEBinaryPayloadAdmissionBytes,

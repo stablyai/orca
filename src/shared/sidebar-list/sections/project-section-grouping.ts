@@ -9,7 +9,7 @@ import { parseWslUncPath } from '../../file-access/wsl-paths'
 import {
   isWindowsAbsolutePathLike,
   normalizeRuntimePathForComparison
-} from '../../cross-platform-path'
+} from '../../file-access/cross-platform-path'
 
 /** The project fields grouping reads. */
 export type ProjectSectionProject = Pick<Project, 'id' | 'displayName'>

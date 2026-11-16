@@ -3,7 +3,7 @@ import type { PersistedState } from '../../../../shared/persisted-state-types'
 import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
 import { deriveGlobalWindowsRuntimeDefaultFromLegacySettings } from '../../../../shared/execution-host/project-runtime-legacy-migration'
 import { normalizeTaskProviderSettings } from '../../../../shared/work-items/task-providers'
-import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../../shared/auto-rename-branch-from-work-settings'
+import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../../shared/source-control/ai/settings/auto-rename-branch-from-work-settings'
 import { normalizePluginSystemEnabledDefaultOn } from '../../../../shared/plugins/plugin-system-settings'
 import { migrateNestedWorkerMaxDepthDefault } from '../../../../shared/orchestration/workers/nested-worker-depth'
 import {

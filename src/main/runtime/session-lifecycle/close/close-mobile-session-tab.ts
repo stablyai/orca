@@ -17,7 +17,7 @@ import type { RuntimeEdgeCommandSurface } from '../../construction/runtime-edge-
 import { rendererPublicationThrottle } from '../../../window/visibility/renderer-publication-throttle'
 import { retireHeadlessMobileSessionEditorTab } from '../../session-tabs/headless-editor-tabs'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { closeMobileStructuredSessionPresentation } from '../../session-tabs/structured-session-tab-presentation'
 import type { OrcaRuntimeWithCloseStructuredAgentSessionTab as ChatPresentation } from '../../session-tabs/structured-session-tab-close'
 

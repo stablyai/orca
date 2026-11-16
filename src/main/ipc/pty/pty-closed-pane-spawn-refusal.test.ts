@@ -57,7 +57,9 @@ vi.mock('../../codex/configuration/homes/codex-pane-account-registry', () =>
 vi.mock('../../codex/history/index/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
-vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
+vi.mock('../../../shared/workspace-layout/layout-owner-switch', () => ({
+  ORCA_LAYOUT_OWNER_IS_MAIN: true
+}))
 
 const TAB = 'tab-1'
 const KEPT = '11111111-1111-4111-8111-111111111111'

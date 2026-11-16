@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import type { Tab } from '../../../../shared/tab-types'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import { useAppStore } from '../../store'
 import { focusTerminalTabSurface } from '../terminal-pane/input/focus/focus-terminal-tab-surface'
 import { TOGGLE_TERMINAL_PANE_EXPAND_EVENT } from '@/constants/terminal'

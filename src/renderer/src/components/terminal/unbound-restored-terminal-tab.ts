@@ -1,6 +1,6 @@
 import type { AppState } from '@/store/types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
-import { tabHasLivePty } from '../../../../shared/tab-has-live-pty'
+import { tabHasLivePty } from '../../../../shared/workspace-layout/terminal-surfaces/tab-has-live-pty'
 
 export type UnboundRestoredTabState = Pick<
   AppState,

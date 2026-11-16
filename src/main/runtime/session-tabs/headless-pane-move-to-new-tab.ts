@@ -8,7 +8,7 @@ import { withSelectedTabs } from './headless-tab-group-selection'
 import type { RuntimeMobileSessionTabGroup } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { isValidHostTerminalTabId } from '../../../shared/workspace-layout/terminal-surfaces/terminal-tab-id'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 import {
   isTerminalLeafMoveRequest,
   type TerminalLeafMoveRequest,

@@ -23,7 +23,7 @@ import type { CommitMessagePlan } from '../../../shared/source-control/ai/genera
 import {
   textGenerationFailure,
   type TextGenerationFailureFields
-} from '../../../shared/text-generation-failure-copy'
+} from '../../../shared/text-generation/text-generation-failure-copy'
 
 // Their stdout is a name or the user's own dictated words, not a diagnostic worth keeping in the error.
 const OPERATIONS_WITHOUT_STDOUT_DETAIL: ReadonlySet<TextGenerationOperation> = new Set([

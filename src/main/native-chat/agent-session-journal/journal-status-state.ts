@@ -4,7 +4,7 @@ import type { JournalReducerState } from './projection/journal-reducer'
 import { renderJournalStatus } from './projection/journal-public-read'
 import { journalInputOrder } from './input-order/journal-input-order'
 import { agentSessionCurrentContextRows } from '../../../shared/agent-session/agent-session-context-clear'
-import { hasOpenStructuredAgentSessionAsyncQuestion } from '../../../shared/agent-session/view/structured-agent-session-async-questions'
+import { newestOpenStructuredAgentSessionAsyncQuestion } from '../../../shared/agent-session/view/structured-agent-session-async-questions'
 
 export type JournalStatusState = ReturnType<typeof projectStructuredAgentSessionStatusState>
 
@@ -23,8 +23,11 @@ export function readJournalStatusState(
     snapshot.item
   )
   const current = agentSessionCurrentContextRows(snapshot.items, snapshot.submissions)
-  return projected.summary.status !== null &&
-    hasOpenStructuredAgentSessionAsyncQuestion(current.items, current.submissions)
-    ? { ...projected, summary: { ...projected.summary, awaitsAnswer: true } }
+  const openAsyncQuestion =
+    projected.summary.status !== null
+      ? newestOpenStructuredAgentSessionAsyncQuestion(current.items, current.submissions)
+      : undefined
+  return openAsyncQuestion
+    ? { ...projected, summary: { ...projected.summary, openAsyncQuestion } }
     : projected
 }

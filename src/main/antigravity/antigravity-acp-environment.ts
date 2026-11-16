@@ -6,5 +6,6 @@ export const ANTIGRAVITY_ACP_ENV = {
   AGY_ACP_FORCE_FILE_STORAGE: '1',
   BROWSER: ANTIGRAVITY_BROWSER_COMMAND,
   PYTHONUNBUFFERED: '1',
-  ELECTRON_RUN_AS_NODE: '1'
+  // Windows' BROWSER helper can't set Node mode inline; elsewhere it would reach agent-run commands.
+  ...(process.platform === 'win32' ? { ELECTRON_RUN_AS_NODE: '1' } : {})
 }

@@ -240,6 +240,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
           : (missingWslCodexHome ??
             fetchCodexRateLimits({
               codexHomePath,
+              readingAccount: codexHome.readingAccount,
               networkProxySettings: this.networkProxySettingsResolver?.(),
               signal
             })),

@@ -11,11 +11,13 @@ import {
   formatAllAgentsInState,
   formatStateCount,
   formatSummaryStateLabel,
+  isUnreadDoneAgent,
   selectSummaryGroupIconAgents,
   summarizeAgentIdentities,
   summarizeAgents
 } from './worktree-card-agent-summary'
 import { useTranslate } from '@/i18n/use-translate'
+import { useHasWorktreeCardUnreadRollup } from '../surface/worktree-card-title-status'
 
 import './worktree-card-compact-agent-row'
 
@@ -90,12 +92,13 @@ export function CompactAgentSummaryButton({
   unreadByPaneKey
 }: CompactAgentSummaryButtonProps): React.JSX.Element {
   const t = useTranslate()
+  const hasUnreadRollup = useHasWorktreeCardUnreadRollup()
+  const isUnread = unreadByPaneKey
+    ? (agent: DashboardAgentRowData) => unreadByPaneKey[agent.paneKey] ?? false
+    : undefined
   const groups: readonly (AgentGroupSummary & { unread?: boolean })[] =
     precomputedGroups ??
-    buildSummaryAgentGroups(
-      agents,
-      unreadByPaneKey ? (agent) => unreadByPaneKey[agent.paneKey] ?? false : undefined
-    ).map((group) => ({
+    buildSummaryAgentGroups(agents, hasUnreadRollup ? undefined : isUnread).map((group) => ({
       state: group.state,
       unread: group.unread,
       count: group.agents.length,
@@ -110,7 +113,9 @@ export function CompactAgentSummaryButton({
           subject: subjectLabel,
           states: groups.map((group) => formatStateCount(group.state, group.count, t)).join(', ')
         })
-  const unreadCount = groups.find((group) => group.unread)?.count ?? 0
+  const unreadCount = isUnread
+    ? agents.reduce((count, agent) => count + (isUnreadDoneAgent(agent, isUnread) ? 1 : 0), 0)
+    : 0
   const unreadSummary =
     unreadCount > 0
       ? t('auto.components.activity.ActivityTitlebarControls.unreadCount', '{{count}} unread', {

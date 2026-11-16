@@ -206,7 +206,8 @@ test.describe('E9: background work on a stopped WSL host', () => {
       await expect.poll(() => focusProject(page, wslProjectPath), { timeout: 30_000 }).toBeTruthy()
       await page.getByRole('button', { name: 'New tab', exact: true }).first().click()
       await page
-        .getByRole('menuitem', { name: /New Terminal/ })
+        .getByRole('menu')
+        .getByRole('button', { name: /New Terminal/ })
         .first()
         .click()
       await expect(page.locator('.xterm:visible').first()).toBeVisible({ timeout: 60_000 })

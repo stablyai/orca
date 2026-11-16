@@ -44,6 +44,7 @@ export function useMobileNativeChatPinchGesture(scopeKey: string): {
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: valid CSS that the handler copies verbatim to style.touchAction; its union lists single keywords only.
 const PAN_WITHOUT_PAGE_ZOOM = 'pan-x pan-y' as ComponentProps<typeof GestureDetector>['touchAction']
 
+// Web: gesture handler 3 also cancels contextmenu by default, which drops Android WebView's Copy menu for selected text.
 export function MobileNativeChatPinchZoom({
   gesture,
   children
@@ -52,7 +53,7 @@ export function MobileNativeChatPinchZoom({
   children: ReactNode
 }) {
   return (
-    <GestureDetector gesture={gesture} touchAction={PAN_WITHOUT_PAGE_ZOOM}>
+    <GestureDetector gesture={gesture} touchAction={PAN_WITHOUT_PAGE_ZOOM} enableContextMenu>
       {children}
     </GestureDetector>
   )
