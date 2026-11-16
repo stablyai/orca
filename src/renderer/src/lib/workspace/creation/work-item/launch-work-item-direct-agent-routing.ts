@@ -156,6 +156,7 @@ export function beginDirectWorkItemStructuredLaunch(args: {
 }
 
 export function finishDirectWorkItemPrompt(args: {
+  worktreeId: string
   primaryTabId: string | null
   effectiveAgent: TuiAgent | null
   promptDelivery: PromptDelivery

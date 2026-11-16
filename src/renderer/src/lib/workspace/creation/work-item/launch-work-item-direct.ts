@@ -293,6 +293,7 @@ export async function launchWorkItemDirect(
       )
     }
     return routing.finishDirectWorkItemPrompt({
+      worktreeId,
       primaryTabId: activation.primaryTabId,
       effectiveAgent,
       promptDelivery,

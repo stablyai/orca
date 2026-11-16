@@ -138,7 +138,8 @@ export abstract class OrcaRuntimeWithGroupFolderSetup extends OrcaRuntimeWithGet
     return {
       bindSetupRecipe: (id, recipe) => this.setupTerminalCompletions.bindRecipe(id, recipe),
       canSpawn: Boolean(this.ptyController?.spawn),
-      setupPrepared: (workspaceId, required) => this.preparedWorkspaceSetup(workspaceId, required),
+      setupPrepared: (workspaceId, required, inProcess) =>
+        this.preparedWorkspaceSetup(workspaceId, required, inProcess),
       setupFailed: (workspaceId) => this.setupTerminalCompletions.refuseWorkspace(workspaceId),
       waitForSetupTerminalCompletion: (handle, signal) =>
         this.waitForSetupTerminalCompletion(handle, signal),

@@ -46,18 +46,24 @@ export function bindTerminalPasteStartupDelivery(session: ConnectPanePtySession)
       clearTimeout(session.startupInjectTimer)
     }
     const generation = session.transportStreamGeneration
-    const isCurrent = (): boolean =>
+    let abort: AbortController | undefined
+    const isTargetCurrent = (): boolean =>
       !session.disposed &&
-      session.pendingStartupCommand === startup &&
       !startup.resumeSource?.cancelled &&
       generation === session.transportStreamGeneration &&
       (startup.isCurrent?.() ?? true)
+    const isCurrent = (): boolean =>
+      isTargetCurrent() &&
+      session.pendingStartupCommand === startup &&
+      (!abort || (setupAbort === abort && !abort.signal.aborted))
     session.startupInjectTimer = setTimeout(() => {
       session.startupInjectTimer = null
       void (async () => {
         if (!isCurrent()) {
           return
         }
+        abort = new AbortController()
+        setupAbort = abort
         if (session.shouldDeliverStartupViaTerminalPaste) {
           await waitForTerminalOutputParsed(session.pane.terminal)
         }
@@ -68,8 +74,6 @@ export function bindTerminalPasteStartupDelivery(session: ConnectPanePtySession)
         if (!ptyId) {
           return
         }
-        const abort = new AbortController()
-        setupAbort = abort
         try {
           await waitForRuntimeTerminalSetup(ptyId, abort.signal)
         } catch {
@@ -84,17 +88,21 @@ export function bindTerminalPasteStartupDelivery(session: ConnectPanePtySession)
         if (!isCurrent()) {
           return
         }
+        session.pendingStartupCommand = null
+        setupAbort = undefined
+        const isDispatchCurrent = (): boolean =>
+          isTargetCurrent() && session.pendingStartupCommand === null
         const command = startup.command
         const submitted = session.shouldDeliverStartupViaTerminalPaste
-          ? await runTerminalPasteStartupCommand(command, isCurrent)
+          ? await runTerminalPasteStartupCommand(command, isDispatchCurrent)
           : session.transport.sendInput(`${command}\r`, 'launch')
+        if (!isDispatchCurrent()) {
+          return
+        }
         if (submitted) {
           session.armStartupDraftReadinessObservation()
         } else {
           session.releaseUnattemptedStartupDraftPasteDelivery()
-        }
-        if (session.pendingStartupCommand === startup) {
-          session.pendingStartupCommand = null
         }
       })()
     }, 50)

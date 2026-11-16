@@ -32,7 +32,11 @@ import type { WorktreeTerminalProvisioningArgs } from './runtime-worktree-termin
 export type RuntimeLocalWorktreeTerminalPorts = {
   canSpawn: boolean
   bindSetupRecipe?: (workspaceId: string, recipe: SetupAttemptRecipe) => void
-  setupPrepared?: (workspaceId: string, required: boolean) => ((success: boolean) => void) | void
+  setupPrepared?: (
+    workspaceId: string,
+    required: boolean,
+    inProcess?: boolean
+  ) => ((success: boolean) => void) | void
   setupFailed?: (workspaceId: string) => void
   waitForSetupTerminalCompletion: (
     handle: string,
@@ -97,7 +101,11 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
   const { request, repo, worktree, defaultTabs, startup, ports } = args
   let { setup } = args
   const requiredSetup = args.requiredSetup ?? setup?.waitForAgentStartup === true
-  const completeSetup = ports.setupPrepared?.(worktree.id, requiredSetup)
+  const completeSetup = ports.setupPrepared?.(
+    worktree.id,
+    requiredSetup,
+    Boolean(args.inProcessSetup)
+  )
   if (args.inProcessSetup && completeSetup) {
     void args.inProcessSetup.then(completeSetup)
   }

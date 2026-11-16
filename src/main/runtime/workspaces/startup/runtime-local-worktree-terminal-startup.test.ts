@@ -70,7 +70,8 @@ it.each([true, false])(
       inProcessSetup: hook.promise,
       ports: {
         canSpawn: false,
-        setupPrepared: (id, required) => completion.preparedWorkspace(id, required),
+        setupPrepared: (id, required, inProcess) =>
+          completion.preparedWorkspace(id, required, inProcess),
         setupFailed: (id) => completion.refuseWorkspace(id),
         waitForSetupTerminalCompletion: async () => ({ exitCode: null }),
         createTerminal: async () => {
@@ -91,7 +92,7 @@ it.each([true, false])(
   }
 )
 
-it.each(['replacement', 'removal'] as const)(
+it.each(['replacement-success', 'replacement-failure', 'removal'] as const)(
   'ignores a late in-process result after workspace %s',
   async (change) => {
     const hook = Promise.withResolvers<boolean>()
@@ -105,7 +106,8 @@ it.each(['replacement', 'removal'] as const)(
       inProcessSetup: hook.promise,
       ports: {
         canSpawn: false,
-        setupPrepared: (id, required) => completion.preparedWorkspace(id, required),
+        setupPrepared: (id, required, inProcess) =>
+          completion.preparedWorkspace(id, required, inProcess),
         waitForSetupTerminalCompletion: async () => ({ exitCode: null }),
         createTerminal: async () => {
           throw new Error('No terminal controller')
@@ -118,21 +120,34 @@ it.each(['replacement', 'removal'] as const)(
         activate() {}
       }
     })
-    const replacement = change === 'replacement' ? completion.beginWorkspace('repo::/task') : null
+    const original = completion.forWorkspace('repo::/task')
+    const replacement = change.startsWith('replacement')
+    if (replacement) {
+      completion.bindRecipe('repo::/task', {
+        runnerScriptPath: '/task/setup.sh',
+        platform: 'posix',
+        nonce: 'new-setup',
+        deadline: Number.MAX_SAFE_INTEGER
+      })
+      completion.begin('new-setup-pty', 'new-handle', 'new-setup', 'repo::/task')
+    }
     if (!replacement) {
       completion.forgetWorkspace('repo::/task')
     }
     let released = false
-    void replacement?.completion.then(() => {
+    void (replacement ? completion.forWorkspace('repo::/task') : undefined)?.then(() => {
       released = true
     })
-    hook.resolve(true)
+    hook.resolve(change !== 'replacement-failure')
     await hook.promise
     await Promise.resolve()
     expect(released).toBe(false)
     if (replacement) {
-      replacement.finish(0)
-      await expect(replacement.completion).resolves.toEqual({ exitCode: 0 })
+      await expect(original).resolves.toEqual({
+        exitCode: change === 'replacement-failure' ? null : 0
+      })
+      completion.observe('new-setup-pty', '__ORCA_SETUP_COMPLETE__:new-setup:0\n')
+      await expect(completion.forWorkspace('repo::/task')).resolves.toEqual({ exitCode: 0 })
     } else {
       expect(completion.forWorkspace('repo::/task')).toBeUndefined()
     }

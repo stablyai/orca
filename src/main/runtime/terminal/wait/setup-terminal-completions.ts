@@ -101,6 +101,7 @@ export class SetupTerminalCompletions extends SetupTerminalDependents {
     let workspace = this.requiredByWorkspace.get(workspaceId)
     if (
       !workspace ||
+      (workspace.bound && !workspace.recipe) ||
       (workspace.recipe && workspace.recipe.nonce !== recipe.nonce) ||
       (workspace.result && !workspace.recipe)
     ) {
@@ -173,14 +174,25 @@ export class SetupTerminalCompletions extends SetupTerminalDependents {
     return workspace
   }
 
-  preparedWorkspace(workspaceId: string, required: boolean): (success: boolean) => void {
-    const workspace = this.requiredByWorkspace.get(workspaceId) ?? this.beginWorkspace(workspaceId)
+  preparedWorkspace(
+    workspaceId: string,
+    required: boolean,
+    inProcess = false
+  ): (success: boolean) => void {
+    let workspace = this.requiredByWorkspace.get(workspaceId)
+    if (!workspace || (inProcess && (workspace.bound || workspace.result || workspace.recipe))) {
+      workspace = this.beginWorkspace(workspaceId)
+    }
+    if (inProcess) {
+      workspace.bound = true
+    }
+    const captured = workspace
     if (!required) {
       workspace.finish(0)
     }
     return (success) => {
-      if (!workspace.cancelled) {
-        workspace.finish(success ? 0 : null)
+      if (!captured.cancelled) {
+        captured.finish(success ? 0 : null)
       }
     }
   }
