@@ -98,10 +98,10 @@ export function installBrowserGuestIdleProtection(
     favicons = key
     backgroundUpdate(changed)
   }
+  // Keep the favicon baseline: Electron doesn't re-send an unchanged favicon after a commit.
   const committed = (): void => {
     owner.backgroundActivity = false
     title = null
-    favicons = null
   }
   guest.on('audio-state-changed', audioChanged)
   guest.on('page-title-updated', titleUpdated)
