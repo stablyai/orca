@@ -53,8 +53,8 @@ function writeProfile() {
     CREATE TABLE agent_session_records(session_id TEXT PRIMARY KEY, record_json TEXT NOT NULL);
     CREATE TABLE agent_session_tabs(tab_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, position INTEGER NOT NULL);
     CREATE TABLE agent_session_store_meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
-    CREATE TABLE journal_items(session_id TEXT, item_id TEXT, revision INTEGER, payload_json TEXT);
-    CREATE TABLE journal_item_tombstones(session_id TEXT, item_id TEXT, revision INTEGER);
+    CREATE TABLE journal_items(session_id TEXT, epoch TEXT, item_id TEXT, revision INTEGER, payload_json TEXT);
+    CREATE TABLE journal_item_tombstones(session_id TEXT, epoch TEXT, item_id TEXT, revision INTEGER);
     CREATE TABLE journal_chat_state(session_id TEXT PRIMARY KEY, epoch TEXT, last_sequence INTEGER);`)
   const insert = (db, table, ...values) =>
     db.prepare(`INSERT INTO ${table} VALUES (${values.map(() => '?').join(',')})`).run(...values)
@@ -65,7 +65,7 @@ function writeProfile() {
     insert(legacy, 'journal_rows', id, 'e1', 2)
     insert(domain, 'agent_session_records', id, '{}')
     insert(domain, 'agent_session_store_meta', `journal.legacy-revision:${id}`, `rev-${id}`)
-    insert(domain, 'journal_items', id, `${id}-item`, 1, 'reply')
+    insert(domain, 'journal_items', id, 'e1', `${id}-item`, 1, 'reply')
   }
   insert(legacy, 'agent_session_tabs', tabId('L4'), 'L4', 0)
   for (const original of ['L1', 'L3', 'L5']) {
@@ -75,6 +75,7 @@ function writeProfile() {
       domain,
       'journal_items',
       copy,
+      'e1',
       `${original}-item`,
       1,
       original === 'L3' ? 'other' : 'reply'

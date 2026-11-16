@@ -129,48 +129,51 @@ export function findMigrationReopenedTabs(legacy, domain) {
 
   const chatState = (id) =>
     domain.prepare('SELECT epoch,last_sequence FROM journal_chat_state WHERE session_id=?').get(id)
-  const revisions = (id, tables) => {
-    const held = new Map()
-    for (const table of tables.filter((name) => has(domain, name))) {
-      for (const row of domain
-        .prepare(`SELECT item_id AS id, revision FROM ${table} WHERE session_id=?`)
-        .iterate(id)) {
-        held.set(String(row.id), Math.max(held.get(String(row.id)) ?? -1, Number(row.revision)))
-      }
-    }
-    return held
-  }
-  const items = (id) =>
+  // Rows of an earlier epoch can linger until pruning; only the current one counts.
+  const rows = (table, columns, id, epoch) =>
+    has(domain, table)
+      ? domain
+          .prepare(`SELECT item_id,${columns} FROM ${table} WHERE session_id=? AND epoch=?`)
+          .all(id, epoch)
+      : []
+  const items = (id, epoch) =>
     new Map(
-      domain
-        .prepare('SELECT item_id,revision,payload_json FROM journal_items WHERE session_id=?')
-        .all(id)
-        .map((row) => [String(row.item_id), row])
+      rows('journal_items', 'revision,payload_json', id, epoch).map((row) => [
+        String(row.item_id),
+        row
+      ])
     )
-  // A duplicate: its original here holds every item exactly as is (a removal leaves a tombstone)
-  // and got as far. A later revision can't show which branch it grew from, so that copy is kept.
+  // A duplicate: its original here, in the same epoch, holds every item exactly as is (a removal
+  // leaves a tombstone) and got as far. A later revision can't show which branch it grew from.
   const isDuplicate = (copy, id) => {
-    const held = items(id)
-    const removed = revisions(id, ['journal_item_tombstones'])
-    for (const [item, row] of items(copy)) {
-      const theirs = held.get(item)
+    const mine = chatState(copy)
+    const theirs = chatState(id)
+    if (
+      mine?.epoch === null ||
+      mine?.epoch === undefined ||
+      theirs?.epoch === null ||
+      theirs?.epoch === undefined ||
+      String(theirs.epoch) !== String(mine.epoch) ||
+      Number(theirs.last_sequence) < Number(mine.last_sequence)
+    ) {
+      return false
+    }
+    const held = items(id, mine.epoch)
+    const removed = new Map(
+      rows('journal_item_tombstones', 'revision', id, mine.epoch).map((row) => [
+        String(row.item_id),
+        Number(row.revision)
+      ])
+    )
+    for (const [item, row] of items(copy, mine.epoch)) {
       const same =
-        theirs !== undefined &&
-        Number(theirs.revision) === Number(row.revision) &&
-        theirs.payload_json === row.payload_json
+        held.get(item)?.revision === row.revision &&
+        held.get(item)?.payload_json === row.payload_json
       if (!same && !((removed.get(item) ?? -1) >= Number(row.revision))) {
         return false
       }
     }
-    const mine = chatState(copy)
-    const theirs = chatState(id)
-    return (
-      !mine ||
-      mine.epoch === null ||
-      (theirs?.epoch !== undefined &&
-        String(theirs.epoch) === String(mine.epoch) &&
-        Number(theirs.last_sequence) >= Number(mine.last_sequence))
-    )
+    return true
   }
   const duplicates = new Set(
     [...copyOf].filter(([copy, id]) => isDuplicate(copy, id)).map(([copy]) => copy)
@@ -606,6 +609,14 @@ function main() {
     } finally {
       domain.close()
     }
+  } catch (error) {
+    // A copy taken while Orca writes can mix two checkpoints; with Orca quit it can't.
+    if (running) {
+      throw new Error(
+        `${running}, and its chat store changed while being read. Quit Orca and run again.`
+      )
+    }
+    throw error
   } finally {
     legacy.close()
   }
@@ -629,7 +640,7 @@ function main() {
   if (!options.apply) {
     console.log(
       found.close.length > 0
-        ? `Dry run: nothing changed. Quit Orca, then run again with --apply to close them.${running ? ` (${running}.)` : ''}`
+        ? `Dry run: nothing changed. Quit Orca, then run again with --apply to close them.${running ? ` (${running}, so these counts are a preview; --apply counts again once it's quit.)` : ''}`
         : 'Dry run: nothing changed, and there is nothing to close.'
     )
     return
