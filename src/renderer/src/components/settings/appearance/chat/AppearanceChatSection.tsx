@@ -4,7 +4,7 @@ import {
   resetNativeChatAppearanceSettings,
   resolveNativeChatAppearanceSettings,
   type NativeChatAppearanceSettings
-} from '../../../../../../shared/native-chat/native-chat-appearance-settings'
+} from '../../../../../../shared/native-chat/settings/native-chat-appearance-settings'
 import { useAppStore } from '../../../../store/index'
 import { formatPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
@@ -24,7 +24,7 @@ import {
   getChatWidthOptions
 } from './chat-appearance-search'
 import { writeNativeChatAppearance } from '../../../native-chat/appearance/native-chat-appearance-write'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 
 export type AppearanceChatSectionProps = {
   settings: GlobalSettings

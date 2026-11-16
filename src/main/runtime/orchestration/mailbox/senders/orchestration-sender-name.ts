@@ -2,8 +2,8 @@ import { senderDispatchLaunch } from './sender-dispatch-launch'
 import { agentSessionRecordShownName } from '../../../agent-session/records/agent-session-record-shown-name'
 import { readWorkerTerminalHostScope } from '../../../../../shared/orchestration/workers/worker-terminal-host-scope'
 import { crewDisplayName } from '../../crew/crew-rules'
-import type { AgentMessageSender } from '../../../../../shared/agent-session/agent-session-message-source'
-import { defaultAgentChatLabel } from '../../../../../shared/agent-session/agent-session-chat-label'
+import type { AgentMessageSender } from '../../../../../shared/agent-session/journal/agent-session-message-source'
+import { defaultAgentChatLabel } from '../../../../../shared/agent-session/conversation-naming/agent-session-chat-label'
 import {
   getAgentRowConversationName,
   type ConversationNameTab

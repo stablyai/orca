@@ -5740,8 +5740,7 @@
           "issueCommand": "Comando de issue",
           "newVmRecipe": "Nueva receta de VM",
           "vmRecipe": "Receta de VM",
-          "thisRepository": "este repositorio",
-          "alwaysTrustRepo": "Confiar siempre en <code>orca.yaml</code> de <repo/>"
+          "thisRepository": "este repositorio"
         },
         "PendingWorktreeRow": {
           "af21e953d1": "Cancelar creación del worktree",
@@ -21536,7 +21535,7 @@
         "settingKeep": "Nunca reiniciar",
         "settingRestart": "Reiniciar siempre",
         "settingTitle": "Cuando cambias de cuenta mientras Claude se está ejecutando en terminales",
-        "settingDescription": "Al reiniciar, cada conversación en un terminal continúa en la nueva cuenta.",
+        "settingDescription": "Al reiniciar, cada conversación en un terminal continúa en la nueva cuenta. Las sesiones ocupadas interrumpen lo que están haciendo.",
         "restartingOther": "Reiniciando {{count}} sesiones de Claude con {{account}}",
         "restartingOne": "Reiniciando 1 sesión de Claude con {{account}}",
         "groupOnAccount": "En ejecución con {{account}}",
@@ -21555,15 +21554,17 @@
         "restartCount_one": "Reiniciar {{count}} sesión",
         "restartCount_other": "Reiniciar {{count}} sesiones",
         "restartCount_many": "Reiniciar {{count}} sesiones",
-        "reviewBody_one": "No se trasladó {{count}} sesión más de Claude a {{next}}.",
-        "reviewBody_other": "No se trasladaron {{count}} sesiones más de Claude a {{next}}.",
-        "reviewBody_many": "No se trasladaron {{count}} sesiones más de Claude a {{next}}.",
-        "body_one": "{{count}} sesión de Claude sigue ejecutándose en {{previous}}. Al reiniciarla, la conversación continúa en {{next}}. Las sesiones ocupadas esperan a estar inactivas antes de reiniciarse.",
-        "body_other": "{{count}} sesiones de Claude siguen ejecutándose en {{previous}}. Al reiniciarlas, cada conversación continúa en {{next}}. Las sesiones ocupadas esperan a estar inactivas antes de reiniciarse.",
-        "body_many": "{{count}} sesiones de Claude siguen ejecutándose en {{previous}}. Al reiniciarlas, cada conversación continúa en {{next}}. Las sesiones ocupadas esperan a estar inactivas antes de reiniciarse.",
+        "reviewBody_one": "No se trasladó {{count}} sesión de Claude a {{next}}.",
+        "reviewBody_other": "No se trasladaron {{count}} sesiones de Claude a {{next}}.",
+        "reviewBody_many": "No se trasladaron {{count}} sesiones de Claude a {{next}}.",
+        "body_one": "{{count}} sesión de Claude sigue ejecutándose en {{previous}}. Al reiniciarla, la conversación continúa en {{next}}. Las sesiones ocupadas interrumpen lo que están haciendo y se reinician ahora.",
+        "body_other": "{{count}} sesiones de Claude siguen ejecutándose en {{previous}}. Al reiniciarlas, cada conversación continúa en {{next}}. Las sesiones ocupadas interrumpen lo que están haciendo y se reinician ahora.",
+        "body_many": "{{count}} sesiones de Claude siguen ejecutándose en {{previous}}. Al reiniciarlas, cada conversación continúa en {{next}}. Las sesiones ocupadas interrumpen lo que están haciendo y se reinician ahora.",
         "reasonSharedSession": "También abierta en otro panel",
         "sharedOne": "1 sesión de Claude permanece en {{previous}} porque otro panel tiene abierta la misma conversación. Reiniciarla podría volver a abrir la conversación del otro panel.",
-        "sharedOther": "{{count}} sesiones de Claude permanecen en {{previous}} porque otro panel tiene abierta la misma conversación. Reiniciarlas podría volver a abrir la conversación del otro panel."
+        "sharedOther": "{{count}} sesiones de Claude permanecen en {{previous}} porque otro panel tiene abierta la misma conversación. Reiniciarlas podría volver a abrir la conversación del otro panel.",
+        "strandedOne": "Es posible que 1 sesión de Claude siga en {{previous}}. Reiníciala manualmente para cambiarla.",
+        "strandedOther": "Es posible que {{count}} sesiones de Claude sigan en {{previous}}. Reinícialas manualmente para cambiarlas."
       },
       "oauthUsage": {
         "title": "Consulta de uso de Claude",
@@ -23720,7 +23721,6 @@
     "setupTrust": {
       "reviewTitle": "¿Aprobar los nuevos comandos de configuración de esta automatización?",
       "reviewBody": "Una ejecución omitió la configuración porque cambiaron los comandos de configuración de <code>orca.yaml</code> de su rama. Si los apruebas, las ejecuciones posteriores usarán estos comandos. Apruébalos solo si confías en <repo/>.",
-      "approve": "Aprobar",
       "approved": "Configuración aprobada. Las ejecuciones posteriores de esta automatización la ejecutarán.",
       "skippedSinceApproved": "La configuración no se ejecutó en esta ejecución porque cambiaron los comandos de configuración de orca.yaml de su rama. Ya se aprobaron, así que las ejecuciones posteriores los ejecutarán.",
       "skippedReview": "No se ejecutó la configuración: la rama de esta ejecución contiene comandos de configuración de orca.yaml diferentes de los aprobados para esta automatización. Revísalos para que las ejecuciones posteriores ejecuten la configuración.",

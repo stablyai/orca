@@ -1,5 +1,5 @@
 import type { RefObject } from 'react'
-import { agentSessionPromptQuestions } from '../../../../../shared/agent-session/agent-session-question-answer'
+import { agentSessionPromptQuestions } from '../../../../../shared/agent-session/requests/prompts/agent-session-question-answer'
 import { chatApprovalFromJournal } from '../../../../../shared/native-chat/input/native-chat-interactive-prompt'
 import { NativeChatApprovalCard } from './NativeChatApprovalCard'
 import { NativeChatStructuredQuestionCard } from './NativeChatStructuredQuestionCard'

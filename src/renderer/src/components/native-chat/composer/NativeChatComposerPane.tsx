@@ -237,9 +237,8 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
 
     const ptyCommandRouting = {
       ...ptyCommandTarget,
-      isDispatchingSessionOption: sessionOptions.isDispatching,
+      ...sessionOptions.ptyCommandRouting,
       answerCommandLocally,
-      sessionOptionsSurface: sessionOptions.pty.surface,
       trackPendingSend,
       setDraft,
       setCaret,

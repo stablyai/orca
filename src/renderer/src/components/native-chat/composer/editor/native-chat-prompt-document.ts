@@ -2,7 +2,7 @@ import { NativeChatFileReferencePill } from './NativeChatFileReferencePill'
 import { NativeChatSkillPill, skillLabel } from './NativeChatSkillPill'
 import { NativeChatImageReferencePill } from './NativeChatImageReferencePill'
 import { formatNativeChatFileReference } from '../../../../../../shared/native-chat/input/composer/agent-image-paste'
-import { imageReferenceToken } from '../../../../../../shared/native-chat/native-chat-image-reference'
+import { imageReferenceToken } from '../../../../../../shared/native-chat/attachments/native-chat-image-reference'
 import {
   FILE_REFERENCE_NODE,
   IMAGE_REFERENCE_NODE,

@@ -15,7 +15,7 @@ import {
 import type { RuntimeSyncWindowGraph } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RuntimeTerminalShow } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { LayoutCommand } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import { applyCommandToSession } from '../../../persistence/terminal-topology/pane-admission/terminal-pane-admission'
 import { partialRuntimeStore } from '../../orca-runtime-tests/runtime-store-partial-fixture'

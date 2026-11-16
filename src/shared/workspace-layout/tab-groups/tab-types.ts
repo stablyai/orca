@@ -1,6 +1,6 @@
 import type { AiVaultSessionTitle } from '../../ai-vault/contracts/ai-vault-session-title'
 import type { AgentType } from '../../agent-status/contracts/agent-status-types'
-import type { ExecutionHostId } from '../../execution-host'
+import type { ExecutionHostId } from '../../execution-host/execution-host'
 
 export type TabGroupSplitDirection = 'horizontal' | 'vertical'
 

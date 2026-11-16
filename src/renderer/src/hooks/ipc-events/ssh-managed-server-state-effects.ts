@@ -11,7 +11,7 @@ import {
   getRepoExecutionHostId,
   toRuntimeExecutionHostId,
   toSshExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import { toastSshHostMoveRefused } from './ssh-managed-server-refusal-toast'
 import { useAppStore } from '../../store'
 import { withoutConvertedSshHostRows } from '../../store/repos/converted-ssh-host-rows'

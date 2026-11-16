@@ -1,8 +1,8 @@
 // Hold provisional chats in server-drawn groups until publication; send placement in server IDs so created tabs retain their intended position (L270).
 
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-import type { StructuredAgentSessionCreateParams } from '../../../../../shared/agent-session/structured-agent-session-create'
-import { AGENT_SESSION_CREATE_TAB_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/agent-session-create-capabilities'
+import type { StructuredAgentSessionCreateParams } from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
+import { AGENT_SESSION_CREATE_TAB_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
 import { structuredAgentSessionTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { useAppStore } from '@/store/index'
 import { readCachedRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'

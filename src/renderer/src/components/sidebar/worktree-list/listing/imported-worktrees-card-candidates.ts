@@ -1,10 +1,10 @@
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import type {
-  GlobalSettings,
-  WorktreeVisibilityDefaults
-} from '../../../../../../shared/global-settings-types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+  WorktreeVisibilityDefaults,
+  Repo
+} from '../../../../../../shared/repository/repo-types'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { getRepoOwnerWorktreeVisibilityDefaults } from '../../../../store/slices/worktrees/listing/worktree-visibility-defaults-by-host'
-import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../../../shared/worktree/types'
 import { getHiddenExternalWorktrees as getHiddenImportedWorktrees } from '../../../../../../shared/worktree/visibility/external-worktree-inbox'
 import { isGitRepoKind } from '../../../../../../shared/repository/repo-kind'

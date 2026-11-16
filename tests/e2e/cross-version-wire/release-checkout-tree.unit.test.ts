@@ -236,6 +236,35 @@ describe('release phone row reader', () => {
 })
 
 describe('release checkout workspace packages', () => {
+  it.each([
+    {
+      reader: 'mobile/src/worktree/agent-row-display.ts',
+      dependency: '../i18n/mobile-i18n'
+    },
+    {
+      reader: 'mobile/src/worktree/agent-lineage/agent-row-display.ts',
+      dependency: '../../i18n/mobile-i18n'
+    }
+  ])('loads the released phone reader at $reader', async ({ reader, dependency }) => {
+    const { repo, commit } = commitRelease({
+      [reader]: `import { phoneLabel } from '${dependency}'\nexport const readLabel = () => phoneLabel\n`,
+      'mobile/src/i18n/mobile-i18n.ts': "export const phoneLabel = 'released phone'\n",
+      'mobile/src/i18n/mobile-i18n.test.ts': 'throw new Error("stale phone spec")\n'
+    })
+    const staging = temporaryDirectory('orca-cross-version-phone-staging-')
+    await extractReleaseCheckoutTree(repo, staging, commit)
+    const checkout = { ref: 'v0.0.0-synthetic', commit, label: 'v0.0.0-synthetic', root: staging }
+    const phone = await importReleaseCheckoutModule(
+      checkout,
+      'mobile/src/worktree/agent-lineage/agent-row-display.ts'
+    )
+    if (typeof phone.readLabel !== 'function') {
+      throw new Error('released phone reader is missing readLabel')
+    }
+    expect(phone.readLabel()).toBe('released phone')
+    expect(existsSync(join(staging, 'mobile/src/i18n/mobile-i18n.test.ts'))).toBe(false)
+  })
+
   it('loads the release workspace package rather than the current one', async () => {
     expect('releaseOnlyExport' in currentProcessHost).toBe(false)
     const { repo, commit } = commitRelease({

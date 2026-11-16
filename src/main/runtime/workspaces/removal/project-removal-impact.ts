@@ -4,7 +4,7 @@ import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import { splitWorktreeId } from '../../../../shared/worktree/id'
 import { worktreePtyBelongsToHost, type WorktreePtyHostFence } from './worktree-pty-host-fence'
 

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { getDefaultWorkspaceSession } from '../../../../shared/constants'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/constants'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   LOCAL_ROW,
   RUNTIME_ROW,
@@ -9,7 +9,7 @@ import {
   twinPartitionSessions,
   type TwinCatalogRow,
   type TwinRepoRow
-} from '../../../../shared/twin-repo-host-routing.test-fixture'
+} from '../../../../shared/execution-host/twin-repo-host-routing.test-fixture'
 import { RuntimeWorkspaceSessionController } from './runtime-workspace-session-controller'
 
 const layoutOwner = vi.hoisted(() => ({ isMain: true }))

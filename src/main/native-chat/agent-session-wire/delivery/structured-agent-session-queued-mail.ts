@@ -1,5 +1,5 @@
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { orchestrationMailNotice } from '../../../../shared/agent-session/agent-session-message-source'
+import { orchestrationMailNotice } from '../../../../shared/agent-session/journal/agent-session-message-source'
 import type { QueuedMessageOwed } from '../../agent-session-journal/queued-messages/queued-message-consume-error'
 import type { StructuredAgentSessionHostDeps } from '../host/structured-agent-session-host-types'
 

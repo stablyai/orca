@@ -35,7 +35,7 @@ import '../operations/structured-agent-session-mutation-admission'
 import { AGENT_SESSION_NOT_ATTACHED } from '../operations/structured-agent-session-mutation-refusals'
 import { deferredStructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
 import { sameProviderChild } from '../host/structured-agent-session-provider-child'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   stopWorkspaceSleepChat,
   workspaceSleepStartAborts,

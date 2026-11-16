@@ -11,7 +11,7 @@ import {
 } from '../../../../../../shared/worktree/lineage/resolved-worktree-lineage'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { getIndexedWorktreesById } from '../listing/worktree-catalog-index'
 import '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { worktreeOwnerHostIds } from '@/lib/workspace/ownership/workspace-catalog-owner-index'

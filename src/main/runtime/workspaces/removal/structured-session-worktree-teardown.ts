@@ -6,7 +6,7 @@ import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import { STILL_LIVE_DETAIL_PREFIX } from '../../../../shared/worktree/removal/removal'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {

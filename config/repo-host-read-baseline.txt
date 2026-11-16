@@ -4,7 +4,7 @@
 # Prune after a fix: pnpm check:repo-host-read-ratchet --prune
 1 src/main/github/accounts/account-binding-required-host.ts
 3 src/main/ipc/ephemeral-vm-recipe-context.ts
-2 src/main/ipc/filesystem/filesystem-source-control-ai-targets.ts
+2 src/main/ipc/filesystem/source-control/filesystem-source-control-ai-targets.ts
 1 src/main/ipc/folder-repo-git-upgrade.ts
 1 src/main/ipc/local-worktree-runtime-options.ts
 4 src/main/ipc/repos/local-repo-registration.ts

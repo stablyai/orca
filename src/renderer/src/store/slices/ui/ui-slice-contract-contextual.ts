@@ -5,11 +5,11 @@ import type {
   FeatureTipId,
   FeatureTipSeenId
 } from '../../../../../shared/feature-education/feature-tips'
-import type { ChatUiLaunchTipVariant } from '../../../../../shared/native-chat/chat-ui-launch-tip-audience'
+import type { ChatUiLaunchTipVariant } from '../../../../../shared/feature-education/chat-ui-launch-tip-audience'
 import type { ContextualTourId } from '../../../../../shared/feature-education/contextual-tours/contextual-tours'
 import type { OrcaHookTrustKind } from '../../../../../shared/workspace-setup/hooks/orca-hook-trust-entries'
 import type { SettingsNavigationTarget } from '../../../components/settings/navigation/settings-navigation-types'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 
 export type WorktreeCardsIntroChoice = 'new' | 'classic'
 
