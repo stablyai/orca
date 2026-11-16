@@ -22,7 +22,7 @@ import { awaitPackedRefsLockRelease } from '../../git/refs/maintenance/local-rep
 import { worktreeRemovalLifetime } from '../../workspaces/removal/worktree-removal-lifetime'
 import { settleTeardownWithinDeadline, settleWithinMs } from './quit-teardown-deadline'
 import { quitTeardownStartGate } from './quit-teardown-start-gate'
-import { setUnreadDockBadgeCount } from '../../dock/unread-badge'
+import { disposeUnreadDockBadge, setUnreadDockBadgeCount } from '../../dock/unread-badge'
 import { destroySystemTray } from '../../tray/system-tray'
 import { shutdownTelemetry } from '../../telemetry/client'
 import { shutdownObservability } from '../../observability/index'
@@ -144,6 +144,7 @@ function installWillQuitHandler(): void {
     const structuredAgentSessionShutdown = stopStructuredAgentSessionRuntime()
     state.pluginService = null
     setUnreadDockBadgeCount(0)
+    disposeUnreadDockBadge()
     // Wait briefly for ref maintenance instead of killing mid-prune and stranding its lock; an orphan can finish safely.
     const refMaintenanceShutdown = settleWithinMs(
       Promise.all([state.repoMaintenanceShutdown, state.uninstallRepoMaintenanceIdleGate?.()]).then(

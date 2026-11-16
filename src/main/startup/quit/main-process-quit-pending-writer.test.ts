@@ -73,7 +73,7 @@ const dependencies: Record<string, Record<string, unknown>> = {
   '../../git/refs/maintenance/local-repo-ref-maintenance': {
     awaitPackedRefsLockRelease: settled()
   },
-  '../../dock/unread-badge': { setUnreadDockBadgeCount: idle() },
+  '../../dock/unread-badge': { setUnreadDockBadgeCount: idle(), disposeUnreadDockBadge: idle() },
   '../../tray/system-tray': { destroySystemTray: idle() },
   '../../telemetry/client': { shutdownTelemetry: settled() },
   '../../observability/index': { shutdownObservability: settled() },
