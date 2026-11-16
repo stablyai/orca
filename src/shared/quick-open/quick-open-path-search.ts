@@ -137,14 +137,15 @@ type QuickOpenQueryTerm = { text: string; withoutSeparators: string | undefined 
 
 const NON_ASCII = /[\u0080-\u{10ffff}]/u
 
-// Why: macOS often stores names decomposed (NFD) while keyboards type composed (NFC), so compare both composed.
+// Why: macOS often stores names decomposed (NFD) while keyboards type composed (NFC); recompose after
+// lowercasing too, since case mapping can leave a sequence decomposed (J\u030c → j\u030c, not ǰ).
 export function composeQuickOpenText(text: string): string {
   return NON_ASCII.test(text) ? text.normalize('NFC') : text
 }
 
 function normalizeQuickOpenQuery(query: string): readonly QuickOpenQueryTerm[] {
-  const composed = composeQuickOpenText(query.trim().replace(/\\/g, '/'))
-  const terms = [...new Set(composed.toLowerCase().split(/\s+/))].filter(Boolean).sort()
+  const lowerQuery = composeQuickOpenText(query.trim().replace(/\\/g, '/').toLowerCase())
+  const terms = [...new Set(lowerQuery.split(/\s+/))].filter(Boolean).sort()
   return terms.map((text) => ({
     text,
     withoutSeparators:
@@ -185,11 +186,11 @@ function scoreQuickOpenTerms(
 
 function prepareQuickOpenFile(path: string, inputIndex: number): QuickOpenIndexedFile {
   const searchPath = composeQuickOpenText(path.replace(/\\/g, '/'))
-  const lastSlash = searchPath.lastIndexOf('/')
+  const lowerPath = composeQuickOpenText(searchPath.toLowerCase())
   const file = {
     path,
-    lowerPath: searchPath.toLowerCase(),
-    lowerFilename: searchPath.slice(lastSlash + 1).toLowerCase(),
+    lowerPath,
+    lowerFilename: lowerPath.slice(lowerPath.lastIndexOf('/') + 1),
     inputIndex
   }
   if (/[A-Z]/.test(searchPath)) {

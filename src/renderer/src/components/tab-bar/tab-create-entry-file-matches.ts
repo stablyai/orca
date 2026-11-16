@@ -12,7 +12,7 @@ export type ExistingFileMatch = {
 }
 
 function normalizeFileMatchQuery(query: string): string {
-  return composeQuickOpenText(query.trim().replace(/\\/g, '/'))
+  return query.trim().replace(/\\/g, '/')
 }
 
 function hasPathSeparator(query: string): boolean {
@@ -81,7 +81,7 @@ export function findExistingFileMatches(
   if (!normalizedQuery || limit <= 0) {
     return []
   }
-  const lowerQuery = normalizedQuery.toLowerCase()
+  const lowerQuery = composeQuickOpenText(normalizedQuery.toLowerCase())
   const exactPathMatches = indexedFiles
     .filter((file) => file.lowerPath === lowerQuery)
     .map((file) => ({
