@@ -48,16 +48,18 @@
       "checkUpdates": "Sprawdź aktualizacje"
     },
     "browserSettingsScreen": {
+      "askEachTime": "Pytaj za każdym razem",
+      "askEachTimeDescription": "Za każdym razem wybierz przeglądarkę Orca, przeglądarkę telefonu albo skopiuj link.",
       "desktopBrowser": "Przeglądarka Orca na komputerze",
       "desktopBrowserDescription": "Otwieraj w przeglądarce strumieniowanej ze sparowanego komputera.",
       "phoneBrowser": "Przeglądarka w telefonie",
       "phoneBrowserDescription": "Otwieraj w Safari, Chrome lub innej przeglądarce na tym telefonie.",
       "title": "Przeglądarka",
       "linksHeading": "LINKI",
-      "linksDescription": "Wybierz, gdzie mają się otwierać linki HTTP(S) dotknięte w wyjściu terminala.",
+      "terminalAndChatLinksDescription": "Wybierz, gdzie otwierać linki dotknięte w danych wyjściowych terminala i w czacie.",
       "loadFailed": "Nie udało się wczytać preferencji przeglądarki. Spróbuj ponownie.",
       "saveFailed": "Nie udało się zapisać preferencji przeglądarki. Spróbuj ponownie.",
-      "openTerminalLinks": "Otwieraj linki z terminala"
+      "openLinks": "Otwieraj linki"
     },
     "menuItems": {
       "appearance": "Wygląd",
@@ -302,6 +304,33 @@
       "textSize": "Rozmiar tekstu",
       "restoreHost": "Przywracanie rozmiaru: {{name}}",
       "textSizePickerTitle": "Rozmiar tekstu terminala"
+    }
+  },
+  "appMove": {
+    "play": {
+      "title": "Orca jest już w Google Play",
+      "description": "Ta aplikacja nadal działa, ale aktualizacje przychodzą teraz z Google Play. Przejście zajmuje kilka minut.",
+      "installTitle": "Zainstaluj Orca z Google Play",
+      "installDescription": "Możesz to zrobić teraz, gdziekolwiek jesteś.",
+      "openGooglePlay": "Otwórz Google Play",
+      "cantUseGooglePlay": "Nie mogę użyć Google Play"
+    },
+    "download": {
+      "title": "Pobierz nową aplikację Orca",
+      "description": "Ta aplikacja nadal działa, ale aktualizacje i poprawki zabezpieczeń przychodzą teraz przez nową aplikację. Przejście zajmuje kilka minut.",
+      "installTitle": "Pobierz nową aplikację",
+      "installDescription": "Jeśli telefon o to poprosi, zezwól przeglądarce na instalowanie aplikacji.",
+      "download": "Pobierz",
+      "keepThisVersion": "Używaj dalej tej wersji",
+      "keepThisVersionNote": "Ominą Cię poprawki zabezpieczeń. Przypomnimy Ci za tydzień."
+    },
+    "pairTitle": "Sparuj z komputerem",
+    "pairDescription": "W Orca na komputerze przejdź do Ustawienia → Mobile i zeskanuj kod.",
+    "deleteTitle": "Usuń tę aplikację",
+    "deleteDescription": "Dopiero gdy nowa aplikacja pokaże Twoich agentów. Do tego czasu używaj tej.",
+    "dataKept": "Twoi agenci, czaty i przestrzenie robocze są zapisane na komputerze, więc zobaczysz je wszystkie w nowej aplikacji.",
+    "banner": {
+      "seeHowToSwitch": "Zobacz, jak przejść"
     }
   },
   "accounts": {
@@ -723,7 +752,6 @@
       "automations": "Automatyzacje"
     },
     "hostScreenOverlays": {
-      "deleteWorktree": "Usuń worktree",
       "deleteConfirmMessage": "Usunąć „{{name}}” ({{branch}})?",
       "deleteDestroysEnvironment": "Zostanie też usunięte środowisko „{{environment}}”, które Orca dla niego utworzyła, razem z niezatwierdzoną pracą i uruchomionymi w nim terminalami.",
       "deleteKeepsEnvironment": "Środowisko „{{environment}}”, które Orca dla niego utworzyła, nadal działa: jego przepis nie ma kroku usuwania.",
@@ -734,8 +762,7 @@
       "primaryWorktreeDeleteHint": "Główne worktree – nie można go usunąć. Zamiast tego usuń projekt.",
       "removeHost": "Usuń hosta",
       "removeHostMessage": "Usunąć „{{name}}”? Możesz później sparować go ponownie.",
-      "deleteFailed": "Nie udało się usunąć „{{name}}”",
-      "deleteAnyway": "Usuń mimo to"
+      "deleteFailed": "Nie udało się usunąć „{{name}}”"
     },
     "workspaceRenameSheet": {
       "title": "Zmień nazwę przestrzeni roboczej",
@@ -1316,11 +1343,14 @@
       "refreshWorkspaceTitle": "Odśwież mobilną przestrzeń roboczą",
       "refreshWorkspaceBody": "Przestrzeń robocza zapisana w pamięci podręcznej dla tego hosta jest starsza, niż wymaga aplikacja na komputerze. Połącz się ponownie z tym hostem, aby pobrać aktualną wersję.",
       "mobileTooOldAppStore": "Ten komputer wymaga nowszej wersji Orca Mobile. Zaktualizuj Orca Mobile z App Store, a potem spróbuj ponownie połączyć się z tym hostem.",
+      "mobileTooOldGooglePlay": "Ten komputer wymaga nowszej aplikacji Orca Mobile. Zaktualizuj Orca Mobile w Google Play, a potem spróbuj ponownie połączyć się z tym hostem.",
       "mobileTooOldGitHubReleases": "Ten komputer wymaga nowszej wersji Orca Mobile. Zaktualizuj Orca Mobile z GitHub Releases, a potem spróbuj ponownie połączyć się z tym hostem.",
       "workspaceNeedsUpdateAppStore": "Mobilna przestrzeń robocza z tego komputera wymaga nowszej wersji Orca Mobile. Zaktualizuj Orca Mobile z App Store, a potem spróbuj ponownie połączyć się z tym hostem.",
+      "workspaceNeedsUpdateGooglePlay": "Mobilna przestrzeń robocza z tego komputera wymaga nowszej aplikacji Orca Mobile. Zaktualizuj Orca Mobile w Google Play, a potem spróbuj ponownie połączyć się z tym hostem.",
       "workspaceNeedsUpdateGitHubReleases": "Mobilna przestrzeń robocza z tego komputera wymaga nowszej wersji Orca Mobile. Zaktualizuj Orca Mobile z GitHub Releases, a potem spróbuj ponownie połączyć się z tym hostem.",
       "desktopTooOldBody": "Sparowana aplikacja na komputerze jest za stara dla tej wersji Orca Mobile. Zaktualizuj Orca na komputerze, a potem spróbuj ponownie połączyć się z tym hostem.",
       "openAppStore": "Otwórz App Store",
+      "openGooglePlay": "Otwórz Google Play",
       "openGitHubReleases": "Otwórz GitHub Releases",
       "getVersion": "Pobierz Orca {{version}}",
       "refreshRecoveryNote": "Jeśli ten komunikat nie zniknie, usuń tego hosta i sparuj go ponownie.",
@@ -1625,7 +1655,6 @@
       "unresolve": "Oznacz jako nierozwiązane",
       "resolve": "Rozwiąż",
       "replyPlaceholder": "Napisz odpowiedź…",
-      "deleteConfirmTitle": "Usunąć komentarz?",
       "deleteConfirmMessage": "Komentarz zostanie trwale usunięty z GitHub."
     },
     "commentsSection": {
@@ -2333,7 +2362,6 @@
       "newCommand": "Nowe szybkie polecenie"
     },
     "quickCommandsSheet": {
-      "deleteConfirmTitle": "Usunąć „{{label}}”?",
       "untitled": "Bez tytułu",
       "deleteConfirmMessage": "To szybkie polecenie zostanie usunięte z listy zapisanych.",
       "editTitle": "Edytuj szybkie polecenie",
@@ -3252,7 +3280,10 @@
       "chooseInAgentPicker": "Wybierz w menu wyboru agenta…",
       "setWhenSessionStarts": "Ustawiane przy starcie sesji.",
       "availableAfterSessionStarts": "Dostępne po rozpoczęciu sesji.",
-      "sessionOptions": "Opcje sesji"
+      "sessionOptions": "Opcje sesji",
+      "permissionAppliesNextMessage": "{{saved}} zadziała od następnej wiadomości; teraz działa {{active}}",
+      "permissionAppliesNextMessageCompact": "{{saved}} · następna wiadomość",
+      "permissionAppliesNextMessageTiming": "Od następnej wiadomości · teraz działa {{active}}"
     },
     "streamFrame": {
       "streamFailed": "Błąd strumienia transkryptu",
@@ -3280,6 +3311,7 @@
     "message": {
       "copyMessage": "Kopiuj wiadomość",
       "forkFromResponse": "Utwórz odgałęzienie z tej odpowiedzi",
+      "scrollMessageToTop": "Przewiń tę wiadomość na górę",
       "forkFromResponseHint": "Nowy czat z całą tą odpowiedzią, aż do końca jej tury"
     },
     "messageActionsSheet": {
@@ -3618,7 +3650,10 @@
       "busy": "Otwiera się inny czat lub terminal. Poczekaj i ponownie utwórz odgałęzienie czatu ({{agent}}).",
       "unconfirmed": "{{agent}} nie potwierdził utworzenia odgałęzienia. Mogło się jednak otworzyć – sprawdź historię sesji, zanim utworzysz je ponownie.",
       "failed": "{{agent}} nie mógł utworzyć odgałęzienia tego czatu. {{detail}}",
-      "unsupported": "Ten host ma starszą wersję Orca. Zaktualizuj Orca na hoście i spróbuj ponownie."
+      "unsupported": "Ten host ma starszą wersję Orca. Zaktualizuj Orca na hoście i spróbuj ponownie.",
+      "mark": "Fork ·",
+      "markedName": "{{mark}} {{name}}",
+      "accessibleName": "Fork: {{name}}"
     },
     "hostOutage": {
       "offlineAsOf": "{{host}} jest offline · stan z {{time}}",
@@ -3661,6 +3696,64 @@
       "outcomeUnknownReturned": "Orca nie mogła potwierdzić, czy rozmowa wróciła do tej wiadomości. Wiadomość wróciła do pola wiadomości, a Orca sprawdzi rozmowę przed wysłaniem kolejnej wiadomości.",
       "timeout": "Czat nie zaktualizował się po cofnięciu do tej wiadomości. Otwórz go ponownie, aby zobaczyć najnowszy stan.",
       "pending": "Poczekaj, aż rozmowa wróci do wcześniejszej wiadomości."
+    },
+    "urlRequest": {
+      "title": "Poproszono o zalogowanie",
+      "open": "Otwórz stronę logowania",
+      "decline": "Odrzuć",
+      "opened": "Otwarto stronę logowania w przeglądarce.",
+      "openAgain": "Otwórz ponownie",
+      "finished": "Zakończono logowanie",
+      "finishedWith": "Zakończono logowanie · {{message}}"
+    },
+    "mcp": {
+      "source": {
+        "project": "Projekt",
+        "local": "Lokalne",
+        "user": "Użytkownik",
+        "plugin": "Plugin",
+        "session": "Sesja"
+      },
+      "status": {
+        "connected": "Połączono",
+        "pending": "Łączenie…",
+        "needsAuth": "Wymaga logowania",
+        "failedReason": "Błąd: {{error}}",
+        "failed": "Błąd",
+        "needsAuthAfterSend": "Wymaga logowania. Wyślij wiadomość, aby zalogować się tutaj.",
+        "finishOnPage": "Dokończ na otwartej stronie",
+        "waitingForSignIn": "Oczekiwanie na zalogowanie…",
+        "tools_one": "{{count}} narzędzie",
+        "tools_other": "{{count}} narzędzia",
+        "tools_few": "{{count}} narzędzia",
+        "tools_many": "{{count}} narzędzi",
+        "off": "Wyłączone"
+      },
+      "title": "Serwery MCP",
+      "notRunning": "Serwery MCP połączą się po wysłaniu następnej wiadomości.",
+      "unsupported": "Zaktualizuj Orca na hoście tego czatu, aby zarządzać tutaj serwerami MCP.",
+      "readFailed": "Nie udało się wczytać serwerów MCP.",
+      "retry": "Ponów",
+      "empty": "Brak skonfigurowanych serwerów MCP dla tego czatu.",
+      "signIn": "Zaloguj się",
+      "reconnect": "Połącz ponownie",
+      "toggleLabel": "Użyj: {{name}}",
+      "actionFailed": "Nie udało się tego wykonać. Spróbuj ponownie.",
+      "openAgain": "Otwórz ponownie",
+      "pastePlaceholder": "Wklej adres",
+      "pasteLabel": "Adres strony logowania",
+      "finish": "Zakończ",
+      "signInUnfinished": "Logowanie nie zostało jeszcze zakończone. Dokończ je na otwartej stronie, a potem dotknij Gotowe.",
+      "summary": {
+        "signingIn": "logowanie do {{name}}",
+        "connected": "Połączono: {{count}}",
+        "needsAuth_one": "{{count}} wymaga logowania",
+        "needsAuth_other": "{{count}} wymaga logowania",
+        "needsAuth_few": "{{count}} wymagają logowania",
+        "needsAuth_many": "{{count}} wymaga logowania",
+        "failed": "Błędy: {{count}}"
+      },
+      "pasteHint": "Gdy przeglądarka trafi na stronę, która się nie wczytuje, skopiuj jej adres i wklej go tutaj."
     }
   },
   "sourceControl": {
@@ -5042,7 +5135,6 @@
       "completed": "Zakończone",
       "couldNotStart": "Nie udało się uruchomić",
       "skipped": "Pominięto",
-      "deleteAutomationTitle": "Usunąć automatyzację?",
       "deleteRetained": "Usunąć automatyzację „{{name}}” i jej zachowane uruchomienia?",
       "couldNotVerifyTheOriginalAgentPaneReconnectAndTryAgain": "Nie udało się sprawdzić pierwotnego panelu agenta. Połącz się ponownie i spróbuj jeszcze raz.",
       "theOriginalAgentPaneIsNoLongerAvailableToOpenSavedOutputRemainsHere": "Pierwotnego panelu agenta nie można już otworzyć. Zapisane dane wyjściowe pozostają tutaj.",
