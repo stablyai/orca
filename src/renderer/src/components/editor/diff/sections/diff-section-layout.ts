@@ -4,7 +4,7 @@ import type { DiffSection } from './diff-section-types'
 import {
   countLinesLikeSplit,
   type DiffLineCounts
-} from '../../../../../../shared/large-diff-render-limit'
+} from '../../../../../../shared/source-control/diff/large-diff-render-limit'
 
 const DIFF_LINE_HEIGHT = 19
 const DIFF_SECTION_PADDING_HEIGHT = 19

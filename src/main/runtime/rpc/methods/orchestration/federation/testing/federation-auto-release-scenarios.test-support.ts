@@ -1,5 +1,5 @@
 import { afterEach, expect, vi } from 'vitest'
-import type { RuntimeRpcResponse } from '../../../../../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 import { getWorkerTerminalAutoReleaseScheduler } from '../../../../../orchestration/terminal-authority/release/worker-terminal-auto-release-scheduler'

@@ -1,6 +1,6 @@
 import { homedir } from 'node:os'
 import type { GlobalSettings, OrcaWorkspaceLayout } from '../../../shared/global-settings-types'
-import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
 import {
   legacyTerminalScrollbackBytesToRows,
   normalizeDesktopTerminalScrollbackRows

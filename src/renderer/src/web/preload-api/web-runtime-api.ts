@@ -1,5 +1,5 @@
 import type { PreloadApi } from '../../../../preload/api-types'
-import type { RuntimeSyncWindowGraph } from '../../../../shared/runtime-types'
+import type { RuntimeSyncWindowGraph } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { callRuntimeEnvelope, getRemoteRuntimeStatus } from './web-runtime-calls'
 import {
   getClientForEnvironment,
@@ -10,6 +10,7 @@ import { noopUnsubscribe } from './web-storage'
 
 export function createWebRuntimeApi(): NonNullable<Partial<PreloadApi>['runtime']> {
   return {
+    syncAgentStatus: async () => ({ accepted: false, reason: 'superseded' }),
     syncWindowGraph: async (_graph: RuntimeSyncWindowGraph) => getRemoteRuntimeStatus(),
     getStatus: () => getRemoteRuntimeStatus(),
     call: ({ method, params }) => callRuntimeEnvelope(method, params),

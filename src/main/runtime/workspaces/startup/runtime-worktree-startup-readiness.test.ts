@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { OPENCODE_AGENT_ROW_GRACE_MS } from '../../../../shared/opencode-agent-row-scanner'
+import { OPENCODE_AGENT_ROW_GRACE_MS } from '../../../../shared/agent-launch/startup/readiness/opencode-agent-row-scanner'
 import {
   deliverStartupFollowupPrompt,
   waitForWorktreeStartupDraft,

@@ -15,7 +15,7 @@ protected files keeps working after its old executable is deleted.
 So a packaged macOS GUI app starts its daemon from a private copy that the updater never touches:
 
 - Each packaged macOS app ships a signed helper, `Contents/Helpers/Orca Agents.app` (about
-  124 MiB): the pinned Node from `src/shared/node-runtime-pin.ts` as its main executable, the
+  124 MiB): the pinned Node from `src/shared/node-runtime/node-runtime-pin.ts` as its main executable, the
   daemon's `out/main` JS and that slice's node-pty.
   `config/scripts/macos/terminal-host-bundle/macos-terminal-host-bundle.cjs`
   builds and signs it in `afterPack`, boots it through one PTY round trip, and fails the build on any

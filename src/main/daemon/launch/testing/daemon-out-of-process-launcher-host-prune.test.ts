@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:
 import os from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { setAppEnvironment } from '../../../../shared/app-environment'
+import { setAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
 import { daemonHostStagingName } from '../../executable-host/windows/daemon-host-reclaim'
 import { buildInstallFixture } from '../../executable-host/windows/testing/daemon-host-relocation.test-fixture'
 import {

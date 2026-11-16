@@ -1,7 +1,7 @@
 import { worktreeCreateGit } from '../../../git/worktrees/creation/worktree-create-git-executor'
 import { shouldRunSetupForCreate } from '../../../workspace-hooks/effective-hook-config'
 import { getEffectiveHooks } from '../../../workspace-hooks/hooks'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import {

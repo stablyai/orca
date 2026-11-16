@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store/index'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { isWorkspaceSleepRecord } from '../../../../../shared/workspace-sleep'
+import { isWorkspaceSleepRecord } from '../../../../../shared/workspace/lifecycle/workspace-sleep'
 import { activationTreatsNoteAsFinished } from './sleeping-agent-pane-ownership'
 
 // A stranded workspace sleep record is the only handle to an unfinished session, never passive history.

@@ -1,11 +1,11 @@
 import os from 'node:os'
 import { app } from 'electron'
-import { sanitizeCrashReportString } from '../../../shared/crash-report-redaction'
-import type { CrashReportDiagnosticBundle } from '../../../shared/crash-reporting-diagnostic-bundle'
+import { sanitizeCrashReportString } from '../../../shared/crash-reporting/crash-report-redaction'
+import type { CrashReportDiagnosticBundle } from '../../../shared/crash-reporting/crash-reporting-diagnostic-bundle'
 import { collectDiagnosticBundle, getDiagnosticsStatus } from '../../observability/index'
 import { resolveDiagnosticOrcaChannel } from '../../observability/diagnostic-upload-endpoint'
 import type { FeedbackDiagnosticBundleAttachment } from '../../ipc/feedback-request'
-import type { FeedbackSubmitResult } from '../../../shared/feedback-submit-contract'
+import type { FeedbackSubmitResult } from '../../../shared/feedback/feedback-submit-contract'
 
 const CRASH_REPORT_LOG_LOOKBACK_MINUTES = 3 * 24 * 60
 

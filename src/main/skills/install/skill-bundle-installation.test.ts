@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { SKILL_INSTALL_CANCELLED_FAILURE } from '../../../shared/skill-install-failure'
+import { SKILL_INSTALL_CANCELLED_FAILURE } from '../../../shared/skills/installation/skill-install-failure'
 import { createSkillBundleArchive } from '../bundle-archive/skill-bundle-creation'
 import { installSkillBundle } from './skill-bundle-installation'
 import { listManagedSkillInstalls } from '../transaction-state/skill-install-provenance'

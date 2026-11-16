@@ -5,7 +5,7 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
-import { readWslHostWindowsDriveRefusal } from '../../../../../../shared/wsl-host-windows-drive-refusal'
+import { readWslHostWindowsDriveRefusal } from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-host-windows-drive-refusal'
 import {
   readDroppedHostPath,
   type DroppedHostPath

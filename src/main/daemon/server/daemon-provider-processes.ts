@@ -1,7 +1,7 @@
 import type { ChildProcess } from 'node:child_process'
 import { spawnOwnedProcess } from '@orca/process-host'
 import type { Socket } from 'node:net'
-import { encodeNdjson } from '../../../shared/main-process-ndjson-framer'
+import { encodeNdjson } from '../../../shared/json-stream/main-process-ndjson-framer'
 import type {
   HostedProviderOutcome,
   HostedProviderSpawn,

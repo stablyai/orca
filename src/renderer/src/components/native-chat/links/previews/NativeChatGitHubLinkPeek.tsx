@@ -12,8 +12,8 @@ import {
   type GitHubIssueOrPRLink
 } from '../../../../../../shared/github/repositories/links'
 import type { GitHubWorkItem } from '../../../../../../shared/github/work-items/work-item-types'
-import type { Repo } from '../../../../../../shared/repo-types'
-import type { HostAuthorityKey } from '../../../../../../shared/host-authority'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
+import type { HostAuthorityKey } from '../../../../../../shared/execution-host/host-authority'
 import {
   githubLinkPreviewKey,
   loadGitHubLinkPreview,

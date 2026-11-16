@@ -7,7 +7,7 @@ import { selectRepoSshGateInput } from '@/lib/workspace/catalog/repo-ssh-connect
 import { useFolderWorkspaceComposerPathStatus } from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-path-status'
 import { useDetectedAgents } from '@/hooks/useDetectedAgents'
 import { resolveWorkspaceCreationTarget } from '@/lib/workspace/creation/project-host-workspace-target'
-import { isGitRepoKind } from '../../../../shared/repo-kind'
+import { isGitRepoKind } from '../../../../shared/repository/repo-kind'
 import { CLIENT_PLATFORM } from '@/lib/workspace/creation/new-workspace'
 import { getLocalRepoProjectExecutionRuntimeContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import {

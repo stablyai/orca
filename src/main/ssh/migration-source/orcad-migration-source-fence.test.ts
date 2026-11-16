@@ -2,8 +2,8 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
-import type { SshTarget } from '../../../shared/ssh-types'
+import { getManagedOrcadFenceEnvironmentId } from '../../../shared/remote-runtime/ssh/managed-orcad-ssh-owner'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { closeTestStores, createSqliteTestStore } from '../../persistence/persistence-test-harness'
 import { Store } from '../../persistence/loading-store/store'
 import {

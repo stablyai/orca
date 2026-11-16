@@ -20,7 +20,10 @@ import {
   resolveWorktreeHostRouting,
   resolveWorktreeLaunchHost
 } from '../../workspaces/catalog/worktree-launch-host-repo'
-import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import {
+  folderWorkspaceKey,
+  parseWorkspaceKey
+} from '../../../../shared/workspace/identity/workspace-scope'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import type { Worktree } from '../../../../shared/worktree/types'

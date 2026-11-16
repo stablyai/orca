@@ -1,13 +1,13 @@
-import type { AgentSessionResumeTrigger } from '../../../shared/agent-session/lifecycle/agent-session-resume-marker'
+import type { AgentSessionResumeTrigger } from '../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
 import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-host'
-import type { JournalHostDatabase } from '../../native-chat/agent-session-journal/database/journal-host-database'
+import type { JournalSqlDatabase } from '../../native-chat/agent-session-journal/database/journal-sql-database'
 import { recordAgentSessionRuntimeEnd } from './records/agent-session-runtime-end-record'
 
 export type InstalledRuntime = {
   host: StructuredAgentSessionHost
   adapter: { closeAll(): Promise<void> }
   /** Closed last, once every conversation has drained into it. */
-  journalDatabase: JournalHostDatabase
+  journalDatabase: JournalSqlDatabase
   // Wait for observed adapter exits to publish and all recovery callbacks they raised to settle.
   waitForRecovery: () => Promise<void>
   /** Stop admissions and timers synchronously; join accepted work before closing its sinks. */

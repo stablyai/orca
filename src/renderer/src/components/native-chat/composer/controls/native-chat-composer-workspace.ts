@@ -4,9 +4,9 @@ import { findIndexedRepoOwnerForHost } from '@/lib/workspace/ownership/repo-owne
 import { getWslDistroFromPath } from '@/runtime/hosts/preflight/local-preflight-context'
 import { selectWslHostDistro } from '@/components/wsl-host-mark/WslHostMark'
 import { resolvePaneWslDistro } from '@/components/terminal-pane/host-state/terminal-pane-wsl-distro'
-import { getHostSettingOverride } from '../../../../../../shared/host-setting-overrides'
-import { isFolderRepo } from '../../../../../../shared/repo-kind'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { getHostSettingOverride } from '../../../../../../shared/execution-host/host-setting-overrides'
+import { isFolderRepo } from '../../../../../../shared/repository/repo-kind'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { getKnownExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
 import {
@@ -28,7 +28,7 @@ import { createNativeChatTabOwnerSelector } from '../../pane/ownership/native-ch
 import { FILE_LINK_CONTEXT_INPUT_KEYS } from '../../links/actions/native-chat-file-link-context'
 import { resolveNativeChatTabDirectory } from '../../pane/routing/native-chat-tab-directory'
 import type { AppState } from '@/store/types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { NativeChatStructuredComposerTransport } from '../submit/native-chat-structured-composer-transport'
 
 const OWNER_CONTEXT_INPUT_KEYS = FILE_LINK_CONTEXT_INPUT_KEYS.filter(

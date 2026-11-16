@@ -1,6 +1,6 @@
 import { providerSpawnAbsenceKnown } from '../../provider-process/provider-child'
-import { abortSignalReason } from '../../../shared/abort-signal-reason'
-import { mergeCommandEnvironment } from '../../../shared/command-environment'
+import { abortSignalReason } from '../../../shared/concurrency/abort-signal-reason'
+import { mergeCommandEnvironment } from '../../../shared/shell/launch/command-environment'
 import type { CommitMessagePlan } from '../../../shared/source-control/ai/generation/commit-message-plan'
 import { killSourceControlAgentProcess } from '../execution/source-control-agent-termination'
 import { MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES } from '../execution/source-control-generation-limits'

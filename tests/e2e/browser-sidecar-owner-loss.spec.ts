@@ -1,7 +1,7 @@
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { getRuntimeMetadataPath } from '../../src/shared/runtime-bootstrap'
+import { getRuntimeMetadataPath } from '../../src/shared/remote-runtime/bootstrap/runtime-bootstrap'
 import { expect, test } from './helpers/orca-app'
 import { launchOwnedBrowserForE2E } from './helpers/orca-restart'
 import { cleanupE2EDaemons } from './helpers/electron-process-shutdown'

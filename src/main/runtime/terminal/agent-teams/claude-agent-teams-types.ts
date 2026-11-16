@@ -4,8 +4,8 @@ import type {
   RuntimeTerminalRead,
   RuntimeTerminalShow,
   RuntimeTerminalSplit
-} from '../../../../shared/runtime-terminal-contracts'
-import type { RuntimeTerminalSend } from '../../../../shared/runtime-terminal-send-contract'
+} from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type { RuntimeTerminalSend } from '../../../../shared/terminal/runtime/runtime-terminal-send-contract'
 import type { TerminalInputKind } from '../../../../shared/terminal/input/terminal-input-kind'
 
 export type AgentTeamsTmuxCompatRequest = {

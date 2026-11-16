@@ -1,8 +1,8 @@
 import type { DaemonClient } from '../daemon/transport/client/daemon-client'
 import { probeAgentSessionProcessIdentity } from '../runtime/agent-session/ownership/agent-session-process-identity-probe'
-import type { AgentSessionOwnerProbe } from '../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import type { AgentSessionOwnerProbe } from '../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import type { HostedProviderState } from '../daemon/protocol/daemon-provider-process-protocol'
-import { withTimeout } from '../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 
 type ExitObservation = HostedProviderState | { state: 'absent' | 'unproven' }
 

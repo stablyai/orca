@@ -26,6 +26,7 @@ vi.mock('../../guest-lifecycle/manager/browser-manager', () => ({ browserManager
 vi.mock('../../sessions/profiles/browser-session-registry', () => ({
   browserSessionRegistry: {
     getProfile: () => ({ label: 'Work' }),
+    attachExtensions: () => {},
     getEnabledExtensionIds: () => [],
     updateEnabledExtensionIds: vi.fn()
   }

@@ -2,7 +2,7 @@
 import { isClaudeIdleEdge } from '@/components/terminal-pane/agent-status/agent-idle-edge'
 import type { AgentIdleEdgeMeta } from '../../../../../../shared/terminal/output/terminal-output-side-effects'
 import { resolveTerminalNotificationOwner } from '@/attention/notification-subject-owner'
-import type { NotificationWorkspaceOwner } from '../../../../../../shared/notification-source'
+import type { NotificationWorkspaceOwner } from '../../../../../../shared/notifications/notification-source'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { useAppStore } from '@/store/index'
 import { createTerminalGitHubPRLinkDetector } from '../../../../../../shared/terminal/links/terminal-github-pr-link-detector'
@@ -12,7 +12,7 @@ import {
   isAgentTaskCompleteOsNotificationEnabledFromState,
   isAgentTaskCompleteTrackingEnabledFromState
 } from '../../notifications/agent-task-complete-policy'
-import { createCommandCodeOutputStatusDetector } from '../../../../../../shared/command-code-output-status'
+import { createCommandCodeOutputStatusDetector } from '../../../../../../shared/agent-status/output/command-code-output-status'
 import { createOsc133CommandFinishedScanner } from '../../../../../../shared/terminal/output/terminal-osc133-command-finished'
 import {
   createParkedTerminalCommandStatusPolicy,
@@ -166,7 +166,7 @@ export function startParkedTerminalByteWatcher(
       const state = useAppStore.getState()
       // Why: null settings means "not hydrated yet"; a spurious timestamp is harmless while a dropped one loses the timer.
       if (
-        isClaudeIdleEdge(title, state.agentStatusByPaneKey[paneKey]) &&
+        isClaudeIdleEdge(title, state.agentStatusByPaneKey.get(paneKey)) &&
         (state.settings === null || state.settings.promptCacheTimerEnabled)
       ) {
         state.setCacheTimerStartedAt(paneKey, Date.now())

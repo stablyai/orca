@@ -50,7 +50,7 @@ function CardTitle({
       displayName={card.visibleCardTitle}
       disabled={card.isDeleting || affiliateListMode}
       showUnreadEmphasis={card.showUnreadEmphasis || rolledUpUnread}
-      dimReadTitle={props.dimWhenRead === true}
+      dimReadTitle={props.dimWhenRead === true && !card.isActiveSurface}
       className="text-[13px] leading-5"
       editingClassName="flex-1"
       titleWrapper={props.tooltip === false ? withoutTitleTooltip : undefined}

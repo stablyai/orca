@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { loadTerminalLinkOpenMode, saveTerminalLinkOpenMode } from './preferences'
+import { loadLinkOpenMode, saveLinkOpenMode } from './preferences'
 import {
   loadDefaultSessionView,
   loadSessionViewOverrides,
@@ -199,9 +199,9 @@ describe('terminal link open mode preference', () => {
       }
       stored = value
     })
-    const firstMount = saveTerminalLinkOpenMode('phone-browser')
-    const secondMount = saveTerminalLinkOpenMode('orca-browser')
-    const reader = loadTerminalLinkOpenMode()
+    const firstMount = saveLinkOpenMode('phone-browser')
+    const secondMount = saveLinkOpenMode('orca-browser')
+    const reader = loadLinkOpenMode()
     await Promise.resolve()
     expect(stored).toBe('orca-browser')
     firstWrite.resolve()

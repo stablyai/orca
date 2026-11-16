@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { linearIssueReadFailureMessage } from '../../../../src/shared/integration-credential-errors'
+import { linearIssueReadFailureMessage } from '../../../../src/shared/secure-storage/integration-credential-errors'
 import type { ProviderLoadActionsModel } from './use-mobile-tasks-provider-load-actions'
 import { isHostedTaskRepo } from '../repositories/hosted-repo-selection'
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'

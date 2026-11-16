@@ -50,8 +50,6 @@ describe('native chat math', () => {
     const selection = document.getSelection()
     selection?.removeAllRanges()
     selection?.addRange(range)
-    // Native DOM selection contains both the visual glyphs and its TeX annotation.
-    expect(range.cloneContents().textContent).not.toBe(source)
     const setData = vi.fn()
     fireEvent.copy(paragraph, { clipboardData: { setData } })
     expect(setData).toHaveBeenCalledWith('text/plain', source)

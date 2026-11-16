@@ -1,6 +1,6 @@
 import { automationCreateIdentity } from './automation-create-identity'
 import { getRepoSshConnectionId } from '../../../shared/execution-host'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import { findAutomationRepoForWrite } from '../../../shared/automations/ownership/automation-repo-target'
 import {
   applyAutomationLaunchSetupPatch,

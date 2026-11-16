@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { MessageType, encodeHandshakeFrame, parseHandshakeMessage } from './protocol'
-import { HEADER_LENGTH } from '../../../shared/relay-frame-decoder'
+import { HEADER_LENGTH } from '../../../shared/remote-runtime/relay/relay-frame-decoder'
 import { FrameDecoder } from './relay-frame-decoder'
-import type { DecodedFrame } from '../../../shared/relay-frame-decoder-contract'
+import type { DecodedFrame } from '../../../shared/remote-runtime/relay/relay-frame-decoder-contract'
 
 describe('handshake framing', () => {
   it('round-trips an orca-relay-handshake envelope through the existing framing', () => {

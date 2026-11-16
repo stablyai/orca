@@ -16,7 +16,7 @@ import {
 } from '../scanners/session-scanner-graph-parsers'
 import { parseKimiSessionFile } from '../scanners/kimi/session-scanner-kimi-parser'
 import { parseMuseSessionFile } from '../scanners/muse/session-scanner-muse-parser'
-import { splitOpenCodeSqliteCandidate } from '../../../shared/opencode-sqlite-session-path'
+import { splitOpenCodeSqliteCandidate } from '../../../shared/agent-session/lifecycle/provider-handles/opencode-sqlite-session-path'
 import { parseJcodeSessionFile } from '../scanners/jcode/session-scanner-jcode-parser'
 import { parseKiroSessionFile } from '../scanners/kiro/session-scanner-kiro-parser'
 import {

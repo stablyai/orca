@@ -22,13 +22,13 @@ import {
 } from '../agent-session/launch/structured-agent-launch-support'
 import { structuredAgentRuntimeMetadata } from '../agent-session/installation/structured-agent-runtime-metadata'
 import { structuredAgentChatProgramNeedsInstall } from '../agent-session/launch/structured-agent-availability'
-import { structuredLaunchSeedOptions } from '../../../shared/native-chat/input/native-chat-session-option-defaults'
+import { structuredLaunchSeedOptions } from '../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
 import { hasPersistedStructuredAgentSessionStore as hasPersistedStructuredAgentSessionStoreOnDisk } from '../agent-session/records/agent-session-record-store-slot'
 import { ensureStructuredAgentSessionHostUnlessRefused } from '../agent-session/structured-agent-session-host-refusal'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 import { isFloatingWorkspaceSelector } from '../../../shared/floating-workspace-worktree'
-import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
-import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { StructuredAgentCreateSupportReply } from '../../../shared/agent-session/structured-agent-create-support-reply'
 
 export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends StructuredSessionWorkspaceScope {
@@ -299,12 +299,15 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
   }
 
   protected async prepareStructuredAgentSessionStartupRestorationOnce(): Promise<void> {
-    if (!this.hasPersistedStructuredAgentSessionStore()) {
+    const startup = this.structuredAgentSessionStartupOpen
+    this.structuredAgentSessionStartupOpen = undefined
+    if (!(startup ? startup.persisted : this.hasPersistedStructuredAgentSessionStore())) {
       return
     }
     // Load durable agent records before reconciling daemon inventory; refused hosts block only structured requests, not app startup.
+    // This startup's refused open is its answer; a later chat request retries the install.
     await ensureStructuredAgentSessionHostUnlessRefused(() =>
-      this.ensureStructuredAgentSessionHost()
+      Promise.resolve(startup?.opened).then(() => this.ensureStructuredAgentSessionHost())
     )
     await this.refreshMobileSessionPtyRecords()
     await getStructuredAgentSessionHost()?.reconcileRestartLeases()

@@ -1,4 +1,4 @@
-import type * as ProcessTable from '../../shared/libproc-process-table'
+import type * as ProcessTable from '../../shared/process-observation/darwin/libproc-process-table'
 import type * as ProcessHost from '@orca/process-host'
 import type * as OwnerChannels from './provider-owner-channels'
 import type { PassThrough } from 'node:stream'
@@ -13,7 +13,7 @@ import {
 import { spawnProviderProcess, installProviderProcessHost } from './provider-process-spawn'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { runProcess } from '@orca/process-host'
-import { runPsInProcess } from '../../shared/libproc-process-table'
+import { runPsInProcess } from '../../shared/process-observation/darwin/libproc-process-table'
 import { HostedProviderChild } from './hosted-provider-child'
 import { createProviderSpawnSpec } from './provider-process-supervisor'
 import { runLocalSourceControlPlan } from '../text-generation/execution/source-control-local-process'
@@ -50,7 +50,7 @@ vi.mock('@orca/process-host', async (original) => ({
   ...(await original<typeof ProcessHost>()),
   runProcess: vi.fn()
 }))
-vi.mock('../../shared/libproc-process-table', async (original) => ({
+vi.mock('../../shared/process-observation/darwin/libproc-process-table', async (original) => ({
   ...(await original<typeof ProcessTable>()),
   runPsInProcess: vi.fn()
 }))

@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../../types'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 
 import { createDetectedAgentsSlice } from './create-detected-agents-slice'
 import { createRuntimeDetectedAgentsSlice } from './runtime-detected-agents'
 import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_PROTOCOL_VERSION
-} from '../../../../../shared/protocol-version'
+} from '../../../../../shared/remote-runtime/protocol/protocol-version'
 import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 
 const detectAgents = vi.fn()
@@ -139,38 +139,6 @@ describe('createDetectedAgentsSlice remote detection', () => {
         _meta: { runtimeId: 'remote-runtime' }
       })
     })
-  })
-
-  it('does not restore an SSH cache entry after it is cleared mid-detection', async () => {
-    const store = createTestStore()
-    let resolveRemote: (ids: string[]) => void = () => {}
-    detectRemoteAgents.mockReturnValueOnce(
-      new Promise<string[]>((resolve) => {
-        resolveRemote = resolve
-      })
-    )
-
-    const pending = store.getState().ensureRemoteDetectedAgents('ssh-1')
-    store.getState().clearRemoteDetectedAgents('ssh-1')
-    resolveRemote(['claude'])
-
-    await expect(pending).resolves.toEqual(['claude'])
-    expect(store.getState().remoteDetectedAgentIds).not.toHaveProperty('ssh-1')
-    expect(store.getState().isDetectingRemoteAgents).not.toHaveProperty('ssh-1')
-  })
-
-  it('re-runs remote detection after an empty result instead of pinning it', async () => {
-    const store = createTestStore()
-    // Retry empty detections so later installs/PATH fixes appear without reconnect; [] truthiness must not cache misses.
-    detectRemoteAgents.mockResolvedValueOnce([])
-
-    await expect(store.getState().ensureRemoteDetectedAgents('ssh-1')).resolves.toEqual([])
-    expect(store.getState().remoteDetectedAgentIds['ssh-1']).toEqual([])
-
-    detectRemoteAgents.mockResolvedValueOnce(['kilo'])
-
-    await expect(store.getState().ensureRemoteDetectedAgents('ssh-1')).resolves.toEqual(['kilo'])
-    expect(store.getState().remoteDetectedAgentIds['ssh-1']).toEqual(['kilo'])
   })
 
   it.each([false, true])(

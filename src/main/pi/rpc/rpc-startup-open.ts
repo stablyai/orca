@@ -1,5 +1,5 @@
 import type { PiRpcConnection, PiRpcSession } from './rpc-session'
-import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
 import type {
   StructuredAgentSessionAcquireInput,
   StructuredAgentSessionAdapter

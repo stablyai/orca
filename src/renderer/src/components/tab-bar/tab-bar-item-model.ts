@@ -2,13 +2,13 @@ import {
   projectedStructuredChatTabSavedName,
   type StructuredChatTabNames
 } from '@/runtime/native-chat/naming/structured-chat-tab-name'
-import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
+import type { BrowserWorkspace } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import type { GitFileStatus } from '../../../../shared/git/status/git-status-types'
 import type { Tab, WorkspaceVisibleTabType } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
 import type { OpenFile } from '../../store/slices/editor/types/open-file'
-import { normalizeRelativePath } from '../../../../shared/cross-platform-path'
+import { normalizeRelativePath } from '../../../../shared/file-access/cross-platform-path'
 import { isVirtualEditorFile } from '@/store/slices/editor/tabs/editor-tab-content-type'
 import { tabItemLabel } from './tab-bar-item-label'
 import type { DropIndicator } from './drop-indicator'

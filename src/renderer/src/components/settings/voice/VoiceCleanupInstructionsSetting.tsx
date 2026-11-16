@@ -1,5 +1,5 @@
 import { useId, useState } from 'react'
-import { BUILT_IN_DICTATION_CLEANUP_INSTRUCTIONS } from '../../../../../shared/dictation-cleanup'
+import { BUILT_IN_DICTATION_CLEANUP_INSTRUCTIONS } from '../../../../../shared/speech/dictation/dictation-cleanup'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
 import { Label } from '../../ui/label'

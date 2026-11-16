@@ -40,11 +40,10 @@ export const UNIT_EXCLUDE = [
   'src/main/startup/shell-environment/shell-probe-terminal-detach.live-shell.test.ts',
   'src/main/startup/shell-environment/shell-probe-lifetime.live-shell.test.ts',
   'src/renderer/src/components/terminal-pane/pty-connection/emulation/fish-color-scheme-child-stdin.node-pty.test.ts',
-  'src/shared/fish-wsl-cwd-report.node-pty.test.ts',
+  'src/shared/shell/wsl/fish-wsl-cwd-report.node-pty.test.ts',
   'src/main/wsl/filesystem/wsl-sh-cwd-report.node-pty.test.ts',
   'src/shared/terminal/pty/ingress/pty-reply-echo-shapes.node-pty.test.ts',
-  'src/shared/startup-shell-portability.live-shell.test.ts',
-  'src/shared/posix-command-path-lookup.test.ts',
+  'src/shared/shell/command-resolution/posix-command-path-lookup.test.ts',
   'tests/e2e/relay-region-correction.unit.test.ts',
   'src/main/browser/cookies/browser-google-cookie-clear.electron.test.ts',
   // Electron probes with in-process deadlines; the package job runs them serially.

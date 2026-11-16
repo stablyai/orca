@@ -40,7 +40,7 @@ import {
 } from './acp-listing-session-models'
 import { AcpAgentError, AcpAgentExitedError } from '../transport/acp-errors'
 import { AgentModelCatalogUnavailableError } from '../../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
-import { usesModelSpecificAcpEfforts } from '../../../shared/agent-session/options/agent-model-catalog-ownership'
+import { usesModelSpecificAcpEfforts } from '../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 
 export type AcpModelCatalogProbeDeps = AcpLaunchInvocationDeps & {
   resolveSavedEnvironment?: () => Promise<Record<string, string>>
@@ -237,7 +237,15 @@ export function createAcpModelCatalogProbe(
         if (models.length === 0) {
           throw new Error(`${spec.agent} listed no models`)
         }
-        return { models, origin: 'probe' as const, ...(attemptedModels ? { attemptedModels } : {}) }
+        const fastModeSupport = models.some((model) => model.supportsFastMode === true)
+          ? { supported: true as const }
+          : undefined
+        return {
+          models,
+          origin: 'probe' as const,
+          ...(fastModeSupport ? { fastModeSupport } : {}),
+          ...(attemptedModels ? { attemptedModels } : {})
+        }
       }
     }
   }

@@ -71,6 +71,7 @@ async function connectCodexAppServer(
     if (!terminalError) {
       const error = buildExitError(cause, protocolFailure)
       terminalError = error
+      handlers.onClose?.(error)
       if (protocolFailure) {
         dispatcher.failPending(error)
       } else {
@@ -195,6 +196,9 @@ async function connectCodexAppServer(
   }
 
   function close(): Promise<boolean> {
+    if (!closing) {
+      handlers.onClose?.(terminalError ?? new Error('codex app-server connection closed'))
+    }
     closing ||= managed.rootVerdict !== 'exited'
     closesInFlight += 1
     return managed

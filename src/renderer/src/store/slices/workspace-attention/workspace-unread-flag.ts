@@ -5,7 +5,7 @@ import {
   getWorktreeIdFromHostIdentity,
   parseWorktreeHostIdentity
 } from '../../../../../shared/worktree/host-qualified-identity'
-import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { applyWorktreeUpdates } from '../worktrees/metadata/worktree-meta-update-application'
 import {
   applyDetectedWorktreeUpdates,

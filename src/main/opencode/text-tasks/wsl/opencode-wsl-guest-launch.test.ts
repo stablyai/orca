@@ -4,7 +4,7 @@ import { rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { parseOpenCodeCliVersion } from '../../../../shared/opencode-cli-version'
+import { parseOpenCodeCliVersion } from '../../../../shared/agent-launch/startup/opencode-cli-version'
 import { guestLoginShellLaunch } from './opencode-wsl-guest-launch'
 
 const roots: string[] = []

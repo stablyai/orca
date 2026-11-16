@@ -9,9 +9,9 @@ import { structuredAgentSessionEndedChildFailure } from '../termination/structur
 import { sameProviderChild } from '../host/structured-agent-session-provider-child'
 import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
-import type { StructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
+import type { StructuredAgentSessionObservedWork } from '../observations/structured-agent-session-observed-work'
 import { structuredAgentSessionCommandRunning } from '../operations/structured-agent-session-command-turn'
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { orchestrationMailNotice } from '../../../../shared/agent-session/agent-session-message-source'
@@ -22,7 +22,7 @@ export function structuredAgentSessionChildAcceptsInput(input: {
   child: StructuredAgentSessionProviderChild | null | undefined
   current: boolean
   stopping: boolean
-  work: StructuredAgentSessionCurrentWork | null
+  work: Pick<StructuredAgentSessionObservedWork, 'activeTurnId'> | null
 }): boolean {
   return Boolean(
     input.current &&
@@ -34,33 +34,31 @@ export function structuredAgentSessionChildAcceptsInput(input: {
 }
 
 /** A consumed automatic card still obeys live pauses until the provider owns its input. */
-export function structuredAutomaticMailWaits(
+export async function structuredAutomaticMailWaits(
   journal: AgentSessionJournal,
   submission: AgentJournalSubmission,
-  work: StructuredAgentSessionCurrentWork | null
-): boolean {
+  work: StructuredAgentSessionObservedWork | null
+): Promise<boolean> {
   if (
     submission.origin !== 'host' ||
     submission.queuedMessageId === undefined ||
-    journal.queuedMessages.get(submission.queuedMessageId)?.consumedAs !==
+    (await journal.queuedMessages.get(submission.queuedMessageId))?.consumedAs !==
       submission.clientMessageId
   ) {
     return false
   }
-  const body = journal.itemBody(agentJournalSubmissionKey(submission.clientMessageId))
+  const body = await journal.reads.itemBody(agentJournalSubmissionKey(submission.clientMessageId))
   if (body?.kind !== 'message' || !orchestrationMailNotice(body.from)) {
     return false
   }
-  const cards = journal.inputOrder.cards
-  cards.ensure(journal.queuedMessages.inputState())
   return Boolean(
-    cards.failureHolds() ||
+    (await journal.queuedMessages.failureHolds()) ||
     (work?.hasActionablePrompt() && !pendingPromptsAllUnanswerableHere(work.actionablePrompts()))
   )
 }
 
 /** Rechecked on the host lane before preparation and the synchronous provider enqueue. */
-export function assertStructuredAgentSessionInputReady(input: {
+export async function assertStructuredAgentSessionInputReady(input: {
   deps: StructuredAgentSessionDeliveryLoopDeps
   sessionId: string
   session: StructuredAgentSessionHostSession
@@ -68,19 +66,21 @@ export function assertStructuredAgentSessionInputReady(input: {
   next: AgentJournalSubmission
   disposed: boolean
   signal?: AbortSignal
-}): void {
+}): Promise<void> {
   const { deps, sessionId, session, binding, next, disposed, signal } = input
+  const work = await deps.currentWork(sessionId)
+  const waits = await structuredAutomaticMailWaits(session.journal, next, work)
+  const stopping = await deps.stopping(sessionId)
   const current = deps.sessions.get(sessionId) === session && session.child === binding
   if (
     signal?.aborted ||
     disposed ||
     deps.sessions.get(sessionId) !== session ||
-    session.journal.submission(next.clientMessageId)?.dispatchState !== 'pending' ||
     !structuredAgentSessionChildAcceptsInput({
       child: binding,
       current,
-      stopping: deps.stopping(sessionId),
-      work: deps.currentWork(sessionId)
+      stopping,
+      work
     })
   ) {
     const ended = session.lastEndedChild
@@ -92,11 +92,11 @@ export function assertStructuredAgentSessionInputReady(input: {
           : null) ?? {
           failure: agentSessionFailureFact('cancelled', { neverReachedAgent: true })
         },
-        deps.failureTextContext(sessionId)
+        await deps.failureTextContext(sessionId)
       )
     })
   }
-  if (structuredAutomaticMailWaits(session.journal, next, deps.currentWork(sessionId))) {
+  if (waits) {
     throw new StructuredAgentSessionInputNotAdmitted({
       state: 'rejected',
       ...agentSessionFailureWords(

@@ -1,6 +1,6 @@
 import { homedir } from 'node:os'
 import { getWslHome } from '../../../wsl/discovery/distro-catalog'
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import {
   getConnectionExecutionHostId,
   getRepoExecutionHostId,
@@ -10,14 +10,14 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import type { SkillInstallDestinationAuthority } from '../../../skills/install/skill-install-destinations'
 import {
   resolveEnvironmentSkillProviderRoots,
   resolveWslSkillProviderRoots,
   withClaudeSkillProviderRoot
 } from '../../../skills/providers/skill-provider-runtime-roots'
-import type { SkillInstallRequest } from '../../../../shared/skill-install-contract'
+import type { SkillInstallRequest } from '../../../../shared/skills/installation/skill-install-contract'
 import type { SkillProviderRootOverrides } from '../../../skills/providers/skill-provider-destinations'
 import type { RuntimeSkillCommandHost } from './runtime-skill-command-contract'
 

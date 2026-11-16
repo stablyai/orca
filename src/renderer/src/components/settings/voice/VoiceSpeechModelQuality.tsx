@@ -1,4 +1,4 @@
-import type { SpeechModelQuality } from '../../../../../shared/speech-model-quality'
+import type { SpeechModelQuality } from './speech-model-quality'
 import { useTranslate } from '@/i18n/use-translate'
 
 export function VoiceSpeechModelQuality({

@@ -7,14 +7,14 @@ import type {
   SkillDeletePlan,
   SkillDeleteRequest,
   SkillDeleteResult
-} from '../../../../../shared/skill-delete-contract'
-import type { DiscoveredSkill } from '../../../../../shared/skills'
+} from '../../../../../shared/skills/deletion/skill-delete-contract'
+import type { DiscoveredSkill } from '../../../../../shared/skills/discovery/skills'
 import {
   deleteSkillsOnRuntimeTarget,
   previewSkillDeletionOnRuntimeTarget,
   runtimeTargetSupportsSkillDelete
 } from '../../../runtime/skills/configuration/runtime-skills-client'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   skillDeleteActionLabel,
   skillDeleteBlockedLines,
@@ -22,7 +22,7 @@ import {
   skillDeletePlacementSummary,
   skillDeleteRetainedSourceLines
 } from './skill-delete-copy'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 
 export type SkillDeleteFlow = {
   /** False while the target is unresolved or the host predates the capability. */

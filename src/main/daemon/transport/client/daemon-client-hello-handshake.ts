@@ -1,5 +1,8 @@
 import type { Socket } from 'node:net'
-import { encodeNdjson, NDJSON_MAX_LINE_BYTES } from '../../../../shared/main-process-ndjson-framer'
+import {
+  encodeNdjson,
+  NDJSON_MAX_LINE_BYTES
+} from '../../../../shared/json-stream/main-process-ndjson-framer'
 import {
   BINARY_STREAM_FRAMING,
   type DaemonStreamFraming

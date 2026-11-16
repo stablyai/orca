@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import type { MobilePushFilter } from '../../../../src/shared/mobile-push-contract'
+import type { MobilePushFilter } from '../../../../src/shared/notifications/mobile-push-contract'
 
 const KEY = 'orca:notificationDeliveryPreferences'
 export type NotificationDeliveryPreferences = {

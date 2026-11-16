@@ -42,7 +42,7 @@ import { subscribeTranscriptAfterHold } from './mobile-structured-transcript-sub
 import {
   useMobileOlderPageLoader,
   type OlderPagePhase
-} from '../transcript/use-mobile-older-page-loader'
+} from '../transcript/ingestion/use-mobile-older-page-loader'
 import { mobileStructuredAgentSessionWorking } from './mobile-structured-agent-session-working'
 import {
   reduceStructuredChatState,
@@ -50,8 +50,8 @@ import {
   storedStructuredSessionState,
   storedStructuredCopy,
   unconfirmedStructuredStateSavedAt
-} from '../transcript/mobile-native-chat-transcript-writer'
-import { useStoredChatTranscript } from '../transcript/use-stored-chat-transcript'
+} from '../transcript/persistence/mobile-native-chat-transcript-writer'
+import { useStoredChatTranscript } from '../transcript/persistence/use-stored-chat-transcript'
 
 const MAX_RETAINED_SESSION_STATES = 32
 

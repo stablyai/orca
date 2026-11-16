@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import VoiceSettingsScreen from './voice-settings-screen'
 import type { VoiceSettingsOperations } from './voice-settings-operations'
 
-import { VoiceModelList } from '../components/VoiceModelList'
+import { VoiceModelList } from '../dictation/setup/VoiceModelList'
 import type { MobileSpeechModel, MobileSpeechSetup } from '../dictation/mobile-dictation-setup'
 
 vi.mock(
@@ -25,7 +25,7 @@ vi.mock('react-native', () => ({
   StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 },
   AppState: { addEventListener: () => ({ remove() {} }) }
 }))
-vi.mock('../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
+vi.mock('../components/controls/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
 vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0 })
 }))
@@ -36,7 +36,7 @@ vi.mock('lucide-react-native', () => ({ ChevronLeft: 'Icon', ChevronRight: 'Icon
 vi.mock('../components/bottom-drawer/BottomDrawer', () => ({
   BottomDrawer: ({ children }: { children: ReactNode }) => children
 }))
-vi.mock('../components/VoiceModelList', () => ({ VoiceModelList: () => null }))
+vi.mock('../dictation/setup/VoiceModelList', () => ({ VoiceModelList: () => null }))
 vi.mock('./voice-transcribe-on-section', () => ({
   VoiceTranscribeOnSection: () => null,
   voiceTranscribeOnShown: () => false

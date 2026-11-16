@@ -1,6 +1,6 @@
 import type { Socket } from 'node:net'
 import { isAbsolute } from 'node:path'
-import { sharedPromiseSettlementWaiters } from '../../../shared/promise-settlement-waiters'
+import { sharedPromiseSettlementWaiters } from '../../../shared/concurrency/promise-settlement-waiters'
 import { enumerateDirectoryOnce } from '../permissions/directory-enumeration-probe'
 import type { DaemonClientConnections, ConnectedDaemonClient } from './daemon-client-connections'
 import type { DaemonTerminalAdmission } from './daemon-terminal-admission'

@@ -2,7 +2,7 @@ import { OrcaRuntimeWithSubmitTerminalAgentPrompt } from './terminal-agent-promp
 import type {
   RuntimeTerminalWait,
   RuntimeTerminalWaitCondition
-} from '../../../../shared/runtime-terminal-contracts'
+} from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { isCompleteAgentPromptDraft } from '../../../../shared/agent-launch/startup/agent-prompt-injection'
 import { readTerminalComposerTypedText } from '../../../../shared/terminal/input/terminal-composer-draft'

@@ -8,7 +8,7 @@ import { isTerminalQueryReply } from '../../../../../shared/terminal/protocol/qu
 import { isUntypedTerminalInput } from '../../../../../shared/terminal/input/terminal-untyped-input'
 import { assertTerminalAgentSendable } from '../../terminal/terminal-agent-send-guard'
 import { TerminalSend } from '../../../../../shared/rpc-contract/terminal/terminal-unary-params'
-import type { RuntimeTerminalSend } from '../../../../../shared/runtime-terminal-send-contract'
+import type { RuntimeTerminalSend } from '../../../../../shared/terminal/runtime/runtime-terminal-send-contract'
 import {
   assertTerminalSendExactPtyBinding,
   assertTerminalSendTextWithinLimit,

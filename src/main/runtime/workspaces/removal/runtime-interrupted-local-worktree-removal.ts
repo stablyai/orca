@@ -1,7 +1,7 @@
 import {
   throwIfSignalAborted,
   waitForPromiseWithSignal
-} from '../../../../shared/abort-signal-reason'
+} from '../../../../shared/concurrency/abort-signal-reason'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'

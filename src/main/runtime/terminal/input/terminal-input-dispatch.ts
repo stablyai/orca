@@ -5,7 +5,7 @@ import type { RuntimeLeafRecord } from '../records/runtime-terminal-state-record
 import type {
   RuntimeTerminalPromptDelivery,
   RuntimeTerminalSend
-} from '../../../../shared/runtime-terminal-send-contract'
+} from '../../../../shared/terminal/runtime/runtime-terminal-send-contract'
 import { OrcaRuntimeWithResolveTerminalPane } from '../recovery/resolve-terminal-pane'
 import { wrapTerminalBracketedPasteText } from '../../../../shared/terminal/input/terminal-bracketed-paste-text'
 import { PROVEN_ABSENT_LEAF_PTY_TTL_MS } from './proven-absent-leaf-pty'

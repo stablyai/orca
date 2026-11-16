@@ -14,8 +14,8 @@ import {
   assertClipboardTextWriteWithinLimitWithYield,
   assertClipboardTextWithinLimitWithYield,
   type ReadClipboardTextOptions
-} from '../../../shared/clipboard-text'
-import { clipboardHtmlMayHaveLinks } from '../../../shared/clipboard-link-html'
+} from '../../../shared/clipboard/clipboard-text'
+import { clipboardHtmlMayHaveLinks } from '../../../shared/clipboard/clipboard-link-html'
 import {
   saveClipboardImageBufferAsTempFile,
   type SaveClipboardImageAsTempFileArgs
@@ -25,7 +25,7 @@ import {
   assertClipboardImageByteLengthWithinLimit,
   assertClipboardImageDimensionsWithinLimit,
   type ClipboardImageThumbnail
-} from '../../../shared/clipboard-image'
+} from '../../../shared/clipboard/clipboard-image'
 import {
   writeFileToClipboard,
   type ClipboardFileDeps,

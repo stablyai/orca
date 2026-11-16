@@ -49,9 +49,9 @@ export function installAgentTaskCompleteNotify(session: ConnectPanePtySession): 
     session.clearPendingAgentTaskCompleteNotification()
     let graceElapsed = false
     const generationAtSchedule = session.agentTaskCompleteNotificationGeneration
-    const agentStatusAtSchedule = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
+    const agentStatusAtSchedule = useAppStore.getState().agentStatusByPaneKey.get(session.cacheKey)
     const hasNewerActiveHookStatus = (): boolean => {
-      const currentStatus = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
+      const currentStatus = useAppStore.getState().agentStatusByPaneKey.get(session.cacheKey)
       const scheduledAgentType = agentStatusAtSchedule?.agentType
       const currentAgentForScheduledTurn = resolveCompatibleAgentTypeForOwner(
         currentStatus?.agentType,
@@ -66,6 +66,7 @@ export function installAgentTaskCompleteNotify(session: ConnectPanePtySession): 
       )
       return (
         options.agentCompletionSource === 'process-exit' &&
+        currentStatus !== undefined &&
         isFreshNonDoneAgentStatus(currentStatus) &&
         (!agentStatusAtSchedule ||
           currentStatus.state !== agentStatusAtSchedule.state ||
@@ -111,7 +112,7 @@ export function installAgentTaskCompleteNotify(session: ConnectPanePtySession): 
       if (!graceElapsed) {
         return
       }
-      const entry = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
+      const entry = useAppStore.getState().agentStatusByPaneKey.get(session.cacheKey)
       if (canDispatchAgentNotificationAfterGrace(entry, options)) {
         dispatch()
       }
