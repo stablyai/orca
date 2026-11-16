@@ -2,7 +2,7 @@
 
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
@@ -10,8 +10,8 @@ import type { RuntimeTerminalQuickCommands } from '@/store/terminals/quick-comma
 
 type TestState = {
   executionHostId: ExecutionHostId
-  loadRuntimeTerminalQuickCommands: () => Promise<void>
-  resolveExecutionHostId: () => ExecutionHostId
+  loadRuntimeTerminalQuickCommands: Mock<() => Promise<void>>
+  resolveExecutionHostId: Mock<() => ExecutionHostId>
   runtimeEnvironments: { id: string; name: string }[]
   runtimeStatusByEnvironmentId: Map<string, { connectionGeneration?: number }>
   runtimeTerminalQuickCommands: Map<string, RuntimeTerminalQuickCommands>
