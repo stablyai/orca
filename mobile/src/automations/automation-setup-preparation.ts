@@ -1,3 +1,4 @@
+import { EMPTY_ORCA_HOOK_CONTENT_HASH } from '../../../src/shared/hashing/orca-hook-content-hash'
 import {
   parseExecutionHostId,
   type ExecutionHostId
@@ -96,21 +97,26 @@ export async function prepareAutomationSetup(args: {
   if (!details.accepted) {
     return { ...draft, setupDecision: 'skip' }
   }
-  if (!readRepoHooksSetupCommand(details.value)) {
-    return { ...draft, setupDecision: 'inherit' }
-  }
   const decision =
     draft.setupDecision === 'inherit'
       ? getAutomationSetupDefaultDecision({
           setupRunPolicy: details.value.setupRunPolicy ?? 'run-by-default'
         })
       : draft.setupDecision
+  const runtimeHost = parseExecutionHostId(args.executionHost)?.kind === 'runtime'
   const setupTrust = normalizeSetupHookTrust(details.value.setupTrust)
+  // A runtime host can't trust the repo, so as desktop, approving no shared setup pins empty content:
+  // setup the base branch adds later is skipped for review. Hosts that read no hooks here omit setupConfig.
+  if (decision === 'run' && !setupTrust && runtimeHost && details.value.setupConfig !== undefined) {
+    return { ...draft, setupDecision: 'run', setupTrustHash: EMPTY_ORCA_HOOK_CONTENT_HASH }
+  }
+  if (!readRepoHooksSetupCommand(details.value)) {
+    return { ...draft, setupDecision: 'inherit' }
+  }
   if (decision !== 'run' || !setupTrust) {
     return { ...draft, setupDecision: decision ?? 'inherit' }
   }
   let trust: PersistedTrustedOrcaHooks = {}
-  const runtimeHost = parseExecutionHostId(args.executionHost)?.kind === 'runtime'
   if (!runtimeHost) {
     try {
       const reply = newWorkspaceUiStateRead.interpret(await newWorkspaceUiStateRead.request(client))
