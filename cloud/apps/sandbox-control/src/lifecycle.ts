@@ -71,7 +71,6 @@ import { recordSessionEnd } from './session-cpu'
 import { flushUsage, queueUsage } from './usage'
 import { SANDBOX_VCPUS } from './machine-size'
 import { isRegionalFailure } from './regions'
-import { forgetWorkspaceFollows } from './workspace-follows'
 import { learnArchiveHook, resetArchiveHookMemo } from './archive-hook'
 
 export const LEASE_MS = 30 * 60_000
@@ -1912,8 +1911,6 @@ export async function destroySandbox(deps: LifecycleDeps, row: SandboxRow): Prom
   await markSnapshotsDeleted(deps.db, row.id, deps.now())
   // Archive metadata (repo state, file tree) goes with the workspace.
   await deps.db.prepare('DELETE FROM sandbox_archives WHERE sandbox_id = ?').bind(row.id).run()
-  // Nobody follows a workspace that is gone (PARITY-FOLLOW).
-  await forgetWorkspaceFollows(deps.db, row.id)
   // So does its sealed read snapshot.
   await deleteReadSnapshot(deps.db, row.id)
   // And its per-workspace agent Source overrides.
