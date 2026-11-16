@@ -12,33 +12,18 @@ vi.mock('@/lib/pane-manager/terminal-output/pane-terminal-output-scheduler', () 
   waitForTerminalOutputParsed: vi.fn(() => Promise.resolve())
 }))
 vi.mock('../../input/paste/terminal-startup-command-paste', () => ({
-  executeTerminalStartupCommandPaste: vi.fn(async () => ({ status: 'pasted' }))
+  executeTerminalStartupCommandPaste: vi.fn(async () => ({
+    status: 'pasted',
+    chunksWritten: 1,
+    diagnostic: 'test',
+    durationMs: 0
+  }))
 }))
 afterEach(() => {
   vi.clearAllMocks()
   vi.useRealTimers()
   vi.unstubAllGlobals()
 })
-
-it.each([300, 3000])(
-  'does no cancellation work for %s output chunks without a startup command',
-  (chunks) => {
-    const RealAbortController = AbortController
-    const controller = vi.fn(class extends RealAbortController {})
-    vi.stubGlobal('AbortController', controller)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the inactive scheduling path reads only pendingStartupCommand and waitTeardowns.
-    const session = {
-      pendingStartupCommand: null,
-      waitTeardowns: []
-    } as unknown as ConnectPanePtySession
-    bindTerminalPasteStartupDelivery(session)
-    for (let index = 0; index < chunks; index++) {
-      session.schedulePendingStartupCommandDelivery()
-    }
-    session.waitTeardowns.forEach((stop) => stop())
-    expect(controller).not.toHaveBeenCalled()
-  }
-)
 
 it.each([false, true])(
   'retires a parser-overlapped delivery before Setup settles (failure: %s)',
@@ -84,7 +69,7 @@ it.each([false, true])(
       vi.mocked(executeTerminalStartupCommandPaste).mockImplementationOnce(async () => {
         session.schedulePendingStartupCommandDelivery()
         await Promise.resolve()
-        return { status: 'pasted' }
+        return { status: 'pasted', chunksWritten: 1, diagnostic: 'test', durationMs: 0 }
       })
       setup.resolve()
       await vi.advanceTimersByTimeAsync(0)

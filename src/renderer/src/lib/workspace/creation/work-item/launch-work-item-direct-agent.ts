@@ -1,3 +1,4 @@
+import { tuiAgentToAgentKind } from '../../../../../../shared/agent-status/identity/agent-kind'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import type {
   AgentStartedTelemetry,
