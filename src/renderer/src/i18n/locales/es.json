@@ -22894,21 +22894,13 @@
     "language": {
       "back": "Idiomas",
       "requestPrompt": "¿Qué idioma te gustaría que Orca admitiera?",
-      "requestSuccess": "Solicitud de idioma registrada. Puedes continuar la configuración.",
       "requestError": "No se pudo registrar tu solicitud. Inténtalo de nuevo.",
       "retry": "Reintentar",
       "requestAction": "Solicitar idioma",
       "title": "Idioma de la interfaz",
-      "device": "Idioma del sistema: {{language}}",
-      "unsupported": "Idioma del sistema: {{language}}. Este idioma aún no es compatible.",
-      "unknown": "No se pudo detectar el idioma del sistema. Elige uno a continuación.",
-      "loadError": "No se pudo cargar este idioma. Inténtalo de nuevo.",
-      "saveError": "No se pudo guardar tu preferencia de idioma. Inténtalo de nuevo.",
-      "other": "Otro idioma…",
       "settingsError": "No se pudo cargar tu configuración.",
       "loadingSettings": "Cargando configuración…",
-      "loading": "Cargando idioma…",
-      "saving": "Guardando idioma…"
+      "loading": "Cargando idioma…"
     }
   },
   "workspaceSpace": {

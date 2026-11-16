@@ -13,7 +13,6 @@ import type { AppIconId } from './app-lifecycle/identity/app-icon'
 import type { SourceControlAiSettings } from './source-control/ai/settings/source-control-ai-settings-types'
 import type { ClaudeAgentTeamsMode } from './agent-launch/startup/claude-agent-teams-tmux-compat'
 import type { TerminalCustomTheme } from './terminal-themes/terminal-custom-themes'
-import type { UiLanguage } from './i18n/ui-language'
 import type { GlobalWindowsRuntimeDefault } from './execution-host/project-runtime-preference'
 import type { PersistedNativeChatSessionOptions } from './native-chat/input/native-chat-session-options'
 import type { AgentChatPermissionMode } from './agent-launch/permissions/agent-chat-permission-mode'
@@ -75,8 +74,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   leftSidebarAppearanceMode: LeftSidebarAppearanceMode
   leftSidebarTintColor?: string
   leftSidebarTintOpacity?: number
-  uiLanguage: UiLanguage
-  uiLanguagePortugueseMigrationApplied?: boolean
   appIcon: AppIconId
   appFontFamily: string
   editorAutoSave: boolean

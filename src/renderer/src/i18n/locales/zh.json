@@ -23682,21 +23682,13 @@
     "language": {
       "back": "语言",
       "requestPrompt": "你希望 Orca 支持哪种语言？",
-      "requestSuccess": "语言请求已记录。你可以继续设置",
       "requestError": "无法记录你的请求。请重试",
       "retry": "重试",
       "requestAction": "请求语言支持",
       "title": "显示语言",
-      "device": "系统语言：{{language}}",
-      "unsupported": "系统语言：{{language}}。暂不支持此语言",
-      "unknown": "无法检测系统语言。请在下方选择语言",
-      "loadError": "无法加载此语言。请重试",
-      "saveError": "无法保存你的语言偏好设置。请重试",
-      "other": "其他语言…",
       "settingsError": "无法加载你的设置",
       "loadingSettings": "正在加载设置…",
-      "loading": "正在加载语言…",
-      "saving": "正在保存语言…"
+      "loading": "正在加载语言…"
     }
   },
   "resourceManager": {

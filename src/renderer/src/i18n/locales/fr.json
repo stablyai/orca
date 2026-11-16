@@ -22917,21 +22917,13 @@
     "language": {
       "back": "Langues",
       "requestPrompt": "Quelle langue aimeriez-vous voir prise en charge par Orca ?",
-      "requestSuccess": "Demande de langue enregistrée. Vous pouvez poursuivre la configuration.",
       "requestError": "Impossible d’enregistrer votre demande. Réessayez.",
       "retry": "Réessayer",
       "requestAction": "Demander une langue",
       "title": "Langue d’affichage",
-      "device": "Langue du système : {{language}}",
-      "unsupported": "Langue du système : {{language}}. Cette langue n’est pas encore prise en charge.",
-      "unknown": "La langue du système n’a pas pu être détectée. Choisissez une langue ci-dessous.",
-      "loadError": "Impossible de charger cette langue. Réessayez.",
-      "saveError": "Impossible d’enregistrer votre préférence de langue. Réessayez.",
-      "other": "Autre langue…",
       "settingsError": "Impossible de charger vos paramètres.",
       "loadingSettings": "Chargement des paramètres…",
-      "loading": "Chargement de la langue…",
-      "saving": "Enregistrement de la langue…"
+      "loading": "Chargement de la langue…"
     }
   },
   "workspaceSpace": {

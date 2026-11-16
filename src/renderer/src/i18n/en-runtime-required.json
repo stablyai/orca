@@ -2306,6 +2306,10 @@
       "linkedCount_other": "{{count}} workspaces linked to {{key}}"
     }
   },
+  "languages": {
+    "pluginsDisabledCount_one": "{{count}} community translation needs plugins turned on.",
+    "pluginsDisabledCount_other": "{{count}} community translations need plugins turned on."
+  },
   "localBuild": {
     "liveTerminals_one": "{{count}} live terminal will reconnect after restart.",
     "liveTerminals_other": "{{count}} live terminals will reconnect after restart."
