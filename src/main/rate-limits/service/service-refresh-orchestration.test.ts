@@ -3,7 +3,10 @@ import type { ProviderRateLimits } from '../../../shared/agent-usage/rate-limits
 import { RateLimitService } from './rate-limit-service'
 import { fetchActiveClaudeRateLimits } from '../providers/claude/claude-active-usage-fetch'
 import { fetchInactiveClaudeAccountUsage } from '../providers/claude/claude-managed-account-usage'
-import { fetchCodexRateLimits } from '../providers/codex/codex-fetcher'
+import {
+  consumeCodexRateLimitResetCredit,
+  fetchCodexRateLimits
+} from '../providers/codex/codex-fetcher'
 import {
   deferred,
   flushMicrotasks,
@@ -345,5 +348,31 @@ describe('RateLimitService', () => {
     expect(service.getState().claude?.session?.usedPercent).toBe(40)
     expect(service.getState().claude?.planType).toBeUndefined()
     expect(service.getState().claude?.usageMetadata?.readingAccount).toBeUndefined()
+  })
+  it('keeps the account on the usage read right after redeeming a Codex reset', async () => {
+    mockFreshBackgroundProviderFetches()
+    const service = new RateLimitService()
+    const readingAccount = { accountId: 'a', runtime: 'host', wslDistro: null } as const
+    service.setCodexHomePathResolver(() => ({
+      kind: 'ready',
+      codexHomePath: '/codex/a',
+      readingAccount
+    }))
+    vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 50))
+    await service.refresh()
+    vi.mocked(consumeCodexRateLimitResetCredit).mockResolvedValueOnce('reset')
+    vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce({
+      ...okProvider('codex', 0),
+      planType: 'pro'
+    })
+    await service.consumeCodexRateLimitResetCredit({
+      idempotencyKey: 'key',
+      target: { runtime: 'host', wslDistro: null },
+      codexHomePath: '/codex/a'
+    })
+    expect(service.getState().codex).toMatchObject({
+      planType: 'pro',
+      usageMetadata: { readingAccount }
+    })
   })
 })

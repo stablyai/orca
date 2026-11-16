@@ -11,10 +11,15 @@ export function useObservedAccountPlans(
   isRemoteAccountScope: boolean,
   ownerUsage: RateLimitState | null
 ): { claudeAccountPlans: ObservedAccountPlans; codexAccountPlans: ObservedAccountPlans } {
-  const localClaude = useAppStore((s) => s.rateLimits.claude)
-  const localInactiveClaude = useAppStore((s) => s.rateLimits.inactiveClaudeAccounts)
-  const localCodex = useAppStore((s) => s.rateLimits.codex)
-  const localInactiveCodex = useAppStore((s) => s.rateLimits.inactiveCodexAccounts)
+  // Remote scope ignores this desktop's usage pushes, so they never re-render it.
+  const localClaude = useAppStore((s) => (isRemoteAccountScope ? null : s.rateLimits.claude))
+  const localInactiveClaude = useAppStore((s) =>
+    isRemoteAccountScope ? null : s.rateLimits.inactiveClaudeAccounts
+  )
+  const localCodex = useAppStore((s) => (isRemoteAccountScope ? null : s.rateLimits.codex))
+  const localInactiveCodex = useAppStore((s) =>
+    isRemoteAccountScope ? null : s.rateLimits.inactiveCodexAccounts
+  )
   const claude = isRemoteAccountScope ? ownerUsage?.claude : localClaude
   const inactiveClaude = isRemoteAccountScope
     ? ownerUsage?.inactiveClaudeAccounts

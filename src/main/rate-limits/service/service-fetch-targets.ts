@@ -1,5 +1,6 @@
 import { RateLimitServiceResultPolicy } from './service-result-policy'
 import { fetchCodexRateLimits } from '../providers/codex/codex-fetcher'
+import { withCodexReadingAccount } from '../providers/codex/codex-reading-account'
 import { fetchKimiRateLimits } from '../providers/kimi/kimi-fetcher'
 import {
   isSystemDefaultClaudeAuth,
@@ -171,9 +172,11 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
       // Redemption is newer than prior reads; invalidate their generations before publishing.
       this.codexFetchGeneration += 1
       this.trackActiveFailureStreak('codex', fresh)
+      // The same home as the redeemed one, so its account (if it is one's own home) read it.
+      const attributed = withCodexReadingAccount(fresh, currentCodexHome.readingAccount)
       this.updateState({
         ...this.state,
-        codex: this.applyStalePolicy(fresh, this.state.codex)
+        codex: this.applyStalePolicy(attributed, this.state.codex)
       })
     }
 

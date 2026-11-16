@@ -65,12 +65,13 @@ export function parseClaudeOAuthCredentialsJson(
 }
 // The tier only refines Max ("default_claude_max_20x" → "max_20x"); it never names a plan alone.
 function readClaudePlanType(subscription: unknown, tier: unknown): string | undefined {
-  const plan = typeof subscription === 'string' ? subscription.trim().toLowerCase() : ''
+  const plan = typeof subscription === 'string' ? subscription.trim() : ''
   if (!plan) {
     return undefined
   }
   const multiplier = typeof tier === 'string' ? /(?:^|_)max_(\d+x)$/i.exec(tier.trim())?.[1] : null
-  return plan === 'max' && multiplier ? `max_${multiplier.toLowerCase()}` : plan
+  // Other values keep the spelling Claude Code wrote.
+  return plan.toLowerCase() === 'max' && multiplier ? `max_${multiplier.toLowerCase()}` : plan
 }
 export function emptyClaudeOAuthCredentialReadResult(): ClaudeOAuthCredentialReadResult {
   return { token: null, hasRefreshableCredentials: false, source: 'none' }

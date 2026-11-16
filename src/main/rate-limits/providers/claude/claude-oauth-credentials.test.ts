@@ -22,9 +22,9 @@ describe('parseClaudeOAuthCredentialsJson plan', () => {
     ).toBe('pro')
   })
 
-  it('keeps the token and plan when the tier is malformed', () => {
-    const result = parse({ subscriptionType: 'team', rateLimitTier: { tier: 'max_20x' } })
-    expect(result).toMatchObject({ token: 'token', planType: 'team' })
+  it('keeps the token and the supplied plan when the tier is malformed', () => {
+    const result = parse({ subscriptionType: 'Team_XL', rateLimitTier: { tier: 'max_20x' } })
+    expect(result).toMatchObject({ token: 'token', planType: 'Team_XL' })
     expect(result.unavailable).toBeUndefined()
   })
 })
