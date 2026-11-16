@@ -153,10 +153,13 @@ export function MobileWebShellScreen({
   // Create the media registry before the bridge; staged files belong to this page session.
   const serveDeviceVerb = useNativeDeviceVerbs(readySessionId)
   const servePdfView = useNativePdfViewer(hostId, readySessionId)
-  const serveImageAction = useNativeImageActions(readySessionId)
   const localBrowser = useNativeLocalBrowser(hostId, readySessionId)
+  const serveImageAction = useNativeImageActions(readySessionId)
   // Read the shell's storage for this host.
-  const serveNativeVerb = (verb: BridgeNativeVerb, params: unknown): Promise<unknown> =>
+  const serveShellVerb = (
+    verb: Exclude<BridgeNativeVerb, 'native.browser.local' | 'native.browser.view'>,
+    params: unknown
+  ): Promise<unknown> =>
     verb === 'native.storage.read'
       ? readWorkspaceKey(storageReadParamsSchema.parse(params).key).then((value) => ({ value }))
       : verb === 'native.pdf.view'
@@ -165,17 +168,19 @@ export function MobileWebShellScreen({
           ? serveImageAction(params)
           : verb === BRIDGE_STORE_VERB
             ? serveDeviceStoreVerb(processDeviceStore(), hostId, params)
-            : verb === 'native.browser.local'
-              ? localBrowser.serve(params)
-              : verb === 'native.browser.view'
-                ? localBrowser.serveView(params)
-                : serveDeviceVerb(verb, params)
+            : serveDeviceVerb(verb, params)
   // Both externalLink and cancelled navigation use this filtered opener. Report device-handler failure without throwing from a native frame callback; neither path has a reply.
   const openUrlForPage = (url: string) => {
     void Linking.openURL(url).catch((error: unknown) => {
       console.warn('[web-shell] could not open a URL for the page', { url, error })
     })
   }
+  const serveNativeVerb = (verb: BridgeNativeVerb, params: unknown): Promise<unknown> =>
+    verb === 'native.browser.local'
+      ? localBrowser.serve(params)
+      : verb === 'native.browser.view'
+        ? localBrowser.serveView(params)
+        : serveShellVerb(verb, params)
 
   // Push so Back reveals the mounted page without downloading or handshaking again, unless the page replaced itself.
   const openPageRoute = (href: string, replace = false) => {

@@ -40,11 +40,11 @@ export const BRIDGE_NATIVE_VERB_NAMES = [
   'native.storage.read',
   'native.pdf.view',
   'native.image.act',
+  'native.browser.local',
+  'native.browser.view',
   BRIDGE_SPEECH_VERB,
   BRIDGE_STORE_VERB,
-  'native.a11y.announce',
-  'native.browser.local',
-  'native.browser.view'
+  'native.a11y.announce'
 ] as const
 
 export type BridgeNativeVerb = (typeof BRIDGE_NATIVE_VERB_NAMES)[number]
@@ -241,10 +241,6 @@ export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNative
     params: storeParamsSchema,
     result: storeResultSchema
   },
-  'native.a11y.announce': {
-    params: a11yAnnounceParamsSchema,
-    result: a11yAnnounceResultSchema
-  },
   'native.browser.local': {
     params: browserLocalParamsSchema,
     result: browserLocalResultSchema
@@ -252,6 +248,10 @@ export const BRIDGE_NATIVE_VERBS: Readonly<Record<BridgeNativeVerb, BridgeNative
   'native.browser.view': {
     params: browserViewParamsSchema,
     result: browserViewResultSchema
+  },
+  'native.a11y.announce': {
+    params: a11yAnnounceParamsSchema,
+    result: a11yAnnounceResultSchema
   }
 }
 
