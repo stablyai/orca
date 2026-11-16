@@ -268,8 +268,9 @@ export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
       if (deleted) {
         statusChanged = true
         this.commitStatusRowMutation(deleted, undefined)
+        // A replacement remote process may reuse the pane; discard the lost owner's children.
+        this.state.providerState.clearPane(paneKey)
         if (deleted.payload.agentType === 'codex') {
-          // A replacement remote process may reuse the pane; discard the lost owner's children.
           this.state.codexSubagentRosterByPaneKey.delete(paneKey)
           this.state.codexLeadStateByPaneKey.delete(paneKey)
           this.state.codexAsyncQuestionsByPaneKey.delete(paneKey)
@@ -278,8 +279,6 @@ export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
           this.state.claudeLeadStateByPaneKey.delete(paneKey)
           this.state.claudeRunningNonAgentTasksByPaneKey.delete(paneKey)
           this.state.claudeActiveSessionCronPaneKeys.delete(paneKey)
-          this.state.claudeLaunchedBackgroundTasksByPaneKey.delete(paneKey)
-          this.state.claudeSessionOwnerByPaneKey.delete(paneKey)
         }
       }
     }

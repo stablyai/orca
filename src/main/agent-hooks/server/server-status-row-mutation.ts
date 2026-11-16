@@ -5,7 +5,7 @@ import { RelaySessionGenerations } from './server-relay-sessions'
 
 import type { EnrichedAgentHookEventPayload } from './server-types'
 
-import { ClaudeOwedNotificationExpiryTimers } from '../../../shared/agent-hook-listener/providers/claude/background-tasks/claude-owed-notification-expiry-timers'
+import { HookLeaseExpiryTimers } from '../../../shared/agent-hook-listener/leases/hook-lease-expiry-timers'
 
 import { AgentHookServerStatusApplication } from './server-status-application'
 
@@ -29,9 +29,7 @@ export abstract class AgentHookServerStatusRowMutation extends AgentHookServerSt
     return resumed
   }
 
-  protected readonly claudeOwedNotificationExpiry = new ClaudeOwedNotificationExpiryTimers(
-    this.state
-  )
+  protected readonly leaseExpiry = new HookLeaseExpiryTimers(this.state)
 
   protected readonly relaySessions = new RelaySessionGenerations()
 
@@ -42,7 +40,7 @@ export abstract class AgentHookServerStatusRowMutation extends AgentHookServerSt
     emit = true
   ): boolean {
     if (after) {
-      this.claudeOwedNotificationExpiry.arm(after.paneKey, (row) => {
+      this.leaseExpiry.arm(after.paneKey, (row) => {
         if (this.server) {
           this.applyRestatedStatus(row)
         }
