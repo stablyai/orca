@@ -2673,7 +2673,6 @@
       "src/main/runtime/session-tabs/session-tabs-phone-layout-moves.test.ts": 4153,
       "src/main/runtime/session-tabs/session-tabs-windowed-main-change.test.ts": 4444,
       "src/main/runtime/orchestration/terminal-authority/settled-worker-process-replacement.test.ts": 5013,
-      "src/main/runtime/sidebar-inputs/catalog/desktop-sidebar-facts.test.ts": 378,
       "src/main/runtime/sidebar-inputs/temporal/orca-runtime-closed-tab-retention.test.ts": 5233,
       "src/main/runtime/sidebar-inputs/catalog/orca-runtime-project-catalog.test.ts": 4975,
       "src/main/runtime/sidebar-inputs/temporal/orca-runtime-sort-stamps.test.ts": 3799,
