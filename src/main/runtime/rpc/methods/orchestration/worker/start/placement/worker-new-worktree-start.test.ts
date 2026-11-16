@@ -139,6 +139,41 @@ describe('orchestration new-worktree workers', () => {
 
   // Composer and idle readiness paths must both record setup evidence; the composer path previously dropped it.
 
+  // Worker accounts (#9496): a coordinator can hand each new worktree to one of the user's accounts.
+  function mockAccounts() {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the account checks read only getSettings' managed accounts.
+    vi.spyOn(runtime, 'requireStore').mockReturnValue({
+      getSettings: () => ({
+        claudeManagedAccounts: [],
+        codexManagedAccounts: [{ id: 'codex-a', email: 'work@example.com' }]
+      })
+    } as unknown as ReturnType<OrcaRuntimeService['requireStore']>)
+  }
+
+  it('pins the new worktree to the account named by --account before the worker starts', async () => {
+    mockAccounts()
+    mockCreatedWorktree()
+
+    await startWorker({ account: 'WORK@example.com' })
+
+    expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
+      expect.objectContaining({ accountPins: { codex: 'codex-a' } })
+    )
+  })
+
+  it('refuses an unknown --account, or one for an existing worktree, before creating anything', async () => {
+    mockAccounts()
+    mockCreatedWorktree()
+
+    await expect(startWorker({ account: 'other@example.com' })).rejects.toThrow(
+      'Accounts on this machine: work@example.com.'
+    )
+    await expect(
+      startWorker({ account: 'work@example.com', worktree: 'current', name: undefined })
+    ).rejects.toThrow('Creation and setup options apply only')
+    expect(runtime.createManagedWorktree).not.toHaveBeenCalled()
+  })
+
   it('does not inject task input when the gated setup terminal fails to start', async () => {
     mockCreatedWorktree({ startupPolicy: 'wait-for-setup', state: 'spawn_failed' })
     vi.mocked(runtime.waitForTerminal).mockResolvedValue({

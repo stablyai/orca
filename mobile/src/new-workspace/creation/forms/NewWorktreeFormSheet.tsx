@@ -43,6 +43,8 @@ export function NewWorktreeFormSheet(props: {
   sshGate: WorkspaceSshGate
   composer: Composer
   selectedAgent: NewWorktreeAgentOption
+  /** The account the agent starts on (#9496); null when it cannot be pinned. */
+  account: { title: string; label: string } | null
   showAdvanced: boolean
   note: string
   setupCommand: string | null
@@ -61,6 +63,7 @@ export function NewWorktreeFormSheet(props: {
   onClearError: () => void
   onConnect: () => void
   onOpenAgent: () => void
+  onOpenAccount: () => void
   onShowAdvancedChange: (show: boolean) => void
   onNoteChange: (note: string) => void
   onSetupDecisionChange: (decision: Exclude<WorkspaceCreateSetupDecision, 'inherit'>) => void
@@ -154,6 +157,21 @@ export function NewWorktreeFormSheet(props: {
               accessibilityLabel={`${t('components.newWorktreeFormSheet.agent', 'Agent')}, ${agentLabel}`}
             />
           </ListGroup>
+
+          {props.account && !gated ? (
+            <>
+              <SectionHeader title={props.account.title} />
+              <ListGroup>
+                <ListRow
+                  key="account"
+                  title={props.account.label}
+                  navigates
+                  onPress={props.onOpenAccount}
+                  accessibilityLabel={`${props.account.title}, ${props.account.label}`}
+                />
+              </ListGroup>
+            </>
+          ) : null}
 
           <NewWorktreeFormOptions
             expanded={props.showAdvanced}

@@ -1342,6 +1342,11 @@
     "smartRailRow": {
       "title": "智能按键栏",
       "subtitle": "根据智能体当前的操作显示相应按键"
+    },
+    "newWorktreeAccount": {
+      "claude": "Claude 账号",
+      "codex": "Codex 账号",
+      "followSelection": "跟随所选账号"
     }
   },
   "connection": {

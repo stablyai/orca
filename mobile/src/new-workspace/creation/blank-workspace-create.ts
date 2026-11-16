@@ -1,4 +1,5 @@
 import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent'
+import type { WorktreeAccountPins } from '../../../../src/shared/worktree-account-pin-settings'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import {
   createWorktreeWithNameRetry,
@@ -22,6 +23,7 @@ export async function createBlankWorkspace(args: {
   worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
   agentLaunchSupported: WorktreeCreateAgentLaunch['supported']
   parent?: WorktreeCreateParent
+  accountPins?: WorktreeAccountPins
 }): Promise<WorktreeCreateResult> {
   const agentLaunch: WorktreeCreateAgentLaunch | undefined = args.createdWithAgentId
     ? { agent: args.createdWithAgentId, supported: args.agentLaunchSupported }
@@ -31,6 +33,7 @@ export async function createBlankWorkspace(args: {
     baseName: args.baseName,
     nameWasGenerated: args.nameWasGenerated,
     parent: args.parent,
+    accountPins: args.accountPins,
     worktreeCreateIdempotency: args.worktreeCreateIdempotency,
     ...(agentLaunch ? { agentLaunch } : {}),
     buildParams: (name) => {

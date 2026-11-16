@@ -1296,6 +1296,11 @@
       "noMatches": "Nenhum arquivo corresponde",
       "current": "atual",
       "viewedFile": "{{path}} visualizado"
+    },
+    "newWorktreeAccount": {
+      "claude": "Conta do Claude",
+      "codex": "Conta do Codex",
+      "followSelection": "Seguir a conta selecionada"
     }
   },
   "connection": {

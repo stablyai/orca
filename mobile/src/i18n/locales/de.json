@@ -1135,6 +1135,11 @@
         "planMode": "Planen",
         "exitPlanMode": "Planungsmodus verlassen"
       }
+    },
+    "newWorktreeAccount": {
+      "claude": "Claude-Konto",
+      "codex": "Codex-Konto",
+      "followSelection": "Ausgewähltem Konto folgen"
     }
   },
   "connection": {

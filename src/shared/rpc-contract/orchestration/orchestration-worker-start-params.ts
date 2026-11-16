@@ -24,6 +24,8 @@ export const WorkerStartParams = z
     baseBranch: OptionalString,
     displayName: OptionalString,
     comment: OptionalString,
+    /** Worker accounts (#9496): the Claude/Codex account (email or id) its new worktree is pinned to. */
+    account: OptionalString,
     setup: z.enum(['run', 'skip', 'inherit']).optional(),
     terminal: OptionalString,
     agent: OptionalString,

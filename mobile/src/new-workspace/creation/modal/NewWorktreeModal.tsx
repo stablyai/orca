@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNewWorktreeAgentAccount } from './use-new-worktree-agent-account'
 import { Keyboard } from 'react-native'
 import { getComposerRepoWorktreeBranches } from '../../../../../src/shared/new-workspace/composer-branch-selection'
 import {
@@ -158,6 +159,13 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     runtimeSettings: runtime.runtimeSettings,
     detectedAgentIds: executionTarget.detectedAgentIds
   })
+  // Worker accounts (#9496): only a worktree on the desktop itself can be pinned to its accounts.
+  const agentAccount = useNewWorktreeAgentAccount({
+    client: desktopClient,
+    visible,
+    agentId: agentSelection.selectedAgent.id,
+    onDesktop: !repoServer && !selectedRepoConnectionId
+  })
   const retiredNamesRefreshKey = useMemo(
     () => buildRetiredWorktreeNamesRefreshKey(existingWorktreePaths),
     [existingWorktreePaths]
@@ -172,6 +180,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     repos: allRepos,
     selectedRepo,
     selectedAgent: agentSelection.selectedAgent,
+    accountPins: agentAccount?.accountPins,
     setSelectedAgent: agentSelection.setSelectedAgent,
     setAgentOverridden: agentSelection.setAgentOverridden,
     runtimeSettings: runtime.runtimeSettings,
@@ -255,7 +264,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     !executionTarget.sshGate.requiresConnection &&
     (!needsSetupChoice || setupScript.setupDecisionChoice != null)
 
-  function openPicker(view: 'project' | 'runTarget' | 'agent'): void {
+  function openPicker(view: 'project' | 'runTarget' | 'agent' | 'account'): void {
     Keyboard.dismiss()
     navigation.transitionDrawer(view)
   }
@@ -303,6 +312,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
         sshGate={executionTarget.sshGate}
         composer={composer}
         selectedAgent={agentSelection.selectedAgent}
+        account={agentAccount}
         showAdvanced={showOptions}
         note={note}
         setupCommand={setupScript.setupCommand}
@@ -321,6 +331,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
         onClearError={() => setError('')}
         onConnect={() => void executionTarget.connect()}
         onOpenAgent={() => openPicker('agent')}
+        onOpenAccount={() => openPicker('account')}
         onShowAdvancedChange={(show) => {
           if (!show) {
             setNoteOptions('folded')
@@ -350,6 +361,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
         runTargetPickerItems={runTargetPickerItems}
         pickerAgentOptions={agentSelection.pickerAgentOptions}
         selectedAgent={agentSelection.selectedAgent}
+        account={agentAccount}
         setupTrustPrompt={createSubmit.setupTrustPrompt}
         creating={createSubmit.creating}
         onSourceRepoChange={(repo) => selectRepo(repo, false)}
@@ -358,6 +370,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
           agentSelection.setAgentOverridden(true)
           agentSelection.setSelectedAgent(agent)
         }}
+        onAccountChange={(accountId) => agentAccount?.select(accountId)}
         onTransitionToForm={() => navigation.transitionDrawer('form')}
         onApproveSetupTrust={(alwaysTrust) => void createSubmit.approveSetupTrust(alwaysTrust)}
         onSkipSetupTrust={createSubmit.skipSetupTrust}

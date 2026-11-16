@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   createdWorktreeAccountPinPatch,
+  resolveAccountPins,
   workspacePinnedAccount
 } from './worktree-account-pin-settings'
 
@@ -53,5 +54,33 @@ describe('createdWorktreeAccountPinPatch', () => {
     ).toBeNull()
     expect(createdWorktreeAccountPinPatch(settings, 'repo::new', { codex: 'removed' })).toBeNull()
     expect(createdWorktreeAccountPinPatch(settings, 'repo::new', undefined)).toBeNull()
+  })
+})
+
+describe('resolveAccountPins', () => {
+  const settings = {
+    claudeManagedAccounts: [
+      { id: 'claude-a', email: 'Work@Example.com' },
+      { id: 'claude-wsl', email: 'wsl@example.com', managedAuthRuntime: 'wsl' as const }
+    ],
+    codexManagedAccounts: []
+  }
+
+  it('takes an account by email, any case, or by id', () => {
+    expect(resolveAccountPins(settings, 'claude', 'work@example.com')).toEqual({
+      pins: { claude: 'claude-a' }
+    })
+    expect(resolveAccountPins(settings, 'claude', 'claude-a')).toEqual({
+      pins: { claude: 'claude-a' }
+    })
+    expect(resolveAccountPins(settings, 'claude', undefined)).toEqual({})
+  })
+
+  it('names the accounts it knows when none matches, and refuses other agents', () => {
+    expect(resolveAccountPins(settings, 'claude', 'wsl@example.com').error).toContain(
+      'Accounts on this machine: Work@Example.com.'
+    )
+    expect(resolveAccountPins(settings, 'codex', 'x').error).toContain('none saved')
+    expect(resolveAccountPins(settings, 'cursor', 'x').error).toContain('only to claude and codex')
   })
 })

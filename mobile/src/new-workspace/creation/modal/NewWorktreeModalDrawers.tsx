@@ -43,11 +43,17 @@ export function NewWorktreeModalDrawers(props: {
   runTargetPickerItems: NewWorkspaceRunTargetOption<MobileWorkspaceRepo>[]
   pickerAgentOptions: NewWorktreeAgentOption[]
   selectedAgent: NewWorktreeAgentOption
+  account: {
+    title: string
+    items: { id: string; label: string }[]
+    selectedId: string
+  } | null
   setupTrustPrompt: OrcaHookTrustPrompt | null
   creating: boolean
   onSourceRepoChange: (repo: MobileWorkspaceRepo) => void
   onRepoChange: (repo: MobileWorkspaceRepo) => void
   onAgentChange: (agent: NewWorktreeAgentOption) => void
+  onAccountChange: (accountId: string) => void
   onTransitionToForm: () => void
   onApproveSetupTrust: (alwaysTrust: boolean) => void
   onSkipSetupTrust: () => void
@@ -111,6 +117,17 @@ export function NewWorktreeModalDrawers(props: {
         onClose={props.onTransitionToForm}
         renderIcon={(agent) => <MobileAgentIcon agentId={agent.id} size={20} />}
       />
+
+      {props.account ? (
+        <PickerListDrawer
+          visible={props.visible && props.drawerView === 'account'}
+          title={props.account.title}
+          items={props.account.items}
+          selectedId={props.account.selectedId}
+          onSelect={(item) => props.onAccountChange(item.id)}
+          onClose={props.onTransitionToForm}
+        />
+      ) : null}
 
       <OrcaHookTrustDrawer
         visible={props.visible && props.drawerView === 'trust' && props.setupTrustPrompt != null}

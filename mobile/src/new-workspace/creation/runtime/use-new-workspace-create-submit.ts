@@ -1,4 +1,5 @@
 import { settingsRead } from '../../../settings/mobile-settings-read-operations'
+import type { WorktreeAccountPins } from '../../../../../src/shared/worktree-account-pin-settings'
 import { useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import type { PersistedTrustedOrcaHooks } from '../../../../../src/shared/workspace-setup/orca-yaml-hook-types'
 import type { RetiredNameRegistry } from '../../../../../src/shared/worktree/naming/retired-name-registry'
@@ -53,6 +54,8 @@ export function useNewWorkspaceCreateSubmit(args: {
   repos: readonly MobileWorkspaceRepo[]
   selectedRepo: MobileWorkspaceRepo | null
   selectedAgent: NewWorktreeAgentOption
+  /** Worker accounts (#9496): the account the new worktree's agent starts on. */
+  accountPins?: WorktreeAccountPins
   setSelectedAgent: (agent: NewWorktreeAgentOption) => void
   setAgentOverridden: (overridden: boolean) => void
   runtimeSettings: NewWorktreeRuntimeSettings | null
@@ -209,7 +212,8 @@ export function useNewWorkspaceCreateSubmit(args: {
             branchIntentSupported: args.getBranchIntentSupport(
               selection.kind === 'branch' && selection.reuse ? 'open-existing-v2' : 'create-new'
             ),
-            parent: folder?.parent
+            parent: folder?.parent,
+            accountPins: args.accountPins
           })
         : await createBlankWorkspace({
             client,
@@ -221,7 +225,8 @@ export function useNewWorkspaceCreateSubmit(args: {
             setupDecision,
             worktreeCreateIdempotency: args.getWorktreeCreateCutoverSupport(),
             agentLaunchSupported: args.getAgentLaunchSupport(),
-            parent: folder?.parent
+            parent: folder?.parent,
+            accountPins: args.accountPins
           })
       if ('error' in result) {
         // Refused on a resend after a lost reply: the first send may have created it.

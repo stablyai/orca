@@ -79,3 +79,30 @@ export function createdWorktreeAccountPinPatch(
   }
   return Object.keys(patch).length ? patch : null
 }
+
+/**
+ * A worker's `--account` (an account's email or id) as the pins of its new worktree; an error
+ * instead when the agent cannot be pinned or no account on this machine matches.
+ */
+export function resolveAccountPins(
+  settings: ManagedAccounts,
+  agent: string,
+  account: string | undefined
+): { pins?: WorktreeAccountPins; error?: string } {
+  if (!account) {
+    return {}
+  }
+  if (agent !== 'claude' && agent !== 'codex') {
+    return { error: '--account applies only to claude and codex workers.' }
+  }
+  const accounts = pinnableHostAccounts(settings, agent)
+  const wanted = account.trim().toLowerCase()
+  const match = accounts.find((a) => a.id === account || a.email.toLowerCase() === wanted)
+  if (!match) {
+    const known = accounts.map((a) => a.email).join(', ') || 'none saved'
+    return {
+      error: `No ${agent} account matches "${account}". Accounts on this machine: ${known}.`
+    }
+  }
+  return { pins: { [agent]: match.id } }
+}
