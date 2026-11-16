@@ -6414,7 +6414,8 @@
           "runtimeHostDisconnectedNamed": "{{hostName}} が切断されました",
           "runtimeHostProject": "Orca サーバー上のプロジェクト",
           "runtimeHostProjectNamed": "{{hostName}} 上のプロジェクト",
-          "ef18787206": "削除待ち"
+          "ef18787206": "削除待ち",
+          "notificationsMuted": "通知はミュート中"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agent",
@@ -6509,7 +6510,9 @@
           "copyPathOption": "パス",
           "copyNameOption": "ワークツリー名",
           "lineageSubmenu": "親と子",
-          "projectGroupSubmenu": "プロジェクトグループ"
+          "projectGroupSubmenu": "プロジェクトグループ",
+          "muteNotifications": "通知をミュート",
+          "unmuteNotifications": "通知のミュートを解除"
         },
         "WorktreeList": {
           "d880ea0744": "グループを作成し、このプロジェクトをそのグループに移動します。",

@@ -6443,7 +6443,8 @@
           "runtimeHostDisconnectedNamed": "{{hostName}} 已断开连接",
           "runtimeHostProject": "Orca 服务器上的项目",
           "runtimeHostProjectNamed": "{{hostName}} 上的项目",
-          "ef18787206": "已排队删除"
+          "ef18787206": "已排队删除",
+          "notificationsMuted": "通知已静音"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "代理",
@@ -6538,7 +6539,9 @@
           "copyNameOption": "工作树名称",
           "lineageSubmenu": "父级与子级",
           "projectGroupSubmenu": "项目组",
-          "newChildWorktree": "新建子工作树..."
+          "newChildWorktree": "新建子工作树...",
+          "muteNotifications": "静音通知",
+          "unmuteNotifications": "取消静音通知"
         },
         "WorktreeList": {
           "d880ea0744": "创建一个组并将该项目移入其中",
