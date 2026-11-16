@@ -25428,7 +25428,7 @@
     "chatTag": "(Chat)",
     "agents": "Agents",
     "noChat": "No chat for {{agent}}",
-    "openIn": "Open in",
+    "openIn": "Open as",
     "chat": "Chat",
     "cli": "CLI"
   },

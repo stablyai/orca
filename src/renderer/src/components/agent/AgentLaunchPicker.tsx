@@ -82,7 +82,7 @@ export const AgentLaunchPicker = memo(
     draftForEntry?: (entry: AgentPickerEntry) => AgentPickerDraft
     agent: AgentPickerEntry['agent'] | null
     disabled?: boolean
-    /** Agents only: no models, effort or Open in. */
+    /** Agents only: no models, effort or Open as. */
     setupDisabled?: boolean
     portalContainer?: HTMLElement | null
     emptyLabel?: string
@@ -199,7 +199,7 @@ export const AgentLaunchPicker = memo(
       const [, parsed]: [unknown, AgentPickerDraft] = JSON.parse(summaryKey)
       return agentLaunchSetupSummary(entry, parsed, pickedModel).join(' · ')
     }, [entry, summaryKey, pickedModel])
-    // Only a dropdown with Open in names where the agent runs, as Open in does.
+    // Only a dropdown with Open as names how the agent runs, as Open as does.
     const surface =
       entry && !setupDisabled && !entry.textGeneration
         ? cli

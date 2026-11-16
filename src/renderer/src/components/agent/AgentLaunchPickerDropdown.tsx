@@ -351,7 +351,7 @@ function AgentLaunchOpenIn({
     : unavailable?.kind === 'chat-unavailable'
       ? chatUnavailableLabel(unavailable.reason, t)
       : t('agentPicker.noChat', 'No chat for {{agent}}', { agent: entry.label })
-  const label = t('agentPicker.openIn', 'Open in')
+  const label = t('agentPicker.openIn', 'Open as')
   const chat = (
     <ToggleGroupItem value="chat" disabled={Boolean(chatReason)} className="h-6">
       <MessageSquare className="size-3.5" />
