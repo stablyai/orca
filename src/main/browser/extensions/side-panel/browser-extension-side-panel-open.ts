@@ -53,6 +53,45 @@ export function openBrowserExtensionSidePanelOnTab(
   })
 }
 
+/**
+ * sidePanel.open({windowId}), as Chrome's OpenGlobalExtensionSidePanel: the global options must
+ * be usable. A panel the active tab shows of its own stays, and the global one waits for other
+ * tabs; otherwise Chrome's Show prefers the extension's own entry for the tab over its global one.
+ */
+export function openBrowserExtensionSidePanelForWindow(
+  profileId: string,
+  extension: Electron.Extension,
+  activeTabId: number,
+  errorScope: string
+): void {
+  const workspaceId = resolveSidePanelWorkspace(activeTabId)
+  const globalOptions = getSidePanelGlobalOptions(profileId, extension)
+  if (!workspaceId || !isUsableSidePanel(globalOptions)) {
+    throw new BrowserExtensionApiError(`No active side panel for ${errorScope}`)
+  }
+  const tabPanelShown = findShownBrowserExtensionSidePanel(workspaceId, activeTabId)?.tabId
+  const tabOptions = getSidePanelTabOptions(profileId, extension.id, activeTabId)
+  if (tabPanelShown !== activeTabId && isUsableSidePanel(tabOptions)) {
+    openBrowserExtensionSidePanel({
+      profileId,
+      extension,
+      workspaceId,
+      tabId: activeTabId,
+      fromTabId: activeTabId,
+      path: tabOptions.path
+    })
+    return
+  }
+  openBrowserExtensionSidePanel({
+    profileId,
+    extension,
+    workspaceId,
+    tabId: null,
+    fromTabId: null,
+    path: globalOptions.path
+  })
+}
+
 /** Shows or hides the panel the tab would show; false when the tab has no usable panel. */
 function toggleBrowserExtensionSidePanelOnTab(
   profileId: string,

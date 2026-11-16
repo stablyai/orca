@@ -28,7 +28,9 @@ import {
 } from '../side-panel/browser-extension-side-panel-options'
 import {
   changeBrowserExtensionSidePanelOptions,
-  openBrowserExtensionSidePanelOnTab
+  openBrowserExtensionSidePanelForWindow,
+  openBrowserExtensionSidePanelOnTab,
+  resolveSidePanelWorkspace
 } from '../side-panel/browser-extension-side-panel-open'
 
 const tabIdSchema = z.number().int().nonnegative()
@@ -76,14 +78,13 @@ function open(caller: BrowserExtensionCaller, target: z.infer<typeof targetSchem
     )
     return
   }
-  // Why the active tab: Orca's window holds every workspace; the panel opens in the one in view,
-  // and (as Chrome's Show prefers it) as that tab's own panel when the extension gave it options.
+  // Why the active tab: Orca's window holds every workspace; the panel opens in the one in view.
   const activeTabId = getActiveBrowserTabId()
   const activeTab = activeTabId === null ? null : webContents.fromId(activeTabId)
   if (activeTabId === null || activeTab?.session !== caller.session) {
     throw new BrowserExtensionApiError(`No active side panel for windowId: ${windowId}`)
   }
-  openBrowserExtensionSidePanelOnTab(
+  openBrowserExtensionSidePanelForWindow(
     caller.browserProfileId,
     caller.extension,
     activeTabId,
@@ -101,8 +102,12 @@ function close(caller: BrowserExtensionCaller, target: z.infer<typeof targetSche
   if (tabId !== undefined) {
     requireSidePanelTab(caller, tabId)
     const tabPanels = findBrowserExtensionSidePanels(profileId, extensionId, { tabId })
-    // Why reject: since Chrome 145 a tabId closes only that tab's panel, never the global one.
-    const globalPanels = findBrowserExtensionSidePanels(profileId, extensionId, { tabId: null })
+    // Why reject: since Chrome 145 a tabId closes only that tab's panel, never the global one,
+    // and only that tab's workspace can be showing it the global one.
+    const workspaceId = resolveSidePanelWorkspace(tabId)
+    const globalPanels = findBrowserExtensionSidePanels(profileId, extensionId, {
+      tabId: null
+    }).filter((panel) => panel.workspaceId === workspaceId)
     if (tabPanels.length === 0 && globalPanels.length > 0) {
       throw new BrowserExtensionApiError(`No active side panel for tabId: ${tabId}`)
     }

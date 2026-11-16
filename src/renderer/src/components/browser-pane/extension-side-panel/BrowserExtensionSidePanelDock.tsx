@@ -4,6 +4,7 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
+  useState,
   useSyncExternalStore
 } from 'react'
 import { createPortal } from 'react-dom'
@@ -42,6 +43,8 @@ import {
 
 // Why a cap: a wide panel must leave the page usable, as Chrome's two-thirds limit does.
 const MAX_PANE_SHARE = '66.667%'
+const MIN_WIDTH = BROWSER_EXTENSION_SIDE_PANEL_MIN_WIDTH
+const KEYBOARD_STEP = 16
 
 function panelWidthValue(width: number): string {
   return `min(${width}px, ${MAX_PANE_SHARE})`
@@ -69,9 +72,31 @@ function SidePanelResizeHandle({
   root: HTMLDivElement
   slotRoot: HTMLDivElement
 }): React.JSX.Element {
+  const t = useTranslate()
+  const width = useAppStore((s) => s.browserExtensionSidePanelWidth)
   const setWidth = useAppStore((s) => s.setBrowserExtensionSidePanelWidth)
   const cleanupRef = useRef<(() => void) | null>(null)
+  const [maxWidth, setMaxWidth] = useState<number | undefined>(undefined)
   useLayoutEffect(() => () => cleanupRef.current?.(), [])
+  const readMaxWidth = useCallback(
+    () => Math.max(MIN_WIDTH, Math.round((slotRoot.getBoundingClientRect().width * 2) / 3)),
+    [slotRoot]
+  )
+  const onKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') {
+        return
+      }
+      event.preventDefault()
+      // The panel sits on the right, so ArrowLeft widens it.
+      const direction = event.key === 'ArrowLeft' ? 1 : -1
+      const step = KEYBOARD_STEP * (event.shiftKey ? 4 : 1)
+      const max = readMaxWidth()
+      setMaxWidth(max)
+      setWidth(Math.min(max, Math.max(MIN_WIDTH, Math.min(width, max) + direction * step)))
+    },
+    [readMaxWidth, setWidth, width]
+  )
   const onPointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
       if (event.button !== 0 || cleanupRef.current) {
@@ -84,10 +109,7 @@ function SidePanelResizeHandle({
       const releasePassthrough = acquireWebviewsDragPassthrough()
       const startX = event.clientX
       const startWidth = root.getBoundingClientRect().width
-      const maxWidth = Math.max(
-        BROWSER_EXTENSION_SIDE_PANEL_MIN_WIDTH,
-        (slotRoot.getBoundingClientRect().width * 2) / 3
-      )
+      const max = readMaxWidth()
       let width: number | null = null
       const onMove = (moveEvent: PointerEvent): void => {
         if (moveEvent.pointerId !== event.pointerId) {
@@ -97,10 +119,7 @@ function SidePanelResizeHandle({
           cleanup()
           return
         }
-        width = Math.min(
-          maxWidth,
-          Math.max(BROWSER_EXTENSION_SIDE_PANEL_MIN_WIDTH, startWidth + startX - moveEvent.clientX)
-        )
+        width = Math.min(max, Math.max(MIN_WIDTH, startWidth + startX - moveEvent.clientX))
         // Why straight to the style: one store write per drag, not one per frame.
         slotRoot.style.setProperty(BROWSER_SIDE_PANEL_WIDTH_VARIABLE, panelWidthValue(width))
       }
@@ -120,13 +139,23 @@ function SidePanelResizeHandle({
       handle.addEventListener('pointercancel', cleanup)
       cleanupRef.current = cleanup
     },
-    [root, setWidth, slotRoot]
+    [readMaxWidth, root, setWidth, slotRoot]
   )
   return (
     <div
       role="separator"
       aria-orientation="vertical"
-      className="absolute top-0 bottom-0 -left-1 z-10 w-2 cursor-col-resize"
+      aria-label={t(
+        'auto.components.browser.pane.BrowserExtensionSidePanelDock.resize',
+        'Resize side panel'
+      )}
+      aria-valuemin={MIN_WIDTH}
+      aria-valuemax={maxWidth}
+      aria-valuenow={maxWidth === undefined ? width : Math.min(width, maxWidth)}
+      tabIndex={0}
+      className="absolute top-0 bottom-0 -left-1 z-10 w-2 cursor-col-resize outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      onFocus={() => setMaxWidth(readMaxWidth())}
+      onKeyDown={onKeyDown}
       onPointerDown={onPointerDown}
     />
   )

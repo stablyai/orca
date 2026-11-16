@@ -165,7 +165,8 @@ export function openBrowserExtensionSidePanel(args: {
   extension: Electron.Extension
   workspaceId: string
   tabId: number | null
-  fromTabId: number
+  /** Null for a window-level open, which never replaces a tab's own panel. */
+  fromTabId: number | null
   path: string
 }): void {
   const { profileId, extension, workspaceId, tabId, fromTabId, path } = args

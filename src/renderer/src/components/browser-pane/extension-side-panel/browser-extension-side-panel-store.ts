@@ -7,6 +7,8 @@ let panels: readonly BrowserExtensionSidePanel[] = EMPTY
 let byWorkspace = new Map<string, readonly BrowserExtensionSidePanel[]>()
 const listeners = new Set<() => void>()
 let stopListening: (() => void) | null = null
+/** Bumped when the last subscriber leaves, so a list fetched for an earlier session is dropped. */
+let generation = 0
 
 function setPanels(next: readonly BrowserExtensionSidePanel[]): void {
   panels = next
@@ -28,10 +30,12 @@ function subscribe(listener: () => void): () => void {
   if (!stopListening) {
     const bridge = window.api.browser
     stopListening = bridge?.onExtensionsSidePanelsChanged?.(setPanels) ?? (() => {})
+    const requested = generation
     void bridge
       ?.extensionsSidePanels?.()
       .then((initial) => {
-        if (panels === EMPTY) {
+        // A push since the request is newer; a fetch from before the last unsubscribe is stale.
+        if (requested === generation && panels === EMPTY) {
           setPanels(initial)
         }
       })
@@ -40,6 +44,7 @@ function subscribe(listener: () => void): () => void {
   return () => {
     listeners.delete(listener)
     if (listeners.size === 0) {
+      generation += 1
       stopListening?.()
       stopListening = null
       panels = EMPTY
