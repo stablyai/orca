@@ -128,39 +128,39 @@ Hoy `orca serve service` **no existe en Windows**: `src/cli/server/serve-service
 
 ### 5a. `zotz serve service` para Windows
 
-- [ ] Implementar la variante de Windows en `serve-service-unit.ts`, siguiendo el patrón de las otras plataformas: `install`, `status` y `uninstall`.
-- [ ] Mecanismo: **Tarea programada de Windows** (`schtasks` o `Register-ScheduledTask` vía PowerShell), **no** un servicio de Windows. Un servicio corre en la sesión 0, sin escritorio, y entonces computer use y el navegador no funcionan.
+- [x] Implementar la variante de Windows en `serve-service-unit.ts`, siguiendo el patrón de las otras plataformas: `install`, `status` y `uninstall`. (Vive en `src/cli/server/zotz-windows-serve-service.ts`, enganchada desde `serve-service.ts`; el XML de la tarea en `src/shared/zotz/zotz-windows-scheduled-task.ts`.)
+- [x] Mecanismo: **Tarea programada de Windows** (`schtasks` o `Register-ScheduledTask` vía PowerShell), **no** un servicio de Windows. Un servicio corre en la sesión 0, sin escritorio, y entonces computer use y el navegador no funcionan.
   - Disparador: _al iniciar sesión_ del usuario dedicado.
-  - Reiniciar si falla: cada 1 min, intentos ilimitados.
+  - Reiniciar si falla: cada 1 min, intentos ilimitados. (RestartOnFailure llega a 999 como máximo y no vigila la salida del proceso, así que el disparador se repite cada minuto con `IgnoreNew` como watchdog.)
   - Sin límite de tiempo de ejecución.
   - "Ejecutar aunque esté con batería".
-- [ ] Usar `runProcess` de `@orca/process-host` (ya importado), no `child_process` directo. Leer `docs/agents-md-refs/cross-platform-support.md` antes.
+- [x] Usar `runProcess` de `@orca/process-host` (ya importado), no `child_process` directo. Leer `docs/agents-md-refs/cross-platform-support.md` antes.
 
 ### 5b. Que Windows no se duerma
 
 `src/main/power/` solo tiene asserts de mac (`macos-system-sleep-assertion.ts`) y Linux (`linux-lid-sleep-assertion.ts`).
 
-- [ ] Agregar `windows-system-sleep-assertion.ts` con `powerSaveBlocker.start('prevent-app-suspension')` de Electron (o `SetThreadExecutionState` si hace falta más fuerza), y conectarlo en `agent-awake-service.ts`. En modo serve debe estar activo **siempre**, no solo mientras haya un agente corriendo.
+- [x] Agregar `windows-system-sleep-assertion.ts` con `powerSaveBlocker.start('prevent-app-suspension')` de Electron (o `SetThreadExecutionState` si hace falta más fuerza), y conectarlo en `agent-awake-service.ts`. En modo serve debe estar activo **siempre**, no solo mientras haya un agente corriendo.
 
 ### 5c. Script de preparación de la MSI
 
 Crear `scripts/windows/zotz-node-setup.ps1` (idempotente, requiere admin, cada paso imprime qué hizo):
 
-- [ ] `powercfg`: nunca suspender ni hibernar con corriente, y que cerrar la tapa no haga nada.
-- [ ] Windows Update: horas activas 0–23 y sin reinicio automático con sesión iniciada (`NoAutoRebootWithLoggedOnUsers`).
-- [ ] Inicio de sesión automático del usuario dedicado (vía Sysinternals Autologon; documentarlo, no guardar la contraseña en texto plano).
-- [ ] Instalar y habilitar **OpenSSH Server**, solo con llave (`PasswordAuthentication no`).
-- [ ] Regla de firewall: el puerto de `zotz serve` y el 22 **solo** desde la interfaz de Tailscale (`100.64.0.0/10`).
-- [ ] Llamar a `zotz serve service install --bind <IP-tailscale>`.
-- [ ] Nota para Hugo, no automatizable: en el BIOS de la MSI, activar _Restore on AC Power Loss_ (o equivalente).
+- [x] `powercfg`: nunca suspender ni hibernar con corriente, y que cerrar la tapa no haga nada.
+- [x] Windows Update: horas activas 0–23 y sin reinicio automático con sesión iniciada (`NoAutoRebootWithLoggedOnUsers`). (Windows acepta máximo 18 h de horas activas: quedan 6:00–24:00, parametrizables.)
+- [x] Inicio de sesión automático del usuario dedicado (vía Sysinternals Autologon; documentarlo, no guardar la contraseña en texto plano).
+- [x] Instalar y habilitar **OpenSSH Server**, solo con llave (`PasswordAuthentication no`).
+- [x] Regla de firewall: el puerto de `zotz serve` y el 22 **solo** desde la interfaz de Tailscale (`100.64.0.0/10`).
+- [x] ~~Llamar a `zotz serve service install --bind <IP-tailscale>`.~~ Reemplazado: el script registra la tarea `\Zotz\Server`, que arranca la **app de escritorio en modo servidor** (computer use y navegador necesitan el escritorio; ver `docs/zotz/NODE-SETUP.md`), y no se fija a la IP de Tailscale porque cambia.
+- [x] Nota para Hugo, no automatizable: en el BIOS de la MSI, activar _Restore on AC Power Loss_ (o equivalente).
 
 ### 5d. Asistente de primer arranque (personal vs. servidor remoto)
 
 La primera vez que se abre Zotz (y después desde Ajustes) pregunta el **modo de la máquina**. Decisiones de Hugo (2026-11-16): se pregunta **al primer arranque**, no en el instalador; en modo servidor se configura **todo de forma automática con un solo permiso de administrador**; si falta Tailscale se **guía e instala**; el autologon **solo se documenta**.
 
-- [ ] Setting nuevo `zotzMachineMode: 'unset' | 'personal' | 'server'` (default `'unset'`). Mientras sea `'unset'`, se muestra el asistente. Cambiable en Ajustes.
-- [ ] **Personal**: no toca el sistema; Zotz se comporta como hoy.
-- [ ] **Servidor remoto**: detecta el SO y ejecuta los pasos de esa plataforma, mostrando cada uno con su estado (hecho / omitido / falló + por qué). Idempotente: re-ejecutarlo no duplica nada.
+- [x] Setting nuevo `zotzMachineMode: 'unset' | 'personal' | 'server'` (default `'unset'`). Mientras sea `'unset'`, se muestra el asistente. Cambiable en Ajustes.
+- [x] **Personal**: no toca el sistema; Zotz se comporta como hoy.
+- [x] **Servidor remoto**: detecta el SO y ejecuta los pasos de esa plataforma, mostrando cada uno con su estado (hecho / omitido / falló + por qué). Idempotente: re-ejecutarlo no duplica nada.
   - **Tailscale**: detectar si está instalado y con sesión. Si falta, ofrecer instalarlo (Windows `winget install Tailscale.Tailscale`, macOS `brew install --cask tailscale` o link, Linux script oficial) y esperar a que tenga IP `100.x`. Tomar la IP de Tailscale como dirección de pairing.
   - **Firewall** solo desde `100.64.0.0/10` al puerto del servidor (Windows `New-NetFirewallRule`; Linux `ufw` si está activo; macOS no requiere).
   - **No dormirse**: Windows `powercfg` (sin suspensión/hibernación en corriente, tapa sin acción) + bloqueo de suspensión de 5b; macOS `pmset`/assertion; Linux inhibidor de systemd.
@@ -168,8 +168,16 @@ La primera vez que se abre Zotz (y después desde Ajustes) pregunta el **modo de
   - **Exposición de red permanente** en la IP de Tailscale (hoy solo se abre al pulsar "Compartir este equipo").
   - **Enlace de acceso / QR** generado al final, listo para pegar en la laptop o escanear con el móvil.
   - **Autologon (Windows)**: solo instrucciones + link a Sysinternals Autologon; Zotz nunca pide ni guarda la contraseña.
-- [ ] Todo lo que requiere admin en Windows se agrupa en **un** script (`zotz-node-setup.ps1` de 5c) lanzado con **una** elevación UAC; macOS/Linux usan el diálogo de privilegios del sistema (`osascript … with administrator privileges` / `pkexec`) solo donde haga falta.
-- [ ] Lógica nueva en archivos `zotz-*` (main: orquestador por plataforma; renderer: pantalla del asistente usando primitivas shadcn de `components/ui` y `docs/STYLEGUIDE.md`); textos en `en` + `es`.
+- [x] Todo lo que requiere admin en Windows se agrupa en **un** script (`zotz-node-setup.ps1` de 5c) lanzado con **una** elevación UAC; macOS/Linux usan el diálogo de privilegios del sistema (`osascript … with administrator privileges` / `pkexec`) solo donde haga falta.
+- [x] Lógica nueva en archivos `zotz-*` (main: orquestador por plataforma; renderer: pantalla del asistente usando primitivas shadcn de `components/ui` y `docs/STYLEGUIDE.md`); textos en `en` + `es`.
+
+Verificación en hardware real (pendiente; nada de esto se pudo probar desde la Mac de desarrollo, pasos en `docs/zotz/NODE-SETUP.md`):
+
+- [ ] Windows (MSI): el asistente pide una sola UAC y deja ✓ en cada paso; la tarea relanza Zotz al cerrarlo; el enlace/QR conecta desde la Mac y el móvil.
+- [ ] Windows: `orca serve service install|status|uninstall` (perfil por defecto).
+- [ ] macOS: `pmset` solo pide contraseña si hace falta; el LaunchAgent abre Zotz al iniciar sesión.
+- [ ] Linux: regla `ufw` con `pkexec` y la unidad `zotz-server.service` al iniciar sesión.
+- [ ] "Listo cuando" de abajo (corte de corriente con Autologon y _Restore on AC Power Loss_).
 
 **Listo cuando:** desconectas y reconectas la corriente, la MSI prende sola, inicia sesión, Zotz levanta en modo serve y en menos de 2 minutos puedes mandarle una tarea por Tailscale.
 
@@ -296,3 +304,27 @@ Las fases 1, 2 y 3 se pueden trabajar en paralelo en worktrees separados.
 - `docs/zotz/UPDATE.md`: `git pull` + `pnpm install` + `pnpm build:win` + reinstalar y reiniciar `serve` (manual hoy; tarea programada cuando exista `zotz serve service` en Fase 5).
 - Sorpresas: (1) no hace falta tocar `updater-setup.ts`: todos los caminos automáticos (timers, `powerMonitor` resume, `browser-window-focus`, nudges, reintentos) nacen en `setupAutoUpdater` o en eventos que este registra. (2) `orcad-managed-auto-update` (actualiza hosts SSH administrados) se dejó: empuja el orcad **empaquetado en este mismo build de Zotz**, no descarga nada de Orca. (3) Upstream rompía un import (`structural-value-equality`); se resolvió en la base `zotz/fase-0-setup` y esta rama se rebasó encima.
 - Pendiente: "Listo cuando" (24 h sin pedir ni instalar updates) solo se puede verificar corriendo el nodo real.
+
+### 2026-11-16 — Fase 5 (`zotz/fase-5-nodo`)
+
+**Qué cambió**
+
+- 5b: `src/main/power/windows-system-sleep-assertion.ts` (`powerSaveBlocker` `prevent-app-suspension`) conectado en `AgentAwakeService`: en Windows, como en macOS, la aserción de sistema sustituye al bloqueo de pantalla (la pantalla se puede apagar; si la aserción falla, se vuelve al bloqueo de pantalla). En modo servidor el modo efectivo es siempre `on` (`resolveZotzComputerAwakeMode` en `src/shared/zotz/zotz-machine-mode.ts`, usado al arrancar y al cambiar settings).
+- 5a: `orca serve service` en Windows con la tarea programada `\Zotz\Serve` (al iniciar sesión, token interactivo, repetición cada minuto con `IgnoreNew`, RestartOnFailure, sin límite de tiempo, con batería). Sin `--supervise` (solo POSIX) y solo con el perfil por defecto (una tarea no fija variables de entorno). `resolveServiceCommand` busca `orca.exe` en Windows. El estado sale del enum `State` de `Get-ScheduledTask`, que no depende del idioma de Windows.
+- 5c: `scripts/windows/zotz-node-setup.ps1` (idempotente, exige admin, transcripción y JSON de resultado por paso; además quita reglas de bloqueo de `Zotz.exe` en el puerto, como la reparación de firewall de upstream). Se empaqueta en `resources/zotz/` (extraResources de Windows; `scripts/` excluido de `app.asar`) y el build de Windows de `zotz-desktop-builds.yml` valida que parsea.
+- 5d: setting `zotzMachineMode` (opcional en el tipo, default `'unset'`). Pantalla en `src/renderer/src/components/zotz/`, montada en `AppRootSurfaces` junto al onboarding de upstream (sale cuando el onboarding ya no está), con entrada en Ajustes → General. Orquestador en `src/main/zotz/` (fases por plataforma, estado por paso, errores aislados, IPC `zotzNode:*`). El enlace/QR final usa las mismas IPC de pairing que "Compartir este equipo" (`mobile:getRuntimePairingUrl` / `mobile:getPairingQR`) con la IP de Tailscale leída en vivo.
+- Exposición de red persistente: en modo servidor el escritorio arranca con `exposeNetworkByDefault` y la política de origen de `serve --refuse-public` (cambio de pocas líneas en `main-process-runtime-launch.ts`). No se fija a la IP de Tailscale: cambia al re-registrar el nodo, puede no existir todavía al iniciar sesión, y con una IP fija `ensureNetworkExposure` de upstream rechaza abrir la red y rompe el botón de vincular. El firewall de Windows limita el puerto a `100.64.0.0/10`.
+- El arranque automático lanza la **app de escritorio** (`Zotz.exe --zotz-node-autostart`), no `serve` sin ventana: computer use y el navegador necesitan el escritorio, `Zotz.exe` no abre consola y es el mismo perfil con los mismos dispositivos. `shouldActivateDesktopForSecondInstance` ignora ese argumento para que el watchdog no robe el foco.
+- Docs: `docs/zotz/NODE-SETUP.md` (qué cambia por SO, cómo deshacerlo, Smart App Control, BIOS, Autologon, cómo probar).
+- Tests: XML/args de la tarea y su estado (`zotz-windows-serve-service.test.ts`); secuencia, aislamiento y estado del orquestador y fases con runners inyectados (`zotz-node-setup.test.ts`: una sola elevación en Windows, UAC rechazada, Tailscale instala → login → espera → timeout, macOS sin pedir contraseña si ya está); aserción de Windows en el servicio de awake; `zotz-machine-mode.test.ts`. Fixture `zotz/ZotzMachineModeWizard` para revisar la UI.
+
+**Sorpresas / pendientes**
+
+- Nada de esto se pudo ejecutar en Windows o Linux reales (esta Mac no tiene PowerShell); ver la lista de verificación de Fase 5.
+- `RestartOnFailure` del Programador de tareas no vigila la salida de un proceso largo y su `Count` máximo es 999; de ahí el watchdog de repetición cada minuto. Mientras un Zotz abierto a mano (no por la tarea) esté corriendo, la tarea lanza cada minuto un segundo `Zotz.exe` que sale al instante sin activar la ventana; desde el siguiente inicio de sesión es la tarea quien lo posee.
+- Windows limita las horas activas a 18 h (no 0–23).
+- `-ExecutionPolicy RemoteSigned` (no `Bypass`, por EDR) para el script empaquetado; si el archivo llegara con Mark-of-the-Web, PowerShell lo bloquea y el paso lo reporta.
+- Pasar de servidor a personal solo quita el arranque automático; energía, firewall, SSH y políticas se deshacen a mano (comandos en NODE-SETUP.md).
+- Homebrew renombró el cask de la app a `tailscale-app`; se intenta ese y luego `tailscale`. En Linux el login de Tailscale sigue siendo `sudo tailscale up` (el asistente espera y lo indica).
+- Hasta reiniciar Zotz, la exposición que abre el asistente no tiene la política de origen (igual que "Compartir este equipo" de upstream).
+- La CLI empaquetada sigue llamándose `orca` (`orca.exe`); no se renombró.
