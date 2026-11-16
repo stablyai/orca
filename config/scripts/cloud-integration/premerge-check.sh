@@ -107,10 +107,16 @@ else
   # A wide change (an upstream sync touches thousands of files) selects nearly everything anyway, and the per-file
   # selection below costs O(changed x tests). Over the threshold, run every src test instead.
   if ((n_changed > ${PREMERGE_SELECT_ALL_OVER:-300})); then
-    echo "premerge: $n_changed changed src files (over ${PREMERGE_SELECT_ALL_OVER:-300}); selecting every src test file"
+    # Runner-specific suites (Electron, Chromium, a login zsh, WSL, Windows) need hosts the offload lanes don't have,
+    # and targeted runs never select them wholesale. The per-cut full suite on the integration Mac still runs them.
+    exclude=${PREMERGE_SELECT_ALL_EXCLUDE:-'\.(electron|chromium|live-shell|wsl|windows)\.test\.tsx?$'}
+    n_excluded=0
     while IFS= read -r t; do
-      if [[ -n "$t" && -f "$t" ]]; then tests+=("$t"); fi
+      if [[ -z "$t" || ! -f "$t" ]]; then continue; fi
+      if [[ "$t" =~ $exclude ]]; then n_excluded=$((n_excluded + 1)); continue; fi
+      tests+=("$t")
     done <<<"$all_tests"
+    echo "premerge: $n_changed changed src files (over ${PREMERGE_SELECT_ALL_OVER:-300}); selecting every src test file except $n_excluded runner-specific one(s) matching $exclude"
   elif ((n_changed > 0)); then
     folders=()
     modules=()
