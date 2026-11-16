@@ -165,6 +165,9 @@ describe('environment-build.sh secret handling (SEC-2)', () => {
       take,
       scan,
       'take_secrets',
+      // Linux file times advance in coarse ticks: on a fast machine a file the install writes at once can
+      // carry the marker's own time and look unchanged. A real build clones in between.
+      'sleep 0.05',
       // Like the script's install step: the child gets the secrets back, nothing else does.
       '( if [ "${#secret_names[@]}" -gt 0 ]; then for i in "${!secret_names[@]}"; do export "${secret_names[$i]}=${secret_values[$i]}"; done; fi',
       '  cd "$ORCA_SCAN_ROOT" && bash -euo pipefail -c "$INSTALL" ) || exit 20',
