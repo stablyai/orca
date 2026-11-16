@@ -76,7 +76,7 @@ it.each([
       isReversibleStop: () => true,
       isPlaced: () => true
     })
-    expect(server.settleTerminalPaneSleep(PANE, 'pty')).toBe(false)
+    expect(server.settleTerminalPaneSleep(PANE, 'pty')).toBe(true)
     expect(server.row()).toMatchObject({ state: 'working' })
     const capture = await captureWorktreeSleepResumeRecords({
       worktreeId: 'wt-1',
@@ -88,5 +88,11 @@ it.each([
       capturedAt: NOW
     })
     expect(capture.get('pty')).toEqual({ records: [], retiredPaneKeys: [PANE] })
+    // Provider cleanup keeps the row; the runtime's second exit settlement sees the same owner.
+    expect(server.settleTerminalPaneSleep(PANE, 'pty')).toBe(true)
+    expect(server.row()).toMatchObject({ state: 'working' })
+    expect(server.row()?.interrupted).not.toBe(true)
+    server.retireSleepingPaneOnSpawn(PANE)
+    expect(server.row()).toBeUndefined()
   }
 )

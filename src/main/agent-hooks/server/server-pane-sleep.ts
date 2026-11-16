@@ -35,6 +35,11 @@ export abstract class AgentHookServerPaneSleep extends AgentHookServerAuthorityF
     const row = this.state.lastStatusByPaneKey.get(resolved) as
       | EnrichedAgentHookEventPayload
       | undefined
+    if (this.paneAgentIdentity(resolved)?.processTopology === 'shared') {
+      this.dropStatusEntry(resolved, { preserveResumeIdentity: false })
+      this.emitPaneStatusCleared({ paneKey: resolved })
+      return
+    }
     if (!row?.paneSleep) {
       return
     }
@@ -111,11 +116,15 @@ export abstract class AgentHookServerPaneSleep extends AgentHookServerAuthorityF
       !previous ||
       !identity ||
       identity.ended ||
-      identity.processTopology === 'shared' ||
       this.terminalPaneLifecycle?.isReversibleStop(ptyId, incarnationId) !== true ||
       this.terminalPaneLifecycle.isPlaced(previous) !== true
     ) {
       return false
+    }
+    // Keep shared ownership through provider cleanup, so later exit reconciliation cannot recover
+    // the stale saved record as a pane-owned agent and falsely interrupt its surviving process.
+    if (identity.processTopology === 'shared') {
+      return true
     }
     const {
       launchToken: _launchToken,
