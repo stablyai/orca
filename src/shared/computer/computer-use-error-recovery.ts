@@ -151,9 +151,9 @@ export function computerUseErrorRecoveryData(
       )
     case 'screenshot_failed':
       return recoverWith(
-        'If the accessibility tree is sufficient, rerun the command with `--no-screenshot` instead of retrying the same screenshot capture.',
+        'If the accessibility tree is sufficient, rerun without screenshots instead of retrying the same capture: drop `--screenshot` from an action command, or add `--no-screenshot` to `get-app-state`.',
         'If the message mentions Screen Recording or screenshots permission, run `orca computer permissions --id screenshots --json` and grant access before retrying.',
-        'If the message mentions the payload cap, target a smaller/current window or use `--no-screenshot`.'
+        'If the message mentions the payload cap, target a smaller/current window or rerun without screenshots as above.'
       )
     case 'accessibility_error':
       // Why: an Orca server installed before it bundled computer use reports only this exit (#31777).
