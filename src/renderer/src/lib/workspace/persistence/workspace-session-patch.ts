@@ -134,7 +134,8 @@ export function buildWorkspaceSessionPatch(
       'editorDrafts',
       'markdownFrontmatterVisible',
       'activeFileIdByWorktree',
-      'activeTabTypeByWorktree'
+      'activeTabTypeByWorktree',
+      'strandedEditorDrafts'
     ] as const)
   ) {
     Object.assign(
@@ -144,7 +145,8 @@ export function buildWorkspaceSessionPatch(
         snapshot.editorDrafts,
         snapshot.markdownFrontmatterVisible,
         snapshot.activeFileIdByWorktree,
-        snapshot.activeTabTypeByWorktree
+        snapshot.activeTabTypeByWorktree,
+        snapshot.strandedEditorDrafts
       )
     )
   }

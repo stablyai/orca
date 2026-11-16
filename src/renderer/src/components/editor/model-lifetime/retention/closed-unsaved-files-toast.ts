@@ -8,6 +8,9 @@ import {
 } from '@/lib/editor/file-operations/editor-file-operation-provenance'
 import { createUntitledMarkdownFile } from '@/lib/editor/file-operations/create-untitled-markdown'
 import { translate } from '@/i18n/i18n'
+import type { StrandedEditorDraftRef } from '@/lib/workspace/persistence/stranded-editor-drafts'
+import { basename, dirname } from '@/lib/path'
+import { getWorktreePathBasenameFromId } from '../../../../../../shared/worktree/id'
 
 function closedUnsavedFilesToastTitle(count: number, workspace: string): string {
   return translate(
@@ -93,15 +96,24 @@ export async function reopenClosedUnsavedFiles(
   return failed
 }
 
-/** Toast callbacks retain a clearable holder; dismissal releases kept records and recovered text. */
-export function showClosedUnsavedFilesToast(
-  closed: readonly ClosedUnsavedFile[],
-  workspaceLabel: string,
-  notice: number
-): void {
-  const holder: { files: readonly ClosedUnsavedFile[] | null } = { files: closed }
+type UnsavedFilesRecoveryToast = {
+  files: readonly ClosedUnsavedFile[]
+  workspaceLabel: string
+  onRecovered?: (recovered: readonly ClosedUnsavedFile[]) => void
+  /** Receives the files still unrecovered when the toast went away. */
+  onDismiss?: (unrecovered: readonly ClosedUnsavedFile[] | null) => void
+}
+
+/** Toast callbacks retain a clearable holder; dismissal hands unrecovered files to the caller. */
+function showUnsavedFilesRecoveryToast({
+  files,
+  workspaceLabel,
+  onRecovered,
+  onDismiss
+}: UnsavedFilesRecoveryToast): void {
+  const holder: { files: readonly ClosedUnsavedFile[] | null } = { files }
   let reopening = false
-  const toastId = toast.warning(closedUnsavedFilesToastTitle(closed.length, workspaceLabel), {
+  const toastId = toast.warning(closedUnsavedFilesToastTitle(files.length, workspaceLabel), {
     duration: Number.POSITIVE_INFINITY,
     action: {
       label: translate('components.workspace.delete.unsavedEdits.reopen', 'Reopen'),
@@ -111,8 +123,10 @@ export function showClosedUnsavedFilesToast(
           return
         }
         reopening = true
-        void reopenClosedUnsavedFiles(holder.files).then((failed) => {
+        const attempted = holder.files
+        void reopenClosedUnsavedFiles(attempted).then((failed) => {
           reopening = false
+          onRecovered?.(attempted.filter((file) => !failed.includes(file)))
           // Dismiss can release the holder while creation is still in flight.
           if (!holder.files) {
             return
@@ -125,8 +139,23 @@ export function showClosedUnsavedFilesToast(
       }
     },
     onDismiss: () => {
-      const files = holder.files
+      const unrecovered = holder.files
       holder.files = null
+      onDismiss?.(unrecovered)
+    }
+  })
+}
+
+/** Dismissal releases kept records and recovered text. */
+export function showClosedUnsavedFilesToast(
+  closed: readonly ClosedUnsavedFile[],
+  workspaceLabel: string,
+  notice: number
+): void {
+  showUnsavedFilesRecoveryToast({
+    files: closed,
+    workspaceLabel,
+    onDismiss: (files) => {
       useAppStore.getState().releaseKeptEditorBuffers(notice)
       if (files) {
         console.warn('[editor] dropped unsaved edits from a removed workspace', {
@@ -134,5 +163,37 @@ export function showClosedUnsavedFilesToast(
         })
       }
     }
+  })
+}
+
+/** Offers drafts of workspaces gone at startup; dismissing keeps them saved for the next launch. */
+export function showStrandedEditorDraftsToast(): void {
+  const stranded = useAppStore.getState().strandedEditorDrafts
+  const refs = new Map<ClosedUnsavedFile, StrandedEditorDraftRef>()
+  const labels = new Set<string>()
+  for (const [ownerKey, drafts] of Object.entries(stranded)) {
+    for (const draft of drafts) {
+      if (draft.dirtyDraftContent === undefined) {
+        continue
+      }
+      const file = {
+        fileId: `${ownerKey}:${draft.filePath}`,
+        filePath: draft.filePath,
+        content: draft.dirtyDraftContent
+      }
+      refs.set(file, { ownerKey, filePath: draft.filePath })
+      labels.add(getWorktreePathBasenameFromId(ownerKey) ?? basename(dirname(draft.filePath)))
+    }
+  }
+  if (refs.size === 0) {
+    return
+  }
+  showUnsavedFilesRecoveryToast({
+    files: [...refs.keys()],
+    workspaceLabel: [...labels].join(', '),
+    onRecovered: (recovered) =>
+      useAppStore
+        .getState()
+        .settleRecoveredStrandedEditorDrafts(recovered.flatMap((file) => refs.get(file) ?? []))
   })
 }

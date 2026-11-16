@@ -28,6 +28,10 @@ import type {
   EditorBufferKeptRecords
 } from '../buffers/editor-buffer-kept'
 import type { EditorBufferDetachments, EditorBufferViewIndex } from '../buffers/editor-buffer-views'
+import type {
+  StrandedEditorDraftRef,
+  StrandedEditorDrafts
+} from '@/lib/workspace/persistence/stranded-editor-drafts'
 import type { EditorOpenLinkIntent, EditorOpenResult } from './editor-open-link-intent'
 import type { OpenFilePathRekey, RekeyOpenFilesResult } from './open-file-path-rekey'
 import type {
@@ -68,6 +72,10 @@ export type EditorFilesSlice = {
   releaseKeptEditorBuffers: (notice: number) => void
   /** A write landed `content` for kept records of `viewIds`: drop one it saved, else move its baseline. */
   settleKeptEditorBuffers: (viewIds: readonly string[], content: string, signature: string) => void
+  /** Unsaved drafts of workspaces gone at startup; kept until recovered, never dropped on dismiss. */
+  strandedEditorDrafts: StrandedEditorDrafts
+  /** Forget stranded drafts whose text now lives in a recovered file. */
+  settleRecoveredStrandedEditorDrafts: (recovered: readonly StrandedEditorDraftRef[]) => void
   /** Bumped when runtime revisions change, so the record middleware re-resolves identities. */
   editorBufferIdentityRevision: number
   /** Re-resolves every view's file identity after a change the store can't see (revisions). */

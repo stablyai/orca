@@ -16,6 +16,7 @@ import { buildActiveConnectionIdsAtShutdown } from './workspace-session-reconnec
 import { withoutStagedBrowserTabs } from './workspace-session-staged-browser-tabs'
 import { buildBrowserSessionData } from './workspace-session-browser-tabs'
 import { pickCloseIntents, type CloseIntentFields } from './workspace-session-close-intents'
+import { withStrandedEditorDrafts, type StrandedEditorDrafts } from './stranded-editor-drafts'
 
 /** Why (issue #1158): require both flags so a hydration failure can't overwrite orca-data.json with empty error-path state. */
 export function shouldPersistWorkspaceSession(
@@ -64,6 +65,7 @@ export type WorkspaceSessionSnapshot = Pick<
     /** Optional so the many partial snapshot fixtures keep type-checking; see buildTerminalSessionData. */
     pendingReconnectPtyIdByTabId?: AppState['pendingReconnectPtyIdByTabId']
     deferredSshSessionIdsByTabId?: AppState['deferredSshSessionIdsByTabId']
+    strandedEditorDrafts?: AppState['strandedEditorDrafts']
   }
 
 // Why: shallow-equality gate for the debounced session writer; _exhaustive below keeps it in sync with the snapshot type.
@@ -104,7 +106,8 @@ export const SESSION_RELEVANT_FIELDS = [
   'clientHostedBrowserCloseIntentsByEnvironment',
   'pairedTerminalTabCloseIntentsByEnvironment',
   'pendingReconnectPtyIdByTabId',
-  'deferredSshSessionIdsByTabId'
+  'deferredSshSessionIdsByTabId',
+  'strandedEditorDrafts'
 ] as const satisfies readonly (keyof WorkspaceSessionSnapshot)[]
 
 type _MissingSessionField = Exclude<
@@ -120,7 +123,8 @@ export function buildEditorSessionData(
   editorDrafts: Record<string, string>,
   markdownFrontmatterVisible: Record<string, boolean>,
   activeFileIdByWorktree: Record<string, string | null>,
-  activeTabTypeByWorktree: Record<string, WorkspaceVisibleTabType>
+  activeTabTypeByWorktree: Record<string, WorkspaceVisibleTabType>,
+  strandedEditorDrafts: StrandedEditorDrafts = {}
 ): Pick<
   WorkspaceSessionState,
   | 'openFilesByWorktree'
@@ -193,7 +197,8 @@ export function buildEditorSessionData(
   )
 
   return {
-    openFilesByWorktree: byWorktree,
+    // Why: the window rebuilds this field wholesale, so drafts it could not restore are written back.
+    openFilesByWorktree: withStrandedEditorDrafts(byWorktree, strandedEditorDrafts),
     activeFileIdByWorktree: persistedActiveFileIdByWorktree,
     activeTabTypeByWorktree: persistedActiveTabTypeByWorktree,
     markdownFrontmatterVisible: persistedMarkdownFrontmatterVisible
@@ -306,7 +311,8 @@ export function buildWorkspaceSessionPayload(
       snapshot.editorDrafts,
       snapshot.markdownFrontmatterVisible,
       snapshot.activeFileIdByWorktree,
-      snapshot.activeTabTypeByWorktree
+      snapshot.activeTabTypeByWorktree,
+      snapshot.strandedEditorDrafts
     ),
     ...buildBrowserSessionData(
       snapshot.browserTabsByWorktree,

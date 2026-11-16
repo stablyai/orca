@@ -1,5 +1,6 @@
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
+import { withoutRecoveredStrandedDrafts } from '@/lib/workspace/persistence/stranded-editor-drafts'
 import { addAdditionalValidWorkspaceKeys } from '@/lib/workspace/persistence/workspace-session-hydration-keys'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
@@ -11,8 +12,17 @@ import { selectFolderWorkspaces } from '../../../workspaces/catalog/workspace-re
 export function createHydrateEditorSession(
   set: EditorSet,
   _get: EditorGet
-): Pick<EditorSlice, 'hydrateEditorSession'> {
+): Pick<
+  EditorSlice,
+  'hydrateEditorSession' | 'strandedEditorDrafts' | 'settleRecoveredStrandedEditorDrafts'
+> {
   return {
+    strandedEditorDrafts: {},
+    settleRecoveredStrandedEditorDrafts: (recovered) =>
+      set((s) => {
+        const next = withoutRecoveredStrandedDrafts(s.strandedEditorDrafts, recovered)
+        return next === s.strandedEditorDrafts ? s : { strandedEditorDrafts: next }
+      }),
     hydrateEditorSession: (session, options) => {
       set((s) => {
         const validWorktreeIds = buildValidWorktreeIdsForSessionHydration(
