@@ -10,10 +10,16 @@ const B = { variable: 'CLAUDE_CONFIG_DIR', path: '/homes/b' }
 function transition(childWork: AgentChildWorkView[], ended = NOW - 10 * 60_000) {
   return readStructuredAgentSessionAccountTransition(
     {
-      child: { phase: 'ready', fence: 2, accountHome: A } as never,
+      child: { phase: 'ready', fence: 2, accountHome: A },
       journal: {
-        reads: { outgrownChild: async () => ({ signedOut: false }) }
-      } as never
+        reads: {
+          outgrownChild: async () => ({
+            signedOut: false,
+            newestTurnCompletedAt: ended,
+            nextMessage: null
+          })
+        }
+      }
     },
     {
       work: {
@@ -36,7 +42,7 @@ function transition(childWork: AgentChildWorkView[], ended = NOW - 10 * 60_000) 
 }
 
 function settled(at: number, outcome: AgentChildWorkView['outcome']): AgentChildWorkView {
-  return {
+  const view: AgentChildWorkView = {
     id: 'task',
     kind: 'agent',
     state: 'done',
@@ -47,7 +53,8 @@ function settled(at: number, outcome: AgentChildWorkView['outcome']): AgentChild
     outcome,
     stoppable: false,
     invocation: { invocationId: 'spawn', generation: 1 }
-  } as AgentChildWorkView
+  }
+  return view
 }
 
 it('waits for the lead to answer work that just finished, until two minutes after it ended', async () => {

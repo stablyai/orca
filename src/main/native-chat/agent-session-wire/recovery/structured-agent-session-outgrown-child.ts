@@ -23,6 +23,15 @@ type OutgrownChildReading = Pick<StructuredAgentSessionHostSession, 'child'> & {
   journal: Pick<AgentSessionJournal, 'reads'>
 }
 
+/** Only what the account reading needs of the running child and the journal. */
+type AccountTransitionReading = {
+  child: Pick<
+    NonNullable<StructuredAgentSessionHostSession['child']>,
+    'phase' | 'close' | 'fence' | 'accountHome'
+  > | null
+  journal: { reads: Pick<AgentSessionJournal['reads'], 'outgrownChild'> }
+}
+
 /** How long an account move waits for the lead's wake-up after child work ends. A stopped task
  *  or a provider that never wakes the lead would otherwise hold the person's message forever. */
 export const STRUCTURED_AGENT_SESSION_ACCOUNT_MOVE_WAKE_UP_MS = 2 * 60_000
@@ -83,7 +92,7 @@ function picksNewLaunchModel(
 /** Loop-free while a start launches under the account `current` reads; a read that throws is no
  *  answer, so unreadable account evidence replaces nothing. Returns the account a start would use. */
 async function launchedUnderOtherAccount(
-  child: OutgrownChildReading['child'],
+  child: AccountTransitionReading['child'],
   current: (() => Promise<AgentSessionAccountHome | null>) | undefined
 ): Promise<AgentSessionAccountHome | null> {
   if (!child || child.phase === 'starting' || child.close || !child.accountHome || !current) {
@@ -155,7 +164,7 @@ type AccountTransitionDeps = {
 
 /** The account move a running child defers, read without stopping anything. */
 export async function readStructuredAgentSessionAccountTransition(
-  session: OutgrownChildReading | undefined,
+  session: AccountTransitionReading | undefined,
   deps: AccountTransitionDeps
 ): Promise<StructuredAgentSessionAccountTransition | null> {
   const child = session?.child
