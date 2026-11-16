@@ -205,16 +205,18 @@ export type EdgeRoute = { frontDoor?: string; byCountry?: boolean; switchable: b
 
 // keepOnly: answer only a host whose row is (under the lock) on the edge; anything else throws
 // EdgeMoveDeferredError('not_on_edge') with nothing written (cohortRegion 'host', regionless asks).
+// It never writes the host's region either.
 export type EdgeMoveOptions = { keepOnly?: boolean }
 
 // How an ask's cohort is judged (EdgeAssignments.judgeCohort).
 // - ask: by the region the ask names (none: RELAY_DEFAULT_REGION), as without cohortRegion.
-// - record: a regionless ask of a host on the edge, by its recorded region (none recorded: the
-//   default region); it may only keep the host there (keepOnly), never move it on.
+// - record: a regionless ask of a host on the edge, by its recorded region; with no valid record
+//   'any' (the highest in-scope rollout, as the evacuation sweep judges it), never the default
+//   region. It may only keep the host there (keepOnly, which writes no record), never move it on.
 // - none: a regionless ask of a host with no edge row: never moved on, and nothing to leave.
 export type EdgeCohortJudgement =
   | { by: 'ask'; region: RelayRegion | undefined }
-  | { by: 'record'; region: RelayRegion | undefined }
+  | { by: 'record'; region: RelayRegion | 'any' }
   | { by: 'none' }
 
 // Thrown out of the switch's first transaction (nothing written): the pending switch must be
@@ -397,7 +399,7 @@ export class EdgeAssignments {
     )[0]
     if (!row || text(row, 'cell_id') !== EDGE_CELL_ID) { return { by: 'none' } }
     const recorded = RelayRegionSchema.safeParse(row.region)
-    return { by: 'record', region: recorded.success ? recorded.data : undefined }
+    return { by: 'record', region: recorded.success ? recorded.data : 'any' }
   }
 
   // Phone paths again, for a credential Postgres does not hold: devices paired or rotated while the
@@ -503,6 +505,8 @@ export class EdgeAssignments {
     const now = this.now()
     const leaseExpiresAt = now + ASSIGNMENT_LIMITS.activityLeaseMs
     const recordRegion = async (transaction: RelayDatabase, onlyIfChanged = false) => {
+      // keepOnly writes no region: the record (or its absence) is what the ask was judged by.
+      if (options.keepOnly === true) { return }
       await transaction.query(
         `INSERT INTO relay_edge_host_regions (user_id, relay_host_id, region, recorded_at)
          VALUES (?, ?, ?, ?)
@@ -667,6 +671,18 @@ export class EdgeAssignments {
     const placeApac = viaFrontDoor && route.byCountry === true
     const record = async (transaction: RelayDatabase, cellUrl: string | undefined, onlyIfChanged = false) => {
       // Every committed answer here also clears any pending switch (completed, or left behind).
+      if (options.keepOnly === true) {
+        // keepOnly writes no region (the record, or its absence, is what the ask was judged by)
+        // and inserts nothing: no record already answers the edge's own URL.
+        await transaction.query(
+          `UPDATE relay_edge_host_regions
+           SET recorded_at = ?, cell_url = ?, pending_epoch = NULL, pending_cell_url = NULL
+           WHERE user_id = ? AND relay_host_id = ?
+           ${onlyIfChanged ? 'AND (cell_url IS DISTINCT FROM ? OR pending_epoch IS NOT NULL)' : ''}`,
+          [now, cellUrl ?? null, identity.userId, identity.relayHostId, ...(onlyIfChanged ? [cellUrl ?? null] : [])]
+        )
+        return
+      }
       await transaction.query(
         `INSERT INTO relay_edge_host_regions
          (user_id, relay_host_id, region, recorded_at, cell_url, pending_epoch, pending_cell_url)

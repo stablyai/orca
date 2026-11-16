@@ -523,12 +523,15 @@ export function createRelayApp(
         return context.json({ error: 'assignment_temporarily_unavailable' }, 503)
       }
     }
-    const cohortRegion = judged.by === 'none' ? undefined : judged.region
+    const judgedRegion = judged.by === 'none' ? undefined : judged.region
+    // 'any' (a regionless keep without a valid record) is only a cohort judgement: no region is
+    // recorded (keepOnly) or routed for it.
+    const cohortRegion = judgedRegion === 'any' ? undefined : judgedRegion
     const toEdge =
       edge?.ready === true &&
       body.data.regionCorrection?.action !== 'report' &&
       judged.by !== 'none' &&
-      inEdgeCohort(edge.config, claims.relayHostId, cohortRegion, claims.sub, country)
+      inEdgeCohort(edge.config, claims.relayHostId, judgedRegion, claims.sub, country)
     // judged 'none': the row was just read off the edge, so there is nothing to leave.
     if (edge?.pushes && !toEdge && judged.by !== 'none' && mayBeOnEdge(edge.config, claims.relayHostId, claims.sub)) {
       // Any lane below may re-place a host whose row is on the edge; its devices come back first.

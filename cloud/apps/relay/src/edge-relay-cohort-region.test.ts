@@ -87,7 +87,7 @@ function edgeConfig(flags: () => EdgeControlFlags, overrides: Partial<EdgeRelayC
 
 // A director with a phase 2 edge: moves push, leaves export, and the cell path really re-places the
 // row (so a host that left is moved back with a new push).
-async function director(flags: () => EdgeControlFlags) {
+async function director(flags: () => EdgeControlFlags, frontDoorUrls?: ReadonlySet<string>) {
   vi.spyOn(console, 'warn').mockImplementation(() => {})
   // Asks minutes apart, as a desktop's are: never the director's per-host rate limit.
   vi.useFakeTimers({ toFake: ['Date'] })
@@ -110,7 +110,7 @@ async function director(flags: () => EdgeControlFlags) {
     })
   } as unknown as EdgeAdmin
   const drained: string[] = []
-  const config = edgeConfig(flags)
+  const config = edgeConfig(flags, frontDoorUrls ? { frontDoorUrls } : {})
   const edge = new EdgeAssignments(database, config, Date.now, admin)
   await edge.ensureEdgeCell()
   const assignments = {
@@ -258,6 +258,47 @@ describe("edge cohort by host (cohortRegion 'host')", () => {
     expect(d.exports).toEqual([splitHost])
     for (const ask of life('asia-east2')) { expect(await d.assign(splitHost, ask)).toBe(CELL_URL) }
     expect(d.pushes).toEqual([splitHost])
+  })
+
+  it('never fabricates a record for an edge host without a valid one: judged as the sweep judges it', async () => {
+    for (const frontDoorUrls of [undefined, new Set(['https://door.example.test'])]) {
+      const flags = hostFlags()
+      const d = await director(() => flags, frontDoorUrls)
+      // On the edge from before records existed, and one whose record names a retired region.
+      for (const host of [lowHost, splitHost]) {
+        await d.database.query(
+          `INSERT INTO relay_assignments
+           (user_id, relay_host_id, cell_id, assignment_epoch, lease_expires_at, last_activity_at,
+            reserved_controls, reserved_splices, reserved_invites, pending_installs,
+            pending_confirmations, migration_leases)
+           VALUES ('user-1', ?, ?, 4, 0, 0, 0, 0, 0, 0, 0, 0)`,
+          [host, EDGE_CELL_ID]
+        )
+      }
+      await d.database.query(
+        `INSERT INTO relay_edge_host_regions (user_id, relay_host_id, region, recorded_at) VALUES ('user-1', ?, 'retired-region', 0)`,
+        [splitHost]
+      )
+      for (const host of [lowHost, splitHost]) {
+        expect(await d.assign(host, refresh)).toBe(EDGE_URL)
+        expect(await d.assign(host, refresh)).toBe(EDGE_URL)
+      }
+      expect(await d.recorded(lowHost)).toBeUndefined()
+      expect(await d.recorded(splitHost)).toBe('retired-region')
+      // asia-east2 aborted: judged 'any' (us-central1's 1000) by the sweep and the assign path alike.
+      flags.regionRolloutPermille = { ...DIVERGENT, 'asia-east2': 0 }
+      expect(await d.sweep()).toEqual([])
+      expect(await d.assign(lowHost, refresh)).toBe(EDGE_URL)
+      expect(await d.recorded(lowHost)).toBeUndefined()
+      // Its next named ask judges and records it: off for good, with no us-central1 record left behind.
+      expect(await d.assign(lowHost, drain('asia-east2'))).toBe(CELL_URL)
+      expect(await d.assign(lowHost, refresh)).toBe(CELL_URL)
+      // Every in-scope rollout at 0: both paths move the unrecorded host off.
+      flags.regionRolloutPermille = { 'us-central1': 0, 'asia-east2': 0 }
+      expect(await d.sweep()).toEqual([splitHost])
+      expect(await d.assign(splitHost, refresh)).toBe(CELL_URL)
+      expect(d.pushes).toEqual([])
+    }
   })
 
   it('still moves off on mode off and on a named region whose rollout no longer admits it', async () => {
