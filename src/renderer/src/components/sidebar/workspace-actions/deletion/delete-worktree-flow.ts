@@ -16,6 +16,7 @@ import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrom
 import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { getPerforceCopyDeleteTarget } from '../../../perforce-copies/perforce-copy-target'
+import { requestPerforceCopyDelete } from '../../../perforce-copies/perforce-copy-delete-request'
 import { translate } from '@/i18n/i18n'
 import {
   resolveWorktreeBatchDeleteTargets,
@@ -59,7 +60,7 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
   const perforceCopy = getPerforceCopyDeleteTarget(state, target)
   if (perforceCopy) {
     // Why: deleting a copy also deletes its Perforce client and maybe shelves, so it always confirms with the full list.
-    state.openModal('delete-perforce-copy', perforceCopy)
+    requestPerforceCopyDelete(target, perforceCopy)
     return
   }
   if (target.hostId) {
@@ -152,8 +153,7 @@ export function runWorktreeBatchDelete(
   if (perforceCopies.length > 0) {
     // Why: each copy's deletion reaches the Perforce server, so it is reviewed on its own.
     if (targets.length === 1) {
-      state.openModal('delete-perforce-copy', perforceCopies[0])
-      return true
+      return requestPerforceCopyDelete(targets[0], perforceCopies[0])
     }
     toast.error(
       translate('perforce.copies.deleteOneAtATime', 'Delete Perforce copies one at a time'),
