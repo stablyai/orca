@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { readFile, stat } from 'node:fs/promises'
-import { getSecretStore } from '../../shared/secret-store'
+import { getSecretStore } from '../../shared/secure-storage/secret-store'
 import { isUnreadableError, writeSecureFile } from '../../shared/secure-storage/secure-file'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { ExecutionHostId } from '../../shared/execution-host'

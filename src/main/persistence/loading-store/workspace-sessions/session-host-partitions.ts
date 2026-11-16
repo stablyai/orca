@@ -13,9 +13,7 @@ import { pruneLocalTerminalScrollbackBuffers } from '../../../../shared/workspac
 import { pruneWorkspaceSessionBrowserHistory } from '../../../../shared/workspace-session/workspace-session-browser-history'
 import { withoutRedundantGlobalFields } from '../../../../shared/workspace-session/workspace-session-host-field-ownership'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
-import { readTerminalScrollbackSnapshotSync } from '../../../pty/scrollback/terminal-scrollback-snapshots'
 import {
-  hasTerminalScrollbackSnapshotSync,
   readTerminalScrollbackSnapshot,
   statTerminalScrollbackSnapshotSize
 } from '../../../pty/scrollback/terminal-scrollback-snapshot-nonblocking-reads'
@@ -30,6 +28,13 @@ import {
 } from '../../restoring-sessions/session-owner-removal'
 
 import type { StoreRuntimeState } from '../store-runtime-state'
+import { WORKSPACE_SESSION_DOMAINS } from '../../workspace-session-domains'
+import {
+  pruneMissingLocalWorktreeSessionsForRepo as pruneMissingLocalWorktreeSessions,
+  selectLocalWorktreeSessionOwnersForRepo,
+  selectRemovableLocalWorktreeSessionOwners
+} from '../../tracking-repos/missing-local-worktree-session-pruning'
+import type { NativeLocalWorktreeMetadataScanExpectation } from '../../tracking-repos/local-worktree-metadata-scan-expectation'
 
 import { type WriteSchedulingOperations, scheduleSave } from '../profile-writing/write-scheduling'
 import {
@@ -114,20 +119,6 @@ export class SessionHostPartitionOperations {
     )
   }
 
-  readTerminalScrollbackSnapshot(ref: string): string | null {
-    return readTerminalScrollbackSnapshotSync(
-      ref,
-      this[sessionHostPartitionOperationsContext].runtime.terminalScrollbackSnapshotStorage
-    )
-  }
-
-  hasTerminalScrollbackSnapshot(ref: string): boolean {
-    return hasTerminalScrollbackSnapshotSync(
-      ref,
-      this[sessionHostPartitionOperationsContext].runtime.terminalScrollbackSnapshotStorage
-    )
-  }
-
   readTerminalScrollbackSnapshotAsync(ref: string): Promise<string | null> {
     return readTerminalScrollbackSnapshot(
       ref,
@@ -153,6 +144,35 @@ export class SessionHostPartitionOperations {
     for (const resolved of workspaceSessionPartitionIdsForHost(target.hostId)) {
       removeWorkspaceSessionOwnerInPartition(this, target.id, resolved, options)
     }
+  }
+
+  /** Candidates for the post-scan cleanup, filtered before any path probe. */
+  selectRemovableLocalWorktreeSessionOwnersForRepo(repoId: string): string[] {
+    const { state } = this[sessionHostPartitionOperationsContext].runtime
+    return selectRemovableLocalWorktreeSessionOwners(
+      state,
+      repoId,
+      selectLocalWorktreeSessionOwnersForRepo(state.workspaceSession, repoId)
+    )
+  }
+
+  /** Drops local saved session state of worktrees a scan no longer lists and whose folders are gone. */
+  pruneMissingLocalWorktreeSessionsForRepo(
+    scan: NativeLocalWorktreeMetadataScanExpectation,
+    missingWorktreeIds: readonly string[]
+  ): string[] {
+    const context = this[sessionHostPartitionOperationsContext]
+    const removed = pruneMissingLocalWorktreeSessions(
+      context.runtime.state,
+      scan,
+      missingWorktreeIds
+    )
+    if (removed.length > 0) {
+      // Releasing session ownership unblocks metadata pruning for the same worktrees.
+      invalidateLocalWorktreeMetadataPruneInputs()
+      scheduleSave(context.scheduling, [WORKSPACE_SESSION_DOMAINS[0]], LOCAL_EXECUTION_HOST_ID)
+    }
+    return removed
   }
 }
 

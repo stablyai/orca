@@ -4,7 +4,7 @@ import { agentSessionFailureWords } from '../agent-session/failures/agent-sessio
 import { agentJournalItemKey } from '../agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalRenderItem } from '../agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnOutcome } from '../agent-status/lifecycle/agent-turn-outcome'
-import { withNativeChatCutTurnNotices } from './transcript/native-chat-cut-turn-notice'
+import { withNativeChatCutTurnNotices } from './transcript/turns/native-chat-cut-turn-notice'
 import {
   latestNativeChatOrcaStopCut,
   orcaShutdownRowClientMessageId

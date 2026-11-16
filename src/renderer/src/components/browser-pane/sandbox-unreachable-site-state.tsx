@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react'
 import { Globe } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
-import type { BrowserLoadError } from '../../../../shared/browser-workspace-types'
+import type { BrowserLoadError } from '../../../../shared/browser/workspaces/browser-workspace-types'
 
 // ERR_SOCKS_CONNECTION_FAILED, ERR_SOCKS_CONNECTION_HOST_UNREACHABLE, ERR_PROXY_CONNECTION_FAILED: what a
 // desktop-hosted cloud page gets when the sandbox (its SOCKS route) cannot connect.

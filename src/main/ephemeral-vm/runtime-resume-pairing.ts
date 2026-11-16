@@ -6,7 +6,7 @@ import {
 import type { PairedRuntimeConnection } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { sendRemoteRuntimeRequestOnSocket } from '../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import { RemoteRuntimeClientError } from '../../shared/remote-runtime/remote-runtime-client-error'
-import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/remote-runtime/protocol/electron-remote-runtime-client-capabilities'
 
 const SAVED_PAIRING_PROBE_TIMEOUT_MS = 10_000
 
@@ -43,7 +43,7 @@ export async function applyResumedRuntimePairing(args: {
 }): Promise<ResumedRuntimePairingOutcome> {
   const resume = ++resumeSequence
   latestResume.set(args.environmentId, resume)
-  const { repairFromFreshOffer, ...refreshed } = refreshEnvironmentFromResumePairingCode(
+  const { repairFromFreshOffer, ...refreshed } = await refreshEnvironmentFromResumePairingCode(
     args.userDataPath,
     args.environmentId,
     { pairingCode: args.pairingCode, now: args.now }
@@ -59,8 +59,8 @@ export async function applyResumedRuntimePairing(args: {
   void args.invalidateTransport(args.environmentId)
   const isCurrent = (): boolean => latestResume.get(args.environmentId) === resume
   // A stale confirmation must not overwrite the pairing a newer resume wrote.
-  const guardedRepair = (): KnownRuntimeEnvironment =>
-    isCurrent() ? repairFromFreshOffer() : refreshed.environment
+  const guardedRepair = (): Promise<KnownRuntimeEnvironment> =>
+    isCurrent() ? repairFromFreshOffer() : Promise.resolve(refreshed.environment)
   const confirmed = confirmSavedPairing(refreshed, guardedRepair, args.probeSavedPairing).then(
     (outcome) => {
       if (outcome.environment === refreshed.environment) {
@@ -86,7 +86,7 @@ export async function applyResumedRuntimePairing(args: {
 
 async function confirmSavedPairing(
   refreshed: ResumedRuntimePairingOutcome,
-  repairFromFreshOffer: () => KnownRuntimeEnvironment,
+  repairFromFreshOffer: () => Promise<KnownRuntimeEnvironment>,
   probe: (connection: PairedRuntimeConnection) => Promise<unknown> = probeSavedPairing
 ): Promise<ResumedRuntimePairingOutcome> {
   try {
@@ -98,7 +98,7 @@ async function confirmSavedPairing(
       return refreshed
     }
     // The server kept its key but lost the saved device (e.g. its device list was reset).
-    return { ...refreshed, environment: repairFromFreshOffer(), reusedPairing: false }
+    return { ...refreshed, environment: await repairFromFreshOffer(), reusedPairing: false }
   }
 }
 

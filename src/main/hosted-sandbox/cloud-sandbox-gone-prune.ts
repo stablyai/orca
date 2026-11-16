@@ -4,8 +4,8 @@
 // row. Only an authoritative answer retires one: missing from the active team's successful list,
 // then confirmed by a second such list or by the sandbox itself answering not found or destroyed.
 // Errors, a team switch mid-check, and asleep (suspended/archived, still listed) sandboxes never do.
-import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'
-import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
+import { listEphemeralVmRuntimes } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
+import type { EphemeralVmRuntimeRecord } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import type { HostedSandboxView } from '../../shared/hosted-sandbox/hosted-sandbox-wire'
 import { isEnvironmentProviderError } from '../environment-providers/environment-provider-driver'
 import { environmentHandleFromRecipeResult } from '../environment-providers/environment-provider-recipe-adapter'

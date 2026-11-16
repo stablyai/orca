@@ -1,4 +1,4 @@
-import type { WorkspacePort } from '../../../../shared/workspace-ports'
+import type { WorkspacePort } from '../../../../shared/workspace/ports/workspace-ports'
 import {
   RUNTIME_PORT_FORWARD_AUTO_EXCLUDED_PORTS,
   type RuntimePortForward,

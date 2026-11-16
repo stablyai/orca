@@ -1,8 +1,8 @@
-import type { WorkspaceSource } from '../../../../shared/workspace-source'
+import type { WorkspaceSource } from '../../../../shared/workspace/creation/workspace-source'
 import { ORCA_CLOUD_RECIPE_ID } from '../../../../shared/hosted-sandbox/orca-cloud-recipe-id'
 import { buildLinearWorkspaceSource } from '../../../../shared/new-workspace/workspace-source'
 import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
-import { getLinearIssueWorkspaceName } from '../../../../shared/workspace-name'
+import { getLinearIssueWorkspaceName } from '../../../../shared/workspace/naming/workspace-name'
 import type { AppState } from '../../store/types'
 
 type NewWorkspaceShortcutModalData = {

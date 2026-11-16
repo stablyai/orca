@@ -2,7 +2,7 @@ import { selectAwakeBrowserTabsByWorktree } from '@/components/sidebar/workspace
 import { useMemo, useState } from 'react'
 import { useAppStore } from '@/store/index'
 import { getAgentStatusEpochNow } from '@/lib/agent-status/evidence/agent-status-epoch-clock'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import '../../worktree-list/listing/visible-worktrees'
 import { computeVisibleWorktrees } from '../../worktree-list/listing/compute-visible-worktrees'
@@ -12,10 +12,11 @@ import type { AppState } from '@/store/types'
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
   getPairedDeviceIdsByEnvironment
-} from '../../../../../../shared/workspace-creator-visibility'
+} from '../../../../../../shared/workspace-view/workspace-creator-visibility'
 import { getStructuredChatWorktreeIds } from '../../worktree-list/listing/visible-worktree-activity-inputs'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import { indexHiddenProjects } from '../../../../../../shared/project/catalog/hidden-projects'
 
 type UseVisibleWorkspaceKanbanWorktreeIdsParams = {
   allWorktrees: readonly Worktree[]
@@ -31,6 +32,7 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
   repoMap
 }: UseVisibleWorkspaceKanbanWorktreeIdsParams): ReadonlySet<string> {
   const worktreesByRepo = useAppStore((s) => selectWorktreesByRepo(s))
+  const repos = useAppStore((s) => s.repos)
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const hideDefaultBranchWorkspace = useAppStore((s) => s.hideDefaultBranchWorkspace)
   const hideAutomationGeneratedWorkspaces = useAppStore((s) => s.hideAutomationGeneratedWorkspaces)
@@ -76,6 +78,7 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
   return useMemo(() => {
     // Board status ordering differs, but workspace visibility must use the sidebar’s filters.
     const sortedIds = allWorktrees.map((worktree) => worktree.id)
+    const defaultHostId = getSettingsFocusedExecutionHostId(settings)
     return new Set(
       computeVisibleWorktrees(worktreesByRepo, sortedIds, {
         filterRepoIds,
@@ -95,9 +98,10 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
           : EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
         alwaysShowDefaultBranchWorkspace,
         repoMap,
+        hiddenProjects: indexHiddenProjects(repos, defaultHostId),
         workspaceHostScope,
         visibleWorkspaceHostIds,
-        defaultHostId: getSettingsFocusedExecutionHostId(settings),
+        defaultHostId,
         worktreeLineageById: {},
         // The board has no nested lineage; ancestor injection would reveal filtered-out parents as cards.
         injectLineageAncestors: false
@@ -118,6 +122,7 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
     settings,
     ptyIdsByTabId,
     repoMap,
+    repos,
     runtimeEnvironments,
     runtimeStatusByEnvironmentId,
     showSleepingWorkspaces,

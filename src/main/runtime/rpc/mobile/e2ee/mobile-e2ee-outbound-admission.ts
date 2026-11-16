@@ -2,7 +2,7 @@ import type { WebSocket } from 'ws'
 import {
   createWsOutboundBackpressureQueue,
   type WsOutboundBackpressureQueue
-} from '../../../../../shared/ws-outbound-backpressure-queue'
+} from '../../../../../shared/network/websocket/ws-outbound-backpressure-queue'
 import {
   REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES,
   REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES
@@ -11,7 +11,7 @@ import type {
   MobileE2EEOutboundMemoryBudget,
   MobileE2EEOutboundSocketMemory
 } from './mobile-e2ee-outbound-memory-budget'
-import type { EventProps } from '../../../../../shared/telemetry-event-classification'
+import type { EventProps } from '../../../../../shared/telemetry/telemetry-event-classification'
 import { track } from '../../../../telemetry/client'
 
 export type MobileE2EEOutboundBudgetEmitter = EventProps<'remote_outbound_budget_close'>['emitter']

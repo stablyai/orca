@@ -286,7 +286,19 @@ export class RelayCredentialStore {
     | { outcome: 'refused' }
     | { outcome: 'resume'; reservation: CredentialReservation }
   > {
-    const tokenHash = hashCredential(token)
+    return await this.lookupResumeHash(relayHostId, hashCredential(token), reservationId)
+  }
+
+  // As lookupResume, from the token's hash (the relay edge is asked with the hash, never the token).
+  async lookupResumeHash(
+    relayHostId: string,
+    tokenHash: string,
+    reservationId: string = randomUUID()
+  ): Promise<
+    | { outcome: 'none' }
+    | { outcome: 'refused' }
+    | { outcome: 'resume'; reservation: CredentialReservation }
+  > {
     const rows = await this.database.query(
       `SELECT * FROM relay_devices
        WHERE relay_host_id = ? AND (current_hash = ? OR grace_hash = ?)`,
@@ -687,7 +699,14 @@ export class RelayCredentialStore {
     relayHostId: string,
     token: string
   ): Promise<{ userId: string; relayDeviceId: string } | null> {
-    const found = await this.lookupResume(relayHostId, token)
+    return await this.resolveResumeHash(relayHostId, hashCredential(token))
+  }
+
+  async resolveResumeHash(
+    relayHostId: string,
+    tokenHash: string
+  ): Promise<{ userId: string; relayDeviceId: string } | null> {
+    const found = await this.lookupResumeHash(relayHostId, tokenHash)
     return found.outcome === 'resume'
       ? { userId: found.reservation.userId, relayDeviceId: found.reservation.relayDeviceId }
       : null
@@ -701,7 +720,14 @@ export class RelayCredentialStore {
     relayHostId: string,
     token: string
   ): Promise<{ userId: string; relayDeviceId: string } | null> {
-    const tokenHash = hashCredential(token)
+    return await this.resolveInviteForMoveHash(relayHostId, hashCredential(token))
+  }
+
+  // Read-only, like resolveResumeHash: the relay edge answers the director's credential check with it.
+  async resolveInviteForMoveHash(
+    relayHostId: string,
+    tokenHash: string
+  ): Promise<{ userId: string; relayDeviceId: string } | null> {
     const rows = await this.database.query(
       `SELECT user_id, relay_device_id, token_hash, state, attempt_count, max_attempts, expires_at
        FROM relay_invites WHERE relay_host_id = ? AND token_hash = ?`,

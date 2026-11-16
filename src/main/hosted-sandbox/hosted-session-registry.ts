@@ -6,8 +6,8 @@ import { z } from 'zod'
 import {
   listEphemeralVmRuntimes,
   updateEphemeralVmRuntimeStatus
-} from '../../shared/ephemeral-vm-runtime-store'
-import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
+} from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
+import type { EphemeralVmRuntimeRecord } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import {
   ORCAD_WORK_VERDICT_METHOD,
   type HostedSessionIdleSleepEvent,
@@ -15,11 +15,11 @@ import {
   type HostedSessionStateEvent,
   type HostedSessionWarningEvent
 } from '../../shared/hosted-sandbox/hosted-session-events'
-import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
+import { callRuntimeEnvironment } from '../ipc/runtime-environments/requests/runtime-environment-transport-routing'
 import { invalidateRuntimeEnvironmentTransport } from '../ipc/runtime-environments/runtime-environments'
 import { applyResumedRuntimePairing } from '../ephemeral-vm/runtime-resume-pairing'
 import { noteRecipeVmWakePairing } from '../ephemeral-vm/recipe-vm-wake-pairings'
-import { getEphemeralVmRecipeResultPairingCode } from '../../shared/ephemeral-vm-recipes'
+import { getEphemeralVmRecipeResultPairingCode } from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipes'
 import { environmentHandleFromRecipeResult } from '../environment-providers/environment-provider-recipe-adapter'
 import type { HostedEnvironmentProviderDriver } from './hosted-environment-provider'
 import { autoResumeAgentsAfterRollover, listRestartOfferIds } from './hosted-agent-auto-resume'

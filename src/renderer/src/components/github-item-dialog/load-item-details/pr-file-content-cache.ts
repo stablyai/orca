@@ -7,14 +7,16 @@ import {
   PR_FILE_CONTENT_CACHE_MAX_BYTES,
   getRetainedPRFileContentsByteCount
 } from '@/components/github/pr-file-content-size'
-import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
+import { githubRepoIdentityKey } from '../../../../../shared/github/repositories/repository-identity-key'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
 import type {
-  GitHubOwnerRepo,
   GitHubPRFile,
   GitHubPRFileContents
-} from '../../../../../shared/github/pull-request-types'
-import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
-import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
+} from '../../../../../shared/github/pull-requests/pull-request-types'
+import {
+  type TaskSourceContext,
+  getTaskSourceCacheScope
+} from '../../../../../shared/work-items/task-source-context'
 
 const PR_FILE_CONTENT_CACHE_MAX = 64
 type PRFileContentCacheEntry = {

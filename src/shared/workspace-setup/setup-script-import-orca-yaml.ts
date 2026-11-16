@@ -1,5 +1,5 @@
 import { stringify } from 'yaml'
-import type { OrcaRunAction } from '../orca-yaml-hook-types'
+import type { OrcaRunAction } from './orca-yaml-hook-types'
 import { defaultRunActionName, LEGACY_RUN_ACTION_ID } from '../orca-yaml-run-actions'
 import type { SetupScriptImportCandidate } from './setup-script-imports'
 

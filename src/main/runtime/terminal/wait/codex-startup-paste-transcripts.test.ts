@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createDraftPasteReadyScanner } from '../../../../shared/draft-paste-ready-scanner'
+import { createDraftPasteReadyScanner } from '../../../../shared/agent-launch/startup/readiness/draft-paste-ready-scanner'
 import { readRuntimeFixture, replayTranscript } from './agent-transcript-replay-test-harness'
 
 describe('Codex launch draft readiness from captured PTY output', () => {

@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { spawnProcess } from '@orca/process-host'
-import { BROWSER_SIDECAR_OWNER_ENV } from '../../../src/shared/browser-sidecar-lifetime'
+import { BROWSER_SIDECAR_OWNER_ENV } from '../../../src/shared/browser/runtime/browser-sidecar-lifetime'
 import { resolveElectronExecutable } from './daemon-generation-runtime-fixture'
 import { getOrcaElectronLaunchArgs } from './electron-launch-args'
 import { isolatedServeProfile } from './orca-serve-cli-host'

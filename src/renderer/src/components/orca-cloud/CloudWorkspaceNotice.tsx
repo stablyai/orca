@@ -143,11 +143,11 @@ export function CloudWorkspaceNotice({
     ? victim
       ? t('orcaCloudWorkspace.oom.titleRan', '{{name}} ran out of memory', { name: victim })
       : t('orcaCloudWorkspace.oom.titleProcess', 'A process ran out of memory')
-    : t('orcaCloudWorkspace.unresponsive.sandboxTitle', 'This sandbox isn’t responding')
+    : t('orcaCloudWorkspace.unresponsive.sandboxTitle', 'This workspace isn’t responding')
   const detail = isOom
     ? t(
         'orcaCloudWorkspace.oom.stopped',
-        'It was stopped so the sandbox stays up. Restart to recover.'
+        'Orca stopped it to keep the workspace running. Restart to recover.'
       )
     : t('orcaCloudWorkspace.detail.restartKeeps', 'Restart keeps your files; agents resume.')
   return (

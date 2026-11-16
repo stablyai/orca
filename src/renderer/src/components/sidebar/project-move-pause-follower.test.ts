@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createProjectMovePauseFollower } from './project-move-pause-follower'
 import type { AppState } from '@/store/types'
-import type { ProjectMovePauseResponse } from '../../../../shared/project-move-pause'
+import type { ProjectMovePauseResponse } from '../../../../shared/project/move/project-move-pause'
 
 const mocks = vi.hoisted(() => {
   const tabsByWorktree: Record<string, { id: string }[]> = {}

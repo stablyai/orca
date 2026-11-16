@@ -4,7 +4,7 @@
 import { createPrivateKey, sign } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { z } from 'zod'
-import type { OrcaOrgRole } from '../../shared/orca-profiles'
+import type { OrcaOrgRole } from '../../shared/orca-profiles/orca-profiles'
 
 export const BILLING_DEV_ISSUER = 'orca-billing-dev-test'
 const TOKEN_TTL_SECONDS = 300

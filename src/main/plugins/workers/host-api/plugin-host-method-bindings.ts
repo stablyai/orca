@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import {
   isPluginHostMethodName,
   PLUGIN_HOST_API,
@@ -7,6 +8,7 @@ import {
 } from '../../../../shared/plugins/workers/plugin-host-api'
 import {
   projectPluginWorkspaceAgents,
+  pluginFrameWorkspaceContext,
   projectPluginWorkspaceContext,
   type PluginAgentStatusRow,
   type PluginWorkspaceTerminal
@@ -23,22 +25,41 @@ import {
   PLUGIN_STATUS_BAR_HANDLERS,
   type PluginStatusBarServices
 } from './plugin-host-status-bar-method-bindings'
+import { PLUGIN_WORKSPACE_ACTION_HANDLERS } from './plugin-host-workspace-method-bindings'
+import { PLUGIN_TERMINAL_ACTION_HANDLERS } from './plugin-host-terminal-method-bindings'
+import { PLUGIN_WORKSPACE_CREATE_HANDLERS } from './plugin-host-workspace-create-bindings'
+import { PLUGIN_AUTOMATION_HANDLERS } from './plugin-host-automation-bindings'
+import { PLUGIN_AGENT_HISTORY_HANDLERS } from './plugin-host-agent-history-bindings'
+import { PLUGIN_PROJECT_VISIBILITY_HANDLERS } from './plugin-host-project-visibility-binding'
 import {
-  PLUGIN_WORKSPACE_ACTION_HANDLERS,
+  pluginHostRpc as rpc,
+  pluginWorkspaceSelector as workspaceSelector,
   type PluginRuntimeRpc
-} from './plugin-host-workspace-method-bindings'
+} from './plugin-host-runtime-call'
 import type { PluginAppearanceService } from '../../appearance/plugin-appearance-service'
 import type { PluginEditorTypographySource } from '../../appearance/plugin-editor-typography'
 import { PluginHostCallError } from './plugin-host-call-scope'
+import type {
+  PluginActionConfirmation,
+  PluginConfirmationSubject
+} from '../../consent/plugin-confirmation-subject'
 
 export type PluginWorktreeContext = {
   worktreeId: string
+  /** Host-qualified identity key, which `workspace.list` ids carry; absent without one. */
+  identityKey?: string
   branch: string
   displayName: string
 }
 
-/** Desktop-only sinks for frame methods; absent in headless serve. */
+/** Desktop-only sinks for frame methods and host confirmations; absent in headless serve. */
 export type PluginDesktopFrameServices = {
+  /** Asks the person in the calling frame's window, else Orca's focused or first window. */
+  confirm(
+    pluginId: string,
+    subject: PluginConfirmationSubject,
+    scope: PluginHostCallScope
+  ): Promise<PluginActionConfirmation>
   openExternal(
     pluginId: string,
     url: string,
@@ -59,6 +80,9 @@ export type PluginHostServices = {
   resolveActiveWorktreeContext(): Promise<PluginWorktreeContext | null>
   listWorktreeTerminals(worktreeId: string): Promise<PluginWorkspaceTerminal[]>
   listAgentStatuses(): readonly PluginAgentStatusRow[]
+  /** The title of the orchestration task each pane runs, by pane key (`tabId:leafId`); absent
+   *  where no runtime dispatches tasks. */
+  listAgentTaskTitles?(): ReadonlyMap<string, string>
   sendTerminalText(
     terminalId: string,
     action: { text: string; enter: boolean }
@@ -96,6 +120,9 @@ export type PluginHostServices = {
   runtimeRpc?: PluginRuntimeRpc | null
   /** Orca's window, for actions only it can take; absent in headless serve. */
   renderer?: PluginHostRendererActions | null
+  /** Asks the person before the plugin acts; absent where nobody can be asked (headless serve).
+   *  Re-checks the plugin's approval once the person answers. */
+  confirm?: PluginDesktopFrameServices['confirm'] | null
   settings: {
     getAll(pluginId: string): Record<string, PluginJsonValue>
     set(
@@ -107,6 +134,8 @@ export type PluginHostServices = {
 }
 
 const api = PLUGIN_HOST_API
+
+const worktreeShowAnswer = z.object({ worktree: z.object({ id: z.string() }) })
 const OK = { ok: true } as const
 
 const HANDLERS: Record<PluginHostMethodName, BoundPluginHostMethod> = {
@@ -131,25 +160,39 @@ const HANDLERS: Record<PluginHostMethodName, BoundPluginHostMethod> = {
     }
     return services.editorTypography.read()
   }),
-  'workspace.readContext': bind(api['workspace.readContext'], async (_params, { services }) => {
-    const context = await services.resolveActiveWorktreeContext()
-    // A remote host may be unreachable; its workspace context still exists, so omit only its terminals.
-    const terminals = context
-      ? await services.listWorktreeTerminals(context.worktreeId).catch(() => [])
-      : []
-    return projectPluginWorkspaceContext(context, terminals)
-  }),
-  'agents.list': bind(api['agents.list'], async (_params, { services }) => {
-    const context = await services.resolveActiveWorktreeContext()
-    if (!context) {
+  'workspace.readContext': bind(
+    api['workspace.readContext'],
+    async (_params, { services, surface }) => {
+      const context = await services.resolveActiveWorktreeContext()
+      // A remote host may be unreachable; its workspace context still exists, so omit only its terminals.
+      const terminals = context
+        ? await services.listWorktreeTerminals(context.worktreeId).catch(() => [])
+        : []
+      const projected = projectPluginWorkspaceContext(context, terminals)
+      return surface === 'worker' ? projected : pluginFrameWorkspaceContext(projected)
+    }
+  ),
+  'agents.list': bind(api['agents.list'], async (params, { services, scope }) => {
+    const worktreeId = params?.workspaceId
+      ? worktreeShowAnswer.parse(
+          await rpc(services)(
+            'worktree.show',
+            { worktree: workspaceSelector(params.workspaceId), matchFolderWorkspaces: true },
+            scope.signal ? { signal: scope.signal } : {}
+          )
+        ).worktree.id
+      : (await services.resolveActiveWorktreeContext())?.worktreeId
+    if (!worktreeId) {
       return { agents: [] }
     }
-    const terminals = await services.listWorktreeTerminals(context.worktreeId).catch(() => [])
+    const terminals = await services.listWorktreeTerminals(worktreeId).catch(() => [])
     return {
       agents: projectPluginWorkspaceAgents(
-        context.worktreeId,
+        worktreeId,
         terminals,
-        services.listAgentStatuses()
+        services.listAgentStatuses(),
+        // Only read when the workspace has agents: it reads the orchestration database.
+        () => services.listAgentTaskTitles?.() ?? new Map()
       )
     }
   }),
@@ -230,7 +273,12 @@ const HANDLERS: Record<PluginHostMethodName, BoundPluginHostMethod> = {
   }),
   ...PLUGIN_PANEL_BRIDGE_HANDLERS,
   ...PLUGIN_STATUS_BAR_HANDLERS,
-  ...PLUGIN_WORKSPACE_ACTION_HANDLERS
+  ...PLUGIN_WORKSPACE_ACTION_HANDLERS,
+  ...PLUGIN_PROJECT_VISIBILITY_HANDLERS,
+  ...PLUGIN_TERMINAL_ACTION_HANDLERS,
+  ...PLUGIN_WORKSPACE_CREATE_HANDLERS,
+  ...PLUGIN_AUTOMATION_HANDLERS,
+  ...PLUGIN_AGENT_HISTORY_HANDLERS
 }
 
 function requireDesktop(services: PluginHostServices): PluginDesktopFrameServices {

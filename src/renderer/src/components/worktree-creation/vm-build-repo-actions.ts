@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { normalizeGitRemoteUrl } from '../../../../shared/git/remotes/git-remote-identity'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 
 /** Where "Contact support" goes: a new issue on Orca's repository. */
 export const ORCA_SUPPORT_URL = 'https://github.com/stablyai/orca/issues/new'

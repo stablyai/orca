@@ -6,7 +6,7 @@ import { VmBuildSheet } from './VmBuildSheet'
 import { formatElapsedTime } from './worktree-creation-clock'
 import type { VmBuildStepTimings } from './vm-build-timing'
 import { useAppStore } from '@/store'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { recordBillingStatus } from '../billing/billing-summary-store'
 import { sampleTeam } from '../billing/plan-billing-fixtures'
 

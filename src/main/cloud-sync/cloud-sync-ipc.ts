@@ -2,13 +2,13 @@
 // never competes with the window's reads), lifecycle signals, and the window's IPC.
 import { mkdir } from 'node:fs/promises'
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
-import { onEphemeralVmRuntimesChanged } from '../../shared/ephemeral-vm-runtime-store-events'
-import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'
+import { onEphemeralVmRuntimesChanged } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store-events'
+import { listEphemeralVmRuntimes } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
 import { ORCA_CLOUD_SYNC_CHANNELS as CH } from '../../shared/cloud-sync/cloud-sync-contract'
 import {
   callRuntimeEnvironment,
   subscribeRuntimeEnvironment
-} from '../ipc/runtime-environments/runtime-environment-transport-routing'
+} from '../ipc/runtime-environments/requests/runtime-environment-transport-routing'
 import { isCloudWorkspaceArchivedOnControlPlane } from '../hosted-sandbox/hosted-workspace-runtime'
 import { subscribeSystemPowerLifecycle } from '../power/system-power-lifecycle'
 import type { SyncCall } from './cloud-sync-remote'

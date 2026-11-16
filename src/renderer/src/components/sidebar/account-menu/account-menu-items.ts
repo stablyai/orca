@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import type { ComponentType } from 'react'
-import type { OrcaProfileAuthStatus } from '../../../../../shared/orca-profiles'
+import type { OrcaProfileAuthStatus } from '../../../../../shared/orca-profiles/orca-profiles'
 import { canManageActiveTeam } from '@/lib/orca-cloud/orca-cloud-team-role'
 
 export type AccountMenuItem = {

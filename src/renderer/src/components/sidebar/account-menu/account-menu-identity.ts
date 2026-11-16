@@ -1,4 +1,4 @@
-import type { OrcaProfileAuthStatus } from '../../../../../shared/orca-profiles'
+import type { OrcaProfileAuthStatus } from '../../../../../shared/orca-profiles/orca-profiles'
 
 export type AccountMenuIdentity =
   | { signedIn: false; needsReconnect: boolean }

@@ -1,7 +1,7 @@
 import { Archive, Moon, Pin, PinOff } from 'lucide-react-native'
 import { useState } from 'react'
 import { View } from 'react-native'
-import { ConfirmModal } from '../components/ConfirmModal'
+import { ConfirmModal } from '../components/sheets/ConfirmModal'
 import { ListRow } from '../components/list/ListGroup'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors } from '../theme/mobile-theme'

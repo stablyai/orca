@@ -1,5 +1,5 @@
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 
 /** Same repo/worktree ids can exist on several hosts; bare metadata cannot choose between them. */

@@ -14,7 +14,7 @@ import type {
   HostedArchiveHookResult,
   HostedArchiveHookRun
 } from '../../../../src/shared/hosted-sandbox/hosted-archive-hook-wire'
-import { parseOrcaYaml } from '../../../../src/shared/orca-yaml'
+import { parseOrcaYaml } from '../../../../src/shared/workspace-setup/orca-yaml'
 import { PROJECT_ROOT } from './api/vm-agent'
 import { runnerScript } from './project-setup'
 import { ProviderError, type SandboxProviderApi } from './sandbox-provider'

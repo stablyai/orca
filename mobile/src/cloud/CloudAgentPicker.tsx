@@ -4,7 +4,7 @@ import {
   ORCA_CLOUD_IMAGE_AGENTS,
   type OrcaCloudImageAgent
 } from '../../../src/shared/hosted-sandbox/orca-cloud-image-agents'
-import { MobileAgentIcon } from '../components/MobileAgentIcon'
+import { MobileAgentIcon } from '../components/icons/MobileAgentIcon'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, radii, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'

@@ -3,8 +3,8 @@ import { AlertTriangle, CheckCircle2, Loader2, RefreshCw } from 'lucide-react'
 import type {
   BundledSkillOutcome,
   BundledSkillPlan
-} from '../../../../../shared/bundled-skill-plan'
-import { summarizeBundledSkillPlan } from '../../../../../shared/bundled-skill-summary'
+} from '../../../../../shared/skills/bundled/bundled-skill-plan'
+import { summarizeBundledSkillPlan } from '../../../../../shared/skills/bundled/bundled-skill-summary'
 import { useSkillFreshness } from '@/hooks/skills/freshness/useSkillFreshness'
 import { useActiveProjectSkillRuntime } from '@/hooks/skills/runtime/useActiveProjectSkillRuntime'
 import { bundledSkillTargetKey } from '@/lib/skills/runtime/bundled-skill-target'

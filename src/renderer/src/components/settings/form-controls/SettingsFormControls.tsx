@@ -18,6 +18,7 @@ type SettingsRowProps = {
   className?: string
   labelId?: string
   alignTop?: boolean
+  id?: string
 }
 
 export function SettingsRow({
@@ -26,10 +27,12 @@ export function SettingsRow({
   control,
   className,
   labelId,
-  alignTop
+  alignTop,
+  id
 }: SettingsRowProps): React.JSX.Element {
   return (
     <div
+      id={id}
       data-settings-row=""
       className={cn(
         'flex gap-4',
@@ -151,7 +154,7 @@ type ColorFieldProps = {
 
 type NumberFieldProps = {
   label: string
-  description: string
+  description?: string
   /** undefined renders the field empty — pair it with `placeholder` and `onClear` for an unset state. */
   value: number | undefined
   defaultValue?: number
@@ -267,15 +270,17 @@ export function NumberField({
       className={className}
       label={label}
       description={
-        <>
-          {description}
-          {defaultValue !== undefined ? (
-            <span className="ml-1 text-muted-foreground/70">
-              {t('auto.components.settings.SettingsFormControls.b661b034ec', '· Default:')}{' '}
-              {defaultValue}
-            </span>
-          ) : null}
-        </>
+        description || defaultValue !== undefined ? (
+          <>
+            {description}
+            {defaultValue !== undefined ? (
+              <span className="ml-1 text-muted-foreground/70">
+                {t('auto.components.settings.SettingsFormControls.b661b034ec', '· Default:')}{' '}
+                {defaultValue}
+              </span>
+            ) : null}
+          </>
+        ) : undefined
       }
       control={
         <div className="flex items-center gap-2">

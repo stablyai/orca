@@ -9,7 +9,7 @@ import {
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
-import type { OrcaProfileAuthStatus } from '../../../../../shared/orca-profiles'
+import type { OrcaProfileAuthStatus } from '../../../../../shared/orca-profiles/orca-profiles'
 import { openCloudConsole } from '@/lib/orca-cloud/open-cloud-console'
 import { switchActiveTeam, usePendingTeamSwitch } from './switch-active-team'
 

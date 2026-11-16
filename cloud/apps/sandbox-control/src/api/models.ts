@@ -4,13 +4,13 @@
 import {
   CLAUDE_SESSION_OPTION_CATALOG,
   CODEX_SESSION_OPTION_CATALOG
-} from '../../../../../src/shared/agent-session/options/agent-session-option-catalog-claude-codex'
+} from '../../../../../src/shared/agent-session/options/catalog-providers/agent-session-option-catalog-claude-codex'
 import {
   CURSOR_SESSION_OPTION_CATALOG,
   GEMINI_SESSION_OPTION_CATALOG
-} from '../../../../../src/shared/agent-session/options/agent-session-option-catalog-gemini-cursor'
-import { OPENCODE_LAUNCH_OPTION_CATALOG } from '../../../../../src/shared/agent-session/options/agent-session-option-catalog-opencode'
-import type { AgentSessionOptionCatalog, CatalogModel } from '../../../../../src/shared/agent-session/options/agent-session-option-catalog-types'
+} from '../../../../../src/shared/agent-session/options/catalog-providers/agent-session-option-catalog-gemini-cursor'
+import { OPENCODE_LAUNCH_OPTION_CATALOG } from '../../../../../src/shared/agent-session/options/catalog-providers/agent-session-option-catalog-opencode'
+import type { AgentSessionOptionCatalog, CatalogModel } from '../../../../../src/shared/agent-session/options/catalog-providers/agent-session-option-catalog-types'
 import { AGENTS, type AgentId } from './vm-agent'
 
 const LABELS: Record<AgentId, string> = {

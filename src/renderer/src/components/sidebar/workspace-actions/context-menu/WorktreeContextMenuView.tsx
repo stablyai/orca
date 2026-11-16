@@ -15,6 +15,7 @@ import {
   CloudCopyWorkspaceLinkItem,
   CloudWorkspaceMenuItems
 } from '@/components/orca-cloud/CloudWorkspaceMenuItems'
+import { prefetchCloudWorkspaceRecord } from '@/components/orca-cloud/use-cloud-workspace-record'
 import { useIsCloudHostRow, usePrimeCloudRowBindings } from '@/lib/orca-cloud/cloud-host-rows'
 import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host'
 import { WorktreeOpenInAndSshSubMenus } from '../cloud-ssh/WorktreeOpenInAndSshSubMenus'
@@ -61,6 +62,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     handleSleepSubtreeWithVm,
     handleTogglePin,
     handleToggleRead,
+    showsUnread,
     hasAnyContextLineage,
     isDeleting,
     isMultiContext,
@@ -104,6 +106,17 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
       ref={scopeRef}
       className="relative"
       {...{ [WORKTREE_CONTEXT_MENU_SCOPE_ATTR]: 'worktree' }}
+      // The cloud menu's Share and link rows need the team's record: fetch it while the pointer is
+      // on the row, so it's there when the menu opens (cached; a fresh one isn't fetched again).
+      onPointerEnter={
+        isCloud
+          ? () =>
+              void prefetchCloudWorkspaceRecord(
+                worktree.id,
+                getWorktreeExecutionHostId(worktree, repo ?? undefined)
+              )
+          : undefined
+      }
       onContextMenuCapture={(event) => {
         if (!isEventTargetInsideCurrentTarget(event.currentTarget, event.target)) {
           return
@@ -183,13 +196,14 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
             <CloudWorkspaceMenuItems
               worktreeId={worktree.id}
               hostId={getWorktreeExecutionHostId(worktree, repo ?? undefined)}
+              // Next to Restart / Archive, not after the cloud group.
+              moveItem={<WorktreeCloudTransferMenuItem worktreeId={worktree.id} />}
             />
           )}
-          {!isMultiContext && <WorktreeCloudTransferMenuItem worktreeId={worktree.id} />}
           {!isMultiContext && (
             <DropdownMenuItem onSelect={handleToggleRead} disabled={isDeleting}>
-              {worktree.isUnread ? <BellOff className="size-3.5" /> : <Bell className="size-3.5" />}
-              {worktree.isUnread
+              {showsUnread ? <BellOff className="size-3.5" /> : <Bell className="size-3.5" />}
+              {showsUnread
                 ? t('auto.components.sidebar.WorktreeContextMenu.8dacff1fe0', 'Mark Read')
                 : t('auto.components.sidebar.WorktreeContextMenu.f50603c6b2', 'Mark Unread')}
             </DropdownMenuItem>

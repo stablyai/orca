@@ -9,7 +9,7 @@ import {
   listEnvironments,
   markEnvironmentUsed,
   removeEnvironment
-} from './runtime-environment-store'
+} from './runtime-environment-store-operations'
 import { getEnvironmentStorePath } from './runtime-environment-store-records'
 import {
   getRuntimeEnvironmentSidecarPath,
@@ -18,7 +18,7 @@ import {
 import {
   addManagedOrcadEnvironment,
   removeManagedOrcadEnvironment
-} from './runtime-environment-managed-orcad-store'
+} from './runtime-environment-managed-orcad-operations'
 import { readPersistedEnvironmentStore } from './runtime-environment-store-file'
 
 const pairing = {

@@ -64,11 +64,11 @@ export function showOrcaCloudRestartWarningToast(
   toast.warning(
     translate(
       'auto.lib.orcaCloudSession.sandboxRestartsInMinutes',
-      'Sandbox for {{name}} restarts in {{count}} minutes',
+      '{{name}} restarts in {{count}} minutes',
       {
         name: workspaceLabel(workspaceName),
         count: minutesLeft,
-        defaultValue_one: 'Sandbox for {{name}} restarts in {{count}} minute'
+        defaultValue_one: '{{name}} restarts in {{count}} minute'
       }
     ),
     {
@@ -78,7 +78,7 @@ export function showOrcaCloudRestartWarningToast(
       description: toastBody(
         translate(
           'auto.lib.orcaCloudSession.sandboxRestartSoonDetail',
-          'Cloud sandboxes restart after 24 hours. Files are kept and Orca resumes your agents after the restart.'
+          'Cloud workspaces restart after 24 hours. Your files are kept and agents resume.'
         ),
         buttons
       )
@@ -119,11 +119,9 @@ function showOrcaCloudRestartFailedToast(
   const id = restartToastId(workspaceId)
   const name = workspaceLabel(workspaceName)
   toast.error(
-    translate(
-      'auto.lib.orcaCloudSession.sandboxRestartFailed',
-      "Couldn't restart the sandbox for {{name}}",
-      { name }
-    ),
+    translate('auto.lib.orcaCloudSession.sandboxRestartFailed', 'Couldn’t restart {{name}}', {
+      name
+    }),
     {
       id,
       duration: RESULT_DURATION_MS,
@@ -131,7 +129,7 @@ function showOrcaCloudRestartFailedToast(
         status === 'not-running'
           ? translate(
               'auto.lib.orcaCloudSession.restartNotRunning',
-              "The sandbox isn't running. Open the workspace to wake it."
+              'The workspace isn’t running. Open it to wake it.'
             )
           : translate(
               'auto.lib.orcaCloudSession.restartFailedDetail',
@@ -143,7 +141,7 @@ function showOrcaCloudRestartFailedToast(
 
 function showOrcaCloudRestartedToast(workspaceId: string, workspaceName: string | null): void {
   toast.success(
-    translate('auto.lib.orcaCloudSession.sandboxRestarted', 'Sandbox for {{name}} restarted', {
+    translate('auto.lib.orcaCloudSession.sandboxRestarted', '{{name}} restarted', {
       name: workspaceLabel(workspaceName)
     }),
     {
@@ -191,13 +189,9 @@ export function showOrcaCloudRestartingToast(
   workspaceName: string | null
 ): void {
   toast.loading(
-    translate(
-      'auto.lib.orcaCloudSession.sandboxRestarting',
-      'Restarting the sandbox for {{name}}…',
-      {
-        name: workspaceLabel(workspaceName)
-      }
-    ),
+    translate('auto.lib.orcaCloudSession.sandboxRestarting', 'Restarting {{name}}…', {
+      name: workspaceLabel(workspaceName)
+    }),
     {
       id: restartToastId(workspaceId),
       duration: Number.POSITIVE_INFINITY,
@@ -219,7 +213,7 @@ export function showOrcaCloudCleanupStartedToast(creationId: string): void {
     duration: Number.POSITIVE_INFINITY,
     description: translate(
       'auto.lib.orcaCloudSession.deletingSandboxDetail',
-      'Creating the workspace was canceled, so its sandbox is deleted and stops using sandbox hours.'
+      'Creating the workspace was canceled, so nothing is left running.'
     )
   })
 }
@@ -244,7 +238,7 @@ export function showOrcaCloudCleanupFailedToast(creationId: string, tryAgain: ()
       description: toastBody(
         translate(
           'auto.lib.orcaCloudSession.sandboxDeleteFailedDetail',
-          'It may still be running and using sandbox hours.'
+          'It may still be running and adding to your usage.'
         ),
         [
           {

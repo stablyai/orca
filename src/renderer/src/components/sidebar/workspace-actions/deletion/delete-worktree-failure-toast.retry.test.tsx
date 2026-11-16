@@ -7,7 +7,7 @@ import {
   CLOUD_DELETE_NOT_SENT_IN_USE,
   CLOUD_DELETE_NOT_SENT_NO_DESTROY,
   CLOUD_DELETE_NOT_SENT_UNCHECKED
-} from '../../../../../../shared/recipe-host-removal'
+} from '../../../../../../shared/remote-runtime/ephemeral-vm-recipes/recipe-host-removal'
 
 const shown = vi.hoisted((): { title: string; description: React.ReactNode; duration: number } => ({
   title: '',

@@ -1,9 +1,18 @@
 import type { ExecutionHostId } from '../execution-host'
 import type { SleepingAgentSessionRecord } from '../agent-session/lifecycle/agent-session-resume'
-import type { WorkspaceKey } from '../workspace-scope'
-import type { Tab, TabGroup, TabGroupLayoutNode, WorkspaceVisibleTabType } from '../tab-types'
+import type { WorkspaceKey } from '../workspace/identity/workspace-scope'
+import type {
+  Tab,
+  TabGroup,
+  TabGroupLayoutNode,
+  WorkspaceVisibleTabType
+} from '../workspace-layout/tab-groups/tab-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../workspace-layout/terminal-tab-types'
-import type { BrowserHistoryEntry, BrowserPage, BrowserWorkspace } from '../browser-workspace-types'
+import type {
+  BrowserHistoryEntry,
+  BrowserPage,
+  BrowserWorkspace
+} from '../browser/workspaces/browser-workspace-types'
 import type { BrowserPageAnnotation } from '../browser/element-grab/browser-grab-types'
 import type { WorkspaceDocHistoryEntry } from './workspace-doc-history'
 import type { ClientHostedBrowserCloseIntent } from './client-hosted-browser-close-intent'

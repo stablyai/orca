@@ -15,10 +15,10 @@ import {
   useRuntimePortForwardState,
   wakeRuntimePortForwardHost
 } from '@/lib/runtime-port-forwards/runtime-port-forwards-store'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { RuntimePortForward } from '../../../../shared/runtime-port-forwards'
-import type { WorkspacePort } from '../../../../shared/workspace-ports'
-import type { PortRowForwarding } from './local-port-section'
+import type { WorkspacePort } from '../../../../shared/workspace/ports/workspace-ports'
+import type { PortRowForwarding } from './ports/local-port-section'
 import {
   RuntimePortForwardStatus,
   type RuntimePortForwardRowState

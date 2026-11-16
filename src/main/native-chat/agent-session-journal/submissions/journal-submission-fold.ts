@@ -5,7 +5,7 @@ import {
   type AgentJournalSubmission
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { readAgentSessionExecutionOptions } from '../../../../shared/agent-session/options/agent-session-execution-options'
+import { readAgentSessionExecutionOptions } from '../../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import { journalRenderItem } from '../projection/journal-render-item'
 import { statedOrDerivedTurnScope, upsertJournalItem } from '../projection/journal-item-fold'
 import type { JournalReducerState } from '../projection/journal-reducer'
@@ -22,8 +22,27 @@ export function applyJournalSubmission(
   state: JournalReducerState,
   row: Extract<JournalRow, { kind: 'submission' }>
 ): void {
+  state.submissions.set(row.clientMessageId, journalSubmissionFromRow(row))
+  const itemId = agentJournalSubmissionKey(row.clientMessageId)
+  // Delayed handovers belong to no turn until dispatch names one.
+  const turnScope = row.handoverRecorded
+    ? AGENT_JOURNAL_THREAD_SCOPE
+    : statedOrDerivedTurnScope(state, row)
+  upsertJournalItem(
+    state,
+    itemId,
+    0,
+    journalRenderItem(itemId, 0, row.body, row, turnScope),
+    // User messages retain admission provenance, not provider execution ownership.
+    { fence: row.fence }
+  )
+}
+
+export function journalSubmissionFromRow(
+  row: Extract<JournalRow, { kind: 'submission' }>
+): AgentJournalSubmission {
   const options = readAgentSessionExecutionOptions(row.options)
-  state.submissions.set(row.clientMessageId, {
+  return {
     clientMessageId: row.clientMessageId,
     fence: row.fence,
     payloadFingerprint: row.payloadFingerprint,
@@ -41,20 +60,7 @@ export function applyJournalSubmission(
     // Preserve source presence: unknown/unreadable kinds must not become legacy user sends.
     ...(row.source !== undefined ? { source: { kind: storedSourceKind(row.source) } } : {}),
     ...(options ? { options } : {})
-  })
-  const itemId = agentJournalSubmissionKey(row.clientMessageId)
-  // Delayed handovers belong to no turn until dispatch names one.
-  const turnScope = row.handoverRecorded
-    ? AGENT_JOURNAL_THREAD_SCOPE
-    : statedOrDerivedTurnScope(state, row)
-  upsertJournalItem(
-    state,
-    itemId,
-    0,
-    journalRenderItem(itemId, 0, row.body, row, turnScope),
-    // User messages retain admission provenance, not provider execution ownership.
-    { fence: row.fence }
-  )
+  }
 }
 
 /** Place at handover, after intervening work; scope legacy rows from the handover position. */

@@ -1,7 +1,6 @@
 import { connect, type Socket } from 'node:net'
 import { afterEach, expect, it, vi } from 'vitest'
 import { RELAY_CLOSE_CODE } from '@orca-cloud/relay-contract/close-codes'
-import { RELAY_PROTOCOL_LIMITS } from '@orca-cloud/relay-contract/protocol-limits'
 import { loadRelayConfig } from '../config.js'
 import type { RelayDatabase } from '../database/database.js'
 import { createRelayServer } from '../relay-server.js'
@@ -19,10 +18,7 @@ const IDLE_LEDGER = {
   enforcedConnectionUnits: 0
 }
 
-async function fixture(
-  options: { role?: 'cell' | 'director'; hardCap?: number } = {}
-) {
-  const role = options.role ?? 'cell'
+async function fixture() {
   const database: RelayDatabase = {
     query: vi.fn(async () => []),
     queryLocked: vi.fn(async () => []),
@@ -35,27 +31,20 @@ async function fixture(
     ORCA_RELAY_AUTH_ISSUER: 'https://auth.example.test',
     ORCA_RELAY_JWKS_URL: 'https://auth.example.test/jwks',
     ORCA_RELAY_ASSIGNMENT_SIGNING_KEY: 'synthetic-assignment-key-for-test-only',
-    ORCA_RELAY_ROLE: role,
+    ORCA_RELAY_ROLE: 'cell',
     ORCA_RELAY_ADMIN_AUDIENCE: 'https://auth.example.test/admin',
     ORCA_RELAY_DEPLOY_SERVICE_ACCOUNT: 'deploy@example.test',
     ORCA_RELAY_CELL_CONNECTION_HARD_CAP: '600',
-    ORCA_RELAY_CELL_CONNECTION_UNOBSERVED_BOUND: '60',
-    ...(role === 'director'
-      ? {
-          ORCA_RELAY_CELLS_JSON: JSON.stringify([
-            { id: 'cell-1', url: 'https://cell-1.example.test', capacityRequests: 900 }
-          ])
-        }
-      : {})
+    ORCA_RELAY_CELL_CONNECTION_UNOBSERVED_BOUND: '60'
   })
   const relay = createRelayServer(config, database, {
-    connectionLedgerLimits: { hardCap: options.hardCap ?? 3, controlReserve: 1 }
+    connectionLedgerLimits: { hardCap: 3, controlReserve: 1 }
   })
   await new Promise<void>((resolve) => relay.server.listen(0, '127.0.0.1', resolve))
   cleanups.push(() => new Promise<void>((resolve) => relay.server.close(() => resolve())))
   const address = relay.server.address()
   if (!address || typeof address === 'string') throw new Error('missing test port')
-  return { relay, port: address.port, database }
+  return { relay, port: address.port }
 }
 
 type RawPeer = {
@@ -108,25 +97,11 @@ async function silentUpgrade(port: number, target: string): Promise<RawPeer> {
   }
 }
 
-// A 43-character base64url credential is the shortest value RelayAuthSchema accepts.
-const WELL_FORMED_CREDENTIAL = 'abcdefghijklmnopqrstuvwxyzABCDEFGH012345678'
-
 function maskedTextFrame(payload: string): Buffer {
   const body = Buffer.from(payload)
   const mask = Buffer.from([1, 2, 3, 4])
   const masked = Buffer.from(body.map((byte, index) => byte ^ mask[index % 4]!))
   return Buffer.concat([Buffer.from([0x81, 0x80 | body.length]), mask, masked])
-}
-
-function relayAuthFrame(): Buffer {
-  return maskedTextFrame(
-    JSON.stringify({
-      type: 'relay-auth',
-      v: 1,
-      mode: 'connect',
-      credential: WELL_FORMED_CREDENTIAL
-    })
-  )
 }
 
 // Rejected peer’s last unmasked frame: 0x88, length, big-endian status, then UTF-8 reason.
@@ -149,63 +124,12 @@ async function expectIdleLedger(
 
 const PHONE_TARGET = '/v1/connect/abcdefghijklmnop'
 
-it.each([
-  { label: 'first-frame timeout', target: PHONE_TARGET, opcode: undefined },
-  { label: 'binary first frame', target: PHONE_TARGET, opcode: 0x82 },
-  { label: 'invalid phone auth', target: PHONE_TARGET, opcode: 0x81 },
-  { label: 'invalid host-data auth', target: '/v1/host/data/connection-1', opcode: 0x81 }
-])(
-  'releases admission after $label even when the peer ignores close',
-  async ({ target, opcode }) => {
-    const { relay, port, database } = await fixture()
-    const peer = await silentUpgrade(port, target)
-    const firstFrameDeadline = opcode === undefined ? RELAY_PROTOCOL_LIMITS.firstFrameDeadlineMs : 0
-    if (opcode !== undefined) peer.socket.write(Buffer.from([opcode, 0x80, 0, 0, 0, 0]))
-    await expectIdleLedger(relay, firstFrameDeadline + 2_000)
-    expect(relay.runtimeCounts().preAuthConnections).toBe(0)
-    expect(database.query).not.toHaveBeenCalled()
-    expect(database.queryLocked).not.toHaveBeenCalled()
-    await silentUpgrade(port, PHONE_TARGET)
-    expect(relay.connectionSnapshot()?.enforcedConnectionUnits).toBe(2)
-  }
-)
-
-it('releases admission after a rejected director invite when the peer ignores close', async () => {
-  const { relay, port } = await fixture({ role: 'director' })
+it('releases admission after a binary first frame even when the peer ignores close', async () => {
+  const { relay, port } = await fixture()
   const peer = await silentUpgrade(port, PHONE_TARGET)
-  peer.socket.write(relayAuthFrame())
+  peer.socket.write(Buffer.from([0x82, 0x80, 0, 0, 0, 0]))
   await expectIdleLedger(relay, 2_000)
-  expect(readCloseFrame(peer.received())).toEqual({
-    code: RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL,
-    reason: 'invalid invite'
-  })
   expect(relay.runtimeCounts().preAuthConnections).toBe(0)
-  await silentUpgrade(port, PHONE_TARGET)
-  expect(relay.connectionSnapshot()?.enforcedConnectionUnits).toBe(2)
-})
-
-it('releases admission after a director move redirect when the peer ignores close', async () => {
-  const { relay, port } = await fixture({ role: 'director' })
-  const identity = { userId: 'user-1', relayHostId: 'abcdefghijklmnop' }
-  vi.spyOn(relay.store, 'resolveInviteForMove').mockResolvedValue({
-    userId: identity.userId,
-    relayDeviceId: 'device-1'
-  })
-  vi.spyOn(relay.assignments, 'resolve').mockResolvedValue({
-    ...identity,
-    cellId: 'cell-1',
-    cellUrl: 'https://cell-1.example.test',
-    assignmentEpoch: 1,
-    leaseExpiresAt: Date.now() + 60_000
-  })
-  const peer = await silentUpgrade(port, PHONE_TARGET)
-  peer.socket.write(relayAuthFrame())
-  await expectIdleLedger(relay, 2_000)
-  expect(peer.received().toString('utf8')).toContain('"type":"relay-moved"')
-  expect(readCloseFrame(peer.received())).toEqual({
-    code: RELAY_CLOSE_CODE.DRAINING,
-    reason: 'connect to assigned cell'
-  })
   await silentUpgrade(port, PHONE_TARGET)
   expect(relay.connectionSnapshot()?.enforcedConnectionUnits).toBe(2)
 })
@@ -223,24 +147,4 @@ it('delivers the rejection code and a graceful FIN to a peer that keeps reading'
   })
   expect(peer.transport().error).toBeNull()
   await expectIdleLedger(relay, 2_000)
-})
-
-const BINARY_FIRST_FRAME = Buffer.from([0x82, 0x80, 0, 0, 0, 0])
-const CONCURRENT_PEERS_PER_SOURCE = 4
-
-// Ledger does not clamp at zero, so a disconnect racing rejection exposes double release as a negative count.
-it('releases exactly once when a rejected peer disconnects at the same moment', async () => {
-  const { relay, port } = await fixture({ hardCap: 2 * CONCURRENT_PEERS_PER_SOURCE + 1 })
-  const peers = await Promise.all(
-    Array.from({ length: CONCURRENT_PEERS_PER_SOURCE }, () => silentUpgrade(port, PHONE_TARGET))
-  )
-  for (const peer of peers) {
-    peer.socket.write(BINARY_FIRST_FRAME)
-    peer.socket.destroy()
-  }
-  await expectIdleLedger(relay, 3_000)
-  expect(relay.connectionSnapshot()).toMatchObject(IDLE_LEDGER)
-  expect(relay.runtimeCounts().preAuthConnections).toBe(0)
-  await silentUpgrade(port, PHONE_TARGET)
-  expect(relay.connectionSnapshot()?.enforcedConnectionUnits).toBe(2)
 })

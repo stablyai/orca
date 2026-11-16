@@ -206,7 +206,6 @@ export function AgentLaunchPickerMenu({
             >
               <DropdownMenuItem
                 variant="launch"
-                className="h-9"
                 disabled={disabled}
                 data-search-default={showSearchDefault || undefined}
                 onSelect={onSelectBlankTerminal}

@@ -6,8 +6,8 @@ import { subscribeRemoteRuntimeTransport } from '../../../shared/remote-runtime/
 import type { RemoteRuntimeTransportSubscription } from '../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
 import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { getPreferredPairedRuntimeConnection } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
-import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
-import { HOST_ACCOUNT_SIGN_IN_CALLBACK_RUNTIME_CAPABILITY } from '../../../shared/account-runtime-capabilities'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/remote-runtime/protocol/electron-remote-runtime-client-capabilities'
+import { HOST_ACCOUNT_SIGN_IN_CALLBACK_RUNTIME_CAPABILITY } from '../../../shared/remote-runtime/protocol/account-runtime-capabilities'
 import { BrowserNetworkTunnelEvent } from '../../../shared/browser/client-hosting/browser-client-host-protocol'
 import {
   AUTH_CALLBACK_FORWARD_MAX_BYTES as MAX_BYTES,
@@ -42,7 +42,7 @@ async function openHostTunnel(
 ): Promise<AuthCallbackTunnel> {
   await ensureOrcadManagedTunnel(userDataPath, request.environmentId)
   const connection = getPreferredPairedRuntimeConnection(
-    resolveEnvironment(userDataPath, request.environmentId)
+    await resolveEnvironment(userDataPath, request.environmentId)
   )
   const ready = Promise.withResolvers<BrowserNetworkTunnelClient>()
   let client: BrowserNetworkTunnelClient | null = null

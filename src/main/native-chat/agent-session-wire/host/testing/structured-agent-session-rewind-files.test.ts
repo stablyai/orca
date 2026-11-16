@@ -8,9 +8,13 @@ import { join } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalSubmissionKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import type { AgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import {
+  openTestAgentSessionDatabase,
+  openTestAgentSessionRecordStore
+} from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import type { AgentSessionDispatchOutcome } from '../../providers/structured-agent-session-adapter'
 import { createAgentSessionCheckpoints } from '../../checkpoints/agent-session-checkpoints'
@@ -24,15 +28,12 @@ import {
   hostTestMessage,
   hostTestOperationId,
   resetHostTestOperationIds
-} from './structured-agent-session-host-test-data'
-import {
-  closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
-} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+} from './structured-agent-session-host-test-data.test-fixture'
+import { closeTestJournalHostDatabases } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../structured-agent-session-logger'
-import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { claudeAndCodexDeclared } from '../../providers/testing/structured-agent-session-adapter-router-test-support'
-import { startsWhenPublished } from './structured-agent-session-instant-start.test-support'
+import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
+import { claudeAndCodexDeclared } from '../../providers/testing/structured-agent-session-adapter-router.test-fixture'
+import { startsWhenPublished } from './structured-agent-session-instant-start.test-fixture'
 
 const caller = { callerKey: 'desktop' }
 let directory: string
@@ -118,7 +119,7 @@ beforeEach(async () => {
     logger: createStructuredAgentSessionLogger(),
     store,
     adapter,
-    journalDatabase: openTestJournalHostDatabase(directory),
+    journalDatabase: await openTestAgentSessionDatabase(directory),
     claimKeyId: 'key',
     resolveWorkspacePath: async () => worktree,
     now: () => HOST_TEST_NOW,
@@ -153,7 +154,7 @@ async function send(text: string, edit: () => Promise<void>): Promise<string> {
   ).toMatchObject({ ok: true })
   await vi.waitFor(async () =>
     expect(
-      (await host.journalSnapshot(HOST_TEST_SESSION)).submissions.find(
+      (await readTestHostJournal(host, HOST_TEST_SESSION)).submissions.find(
         (entry) => entry.clientMessageId === clientOperationId
       )?.dispatchState
     ).toBe('accepted')

@@ -1,3 +1,4 @@
+import { translate } from '@/i18n/i18n'
 import {
   composePaletteEvidence,
   type PaletteComposedEvidence
@@ -17,6 +18,33 @@ export type PaletteSupportingKind =
   | 'task'
   | 'automation'
   | 'cloudWorkspace'
+
+export function getPaletteSupportingAccessibilityLabel(kind: PaletteSupportingKind): string {
+  switch (kind) {
+    case 'comment':
+      return translate('auto.lib.worktreePaletteEvidence.workspaceComment', 'Workspace comment')
+    case 'automation':
+      return translate(
+        'auto.lib.worktreePaletteEvidence.createdByAutomation',
+        'Created by automation'
+      )
+    case 'task':
+      return translate('auto.lib.worktreePaletteEvidence.linkedTask', 'Linked task')
+    case 'pr':
+      return translate('auto.lib.worktreePaletteEvidence.pullRequest', 'Pull request')
+    case 'mr':
+      return translate('auto.lib.worktreePaletteEvidence.mergeRequest', 'Merge request')
+    case 'issue':
+      return translate('auto.lib.worktreePaletteEvidence.linkedIssue', 'Linked issue')
+    case 'port':
+      return translate('auto.lib.worktreePaletteEvidence.listeningPort', 'Listening port')
+    case 'cloudWorkspace':
+      return translate(
+        'auto.lib.worktreePaletteEvidence.cloudWorkspaceNumber',
+        'Cloud workspace number'
+      )
+  }
+}
 
 export type WorktreePaletteReviewSource = {
   provider: HostedReviewInfo['provider']
@@ -38,7 +66,7 @@ export function buildWorktreeCommentEvidence(comment: string): PaletteComposedEv
   return composePaletteEvidence({
     id: 'comment',
     kind: 'comment',
-    accessibilityLabel: 'Workspace comment',
+    accessibilityLabel: getPaletteSupportingAccessibilityLabel('comment'),
     parts: [{ key: 'text', text: comment, profile: 'prose' }]
   })
 }
@@ -71,7 +99,7 @@ export function buildWorktreeAutomationEvidence(
   return composePaletteEvidence({
     id: `automation:${provenance.automationRunId || provenance.automationId}`,
     kind: 'automation',
-    accessibilityLabel: 'Created by automation',
+    accessibilityLabel: getPaletteSupportingAccessibilityLabel('automation'),
     parts: [
       { key: 'name', text: provenance.automationNameSnapshot, profile: 'structured-label' },
       {
@@ -124,7 +152,7 @@ export function buildWorktreeLinkedTaskEvidence(
   return composePaletteEvidence({
     id: `task:${identifier || title}`,
     kind: 'task',
-    accessibilityLabel: 'Linked task',
+    accessibilityLabel: getPaletteSupportingAccessibilityLabel('task'),
     parts: [
       {
         key: 'identifier',
@@ -145,10 +173,11 @@ export function buildWorktreeReviewEvidence(
   }
   const isMergeRequest = review.provider === 'gitlab'
   const sigil = isMergeRequest ? '!' : '#'
+  const kind = isMergeRequest ? 'mr' : 'pr'
   return composePaletteEvidence({
     id: `review:${review.provider}:${review.number}`,
-    kind: isMergeRequest ? 'mr' : 'pr',
-    accessibilityLabel: isMergeRequest ? 'Merge request' : 'Pull request',
+    kind,
+    accessibilityLabel: getPaletteSupportingAccessibilityLabel(kind),
     parts: [
       {
         key: 'number',
@@ -171,7 +200,7 @@ export function buildWorktreeIssueEvidence(args: {
   return composePaletteEvidence({
     id: `issue:${args.number}`,
     kind: 'issue',
-    accessibilityLabel: 'Linked issue',
+    accessibilityLabel: getPaletteSupportingAccessibilityLabel('issue'),
     parts: [
       {
         key: 'number',
@@ -194,7 +223,7 @@ export function buildWorktreeCloudNumberEvidence(
   return composePaletteEvidence({
     id: `cloud-number:${number}`,
     kind: 'cloudWorkspace',
-    accessibilityLabel: 'Cloud workspace number',
+    accessibilityLabel: getPaletteSupportingAccessibilityLabel('cloudWorkspace'),
     parts: [{ key: 'number', text: `W-${number}`, profile: 'structured-label' }]
   })
 }
@@ -205,7 +234,7 @@ export function buildWorktreePortEvidence(
   return composePaletteEvidence({
     id: `port:${port.port}`,
     kind: 'port',
-    accessibilityLabel: 'Listening port',
+    accessibilityLabel: getPaletteSupportingAccessibilityLabel('port'),
     parts: [
       {
         key: 'number',
@@ -235,7 +264,7 @@ export function buildWorktreeAttachmentEvidence(
   return composePaletteEvidence({
     id: `task:${identifier}`,
     kind: 'task',
-    accessibilityLabel: 'Linked task',
+    accessibilityLabel: getPaletteSupportingAccessibilityLabel('task'),
     parts: [
       { key: 'identifier', text: identifier, profile: 'identifier', identifier: { kind: 'key' } },
       { key: 'title', text: item.title ?? '', profile: 'prose' }

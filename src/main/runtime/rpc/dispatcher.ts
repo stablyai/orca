@@ -99,6 +99,7 @@ export class RpcDispatcher {
       options?.beforeInvoke?.()
       return successResponse(request.id, meta, await this.invokeUnary(admission, options))
     } catch (error) {
+      options?.onHandlerError?.(error)
       if (probeEmulator) {
         emulatorProbeError(`rpc ${request.method}`, error, {
           params: request.params
@@ -306,9 +307,9 @@ export class RpcDispatcher {
       context.orchestrationCaller
     )
     if (request.method.startsWith('orchestration.')) {
-      queueMicrotask(() => {
+      queueMicrotask(async () => {
         try {
-          runtime.refreshAgentSenderAssociations?.()
+          await runtime.refreshAgentSenderAssociations?.()
         } catch (error) {
           console.warn('[runtime] Sender identity publication failed', error)
         }

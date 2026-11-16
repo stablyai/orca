@@ -1,5 +1,5 @@
 import { ClaudeTaskInvocations } from '../background-tasks/claude-task-invocations'
-import { BoundedMap } from '../../../shared/bounded-map'
+import { BoundedMap } from '../../../shared/collections/bounded-map'
 import { ClaudeSubagentIds } from './claude-subagent-id-aliases'
 import type { ClaudeJournaledSubagents } from './claude-subagent-journaled-identities'
 import {

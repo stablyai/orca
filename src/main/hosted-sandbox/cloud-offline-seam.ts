@@ -2,7 +2,7 @@
 // window call observer, and the Sleep/archive hooks. No service state lives here.
 import { assessSecretProtection } from '../host/electron-secret-store'
 import { guardedSafeStorage } from '../host/safe-storage-availability'
-import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { OFFLINE_READ_METHODS, type OfflineCacheCodec } from './cloud-offline-cache-types'
 import type { CloudMessageQueue } from './cloud-message-queue'
 

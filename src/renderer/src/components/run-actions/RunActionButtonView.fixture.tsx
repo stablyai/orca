@@ -1,7 +1,7 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import type { RunActionRun } from '@/lib/run-actions/run-actions-store'
-import type { OrcaRunAction } from '../../../../shared/orca-yaml-hook-types'
-import type { WorkspacePort } from '../../../../shared/workspace-ports'
+import type { OrcaRunAction } from '../../../../shared/workspace-setup/orca-yaml-hook-types'
+import type { WorkspacePort } from '../../../../shared/workspace/ports/workspace-ports'
 import { RunActionButtonView, type RunActionButtonViewProps } from './RunActionButtonView'
 
 const noop = (): void => {}

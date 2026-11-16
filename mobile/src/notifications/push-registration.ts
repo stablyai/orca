@@ -13,7 +13,7 @@ import {
   saveNotificationDeliveryPreferences,
   type NotificationDeliveryPreferences
 } from './delivery-policy/notification-delivery-preferences'
-import { NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY as NOTIFICATIONS_REMOTE_PUSH_CAPABILITY } from '../../../src/shared/mobile-runtime-capabilities'
+import { NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY as NOTIFICATIONS_REMOTE_PUSH_CAPABILITY } from '../../../src/shared/remote-runtime/protocol/mobile-runtime-capabilities'
 import type { UnvalidatedRpcRequestPort } from '../transport/rpc/unvalidated-rpc-request-port'
 import { startRuntimeCapabilityProbe } from '../transport/connection/runtime-capability-probe'
 import {

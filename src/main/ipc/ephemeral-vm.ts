@@ -8,20 +8,20 @@ import type { Store } from '../persistence/loading-store/store'
 import {
   getEphemeralVmRecipeResultConnection,
   type EphemeralVmRecipeDoctorResult
-} from '../../shared/ephemeral-vm-recipes'
+} from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipes'
 import {
   getEphemeralVmRecipeResultWarnings,
-  redactEphemeralVmRecipeDiagnosticText,
   type EphemeralVmRecipeResultWarning
-} from '../../shared/ephemeral-vm-recipe-diagnostics'
-import { getProvisionedRootRecipeRepoUrl } from '../../shared/ephemeral-vm-recipe-repo-url'
+} from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-diagnostics'
+import { redactEphemeralVmRecipeDiagnosticText } from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-diagnostic-redaction'
+import { getProvisionedRootRecipeRepoUrl } from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-repo-url'
 // Import the Node-only doctor directly so browser consumers of the barrel do not bundle fs/path.
-import { doctorEphemeralVmRecipe } from '../../shared/ephemeral-vm-recipe-doctor'
-import { updateEphemeralVmRuntimeStatus } from '../../shared/ephemeral-vm-runtime-store'
+import { doctorEphemeralVmRecipe } from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-doctor'
+import { updateEphemeralVmRuntimeStatus } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
 import {
   requireEphemeralVmRecipeResult,
   type EphemeralVmProvisionedRuntimeRecord
-} from '../../shared/ephemeral-vm-runtimes'
+} from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import { addEnvironmentFromPairingCode } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import {
   redactRuntimeEnvironment,
@@ -53,12 +53,12 @@ import {
 import { missingRecipeFailure } from './orca-cloud-missing-recipe'
 import { refuseOrcaCloudWithoutGithub } from '../hosted-sandbox/hosted-sandbox-recipe'
 import { resolveProvisionedRootSource } from '../ephemeral-vm/provisioned-root-source'
-import { getRuntimeEnvironmentRegistryRoot } from './runtime-environments/runtime-environment-registry-root'
+import { getRuntimeEnvironmentRegistryRoot } from './runtime-environments/catalog/runtime-environment-registry-root'
 import {
   ephemeralVmFailure,
   pickEphemeralVmFailureCode,
   type EphemeralVmFailure
-} from '../../shared/ephemeral-vm-failure-copy'
+} from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-failure-copy'
 import { registerRecipeForwardedEnvHandler } from './ephemeral-vm-forwarded-env'
 import { activeProvisionControllers } from './provision-controllers'
 
@@ -263,9 +263,9 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
           }
         }
 
-        let environment: ReturnType<typeof addEnvironmentFromPairingCode>
+        let environment: Awaited<ReturnType<typeof addEnvironmentFromPairingCode>>
         try {
-          environment = addEnvironmentFromPairingCode(getRuntimeEnvironmentRegistryRoot(), {
+          environment = await addEnvironmentFromPairingCode(getRuntimeEnvironmentRegistryRoot(), {
             name: buildEphemeralEnvironmentName(repo.repo.displayName, result.runtime.id, recipe),
             pairingCode: connection.pairingCode,
             source: 'ephemeral-vm'

@@ -20,7 +20,7 @@ import type {
   SettingsNavSection,
   SettingsNavTarget
 } from '@/components/settings/navigation/settings-navigation-types'
-import type { OrcaProfileAuthStatus } from '../../../shared/orca-profiles'
+import type { OrcaProfileAuthStatus } from '../../../shared/orca-profiles/orca-profiles'
 import {
   BookOpenText,
   Boxes,
@@ -94,7 +94,7 @@ export function buildOrcaCloudSettingsSections(
       title: t('cloudSecrets.title', 'Cloud secrets'),
       description: t(
         'cloudSecrets.descriptionEdge',
-        'Orca swaps model API keys and agent sign-ins in at the network edge, so the sandbox never sees them. Other secrets reach cloud workspaces as environment variables that anything in the sandbox can read.'
+        'Model keys and agent sign-ins never enter the workspace. Other secrets become environment variables any code there can read.'
       ),
       icon: LockKeyhole,
       searchEntries: getOrcaCloudSecretsSearchEntries(),

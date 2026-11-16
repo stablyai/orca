@@ -3,7 +3,7 @@ import { OrcaRuntimeWithBrowserWorkspaceRouting } from '../../browser/client-pag
 import {
   floatingWorkspaceToWorktree,
   isFloatingWorkspaceSelector
-} from '../../../../shared/floating-workspace-worktree'
+} from '../../../../shared/workspace/identity/floating-workspace-worktree'
 import { resolveFloatingTerminalCwd } from '../../../ipc/floating-workspace-directory'
 import type { BrowserNetworkExecutionHost } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
 import {
@@ -20,7 +20,10 @@ import {
   resolveWorktreeHostRouting,
   resolveWorktreeLaunchHost
 } from '../../workspaces/catalog/worktree-launch-host-repo'
-import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import {
+  folderWorkspaceKey,
+  parseWorkspaceKey
+} from '../../../../shared/workspace/identity/workspace-scope'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import type { Worktree } from '../../../../shared/worktree/types'

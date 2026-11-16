@@ -1,13 +1,13 @@
 import type { AppState } from '../../../types'
 import type { EditorSlice } from '../types/editor-slice'
 import type { EditorOpenTargetOptions, OpenFile } from '../types/open-file'
-import type { DiffSource } from '../../../../../../shared/editor-tab-view-types'
+import type { DiffSource } from '../../../../../../shared/editor/views/editor-tab-view-types'
 import { toSshExecutionHostId } from '../../../../../../shared/execution-host'
-import { areLocalWindowsWslPathAliases } from '../../../../../../shared/cross-platform-path'
+import { areLocalWindowsWslPathAliases } from '../../../../../../shared/file-access/cross-platform-path'
 import { getConnectionIdForFileFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { isLocalWindowsDesktopClient } from '@/app-shell/chrome/desktop-window-chrome'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
 
 export function runtimeOwnerKey(runtimeEnvironmentId: string | null | undefined): string | null {
   return runtimeEnvironmentId?.trim() || null

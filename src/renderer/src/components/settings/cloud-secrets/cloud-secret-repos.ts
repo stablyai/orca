@@ -1,4 +1,4 @@
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { CloudSecretRepoChoice } from './CloudSecretsPane'
 
 /** `github.com/owner/name` for a repo whose remote is on GitHub; repo secrets are keyed by it. */

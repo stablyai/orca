@@ -7,14 +7,14 @@ import type { ZodError, ZodType } from 'zod'
 import type { TerminalStreamFrame } from '../../../shared/terminal/stream/terminal-stream-protocol'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { OrchestrationCompatibilityCallerAuthority } from '../orchestration/terminal-authority/orchestration-compatibility-authority'
-import type { StructuredAgentCliSourceEvidence } from '../../native-chat/structured-agent-cli-source'
+import type { StructuredAgentCliSourceEvidence } from '../../native-chat/conversation-adoption/structured-agent-cli-source'
 import type {
   DeviceCredentialInstalled,
   PairingGetEndpointsParams,
   PairingGetEndpointsResult,
   PairingProvisionRelayParams
 } from '../../../shared/remote-runtime/relay/mobile-relay-credential-contract'
-import type { RuntimeCapability } from '../../../shared/protocol-version'
+import type { RuntimeCapability } from '../../../shared/remote-runtime/protocol/protocol-version'
 import type {
   MobileRelayHostsListResult,
   MobileRelayHostWorktreesResult
@@ -22,11 +22,11 @@ import type {
 import type {
   DelegatedPhone,
   DelegatedMobileDeviceSyncResult
-} from '../../../shared/delegated-mobile-device-contract'
+} from '../../../shared/remote-runtime/pairing/delegated-mobile-device-contract'
 import type { OrchestrationCompatibilityEvidence } from '../../../shared/orchestration/orchestration-compatibility-evidence'
 import type { OrchestrationEntryCaller } from '../orchestration/addressing/orchestration-caller-identity'
 import type { RpcCallerIdentity } from './callers/rpc-caller-identity'
-import type { OrcadPeerDesktopsResult } from '../../../shared/orcad-peer-desktops-contract'
+import type { OrcadPeerDesktopsResult } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-peer-desktops-contract'
 import type { RpcBinarySender } from './transports/rpc-binary-sender'
 import type { RpcMethodPermission } from './callers/rpc-method-permission'
 import type { OrcadFeatureRequirement } from './startup/orcad-readiness'
@@ -136,6 +136,8 @@ export type RpcContext = {
   pairedDeviceOriginId?: string
   // Host-assigned transport identity; absent means the caller could not be established.
   caller?: RpcCallerIdentity
+  // Set only by the in-process plugin host: the plugin a call acts for, kept as provenance.
+  plugin?: { key: string; name: string; assertActive?: () => void }
   // Only phones receive truncated payloads; undefined in-process callers remain unclipped.
   clientKind?: 'mobile' | 'runtime'
   // Session-tab streams re-project with .current; other readers use the request-time clientCapabilities.
@@ -175,7 +177,7 @@ export type RpcContext = {
   deviceSelf?: DeviceSelfRpcContext
   // Available only on a desktop relay for its configured servers.
   mobileRelayHosts?: {
-    list(): MobileRelayHostsListResult
+    list(): MobileRelayHostsListResult | Promise<MobileRelayHostsListResult>
     worktrees(hostId: string): Promise<MobileRelayHostWorktreesResult>
   }
   // Authenticated runtime devices see which other desktops share this server.

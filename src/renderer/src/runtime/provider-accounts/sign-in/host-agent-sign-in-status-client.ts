@@ -3,7 +3,7 @@ import type {
   HostAgentSignInEntry,
   HostAgentSignInReport
 } from '../../../../../shared/host-agent-sign-in-status'
-import { HOST_AGENT_SIGN_IN_STATUS_RUNTIME_CAPABILITY } from '../../../../../shared/account-runtime-capabilities'
+import { HOST_AGENT_SIGN_IN_STATUS_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/account-runtime-capabilities'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { runtimeEnvironmentSupportsCapability } from '../../rpc/compatibility/runtime-capability-proof'
 

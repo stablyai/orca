@@ -5,7 +5,7 @@ import {
   isRipgrepMissingCwdExit,
   ripgrepMissingCwdError
 } from '../ripgrep/ripgrep-process-availability'
-import { abortSignalReason } from '../abort-signal-reason'
+import { abortSignalReason } from '../concurrency/abort-signal-reason'
 import { markdownDocumentFromRelativePath, isMarkdownDocumentName } from './markdown-document-paths'
 import { joinSearchRoot } from '../file-search/text-search-paths'
 import {

@@ -2,8 +2,8 @@
 // returns what the primary button and ⌘↵ do.
 import { useCallback, useEffect, useMemo, type MutableRefObject } from 'react'
 import { useNeedsRepoSubmitGuard } from './use-needs-repo-submit-guard'
-import type { ComposerModalData } from '../composer-modal-data'
-import type { NewWorkspaceComposerCardProps } from '../new-workspace-composer-card-props'
+import type { ComposerModalData } from '../composer/composer-modal-data'
+import type { NewWorkspaceComposerCardProps } from '../composer/new-workspace-composer-card-props'
 import { useCloudStartComposer } from './use-cloud-start-composer'
 import { buildComposerSnapshot } from '../composer-cloud-auto-start'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'

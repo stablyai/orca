@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultPersistedState } from '../../../../../shared/constants'
 import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../../../../shared/project-group-types'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { ProjectGroup } from '../../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import { orcadMigrationCutoverFixture } from '../../../../managed-server/migration/cutover/testing/orcad-migration-cutover-fixture'
 import { subtractOrcadSourceCatalogState } from './orcad-source-catalog-subtraction'
 

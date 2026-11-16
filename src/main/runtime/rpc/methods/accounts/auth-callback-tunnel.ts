@@ -7,8 +7,8 @@ import {
   AUTH_CALLBACK_FORWARD_MAX_STREAMS as AUTH_CALLBACK_TUNNEL_MAX_STREAMS,
   AUTH_CALLBACK_FORWARD_TTL_MS as AUTH_CALLBACK_TUNNEL_TTL_MS
 } from '../../../../../shared/auth-callback-forward'
-import { AuthCallbackTunnelParams } from '../../../../../shared/rpc-contract/accounts-params'
-import { HOST_ACCOUNT_SIGN_IN_CALLBACK_RUNTIME_CAPABILITY } from '../../../../../shared/account-runtime-capabilities'
+import { AuthCallbackTunnelParams } from '../../../../../shared/rpc-contract/accounts/accounts-params'
+import { HOST_ACCOUNT_SIGN_IN_CALLBACK_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/account-runtime-capabilities'
 import { defineStreamingMethod, type RpcContext } from '../../core'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { HostAccountSignInFlows } from '../../../agent-session/environment/host-account-sign-in-flows'

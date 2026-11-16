@@ -2,7 +2,7 @@ import { parseExecutionHostId, type ExecutionHostId } from '../../../../src/shar
 import {
   routeRpcClientCalls,
   scopeRpcClientToExecutionHost
-} from '../../worktree/execution-host-scoped-rpc-client'
+} from '../../worktree/execution-hosts/execution-host-scoped-rpc-client'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 
 type RoutedRepo = { id: string; executionHostId?: ExecutionHostId | null }

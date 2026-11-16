@@ -5,7 +5,7 @@ const environments = new Map<string, { source?: string; endpoints: { endpoint: s
 let launchEnv: Record<string, string> = {}
 const launchCalls: unknown[][] = []
 
-vi.mock('../../shared/ephemeral-vm-runtime-store', () => ({
+vi.mock('../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store', () => ({
   listEphemeralVmRuntimes: () => runtimes
 }))
 vi.mock('../../shared/remote-runtime/host-store/runtime-environment-store', () => ({
@@ -47,29 +47,29 @@ beforeEach(() => {
 })
 
 describe('isOrcaCloudRuntimeEnvironment', () => {
-  it('is true for an Orca Cloud runtime and false for another VM recipe or a paired machine', () => {
+  it('is true for an Orca Cloud runtime and false for another VM recipe or a paired machine', async () => {
     runtimes.push({ runtimeEnvironmentId: 'env-cloud', recipe: { provider: 'orca-cloud' } })
     runtimes.push({ runtimeEnvironmentId: 'env-own-vm', recipe: { provider: 'my-recipes' } })
     environments.set('env-mac', {
       source: 'manual',
       endpoints: [{ endpoint: 'wss://192.168.1.4:6768' }]
     })
-    expect(isOrcaCloudRuntimeEnvironment('/u', 'env-cloud')).toBe(true)
-    expect(isOrcaCloudRuntimeEnvironment('/u', 'env-own-vm')).toBe(false)
-    expect(isOrcaCloudRuntimeEnvironment('/u', 'env-mac')).toBe(false)
+    expect(await isOrcaCloudRuntimeEnvironment('/u', 'env-cloud')).toBe(true)
+    expect(await isOrcaCloudRuntimeEnvironment('/u', 'env-own-vm')).toBe(false)
+    expect(await isOrcaCloudRuntimeEnvironment('/u', 'env-mac')).toBe(false)
   })
 
-  it('fails closed: a VM with no provider record, or a host on a Vercel Sandbox route, counts as Orca Cloud', () => {
+  it('fails closed: a VM with no provider record, or a host on a Vercel Sandbox route, counts as Orca Cloud', async () => {
     runtimes.push({ runtimeEnvironmentId: 'env-unknown-recipe' })
     environments.set('env-vm', { source: 'ephemeral-vm', endpoints: [{ endpoint: 'wss://x' }] })
     environments.set('env-paired-cloud', {
       source: 'manual',
       endpoints: [{ endpoint: 'wss://sb-abc123.vercel.run' }]
     })
-    expect(isOrcaCloudRuntimeEnvironment('/u', 'env-unknown-recipe')).toBe(true)
-    expect(isOrcaCloudRuntimeEnvironment('/u', 'env-vm')).toBe(true)
-    expect(isOrcaCloudRuntimeEnvironment('/u', 'env-paired-cloud')).toBe(true)
-    expect(isOrcaCloudRuntimeEnvironment('/u', 'env-missing')).toBe(false)
+    expect(await isOrcaCloudRuntimeEnvironment('/u', 'env-unknown-recipe')).toBe(true)
+    expect(await isOrcaCloudRuntimeEnvironment('/u', 'env-vm')).toBe(true)
+    expect(await isOrcaCloudRuntimeEnvironment('/u', 'env-paired-cloud')).toBe(true)
+    expect(await isOrcaCloudRuntimeEnvironment('/u', 'env-missing')).toBe(false)
   })
 })
 

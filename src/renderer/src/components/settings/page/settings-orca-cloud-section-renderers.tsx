@@ -13,8 +13,6 @@ import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { SettingsRenderContext } from './settings-render-context'
 
-const BARE_BODY = 'rounded-none border-0 bg-transparent p-0 shadow-none'
-
 /** Settings › Orca Cloud: the account-backed panes. Orca API keys and Routines follow them. */
 export function renderOrcaCloudSettingsSections(
   context: SettingsRenderContext,
@@ -31,15 +29,12 @@ export function renderOrcaCloudSettingsSections(
     navOnly?: boolean
     /** Replaces the nav's plain-text description on the page. */
     description?: React.ReactNode
-    /** The pane draws its own card. */
-    grouped?: boolean
   }[] = [
     // S0, moved here from Settings › Agent accounts (which keeps a link row to this page).
     {
       id: 'cloud-agent-sign-ins',
       pane: <OrcaCloudAccountsSection hideHeader />,
-      description: <OrcaCloudAccountsDescription />,
-      grouped: true
+      description: <OrcaCloudAccountsDescription />
     },
     // Listed in the nav for team owners and admins only; without the entry there is no page.
     { id: 'cloud-workspaces', pane: <OrcaCloudWorkspacesPane />, navOnly: true },
@@ -51,7 +46,7 @@ export function renderOrcaCloudSettingsSections(
   ]
   return (
     <>
-      {sections.map(({ id, pane, navOnly, description, grouped }) => {
+      {sections.map(({ id, pane, navOnly, description }) => {
         const meta = navigation.navSections.find((section) => section.id === id)
         if (navOnly && !meta) {
           return null
@@ -63,8 +58,6 @@ export function renderOrcaCloudSettingsSections(
             title={meta?.title ?? t('settings.breadcrumb.settings', 'Settings')}
             description={description ?? meta?.description ?? ''}
             searchEntries={navigation.getSectionSearchEntries(id)}
-            grouped={grouped}
-            bodyClassName={grouped ? undefined : BARE_BODY}
           >
             {view.isSectionMounted(id) ? pane : null}
           </SettingsSection>

@@ -1,8 +1,8 @@
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
-} from '../../../../shared/managed-account-types'
-import type { HostAccountSignInStatus } from '../../../../shared/host-account-sign-in-types'
+} from '../../../../shared/agent-accounts/managed-account-types'
+import type { HostAccountSignInStatus } from '../../../../shared/agent-accounts/host-account-sign-in-types'
 import { refreshHostAgentSignInReport } from '@/runtime/provider-accounts/sign-in/host-agent-sign-in-status-client'
 import {
   cancelHostAccountSignIn,

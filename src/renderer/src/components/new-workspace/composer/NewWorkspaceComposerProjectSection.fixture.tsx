@@ -1,0 +1,268 @@
+import type { OrcaCloudDropReason } from '@/hooks/useEphemeralVmRecipeOptions'
+import { useState } from 'react'
+import { defineFixture } from '../../../component-fixtures/component-fixture'
+import type { NewWorkspaceProjectOption } from '@/lib/workspace/creation/new-workspace-project-options'
+import {
+  getProjectHostSetupSelectionKey,
+  type ProjectHostSetupOption
+} from '@/lib/workspace/creation/project-host-setup-options'
+import { NewWorkspaceComposerProjectSection } from './NewWorkspaceComposerProjectSection'
+import type { EphemeralVmRecipeOption } from '../run-target/run-target-options'
+import type { OrcaCloudRunTargetAccess } from '../orca-cloud-run-target-access'
+import type { CloudStartView } from '../run-on/cloud-start-view'
+
+const projects: NewWorkspaceProjectOption[] = [
+  {
+    kind: 'project',
+    id: 'orca',
+    projectId: 'orca',
+    displayName: 'orca',
+    badgeColor: 'var(--muted-foreground)',
+    detail: 'stablyai/orca'
+  },
+  {
+    kind: 'project',
+    id: 'personal-orca',
+    projectId: 'personal-orca',
+    displayName: 'orca',
+    badgeColor: 'var(--muted-foreground)',
+    detail: 'personal/orca'
+  },
+  {
+    kind: 'project',
+    id: 'api',
+    projectId: 'api',
+    displayName: 'platform-api',
+    badgeColor: 'var(--muted-foreground)',
+    detail: 'stablyai/platform-api'
+  },
+  {
+    kind: 'project-group',
+    id: 'folder',
+    projectGroupId: 'folder',
+    displayName: 'Design workspace',
+    badgeColor: 'var(--muted-foreground)',
+    detail: '/Users/alice/Projects/design',
+    parentPath: '/Users/alice/Projects/design',
+    connectionId: null
+  }
+]
+const hosts: ProjectHostSetupOption[] = [
+  {
+    kind: 'ready',
+    id: 'local',
+    projectId: 'orca',
+    repoId: 'orca-local',
+    hostId: 'local',
+    label: 'MacBook Pro',
+    detail: 'Local',
+    path: '/Users/alice/Projects/orca'
+  },
+  {
+    kind: 'ready',
+    id: 'remote',
+    projectId: 'orca',
+    repoId: 'orca-remote',
+    hostId: 'ssh:devbox',
+    label: 'Dev server',
+    detail: 'SSH',
+    path: '/home/alice/projects/orca'
+  },
+  {
+    kind: 'needs-setup',
+    id: 'windows',
+    projectId: 'orca',
+    hostId: 'runtime:windows',
+    label: 'Windows workstation',
+    detail: 'Project location not set',
+    isAvailable: true,
+    attention: false,
+    canSetLocation: true
+  }
+]
+
+const orcaCloudRecipe: EphemeralVmRecipeOption = {
+  id: 'cloud',
+  name: 'Orca Cloud',
+  description: 'Hosted by Orca. Sleeps when idle and keeps your files.',
+  provider: 'orca-cloud',
+  create: 'orca-cloud create'
+}
+
+const handoffCloudStart = (githubHandoff: 'waiting' | 'timed-out'): CloudStartView => ({
+  onSelectOrcaCloud: () => {},
+  onUserPick: () => {},
+  cloudOnly: {
+    repos: [],
+    showMore: null,
+    retryRepos: null,
+    retryingRepos: false,
+    picked: null,
+    folderProject: false,
+    needsGitHubPick: false,
+    remoteServerProject: false,
+    githubStep: null,
+    pick: () => {},
+    clear: () => {},
+    moreAccess: () => {},
+    githubHandoff,
+    checkGitHubAgain: () => {},
+    start: async () => false
+  }
+})
+
+function ProjectAndHostPreview({
+  folderOnly = false,
+  orcaCloud,
+  githubHandoff,
+  cloudDropped
+}: {
+  folderOnly?: boolean
+  /** RUNON-STICKY: a picked Orca Cloud didn't carry over to this project. */
+  cloudDropped?: OrcaCloudDropReason
+  /** Back from GitHub's access page (REPO-ACCESS-REFRESH). */
+  githubHandoff?: 'waiting' | 'timed-out'
+  /** Offers Orca Cloud with this entitlement. */
+  orcaCloud?: OrcaCloudRunTargetAccess
+}): React.JSX.Element {
+  const [project, setProject] = useState(folderOnly ? 'folder' : 'orca')
+  const [host, setHost] = useState('local')
+  const [recipe, setRecipe] = useState<string | null>(githubHandoff ? 'cloud' : null)
+  return (
+    <div className="space-y-4 rounded-xl border border-border bg-background p-4">
+      <h1 className="text-base font-semibold">Create workspace</h1>
+      <NewWorkspaceComposerProjectSection
+        projectError={null}
+        selectedRepoConnectionId={null}
+        selectedRepoRequiresConnection={false}
+        selectedRepoConnectInProgress={false}
+        projectOptions={projects}
+        selectedProjectId={project}
+        onProjectChange={setProject}
+        projectDescriptionId="fixture-project-description"
+        onAddProject={() => {}}
+        onAddProjectEntryRequest={() => {}}
+        handleOpenRemoteHostDialog={() => {}}
+        focusNameInput={() => {}}
+        shouldShowRunTargetPicker={!folderOnly}
+        projectHostSetupOptions={hosts}
+        selectedProjectHostSetupId={host}
+        handleProjectHostSetupChange={(key) => {
+          const option = hosts.find(
+            (candidate) => getProjectHostSetupSelectionKey(candidate) === key
+          )
+          if (option) {
+            setHost(option.id)
+          }
+        }}
+        ephemeralVmRecipes={orcaCloud ? [orcaCloudRecipe] : []}
+        selectedEphemeralVmRecipeId={recipe}
+        onEphemeralVmRecipeChange={setRecipe}
+        {...(orcaCloud ? { orcaCloudAccess: orcaCloud } : {})}
+        {...(cloudDropped ? { orcaCloudDropped: cloudDropped } : {})}
+        {...(githubHandoff ? { cloudStart: handoffCloudStart(githubHandoff) } : {})}
+        handleAddSshHost={() => {}}
+        handleAddRemoteServer={() => {}}
+        handleConnectRunTargetHost={async () => {}}
+        handleSetLocation={() => {}}
+        onConnectSelectedRepo={async () => {}}
+        sshStatusLabel="Connected"
+        connectButtonLabel="Connect"
+        selectedProjectName="orca"
+      />
+    </div>
+  )
+}
+
+export const closed = defineFixture({
+  width: 560,
+  // The browser preload answers agent keys and Cloud secrets with stubs the Orca Cloud agent hint
+  // can't read; without them the hint shows nothing, as it does before they load.
+  setup: () => {
+    window.api.agentApiKeys = undefined
+    window.api.cloudSecrets = undefined
+  },
+  render: () => <ProjectAndHostPreview />
+})
+export const narrow = defineFixture({ width: 360, render: () => <ProjectAndHostPreview /> })
+export const folderOnly = defineFixture({
+  width: 560,
+  render: () => <ProjectAndHostPreview folderOnly />
+})
+export const projectMenu = defineFixture({
+  ...closed,
+  interact: (frame) => {
+    // Focus alone never opens the list (DS-22); a click does.
+    const field = frame.querySelector<HTMLInputElement>('[aria-label="Project"][role="combobox"]')
+    field?.focus()
+    field?.click()
+  }
+})
+export const hostMenu = defineFixture({
+  ...closed,
+  interact: (frame) => {
+    // Focus alone never opens the list (DS-22); a click does.
+    const field = frame.querySelector<HTMLInputElement>('[aria-label="Run on"][role="combobox"]')
+    field?.focus()
+    field?.click()
+  }
+})
+
+export const narrowProjectMenu = defineFixture({ ...projectMenu, width: 360 })
+export const narrowHostMenu = defineFixture({ ...hostMenu, width: 360 })
+
+function tooltipFixture(attribute: string) {
+  return defineFixture({
+    ...closed,
+    interact: async (frame) => {
+      frame
+        .querySelector(`div[${attribute}]`)
+        ?.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, pointerType: 'mouse' }))
+      await new Promise((resolve) => setTimeout(resolve, 500))
+    }
+  })
+}
+
+export const projectTooltip = tooltipFixture('data-project-combobox-root')
+export const hostTooltip = tooltipFixture('data-run-target-combobox-root')
+
+const entitled: OrcaCloudRunTargetAccess = { state: 'entitled', remainingSeconds: 41 * 3600 }
+export const hostMenuOrcaCloud = defineFixture({
+  ...hostMenu,
+  render: () => <ProjectAndHostPreview orcaCloud={entitled} />
+})
+export const hostMenuOrcaCloudLocked = defineFixture({
+  ...hostMenu,
+  render: () => (
+    <ProjectAndHostPreview
+      orcaCloud={{ state: 'no-plan', lapsed: false, canManageBilling: true }}
+    />
+  )
+})
+export const hostMenuOrcaCloudNoPlanMember = defineFixture({
+  ...hostMenu,
+  render: () => (
+    <ProjectAndHostPreview
+      orcaCloud={{ state: 'no-plan', lapsed: false, canManageBilling: false }}
+    />
+  )
+})
+
+export const waitingForGitHub = defineFixture({
+  ...closed,
+  render: () => <ProjectAndHostPreview orcaCloud={entitled} githubHandoff="waiting" />
+})
+export const githubHandoffTimedOut = defineFixture({
+  ...closed,
+  render: () => <ProjectAndHostPreview orcaCloud={entitled} githubHandoff="timed-out" />
+})
+
+// RUNON-STICKY: Orca Cloud was picked, then a project that can't run on it.
+export const cloudDroppedElsewhere = defineFixture({
+  ...closed,
+  render: () => <ProjectAndHostPreview orcaCloud={entitled} cloudDropped="elsewhere" />
+})
+export const cloudDroppedUnavailable = defineFixture({
+  ...closed,
+  render: () => <ProjectAndHostPreview orcaCloud={entitled} cloudDropped="unavailable" />
+})

@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { readRunOnMemory } from '@/lib/orca-cloud/run-on-memory'
 import { ORCA_CLOUD_RECIPE_ID } from '../../../../../shared/hosted-sandbox/orca-cloud-recipe-id'
-import type { OrcaCloudAvailability } from '../../../../../shared/orca-yaml-hook-types'
+import type { OrcaCloudAvailability } from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
 import type { OrcaCloudRunTargetAccess } from '../orca-cloud-run-target-access'
 import { getOrcaCloudSegmentState, resolveDefaultRunOn } from './cloud-start-model'
 

@@ -1,7 +1,7 @@
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
-} from '../../../../shared/managed-account-types'
+} from '../../../../shared/agent-accounts/managed-account-types'
 import type {
   HostAgentSignInAgent,
   HostAgentSignInEntry,

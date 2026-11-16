@@ -3,7 +3,7 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { z } from 'zod'
 import type { CloudQueuedPrompt } from '../../shared/hosted-sandbox/cloud-workspace-offline-api'
-import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { OfflineCacheCodec } from './cloud-offline-cache'
 
 export type StoredPrompt = CloudQueuedPrompt & {

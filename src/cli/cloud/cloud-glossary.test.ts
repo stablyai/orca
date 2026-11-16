@@ -1,7 +1,7 @@
 // Human output of `orca cloud …` follows the product glossary: states, errors and sizes in words,
 // raw API codes only under --json.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { HandlerContext } from '../dispatch'
+import type { HandlerContext } from '../dispatch/dispatch'
 import { cloudApiError } from './cloud-api-errors'
 import { nodeCloudCredentialFs } from './cloud-credentials'
 import {

@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Plus, X } from 'lucide-react'
-import type { VoiceSettings } from '../../../../../shared/speech-types'
+import type { VoiceSettings } from '../../../../../shared/speech/speech-types'
 import {
   MAX_DICTATION_TERMS,
   MAX_DICTATION_TERM_LENGTH,
   type DictationTerm
-} from '../../../../../shared/dictation-dictionary'
+} from '../../../../../shared/speech/dictation/dictation-dictionary'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
 import { useAppStore } from '@/store'
 import { selectRepoByIdForActiveWorkspace } from '@/store/repos/active-workspace-repository'

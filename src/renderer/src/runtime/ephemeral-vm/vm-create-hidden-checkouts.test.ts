@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { EMPTY_SIDEBAR_FEED_DOMAINS } from '../../../../shared/sidebar-feed-client/sidebar-feed-snapshot'
-import type { SidebarFeedDomains } from '../../../../shared/sidebar-list/sidebar-feed-domains'
+import type { SidebarFeedDomains } from '../../../../shared/sidebar-list/feed/sidebar-feed-domains'
 import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import {
   hideVmCreateCheckout,

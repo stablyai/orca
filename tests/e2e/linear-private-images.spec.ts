@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import type { LinearIssue } from '../../src/shared/linear/issue-types'
-import type { LinearIssueUpdate } from '../../src/shared/issue-mutation-types'
+import type { LinearIssueUpdate } from '../../src/shared/work-items/issue-mutation-types'
 
 declare global {
   var __linearImageSaved: LinearIssueUpdate[] | undefined

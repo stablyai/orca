@@ -6,7 +6,7 @@ import { Progress } from '@/components/ui/progress'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { uiNumberFormat } from '@/i18n/ui-intl-formatters'
 import { formatElapsedTime } from '@/components/worktree-creation/worktree-creation-clock'
-import { formatBytes } from '../../../../../../shared/format-bytes'
+import { formatBytes } from '../../../../../../shared/text/format-bytes'
 import type { RuntimeDownloadErrorCode } from '../../../../../../shared/runtime-downloads/runtime-download-contract'
 import type { RuntimeDownloadProgressSnapshot } from '@/runtime/files/downloads/runtime-download-progress-store'
 import {

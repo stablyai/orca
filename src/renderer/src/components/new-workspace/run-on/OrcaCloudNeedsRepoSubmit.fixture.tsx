@@ -3,9 +3,9 @@
 import { useState } from 'react'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import type { NewWorkspaceProjectOption } from '@/lib/workspace/creation/new-workspace-project-options'
-import { NewWorkspaceComposerProjectSection } from '../NewWorkspaceComposerProjectSection'
-import { NewWorkspaceComposerFooter } from '../NewWorkspaceComposerFooter'
-import type { EphemeralVmRecipeOption } from '../run-target-options'
+import { NewWorkspaceComposerProjectSection } from '../composer/NewWorkspaceComposerProjectSection'
+import { NewWorkspaceComposerFooter } from '../composer/NewWorkspaceComposerFooter'
+import type { EphemeralVmRecipeOption } from '../run-target/run-target-options'
 import { ORCA_CLOUD_RECIPE_ID } from '../../../../../shared/hosted-sandbox/orca-cloud-recipe-id'
 import { useNeedsRepoSubmitGuard } from './use-needs-repo-submit-guard'
 

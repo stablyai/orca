@@ -1,7 +1,7 @@
 // HTTPS client for the team workspace registry on the sandbox control plane. Same auth as the
 // hosted sandbox driver: a short-lived Orca token (aud=orca-sandbox), never a provider credential.
 import { z } from 'zod'
-import { errorMessage } from '../../shared/error-message'
+import { errorMessage } from '../../shared/errors/error-message'
 import { cloudWorkspacePrefsMethods } from './cloud-workspaces-prefs-client'
 import { cloudWorkspaceOwnerChangeMethods } from './cloud-workspaces-owner-change-client'
 import { HOSTED_SANDBOX_STATUSES } from '../../shared/hosted-sandbox/hosted-sandbox-wire'

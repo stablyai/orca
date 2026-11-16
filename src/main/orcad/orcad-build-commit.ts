@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { ORCAD_CLI_PACKAGE_FILENAME } from '../../shared/orcad-artifacts'
+import { ORCAD_CLI_PACKAGE_FILENAME } from '../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 
 /** Written beside the server by the Orca Cloud golden build (sandbox-control image/source-build.sh). */
 export const ORCAD_SOURCE_COMMIT_FILENAME = 'SOURCE_COMMIT'

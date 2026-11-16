@@ -14,8 +14,8 @@ import {
   isOrcaCloudDevAuthEnabled
 } from '../orca-profiles/cloud-auth/profile-cloud-auth-config'
 import { readFreshOrcaCloudSession } from '../orca-profiles/cloud-session/profile-cloud-session-refresh'
-import type { OrcaCloudAvailability, OrcaVmRecipe } from '../../shared/orca-yaml-hook-types'
-import { getApprovedPluginVmRecipes } from '../plugins/plugin-approved-vm-recipes'
+import type { OrcaCloudAvailability, OrcaVmRecipe } from '../../shared/workspace-setup/orca-yaml-hook-types'
+import { getApprovedPluginVmRecipes } from '../plugins/contributions/plugin-approved-vm-recipes'
 import type { PluginService } from '../plugins/plugin-service'
 import { getHostedSandboxConfig } from './hosted-sandbox-config'
 import { createHostedSandboxDeviceEnroller } from './hosted-sandbox-device-enrollment'
@@ -42,7 +42,7 @@ import { createCloudAccountBackfill } from './cloud-account-backfill'
 import { createCloudSandboxGonePrune } from './cloud-sandbox-gone-prune'
 import { setCloudGonePruneRunner } from './cloud-gone-prune-request'
 import { retireGoneCloudSandbox } from './cloud-sandbox-gone-retire'
-import type { RemovedServerStore } from '../ipc/runtime-environments/runtime-environment-removal-cleanup'
+import type { RemovedServerStore } from '../ipc/runtime-environments/catalog/runtime-environment-removal-cleanup'
 import { createUsageAlertRefreshScheduler } from '../billing/usage-alert-refresh'
 import { sendToTrustedUIRenderer } from '../ipc/ui'
 import { ORCA_BILLING_REFRESH_CHANNEL } from '../../shared/orca-billing'
@@ -58,7 +58,7 @@ import {
   isArchivedOnControlPlane,
   setCloudArchiveCheck
 } from './hosted-workspace-runtime'
-import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
+import { callRuntimeEnvironment } from '../ipc/runtime-environments/requests/runtime-environment-transport-routing'
 import type { HostedSessionRestartResult } from '../../shared/hosted-sandbox/hosted-session-events'
 import {
   installCloudMcpSync,

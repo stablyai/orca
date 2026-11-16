@@ -3,7 +3,7 @@ import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { RunActionRun } from '@/lib/run-actions/run-actions-store'
-import type { OrcaRunAction } from '../../../../shared/orca-yaml-hook-types'
+import type { OrcaRunAction } from '../../../../shared/workspace-setup/orca-yaml-hook-types'
 import { RunActionButtonView, type RunActionButtonViewProps } from './RunActionButtonView'
 
 const noop = (): void => {}

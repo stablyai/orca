@@ -7,8 +7,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/class-names'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { Translate } from '@/i18n/use-translate'
-import { RunTargetRow } from './RunTargetComboboxRow'
-import { ORCA_CLOUD_LABEL, type EphemeralVmRecipeOption } from './run-target-options'
+import { RunTargetRow } from './run-target/RunTargetComboboxRow'
+import { ORCA_CLOUD_LABEL, type EphemeralVmRecipeOption } from './run-target/run-target-options'
 import {
   getOrcaCloudHoursLeft,
   type OrcaCloudRunTargetAccess

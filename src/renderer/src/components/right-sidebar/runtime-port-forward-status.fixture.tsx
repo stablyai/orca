@@ -1,7 +1,7 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
-import type { WorkspacePort } from '../../../../shared/workspace-ports'
+import type { WorkspacePort } from '../../../../shared/workspace/ports/workspace-ports'
 import type { RuntimePortForward } from '../../../../shared/runtime-port-forwards'
-import { LocalPortSection } from './local-port-section'
+import { LocalPortSection } from './ports/local-port-section'
 import { RuntimeForwardedPortsSection } from './runtime-forwarded-ports-section'
 import { SharedLinksList } from './cloud-share/shared-links-list'
 import {

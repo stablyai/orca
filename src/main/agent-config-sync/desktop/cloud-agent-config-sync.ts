@@ -6,9 +6,9 @@ import {
   type AgentConfigSyncStatus,
   type CloudAgentConfigSyncPreferences
 } from '../../../shared/agent-config-sync/agent-config-sync-contract'
-import { listEphemeralVmRuntimes } from '../../../shared/ephemeral-vm-runtime-store'
+import { listEphemeralVmRuntimes } from '../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
 import { writeFileAtomically } from '../../filesystem/atomic-file-publication'
-import { callRuntimeEnvironment } from '../../ipc/runtime-environments/runtime-environment-transport-routing'
+import { callRuntimeEnvironment } from '../../ipc/runtime-environments/requests/runtime-environment-transport-routing'
 import { defaultAgentConfigHomes } from '../agent-config-roots'
 import { applyAgentConfigSyncResults, planAgentConfigSync } from './agent-config-sync-plan'
 import { exchangeAgentConfig } from './agent-config-host-exchange'

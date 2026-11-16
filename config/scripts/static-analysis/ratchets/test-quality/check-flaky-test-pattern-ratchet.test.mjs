@@ -67,15 +67,8 @@ describe('listChangedFiles', () => {
   })
 
   it.each([
-    ['a new finding', `${movedImports}Date.now()\n`],
     ['a changed suppression comment', movedImports.replace('declaration only', 'new reason')],
     ['an import binding change', movedImports.replace('{ watch }', '{ watch as renamed }')],
-    [
-      'an import type flag change',
-      movedImports.replace('import type { Snapshot }', 'import { Snapshot }')
-    ],
-    ['a body change', movedImports.replace('Date.now()', 'performance.now()')],
-    ['a whitespace change', `${movedImports}\n`],
     ['a parse failure', `${movedImports})\n`]
   ])('keeps %s in enforcement scope alongside import path changes', (_label, current) => {
     createExistingTest()

@@ -61,6 +61,8 @@ function facts(host: Host, title: string, style = 'new') {
     },
     options: {
       style,
+      // The "Details row" card option (on by default) is what puts line 2 on a new-style card.
+      detailsRow: true,
       show: {
         host: true,
         branch: true,

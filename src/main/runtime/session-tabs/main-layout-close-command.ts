@@ -4,7 +4,7 @@ import type { LayoutApplyReply } from '../../../shared/workspace-layout/workspac
 import type { WindowLayoutCommand } from '../terminal/layout/runtime-layout-apply'
 // Type-only: the stops module sits late in the runtime's class chain, and this runs early in it.
 import type { ExplicitCloseStop } from './explicit-terminal-close-pty-stops'
-import { parseAppSshPtyId } from '../../../shared/ssh-pty-id'
+import { parseAppSshPtyId } from '../../../shared/remote-runtime/ssh/ssh-pty-id'
 
 const NO_STOP: ExplicitCloseStop = { stopped: false }
 

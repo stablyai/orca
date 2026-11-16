@@ -1,10 +1,10 @@
-import { withGitHubTargetOperation } from '../../source-control/review/github-work-item-operation'
+import { withGitHubTargetOperation } from '../../source-control/review/github-operations/github-work-item-operation'
 import { githubTaskKey, requireGitHubTaskTarget } from './github-task-identity'
 import {
   matchesGitHubWorkItemTarget,
   GitHubWorkItemTargetError
-} from '../../../../src/shared/github/work-item-target'
-import type { ProviderCheckSummary } from '../../../../src/shared/github/pull-request-types'
+} from '../../../../src/shared/github/work-items/work-item-target'
+import type { ProviderCheckSummary } from '../../../../src/shared/github/pull-requests/pull-request-types'
 import type { GitLabWorkItem } from '../mobile-tasks-provider-detail-types'
 import type { ItemDetailMetadataEffectsModel } from './use-mobile-tasks-item-detail-metadata-effects'
 import { fetchJiraIssueDetail } from '../providers/jira/mobile-jira-task-source'

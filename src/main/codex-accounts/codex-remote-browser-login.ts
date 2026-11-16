@@ -1,7 +1,7 @@
 import {
   signInCallbackPort,
   type HostAccountSignInChannel
-} from '../../shared/host-account-sign-in-types'
+} from '../../shared/agent-accounts/host-account-sign-in-types'
 
 /** Publishes codex's browser link with its localhost callback port for a remote person to forward. */
 export function publishCodexCallbackPrompt(channel: HostAccountSignInChannel, url: string): void {

@@ -175,10 +175,10 @@ export type ClaudeContextUsageReader = Pick<ClaudeStreamJsonConnection, 'getCont
 
 export type ClaudeContextUsageTarget = Pick<
   ClaudeJournalTranslator,
-  'subscribeContextUsageRequests' | 'recordContextReport' | 'contextActivity'
+  'subscribeContextUsageRequests' | 'recordContextReport'
 >
 
-/** Newer requests discard old answers; conversation activity invalidates only usage, not the window. */
+/** Newer requests discard old answers; the translator decides whether a late answer still replaces usage. */
 export function bindClaudeContextUsageCapture(
   connection: ClaudeContextUsageReader,
   translator: ClaudeContextUsageTarget | null,
@@ -189,9 +189,8 @@ export function bindClaudeContextUsageCapture(
   }
   let bound = true
   let requests = 0
-  const unsubscribe = translator.subscribeContextUsageRequests((target) => {
+  const unsubscribe = translator.subscribeContextUsageRequests((target, askedAt) => {
     const request = ++requests
-    const activity = translator.contextActivity
     void connection
       .getContextUsage({ timeoutMs: options.timeoutMs ?? CLAUDE_CONTEXT_USAGE_TIMEOUT_MS })
       .then(
@@ -203,11 +202,7 @@ export function bindClaudeContextUsageCapture(
           if (!report) {
             return
           }
-          if (activity !== translator.contextActivity) {
-            translator.recordContextReport(target, report, 'window')
-            return
-          }
-          translator.recordContextReport(target, report, 'report')
+          translator.recordContextReport(target, report, askedAt)
         },
         () => {}
       )

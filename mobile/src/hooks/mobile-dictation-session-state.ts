@@ -2,7 +2,7 @@
 import { Buffer } from 'buffer'
 
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-import type { DictationTerm } from '../../../src/shared/dictation-dictionary'
+import type { DictationTerm } from '../../../src/shared/speech/dictation/dictation-dictionary'
 import type { MobileDictationMeter } from './mobile-dictation-meter'
 
 export type DictationStatus = 'idle' | 'starting' | 'recording' | 'processing' | 'error'

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store/index'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import { getHostDisplayLabelOverrides } from '../../../../../shared/host-setting-overrides'
+import { getHostDisplayLabelOverrides } from '../../../../../shared/execution-host/host-setting-overrides'
 import { translateLocalExecutionHostLabel } from '@/components/sidebar/execution-host-label'
 import { useTranslate } from '@/i18n/use-translate'
 import type { AutomationHostFilter } from '../../../../../shared/automations/ownership/automation-host-filter'

@@ -3,7 +3,7 @@
 // verdict ignores connected clients). Asleep: the copy stays readable. Archived or deleted: sync
 // stops and the copy this computer made is removed (files someone added here are left alone).
 import { join } from 'node:path'
-import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
+import type { EphemeralVmRuntimeRecord } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import type {
   CloudSyncRemovalPreview,
   CloudSyncState,

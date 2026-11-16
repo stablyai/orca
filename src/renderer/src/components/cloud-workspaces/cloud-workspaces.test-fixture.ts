@@ -3,7 +3,7 @@ import type {
   CloudWorkspace,
   CloudWorkspacePresence
 } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
-import type { OrcaOrgMembersRoster, OrcaProfileAuthStatus } from '../../../../shared/orca-profiles'
+import type { OrcaOrgMembersRoster, OrcaProfileAuthStatus } from '../../../../shared/orca-profiles/orca-profiles'
 import type { CloudWorkspacesApi } from '../../../../preload/api/cloud-workspaces-api'
 import type { MemberDirectory } from './cloud-workspace-format'
 

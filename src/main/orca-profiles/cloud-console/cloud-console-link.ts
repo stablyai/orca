@@ -2,7 +2,7 @@
 // URL from auth, so the browser lands signed in; when that fails for any reason the console opens
 // without one and the browser asks the person to sign in. The ticket is never logged or kept.
 import { app, shell } from 'electron'
-import { cleanCloudServiceOrigin } from '../../../shared/cloud-service-url'
+import { cleanCloudServiceOrigin } from '../../../shared/network/cloud-service-url'
 import {
   ORCA_CLOUD_CONSOLE_BILLING_HINT_CAPABILITY,
   type OrcaCloudConsoleBillingHint,

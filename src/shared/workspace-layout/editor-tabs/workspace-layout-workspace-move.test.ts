@@ -3,7 +3,7 @@ import { applyLayoutCommand } from '../workspace-layout-commands'
 import type { CommandOf } from '../workspace-layout-command-types'
 import { build, testContext, WS } from '../commands/workspace-layout-command.test-fixture'
 import type { WorkspaceLayoutModel } from '../workspace-layout-model'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../layout-owner-switch'
 
 const TO = 'wt-target'
 const PATH = '/target/docs/readme.md'

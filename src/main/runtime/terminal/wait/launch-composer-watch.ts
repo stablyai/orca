@@ -1,5 +1,5 @@
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import { resolveDraftPasteReadyTimeoutMs } from '../../../../shared/draft-paste-ready-timeout'
+import { resolveDraftPasteReadyTimeoutMs } from '../../../../shared/agent-launch/startup/readiness/draft-paste-ready-timeout'
 import type { LaunchedAgentForeground } from './launched-agent-foreground'
 import { readFreshComposerHold } from './launched-agent-composer-readiness'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'

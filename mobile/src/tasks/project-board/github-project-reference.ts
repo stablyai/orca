@@ -1,11 +1,11 @@
 import {
   GITHUB_OWNER_NUMBER_SHORTHAND_RE,
   GITHUB_OWNER_SLUG_RE
-} from '../../../../src/shared/github/owner-slug'
+} from '../../../../src/shared/github/repositories/owner-slug'
 import type {
   GitHubProjectIdentity,
   GitHubProjectIdentity as GitHubProjectRef
-} from '../../../../src/shared/github/project-identity'
+} from '../../../../src/shared/github/projects/project-identity'
 
 export type GitHubProjectOwnerType = GitHubProjectIdentity['ownerType']
 

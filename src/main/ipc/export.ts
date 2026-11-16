@@ -2,7 +2,10 @@ import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { writeFile } from 'node:fs/promises'
 import { ExportTimeoutError, htmlToPdf } from '../lib/html-to-pdf'
 import { abortWhenRendererGone } from './renderer-lifetime-abort'
-import { pdfExportFailure, type PdfExportResult } from '../../shared/pdf-export-failure-copy'
+import {
+  pdfExportFailure,
+  type PdfExportResult
+} from '../../shared/document-preview/pdf-export-failure-copy'
 
 export type ExportHtmlToPdfArgs = {
   html: string

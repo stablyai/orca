@@ -1,4 +1,4 @@
-import { redactEphemeralVmRecipeDiagnosticText } from './ephemeral-vm-recipe-diagnostic-redaction'
+import { redactEphemeralVmRecipeDiagnosticText } from './remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-diagnostic-redaction'
 
 export type CloudEnvironmentAgentPromptFailure = {
   buildNumber?: number

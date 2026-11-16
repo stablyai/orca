@@ -2,7 +2,7 @@
 
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SkillCloudOwnedShare } from '../../../../../shared/skill-cloud-contract'
+import type { SkillCloudOwnedShare } from '../../../../../shared/skills/sharing/skill-cloud-contract'
 import { noteSkillSharesChanged } from './skill-shares-changed'
 import { useOwnedSkillShares } from './use-owned-skill-shares'
 

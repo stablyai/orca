@@ -5,7 +5,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ORCA_CLOUD_RECIPE_ID } from '../../../../shared/hosted-sandbox/orca-cloud-recipe-id'
-import { NewWorkspaceComposerProjectSection } from './NewWorkspaceComposerProjectSection'
+import { NewWorkspaceComposerProjectSection } from './composer/NewWorkspaceComposerProjectSection'
 import type { CloudOnlyRepo } from './run-on/use-cloud-only-repo'
 
 afterEach(cleanup)
@@ -83,7 +83,7 @@ function renderSection(
   )
 }
 
-vi.mock('@/components/new-workspace/use-recent-project-ids', () => ({
+vi.mock('@/components/new-workspace/project-selection/use-recent-project-ids', () => ({
   useRecentProjectIds: () => []
 }))
 vi.mock('@/components/sidebar/host-admission/ssh/AddRemoteHostDialog', () => ({

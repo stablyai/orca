@@ -9,7 +9,7 @@ import {
   ORCAD_INSTALL_COMPLETE_FILENAME,
   ORCAD_RUNTIMES_DIRNAME,
   ORCAD_VERSION_FILENAME
-} from '../../../shared/orcad-artifacts'
+} from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import {
   isWindowsRemoteHost,
   type RemoteHostPlatform

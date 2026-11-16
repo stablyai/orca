@@ -1,6 +1,6 @@
 import { useAutomationSetupConsent } from './use-automation-setup-consent'
-import { describeLoadError } from '../components/load-error-description'
-import { OrcaHookTrustDrawer } from '../components/OrcaHookTrustDrawer'
+import { describeLoadError } from '../components/feedback/load-error-description'
+import { OrcaHookTrustDrawer } from '../components/hook-trust/OrcaHookTrustDrawer'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useAutomationRuns, type AutomationRunScope } from './use-automation-runs'
@@ -9,7 +9,7 @@ import { useAutomationCreateAttempt } from './use-automation-create-attempt'
 import { ScrollView, Text, View } from 'react-native'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import { toAutomationOwnerPrecondition } from '../../../src/shared/automations/ownership/automation-owner-precondition'
-import { ConfirmModal } from '../components/ConfirmModal'
+import { ConfirmModal } from '../components/sheets/ConfirmModal'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { AutomationButton, AutomationChoice, AutomationTabs } from './AutomationControls'
 import { AutomationList } from './AutomationList'
@@ -389,13 +389,13 @@ export function AutomationManager(props: {
       <OrcaHookTrustDrawer {...setupConsent.drawer} />
       <ConfirmModal
         visible={deleting !== null}
-        title={t('automations.mobile.deleteAutomationTitle', 'Delete automation?')}
+        title={t('common.delete', 'Delete')}
         message={t(
           'automations.mobile.deleteRetained',
           'Delete “{{name}}” and its retained runs?',
           { name: deleting?.automation.name ?? '' }
         )}
-        confirmLabel={t('automations.mobile.deleteAutomation', 'Delete automation')}
+        confirmLabel={t('common.delete', 'Delete')}
         destructive
         onCancel={() => setDeleting(null)}
         onConfirm={() => deleting && remove(deleting)}

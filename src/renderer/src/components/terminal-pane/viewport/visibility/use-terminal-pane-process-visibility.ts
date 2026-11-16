@@ -8,7 +8,7 @@ import {
   reconcileMissingSessions,
   type ReconcilableBinding
 } from '../../pty-connection/lifecycle/terminal-dead-session-reconcile'
-import type { UseTerminalPaneLifecycleDeps } from '../../mounting/terminal-pane-lifecycle-types'
+import type { MountedTerminalPaneLifecycleDeps } from '../../mounting/terminal-pane-lifecycle-types'
 import type { TerminalPaneLifecycleRefs } from '../../mounting/use-terminal-pane-lifecycle-refs'
 
 type IDisposableWithVisibility = IDisposable & {
@@ -18,12 +18,21 @@ type IDisposableWithVisibility = IDisposable & {
 
 export function useTerminalPaneProcessVisibility(
   deps: Pick<
-    UseTerminalPaneLifecycleDeps,
-    'tabId' | 'cwd' | 'isVisible' | 'isVisibleRef' | 'panePtyBindingsRef'
+    MountedTerminalPaneLifecycleDeps,
+    | 'managerRef'
+    | 'mountedManager'
+    | 'tabId'
+    | 'cwd'
+    | 'isVisible'
+    | 'isVisibleRef'
+    | 'panePtyBindingsRef'
   >,
   refs: Pick<TerminalPaneLifecycleRefs, 'previousVisibleForReconcileRef'>
 ): void {
   useEffect(() => {
+    if (!deps.mountedManager || deps.managerRef.current !== deps.mountedManager) {
+      return
+    }
     const previousIsVisible = getPreviousVisibleForTerminalPane({
       previous: refs.previousVisibleForReconcileRef.current,
       tabId: deps.tabId,
@@ -55,6 +64,8 @@ export function useTerminalPaneProcessVisibility(
       })
     }
   }, [
+    deps.mountedManager,
+    deps.managerRef,
     deps.cwd,
     deps.isVisible,
     deps.isVisibleRef,

@@ -3,7 +3,7 @@ import { nextDaemonChildSpawn, spawnDaemonChildProcess } from './daemon-launched
 
 const { forkProcessMock } = vi.hoisted(() => ({ forkProcessMock: vi.fn(() => ({ pid: 1 })) }))
 vi.mock('@orca/process-host/fork-process', () => ({ forkProcess: forkProcessMock }))
-vi.mock('../../../shared/app-environment', () => ({
+vi.mock('../../../shared/app-lifecycle/app-environment', () => ({
   getAppEnvironment: () => ({ getVersion: () => '0.0.0-test' })
 }))
 vi.mock('./daemon-launch-paths', () => ({ daemonLogArgs: () => [] }))

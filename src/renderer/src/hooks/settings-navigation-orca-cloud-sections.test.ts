@@ -1,6 +1,6 @@
 import { Bot } from 'lucide-react'
 import type { SettingsNavSection } from '@/components/settings/navigation/settings-navigation-types'
-import type { OrcaProfileAuthStatus } from '../../../shared/orca-profiles'
+import type { OrcaProfileAuthStatus } from '../../../shared/orca-profiles/orca-profiles'
 import { describe, expect, it } from 'vitest'
 import { buildSetupSettingsSections } from './settings-navigation-capability-sections'
 import type { SettingsNavigationBuildOptions } from './settings-navigation-build-options'

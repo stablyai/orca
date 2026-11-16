@@ -28,7 +28,7 @@ import type { CloudSetupPageRequest } from '@/lib/orca-cloud/cloud-setup-page-st
 import type { ExternalLinkSource } from '@/components/open-external/copy-external-link'
 import { reportCloudSetupProgress } from '@/lib/orca-cloud/cloud-setup-telemetry'
 import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
-import type { OrcaCloudAvailability } from '../../../../shared/orca-yaml-hook-types'
+import type { OrcaCloudAvailability } from '../../../../shared/workspace-setup/orca-yaml-hook-types'
 import type { OrcaCloudRunTargetAccess } from '@/components/new-workspace/orca-cloud-run-target-access'
 import {
   cloudSetupPageModel,

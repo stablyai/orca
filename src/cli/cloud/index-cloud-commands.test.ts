@@ -11,7 +11,7 @@ const { callMock, runtimeClientConstructorMock, serveOrcaAppMock, getDefaultUser
     getDefaultUserDataPathMock: vi.fn(() => '/tmp/orca-user-data')
   }))
 
-vi.mock('../runtime-client', async () => {
+vi.mock('../runtime/client', async () => {
   const { createRuntimeClientModuleMock } = await import('../index-test-harness.js')
   return createRuntimeClientModuleMock({
     callMock,
@@ -20,6 +20,16 @@ vi.mock('../runtime-client', async () => {
     getDefaultUserDataPathMock
   })
 })
+
+vi.mock('../runtime/launch', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  serveOrcaApp: serveOrcaAppMock
+}))
+
+vi.mock('../runtime/profile/metadata', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getDefaultUserDataPath: getDefaultUserDataPathMock
+}))
 
 import { main } from '../index'
 

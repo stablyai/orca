@@ -7,7 +7,7 @@ import type {
   AgentMcpSyncResult,
   McpSyncHostOutcome
 } from '../../../shared/agent-mcp-sync/mcp-sync-contract'
-import { errnoCodeOrUnknown } from '../../../shared/errno-code'
+import { errnoCodeOrUnknown } from '../../../shared/errors/errno-code'
 import { writeFileAtomicallyIfUnchanged } from '../../filesystem/atomic-file-publication'
 import { isCommandOnLocalPath } from '../../ipc/command-path/command-path-resolver'
 import { hostShellEnvironment } from '../../runtime/agent-session/environment/structured-agent-shell-environment'

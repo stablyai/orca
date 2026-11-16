@@ -10,7 +10,7 @@ import {
 } from './remote-disk-usage-poll'
 import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
 import type { OrcadDiskUsageResult } from '../../../../../shared/orcad-disk-usage'
-import type { RuntimeRpcFailure } from '../../../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcFailure } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 
 const RESULT: OrcadDiskUsageResult = {
   checkedAt: 1,

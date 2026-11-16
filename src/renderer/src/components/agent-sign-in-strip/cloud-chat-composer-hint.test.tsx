@@ -5,6 +5,7 @@
 import { cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatComposerFieldProps } from '../native-chat/composer/editor/NativeChatComposerField'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 
 const captured = vi.hoisted(() => {
   const state: { props: NativeChatComposerFieldProps | null } = { props: null }
@@ -33,7 +34,7 @@ vi.mock('../../store/index', () => {
     repos: [],
     dictationState: 'idle',
     settings: { voice: { enabled: false }, nativeChatSessionOptions: {} },
-    agentStatusByPaneKey: {},
+    agentStatusByPaneKey: acceptedAgentStatuses(),
     updateSettings: vi.fn(),
     clearNativeChatLaunchDraft: vi.fn(),
     markNativeChatLaunchDraftAdopted: vi.fn()

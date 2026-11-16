@@ -7,7 +7,7 @@ vi.mock('./agent-session/launch/environment-setup-agent-launch', () => ({
 }))
 
 import { githubSlugForRepo, pickCloudEnvironmentAgentRepo } from './cloud-environment-agent-launch'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 
 function repo(id: string, canonicalKey: string | null): Repo {
   return {

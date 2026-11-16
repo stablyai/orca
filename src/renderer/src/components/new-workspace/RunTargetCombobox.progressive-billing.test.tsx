@@ -5,10 +5,10 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ProjectHostSetupOption } from '@/lib/workspace/creation/project-host-setup-options'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import RunTargetCombobox from './RunTargetCombobox'
+import RunTargetCombobox from './run-target/RunTargetCombobox'
 import { useAppStore } from '@/store/index'
 import { resetOrcaCloudBillingCache } from './orca-cloud-billing-cache'
-import type { EphemeralVmRecipeOption } from './run-target-options'
+import type { EphemeralVmRecipeOption } from './run-target/run-target-options'
 import type { OrcaCloudRunTargetAccess } from './orca-cloud-run-target-access'
 
 vi.mock('@/components/ui/popover', () => ({

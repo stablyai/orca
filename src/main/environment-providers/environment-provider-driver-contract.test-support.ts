@@ -4,7 +4,7 @@ import {
   getEphemeralVmRecipeResultConnection,
   getEphemeralVmRecipeResultProjectRoot,
   isAbsoluteRuntimePath
-} from '../../shared/ephemeral-vm-recipes'
+} from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipes'
 import {
   ENVIRONMENT_PROVIDER_ERROR_CODES,
   isEnvironmentProviderError,

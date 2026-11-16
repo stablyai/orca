@@ -6,13 +6,18 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { useCloudWorkspace, useIsCloudWorkspace } from '@/lib/orca-cloud/orca-cloud-workspace-store'
-import { isArchivedCloudStatus } from '@/lib/orca-cloud/orca-cloud-workspace-rows'
+import {
+  isArchivedCloudStatus,
+  isPairedCloudStatusRow
+} from '@/lib/orca-cloud/orca-cloud-workspace-rows'
+import { wakeCloudWorkspace } from '@/components/orca-cloud/cloud-workspace-actions'
+import type { HostedWorkspaceStatus } from '../../../../../../shared/hosted-sandbox/hosted-sandbox-wire'
 import { selectEphemeralVmWorkspaceRuntime } from '@/store/slices/ephemeral-vm/ephemeral-vm-lifecycle'
 import {
   resumeEphemeralVmWorkspace,
   suspendEphemeralVmWorkspace
 } from '@/lib/workspace/activation/sidebar-worktree-activation'
-import type { EphemeralVmRuntimeStatus } from '../../../../../../shared/ephemeral-vm-runtimes'
+import type { EphemeralVmRuntimeStatus } from '../../../../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 
 export type WorkspaceVmLifecycleAction = 'suspend' | 'resume' | 'waking' | null
 
@@ -42,6 +47,22 @@ export function getWorkspaceVmLifecycleAction(
     case 'cleaned':
       return null
   }
+}
+
+/**
+ * PAIRED-LIFECYCLE: a paired cloud workspace (one this desktop opened or created from a GitHub-only
+ * project) has no VM record here, so its lifecycle item comes from the control plane's status:
+ * asleep offers Wake, waking shows Waking…, anything else keeps the plain Sleep items (which reach
+ * the sandbox). Before this an asleep paired row offered Sleep and never Wake (n79).
+ */
+export function getPairedCloudLifecycleAction(
+  state: HostedWorkspaceStatus['state'] | undefined,
+  wakeInFlight: boolean
+): WorkspaceVmLifecycleAction {
+  if (wakeInFlight || state === 'waking') {
+    return 'waking'
+  }
+  return state === 'sleeping' ? 'resume' : null
 }
 
 /**
@@ -106,12 +127,36 @@ export function WorkspaceVmLifecycleMenuItems({
   const archived = useCloudWorkspace((state) =>
     isArchivedCloudStatus(state.status[worktreeId]?.status)
   )
+  const paired = useCloudWorkspace((state) => isPairedCloudStatusRow(state, worktreeId))
+  const pairedAction = useCloudWorkspace((state) =>
+    paired
+      ? getPairedCloudLifecycleAction(
+          state.status[worktreeId]?.status?.state,
+          state.wake[worktreeId]?.phase === 'waking' || state.wake[worktreeId]?.phase === 'connecting'
+        )
+      : null
+  )
   const action = getWorkspaceVmLifecycleAction(status, waking, canSuspend)
   if (archived) {
     return null
   }
+  if (!action && pairedAction) {
+    return (
+      <VmLifecycleMenuItem
+        action={pairedAction}
+        cloud
+        retry={false}
+        disabled={disabled}
+        t={t}
+        onResume={() => void wakeCloudWorkspace(worktreeId)}
+        onSuspend={onSleep}
+      />
+    )
+  }
   if (!action) {
-    return <>{sleepItems}</>
+    // This desktop's own cloud workspace mid-transition has no lifecycle item. (A paired one has no
+    // VM record here; its Sleep is `sleepItems`, which reaches the sandbox.)
+    return cloud ? null : <>{sleepItems}</>
   }
   const vmItem = (
     <VmLifecycleMenuItem
@@ -134,8 +179,10 @@ export function WorkspaceVmLifecycleMenuItems({
     />
   )
   // Sleep and Suspend VM are one action on a running VM. A VM still asleep or waking keeps Sleep
-  // only while it has restored panels to close; otherwise Sleep would sit there disabled.
-  return replacesSleep && (action === 'suspend' || !hasSleepableActivity) ? (
+  // only while it has restored panels to close; otherwise Sleep would sit there disabled. Not on
+  // Orca Cloud (Neil): there that "Sleep" read as a second, contradictory item beside Wake; the
+  // cloud row has exactly one lifecycle item, Sleep or Wake.
+  return cloud || (replacesSleep && (action === 'suspend' || !hasSleepableActivity)) ? (
     vmItem
   ) : (
     <>
@@ -200,7 +247,7 @@ function VmLifecycleMenuItem({
         {cloud
           ? t(
               'orcaCloudWorkspace.menu.sleepDescription',
-              "Close this workspace's panels and put its sandbox to sleep. Opening the workspace wakes it."
+              'Pauses the workspace until you open it again.'
             )
           : t(
               'workspace.vm.menu.suspendDescription',

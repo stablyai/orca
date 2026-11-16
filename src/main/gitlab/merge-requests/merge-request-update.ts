@@ -1,5 +1,5 @@
-import type { IssueSourcePreference } from '../../../shared/repo-types'
-import type { GitLabMRUpdate } from '../../../shared/gitlab-types'
+import type { IssueSourcePreference } from '../../../shared/repository/repo-types'
+import type { GitLabMRUpdate } from '../../../shared/gitlab/gitlab-types'
 import { acquire, release } from '../requests/glab-request-admission'
 import { classifyGlabError } from '../requests/glab-error-classification'
 import { glabHostnameArgs, glabRepoExecOptions } from '../projects/gitlab-project-ref-resolution'
@@ -10,8 +10,11 @@ import { encodedProject } from '../projects/project-path-encoding'
 import { stripGitLabDraftTitlePrefix } from './merge-request-draft-title'
 import { withProjectRef } from './merge-request-project-resolution'
 import { tryMarkMRReady } from './merge-request-ready'
-import { codeHostFailure, classifiedFailure } from '../../../shared/code-host-failure-copy'
-import { invalidateReviewLookupsAfterPRMutation } from '../../github/pr-mutation-review-invalidation'
+import {
+  codeHostFailure,
+  classifiedFailure
+} from '../../../shared/source-control/code-host-failure-copy'
+import { invalidateReviewLookupsAfterPRMutation } from '../../github/pull-requests/refresh/pr-mutation-review-invalidation'
 
 export async function updateMR(
   repoPath: string,

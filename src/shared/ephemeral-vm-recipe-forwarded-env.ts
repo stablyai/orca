@@ -1,4 +1,4 @@
-import { buildRecipeInheritedEnv, isRecipeCredentialEnvName } from './ephemeral-vm-recipe-env'
+import { buildRecipeInheritedEnv, isRecipeCredentialEnvName } from './remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-env'
 
 /** Names only: the env a recipe's scripts inherit (passEnv-narrowed or whole); values never leave main. */
 export type RecipeForwardedEnvSummary = {

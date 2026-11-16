@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 const runtimes = vi.hoisted((): { list: unknown[] } => ({ list: [] }))
-vi.mock('../../shared/ephemeral-vm-runtime-store', () => ({
+vi.mock('../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store', () => ({
   listEphemeralVmRuntimes: () => runtimes.list
 }))
 vi.mock('../environment-providers/environment-provider-recipe-adapter', () => ({

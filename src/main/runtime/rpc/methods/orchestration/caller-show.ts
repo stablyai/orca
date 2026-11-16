@@ -6,12 +6,12 @@ import type {
 import {
   formatOrcaSessionAddress,
   isOrcaSessionId
-} from '../../../../../shared/orca-session-address'
+} from '../../../../../shared/agent-session/identity/orca-session-address'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../../shared/orchestration/orchestration-session-caller-codes'
 import {
   PartyLocationParams,
   SessionAddressParams
-} from '../../../../../shared/rpc-contract/orchestration-params'
+} from '../../../../../shared/rpc-contract/orchestration/orchestration-params'
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
 import { resolveOrcaSessionParty } from '../../../orchestration/addressing/orchestration-party'
 import { locateOrchestrationParty } from '../../../orchestration/addressing/orchestration-party-location'
@@ -20,7 +20,7 @@ import type { z } from 'zod'
 import type { OrchestrationDb } from '../../../orchestration/db/orchestration-db'
 import type { RpcContext } from '../../core'
 import { defineOrchestrationMethod } from './access/orchestration-method-access'
-import { openClosedWorkerTerminal } from './worker/closed-worker-terminal'
+import { openClosedWorkerTerminal } from './worker/follow-up/closed-worker-terminal'
 import { ensureStructuredHostInstalled } from '../structured-sessions/creation/structured-agent-session-gate'
 
 async function locateParty(

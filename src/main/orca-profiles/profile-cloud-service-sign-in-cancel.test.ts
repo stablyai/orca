@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { OrcaCloudSignInEnd, OrcaProfileCloudSummary } from '../../shared/orca-profiles'
+import type { OrcaCloudSignInEnd, OrcaProfileCloudSummary } from '../../shared/orca-profiles/orca-profiles'
 
 const { beginOrcaCloudPkceFlowMock, exchangeOrcaCloudAuthCodeMock, safeStorageMock } = vi.hoisted(
   () => ({
@@ -62,7 +62,9 @@ const code = {
   codeVerifier: 'verifier',
   nonce: 'nonce',
   redirectUri: 'http://127.0.0.1:4100/auth/callback',
-  state: 'state'
+  state: 'state',
+  respond: vi.fn(),
+  redirect: vi.fn()
 }
 
 /** Waits for the browser like the real loopback: rejects when the attempt is aborted. */

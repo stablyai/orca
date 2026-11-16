@@ -1,5 +1,5 @@
 import type { ExecutionHostId } from '../execution-host'
-import type { Repo } from '../repo-types'
+import type { Repo } from '../repository/repo-types'
 import type { Row } from './row-types'
 
 type MergedHost = { id: ExecutionHostId; mergedIntoHostId?: ExecutionHostId }

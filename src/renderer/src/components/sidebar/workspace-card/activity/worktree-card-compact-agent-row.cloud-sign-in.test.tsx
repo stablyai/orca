@@ -2,7 +2,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
+import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/rows/dashboard-agent-row'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
 import type { OrcaCloudAgentsStatus } from '../../../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
@@ -31,8 +31,9 @@ const CLOUD_ENV = 'env-cloud'
 const LOCAL_WORKTREE = 'wt-local'
 const CLOUD_WORKTREE = 'wt-cloud'
 
-vi.mock('@/components/dashboard/use-agent-row-conversation-name', () => ({
-  useAgentRowConversationName: () => null
+vi.mock('@/components/dashboard/rows/use-agent-row-conversation-name', () => ({
+  useAgentRowConversationName: () => null,
+  useAgentRowConversationNaming: () => ({ name: null, forked: false })
 }))
 
 vi.mock('./CacheTimer', () => ({
@@ -400,7 +401,11 @@ function statusButtons(container: HTMLElement): HTMLButtonElement[] {
 
 /** Keyboard focus opens the app tooltip; read its content, not a title attribute. */
 function focusTooltip(button: HTMLButtonElement): Element | null {
-  act(() => button.focus())
+  // The app tooltip opens on focus only when keyboard navigation moved it (keyboard-input-modality).
+  act(() => {
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab' }))
+    button.focus()
+  })
   return document.body.querySelector('[role="tooltip"]')
 }
 

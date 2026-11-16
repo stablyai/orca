@@ -6,7 +6,7 @@ import type {
   OrcaCloudCapabilities,
   OrcaCloudOrgSummary,
   OrcaProfileCloudSummary
-} from '../../../shared/orca-profiles'
+} from '../../../shared/orca-profiles/orca-profiles'
 
 const {
   beginOrcaCloudPkceFlowMock,
@@ -85,7 +85,9 @@ describe('Orca cloud sign-out vs newer connect', () => {
       codeVerifier: 'code-verifier',
       nonce: 'nonce',
       redirectUri: 'http://127.0.0.1:4100/auth/callback',
-      state: 'state'
+      state: 'state',
+      respond: vi.fn(),
+      redirect: vi.fn()
     })
     exchangeOrcaCloudAuthCodeMock.mockResolvedValue({
       accessToken: 'access-token',

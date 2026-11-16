@@ -1,5 +1,5 @@
-import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'
-import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
+import { listEphemeralVmRuntimes } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
+import type { EphemeralVmRuntimeRecord } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import { isOrcaCloudRuntimeInAccount } from '../../shared/hosted-sandbox/orca-cloud-account'
 
 // The Orca Cloud account (team) this desktop acts for right now, in sandbox-control's form. Set by

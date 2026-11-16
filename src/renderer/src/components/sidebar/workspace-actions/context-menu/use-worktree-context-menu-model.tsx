@@ -1,4 +1,3 @@
-import { selectAwakeBrowserTabsByWorktree } from '@/components/sidebar/workspace-actions/sleep/browser-tab-sleep'
 import { useIsPairedCloudPrimaryRow } from '@/lib/orca-cloud/cloud-host-rows'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store/index'
@@ -7,20 +6,12 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import { useContextWorkspaceStatuses } from '../../workspace-status/presentation/use-workspace-board-statuses'
 import { useMenuScopedWorktreeCatalog } from './use-menu-scoped-worktree-catalog'
 import { useMenuLineageParent } from './use-menu-lineage-parent'
-import {
-  hasSleepableWorkspaceActivity,
-  useWorkspaceLineageMenuActions
-} from './workspace-lineage-menu-actions'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { useWorkspaceMenuActivity } from './workspace-lineage-menu-actions'
+import { getWorkspaceDeleteLineage } from '../deletion/workspace-delete-lineage'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { getDeleteStateForWorktreeHost } from '../deletion/worktree-delete-state-host-match'
 import {
-  EMPTY_AGENT_STATUS_BY_PANE_KEY,
-  EMPTY_BROWSER_TABS_BY_WORKTREE,
-  EMPTY_DELETE_STATE_BY_WORKTREE_ID,
-  EMPTY_STRUCTURED_CHAT_SLEPT_AT,
-  EMPTY_PTY_IDS_BY_TAB_ID,
-  EMPTY_TABS_BY_WORKTREE,
-  EMPTY_UNIFIED_TABS_BY_WORKTREE,
+  EMPTY_WORKTREES,
   EMPTY_WORKSPACE_LINEAGE_BY_CHILD_KEY,
   EMPTY_WORKTREE_LINEAGE_BY_ID,
   getSharedWorkspaceStatus,
@@ -29,6 +20,7 @@ import {
   shouldRemoveProjectFromContextMenu
 } from './worktree-context-menu-policy'
 import { useWorktreeContextMenuCommands } from './use-worktree-context-menu-commands'
+import { selectWorkspaceShowsUnread } from '../../worktree-card-slot-rollup'
 import {
   useWorktreeParentPickerTransition,
   type PendingParentPicker
@@ -102,30 +94,9 @@ export function useWorktreeContextMenuModel({
     )
   )
   const updateWorktreeLineage = useAppStore((s) => s.updateWorktreeLineage)
-  const tabsByWorktree = useAppStore((s) =>
-    selectMenuScopedMap(menuOpen, s.tabsByWorktree, EMPTY_TABS_BY_WORKTREE)
-  )
-  const ptyIdsByTabId = useAppStore((s) =>
-    selectMenuScopedMap(menuOpen, s.ptyIdsByTabId, EMPTY_PTY_IDS_BY_TAB_ID)
-  )
-  const browserTabsByWorktree = useAppStore((s) =>
-    selectMenuScopedMap(
-      menuOpen,
-      selectAwakeBrowserTabsByWorktree(s),
-      EMPTY_BROWSER_TABS_BY_WORKTREE
-    )
-  )
-  const unifiedTabsByWorktree = useAppStore((s) =>
-    selectMenuScopedMap(menuOpen, s.unifiedTabsByWorktree, EMPTY_UNIFIED_TABS_BY_WORKTREE)
-  )
-  const agentStatusByPaneKey = useAppStore((s) =>
-    selectMenuScopedMap(menuOpen, s.agentStatusByPaneKey, EMPTY_AGENT_STATUS_BY_PANE_KEY)
-  )
-  const structuredChatSleptAtByPaneKey = useAppStore((s) =>
-    selectMenuScopedMap(menuOpen, s.structuredChatSleptAtByPaneKey, EMPTY_STRUCTURED_CHAT_SLEPT_AT)
-  )
-  const deleteStateByWorktreeId = useAppStore((s) =>
-    selectMenuScopedMap(menuOpen, s.deleteStateByWorktreeId, EMPTY_DELETE_STATE_BY_WORKTREE_ID)
+  // The menu offers what the card shows: unread when any agent result or the flag is unread.
+  const showsUnread = useAppStore((s) =>
+    menuOpen ? selectWorkspaceShowsUnread(s, worktree) : worktree.isUnread
   )
   const scopeRef = useRef<HTMLDivElement>(null)
   const contextMenuOpenedAtRef = useRef<number | null>(null)
@@ -136,54 +107,42 @@ export function useWorktreeContextMenuModel({
   const workspaceScope = parseWorkspaceKey(worktree.id)
   const folderWorkspaceId =
     workspaceScope?.type === 'folder' ? workspaceScope.folderWorkspaceId : null
-  const sleepActivity = useMemo(
-    () => ({
-      tabsByWorktree,
-      ptyIdsByTabId,
-      browserTabsByWorktree,
-      unifiedTabsByWorktree,
-      agentStatusByPaneKey,
-      structuredChatSleptAtByPaneKey
-    }),
-    [
-      agentStatusByPaneKey,
-      browserTabsByWorktree,
-      structuredChatSleptAtByPaneKey,
-      ptyIdsByTabId,
-      tabsByWorktree,
-      unifiedTabsByWorktree
-    ]
-  )
   // A paired cloud workspace can be running with nothing open here: its Sleep reaches the sandbox.
   const pairedCloudSleepable = useIsPairedCloudPrimaryRow(worktree) && !isMultiContext
+  // Lineage reads only the catalog; per-workspace activity comes from narrow id selectors below.
+  const lineageTargets = useMemo(
+    () =>
+      menuOpen && !isMultiContext
+        ? [
+            worktree,
+            ...getWorkspaceDeleteLineage(worktree, allWorktrees, worktreeLineageById).descendants
+          ]
+        : EMPTY_WORKTREES,
+    [allWorktrees, isMultiContext, menuOpen, worktree, worktreeLineageById]
+  )
+  const activityCandidates = useMemo(
+    () => [
+      ...activeContextWorktrees,
+      ...lineageTargets.filter((target) => !activeContextWorktrees.includes(target))
+    ],
+    [activeContextWorktrees, lineageTargets]
+  )
+  const { sleepableIds, deletingIds } = useWorkspaceMenuActivity(menuOpen, activityCandidates)
   const sleepableWorktrees = useMemo(
     () =>
       activeContextWorktrees.filter(
         (item) =>
-          hasSleepableWorkspaceActivity(item.id, sleepActivity) ||
-          (pairedCloudSleepable && item.id === worktree.id)
+          sleepableIds.includes(item.id) || (pairedCloudSleepable && item.id === worktree.id)
       ),
-    [activeContextWorktrees, sleepActivity, pairedCloudSleepable, worktree.id]
+    [activeContextWorktrees, sleepableIds, pairedCloudSleepable, worktree.id]
   )
-  const lineageMenuActions = useWorkspaceLineageMenuActions({
-    enabled: menuOpen && !isMultiContext,
-    parent: worktree,
-    worktrees: allWorktrees,
-    lineageById: worktreeLineageById,
-    activity: sleepActivity
-  })
-  const lineageDescendantCount = lineageMenuActions.descendants.length
-  const subtreeSleepableWorktrees = lineageMenuActions.sleepableTargets
-  const deletingContext = useMemo(
-    () =>
-      activeContextWorktrees.some(
-        (item) => getDeleteStateForWorktreeHost(item, deleteStateByWorktreeId)?.isDeleting
-      ),
-    [activeContextWorktrees, deleteStateByWorktreeId]
+  const lineageDescendantCount = Math.max(0, lineageTargets.length - 1)
+  const subtreeSleepableWorktrees = useMemo(
+    () => lineageTargets.filter((target) => sleepableIds.includes(target.id)),
+    [lineageTargets, sleepableIds]
   )
-  const deletingSubtree = lineageMenuActions.targets.some(
-    (item) => getDeleteStateForWorktreeHost(item, deleteStateByWorktreeId)?.isDeleting
-  )
+  const deletingContext = activeContextWorktrees.some((item) => deletingIds.includes(item.id))
+  const deletingSubtree = lineageTargets.some((item) => deletingIds.includes(item.id))
   const contextDeletePending = isMultiContext ? deletingContext : deletingSubtree
   const contextWorkspaceStatus = useMemo(
     () => getSharedWorkspaceStatus(activeContextWorktrees, statusesForWorktree),
@@ -298,6 +257,7 @@ export function useWorktreeContextMenuModel({
     setMenuOpenState,
     setWorkspaceUnreadByUser,
     setWorktreesPinnedAndReveal,
+    showsUnread,
     sleepableWorktrees,
     subtreeSleepableWorktrees,
     statusesForWorktree,
@@ -341,9 +301,9 @@ export function useWorktreeContextMenuModel({
 
   return {
     ...commands,
+    showsUnread,
     activeContextWorktrees,
     batchDeleteWorktrees,
-    browserTabsByWorktree,
     children,
     contentClassName,
     contextDeletePending,
@@ -373,7 +333,6 @@ export function useWorktreeContextMenuModel({
     parentPicker,
     parentPickerOpen,
     projectGroups,
-    ptyIdsByTabId,
     removesProject,
     repo,
     scopeRef,
@@ -385,7 +344,6 @@ export function useWorktreeContextMenuModel({
     sleepableWorktrees,
     subtreeSleepableWorktrees,
     suppressOpeningPointerEvent,
-    tabsByWorktree,
     validParentWorktreeId,
     worktree,
     workspaceStatuses

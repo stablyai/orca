@@ -46,7 +46,6 @@ export const cloudAgentSignIns = defineFixture({
         title="Cloud agent sign-ins"
         description={<OrcaCloudAccountsDescription />}
         forceVisible
-        grouped
       >
         <OrcaCloudAccountsView
           load={READY}
@@ -81,7 +80,6 @@ export const agentAccountsLinkRow = defineFixture({
         title="Agent accounts"
         description="Sign-ins, account switching and usage for your agents."
         forceVisible
-        grouped
       >
         <AgentAccountsJumpRow
           links={[

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { CreateAgentSessionParams } from '../rpc-contract/agent-session-params'
+import { CreateAgentSessionParams } from '../rpc-contract/terminal/agent-session-params'
 import { withAgentKeyLaunchEnv } from './agent-key-launch-env'
 
 const base = {

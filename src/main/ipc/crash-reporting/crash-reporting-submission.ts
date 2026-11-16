@@ -1,12 +1,12 @@
 import os from 'node:os'
 import { app } from 'electron'
-import type { CrashReportDiagnosticBundle } from '../../../shared/crash-reporting-diagnostic-bundle'
+import type { CrashReportDiagnosticBundle } from '../../../shared/crash-reporting/crash-reporting-diagnostic-bundle'
 import {
   type CrashReportSubmitArgs,
   type CrashReportSubmitResult,
   formatCrashReportText,
   formatUncapturedCrashReportText
-} from '../../../shared/crash-reporting'
+} from '../../../shared/crash-reporting/crash-reporting'
 import { submitFeedback } from '../feedback'
 import type { CrashReportStore } from '../../crash-reporting/reports/crash-report-store'
 import {
@@ -101,7 +101,10 @@ export async function submitCrashReport(
   inFlightSubmissions.add(report.id)
   try {
     const diagnosticUpload = await prepareCrashDiagnosticBundle(
-      args.includeDiagnosticLogs !== false
+      args.includeDiagnosticLogs !== false,
+      report.reason === 'main-thread-hang' && typeof report.details.captureId === 'string'
+        ? report.details.captureId
+        : undefined
     )
     const diagnosticBundle = diagnosticUpload.diagnosticBundle
     const reportOnlyDiagnosticBundle = diagnosticBundleForReportOnlyRetry(diagnosticUpload)

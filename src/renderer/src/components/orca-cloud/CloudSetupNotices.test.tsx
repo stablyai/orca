@@ -181,7 +181,7 @@ describe('the can’t-reach line says why (GH-FETCH-REASON)', () => {
     const line = await show('install', 'remoteDenied')
     expect(line.text).toBe('Orca’s GitHub app doesn’t have access to stablyai/orca-plugins.')
     expect(line.description).toBe('Pulls and pushes won’t work until it does.')
-    expect(line.action).toMatchObject({ label: 'Grant access' })
+    expect(line.action).toMatchObject({ label: 'Give Orca access' })
     expect(line.text).not.toContain('right now')
   })
 
@@ -189,7 +189,7 @@ describe('the can’t-reach line says why (GH-FETCH-REASON)', () => {
     const line = await show('cantInstall')
     expect(line.text).toBe('Orca’s GitHub app doesn’t have access to stablyai/orca-plugins.')
     expect(line.description).toBe(
-      'Only an owner of stablyai can grant it. Pulls and pushes won’t work until they do.'
+      'Only an owner of stablyai can give Orca access. Pulls and pushes won’t work until they do.'
     )
     expect(line.action).toMatchObject({ label: 'Copy request for an owner' })
   })

@@ -2,7 +2,7 @@
 // this app wake the VM, install this device's key and open the runtime port forward. The VM host
 // key comes from the control plane and is pinned, never trusted on first use.
 import { readFile } from 'node:fs/promises'
-import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
+import type { EphemeralVmRuntimeRecord } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import { isEnvironmentProviderError } from '../environment-providers/environment-provider-driver'
 import type { HostedSandboxControlPlaneClient } from '../hosted-sandbox/hosted-sandbox-control-plane-client'
 import {

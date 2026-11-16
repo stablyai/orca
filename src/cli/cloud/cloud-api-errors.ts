@@ -1,7 +1,7 @@
 // Private build only: maps a control-plane error response to the CLI's error. Messages follow the
 // product glossary's error tone: say what happened in plain words, say whether anything was lost or
 // charged, give one next step. API codes and reasons stay in `error.data` (seen with --json).
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import type { CloudCredentials } from './cloud-credentials'
 
 export type CloudApiErrorBody = { error?: unknown; reason?: unknown }

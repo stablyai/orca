@@ -17,7 +17,7 @@ import {
 import { startRunAction, stopRunAction } from '@/lib/run-actions/run-action-controller'
 import { autoRunProvisionedWorkspaceOnce } from '@/lib/run-actions/run-action-events'
 import { useWorktreeRunActionRuns, type RunActionRun } from '@/lib/run-actions/run-actions-store'
-import type { WorkspacePort } from '../../../../shared/workspace-ports'
+import type { WorkspacePort } from '../../../../shared/workspace/ports/workspace-ports'
 import { RunActionButtonView } from './RunActionButtonView'
 import { findLiveRunTabId } from '@/lib/run-actions/run-action-tabs'
 

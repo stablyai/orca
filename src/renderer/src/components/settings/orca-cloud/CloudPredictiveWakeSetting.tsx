@@ -52,11 +52,11 @@ export function CloudPredictiveWakeSettingView({
           <p className="text-xs text-muted-foreground">
             {t(
               'auto.components.settings.orcaCloudPredictiveWake.description',
-              "Starts waking a sleeping sandbox when you point at its workspace or come back to Orca, so it's ready sooner. If you don't open it, it goes back to sleep after {{count}} minutes idle. Early wakes count toward your sandbox hours.",
+              'Starts waking a workspace when you hover it or return to Orca, so it opens faster. Unopened, it sleeps again after {{count}} minutes. Early wakes add to your usage.',
               {
                 count: idleMinutes,
                 defaultValue_one:
-                  "Starts waking a sleeping sandbox when you point at its workspace or come back to Orca, so it's ready sooner. If you don't open it, it goes back to sleep after {{count}} minute idle. Early wakes count toward your sandbox hours."
+                  'Starts waking a workspace when you hover it or return to Orca, so it opens faster. Unopened, it sleeps again after {{count}} minute. Early wakes add to your usage.'
               }
             )}
           </p>

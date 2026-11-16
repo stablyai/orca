@@ -1,9 +1,9 @@
 // Private build only: `orca cloud workspace sleep|wake|archive|delete` (`destroy` is a hidden alias of
 // delete). Wake and sleep show progress on stderr (see cloud-progress.ts) so a multi-second wait is
 // never silent.
-import type { CommandHandler } from '../dispatch'
-import { getRequiredStringFlag } from '../flags'
-import { RuntimeClientError } from '../runtime/types'
+import type { CommandHandler } from '../dispatch/dispatch'
+import { getRequiredStringFlag } from '../arguments/flags'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { formatCloudWorkspace, printCloudResult, type CloudWorkspace } from './cloud-format'
 import {
   MUTATE_TIMEOUT_MS,
