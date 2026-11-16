@@ -39,7 +39,8 @@ export function createHydrateEditorSession(
           session,
           validWorktreeIds,
           // Why: use the store's activeWorktreeId — hydrateWorkspaceSession may have nulled an invalid ID, and we must respect that.
-          s.activeWorktreeId
+          s.activeWorktreeId,
+          new Set(options?.wslMovedChatWorkspaceKeys)
         )
         return {
           ...state,

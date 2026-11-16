@@ -38,7 +38,9 @@ export type HydratedEditorSessionState = Pick<
 export function buildHydratedEditorSessionState(
   session: WorkspaceSessionState,
   validWorktreeIds: ReadonlySet<string>,
-  activeWorktreeId: string | null
+  activeWorktreeId: string | null,
+  /** Owners whose editors moved to another host: not stranded here. */
+  movedOwnerKeys: ReadonlySet<string> = new Set()
 ): {
   state: HydratedEditorSessionState
   editorFileIdMigrationsByWorktree: Record<string, Map<string, string>>
@@ -66,7 +68,7 @@ export function buildHydratedEditorSessionState(
   for (const [worktreeId, files] of Object.entries(openFilesByWorktree)) {
     if (!validWorktreeIds.has(worktreeId)) {
       // Why: unsaved text is never dropped automatically; keep it for recovery and later saves.
-      const drafts = strandedDraftFiles(files)
+      const drafts = movedOwnerKeys.has(worktreeId) ? [] : strandedDraftFiles(files)
       if (drafts.length > 0) {
         strandedEditorDrafts[worktreeId] = drafts
       }

@@ -8,7 +8,7 @@ import {
 } from '@/lib/editor/file-operations/editor-file-operation-provenance'
 import { createUntitledMarkdownFile } from '@/lib/editor/file-operations/create-untitled-markdown'
 import { translate } from '@/i18n/i18n'
-import type { StrandedEditorDraftRef } from '@/lib/workspace/persistence/stranded-editor-drafts'
+import type { PersistedOpenFile } from '../../../../../../shared/workspace-session/workspace-session-state-types'
 import { basename, dirname } from '@/lib/path'
 import { getWorktreePathBasenameFromId } from '../../../../../../shared/worktree/id'
 
@@ -169,7 +169,7 @@ export function showClosedUnsavedFilesToast(
 /** Offers drafts of workspaces gone at startup; dismissing keeps them saved for the next launch. */
 export function showStrandedEditorDraftsToast(): void {
   const stranded = useAppStore.getState().strandedEditorDrafts
-  const refs = new Map<ClosedUnsavedFile, StrandedEditorDraftRef>()
+  const drafted = new Map<ClosedUnsavedFile, PersistedOpenFile>()
   const labels = new Set<string>()
   for (const [ownerKey, drafts] of Object.entries(stranded)) {
     for (const draft of drafts) {
@@ -181,19 +181,21 @@ export function showStrandedEditorDraftsToast(): void {
         filePath: draft.filePath,
         content: draft.dirtyDraftContent
       }
-      refs.set(file, { ownerKey, filePath: draft.filePath })
+      drafted.set(file, draft)
       labels.add(getWorktreePathBasenameFromId(ownerKey) ?? basename(dirname(draft.filePath)))
     }
   }
-  if (refs.size === 0) {
+  if (drafted.size === 0) {
     return
   }
   showUnsavedFilesRecoveryToast({
-    files: [...refs.keys()],
+    files: [...drafted.keys()],
     workspaceLabel: [...labels].join(', '),
     onRecovered: (recovered) =>
       useAppStore
         .getState()
-        .settleRecoveredStrandedEditorDrafts(recovered.flatMap((file) => refs.get(file) ?? []))
+        .settleRecoveredStrandedEditorDrafts(
+          new Set(recovered.flatMap((file) => drafted.get(file) ?? []))
+        )
   })
 }
