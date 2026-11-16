@@ -182,6 +182,7 @@ test('captures the worker strip in an isolated hidden native chat', async ({
         })
         await stopTarget.focus()
         await expect(stopTarget).toBeFocused()
+        await page.keyboard.press('Escape')
       }
       if (scenario === 'asks-20') {
         const order = () =>

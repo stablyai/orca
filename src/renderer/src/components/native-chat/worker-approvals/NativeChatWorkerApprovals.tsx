@@ -287,11 +287,6 @@ export function NativeChatWorkerApprovalStack({
                     'Show {{name}} question',
                     { name: entry.worker.label }
                   )}
-                  onFocus={(event) =>
-                    event.currentTarget
-                      .closest('[data-native-chat-worker-question-summary]')
-                      ?.scrollIntoView({ block: 'center' })
-                  }
                   onClick={() => {
                     setSelected(entry.approval.approvalId)
                     setFolded((current) => {

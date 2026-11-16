@@ -163,7 +163,7 @@ export const WorkerDockRow = memo(function WorkerDockRow({
           </span>
           <span
             className={cn(
-              compact && !narrow && 'flex min-w-0 items-baseline gap-2',
+              !narrow && 'flex min-w-0 items-baseline gap-2',
               compact && narrow && 'contents'
             )}
           >
