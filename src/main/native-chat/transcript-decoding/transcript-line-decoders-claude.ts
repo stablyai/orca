@@ -19,8 +19,10 @@ import { claudeStopHookFeedbackRow } from '../../claude/structured/journal/claud
 import { structuredAgentSessionStatusBlock } from '../../../shared/agent-session/view/structured-agent-session-status-block'
 import {
   claudeMessageWithoutSyntheticText,
-  isClaudeInjectedUserMessage
+  isClaudeInjectedUserMessage,
+  isClaudeTaskNotificationTurnStart
 } from '../../claude/structured/journal/claude-internal-message-content'
+import { NATIVE_CHAT_PROVIDER_TURN_START_PRESENTATION } from '../../../shared/native-chat/transcript/turns/native-chat-provider-turn-start'
 
 const MAX_EDIT_PATCH_HUNKS = 40
 const MAX_EDIT_PATCH_HUNK_LINES = 400
@@ -137,6 +139,31 @@ export function decodeClaudeTranscriptLine(
     timestamp,
     source: 'transcript',
     ...parent
+  }
+}
+
+/** Chat reads keep where Claude resumed on its own, so journal-less turns split there as structured turns do. */
+export function decodeClaudeChatTranscriptLine(
+  line: string,
+  fallbackId: string
+): NativeChatMessage | null {
+  const record = line.includes('task-notification') ? parseJsonObject(line) : null
+  if (!record || !isClaudeTaskNotificationTurnStart(record)) {
+    return decodeClaudeTranscriptLine(line, fallbackId)
+  }
+  return {
+    id: extractString(record.uuid) ?? fallbackId,
+    role: 'system',
+    // Harness text: clients that predate the marker strip it as an injected turn.
+    blocks: [
+      {
+        type: 'text',
+        text: '<task-notification>',
+        presentation: NATIVE_CHAT_PROVIDER_TURN_START_PRESENTATION
+      }
+    ],
+    timestamp: parseTimestamp(record.timestamp),
+    source: 'transcript'
   }
 }
 

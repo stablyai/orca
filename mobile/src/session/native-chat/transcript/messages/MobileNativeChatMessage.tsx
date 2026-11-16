@@ -10,7 +10,10 @@ import {
   isRenderableSubagentGroup,
   withoutSubagentGroupTwins
 } from '../../../../../../src/shared/native-chat/transcript/subagents/native-chat-subagent-summary'
-import { deriveNativeChatRowContent } from '../../../../../../src/shared/native-chat/transcript/row-content/native-chat-row-content'
+import {
+  deriveNativeChatRowContent,
+  nativeChatRowRendersContent
+} from '../../../../../../src/shared/native-chat/transcript/row-content/native-chat-row-content'
 import {
   MobileNativeChatGroupedThought,
   MobileNativeChatReasoningRow
@@ -203,8 +206,12 @@ function MobileNativeChatMessageImpl({
       onToggleExpanded={turnKey && onToggleTurn ? () => onToggleTurn(turnKey) : undefined}
     />
   ) : null
-  // Keep answered receipts visible even when their tool run folds away.
-  if (joinsWorkRun || (foldedAway && !receipt)) {
+  // Keep answered receipts visible even when their tool run folds away; an empty system row draws only its bar.
+  if (
+    joinsWorkRun ||
+    (foldedAway && !receipt) ||
+    (isSystem && !receipt && !nativeChatRowRendersContent(message.blocks))
+  ) {
     return <>{statusRow}</>
   }
   if (receipt) {
