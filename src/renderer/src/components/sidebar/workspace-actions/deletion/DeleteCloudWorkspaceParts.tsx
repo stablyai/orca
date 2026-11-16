@@ -53,7 +53,7 @@ export function DeleteCloudWorkspaceHeader({
       <DialogDescription>
         {t(
           'auto.components.sidebar.DeleteCloudWorkspace.bodyNoSnapshot',
-          "Deletes the sandbox and its disk, including chats, terminals and uncommitted changes. This can't be undone."
+          'Deletes the workspace and all its files, chats and uncommitted changes. This can’t be undone.'
         )}
       </DialogDescription>
       {/* The files live in the sandbox: name, repo and branch, and its state; no local path. */}
@@ -94,7 +94,7 @@ export function DeleteCloudWorkspaceHeader({
           <div className="mt-0.5 text-muted-foreground" data-cloud-archive-hook-wake>
             {t(
               'auto.components.sidebar.DeleteCloudWorkspace.archiveHookWake',
-              'It wakes first to run its archive hook (orca.yaml scripts.archive).'
+              'It wakes first to run the archive script in orca.yaml.'
             )}
           </div>
         ) : null}

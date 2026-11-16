@@ -42,7 +42,7 @@ export function toastCloudSleepFailure(
   toast.error(sleepFailedTitle(worktreeIds), {
     description: translate(
       'orcaCloudWorkspace.sleepFailedDetail',
-      'Its sandbox is still running and using sandbox hours. Your files are safe.'
+      'It’s still running and adding to your usage. Your files are safe.'
     ),
     action: {
       label: translate('orcaCloudWorkspace.tryAgain', 'Try again'),

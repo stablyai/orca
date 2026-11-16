@@ -19,13 +19,12 @@ import { cn } from '@/lib/class-names'
 import {
   buildFileTree,
   formatRelative,
-  formatShortDate,
   type FileTreeNode
 } from '@/lib/orca-cloud/orca-cloud-workspace-state'
 import type { CloudArchiveInfo } from '../../../../shared/hosted-sandbox/cloud-workspace-api'
 import type { HostedArchivePullRequest } from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
 import { CloudGitChanges } from './CloudGitChanges'
-import { archivedSnapshotLine } from './archive-snapshot-copy'
+import { archivedCountdownShort } from './archive-snapshot-copy'
 import { CloudWorkspaceHeader } from './CloudWorkspaceHeader'
 import { FOCUS_RING } from './cloud-focus'
 
@@ -193,11 +192,7 @@ export function CloudArchivedWorkspaceView({
           when: formatRelative(archivedAt, now)
         })
       : t('orcaCloudWorkspace.state.archived', 'Archived'),
-    expiresAt
-      ? t('orcaCloudWorkspace.archived.keptUntilShort', 'kept until {{date}}', {
-          date: formatShortDate(expiresAt)
-        })
-      : null
+    expiresAt ? archivedCountdownShort(t, expiresAt, now) : null
   ]
     .filter(Boolean)
     .join(' · ')
@@ -213,8 +208,18 @@ export function CloudArchivedWorkspaceView({
           title={workspaceName ?? t('orcaCloudWorkspace.archived.title', 'Archived workspace')}
           state="archived"
           stateLine={stateLine}
-          // The snapshot defined inline, with this workspace's own deletion date.
-          note={archivedSnapshotLine(t, expiresAt)}
+          // The countdown is in the state line; without a date, the note names the 30-day rule.
+          note={
+            expiresAt
+              ? t(
+                  'orcaCloudWorkspace.archiveSnapshot.archivedNote',
+                  'Read-only. Unarchive it to keep working.'
+                )
+              : t(
+                  'orcaCloudWorkspace.archiveSnapshot.archived',
+                  'Read-only. Deletes 30 days after archiving unless you unarchive it.'
+                )
+          }
           headingRef={headingRef}
           action={
             <Button

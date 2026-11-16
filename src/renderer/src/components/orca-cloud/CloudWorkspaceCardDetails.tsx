@@ -157,7 +157,7 @@ export function CloudWorkspaceCardDetails({
         />
         {status.archive?.expiresAt ? (
           <Fact
-            label={t('orcaCloudWorkspace.keptUntil', 'Kept until')}
+            label={t('orcaCloudWorkspace.keptUntil', 'Deletes')}
             value={formatShortDate(status.archive.expiresAt)}
           />
         ) : null}

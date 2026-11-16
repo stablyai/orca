@@ -228,7 +228,10 @@ export function CloudWorkspaceStatusPanel({
       {unavailable ? (
         <InlineError
           tone="neutral"
-          title={t('orcaCloudWorkspace.statusUnavailableTitle', 'Couldn’t get the sandbox status.')}
+          title={t(
+            'orcaCloudWorkspace.statusUnavailableTitle',
+            'Couldn’t get the workspace status.'
+          )}
           retryLabel={t('orcaCloudWorkspace.tryAgain', 'Try again')}
           retrying={entry?.loading}
           onRetry={() => void refreshCloudWorkspaceStatus(workspaceId)}

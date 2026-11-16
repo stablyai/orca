@@ -99,7 +99,7 @@ export function archiveCloudWorkspace(
     if (deps.beforeSleep && !(await deps.beforeSleep())) {
       const message = translate(
         'auto.lib.orcaCloud.workspaceActions.archiveHookKept',
-        'Not archived: its archive hook failed. Fix it and archive again.'
+        'Not archived: its archive script failed. Fix it and archive again.'
       )
       return { ok: false, code: 'failed', message, userMessage: message }
     }
@@ -108,7 +108,7 @@ export function archiveCloudWorkspace(
       // Never archive a sandbox that is still running: it would keep using hours behind an "Archived" label.
       const message = translate(
         'auto.lib.orcaCloud.workspaceActions.archiveSleepFailed',
-        'It’s still running. Your files are safe.'
+        'It’s still running and adding to your usage. Your files are safe.'
       )
       return { ok: false, code: 'failed', message, userMessage: message }
     }

@@ -199,7 +199,7 @@ it('says nothing was created only when no sandbox is left running', () => {
   )
   const kept = vmBuildFailureCopy(failure, { ...context, sandboxKept: true }, translate).body
   expect(kept).not.toContain('Nothing was created')
-  expect(kept).toContain('delete the sandbox')
+  expect(kept).toContain('delete it so it stops adding to your usage')
 })
 
 it('recipe VMs keep counting failed checks in the title', () => {

@@ -229,7 +229,7 @@ export function vmBuildFailureCopy(
             body: sandboxKept
               ? t(
                   'auto.components.worktree.creation.VmBuildFailureCard.provisionBodyCloudKept',
-                  'Something went wrong while starting the sandbox. Try again, or delete the sandbox to stop using sandbox hours.'
+                  'Try again, or delete it so it stops adding to your usage.'
                 )
               : t(
                   'auto.components.worktree.creation.VmBuildFailureCard.provisionBodyCloud2',
