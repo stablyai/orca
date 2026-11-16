@@ -1,4 +1,4 @@
-import { parseExecutionHostId, type ExecutionHostId } from '../execution-host'
+import { parseExecutionHostId, type ExecutionHostId } from './execution-host'
 
 /** Bounded listing evidence applies only to covered hosts; absent scopes on old hosts prove no coverage
  * (docs/reference/ssh-execution-boundary.md). */

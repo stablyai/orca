@@ -6369,7 +6369,8 @@
           "runtimeHostDisconnectedNamed": "{{hostName}} déconnecté",
           "runtimeHostProject": "Projet sur serveur Orca",
           "runtimeHostProjectNamed": "Projet sur {{hostName}}",
-          "ef18787206": "En attente de suppression"
+          "ef18787206": "En attente de suppression",
+          "notificationsMuted": "Notifications désactivées"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents",
@@ -6465,7 +6466,9 @@
           "copyPathOption": "Chemin",
           "copyNameOption": "Nom du worktree",
           "lineageSubmenu": "Parent et enfants",
-          "projectGroupSubmenu": "Groupe de projets"
+          "projectGroupSubmenu": "Groupe de projets",
+          "muteNotifications": "Désactiver les notifications",
+          "unmuteNotifications": "Réactiver les notifications"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Mise à jour requise",
@@ -22827,7 +22830,9 @@
       "chooseTransition": "Choisissez un changement de statut :",
       "cancel": "Annuler",
       "noTransition": "Aucun changement de statut vers {{column}} n'est disponible pour {{key}}.",
-      "queryTooLong": "La requête Jira est trop longue. Raccourcissez la requête ou effacez les filtres."
+      "queryTooLong": "La requête Jira est trop longue. Raccourcissez la requête ou effacez les filtres.",
+      "reorderColumn": "Réorganiser {{column}}",
+      "reorderColumnHint": "Issues dans cette colonne : {{count}}. Utilisez les flèches gauche et droite pour la déplacer."
     },
     "favourites": {
       "activeLabel": "Favoris Jira : {{name}}",
@@ -22917,21 +22922,13 @@
     "language": {
       "back": "Langues",
       "requestPrompt": "Quelle langue aimeriez-vous voir prise en charge par Orca ?",
-      "requestSuccess": "Demande de langue enregistrée. Vous pouvez poursuivre la configuration.",
       "requestError": "Impossible d’enregistrer votre demande. Réessayez.",
       "retry": "Réessayer",
       "requestAction": "Demander une langue",
       "title": "Langue d’affichage",
-      "device": "Langue du système : {{language}}",
-      "unsupported": "Langue du système : {{language}}. Cette langue n’est pas encore prise en charge.",
-      "unknown": "La langue du système n’a pas pu être détectée. Choisissez une langue ci-dessous.",
-      "loadError": "Impossible de charger cette langue. Réessayez.",
-      "saveError": "Impossible d’enregistrer votre préférence de langue. Réessayez.",
-      "other": "Autre langue…",
       "settingsError": "Impossible de charger vos paramètres.",
       "loadingSettings": "Chargement des paramètres…",
-      "loading": "Chargement de la langue…",
-      "saving": "Enregistrement de la langue…"
+      "loading": "Chargement de la langue…"
     }
   },
   "workspaceSpace": {

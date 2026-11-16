@@ -15,7 +15,7 @@ import type { StructuredAgentSessionProviderOpenInput } from '../../../native-ch
 import type { CodexJournalTranslationAdmission } from '../journal/codex-structured-journal-contracts'
 import { dispatchCodexTurn } from '../turns/codex-structured-turn-start'
 import { isCodexTurnOptionKey } from '../turns/codex-turn-option-keys'
-import { isNativeLocalLocation as supportsCodexStructuredLocation } from '../../../../shared/execution-host'
+import { isNativeLocalLocation as supportsCodexStructuredLocation } from '../../../../shared/execution-host/execution-host'
 import { CodexStructuredSessionTeardown } from './codex-structured-session-teardown'
 import {
   applyCodexStructuredSessionOption,

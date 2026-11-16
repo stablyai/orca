@@ -3,7 +3,7 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { GitHubPRRefreshCandidate } from '../../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import { getHostedReviewCacheKey } from '../hosted-review-cache-identity'
 import { findIndexedRepoOwnerForHost } from '@/lib/workspace/ownership/repo-owner-index'
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 
 export function shouldCoordinateVisibleGitHubReview(
   state: AppState,

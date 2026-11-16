@@ -26,7 +26,10 @@ import {
   reportWorkerTurnStop,
   type WorkerTurnStop
 } from '../../orchestration/workers/turn-stops/worker-turn-stop-report'
-import { LOCAL_EXECUTION_HOST_ID, toSshExecutionHostId } from '../../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  toSshExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 
 export abstract class OrcaRuntimeWithSubscribeToTerminalResize extends OrcaRuntimeWithApplyMobileDisplayMode {

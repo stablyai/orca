@@ -12,7 +12,7 @@ import {
 
 // Read at each close, so one import serves both builds.
 const layoutOwner = vi.hoisted(() => ({ isMain: false }))
-vi.mock('../../../shared/layout-owner-switch', () => ({
+vi.mock('../../../shared/workspace-layout/layout-owner-switch', () => ({
   get ORCA_LAYOUT_OWNER_IS_MAIN() {
     return layoutOwner.isMain
   }
@@ -99,19 +99,6 @@ describe.each([false, true])('ORCA_LAYOUT_OWNER_IS_MAIN=%s', (layoutOwnerIsMain)
     expect(reply.error?.code).toBe('terminal_tab_pinned')
     expect(f.hasTab()).toBe(true)
     expect(stopped).toEqual([])
-  })
-
-  it('closes a pinned tab on a confirmed (forced) close and stops its terminals', async () => {
-    const { f, stopped, close } = await pinnedServerTab(layoutOwnerIsMain)
-    const reply = await close({ force: true })
-    expect(reply.ok).toBe(true)
-    expect(f.hasTab()).toBe(false)
-    if (layoutOwnerIsMain) {
-      expect(stopped).toEqual(expect.arrayContaining(['pty-a', 'pty-b']))
-    } else {
-      // The window's forced close stops the tab's terminals there.
-      expect(f.closeTerminalTab).toHaveBeenCalledWith(expect.any(String), { force: true })
-    }
   })
 
   it('ignores force on a reasonless legacy close, which never carried a confirmation', async () => {

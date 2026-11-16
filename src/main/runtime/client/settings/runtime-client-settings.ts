@@ -13,7 +13,7 @@ import { haveSameDisabledTuiAgents } from '../../../../shared/agent-launch/catal
 import { normalizeSourceControlAiSettings } from '../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import { normalizeSourceControlGroupOrder } from '../../../../shared/source-control/listing/source-control-group-order'
 import { SOURCE_CONTROL_LAUNCH_ACTION_IDS } from '../../../../shared/source-control/ai/recipes/source-control-ai-actions'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { applyNativeChatSessionOptionSettingsMutation } from '../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
 import type { NativeChatSessionOptionSettingsMutation } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { getHostDisplayLabelOverrides } from '../../../../shared/execution-host/host-setting-overrides'

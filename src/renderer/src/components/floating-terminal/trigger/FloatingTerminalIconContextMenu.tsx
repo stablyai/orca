@@ -8,7 +8,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '@/store/index'
-import type { FloatingTerminalTriggerLocation } from '../../../../../shared/ui-chrome-types'
+import type { FloatingTerminalTriggerLocation } from '../../../../../shared/ui-chrome/ui-chrome-types'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 

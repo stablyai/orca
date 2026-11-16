@@ -2,7 +2,7 @@
  * What converting a UNC Windows-drive project to its drive path (D1c) does with each saved field;
  * src/main/wsl/filesystem/wsl-drive-unc-state-rewrite.ts applies it.
  */
-import type { PersistedState } from '../persisted-state-types'
+import type { PersistedState } from '../orca-profiles/persisted-state-types'
 
 type Disposition =
   /** Every identity string in it is re-keyed. */

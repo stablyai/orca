@@ -7,8 +7,8 @@ import { argumentBudgetFailure } from './source-control-command-line-budget'
 import { removeTree } from '../../../shared/file-write/windows-transient-lock-removal'
 import { WindowsCmdLineBreakError } from '@orca/process-host/windows-command-line'
 import { WindowsCommandLineBudgetError } from '../../../shared/shell/launch/windows-command-line-budget'
-import { supervisedProviderSpawnFailure } from '../../provider-process/provider-spawn-failure-report'
 import {
+  agentHostFailure,
   finalizeFromAgentOutput,
   userFacingUnsafeWindowsBatchArgs
 } from '../failures/source-control-agent-failure'
@@ -218,14 +218,8 @@ export function runLocalSourceControlPlan(
         finalize({ success: false, ...textGenerationFailure('outputTooLarge', labelValue) })
         return
       }
-      const spawnFailure = supervisedProviderSpawnFailure(code, stderr)
-      if (spawnFailure?.thrown) {
-        console.error('[commit-message] Failed to spawn local generator:', spawnFailure.error)
-        finalize({ success: false, ...couldNotStart })
-        return
-      }
-      if (spawnFailure) {
-        onError(spawnFailure.error)
+      if (child.outcomeLost) {
+        finalize({ success: false, ...agentHostFailure(plan.label) })
         return
       }
       finalize(

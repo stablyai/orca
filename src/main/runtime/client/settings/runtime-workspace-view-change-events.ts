@@ -1,7 +1,7 @@
 import { isDeepStrictEqual } from 'node:util'
 import type { RuntimeClientEvent } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
+import type { PersistedUIState } from '../../../../shared/orca-profiles/persisted-ui-state-types'
 import { ALL_WORKSPACE_VIEW_UI_FIELDS } from '../../../../shared/workspace-view/workspace-view-ui-fields'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 

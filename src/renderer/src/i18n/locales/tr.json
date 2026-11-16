@@ -22616,21 +22616,13 @@
     "language": {
       "back": "Diller",
       "requestPrompt": "Orca'nın hangi dili desteklemesini istersiniz?",
-      "requestSuccess": "Dil isteği kaydedildi. İlk kuruluma devam edebilirsiniz.",
       "requestError": "İsteğiniz kaydedilemedi. Tekrar deneyin.",
       "retry": "Yeniden dene",
       "requestAction": "Dil iste",
       "title": "Görüntüleme dili",
-      "device": "Sistem dili: {{language}}",
-      "unsupported": "Sistem dili: {{language}}. Bu dil henüz desteklenmiyor.",
-      "unknown": "Sistem diliniz algılanamadı. Aşağıdan bir dil seçin.",
-      "loadError": "Bu dil yüklenemedi. Tekrar deneyin.",
-      "saveError": "Dil tercihiniz kaydedilemedi. Tekrar deneyin.",
-      "other": "Başka bir dil…",
       "settingsError": "Ayarlarınız yüklenemedi.",
       "loadingSettings": "Ayarlar yükleniyor…",
-      "loading": "Dil yükleniyor…",
-      "saving": "Dil kaydediliyor…"
+      "loading": "Dil yükleniyor…"
     }
   },
   "resourceManager": {

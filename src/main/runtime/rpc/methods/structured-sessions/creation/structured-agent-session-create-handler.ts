@@ -24,7 +24,7 @@ import {
   structuredAgentSessionCreateIntentFingerprint
 } from './structured-agent-session-create'
 import { resolveUncommittedStructuredCreate } from './structured-agent-session-precommit-refusal'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
 import { projectReceiptDeviceAttach } from '../subscriptions/structured-agent-session-receipt-devices'
 import {
   structuredAgentSessionClosedBeforeCreate,

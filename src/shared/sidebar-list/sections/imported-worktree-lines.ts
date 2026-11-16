@@ -1,5 +1,5 @@
-import type { ExecutionHostId } from '../../execution-host'
-import { getRepoExecutionHostIdOrDefault } from '../../execution-host'
+import type { ExecutionHostId } from '../../execution-host/execution-host'
+import { getRepoExecutionHostIdOrDefault } from '../../execution-host/execution-host'
 import { getHostContextLabel } from '../../worktree/row-display/host-context-labels'
 import type { ImportedWorktreesCardCandidate, Row } from '../row-types'
 
