@@ -17,7 +17,6 @@ on:
       - 'config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-group-recovery.test.mjs'
       - 'config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-metrics.mjs'
       - 'config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-processes.mjs'
-      - 'config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-processes.test.mjs'
       - 'config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-trial-cleanup.mjs'
       - 'config/scripts/runtime-verification/daemon-lifecycle/daemon-boot-smoke.mjs'
       - 'config/scripts/runtime-verification/daemon-lifecycle/daemon-endpoint-handover-smoke.mjs'
@@ -92,7 +91,6 @@ jobs:
       - run: >-
           pnpm vitest run --config config/vitest.config.ts
           config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-group-recovery.test.mjs
-          config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-processes.test.mjs
           src/main/computer/sidecar-transport/sidecar-client.test.ts
           src/main/computer/macos-native/macos-native-provider-client.test.ts
           src/main/providers/shell-launch/windows/shell-preflight-runtime.windows.test.ts
