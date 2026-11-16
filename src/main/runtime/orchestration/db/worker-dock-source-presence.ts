@@ -120,7 +120,8 @@ export class WorkerDockSourcePresence {
     }
   }
 
-  rememberSnapshot(source: string, snapshot: WorkerDockSnapshot): void {
+  rememberSnapshot(source: string, snapshot: WorkerDockSnapshot, providerFailures: boolean): void {
+    const first = !this.seeded.has(source)
     this.seeded.add(source)
     const open = snapshot.identities.length > 0
     const previous = this.values.get(source)
@@ -135,10 +136,15 @@ export class WorkerDockSourcePresence {
         this.listener?.()
       }
     }
-    for (const row of [...snapshot.identities, ...snapshot.results]) {
-      this.dispatchSources.set(row.dispatchId, source)
+    if (first) {
+      for (const row of snapshot.identities) {
+        this.dispatchSources.set(row.dispatchId, source)
+      }
+      for (const row of snapshot.results) {
+        this.dispatchSources.set(row.dispatchId, source)
+      }
     }
-    if (snapshot.identities.some((row) => row.kind && row.kind !== 'worker')) {
+    if (providerFailures) {
       this.providerSources.add(source)
     }
   }

@@ -144,7 +144,7 @@ export function readWorkerDock(
       rows,
       anchor: identities[center]?.id ?? null
     }
-    db.workerDockSources.rememberSnapshot(source, snapshot)
+    db.workerDockSources.rememberSnapshot(source, snapshot, Boolean(providerFailures?.length))
     return snapshot
   })
 }
