@@ -119,9 +119,10 @@ export function WorkspaceCleanupRuleRows({
       <SearchableSetting {...search[key]} forceVisible={forceVisible}>
         <SettingsRow
           label={
-            <span className="inline-flex items-center gap-2">
+            // Inline, so a wrapping title carries its badge with it.
+            <span className="leading-snug">
               {search[key].title}
-              {badge ? <SettingsBadge>{badge}</SettingsBadge> : null}
+              {badge ? <SettingsBadge className="ml-2 align-middle">{badge}</SettingsBadge> : null}
             </span>
           }
           description={

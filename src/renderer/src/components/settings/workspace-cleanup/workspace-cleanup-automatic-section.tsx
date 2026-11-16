@@ -169,12 +169,12 @@ export function WorkspaceCleanupAutomaticSection({
   if (!showRules) {
     return matchesSettingsSearch(query, [search.status]) ? (
       <SearchableSetting {...search.status}>
-        <SettingsGroupHeader title={title} description={description} action={action} />
+        <SettingsGroupHeader title={title} description={description} action={action} wrapAction />
       </SearchableSetting>
     ) : null
   }
   return (
-    <SettingsGroup title={title} description={description} action={action}>
+    <SettingsGroup title={title} description={description} action={action} wrapAction>
       {children}
       {query.trim() === '' ? (
         <p data-settings-row="" className="py-3 text-xs text-muted-foreground">

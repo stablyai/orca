@@ -22608,7 +22608,7 @@
           "startup": "On startup",
           "hourly": "Hourly",
           "settings": "After a rule change",
-          "runNow": "Clean up now",
+          "runNow": "Run rules now",
           "cli": "From the CLI"
         },
         "search": {
