@@ -2,7 +2,7 @@ import { projectSavedChatContextItems } from '../../conversation-context/agent-s
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionContinuationContext } from '../../../../shared/agent-session/agent-session-wire'
 import { buildAgentSessionHandoffContext } from '../../../../shared/native-chat/transcript/agent-session-handoff-context'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { projectStructuredAgentSessionMessages } from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import { formatWorkerTranscriptMessage } from '../../../../shared/native-chat/transcript/worker-transcript-text'
 import { toLinuxPath } from '../../../../shared/file-access/wsl-paths'

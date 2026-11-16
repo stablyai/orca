@@ -179,9 +179,10 @@ export function createReadOwner(
   }
 
   let owner: StructuredAgentSessionReadOwner
+  let retained = 0
   const deleteIfUnused = (): void => {
     const subscriptions = activations.size + listeners.size + commandListeners.size
-    if (subscriptions === 0 && !activity.retained()) {
+    if (subscriptions === 0 && retained === 0 && !activity.retained()) {
       forgetStructuredReadOwner(key, owner)
     }
   }
@@ -197,6 +198,18 @@ export function createReadOwner(
     }
   }
   owner = {
+    retain: () => {
+      adoptStructuredReadOwner(key, owner)
+      retained++
+      let released = false
+      return () => {
+        if (!released) {
+          released = true
+          retained--
+          deleteIfUnused()
+        }
+      }
+    },
     trackSend: activity.trackSend,
     admit: activity.admit,
     publishCreated: (page) => {

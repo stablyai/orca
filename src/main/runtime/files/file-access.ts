@@ -24,7 +24,10 @@ import {
   resolveFileExplorerPath,
   resolveFileExplorerPaths
 } from './file-target'
-import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
+import {
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host/execution-host'
 import type { FileStat } from '../../providers/filesystem/provider-contract'
 import { assertRuntimeReadWslDistroRunning } from '../integrations/git/runtime-wsl-background-read-gate'
 

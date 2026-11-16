@@ -16,7 +16,7 @@ import {
   type AiVaultSession
 } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { aiVaultScanIssueText } from '../../../shared/ai-vault/scanning/ai-vault-scan-issue-copy'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { ScannedSessionCollection } from './session-root-dedup'
 import type { AntigravityWorkspaceResolver } from '../scanners/antigravity/session-scanner-antigravity-history'
 import {

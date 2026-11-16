@@ -3,7 +3,7 @@ import { resolveGroupTabFromVisibleId } from '@/components/tab-group/tab-group-v
 import { useTabGroupCloseScopeCommands } from '@/components/tab-group/useTabGroupCloseScopeCommands'
 import { useTabGroupTabCloseCommands } from '@/components/tab-group/useTabGroupTabCloseCommands'
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace/tabs/workspace-tab-commands'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import type { FloatingWorkspaceChromeModel } from './use-floating-workspace-chrome-model'
 
 type FloatingTerminalCloseActionsInput = Pick<

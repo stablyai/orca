@@ -1,9 +1,12 @@
 import { normalize } from 'node:path'
 import { realpath, stat } from 'node:fs/promises'
 import type { Store } from '../../../persistence/loading-store/store'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { Repo } from '../../../../shared/repository/repo-types'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../../shared/execution-host/execution-host'
 import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import {
   getRuntimePathBasename,
@@ -85,7 +88,8 @@ async function maybeAddBaseTarget(
   const config = {
     repoId: repo.id,
     repoName: getRuntimePathBasename(repo.path).replace(/\.git$/, ''),
-    nestWorkspaces: pathSettings.nestWorkspaces
+    nestWorkspaces: pathSettings.nestWorkspaces,
+    headMovesNeedListing: mirrorDistro !== undefined
   }
   // A root mirrored into WSL is a UNC path either way; probing the distro's home (which can kill a
   // booting distro) would only lead to the same skip, so keep just the Git-common watch.

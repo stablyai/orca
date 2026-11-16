@@ -2,7 +2,7 @@ import type { AppState } from '../../types'
 import {
   getRepoExecutionHostId,
   getWorktreeExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import { selectWorktreesByRepo } from '../../workspaces/catalog/workspace-record-fields'
 
 // Resolve unstamped SSH rows via canonical hostId-first worktree ownership (#9030). Clear only unambiguous connection IDs: repoId::path collides across hosts, and teardown must not hide sibling status.

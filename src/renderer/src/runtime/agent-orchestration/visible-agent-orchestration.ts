@@ -4,7 +4,7 @@ import { getStructuredAgentSessionTabs } from '@/components/native-chat/session/
 import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import {
   isRemoteRuntimePtyId,
   parseRemoteRuntimePtyId

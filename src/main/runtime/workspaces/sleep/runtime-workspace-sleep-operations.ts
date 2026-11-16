@@ -18,8 +18,8 @@ import {
   workspaceLifecycleKey
 } from '../lifecycle/workspace-lifecycle-commands'
 import { getRuntimeWorktreeRemovalOptionsKey } from '../catalog/runtime-worktree-selection'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import type {
   RecipeWorkspaceRemoval,
   RecipeWorkspaceRemoveParams

@@ -3,7 +3,7 @@ import { readdir } from 'node:fs/promises'
 import { resolveGitCommonDir, resolveGitDir } from '../git/source-control/resolve-git-dir'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
-import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 import type { Repo } from '../../shared/repository/repo-types'
 import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import type { OrcaWorkspaceLayout } from '../../shared/worktree/paths/orca-workspace-layout'
@@ -13,7 +13,7 @@ import type {
   WorkspaceAgentHistoryMeasurement,
   WorkspaceAgentHistoryTally
 } from '../../shared/workspace-agent-history/workspace-agent-history-types'
-import { getRepoExecutionHostId, isLocalExecutionHost } from '../../shared/execution-host'
+import * as host from '../../shared/execution-host/execution-host'
 import { isPathInsideOrEqual } from '../../shared/file-access/cross-platform-path'
 import {
   FOLDER_WORKSPACE_INSTANCE_SEPARATOR,
@@ -210,7 +210,7 @@ async function runChats(
   }
   const local = recordStore
     .listConversations()
-    .filter((chat) => isLocalExecutionHost(chat.location.executionHostId))
+    .filter((chat) => host.isLocalExecutionHost(chat.location.executionHostId))
   tally.total = local.length
   const deletable: string[] = []
   for (const chat of local) {
@@ -256,7 +256,7 @@ async function liveWorktreeAdminNames(current: WorkspaceAgentHistoryStore): Prom
   const names = await Promise.all(
     current
       .getRepos()
-      .filter((repo) => isLocalExecutionHost(getRepoExecutionHostId(repo)))
+      .filter((repo) => host.isLocalExecutionHost(host.getRepoExecutionHostId(repo)))
       .map(async (repo): Promise<string[]> => {
         try {
           // A `.git` file points at the real admin folder; its common dir owns `worktrees/`.
@@ -310,7 +310,7 @@ function removedWorkspaceIsLocal(
   event: Extract<RuntimeWorktreeLifecycleEvent, { kind: 'removed' }>
 ): boolean {
   if (event.hostId) {
-    return isLocalExecutionHost(event.hostId)
+    return host.isLocalExecutionHost(event.hostId)
   }
   // Folder events carry no SSH stamp; runChats keeps only this computer's chats.
   if (parseWorkspaceKey(event.worktreeId)?.type === 'folder') {
@@ -318,7 +318,7 @@ function removedWorkspaceIsLocal(
   }
   const repoId = splitWorktreeId(event.worktreeId)?.repoId
   const repo = current.getRepos().find((entry) => entry.id === repoId)
-  return repo ? isLocalExecutionHost(getRepoExecutionHostId(repo)) : false
+  return repo ? host.isLocalExecutionHost(host.getRepoExecutionHostId(repo)) : false
 }
 
 function worktreeIdPath(worktreeId: string): string | null {

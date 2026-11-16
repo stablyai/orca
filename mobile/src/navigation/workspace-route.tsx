@@ -1,6 +1,9 @@
 import { useContext, type ReactNode } from 'react'
 import { useLocalSearchParams } from 'expo-router'
-import { normalizeExecutionHostId, type ExecutionHostId } from '../../../src/shared/execution-host'
+import {
+  normalizeExecutionHostId,
+  type ExecutionHostId
+} from '../../../src/shared/execution-host/execution-host'
 import { firstParam } from './route-param-reader'
 import { WorkspaceExecutionHostContext } from './workspace-execution-host'
 import {

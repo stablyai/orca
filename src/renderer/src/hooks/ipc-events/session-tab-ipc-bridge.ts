@@ -13,7 +13,7 @@ import {
   resolvePinnedTabLabel
 } from '../../store/slices/tabs/closing/pinned-tab-close-guard'
 import { useAppStore } from '../../store'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { RuntimeMobileSessionTabMove } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   dropTabThroughLayoutOwner,

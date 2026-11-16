@@ -8,7 +8,7 @@ import { isAgentSessionHandleProvider } from '../../../../../shared/agent-sessio
 import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import {
   MANAGED_RUNTIME_INSTALL_RUNTIME_CAPABILITY,
   MANAGED_RUNTIME_REMOVE_RUNTIME_CAPABILITY

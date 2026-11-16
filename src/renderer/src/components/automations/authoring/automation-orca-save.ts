@@ -16,7 +16,7 @@ import type {
   AutomationCreateInput,
   AutomationUpdateInput
 } from '../../../../../shared/automations/automation-definition'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import { listAutomationsForTarget } from '../hosts/automation-host-client'

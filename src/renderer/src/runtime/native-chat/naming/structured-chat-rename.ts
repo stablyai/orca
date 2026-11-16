@@ -11,7 +11,7 @@ import {
   legacyStructuredChatRenameOwner,
   executionHostIdForStructuredTarget
 } from '../session-ownership/structured-agent-session-owner'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import { sendTabChangeToLayoutOwner } from '@/store/terminals/tabs/presentation/tab-change-through-layout-owner'
 import { captureStructuredChatRename } from './structured-chat-rename-action'
 

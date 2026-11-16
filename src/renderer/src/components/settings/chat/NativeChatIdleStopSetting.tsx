@@ -1,6 +1,6 @@
 import type React from 'react'
 import { useId } from 'react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import {
   NATIVE_CHAT_IDLE_STOP_MINUTE_CHOICES,
   NATIVE_CHAT_IDLE_STOP_NEVER,

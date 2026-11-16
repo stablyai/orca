@@ -1,6 +1,6 @@
 /** Keep live, parked-watcher and side-effect completion policy aligned without importing pane/xterm dependencies. */
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 
 /** Delay BEL/completion banners so richer same-burst agent detail can win. */
 export const AGENT_TASK_COMPLETE_NOTIFICATION_GRACE_MS = 250

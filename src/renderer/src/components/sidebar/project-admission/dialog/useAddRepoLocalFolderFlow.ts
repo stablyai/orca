@@ -14,7 +14,7 @@ import type { ShowNestedRepoReviewArgs } from '../nested-import/useAddRepoNested
 import { createNestedRepoScanId } from './add-repo-dialog-types'
 import { translate } from '@/i18n/i18n'
 import { worktreeRefreshOptions } from '../host-selection/add-repo-runtime-owner'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { addRepoBusyLabels } from './add-repo-busy-labels'
 import {
   addLocalPathsForGeneration,

@@ -6,7 +6,7 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import {
   LOCAL_EXECUTION_HOST_ID,
   toSshExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { isExecutionHostAliasForWorktree } from '../../ownership/worktree-execution-host-alias'
 
 export type AgentMetadata = {
