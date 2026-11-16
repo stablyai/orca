@@ -8,7 +8,7 @@ import type { TabSplitTarget } from '@/store/slices/tabs/tabs-slice-contract'
 import type { Tab, TabGroup } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { OpenWorkspaceBrowserTabRequest } from '../workspace/workspace-browser-tab-open'
 import type { BrowserWorkspace } from '../../../../../shared/browser/workspaces/browser-workspace-types'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 
 export type HttpLinkBrowserPlacement = { targetGroupId: string } | { split: TabSplitTarget }
 

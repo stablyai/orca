@@ -7,7 +7,7 @@ import {
   parseExecutionHostId,
   toRuntimeExecutionHostId,
   toSshExecutionHostId
-} from '../../execution-host'
+} from '../../execution-host/execution-host'
 
 const SUBJECT_KEY_PREFIX = 'agent-status-subject-v1:'
 const MAX_SCOPE_PART_LENGTH = 512

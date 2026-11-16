@@ -4,7 +4,8 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { NativeChatStructuredSession } from '@/components/native-chat/NativeChatStructuredSession'
+import StructuredAgentSessionPaneOverlayLayer from '@/components/native-chat/pane/routing/StructuredAgentSessionPaneOverlayLayer'
+import type { ReactNode } from 'react'
 import PendingNativeChatCreation from '@/components/worktree-creation/PendingNativeChatCreation'
 import {
   changePrompt,
@@ -85,6 +86,10 @@ vi.mock('../../../components/native-chat/NativeChatMessageList', () =>
 vi.mock('../../../components/native-chat/host-access/NativeChatEmptyState', () =>
   moduleFactories.nativeChatEmptyState()
 )
+vi.mock('@/components/tab-group/RetainedPaneHost', () => ({
+  RetainedPaneHost: ({ children }: { children: ReactNode }) => <>{children}</>
+}))
+
 vi.mock('../../../components/worktree-creation/WorktreeSetupSteps', () => ({
   WorktreeSetupSteps: () => null
 }))
@@ -180,7 +185,7 @@ function prompt(kind: 'approval' | 'question'): AgentJournalRenderItem {
 }
 
 it.each([{ kind: 'approval', draft: 'Unsent follow-up' }] as const)(
-  'reveals a mounted $kind with draft "$draft"',
+  'hands off to a suspended $kind without progress events, retaining draft "$draft"',
   async ({ kind, draft }) => {
     const pending = render(
       <TooltipProvider>
@@ -213,13 +218,9 @@ it.each([{ kind: 'approval', draft: 'Unsent follow-up' }] as const)(
 
     const pane = (visible: boolean) => (
       <TooltipProvider>
-        <NativeChatStructuredSession
-          isVisible={visible}
-          isFocusedGroup={visible}
-          tabId={tab.id}
-          sessionId={sessionId}
-          target={{ kind: 'local' }}
-          agent="codex"
+        <StructuredAgentSessionPaneOverlayLayer
+          worktreeId={worktree.id}
+          isWorktreeActive={visible}
         />
       </TooltipProvider>
     )
@@ -253,7 +254,7 @@ it.each([{ kind: 'approval', draft: 'Unsent follow-up' }] as const)(
       itemId: item.itemId,
       expectedRevision: item.revision
     })
-    // Resolving the prompt restores the retained follow-up to the real destination editor.
+    replacement.rerender(pane(false))
     mocks.promptItems = []
     replacement.rerender(pane(true))
     expect(promptValue(screen.getByRole('textbox'))).toBe(expectedDraft)

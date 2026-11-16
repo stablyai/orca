@@ -9,7 +9,7 @@ import type {
 import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
-import { KeyedDeadlines } from '../../../../../shared/keyed-deadlines'
+import { KeyedDeadlines } from '../../../../../shared/collections/keyed-deadlines'
 import type { TabAgentPane } from '@/lib/agent-session/tab-identity/tab-agent-status-index'
 import { structuralValuesEqualIgnoringUndefined as equal } from '../../../../../shared/collections/structural-value-equality'
 import {

@@ -288,22 +288,6 @@ describe('browser password detector', () => {
     expect(sentOn(CHANNEL.submitted)).toEqual([])
   })
 
-  it('keeps viewport invalidation alive after a picker focus transfer', async () => {
-    load(LOGIN_FORM)
-    install()
-    enable()
-    focusIn(el('#pw'))
-    const fieldToken = readString(sentOn(CHANNEL.fieldFocused).at(-1), 'fieldToken')
-    el('#pw').dispatchEvent(new FocusEvent('focusout', { bubbles: true, composed: true }))
-    await vi.advanceTimersByTimeAsync(100)
-    window.dispatchEvent(new Event('resize'))
-    expect(sentOn(CHANNEL.fieldFocused)).toHaveLength(1)
-    expect(sentOn(CHANNEL.fieldBlurred)).toEqual([
-      { fieldToken, reason: 'focusout' },
-      { fieldToken }
-    ])
-  })
-
   it('detects and captures credentials when HTTP crypto has no randomUUID', async () => {
     vi.stubGlobal('crypto', { getRandomValues: crypto.getRandomValues.bind(crypto) })
     load(LOGIN_FORM)

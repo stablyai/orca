@@ -1,4 +1,4 @@
-import { parseExecutionHostId } from '../../shared/execution-host'
+import { parseExecutionHostId } from '../../shared/execution-host/execution-host'
 
 /** Local reads require a placeable local owner; malformed stamps fail closed. Repo runtime: stamps identify this store, not peers. */
 export function hasRemoteFilesystemOwner(scope: {

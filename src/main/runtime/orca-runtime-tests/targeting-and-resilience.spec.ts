@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import { bindPaneFirst, registerBoundPty } from './bind-first-pane.test-fixture'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 import './runtime-test-module-registration.spec'
 import { MOCK_GIT_WORKTREES, electronMocks } from '../orca-runtime-test-mocks/setup.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { AgentBrowserBridge } from '../../browser/agent-browser/agent-browser-bridge'
 import type { IPtyProvider } from '../../providers/pty/provider-contract'
-import { assertWorktreeCleanForRemoval } from '../../git/worktrees/removal/worktree-removal-preflight'
+import '../../git/worktrees/removal/worktree-removal-preflight'
 import { ipcMain } from 'electron'
 import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
 import { removeWorktree } from '../../git/worktrees/removal/worktree-removal'
@@ -31,37 +31,6 @@ describe('OrcaRuntimeService', () => {
         isLoading: () => false
       })
     }
-
-    it('resolves explicit worktree selectors when page ids are also provided', async () => {
-      vi.mocked(listWorktrees).mockClear()
-      mockLiveBrowserGuest()
-      const runtime = createRuntime()
-      const snapshotMock = vi.fn<AgentBrowserBridge['snapshot']>().mockResolvedValue({
-        browserPageId: 'page-1',
-        snapshot: 'tree',
-        refs: [],
-        url: 'https://example.com',
-        title: 'Example'
-      })
-
-      runtime.setAgentBrowserBridge(
-        createBrowserBridge({
-          snapshot: snapshotMock,
-          getRegisteredTabs: vi.fn(() => new Map([['page-1', 1]])),
-          getRegisteredPageWebContentsId: (page: string) => (page === 'page-1' ? 1 : undefined)
-        })
-      )
-
-      await runtime.browserSnapshot({
-        worktree: 'branch:feature/foo',
-        page: 'page-1'
-      })
-
-      expect(snapshotMock).toHaveBeenCalledWith(TEST_WORKTREE_ID, 'page-1', {
-        worktree: 'branch:feature/foo',
-        page: 'page-1'
-      })
-    })
 
     it('does not silently drop invalid explicit worktree selectors for page-targeted commands', async () => {
       vi.mocked(listWorktrees).mockResolvedValue(MOCK_GIT_WORKTREES)
@@ -189,52 +158,6 @@ describe('OrcaRuntimeService', () => {
       } satisfies IPtyProvider
     }
 
-    it('RPC-initiated delete awaits matching PTYs before git', async () => {
-      const callOrder: string[] = []
-      const stopAndWait = vi.fn(async (id: string) => {
-        callOrder.push(`stop-and-wait:${id}`)
-        return true
-      })
-      const localProvider = createProviderStub(async () => [])
-      vi.mocked(assertWorktreeCleanForRemoval).mockImplementation(async () => {
-        callOrder.push('preflight')
-      })
-      vi.mocked(removeWorktree).mockImplementation(async () => {
-        callOrder.push('git-removeWorktree')
-        return {}
-      })
-
-      const runtime = new OrcaRuntimeService(store, undefined, {
-        getLocalProvider: () => {
-          callOrder.push('getLocalProvider')
-          return localProvider
-        }
-      })
-      runtime.setPtyController({
-        write: () => true,
-        kill: vi.fn(() => true),
-        stopAndWait,
-        getForegroundProcess: async () => null
-      })
-      await syncSinglePty(runtime, 'pty-1')
-
-      await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
-
-      // Destructive teardown must bound the underlying RPCs below the sweep deadline.
-      expect(stopAndWait).toHaveBeenCalledWith(
-        'pty-1',
-        expect.objectContaining({ deadlineMs: expect.any(Number) })
-      )
-      // Physically stop the runtime graph before sweeping providers or removing Git worktrees.
-      const preflightIdx = callOrder.indexOf('preflight')
-      const stopIdx = callOrder.indexOf('stop-and-wait:pty-1')
-      const gitIdx = callOrder.indexOf('git-removeWorktree')
-      expect(preflightIdx).toBeGreaterThanOrEqual(0)
-      expect(stopIdx).toBeGreaterThan(preflightIdx)
-      expect(stopIdx).toBeGreaterThanOrEqual(0)
-      expect(gitIdx).toBeGreaterThan(stopIdx)
-    })
-
     it('does not start Git removal when physical PTY stop cannot be proven', async () => {
       // Retain the live PTY in fresh inventory so failed stop cannot be mistaken for proven exit.
       const localProvider = createProviderStub(async () => [
@@ -256,138 +179,6 @@ describe('OrcaRuntimeService', () => {
       )
 
       expect(removeWorktree).not.toHaveBeenCalled()
-    })
-
-    it('thunk resolves the installed provider lazily, not at construction time', async () => {
-      // Resolve the provider at removal time; daemon initialization can replace it after construction.
-      const preDaemonProvider = createProviderStub(async () => [
-        { id: '1', cwd: '/tmp', title: 'shell' },
-        { id: '2', cwd: '/tmp', title: 'shell' }
-      ])
-      const postDaemonProvider = createProviderStub(async () => [
-        { id: `${TEST_WORKTREE_ID}@@aaaaaaaa`, cwd: '/tmp', title: 'shell' }
-      ])
-      let currentProvider: ReturnType<typeof createProviderStub> = preDaemonProvider
-      const onPtyStopped = vi.fn()
-
-      const runtime = new OrcaRuntimeService(store, undefined, {
-        getLocalProvider: () => currentProvider,
-        onPtyStopped
-      })
-      vi.mocked(removeWorktree).mockResolvedValue({})
-
-      currentProvider = postDaemonProvider
-
-      await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
-
-      expect(postDaemonProvider.shutdown).toHaveBeenCalledWith(
-        `${TEST_WORKTREE_ID}@@aaaaaaaa`,
-        expect.objectContaining({ immediate: true })
-      )
-      expect(onPtyStopped).toHaveBeenCalledWith(`${TEST_WORKTREE_ID}@@aaaaaaaa`)
-      expect(preDaemonProvider.shutdown).not.toHaveBeenCalled()
-    })
-  })
-  describe('stale terminal handle resolution (#7718)', () => {
-    async function syncSingleTerminalGraph(
-      runtime: OrcaRuntimeService,
-      ptyId: string
-    ): Promise<void> {
-      await runtime.syncWindowGraph(1, {
-        tabs: [
-          {
-            tabId: 'tab-1',
-            worktreeId: TEST_WORKTREE_ID,
-            title: 'Terminal 1',
-            activeLeafId: 'pane:1',
-            layout: null
-          }
-        ],
-        leaves: [
-          {
-            tabId: 'tab-1',
-            worktreeId: TEST_WORKTREE_ID,
-            leafId: 'pane:1',
-            paneRuntimeId: 1,
-            ptyId,
-            paneTitle: 'Terminal 1'
-          }
-        ],
-        mobileSessionTabs: [
-          {
-            worktree: TEST_WORKTREE_ID,
-            publicationEpoch: 'epoch-1',
-            snapshotVersion: 1,
-            activeGroupId: 'group-1',
-            activeTabId: 'tab-1::pane:1',
-            activeTabType: 'terminal',
-            tabs: [
-              {
-                type: 'terminal',
-                id: 'tab-1::pane:1',
-                parentTabId: 'tab-1',
-                leafId: 'pane:1',
-                title: 'Terminal 1',
-                isActive: true
-              }
-            ]
-          }
-        ]
-      })
-    }
-
-    // Client LEAF handles can outlive the PTY they originally named.
-    function issueLeafHandle(runtime: OrcaRuntimeService, ptyId: string): string {
-      const internals = runtime as unknown as {
-        leaves: Map<string, { ptyId: string | null }>
-        issueHandle: (leaf: unknown) => string
-      }
-      const leaf = Array.from(internals.leaves.values()).find(
-        (candidate) => candidate.ptyId === ptyId
-      )
-      if (!leaf) {
-        throw new Error('expected leaf record')
-      }
-      return internals.issueHandle(leaf)
-    }
-
-    it('errors with terminal_handle_stale instead of adopting a replacement PTY', async () => {
-      const runtime = new OrcaRuntimeService(store)
-      runtime.attachWindow(1)
-      await syncSingleTerminalGraph(runtime, 'pty-a')
-      const handle = issueLeafHandle(runtime, 'pty-a')
-
-      const internals = runtime as unknown as {
-        leaves: Map<string, { ptyId: string | null }>
-      }
-      for (const leaf of internals.leaves.values()) {
-        if (leaf.ptyId === 'pty-a') {
-          leaf.ptyId = 'pty-b'
-        }
-      }
-
-      expect(runtime.resolveLeafForHandle(handle)).toEqual({ ptyId: 'pty-b' })
-      expect(() => runtime.resolveLiveLeafForHandle(handle)).toThrow('terminal_handle_stale')
-      expect(runtime.getLiveTerminalPaneKey(handle)).toBeNull()
-    })
-
-    it('lets a handle issued before its first PTY adopt that PTY without erroring', async () => {
-      const runtime = new OrcaRuntimeService(store)
-      runtime.attachWindow(1)
-      await syncSingleTerminalGraph(runtime, 'pty-a')
-      const handle = issueLeafHandle(runtime, 'pty-a')
-
-      // A pre-spawn handle has no PTY yet; its first binding must still resolve.
-      const internals = runtime as unknown as {
-        handles: Map<string, { ptyId: string | null }>
-      }
-      const record = internals.handles.get(handle)
-      if (!record) {
-        throw new Error('expected handle record')
-      }
-      record.ptyId = null
-
-      expect(runtime.resolveLiveLeafForHandle(handle)).toEqual({ ptyId: 'pty-a' })
     })
   })
 

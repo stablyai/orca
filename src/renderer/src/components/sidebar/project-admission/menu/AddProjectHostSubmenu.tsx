@@ -15,7 +15,7 @@ import { HostListSearchField } from '@/components/host-picker/HostListSearchFiel
 import { useBoundedHostRows } from '@/components/host-picker/use-bounded-host-rows'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { AddRemoteHostMode } from '../../host-admission/ssh/AddRemoteHostDialog'
 import {
   openWslHostsExperimentalSetting,

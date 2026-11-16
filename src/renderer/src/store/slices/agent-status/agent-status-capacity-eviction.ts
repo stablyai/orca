@@ -1,3 +1,5 @@
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
+import { structuredAgentSessionPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { AppState } from '../../types'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalPaneLayoutNode } from '../../../../../shared/workspace-layout/terminal-tab-types'
@@ -37,11 +39,19 @@ function rootHasLeaf(root: TerminalPaneLayoutNode, leafId: string): boolean {
   return leaves.has(leafId)
 }
 
-// Only exact rooted leaves prove placement; legacy colon-containing owners still match full keys.
+// Existing chat tabs and exact terminal leaves prove placement without mounting the workspace.
 export function classifyPaneKeyLiveness(
-  layouts: AppState['terminalLayoutsByTabId']
+  layouts: AppState['terminalLayoutsByTabId'],
+  representedTabs?: Pick<ReadonlyMap<string, Tab>, 'get'>
 ): (paneKey: string) => PaneLiveness {
   return (paneKey) => {
+    const tab = representedTabs?.get(paneKey)
+    if (
+      tab?.contentType === 'agent-session' &&
+      structuredAgentSessionPaneKey(tab.id, tab.entityId) === paneKey
+    ) {
+      return 'live'
+    }
     for (const tabId of paneKeyCandidateTabIds(paneKey)) {
       const root = layouts[tabId]?.root
       if (root && rootHasLeaf(root, paneKey.slice(tabId.length + 1))) {

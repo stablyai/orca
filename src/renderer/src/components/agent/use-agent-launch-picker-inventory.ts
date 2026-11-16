@@ -16,7 +16,7 @@ import {
   subscribeLocalRuntimeCapabilityObservation
 } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { selectWorkspaceByHostTarget } from '@/store/workspaces/selection/workspace-host-target'
 import {
   selectWorktreesByRepo,

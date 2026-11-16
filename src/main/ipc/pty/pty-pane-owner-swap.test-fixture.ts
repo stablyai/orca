@@ -2,7 +2,7 @@
 import { vi, type Mock } from 'vitest'
 import { PtyBindingPersistenceOperations } from '../../persistence/loading-store/terminal-bindings/pty-binding-persistence'
 import { ptyBindingGenerationOf } from '../../persistence/loading-store/terminal-bindings/pty-binding-generations'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type { PtyIpcSuiteFixtures } from './pty-ipc-test-harness'
 import { TerminalKilledError } from '../../daemon/providers/adapter/daemon-pty-lifecycle-errors'
 import { SessionNotFoundError } from '../../daemon/protocol/daemon-errors'

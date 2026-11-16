@@ -21,7 +21,7 @@ import { validateGitRelativeFilePath } from './access/filesystem-path-containmen
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
 import { parseGitStageWorktreeScope } from '../../../shared/git/paths/git-stage-worktree-scope'
 import { requireReachableGitRoute } from '../../providers/execution-host-provider-dispatch'
-import { getConnectionExecutionHostId } from '../../../shared/execution-host'
+import { getConnectionExecutionHostId } from '../../../shared/execution-host/execution-host'
 import {
   CONFLICT_RESOLUTIONS,
   type ConflictResolution

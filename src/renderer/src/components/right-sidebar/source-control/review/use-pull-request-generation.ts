@@ -4,7 +4,7 @@ import {
   sourceControlConnectionId,
   useSourceControlScope
 } from '../panel/worktree-scope'
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { getWorkspaceJiraIssueKey } from '../../../../../../shared/jira/jira-review-title'
 import { useCallback } from 'react'
 import { resolveWorktreeGitCopyNow } from '@/lib/workspace/ownership/worktree-git-copy'

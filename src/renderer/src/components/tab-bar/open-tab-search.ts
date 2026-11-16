@@ -10,7 +10,10 @@ import {
   type PaletteActivityRank,
   type PaletteSearchContext
 } from '../../../../shared/palette-match/palette-ranking'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import {
   searchBrowserPages,
   type BrowserPaletteSearchResult,

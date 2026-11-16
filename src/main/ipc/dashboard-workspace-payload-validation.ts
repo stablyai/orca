@@ -3,7 +3,7 @@ import {
   DASHBOARD_MAX_MAP_WORKSPACES,
   type DashboardWorkspace
 } from '../../shared/agent-status/presentation/dashboard-snapshot'
-import { normalizeExecutionHostId } from '../../shared/execution-host'
+import { normalizeExecutionHostId } from '../../shared/execution-host/execution-host'
 
 const MAX_ID_LENGTH = 4_096
 const HOST_KINDS = new Set(['local', 'ssh', 'wsl', 'remote'])

@@ -11,7 +11,7 @@ import type { Repo } from '../../../../../../shared/repository/repo-types'
 import {
   getLocalExecutionHostLabel,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { getHostDisplayLabelOverrides } from '../../../../../../shared/execution-host/host-setting-overrides'
 import { planSidebarRows } from '../../../../../../shared/sidebar-list/sidebar-row-plan'
 import { createHostScopedRepoOf } from '../../../../../../shared/sidebar-list/feed/sidebar-feed-index'

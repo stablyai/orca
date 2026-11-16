@@ -14,6 +14,7 @@ import {
 } from '../windows/windows-process-tree-gyp-rebuild.mjs'
 import { runProcessSync } from '@orca/process-host'
 import { describeProcessFailure } from '../../tool-invocation/process-failure-message.mjs'
+import { buildHostProviderExec } from '../posix/build-provider-exec.mjs'
 import {
   nativeRuntimeModules,
   isSharedNativePackage,
@@ -52,6 +53,10 @@ if (process.argv.includes(CHILD_CHECK_FLAG)) {
     process.exit(1)
   }
   process.exit(0)
+}
+
+if ((runtime === 'node' || runtime === 'electron') && process.platform !== 'win32') {
+  buildHostProviderExec()
 }
 
 if (runtime === 'node') {

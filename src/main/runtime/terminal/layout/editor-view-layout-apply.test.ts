@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getDefaultWorkspaceSession } from '../../../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/constants'
 import type { LayoutEditorView } from '../../../../shared/workspace-layout/editor-tabs/layout-editor-view'
 import type { Store } from '../../../persistence/loading-store/store'
 import { WindowSession } from '../../../persistence/terminal-topology/testing/terminal-topology-window-session-fixture'
@@ -17,7 +17,9 @@ import {
 } from '../../../persistence/terminal-topology/testing/terminal-topology-profile-fixture'
 import { OrcaRuntimeService } from '../../orca-runtime'
 
-vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
+vi.mock('../../../../shared/workspace-layout/layout-owner-switch', () => ({
+  ORCA_LAYOUT_OWNER_IS_MAIN: true
+}))
 vi.mock('../../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),

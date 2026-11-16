@@ -23,7 +23,7 @@ import {
   startCodexStateDbBackfillRecoveryInBackground
 } from '../../../codex/history/index/codex-state-db-backfill-recovery'
 import { spawnProcessOnWorkerThread } from '../../../worker-thread-child-process/worker-thread-child-process'
-import { buildConfiguredProxyEnv } from '../../../../shared/network-proxy'
+import { buildConfiguredProxyEnv } from '../../../../shared/network/network-proxy'
 import { getMainHttpClient } from '../../../network/http-client'
 import { probeCodexAuthPresence } from './codex-auth-presence'
 import {

@@ -9,6 +9,15 @@ export const ORCAD_WINDOWS_PROCESS_TREE_FILENAME = 'windows-process-tree.node'
 export const ORCAD_WINDOWS_SECURITY_FILENAME = 'windows-security.node'
 /** native/windows-cli-launcher: cmd.exe and .ps1 shims cannot carry every argv intact. */
 export const ORCAD_WINDOWS_CLI_LAUNCHER_FILENAME = 'bin/orca.exe'
+/** native/provider-exec: POSIX provider CLIs launch through it; there is no fallback launcher. */
+export const ORCAD_PROVIDER_EXEC_FILENAME = 'bin/orca-provider-exec'
+/** Its path in a POSIX prebuild slot, compiled by the slot's own toolchain at its libc floor. */
+export const ORCAD_PROVIDER_EXEC_SLOT_FILE = 'provider-exec/orca-provider-exec'
+
+/** Files every install path must mark executable; SFTP and plain copies drop the mode. */
+export function isOrcadExecutableArtifact(filename: string): boolean {
+  return /(?:^|\/)(?:rg|spawn-helper|orca-provider-exec)$/.test(filename)
+}
 
 export function orcadBunRuntimeFilename(target: string): string {
   return isWindowsTarget(target) ? ORCAD_WINDOWS_BUN_RUNTIME_FILENAME : ORCAD_BUN_RUNTIME_FILENAME
@@ -298,6 +307,8 @@ export function orcadArtifactFilenames(
       ORCAD_WINDOWS_SECURITY_FILENAME,
       ORCAD_WINDOWS_CLI_LAUNCHER_FILENAME
     )
+  } else {
+    filenames.push(ORCAD_PROVIDER_EXEC_FILENAME)
   }
   filenames.push(...mobileWebAssets)
   return filenames

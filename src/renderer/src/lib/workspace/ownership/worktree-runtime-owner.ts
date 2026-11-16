@@ -3,8 +3,8 @@ import {
   parseExecutionHostId,
   toRuntimeExecutionHostId,
   UNRESOLVED_OWNER_HOST_ID
-} from '../../../../../shared/execution-host'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 
 import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'

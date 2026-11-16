@@ -27,8 +27,8 @@ import type { HttpLinkBrowserTabState } from './http-link-browser-placement'
 import { resolveModifierRouting } from './http-link-modifier-routing'
 import type { WorkspacePortScanResult } from '../../../../../shared/workspace/ports/workspace-ports'
 import type { AppState } from '@/store/types'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { OpenHttpLinkOptions, WorkspaceHttpLinkBrowserOpener } from './http-link-destinations'
 
 function settleHttpLinkBrowserOpen(
@@ -221,6 +221,8 @@ function executeHttpLink(
         ...fields,
         linkContext: { linkIntent: null, ...opts.linkContext, canReveal: reveal.canReveal },
         ...(opts.allowClientBrowserFallback ? { allowClientBrowserFallback: true } : {}),
+        // Why: only links that already open in Orca may use a "This device" SSH host's desktop tab.
+        ...(openLinksInApp ? { allowSshDeviceBrowser: true } : {}),
         ...(effectiveSourceOwner?.kind === 'runtime'
           ? { expectedRuntimeEnvironmentId: effectiveSourceOwner.runtimeEnvironmentId }
           : effectiveSourceOwner?.kind === 'ssh'

@@ -2,7 +2,7 @@
 
 import { toast } from 'sonner'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'

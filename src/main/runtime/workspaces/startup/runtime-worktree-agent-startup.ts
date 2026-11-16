@@ -7,7 +7,7 @@ import type { Repo } from '../../../../shared/repository/repo-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation/launch-types'
 import { repoIsRemote } from '../../../../shared/agent-launch/startup/agent-launch-remote'
-import { getRepoSshConnectionId } from '../../../../shared/execution-host'
+import { getRepoSshConnectionId } from '../../../../shared/execution-host/execution-host'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import {
   isTuiAgentEnabled,

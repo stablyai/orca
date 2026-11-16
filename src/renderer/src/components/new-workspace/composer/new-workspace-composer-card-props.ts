@@ -22,7 +22,7 @@ import type { SshConnectionStatus } from '../../../../../shared/remote-runtime/s
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { AddRepoDialogEntryRequest } from '@/components/sidebar/project-admission/dialog/add-repo-dialog-types'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 
 import type { EphemeralVmRecipeOption } from '../run-target/run-target-options'
 

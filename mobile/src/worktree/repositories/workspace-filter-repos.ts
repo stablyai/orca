@@ -1,4 +1,4 @@
-import { getRepoExecutionHostId } from '../../../../src/shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
 import { resolveRepoBadgeColor } from '../../../../src/shared/repository/appearance/repo-badge-color'
 import { buildSectionRepoMap } from '../workspace-list/workspace-list-sections'
 import type { SectionRepo, Worktree } from '../workspace-list/workspace-list-types'

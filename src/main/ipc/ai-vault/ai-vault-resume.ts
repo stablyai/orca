@@ -6,7 +6,10 @@ import type {
   AiVaultPrepareSessionResumeResult,
   AiVaultSessionResumePreparation
 } from '../../../shared/ai-vault/resume/ai-vault-resume-preparation'
-import { isUnresolvedOwnerHostId, parseExecutionHostId } from '../../../shared/execution-host'
+import {
+  isUnresolvedOwnerHostId,
+  parseExecutionHostId
+} from '../../../shared/execution-host/execution-host'
 import { isWslUncPath } from '../../../shared/file-access/wsl-paths'
 import { assertLegacyAiVaultResumeAllowed } from '../../ai-vault/structured-sessions/structured-session-ownership'
 import { tryEnsureStructuredAgentSessionHostForResume } from '../../runtime/agent-session/structured-agent-session-host-refusal'

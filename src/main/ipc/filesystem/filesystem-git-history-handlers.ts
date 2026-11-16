@@ -4,7 +4,7 @@ import type {
   GitHistoryResult
 } from '../../../shared/git/history/git-history-types'
 import { getHistory, getHistoryRefs } from '../../git/source-control/history'
-import { getConnectionExecutionHostId } from '../../../shared/execution-host'
+import { getConnectionExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { requireReachableGitRoute } from '../../providers/execution-host-provider-dispatch'
 import { readWorktreeGitUnlessWslStopped } from './wsl-gated-worktree-git-read'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
