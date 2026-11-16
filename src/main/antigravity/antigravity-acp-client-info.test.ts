@@ -52,7 +52,7 @@ it('launches a managed release with the version its receipt names', async () => 
   await writeRuntimeReleaseReceipt(folder, {
     version: '1.3.0',
     url: 'https://example.invalid/agy.zip',
-    archiveSha256: 'older-release',
+    archiveSha256: 'a'.repeat(64),
     archiveBytes: 1,
     members: [{ path: 'server', sha256: 'unused', bytes: 1 }]
   })
