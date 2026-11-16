@@ -1432,6 +1432,9 @@ final class Provider {
             try requireBackgroundInputReachable(snapshot, input: "paste")
         }
         let insertion = TextInput.Insertion(into: focused, text: text)
+        // Why: refuse before the clipboard is replaced, as above; check after the insertion's reads so typing that
+        // starts during them is caught here rather than after the clipboard already holds the text.
+        try requireUncontendedInput(snapshot, foreground: isForegroundRequest(params), sendsKeys: true)
         try Input.withPasteboardText(text) {
             try deliverKeys(pasteKeys, snapshot: snapshot, params: params)
         }
@@ -2031,6 +2034,7 @@ private func clickPointer(
     foreground: Bool,
     element: AXUIElement? = nil
 ) throws -> UnfocusedTargetClick? {
+    try requireUncontendedInput(snapshot, foreground: foreground, sendsKeys: false)
     if foreground {
         return try Input.click(at: point, button: button, count: count, modifiers: modifiers, targetWindow: snapshot)
     }
@@ -2117,14 +2121,38 @@ private func scrollPointer(at point: CGPoint, direction: String, pages: Double, 
 private func deliverKeys(_ events: [CGEvent], snapshot: Snapshot, params: [String: JSONValue]) throws {
     if isForegroundRequest(params) {
         try requireTargetWindowFocused(snapshot, restoreWindowRequested: true)
+        try requireUncontendedInput(snapshot, foreground: true, sendsKeys: true)
+        defer { KeyboardContention.OwnInputClock.shared.recordInput() }
         for event in events {
             event.post(tap: .cghidEventTap)
         }
         return
     }
     try requireBackgroundInputReachable(snapshot, input: "key input")
+    try requireUncontendedInput(snapshot, foreground: false, sendsKeys: true)
     try withTransportErrors {
         try BackgroundInputTransport.sendKeys(events, to: backgroundTarget(snapshot))
+    }
+}
+
+/// Refuses, before anything is sent, input that would mix with the user's own typing or type into a secure field.
+private func requireUncontendedInput(_ snapshot: Snapshot, foreground: Bool, sendsKeys: Bool) throws {
+    let target = NSRunningApplication(processIdentifier: snapshot.app.pid)
+    guard let refusal = KeyboardContention.refusal(
+        targetPID: snapshot.app.pid,
+        sharesUserKeyboard: foreground || target?.isActive == true,
+        sendsKeys: sendsKeys,
+        conditions: KeyboardContention.currentConditions()
+    ) else {
+        return
+    }
+    switch refusal {
+    case let .secureInputActive(ownerPID):
+        let owner = ownerPID.flatMap { NSRunningApplication(processIdentifier: $0)?.localizedName }.map { " (held by \($0))" } ?? ""
+        throw ProviderError.coded("secure_input_active", "a password or other secure text field has keyboard focus\(owner), so these keys could be typed into it; nothing was sent. Ask the user to finish or close that field, or to enter the secret themselves.")
+    case let .userTyping(secondsAgo):
+        let input = sendsKeys ? "these keys would mix with the user's typing" : "this click could move the user's typing to another field"
+        throw ProviderError.coded("user_actively_typing", String(format: "the user pressed a key %.1f s ago in the app this input goes to, so %@; nothing was sent. Wait until they pause, then retry.", secondsAgo, input))
     }
 }
 
