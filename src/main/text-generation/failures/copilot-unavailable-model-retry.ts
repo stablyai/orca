@@ -10,21 +10,16 @@ import type { AgentGenerationFailureOutput } from './agent-failure-output'
 const PROMPT_VALUE_OPTIONS = ['--prompt', '-p']
 
 function withoutOption<T extends GenerationArgument>(args: T[], aliases: readonly string[]): T[] {
-  let remaining = args
+  const optionTokens = generationOptionTokens(args)
+  const result: T[] = []
+  let cursor = 0
   for (;;) {
-    const option = findOptionOccurrence(
-      generationOptionTokens(remaining),
-      aliases,
-      true,
-      PROMPT_VALUE_OPTIONS
-    )
+    const option = findOptionOccurrence(optionTokens, aliases, true, PROMPT_VALUE_OPTIONS, cursor)
     if (!option) {
-      return remaining
+      return [...result, ...args.slice(cursor)]
     }
-    remaining = [
-      ...remaining.slice(0, option.index),
-      ...remaining.slice(option.index + option.consumed)
-    ]
+    result.push(...args.slice(cursor, option.index))
+    cursor = option.index + option.consumed
   }
 }
 
