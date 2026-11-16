@@ -29,8 +29,12 @@ export async function waitForRuntimeTerminalSetup(
             { signal: readSignal, timeoutMs: 15_000, expectedEnvironmentPairingRevision: revision }
           )
         } catch (error) {
-          if (classifyTerminalProcessInspectionFailure(error) === 'old_host') {
+          const failure = classifyTerminalProcessInspectionFailure(error)
+          if (failure === 'old_host') {
             return null
+          }
+          if (failure === 'transport_loss') {
+            terminalSetupObservers.setConnected(owner.target.environmentId, false)
           }
           throw error
         }
@@ -79,36 +83,52 @@ export function withPendingTerminalSetupHosts(environmentIds: string[]): string[
 export function terminalSetupStreamLifecycle(
   scope: string,
   isCurrent: () => boolean,
-  onClose: () => void
+  onClose: () => void,
+  onError: (error: unknown) => void
 ) {
   const owner = Symbol(scope)
   activeStreams.set(scope, owner)
   terminalSetupObservers.setConnected(scope, false)
+  const isActive = (): boolean => activeStreams.get(scope) === owner
   const disconnect = (): void => {
-    if (activeStreams.get(scope) === owner) {
+    if (isActive()) {
       terminalSetupObservers.setConnected(scope, false)
     }
   }
+  const release = (): void => {
+    disconnect()
+    if (isActive()) {
+      activeStreams.delete(scope)
+    }
+  }
   return {
+    isActive,
     callbacks: {
       onReady: () => {
-        if (isCurrent() && activeStreams.get(scope) === owner) {
+        if (isCurrent() && isActive()) {
           terminalSetupObservers.setConnected(scope, true)
         }
       },
-      onClose: () => {
+      onError: (error: unknown) => {
         disconnect()
+        onError(error)
+      },
+      onClose: () => {
+        release()
         onClose()
       }
     },
     retain: async (subscription: Promise<{ unsubscribe: () => void }>) => {
-      const handle = await subscription
+      let handle: { unsubscribe: () => void }
+      try {
+        handle = await subscription
+      } catch (error) {
+        release()
+        throw error
+      }
       return {
         unsubscribe: () => {
-          disconnect()
-          if (activeStreams.get(scope) === owner) {
-            activeStreams.delete(scope)
-          }
+          release()
           handle.unsubscribe()
         }
       }

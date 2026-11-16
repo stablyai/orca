@@ -3,6 +3,7 @@ import { useAppStore } from '@/store'
 import { subscribeRuntimeEnvironmentFromPreload } from '../../../../preload/runtime/runtime-environment-subscriptions'
 import { tagRuntimeSubscriptionReplayResponse } from '../../../../shared/remote-runtime/rpc/runtime-subscription-replay'
 import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
+import { terminalSetupObservers } from '@/runtime/hosted-terminals/inspection/runtime-terminal-setup'
 import { registerRuntimeClientIpcBridge } from './runtime-client-ipc-bridge'
 import type { RuntimeClientEvent } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
@@ -121,6 +122,7 @@ function createHarness() {
       replay = false,
       event?:
         | RuntimeClientEvent
+        | { type: 'ready' }
         | { type: 'worktreesChanged'; repoId: string; sortOrderOnly: unknown; sortOrders?: unknown }
     ) => {
       const response = {
@@ -140,6 +142,13 @@ function createHarness() {
         response: replay ? tagRuntimeSubscriptionReplayResponse(response) : response
       })
     },
+    error: (index: number) =>
+      listener?.(null, {
+        subscriptionId: `sub-${index}`,
+        type: 'error',
+        code: 'remote_runtime_unavailable',
+        message: 'Remote runtime connection closed'
+      }),
     finish: async () => {
       starts.forEach((stop) => stop())
       pending.forEach((setup, index) =>
@@ -243,4 +252,37 @@ it('accepts a fresh bridge early frame while rejecting the previous bridge frame
     await h.finish()
   }
   expect(h.ipc.removeListener).toHaveBeenCalledOnce()
+})
+
+it('holds a draft through a shared-stream outage during its initial status read', async () => {
+  const h = createHarness()
+  const read = Promise.withResolvers<never>()
+  const abort = new AbortController()
+  try {
+    h.start()
+    const status = {
+      runtimeId: 'runtime-a',
+      ptyId: 'pty-a',
+      dependencyId: 'setup-a',
+      state: 'ready' as const
+    }
+    let connected = false
+    const wait = terminalSetupObservers.wait(
+      'host-a',
+      'terminal-a',
+      () => (connected ? Promise.resolve(status) : read.promise),
+      abort.signal
+    )
+    h.emit(0, false, { type: 'ready' })
+    h.error(0)
+    read.reject(new Error('Remote runtime connection closed'))
+    await vi.advanceTimersByTimeAsync(0)
+    connected = true
+    h.emit(0, true, { type: 'ready' })
+    h.emit(h.pending.length - 1, false, { type: 'ready' })
+    await expect(wait).resolves.toBeUndefined()
+  } finally {
+    abort.abort()
+    await h.finish()
+  }
 })

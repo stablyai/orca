@@ -211,7 +211,7 @@ export function registerRuntimeClientIpcBridge(
       withPendingTerminalSetupHosts(getRuntimeClientEventEnvironmentIds(useAppStore.getState())),
     getSubscriptionKey: (environmentId) => buildRuntimeClientEventEnvironmentKey([environmentId]),
     subscribe: (environmentId, onEvent, onError, isCurrent, onClose) => {
-      const setupStream = terminalSetupStreamLifecycle(environmentId, isCurrent, onClose)
+      const setupStream = terminalSetupStreamLifecycle(environmentId, isCurrent, onClose, onError)
       const sshGeneration = getEnvironmentSshStateGeneration(environmentId)
       const runtimeGeneration = getRuntimeEnvironmentConnectionGeneration(environmentId)
       const runtimeRevision = getRuntimeEnvironmentRevision(environmentId)
@@ -227,7 +227,7 @@ export function registerRuntimeClientIpcBridge(
             onEvent(event)
           }
         },
-        onError,
+        setupStream.callbacks.onError,
         () => {
           if (!isCurrent()) {
             return

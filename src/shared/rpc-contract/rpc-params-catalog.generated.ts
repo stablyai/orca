@@ -1648,6 +1648,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'terminal.setDisplayMode': TerminalSetDisplayMode,
   'terminal.setPaneTitle': TerminalSetPaneTitle,
   'terminal.setViewerColors': TerminalSetViewerColors,
+  'terminal.setupStatus': TerminalHandle,
   'terminal.show': TerminalHandle,
   'terminal.sleep': TerminalCloseAll,
   'terminal.split': TerminalSplit,

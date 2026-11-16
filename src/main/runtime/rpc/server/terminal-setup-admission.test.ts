@@ -1,3 +1,5 @@
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../shared/orchestration/orchestration-runtime-capabilities'
+import { defineOrchestrationMethod } from '../methods/orchestration/access/orchestration-method-access'
 import '../dispatch/testing/unused-default-rpc-methods.test-fixture'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -10,16 +12,13 @@ import { DeviceRegistry } from './pairing/device-registry'
 import { defineMethod, type RpcResponse } from '../core'
 import { TERMINAL_QUERY_METHODS } from '../methods/terminal/terminal-query-methods'
 import { TerminalSetupObservers } from '../../../../renderer/src/runtime/hosted-terminals/inspection/terminal-setup-observers'
-import {
-  isTerminalSetupStatus,
-  type TerminalSetupStatus
-} from '../../../../shared/terminal/pty/lifecycle/terminal-setup-status'
+import { isTerminalSetupStatus } from '../../../../shared/terminal/pty/lifecycle/terminal-setup-status'
 
 class SetupHost extends OrcaRuntimeService {
   bindSetup(id: string, completion: Promise<{ exitCode: number | null }>): void {
     this.setupTerminalCompletions.bindDependent('workspace', id, completion)
   }
-  override getTerminalSetupStatus(handle: string): TerminalSetupStatus {
+  override getTerminalSetupStatus(handle: string) {
     return this.getPtySetupStatus(handle)
   }
 }
@@ -35,6 +34,7 @@ class PairedServer extends OrcaRuntimeRpcServer {
         JSON.stringify({
           id,
           method,
+          orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
           params: { terminal: id, ...(method === 'agent.launch' ? { prompt: 'hello' } : {}) }
         }),
         (response) => resolve(JSON.parse(response)),
@@ -55,20 +55,30 @@ describe('paired Setup admission', () => {
     const release = Promise.withResolvers<void>()
     const admitted = Promise.withResolvers<void>()
     let waiting = 0
-    const methods = ['terminal.wait', 'orchestration.workerStart', 'agent.launch'].map((name) =>
-      defineMethod({
-        name,
+    const hold = async () => {
+      if (++waiting === 16) {
+        admitted.resolve()
+      }
+      await release.promise
+      return { accepted: true }
+    }
+    const methods = [
+      ...['terminal.wait', 'agent.launch'].map((name) =>
+        defineMethod({
+          name,
+          permission: 'workspace',
+          params: z.object({}),
+          handler: hold
+        })
+      ),
+      defineOrchestrationMethod({
+        name: 'orchestration.workerStart',
         permission: 'workspace',
+        access: { kind: 'writes', targets: {} },
         params: z.object({}),
-        handler: async () => {
-          if (++waiting === 16) {
-            admitted.resolve()
-          }
-          await release.promise
-          return { accepted: true }
-        }
+        handler: hold
       })
-    )
+    ]
     const server = new PairedServer({
       runtime,
       userDataPath: path,
@@ -117,7 +127,20 @@ describe('paired Setup admission', () => {
           index === 0 ? 'orchestration.workerStart' : index === 1 ? 'agent.launch' : 'terminal.wait'
         )
       )
-      await admitted.promise
+      await Promise.race([
+        admitted.promise,
+        Promise.all(
+          longRequests.map(async (request) => {
+            const response = await request
+            if (!response.ok) {
+              throw new Error(JSON.stringify(response))
+            }
+            return response
+          })
+        ).then(() => {
+          throw new Error('long requests ended before release')
+        })
+      ])
       await expect(server.request(token, 'overflow', 'terminal.wait')).resolves.toMatchObject({
         ok: false,
         error: { code: 'runtime_busy' }
