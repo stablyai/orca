@@ -1,5 +1,4 @@
 import { useMemo } from 'react'
-import { shallow } from 'zustand/shallow'
 import { getStructuredChatWorktreeIds } from '@/components/sidebar/worktree-list/listing/visible-worktree-activity-inputs'
 import { filterWorkspaceRows } from '../../../../../shared/workspace-view/workspace-row-filters'
 import { buildDesktopWorkspaceRowFactReader } from '@/components/sidebar/worktree-list/listing/desktop-workspace-row-facts'
@@ -20,11 +19,13 @@ import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
   getPairedDeviceIdsByEnvironment
 } from '../../../../../shared/workspace-view/workspace-creator-visibility'
-import type { Worktree } from '../../../../../shared/worktree/types'
 import { indexHiddenProjects } from '../../../../../shared/project/catalog/hidden-projects'
 import { EMPTY_SORTED_WORKTREES } from '../worktree-jump-palette-model'
 import { buildWorktreeJumpPaletteDocumentIndex } from '../tabs/worktree-jump-palette-document-index'
-import { buildWorktreeJumpPaletteWorktreeMaps } from './worktree-jump-palette-worktree-maps'
+import {
+  buildWorktreeJumpPaletteWorktreeMaps,
+  createPaletteWorktreeArrayReuse
+} from './worktree-jump-palette-worktree-maps'
 import type { WorktreeJumpPaletteWorktreesInput } from './worktree-jump-palette-worktrees-input'
 
 export function useWorktreeJumpPaletteWorktrees({
@@ -167,15 +168,7 @@ export function useWorktreeJumpPaletteWorktrees({
     })
     return hasQuery && filterPredicate ? scope.filter(filterPredicate.matchesWorktree) : scope
   }, [workspaces, filterPredicate, hasQuery, switchableWorktreesForRows, hiddenProjects])
-  const reuseSortedWorktrees = useMemo(() => {
-    let previous: readonly Worktree[] = EMPTY_SORTED_WORKTREES
-    return (next: readonly Worktree[]) => {
-      if (!shallow(previous, next)) {
-        previous = next
-      }
-      return previous
-    }
-  }, [])
+  const reuseSortedWorktrees = useMemo(createPaletteWorktreeArrayReuse, [])
   const browserSortedWorktrees = useMemo(() => {
     if (!paletteStatusInputsActive) {
       return reuseSortedWorktrees(EMPTY_SORTED_WORKTREES)

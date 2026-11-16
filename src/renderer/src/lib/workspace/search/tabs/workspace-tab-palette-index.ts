@@ -1,7 +1,7 @@
 import { shallow } from 'zustand/shallow'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import { readRecordChanges } from '@/store/keyed-record-change-reads'
-import { getPaneKeyTabId } from './workspace-tab-agent-metadata'
+import { collectAgentMetadataFromIndex, getPaneKeyTabId } from './workspace-tab-agent-metadata'
 import {
   buildPaletteTabDocument,
   type PaletteTabDocumentInput
@@ -9,7 +9,6 @@ import {
 import type { PaletteDocument } from '../../../../../../shared/palette-match/palette-document'
 import { buildSearchableWorkspaceTabEntries } from './workspace-tab-palette-entry-builder'
 import { createWorkspaceTabAgentIndex } from './workspace-tab-agent-index'
-import { collectAgentMetadataFromIndex } from './workspace-tab-agent-metadata'
 import {
   findAmbiguousWorktreeIds,
   getUnifiedTabPaletteExecutionHostId
@@ -39,6 +38,16 @@ function sameEntry(a: SearchableWorkspaceTab, b: SearchableWorkspaceTab): boolea
   )
 }
 
+function stableEntryInputs({
+  agentStatusByPaneKey: _agentStatusByPaneKey,
+  sleepingAgentSessionsByPaneKey: _sleepingAgentSessionsByPaneKey,
+  terminalLayoutsByTabId: _terminalLayoutsByTabId,
+  paneForegroundAgentByPaneKey: _paneForegroundAgentByPaneKey,
+  ...inputs
+}: BuildSearchableWorkspaceTabsOptions) {
+  return inputs
+}
+
 /** One open palette owns the derived index; closing it drops every cached entry. */
 export function createWorkspaceTabPaletteIndex() {
   const agents = createWorkspaceTabAgentIndex()
@@ -54,9 +63,10 @@ export function createWorkspaceTabPaletteIndex() {
     const dirtyTabs = agentTabs && new Set(agentTabs)
     let addressed = dirtyTabs !== null
     if (previous && dirtyTabs) {
-      for (const field of ['terminalLayoutsByTabId', 'paneForegroundAgentByPaneKey'] as const) {
-        const before = previous[field]
-        const after = options[field]
+      for (const [before, after, paneKeys] of [
+        [previous.terminalLayoutsByTabId, options.terminalLayoutsByTabId, false],
+        [previous.paneForegroundAgentByPaneKey, options.paneForegroundAgentByPaneKey, true]
+      ] as const) {
         if (before === after) {
           continue
         }
@@ -70,25 +80,17 @@ export function createWorkspaceTabPaletteIndex() {
           break
         }
         for (const key of changes.keys) {
-          const tabId = field === 'terminalLayoutsByTabId' ? key : getPaneKeyTabId(key)
+          const tabId = paneKeys ? getPaneKeyTabId(key) : key
           if (tabId) {
             dirtyTabs.add(tabId)
           }
         }
       }
     }
-    const previousInputs = new Map(previous ? Object.entries(previous) : [])
     const statusOnly =
       previous &&
       Object.keys(options).length === Object.keys(previous).length &&
-      Object.entries(options).every(
-        ([key, value]) =>
-          key === 'agentStatusByPaneKey' ||
-          key === 'sleepingAgentSessionsByPaneKey' ||
-          key === 'terminalLayoutsByTabId' ||
-          key === 'paneForegroundAgentByPaneKey' ||
-          (previousInputs.has(key) && previousInputs.get(key) === value)
-      )
+      shallow(stableEntryInputs(previous), stableEntryInputs(options))
     previous = options
     if (statusOnly && addressed && dirtyTabs !== null) {
       let next = entries
