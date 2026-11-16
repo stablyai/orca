@@ -1,8 +1,4 @@
 import { KEYBINDING_DEFINITIONS } from '../../../../../shared/keybindings/definitions'
-import {
-  CLOUD_SHARE_LINK_ACTION_ID,
-  cloudTeamSharingEnabled
-} from '@/lib/orca-cloud/cloud-team-sharing-flag'
 import type { SettingsSearchEntry } from '../search/settings-search'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
@@ -66,8 +62,7 @@ export function getShortcutsPaneSearchEntries(options?: {
         ({ actionId }) =>
           (includeManagedBrowser ||
             (actionId !== 'tab.newBrowser' && actionId !== 'tab.newBrowserSplitRight')) &&
-          (includeMobileEmulator || actionId !== 'tab.newSimulator') &&
-          (actionId !== CLOUD_SHARE_LINK_ACTION_ID || cloudTeamSharingEnabled())
+          (includeMobileEmulator || actionId !== 'tab.newSimulator')
       )
       .map(({ searchEntry }) => searchEntry),
     getTerminalShortcutPolicySearchEntry()

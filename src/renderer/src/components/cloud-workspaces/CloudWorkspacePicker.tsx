@@ -1,6 +1,6 @@
 // "Open cloud workspace…": cloud workspaces this computer's sidebar doesn't show, as the same rows
 // (and ⋯ menu) the team list had. Open goes through openCloudWorkspace and closes the picker.
-import { cloudTeamSharingEnabled } from '@/lib/orca-cloud/cloud-team-sharing-flag'
+import { canManageActiveTeam } from '@/lib/orca-cloud/orca-cloud-team-role'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { RefreshCw, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -13,7 +13,6 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
-import { SettingsSegmentedControl } from '@/components/settings/form-controls/SettingsFormControls'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
@@ -36,7 +35,6 @@ import {
   pickerListQuery,
   pickerRows,
   pickerShowsArchived,
-  pickerShowsScope,
   type CloudWorkspacePickerControls
 } from './cloud-workspace-picker-model'
 import {
@@ -49,34 +47,15 @@ import { useCloudWorkspaces } from './use-cloud-workspaces'
 
 function pickerCopy(
   focus: CloudWorkspacePickerFocus,
-  teammateName: string | null,
   t: Translate
 ): { title: string; description: string } {
   switch (focus.kind) {
     case 'open':
       return {
         title: t('components.cloudWorkspaces.picker.title', 'Open cloud workspace'),
-        // TEAM-SHARING-HOLD: nothing is shared by teammates while sharing is held.
-        description: cloudTeamSharingEnabled()
-          ? t(
-              'components.cloudWorkspaces.picker.description',
-              'Cloud workspaces that aren’t in your sidebar: shared by teammates, or started on another computer.'
-            )
-          : t(
-              'components.cloudWorkspaces.picker.descriptionOwn',
-              'Your cloud workspaces that aren’t in your sidebar, such as ones started on another computer.'
-            )
-      }
-    case 'teammate':
-      return {
-        title: teammateName
-          ? t('components.cloudWorkspaces.picker.teammateTitle', '{{name}}’s cloud workspaces', {
-              name: teammateName
-            })
-          : t('components.cloudWorkspaces.picker.title', 'Open cloud workspace'),
         description: t(
-          'components.cloudWorkspaces.picker.teammateDescription',
-          'The ones they own or started that you can see.'
+          'components.cloudWorkspaces.picker.descriptionOwn',
+          'Your cloud workspaces that aren’t in your sidebar, such as ones started on another computer.'
         )
       }
     case 'running':
@@ -102,14 +81,12 @@ function emptyReason({
   focus,
   controls,
   hiddenInSidebar,
-  listedBeforeSearch,
-  teammateName
+  listedBeforeSearch
 }: {
   focus: CloudWorkspacePickerFocus
   controls: CloudWorkspacePickerControls
   hiddenInSidebar: number
   listedBeforeSearch: boolean
-  teammateName: string | null
 }): PickerEmptyReason {
   if (controls.search.trim() && listedBeforeSearch) {
     return { kind: 'search' }
@@ -119,9 +96,6 @@ function emptyReason({
   }
   if (focus.kind === 'running') {
     return { kind: 'none-running' }
-  }
-  if (focus.kind === 'teammate') {
-    return { kind: 'teammate', name: teammateName ?? '' }
   }
   return hiddenInSidebar > 0 ? { kind: 'all-in-sidebar' } : { kind: 'none' }
 }
@@ -139,13 +113,13 @@ export function CloudWorkspacePicker({
   const signIn = useAppStore((s) => s.connectCurrentOrcaProfile)
   const account = useOrcaAccountKey()
   const orgId = cloud?.activeOrgId
-  const hasOrg = Boolean(orgId)
   const selfId = cloud?.userId ?? null
-  const [controls, setControls] = useState(() => initialPickerControls(hasOrg))
+  const [controls, setControls] = useState(initialPickerControls)
   const [now, setNow] = useState(() => Date.now())
   const change = (next: Partial<CloudWorkspacePickerControls>): void =>
     setControls((previous) => ({ ...previous, ...next }))
-  const query = pickerListQuery(focus, controls, hasOrg)
+  const teamAdmin = useAppStore((s) => canManageActiveTeam(s.orcaProfileAuthStatus))
+  const query = pickerListQuery(focus, controls, teamAdmin)
   const { state, stale, reading, refresh, replace } = useCloudWorkspaces(
     query,
     Boolean(cloud),
@@ -183,8 +157,6 @@ export function CloudWorkspacePicker({
       }).rows.length > 0,
     [all, focus, inSidebar, directory]
   )
-  const teammateName =
-    focus.kind === 'teammate' ? (directory.get(focus.userId)?.name ?? null) : null
   const members = useMemo(
     () =>
       [...directory.entries()].map(([userId, m]) => ({
@@ -206,7 +178,7 @@ export function CloudWorkspacePicker({
     onOpened: onClose
   })
 
-  const copy = pickerCopy(focus, teammateName, t)
+  const copy = pickerCopy(focus, t)
   const loading = state.status === 'loading' || (state.status === 'ready' && inSidebar === null)
 
   return (
@@ -235,18 +207,6 @@ export function CloudWorkspacePicker({
             onChange={(event) => change({ search: event.target.value })}
           />
         </div>
-        {pickerShowsScope(focus, hasOrg) ? (
-          <SettingsSegmentedControl
-            size="sm"
-            ariaLabel={t('auto.components.cloudWorkspaces.whoseWorkspaces', 'Whose workspaces')}
-            value={controls.scope}
-            onChange={(scope) => change({ scope })}
-            options={[
-              { value: 'team', label: t('auto.components.cloudWorkspaces.scopeTeam', 'Team') },
-              { value: 'mine', label: t('auto.components.cloudWorkspaces.scopeMine', 'Mine') }
-            ]}
-          />
-        ) : null}
         {pickerShowsArchived(focus) ? (
           <label className="flex h-7 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
             <Switch
@@ -304,8 +264,7 @@ export function CloudWorkspacePicker({
               focus,
               controls,
               hiddenInSidebar,
-              listedBeforeSearch,
-              teammateName
+              listedBeforeSearch
             })}
             onCreate={() => {
               onClose()

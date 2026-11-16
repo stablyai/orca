@@ -1,9 +1,9 @@
 // Static team, workspaces and API stubs shared by the cloud workspaces component fixtures.
+import type { CloudWorkspace } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 import type {
-  CloudWorkspace,
-  CloudWorkspacePresence
-} from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
-import type { OrcaOrgMembersRoster, OrcaProfileAuthStatus } from '../../../../shared/orca-profiles/orca-profiles'
+  OrcaOrgMembersRoster,
+  OrcaProfileAuthStatus
+} from '../../../../shared/orca-profiles/orca-profiles'
 import type { CloudWorkspacesApi } from '../../../../preload/api/cloud-workspaces-api'
 import type { MemberDirectory } from './cloud-workspace-format'
 
@@ -46,13 +46,6 @@ export const AUTH_STATUS: OrcaProfileAuthStatus = {
   }
 }
 
-export function presence(
-  userId: string,
-  state: CloudWorkspacePresence['state'] = 'viewing'
-): CloudWorkspacePresence {
-  return { userId, clientId: `desktop-${userId}`, state, chatId: 's:ses_1', at: FIXTURE_NOW }
-}
-
 let next = 0
 export function workspace(overrides: Partial<CloudWorkspace>): CloudWorkspace {
   next += 1
@@ -67,7 +60,6 @@ export function workspace(overrides: Partial<CloudWorkspace>): CloudWorkspace {
     title: null,
     number: 40 + next,
     repo: { url: 'https://github.com/acme/payments.git', branch: 'main' },
-    visibility: 'team',
     section: null,
     archivedAt: null,
     createdBy: SELF_ID,
@@ -82,7 +74,6 @@ export function workspace(overrides: Partial<CloudWorkspace>): CloudWorkspace {
       totalUsdMicros: 2_360_000
     },
     access: 'owner',
-    presence: [],
     ...overrides
   }
 }
@@ -92,8 +83,7 @@ export function teamWorkspaces(): CloudWorkspace[] {
   return [
     workspace({
       title: 'Checkout retries',
-      section: 'Payments',
-      presence: [presence('user_grace', 'typing'), presence('user_linus')]
+      section: 'Payments'
     }),
     workspace({
       repo: { url: 'https://github.com/acme/payments.git', branch: 'refund-webhooks' },
@@ -130,7 +120,6 @@ export function teamWorkspaces(): CloudWorkspace[] {
     workspace({
       title: 'Flaky e2e repro',
       repo: { url: 'https://github.com/acme/web.git', branch: 'fix-e2e' },
-      visibility: 'private',
       status: 'failed',
       lastActivityAt: FIXTURE_NOW - 26 * 3_600_000
     }),

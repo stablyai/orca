@@ -13,7 +13,7 @@ import { useCloudGitActor } from '@/components/cloud-workspaces/use-cloud-git-ac
 /**
  * GH-ACTING-LINE under Commit/Push in a cloud workspace: who pushes and PRs go out as right now, and,
  * when it falls back to Orca's bot for a viewer who hasn't connected GitHub, Connect GitHub. The
- * only place that action shows; the people tooltip just says who.
+ * only place that action shows.
  */
 export function CloudGitActingNoticeView({
   answer,

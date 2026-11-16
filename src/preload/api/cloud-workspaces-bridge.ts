@@ -6,7 +6,6 @@ export const cloudWorkspacesApi = {
   list: (query) => ipcRenderer.invoke('cloudWorkspaces:list', query),
   get: (id) => ipcRenderer.invoke('cloudWorkspaces:get', { id }),
   patch: (id, patch) => ipcRenderer.invoke('cloudWorkspaces:patch', { id, patch }),
-  follow: (id, follow) => ipcRenderer.invoke('cloudWorkspaces:follow', { id, follow }),
   resolveLink: (target, chatId) =>
     ipcRenderer.invoke('cloudWorkspaces:resolveLink', { target, chatId }),
   openGrant: (id) => ipcRenderer.invoke('cloudWorkspaces:openGrant', { id }),
@@ -17,7 +16,6 @@ export const cloudWorkspacesApi = {
   wake: (id) => ipcRenderer.invoke('cloudWorkspaces:wake', { id }),
   destroy: (id) => ipcRenderer.invoke('cloudWorkspaces:destroy', { id }),
   localWorkspaces: () => ipcRenderer.invoke('cloudWorkspaces:localWorkspaces'),
-  noteSent: (id) => ipcRenderer.invoke('cloudWorkspaces:noteSent', { id }),
   bindEnvironment: (sandboxId, runtimeEnvironmentId, grantId) =>
     ipcRenderer.invoke('cloudWorkspaces:bindEnvironment', {
       sandboxId,
@@ -32,13 +30,6 @@ export const cloudWorkspacesApi = {
   getPrefs: () => ipcRenderer.invoke('cloudWorkspaces:getPrefs'),
   putPrefs: (document, revision) =>
     ipcRenderer.invoke('cloudWorkspaces:putPrefs', { document, revision }),
-  getOrgSlug: (orgName) => ipcRenderer.invoke('cloudWorkspaces:getOrgSlug', { orgName }),
-  teammateProfile: (userId, utcOffsetMin) =>
-    ipcRenderer.invoke('cloudWorkspaces:teammateProfile', { userId, utcOffsetMin }),
-  poke: (userId) => ipcRenderer.invoke('cloudWorkspaces:poke', { userId }),
-  pokeInbox: () => ipcRenderer.invoke('cloudWorkspaces:pokeInbox'),
-  setPokesEnabled: (enabled) => ipcRenderer.invoke('cloudWorkspaces:setPokesEnabled', { enabled }),
-  markPokesSeen: (ids) => ipcRenderer.invoke('cloudWorkspaces:markPokesSeen', { ids }),
   changeOwner: (id, ownerUserId) =>
     ipcRenderer.invoke('cloudWorkspaces:changeOwner', { id, ownerUserId }),
   ownerNotices: () => ipcRenderer.invoke('cloudWorkspaces:ownerNotices'),

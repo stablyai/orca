@@ -1,5 +1,4 @@
 import React, { useRef } from 'react'
-import { useCloudTeamSharingEnabled } from '@/lib/orca-cloud/cloud-team-sharing-flag'
 import { ArchiveSnapshotTooltip } from '@/components/orca-cloud/ArchiveSnapshotTooltip'
 import {
   Archive,
@@ -8,15 +7,10 @@ import {
   Trash2,
   ArrowUpRight,
   BookOpen,
-  Link2,
-  Lock,
-  MessageSquare,
   MoreHorizontal,
   Play,
   RotateCw,
-  SquareTerminal,
-  UserRoundCog,
-  Users
+  UserRoundCog
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -32,18 +26,13 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { formatOptionalPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
-import { useAppStore } from '@/store'
-import {
-  formatWorkspaceNumber,
-  type CloudWorkspace,
-  type CloudWorkspacePatch,
-  type CloudWorkspacePresence
+import type {
+  CloudWorkspace,
+  CloudWorkspacePatch
 } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 import { MemberAvatar } from './CloudMemberAvatars'
-import { openTeammateProfile } from '../teammates/teammate-profile-store'
-import { memberName, presentMembers, type MemberDirectory } from './cloud-workspace-format'
+import type { MemberDirectory } from './cloud-workspace-format'
 import {
   cloudWorkspaceActionGroups,
   type CloudWorkspaceAction
@@ -54,14 +43,6 @@ export type RowActions = {
   open: (w: CloudWorkspace) => void
   /** Asleep: the read-only copy it saved when it went to sleep (never wakes it). */
   read: (w: CloudWorkspace) => void
-  /** The workspace's link (W-number), the same as ⌘⌥⇧L and the tab-bar chip. */
-  copyLink: (w: CloudWorkspace) => void
-  /** The link to the chat or terminal you have focused in it (only offered while it is in front). */
-  copyWorkspaceLink: (w: CloudWorkspace) => void
-  /** What is focused in this workspace right now, if it is the one in front. */
-  focusedItem?: (w: CloudWorkspace) => 'chat' | 'terminal' | null
-  /** One-time jump: open the workspace on the chat this teammate has in front. */
-  goToChat: (w: CloudWorkspace, member: CloudWorkspacePresence) => void
   patch: (w: CloudWorkspace, patch: CloudWorkspacePatch) => void
   /** Sleep and archive with a snapshot (Undo for 5 s); never just a label. */
   archive: (w: CloudWorkspace) => void
@@ -110,14 +91,6 @@ export function CloudWorkspaceRowMenu({
   actions: RowActions
 }): React.JSX.Element {
   const t = useTranslate()
-  const keybindings = useAppStore((state) => state.keybindings)
-  const copyShortcut = formatOptionalPrimaryShortcutLabel('cloudWorkspace.copyLink', keybindings)
-  const teamSharing = useCloudTeamSharingEnabled()
-  // Read when the menu renders (it re-renders on open), not kept: focus moves between opens.
-  const focused = open ? (actions.focusedItem?.(w) ?? null) : null
-  const teammatesHere = canOpen
-    ? presentMembers(w.presence, selfId).filter((p) => p.userId !== selfId)
-    : []
   // Focus returns to ⋯ on close; after a mouse open that would leave a ring nobody asked for.
   const openedByPointer = useRef(false)
   // The same action list the sidebar menu renders (JA-14).
@@ -125,7 +98,6 @@ export function CloudWorkspaceRowMenu({
     surface: 'list',
     status: w.status,
     archivedAt: w.archivedAt,
-    visibility: w.visibility,
     canOpen,
     canManage,
     readableAsleep: isReadableAsleep(w),
@@ -187,79 +159,9 @@ export function CloudWorkspaceRowMenu({
             <DropdownMenuShortcut>↵</DropdownMenuShortcut>
           </DropdownMenuItem>
         )}
-        {/* TEAM-SHARING-HOLD: share links only while team sharing is on. */}
-        {teamSharing ? (
-          <DropdownMenuItem onSelect={() => actions.copyLink(w)}>
-            <Link2 />
-            {w.number
-              ? t('auto.components.cloudWorkspaces.copyLinkTo', 'Copy link to {{number}}', {
-                  number: formatWorkspaceNumber(w.number)
-                })
-              : t('auto.components.cloudWorkspaces.copyLink', 'Copy link')}
-            {copyShortcut ? <DropdownMenuShortcut>{copyShortcut}</DropdownMenuShortcut> : null}
-          </DropdownMenuItem>
-        ) : null}
-        {teamSharing && focused ? (
-          <DropdownMenuItem onSelect={() => actions.copyWorkspaceLink(w)}>
-            {focused === 'terminal' ? <SquareTerminal /> : <MessageSquare />}
-            {focused === 'terminal'
-              ? t(
-                  'auto.components.cloudWorkspaces.copyLinkToTerminal',
-                  'Copy link to this terminal'
-                )
-              : t('auto.components.cloudWorkspaces.copyLinkToChat', 'Copy link to this chat')}
-          </DropdownMenuItem>
-        ) : null}
-        {w.ownerUserId !== selfId && (
-          <DropdownMenuItem onSelect={() => openTeammateProfile(w.ownerUserId)}>
-            <MemberAvatar userId={w.ownerUserId} directory={directory} selfId={selfId} size="sm" />
-            <span className="truncate">
-              {t('auto.components.cloudWorkspaces.viewOwnerProfile', "View {{name}}'s profile", {
-                name: memberName(directory, w.ownerUserId, selfId, t)
-              })}
-            </span>
-          </DropdownMenuItem>
-        )}
-        {teammatesHere.length > 0 && (
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>
-              <ArrowUpRight />
-              {t('auto.components.cloudWorkspaces.goToTeammateChat', "Go to a teammate's chat")}
-            </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent className="w-56" collisionPadding={SUBMENU_COLLISION_PADDING}>
-              {teammatesHere.map((member) => (
-                <DropdownMenuItem key={member.userId} onSelect={() => actions.goToChat(w, member)}>
-                  <MemberAvatar
-                    userId={member.userId}
-                    directory={directory}
-                    selfId={selfId}
-                    size="sm"
-                  />
-                  <span className="truncate">
-                    {t('auto.components.cloudWorkspaces.goToChat', "Go to {{value0}}'s chat", {
-                      value0: memberName(directory, member.userId, selfId, t)
-                    })}
-                  </span>
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-        )}
         {canManage && (
           <>
-            <DropdownMenuSeparator />
-            {/* TEAM-SHARING-HOLD: no Share with team / Make private while sharing is held. */}
-            {!teamSharing ? null : w.visibility === 'private' ? (
-              <DropdownMenuItem onSelect={() => actions.patch(w, { visibility: 'team' })}>
-                <Users />
-                {t('auto.components.cloudWorkspaces.shareWithTeam', 'Share with team')}
-              </DropdownMenuItem>
-            ) : (
-              <DropdownMenuItem onSelect={() => actions.patch(w, { visibility: 'private' })}>
-                <Lock />
-                {t('auto.components.cloudWorkspaces.makePrivate', 'Make private')}
-              </DropdownMenuItem>
-            )}
+            {members.length > 0 && <DropdownMenuSeparator />}
             {members.length > 0 && (
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger>

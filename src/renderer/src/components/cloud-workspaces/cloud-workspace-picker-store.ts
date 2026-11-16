@@ -1,14 +1,12 @@
 // "Open cloud workspace…": the one place to open a cloud workspace this computer's sidebar doesn't
-// show (a teammate's shared one, one started on another computer, one whose pairing was removed).
-// Every surface that used to send people to the Home list opens this instead, with a focus that
-// says why: the running limit lists your running ones, a teammate's profile lists theirs.
+// show (one started on another computer, one whose pairing was removed). Every surface that used to
+// send people to the Home list opens this instead, with a focus that says why: the running limit
+// lists your running ones.
 import { useSyncExternalStore } from 'react'
 
 export type CloudWorkspacePickerFocus =
   /** Anything not in this sidebar yet (the menu, the palette, a broken pairing). */
   | { kind: 'open' }
-  /** Everything one teammate has that you can see (their profile's "Show all"). */
-  | { kind: 'teammate'; userId: string }
   /** At the running-sandbox limit: your running ones, sidebar ones too, to put one to sleep. */
   | { kind: 'running' }
   /** Deleting the team: every team workspace, archived ones too, so they can be deleted first. */

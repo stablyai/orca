@@ -13,23 +13,14 @@ import {
   CloudWorkspaceGrantListSchema,
   CloudWorkspaceLinkResponseSchema,
   CloudWorkspaceListResponseSchema,
-  CloudWorkspacePresenceResponseSchema,
   CloudWorkspaceResponseSchema,
-  CloudWorkspaceFollowSchema,
   OrgPromptsSchema,
   type CloudWorkspaceLinkTarget,
   type CloudWorkspaceListQuery,
   type CloudWorkspacePatch,
   type OrgPrompts
 } from '../../shared/cloud-workspaces/cloud-workspaces-wire'
-import {
-  PokeInboxSchema,
-  PokeSentSchema,
-  PokeSettingsSchema,
-  TeammateProfileResponseSchema
-} from '../../shared/cloud-workspaces/team-presence-wire'
-
-const NoteSentSchema = z.object({ ok: z.literal(true) })
+const OkSchema = z.object({ ok: z.literal(true) })
 /** DELETE and POST suspend on /v1/sandboxes/:id answer with the sandbox's new state, not `{ok}`. */
 const SandboxStateSchema = z.object({
   sandbox: z.object({ id: z.string(), status: z.enum(HOSTED_SANDBOX_STATUSES) })
@@ -55,7 +46,7 @@ export type CloudWorkspacesClientOptions = {
 }
 
 const CONTROL_TIMEOUT_MS = 20_000
-// Opening a sleeping teammate workspace includes a VM boot.
+// Opening a sleeping workspace on another device includes a VM boot.
 const GRANT_TIMEOUT_MS = 120_000
 const MAX_RESPONSE_BYTES = 512 * 1024
 // A read snapshot carries chat tails (bounded by READ_SNAPSHOT_LIMITS), base64 over AES-GCM.
@@ -160,19 +151,6 @@ export function createCloudWorkspacesClient(options: CloudWorkspacesClientOption
     async patch(id: string, patch: CloudWorkspacePatch) {
       return call('PATCH', ws(id), CloudWorkspaceResponseSchema.extend({}).passthrough(), patch)
     },
-    async follow(id: string, follow: boolean) {
-      return call(follow ? 'PUT' : 'DELETE', `${ws(id)}/follow`, CloudWorkspaceFollowSchema)
-    },
-    async noteSent(id: string) {
-      await call('POST', `${ws(id)}/sent`, NoteSentSchema, {})
-    },
-    async presence(
-      id: string,
-      body: { clientId: string; state: 'viewing' | 'typing' | 'left'; chatId?: string | null }
-    ) {
-      return (await call('POST', `${ws(id)}/presence`, CloudWorkspacePresenceResponseSchema, body))
-        .presence
-    },
     async wake(id: string) {
       return (
         await call('POST', `${ws(id)}/wake`, CloudWorkspaceResponseSchema, {}, GRANT_TIMEOUT_MS)
@@ -244,7 +222,7 @@ export function createCloudWorkspacesClient(options: CloudWorkspacesClientOption
       await call(
         'DELETE',
         `/v1/reader-keys/${encodeURIComponent(keyId)}`,
-        NoteSentSchema.passthrough(),
+        OkSchema.passthrough(),
         undefined,
         timeoutMs
       )
@@ -276,35 +254,6 @@ export function createCloudWorkspacesClient(options: CloudWorkspacesClientOption
     },
     putOrgPrompts(document: OrgPrompts['document'], revision: number): Promise<OrgPrompts> {
       return call('PUT', '/v1/team/prompts', OrgPromptsSchema, { document, revision })
-    },
-    async teammateProfile(userId: string, utcOffsetMin: number) {
-      const qs = new URLSearchParams({ utcOffsetMin: String(utcOffsetMin) })
-      return (
-        await call(
-          'GET',
-          `/v1/team/members/${encodeURIComponent(userId)}/profile?${qs}`,
-          TeammateProfileResponseSchema
-        )
-      ).profile
-    },
-    async poke(userId: string) {
-      return (
-        await call(
-          'POST',
-          `/v1/team/members/${encodeURIComponent(userId)}/poke`,
-          PokeSentSchema,
-          {}
-        )
-      ).poke
-    },
-    pokeInbox() {
-      return call('GET', '/v1/team/pokes', PokeInboxSchema)
-    },
-    async setPokesEnabled(enabled: boolean) {
-      return (await call('PUT', '/v1/team/pokes/settings', PokeSettingsSchema, { enabled })).enabled
-    },
-    async markPokesSeen(ids: string[]) {
-      await call('POST', '/v1/team/pokes/seen', NoteSentSchema, { ids })
     }
   }
 }

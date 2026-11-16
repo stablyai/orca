@@ -29,12 +29,6 @@ const mocks = vi.hoisted(() => {
   return { state, open: vi.fn(), sleep: vi.fn(), archive: vi.fn() }
 })
 
-const teamSharing = vi.hoisted(() => ({ on: true }))
-vi.mock('@/lib/orca-cloud/cloud-team-sharing-flag', () => ({
-  CLOUD_SHARE_LINK_ACTION_ID: 'cloudWorkspace.copyLink',
-  cloudTeamSharingEnabled: () => teamSharing.on,
-  useCloudTeamSharingEnabled: () => teamSharing.on
-}))
 vi.mock('@/store', () => ({
   useAppStore: Object.assign(
     (selector: (s: typeof mocks.state) => unknown) => selector(mocks.state),
@@ -82,7 +76,6 @@ const ARCHIVED = workspace({
 })
 const PRIVATE = workspace({
   title: 'Ada’s private notes',
-  visibility: 'private',
   status: 'suspended',
   lastActivityAt: FIXTURE_NOW - 3_600_000
 })
@@ -98,7 +91,7 @@ beforeEach(() => {
     cloudWorkspaces: {
       available: () => Promise.resolve(true),
       list: vi.fn((query: unknown) => {
-        expect(query).toEqual({ scope: 'team', archived: 'include' })
+        expect(query).toEqual({ scope: 'mine', archived: 'include' })
         return Promise.resolve({ ok: true, value: list })
       })
     }
@@ -122,16 +115,16 @@ async function renderPane(): Promise<void> {
 const row = (title: string): HTMLElement => screen.getByText(title).closest('tr')!
 
 describe('Settings › Workspaces', () => {
-  it('lists every team workspace with who started it, its state, W-number and access', async () => {
+  it('lists every workspace with who started it, its state and W-number, and no access column', async () => {
     await renderPane()
     const refund = within(row('Refund webhooks'))
     expect(refund.getByText('Grace Hopper')).toBeTruthy()
     expect(refund.getByText('Running')).toBeTruthy()
     expect(refund.getByText(`W-${RUNNING.number}`)).toBeTruthy()
-    expect(refund.getByText('Shared')).toBeTruthy()
     expect(refund.getByText('acme/web · refunds')).toBeTruthy()
     expect(within(row('Old spike')).getByText('Archived')).toBeTruthy()
-    expect(within(row('Ada’s private notes')).getByText('Private')).toBeTruthy()
+    expect(screen.queryByText('Private')).toBeNull()
+    expect(screen.queryByText('Shared')).toBeNull()
     expect(screen.getByText('3 of 3 workspaces')).toBeTruthy()
   })
 

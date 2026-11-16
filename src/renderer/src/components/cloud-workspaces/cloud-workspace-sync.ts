@@ -1,7 +1,6 @@
 // App-level sync for cloud workspace arrangement and identity, installed with the link wiring:
 // follows the signed-in account, polls this member's synced prefs (pins, order, sections) while the
-// window is visible, keeps W-numbers and links for the palette and headers, and names the org's
-// link slug the first time anyone in the org asks (the control plane only knows org ids).
+// window is visible, and keeps W-numbers for the palette and headers.
 import { useAppStore } from '@/store'
 import { getOrcaAccountKey } from '@/hooks/use-orca-account-key'
 import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
@@ -21,7 +20,7 @@ import {
 import { setPinned } from '../../../../shared/cloud-workspaces/cloud-workspace-arrangement'
 import { onWorktreesPinnedByUser } from '@/lib/orca-cloud/worktree-pin-listeners'
 
-/** Numbers and links rarely change; Home's own polling refreshes them faster while it is open. */
+/** Numbers rarely change; Home's own polling refreshes them faster while it is open. */
 const IDENTITY_POLL_MS = 60_000
 const FRONT_RETRY_MS = 5_000
 
@@ -31,7 +30,6 @@ export function installCloudWorkspaceSync(): () => void {
     return () => {}
   }
   let account: string | null = null
-  const sluggedAccounts = new Set<string>()
 
   const refreshIdentity = async (): Promise<void> => {
     if (!account || !(await cloudWorkspacesAvailable())) {
@@ -39,26 +37,11 @@ export function installCloudWorkspaceSync(): () => void {
     }
     const forAccount = account
     const [list] = await Promise.all([
-      api.list({ scope: 'team', archived: 'include' }),
+      api.list({ scope: 'mine', archived: 'include' }),
       refreshCloudWorktreeBindings()
     ])
     if (list.ok && account === forAccount) {
       rememberCloudWorkspaces(list.value)
-    }
-  }
-
-  const ensureSlug = async (): Promise<void> => {
-    const status = useAppStore.getState().orcaProfileAuthStatus
-    const orgName = status?.cloud?.activeOrgName
-    if (!account || !status?.cloud?.activeOrgId || sluggedAccounts.has(account)) {
-      return
-    }
-    const forAccount = account
-    const result = await api.getOrgSlug(orgName ?? null)
-    if (result.ok && result.value.slug && account === forAccount) {
-      sluggedAccounts.add(forAccount)
-      // Links in the list now carry the slug form.
-      void refreshIdentity()
     }
   }
 
@@ -75,7 +58,7 @@ export function installCloudWorkspaceSync(): () => void {
       void cloudWorkspacesAvailable().then((available) => {
         if (available && account === key) {
           void refreshCloudWorkspacePrefs()
-          void ensureSlug().then(refreshIdentity)
+          void refreshIdentity()
         }
       })
     }
@@ -98,7 +81,7 @@ export function installCloudWorkspaceSync(): () => void {
   )
   cleanups.push(
     installWindowVisibilityInterval({
-      run: () => void ensureSlug().then(refreshIdentity),
+      run: () => void refreshIdentity(),
       intervalMs: IDENTITY_POLL_MS
     })
   )

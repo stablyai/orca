@@ -185,8 +185,8 @@ export function createCloudWorkspacesPairings(
     updateBindings,
     listVisible: async () => {
       const s = await getService().catch(() => null)
-      // Everything this user can see in the team, archived and routine runs included.
-      const result = await s?.list({ scope: 'team', archived: 'include', routines: 'include' })
+      // Everything this user can open, archived and routine runs included.
+      const result = await s?.list({ scope: 'mine', archived: 'include', routines: 'include' })
       return result?.ok ? new Set(result.value.map((w) => w.id)) : null
     },
     presence: (id) => sandboxPresence(getService, id),

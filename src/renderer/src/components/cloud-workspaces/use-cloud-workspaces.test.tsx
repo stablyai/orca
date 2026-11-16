@@ -10,7 +10,7 @@ import { useCloudWorkspaces } from './use-cloud-workspaces'
 
 type ListResult = { ok: true; value: CloudWorkspace[] }
 let pending: ((result: ListResult) => void)[] = []
-const QUERY: CloudWorkspaceListQuery = { scope: 'team', archived: 'exclude' }
+const QUERY: CloudWorkspaceListQuery = { scope: 'mine', archived: 'exclude' }
 
 beforeEach(() => {
   pending = []

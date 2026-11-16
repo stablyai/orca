@@ -1,4 +1,4 @@
-// IPC for synced cloud workspace prefs (pins, order, sections) and the org's link slug.
+// IPC for synced cloud workspace prefs (pins, order, sections).
 // Registered with the other cloud workspace handlers; same `not_configured` contract.
 import { z } from 'zod'
 import { CloudWorkspacePrefsDocumentSchema } from '../../shared/cloud-workspaces/cloud-workspaces-wire'
@@ -22,10 +22,5 @@ export function registerCloudWorkspacePrefsHandlers(
       : parsed.success
         ? s.putPrefs(parsed.data.document, parsed.data.revision)
         : INVALID
-  })
-  handle('cloudWorkspaces:getOrgSlug', async (args) => {
-    const parsed = z.object({ orgName: z.string().max(200).nullable().optional() }).safeParse(args)
-    const s = await getService()
-    return !s ? NOT_CONFIGURED : s.getOrgSlug(parsed.success ? parsed.data.orgName : null)
   })
 }

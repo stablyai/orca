@@ -144,7 +144,7 @@ export async function listCloudWorkspaces(
     const body = await request(
       plane,
       'GET',
-      '/v1/team/workspaces?scope=team&archived=include',
+      '/v1/team/workspaces?scope=mine&archived=include',
       CloudWorkspaceListResponseSchema,
       { signal }
     )
