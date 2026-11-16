@@ -107,7 +107,7 @@ export function useMobileStructuredOptionState(args: {
       summary,
       fence
     ),
-    ...(agent === 'claude' && typeof summary?.launchPermissionMode === 'string'
+    ...(typeof summary?.launchPermissionMode === 'string'
       ? { launchPermissionMode: summary.launchPermissionMode }
       : {})
   })

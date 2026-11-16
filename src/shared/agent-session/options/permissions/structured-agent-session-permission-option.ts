@@ -73,11 +73,9 @@ export function structuredAgentSessionPermissionDescriptor(state: {
         : current === 'read-only'
           ? 'Read only'
           : (current ?? 'Permissions')
-  // Claude applies a pick on reacquisition; Codex can apply one to its reused child.
+  // A pick the running child has not applied yet takes effect with the next message.
   const activeValue =
-    state.record.agent === 'claude' &&
-    state.launchPermissionMode !== undefined &&
-    state.launchPermissionMode !== current
+    state.launchPermissionMode !== undefined && state.launchPermissionMode !== current
       ? state.launchPermissionMode
       : undefined
   return {
