@@ -1034,7 +1034,6 @@
       "src/main/command-code/hook-service.test.ts": 271,
       "src/main/computer/desktop-script/actions/desktop-script-provider-actions.test.ts": 244,
       "src/main/computer/desktop-script/runtime-host/desktop-script-runtime-host.test.ts": 257,
-      "src/main/computer/macos-permissions/macos-computer-use-permission-status-cleanup.integration.test.ts": 65,
       "src/main/computer/macos-native/macos-native-provider-client.test.ts": 1210,
       "src/main/computer/sidecar-transport/sidecar-client.test.ts": 121,
       "src/main/connector-cloud/connector-hello.test.ts": 126,
