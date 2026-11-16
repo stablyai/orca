@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path'
 import {
   CLAUDE_INJECTED_CONFIG_DIR_ENV,
   CLAUDE_PROFILE_POINTER_ENV
-} from '../../../../shared/claude-profile-routing'
+} from '../../../../shared/agent-accounts/claude/claude-profile-routing'
 import { writeFileAtomically } from '../../../filesystem/atomic-file-publication'
 import type { ClaudeProfileDescriptor } from '../claude-profile-paths'
 import type { ClaudeEnvPatch } from '../../runtime-auth/environment'

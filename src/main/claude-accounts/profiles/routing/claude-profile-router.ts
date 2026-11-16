@@ -287,12 +287,9 @@ export class ClaudeProfileRouter {
       ...(userConfigDir ? { [CLAUDE_USER_CONFIG_DIR_ENV]: userConfigDir } : {})
     }
     const pinned = pinnedClaudeTerminalEnv(this, base, worktreeId)
-    if (pinned) {
-      return pinned
-    }
     // Defer routing until the shell env resolves; the shell function will read the updated pointer.
-    if (!this.envResolved) {
-      return base
+    if (pinned || !this.envResolved) {
+      return pinned ?? base
     }
     try {
       this.writePointer()

@@ -1,5 +1,4 @@
 import { settingsRead } from '../../../settings/mobile-settings-read-operations'
-import type { WorktreeAccountPins } from '../../../../../src/shared/worktree-account-pin-settings'
 import { useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import type { PersistedTrustedOrcaHooks } from '../../../../../src/shared/workspace-setup/orca-yaml-hook-types'
 import type { RetiredNameRegistry } from '../../../../../src/shared/worktree/naming/retired-name-registry'
@@ -55,7 +54,7 @@ export function useNewWorkspaceCreateSubmit(args: {
   selectedRepo: MobileWorkspaceRepo | null
   selectedAgent: NewWorktreeAgentOption
   /** Worker accounts (#9496): the account the new worktree's agent starts on. */
-  accountPins?: WorktreeAccountPins
+  accountPins?: Parameters<typeof createBlankWorkspace>[0]['accountPins']
   setSelectedAgent: (agent: NewWorktreeAgentOption) => void
   setAgentOverridden: (overridden: boolean) => void
   runtimeSettings: NewWorktreeRuntimeSettings | null
@@ -107,6 +106,7 @@ export function useNewWorkspaceCreateSubmit(args: {
     setCreating(true)
     args.setError('')
     const folder = args.folderLaunch
+    const placement = { parent: folder?.parent, accountPins: args.accountPins }
     // Admitted for the repo actually picked, before anything is sent; the folder screen owns it until it settles.
     const admission = folder
       ? getRepoExecutionHostId(selectedRepo) === folder.executionHostId
@@ -212,8 +212,7 @@ export function useNewWorkspaceCreateSubmit(args: {
             branchIntentSupported: args.getBranchIntentSupport(
               selection.kind === 'branch' && selection.reuse ? 'open-existing-v2' : 'create-new'
             ),
-            parent: folder?.parent,
-            accountPins: args.accountPins
+            ...placement
           })
         : await createBlankWorkspace({
             client,
@@ -225,8 +224,7 @@ export function useNewWorkspaceCreateSubmit(args: {
             setupDecision,
             worktreeCreateIdempotency: args.getWorktreeCreateCutoverSupport(),
             agentLaunchSupported: args.getAgentLaunchSupport(),
-            parent: folder?.parent,
-            accountPins: args.accountPins
+            ...placement
           })
       if ('error' in result) {
         // Refused on a resend after a lost reply: the first send may have created it.

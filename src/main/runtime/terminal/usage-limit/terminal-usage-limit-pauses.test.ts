@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { TerminalUsageLimitPauses } from './terminal-usage-limit-pauses'
-import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
+import type { ProviderRateLimits } from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { AgentHookEventPayload } from '../../../../shared/agent-hook-listener/listener-event'
 
 const HOUR = 60 * 60_000

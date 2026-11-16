@@ -2,6 +2,7 @@ import { resolveHostCodexSessionSourceHome } from '../../../codex/history/rollou
 import { startSystemCodexSessionBridgeInBackground } from '../../../codex/history/bridges/codex-session-bridge'
 import { isCodexHistorySharedAcrossAccounts } from './codex-history-sharing'
 import {
+  getSystemCodexHomePath,
   resolveOrcaManagedCodexHomePath,
   syncSystemCodexResourcesIntoManagedHome
 } from '../../../codex/configuration/homes/codex-home-paths'
@@ -73,11 +74,17 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
       // Why not prepareSelfContainedManagedHomeForLaunch: that one also syncs the selection's state.
       const home = this.pinnedHomePath(pinned)
       syncSystemCodexResourcesIntoManagedHome(home)
-      syncSystemConfigIntoManagedCodexHome({
-        runtimeHomePath: home,
-        systemHomePath: getSystemCodexHomePath()
-      })
-      this.startSelfContainedSessionBridgeForLaunch(home)
+      const syncConfig = (): boolean =>
+        syncSystemConfigIntoManagedCodexHome({
+          runtimeHomePath: home,
+          systemHomePath: getSystemCodexHomePath()
+        })
+      if (options?.deferConfigSync) {
+        options.deferConfigSync(syncConfig)
+      } else {
+        syncConfig()
+      }
+      void this.prepareAccountHistory(home)
       return home
     }
     const selfContainedAccount = this.getSelfContainedManagedHostAccount()

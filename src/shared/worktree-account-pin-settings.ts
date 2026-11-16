@@ -1,4 +1,7 @@
-import type { ClaudeManagedAccount, CodexManagedAccount } from './managed-account-types'
+import type {
+  ClaudeManagedAccount,
+  CodexManagedAccount
+} from './agent-accounts/managed-account-types'
 
 export type WorktreeAccountPinSettings = {
   /** Worker accounts (#9496): a worktree pinned to an account launches Claude there whatever the selection; worktreeId → accountId. */

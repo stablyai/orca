@@ -1,5 +1,5 @@
-import { rateLimitSpentUntil } from '../../../../shared/rate-limit-spent-windows'
-import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
+import { rateLimitSpentUntil } from '../../../../shared/agent-usage/rate-limits/rate-limit-spent-windows'
+import type { ProviderRateLimits } from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { AgentHookEventPayload } from '../../../../shared/agent-hook-listener/listener-event'
 import type { RateLimitService } from '../../../rate-limits/service/rate-limit-service'
 
