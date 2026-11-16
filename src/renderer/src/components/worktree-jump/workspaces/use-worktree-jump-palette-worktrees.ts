@@ -20,6 +20,7 @@ import {
   getPairedDeviceIdsByEnvironment
 } from '../../../../../shared/workspace-view/workspace-creator-visibility'
 import { indexHiddenProjects } from '../../../../../shared/project/catalog/hidden-projects'
+import type { Worktree } from '../../../../../shared/worktree/types'
 import { EMPTY_SORTED_WORKTREES } from '../worktree-jump-palette-model'
 import { buildWorktreeJumpPaletteDocumentIndex } from '../tabs/worktree-jump-palette-document-index'
 import {
@@ -168,7 +169,7 @@ export function useWorktreeJumpPaletteWorktrees({
     })
     return hasQuery && filterPredicate ? scope.filter(filterPredicate.matchesWorktree) : scope
   }, [workspaces, filterPredicate, hasQuery, switchableWorktreesForRows, hiddenProjects])
-  const reuseSortedWorktrees = useMemo(createPaletteWorktreeArrayReuse, [])
+  const reuseSortedWorktrees = useMemo(() => createPaletteWorktreeArrayReuse(), [])
   const browserSortedWorktrees = useMemo(() => {
     if (!paletteStatusInputsActive) {
       return reuseSortedWorktrees(EMPTY_SORTED_WORKTREES)
