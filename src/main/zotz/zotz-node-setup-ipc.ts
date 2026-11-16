@@ -1,5 +1,5 @@
 import { app, ipcMain, type IpcMainInvokeEvent } from 'electron'
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { access, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { homedir, userInfo } from 'node:os'
 import { dirname, join } from 'node:path'
 import type { ZotzNodeSetupResult } from '../../shared/zotz/zotz-node-setup-contract'
@@ -18,42 +18,57 @@ type ZotzNodeSetupHandlerDeps = {
   getAgentAwakeService: () => AgentAwakeService | null
 }
 
-function resolveSetupScriptPath(): string | null {
-  const candidates = [
-    join(process.resourcesPath ?? '', 'zotz', 'zotz-node-setup.ps1'),
-    join(app.getAppPath(), 'scripts', 'windows', 'zotz-node-setup.ps1')
-  ]
-  return candidates.find((candidate) => existsSync(candidate)) ?? null
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await access(path)
+    return true
+  } catch {
+    return false
+  }
 }
 
-function readText(path: string): string | null {
+async function resolveSetupScriptPath(): Promise<string | null> {
+  for (const candidate of [
+    join(process.resourcesPath ?? '', 'zotz', 'zotz-node-setup.ps1'),
+    join(app.getAppPath(), 'scripts', 'windows', 'zotz-node-setup.ps1')
+  ]) {
+    if (await pathExists(candidate)) {
+      return candidate
+    }
+  }
+  return null
+}
+
+async function readText(path: string): Promise<string | null> {
   try {
-    return readFileSync(path, 'utf8')
+    return await readFile(path, 'utf8')
   } catch {
     return null
   }
 }
 
-function createEnvironment(deps: ZotzNodeSetupHandlerDeps): ZotzNodeSetupEnvironment {
+async function createEnvironment(
+  deps: ZotzNodeSetupHandlerDeps
+): Promise<ZotzNodeSetupEnvironment> {
   const runtimeRpc = deps.getRuntimeRpc()
   return {
     platform: process.platform,
     env: process.env,
     run: runZotzProcess,
-    exists: existsSync,
+    exists: pathExists,
     readText,
-    writeFile: (path, data) => {
-      mkdirSync(dirname(path), { recursive: true })
-      writeFileSync(path, data)
+    writeFile: async (path, data) => {
+      await mkdir(dirname(path), { recursive: true })
+      await writeFile(path, data)
     },
-    removeFile: (path) => rmSync(path, { force: true }),
+    removeFile: (path) => rm(path, { force: true }),
     isPackaged: app.isPackaged,
     executablePath: process.execPath,
     homeDir: homedir(),
     userDataPath: app.getPath('userData'),
     username: userInfo().username,
     port: getWebSocketPort(runtimeRpc?.getWebSocketEndpoint() ?? null) ?? DEFAULT_WS_PORT,
-    setupScriptPath: process.platform === 'win32' ? resolveSetupScriptPath() : null,
+    setupScriptPath: process.platform === 'win32' ? await resolveSetupScriptPath() : null,
     ensureNetworkExposure: async () => {
       if (!runtimeRpc) {
         throw new Error('the runtime server is not running')
@@ -80,13 +95,17 @@ export function registerZotzNodeSetupHandlers(deps: ZotzNodeSetupHandlerDeps): v
     }
     if (!inFlight) {
       const sender = event.sender
-      inFlight = runZotzNodeSetup(buildZotzNodeSetupPhases(createEnvironment(deps)), (steps) => {
-        if (!sender.isDestroyed()) {
-          sender.send('zotzNode:setupProgress', steps)
-        }
-      }).finally(() => {
-        inFlight = null
-      })
+      inFlight = createEnvironment(deps)
+        .then((environment) =>
+          runZotzNodeSetup(buildZotzNodeSetupPhases(environment), (steps) => {
+            if (!sender.isDestroyed()) {
+              sender.send('zotzNode:setupProgress', steps)
+            }
+          })
+        )
+        .finally(() => {
+          inFlight = null
+        })
     }
     return inFlight
   })
@@ -94,6 +113,6 @@ export function registerZotzNodeSetupHandlers(deps: ZotzNodeSetupHandlerDeps): v
     if (!isWindowRenderer(event)) {
       throw new Error('zotz node setup is only available from a desktop window')
     }
-    return removeZotzDesktopAutostart(createEnvironment(deps))
+    return createEnvironment(deps).then(removeZotzDesktopAutostart)
   })
 }

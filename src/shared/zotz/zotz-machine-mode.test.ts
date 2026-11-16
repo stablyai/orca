@@ -5,7 +5,7 @@ describe('zotz machine mode', () => {
   it('treats a missing or unknown persisted mode as unset so the wizard shows', () => {
     expect(resolveZotzMachineMode(undefined)).toBe('unset')
     expect(resolveZotzMachineMode({})).toBe('unset')
-    expect(resolveZotzMachineMode({ zotzMachineMode: 'bogus' as never })).toBe('unset')
+    expect(resolveZotzMachineMode(JSON.parse('{"zotzMachineMode":"bogus"}'))).toBe('unset')
     expect(resolveZotzMachineMode({ zotzMachineMode: 'server' })).toBe('server')
   })
 

@@ -1,6 +1,7 @@
 import { windowsPowerShellPath } from '@orca/process-host/windows-system-binary'
 import { quoteWindowsArgument } from '@orca/process-host/windows-command-line'
 import { quotePowerShellLiteral } from '../../shared/shell/launch/powershell-native-argument'
+import { parseJsonRecord } from './zotz-json-record'
 import type { ZotzProcessRunner } from './zotz-process-runner'
 
 export type ZotzElevationResult =
@@ -26,15 +27,8 @@ try {
 }
 
 export function parseWindowsElevationOutput(stdout: string): ZotzElevationResult {
-  let parsed: {
-    launched?: unknown
-    exitCode?: unknown
-    nativeErrorCode?: unknown
-    message?: unknown
-  }
-  try {
-    parsed = JSON.parse(stdout.trim()) as typeof parsed
-  } catch {
+  const parsed = parseJsonRecord(stdout)
+  if (!parsed) {
     return {
       launched: false,
       cancelled: false,

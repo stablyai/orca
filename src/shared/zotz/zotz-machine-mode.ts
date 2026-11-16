@@ -18,8 +18,8 @@ type ZotzMachineModeSettings = {
 export function resolveZotzMachineMode(
   settings: Pick<ZotzMachineModeSettings, 'zotzMachineMode'> | null | undefined
 ): ZotzMachineMode {
-  const mode = settings?.zotzMachineMode
-  return ZOTZ_MACHINE_MODES.includes(mode as ZotzMachineMode) ? (mode as ZotzMachineMode) : 'unset'
+  const persisted = settings?.zotzMachineMode
+  return ZOTZ_MACHINE_MODES.find((mode) => mode === persisted) ?? 'unset'
 }
 
 /** A remote server node must never sleep, whatever the per-agent awake preference says. */

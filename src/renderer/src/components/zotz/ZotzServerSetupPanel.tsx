@@ -9,12 +9,26 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { cn } from '@/lib/class-names'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import { LoadingSpinner } from '../LoadingSpinner'
 import { Button } from '../ui/button'
 import { ZotzAccessLink } from './ZotzAccessLink'
 import { zotzNodeSetupStepDetail, zotzNodeSetupStepTitle } from './zotz-node-setup-step-labels'
 
 type SetupState = 'intro' | 'running' | 'finished'
+
+async function runServerSetupWithProgress(
+  onProgress: (steps: ZotzNodeSetupStep[]) => void
+): Promise<ZotzNodeSetupResult | Error> {
+  const unsubscribe = window.api.zotzNode.onSetupProgress(onProgress)
+  try {
+    return await window.api.zotzNode.runServerSetup()
+  } catch (error) {
+    return error instanceof Error ? error : new Error(String(error))
+  } finally {
+    unsubscribe()
+  }
+}
 
 export function ZotzServerSetupPanel({
   onBack,
@@ -38,24 +52,19 @@ export function ZotzServerSetupPanel({
     onStart()
     // Server mode first: it keeps the node awake and exposed from the next launch even if a step fails.
     await updateSettings({ zotzMachineMode: 'server' })
-    const unsubscribe = window.api.zotzNode.onSetupProgress((next) => {
+    const outcome = await runServerSetupWithProgress((next) => {
       if (mountedRef.current) {
         setSteps(next)
       }
     })
-    try {
-      const outcome = await window.api.zotzNode.runServerSetup()
-      if (mountedRef.current) {
-        setSteps(outcome.steps)
-        setResult(outcome)
-      }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : String(error))
-    } finally {
-      unsubscribe()
-      if (mountedRef.current) {
-        setState('finished')
-      }
+    if (outcome instanceof Error) {
+      toast.error(outcome.message)
+    } else if (mountedRef.current) {
+      setSteps(outcome.steps)
+      setResult(outcome)
+    }
+    if (mountedRef.current) {
+      setState('finished')
     }
   }
 
@@ -172,7 +181,7 @@ function StepRow({ step }: { step: ZotzNodeSetupStep }): React.JSX.Element {
           variant="outline"
           size="sm"
           className="shrink-0"
-          onClick={() => void window.api.shell.openUrl(url)}
+          onClick={() => openAppHttpLink(url, { destination: 'system' })}
         >
           <ExternalLink />
           {t('zotz.nodeSetup.open', 'Open')}

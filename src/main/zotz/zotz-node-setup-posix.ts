@@ -126,7 +126,7 @@ export function posixAutostartPhase(environment: ZotzNodeSetupEnvironment): Zotz
           autostart: { status: 'skipped', detail: `unsupported on ${environment.platform}` }
         }
       }
-      environment.writeFile(spec.path, spec.content)
+      await environment.writeFile(spec.path, spec.content)
       // Loading now would start a second instance; the agent/unit takes over from the next login.
       if (environment.platform === 'linux') {
         const reload = await environment.run('systemctl', ['--user', 'daemon-reload'])

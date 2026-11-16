@@ -5,10 +5,10 @@ export type ZotzNodeSetupEnvironment = {
   platform: NodeJS.Platform
   env: NodeJS.ProcessEnv
   run: ZotzProcessRunner
-  exists: (path: string) => boolean
-  readText: (path: string) => string | null
-  writeFile: (path: string, data: string | Buffer) => void
-  removeFile: (path: string) => void
+  exists: (path: string) => Promise<boolean>
+  readText: (path: string) => Promise<string | null>
+  writeFile: (path: string, data: string | Buffer) => Promise<void>
+  removeFile: (path: string) => Promise<void>
   /** Dev builds point at a transient Electron binary that must not be persisted in autostart. */
   isPackaged: boolean
   executablePath: string

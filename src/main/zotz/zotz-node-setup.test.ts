@@ -8,8 +8,15 @@ import type { ZotzProcessResult } from './zotz-process-runner'
 
 type Call = { program: string; args: readonly string[] }
 
+type FakeOverrides = Partial<Omit<ZotzNodeSetupEnvironment, 'exists'>> & {
+  exists?: (path: string) => boolean
+}
+
 function fakeEnvironment(
-  overrides: Partial<ZotzNodeSetupEnvironment>,
+  {
+    exists = (path) => path === '/Applications/Tailscale.app/Contents/MacOS/Tailscale',
+    ...overrides
+  }: FakeOverrides,
   answer: (call: Call) => Partial<ZotzProcessResult> = () => ({})
 ): { environment: ZotzNodeSetupEnvironment; calls: Call[]; files: Map<string, string | Buffer> } {
   const calls: Call[] = []
@@ -23,13 +30,17 @@ function fakeEnvironment(
       calls.push(call)
       return { code: 0, stdout: '', stderr: '', ...answer(call) }
     },
-    exists: (path) => path === '/Applications/Tailscale.app/Contents/MacOS/Tailscale',
-    readText: (path) => {
+    exists: async (path) => exists(path),
+    readText: async (path) => {
       const value = files.get(path)
       return typeof value === 'string' ? value : null
     },
-    writeFile: (path, data) => files.set(path, data),
-    removeFile: (path) => files.delete(path),
+    writeFile: async (path, data) => {
+      files.set(path, data)
+    },
+    removeFile: async (path) => {
+      files.delete(path)
+    },
     isPackaged: true,
     executablePath: '/Applications/Zotz.app/Contents/MacOS/Zotz',
     homeDir: '/Users/hugo',
@@ -217,8 +228,10 @@ describe('Windows server setup', () => {
       autologon: 'skipped'
     })
     const taskXml = files.get(join(windows.userDataPath, 'zotz-server-task.xml'))
-    expect(Buffer.isBuffer(taskXml)).toBe(true)
-    const xml = (taskXml as Buffer).subarray(2).toString('utf16le')
+    if (!Buffer.isBuffer(taskXml)) {
+      throw new Error('the task XML must be written as UTF-16 bytes')
+    }
+    const xml = taskXml.subarray(2).toString('utf16le')
     expect(xml).toContain(`<Command>${windows.executablePath}</Command>`)
     expect(xml).toContain('<Arguments>"--zotz-node-autostart"</Arguments>')
     expect(xml).toContain('<UserId>MSI\\zotz</UserId>')

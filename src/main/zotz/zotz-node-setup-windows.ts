@@ -9,6 +9,7 @@ import { windowsPowerShellPath } from '@orca/process-host/windows-system-binary'
 import { renderZotzDesktopAutostart, ZOTZ_SERVER_TASK_PATH } from './zotz-desktop-autostart'
 import type { ZotzNodeSetupEnvironment } from './zotz-node-setup-environment'
 import type { ZotzNodeSetupOutcome, ZotzNodeSetupPhase } from './zotz-node-setup-orchestrator'
+import { isJsonRecord, parseJsonRecord } from './zotz-json-record'
 import { runElevatedWindowsProcess } from './zotz-windows-elevation'
 
 export const WINDOWS_ELEVATED_STEPS = [
@@ -30,28 +31,16 @@ function allSteps(outcome: ZotzNodeSetupOutcome): Outcomes {
 
 /** Reads the per-step JSON zotz-node-setup.ps1 writes to -ResultPath. */
 export function parseNodeSetupScriptResult(json: string): Outcomes {
-  let parsed: { steps?: unknown }
-  try {
-    parsed = JSON.parse(json.replace(/^\uFEFF/, '')) as typeof parsed
-  } catch {
-    return {}
-  }
+  const steps = parseJsonRecord(json)?.steps
   const outcomes: Outcomes = {}
-  for (const step of Array.isArray(parsed.steps) ? parsed.steps : []) {
-    const { id, status, detail } = (step ?? {}) as {
-      id?: unknown
-      status?: unknown
-      detail?: unknown
+  for (const step of Array.isArray(steps) ? steps : []) {
+    if (!isJsonRecord(step)) {
+      continue
     }
-    if (
-      typeof id === 'string' &&
-      (WINDOWS_ELEVATED_STEPS as readonly string[]).includes(id) &&
-      (status === 'done' || status === 'skipped' || status === 'failed')
-    ) {
-      outcomes[id as ZotzNodeSetupStepId] = {
-        status,
-        ...(typeof detail === 'string' && detail ? { detail } : {})
-      }
+    const { id, status, detail } = step
+    const stepId = WINDOWS_ELEVATED_STEPS.find((candidate) => candidate === id)
+    if (stepId && (status === 'done' || status === 'skipped' || status === 'failed')) {
+      outcomes[stepId] = { status, ...(typeof detail === 'string' && detail ? { detail } : {}) }
     }
   }
   return outcomes
@@ -111,13 +100,13 @@ export function windowsElevatedPhase(environment: ZotzNodeSetupEnvironment): Zot
           windowsUserId: resolveWindowsTaskUserId(environment.env, environment.username)
         })
         if (autostart) {
-          environment.writeFile(autostart.path, encodeWindowsTaskXml(autostart.content))
+          await environment.writeFile(autostart.path, encodeWindowsTaskXml(autostart.content))
           taskXmlPath = autostart.path
         }
       }
       const resultPath = join(environment.userDataPath, 'zotz-node-setup-result.json')
       const logPath = join(environment.userDataPath, 'zotz-node-setup.log')
-      environment.removeFile(resultPath)
+      await environment.removeFile(resultPath)
       const elevation = await runElevatedWindowsProcess(
         environment.run,
         environment.env,
@@ -138,7 +127,7 @@ export function windowsElevatedPhase(environment: ZotzNodeSetupEnvironment): Zot
           detail: elevation.cancelled ? 'administrator permission was declined' : elevation.detail
         })
       }
-      const outcomes = parseNodeSetupScriptResult(environment.readText(resultPath) ?? '')
+      const outcomes = parseNodeSetupScriptResult((await environment.readText(resultPath)) ?? '')
       const missing: ZotzNodeSetupOutcome = {
         status: 'failed',
         detail: `the setup script exited ${String(elevation.exitCode)} without a result; see ${logPath}`

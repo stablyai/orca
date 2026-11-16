@@ -13,6 +13,24 @@ type AccessLinks = {
   error: string | null
 }
 
+async function mintAccessLinks(address: string): Promise<AccessLinks> {
+  try {
+    const [runtime, mobile] = await Promise.all([
+      window.api.mobile.getRuntimePairingUrl({ address, rotate: true, reach: 'network' }),
+      window.api.mobile.getPairingQR({ address, connectionMode: 'local-only', rotate: true })
+    ])
+    return {
+      pairingUrl: runtime.available ? runtime.pairingUrl : null,
+      webClientUrl: runtime.available ? runtime.webClientUrl : null,
+      qrDataUrl: mobile.available ? mobile.qrDataUrl : null,
+      error: runtime.available ? null : (runtime.guidance ?? null)
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return { pairingUrl: null, webClientUrl: null, qrDataUrl: null, error: message }
+  }
+}
+
 /** Mints offers through the same pairing IPC as Settings → Share this computer, pinned to the tailnet IP. */
 export function ZotzAccessLink({ address }: { address: string }): React.JSX.Element {
   const t = useTranslate()
@@ -23,28 +41,10 @@ export function ZotzAccessLink({ address }: { address: string }): React.JSX.Elem
 
   const generate = useCallback(async (): Promise<void> => {
     setGenerating(true)
-    try {
-      const [runtime, mobile] = await Promise.all([
-        window.api.mobile.getRuntimePairingUrl({ address, rotate: true, reach: 'network' }),
-        window.api.mobile.getPairingQR({ address, connectionMode: 'local-only', rotate: true })
-      ])
-      if (mountedRef.current) {
-        setLinks({
-          pairingUrl: runtime.available ? runtime.pairingUrl : null,
-          webClientUrl: runtime.available ? runtime.webClientUrl : null,
-          qrDataUrl: mobile.available ? mobile.qrDataUrl : null,
-          error: runtime.available ? null : (runtime.guidance ?? null)
-        })
-      }
-    } catch (error) {
-      if (mountedRef.current) {
-        const message = error instanceof Error ? error.message : String(error)
-        setLinks({ pairingUrl: null, webClientUrl: null, qrDataUrl: null, error: message })
-      }
-    } finally {
-      if (mountedRef.current) {
-        setGenerating(false)
-      }
+    const next = await mintAccessLinks(address)
+    if (mountedRef.current) {
+      setLinks(next)
+      setGenerating(false)
     }
   }, [address, mountedRef])
 

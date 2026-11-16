@@ -28,7 +28,7 @@ export async function removeZotzDesktopAutostart(
     const args = ['/Delete', '/TN', ZOTZ_SERVER_TASK_PATH, '/F']
     const query = await environment.run(schtasks, ['/Query', '/TN', ZOTZ_SERVER_TASK_PATH])
     if (query.code !== 0) {
-      environment.removeFile(spec.path)
+      await environment.removeFile(spec.path)
       return { ok: true, detail: 'not installed' }
     }
     const direct = await environment.run(schtasks, args)
@@ -45,14 +45,14 @@ export async function removeZotzDesktopAutostart(
           )
     const ok = 'ok' in outcome ? outcome.ok : outcome.launched && outcome.exitCode === 0
     if (ok) {
-      environment.removeFile(spec.path)
+      await environment.removeFile(spec.path)
     }
     return { ok, detail: ok ? ZOTZ_SERVER_TASK_PATH : processOutput(direct) }
   }
   if (environment.platform === 'linux') {
     await environment.run('systemctl', ['--user', 'disable', ZOTZ_SERVER_SYSTEMD_UNIT])
   }
-  environment.removeFile(spec.path)
+  await environment.removeFile(spec.path)
   if (environment.platform === 'linux') {
     await environment.run('systemctl', ['--user', 'daemon-reload'])
   }

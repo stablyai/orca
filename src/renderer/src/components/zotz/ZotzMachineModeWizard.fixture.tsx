@@ -24,14 +24,13 @@ const QR_PLACEHOLDER =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='
 
 function stubServerSetup(): void {
-  const api = window.api as unknown as Record<string, Record<string, unknown>>
-  api.zotzNode = {
+  window.api.zotzNode = {
     onSetupProgress: () => () => {},
     runServerSetup: async () => ({ steps: FINISHED_STEPS, tailscaleIp: '100.88.1.2' }),
     removeAutostart: async () => ({ ok: true, detail: '' })
   }
-  api.mobile = {
-    ...api.mobile,
+  window.api.mobile = {
+    ...window.api.mobile,
     getRuntimePairingUrl: async () => ({
       available: true,
       pairingUrl: 'orca://pair?o=eyJ2IjozLCJlbmRwb2ludCI6IndzOi8vMTAwLjg4LjEuMjo2NzY4In0',

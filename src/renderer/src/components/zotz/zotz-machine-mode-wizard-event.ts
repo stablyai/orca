@@ -11,5 +11,5 @@ export function onZotzMachineModeWizardOpen(callback: () => void): () => void {
 
 /** Remote web clients render another host's settings; only the local desktop owns its machine mode. */
 export function isZotzMachineModeHost(): boolean {
-  return !(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
+  return !('__ORCA_WEB_CLIENT__' in window && window.__ORCA_WEB_CLIENT__ === true)
 }

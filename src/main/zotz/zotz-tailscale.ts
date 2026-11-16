@@ -1,13 +1,13 @@
-import { existsSync } from 'node:fs'
 import { delimiter, join, win32 } from 'node:path'
 import type { ZotzTailscaleStatus } from '../../shared/zotz/zotz-node-setup-contract'
+import { isJsonRecord, parseJsonRecord } from './zotz-json-record'
 import { processOutput, type ZotzProcessRunner } from './zotz-process-runner'
 
 export type ZotzTailscaleEnvironment = {
   platform: NodeJS.Platform
   env: NodeJS.ProcessEnv
   run: ZotzProcessRunner
-  exists?: (path: string) => boolean
+  exists: (path: string) => Promise<boolean>
 }
 
 const STATUS_TIMEOUT_MS = 10_000
@@ -42,23 +42,30 @@ export function tailscaleCliCandidates(
   return ['/usr/bin/tailscale', '/usr/local/bin/tailscale', ...pathCandidates(env, 'tailscale')]
 }
 
-export function findTailscaleCli(environment: ZotzTailscaleEnvironment): string | null {
-  const exists = environment.exists ?? existsSync
-  return (
-    tailscaleCliCandidates(environment.platform, environment.env).find((path) => exists(path)) ??
-    null
-  )
+async function firstExisting(
+  environment: ZotzTailscaleEnvironment,
+  candidates: readonly string[]
+): Promise<string | null> {
+  for (const candidate of candidates) {
+    if (await environment.exists(candidate)) {
+      return candidate
+    }
+  }
+  return null
+}
+
+export function findTailscaleCli(environment: ZotzTailscaleEnvironment): Promise<string | null> {
+  return firstExisting(environment, tailscaleCliCandidates(environment.platform, environment.env))
 }
 
 /** `tailscale status --json`: only a Running backend has a usable tailnet address. */
 export function parseTailscaleStatusJson(json: string): Omit<ZotzTailscaleStatus, 'installed'> {
-  let parsed: { BackendState?: unknown; AuthURL?: unknown; Self?: { TailscaleIPs?: unknown } }
-  try {
-    parsed = JSON.parse(json) as typeof parsed
-  } catch {
+  const parsed = parseJsonRecord(json)
+  if (!parsed) {
     return { running: false, ip: null, authUrl: null }
   }
-  const ips = Array.isArray(parsed.Self?.TailscaleIPs) ? parsed.Self.TailscaleIPs : []
+  const self = isJsonRecord(parsed.Self) ? parsed.Self : {}
+  const ips: unknown[] = Array.isArray(self.TailscaleIPs) ? self.TailscaleIPs : []
   const ip =
     ips.find((value): value is string => typeof value === 'string' && value.startsWith('100.')) ??
     null
@@ -73,7 +80,7 @@ export function parseTailscaleStatusJson(json: string): Omit<ZotzTailscaleStatus
 export async function readTailscaleStatus(
   environment: ZotzTailscaleEnvironment
 ): Promise<ZotzTailscaleStatus> {
-  const cli = findTailscaleCli(environment)
+  const cli = await findTailscaleCli(environment)
   if (!cli) {
     return { installed: false, running: false, ip: null, authUrl: null }
   }
@@ -84,19 +91,16 @@ export async function readTailscaleStatus(
 
 type InstallCommand = { program: string; args: string[] }
 
-function homebrew(exists: (path: string) => boolean): string | null {
-  return ['/opt/homebrew/bin/brew', '/usr/local/bin/brew'].find((path) => exists(path)) ?? null
-}
-
 /** Ordered attempts; the first that exits 0 wins. Empty means the user must install by hand. */
-export function tailscaleInstallCommands(environment: ZotzTailscaleEnvironment): InstallCommand[] {
-  const exists = environment.exists ?? existsSync
+export async function tailscaleInstallCommands(
+  environment: ZotzTailscaleEnvironment
+): Promise<InstallCommand[]> {
   if (environment.platform === 'win32') {
     const localAppData = environment.env.LOCALAPPDATA
     const winget = localAppData
       ? win32.join(localAppData, 'Microsoft', 'WindowsApps', 'winget.exe')
       : null
-    return winget && exists(winget)
+    return winget && (await environment.exists(winget))
       ? [
           {
             program: winget,
@@ -114,7 +118,7 @@ export function tailscaleInstallCommands(environment: ZotzTailscaleEnvironment):
       : []
   }
   if (environment.platform === 'darwin') {
-    const brew = homebrew(exists)
+    const brew = await firstExisting(environment, ['/opt/homebrew/bin/brew', '/usr/local/bin/brew'])
     // Homebrew renamed the GUI cask from `tailscale` to `tailscale-app`.
     return brew
       ? [
@@ -123,7 +127,7 @@ export function tailscaleInstallCommands(environment: ZotzTailscaleEnvironment):
         ]
       : []
   }
-  return exists('/usr/bin/pkexec')
+  return (await environment.exists('/usr/bin/pkexec'))
     ? [
         {
           program: '/usr/bin/pkexec',
@@ -144,7 +148,7 @@ export function tailscaleDownloadUrl(platform: NodeJS.Platform): string {
 export async function installTailscale(
   environment: ZotzTailscaleEnvironment
 ): Promise<{ ok: boolean; detail: string }> {
-  const commands = tailscaleInstallCommands(environment)
+  const commands = await tailscaleInstallCommands(environment)
   let detail = 'no supported installer found (winget, Homebrew or pkexec)'
   for (const command of commands) {
     const result = await environment.run(command.program, command.args, 15 * 60_000)

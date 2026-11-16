@@ -36,7 +36,7 @@ export function tailscalePhase(environment: ZotzNodeSetupEnvironment): ZotzNodeS
             }
           }
         }
-        const cli = findTailscaleCli(environment)
+        const cli = await findTailscaleCli(environment)
         if (cli && !status.authUrl && !loginRequested) {
           loginRequested = true
           // `login` publishes an AuthURL that the next status read returns; it exits once logged in.
