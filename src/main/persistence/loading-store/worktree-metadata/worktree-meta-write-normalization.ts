@@ -12,7 +12,7 @@ import { normalizeWorkspaceAttachmentUpdate } from '../../../../shared/workspace
 import {
   mergeDiffCommentMutation,
   type DiffCommentBaseMutation
-} from '../../../../shared/diff-comment-mutation'
+} from '../../../../shared/file-review/diff-comment-mutation'
 
 type WorktreeMetaIdentity = {
   instanceId: string

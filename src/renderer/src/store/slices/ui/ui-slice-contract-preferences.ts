@@ -4,7 +4,7 @@ import type { BrowserDevToolsDockLayout } from '../../../../../shared/browser/de
 import type {
   ActivityGroupBy,
   ThreadReadFilter
-} from '../../../../../shared/agents-view-thread-filters'
+} from '../../../../../shared/agent-status/presentation/agents-view-thread-filters'
 import type {
   AgentActivityDisplayMode,
   ManualRepoOrderEntry,
@@ -20,7 +20,7 @@ import type { UsagePercentageDisplay } from '../../../../../shared/agent-usage/d
 import type { AutomationHostFilter } from '../../../../../shared/automations/ownership/automation-host-filter'
 import type { WorkspaceStatusDefinition } from '../../../../../shared/worktree/types'
 import type { WorkspacePortScanResult } from '../../../../../shared/workspace/ports/workspace-ports'
-import type { CustomPet } from '../../../../../shared/pet-types'
+import type { CustomPet } from '../../../../../shared/pets/pet-types'
 import type { ReleaseChannel } from '../../../../../shared/updater/release-channel'
 import type { ChangelogData, UpdateStatus } from '../../../../../shared/updater/update-status-types'
 import type { StatusBarUsageMode } from '../../../../../shared/status-bar/status-bar-usage-mode'

@@ -1,6 +1,6 @@
 import type { DeviceScope } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { MobilePairingConnectionMode } from '../../../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
-import type { MobilePushRegistration } from '../../../../../shared/mobile-push-contract'
+import type { MobilePushRegistration } from '../../../../../shared/notifications/mobile-push-contract'
 import type { RuntimePairingReach } from '../../../../../shared/remote-runtime/pairing/runtime-pairing-reach'
 import type { RelayDeviceBinding } from '../../../mobile-cloud-relay/pairing/relay-revoke-outbox'
 import type { RuntimeDeviceGrant } from '../../callers/rpc-method-permission'

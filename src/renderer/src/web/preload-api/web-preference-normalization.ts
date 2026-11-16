@@ -2,14 +2,14 @@ import { normalizeAgentLaunchChoices } from '../../../../shared/agent-launch/cho
 import {
   hasLegacyMatchTerminalSidebar,
   syncLegacyMatchTerminalSidebar
-} from '../../../../shared/plugin-theme-settings'
+} from '../../../../shared/plugins/appearance/plugin-theme-settings'
 import { isAgentChatPermissionMode } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { normalizeNativeChatAppearanceSettings } from '../../../../shared/native-chat/native-chat-appearance-settings'
 import {
   normalizeAgentDefaultSurface,
   carriedChatUiLaunchSettings
 } from '../../../../shared/native-chat/native-chat-providers'
-import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../../shared/auto-rename-branch-from-work-settings'
+import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../../shared/source-control/ai/settings/auto-rename-branch-from-work-settings'
 import { getDefaultSettings, normalizeAgentActivityDisplayMode } from '../../../../shared/constants'
 import { normalizeWorktreeCardProperties } from '../../../../shared/worktree/row-display/card-properties'
 import {
@@ -44,8 +44,8 @@ import { migrateAgentPermissionChoice } from '../../../../shared/agent-launch/pe
 import { normalizeOsc52ClipboardDefaultOn } from '../../../../shared/terminal/clipboard/osc52-clipboard-settings'
 import { normalizeTerminalCursorStyleDefault } from '../../../../shared/terminal/appearance/terminal-cursor-style-settings'
 import { normalizeDisabledTuiAgents } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
-import { normalizeUiLanguage } from '../../../../shared/ui-language'
-import { migratePortugueseUiLanguageOnLoad } from '../../../../shared/portuguese-ui-language-migration'
+import { normalizeUiLanguage } from '../../../../shared/i18n/ui-language'
+import { migratePortugueseUiLanguageOnLoad } from '../../../../shared/i18n/portuguese-ui-language-migration'
 import { normalizeUsagePercentageDisplay } from '../../../../shared/agent-usage/display/usage-percentage-display'
 import { mergeWorkspaceCleanupUIState } from '../../../../shared/workspace-cleanup/workspace-cleanup-ui-state'
 

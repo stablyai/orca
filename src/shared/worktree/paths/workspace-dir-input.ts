@@ -1,4 +1,4 @@
-import { isRuntimePathAbsolute } from '../../cross-platform-path'
+import { isRuntimePathAbsolute } from '../../file-access/cross-platform-path'
 
 /** Leading whitespace before an absolute or home path makes readers resolve it inside every repo (STA-14308). */
 export function normalizeWorkspaceDirInput(value: string, isWindowsHost: boolean): string {

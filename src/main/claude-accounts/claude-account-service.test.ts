@@ -178,6 +178,31 @@ describe('ClaudeAccountService', () => {
     expect(existsSync(join(f.root, newId(f)))).toBe(false)
   })
 
+  it('names a signed-out account without touching its sign-in, keeps the name, and drops it on removal', async () => {
+    const f = fixture()
+    const records = f.settings().claudeManagedAccounts
+    const selection = f.settings().activeClaudeManagedAccountIdsByRuntime
+    expect(f.service.renameAccount('b', '  Work  ').accounts).toContainEqual(
+      expect.objectContaining({ id: 'b', email: 'b@example.test', displayName: 'Work' })
+    )
+    // Launch-relevant records and selection stay the same objects, so nothing re-reads them.
+    expect(f.settings().claudeManagedAccounts).toBe(records)
+    expect(f.settings().activeClaudeManagedAccountIdsByRuntime).toBe(selection)
+    f.runLogin.mockImplementationOnce(async () => {
+      f.signIn('b', 'b@example.test')
+      return ''
+    })
+    await f.service.reauthenticateAccount('b')
+    expect(f.service.listAccounts().accounts.find((entry) => entry.id === 'b')?.displayName).toBe(
+      'Work'
+    )
+    f.service.renameAccount('b', ' ')
+    expect(f.settings().managedAccountDisplayNames).toEqual({ claude: {} })
+    f.service.renameAccount('b', 'Work')
+    await f.service.removeAccount('b')
+    expect(f.settings().managedAccountDisplayNames).toEqual({ claude: {} })
+  })
+
   it('signs a saved account in again inside its own folder and keeps it on failure', async () => {
     const f = fixture()
     f.runLogin.mockImplementationOnce(async (_args, config) => {

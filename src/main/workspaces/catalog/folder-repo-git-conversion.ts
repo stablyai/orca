@@ -11,7 +11,7 @@ import {
 } from '../../../shared/execution-host'
 import type { Store } from '../../persistence/loading-store/store'
 import { isFolderRepo } from '../../../shared/repository/repo-kind'
-import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
 import {
   getGitRepoRootAsync,
   isGitRepoAsync

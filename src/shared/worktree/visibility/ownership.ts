@@ -1,7 +1,7 @@
 import {
   normalizeRuntimePathForComparison,
   relativePathInsideRoot
-} from '../../cross-platform-path'
+} from '../../file-access/cross-platform-path'
 import { parseWslUncPath } from '../../file-access/wsl-paths'
 import {
   isRuntimePathAbsoluteForRepo,
@@ -20,7 +20,7 @@ import {
 import { isLegacyRepoForExternalWorktreeVisibility } from './external-worktree-visibility'
 import { shouldShowWorktree } from './worktree-visibility-resolution'
 import type { GlobalSettings } from '../../global-settings-types'
-import type { OrcaWorkspaceLayout } from '../../orca-workspace-layout'
+import type { OrcaWorkspaceLayout } from '../paths/orca-workspace-layout'
 import type { Repo } from '../../repository/repo-types'
 import type { WorktreeMeta } from '../meta-types'
 import type { DetectedWorktree, Worktree, WorktreeOwnership } from '../types'

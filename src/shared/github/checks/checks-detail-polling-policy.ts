@@ -6,7 +6,7 @@ import {
   reviewRefreshIntervalMs,
   scaleReviewRefreshInterval,
   type PRAutoRefreshCadence
-} from '../../review-refresh-policy'
+} from '../../source-control/hosted-review/review-refresh-policy'
 
 export function detailedChecksStatus(checks: readonly PRCheckDetail[]): CheckStatus | undefined {
   if (checks.length === 0) {

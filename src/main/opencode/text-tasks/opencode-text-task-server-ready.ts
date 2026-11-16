@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { SearchSubprocessLineAccumulator } from '../../../shared/search-subprocess-lines'
+import { SearchSubprocessLineAccumulator } from '../../../shared/process-streams/search-subprocess-lines'
 import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
 import { MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES } from '../../text-generation/execution/source-control-generation-limits'
 import type { SpawnedSourceControlAgentProcess } from '../../text-generation/source-control-text-generation-types'

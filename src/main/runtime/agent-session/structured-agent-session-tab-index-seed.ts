@@ -1,4 +1,4 @@
-import type { Tab } from '../../../shared/tab-types'
+import type { Tab } from '../../../shared/workspace-layout/tab-groups/tab-types'
 import type { ChatTabChange } from './agent-session-tab-layout'
 import { savedSessionId } from './lifecycle/saved-structured-agent-session-restoration'
 

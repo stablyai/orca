@@ -8,7 +8,7 @@ import { VaultSessionRow } from '../right-sidebar/ai-vault/session-list/AiVaultS
 import { CompactAgentRow } from '../sidebar/workspace-card/activity/worktree-card-compact-agent-row'
 import type { DashboardAgentRow } from '../dashboard/rows/dashboard-agent-row'
 import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
-import type { Tab } from '../../../../shared/tab-types'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 
 const WORKTREE = 'repo-1::/repos/orca'
 

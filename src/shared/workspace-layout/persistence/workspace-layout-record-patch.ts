@@ -1,6 +1,6 @@
 // Isolate command edits by diffing saves before/after the command; patch only those fields onto stored data so unrelated Loader normalizations remain unwritten.
 
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../layout-owner-switch'
 import type { WorkspaceSessionState } from '../../workspace-session/workspace-session-state-types'
 import { editorFileKey } from '../editor-tabs/workspace-layout-editor-tab-file'
 import { adoptTouchedFoldedRows } from './workspace-layout-folded-rows'

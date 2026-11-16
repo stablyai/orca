@@ -18,7 +18,6 @@ import { resolveRuntimeAgentDetectionHost } from '../../workspaces/catalog/runti
 import type { RuntimeLeafRecord } from '../records/runtime-terminal-state-records'
 import { resolveRuntimeTerminalOrchestrationCliCommand } from '../../orchestration/workers/launch/orchestration-cli-command'
 import {
-  readOrchestrationFleetAgentStatusSnapshot,
   readAgentOrchestrationProjectionRecords,
   readCapturedOrchestrationFleetAgentStatusSnapshot
 } from '../../orchestration/addressing/orchestration-fleet-agent-status-snapshot'
@@ -263,19 +262,19 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
   }
 
   getOrchestrationFleetAgentStatusSnapshot(context?: TerminalIdentityReadContext) {
-    if (!context) {
-      return readOrchestrationFleetAgentStatusSnapshot(this)
-    }
-    const dependencies = this.agentOrchestrationDependencies({
-      paneOf: (pty) => context.paneOf(pty),
-      issueLeafHandle: (leaf) => this.issueHandle(leaf, context),
-      issuePtyHandle: (pty) => this.issuePtyHandle(pty, context),
-      getWorktreeId: (handle) => this.getTerminalWorktreeIdForHandle(handle, context),
-      getHandleForPaneKey: (pane) => this.getTerminalHandleForPaneKey(pane, context),
-      getPaneKey: (handle) => this.getPaneKeyForTerminalHandle(handle, context),
-      getDispatchAuthority: (handle) => this.getOrchestrationDispatchAuthority(handle, context),
-      getSessionRecords: () => readAgentOrchestrationProjectionRecords(context)
-    })
+    // One facts view per fleet read; per-pane raw lookups refreshed the facts source each pane.
+    const dependencies = context
+      ? this.agentOrchestrationDependencies({
+          paneOf: (pty) => context.paneOf(pty),
+          issueLeafHandle: (leaf) => this.issueHandle(leaf, context),
+          issuePtyHandle: (pty) => this.issuePtyHandle(pty, context),
+          getWorktreeId: (handle) => this.getTerminalWorktreeIdForHandle(handle, context),
+          getHandleForPaneKey: (pane) => this.getTerminalHandleForPaneKey(pane, context),
+          getPaneKey: (handle) => this.getPaneKeyForTerminalHandle(handle, context),
+          getDispatchAuthority: (handle) => this.getOrchestrationDispatchAuthority(handle, context),
+          getSessionRecords: () => readAgentOrchestrationProjectionRecords(context)
+        })
+      : this.agentOrchestrationDependencies()
     return readCapturedOrchestrationFleetAgentStatusSnapshot(
       {
         getAgentStatusSnapshotFn: this.getAgentStatusSnapshotFn,

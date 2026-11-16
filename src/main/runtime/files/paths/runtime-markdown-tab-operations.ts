@@ -2,7 +2,7 @@ import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged } from '../../sess
 import type {
   RuntimeMarkdownReadTabResult,
   RuntimeMarkdownSaveTabResult
-} from '../../../../shared/mobile-markdown-document'
+} from '../../../../shared/editor/markdown/mobile-markdown-document'
 import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import {

@@ -1,4 +1,4 @@
-import type { WorkspaceVisibleTabType } from '../../../../../shared/tab-types'
+import type { WorkspaceVisibleTabType } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type {
   PersistedOpenFile,
   WorkspaceSessionState

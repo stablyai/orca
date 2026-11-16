@@ -3,7 +3,7 @@ import type {
   GitLabProjectRef,
   GitLabWorkItem,
   MRListState
-} from '../../../../shared/gitlab-types'
+} from '../../../../shared/gitlab/gitlab-types'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import { diagnoseAuth, getRateLimit } from '../../../gitlab/requests/gitlab-auth-and-rate-limit'
 import {

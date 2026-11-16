@@ -5,7 +5,7 @@ import type {
 } from '../../../../../shared/orchestration/mailbox/agent-sender-associations'
 import type { AgentMessageSender } from '../../../../../shared/agent-session/agent-session-message-source'
 import { structuredAgentSessionOwnerInputs } from '../session-ownership/structured-agent-session-owner'
-import type { Tab } from '../../../../../shared/tab-types'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { agentSenderAliasParts, assembleAgentSenderAliases } from './agent-sender-alias-projection'
 import {
   effectivePublications,

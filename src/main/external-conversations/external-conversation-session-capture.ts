@@ -5,7 +5,7 @@ import {
 import { agentProviderSessionsEqual } from '../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { getConnectionExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
-import type { ExternalConversationLink } from '../../shared/external-conversation-link'
+import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
 import { isLocalHookConnectionId } from '../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import {
