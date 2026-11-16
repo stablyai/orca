@@ -41,3 +41,9 @@ export function withCloudBuildDefaults(env: NodeJS.ProcessEnv): NodeJS.ProcessEn
 export function cloudDevSigningAllowed(packaged: boolean): boolean {
   return !packaged || buildDefaults().allowDevSigning === true
 }
+
+/** Internal (integration) builds show Orca Cloud regardless of the account's capability. The
+ * integration build is the only one that bakes allowDevSigning; public builds ship no defaults. */
+export function cloudAvailableByBuild(): boolean {
+  return buildDefaults().allowDevSigning === true
+}

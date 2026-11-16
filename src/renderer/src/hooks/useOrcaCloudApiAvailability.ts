@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react'
 import type { CloudApiAvailability } from '../../../shared/cloud-api/cloud-api-types'
 import { availabilityRetryDelay } from '@/lib/availability-retry'
+import { useOrcaCloudEnabled } from '@/hooks/useOrcaCloudEnabled'
 
 // One probe per renderer: whether this build has an Orca Cloud control plane (private/hosted builds).
 // Settings navigation and the panes share it, so the sections never flicker in and out.
@@ -50,12 +51,17 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener)
 }
 
+const HIDDEN: CloudApiAvailability = { status: 'unconfigured' }
+
+/** The build's control plane, reported as unconfigured while the rollout flag hides Orca Cloud. */
 export function useOrcaCloudApiAvailability(): CloudApiAvailability | null {
-  return useSyncExternalStore(
+  const enabled = useOrcaCloudEnabled()
+  const value = useSyncExternalStore(
     subscribe,
     () => availability,
     () => null
   )
+  return enabled ? value : HIDDEN
 }
 
 export function useOrcaCloudApiAvailable(): boolean {

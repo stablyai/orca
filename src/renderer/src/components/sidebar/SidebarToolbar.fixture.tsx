@@ -5,6 +5,7 @@ import SidebarToolbar from './SidebarToolbar'
 import { registerPlanBillingMenuItem } from '../billing/register-plan-billing-menu-item'
 import { recordBillingStatus } from '../billing/billing-summary-store'
 import { sampleTeam } from '../billing/plan-billing-fixtures'
+import { setOrcaCloudEnabledForTests } from '@/hooks/useOrcaCloudEnabled'
 
 const settle = (ms = 300): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
@@ -191,4 +192,26 @@ export const teamSwitcher = footer({
   },
   setup: withBilling(true),
   interact: openTeamSwitcher
+})
+
+/** Rollout flag on: the team row, Team and Plan & billing. */
+export const cloudRolloutOnMenu = footer({
+  height: 320,
+  authStatus: signedInWithBilling,
+  setup: () => {
+    withBilling(true)()
+    setOrcaCloudEnabledForTests(true)
+  },
+  interact: openAccountMenu
+})
+
+/** Rollout flag off (a public build before rollout): the same account, no Orca Cloud rows. */
+export const cloudRolloutOffMenu = footer({
+  height: 260,
+  authStatus: signedInWithBilling,
+  setup: () => {
+    withBilling(true)()
+    setOrcaCloudEnabledForTests(false)
+  },
+  interact: openAccountMenu
 })

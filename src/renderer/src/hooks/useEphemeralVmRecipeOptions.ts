@@ -1,5 +1,5 @@
 import { ORCA_CLOUD_RECIPE_ID } from '../../../shared/hosted-sandbox/orca-cloud-recipe-id'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
@@ -14,6 +14,7 @@ import type { EphemeralVmFailure } from '../../../shared/remote-runtime/ephemera
 import { ephemeralVmErrorText } from '@/runtime/ephemeral-vm/ephemeral-vm-error-copy'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { takeOrcaCloudSelectionAfterSignIn } from '@/lib/orca-cloud-select-after-sign-in'
+import { useOrcaCloudEnabled } from '@/hooks/useOrcaCloudEnabled'
 
 type EphemeralVmRecipeOptionsArgs = {
   /** Defaults on: Orca Cloud is gated by the account's sandbox capability in main. */
@@ -43,6 +44,10 @@ const ORCA_CLOUD_SETUP_RECIPE: OrcaVmRecipe = {
   name: 'Orca Cloud',
   provider: 'orca-cloud',
   create: 'orca-cloud create'
+}
+
+function isOrcaCloudOption(recipe: OrcaVmRecipe): boolean {
+  return recipe.id === ORCA_CLOUD_RECIPE_ID || recipe.provider === 'orca-cloud'
 }
 
 export function withOrcaCloudSetupRecipe(
@@ -269,14 +274,21 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
   }, [load])
 
   useUiLanguageRevision()
+  // The rollout flag hides "Run on: Orca Cloud" (and its sign-in and setup rows) entirely.
+  const cloudEnabled = useOrcaCloudEnabled()
+  const visibleRecipes = useMemo(
+    () => (cloudEnabled ? recipes : recipes.filter((recipe) => !isOrcaCloudOption(recipe))),
+    [cloudEnabled, recipes]
+  )
   const error = errors.map(ephemeralVmErrorText).filter(Boolean).join('\n') || null
   return {
-    recipes,
-    selectedRecipeId,
+    recipes: visibleRecipes,
+    selectedRecipeId:
+      !cloudEnabled && selectedRecipeId === ORCA_CLOUD_RECIPE_ID ? null : selectedRecipeId,
     setSelectedRecipeId,
     error,
-    offered: (args.customRecipesEnabled && args.repoIsGit) || recipes.length > 0,
-    orcaCloud: canLoad ? orcaCloud : 'unavailable',
-    orcaCloudDropped
+    offered: (args.customRecipesEnabled && args.repoIsGit) || visibleRecipes.length > 0,
+    orcaCloud: canLoad && cloudEnabled ? orcaCloud : 'unavailable',
+    orcaCloudDropped: cloudEnabled ? orcaCloudDropped : null
   }
 }

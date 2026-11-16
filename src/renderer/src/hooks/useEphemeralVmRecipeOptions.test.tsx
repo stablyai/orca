@@ -2,11 +2,12 @@
 
 import { StrictMode, act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useEphemeralVmRecipeOptions } from './useEphemeralVmRecipeOptions'
 import { ORCA_CLOUD_RECIPE_ID } from '../../../shared/hosted-sandbox/orca-cloud-recipe-id'
 import { useAppStore } from '@/store'
 import { requestOrcaCloudSelectionAfterSignIn } from '@/lib/orca-cloud-select-after-sign-in'
+import { setOrcaCloudEnabledForTests } from './useOrcaCloudEnabled'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
@@ -14,7 +15,13 @@ type RecipeListResult = Awaited<ReturnType<typeof window.api.ephemeralVm.listRec
 
 const roots: Root[] = []
 
+// Most cases run where Orca Cloud is rolled out; the rollout-flag case turns it off.
+beforeEach(() => {
+  setOrcaCloudEnabledForTests(true)
+})
+
 afterEach(async () => {
+  setOrcaCloudEnabledForTests(null)
   await act(async () => {
     roots.splice(0).forEach((root) => root.unmount())
   })
@@ -136,6 +143,32 @@ describe('useEphemeralVmRecipeOptions', () => {
       expect(container.querySelector('[data-testid="recipes"]')?.textContent).toBe('cloud')
     )
     expect(container.querySelector('[data-testid="error"]')?.textContent).toBe('none')
+  })
+
+  it('hides Orca Cloud, its setup row and any pick of it while the rollout flag is off', async () => {
+    setOrcaCloudEnabledForTests(false)
+    for (const orcaCloud of ['offered', 'needs-sign-in'] as const) {
+      installApi(
+        vi.fn().mockResolvedValue({
+          ...result(['devbox']),
+          recipes: [
+            {
+              id: 'cloud',
+              name: 'Orca Cloud',
+              provider: 'orca-cloud',
+              create: 'orca-cloud create'
+            },
+            { id: 'devbox', name: 'devbox', create: './create.sh' }
+          ],
+          orcaCloud
+        })
+      )
+      const { container } = await render(<Harness repoId="repo-1" initialRecipeId="cloud" />)
+      await vi.waitFor(() =>
+        expect(container.querySelector('[data-testid="recipes"]')?.textContent).toBe('devbox')
+      )
+      expect(container.querySelector('[data-testid="selected"]')?.textContent).toBe('none')
+    }
   })
 
   // A1: signed out (or no plan yet) the composer must still be able to pick Orca Cloud and reach
