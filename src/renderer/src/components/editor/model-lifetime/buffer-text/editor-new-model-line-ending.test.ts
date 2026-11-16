@@ -3,8 +3,6 @@ import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
 import { afterEach, describe, expect, it } from 'vitest'
 import { applyNewModelLineEnding, trackNewModelLineEnding } from './editor-new-model-line-ending'
 import { syncContentOnMount, syncContentUpdate } from './monaco-content-sync'
-import { isEditorContentUnchanged } from './editor-content-dirty-state'
-import { getWrittenContentDiskSignature } from '../../../../../../shared/file-write/disk-baseline-signature'
 import {
   beginProgrammaticContentSync,
   endProgrammaticContentSync,
@@ -30,10 +28,6 @@ function type(model: monaco.editor.ITextModel, text: string): void {
 }
 
 const settle = () => new Promise<void>((resolve) => queueMicrotask(resolve))
-
-/** The disk signature a save of the model's current text leaves behind. */
-const saveToDisk = (model: monaco.editor.ITextModel) =>
-  getWrittenContentDiskSignature(model.getValue())
 
 function writeExternally(
   model: monaco.editor.ITextModel,
@@ -67,7 +61,7 @@ afterEach(() => {
 })
 
 describe('line ending of a new model', () => {
-  it('switches without registering as a user edit', () => {
+  it('switches a one-line model without registering as a user edit', () => {
     const model = windowsModel()
     let echoed = false
     model.onDidChangeContent(() => {
@@ -85,7 +79,7 @@ describe('line ending of a new model', () => {
     tracker.dispose()
   })
 
-  it('keeps the chosen ending after undo restores the old one', async () => {
+  it('restores the chosen ending when Undo returns to one line', async () => {
     const model = windowsModel()
     type(model, 'typed')
     const tracker = trackNewModelLineEnding(model, '\n', 'key')
@@ -93,20 +87,37 @@ describe('line ending of a new model', () => {
     await settle()
     expect(model.getEOL()).toBe('\n')
     type(model, 'next\nline')
-    await settle()
     expect(model.getValue()).toBe('next\nline')
     tracker.dispose()
   })
 
-  it('converts lines typed before the host reported its OS', () => {
+  it('leaves lines typed before a late host report untouched and clean of edits', async () => {
     const model = windowsModel()
-    const pending = trackNewModelLineEnding(model, null, 'key')
-    type(model, 'first\nsecond')
-    expect(model.getValue()).toBe('first\r\nsecond')
-    pending.dispose()
+    trackNewModelLineEnding(model, null, 'key').dispose()
+    // Typed while an in-flight save of `one\ntwo` is still writing.
+    type(model, 'one\ntwo')
+    type(model, 'one\ntwoX')
+    let events = 0
+    model.onDidChangeContent(() => {
+      events += 1
+    })
     const reported = trackNewModelLineEnding(model, '\n', 'key')
-    expect(model.getValue()).toBe('first\nsecond')
+    await settle()
+    expect(model.getValue()).toBe('one\r\ntwoX')
+    expect(events).toBe(0)
+    model.undo()
+    await settle()
+    expect(model.getValue()).toBe('one\r\ntwo')
     reported.dispose()
+  })
+
+  it('never converts saved lines when End of Line changes', () => {
+    const model = windowsModel()
+    trackNewModelLineEnding(model, '\r\n', 'key').dispose()
+    type(model, 'one\ntwo')
+    const changed = trackNewModelLineEnding(model, '\n', 'key')
+    expect(model.getValue()).toBe('one\r\ntwo')
+    changed.dispose()
   })
 
   it('adopts the ending of external text written into a new file', async () => {
@@ -120,126 +131,16 @@ describe('line ending of a new model', () => {
 
   it('keeps external text written while no editor was mounted', async () => {
     const model = windowsModel()
-    trackNewModelLineEnding(model, '\n', 'key').dispose()
+    trackNewModelLineEnding(model, null, 'key').dispose()
     let userEdits = 0
     model.onDidChangeContent(() => {
       userEdits += isProgrammaticContentSyncInFlight('key') ? 0 : 1
     })
-    writeExternally(model, 'a\r\nb', 'mount')
-    const remount = trackNewModelLineEnding(model, '\n', 'key')
-    await settle()
-    expect(model.getValue()).toBe('a\r\nb')
-    expect(userEdits).toBe(0)
-    remount.dispose()
-  })
-
-  it('keeps unmounted external text when the host reports after remount', async () => {
-    const model = windowsModel()
-    trackNewModelLineEnding(model, null, 'key').dispose()
     writeExternally(model, 'a\nb', 'mount')
     const remount = trackNewModelLineEnding(model, '\r\n', 'key')
     await settle()
     expect(model.getValue()).toBe('a\nb')
+    expect(userEdits).toBe(0)
     remount.dispose()
-  })
-
-  it('never converts a new file once its typed lines are saved', () => {
-    const model = windowsModel()
-    const typing = trackNewModelLineEnding(model, '\r\n', 'key')
-    type(model, 'one\ntwo')
-    typing.dispose()
-    // Saved to disk, then End of Line changes to LF.
-    const disk = saveToDisk(model)
-    trackNewModelLineEnding(model, '\r\n', 'key', disk).dispose()
-    const changed = trackNewModelLineEnding(model, '\n', 'key', disk)
-    expect(model.getValue()).toBe('one\r\ntwo')
-    changed.dispose()
-  })
-
-  it('stays an existing file after it becomes dirty again', () => {
-    const model = windowsModel()
-    trackNewModelLineEnding(model, '\r\n', 'key').dispose()
-    type(model, 'one\ntwo')
-    const disk = saveToDisk(model)
-    trackNewModelLineEnding(model, '\r\n', 'key', disk).dispose()
-    type(model, 'one\ntwo\nthree')
-    const changed = trackNewModelLineEnding(model, '\n', 'key', disk)
-    expect(model.getValue()).toBe('one\r\ntwo\r\nthree')
-    changed.dispose()
-  })
-
-  it('converts an unsaved Markdown line break that the dirty check ignores', () => {
-    const model = monaco.editor.createModel('# Title', 'markdown')
-    model.setEOL(CRLF)
-    models.push(model)
-    const disk = saveToDisk(model)
-    const pending = trackNewModelLineEnding(model, null, 'key', disk)
-    type(model, '# Title\n')
-    // Markdown dirty state ignores trailing whitespace, so this edit still reads as clean.
-    expect(isEditorContentUnchanged(model.getValue(), '# Title', true)).toBe(true)
-    pending.dispose()
-    const known = trackNewModelLineEnding(model, '\n', 'key', disk)
-    type(model, '# Title\nBody')
-    expect(model.getValue()).toBe('# Title\nBody')
-    known.dispose()
-  })
-
-  it('keeps undo offsets valid across a late conversion of typed lines', async () => {
-    const model = windowsModel()
-    const pending = trackNewModelLineEnding(model, null, 'key')
-    type(model, 'a\nbc')
-    model.pushEditOperations(
-      [],
-      [
-        { range: { startLineNumber: 2, startColumn: 2, endLineNumber: 2, endColumn: 2 }, text: 'X' }
-      ],
-      () => null
-    )
-    model.pushStackElement()
-    pending.dispose()
-    const known = trackNewModelLineEnding(model, '\n', 'key')
-    expect(model.getValue()).toBe('a\nbXc')
-    // Undo first reverts the conversion, then the typed X, without being trapped.
-    model.undo()
-    await settle()
-    expect(model.getValue()).toBe('a\r\nbXc')
-    model.undo()
-    await settle()
-    expect(model.getValue()).toBe('a\r\nbc')
-    model.redo()
-    await settle()
-    model.redo()
-    await settle()
-    expect(model.getValue()).toBe('a\nbXc')
-    known.dispose()
-  })
-
-  it('keeps undo and redo consistent when typing after a late conversion', async () => {
-    const model = windowsModel()
-    const pending = trackNewModelLineEnding(model, null, 'key')
-    type(model, 'line1\nline2\nline3')
-    pending.dispose()
-    const known = trackNewModelLineEnding(model, '\n', 'key')
-    model.pushEditOperations(
-      [],
-      [
-        { range: { startLineNumber: 3, startColumn: 6, endLineNumber: 3, endColumn: 6 }, text: 'Z' }
-      ],
-      () => null
-    )
-    model.pushStackElement()
-    const states: string[] = []
-    for (const step of ['undo', 'undo', 'redo', 'redo'] as const) {
-      model[step]()
-      await settle()
-      states.push(model.getValue())
-    }
-    expect(states).toEqual([
-      'line1\nline2\nline3',
-      'line1\r\nline2\r\nline3',
-      'line1\nline2\nline3',
-      'line1\nline2\nline3Z'
-    ])
-    known.dispose()
   })
 })

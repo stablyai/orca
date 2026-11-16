@@ -14,7 +14,7 @@ Enable **Insert Final Newline** under [Settings → General → Editor](/docs/se
 
 ## Line endings
 
-New files, and files that opened with no line breaks, use the line ending of the system that runs the file's workspace: LF on Linux and macOS hosts, WSL hosts, and Windows projects that run in WSL; CRLF on Windows otherwise. Choose LF or CRLF under **End of Line** in [Settings → General → Editor](/docs/settings) to always use one. Files that opened with line breaks keep their ending, text written into the file from outside the editor keeps its own ending, and shell scripts always start with LF. With autosave on, lines saved before a remote host reports its system keep the ending used until then.
+New files, and files that have no line breaks yet, use the line ending of the system that runs the file's workspace: LF on Linux and macOS hosts, WSL hosts, and Windows projects that run in WSL; CRLF on Windows otherwise. Choose LF or CRLF under **End of Line** in [Settings → General → Editor](/docs/settings) to always use one. The ending is set only while the file has at most one line. Once it has line breaks, Orca never changes them, so lines you typed and text written from outside the editor keep their ending. If you type several lines before a remote SSH host or Orca server reports its system, those lines keep the editor's starting ending. WSL hosts are treated as Linux from the start, so they are not affected. Shell scripts always start with LF.
 
 ## Multi-cursor, go-to, find
 
