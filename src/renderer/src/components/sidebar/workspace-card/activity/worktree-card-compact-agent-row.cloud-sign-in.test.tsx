@@ -102,7 +102,7 @@ function makeAgent(worktreeId: string, sessionBoundary: boolean): DashboardAgent
   }
 }
 
-/** The row a real cloud workspace mirrors from its host (m4air "crayfish"): no sessionBoundary. */
+/** The row a real cloud workspace mirrors from its host (dev-mac "crayfish"): no sessionBoundary. */
 function makeMirroredAgent(worktreeId: string): DashboardAgentRowData {
   return {
     paneKey: 'tab-1:leaf-1',

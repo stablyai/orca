@@ -161,6 +161,25 @@ export const billingPage = defineFixture({
   )
 })
 
+/** API keys and connected apps are managed in the web console: the page is one link row. */
+export const apiKeysPage = defineFixture({
+  width: 784,
+  render: () => (
+    <Page
+      id="cloud-api-keys"
+      title="API keys & connected apps"
+      description="Keys for the Orca CLI and MCP clients, and the apps connected to your account. Managed in your browser."
+    >
+      <CloudConsoleLinkRowView
+        label="API keys & connected apps"
+        description="Create and revoke keys, and disconnect apps."
+        busy={false}
+        onOpen={noop}
+      />
+    </Page>
+  )
+})
+
 const SIGNED_OUT: OrcaProfileAuthStatus = {
   activeProfileId: 'profile-1',
   configured: true,

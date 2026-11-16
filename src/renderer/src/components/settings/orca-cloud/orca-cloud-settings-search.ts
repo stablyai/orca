@@ -19,6 +19,23 @@ export const getOrcaCloudBillingSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
+/** Orca Cloud › API keys & connected apps: one row that opens the web console. */
+export const getOrcaCloudApiConsoleSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate('settings.cloudConsole.api.title', 'API keys & connected apps'),
+    description: translate(
+      'settings.cloudConsole.api.searchDescription',
+      'Create and revoke Orca API keys and disconnect MCP apps in your browser.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('settings.cloudConsole.api.keywordApiKey', 'api key'),
+      ...translateSearchKeyword('settings.cloudConsole.api.keywordToken', 'token'),
+      ...translateSearchKeyword('settings.cloudConsole.api.keywordMcp', 'mcp'),
+      ...translateSearchKeyword('settings.cloudConsole.api.keywordCli', 'cli')
+    ]
+  }
+])
+
 /** Account › "Team & admin": the web console's team, billing and admin pages. */
 export const getOrcaCloudTeamAdminSearchEntries = createLocalizedCatalog(() => [
   {

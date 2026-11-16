@@ -164,40 +164,6 @@ export type OrcaBillingStatusResult =
   | { status: 'signed-out' }
   | { status: 'failed'; error: string }
 
-export type OrcaBillingOverageArgs = {
-  enabled: boolean
-  /** Whole cents; omitted keeps the current cap. */
-  spendCapCents?: number
-}
-
-export type OrcaBillingOpenResult =
-  | { status: 'opened' }
-  | { status: 'unconfigured' }
-  | { status: 'signed-out' }
-  | { status: 'forbidden' }
-  | { status: 'already-subscribed' }
-  | { status: 'no-billing-account' }
-  /** Personal account: every plan lands on a team, so the caller starts cloud setup instead. */
-  | { status: 'team-required' }
-  /** Billing's 409 plan_unavailable: Stripe has no price on sale for this plan and interval. */
-  | { status: 'plan-unavailable' }
-  | { status: 'failed'; error: string }
-
-/** Why a Checkout/Portal open (or link) didn't happen. */
-export type OrcaBillingOpenRefusal = Exclude<OrcaBillingOpenResult, { status: 'opened' }>
-
-/** A minted Checkout/Portal URL for "Copy link" (not opened), or why there is none. */
-export type OrcaBillingLinkResult = { status: 'ok'; url: string } | OrcaBillingOpenRefusal
-
-export type OrcaBillingOverageResult =
-  | { status: 'ok'; entitlement: OrcaBillingEntitlement }
-  | { status: 'unconfigured' }
-  | { status: 'signed-out' }
-  | { status: 'forbidden' }
-  | { status: 'no-subscription' }
-  | { status: 'cap-too-high' }
-  | { status: 'failed'; error: string }
-
 /** Another team the signed-in user is on, and its plan state (cloud start B2, "Switch to <team>"). */
 export type OrcaBillingTeamPlan = {
   orgId: string

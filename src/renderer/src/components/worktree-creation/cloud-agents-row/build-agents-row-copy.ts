@@ -34,7 +34,7 @@ function groupLabel(via: BuildAgentVia, agents: string, t: Translate): string {
 }
 
 /**
- * R1: "Claude and Codex from your Orca account · nw@stably.ai". Mixed sources: one group per
+ * R1: "Claude and Codex from your Orca account · nw@example.com". Mixed sources: one group per
  * source, and the "·" separates groups only: "Claude from your Orca account · Codex with the team key".
  */
 export function readyLine(

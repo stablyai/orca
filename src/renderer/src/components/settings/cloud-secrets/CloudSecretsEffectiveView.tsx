@@ -8,7 +8,7 @@ import { Badge } from '../../ui/badge'
 import { CloudSecretChips } from './CloudSecretVmBadge'
 import { InlineError } from '../../ui/inline-error'
 import { Skeleton } from '../../ui/skeleton'
-import { CloudApiEmptyState } from '../cloud-api/cloud-api-parts'
+import { CloudEmptyState } from '../orca-cloud/CloudEmptyState'
 import { cloudSecretScopeLabel, cloudSecretsErrorCopy } from './cloud-secrets-copy'
 import { CloudSecretHint } from './CloudSecretHint'
 import type { Loadable } from './use-cloud-secrets'
@@ -91,7 +91,7 @@ export function CloudSecretsEffectiveView({
       <CloudSecretsPrecedence precedence={precedence} />
       {secrets.length === 0 ? (
         <div className="rounded-md border border-border/60">
-          <CloudApiEmptyState
+          <CloudEmptyState
             icon={Layers}
             title={t('cloudSecrets.effective.emptyTitle', 'Nothing is injected yet')}
             description={t(

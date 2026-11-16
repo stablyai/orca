@@ -49,7 +49,7 @@ export const populated = defineFixture({
             sandboxId: 'sbx_000000000000000000000001',
             workspaceLabel: 'ios-login-fix',
             command: 'xcrun simctl list devices booted',
-            cwd: '/Users/neil',
+            cwd: '/Users/dev',
             createdAt: NOW - 3_600_000
           }
         ]
@@ -61,7 +61,7 @@ export const populated = defineFixture({
           sandboxId: 'sbx_000000000000000000000001',
           workspaceLabel: 'ios-login-fix',
           command: 'xcrun simctl list devices booted',
-          cwd: '/Users/neil',
+          cwd: '/Users/dev',
           agent: 'Claude Code',
           outcome: 'auto-allowed',
           exitCode: 0,
@@ -73,7 +73,7 @@ export const populated = defineFixture({
           sandboxId: 'sbx_000000000000000000000001',
           workspaceLabel: 'ios-login-fix',
           command: 'security find-identity -p codesigning -v',
-          cwd: '/Users/neil',
+          cwd: '/Users/dev',
           agent: 'Claude Code',
           outcome: 'denied'
         },
@@ -83,7 +83,7 @@ export const populated = defineFixture({
           sandboxId: 'sbx_000000000000000000000001',
           workspaceLabel: 'ios-login-fix',
           command: 'xcodebuild -scheme Acme test',
-          cwd: '/Users/neil/projects/acme-ios',
+          cwd: '/Users/dev/projects/acme-ios',
           agent: 'Claude Code',
           outcome: 'allowed-once',
           exitCode: 65,

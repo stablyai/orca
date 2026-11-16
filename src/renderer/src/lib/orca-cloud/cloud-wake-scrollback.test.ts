@@ -216,7 +216,7 @@ describe('WAKE-SCROLLBACK', () => {
     expect(text(terminal)).toEqual(['$'])
   })
 
-  // m4air run: by "asleep" a resubscribe had replaced 2000 rows with the host's 1000-row snapshot.
+  // dev-mac run: by "asleep" a resubscribe had replaced 2000 rows with the host's 1000-row snapshot.
   it('captures once per sleep (at going to sleep): a later look at a replaced buffer changes nothing', async () => {
     const terminal = pane(10)
     const seq = Array.from({ length: 2000 }, (_, index) => String(index + 1)).join('\r\n')
@@ -325,7 +325,7 @@ describe('WAKE-SCROLLBACK', () => {
     expect(elapsed).toBeLessThan(2000)
   })
 
-  // m4air (c): waking remounts the pane at the bottom; the place the person scrolled to comes back.
+  // dev-mac (c): waking remounts the pane at the bottom; the place the person scrolled to comes back.
   it('a scroll made while waking survives the remount and is put back after the restore', async () => {
     const before = pane(5)
     await write(before, Array.from({ length: 50 }, (_, index) => `row ${index}`).join('\r\n'))

@@ -94,11 +94,9 @@ export const orcaProfilesApi = {
   },
   billingStatus: () => ipcRenderer.invoke('orcaProfiles:billingStatus'),
   billingPlans: () => ipcRenderer.invoke('orcaProfiles:billingPlans'),
-  billingOpenPortal: () => ipcRenderer.invoke('orcaProfiles:billingOpenPortal'),
   billingTeamPlans: (args) => ipcRenderer.invoke('orcaProfiles:billingTeamPlans', args),
   cloudSetupStart: (args) => ipcRenderer.invoke('orcaProfiles:cloudSetupStart', args),
   cloudSetupGet: (args) => ipcRenderer.invoke('orcaProfiles:cloudSetupGet', args),
   cloudSetupLink: (args) => ipcRenderer.invoke('orcaProfiles:cloudSetupLink', args),
-  billingSetOverage: (args) => ipcRenderer.invoke('orcaProfiles:billingSetOverage', args),
   billingClaimTrial: () => ipcRenderer.invoke('orcaProfiles:billingClaimTrial')
 } satisfies PreloadApi['orcaProfiles']
