@@ -6,7 +6,7 @@ import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runti
 import { validateFullGitObjectId } from './access/filesystem-path-containment'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
 import { requireReachableGitRoute } from '../../providers/execution-host-provider-dispatch'
-import { getConnectionExecutionHostId } from '../../../shared/execution-host'
+import { getConnectionExecutionHostId } from '../../../shared/execution-host/execution-host'
 
 export function registerFilesystemGitUrlHandlers(context: FilesystemHandlerContext): void {
   const { store } = context

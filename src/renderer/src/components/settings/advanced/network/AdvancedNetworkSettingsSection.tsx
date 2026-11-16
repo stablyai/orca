@@ -1,7 +1,7 @@
 import type React from 'react'
 import { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import {
   normalizeProxyBypassRules,
   normalizeProxyUrl,

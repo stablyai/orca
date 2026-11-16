@@ -1,5 +1,5 @@
 import type { DiffComment } from '../../../../../../shared/file-review/diff-comment-types'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import { isMarkdownComment } from '../../../source-control/review/comments/diff-comment-compat'
 
 export function isMarkdownReviewNotesEnabled(

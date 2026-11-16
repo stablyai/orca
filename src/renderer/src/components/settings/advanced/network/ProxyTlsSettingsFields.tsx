@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import { Label } from '../../../ui/label'
 import { Textarea } from '../../../ui/textarea'
 import { SettingsRow } from '../../form-controls/SettingsFormControls'

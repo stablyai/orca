@@ -1,5 +1,5 @@
 import { ghRepoExecOptions, githubRepoContext } from '../../repositories/github-repository-identity'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   hostedReviewRepoScope,
   scopeGeneration
