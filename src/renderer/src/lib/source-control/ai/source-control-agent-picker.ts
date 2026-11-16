@@ -23,7 +23,7 @@ import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
 import type {
   AgentMenuRowsTarget,
   NewTabAgentMenuModel
-} from '@/components/tab-bar/new-tab-agent-menu-model'
+} from '@/components/agent/launch-menu/new-tab-agent-menu-model'
 import type { resolveAgentMenuSelection } from '@/lib/agent-session/launch/routing/agent-menu-selection'
 import type { AgentPickerEntry } from '../../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { AgentLaunchSurface } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'

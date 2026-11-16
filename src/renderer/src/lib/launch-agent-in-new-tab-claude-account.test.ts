@@ -72,7 +72,7 @@ vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', () => ({
   runtimeEnvironmentIdOrLocalUnlessTwin: () => null
 }))
 
-vi.mock('@/components/tab-bar/reconcile-order', () => ({
+vi.mock('@/lib/workspace/tabs/order/reconcile-tab-order', () => ({
   reconcileTabOrder: (_stored: unknown, terminalIds: string[]) => terminalIds
 }))
 

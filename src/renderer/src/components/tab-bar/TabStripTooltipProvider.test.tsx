@@ -2,8 +2,8 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { StrictMode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { TabHoverCard } from './TabHoverCard'
-import { TAB_TOOLTIP_DELAY_MS, TabStripTooltipProvider } from './TabStripTooltipProvider'
+import { TabHoverCard } from './strip/TabHoverCard'
+import { TAB_TOOLTIP_DELAY_MS, TabStripTooltipProvider } from './strip/TabStripTooltipProvider'
 
 function renderTabs(): void {
   render(

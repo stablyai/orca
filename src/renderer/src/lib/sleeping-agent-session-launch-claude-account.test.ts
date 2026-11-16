@@ -42,7 +42,7 @@ vi.mock('@/diagnostics/telemetry/telemetry', () => ({
   track: vi.fn(),
   tuiAgentToAgentKind: (agent: string) => agent
 }))
-vi.mock('@/components/tab-bar/reconcile-order', () => ({
+vi.mock('@/lib/workspace/tabs/order/reconcile-tab-order', () => ({
   reconcileTabOrder: vi.fn((_stored, termIds: string[]) => [...termIds])
 }))
 
