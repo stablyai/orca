@@ -4,7 +4,7 @@ import {
   type AgentSessionRecord
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { agentSessionLeaseIsReleased } from '../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
-import { setAgentSessionTabVisibility } from '../agent-session-tab-table'
+import { setAgentSessionTabVisibility } from './agent-session-tab-table'
 import { clearSuccessor } from './agent-session-sender-identity-revision'
 import type { AgentSessionStoreState } from './agent-session-store-state'
 
