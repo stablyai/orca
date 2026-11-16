@@ -122,7 +122,11 @@ describe('Claude stream retirement', () => {
         options: { lifecycle: true }
       })
       expect(row('claude:claude-session:child-thinking')).toMatchObject({
-        body: { blocks: [{ type: 'reasoning', text: 'Considering complete', state: 'completed' }] },
+        body: {
+          role: 'reasoning',
+          state: 'completed',
+          blocks: [{ type: 'text', text: 'Considering complete' }]
+        },
         options: { lifecycle: true }
       })
       expect(row('claude:claude-session:child-c-next')).toBeUndefined()
@@ -145,15 +149,14 @@ describe('Claude stream retirement', () => {
       delta('later-block', 'Later message', 'agent-tool', 0, kind)
       translator.flush()
 
-      const blockType = kind === 'text' ? 'text' : 'reasoning'
       expect(row('claude:claude-session:first-block')?.body).toMatchObject({
-        blocks: [{ type: blockType, text: 'First complete' }]
+        blocks: [{ type: 'text', text: 'First complete' }]
       })
       expect(row('claude:claude-session:second-block')?.body).toMatchObject({
-        blocks: [{ type: blockType, text: 'Second complete' }]
+        blocks: [{ type: 'text', text: 'Second complete' }]
       })
       expect(row('claude:claude-session:later-block')?.body).toMatchObject({
-        blocks: [{ type: blockType, text: 'Later message' }]
+        blocks: [{ type: 'text', text: 'Later message' }]
       })
       expect(row('claude:claude-session:second-next')).toBeUndefined()
       expect(row('claude:claude-session:first-final')).toBeUndefined()
