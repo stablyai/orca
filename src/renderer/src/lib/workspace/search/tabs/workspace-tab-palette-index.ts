@@ -1,0 +1,132 @@
+import { shallow } from 'zustand/shallow'
+import {
+  buildPaletteTabDocument,
+  type PaletteTabDocumentInput
+} from '../../../../../../shared/palette-match/tab-document'
+import type { PaletteDocument } from '../../../../../../shared/palette-match/palette-document'
+import { buildSearchableWorkspaceTabEntries } from './workspace-tab-palette-entry-builder'
+import { createWorkspaceTabAgentIndex } from './workspace-tab-agent-index'
+import { collectAgentMetadataFromIndex } from './workspace-tab-agent-metadata'
+import {
+  findAmbiguousWorktreeIds,
+  getUnifiedTabPaletteExecutionHostId
+} from '../../ownership/unified-tab-host-ownership'
+import { resolveOpenTabOccupantAgent } from '../../../agent-session/tab-identity/open-tab-occupant-agent'
+import type {
+  BuildSearchableWorkspaceTabsOptions,
+  SearchableWorkspaceTab
+} from './workspace-tab-search-types'
+
+function entryIdentity(entry: SearchableWorkspaceTab): string {
+  return JSON.stringify([
+    getUnifiedTabPaletteExecutionHostId(entry.tab, entry.worktree) ?? null,
+    entry.tab.id
+  ])
+}
+
+function sameEntry(a: SearchableWorkspaceTab, b: SearchableWorkspaceTab): boolean {
+  return (
+    shallow(a.agentMetadata, b.agentMetadata) &&
+    shallow(a.secondarySearchTexts, b.secondarySearchTexts) &&
+    shallow(a.typeSearchAliases, b.typeSearchAliases) &&
+    shallow(
+      { ...a, agentMetadata: null, secondarySearchTexts: null, typeSearchAliases: null },
+      { ...b, agentMetadata: null, secondarySearchTexts: null, typeSearchAliases: null }
+    )
+  )
+}
+
+/** One open palette owns the derived index; closing it drops every cached entry. */
+export function createWorkspaceTabPaletteIndex() {
+  const agents = createWorkspaceTabAgentIndex()
+  let previous: BuildSearchableWorkspaceTabsOptions | undefined
+  let entries: SearchableWorkspaceTab[] = []
+  let documents = new Map<string, { input: PaletteTabDocumentInput; document: PaletteDocument }>()
+  let terminalEntries = new Map<string, number[]>()
+  let ambiguousWorktreeIds: ReadonlySet<string> = new Set()
+
+  return (options: BuildSearchableWorkspaceTabsOptions): SearchableWorkspaceTab[] => {
+    const dirtyTabs = agents.update(options)
+    const statusOnly =
+      previous &&
+      Object.keys(options).length === Object.keys(previous).length &&
+      Object.entries(options).every(
+        ([key, value]) =>
+          key === 'agentStatusByPaneKey' ||
+          value === previous![key as keyof BuildSearchableWorkspaceTabsOptions]
+      )
+    previous = options
+    if (statusOnly && dirtyTabs !== null) {
+      let next = entries
+      for (const tabId of dirtyTabs) {
+        for (const position of terminalEntries.get(tabId) ?? []) {
+          const entry = entries[position]
+          const terminal = options.tabsByWorktree[entry.worktree.id]?.find(
+            (tab) => tab.id === tabId
+          )
+          const updated = {
+            ...entry,
+            agentMetadata: collectAgentMetadataFromIndex(
+              agents.index,
+              tabId,
+              entry.worktree,
+              ambiguousWorktreeIds
+            ),
+            occupantAgent: resolveOpenTabOccupantAgent({
+              tabId,
+              title: entry.title,
+              defaultTitle: terminal?.defaultTitle,
+              launchAgent: terminal?.launchAgent,
+              layout: options.terminalLayoutsByTabId?.[tabId],
+              agentStatusByPaneKey: options.agentStatusByPaneKey,
+              sleepingAgentSessionsByPaneKey: options.sleepingAgentSessionsByPaneKey,
+              paneForegroundAgentByPaneKey: options.paneForegroundAgentByPaneKey
+            })
+          }
+          if (!sameEntry(entry, updated)) {
+            if (next === entries) next = entries.slice()
+            next[position] = updated
+          }
+        }
+      }
+      entries = next
+      return entries
+    }
+    const nextDocuments = new Map<
+      string,
+      { input: PaletteTabDocumentInput; document: PaletteDocument }
+    >()
+    const priorEntries = new Map(entries.map((entry) => [entryIdentity(entry), entry]))
+    const next = buildSearchableWorkspaceTabEntries(options, {
+      agentIndex: agents.index,
+      document(identity, input) {
+        const cached = documents.get(identity)
+        const same =
+          cached &&
+          shallow(cached.input.secondaryTexts, input.secondaryTexts) &&
+          shallow(cached.input.typeAliases, input.typeAliases) &&
+          shallow(
+            { ...cached.input, secondaryTexts: null, typeAliases: null },
+            { ...input, secondaryTexts: null, typeAliases: null }
+          )
+        const value = same ? cached : { input, document: buildPaletteTabDocument(input) }
+        nextDocuments.set(identity, value)
+        return value.document
+      }
+    }).map((entry) => {
+      const prior = priorEntries.get(entryIdentity(entry))
+      return prior && sameEntry(prior, entry) ? prior : entry
+    })
+    documents = nextDocuments
+    ambiguousWorktreeIds = findAmbiguousWorktreeIds(options.ownershipWorktrees ?? options.worktrees)
+    terminalEntries = new Map()
+    next.forEach((entry, position) => {
+      if (entry.tab.contentType !== 'terminal') return
+      const positions = terminalEntries.get(entry.tab.entityId) ?? []
+      positions.push(position)
+      terminalEntries.set(entry.tab.entityId, positions)
+    })
+    if (!shallow(entries, next)) entries = next
+    return entries
+  }
+}
