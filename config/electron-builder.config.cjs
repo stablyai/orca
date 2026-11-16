@@ -659,6 +659,9 @@ module.exports = {
       ...orcadTemplateMacSignIgnore,
       // afterPack signs it before the orcad template hashes it.
       '/Contents/Resources/agent-browser-darwin-[^/]+$',
+      // afterPack signs these with their own entitlements; osx-sign would replace them with entitlementsInherit (#27320).
+      '/Contents/Resources/Orca Computer Use\\.app(/|$)',
+      '/Contents/MacOS/orca-(notification-status|keyboard-layout|process-footprint|provider-exec)$',
       ...macTerminalHostSignIgnore
     ],
     extendInfo: macUsageDescriptions,

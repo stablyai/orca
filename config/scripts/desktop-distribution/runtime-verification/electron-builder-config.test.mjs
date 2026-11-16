@@ -70,6 +70,25 @@ describe('electron-builder config', () => {
     }
   })
 
+  // osx-sign re-signed these with Electron's entitlements, replacing afterPack's (#27320).
+  it('leaves helpers afterPack signs to that signature', () => {
+    const app = '/dist/mac-arm64/Orca.app/Contents'
+    const skipped = (path) =>
+      electronBuilderConfig.mac.signIgnore.some((pattern) => new RegExp(pattern).test(app + path))
+    for (const path of [
+      '/Resources/Orca Computer Use.app',
+      '/Resources/Orca Computer Use.app/Contents/MacOS/orca-computer-use-macos',
+      '/MacOS/orca-notification-status',
+      '/MacOS/orca-keyboard-layout',
+      '/MacOS/orca-process-footprint',
+      '/MacOS/orca-provider-exec'
+    ]) {
+      expect(skipped(path), path).toBe(true)
+    }
+    expect(skipped('/MacOS/Orca')).toBe(false)
+    expect(skipped('/Frameworks/Orca Helper (Renderer).app')).toBe(false)
+  })
+
   // Bundled agent-browser answered "No skills found" because only its binary shipped (#17705).
   const hostBuilderPlatform = { darwin: 'mac', linux: 'linux', win32: 'win' }[process.platform]
   it.runIf(hostBuilderPlatform)(
