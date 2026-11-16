@@ -126,7 +126,7 @@ const MAX_LINK_HOPS = 8
 async function linkTargets(path: string): Promise<{ targets: string[]; complete: boolean }> {
   const targets = [path]
   let current = path
-  for (let hop = 0; hop < MAX_LINK_HOPS; hop += 1) {
+  for (let hop = 0; ; hop += 1) {
     let existing = current
     const rest: string[] = []
     for (
@@ -145,7 +145,8 @@ async function linkTargets(path: string): Promise<{ targets: string[]; complete:
     if (!stats?.isSymbolicLink()) {
       return { targets, complete: stats !== null }
     }
-    const link = await readlink(existing).catch(() => null)
+    const link = hop < MAX_LINK_HOPS ? await readlink(existing).catch(() => null) : null
+    // An unreadable link, or one past the hop limit, points somewhere unknown.
     if (link === null) {
       return { targets, complete: false }
     }
@@ -155,8 +156,6 @@ async function linkTargets(path: string): Promise<{ targets: string[]; complete:
     current = [isAbsolute(link) ? link : `${linkFolder}${sep}${link}`, ...rest].join(sep)
     targets.push(current)
   }
-  // A longer chain was not followed to its end, so where it points is unknown.
-  return { targets, complete: false }
 }
 
 export async function readListedFolders(store: RuntimeStore): Promise<ListedFolders> {

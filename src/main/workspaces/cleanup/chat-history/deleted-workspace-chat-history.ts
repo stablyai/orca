@@ -154,12 +154,13 @@ export async function sweepDeletedWorkspaceChatHistory(
     // Reading one transcript can take a while, so each is checked right before its own removal.
     const deleted = await deps.deleteSessions(
       targets,
+      // The slow transcript reads first: the cheap folder and row checks then run last, nearest the rm.
       async (target) =>
+        (await isChatStillIdleInGoneFolder(target.filePath, key, Date.now())) &&
         !deps.signal?.aborted &&
         deps.isEnabled() &&
         (await isStillGone(folder)) &&
-        (await isUnclaimed(key, folder)) &&
-        (await isChatStillIdleInGoneFolder(target.filePath, key, Date.now()))
+        (await isUnclaimed(key, folder))
     )
     result.deleted += deleted.deleted
     result.failed += deleted.failed
