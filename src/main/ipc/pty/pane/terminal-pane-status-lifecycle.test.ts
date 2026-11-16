@@ -13,25 +13,22 @@ vi.mock('../../../agent-hooks/server/agent-hook-server', () => ({
 vi.mock('../provider/registry', () => ({ getProviderForPty }))
 
 it.each([
-  ['quit at cmd', false, 'cmd.exe', true, false, true],
-  ['quit at Git Bash', false, 'bash', true, false, true],
-  ['stopped child', true, 'bash', true, false, false],
-  ['agent foreground', false, 'codex', true, false, false],
-  ['unanswered shell', false, null, true, false, false],
-  ['intervening command revoked launch', false, 'bash', false, false, false],
-  ['successor launch during inspection', false, 'cmd.exe', true, true, false]
+  ['shell alone after the launched agent quit', true, 'held', false, true],
+  ['shell alone after a reattach left the launch unknown', true, 'unknown', false, true],
+  ['no shell-alone proof (stopped job, agent foreground, unanswered)', false, 'held', false, false],
+  ['intervening command retired the launch', true, 'gone', false, false],
+  ['successor launch during inspection', true, 'held', true, false]
 ] as const)(
   'proves an unmarked process exit only for the current launch: %s',
-  async (_, children, foreground, held, replaced, expected) => {
+  async (_, shellAlone, evidence, replaced, expected) => {
     const launch = { agentArgs: '', agentEnv: {} }
-    let currentLaunch = held ? launch : null
+    let currentLaunch = evidence === 'held' ? launch : evidence === 'gone' ? null : undefined
     getProviderForPty.mockReturnValue({
-      hasChildProcesses: async () => children,
-      confirmForegroundProcess: async () => {
+      confirmShellForeground: async () => {
         if (replaced) {
           currentLaunch = { agentArgs: '--resume next', agentEnv: {} }
         }
-        return foreground
+        return shellAlone
       }
     })
     // SAFETY: This binding's exit probe only reads these two runtime capabilities.

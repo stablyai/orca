@@ -185,7 +185,7 @@ async function connectAgentPane(args: {
 
 async function seedHookRow(
   paneKey: string,
-  agentType: 'claude' | 'codex' | 'gemini' | 'opencode',
+  agentType: 'claude' | 'codex',
   state: 'working' | 'done' = 'done'
 ): Promise<AgentStatusEntry> {
   // Why the real slice: the row must carry the acceptedStatusSeq a real accepted hook stamps.
@@ -252,8 +252,8 @@ describe('connectPanePty confirmed process exit retires the live agent row', () 
     )
   })
 
-  it.each(['claude', 'codex', 'gemini', 'opencode'] as const)(
-    'retires %s recovery and row after a process exit without command marks',
+  it.each(['codex'] as const)(
+    'asks main to retire %s recovery after a process exit without command marks',
     async (agent) => {
       let foreground: string | null = agent
       let children = true

@@ -8,7 +8,6 @@ import { paneKeyPtyId } from './key-state'
 import { ptyIncarnationById } from '../provider/ownership-state'
 import { isLocalHookConnectionId } from '../../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import { getProviderForPty } from '../provider/registry'
-import { isShellProcess } from '../../../../shared/agent-status/process/shell-process-detection'
 import { isRemoteExecutionHostPtyId } from '../../../../shared/execution-host/remote-execution-host-pty-id'
 
 export function bindTerminalPaneStatusLifecycle(
@@ -24,20 +23,15 @@ export function bindTerminalPaneStatusLifecycle(
       try {
         const pane = runtime.resolveTerminalPane(paneKey)
         const launch = runtime.getLaunchStatementForPaneKey(paneKey, agent)
-        // A finished/intervening command has already revoked this launch's authority.
-        if (!pane.ptyId || isRemoteExecutionHostPtyId(pane.ptyId) || !launch) {
+        // A finished command already retired a gone launch; an unknown one (reattach) needs the proof.
+        if (!pane.ptyId || isRemoteExecutionHostPtyId(pane.ptyId) || launch === null) {
           return false
         }
-        const provider = getProviderForPty(pane.ptyId)
-        const [children, foreground] = await Promise.all([
-          provider.hasChildProcesses(pane.ptyId),
-          provider.confirmForegroundProcess?.(pane.ptyId)
-        ])
+        // Host proof: the shell alone holds the PTY, with no stopped job behind it.
+        const shellAlone = await getProviderForPty(pane.ptyId).confirmShellForeground?.(pane.ptyId)
         const current = runtime.resolveTerminalPane(paneKey)
         return (
-          children === false &&
-          typeof foreground === 'string' &&
-          isShellProcess(foreground) &&
+          shellAlone === true &&
           current.ptyId === pane.ptyId &&
           current.incarnationId === pane.incarnationId &&
           runtime.getLaunchStatementForPaneKey(paneKey, agent) === launch

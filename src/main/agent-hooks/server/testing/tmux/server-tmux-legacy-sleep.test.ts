@@ -133,9 +133,10 @@ it('does not recapture a detached tmux writer from its remaining live checkpoint
     updatedAt: NOW,
     origin: 'live'
   }
+  let stopping = false
   server.setTerminalPaneLifecycle({
     ownsProcess: () => true,
-    isStopping: () => true,
+    isStopping: () => stopping,
     isReversibleStop: () => true,
     isPlaced: () => true,
     readSavedRecord: () => saved,
@@ -149,6 +150,7 @@ it('does not recapture a detached tmux writer from its remaining live checkpoint
   expect(saved).toBeUndefined()
   expect(server.row()).toBeUndefined()
   // The sleep's physical stop must not promote a stale checkpoint into a pane-owned agent.
+  stopping = true
   expect(server.settleTerminalPaneSleep(PANE, 'pty')).toBe(false)
   const capture = await captureWorktreeSleepResumeRecords({
     worktreeId: 'wt-1',

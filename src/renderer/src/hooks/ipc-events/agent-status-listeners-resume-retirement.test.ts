@@ -14,9 +14,13 @@ vi.mock('@/store/index', () => ({ useAppStore: { getState: (): AppState => store
 
 afterEach(() => vi.unstubAllGlobals())
 
-it.each(['live', 'quit'] as const)(
-  'keeps a retired %s record out of the next window save, including queued status',
-  (origin) => {
+it.each([
+  ['live', null],
+  ['quit', null],
+  ['live', 'ssh-1']
+] as const)(
+  'keeps a retired %s record (connection %s) out of the next window save, including queued status',
+  (origin, connectionId) => {
     store = createTestStore()
     const paneKey = 'tab-1:11111111-1111-4111-8111-111111111111'
     store.setState({
@@ -30,7 +34,8 @@ it.each(['live', 'quit'] as const)(
           state: 'done',
           capturedAt: 250,
           updatedAt: 200,
-          origin
+          origin,
+          connectionId
         },
         'other-pane': {
           paneKey: 'other-pane',
@@ -66,7 +71,7 @@ it.each(['live', 'quit'] as const)(
       state: 'done',
       prompt: '',
       providerSession: { key: 'session_id', id: 'quit-codex' },
-      connectionId: null,
+      connectionId,
       receivedAt: 200,
       stateStartedAt: 150
     }
@@ -88,7 +93,7 @@ it.each(['live', 'quit'] as const)(
         agent: 'codex',
         providerSession: { key: 'session_id', id: 'quit-codex' },
         expectedStatus: { paneKey, receivedAt: 200, stateStartedAt: 150 },
-        expectedSavedRecord: { paneKey, capturedAt: 200, updatedAt: 200 }
+        expectedSavedRecord: { paneKey, capturedAt: 250, updatedAt: 200 }
       }
     })
     const saved = buildSleepingAgentSessionData(store.getState()).sleepingAgentSessionsByPaneKey

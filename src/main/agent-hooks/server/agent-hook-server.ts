@@ -71,37 +71,6 @@ export class AgentHookServer extends AgentHookServerLifecycle {
   // A live sender means the owner's exit cannot establish pane exit.
   private readonly ownerChallengesByLiveSender = new Map<string, number>()
 
-  hasVerifiableAgentProcess(paneKey: string): boolean {
-    const presence = this.state.lastStatusByPaneKey.get(
-      this.resolvePaneKeyAlias(paneKey)
-    )?.agentPresence
-    return presence?.process !== undefined && !presence.ended
-  }
-
-  /** Shells without command marks need the owning host's process-tree proof. */
-  async reconcilePaneProcessExit(paneKey: string): Promise<void> {
-    const resolved = this.resolvePaneKeyAlias(paneKey)
-    // A verifiable process (e.g. a stopped job) owns its own exit; the quiet shell proves nothing.
-    if (this.hasVerifiableAgentProcess(resolved)) {
-      return
-    }
-    const row = this.state.lastStatusByPaneKey.get(resolved)
-    const identity = this.paneAgentIdentity(resolved)
-    const agent = identity?.status.agentType
-    const confirmedExit =
-      identity &&
-      agent &&
-      identity.processTopology !== 'shared' &&
-      (await this.terminalPaneLifecycle?.confirmProcessExit?.(resolved, agent))
-    if (this.state.lastStatusByPaneKey.get(resolved) !== row) {
-      return
-    }
-    this.reconcileEndedProcessForPaneKeys([resolved], {
-      preserveResumeIdentity: true,
-      confirmedExit: confirmedExit === true
-    })
-  }
-
   /** Pin inspection to this row so a replacement owner cannot become its subject. */
   readCliWriterObservation(expected: AgentStatusIpcPayload): CliWriterObservation | null {
     const resolved = this.resolvePaneKeyAlias(expected.paneKey)

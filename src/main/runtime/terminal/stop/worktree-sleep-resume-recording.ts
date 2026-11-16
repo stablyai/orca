@@ -191,24 +191,30 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
 
   /** A cleared status leaves the record alone (lost contact is no evidence), as in the window. */
   forgetHookStatusResume(clear: AgentStatusClearIpcPayload): void {
-    for (const [paneKey, status] of this.previousHookStatusByPaneKey) {
-      if (
-        'paneKey' in clear
-          ? paneKey === clear.paneKey &&
-            (!clear.refusedResume ||
-              (!!clear.refusedResume.expectedStatus &&
-                status.updatedAt <= clear.refusedResume.expectedStatus.receivedAt &&
-                status.stateStartedAt === clear.refusedResume.expectedStatus.stateStartedAt &&
-                status.agentType === clear.refusedResume.agent &&
-                agentProviderSessionsEqual(
-                  status.agentType,
-                  status.providerSession,
-                  clear.refusedResume.providerSession
-                )))
-          : status.connectionId === clear.connectionId
-      ) {
-        this.previousHookStatusByPaneKey.delete(paneKey)
+    if (!('paneKey' in clear)) {
+      for (const [paneKey, status] of this.previousHookStatusByPaneKey) {
+        if (status.connectionId === clear.connectionId) {
+          this.previousHookStatusByPaneKey.delete(paneKey)
+        }
       }
+      return
+    }
+    const status = this.previousHookStatusByPaneKey.get(clear.paneKey)
+    const refused = clear.refusedResume
+    if (
+      status &&
+      (!refused ||
+        (!!refused.expectedStatus &&
+          status.updatedAt <= refused.expectedStatus.receivedAt &&
+          status.stateStartedAt === refused.expectedStatus.stateStartedAt &&
+          status.agentType === refused.agent &&
+          agentProviderSessionsEqual(
+            status.agentType,
+            status.providerSession,
+            refused.providerSession
+          )))
+    ) {
+      this.previousHookStatusByPaneKey.delete(clear.paneKey)
     }
   }
 
