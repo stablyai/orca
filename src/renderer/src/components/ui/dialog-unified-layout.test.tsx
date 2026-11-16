@@ -63,6 +63,11 @@ describe('unified dialog layout', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus())
   })
 
+  it('keeps focus inside a busy dialog whose Cancel button is disabled', async () => {
+    render(<UnifiedDialog busy initialFocus="cancel" />)
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Show changes' })).toHaveFocus())
+  })
+
   it('blocks Esc and Cancel while busy, and closes on Esc otherwise', async () => {
     const onOpenChange = vi.fn()
     const { rerender } = render(<UnifiedDialog busy onOpenChange={onOpenChange} />)

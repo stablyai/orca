@@ -1,3 +1,4 @@
+// @protected-copy
 import { useId, type JSX } from 'react'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import type { Worktree } from '../../../../../../shared/worktree/types'
@@ -21,6 +22,11 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { DialogDisclosure, DialogWarning } from '@/components/ui/dialog-parts'
 import { deleteWorktreeLossLine } from './DeleteWorktreeChangesSummary'
+import { useAppStore } from '@/store'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import { worktreePurgeClosedFileIds } from '@/store/slices/worktrees/teardown/worktree-purge-closed-files'
+
+const EMPTY_UNSAVED_FILES: readonly OpenFile[] = []
 
 function getCollisionIds(worktrees: readonly Worktree[]): ReadonlySet<string> {
   const seen = new Set<string>()
@@ -48,7 +54,7 @@ function getTargetHostLabel(
 
 export function DeleteWorktreeTargetPreview({
   isBatchDelete,
-  unsavedFileCount = 0,
+  unsavedFiles = EMPTY_UNSAVED_FILES,
   worktree,
   worktrees,
   collisionWorktrees,
@@ -60,7 +66,7 @@ export function DeleteWorktreeTargetPreview({
   atRiskLocalFilesByIdentity
 }: {
   isBatchDelete: boolean
-  unsavedFileCount?: number
+  unsavedFiles?: readonly OpenFile[]
   worktree: Worktree | null
   worktrees: readonly Worktree[]
   collisionWorktrees: readonly Worktree[]
@@ -75,24 +81,38 @@ export function DeleteWorktreeTargetPreview({
   const targetIdPrefix = useId()
   const collisionIds = getCollisionIds(collisionWorktrees)
   if (isBatchDelete) {
-    const unknown = [...(changeCheckStatesByWorktreeId ?? [])].some(
-      ([key, state]) => state !== 'complete' && !dirtyChangeCountsByWorktreeId.has(key)
+    const unknown =
+      [...(changeCheckStatesByWorktreeId?.values() ?? [])].some((state) => state !== 'complete') ||
+      [...(atRiskLocalFilesByIdentity?.values() ?? [])].some((files) => !files.complete)
+    const ignored = [...(atRiskLocalFilesByIdentity?.values() ?? [])].some(
+      (files) => files.count > 0
     )
+    const dirtyCounts = [...dirtyChangeCountsByWorktreeId.values()]
     const loss = deleteWorktreeLossLine(
-      dirtyChangeCountsByWorktreeId.size > 0
-        ? [...dirtyChangeCountsByWorktreeId.values()].reduce((total, count) => total + count, 0)
+      dirtyCounts.length > 0
+        ? dirtyCounts.includes(0)
+          ? 0
+          : dirtyCounts.reduce((total, count) => total + count, 0)
         : undefined,
-      unsavedFileCount,
-      t
+      unsavedFiles.length,
+      t,
+      ignored
     )
     return (
       <>
-        {!unknown && loss ? <DialogWarning>{loss}</DialogWarning> : null}
+        {loss ? <DialogWarning>{loss}</DialogWarning> : null}
+        {unknown ? (
+          <p className="text-settings-detail text-muted-foreground">
+            {t('worktree.delete.changesIncomplete', 'Some changes couldn’t be fully checked.')}
+          </p>
+        ) : null}
         <ScrollArea className="max-h-48 rounded-md border border-border/70 bg-muted/35 text-xs">
           <div className="space-y-1 px-3 py-2" role="list">
             {worktrees.map((item, index) => {
               const itemDeleteState = getDeleteStateForWorktreeHost(item, deleteStateByWorktreeId)
               const itemDeleteError = getWorktreeDeleteErrorToShow(item, itemDeleteState, t)
+              const closedFileIds = worktreePurgeClosedFileIds(useAppStore.getState(), [item])
+              const unsavedCount = unsavedFiles.filter((file) => closedFileIds.has(file.id)).length
               const labelIds = {
                 name: `${targetIdPrefix}-${index}-name`,
                 path: `${targetIdPrefix}-${index}-path`,
@@ -124,8 +144,10 @@ export function DeleteWorktreeTargetPreview({
                           dirtyChangeCountsByWorktreeId.get(
                             item.hostId ? getWorktreeHostIdentity(item) : item.id
                           ),
-                          0,
-                          t
+                          unsavedCount,
+                          t,
+                          (atRiskLocalFilesByIdentity?.get(getWorktreeHostIdentity(item))?.count ??
+                            0) > 0
                         )}
                       </p>
                       {itemDeleteError ? (

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
 import { canSleepInsteadOfClosingTab } from './terminal-close-sleep-eligibility'
 import { resolveTerminalPtyOwner } from '@/lib/workspace/ownership/terminal-worktree-route'
@@ -6,9 +6,13 @@ import { resolveTerminalPtyOwner } from '@/lib/workspace/ownership/terminal-work
 const worktrees = vi.hoisted(
   () => new Map<string, { id: string; hostId?: string; runtimeOwnerEnvironmentId?: string }>()
 )
-vi.mock('@/store/github/refresh/worktree-refresh', () => ({
-  findWorktreeById: (_state: unknown, id: string) => worktrees.get(id) ?? null
+const windowKind = vi.hoisted(() => ({ pairedWeb: false }))
+vi.mock('@/app-shell/chrome/desktop-window-chrome', () => ({
+  isPairedWebClientWindow: () => windowKind.pairedWeb
 }))
+beforeEach(() => {
+  windowKind.pairedWeb = false
+})
 
 const LEAF = '11111111-1111-4111-8111-111111111111'
 const PANE_KEY = `tab-1:${LEAF}`
@@ -51,6 +55,22 @@ function eligible(state: AppState): boolean {
 }
 
 describe('canSleepInsteadOfClosingTab', () => {
+  it('hides sleep for a paired browser even when its catalog calls the server local', () => {
+    worktrees.set('wt-1', { id: 'wt-1', hostId: 'local' })
+    windowKind.pairedWeb = true
+    expect(eligible(stateWith({ agentType: 'claude', providerSession: SESSION }))).toBe(false)
+  })
+  it('refuses contested catalog owners even when focus selects the local copy', () => {
+    worktrees.set('wt-1', { id: 'wt-1', hostId: 'local' })
+    const state = stateWith({ agentType: 'claude', providerSession: SESSION })
+    state.worktreesByRepo['repo-1'].push({
+      ...state.worktreesByRepo['repo-1'][0],
+      hostId: 'runtime:env-1'
+    })
+    state.activeWorktreeId = 'wt-1'
+    state.activeWorkspaceExecutionHostId = 'local'
+    expect(eligible(state)).toBe(false)
+  })
   it('uses terminal ownership for SSH aliases and legacy rows owned by a paired runtime', () => {
     const resumable = { agentType: 'claude', providerSession: SESSION }
     worktrees.set('wt-1', {

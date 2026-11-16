@@ -21818,7 +21818,10 @@
         "unsavedFiles_one": "저장하지 않은 파일 {{count}}개",
         "unsavedFiles_other": "저장하지 않은 파일 {{count}}개",
         "both": "{{changes}}과(와) {{files}}이(가) 사라집니다",
-        "one": "{{what}}이(가) 사라집니다"
+        "one": "{{what}}이(가) 사라집니다",
+        "all": "{{changes}}, {{files}} and ignored files will be lost",
+        "withIgnored": "{{what}} and ignored files will be lost",
+        "ignoredOnly": "Ignored files will be lost"
       },
       "showChanges": "변경 사항 보기",
       "unsavedSuffix": "(저장 안 됨)",
@@ -21835,7 +21838,8 @@
       "singleTitle": "{{name}}을(를) 삭제할까요?",
       "singleVerb": "워크스페이스 삭제",
       "forceExplanation": "Git couldn’t delete it because it has changes. Force delete removes them anyway.",
-      "errorDetails": "Details"
+      "errorDetails": "Details",
+      "changesIncomplete": "Some changes couldn’t be fully checked."
     }
   },
   "mediaPreview": {

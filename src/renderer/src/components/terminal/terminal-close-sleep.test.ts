@@ -5,9 +5,6 @@ import { revalidateTerminalCloseSleep } from './terminal-close-sleep'
 const probe = vi.hoisted(() => vi.fn())
 let state: AppState
 vi.mock('@/store', () => ({ useAppStore: { getState: () => state } }))
-vi.mock('@/store/github/refresh/worktree-refresh', () => ({
-  findWorktreeById: () => ({ id: 'wt-1' })
-}))
 vi.mock('./pty-running-work-probe', () => ({ probePtyRunningWork: probe }))
 
 const leaf = '11111111-1111-4111-8111-111111111111'
@@ -54,3 +51,20 @@ it('refuses an unverifiable process instead of stopping unknown work', async () 
   probe.mockResolvedValue([{ ptyId: 'pty-1', verdict: 'unverifiable', timedOut: true }])
   expect(await revalidateTerminalCloseSleep('wt-1', 'tab-1')).toBe(false)
 })
+
+it.each([
+  { verdict: 'live', allowed: false },
+  { verdict: 'unverifiable', allowed: false },
+  { verdict: 'exited', allowed: true }
+])(
+  'rechecks an idle shell and handles its final $verdict verdict',
+  async ({ verdict, allowed }) => {
+    probe
+      .mockResolvedValueOnce([
+        { ptyId: 'pty-1', verdict: 'live', timedOut: false },
+        { ptyId: 'pty-2', verdict: 'exited', timedOut: false }
+      ])
+      .mockResolvedValueOnce([{ ptyId: 'pty-2', verdict, timedOut: false }])
+    expect(await revalidateTerminalCloseSleep('wt-1', 'tab-1')).toBe(allowed)
+  }
+)

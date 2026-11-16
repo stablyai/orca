@@ -22540,7 +22540,10 @@
         "unsavedFiles_other": "{{count}} archivos sin guardar",
         "unsavedFiles_many": "{{count}} archivos sin guardar",
         "both": "Se perderán {{changes}} y {{files}}",
-        "one": "Se perderá: {{what}}"
+        "one": "Se perderá: {{what}}",
+        "all": "{{changes}}, {{files}} and ignored files will be lost",
+        "withIgnored": "{{what}} and ignored files will be lost",
+        "ignoredOnly": "Ignored files will be lost"
       },
       "showChanges": "Mostrar cambios",
       "unsavedSuffix": "(sin guardar)",
@@ -22558,7 +22561,8 @@
       "singleTitle": "¿Eliminar {{name}}?",
       "singleVerb": "Eliminar espacio de trabajo",
       "forceExplanation": "Git couldn’t delete it because it has changes. Force delete removes them anyway.",
-      "errorDetails": "Details"
+      "errorDetails": "Details",
+      "changesIncomplete": "Some changes couldn’t be fully checked."
     }
   },
   "mediaPreview": {

@@ -341,11 +341,11 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
 
         {isMainWorktree ? null : (
           <div className="scrollbar-sleek flex max-h-[50vh] min-w-0 flex-col gap-3 overflow-y-auto">
-            {hasUnknownChangeState ? <DeleteWorktreeUnknownChangesWarning /> : null}
+            {!isBatchDelete && hasUnknownChangeState && <DeleteWorktreeUnknownChangesWarning />}
             {isBatchDelete ? (
               <DeleteWorktreeTargetPreview
                 isBatchDelete
-                unsavedFileCount={unsavedFiles.length}
+                unsavedFiles={unsavedFiles}
                 worktree={worktree}
                 worktrees={worktrees}
                 collisionWorktrees={allWorktrees}

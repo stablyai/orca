@@ -16,11 +16,12 @@ import type {
 
 type UnsavedFile = { id: string; relativePath?: string; filePath: string }
 
-/** "3 uncommitted changes and 2 unsaved files will be lost", leaving out the part that is 0. */
+/** One consequence sentence, leaving out loss categories absent from the scan results. */
 export function deleteWorktreeLossLine(
   changeCount: number | undefined,
   unsavedFileCount: number,
-  t: Translate = translate
+  t: Translate = translate,
+  hasIgnoredFiles = false
 ): string | null {
   const changes =
     changeCount === undefined
@@ -39,6 +40,19 @@ export function deleteWorktreeLossLine(
           defaultValue_one: '{{count}} unsaved file'
         })
       : null
+  if (hasIgnoredFiles) {
+    if (changes && files) {
+      return t(
+        'worktree.delete.loss.all',
+        '{{changes}}, {{files}} and ignored files will be lost',
+        { changes, files }
+      )
+    }
+    const what = changes ?? files
+    return what
+      ? t('worktree.delete.loss.withIgnored', '{{what}} and ignored files will be lost', { what })
+      : t('worktree.delete.loss.ignoredOnly', 'Ignored files will be lost')
+  }
   if (changes && files) {
     return t('worktree.delete.loss.both', '{{changes}} and {{files}} will be lost', {
       changes,

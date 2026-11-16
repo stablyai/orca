@@ -169,7 +169,7 @@ function DialogContent({
             event.target instanceof HTMLElement
               ? event.target.querySelector<HTMLElement>('[data-dialog-cancel]')
               : null
-          if (cancel) {
+          if (cancel && !cancel.matches(':disabled')) {
             event.preventDefault()
             cancel.focus()
           }

@@ -23722,7 +23722,10 @@
         "unsavedFiles_one": "{{count}} 个未保存的文件",
         "unsavedFiles_other": "{{count}} 个未保存的文件",
         "both": "{{changes}}和{{files}}将会丢失",
-        "one": "{{what}}将会丢失"
+        "one": "{{what}}将会丢失",
+        "all": "{{changes}}, {{files}} and ignored files will be lost",
+        "withIgnored": "{{what}} and ignored files will be lost",
+        "ignoredOnly": "Ignored files will be lost"
       },
       "showChanges": "显示更改",
       "unsavedSuffix": "（未保存）",
@@ -23739,7 +23742,8 @@
       "singleTitle": "要删除 {{name}} 吗？",
       "singleVerb": "删除工作区",
       "forceExplanation": "Git couldn’t delete it because it has changes. Force delete removes them anyway.",
-      "errorDetails": "Details"
+      "errorDetails": "Details",
+      "changesIncomplete": "Some changes couldn’t be fully checked."
     }
   },
   "mediaPreview": {

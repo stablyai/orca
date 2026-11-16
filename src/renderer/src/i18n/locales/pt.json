@@ -23048,7 +23048,10 @@
         "unsavedFiles_other": "{{count}} arquivos não salvos",
         "unsavedFiles_many": "{{count}} arquivos não salvos",
         "both": "{{changes}} e {{files}} serão perdidos",
-        "one": "Será perdido: {{what}}"
+        "one": "Será perdido: {{what}}",
+        "all": "{{changes}}, {{files}} and ignored files will be lost",
+        "withIgnored": "{{what}} and ignored files will be lost",
+        "ignoredOnly": "Ignored files will be lost"
       },
       "showChanges": "Mostrar alterações",
       "unsavedSuffix": "(não salvo)",
@@ -23066,7 +23069,8 @@
       "singleTitle": "Excluir {{name}}?",
       "singleVerb": "Excluir espaço de trabalho",
       "forceExplanation": "Git couldn’t delete it because it has changes. Force delete removes them anyway.",
-      "errorDetails": "Details"
+      "errorDetails": "Details",
+      "changesIncomplete": "Some changes couldn’t be fully checked."
     }
   },
   "projectBoard": {

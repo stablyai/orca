@@ -22781,7 +22781,10 @@
         "unsavedFiles_few": "Несохранённые файлы: {{count}}",
         "unsavedFiles_many": "Несохранённые файлы: {{count}}",
         "both": "Будут потеряны: {{changes}} и {{files}}",
-        "one": "Будет потеряно: {{what}}"
+        "one": "Будет потеряно: {{what}}",
+        "all": "{{changes}}, {{files}} and ignored files will be lost",
+        "withIgnored": "{{what}} and ignored files will be lost",
+        "ignoredOnly": "Ignored files will be lost"
       },
       "showChanges": "Показать изменения",
       "unsavedSuffix": "(не сохранено)",
@@ -22800,7 +22803,8 @@
       "singleTitle": "Удалить {{name}}?",
       "singleVerb": "Удалить рабочее пространство",
       "forceExplanation": "Git couldn’t delete it because it has changes. Force delete removes them anyway.",
-      "errorDetails": "Details"
+      "errorDetails": "Details",
+      "changesIncomplete": "Some changes couldn’t be fully checked."
     }
   },
   "projectBoard": {

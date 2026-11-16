@@ -1,10 +1,12 @@
 import type { AppState } from '@/store/types'
-import { findWorktreeById } from '@/store/github/refresh/worktree-refresh'
+import { findIndexedWorktreeOwner } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import { getPairedWebClientEnvironmentId } from '@/app-shell/platform/paired-web-client-host'
 import { selectEphemeralVmWorkspaceRuntime } from '@/store/slices/ephemeral-vm/ephemeral-vm-lifecycle'
 import {
-  resolveTerminalHostOwnership,
-  resolveTerminalPtyOwner
-} from '@/lib/workspace/ownership/terminal-worktree-route'
+  resolveExplicitWorktreeOperationRouteResult,
+  resolveUnstampedRecordHost
+} from '@/lib/workspace/ownership/worktree-operation-catalog-route'
 import {
   isResumableTuiAgent,
   normalizeAgentProviderSession
@@ -22,16 +24,24 @@ export function canSleepInsteadOfClosingTab(
   state: AppState,
   args: { worktreeId: string; terminalTabId: string; busyPtyIds: readonly string[] }
 ): boolean {
-  const worktree = findWorktreeById(state, args.worktreeId)
-  const host = worktree ? parseExecutionHostId(worktree.hostId ?? null) : null
-  const hostKind = worktree?.hostId ? host?.kind : 'local'
-  if (!worktree || (hostKind !== 'local' && hostKind !== 'ssh')) {
+  const worktree = findIndexedWorktreeOwner(selectWorktreesByRepo(state), args.worktreeId)
+  if (!worktree || getPairedWebClientEnvironmentId(state)) {
     return false
   }
+  const owner = resolveExplicitWorktreeOperationRouteResult(state, args.worktreeId)
   if (
-    resolveTerminalPtyOwner(state, args.worktreeId).kind !== 'non-runtime' ||
-    resolveTerminalHostOwnership(state, args.worktreeId, 'teardown').kind !== 'local-or-ssh'
+    owner.kind === 'ambiguous' ||
+    (owner.kind === 'resolved' && owner.route.runtimeEnvironmentId) ||
+    (owner.kind === 'missing' && (worktree.hostId || worktree.runtimeOwnerEnvironmentId))
   ) {
+    return false
+  }
+  const host = parseExecutionHostId(
+    owner.kind === 'resolved'
+      ? owner.route.executionHostId
+      : resolveUnstampedRecordHost(state, worktree)
+  )
+  if (host?.kind !== 'local' && host?.kind !== 'ssh') {
     return false
   }
   if (selectEphemeralVmWorkspaceRuntime(state, args.worktreeId)) {

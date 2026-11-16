@@ -2,23 +2,55 @@
 import '@testing-library/jest-dom/vitest'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { AgentSessionContinuationDialog } from './AgentSessionContinuationDialog'
+
+const observationState = vi.hoisted(() => ({ detecting: false }))
 
 vi.mock('@/hooks/useAgentDetectionTarget', () => ({
   useAgentDetectionTargetForWorktree: () => null
 }))
 vi.mock('@/components/tab-bar/use-new-tab-agent-menu-rows', () => ({
   useAgentMenuObservation: () => ({
-    detection: { detectedIds: [], detectionFailed: false },
-    model: { state: 'settled', rows: [] },
+    detection: { detectedIds: observationState.detecting ? null : [], detectionFailed: false },
+    model: { state: observationState.detecting ? 'pending' : 'settled', rows: [] },
     selectionFor: () => ({ ready: false, choice: null, cli: false })
   })
 }))
 vi.mock('@/components/agent/AgentLaunchPicker', () => ({
-  AgentLaunchPicker: () => <button type="button">Agent field</button>
+  AgentLaunchPicker: ({ disabled }: { disabled: boolean }) => (
+    <button type="button" disabled={disabled}>
+      Agent field
+    </button>
+  )
 }))
+beforeEach(() => {
+  observationState.detecting = false
+})
 afterEach(cleanup)
+
+it('moves initial focus to the Agent trigger when detection finishes', async () => {
+  observationState.detecting = true
+  const dialog = <AgentSessionContinuationDialog open request={null} onOpenChange={() => {}} />
+  const { rerender } = render(dialog)
+  await waitFor(() => expect(screen.getByRole('group', { name: 'Agent' })).toHaveFocus())
+  observationState.detecting = false
+  const ready = (
+    <AgentSessionContinuationDialog
+      open
+      request={{
+        worktreeId: 'wt-1',
+        workspacePath: '/tmp/fix-login',
+        launchSource: 'sidebar',
+        source: { sourceAgent: 'claude', capturedText: 'Current task' }
+      }}
+      onOpenChange={() => {}}
+    />
+  )
+  rerender(ready)
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Agent field' })).toHaveFocus())
+  await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+})
 
 it('focuses the Agent field and shows the cost helper only for the full transcript', async () => {
   render(

@@ -68,12 +68,16 @@ const dirtyEntries: GitStatusEntry[] = Array.from({ length: 13 }, (_, index) => 
   area: index % 3 === 0 ? 'untracked' : 'unstaged'
 }))
 
+let defaultGitStatus: typeof window.api.git.status | undefined
+
 function dialogFixture(
   options: {
     target?: Worktree
     entries?: GitStatusEntry[]
     batch?: boolean
     unsaved?: boolean
+    incomplete?: boolean
+    ignored?: boolean
     deleteState?: WorktreeDeleteState
   } = {},
   interact?: (frame: HTMLElement) => void
@@ -86,7 +90,9 @@ function dialogFixture(
     store: {
       repos: [repo],
       worktreesByRepo: { [repo.id]: all },
-      gitStatusByWorktree: Object.fromEntries(all.map((item) => [item.id, entries])),
+      gitStatusByWorktree: options.incomplete
+        ? {}
+        : Object.fromEntries(all.map((item) => [item.id, entries])),
       openFiles: options.unsaved
         ? [unsavedFile(target.id, 'src/login.ts'), unsavedFile(target.id, 'src/session.ts')]
         : [],
@@ -95,6 +101,19 @@ function dialogFixture(
       modalData: options.batch
         ? { worktreeIds: all.map((item) => item.id) }
         : { worktreeId: target.id }
+    },
+    setup: () => {
+      defaultGitStatus ??= window.api.git.status
+      window.api.git.status = options.incomplete
+        ? async () => {
+            throw new Error('Fixture: Git scan unavailable')
+          }
+        : defaultGitStatus
+      window.api.git.atRiskLocalFiles = async () => ({
+        count: options.ignored ? 2 : 0,
+        samplePaths: options.ignored ? ['.env', 'node_modules/'] : [],
+        complete: !options.incomplete
+      })
     },
     // The dialog portals to <body>; reserve room so the centered modal fits the frame.
     render: () => (
@@ -121,6 +140,34 @@ export const showChangesOpen = dialogFixture({ target: shortWorktree, unsaved: t
 export const longName = dialogFixture()
 
 export const batch = dialogFixture({ target: shortWorktree, batch: true })
+
+export const batchUnsavedIncomplete = dialogFixture({
+  target: shortWorktree,
+  batch: true,
+  entries: [],
+  unsaved: true,
+  incomplete: true
+})
+
+export const batchUncommittedIgnored = dialogFixture({
+  target: shortWorktree,
+  batch: true,
+  ignored: true
+})
+
+export const batchAllLosses = dialogFixture({
+  target: shortWorktree,
+  batch: true,
+  unsaved: true,
+  ignored: true
+})
+
+export const batchCleanIncomplete = dialogFixture({
+  target: shortWorktree,
+  batch: true,
+  entries: [],
+  incomplete: true
+})
 
 export const forceDelete = dialogFixture({
   target: shortWorktree,

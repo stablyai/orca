@@ -1,7 +1,7 @@
 import { useAgentPickerDraftScope } from '../agent/AgentLaunchSetupButton'
 import { agentsOfferedForLaunch } from '@/lib/agent-session/launch/inventory/host-chat-program'
 import { worktreeLaunchWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
 import {
@@ -153,6 +153,13 @@ export function AgentSessionContinuationDialog({
   const controlsDisabled = preparing || detecting || starting
   const hasFullContext = request ? hasFullAgentSessionContext(request.source) : false
 
+  useLayoutEffect(() => {
+    const field = agentFieldRef.current
+    if (open && !controlsDisabled && document.activeElement === field) {
+      field?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus()
+    }
+  }, [open, controlsDisabled, destinationModel.state])
+
   useEffect(() => {
     const abort = open && request ? new AbortController() : null
     abortRef.current = abort
@@ -290,7 +297,7 @@ export function AgentSessionContinuationDialog({
         </DialogHeader>
 
         <div
-          className="grid min-w-0 gap-1.5"
+          className="grid min-w-0 gap-1.5 outline-none"
           ref={agentFieldRef}
           tabIndex={-1}
           role="group"

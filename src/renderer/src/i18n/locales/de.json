@@ -22070,7 +22070,10 @@
         "unsavedFiles_one": "{{count}} nicht gespeicherte Datei",
         "unsavedFiles_other": "{{count}} nicht gespeicherte Dateien",
         "both": "{{changes}} und {{files}} gehen verloren",
-        "one": "{{what}} gehen verloren"
+        "one": "{{what}} gehen verloren",
+        "all": "{{changes}}, {{files}} and ignored files will be lost",
+        "withIgnored": "{{what}} and ignored files will be lost",
+        "ignoredOnly": "Ignored files will be lost"
       },
       "showChanges": "Änderungen anzeigen",
       "unsavedSuffix": "(nicht gespeichert)",
@@ -22087,7 +22090,8 @@
       "singleTitle": "{{name}} löschen?",
       "singleVerb": "Arbeitsbereich löschen",
       "forceExplanation": "Git couldn’t delete it because it has changes. Force delete removes them anyway.",
-      "errorDetails": "Details"
+      "errorDetails": "Details",
+      "changesIncomplete": "Some changes couldn’t be fully checked."
     }
   },
   "projectBoard": {

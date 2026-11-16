@@ -24217,7 +24217,10 @@
         "unsavedFiles_one": "{{count}} unsaved file",
         "unsavedFiles_other": "{{count}} unsaved files",
         "both": "{{changes}} and {{files}} will be lost",
-        "one": "{{what}} will be lost"
+        "one": "{{what}} will be lost",
+        "all": "{{changes}}, {{files}} and ignored files will be lost",
+        "withIgnored": "{{what}} and ignored files will be lost",
+        "ignoredOnly": "Ignored files will be lost"
       },
       "showChanges": "Show changes",
       "unsavedSuffix": "(unsaved)",
@@ -24234,7 +24237,8 @@
       "singleTitle": "Delete {{name}}?",
       "singleVerb": "Delete workspace",
       "forceExplanation": "Git couldn’t delete it because it has changes. Force delete removes them anyway.",
-      "errorDetails": "Details"
+      "errorDetails": "Details",
+      "changesIncomplete": "Some changes couldn’t be fully checked."
     }
   },
   "projectBoard": {

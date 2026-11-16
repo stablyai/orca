@@ -22210,7 +22210,10 @@
         "unsavedFiles_one": "{{count}} kaydedilmemiş dosya",
         "unsavedFiles_other": "{{count}} kaydedilmemiş dosya",
         "both": "{{changes}} ve {{files}} kaybolacak",
-        "one": "{{what}} kaybolacak"
+        "one": "{{what}} kaybolacak",
+        "all": "{{changes}}, {{files}} and ignored files will be lost",
+        "withIgnored": "{{what}} and ignored files will be lost",
+        "ignoredOnly": "Ignored files will be lost"
       },
       "showChanges": "Değişiklikleri göster",
       "unsavedSuffix": "(kaydedilmedi)",
@@ -22227,7 +22230,8 @@
       "singleTitle": "{{name}} silinsin mi?",
       "singleVerb": "Çalışma alanını sil",
       "forceExplanation": "Git couldn’t delete it because it has changes. Force delete removes them anyway.",
-      "errorDetails": "Details"
+      "errorDetails": "Details",
+      "changesIncomplete": "Some changes couldn’t be fully checked."
     }
   },
   "projectBoard": {

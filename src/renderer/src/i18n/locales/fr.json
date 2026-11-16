@@ -22563,7 +22563,10 @@
         "unsavedFiles_other": "{{count}} fichiers non enregistrés",
         "unsavedFiles_many": "{{count}} fichiers non enregistrés",
         "both": "{{changes}} et {{files}} seront perdus",
-        "one": "Perdu : {{what}}"
+        "one": "Perdu : {{what}}",
+        "all": "{{changes}}, {{files}} and ignored files will be lost",
+        "withIgnored": "{{what}} and ignored files will be lost",
+        "ignoredOnly": "Ignored files will be lost"
       },
       "showChanges": "Afficher les modifications",
       "unsavedSuffix": "(non enregistré)",
@@ -22581,7 +22584,8 @@
       "singleTitle": "Supprimer {{name}} ?",
       "singleVerb": "Supprimer l'espace de travail",
       "forceExplanation": "Git couldn’t delete it because it has changes. Force delete removes them anyway.",
-      "errorDetails": "Details"
+      "errorDetails": "Details",
+      "changesIncomplete": "Some changes couldn’t be fully checked."
     }
   },
   "mediaPreview": {
