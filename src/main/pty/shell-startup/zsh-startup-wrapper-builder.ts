@@ -1,4 +1,4 @@
-import { ORCA_CLI_POSIX_PATH_RESTORE } from '../../../shared/orca-cli-shell-path'
+import { ORCA_CLI_POSIX_PATH_RESTORE } from '../../../shared/shell/launch/orca-cli-shell-path'
 import { MANAGED_DATA_ACCOUNT_POSIX_RESTORE } from '../../../shared/shell/launch/agents/managed-data-account-shell'
 /** Restore ZDOTDIR before user startup; define functions first so .zshenv emulation cannot change their parsing. */
 import { getPosixOmpShellWrapper } from './omp-shell-wrapper'

@@ -23,6 +23,7 @@ import {
   withCopiedClaudeLink
 } from './claude-sign-in-link-menu'
 import { AccountRenameButton, renameTargetFor } from '../account-rename-button'
+import { getObservedAccountPlan } from '@/lib/provider-accounts/observed-account-plans'
 
 export function renderClaudeAccountRow(
   account: ClaudeRateLimitAccountsState['accounts'][number],
@@ -35,6 +36,7 @@ export function renderClaudeAccountRow(
     accountRuntime,
     accountRuntimeUnavailable,
     accountVisibilityOptions,
+    claudeAccountPlans,
     claudeAccounts,
     claudeAction,
     isRemoteAccountScope,
@@ -53,6 +55,7 @@ export function renderClaudeAccountRow(
   const isBusy = claudeAction !== 'idle' || accountRuntimeUnavailable
   const accountRuntimeView = getProviderAccountRuntime(account)
   const accountLabel = getManagedAccountPrimaryLabel(account)
+  const plan = getObservedAccountPlan(claudeAccountPlans, account.id, accountRuntimeView)
   // A named row keeps its sign-in email visible, most of all when it needs signing in.
   const namedEmail = account.displayName ? account.email : null
   const reauthenticate = (copyLink: boolean): Promise<void> =>
@@ -121,6 +124,7 @@ export function renderClaudeAccountRow(
                   ]
                 : [
                     account.organizationName,
+                    plan,
                     namedEmail,
                     formatAccountTimestamp(account.lastAuthenticatedAt, intlLocale)
                   ]

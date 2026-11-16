@@ -18,7 +18,8 @@ const child = spawn(
     stdio: 'inherit',
     env: {
       ...withRolldownThreadLimit(process.env),
-      NODE_OPTIONS: nodeOptions
+      NODE_OPTIONS: nodeOptions,
+      VITE_CONFIG_NATIVE_IGNORE_WARNING: 'true'
     }
   }
 )

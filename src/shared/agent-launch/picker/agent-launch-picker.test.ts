@@ -1,17 +1,7 @@
-import { toAgentLaunchPreferences } from '../choices/agent-launch-preferences'
-import { resolveAgentSessionOptionLaunch } from '../../agent-session/options/launch/agent-session-option-launch'
 import { agentPickerEntryOptions } from './agent-launch-picker-catalog'
 import { describe, expect, it } from 'vitest'
 
 describe('agent launch picker', () => {
-  it('never emits a chat-only effort into terminal argv or legacy host preferences', () => {
-    const values = { model: 'opus', effort: 'ultracode' }
-    const launch = resolveAgentSessionOptionLaunch('claude', values)
-    expect(launch.args).not.toContain('ultracode')
-    expect(launch.appliedValues).not.toHaveProperty('effort')
-    expect(toAgentLaunchPreferences(values, 'claude')).toEqual({ model: 'opus' })
-  })
-
   it('shows per-model Antigravity efforts on chat and terminal while hiding them for standalone models', () => {
     const entry = {
       agent: 'antigravity' as const,

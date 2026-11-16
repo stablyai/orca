@@ -1,6 +1,6 @@
 import type { Repo } from '../../shared/repository/repo-types'
-import type { OrcaHooks } from '../../shared/orca-yaml-hook-types'
-import { parseOrcaYaml } from '../../shared/orca-yaml'
+import type { OrcaHooks } from '../../shared/workspace-setup/orca-yaml-hook-types'
+import { parseOrcaYaml } from '../../shared/workspace-setup/orca-yaml'
 import { scopeHooksToRepoKind } from '../../shared/folder-workspace-hooks'
 import { isFolderRepo } from '../../shared/repository/repo-kind'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-refs/base-ref'

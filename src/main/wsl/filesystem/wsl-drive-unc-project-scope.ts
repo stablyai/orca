@@ -8,7 +8,7 @@ import { resolveFolderWorkspaceHost } from '../../../shared/folder-workspaces/fo
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../shared/project/groups/project-group-types'
 import type { Repo } from '../../../shared/repository/repo-types'
-import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
 import { rewriteWorktreeIdPath } from '../../../shared/worktree/id'
 import { wslUncDrivePathToWindows } from '../../../shared/file-access/wsl-paths'
 

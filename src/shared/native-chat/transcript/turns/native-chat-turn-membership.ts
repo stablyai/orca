@@ -16,12 +16,14 @@ import type {
 import { readAgentJournalTurn } from '../../../agent-session/lifecycle/records/agent-session-turn-record'
 import {
   nativeChatJournalOrderTurnKeys,
+  nativeChatPositionalTurnKeys,
   nativeChatRowTurnKeys,
   nativeChatTurnDrawOrder,
   nativeChatUserRowOpensTurn,
-  type NativeChatOpensTurn
+  type NativeChatOpensTurn,
+  type NativeChatTurnMember
 } from './native-chat-turn-grouping'
-import type { NativeChatMessage, NativeChatRole } from '../../native-chat-types'
+import type { NativeChatRole } from '../../native-chat-types'
 import { dispatchWasWithdrawn } from '../../../agent-session/requests/structured-agent-session-dispatch-rejection'
 import { inSendOrder } from '../../native-chat-send-order'
 import { runningStructuredAgentSessionTurnScope } from '../../../agent-session/view/structured-agent-session-live-turn'
@@ -235,8 +237,6 @@ export type NativeChatTurnMembership = {
   unresolvedRowIds?: ReadonlySet<string>
 }
 
-type NativeChatTurnMember = Pick<NativeChatMessage, 'id' | 'role' | 'unsent' | 'journalPosition'>
-
 /** Anchoring/unscoped user entries key themselves; steers take their owning turn. Legacy hosts use journal-order keys.
  * opensTurn narrows anchors in interleaved streams; unsent messages belong to no turn and never become live. */
 export function nativeChatTurnMembership(
@@ -246,10 +246,10 @@ export function nativeChatTurnMembership(
 ): NativeChatTurnMembership {
   const opens: NativeChatOpensTurn = (message) => !isUnsent(message) && opensTurn(message)
   if (!journal) {
-    const turnKeys = withoutUnsent(messages, nativeChatRowTurnKeys(messages, null, opens))
+    const turnKeys = withoutUnsent(messages, nativeChatPositionalTurnKeys(messages, opens))
     return {
       turnKeys,
-      liveTurnKey: newestNativeChatUserTurnKey(messages, turnKeys),
+      liveTurnKey: turnKeys.findLast((turnKey) => turnKey !== undefined),
       drawOrder: null
     }
   }

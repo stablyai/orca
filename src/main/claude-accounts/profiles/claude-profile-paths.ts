@@ -5,7 +5,7 @@ import {
   CLAUDE_INJECTED_CONFIG_DIR_ENV,
   CLAUDE_USER_CONFIG_DIR_ENV
 } from '../../../shared/agent-accounts/claude/claude-profile-routing'
-import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesystem-absence'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { writeFileAtomically } from '../../filesystem/atomic-file-publication'
 import { ClaudeProfileSurfaceError } from './claude-profile-report'

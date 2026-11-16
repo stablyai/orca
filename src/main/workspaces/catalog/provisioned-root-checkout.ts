@@ -9,7 +9,7 @@ import type {
 } from '../../../shared/worktree/lineage-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import type { AutomationWorkspaceProvenance, GitWorktreeInfo } from '../../../shared/worktree/types'
-import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
 import { getProjectHostSetupWorktreeMeta } from '../../../shared/project/host-setup/project-host-setup-lookup'
 import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import { getWorktreeCreationLayout } from '../../ipc/worktree-logic'
