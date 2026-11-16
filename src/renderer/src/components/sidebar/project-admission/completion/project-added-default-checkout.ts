@@ -7,7 +7,10 @@ import type { DetectedWorktreeListResult, Worktree } from '../../../../../../sha
 import { relativePathInsideRoot } from '../../../../../../shared/file-access/cross-platform-path'
 import { markOnboardingProjectAdded } from '@/components/onboarding/onboarding-project-checklist'
 import { finalizeImportedRepoAfterSkip } from './add-repo-skip-finalization'
-import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
+import {
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host/execution-host'
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo

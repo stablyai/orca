@@ -6414,7 +6414,8 @@
           "runtimeHostDisconnectedNamed": "{{hostName}} が切断されました",
           "runtimeHostProject": "Orca サーバー上のプロジェクト",
           "runtimeHostProjectNamed": "{{hostName}} 上のプロジェクト",
-          "ef18787206": "削除待ち"
+          "ef18787206": "削除待ち",
+          "notificationsMuted": "通知はミュート中"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agent",
@@ -6509,7 +6510,9 @@
           "copyPathOption": "パス",
           "copyNameOption": "ワークツリー名",
           "lineageSubmenu": "親と子",
-          "projectGroupSubmenu": "プロジェクトグループ"
+          "projectGroupSubmenu": "プロジェクトグループ",
+          "muteNotifications": "通知をミュート",
+          "unmuteNotifications": "通知のミュートを解除"
         },
         "WorktreeList": {
           "d880ea0744": "グループを作成し、このプロジェクトをそのグループに移動します。",
@@ -20993,7 +20996,6 @@
           "reopen": "再度開く",
           "reopenFailed": "一部のファイルを再度開けませんでした。ワークスペースを開いて、もう一度「再度開く」を試してください。"
         },
-        "ignoredFilesLost": "無視されたファイルは失われます: {{names}}",
         "ignoredFilesUnchecked": "無視されたファイルを完全には確認できませんでした"
       },
       "atRiskLocalFiles": {
@@ -22982,7 +22984,7 @@
         "restartOne": "セッションを再起動",
         "keep": "そのままにする",
         "session": "Claude セッション",
-        "settingDescription": "再起動すると、ターミナル内の各会話が新しいアカウントで継続されます。",
+        "settingDescription": "再起動すると、ターミナル内の各会話が新しいアカウントで継続されます。処理中のセッションは現在の作業を中断します。",
         "settingTitle": "ターミナルで Claude を実行中にアカウントを切り替える場合",
         "restartingOne": "{{account}} で Claude セッションを 1 件再起動中",
         "restartingOther": "{{account}} で Claude セッションを {{count}} 件再起動中",
@@ -23002,11 +23004,13 @@
         "uncheckedOne": "1 つのターミナルで Claude を確認できませんでした。そこで Claude が実行中の場合、再起動するまで {{previous}} のままになります。",
         "uncheckedOther": "{{count}} 個のターミナルで Claude を確認できませんでした。そこで実行中の Claude は、再起動するまで {{previous}} のままになります。",
         "restartCount_other": "{{count}} 件のセッションを再起動",
-        "reviewBody_other": "ほかの {{count}} 件の Claude セッションは {{next}} に移動されませんでした。",
-        "body_other": "{{count}} 件の Claude セッションがまだ {{previous}} で実行中です。再起動すると、各会話が {{next}} で続行されます。処理中のセッションは待機状態になってから再起動します。",
+        "reviewBody_other": "{{count}} 件の Claude セッションは {{next}} に移動されませんでした。",
+        "body_other": "{{count}} 件の Claude セッションがまだ {{previous}} で実行中です。再起動すると、各会話が {{next}} で続行されます。処理中のセッションは現在の作業を中断してすぐに再起動します。",
         "reasonSharedSession": "別のペインでも開いています",
         "sharedOne": "別のペインで同じ会話が開いているため、1 件の Claude セッションは {{previous}} のままです。再起動すると別のペインの会話が再び開く可能性があります。",
-        "sharedOther": "別のペインで同じ会話が開いているため、{{count}} 件の Claude セッションは {{previous}} のままです。再起動すると別のペインの会話が再び開く可能性があります。"
+        "sharedOther": "別のペインで同じ会話が開いているため、{{count}} 件の Claude セッションは {{previous}} のままです。再起動すると別のペインの会話が再び開く可能性があります。",
+        "strandedOne": "1 件の Claude セッションがまだ {{previous}} で実行中の可能性があります。切り替えるには手動で再起動してください。",
+        "strandedOther": "{{count}} 件の Claude セッションがまだ {{previous}} で実行中の可能性があります。切り替えるには手動で再起動してください。"
       },
       "oauthUsage": {
         "title": "Claude の使用量の定期取得",
@@ -23597,7 +23601,9 @@
       "chooseTransition": "ステータス変更を選択:",
       "cancel": "キャンセル",
       "noTransition": "{{key}} では {{column}} へのステータス変更を利用できません。",
-      "queryTooLong": "Jira クエリが長すぎます。クエリを短くするか、フィルターをクリアしてください。"
+      "queryTooLong": "Jira クエリが長すぎます。クエリを短くするか、フィルターをクリアしてください。",
+      "reorderColumn": "{{column}} を並び替え",
+      "reorderColumnHint": "このレーンの Issue: {{count}} 件。左右の矢印キーで移動できます。"
     },
     "favourites": {
       "activeLabel": "Jira のお気に入り: {{name}}",
@@ -23683,21 +23689,13 @@
     "language": {
       "back": "言語",
       "requestPrompt": "Orcaに対応してほしい言語は何ですか？",
-      "requestSuccess": "言語のリクエストを記録しました。設定を続けられます。",
       "requestError": "リクエストを記録できませんでした。再試行してください。",
       "retry": "再試行",
       "requestAction": "言語をリクエスト",
       "title": "表示言語",
-      "device": "システム言語：{{language}}",
-      "unsupported": "システム言語：{{language}}。この言語はまだサポートされていません。",
-      "unknown": "システム言語を検出できませんでした。以下から選択してください。",
-      "loadError": "この言語を読み込めませんでした。再試行してください。",
-      "saveError": "言語設定を保存できませんでした。再試行してください。",
-      "other": "その他の言語…",
       "settingsError": "設定を読み込めませんでした。",
       "loadingSettings": "設定を読み込み中…",
-      "loading": "言語を読み込み中…",
-      "saving": "言語を保存中…"
+      "loading": "言語を読み込み中…"
     }
   },
   "resourceManager": {

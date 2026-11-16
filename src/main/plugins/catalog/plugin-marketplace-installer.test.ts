@@ -11,6 +11,7 @@ import type { PluginMarketplace } from '../../../shared/plugins/catalog/plugin-m
 import { readPluginLockfile, removeInstalledPlugin } from '../installation/plugin-install'
 import type { PluginImageCache } from '../media/plugin-image-cache'
 import { PluginMarketplaceInstaller } from './plugin-marketplace-installer'
+import { refreshInstalledPluginCatalog } from './plugin-marketplace-shared-refresh'
 import { PluginMarketplaceService } from './plugin-marketplace-service'
 
 const revokeConsent = vi.fn(async (_pluginKey: string) => undefined)
@@ -261,6 +262,45 @@ describe('PluginMarketplaceInstaller', () => {
     await expect(installer.previewInstalledUpdate('community.notes')).resolves.toMatchObject({
       marketplaceSourceId: sourceId
     })
+  })
+
+  it('re-fetches the catalog of an installed plugin before its update preview, sharing one fetch', async () => {
+    const { marketplace: service, installer, sourceId } = await setup()
+    await installer.install(await installer.preview(sourceId, 'community.notes'))
+    git.marketplaceCommit = 'e'.repeat(40)
+
+    // The cached catalog still names the old commit until something refreshes it.
+    await expect(installer.previewInstalledUpdate('community.notes')).resolves.toMatchObject({
+      marketplaceCommit: 'f'.repeat(40)
+    })
+    const refresh = vi.spyOn(service, 'refreshSource')
+    const services = { installer, marketplace: service }
+    const preview = async () => {
+      await refreshInstalledPluginCatalog(services, 'community.notes')
+      return installer.previewInstalledUpdate('community.notes')
+    }
+    const [first, second] = await Promise.all([preview(), preview()])
+    expect(first.marketplaceCommit).toBe('e'.repeat(40))
+    expect(second.marketplaceCommit).toBe('e'.repeat(40))
+    expect(refresh).toHaveBeenCalledOnce()
+    await expect(installer.install(first, { requireInstalled: true })).resolves.toMatchObject({
+      ok: true
+    })
+  })
+
+  it('previews from the cached catalog when the refresh before an update preview fails', async () => {
+    const { marketplace: service, installer, sourceId } = await setup()
+    await installer.install(await installer.preview(sourceId, 'community.notes'))
+    git.marketplaceCommit = 'e'.repeat(40)
+    vi.spyOn(service, 'refreshSource').mockRejectedValueOnce(new Error('offline'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    await refreshInstalledPluginCatalog({ installer, marketplace: service }, 'community.notes')
+    await expect(installer.previewInstalledUpdate('community.notes')).resolves.toMatchObject({
+      marketplaceCommit: 'f'.repeat(40)
+    })
+    expect(warn).toHaveBeenCalled()
+    warn.mockRestore()
   })
 
   it('lets a Remove that starts during an automatic update win', async () => {

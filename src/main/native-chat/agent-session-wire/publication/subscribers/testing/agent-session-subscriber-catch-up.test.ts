@@ -97,6 +97,7 @@ async function openChat(name: string, held: Set<string>) {
       )
   })
   const historyReads = vi.spyOn(journal, 'history')
+  const ends = vi.fn<(cause: unknown) => void>()
   const queueReads = vi.spyOn(journal.reads, 'queue')
   /** Checked against the pane after every delivered event. */
   const invariants: (() => void)[] = []
@@ -113,6 +114,7 @@ async function openChat(name: string, held: Set<string>) {
       fence: 1,
       ...(cursor ? { cursor } : {}),
       projectJournalEvent: queuedImageReaderEvent,
+      end: ends,
       emit: (event) => {
         events.push(event)
         eventsOf.set(id, [...(eventsOf.get(id) ?? []), event])
@@ -186,6 +188,7 @@ async function openChat(name: string, held: Set<string>) {
     events,
     eventsOf,
     historyReads,
+    ends,
     queueReads,
     invariants,
     laneDrained,
@@ -223,6 +226,46 @@ it('a send accepted while its delivery is in flight ends accepted', async () => 
 
   const states = chat.delivered(before)
   expect(states.slice(states.indexOf('accepted'))).not.toContain('pending')
+})
+
+it('a catch-up read that fails ends the stream so the client resubscribes', async () => {
+  const chat = await openChat('read-failure', new Set())
+  chat.open()
+  await vi.waitFor(() => expect(chat.events.some((event) => event.type === 'snapshot')).toBe(true))
+  await chat.submit()
+  const failure = new Error('disk I/O error')
+  chat.historyReads.mockRejectedValueOnce(failure)
+  chat.subscribers.publish(SESSION, chat.journal)
+
+  await vi.waitFor(() => expect(chat.ends).toHaveBeenCalledWith(failure))
+  await chat.laneDrained()
+  expect(chat.ends).toHaveBeenCalledTimes(1)
+  expect(chat.subscribers.subscriberCountForTests(SESSION)).toBe(0)
+})
+
+it('a failed delivery to a replaced subscriber leaves its same-id successor open', async () => {
+  const chat = await openChat('same-id-reopen', new Set())
+  chat.open()
+  await vi.waitFor(() => expect(chat.events.some((event) => event.type === 'snapshot')).toBe(true))
+  await chat.submit()
+  const read = Promise.withResolvers<never>()
+  chat.historyReads.mockReturnValueOnce(read.promise)
+  const readsBefore = chat.historyReads.mock.calls.length
+  chat.subscribers.publish(SESSION, chat.journal)
+  await vi.waitFor(() => expect(chat.historyReads.mock.calls.length).toBeGreaterThan(readsBefore))
+
+  const snapshotsBefore = chat.events.filter((event) => event.type === 'snapshot').length
+  chat.open()
+  read.reject(new Error('disk I/O error'))
+  await vi.waitFor(() =>
+    expect(chat.events.filter((event) => event.type === 'snapshot').length).toBeGreaterThan(
+      snapshotsBefore
+    )
+  )
+  await chat.laneDrained()
+
+  expect(chat.ends).not.toHaveBeenCalled()
+  expect(chat.subscribers.subscriberCountForTests(SESSION)).toBe(1)
 })
 
 it('a commit readable before main adopts it is delivered only after adoption, with its work', async () => {
@@ -437,4 +480,23 @@ it('a send restated off a snapshot page survives a follow-up abandoned by a newe
   await chat.laneDrained()
 
   expect(chat.sendState('send')).toBe('pending')
+})
+
+it('a first snapshot abandoned mid-read is still sent before any other frame', async () => {
+  const held = new Set(['send'])
+  const chat = await openChat('owed-snapshot', held)
+  await chat.submit()
+  // The opening snapshot's authority changes during its read, so that capture is abandoned.
+  chat.historyReads.mockImplementationOnce(async (...args) => {
+    const read = chat.journal.history(...args)
+    held.clear()
+    return read
+  })
+  chat.open()
+  await chat.laneDrained()
+  chat.subscribers.publish(SESSION, chat.journal)
+  await vi.waitFor(() => expect(chat.events.length).toBeGreaterThan(0))
+
+  expect(chat.events[0]).toMatchObject({ type: 'snapshot', sessionId: SESSION, fence: 1 })
+  expect(chat.sendState('send')).toBe('unknown')
 })

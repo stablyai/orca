@@ -3,7 +3,7 @@ import { useCallback, useMemo, useSyncExternalStore } from 'react'
 import { useStore } from 'zustand'
 import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
 import type { AgentStatusProjection } from '@/store/slices/agent-status/agent-status-projection'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   createWorktreeAgentRowsSelector,
   EMPTY_AGENT_ROWS,

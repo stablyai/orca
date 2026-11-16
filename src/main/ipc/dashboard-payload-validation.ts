@@ -4,7 +4,7 @@ import {
   type DashboardSnapshot
 } from '../../shared/agent-status/presentation/dashboard-snapshot'
 import { BoundedMap } from '../../shared/collections/bounded-map'
-import { normalizeExecutionHostId } from '../../shared/execution-host'
+import { normalizeExecutionHostId } from '../../shared/execution-host/execution-host'
 import { sanitizeRepoIcon } from '../../shared/repository/appearance/repo-icon'
 import {
   AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH,

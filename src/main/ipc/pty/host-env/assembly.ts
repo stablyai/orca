@@ -18,7 +18,7 @@ import { stripLegacyTerminalShimEnv } from '../../../pty/shell-startup/legacy-te
 import { mergePersistedWindowsPath } from '../../../pty/environment/windows-environment-path'
 import { resolveCodexShellLaunchPreflightCommand } from '../../../pty/shell-startup/codex-shell-launch-preflight'
 import { scheduleCodexHookReconcile } from '../../../codex/hooks/reconciliation/codex-hook-reconcile'
-import { buildConfiguredProxyEnv } from '../../../../shared/network-proxy'
+import { buildConfiguredProxyEnv } from '../../../../shared/network/network-proxy'
 import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import type { BuildPtyHostEnvOptions } from './types'
 import { stripInheritedOrcaCodexHomeOverride } from './codex-home'

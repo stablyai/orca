@@ -5,7 +5,7 @@ import type { Translate } from '@/i18n/use-translate'
 import type { AppState } from '@/store/types'
 import type { WorktreePurgeTarget } from '@/store/slices/worktrees/teardown/worktree-purge-target'
 import { collectRemovalUnsavedFiles } from '@/components/editor/save/flush/removal-unsaved-editor-files'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { getKnownRepoWorktreeIds } from '@/store/repos/repo-removal'
 
 export function discardedUnsavedFilesLabel(count: number, t: Translate = translate): string {

@@ -1,7 +1,8 @@
 import { normalizeGitGraphFilters } from '../../../shared/git/history/git-graph-filters'
 import { normalizeExplorerDisplayRootByWorktree } from '../../../shared/file-listing/file-explorer-display-root'
-import type { PersistedState } from '../../../shared/persisted-state-types'
-import { getDefaultUIState, normalizeAgentActivityDisplayMode } from '../../../shared/constants'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
+import { getDefaultUIState } from '../../../shared/orca-profiles/constants'
+import { normalizeAgentActivityDisplayMode } from '../../../shared/agent-status/presentation/agent-activity-display-mode'
 import { normalizeWorktreeCardProperties } from '../../../shared/worktree/row-display/card-properties'
 import {
   normalizeWorkspaceStatuses,
@@ -17,7 +18,7 @@ import {
   normalizeExecutionHostScope,
   normalizeVisibleExecutionHostIds,
   normalizeExecutionHostOrder
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import { workspaceHostScopeForVisibleHosts } from '../../../shared/workspace-view/workspace-host-visibility'
 import { normalizeManualRepoOrder } from '../../../shared/repository/manual-repo-order'
 import { normalizeBrowserPageZoomLevel } from '../../../shared/browser/site-settings/browser-page-zoom'
@@ -33,6 +34,7 @@ import {
 import {
   normalizeGroupBy,
   normalizeProjectOrderBy,
+  normalizeNotificationsMutedByWorktree,
   normalizeRightSidebarExplorerView,
   normalizeRightSidebarTab,
   normalizeShowDotfilesByWorktree,
@@ -200,6 +202,10 @@ export function updatePersistedUI(
       sanitizedUpdates.showDotfilesByWorktree !== undefined
         ? normalizeShowDotfilesByWorktree(sanitizedUpdates.showDotfilesByWorktree)
         : normalizeShowDotfilesByWorktree(operations.state.ui?.showDotfilesByWorktree),
+    notificationsMutedByWorktree:
+      sanitizedUpdates.notificationsMutedByWorktree !== undefined
+        ? normalizeNotificationsMutedByWorktree(sanitizedUpdates.notificationsMutedByWorktree)
+        : normalizeNotificationsMutedByWorktree(operations.state.ui?.notificationsMutedByWorktree),
     // Union dismissals so stale clients cannot revive one-time tips.
     featureTipsSeenIds:
       sanitizedUpdates.featureTipsSeenIds !== undefined

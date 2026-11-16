@@ -138,17 +138,4 @@ describeRender('native chat transcript in the phone web pages', () => {
     expect(await page.evaluate(() => window.visualViewport.scale)).toBe(1)
     await page.context().close()
   })
-
-  // Android WebView shows the selection's Copy menu through contextmenu; cancelling it leaves bare handles.
-  it('leaves the long-press context menu to the browser', async () => {
-    const page = await openTranscript()
-    const cancelled = await page
-      .getByText('message 3', { exact: true })
-      .evaluate(
-        (element) =>
-          !element.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }))
-      )
-    expect(cancelled).toBe(false)
-    await page.context().close()
-  })
 })

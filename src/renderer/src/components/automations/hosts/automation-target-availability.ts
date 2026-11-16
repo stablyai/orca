@@ -3,7 +3,7 @@ import {
   type AutomationCapturedOwner
 } from './automation-captured-owner'
 import type { Automation } from '../../../../../shared/automations/automation-definition'
-import { parseExecutionHostId } from '../../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import {
   setupHostMatchesRunContext,
   repoHostMatchesRunContext

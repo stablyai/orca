@@ -9,6 +9,7 @@ import { AlertCircle, AlertTriangle, Info } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useSyncExternalStore } from 'react'
 import { NativeChatForkedFromRow } from './NativeChatForkedFromRow'
+import { NativeChatAutoReviewDenialRow } from './NativeChatAutoReviewDenialRow'
 import { NativeChatPullRequestEventLine } from './NativeChatPullRequestEventLine'
 import { PULL_REQUEST_EVENT_PRESENTATION } from '../../../../../../shared/native-chat/native-chat-pull-request-event'
 import { NativeChatMarkdown } from '../../markdown/NativeChatMarkdown'
@@ -31,6 +32,7 @@ import { useNativeChatOrcaStopView } from './native-chat-orca-stop-context'
 import { NativeChatInterruptedContinueButton } from '../../usage/NativeChatInterruptedContinue'
 import { nativeChatOrcaStopRowText } from '../../../../../../shared/native-chat/native-chat-orca-stop-words'
 import { sayNativeChatOrcaStopTranslated } from './native-chat-orca-stop-words-text'
+import { agentSessionRestartNoteText } from './agent-session-restart-note-text'
 import {
   NativeChatDetailsDisclosure,
   ProviderFrameRow
@@ -160,6 +162,15 @@ export function NativeChatNoticeRow({
       </Card>
     )
   }
+  if (look.kind === 'auto-review-denied') {
+    return (
+      <NativeChatAutoReviewDenialRow
+        denial={look.denial}
+        agent={agentName ?? look.agent}
+        itemId={messageId}
+      />
+    )
+  }
   if (look.kind === 'settled-permission') {
     const agent = agentName ?? look.agent
     const summary =
@@ -269,7 +280,7 @@ export function NativeChatNoticeRow({
               { agentName, wslDistro },
               sayAgentSessionFailureTranslated
             )
-          : agentSessionGoalControlWords(block.text)
+          : (agentSessionRestartNoteText(block.text, t) ?? agentSessionGoalControlWords(block.text))
   const failureDetail = agentSessionFailureDetailText(failure)
   const detail = failureDetail?.trim() !== text.trim() ? failureDetail : undefined
   const tone = named ? 'notice' : look.kind === 'line' ? look.tone : null

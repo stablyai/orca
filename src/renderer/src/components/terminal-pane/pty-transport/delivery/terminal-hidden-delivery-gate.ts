@@ -1,5 +1,5 @@
 /** Select hidden-delivery authority once at pane/watcher creation; mode-2031 byte-scan versus fact observers cannot change per chunk. Requires main side-effect authority and the gate switch. */
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 
 // Cache the blocking read once on pre-hydration startup, never per pane bind.
 let persistedGateFlagCache: boolean | null | undefined

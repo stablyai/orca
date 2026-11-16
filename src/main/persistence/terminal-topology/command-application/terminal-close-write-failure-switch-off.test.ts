@@ -6,7 +6,9 @@ import {
 } from '../../loading-store/profile-writing/profile-state-delayed-authority-fixture'
 
 // Preserve switch-off behavior regardless of the active build switch.
-vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
+vi.mock('../../../../shared/workspace-layout/layout-owner-switch', () => ({
+  ORCA_LAYOUT_OWNER_IS_MAIN: false
+}))
 vi.mock('../../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),

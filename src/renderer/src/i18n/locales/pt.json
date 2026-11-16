@@ -22891,7 +22891,7 @@
         "busy": "Trabalhando",
         "idle": "Ociosa",
         "settingTitle": "Ao trocar de conta com o Claude em execução",
-        "settingDescription": "Reiniciar continua cada conversa em execução na nova conta.",
+        "settingDescription": "Reiniciar continua cada conversa em execução na nova conta. As sessões ocupadas interrompem o que estão fazendo.",
         "keyword": {
           "restart": "reiniciar",
           "running": "em execução"
@@ -22917,15 +22917,17 @@
         "restartCount_one": "Reiniciar {{count}} sessão",
         "restartCount_other": "Reiniciar {{count}} sessões",
         "restartCount_many": "Reiniciar {{count}} sessões",
-        "reviewBody_one": "{{count}} outra sessão do Claude não foi movida para {{next}}.",
-        "reviewBody_other": "{{count}} outras sessões do Claude não foram movidas para {{next}}.",
-        "reviewBody_many": "{{count}} outras sessões do Claude não foram movidas para {{next}}.",
-        "body_one": "{{count}} sessão do Claude ainda está em execução em {{previous}}. Ao reiniciar, a conversa continua em {{next}}. As sessões ocupadas aguardam ficar ociosas antes de reiniciar.",
-        "body_other": "{{count}} sessões do Claude ainda estão em execução em {{previous}}. Ao reiniciar, cada conversa continua em {{next}}. As sessões ocupadas aguardam ficar ociosas antes de reiniciar.",
-        "body_many": "{{count}} sessões do Claude ainda estão em execução em {{previous}}. Ao reiniciar, cada conversa continua em {{next}}. As sessões ocupadas aguardam ficar ociosas antes de reiniciar.",
+        "reviewBody_one": "{{count}} sessão do Claude não foi movida para {{next}}.",
+        "reviewBody_other": "{{count}} sessões do Claude não foram movidas para {{next}}.",
+        "reviewBody_many": "{{count}} sessões do Claude não foram movidas para {{next}}.",
+        "body_one": "{{count}} sessão do Claude ainda está em execução em {{previous}}. Ao reiniciar, a conversa continua em {{next}}. As sessões ocupadas interrompem o que estão fazendo e reiniciam agora.",
+        "body_other": "{{count}} sessões do Claude ainda estão em execução em {{previous}}. Ao reiniciar, cada conversa continua em {{next}}. As sessões ocupadas interrompem o que estão fazendo e reiniciam agora.",
+        "body_many": "{{count}} sessões do Claude ainda estão em execução em {{previous}}. Ao reiniciar, cada conversa continua em {{next}}. As sessões ocupadas interrompem o que estão fazendo e reiniciam agora.",
         "reasonSharedSession": "Também aberta em outro painel",
         "sharedOne": "1 sessão do Claude permanece em {{previous}} porque outro painel tem a mesma conversa aberta. Reiniciar pode reabrir a conversa do outro painel.",
-        "sharedOther": "{{count}} sessões do Claude permanecem em {{previous}} porque outro painel tem a mesma conversa aberta. Reiniciar pode reabrir a conversa do outro painel."
+        "sharedOther": "{{count}} sessões do Claude permanecem em {{previous}} porque outro painel tem a mesma conversa aberta. Reiniciar pode reabrir a conversa do outro painel.",
+        "strandedOne": "1 sessão do Claude pode ainda estar em {{previous}}. Reinicie-a manualmente para trocar.",
+        "strandedOther": "{{count}} sessões do Claude podem ainda estar em {{previous}}. Reinicie-as manualmente para trocar."
       },
       "oauthUsage": {
         "title": "Consulta de uso do Claude",
@@ -23378,7 +23380,9 @@
       "chooseTransition": "Escolha uma alteração de status:",
       "cancel": "Cancelar",
       "noTransition": "Nenhuma alteração de status para {{column}} está disponível para {{key}}.",
-      "queryTooLong": "A consulta do Jira é muito longa. Encurte a consulta ou limpe os filtros."
+      "queryTooLong": "A consulta do Jira é muito longa. Encurte a consulta ou limpe os filtros.",
+      "reorderColumn": "Reordenar {{column}}",
+      "reorderColumnHint": "Issues nesta coluna: {{count}}. Use as setas para a esquerda e para a direita para movê-la."
     },
     "favourites": {
       "loadFailed": "Não foi possível carregar os favoritos do Jira.",
@@ -23462,21 +23466,13 @@
     "language": {
       "back": "Idiomas",
       "requestPrompt": "Qual idioma você gostaria que o Orca oferecesse?",
-      "requestSuccess": "Solicitação de idioma registrada. Você pode continuar a configuração.",
       "requestError": "Não foi possível registrar sua solicitação. Tente novamente.",
       "retry": "Tentar novamente",
       "requestAction": "Solicitar idioma",
       "title": "Idioma de exibição",
-      "device": "Idioma do sistema: {{language}}",
-      "unsupported": "Idioma do sistema: {{language}}. Este idioma ainda não é compatível.",
-      "unknown": "Não foi possível detectar o idioma do sistema. Escolha um idioma abaixo.",
-      "loadError": "Não foi possível carregar este idioma. Tente novamente.",
-      "saveError": "Não foi possível salvar sua preferência de idioma. Tente novamente.",
-      "other": "Outro idioma…",
       "settingsError": "Não foi possível carregar suas configurações.",
       "loadingSettings": "Carregando configurações…",
-      "loading": "Carregando idioma…",
-      "saving": "Salvando idioma…"
+      "loading": "Carregando idioma…"
     }
   },
   "resourceManager": {
