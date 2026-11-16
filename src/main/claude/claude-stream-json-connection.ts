@@ -200,6 +200,15 @@ export async function openClaudeStreamJsonConnection(
     }
   }
 
+  const handleTransportFailure = async (error: Error): Promise<void> => {
+    if (!closing && managed.rootVerdict !== 'exited') {
+      await tree.reap()
+    }
+    // A broken pipe can precede the same child's spawn failure or drained exit diagnostic.
+    await withTimeout(managed.exitPromise, CLAUDE_READER_DRAIN_AFTER_EXIT_MS, undefined)
+    handleUnexpectedEnd(error)
+  }
+
   const readerDone = (async () => {
     try {
       const iterator = session[Symbol.asyncIterator]()
@@ -224,11 +233,7 @@ export async function openClaudeStreamJsonConnection(
         }
       }
     } catch (error: unknown) {
-      // Transport failure can leave the child alive, requiring a tree reap.
-      if (!closing && managed.rootVerdict !== 'exited') {
-        void tree.reap()
-      }
-      handleUnexpectedEnd(error instanceof Error ? error : new Error(String(error)))
+      await handleTransportFailure(error instanceof Error ? error : new Error(String(error)))
     }
   })()
 
@@ -244,8 +249,7 @@ export async function openClaudeStreamJsonConnection(
   })
   child.stdin.on('error', (error) => {
     if (!closing) {
-      void tree.reap()
-      handleUnexpectedEnd(error)
+      void handleTransportFailure(error)
     }
   })
 

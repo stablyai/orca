@@ -13,6 +13,8 @@ import {
 } from '../claude-stream-json-connection'
 import { CLAUDE_STRUCTURED_BASE_OPTIONS } from '../structured/launch/claude-structured-launch-resolution'
 import { providerStartupFailureFact } from '../../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
+import * as providerSpawn from '../../provider-process/provider-process-spawn'
+import { createFakeSpawnedChild } from '../../../shared/__fixtures__/fake-spawned-child'
 
 // Exercise the real SDK against a scripted child CLI.
 const FAKE_CLI = join(__dirname, '../__fixtures__', 'claude-agent-sdk-scripted-cli.mjs')
@@ -41,6 +43,7 @@ afterEach(async () => {
   }
   spawned.splice(0)
   spawnedChildren.splice(0)
+  vi.restoreAllMocks()
   vi.unstubAllEnvs()
 })
 
@@ -95,6 +98,40 @@ async function open(
 }
 
 describe('Claude stream-json connection', () => {
+  it.each(['cliMissing', 'fullAccessAsRoot'] as const)(
+    'keeps %s when an input pipe fails before the child reports its ending',
+    async (kind) => {
+      const child = createFakeSpawnedChild(9_999_999)
+      const scenario = scriptScenario([])
+      const launch = launchFor(scenario)
+      if (kind === 'cliMissing') {
+        Object.defineProperty(child, 'pid', { value: undefined })
+        launch.pathToClaudeCodeExecutable = join(scenario.cwd, 'missing-claude')
+      }
+      vi.spyOn(providerSpawn, 'spawnProviderProcess').mockReturnValue(child)
+      const fault = Promise.withResolvers<Error>()
+      const connection = await open(launch, { onFault: fault.resolve })
+      child.stdin.emit('error', Object.assign(new Error('write EPIPE'), { code: 'EPIPE' }))
+      if (kind === 'cliMissing') {
+        child.emit(
+          'error',
+          Object.assign(new Error('spawn missing-claude ENOENT'), {
+            code: 'ENOENT',
+            path: launch.pathToClaudeCodeExecutable
+          })
+        )
+      } else {
+        child.stderr.write('--dangerously-skip-permissions cannot be used with root\n')
+        child.emit('exit', 1, null)
+      }
+      child.stdout.end()
+      child.stderr.end()
+      child.emit('close', 1, null)
+      expect(providerStartupFailureFact(await fault.promise)).toMatchObject({ kind })
+      await connection.close()
+    }
+  )
+
   it.runIf(process.platform !== 'win32')(
     'reports lost parent outcome once through the real SDK',
     async () => {
