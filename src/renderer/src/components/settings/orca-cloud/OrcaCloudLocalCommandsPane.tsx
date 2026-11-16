@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { cloudTeamSharingEnabled } from '@/lib/orca-cloud/cloud-team-sharing-flag'
 import { SquareTerminal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
@@ -20,16 +21,22 @@ import { LocalCommandText } from '../../local-commands/LocalCommandText'
 
 const AUDIT_ROWS = 20
 
-function workspaceDetail(row: LocalCommandWorkspaceRow, t: Translate): string {
+function workspaceDetail(
+  row: LocalCommandWorkspaceRow,
+  t: Translate,
+  teamSharing = cloudTeamSharingEnabled()
+): string {
+  // TEAM-SHARING-HOLD: no mention of sharing while team sharing is held.
+  const shared = teamSharing && row.shared
   if (row.isOwner === false) {
     return t('localCommands.settings.notOwner', 'Only the workspace owner can turn this on.')
   }
   if (!row.enabled) {
-    return row.shared
+    return shared
       ? t('localCommands.settings.offShared', 'Off · Shared with your team')
       : t('localCommands.settings.off', 'Off')
   }
-  const sharing = row.shared
+  const sharing = shared
     ? ` · ${t('localCommands.settings.sharedOn', 'Shared with your team')}`
     : ''
   return row.connected
@@ -318,7 +325,12 @@ export function OrcaCloudLocalCommandsPane(): React.JSX.Element {
           surface: 'security',
           initialFocus: 'cancel'
         })
-      if (enabling && row.shared && !(allowShared = await confirmShared())) {
+      if (
+        enabling &&
+        row.shared &&
+        cloudTeamSharingEnabled() &&
+        !(allowShared = await confirmShared())
+      ) {
         return
       }
       setPendingSandboxId(row.sandboxId)
