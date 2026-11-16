@@ -2,7 +2,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { admitStructuredLaunchOnHost } from '@/lib/agent-session/launch/structured-agent-session-host-admission'
-import { structuredChatUnavailableText } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
+import { structuredChatUnavailableToast } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
 import { notifyHostPermissionRefused } from '@/lib/agent-session/launch/structured-agent-session-launch-permission-notice'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import { readStructuredChatHostPermissionVerdict } from '@/runtime/native-chat/host-capabilities/structured-chat-host-permission'
@@ -156,7 +156,11 @@ export async function admitCliChatResumeClose(
     return null
   }
   if (support.kind === 'declined') {
-    toast.error(structuredChatUnavailableText(support.reason))
+    const { description, action } = structuredChatUnavailableToast(
+      support.reason,
+      source.workspaceId
+    )
+    toast.error(description, action ? { action } : undefined)
     return null
   }
   // A host that could not say whether it checked the other writers still lets the switch go on:

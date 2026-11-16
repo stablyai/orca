@@ -21455,6 +21455,8 @@
       "thoughtForDuration": "Thought for {{duration}}",
       "explicitChatWsl": "Chat is not available in WSL. Open the agent in a terminal instead.",
       "explicitChatWslAddHost": "Chat is not available in a WSL folder opened from Windows. Add the distro as a WSL host (Add a project → Add remote host → Add WSL distro) to chat there, or open the agent in a terminal.",
+      "explicitChatWslMoveToHost": "Chat is not available in a WSL folder opened from Windows. Run the project on a WSL host to chat there, or open the agent in a terminal.",
+      "explicitChatWslRunAsHost": "Run {{distro}} as a host",
       "explicitChatSsh": "Chat is not available over SSH. Open the agent in a terminal instead.",
       "explicitChatUnavailable": "This workspace cannot run the chat. Check the agent installation or open it in a terminal.",
       "structuredSessionHostDeclined": "Opened {{value0}} in a terminal",
