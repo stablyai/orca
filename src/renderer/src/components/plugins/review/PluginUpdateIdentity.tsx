@@ -49,8 +49,13 @@ export function PluginUpdatePublisher({
     manifest: preview.manifest,
     types: null
   })
+  if (preview.official) {
+    return <PluginPublisherBadge official publisher={publisher} />
+  }
+  const label = `${t('auto.components.settings.PluginNotOfficialWarning.community', 'Community plugin')}${publisher ? ` · ${publisher}` : ''}`
+  // Why plain: a community plugin that runs no code (a theme, say) has nothing to trust it with.
   if (notice === 'none') {
-    return <PluginPublisherBadge official={preview.official} publisher={publisher} />
+    return <Badge variant="outline">{label}</Badge>
   }
   return (
     <Tooltip>
@@ -61,8 +66,7 @@ export function PluginUpdatePublisher({
           className="gap-1 border-status-warning-border bg-status-warning-background text-status-warning-text"
         >
           <TriangleAlert className="size-3.5" aria-hidden="true" />
-          {t('auto.components.settings.PluginNotOfficialWarning.community', 'Community plugin')}
-          {publisher ? ` · ${publisher}` : ''}
+          {label}
         </Badge>
       </TooltipTrigger>
       <TooltipContent side="bottom" className="max-w-72">

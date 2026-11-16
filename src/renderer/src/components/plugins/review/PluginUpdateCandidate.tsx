@@ -1,3 +1,4 @@
+// @protected-copy
 import { Check, ChevronDown } from 'lucide-react'
 import type { PluginMarketplaceHostInstallPreview } from '../../../../../preload/api/plugins/plugin-host-api'
 import type { PluginManifest } from '../../../../../shared/plugins/manifest/plugin-manifest'
@@ -6,7 +7,6 @@ import { reachablePluginCapabilities } from '../../../../../shared/plugins/capab
 import { builtInActionTitle } from '../page/PluginCommandReplacementRow'
 import type { PluginContributionPoint } from '../../../../../shared/plugins/contributions/plugin-contribution-points'
 import { pluginUpdateGrowsAccess } from '../../../../../shared/plugins/approval/plugin-update-access-growth'
-import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { PluginListEntry } from '../list/plugin-list-entries'
 import { PluginRowArt } from '../list/PluginRowArt'
@@ -14,6 +14,7 @@ import { Button } from '../../ui/button'
 import { Checkbox } from '../../ui/checkbox'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../ui/collapsible'
 import { PluginConsentProvenance } from './PluginConsentProvenance'
+import { pluginKeyOwner } from './PluginUpdateIdentity'
 import { pluginPointsFromManifest, pluginTrust } from '../presentation/plugin-access-profile'
 import { pluginTrustWarnings } from '../presentation/plugin-consent-copy'
 import { pluginCapabilityDescription } from '../presentation/plugin-capability-presentation'
@@ -30,9 +31,9 @@ export type UpdateCandidate = {
 }
 
 /**
- * Whether the update changes what the plugin may do or where it comes from. Such an update never
- * joins a bulk Update; it lands only from its own review. Why unknown counts: main omits growth
- * only when it could not compare against the installed version.
+ * Whether the update changes what the plugin may do or where it comes from. Such an update lands
+ * only through "Approve & update", which approves exactly what the review showed. Why unknown
+ * counts: main omits growth only when it could not compare against the installed version.
  */
 export function updateNeedsApproval(preview: PluginMarketplaceHostInstallPreview): boolean {
   return (
@@ -42,57 +43,48 @@ export function updateNeedsApproval(preview: PluginMarketplaceHostInstallPreview
   )
 }
 
-// Why the same form as main's list projection: `movedFrom` is compared against it by eye.
-export const sourceLabel = (source: { url: string; path?: string }): string =>
+// Why the same form as main's list projection: the Source popover shows it next to the commit.
+const sourceLabel = (source: { url: string; path?: string }): string =>
   source.path ? `${source.url} (${source.path})` : source.url
 
-const contributionGrowthLabel = (point: PluginContributionPoint): string => {
+const contributionGrowthLabel = (point: PluginContributionPoint, t: Translate): string => {
   if (point === 'keybindings') {
-    return translate(
-      'auto.components.settings.PluginUpdateAllDialog.newShortcuts',
-      'Keyboard shortcuts'
-    )
+    return t('auto.components.settings.PluginUpdateAllDialog.newShortcuts', 'Keyboard shortcuts')
   }
   if (point === 'commands') {
-    return translate('auto.components.settings.PluginUpdateAllDialog.newCommands', 'Commands')
+    return t('auto.components.settings.PluginUpdateAllDialog.newCommands', 'Commands')
   }
   if (point === 'panels') {
-    return translate('auto.components.settings.PluginUpdateAllDialog.newPanels', 'Adds panels')
+    return t('auto.components.settings.PluginUpdateAllDialog.newPanels', 'Adds panels')
   }
   if (point === 'events') {
-    return translate(
+    return t(
       'auto.components.settings.PluginUpdateAllDialog.newEvents',
       'Reacts to more Orca events'
     )
   }
   if (point === 'vmRecipes') {
-    return translate('auto.components.settings.PluginUpdateAllDialog.newRecipes', 'Machine recipes')
+    return t('auto.components.settings.PluginUpdateAllDialog.newRecipes', 'Machine recipes')
   }
   if (point === 'customEditors') {
-    return translate(
+    return t(
       'auto.components.settings.PluginUpdateAllDialog.newFileTypes',
       'Changes which files it opens'
     )
   }
   if (point === 'hooks') {
-    return translate(
+    return t(
       'auto.components.settings.PluginUpdateAllDialog.newHooks',
       'Can change or stop what Orca and your agents do'
     )
   }
   if (point === 'settings') {
-    return translate(
-      'auto.components.settings.PluginUpdateAllDialog.newSettings',
-      'A settings page'
-    )
+    return t('auto.components.settings.PluginUpdateAllDialog.newSettings', 'A settings page')
   }
   if (point === 'statusBarItems') {
-    return translate(
-      'auto.components.settings.PluginUpdateAllDialog.newStatusBarItems',
-      'Status bar items'
-    )
+    return t('auto.components.settings.PluginUpdateAllDialog.newStatusBarItems', 'Status bar items')
   }
-  return translate(
+  return t(
     'auto.components.settings.PluginUpdateAllDialog.newContributions',
     'Features that act for you'
   )
@@ -128,11 +120,11 @@ function editorGrowthLines(
       : [])
   ]
   return growth.other || lines.length === 0
-    ? [...lines, contributionGrowthLabel('customEditors')]
+    ? [...lines, contributionGrowthLabel('customEditors', t)]
     : lines
 }
 
-const replacementLine = (command: string, action: string, t: Translate = translate): string =>
+const replacementLine = (command: string, action: string, t: Translate): string =>
   t(
     'auto.components.settings.PluginUpdateAllDialog.replacesAction',
     '{{value0}} runs instead of Orca’s {{value1}}',
@@ -142,7 +134,7 @@ const replacementLine = (command: string, action: string, t: Translate = transla
 /** What main found the update adds over the installed version, as review lines. */
 export function updateChanges(
   preview: PluginMarketplaceHostInstallPreview,
-  t?: Translate,
+  t: Translate,
   /** The installed manifest, when loaded: names the file types a grown editor reaches. */
   installedManifest?: EditorManifest | null
 ): {
@@ -161,11 +153,11 @@ export function updateChanges(
     : []
   // Why: a panel profile has no trust warning of its own, but its growth still asks again.
   const executionLines =
-    growth?.execution && execution.length === 0 ? [contributionGrowthLabel('panels')] : execution
+    growth?.execution && execution.length === 0 ? [contributionGrowthLabel('panels', t)] : execution
   const contributions = (growth?.contributions ?? []).flatMap((point) =>
     point === 'customEditors'
-      ? editorGrowthLines(installedManifest, preview.manifest, t ?? translate)
-      : [contributionGrowthLabel(point)]
+      ? editorGrowthLines(installedManifest, preview.manifest, t)
+      : [contributionGrowthLabel(point, t)]
   )
   // Why named: "Commands" alone would hide that one takes over an Orca action.
   const replacements = growth?.contributions.includes('commands')
@@ -224,7 +216,7 @@ export function AllAccess({
           <PluginConsentProvenance
             badge={false}
             official={preview.official}
-            publisher={preview.manifest.publisher ?? ''}
+            publisher={pluginKeyOwner(preview.pluginKey)}
             source={{
               kind: preview.bundled ? 'bundled' : 'marketplace',
               reference: sourceLabel({

@@ -11,12 +11,7 @@ import {
   type UpdateCandidate
 } from '../review/PluginUpdateCandidate'
 import { PluginUpdateReview } from '../review/PluginUpdateReview'
-import { readInstalledManifest } from '../review/plugin-update-additions'
-import {
-  installReviewedUpdate,
-  installUpdate,
-  requiredNewerOrca
-} from '../state/plugin-update-approval'
+import { installUpdates, loadUpdate, requiredNewerOrca } from '../state/plugin-update-approval'
 import type { PluginListEntry } from '../list/plugin-list-entries'
 
 /** Updates that change access or repository; they land only through their own review. */
@@ -41,8 +36,8 @@ function failureMessage(failed: readonly string[], updatedCount: number): string
 /**
  * One review for every pending update. Updates that ask for nothing new are one ticked line.
  * Updates that grow access or moved repository are grouped above them, each showing only what it
- * adds; the button then reads "Approve & update" and approves exactly what was shown. Any can be
- * unticked, and nothing installs until the button. A lone update that needs approval shows alone.
+ * adds; the button then reads "Approve & update" and approves exactly what was shown. Beside plain
+ * updates those start unticked, so a grant takes a deliberate tick. A lone one shows alone.
  * Why no reset effect: the parent mounts a fresh dialog per open (keyed), so state starts clean.
  */
 export function PluginUpdateAllDialog({
@@ -79,10 +74,7 @@ export function PluginUpdateAllDialog({
     void Promise.all(
       plugins.map(async (entry): Promise<UpdateCandidate> => {
         try {
-          const [preview, installedManifest] = await Promise.all([
-            window.api.plugins.previewMarketplaceUpdate({ pluginKey: entry.pluginKey }),
-            readInstalledManifest(entry.pluginKey)
-          ])
+          const { preview, installedManifest } = await loadUpdate(entry.pluginKey)
           return {
             entry,
             preview,
@@ -140,24 +132,20 @@ export function PluginUpdateAllDialog({
   const update = async (): Promise<void> => {
     setBusy(true)
     setFailure(null)
-    const done: string[] = []
-    const failed: string[] = []
-    // Why sequential: each install re-reads the plugin list; parallel installs race that refresh.
-    for (const candidate of chosen) {
-      const { entry, preview } = candidate
-      if (!preview) {
-        continue
-      }
-      // Why held counts as done here: it landed and waits on the plugin's page, as before.
-      const ok = approvals.includes(candidate)
-        ? (await installReviewedUpdate(preview)) !== 'failed'
-        : await installUpdate(preview)
-      if (ok) {
-        done.push(entry.pluginKey)
-      } else {
-        failed.push(entry.name)
-      }
-    }
+    const { approved, held, failed } = await installUpdates(
+      chosen.flatMap(({ entry, preview }) =>
+        preview
+          ? [
+              {
+                preview,
+                name: entry.name,
+                reviewed: approvals.some((item) => item.entry === entry)
+              }
+            ]
+          : []
+      )
+    )
+    const done = [...approved, ...held].map(({ preview }) => preview.pluginKey)
     setUpdated((current) => new Set([...current, ...done]))
     if (done.length > 0) {
       await onUpdated(done)
@@ -167,7 +155,12 @@ export function PluginUpdateAllDialog({
       onClose()
       return
     }
-    setFailure(failureMessage(failed, updated.size + done.length))
+    setFailure(
+      failureMessage(
+        failed.map(({ name }) => name),
+        updated.size + done.length
+      )
+    )
   }
 
   const title = alone

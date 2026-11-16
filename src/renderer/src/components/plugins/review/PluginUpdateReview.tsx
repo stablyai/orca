@@ -52,25 +52,23 @@ export function PluginUpdateReview({
   const execution = pluginExecutionProfile(preview.manifest)
   const { lines, compared } = pluginUpdateAdditions(preview, installedManifest, t)
   const checkboxId = `plugin-update-approve-${entry.pluginKey}`
-  const name = (
-    <>
-      {entry.name}
-      <PluginUpdateVersions from={installed?.version} preview={preview} />
-    </>
-  )
 
   return (
     <div data-plugin-update-review={entry.pluginKey} className="space-y-3">
       <div className="flex items-center gap-3">
         <PluginRowArt entry={entry} />
         <div className="min-w-0 flex-1 space-y-1">
-          {selection ? (
-            <label htmlFor={checkboxId} className="block truncate text-sm font-medium">
-              {name}
-            </label>
-          ) : (
-            <p className="truncate text-sm font-medium">{name}</p>
-          )}
+          {/* Why the link outside the label: a click on it must not toggle the checkbox. */}
+          <p className="flex min-w-0 items-baseline text-sm font-medium">
+            {selection ? (
+              <label htmlFor={checkboxId} className="truncate">
+                {entry.name}
+              </label>
+            ) : (
+              <span className="truncate">{entry.name}</span>
+            )}
+            <PluginUpdateVersions from={installed?.version} preview={preview} />
+          </p>
           <PluginUpdatePublisher pluginKey={entry.pluginKey} preview={preview} />
         </div>
         {selection ? (

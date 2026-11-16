@@ -1,17 +1,57 @@
 import { useEffect, useState } from 'react'
+import { toast } from 'sonner'
 import {
   closePluginUpdateReviewDialog,
   usePluginUpdateReviewDialogStore
 } from '@/store/plugins/updates/plugin-update-review-dialog'
+import {
+  pluginUpdateReviewNoticesKey,
+  resolvePluginUpdateReviews,
+  usePluginUpdateReviewNoticesStore
+} from '@/store/plugins/updates/plugin-update-review-toast'
 import { pluginListEntryFromInstalled, type PluginListEntry } from '../list/plugin-list-entries'
+import { PluginUpdateReviewToast } from '../review/PluginUpdateReviewToast'
 import { useOrcaVersion } from '../state/use-plugin-page-navigation'
 import { PluginUpdateAllDialog } from './PluginUpdateAllDialog'
 
+const TOAST_ID = 'plugin-update-review'
+
+/** One toast for every held update main reported, however many arrive. */
+function useHeldUpdateToast(): void {
+  const notices = usePluginUpdateReviewNoticesStore((state) => state.notices)
+  useEffect(() => {
+    if (notices.length === 0) {
+      toast.dismiss(TOAST_ID)
+      return
+    }
+    toast.custom(
+      () => (
+        <PluginUpdateReviewToast
+          key={pluginUpdateReviewNoticesKey(notices)}
+          notices={notices}
+          onResolved={resolvePluginUpdateReviews}
+        />
+      ),
+      {
+        id: TOAST_ID,
+        duration: Infinity,
+        closeButton: false,
+        unstyled: true,
+        // Why: a swipe or Escape dismisses it too, and those notices are then handled.
+        onDismiss: () => resolvePluginUpdateReviews(notices)
+      }
+    )
+  }, [notices])
+  // Why: the toast's tree must not outlive this host.
+  useEffect(() => () => void toast.dismiss(TOAST_ID), [])
+}
+
 /**
- * The update review outside Settings: the held-update toast's "Details" opens it over whatever
- * the user is doing, instead of sending them to Settings → Plugins.
+ * Held plugin updates outside Settings: the toast, and the review its "Details" opens over
+ * whatever the user is doing.
  */
 export function PluginUpdateReviewHost(): React.JSX.Element | null {
+  useHeldUpdateToast()
   const request = usePluginUpdateReviewDialogStore((state) => state.request)
   const orcaVersion = useOrcaVersion()
   const [loaded, setLoaded] = useState<{ id: number; entries: PluginListEntry[] } | null>(null)
@@ -57,6 +97,7 @@ export function PluginUpdateReviewHost(): React.JSX.Element | null {
       entries={loaded.entries}
       orcaVersion={orcaVersion}
       onClose={closePluginUpdateReviewDialog}
+      // Why nothing to reload: main's install events refresh what the rest of Orca shows.
       onUpdated={async () => undefined}
     />
   )

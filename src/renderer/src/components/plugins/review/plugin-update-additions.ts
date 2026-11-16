@@ -35,11 +35,3 @@ export function pluginUpdateAdditions(
     compared: preview.accessGrowth !== undefined
   }
 }
-
-/** The installed manifest, or null when it can't be read (editor lines then stay generic). */
-export function readInstalledManifest(pluginKey: string): Promise<PluginManifest | null> {
-  return window.api.plugins.getInstalledManifest({ pluginKey }).catch((cause: unknown) => {
-    console.warn('[plugins] installed manifest read failed:', cause)
-    return null
-  })
-}
