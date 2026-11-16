@@ -177,11 +177,10 @@ export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void 
     return session.deps.restoredViewportBlankingPanesRef?.current.delete(session.pane.id) ?? false
   }
 
-  const ownerIsConpty = (): boolean =>
-    session.pane.terminal.options.windowsPty?.backend === 'conpty'
-
   session.writeFreshShellViewport = (rows = session.pane.terminal.rows): void => {
-    session.writeReplayData(buildFreshShellViewportSequence(rows, ownerIsConpty()))
+    // A remote owner whose OS has not arrived yet may be ConPTY; blanking is safe for either.
+    const ownerIsConpty = session.windowsPtyModel?.ownerUsesConpty() !== false
+    session.writeReplayData(buildFreshShellViewportSequence(rows, ownerIsConpty))
   }
 
   session.prepareFreshShellViewportForSpawn = (options: FreshSpawnOptions): void => {
@@ -189,12 +188,9 @@ export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void 
     if (!options.forceBlankRestoredViewport && !hadRestoredViewport) {
       return
     }
-    // A normal-buffer restore already ended on a fresh line, so only ConPTY needs its rows moved up.
-    if (
-      hadRestoredViewport &&
-      !ownerIsConpty() &&
-      session.pane.terminal.buffer.active.type === 'normal'
-    ) {
+    const buffer = session.pane.terminal.buffer.active
+    // Nothing on screen to keep or move.
+    if (!hadRestoredViewport && buffer.baseY === 0 && buffer.cursorY === 0 && buffer.cursorX === 0) {
       return
     }
     session.writeFreshShellViewport()

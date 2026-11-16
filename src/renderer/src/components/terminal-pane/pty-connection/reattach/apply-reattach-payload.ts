@@ -304,7 +304,7 @@ export function createReattachPayloadHandlers(
       // Why: cold-restore spawned a fresh shell; reset mode bytes a crashed TUI (e.g. Claude's \e[?1004h) left in scrollback that no live TUI now consumes.
       session.writeInputModeGround(POST_REPLAY_MODE_RESET)
       session.consumeRestoredViewportBlankingMarker()
-      // Why: a taller destination fit must not pull recovered rows back into the fresh shell's viewport after source-grid replay.
+      // Why: under ConPTY a taller destination fit must not pull recovered rows back into the fresh shell's viewport.
       session.writeFreshShellViewport(Math.max(destinationRows, session.pane.terminal.rows))
       ackPaintedColdRestore(session, ctx.ptyId)
       if (didPrepareResume && !ctx.coldRestoreStartup) {

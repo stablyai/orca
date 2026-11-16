@@ -98,7 +98,8 @@ export function registerPtyConnectionColdRestoreRepaintTests(): void {
       const destinationRows = 5
       const recoveredCols = 20
       const recoveredRows = 3
-      const coldScrollback = '\x1b[1;1HCOLD\x1b[1;15HEND\r\nCOLD_SOURCE_ROW_02'
+      // The dead process parked its cursor back on the first row, as agents do in their input box.
+      const coldScrollback = '\x1b[1;1HCOLD\x1b[1;15HEND\r\nCOLD_SOURCE_ROW_02\x1b[1;3H'
       const groundedColdScrollback = `${RESET_GRAPHIC_RENDITION}${coldScrollback}`
       const viewportClear = `${RELEASE_SYNCHRONIZED_OUTPUT}${RESET_GRAPHIC_RENDITION}\x1b[2J\x1b[H`
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
@@ -172,7 +173,9 @@ export function registerPtyConnectionColdRestoreRepaintTests(): void {
       await flushAsyncTicks(20)
 
       const freshShellViewport =
-        prompt === 'PS >' ? buildFreshShellViewportBlankingSequence(destinationRows) : '\r\n'
+        prompt === 'PS >'
+          ? buildFreshShellViewportBlankingSequence(destinationRows)
+          : `\x1b[?6l\x1b[r\x1b[${destinationRows};1H\r\n`
       expect(pane.terminal.resize).toHaveBeenCalledWith(recoveredCols, recoveredRows)
       expect(transport.resize).not.toHaveBeenCalledWith(recoveredCols, recoveredRows)
       expect(transport.resize).toHaveBeenCalledWith(destinationCols, destinationRows)
@@ -186,7 +189,7 @@ export function registerPtyConnectionColdRestoreRepaintTests(): void {
       )
       expect(written.indexOf(viewportClear)).toBeLessThan(written.indexOf(groundedColdScrollback))
       expect(written.indexOf(groundedColdScrollback)).toBeLessThan(
-        written.lastIndexOf(freshShellViewport)
+        written.indexOf(freshShellViewport)
       )
       const viewportClearOperation = operations.findIndex(
         (operation) => operation.kind === 'write' && operation.data === viewportClear
