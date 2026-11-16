@@ -51,6 +51,9 @@ export function PerforcePanel({
   const [collapsedChangelists, setCollapsedChangelists] = useState<ReadonlySet<number>>(new Set())
   const { selected, select, focusForContextMenu } = usePerforceSelection()
   const template = usePerforceDescriptionTemplate(settings, status, setMessage)
+  // Why: the box stays editable while an operation runs, so text typed meanwhile must survive it.
+  const replaceMessageIfUnchanged = (sent: string, next: string): void =>
+    setMessage((current) => (current === sent ? next : current))
 
   const { groups, orderedKeys } = usePerforceGroups(status)
 
@@ -69,7 +72,7 @@ export function PerforcePanel({
       'Submitted change'
     )
     if (ok) {
-      setMessage(template)
+      replaceMessageIfUnchanged(message, template)
     }
   }
 
@@ -205,7 +208,7 @@ export function PerforcePanel({
                       filePaths: createFilePaths(groups.defaultList)
                     }),
                   'Created changelist'
-                ).then((ok) => ok && setMessage(template))
+                ).then((ok) => ok && replaceMessageIfUnchanged(message, template))
               }
             >
               <FolderPlus />
@@ -333,7 +336,7 @@ export function PerforcePanel({
               disabled={busy || groups.defaultList.length === 0}
               onClick={() =>
                 void generateDescription('default', paths(groups.defaultList)).then(
-                  (text) => text && setMessage(text)
+                  (text) => text && replaceMessageIfUnchanged(message, text)
                 )
               }
             >
