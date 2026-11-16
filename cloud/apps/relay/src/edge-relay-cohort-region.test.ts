@@ -7,6 +7,7 @@ import { parseEdgeControl, parseEdgeControlOver, type EdgeControlFlags } from '.
 import {
   EDGE_CELL_ID,
   EdgeAssignments,
+  EdgeMoveDeferredError,
   edgeCohortBucketPermille,
   inEdgeCohort,
   type EdgeRelayConfig
@@ -30,8 +31,9 @@ const CELL_URL = 'https://us-c1.relay.example.test'
 const DIVERGENT = { 'us-central1': 1000, 'asia-east2': 500 } as const
 
 const hosts = Array.from({ length: 400 }, (_, index) => `cohortregion${String(index).padStart(4, '0')}`)
-// In the cohort when an ask names us-central1 (or no region), out when it names asia-east2.
+// Bucket in [500, 1000): in us-central1's cohort, out of asia-east2's (the incident's flapping hosts).
 const splitHost = hosts.find((host) => edgeCohortBucketPermille(host) >= 500)!
+// Bucket under 500: in both.
 const lowHost = hosts.find((host) => edgeCohortBucketPermille(host) < 500)!
 
 const databases: RelayDatabase[] = []
@@ -102,9 +104,14 @@ async function director(flags: () => EdgeControlFlags) {
       exports.push(relayHostId)
       return { outcome: 'exported' as const, assignment: null, devices: [] }
     }),
-    drain: vi.fn(async (): Promise<EdgeDrainResult> => ({ outcome: 'idle' }))
+    drain: vi.fn(async (relayHostId: string): Promise<EdgeDrainResult> => {
+      drained.push(relayHostId)
+      return { outcome: 'idle' }
+    })
   } as unknown as EdgeAdmin
-  const edge = new EdgeAssignments(database, edgeConfig(flags), Date.now, admin)
+  const drained: string[] = []
+  const config = edgeConfig(flags)
+  const edge = new EdgeAssignments(database, config, Date.now, admin)
   await edge.ensureEdgeCell()
   const assignments = {
     assign: vi.fn(async (identity: { userId: string; relayHostId: string }) => {
@@ -160,68 +167,113 @@ async function director(flags: () => EdgeControlFlags) {
         relayHostId
       ])
     )[0]?.region
-  return { database, edge, pushes, exports, assign, recorded }
+  const sweep = async () => {
+    drained.length = 0
+    await new EdgeEvacuation(database, config, admin, EDGE_CELL_ID, Date.now, () => 0).sweep()
+    return [...drained]
+  }
+  return { database, edge, pushes, exports, assign, recorded, sweep }
 }
 
-// What shipped desktops send over a host's life: asks without a region, the initial open and the
-// hourly refresh (issue-window), each naming whichever region the desktop prefers at that moment.
-const ASKS: Record<string, unknown>[] = [
-  {},
-  { preferredRegion: 'asia-east2', reconnect: true, regionCorrection: { v: 1, action: 'issue-window' } },
-  { preferredRegion: 'us-central1' },
-  { preferredRegion: 'asia-east2' },
-  { reconnect: true },
-  { preferredRegion: 'asia-east2', reconnect: true, regionCorrection: { v: 1, action: 'issue-window' } },
-  { preferredRegion: 'us-central1', reconnect: true, regionCorrection: { v: 1, action: 'issue-window' } },
-  { preferredRegion: 'asia-east2' }
-]
+// What shipped desktops send (src/main/runtime/mobile-cloud-relay): the initial open and the drain
+// reconnect name the desktop's preferred region; the hourly region refresh names none, and neither
+// does the retry after a director refused the named region.
+const open = (region: RelayRegion) => ({ preferredRegion: region, reconnect: true, regionCorrection: { v: 1, action: 'issue-window' } })
+const drain = (region: RelayRegion) => ({ preferredRegion: region, reconnect: true })
+const refresh = { reconnect: true, regionCorrection: { v: 1, action: 'issue-window' } }
+const retry = {}
+const life = (region: RelayRegion) => [open(region), refresh, refresh, drain(region), refresh, retry, refresh, drain(region), refresh]
+
+const hostFlags = (): EdgeControlFlags => ({ mode: 'on', regionRolloutPermille: { ...DIVERGENT }, cohortRegion: 'host' })
 
 describe("edge cohort by host (cohortRegion 'host')", () => {
-  it('never flaps a host whose asks alternate regions under divergent regional rollouts', async () => {
-    const flags: EdgeControlFlags = { mode: 'on', regionRolloutPermille: { ...DIVERGENT }, cohortRegion: 'host' }
+  it('never flaps an Asian host whose regionless refreshes would count as us-central1', async () => {
+    const flags = hostFlags()
     const d = await director(() => flags)
     const answers: string[] = []
     for (let round = 0; round < 3; round += 1) {
-      for (const ask of ASKS) { answers.push(await d.assign(splitHost, ask)) }
+      for (const ask of life('asia-east2')) { answers.push(await d.assign(splitHost, ask)) }
     }
-    // Moved on by the first ask (no region: us-central1), then kept whatever the asks name.
-    expect(answers.every((url) => url === EDGE_URL)).toBe(true)
-    expect(d.pushes).toEqual([splitHost])
-    expect(d.exports).toEqual([])
-    // Kept asks never rewrite the region it moved under.
-    expect(await d.recorded(splitHost)).toBe('us-central1')
-  })
-
-  it('moves a host on only by an ask whose region admits it, then keeps it', async () => {
-    const flags: EdgeControlFlags = { mode: 'on', regionRolloutPermille: { ...DIVERGENT }, cohortRegion: 'host' }
-    const d = await director(() => flags)
-    // Off the edge, an Asian ask is judged by asia-east2 (500): out.
-    expect(await d.assign(splitHost, { preferredRegion: 'asia-east2' })).toBe(CELL_URL)
+    // Out of asia-east2's cohort: never moved on, by any ask.
+    expect(answers.every((url) => url === CELL_URL)).toBe(true)
     expect(d.pushes).toEqual([])
-    expect(await d.assign(splitHost, { preferredRegion: 'us-central1' })).toBe(EDGE_URL)
-    expect(await d.assign(splitHost, { preferredRegion: 'asia-east2' })).toBe(EDGE_URL)
-    expect(d.pushes).toEqual([splitHost])
     expect(d.exports).toEqual([])
-    // A host under both rollouts moved by an Asian ask keeps asia-east2 as its region.
-    for (const ask of ASKS) { expect(await d.assign(lowHost, { preferredRegion: 'asia-east2', ...ask })).toBe(EDGE_URL) }
-    expect(await d.recorded(lowHost)).toBe('asia-east2')
   })
 
-  it('still leaves when the rollout of the region it moved under no longer admits it', async () => {
-    const flags: EdgeControlFlags = { mode: 'on', regionRolloutPermille: { ...DIVERGENT }, cohortRegion: 'host' }
+  it('keeps a host its named region admits on the edge through every regionless ask', async () => {
+    const flags = hostFlags()
     const d = await director(() => flags)
-    expect(await d.assign(splitHost, { preferredRegion: 'us-central1' })).toBe(EDGE_URL)
-    flags.regionRolloutPermille = { 'us-central1': 0, 'asia-east2': 500 }
-    expect(await d.assign(splitHost, { preferredRegion: 'us-central1' })).toBe(CELL_URL)
-    expect(d.exports).toEqual([splitHost])
-    // Mode off empties the cohort, recorded region or not.
-    flags.regionRolloutPermille = { ...DIVERGENT }
-    expect(await d.assign(splitHost, {})).toBe(EDGE_URL)
-    flags.mode = 'off'
-    expect(await d.assign(splitHost, {})).toBe(CELL_URL)
+    for (const [host, region] of [[lowHost, 'asia-east2'], [splitHost, 'us-central1']] as const) {
+      for (let round = 0; round < 3; round += 1) {
+        for (const ask of life(region)) { expect(await d.assign(host, ask)).toBe(EDGE_URL) }
+      }
+      expect(await d.recorded(host)).toBe(region)
+    }
+    expect(d.pushes).toEqual([lowHost, splitHost])
+    expect(d.exports).toEqual([])
+    expect(await d.sweep()).toEqual([])
   })
 
-  it('judges country exclusion against the region the host moved under', async () => {
+  it('never moves a host onto the edge on a regionless ask (the review scenario)', async () => {
+    const flags = hostFlags()
+    const d = await director(() => flags)
+    const answers = [
+      await d.assign(splitHost, { preferredRegion: 'asia-east2' }),
+      await d.assign(splitHost, refresh),
+      await d.assign(splitHost, { preferredRegion: 'asia-east2' })
+    ]
+    flags.regionRolloutPermille = { ...DIVERGENT, 'asia-east2': 0 }
+    answers.push(await d.assign(splitHost, { preferredRegion: 'asia-east2' }))
+    expect(answers).toEqual([CELL_URL, CELL_URL, CELL_URL, CELL_URL])
+    expect(d.pushes).toEqual([])
+  })
+
+  it('drains and moves off an Asian host when asia-east2 is aborted, by the sweep and by its refresh', async () => {
+    const flags = hostFlags()
+    const d = await director(() => flags)
+    expect(await d.assign(lowHost, open('asia-east2'))).toBe(EDGE_URL)
+    expect(await d.assign(lowHost, refresh)).toBe(EDGE_URL)
+    expect(await d.assign(splitHost, open('us-central1'))).toBe(EDGE_URL)
+    flags.regionRolloutPermille = { ...DIVERGENT, 'asia-east2': 0 }
+    // The sweep and a regionless ask both judge it by its recorded asia-east2.
+    expect(await d.sweep()).toEqual([lowHost])
+    expect(await d.assign(lowHost, refresh)).toBe(CELL_URL)
+    expect(d.exports).toEqual([lowHost])
+    // And it is not moved back by a later refresh, which would count as us-central1 under 'ask'.
+    expect(await d.assign(lowHost, refresh)).toBe(CELL_URL)
+    expect(await d.assign(splitHost, refresh)).toBe(EDGE_URL)
+    expect(d.pushes).toEqual([lowHost, splitHost])
+  })
+
+  it('heals a us-central1 record a regionless ask wrote before the flag at the next named ask', async () => {
+    // Under 'ask' the refresh kept the host and rewrote its record to us-central1.
+    const flags: EdgeControlFlags = { mode: 'on', regionRolloutPermille: { ...DIVERGENT } }
+    const d = await director(() => flags)
+    expect(await d.assign(splitHost, refresh)).toBe(EDGE_URL)
+    expect(await d.recorded(splitHost)).toBe('us-central1')
+    flags.cohortRegion = 'host'
+    // Refreshes keep it (judged by the stale record), its next named ask moves it off, for good.
+    expect(await d.assign(splitHost, refresh)).toBe(EDGE_URL)
+    expect(await d.assign(splitHost, drain('asia-east2'))).toBe(CELL_URL)
+    expect(d.exports).toEqual([splitHost])
+    for (const ask of life('asia-east2')) { expect(await d.assign(splitHost, ask)).toBe(CELL_URL) }
+    expect(d.pushes).toEqual([splitHost])
+  })
+
+  it('still moves off on mode off and on a named region whose rollout no longer admits it', async () => {
+    const flags = hostFlags()
+    const d = await director(() => flags)
+    expect(await d.assign(splitHost, open('us-central1'))).toBe(EDGE_URL)
+    flags.regionRolloutPermille = { 'us-central1': 0, 'asia-east2': 500 }
+    expect(await d.assign(splitHost, drain('us-central1'))).toBe(CELL_URL)
+    flags.regionRolloutPermille = { ...DIVERGENT }
+    expect(await d.assign(splitHost, open('us-central1'))).toBe(EDGE_URL)
+    flags.mode = 'off'
+    expect(await d.assign(splitHost, refresh)).toBe(CELL_URL)
+    expect(d.exports).toEqual([splitHost, splitHost])
+  })
+
+  it('judges a regionless ask against the recorded region for country exclusion', async () => {
     const flags: EdgeControlFlags = {
       mode: 'on',
       regionRolloutPermille: { 'us-central1': 1000, 'asia-east2': 1000 },
@@ -234,39 +286,84 @@ describe("edge cohort by host (cohortRegion 'host')", () => {
     const edge = new EdgeAssignments(database, config)
     await edge.ensureEdgeCell()
     const identity = { userId: 'user-1', relayHostId: splitHost }
-    await edge.moveToEdge(identity, 0, 'us-central1')
-    // Moved under us-central1 (no exclusion there): an Asian ask from CN no longer flips it off.
-    const region = await edge.cohortRegion(identity, 'asia-east2')
-    expect(region).toBe('us-central1')
-    expect(inEdgeCohort(config, splitHost, region, 'user-1', 'CN')).toBe(true)
-    // Moved under asia-east2: CN is excluded whatever its asks name.
-    await database.query(`UPDATE relay_edge_host_regions SET region = 'asia-east2'`)
-    const asia = await edge.cohortRegion(identity, 'us-central1')
-    expect(asia).toBe('asia-east2')
-    expect(inEdgeCohort(config, splitHost, asia, 'user-1', 'CN')).toBe(false)
-    expect(inEdgeCohort(config, splitHost, asia, 'user-1', 'HK')).toBe(true)
+    await edge.moveToEdge(identity, 0, 'asia-east2')
+    const judged = await edge.judgeCohort(identity, undefined)
+    expect(judged).toEqual({ by: 'record', region: 'asia-east2' })
+    // Under 'ask' a CN refresh counted as us-central1 (no exclusion there) and kept it.
+    expect(inEdgeCohort(config, splitHost, undefined, 'user-1', 'CN')).toBe(true)
+    expect(inEdgeCohort(config, splitHost, 'asia-east2', 'user-1', 'CN')).toBe(false)
+    expect(inEdgeCohort(config, splitHost, 'asia-east2', 'user-1', 'HK')).toBe(true)
   })
 
-  it('ignores a stale record of a host not on the edge, and keeps the front door and allow lists', async () => {
-    const flags: EdgeControlFlags = { mode: 'on', regionRolloutPermille: { ...DIVERGENT }, cohortRegion: 'host' }
-    const config = edgeConfig(() => flags, { allowHosts: new Set([hosts[1]!]) })
+  it('re-checks under the row lock: a regionless ask never moves a host that left meanwhile', async () => {
+    for (const frontDoorUrls of [undefined, new Set(['https://door.example.test'])]) {
+      const flags = hostFlags()
+      const config = edgeConfig(() => flags, frontDoorUrls ? { frontDoorUrls } : {})
+      const database = await openInMemoryRelayDatabase()
+      databases.push(database)
+      const edge = new EdgeAssignments(database, config)
+      await edge.ensureEdgeCell()
+      const identity = { userId: 'user-1', relayHostId: lowHost }
+      await edge.moveToEdge(identity, 0, 'asia-east2')
+      expect(await edge.judgeCohort(identity, undefined)).toEqual({ by: 'record', region: 'asia-east2' })
+      // Another director placed it on a cell between the read and the lock.
+      await database.query(`UPDATE relay_assignments SET cell_id = 'us-c1', assignment_epoch = 7`)
+      const route = frontDoorUrls ? { switchable: false } : undefined
+      await expect(edge.moveToEdge(identity, 0, 'asia-east2', route, { keepOnly: true })).rejects.toEqual(
+        new EdgeMoveDeferredError('not_on_edge')
+      )
+      const row = (await database.query(`SELECT cell_id, assignment_epoch FROM relay_assignments`))[0]!
+      expect([row.cell_id, Number(row.assignment_epoch)]).toEqual(['us-c1', 7])
+      // No row at all: nothing inserted either.
+      const fresh = { userId: 'user-1', relayHostId: splitHost }
+      await expect(edge.moveToEdge(fresh, 0, undefined, route, { keepOnly: true })).rejects.toBeInstanceOf(EdgeMoveDeferredError)
+      expect(await database.query(`SELECT 1 FROM relay_assignments WHERE relay_host_id = ?`, [splitHost])).toEqual([])
+      // On the edge, keepOnly answers as before.
+      await database.query(`UPDATE relay_assignments SET cell_id = ?`, [EDGE_CELL_ID])
+      expect((await edge.moveToEdge(identity, 0, 'asia-east2', route, { keepOnly: true })).cellId).toBe(EDGE_CELL_ID)
+    }
+  })
+
+  it('reads the row only for a regionless ask of a host that may be on the edge, and never twice', async () => {
+    const flags: EdgeControlFlags = { ...hostFlags(), leaveCeilingPermille: 1000 }
+    const d = await director(() => flags)
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const judge = vi.spyOn(d.edge, 'judgeCohort')
+    const leave = vi.spyOn(d.edge, 'leaveEdge')
+    const query = vi.spyOn(d.database, 'query')
+    const reads = () => query.mock.calls.filter(([sql]) => sql.includes('LEFT JOIN relay_edge_host_regions')).length
+    // Named ask: judged as under 'ask', no read.
+    await d.assign(splitHost, drain('asia-east2'))
+    expect(reads()).toBe(0)
+    expect(leave).toHaveBeenCalledTimes(1)
+    // Regionless ask of a host off the edge: one read, and no leave read after it.
+    await d.assign(splitHost, refresh)
+    expect(reads()).toBe(1)
+    expect(leave).toHaveBeenCalledTimes(1)
+    // Above every rollout and the ceiling: no edge row is possible, so nothing is read.
+    flags.leaveCeilingPermille = 500
+    flags.regionRolloutPermille = { 'us-central1': 500, 'asia-east2': 500 }
+    await d.assign(splitHost, refresh)
+    expect(reads()).toBe(1)
+    expect(await judge.mock.results.at(-1)!.value).toEqual({ by: 'none' })
+  })
+
+  it('judges hosts listed by id as before: their region never matters', async () => {
+    const flags = hostFlags()
+    const config = edgeConfig(() => flags, { allowHosts: new Set([splitHost]), denyHosts: new Set([lowHost]) })
     const database = await openInMemoryRelayDatabase()
     databases.push(database)
     const edge = new EdgeAssignments(database, config)
     await edge.ensureEdgeCell()
-    const identity = { userId: 'user-1', relayHostId: splitHost }
-    await edge.moveToEdge(identity, 0, 'us-central1')
-    // A record left behind (a failed forget) after the host went to a cell.
-    await database.query(`UPDATE relay_assignments SET cell_id = 'us-c1'`)
-    expect(await edge.cohortRegion(identity, 'asia-east2')).toBe('asia-east2')
-    expect(await edge.cohortRegion({ userId: 'user-1', relayHostId: 'neverassigned001' }, undefined)).toBeUndefined()
-    // Allow lists win whatever the region.
-    expect(inEdgeCohort(config, hosts[1]!, 'asia-east2')).toBe(true)
+    const query = vi.spyOn(database, 'query')
+    expect(await edge.judgeCohort({ userId: 'user-1', relayHostId: splitHost }, undefined)).toEqual({ by: 'ask', region: undefined })
+    expect(await edge.judgeCohort({ userId: 'user-1', relayHostId: lowHost }, undefined)).toEqual({ by: 'ask', region: undefined })
+    expect(query).not.toHaveBeenCalled()
   })
 })
 
 describe('edge cohort by ask (cohortRegion absent or ask)', () => {
-  it('decides as before: the same asks still flap the host (the incident)', async () => {
+  it('decides as before: an Asian host still flaps at every regionless refresh (the incident)', async () => {
     for (const cohortRegion of [undefined, 'ask'] as const) {
       const flags: EdgeControlFlags = {
         mode: 'on',
@@ -275,30 +372,40 @@ describe('edge cohort by ask (cohortRegion absent or ask)', () => {
       }
       const d = await director(() => flags)
       const answers: string[] = []
-      for (const ask of ASKS) { answers.push(await d.assign(splitHost, ask)) }
-      expect(answers).toEqual([EDGE_URL, CELL_URL, EDGE_URL, CELL_URL, EDGE_URL, CELL_URL, EDGE_URL, CELL_URL])
-      expect(d.pushes).toHaveLength(4)
-      expect(d.exports).toHaveLength(4)
+      for (const ask of life('asia-east2')) { answers.push(await d.assign(splitHost, ask)) }
+      expect(answers).toEqual([CELL_URL, EDGE_URL, EDGE_URL, CELL_URL, EDGE_URL, EDGE_URL, EDGE_URL, CELL_URL, EDGE_URL])
+      expect(d.pushes).toHaveLength(3)
+      expect(d.exports).toHaveLength(2)
+      // The review scenario: the refresh moves it on, and an asia-east2 abort still moves it off.
+      const r = await director(() => flags)
+      const scenario = [
+        await r.assign(splitHost, { preferredRegion: 'asia-east2' }),
+        await r.assign(splitHost, refresh),
+        await r.assign(splitHost, { preferredRegion: 'asia-east2' })
+      ]
+      expect(scenario).toEqual([CELL_URL, EDGE_URL, CELL_URL])
     }
   })
 
-  it('never reads the recorded region, and answers the ask region on every path', async () => {
-    const database = await openInMemoryRelayDatabase()
-    databases.push(database)
-    const flags: EdgeControlFlags = { mode: 'on', regionRolloutPermille: { ...DIVERGENT } }
-    const edge = new EdgeAssignments(database, edgeConfig(() => flags))
-    await edge.ensureEdgeCell()
-    const identity = { userId: 'user-1', relayHostId: splitHost }
-    await edge.moveToEdge(identity, 0, 'us-central1')
-    const query = vi.spyOn(database, 'query')
-    for (const region of [...RELAY_REGIONS, undefined] as (RelayRegion | undefined)[]) {
-      expect(await edge.cohortRegion(identity, region)).toBe(region)
+  it('never reads the row, on any ask', async () => {
+    for (const flags of [
+      { mode: 'on', regionRolloutPermille: { ...DIVERGENT } },
+      { mode: 'on', regionRolloutPermille: { ...DIVERGENT }, cohortRegion: 'ask' },
+      // 'host' with the mode off: nobody is in the cohort.
+      { mode: 'off', regionRolloutPermille: { ...DIVERGENT }, cohortRegion: 'host' }
+    ] as EdgeControlFlags[]) {
+      const database = await openInMemoryRelayDatabase()
+      databases.push(database)
+      const edge = new EdgeAssignments(database, edgeConfig(() => flags))
+      await edge.ensureEdgeCell()
+      const identity = { userId: 'user-1', relayHostId: splitHost }
+      await edge.moveToEdge(identity, 0, 'us-central1')
+      const query = vi.spyOn(database, 'query')
+      for (const region of [...RELAY_REGIONS, undefined] as (RelayRegion | undefined)[]) {
+        expect(await edge.judgeCohort(identity, region)).toEqual({ by: 'ask', region })
+      }
+      expect(query).not.toHaveBeenCalled()
     }
-    // 'host' with the mode off reads nothing either: nobody is in the cohort.
-    flags.cohortRegion = 'host'
-    flags.mode = 'off'
-    expect(await edge.cohortRegion(identity, 'asia-east2')).toBe('asia-east2')
-    expect(query).not.toHaveBeenCalled()
   })
 
   it('parses as before without the key; a bad value drops only this key and keeps the last one', () => {
@@ -337,7 +444,7 @@ describe('edge evacuation agrees with the assign path', () => {
   // 'retired-region': a record no longer a known region, judged like no record.
   const recordings: (string | undefined)[] = ['us-central1', 'asia-east2', 'retired-region', undefined]
 
-  it('drains exactly the edge hosts the assign path would move off, for every ask region', async () => {
+  it('drains exactly the edge hosts the assign path would move off', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     vi.spyOn(console, 'error').mockImplementation(() => {})
     const sample = hosts.slice(0, 60)
@@ -375,20 +482,22 @@ describe('edge evacuation agrees with the assign path', () => {
       }
       const evacuation = new EdgeEvacuation(database, config, admin, EDGE_CELL_ID, () => 1_000, () => 0)
       await evacuation.sweep()
+      const keeps = async (host: string, asked: RelayRegion | undefined) => {
+        const judged = await edge.judgeCohort({ userId: 'user-1', relayHostId: host }, asked)
+        return judged.by !== 'none' && inEdgeCohort(config, host, judged.region, 'user-1', null)
+      }
       for (const host of sample) {
-        const identity = { userId: 'user-1', relayHostId: host }
-        const kept = await Promise.all(
-          ([...RELAY_REGIONS, undefined] as (RelayRegion | undefined)[]).map(async (asked) =>
-            inEdgeCohort(config, host, await edge.cohortRegion(identity, asked), 'user-1', null)
-          )
-        )
-        if ((RELAY_REGIONS as readonly (string | undefined)[]).includes(recordedOf.get(host))) {
-          // A recorded host: one decision whatever its asks name, and the sweep's is the same.
-          expect(new Set(kept).size).toBe(1)
+        const recorded = recordedOf.get(host)
+        if ((RELAY_REGIONS as readonly (string | undefined)[]).includes(recorded)) {
+          // A recorded host: its regionless asks and an ask naming its region (what its desktop
+          // sends) decide alike, and the sweep drains it exactly when they would move it off.
+          const kept = [await keeps(host, undefined), await keeps(host, recorded as RelayRegion)]
+          expect(kept[0]).toBe(kept[1])
           expect(drained.includes(host)).toBe(!kept[0])
         } else {
-          // No valid record (e.g. moved before records existed): the sweep judges 'any', so it never drains a
-          // host some ask would keep, and its next ask records a region.
+          // No valid record (moved before records existed): the sweep judges 'any', so it never
+          // drains a host some ask would keep; its next ask records a region.
+          const kept = await Promise.all(([...RELAY_REGIONS, undefined] as (RelayRegion | undefined)[]).map((asked) => keeps(host, asked)))
           expect(drained.includes(host)).toBe(!kept.some(Boolean))
         }
       }

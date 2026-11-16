@@ -134,7 +134,7 @@ export class EdgeEvacuation {
         // is judged by the effective share of the region its last edge ask recorded
         // (relay_edge_host_regions), so a regional abort or shrink drains just that region; a
         // host with no record is judged 'any'. With cohortRegion 'host' the record is the region
-        // the host moved onto the edge under, which is also what its asks are judged by. Country exclusion needs the ask's address, so an
+        // of the host's last region-naming ask, which its regionless asks are judged by too. Country exclusion needs the ask's address, so an
         // excluded host leaves on its next ask.
         const region = regional ? recordedRegion(row) : 'any'
         if (inEdgeCohort(this.config, identity.relayHostId, region, identity.userId)) { continue }

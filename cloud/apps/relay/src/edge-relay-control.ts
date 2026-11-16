@@ -54,20 +54,19 @@ export type EdgeControlFlags = {
   // edge URL on their next reconnect. A bad value drops only this key (reported in ignoredKeys);
   // the rest of the object still applies.
   frontDoor?: EdgeFrontDoorFlag
-  // Which region a host's cohort is judged by (inEdgeCohort's region, regional rollout and country
-  // exclusion). 'ask' (also when absent): the region the ask names, so a host whose asks name
-  // different regions (the hourly region refresh, the initial open, asks without a region) moves on
-  // and off the edge when those regions' rollouts differ. 'host': a host whose row is on the edge
-  // is judged by the region recorded when it moved there (relay_edge_host_regions), whatever its
-  // asks name, and its kept asks no longer rewrite that record; only a move onto the edge uses the
-  // ask's region. For a fixed set of flags a host then never flips, and the evacuation sweep judges
-  // every edge host by its record (as with regional rollouts). A country exclusion is judged for
-  // that region too (the ask's country), so a host moved on under a region that does not exclude
-  // its country stays: give every in-scope region the same exclusions when the country matters
-  // whatever region its asks name. Front door mapping by country uses the same region. Set it
-  // only once every serving director carries it: an older one ignores it (ignoredKeys) and keeps
-  // judging by the ask. A bad value drops only this key (reported in ignoredKeys) and keeps the
-  // last applied one.
+  // How a regionless ask is judged. 'ask' (also when absent): as RELAY_DEFAULT_REGION, so with
+  // regional rollouts that differ, a host whose region-naming asks (the initial open, the drain
+  // reconnect) name another region moves on and off the edge at every regionless one (the shipped
+  // desktop's hourly region refresh). 'host': a regionless ask never moves a host onto the edge;
+  // one of a host on the edge is judged by the region its last region-naming ask recorded
+  // (relay_edge_host_regions, which it leaves unchanged), whatever its country exclusion or front
+  // door says for that region. Asks naming a region are judged and recorded exactly as under
+  // 'ask'. For a fixed set of flags and a desktop whose preferred region holds, a host then never
+  // flips, and the evacuation sweep judges every edge host by its record, as the assign path
+  // does. A host whose desktop never names a region never joins under 'host'. Set it only once
+  // every serving director carries it: an older one ignores it (ignoredKeys) and keeps judging by
+  // the ask. A bad value drops only this key (reported in ignoredKeys) and keeps the last applied
+  // one.
   cohortRegion?: EdgeCohortRegion
 }
 

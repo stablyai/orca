@@ -61,6 +61,7 @@ import {
   inEdgeCohort,
   mapEpochFloor,
   mayBeOnEdge,
+  type EdgeCohortJudgement,
   type EdgeAssignments
 } from './edge-relay.js'
 import { EDGE_CONTROL_DEFAULTS } from './edge-relay-control.js'
@@ -503,12 +504,12 @@ export function createRelayApp(
     if (edge?.config.ipCountry) {
       edge.regionCountries.record(requestedRegion, country)
     }
-    // The region the cohort is judged by: the ask's, unless director/edge.json cohortRegion is
-    // 'host' (EdgeAssignments.cohortRegion).
-    let cohortRegion = requestedRegion
+    // How the cohort is judged: by the ask's region, unless director/edge.json cohortRegion is
+    // 'host' and the ask names none (EdgeAssignments.judgeCohort).
+    let judged: EdgeCohortJudgement = { by: 'ask', region: requestedRegion }
     if (edge && body.data.regionCorrection?.action !== 'report') {
       try {
-        cohortRegion = await edge.cohortRegion(identity, requestedRegion)
+        judged = await edge.judgeCohort(identity, requestedRegion)
       } catch (error) {
         if (!isRelayDatabaseTransientError(error)) { throw error }
         logAssignmentRejection({
@@ -522,11 +523,14 @@ export function createRelayApp(
         return context.json({ error: 'assignment_temporarily_unavailable' }, 503)
       }
     }
+    const cohortRegion = judged.by === 'none' ? undefined : judged.region
     const toEdge =
       edge?.ready === true &&
       body.data.regionCorrection?.action !== 'report' &&
+      judged.by !== 'none' &&
       inEdgeCohort(edge.config, claims.relayHostId, cohortRegion, claims.sub, country)
-    if (edge?.pushes && !toEdge && mayBeOnEdge(edge.config, claims.relayHostId, claims.sub)) {
+    // judged 'none': the row was just read off the edge, so there is nothing to leave.
+    if (edge?.pushes && !toEdge && judged.by !== 'none' && mayBeOnEdge(edge.config, claims.relayHostId, claims.sub)) {
       // Any lane below may re-place a host whose row is on the edge; its devices come back first.
       // Hosts that were never in a cohort skip this row read (most asks; the pool is small).
       try {
@@ -574,10 +578,12 @@ export function createRelayApp(
             mapEpochFloor(operations.shadowSeats, identity, Date.now()),
             operations.reservePlacement?.rowEpochFloor(identity) ?? 0
           ),
-          // The judged region: recorded on a move, and unchanged on a kept host under 'host'.
+          // The judged region: the ask's, or under 'host' a regionless ask's recorded one (unchanged).
           cohortRegion,
           // Only with front doors configured (ORCA_RELAY_EDGE_FRONT_DOOR_URLS); else as before.
-          edgeRoute(edge.config, claims.relayHostId, cohortRegion, country, body.data)
+          edgeRoute(edge.config, claims.relayHostId, cohortRegion, country, body.data),
+          // A regionless ask under 'host' only keeps a host on the edge (re-checked under the lock).
+          { keepOnly: judged.by === 'record' }
         )
       } catch (error) {
         if (error instanceof EdgeMoveDeferredError) {
