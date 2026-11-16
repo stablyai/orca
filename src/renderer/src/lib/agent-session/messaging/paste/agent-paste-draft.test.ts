@@ -26,6 +26,7 @@ const testState = vi.hoisted(() => ({
   isRemoteRuntimePtyId: vi.fn(),
   sendRuntimePtyInputVerified: vi.fn(),
   inspectRuntimeTerminalProcess: vi.fn(),
+  waitForRuntimeTerminalSetup: vi.fn(),
   subscribeToRuntimeTerminalData: vi.fn()
 }))
 
@@ -47,6 +48,10 @@ vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-data-sidecar-subs
 
 vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-pre-handler-buffer', () => ({
   replayPreHandlerPtyData: testState.replayPreHandlerPtyData
+}))
+
+vi.mock('@/runtime/hosted-terminals/inspection/runtime-terminal-setup', () => ({
+  waitForRuntimeTerminalSetup: testState.waitForRuntimeTerminalSetup
 }))
 
 vi.mock('@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection', () => ({
@@ -103,6 +108,8 @@ describe('pasteDraftWhenAgentReady', () => {
     testState.isRemoteRuntimePtyId.mockReturnValue(false)
     testState.sendRuntimePtyInputVerified.mockReset()
     testState.sendRuntimePtyInputVerified.mockResolvedValue(true)
+    testState.waitForRuntimeTerminalSetup.mockReset()
+    testState.waitForRuntimeTerminalSetup.mockResolvedValue(undefined)
     testState.inspectRuntimeTerminalProcess.mockReset()
     testState.inspectRuntimeTerminalProcess.mockResolvedValue({
       foregroundProcess: 'bash',
@@ -131,12 +138,10 @@ describe('pasteDraftWhenAgentReady', () => {
       submit: true
     })
 
-    expect(testState.storeSubscribers.size).toBe(1)
     testState.appState.ptyIdsByTabId = { 'tab-1': ['pty-1'] }
     for (const subscriber of testState.storeSubscribers) {
       subscriber(testState.appState)
     }
-    expect(testState.storeSubscribers.size).toBe(0)
     expect(testState.ptyObserver).not.toBeNull()
     expect(testState.replayPreHandlerPtyData).toHaveBeenCalledWith('pty-1', testState.ptyObserver)
     await vi.advanceTimersByTimeAsync(0)
@@ -178,7 +183,8 @@ describe('pasteDraftWhenAgentReady', () => {
 
   it('keeps the issue draft through slow Setup and readiness output arriving during confirmation', async () => {
     const setup = Promise.withResolvers<{ foregroundProcess: string; hasChildProcesses: boolean }>()
-    testState.inspectRuntimeTerminalProcess.mockReturnValueOnce(setup.promise)
+    testState.waitForRuntimeTerminalSetup.mockReturnValueOnce(setup.promise)
+    testState.inspectRuntimeTerminalProcess.mockRejectedValue(new Error('daemon timeout'))
     const paste = pasteDraftWhenAgentReady({ tabId: 'tab-1', content: ISSUE_URL, agent: 'codex' })
     await vi.advanceTimersByTimeAsync(11 * 60 * 1000)
     expect(testState.sendRuntimePtyInputVerified).not.toHaveBeenCalled()
@@ -189,7 +195,7 @@ describe('pasteDraftWhenAgentReady', () => {
   })
 
   it('refuses a draft after failed Setup even if Claude owns the PTY', async () => {
-    testState.inspectRuntimeTerminalProcess.mockRejectedValueOnce(new Error('Setup failed'))
+    testState.waitForRuntimeTerminalSetup.mockRejectedValueOnce(new Error('Setup failed'))
     testState.inspectRuntimeTerminalProcess.mockResolvedValue({
       foregroundProcess: 'claude',
       hasChildProcesses: true

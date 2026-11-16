@@ -1,3 +1,4 @@
+import { isLocalCounterPtyId } from '../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import { SessionNotFoundError } from '../../daemon/protocol/daemon-errors'
 import { addWslEnvKeys } from '../../../shared/shell/wsl/wsl-env'
 import type { PtySpawnOperationState } from './spawn-operation-state'
@@ -7,8 +8,16 @@ import { resolveHostAgentStartupShell } from '../../../shared/shell/launch/windo
 import { getRegisteredSshState } from '../../ssh/targets/ssh-target-registry'
 import { isWslTerminalSpawn } from './wsl-terminal-spawn'
 
+type SetupGatedPtyDispatch = Pick<
+  PtySpawnOperationState,
+  'args' | 'spawnOptions' | 'expectedWslDistro' | 'effectiveSessionAppId' | 'releaseSetupDependency'
+> & {
+  deps: Pick<PtySpawnOperationState['deps'], 'runtime'>
+  provider: Pick<PtySpawnOperationState['provider'], 'spawn'>
+}
+
 /** Preparation keeps the real command; only the physical fresh dispatch hands it to the Setup shell. */
-export async function dispatchSetupGatedPty(ctx: PtySpawnOperationState, validate: () => void) {
+export async function dispatchSetupGatedPty(ctx: SetupGatedPtyDispatch, validate: () => void) {
   const { args, spawnOptions, deps } = ctx
   const wsl =
     !args.connectionId &&
@@ -19,8 +28,17 @@ export async function dispatchSetupGatedPty(ctx: PtySpawnOperationState, validat
     : args.connectionId
       ? getRegisteredSshState(args.connectionId)?.remotePlatform
       : process.platform
+  const hasAgentLaunch = Boolean(
+    args.worktreeId && (spawnOptions.command || spawnOptions.launchAgent)
+  )
   const tryReattach = async () => {
-    if (!args.sessionId || spawnOptions.isNewSession || args.agentSessionEnsure) {
+    if (
+      !hasAgentLaunch ||
+      !args.sessionId ||
+      isLocalCounterPtyId(args.sessionId) ||
+      spawnOptions.isNewSession ||
+      args.agentSessionEnsure
+    ) {
       return undefined
     }
     validate()
@@ -48,7 +66,7 @@ export async function dispatchSetupGatedPty(ctx: PtySpawnOperationState, validat
     return existing
   }
   const prepare = async () =>
-    args.worktreeId && (spawnOptions.command || spawnOptions.launchAgent)
+    args.worktreeId && hasAgentLaunch
       ? await deps.runtime?.prepareTerminalSetupForSpawn?.({
           workspaceId: args.worktreeId,
           command: spawnOptions.command,

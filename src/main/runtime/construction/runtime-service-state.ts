@@ -1,4 +1,3 @@
-import { SetupTerminalCompletions } from '../terminal/wait/setup-terminal-completions'
 import { CrewChanges } from '../orchestration/crew/crew-changes'
 import { OrchestrationStructuredMailboxPointerDelivery } from '../orchestration/mailbox/structured-pointer/structured-mailbox-pointer-delivery'
 
@@ -185,7 +184,6 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     },
     readForegroundCommandLine: (ptyId, foregroundProcess) =>
       readLocalPtyForegroundCommandLine(ptyId, foregroundProcess),
-    // Renderer command-finished can drop unchanged status rows; publish Done after that fact.
     publish: (ptyId, payload, yieldsToHookSince) =>
       this.runAfterPendingTerminalSideEffectFacts(ptyId, () =>
         this.emitTerminalAgentStatusEvents(
@@ -332,12 +330,9 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
 
   protected readonly terminalStreamConsumers = new RuntimeTerminalStreamConsumers()
 
-  // Replay bounded startup bytes when draft paste subscribes after the ready marker.
   protected recentPtyOutputById = new Map<string, RecentPtyOutputBuffer>()
 
-  // A fresh launch's pending composer watch; submits await it, and it is dropped once settled.
   protected launchComposerReadyByPtyId = new Map<string, Promise<boolean>>()
 
   protected setupCompletionTokenByPtyId = new Map<string, string>()
-  protected readonly setupTerminalCompletions = new SetupTerminalCompletions()
 }

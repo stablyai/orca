@@ -1,5 +1,4 @@
 import { launchPreparationFailure } from '../providers/structured-agent-session-adapter-errors'
-import { providerStartupFailureFact } from './structured-agent-session-failure-text'
 import { structuredAgentSessionHandingOver } from '../delivery/structured-agent-session-handing-over'
 import { randomUUID } from 'node:crypto'
 import { setTimeout as delay } from 'node:timers/promises'
@@ -29,7 +28,7 @@ import {
   refusedStructuredAgentSessionStart as failedStart,
   recordStructuredAgentSessionStartFailure
 } from './structured-agent-session-start-failure-row'
-import { structuredAgentSessionStartFailure } from './structured-agent-session-failure-text'
+import * as failureText from './structured-agent-session-failure-text'
 import { structuredAgentSessionFailureWordsContext } from '../operations/structured-agent-session-send-preparation'
 import { sameProviderChild } from '../host/structured-agent-session-provider-child'
 
@@ -80,7 +79,7 @@ export function registerStructuredAgentSessionStart(
         }
         return {
           ...failedStructuredAgentSessionStart(),
-          failure: providerStartupFailureFact(launchPreparationFailure(error))
+          failure: failureText.providerStartupFailureFact(launchPreparationFailure(error))
         }
       }
       const queued = await preparationLock.commit(async () => {
@@ -152,10 +151,7 @@ export function registerStructuredAgentSessionStart(
       return failedStructuredAgentSessionStart()
     })
   let recorded: Promise<void> = Promise.resolve()
-  // Stop, close, quit, the deadline and the contract guard decide the start at once, even while
-  // its attempt or the session's serialized work is still held; late attempt work fails the
-  // flight's commit check. The failure row is queued before callers wake, so their work follows
-  // it, but they never wait for it to be written.
+  // Cancellation settles before serialized writes; the commit check fences late attempts.
   const outcome = Promise.race([
     attempting,
     stoppedStructuredAgentSessionStartSignal(acquire.signal)
@@ -221,7 +217,7 @@ async function recordStructuredAgentSessionFlightFailure(
     { journal: session.journal, fence: record?.lease.runtimeFence ?? 0 },
     {
       startKey: key.generation ?? failure.startKey ?? key.startedFor ?? key.attemptId,
-      ...structuredAgentSessionStartFailure(
+      ...failureText.structuredAgentSessionStartFailure(
         failure.cause,
         structuredAgentSessionFailureWordsContext(record)
       )

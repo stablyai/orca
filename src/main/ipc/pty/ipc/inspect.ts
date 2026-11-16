@@ -25,7 +25,7 @@ import {
 } from '../pane/serializer-state'
 
 export function installPtyInspectIpcHandlers(deps: {
-  runtime?: Pick<OrcaRuntimeService, 'waitForPtySetup'>
+  runtime?: Pick<OrcaRuntimeService, 'waitForPtySetup' | 'getPtySetupStatus'>
   getLocalPtyProviderStartupPromise: (hostId?: ResolvedPtyHost) => Promise<void> | undefined
 }): void {
   const ipcMain = getPtyIpc()
@@ -137,6 +137,16 @@ export function installPtyInspectIpcHandlers(deps: {
       return getProviderForPty(args.id).getForegroundProcess(args.id)
     }
   )
+
+  ipcMain.handle('pty:setupStatus', (_event, args: { id: string }) => {
+    if (typeof args?.id !== 'string' || !args.id || isRemoteRuntimePtyId(args.id)) {
+      throw new Error('terminal_gone')
+    }
+    if (!deps.runtime) {
+      throw new Error('unsupported_method')
+    }
+    return deps.runtime.getPtySetupStatus(args.id)
+  })
 
   ipcMain.handle(
     'pty:inspectProcess',

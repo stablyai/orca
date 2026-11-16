@@ -1,3 +1,4 @@
+import type { TerminalSetupStatus } from '../../../../shared/terminal/pty/lifecycle/terminal-setup-status'
 import type { WorkspaceMetadataSet } from '../../../../shared/worktree/metadata/workspace-metadata-set'
 import type { WorkspaceCleanupRunFinishedEvent } from '../../../../shared/workspace-cleanup/workspace-cleanup-run'
 import type {
@@ -192,6 +193,7 @@ export type RuntimeNotifier = {
   ): void
   // Publish driver/clientId so the lock banner distinguishes mobile actors; boolean lock state loses identity (docs/mobile-presence-lock.md).
   terminalDriverChanged(ptyId: string, driver: RuntimeTerminalDriverState): void
+  terminalSetupChanged?(status: TerminalSetupStatus): void
   nativeChatLaunchDraftResolved?(
     tabId: string,
     resolution: { text: string; createdAt: number }

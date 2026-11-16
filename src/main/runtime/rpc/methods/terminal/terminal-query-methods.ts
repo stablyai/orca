@@ -129,6 +129,12 @@ export const TERMINAL_QUERY_METHODS = [
     })
   }),
   defineMethod({
+    name: 'terminal.setupStatus',
+    permission: 'workspace',
+    params: TerminalHandle,
+    handler: async (params, { runtime }) => runtime.getTerminalSetupStatus(params.terminal)
+  }),
+  defineMethod({
     name: 'terminal.inspectProcess',
     permission: 'workspace',
     params: TerminalInspectProcess,

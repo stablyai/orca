@@ -232,6 +232,7 @@ export function registerRuntimeWindowLifecycle(
       send('runtime:terminalFitOverrideChanged', { ptyId, mode, cols, rows }),
     terminalDriverChanged: (ptyId, driver) =>
       send('runtime:terminalDriverChanged', { ptyId, driver }),
+    terminalSetupChanged: (status) => send('runtime:terminalSetupChanged', status),
     nativeChatLaunchDraftResolved: (tabId, resolution) =>
       send('runtime:nativeChatLaunchDraftResolved', { tabId, ...resolution }),
     browserDriverChanged: (browserPageId, driver) =>

@@ -42,6 +42,10 @@ vi.mock('@/components/terminal-pane/pty-transport/delivery/pty-pre-handler-buffe
   replayPreHandlerPtyData: testState.replayPreHandlerPtyData
 }))
 
+vi.mock('@/runtime/hosted-terminals/inspection/runtime-terminal-setup', () => ({
+  waitForRuntimeTerminalSetup: async () => {}
+}))
+
 vi.mock('@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection', () => ({
   inspectRuntimeTerminalProcess: testState.inspectRuntimeTerminalProcess
 }))

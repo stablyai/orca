@@ -1,4 +1,4 @@
-import { inspectRuntimeTerminalProcess } from '@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection'
+import { waitForRuntimeTerminalSetup } from '@/runtime/hosted-terminals/inspection/runtime-terminal-setup'
 import { waitForTerminalOutputParsed } from '@/lib/pane-manager/terminal-output/pane-terminal-output-scheduler'
 import { executeTerminalStartupCommandPaste } from '../../input/paste/terminal-startup-command-paste'
 import { resolveTerminalPasteRuntime } from '../../input/paste/terminal-paste-runtime'
@@ -6,6 +6,12 @@ import { CLIENT_PLATFORM } from '@/lib/workspace/creation/new-workspace'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
 export function bindTerminalPasteStartupDelivery(session: ConnectPanePtySession): void {
+  const setupAbort = new AbortController()
+  const cleanup = session.cleanupStartupDraftPasteTimers
+  session.cleanupStartupDraftPasteTimers = () => {
+    setupAbort.abort()
+    cleanup()
+  }
   const isStartupPasteTargetCurrent = (ptyId: string | null): boolean =>
     !session.disposed &&
     session.deps.paneTransportsRef.current.get(session.pane.id) === session.transport &&
@@ -65,8 +71,14 @@ export function bindTerminalPasteStartupDelivery(session: ConnectPanePtySession)
           return
         }
         try {
-          await inspectRuntimeTerminalProcess(ptyId, { waitForSetup: true })
+          await waitForRuntimeTerminalSetup(ptyId, setupAbort.signal)
         } catch {
+          if (!setupAbort.signal.aborted && isCurrent()) {
+            session.deps.onPtyErrorRef?.current?.(
+              session.pane.id,
+              `${session.startupDraftAgent ?? 'Agent'} did not start because Setup could not be confirmed. Check the Setup terminal and try again.`
+            )
+          }
           return
         }
         if (!isCurrent()) {

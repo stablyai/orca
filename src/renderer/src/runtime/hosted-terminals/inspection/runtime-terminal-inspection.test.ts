@@ -1,4 +1,3 @@
-import { inspectRuntimeTerminalProcess } from './runtime-terminal-process-inspection'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { sendRuntimePtyInput } from '../input/runtime-terminal-input-send'
 import { sendRuntimePtyInputVerified } from '../input/runtime-terminal-verified-input'
@@ -27,24 +26,6 @@ describe('runtime terminal owner routing', () => {
         }
       }
     })
-  })
-
-  it('keeps older-host compatibility for Setup-aware startup inspection', async () => {
-    inspectProcess.mockRejectedValueOnce(
-      Object.assign(new Error('unsupported_method'), { code: 'unsupported_method' })
-    )
-    await expect(
-      inspectRuntimeTerminalProcess('local-pty', { waitForSetup: true })
-    ).resolves.toMatchObject({ verdict: 'unverifiable', reason: 'old_host' })
-  })
-
-  it('refuses Setup-aware startup inspection when transport is lost', async () => {
-    inspectProcess.mockRejectedValueOnce(
-      Object.assign(new Error('connection lost'), { code: 'CONNECTION_LOST' })
-    )
-    await expect(
-      inspectRuntimeTerminalProcess('local-pty', { waitForSetup: true })
-    ).rejects.toThrow('connection lost')
   })
 
   it('drops byte-oversized fire-and-forget input after deferred validation', async () => {

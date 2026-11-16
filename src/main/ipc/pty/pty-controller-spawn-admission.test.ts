@@ -151,6 +151,30 @@ describe('registerPtyHandlers', () => {
     ).resolves.toMatchObject({ id: 'existing-live', isReattach: true })
   })
 
+  it.each([
+    { sessionId: '1', command: 'claude' },
+    { sessionId: 'saved-shell', command: undefined }
+  ])('keeps fresh restore semantics for $sessionId', async (request) => {
+    const provider = createAgentClaimProvider({
+      spawn: vi.fn(async (options) =>
+        options.attachOnly
+          ? { id: request.sessionId, isReattach: true }
+          : { id: 'fresh-restored-shell' }
+      )
+    })
+    setLocalPtyProvider(provider as never)
+    const controller = registerAgentClaimController({ seedHeadlessTerminal: vi.fn() })
+    await expect(
+      controller.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: '/tmp/recovered-worktree',
+        worktreeId: recoveredAgentSurface.worktreeId,
+        ...request
+      })
+    ).resolves.toMatchObject({ id: 'fresh-restored-shell' })
+  })
+
   it('fails closed when a recovered claimed owner omits incarnation proof', async () => {
     const owner: AgentSessionOwnerBinding = {
       claim: {

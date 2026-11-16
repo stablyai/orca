@@ -1,3 +1,5 @@
+import { getTerminalTabOwnerWorktreeId } from '@/store/terminals/ownership/terminal-tab-owner-index'
+import { createPasteReadinessTimeoutNotice } from './launch-agent-paste-timeout-notice'
 import { agentDeliversDraftViaNativePrefill } from '@/lib/agent-session/messaging/paste/agent-native-draft-prefill'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-session/messaging/paste/agent-paste-draft'
 import { canMirrorLaunchDraftToNativeChat } from '../../../../../../shared/native-chat/input/composer/native-chat-launch-draft-mirrorability'
@@ -90,11 +92,21 @@ export function deliverLaunchPromptToAgentTab(args: {
       }
       return delivered || deliversViaNativePrefill
     },
-    (error) => {
+    () => {
       if (seeded && !deliversViaNativePrefill) {
         useAppStore.getState().markNativeChatLaunchPromptFailed(tabId)
       }
-      throw error
+      const worktreeId = getTerminalTabOwnerWorktreeId(useAppStore.getState().tabsByWorktree, tabId)
+      if (worktreeId) {
+        createPasteReadinessTimeoutNotice({
+          worktreeId,
+          tabId,
+          agent,
+          submitted: submit,
+          droppedText: content
+        }).onTimeout()
+      }
+      return false
     }
   )
 }

@@ -1,3 +1,4 @@
+import { waitForRuntimeTerminalSetup } from '@/runtime/hosted-terminals/inspection/runtime-terminal-setup'
 import { inspectRuntimeTerminalProcess } from '@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection'
 import { isAgentForegroundProcess } from '../../../../../../shared/agent-status/process/agent-process-recognition'
 import { resolveDraftPasteReadyTimeoutMs } from '../../../../../../shared/agent-launch/startup/readiness/draft-paste-ready-timeout'
@@ -23,6 +24,7 @@ export function bindStartupDraftPaste(session: ConnectPanePtySession): void {
           'render-quiet-after-bracketed-paste'
       )
     : null
+  const setupAbort = new AbortController()
   let setupWaitInFlight = false
   let earlyReadinessData = ''
   let startupDraftReadinessArmed = false
@@ -41,7 +43,11 @@ export function bindStartupDraftPaste(session: ConnectPanePtySession): void {
       startupDraftHardTimer = null
     }
   }
-  session.cleanupStartupDraftPasteTimers = clearStartupDraftPasteTimers
+  session.cleanupStartupDraftPasteTimers = () => {
+    setupAbort.abort()
+    earlyReadinessData = ''
+    clearStartupDraftPasteTimers()
+  }
   const getStartupDraftPtyId = (): string | null => {
     const ptyId = session.transport.getPtyId()
     if (
@@ -154,7 +160,7 @@ export function bindStartupDraftPaste(session: ConnectPanePtySession): void {
       return
     }
     setupWaitInFlight = true
-    void inspectRuntimeTerminalProcess(ptyId, { waitForSetup: true })
+    void waitForRuntimeTerminalSetup(ptyId, setupAbort.signal)
       .then(() => {
         if (getStartupDraftPtyId() !== ptyId || startupDraftPasteSettled) {
           return
@@ -166,7 +172,17 @@ export function bindStartupDraftPaste(session: ConnectPanePtySession): void {
         session.observeStartupDraftPasteReadiness(data)
       })
       .catch(() => {
+        earlyReadinessData = ''
         startupDraftPasteSettled = true
+        if (!session.disposed && !setupAbort.signal.aborted && session.startupDraftAgent) {
+          createPasteReadinessTimeoutNotice({
+            worktreeId: session.deps.worktreeId,
+            tabId: session.deps.tabId,
+            agent: session.startupDraftAgent,
+            submitted: false,
+            droppedText: session.startupDraftPrompt ?? undefined
+          }).onTimeout()
+        }
       })
   }
   session.observeStartupDraftPasteReadiness = (data: string): void => {

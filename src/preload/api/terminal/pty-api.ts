@@ -1,3 +1,4 @@
+import type { TerminalSetupStatus } from '../../../shared/terminal/pty/lifecycle/terminal-setup-status'
 import type { RuntimeTerminalAttention } from '../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { PaintedRestorePane } from '../../../shared/terminal/replay/painted-restore-ack'
 import type {
@@ -168,6 +169,7 @@ export type PtyApi = {
   publishTerminalViewAttributes: (attributes: TerminalViewAttributes) => void
   hasChildProcesses: (id: string) => Promise<boolean>
   getForegroundProcess: (id: string) => Promise<string | null>
+  setupStatus?: (id: string) => Promise<TerminalSetupStatus>
   inspectProcess: (
     id: string,
     options?: {

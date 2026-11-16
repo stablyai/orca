@@ -1,4 +1,4 @@
-import { inspectRuntimeTerminalProcess } from '@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection'
+import { waitForRuntimeTerminalSetup } from '@/runtime/hosted-terminals/inspection/runtime-terminal-setup'
 import type { DraftPasteReadySignal } from '../../../../../../shared/agent-launch/catalog/tui-agent-config-types'
 import { subscribeToPtyData } from '@/components/terminal-pane/pty-transport/delivery/pty-data-sidecar-subscriptions'
 import { replayPreHandlerPtyData } from '@/components/terminal-pane/pty-transport/delivery/pty-pre-handler-buffer'
@@ -12,9 +12,12 @@ const BRACKETED_PASTE_QUIET_MS = 1500
 export async function waitForAgentDraftInputReady(
   ptyId: string,
   timeoutMs: number,
-  readySignal: DraftPasteReadySignal
+  readySignal: DraftPasteReadySignal,
+  signal?: AbortSignal
 ): Promise<boolean> {
   return new Promise<boolean>((resolve, reject) => {
+    const setupAbort = new AbortController()
+    let outputLost = false
     let setupReady = false
     let earlyData = ''
     let settled = false
@@ -38,13 +41,23 @@ export async function waitForAgentDraftInputReady(
       if (graceTimer !== null) {
         window.clearTimeout(graceTimer)
       }
+      setupAbort.abort()
       unsubscribe?.()
+      signal?.removeEventListener('abort', onAbort)
+      earlyData = ''
       if (error !== undefined) {
         reject(error)
       } else {
         resolve(value)
       }
     }
+
+    const onAbort = (): void => finish(false, signal?.reason ?? new Error('request_aborted'))
+    if (signal?.aborted) {
+      onAbort()
+      return
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
 
     const armQuietTimer = (): void => {
       if (quietTimer !== null) {
@@ -86,19 +99,28 @@ export async function waitForAgentDraftInputReady(
           }
           unsubscribe = remoteUnsubscribe
         })
-        .catch(() => finish(false))
+        .catch(() => {
+          outputLost = true
+          if (setupReady) {
+            finish(false)
+          }
+        })
     } else {
       unsubscribe = subscribeToPtyData(ptyId, observeData)
       // Replay early buffered Codex output to this observer without consuming xterm’s primary copy.
       replayPreHandlerPtyData(ptyId, observeData)
     }
 
-    void inspectRuntimeTerminalProcess(ptyId, { waitForSetup: true })
+    void waitForRuntimeTerminalSetup(ptyId, setupAbort.signal)
       .then(() => {
         if (settled) {
           return
         }
         setupReady = true
+        if (outputLost) {
+          finish(false)
+          return
+        }
         const data = earlyData
         earlyData = ''
         observeData(data)

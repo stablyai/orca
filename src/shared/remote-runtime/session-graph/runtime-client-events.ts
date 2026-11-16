@@ -1,3 +1,4 @@
+import type { TerminalSetupStatus } from '../../terminal/pty/lifecycle/terminal-setup-status'
 import type { NotificationAttentionAcknowledgement } from '../../notifications/notification-settings-types'
 import type { CreateWorktreeResult } from '../../worktree/create-types'
 import type {
@@ -47,6 +48,7 @@ export type RuntimeClientEvent =
   /** A desktop PR refresh found this checkout's PR (or its absence) changed; phones re-read it. */
   | { type: 'pullRequestChanged'; worktreeId: string; repoId: string; branch: string }
   | ({ type: 'nativeChatLaunchDraftResolved' } & RuntimeNativeChatLaunchDraftResolution)
+  | { type: 'terminalSetupChanged'; status: TerminalSetupStatus }
   | { type: 'terminalSideEffects'; batch: TerminalSideEffectBatch }
   /** Only while this host's own phone reads the sidebar feed; every other reader drops it. */
   | SidebarInputsChangedEvent

@@ -53,7 +53,6 @@ export async function inspectRuntimeTerminalProcess(
     expectedIncarnationId?: string
     scanChildProcesses?: boolean
     steadyState?: boolean
-    waitForSetup?: true
   }
 ): Promise<RuntimeTerminalProcessInspection> {
   const owner = getRemoteRuntimePtyOwner(ptyId)
@@ -64,17 +63,10 @@ export async function inspectRuntimeTerminalProcess(
         ? window.api.pty.inspectProcess(ptyId, options)
         : window.api.pty.inspectProcess(ptyId))
       const normalized = normalizeInspectionResult(result, remote)
-      if (
-        options?.waitForSetup &&
-        isClientOnlyUnverifiableInspection(normalized) &&
-        normalized.reason !== 'old_host'
-      ) {
-        throw new Error('Could not confirm Setup completion. Check the terminal and try again.')
-      }
       return normalized
     } catch (error) {
       const reason = classifyTerminalProcessInspectionFailure(error)
-      if (reason && (!options?.waitForSetup || reason === 'old_host')) {
+      if (reason) {
         return clientOnlyUnverifiableInspection(reason)
       }
       throw error
@@ -90,24 +82,16 @@ export async function inspectRuntimeTerminalProcess(
         ...(options?.expectedIncarnationId
           ? { expectedIncarnationId: options.expectedIncarnationId }
           : {}),
-        ...(options?.waitForSetup ? { waitForSetup: true } : {}),
         // Close guards request real process scans; dropping this causes unverifiable and confirmation on every idle remote Windows close.
         ...(options?.scanChildProcesses === true ? { scanChildProcesses: true } : {})
       },
-      { timeoutMs: options?.waitForSetup ? 2 * 60 * 60 * 1000 : 15_000 }
+      { timeoutMs: 15_000 }
     )
     const normalized = normalizeInspectionResult(result.process, true)
-    if (
-      options?.waitForSetup &&
-      isClientOnlyUnverifiableInspection(normalized) &&
-      normalized.reason !== 'old_host'
-    ) {
-      throw new Error('Could not confirm Setup completion. Check the terminal and try again.')
-    }
     return normalized
   } catch (error) {
     const reason = classifyTerminalProcessInspectionFailure(error)
-    if (reason && (!options?.waitForSetup || reason === 'old_host')) {
+    if (reason) {
       return clientOnlyUnverifiableInspection(reason)
     }
     throw error

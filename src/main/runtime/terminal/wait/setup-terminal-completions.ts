@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto'
+import type { TerminalSetupVerdict } from '../../../../shared/terminal/pty/lifecycle/terminal-setup-status'
 import type { SetupAttemptRecipe } from '../../../../shared/agent-launch/startup/setup-attempt-recipe'
 import { mintPtySessionId } from '../../../daemon/sessions/pty-session-id'
 import type { TerminalCreateOptions } from '../launch/terminal-create-options'
@@ -28,11 +30,24 @@ export class SetupTerminalCompletions {
   private readonly requiredByWorkspace = new Map<string, WorkspaceAttempt>()
   private readonly dependents = new Map<
     string,
-    { workspaceId: string; completion: Promise<SetupCompletion>; cancel: () => void }
+    {
+      workspaceId: string
+      completion: Promise<SetupCompletion>
+      cancel: () => void
+      verdict: TerminalSetupVerdict
+    }
   >()
   private readonly activeByWorkspace = new Map<string, Set<WorkspaceAttempt>>()
   private readonly dependentIdsByWorkspace = new Map<string, Set<string>>()
   private readonly byHandle = new Map<string, Attempt>()
+
+  constructor(
+    private readonly changed: (ptyId: string, verdict: TerminalSetupVerdict) => void = () => {}
+  ) {}
+
+  status(ptyId: string): TerminalSetupVerdict {
+    return this.dependents.get(ptyId)?.verdict ?? { dependencyId: null, state: 'ready' }
+  }
 
   capture(workspaceId: string, handle: string, options: TerminalCreateOptions) {
     const token = options.setupCompletionToken
@@ -91,8 +106,14 @@ export class SetupTerminalCompletions {
     completion: Promise<SetupCompletion>
   ): () => void {
     const cancelled = Promise.withResolvers<SetupCompletion>()
-    const dependent = {
+    const dependent: {
+      workspaceId: string
+      verdict: TerminalSetupVerdict
+      completion: Promise<SetupCompletion>
+      cancel: () => void
+    } = {
       workspaceId,
+      verdict: { dependencyId: randomUUID(), state: 'pending' } satisfies TerminalSetupVerdict,
       completion: Promise.race([completion, cancelled.promise]),
       cancel: () => cancelled.resolve({ exitCode: null })
     }
@@ -104,6 +125,16 @@ export class SetupTerminalCompletions {
       this.dependentIdsByWorkspace.set(workspaceId, ids)
     }
     ids.add(ptyId)
+    void dependent.completion.then(({ exitCode }) => {
+      if (this.dependents.get(ptyId) !== dependent || dependent.verdict.state !== 'pending') {
+        return
+      }
+      dependent.verdict = {
+        dependencyId: dependent.verdict.dependencyId,
+        state: exitCode === 0 ? 'ready' : exitCode === null ? 'unknown' : 'failed'
+      }
+      this.changed(ptyId, dependent.verdict)
+    })
     return () => {
       if (this.dependents.get(ptyId) === dependent) {
         this.forgetDependent(ptyId)
@@ -121,6 +152,7 @@ export class SetupTerminalCompletions {
       return
     }
     dependent.cancel()
+    this.changed(ptyId, { dependencyId: dependent.verdict.dependencyId, state: 'unknown' })
     this.dependents.delete(ptyId)
     const ids = this.dependentIdsByWorkspace.get(dependent.workspaceId)
     ids?.delete(ptyId)
@@ -195,8 +227,12 @@ export class SetupTerminalCompletions {
 
   forgetWorkspace(workspaceId: string): void {
     for (const id of this.dependentIdsByWorkspace.get(workspaceId) ?? []) {
-      this.dependents.get(id)?.cancel()
-      this.dependents.delete(id)
+      const dependent = this.dependents.get(id)
+      if (dependent) {
+        dependent.verdict = { dependencyId: dependent.verdict.dependencyId, state: 'unknown' }
+        dependent.cancel()
+        this.changed(id, dependent.verdict)
+      }
     }
     this.dependentIdsByWorkspace.delete(workspaceId)
     for (const attempt of this.activeByWorkspace.get(workspaceId) ?? []) {

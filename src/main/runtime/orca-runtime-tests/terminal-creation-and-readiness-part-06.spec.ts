@@ -87,6 +87,7 @@ describe('OrcaRuntimeService', () => {
         dispatchSetupGatedPty(
           {
             args: options,
+            expectedWslDistro: null,
             spawnOptions: { ...options },
             effectiveSessionAppId: options.sessionId,
             deps: { runtime },
@@ -102,7 +103,7 @@ describe('OrcaRuntimeService', () => {
                 return { id: prepared.sessionId ?? `dependent-${spawns.length}` }
               }
             }
-          } as never,
+          },
           () => {}
         ),
       write: () => true,

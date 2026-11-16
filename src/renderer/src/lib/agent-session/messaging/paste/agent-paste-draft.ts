@@ -4,7 +4,6 @@ import { TUI_AGENT_CONFIG } from '../../../../../../shared/agent-launch/catalog/
 import { AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS } from '../../../../../../shared/agent-launch/startup/agent-prompt-injection'
 import { resolveDraftPasteReadyTimeoutMs } from '../../../../../../shared/agent-launch/startup/readiness/draft-paste-ready-timeout'
 import { resolvePasteReadySignal } from '../../../../../../shared/agent-launch/startup/readiness/draft-paste-ready-scanner'
-import { useAppStore } from '@/store/index'
 import { inspectRuntimeTerminalProcess } from '@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection'
 import { sendRuntimePtyInputVerified } from '@/runtime/hosted-terminals/input/runtime-terminal-verified-input'
 import '@/components/terminal-pane/input/paste/terminal-bracketed-paste'
@@ -14,6 +13,7 @@ import { waitForAgentReady } from './agent-ready-wait'
 import { sendAgentDraftPasteContentNow } from './agent-draft-paste-content'
 import { agentDeliversDraftViaNativePrefill } from './agent-native-draft-prefill'
 import { waitForAgentDraftInputReady } from './agent-draft-readiness'
+import { waitForAgentDraftInputReadyOnTab } from './agent-draft-tab-readiness'
 import { isAgentForegroundProcess } from '../../../../../../shared/agent-status/process/agent-process-recognition'
 
 // Bracketed paste keeps prompt insertion atomic; callers separately choose whether to submit with Enter.
@@ -55,7 +55,8 @@ export async function pasteDraftWhenAgentReady(args: {
     ...(args.launchPty ? { launchPty: args.launchPty } : {})
   })
   // Why: a pane that didn't start is the caller's own outcome to report, not a readiness timeout.
-  if (args.launchPty && !(await args.launchPty)) {
+  if (args.launchPty && !(await args.launchPty.catch(() => null))) {
+    void readinessResult.catch(() => {})
     return false
   }
   const readiness = await readinessResult
@@ -197,82 +198,6 @@ async function sendBracketedPasteToAgent(args: {
   } catch {
     return false
   }
-}
-
-function waitForAgentDraftInputReadyOnTab(args: {
-  tabId: string
-  spawnTimeoutMs: number
-  readinessTimeoutMs: number
-  readySignal: Parameters<typeof waitForAgentDraftInputReady>[2]
-  launchPty?: Promise<string | null>
-}): Promise<{ ptyId: string; ready: boolean } | null> {
-  return new Promise((resolve, reject) => {
-    const readinessByPtyId = new Map<string, Promise<boolean>>()
-    let settled = false
-    let spawnTimer: number | null = null
-    let unsubscribeStore: (() => void) | null = null
-    const finish = (result: { ptyId: string; ready: boolean } | null, error?: unknown): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      if (spawnTimer !== null) {
-        window.clearTimeout(spawnTimer)
-      }
-      unsubscribeStore?.()
-      if (error !== undefined) {
-        reject(error)
-      } else {
-        resolve(result)
-      }
-    }
-    const watchPty = (ptyId: string): Promise<boolean> => {
-      const existing = readinessByPtyId.get(ptyId)
-      if (existing) {
-        return existing
-      }
-      const readiness = waitForAgentDraftInputReady(
-        ptyId,
-        args.readinessTimeoutMs,
-        args.readySignal
-      )
-      readinessByPtyId.set(ptyId, readiness)
-      // Other panes can appear before the launch owner is selected; only that owner's failure is delivered.
-      void readiness.catch(() => {})
-      return readiness
-    }
-    const deliverPty = (ptyId: string): void => {
-      if (settled) {
-        return
-      }
-      if (spawnTimer !== null) {
-        window.clearTimeout(spawnTimer)
-      }
-      unsubscribeStore?.()
-      void watchPty(ptyId).then(
-        (ready) => finish({ ptyId, ready }),
-        (error: unknown) => finish(null, error)
-      )
-    }
-    const bindFromState = (state: ReturnType<typeof useAppStore.getState>): void => {
-      const ptyIds = state.ptyIdsByTabId[args.tabId] ?? []
-      if (args.launchPty) {
-        // Each pane's readiness attaches before its primary handler drains startup bytes.
-        for (const ptyId of ptyIds) {
-          watchPty(ptyId)
-        }
-      } else if (ptyIds[0]) {
-        deliverPty(ptyIds[0])
-      }
-    }
-    if (args.launchPty) {
-      void args.launchPty.then((ptyId) => (ptyId ? deliverPty(ptyId) : finish(null)))
-    } else {
-      spawnTimer = window.setTimeout(() => finish(null), args.spawnTimeoutMs)
-    }
-    unsubscribeStore = useAppStore.subscribe(bindFromState)
-    bindFromState(useAppStore.getState())
-  })
 }
 
 async function waitForAgentOnPty(

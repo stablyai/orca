@@ -30,6 +30,9 @@ export const CLIENT_EVENT_METHODS = [
         // Mobile discards terminalSideEffects; filter per-OSC batch frames before they cross the relay.
         const unsubscribe = runtime.onClientEvent(
           (event) => {
+            if (event.type === 'terminalSetupChanged' && clientKind !== 'runtime') {
+              return
+            }
             emit(event)
           },
           { consumesTerminalSideEffects: clientKind !== 'mobile' }

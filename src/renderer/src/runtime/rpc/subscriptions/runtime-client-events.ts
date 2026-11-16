@@ -22,7 +22,9 @@ export async function subscribeRuntimeClientEvents(
   // Control-outage events are lost, not queued. First replay-tagged response is the only signal to resync event-derived mirrors such as per-environment SSH state.
   onReplayedAfterReconnect?: () => void,
   // Managed SSH hosts reach this desktop's browser through the desktop browser bridge instead.
-  options: { hostsBrowserPages: boolean; onClose?: () => void } = { hostsBrowserPages: false }
+  options: { hostsBrowserPages: boolean; onClose?: () => void; onReady?: () => void } = {
+    hostsBrowserPages: false
+  }
 ): Promise<RuntimeClientEventSubscription> {
   const handle = await subscribeRuntimeEnvironment(
     {
@@ -40,7 +42,8 @@ export async function subscribeRuntimeClientEvents(
           response,
           onEvent,
           onError,
-          onReplayedAfterReconnect
+          onReplayedAfterReconnect,
+          options.onReady
         )
       },
       onError,
@@ -55,7 +58,8 @@ function handleRuntimeClientEventResponse(
   response: RuntimeRpcResponse<unknown>,
   onEvent: (event: RuntimeClientEvent) => void,
   onError: (error: unknown) => void,
-  onReplayedAfterReconnect?: () => void
+  onReplayedAfterReconnect?: () => void,
+  onReady?: () => void
 ): void {
   if (response.ok === false) {
     onError(response.error)
@@ -66,6 +70,7 @@ function handleRuntimeClientEventResponse(
   }
   const message = response.result as RuntimeClientEventStreamMessage
   if (message.type === 'ready') {
+    onReady?.()
     for (const sshState of message.snapshot?.sshStates ?? []) {
       const state = admitSshConnectionState(sshState.state, sshState.targetId)
       if (state) {
@@ -115,6 +120,7 @@ function isRuntimeClientEvent(
     message.type === 'workspaceMetadataSet' ||
     message.type === 'nativeChatLaunchDraftResolved' ||
     message.type === 'terminalSideEffects' ||
+    message.type === 'terminalSetupChanged' ||
     message.type === 'sshStateChanged' ||
     message.type === 'automationsChanged' ||
     message.type === 'browserProfilesChanged' ||

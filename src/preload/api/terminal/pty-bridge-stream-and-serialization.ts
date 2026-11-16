@@ -1,3 +1,4 @@
+import type { TerminalSetupStatus } from '../../../shared/terminal/pty/lifecycle/terminal-setup-status'
 import type { PtySessionLifecycle } from '../../../shared/terminal/pty/lifecycle/pty-listed-session'
 import { ipcRenderer } from 'electron'
 import type { PtyModelRestoreNeededEvent } from '../../../shared/terminal/replay/pty-model-restore-marker'
@@ -11,6 +12,8 @@ import type {
 } from '../../../shared/terminal/daemon/newer-daemon-hold'
 
 export const ptyStreamAndSerializationApi = {
+  setupStatus: (id: string): Promise<TerminalSetupStatus> =>
+    ipcRenderer.invoke('pty:setupStatus', { id }),
   inspectProcess: (
     id: string,
     options?: {

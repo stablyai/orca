@@ -1,3 +1,4 @@
+import type { TerminalSetupStatus } from '../../../shared/terminal/pty/lifecycle/terminal-setup-status'
 import type {
   RendererStatusPublication,
   RendererStatusAck
@@ -103,6 +104,12 @@ export const runtimeApi = {
     ) => callback(data)
     ipcRenderer.on('runtime:terminalDriverChanged', listener)
     return () => ipcRenderer.removeListener('runtime:terminalDriverChanged', listener)
+  },
+  onTerminalSetupChanged: (callback: (status: TerminalSetupStatus) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, status: TerminalSetupStatus) =>
+      callback(status)
+    ipcRenderer.on('runtime:terminalSetupChanged', listener)
+    return () => ipcRenderer.removeListener('runtime:terminalSetupChanged', listener)
   },
   onNativeChatLaunchDraftResolved: (
     callback: (event: { tabId: string; text: string; createdAt: number }) => void

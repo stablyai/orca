@@ -158,6 +158,15 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
     }
   }
 
+  getPtySetupStatus(ptyId: string) {
+    return { ...this.setupTerminalCompletions.status(ptyId), ptyId, runtimeId: this.runtimeId }
+  }
+
+  getTerminalSetupStatus(handle: string) {
+    const { pty } = this.getTerminalPtyForHandle(handle)
+    return this.getPtySetupStatus(pty.ptyId)
+  }
+
   async waitForTerminalSetup(handle: string, agent: string, signal?: AbortSignal): Promise<void> {
     const ptyId = this.getLivePtyForHandle(handle)?.pty.ptyId
     if (ptyId) {

@@ -1,3 +1,4 @@
+import type { TerminalSetupStatus } from '../../../shared/terminal/pty/lifecycle/terminal-setup-status'
 import type {
   RendererStatusPublication,
   RendererStatusAck
@@ -78,6 +79,7 @@ export type RuntimeApi = {
     onTerminalDriverChanged: (
       callback: (event: { ptyId: string; driver: RuntimeTerminalDriverState }) => void
     ) => () => void
+    onTerminalSetupChanged?: (callback: (status: TerminalSetupStatus) => void) => () => void
     onNativeChatLaunchDraftResolved?: (
       callback: (event: { tabId: string; text: string; createdAt: number }) => void
     ) => () => void

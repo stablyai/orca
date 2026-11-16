@@ -66,7 +66,10 @@ export function classifyRuntimeLongPoll(request: RpcRequest): RuntimeLongPollCla
   }
   if (
     request.method === 'terminal.inspectProcess' &&
-    (request.params as { waitForSetup?: unknown } | undefined)?.waitForSetup === true
+    typeof request.params === 'object' &&
+    request.params !== null &&
+    'waitForSetup' in request.params &&
+    request.params.waitForSetup === true
   ) {
     return 'wait'
   }
