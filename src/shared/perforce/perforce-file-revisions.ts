@@ -8,6 +8,9 @@ import { parseTaggedOutput } from './p4-tagged-output'
 import { resolveReadableInWorkspace } from './perforce-workspace-real-path'
 
 const MAX_TEXT_DIFF_BYTES = 5 * 1024 * 1024
+// p4's answers for a revision that does not exist, which diffs against empty.
+const NO_REVISION =
+  /no such file\(s\)|file\(s\) not on client|no file\(s\) at that revision|file\(s\) not in client view/i
 
 function looksBinary(content: string): boolean {
   return content.slice(0, 8000).includes('\0')
@@ -42,7 +45,11 @@ export async function getPerforceDiff(cwd: string, rawFilePath: string): Promise
       ? '#head'
       : '#have'
   const printed = await runP4(['print', '-q', `${escapeP4FileArg(filePath)}${revision}`], { cwd })
-  // Why: a file with no have revision (new, or not in the depot) diffs against empty.
+  // Why: a file with no have revision (new, or not in the depot) diffs against empty; any other
+  // failure (login, connection, timeout) must not show the whole file as added.
+  if (printed.code !== 0 && !NO_REVISION.test(printed.stderr)) {
+    throw new Error(printed.stderr.trim() || 'p4 print failed')
+  }
   const original = printed.code === 0 ? printed.stdout : ''
   const modified = shelved?.viewOnly ? original : await readWorkingFile(cwd, filePath)
   if (looksBinary(original) || (modified !== null && looksBinary(modified))) {
