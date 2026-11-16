@@ -4,7 +4,7 @@ import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesyste
 import { AgentSessionPreSpawnError } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import type { AgentSessionRecordStore } from './records/agent-session-record-store'
 import { agentSessionPinnedLaunchDirectory } from './records/agent-session-record-launch-directory'
-import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
+import { isFloatingWorkspaceId } from '../../../shared/workspace/identity/floating-workspace-worktree'
 
 /** Resuming a missing floating launch directory elsewhere would change the conversation. */
 export function agentSessionLaunchFolderMissing(

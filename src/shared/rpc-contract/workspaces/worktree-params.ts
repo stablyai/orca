@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { normalizeExecutionHostId } from '../../execution-host'
+import { normalizeExecutionHostId } from '../../execution-host/execution-host'
 import { CLIENT_PROVENANCE_SNAPSHOT_MAX } from '../../automations/ownership/automation-workspace-provenance'
 import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'

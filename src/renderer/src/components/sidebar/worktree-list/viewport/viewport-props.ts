@@ -8,7 +8,7 @@ import type {
 } from '@/store/slices/ui/ui-slice-contract-core'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
-import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome-types'
+import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome/ui-chrome-types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type {
   WorkspaceLineage,
@@ -19,7 +19,7 @@ import type {
   WorkspaceStatusDefinition,
   Worktree
 } from '../../../../../../shared/worktree/types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { ExecutionHostRegistryEntry } from '../../../../../../shared/execution-host/execution-host-registry-entry'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
 import type { ImportedWorktreeCardActionState } from '../listing/imported-worktrees-card-actions'

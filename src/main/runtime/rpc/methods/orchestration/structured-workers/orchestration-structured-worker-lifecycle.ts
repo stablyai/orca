@@ -18,10 +18,7 @@ import {
   decodeWorkerOutputCursor,
   encodeWorkerOutputCursor
 } from '../../../../orchestration/workers/transcripts/worker-output-cursor'
-import {
-  boundWorkerTranscriptMessages,
-  clampWorkerTranscriptLimit
-} from '../../../../orchestration/workers/transcripts/worker-transcript-payload'
+import { pageWorkerTranscriptMessages } from '../../../../orchestration/workers/transcripts/worker-transcript-payload'
 import {
   projectStructuredItemToNativeChat,
   projectStructuredItemsToNativeChat
@@ -156,7 +153,6 @@ export async function readStructuredWorkerJournal(args: {
       `The transcript for Dispatch ${args.dispatchId} could not be read; its session is not attached.`
     )
   }
-  const bounded = boundWorkerTranscriptMessages(projectStructuredItemsToNativeChat(page.items))
   // Identity of the PREFIX the caller already holds — see `structuredJournalPrefixIdentity`.
   const identityAt = (position: number): string =>
     structuredJournalPrefixIdentity({ identity: args.identity, page, position })
@@ -171,12 +167,10 @@ export async function readStructuredWorkerJournal(args: {
     )
   }
   return pageMessages({
-    messages: bounded.messages,
-    warnings: [
-      ...bounded.warnings,
-      ...(page.hasOlder ? ['Older journal items were omitted from this page.'] : [])
-    ],
-    limited: bounded.limited || page.hasOlder,
+    messages: projectStructuredItemsToNativeChat(page.items),
+    alreadyBounded: false,
+    warnings: page.hasOlder ? ['Older journal items were omitted from this page.'] : [],
+    limited: page.hasOlder,
     dispatchId: args.dispatchId,
     workerState: args.workerState,
     agent: args.agent,
@@ -245,6 +239,7 @@ export function readArchivedStructuredJournal(args: {
   }
   return pageMessages({
     messages: args.archive.messages,
+    alreadyBounded: true,
     warnings: args.archive.warnings,
     limited: args.archive.limited,
     dispatchId: args.dispatchId,
@@ -262,6 +257,8 @@ export function readArchivedStructuredJournal(args: {
 
 function pageMessages(input: {
   messages: readonly NativeChatMessage[]
+  alreadyBounded: boolean
+  /** Source-level omissions, independent of this page. */
   warnings: string[]
   limited: boolean
   dispatchId: string
@@ -274,8 +271,8 @@ function pageMessages(input: {
   archived: boolean
   liveness: StructuredWorkerObservation['status']
 }): OrchestrationWorkerReadTranscriptResult {
-  const start = Math.min(input.start, input.messages.length)
-  const end = Math.min(start + clampWorkerTranscriptLimit(input.limit), input.messages.length)
+  const page = pageWorkerTranscriptMessages(input)
+  const end = page.end
   // Stamp the prefix through end so later revisions below it invalidate the next cursor.
   const sourceIdentity = input.identityAt(end)
   const nextCursor = encodeWorkerOutputCursor(input.dispatchId, 'transcript', sourceIdentity, end)
@@ -285,10 +282,10 @@ function pageMessages(input: {
     sourceIdentity,
     provider: input.agent,
     transcript: {
-      messages: input.messages.slice(start, end),
+      messages: page.messages,
       nextCursor,
-      limited: input.limited || end < input.messages.length,
-      returnedMessageCount: end - start
+      limited: input.limited || page.limited,
+      returnedMessageCount: page.messages.length
     },
     cursor: nextCursor,
     status: {
@@ -297,7 +294,7 @@ function pageMessages(input: {
       liveness: input.liveness
     },
     fallbackReason: null,
-    warnings: input.warnings,
+    warnings: [...page.warnings, ...input.warnings],
     ...(input.archived ? { archived: true } : {})
   }
 }

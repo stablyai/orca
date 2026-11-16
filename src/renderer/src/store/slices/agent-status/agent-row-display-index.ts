@@ -5,7 +5,7 @@ import { buildAgentRowLineageTree } from '@/components/dashboard/rows/agent-row-
 import { agentRowDisplayDotState } from '@/lib/agent-status/presentation/agent-row-dot-state'
 import { SUMMARY_STATE_ORDER } from '@/components/sidebar/workspace-card/activity/worktree-card-agent-summary'
 import type { AgentDotState } from '@/components/AgentStateDot'
-import { KeyedDeadlines } from '../../../../../shared/keyed-deadlines'
+import { KeyedDeadlines } from '../../../../../shared/collections/keyed-deadlines'
 
 /** Display membership changes separately from immutable per-key row presentations. */
 export class AgentRowDisplayIndex {

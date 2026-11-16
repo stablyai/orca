@@ -3,7 +3,7 @@ import {
   markStructuredAgentSessionLaunchesPublished,
   publishedStructuredSessions
 } from '@/lib/agent-session/launch/structured-agent-session-launch-publication'
-import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
+import { toRuntimeExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { AppState } from '../../store/types'
 import { useAppStore } from '../../store'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'

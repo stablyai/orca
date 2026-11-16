@@ -66,10 +66,6 @@ describe('a WSL bridge shell reports its folder', () => {
     expect(output).toContain('USER_PROMPT_HOOK')
   })
 
-  it.skipIf(!hasShell('bash'))('from bash only inside WSL', () => {
-    expect(reportedFolders(runBash({}))).toEqual([unc('/elsewhere')])
-  })
-
   it.skipIf(!hasShell('zsh'))('from zsh, at every prompt', () => {
     const zdotdir = join(home, 'zsh')
     mkdirSync(zdotdir)

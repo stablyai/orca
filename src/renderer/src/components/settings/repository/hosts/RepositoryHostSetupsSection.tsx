@@ -4,7 +4,7 @@ import {
   parseExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { buildExecutionHostRegistry } from '../../../../../../shared/execution-host/execution-host-registry'
 import { getHostDisplayLabelOverrides } from '../../../../../../shared/execution-host/host-setting-overrides'
 import type { ProjectHostSetup } from '../../../../../../shared/project/project-types'

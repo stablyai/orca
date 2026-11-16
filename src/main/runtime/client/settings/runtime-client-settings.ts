@@ -13,7 +13,7 @@ import { haveSameDisabledTuiAgents } from '../../../../shared/agent-launch/catal
 import { normalizeSourceControlAiSettings } from '../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import { normalizeSourceControlGroupOrder } from '../../../../shared/source-control/listing/source-control-group-order'
 import { SOURCE_CONTROL_LAUNCH_ACTION_IDS } from '../../../../shared/source-control/ai/recipes/source-control-ai-actions'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { applyNativeChatSessionOptionSettingsMutation } from '../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
 import type { NativeChatSessionOptionSettingsMutation } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { getHostDisplayLabelOverrides } from '../../../../shared/execution-host/host-setting-overrides'
@@ -42,6 +42,7 @@ import type {
   RuntimeClientSourceControlAi,
   RuntimeHostDisplayLabelOverrides
 } from './runtime-client-settings-shape'
+import { normalizeNewTabMenuLayout } from '../../../../shared/new-tab-menu/new-tab-menu-layout'
 
 /** Which Orca cloud services this host registered; headless hosts register none. */
 export type RuntimeSharingServicePresence = {
@@ -104,6 +105,11 @@ export class RuntimeClientSettingsController {
       sourceControlCompareAgainstUpstream: settings.sourceControlCompareAgainstUpstream === true,
       prAutoRefresh: normalizePRAutoRefreshCadence(settings.prAutoRefresh),
       diffShowWhitespace: settings.diffShowWhitespace === true,
+      // Paired clients render the same + menu customization they can edit.
+      newTabMenuLayout: normalizeNewTabMenuLayout(settings.newTabMenuLayout),
+      floatingTerminalNewTabMenuLayout: normalizeNewTabMenuLayout(
+        settings.floatingTerminalNewTabMenuLayout
+      ),
       // Omitted without a service: clients treat absence as "ask the host", which names the real cause.
       ...(this.sharingServices?.artifacts() === false
         ? {}

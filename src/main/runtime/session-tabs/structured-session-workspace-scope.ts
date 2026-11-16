@@ -6,12 +6,12 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   getConnectionExecutionHostId,
   getRepoExecutionHostId
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import { getLocalProjectWorktreeGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
 import {
   isFloatingWorkspaceId,
   isFloatingWorkspaceSelector
-} from '../../../shared/floating-workspace-worktree'
+} from '../../../shared/workspace/identity/floating-workspace-worktree'
 import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { composeWorktreeId, splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'

@@ -6,7 +6,11 @@ import type {
   TerminalPaneLayoutNode,
   TerminalTab
 } from '../../src/shared/workspace-layout/terminal-tab-types'
-import type { Tab, TabGroup, TabGroupLayoutNode } from '../../src/shared/tab-types'
+import type {
+  Tab,
+  TabGroup,
+  TabGroupLayoutNode
+} from '../../src/shared/workspace-layout/tab-groups/tab-types'
 import type { WorktreeLineage } from '../../src/shared/worktree/lineage-types'
 import type { Worktree } from '../../src/shared/worktree/types'
 import type { NormalizedAccumulatedWorkspaceFixtureOptions } from './accumulated-workspace-profile'

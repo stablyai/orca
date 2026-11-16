@@ -20,16 +20,19 @@ import {
   type ResolvedWorktreeRepoScans,
   type ResolvedWorktreeScanJoin
 } from './resolved-worktree-scan-join'
-import { projectResolvedWorktreeLineage } from '../../../../shared/resolved-worktree-lineage'
+import { projectResolvedWorktreeLineage } from '../../../../shared/worktree/lineage/resolved-worktree-lineage'
 import {
   listRuntimeFolderWorkspaces,
   projectRuntimeFolderWorkspaces
 } from './runtime-worktree-filesystem'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../../shared/execution-host/execution-host'
 import { withUnregisteredRemovalCheckouts } from '../../../workspaces/removal/worktree-removal-listing'
 import { withoutInFlightWorktreeCreates } from '../../../workspaces/creation/worktree-create-in-flight'
 import { preserveFolderUpgradeWorktreePath } from '../../../workspaces/catalog/folder-upgrade-worktree-path'

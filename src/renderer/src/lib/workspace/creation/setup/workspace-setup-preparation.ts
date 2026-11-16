@@ -1,6 +1,6 @@
 import type { HookCheckResult } from '@/runtime/repo-hooks/runtime-hooks-client'
 import { checkRuntimeHooks } from '@/runtime/repo-hooks/runtime-hooks-client'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type {
   OrcaHooks,
   RepoHookSettings

@@ -4,7 +4,7 @@ import {
   type AgentSessionAccountHome,
   isLegacyAgentSessionAccountHome
 } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
-import { isNativeLocalLocation } from '../../../shared/execution-host'
+import { isNativeLocalLocation } from '../../../shared/execution-host/execution-host'
 import type {
   AgentModelCatalogConfiguredChoice,
   AgentModelCatalogListing

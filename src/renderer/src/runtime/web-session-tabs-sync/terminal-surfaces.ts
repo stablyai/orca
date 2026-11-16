@@ -24,8 +24,8 @@ import type {
   ReadyTerminalSurface,
   MirroredAgentTab
 } from './state'
-import type { Tab } from '../../../../shared/tab-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { hasStructuredAgentSessionLaunchCancellationTombstone } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import { withPendingPaneTitleRenames } from './naming/pending-pane-title-renames'

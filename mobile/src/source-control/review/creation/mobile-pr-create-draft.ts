@@ -7,7 +7,7 @@ import {
   normalizeCreateReviewBaseSearchResults,
   normalizeHostedReviewBaseRef
 } from '../../../../../src/shared/source-control/hosted-review/hosted-review-refs'
-import { TEXT_GENERATION_CLIENT_TIMEOUT_MS } from '../../../../../src/shared/text-generation-client-timeout'
+import { TEXT_GENERATION_CLIENT_TIMEOUT_MS } from '../../../../../src/shared/text-generation/text-generation-client-timeout'
 import type { HostedReviewProvider } from '../../../../../src/shared/source-control/hosted-review/hosted-review-contracts'
 import type { MobileGitStatusHostPayload as MobileGitStatusResult } from '../../git/git-status-reply-schema'
 import { fetchMobileGitHistory } from '../../history/mobile-git-history'

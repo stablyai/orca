@@ -14,7 +14,6 @@ src/main/browser/network/egress/browser-route-egress-electron-launch.ts
 src/main/codex-accounts/legacy-wsl-auth-drain/legacy-wsl-runtime-auth-drain-script-harness.ts
 src/main/codex-accounts/service.ts
 src/main/computer/desktop-script/desktop-script-provider-bridge.ts
-src/main/computer/macos-permissions/macos-computer-use-permission-status.ts
 src/main/computer/macos-permissions/macos-computer-use-permissions.ts
 src/main/computer/macos-native/macos-native-provider-transport.ts
 src/main/computer/sidecar-transport/sidecar-client.ts

@@ -9,7 +9,7 @@ import {
   forgetStaleCodexPanes,
   listStaleCodexPanes
 } from '../codex/configuration/homes/codex-stale-pane-accounts'
-import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 
 export function registerCodexAccountHandlers(
   codexAccounts: CodexAccountService,

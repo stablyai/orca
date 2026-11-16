@@ -1,4 +1,4 @@
-import { getDefaultWorkspaceSession } from '../../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../../shared/orca-profiles/constants'
 import type { PersistPtyBindingArgs } from '../../persistence/loading-store/terminal-bindings/pty-binding-persistence'
 import { ptyBindingIsRefused } from '../../persistence/loading-store/terminal-bindings/pty-binding-refusals'
 import { applyPtyBinding } from '../../persistence/loading-store/terminal-bindings/pty-binding-session-update'

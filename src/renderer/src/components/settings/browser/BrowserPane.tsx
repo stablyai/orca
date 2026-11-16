@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { useAppStore } from '../../../store/index'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { getBrowserPaneSearchEntries } from './browser-search'
@@ -38,7 +38,7 @@ import {
   getSettingsFocusedExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import { isMacUserAgent } from '@/app-shell/platform/user-agent-platform'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { useTranslate } from '@/i18n/use-translate'
@@ -259,6 +259,7 @@ export function BrowserPane({
       {showBrowserUse ? (
         <SettingsGroup>
           <BrowserUseSetup
+            hostId={selectedBrowserSessionHostId}
             onConfigureMoreBrowsers={scrollToSessionCookies}
             onOpenComputerUse={onOpenComputerUse}
           />

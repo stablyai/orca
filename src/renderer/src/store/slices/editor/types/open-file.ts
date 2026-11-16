@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { RecentlyClosedTabPosition } from '../../tabs/recently-closed-tab-position'
 import type { EditorFileOperationProvenance } from '@/lib/editor/file-operations/editor-file-operation-provenance'
 import type {

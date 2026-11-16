@@ -1,5 +1,5 @@
 import type { Store } from '../../persistence/loading-store/store'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type { VoiceSettings } from '../../../shared/speech/speech-types'
 
 export type RuntimeStore = {
@@ -179,6 +179,8 @@ export type RuntimeStore = {
     sourceControlCompareAgainstUpstream?: GlobalSettings['sourceControlCompareAgainstUpstream']
     prAutoRefresh?: GlobalSettings['prAutoRefresh']
     diffShowWhitespace?: GlobalSettings['diffShowWhitespace']
+    newTabMenuLayout?: GlobalSettings['newTabMenuLayout']
+    floatingTerminalNewTabMenuLayout?: GlobalSettings['floatingTerminalNewTabMenuLayout']
     artifactSharingEnabled?: GlobalSettings['artifactSharingEnabled']
     terminalQuickCommands?: GlobalSettings['terminalQuickCommands']
     gitlabProjects?: GlobalSettings['gitlabProjects']

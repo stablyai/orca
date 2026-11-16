@@ -17,7 +17,7 @@ import {
   usePluginThemeStore,
   usePluginTerminalThemeStore
 } from '@/store/plugins/appearance/plugin-themes'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { PluginThemeRegistration } from '../../../../../shared/plugins/artifacts/plugin-theme-artifact'
 import type { PluginTerminalThemeRegistration } from '../../../../../shared/plugins/artifacts/plugin-terminal-theme-artifact'
 

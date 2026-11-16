@@ -15,7 +15,7 @@ import { startTerminalTabProviderRetirement } from './terminal-tab-close-provide
 import { stopLegacyRelayBridgedShellsForTab } from './legacy-relay-bridged-tab-close'
 import { commitTerminalSurfaceClose } from './terminal-surface-close-intent'
 import { recordTerminalTabCloseThroughLayoutOwner } from './terminal-tab-close-layout-owner'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import { omitUnverifiedPtyLossTabIds } from '../pty/terminal-unverified-pty-loss'
 import { removePaneKeysByTabPrefix } from '../../slices/agent-status/agent-status-pane-keyed-records'
 import { removeTabsAttention } from '../../slices/workspace-attention/subject-attention-transitions'

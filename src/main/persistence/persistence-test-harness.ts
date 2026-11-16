@@ -9,8 +9,8 @@ import {
   worktreeWorkspaceKey
 } from '../../shared/workspace/identity/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
-import type { PersistedState } from '../../shared/persisted-state-types'
-import { getDefaultPersistedState } from '../../shared/constants'
+import type { PersistedState } from '../../shared/orca-profiles/persisted-state-types'
+import { getDefaultPersistedState } from '../../shared/orca-profiles/constants'
 import type { SshRemotePtyLease } from '../../shared/remote-runtime/ssh/ssh-types'
 import { hydrateWorktreeMetaAliasProjection } from './loading-store/worktree-metadata/worktree-meta-alias-projection'
 import { Store } from './loading-store/store'

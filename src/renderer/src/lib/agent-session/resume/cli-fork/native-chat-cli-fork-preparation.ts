@@ -11,14 +11,14 @@ import {
   type AiVaultPrepareSessionResumeResult
 } from '../../../../../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import type { RuntimeStatus } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import { parseExecutionHostId } from '../../../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { prepareAiVaultSessionForFork } from '../history/ai-vault-session-resume-preparation'
 import { aiVaultSessionListArgs } from '@/components/right-sidebar/ai-vault/scanning/ai-vault-session-list-request'
 import {
   findTabSessionHistoryRow,
   type TabSessionHistorySubject
-} from '@/components/tab-bar/tab-session-history-switch'
+} from '@/components/tab-bar/session-actions/tab-session-history-switch'
 import type { AiVaultResumeCommandSession } from '../../../../../../shared/ai-vault/resume/ai-vault-resume-startup'
 import { waitForPromiseWithSignal } from '../../../../../../shared/concurrency/abort-signal-reason'
 import { translate } from '@/i18n/i18n'

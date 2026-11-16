@@ -14,7 +14,7 @@ import { requestEditorSaveQuiesce } from '../autosave/editor-autosave'
 import type { RestoredEditorOwnerResult as RestoredEditorOwnerMigrationResult } from '@/store/slices/editor/types/restored-editor-owner'
 import { contentRekeyOutcome } from '@/runtime/workspace-layout/intents/layout-owner-content-rekeys'
 import { afterPendingEntityTabs } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 
 export function restoredOwnerMigrationErrorMessage(
   reason: Extract<RestoredEditorOwnerMigrationResult, { ok: false }>['reason']

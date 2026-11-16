@@ -21,7 +21,7 @@ import {
   githubPRTransportFailureOutcome
 } from '../../../../../shared/github/pull-requests/refresh/pull-request-for-branch-outcome'
 import { isPRRevalidationOnly } from '../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { callRuntimeRpc } from '../../../runtime/rpc/calls/runtime-rpc-call'
 import { inflightPRRequests, prRequestGenerations } from '../requests/request-coordination'
 import { getRuntimeRepoTarget } from '../repositories/repository-routing'

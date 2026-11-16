@@ -1,7 +1,7 @@
 // Preserve session.tabs row/ID/group shapes for older phones/desktops. Runtime adds live handles/status/theme/drafts/certificate errors/document versions and publication fences.
 
 import { defaultAgentChatLabel } from '../../agent-session/agent-session-chat-label'
-import { resolveTerminalTabTitle } from '../../tab-title-resolution'
+import { resolveTerminalTabTitle } from '../tab-groups/tab-title-resolution'
 import type {
   RuntimeMobileSessionAgentTab,
   RuntimeMobileSessionBrowserTab,

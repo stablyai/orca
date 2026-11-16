@@ -100,13 +100,13 @@ import {
   getConnectionExecutionHostId,
   getRepoExecutionHostId,
   type ExecutionHostId
-} from '../../shared/execution-host'
+} from '../../shared/execution-host/execution-host'
 import type { BranchPrefixSettings } from '../../shared/git/branches/branch-prefix'
 import {
   parseWorkspaceKey,
   worktreeWorkspaceKey
 } from '../../shared/workspace/identity/workspace-scope'
-import { sharesWorktreeLineageBoundary } from '../../shared/resolved-worktree-lineage'
+import { sharesWorktreeLineageBoundary } from '../../shared/worktree/lineage/resolved-worktree-lineage'
 import { CrossStoreParentRefSchema } from '../../shared/rpc-contract/workspaces/cross-store-parent-params'
 import { assertParentInAnotherStore } from '../runtime/workspaces/lineage/cross-store-parent-store-check'
 import {

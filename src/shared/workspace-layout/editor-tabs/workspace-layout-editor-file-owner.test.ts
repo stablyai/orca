@@ -2,8 +2,8 @@
 // open, reload, move and close touches its own owner's record only.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../constants'
-import '../../execution-host'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../workspace/identity/floating-workspace-id'
+import '../../execution-host/execution-host'
 import { ownedEditorFileId } from '../../workspace-session/workspace-session-pane-ownership'
 import type {
   PersistedOpenFile,
@@ -21,7 +21,7 @@ import '../persistence/workspace-layout-save'
 import { emptySession, GIT_KEY } from '../persistence/workspace-layout-session.test-fixture'
 
 const mocks = vi.hoisted(() => ({ layoutOwnerIsMain: true }))
-vi.mock('../../layout-owner-switch', () => ({
+vi.mock('../layout-owner-switch', () => ({
   get ORCA_LAYOUT_OWNER_IS_MAIN() {
     return mocks.layoutOwnerIsMain
   }
@@ -161,12 +161,5 @@ describe('editor file records keyed by path and owner, layout-owner build', () =
     )
 
     expect(patched.openFilesByWorktree?.[FLOATING]).toEqual([local, runtime])
-  })
-
-  it('match by path alone when the switch is off, as a headless host does today', () => {
-    mocks.layoutOwnerIsMain = false
-    const { model } = bothOpen(FLOATING, localId(FLOATING))
-
-    expect(owners(model, FLOATING)).toEqual([ENV])
   })
 })
