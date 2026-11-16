@@ -1,5 +1,6 @@
 // A chat refused in a Windows-opened WSL folder runs once its project moves onto a WSL host.
 
+import { useSyncExternalStore } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
@@ -26,7 +27,12 @@ export type WslHostChatOffer = {
   hostReady: boolean
 }
 
-export type WslHostChatAction = { label: string; primary: true; onClick: () => void }
+export type WslHostChatAction = {
+  label: string
+  primary: true
+  disabled: boolean
+  onClick: () => void
+}
 
 /** This workspace's local WSL project, while this desktop can add WSL hosts; else null. */
 export type WslHostChatOfferState = Parameters<typeof readWslHostOfferGate>[0] & {
@@ -59,6 +65,17 @@ export function readWslHostChatOffer(
   }
 }
 
+/** The offer for a chat whose start the host refused because the workspace runs under WSL. */
+export function readWslHostChatOfferForLaunch(
+  state: WslHostChatOfferState,
+  launch: { lifecycle: string | null; failure?: { hostReason?: string } | null },
+  worktreeId: string | null | undefined
+): WslHostChatOffer | null {
+  return launch.lifecycle === 'failed' && launch.failure?.hostReason === 'wsl'
+    ? readWslHostChatOffer(state, worktreeId)
+    : null
+}
+
 export function wslHostChatOfferText(t: Translate = translate): string {
   return t(
     'components.native-chat.explicitChatWslMoveToHost',
@@ -66,52 +83,110 @@ export function wslHostChatOfferText(t: Translate = translate): string {
   )
 }
 
+// One setup per distro, shared by every surface; a second click joins the first.
+const settingUp = new Map<string, Promise<void>>()
+const settingUpListeners = new Set<() => void>()
+// Setups run one at a time so each restores the setting it read, not another's.
+let setupQueue: Promise<unknown> = Promise.resolve()
+
+function notifySettingUp(): void {
+  for (const listener of settingUpListeners) {
+    listener()
+  }
+}
+
+function subscribeSettingUp(listener: () => void): () => void {
+  settingUpListeners.add(listener)
+  return () => settingUpListeners.delete(listener)
+}
+
+export function isWslHostChatOfferSettingUp(distro: string): boolean {
+  return settingUp.has(distro.toLowerCase())
+}
+
+/** True while this distro's host is being set up from any chat refusal. */
+export function useWslHostChatOfferSettingUp(distro: string | null | undefined): boolean {
+  return useSyncExternalStore(subscribeSettingUp, () =>
+    distro ? isWslHostChatOfferSettingUp(distro) : false
+  )
+}
+
 /** Turns the setting on and adds the distro when needed, then opens the move for this project. */
 export function wslHostChatOfferAction(
   offer: WslHostChatOffer,
-  t: Translate = translate
+  t: Translate = translate,
+  settingUpNow = false
 ): WslHostChatAction {
   const only: WslMoveRowRef = { kind: offer.projectKind, id: offer.projectId }
   return {
-    label: offer.hostReady
-      ? t('wslMove.entry.projectMenu', 'Move to {{distro}} host…', { distro: offer.distro })
-      : t('components.native-chat.explicitChatWslRunAsHost', 'Run {{distro}} as a host', {
-          distro: offer.distro
-        }),
+    label: settingUpNow
+      ? t('auto.components.sidebar.AddWslHostFormPanel.adding', 'Setting up…')
+      : offer.hostReady
+        ? t('wslMove.entry.projectMenu', 'Move to {{distro}} host…', { distro: offer.distro })
+        : t('components.native-chat.explicitChatWslRunAsHost', 'Run {{distro}} as a host', {
+            distro: offer.distro
+          }),
     primary: true,
+    disabled: settingUpNow,
     onClick: () => void runWslHostChatOffer(offer.hostReady, offer.distro, only)
   }
 }
 
-async function runWslHostChatOffer(
+/** Resolves when this click's work is done; a click during a setup joins it and opens nothing. */
+export function runWslHostChatOffer(
   hostReady: boolean,
   distro: string,
   only: WslMoveRowRef
 ): Promise<void> {
-  if (!hostReady) {
-    const adding = toast.loading(
-      translate(
-        'auto.components.sidebar.AddWslHostFormPanel.addingHint',
-        'Installing and starting the Orca server in the distro. The first time can take a minute.'
-      )
-    )
-    try {
-      const refusal = await runWslDistroAsHost(distro, {
-        readWslHostsSetting: () => useAppStore.getState().settings?.experimentalWslHosts === true,
-        updateSettings: (updates) => useAppStore.getState().updateSettingsOrThrow(updates),
-        addWslHost: addWslHostDistro
-      })
-      if (refusal) {
-        toast.error(wslHostAddRefusalMessage(refusal))
-        return
-      }
-    } catch (cause) {
-      toast.error(readIpcErrorDetail(cause) ?? String(cause))
-      return
-    } finally {
-      toast.dismiss(adding)
-    }
+  const key = distro.toLowerCase()
+  const running = settingUp.get(key)
+  if (running) {
+    return running
   }
-  // The user's Move in the dialog is what moves the project.
-  openWslMoveDialogFor(distro, only)
+  if (hostReady) {
+    // The user's Move in the dialog is what moves the project.
+    openWslMoveDialogFor(distro, only)
+    return Promise.resolve()
+  }
+  const setup = setupQueue
+    .then(() => setUpWslHostForChat(distro))
+    .then((added) => {
+      if (added) {
+        openWslMoveDialogFor(distro, only)
+      }
+    })
+    .finally(() => {
+      settingUp.delete(key)
+      notifySettingUp()
+    })
+  setupQueue = setup.catch(() => undefined)
+  settingUp.set(key, setup)
+  notifySettingUp()
+  return setup
+}
+
+async function setUpWslHostForChat(distro: string): Promise<boolean> {
+  const adding = toast.loading(
+    translate(
+      'auto.components.sidebar.AddWslHostFormPanel.addingHint',
+      'Installing and starting the Orca server in the distro. The first time can take a minute.'
+    )
+  )
+  try {
+    const refusal = await runWslDistroAsHost(distro, {
+      readWslHostsSetting: () => useAppStore.getState().settings?.experimentalWslHosts === true,
+      updateSettings: (updates) => useAppStore.getState().updateSettingsOrThrow(updates),
+      addWslHost: addWslHostDistro
+    })
+    if (refusal) {
+      toast.error(wslHostAddRefusalMessage(refusal))
+      return false
+    }
+    return true
+  } catch (cause) {
+    toast.error(readIpcErrorDetail(cause) ?? String(cause))
+    return false
+  } finally {
+    toast.dismiss(adding)
+  }
 }

@@ -12,7 +12,14 @@ const mocks = vi.hoisted(() => ({
   addWslHost:
     vi.fn<(args: { distro: string; startIfStopped: boolean }) => Promise<WslHostAddResult>>(),
   openMove: vi.fn(),
-  toastError: vi.fn()
+  toastError: vi.fn(),
+  store: {
+    wslHostsAcceptNewWork: true,
+    wslHostServerFiles: 'present',
+    repos: [{ id: 'repo-1', path: '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo' }],
+    folderWorkspaces: [],
+    runtimeEnvironments: []
+  }
 }))
 
 vi.mock('sonner', () => ({
@@ -21,6 +28,7 @@ vi.mock('sonner', () => ({
 vi.mock('@/store/index', () => ({
   useAppStore: {
     getState: () => ({
+      ...mocks.store,
       settings: mocks.settings,
       updateSettingsOrThrow: mocks.updateSettingsOrThrow
     })
@@ -33,10 +41,13 @@ vi.mock('@/components/wsl-move/wsl-move-entry', () => ({ openWslMoveDialogFor: m
 
 import {
   readWslHostChatOffer,
+  readWslHostChatOfferForLaunch,
+  isWslHostChatOfferSettingUp,
   wslHostChatOfferAction,
   type WslHostChatOffer,
   type WslHostChatOfferState
 } from './structured-chat-wsl-host-offer'
+import { structuredChatUnavailableToast } from './structured-agent-session-launch-failure'
 import { structuredSessionNotices } from '@/components/native-chat/messages/notices/native-chat-structured-session-notices'
 
 const REPO_PATH = '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo'
@@ -143,12 +154,116 @@ describe('wslHostChatOfferAction', () => {
     expect(mocks.openMove).not.toHaveBeenCalled()
   })
 
+  it('runs one setup for repeated and concurrent clicks across surfaces', async () => {
+    let finishAdd: (result: WslHostAddResult) => void = () => undefined
+    mocks.addWslHost.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finishAdd = resolve
+        })
+    )
+    const first = wslHostChatOfferAction(offer)
+    first.onClick()
+    first.onClick()
+    // Another surface (the toast) for the same distro, spelled differently, joins too.
+    wslHostChatOfferAction({ ...offer, distro: 'ubuntu' }).onClick()
+    await vi.waitFor(() => expect(mocks.addWslHost).toHaveBeenCalledTimes(1))
+    expect(isWslHostChatOfferSettingUp('UBUNTU')).toBe(true)
+    const busy = wslHostChatOfferAction(offer, undefined, true)
+    expect(busy).toMatchObject({ label: 'Setting up…', disabled: true })
+    finishAdd({ ok: false, kind: 'failed', message: 'Could not start the server.' })
+    await vi.waitFor(() => expect(isWslHostChatOfferSettingUp('Ubuntu')).toBe(false))
+    expect(mocks.toastError).toHaveBeenCalledTimes(1)
+    // The one failed setup restores what it read: the setting stays off.
+    expect(mocks.settings.experimentalWslHosts).toBe(false)
+    expect(mocks.openMove).not.toHaveBeenCalled()
+  })
+
+  it('runs setups for different distros one after another', async () => {
+    const order: string[] = []
+    mocks.addWslHost.mockImplementation(async ({ distro }) => {
+      order.push(`start ${distro}`)
+      await Promise.resolve()
+      order.push(`end ${distro}`)
+      return { ok: true, environmentId: distro }
+    })
+    wslHostChatOfferAction(offer).onClick()
+    wslHostChatOfferAction({ ...offer, distro: 'Debian' }).onClick()
+    await vi.waitFor(() => expect(mocks.openMove).toHaveBeenCalledTimes(2))
+    expect(order).toEqual(['start Ubuntu', 'end Ubuntu', 'start Debian', 'end Debian'])
+  })
+
   it('opens the move straight away when the host is ready', async () => {
     const action = wslHostChatOfferAction({ ...offer, hostReady: true })
     expect(action.label).toBe('Move to Ubuntu host…')
     action.onClick()
     await vi.waitFor(() => expect(mocks.openMove).toHaveBeenCalled())
     expect(mocks.addWslHost).not.toHaveBeenCalled()
+  })
+})
+
+describe('readWslHostChatOfferForLaunch', () => {
+  const wslFailure = {
+    kind: 'refused',
+    code: 'structured_agent_session_unsupported',
+    hostReason: 'wsl'
+  } as const
+
+  it('offers only for a failed start the host refused as WSL', () => {
+    expect(
+      readWslHostChatOfferForLaunch(
+        state(),
+        { lifecycle: 'failed', failure: wslFailure },
+        WORKTREE_ID
+      )
+    ).toMatchObject({ distro: 'Ubuntu' })
+    expect(
+      readWslHostChatOfferForLaunch(
+        state(),
+        { lifecycle: 'failed', failure: { ...wslFailure, hostReason: 'remote' } },
+        WORKTREE_ID
+      )
+    ).toBeNull()
+    expect(
+      readWslHostChatOfferForLaunch(
+        state(),
+        { lifecycle: 'visibility-unknown', failure: wslFailure },
+        WORKTREE_ID
+      )
+    ).toBeNull()
+    expect(
+      readWslHostChatOfferForLaunch(state(), { lifecycle: 'failed', failure: null }, WORKTREE_ID)
+    ).toBeNull()
+  })
+})
+
+describe('structuredChatUnavailableToast', () => {
+  it('keeps the plain words for other refusals', () => {
+    expect(structuredChatUnavailableToast('remote', WORKTREE_ID)).toEqual({
+      description: 'Chat is not available over SSH. Open the agent in a terminal instead.'
+    })
+  })
+
+  it('keeps the plain words when the workspace has no offer', () => {
+    vi.stubGlobal('window', { api: { runtimeEnvironments: {} } })
+    expect(structuredChatUnavailableToast('wsl', WORKTREE_ID)).toEqual({
+      description: 'Chat is not available in WSL. Open the agent in a terminal instead.'
+    })
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { wslHosts: {} } } })
+    expect(structuredChatUnavailableToast('wsl', 'repo-unknown::/elsewhere')).not.toHaveProperty(
+      'action'
+    )
+  })
+
+  it('wires the toast button to the host setup for this project', async () => {
+    mocks.addWslHost.mockResolvedValue({ ok: true, environmentId: 'env-ubuntu' })
+    const toastOptions = structuredChatUnavailableToast('wsl', WORKTREE_ID)
+    expect(toastOptions.description).toContain('Run the project on a WSL host')
+    expect(toastOptions.action?.label).toBe('Run Ubuntu as a host')
+    toastOptions.action?.onClick()
+    await vi.waitFor(() =>
+      expect(mocks.openMove).toHaveBeenCalledWith('Ubuntu', { kind: 'repo', id: 'repo-1' })
+    )
   })
 })
 
@@ -176,5 +291,22 @@ describe('the chat composer notice', () => {
     })
     expect(notice?.text).toContain('Run the project on a WSL host to chat there')
     expect(notice?.action?.label).toBe('Run Ubuntu as a host')
+  })
+
+  it('shows the button busy while the host is being set up', () => {
+    const [notice] = structuredSessionNotices({
+      launch: { lifecycle: 'failed', failure: null, retry: vi.fn() },
+      agentLabel: 'Claude',
+      sessionError: null,
+      composerError: null,
+      wslHostOffer: {
+        distro: 'Ubuntu',
+        projectKind: 'repo',
+        projectId: 'repo-1',
+        hostReady: false
+      },
+      wslHostOfferSettingUp: true
+    })
+    expect(notice?.action).toMatchObject({ label: 'Setting up…', disabled: true })
   })
 })

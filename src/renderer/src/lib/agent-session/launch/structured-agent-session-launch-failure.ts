@@ -14,6 +14,7 @@ import { wslHostsAvailable } from '@/components/sidebar/use-wsl-hosts-enabled'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import {
+  isWslHostChatOfferSettingUp,
   readWslHostChatOffer,
   wslHostChatOfferAction,
   wslHostChatOfferText
@@ -81,7 +82,11 @@ export function structuredChatUnavailableToast(
   if (!offer) {
     return { description: structuredChatUnavailableText(reason) }
   }
-  const { label, onClick } = wslHostChatOfferAction(offer)
+  const { label, onClick } = wslHostChatOfferAction(
+    offer,
+    translate,
+    isWslHostChatOfferSettingUp(offer.distro)
+  )
   return { description: wslHostChatOfferText(), action: { label, onClick } }
 }
 

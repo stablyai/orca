@@ -28,7 +28,8 @@ function nativeChatLaunchNotice(
     agentLabel,
     onRetry,
     setup = null,
-    wslHostOffer = null
+    wslHostOffer = null,
+    wslHostOfferSettingUp = false
   }: {
     lifecycle: StructuredAgentSessionLaunchLifecycle | null
     failure?: StructuredLaunchFailure | null
@@ -38,6 +39,7 @@ function nativeChatLaunchNotice(
     setup?: NativeChatHostSetup | null
     /** A WSL folder's chat runs on its distro's host; Retry here would only refuse again. */
     wslHostOffer?: WslHostChatOffer | null
+    wslHostOfferSettingUp?: boolean
   },
   t: Translate = translate
 ): NativeChatComposerNotice | null {
@@ -56,7 +58,7 @@ function nativeChatLaunchNotice(
       key: 'launch',
       kind: 'error',
       text: joinSentences([message, wslHostChatOfferText(t)]),
-      action: wslHostChatOfferAction(wslHostOffer, t)
+      action: wslHostChatOfferAction(wslHostOffer, t, wslHostOfferSettingUp)
     }
   }
   const cause = failure
@@ -102,7 +104,8 @@ export function structuredSessionNotices(
     setup = null,
     availability = null,
     hostPermission = null,
-    wslHostOffer = null
+    wslHostOffer = null,
+    wslHostOfferSettingUp = false
   }: {
     launch: {
       lifecycle: StructuredAgentSessionLaunchLifecycle | null
@@ -117,6 +120,8 @@ export function structuredSessionNotices(
     availability?: NativeChatComposerNotice | null
     hostPermission?: NativeChatComposerNotice | null
     wslHostOffer?: WslHostChatOffer | null
+    /** This distro's host is being set up, so its button shows busy. */
+    wslHostOfferSettingUp?: boolean
   },
   t?: Translate
 ): NativeChatComposerNotice[] {
@@ -128,7 +133,8 @@ export function structuredSessionNotices(
       agentLabel,
       onRetry: launch.retry,
       setup,
-      wslHostOffer
+      wslHostOffer,
+      wslHostOfferSettingUp
     },
     t
   )

@@ -23,7 +23,7 @@ import {
 } from '../../../../shared/workspace/identity/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
+import { wslHostMovableDistroOfPath } from '../../../../shared/file-access/wsl-paths'
 import type {
   WslMoveBlocker,
   WslMoveRowRef
@@ -47,14 +47,8 @@ export type WslMoveCounts = {
   chats: number
 }
 
-// Rule D7: a repo on a Windows drive reached through the distro stays a Windows project.
-const WINDOWS_DRIVE_MOUNT = /^\/mnt\/[a-z](\/|$)/i
-
 /** The distro a local folder lives in when it could move to that distro's host; else null. */
-export function wslMoveDistroOfPath(path: string): string | null {
-  const parsed = parseWslUncPath(path)
-  return parsed && !WINDOWS_DRIVE_MOUNT.test(parsed.linuxPath) ? parsed.distro : null
-}
+export const wslMoveDistroOfPath = wslHostMovableDistroOfPath
 
 /** The added WSL host of a distro, matched as WSL matches names: case-insensitively. */
 export function findWslHostForDistro(
