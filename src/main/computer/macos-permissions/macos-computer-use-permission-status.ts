@@ -116,5 +116,6 @@ async function readPermissionStatusFromHelper(
     const detail = result.stderr.trim() || `exit ${result.code ?? result.signal ?? 'unknown'}`
     throw new RuntimeClientError('accessibility_error', `Could not check permissions: ${detail}`)
   }
-  return JSON.parse(result.stdout) as HelperPermissionStatus
+  const status: HelperPermissionStatus = JSON.parse(result.stdout)
+  return status
 }

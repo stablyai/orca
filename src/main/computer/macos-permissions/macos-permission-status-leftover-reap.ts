@@ -68,6 +68,6 @@ async function probeDirectoryMayExist(path: string): Promise<boolean> {
     await stat(path)
     return true
   } catch (error) {
-    return (error as NodeJS.ErrnoException).code !== 'ENOENT'
+    return !(error instanceof Error && 'code' in error && error.code === 'ENOENT')
   }
 }
