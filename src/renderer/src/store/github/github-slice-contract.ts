@@ -26,7 +26,7 @@ import type {
 } from '../../../../shared/github/projects/project-result-types'
 import type { GetProjectViewTableArgs } from '../../../../shared/github/projects/project-request-types'
 import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type {
   CacheEntry,

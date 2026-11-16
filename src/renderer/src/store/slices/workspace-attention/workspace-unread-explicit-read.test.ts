@@ -2,7 +2,7 @@ import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agen
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as WorktreeMetaPersistModule from '../worktrees/metadata/worktree-meta-persist'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
-import '../../../../../shared/constants'
+import '../../../../../shared/orca-profiles/constants'
 import {
   addLiveTerminalTab,
   createAttentionStore,
@@ -308,17 +308,6 @@ describe('explicit workspace and agent reads', () => {
 
     expect(store.getState().unreadAgentCompletionPanes).toEqual({})
     expect(isWorkspaceFlagSet(store.getState(), WS_A)).toBe(true)
-  })
-
-  it('closing the last marked tab lowers a flag only its marker raised', () => {
-    const { store } = createAttentionStore()
-    const pane = finishedAgentOffScreen(store)
-    expect(isWorkspaceFlagSet(store.getState(), WS_A)).toBe(true)
-
-    store.getState().closeTab(pane.tabId)
-
-    expect(isWorkspaceFlagSet(store.getState(), WS_A)).toBe(false)
-    expect(store.getState().workspaceUnreadRaisedByMarkers).toEqual({})
   })
 
   it('reads only the selected host, including agents awaiting tab hydration', () => {

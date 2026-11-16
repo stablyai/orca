@@ -1,5 +1,5 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
-import type { AgentSessionMcpServer } from '../../../../../shared/agent-session/agent-session-mcp'
+import type { AgentSessionMcpServer } from '../../../../../shared/agent-session/options/protocol/agent-session-mcp'
 import type { AgentSessionMcpPanelState } from '../../../../../shared/agent-session/view/use-agent-session-mcp-panel'
 import { NativeChatThreadGoalBanner } from '../session/goals/NativeChatThreadGoalBanner'
 import { NativeChatMcpTrayView } from './NativeChatMcpTray'

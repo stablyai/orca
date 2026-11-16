@@ -1,5 +1,5 @@
 import type { AppState } from '../../types'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { structuredAgentSessionPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { getAgentPaneExecutionHost } from '../agent-status/agent-pane-execution-host'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'

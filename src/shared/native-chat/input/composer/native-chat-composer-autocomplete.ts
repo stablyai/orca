@@ -1,7 +1,7 @@
 import type { DiscoveredSkill } from '../../../skills/discovery/skills'
 import { formatNativeChatFileReference } from './agent-image-paste'
-import { skillDirectoryName } from '../../native-chat-reported-skill'
-import type { NativeChatAgentProfile } from '../../native-chat-agent-profiles'
+import { skillDirectoryName } from './native-chat-reported-skill'
+import type { NativeChatAgentProfile } from '../commands/native-chat-agent-profiles'
 import type {
   NativeChatSessionSkill,
   SlashCommandSuggestion

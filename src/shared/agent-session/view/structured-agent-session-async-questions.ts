@@ -3,7 +3,7 @@ import type {
   AgentJournalSubmission
 } from '../journal/agent-session-journal-types'
 import { isRootAgentJournalItem } from '../journal/agent-session-journal-producer'
-import { isStructuredAgentSessionCommandEntry } from '../structured-agent-session-command-entry'
+import { isStructuredAgentSessionCommandEntry } from '../requests/structured-agent-session-command-entry'
 import { scanPendingAsks } from '../../native-chat/input/native-chat-ask'
 import { isDeliveredNativeChatUserMessage } from '../../native-chat/input/questions/native-chat-ask-answer'
 import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'

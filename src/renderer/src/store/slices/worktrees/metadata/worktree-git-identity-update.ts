@@ -32,7 +32,10 @@ import { persistWorktreeMeta } from './worktree-meta-persist'
 import { withRepoHostOwnership } from '../listing/worktree-host-ownership'
 import { getRepoRegistrationHostIds } from '../../../../../../shared/repository/repo-host-identity'
 import { isRuntimeSelectorNotFoundError } from '../listing/runtime-worktree-rpc-errors'
-import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
+import {
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host/execution-host'
 import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'
 import {
   selectWorkspaceByHostTarget,

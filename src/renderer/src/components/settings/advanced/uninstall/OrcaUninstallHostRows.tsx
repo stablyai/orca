@@ -1,27 +1,27 @@
 import type React from 'react'
 import { useMemo } from 'react'
 import { Monitor } from 'lucide-react'
+import { Trans } from 'react-i18next'
 import type { OrcaUninstallHostEntry } from '../../../../../../shared/uninstall/orca-uninstall-types'
+import { i18n } from '@/i18n/i18n'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
+import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
 import { useBoundedHostRows } from '../../../host-picker/use-bounded-host-rows'
 import { HostListSearchField } from '../../../host-picker/HostListSearchField'
 import { HostListOverflowNote } from '../../../host-picker/HostListOverflowNote'
 import { isOrcaUninstallProblem } from './orca-uninstall-plan-state'
 import { getOrcaUninstallSlotKind, OrcaUninstallCopyCommandButton } from './OrcaUninstallStatus'
-import {
-  ExpandableRow,
-  PATH_CLASS,
-  RowSlot,
-  SUB_ROW_CLASS,
-  SubRowSlot,
-  useAutoExpand,
-  type RowsModel
-} from './OrcaUninstallRowLayout'
+import { PATH_CLASS, SUB_ROW_CLASS, SubRowSlot, type RowsModel } from './OrcaUninstallRowLayout'
 import { orcaUninstallRetryKey } from './use-orca-uninstall'
 
-export function OrcaUninstallHostRows({ model }: { model: RowsModel }): React.JSX.Element | null {
-  const t = useTranslate()
+/** Sub-rows of the hooks row: on a host, uninstall only turns that host's agent hooks off. */
+export function OrcaUninstallHostSubRows({
+  model
+}: {
+  model: RowsModel
+}): React.JSX.Element | null {
   const hosts = useMemo(() => model.plan?.hosts ?? [], [model.plan])
   const hostRows = useMemo(
     () => hosts.map((entry) => ({ id: entry.hostId, label: entry.label, entry })),
@@ -36,38 +36,16 @@ export function OrcaUninstallHostRows({ model }: { model: RowsModel }): React.JS
     [hosts]
   )
   const rows = useBoundedHostRows(hostRows, problemIds)
-  const [expanded, toggle] = useAutoExpand(problemIds.size > 0)
   if (hosts.length === 0) {
     return null
   }
   return (
     <>
-      <ExpandableRow
-        expanded={expanded}
-        onToggle={toggle}
-        label={t('settings.uninstall.rows.hosts', 'SSH hosts')}
-        slot={
-          <RowSlot
-            model={model}
-            step="ssh-hosts"
-            meta={t('settings.uninstall.rows.hostCount', '{{count}} hosts', {
-              count: hosts.length,
-              defaultValue_one: '1 host'
-            })}
-          />
-        }
-      />
-      {expanded ? (
-        <div className="pl-6">
-          {rows.searchable ? (
-            <HostListSearchField value={rows.query} onChange={rows.setQuery} />
-          ) : null}
-          {rows.shown.map((row) => (
-            <HostSubRow key={row.id} model={model} entry={row.entry} />
-          ))}
-          <HostListOverflowNote hiddenCount={rows.hiddenCount} />
-        </div>
-      ) : null}
+      {rows.searchable ? <HostListSearchField value={rows.query} onChange={rows.setQuery} /> : null}
+      {rows.shown.map((row) => (
+        <HostSubRow key={row.id} model={model} entry={row.entry} />
+      ))}
+      <HostListOverflowNote hiddenCount={rows.hiddenCount} />
     </>
   )
 }
@@ -101,11 +79,26 @@ function HostSubRow({
   return (
     <div className={SUB_ROW_CLASS}>
       <Monitor className="size-3.5 text-muted-foreground" />
-      <span className="min-w-0 break-words">{entry.label}</span>
-      <span className={PATH_CLASS}>
-        {entry.connected
-          ? t('settings.uninstall.host.connected', 'Connected')
-          : t('settings.uninstall.host.offline', 'Offline')}
+      <span className="flex min-w-0 flex-wrap items-center gap-1.5">
+        <span className="min-w-0 break-words">{entry.label}</span>
+        <Badge variant="hostContext">{t('settings.uninstall.host.ssh', 'SSH')}</Badge>
+      </span>
+      <span className={cn(PATH_CLASS, 'font-sans')}>
+        {entry.connected ? (
+          t('settings.uninstall.host.connected', 'Connected')
+        ) : entry.manualCommand ? (
+          <Trans
+            i18n={i18n}
+            defaults={t(
+              'settings.uninstall.host.notConnectedRun',
+              'Not connected. Run <cmd>{{command}}</cmd> on the host.'
+            )}
+            values={{ command: entry.manualCommand }}
+            components={{ cmd: <code className="font-mono" /> }}
+          />
+        ) : (
+          t('settings.uninstall.host.notConnected', 'Not connected.')
+        )}
       </span>
       <SubRowSlot
         kind={model.phase === 'idle' ? 'blank' : kind}

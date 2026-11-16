@@ -6,7 +6,7 @@ import { agentLaunchChoiceUpdates } from './agent-launch-choice-updates'
 import { projectAgentLaunchProfile } from './agent-launch-profile'
 import type { AgentLaunchChoices, AgentChoicePatch } from './agent-launch-choices'
 import { agentEnvironmentMutationUpdates, choiceUpdate } from './agent-launch-environment-updates'
-import type { GlobalSettings } from '../../global-settings-types'
+import type { GlobalSettings } from '../../settings/global-settings-types'
 import type { TuiAgent } from '../catalog/tui-agent'
 import { buildDefaultAgentSettingsUpdate } from './default-agent-settings'
 import {

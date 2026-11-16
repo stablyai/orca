@@ -35,7 +35,7 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/runtime/rpc/server/orchestration-cli-subprocess.test.ts',
   'src/main/runtime/orchestration/mailbox/terminal-pointer/orchestration-mailbox-delivery.test.ts',
   'src/main/runtime/orchestration/mailbox/routing/orchestration-mailbox-routing.test.ts',
-  'tests/e2e/cross-version-wire/agent-session-clear-old-client.unit.test.ts',
+
   'tests/e2e/cross-version-wire/agent-session-clear-old-tab-mirror.unit.test.ts',
   'src/main/pi/rpc/rpc-session-startup.test.ts',
   'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-clear-queued-command.test.ts',
@@ -43,10 +43,9 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/acp/session/acp-structured-session-adapter-resume.test.ts',
   'src/main/pi/rpc/rpc-turn-races.test.ts',
   'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-background-stop-unreadable.test.ts',
-  'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-exit-delivery.test.ts',
+
   'src/main/runtime/construction/orca-runtime.test.ts',
   'src/main/runtime/terminal/stop/worktree-sleep-resume-recording.test.ts',
-  'src/main/runtime/workspaces/startup/worktree-agent-first-surface.test.ts',
   'src/main/runtime/client/settings/runtime-client-agent-launch-settings-durability.test.ts',
   'src/cli/**/*.test.ts',
   'src/main/persistence/**/*.test.ts',

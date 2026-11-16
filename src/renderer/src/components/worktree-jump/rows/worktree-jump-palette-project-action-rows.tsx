@@ -11,7 +11,7 @@ import type {
 } from '../worktree-jump-palette-model'
 import type { WorktreeJumpPaletteController } from '../use-worktree-jump-palette-controller'
 import { PaletteHostBadgeChip } from './worktree-jump-palette-row-content'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { BROWSER_NAVIGATION_ACTION_ID } from '../../cmd-j/browser-navigation-action'
 
 export function WorktreeJumpPaletteProjectRow({

@@ -49,7 +49,7 @@ export const PR_EDITOR_PREVIEW_E2E_SOURCE_ROUTES = [
           file
         ) ||
         [
-          'src/main/ipc/filesystem/filesystem-read-handlers.ts',
+          'src/main/ipc/filesystem/reads/filesystem-read-handlers.ts',
           'src/main/startup/chromium-policy/privileged-custom-schemes.ts',
           'src/preload/api/filesystem/fs-bridge.ts',
           'src/renderer/src/runtime/files/reads/runtime-file-range-preview.ts',

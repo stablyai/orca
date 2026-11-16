@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { getRepoExecutionHostId } from '../../execution-host'
+import { getRepoExecutionHostId } from '../../execution-host/execution-host'
 import type { Repo } from '../../repository/repo-types'
 
 /** Longest data URL one icon may reply with. */

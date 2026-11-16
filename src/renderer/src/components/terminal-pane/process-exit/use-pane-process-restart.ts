@@ -3,6 +3,7 @@ import { useAppStore } from '../../../store'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { connectPanePty } from '../pty-connection/connect-pane-pty'
 import { releasePaneTransportForRestart } from './pane-restart-transport-handoff'
+import { holdPaneResumeInPlace } from '../session-restore/spawn-deferral/pane-spawn-deferral-registry'
 import { clearPaneTerminalError } from '../errors/terminal-error-accumulation'
 import type { PtyConnectionDeps } from '../pty-connection/pty-connection-deps'
 import type { TerminalPaneCloseController } from '../layout/close/use-terminal-pane-close-actions'
@@ -87,62 +88,76 @@ export function usePaneProcessRestart({
       if (!manager || !pane) {
         return
       }
-      const transport = paneTransportsRef.current.get(paneId)
-      const panePtyBinding = panePtyBindingsRef.current.get(paneId)
-      const existingPtyId = transport?.getPtyId()
-      if (existingPtyId) {
-        suppressPtyExit(existingPtyId)
-        clearCodexRestartNotice(existingPtyId)
-        clearTabPtyId(tabId, existingPtyId)
-      }
-      panePtyBinding?.dispose()
-      panePtyBindingsRef.current.delete(paneId)
-      syncPanePtyLayoutBinding(paneId, null)
-      const replacesPtyId = releasePaneTransportForRestart(transport)
-      paneTransportsRef.current.delete(paneId)
-      setCacheTimerStartedAt(makePaneKey(tabId, pane.leafId), null)
-      setTerminalError(null)
-      setTerminalErrorsByPaneId((current) => clearPaneTerminalError(current, paneId))
-      const newPaneBinding = connectPanePty(pane, manager, {
-        tabId,
-        worktreeId,
-        cwd,
-        startup,
-        ...(replacesPtyId ? { replacesPtyId } : {}),
-        mountFollowsTerminalPark: false,
-        invalidateRetainedInlineScrollback: (leafId) => {
-          initialLayoutRef.current = clearRetainedInlineScrollback(initialLayoutRef.current, leafId)
-        },
-        paneTransportsRef,
-        paneMode2031Ref,
-        paneKittyKeyboardModesRef,
-        paneLastThemeModeRef,
-        replayingPanesRef,
-        isActiveRef,
-        isVisibleRef,
-        onPtyExitRef,
-        onAgentExitedRef,
-        onPtyErrorRef,
-        onPtyErrorClearedRef,
-        onPaneProcessDied: handlePaneProcessDied,
-        onPtyRecoveryStateRef,
-        clearTabPtyId,
-        consumeSuppressedPtyExit: useAppStore.getState().consumeSuppressedPtyExit,
-        isPtyShutdownPending: useAppStore.getState().isPtyShutdownPending,
-        updateTabTitle,
-        setRuntimePaneTitle,
-        clearRuntimePaneTitle,
-        updateTabPtyId,
-        markTerminalBell,
-        onShowSessionRestoredBanner: showRestoredSessionBanner,
-        dispatchNotification,
-        setCacheTimerStartedAt,
-        syncPanePtyLayoutBinding,
-        clearExitedPanePtyLayoutBinding
-      })
-      panePtyBindingsRef.current.set(paneId, newPaneBinding)
-      if (options.focus) {
-        manager.setActivePane(paneId, { focus: true })
+      // Activation must not fork the retained conversation while its replacement has no PTY.
+      const releaseResumeInPlace = holdPaneResumeInPlace(
+        makePaneKey(tabId, pane.leafId),
+        () => true
+      )
+      try {
+        const transport = paneTransportsRef.current.get(paneId)
+        const panePtyBinding = panePtyBindingsRef.current.get(paneId)
+        const existingPtyId = transport?.getPtyId()
+        if (existingPtyId) {
+          suppressPtyExit(existingPtyId)
+          clearCodexRestartNotice(existingPtyId)
+          clearTabPtyId(tabId, existingPtyId)
+        }
+        panePtyBinding?.dispose()
+        panePtyBindingsRef.current.delete(paneId)
+        syncPanePtyLayoutBinding(paneId, null)
+        const replacesPtyId = releasePaneTransportForRestart(transport)
+        paneTransportsRef.current.delete(paneId)
+        setCacheTimerStartedAt(makePaneKey(tabId, pane.leafId), null)
+        setTerminalError(null)
+        setTerminalErrorsByPaneId((current) => clearPaneTerminalError(current, paneId))
+        const newPaneBinding = connectPanePty(pane, manager, {
+          tabId,
+          worktreeId,
+          cwd,
+          startup,
+          releaseResumeInPlace,
+          ...(replacesPtyId ? { replacesPtyId } : {}),
+          mountFollowsTerminalPark: false,
+          invalidateRetainedInlineScrollback: (leafId) => {
+            initialLayoutRef.current = clearRetainedInlineScrollback(
+              initialLayoutRef.current,
+              leafId
+            )
+          },
+          paneTransportsRef,
+          paneMode2031Ref,
+          paneKittyKeyboardModesRef,
+          paneLastThemeModeRef,
+          replayingPanesRef,
+          isActiveRef,
+          isVisibleRef,
+          onPtyExitRef,
+          onAgentExitedRef,
+          onPtyErrorRef,
+          onPtyErrorClearedRef,
+          onPaneProcessDied: handlePaneProcessDied,
+          onPtyRecoveryStateRef,
+          clearTabPtyId,
+          consumeSuppressedPtyExit: useAppStore.getState().consumeSuppressedPtyExit,
+          isPtyShutdownPending: useAppStore.getState().isPtyShutdownPending,
+          updateTabTitle,
+          setRuntimePaneTitle,
+          clearRuntimePaneTitle,
+          updateTabPtyId,
+          markTerminalBell,
+          onShowSessionRestoredBanner: showRestoredSessionBanner,
+          dispatchNotification,
+          setCacheTimerStartedAt,
+          syncPanePtyLayoutBinding,
+          clearExitedPanePtyLayoutBinding
+        })
+        panePtyBindingsRef.current.set(paneId, newPaneBinding)
+        if (options.focus) {
+          manager.setActivePane(paneId, { focus: true })
+        }
+      } catch (error) {
+        releaseResumeInPlace()
+        throw error
       }
     },
     [
