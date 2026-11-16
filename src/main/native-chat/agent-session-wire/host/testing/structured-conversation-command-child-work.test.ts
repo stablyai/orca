@@ -119,9 +119,9 @@ describe('conversation command admission reads the work the provider reported', 
     expect(await state.host.conversationCommand(CALLER, first)).toMatchObject({ ok: true })
     await vi.waitFor(() => expect(compact).toHaveBeenCalledTimes(1))
     finish()
-    await vi.waitFor(async () =>
-      expect(await commandTurnState(first.envelope.clientOperationId)).toBe('completed')
-    )
+    // The completion commits through the child's event sink; drain it instead of polling 1 s.
+    await state.host.flushStreamedEvents(HOST_TEST_SESSION)
+    expect(await commandTurnState(first.envelope.clientOperationId)).toBe('completed')
 
     report([devServer()])
     await vi.waitFor(() =>
