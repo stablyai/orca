@@ -37,6 +37,7 @@ import { PierreDiffSearchBar } from './PierreDiffSearchBar'
 import { usePierreDiffShiftWheel } from './use-pierre-diff-shift-wheel'
 import { usePierreDiffNativeView } from './use-pierre-diff-native-view'
 import { usePierreDiffContextCopy } from './use-pierre-diff-context-copy'
+import { usePierreDiffUnicodeHighlight } from './use-pierre-diff-unicode-highlight'
 import { editorShortcutMatches } from '@/components/editor/commands/editor-shortcuts'
 import { usePierreDiffNoteNavigation } from './use-pierre-diff-note-navigation'
 import { usePierreDiffNoteSelection } from './use-pierre-diff-note-selection'
@@ -200,41 +201,37 @@ export function PierreDiffSurface({
     commentableLines
   })
   const navigateToNote = usePierreDiffNoteNavigation({ worktreeId, filePath, comments })
-  const postRenderRef = useRef({
-    onPostRender,
-    navigateToNote,
-    searchPostRender,
-    shiftWheelPostRender,
-    nativeViewPostRender,
-    noteSelectionPostRender: noteSelection.onPostRender
-  })
-  // Keep Pierre's render callback stable; committed callbacks may lag a child layout effect.
-  useLayoutEffect(() => {
-    postRenderRef.current = {
+  const unicodePostRender = usePierreDiffUnicodeHighlight(language)
+  const postRenderChain = useMemo(
+    () => [
       onPostRender,
       navigateToNote,
       searchPostRender,
       shiftWheelPostRender,
       nativeViewPostRender,
-      noteSelectionPostRender: noteSelection.onPostRender
-    }
-  }, [
-    onPostRender,
-    navigateToNote,
-    searchPostRender,
-    shiftWheelPostRender,
-    nativeViewPostRender,
-    noteSelection.onPostRender
-  ])
+      noteSelection.onPostRender,
+      unicodePostRender
+    ],
+    [
+      onPostRender,
+      navigateToNote,
+      searchPostRender,
+      shiftWheelPostRender,
+      nativeViewPostRender,
+      noteSelection.onPostRender,
+      unicodePostRender
+    ]
+  )
+  const postRenderRef = useRef(postRenderChain)
+  // Keep Pierre's render callback stable; committed callbacks may lag a child layout effect.
+  useLayoutEffect(() => {
+    postRenderRef.current = postRenderChain
+  }, [postRenderChain])
   const handlePostRender = useCallback(
     (node: HTMLElement, instance: PierreDiffInstance, phase: PostRenderPhase) => {
-      const chain = postRenderRef.current
-      chain.onPostRender?.(node, phase, instance)
-      chain.navigateToNote(node, phase, instance)
-      chain.searchPostRender(node, phase, instance)
-      chain.shiftWheelPostRender(node, phase, instance)
-      chain.nativeViewPostRender(node, phase, instance)
-      chain.noteSelectionPostRender(node, phase, instance)
+      for (const postRender of postRenderRef.current) {
+        postRender?.(node, phase, instance)
+      }
     },
     []
   )

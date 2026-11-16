@@ -7,6 +7,7 @@ import {
   type EditorTypography
 } from '../../../../../shared/editor/editor-typography'
 import { PIERRE_SEARCH_CSS } from './pierre-diff-search-view'
+import { PIERRE_UNICODE_HIGHLIGHT_CSS } from './pierre-diff-unicode-highlight'
 
 /**
  * `light-plus` / `dark-plus` are the VS Code default themes that Monaco's
@@ -72,7 +73,11 @@ export function buildPierreDiffOptions<LAnnotation>({
     // from here — without it Pierre asks Shiki for its unregistered default
     // `pierre-dark` and the render throws instead of painting.
     theme: PIERRE_DIFF_THEMES,
-    unsafeCSS: PIERRE_GUTTER_BUTTON_CSS + PIERRE_SEARCH_CSS + PIERRE_SELECTION_CSS,
+    unsafeCSS:
+      PIERRE_GUTTER_BUTTON_CSS +
+      PIERRE_SEARCH_CSS +
+      PIERRE_SELECTION_CSS +
+      PIERRE_UNICODE_HIGHLIGHT_CSS,
     themeType: settings?.theme ?? 'system',
     overflow: settings?.diffWordWrap ? 'wrap' : 'scroll',
     parseDiffOptions: buildPierreParseDiffOptions(settings?.diffShowWhitespace),
