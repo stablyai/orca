@@ -87,6 +87,10 @@
     },
     "wslMoved": {
       "movedToHost": "已移至 {{distro}} 主機",
+      "sectionTitle": "已移至 WSL 主機 ({{count}})",
+      "hide": "從此清單隱藏",
+      "hiddenToast": "已從此清單隱藏 {{name}}",
+      "hiddenToastDescription": "「重新在這台電腦上使用」仍在 {{distro}} 主機下的選單中。",
       "useHere": "重新在這台電腦上使用",
       "useHereTitle": "要重新在這台電腦上使用 {{name}} 嗎？",
       "useHereDescription": "Orca 會依照移動前的狀態在這裡開啟此專案。你的程式碼不受影響：它從未移動。移動後在 {{distro}} 主機上所做的變更（例如新分頁和聊天）會留在主機上，不會帶回來。與它一起移動的專案也會一起回來。在你於 {{distro}} 主機上將其移除之前，專案也會一直保留在那裡。此視窗將重新載入。",

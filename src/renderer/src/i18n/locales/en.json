@@ -107,6 +107,10 @@
     },
     "wslMoved": {
       "movedToHost": "Moved to {{distro}} host",
+      "sectionTitle": "Moved to WSL hosts ({{count}})",
+      "hide": "Hide from this list",
+      "hiddenToast": "{{name}} hidden from this list",
+      "hiddenToastDescription": "“Use on this computer again” stays in its menu under the {{distro}} host.",
       "useHere": "Use on this computer again",
       "useHereTitle": "Use {{name}} on this computer again?",
       "useHereDescription": "Orca will open this project here as it was before the move. Your code is not affected: it never moved. Changes made on the {{distro}} host since the move, such as new tabs and chats, stay on the host and do not come back. Projects moved with it come back too. The project also stays on the {{distro}} host until you remove it there. This window reloads.",

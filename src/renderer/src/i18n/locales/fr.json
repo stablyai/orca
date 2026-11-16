@@ -21381,6 +21381,10 @@
     },
     "wslMoved": {
       "movedToHost": "Déplacé vers l'hôte {{distro}}",
+      "sectionTitle": "Déplacés vers des hôtes WSL ({{count}})",
+      "hide": "Masquer de cette liste",
+      "hiddenToast": "{{name}} masqué de cette liste",
+      "hiddenToastDescription": "« Utiliser à nouveau sur cet ordinateur » reste dans son menu, sous l'hôte {{distro}}.",
       "useHere": "Utiliser à nouveau sur cet ordinateur",
       "useHereTitle": "Utiliser à nouveau {{name}} sur cet ordinateur ?",
       "useHereDescription": "Orca ouvrira ce projet ici tel qu'il était avant le déplacement. Votre code n'est pas concerné : il n'a jamais été déplacé. Les modifications faites sur l'hôte {{distro}} depuis le déplacement, comme de nouveaux onglets et chats, restent sur l'hôte et ne reviennent pas. Les projets déplacés avec celui-ci reviennent aussi. Le projet reste également sur l'hôte {{distro}} jusqu'à ce que vous l'y supprimiez. Cette fenêtre va se recharger.",

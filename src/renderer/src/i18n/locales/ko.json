@@ -20676,6 +20676,10 @@
     },
     "wslMoved": {
       "movedToHost": "{{distro}} 호스트로 이동됨",
+      "sectionTitle": "WSL 호스트로 이동됨 ({{count}})",
+      "hide": "이 목록에서 숨기기",
+      "hiddenToast": "{{name}}을(를) 이 목록에서 숨겼습니다",
+      "hiddenToastDescription": "‘이 컴퓨터에서 다시 사용’은 {{distro}} 호스트 아래 메뉴에 남아 있습니다.",
       "useHere": "이 컴퓨터에서 다시 사용",
       "useHereTitle": "{{name}}을(를) 이 컴퓨터에서 다시 사용할까요?",
       "useHereDescription": "Orca가 이 프로젝트를 이동 전 상태 그대로 여기에서 엽니다. 코드에는 영향이 없습니다. 코드는 이동되지 않았습니다. 이동 후 {{distro}} 호스트에서 만든 새 탭이나 채팅 같은 변경 사항은 호스트에 남고 돌아오지 않습니다. 함께 이동한 프로젝트도 함께 돌아옵니다. 프로젝트는 {{distro}} 호스트에서 제거할 때까지 그곳에도 남아 있습니다. 이 창이 다시 로드됩니다.",

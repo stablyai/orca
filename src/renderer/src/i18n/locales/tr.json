@@ -87,6 +87,10 @@
     },
     "wslMoved": {
       "movedToHost": "{{distro}} ana makinesine taşındı",
+      "sectionTitle": "WSL ana makinelerine taşınanlar ({{count}})",
+      "hide": "Bu listeden gizle",
+      "hiddenToast": "{{name}} bu listeden gizlendi",
+      "hiddenToastDescription": "“Bu bilgisayarda yeniden kullan”, {{distro}} ana makinesi altındaki menüsünde kalır.",
       "useHere": "Bu bilgisayarda yeniden kullan",
       "useHereTitle": "{{name}} bu bilgisayarda yeniden kullanılsın mı?",
       "useHereDescription": "Orca bu projeyi burada, taşımadan önceki hâliyle açar. Kodunuz etkilenmez: hiç taşınmadı. Taşımadan bu yana {{distro}} ana makinesinde yapılan yeni sekmeler ve sohbetler gibi değişiklikler ana makinede kalır ve geri gelmez. Bu projeyle birlikte taşınan projeler de geri gelir. Proje, siz oradan kaldırana kadar {{distro}} ana makinesinde de kalır. Bu pencere yeniden yüklenir.",

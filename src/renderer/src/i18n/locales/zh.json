@@ -22450,6 +22450,10 @@
     },
     "wslMoved": {
       "movedToHost": "已移至 {{distro}} 主机",
+      "sectionTitle": "已移至 WSL 主机 ({{count}})",
+      "hide": "从此列表隐藏",
+      "hiddenToast": "已从此列表隐藏 {{name}}",
+      "hiddenToastDescription": "“重新在此电脑上使用”仍在 {{distro}} 主机下的菜单中。",
       "useHere": "重新在此电脑上使用",
       "useHereTitle": "要重新在此电脑上使用 {{name}} 吗？",
       "useHereDescription": "Orca 会按移动前的状态在这里打开此项目。你的代码不受影响：它从未移动。移动后在 {{distro}} 主机上所做的更改（例如新标签页和聊天）会留在主机上，不会回来。与它一起移动的项目也会一起回来。在你于 {{distro}} 主机上将其移除之前，项目也会一直保留在那里。此窗口将重新加载",
