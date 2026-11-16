@@ -1,6 +1,14 @@
 import { spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { lstatSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync } from 'node:fs'
+import {
+  lstatSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { hostname, tmpdir } from 'node:os'
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
@@ -24,15 +32,19 @@ const copyId = (id) => createHash('sha256').update(`${id}\0rev-${id}`).digest('h
 const tabId = (session) => `structured-agent-session-${session}`
 
 /**
- * The older journal has chats L0..L6 (L0 and L4 open there). Before the faulty pass the store showed
- * L0 and L1, and L1 was converted. The pass then appended, in journal order: a copy of L1 (the user
- * closed it since), L2, a copy of L3 that holds an older build's turn, L4, a copy of L5, and L6, which
- * the user has written in since. A chat N created here sits after them.
+ * The older journal has chats L0..L7 (L4 open there). Before the faulty pass the store showed L0,
+ * never viewed here, and L1, converted. The pass then appended, in journal order: a copy of L1 (the user
+ * closed it since), L2, a copy of L3 whose item an older build revised, L4, a copy of L5, L6, which
+ * the user has written in since, and L7, which the user closed and reopened. A chat N created here
+ * sits between the last two.
+ *
+ * With `unrecorded`, the store hadn't recorded its tab list: the pass tabbed every chat here at once,
+ * in id order, then appended the copies.
  */
-function writeProfile() {
+function writeProfile({ unrecorded = false } = {}) {
   const userData = mkdtempSync(path.join(tmpdir(), 'orca-tab-repair-'))
   roots.push(userData)
-  const ids = ['L0', 'L1', 'L2', 'L3', 'L4', 'L5', 'L6']
+  const ids = ['L0', 'L1', 'L2', 'L3', 'L4', 'L5', 'L6', 'L7']
   const legacy = new DatabaseSync(path.join(userData, LEGACY_FILE))
   legacy.exec(`PRAGMA journal_mode=WAL;
     CREATE TABLE agent_session_records(session_id TEXT PRIMARY KEY, record_json TEXT NOT NULL);
@@ -44,51 +56,55 @@ function writeProfile() {
     CREATE TABLE agent_session_records(session_id TEXT PRIMARY KEY, record_json TEXT NOT NULL);
     CREATE TABLE agent_session_tabs(tab_id TEXT PRIMARY KEY, session_id TEXT NOT NULL, position INTEGER NOT NULL);
     CREATE TABLE agent_session_store_meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
-    CREATE TABLE journal_items(session_id TEXT, item_id TEXT);
-    CREATE TABLE journal_item_tombstones(session_id TEXT, item_id TEXT);
+    CREATE TABLE journal_items(session_id TEXT, item_id TEXT, revision INTEGER);
+    CREATE TABLE journal_item_tombstones(session_id TEXT, item_id TEXT, revision INTEGER);
     CREATE TABLE journal_chat_state(session_id TEXT PRIMARY KEY, epoch TEXT, last_sequence INTEGER);`)
+  const insert = (db, table, ...values) =>
+    db.prepare(`INSERT INTO ${table} VALUES (${values.map(() => '?').join(',')})`).run(...values)
   for (const id of ids) {
-    legacy.prepare('INSERT INTO agent_session_records VALUES (?, ?)').run(id, '{}')
-    legacy.prepare('INSERT INTO journal_sessions VALUES (?, ?, ?)').run(id, 'e1', 'w')
-    legacy
-      .prepare('INSERT INTO journal_rows VALUES (?, ?, ?), (?, ?, ?)')
-      .run(id, 'e1', 1, id, 'e1', 2)
-    domain.prepare('INSERT INTO agent_session_records VALUES (?, ?)').run(id, '{}')
-    domain
-      .prepare('INSERT INTO agent_session_store_meta VALUES (?, ?)')
-      .run(`journal.legacy-revision:${id}`, `rev-${id}`)
-    domain.prepare('INSERT INTO journal_items VALUES (?, ?)').run(id, `${id}-item`)
+    insert(legacy, 'agent_session_records', id, '{}')
+    insert(legacy, 'journal_sessions', id, 'e1', 'w')
+    insert(legacy, 'journal_rows', id, 'e1', 1)
+    insert(legacy, 'journal_rows', id, 'e1', 2)
+    insert(domain, 'agent_session_records', id, '{}')
+    insert(domain, 'agent_session_store_meta', `journal.legacy-revision:${id}`, `rev-${id}`)
+    insert(domain, 'journal_items', id, `${id}-item`, 1)
   }
-  for (const [position, id] of [
-    [0, 'L0'],
-    [1, 'L4']
-  ]) {
-    legacy.prepare('INSERT INTO agent_session_tabs VALUES (?, ?, ?)').run(tabId(id), id, position)
-  }
+  insert(legacy, 'agent_session_tabs', tabId('L4'), 'L4', 0)
   for (const original of ['L1', 'L3', 'L5']) {
     const copy = copyId(original)
-    domain
-      .prepare('INSERT INTO agent_session_records VALUES (?, ?)')
-      .run(copy, JSON.stringify({ conversationName: `copy of ${original}` }))
-    domain.prepare('INSERT INTO journal_items VALUES (?, ?)').run(copy, `${original}-item`)
-    domain.prepare('INSERT INTO journal_chat_state VALUES (?, ?, ?)').run(copy, 'e1', 2)
+    insert(domain, 'agent_session_records', copy, JSON.stringify({ conversationName: original }))
+    insert(domain, 'journal_items', copy, `${original}-item`, original === 'L3' ? 2 : 1)
+    insert(domain, 'journal_chat_state', copy, 'e1', 2)
+    insert(domain, 'journal_chat_state', original, 'e1', 2)
   }
-  domain.prepare('INSERT INTO journal_items VALUES (?, ?)').run(copyId('L3'), 'older-build-turn')
-  domain.prepare('INSERT INTO journal_chat_state VALUES (?, ?, ?)').run('L0', null, 0)
-  domain.prepare('INSERT INTO journal_chat_state VALUES (?, ?, ?)').run('L1', 'e1', 2)
-  domain.prepare('INSERT INTO journal_chat_state VALUES (?, ?, ?)').run('L6', 'e1', 5)
-  domain.prepare('INSERT INTO agent_session_records VALUES (?, ?)').run('N', '{}')
-  const tabs = ['L0', 'L1', null, 'L2', copyId('L3'), 'L4', copyId('L5'), 'L6', 'N']
+  insert(domain, 'journal_chat_state', 'L0', null, 0)
+  insert(domain, 'journal_chat_state', 'L6', 'e1', 5)
+  insert(domain, 'agent_session_records', 'N', '{}')
+  const tabs = unrecorded
+    ? [...ids.filter((id) => id !== 'L7'), 'N', copyId('L1'), copyId('L3'), copyId('L5')]
+    : ['L0', 'L1', null, 'L2', copyId('L3'), 'L4', copyId('L5'), 'L6', 'N']
   tabs.forEach((session, position) => {
     if (session !== null) {
-      domain
-        .prepare('INSERT INTO agent_session_tabs VALUES (?, ?, ?)')
-        .run(tabId(session), session, position)
+      insert(domain, 'agent_session_tabs', tabId(session), session, position)
     }
   })
+  insert(domain, 'agent_session_tabs', `agent-chat-tab-v1-${'0'.repeat(8)}`, 'L7', tabs.length)
   legacy.close()
   domain.close()
   return userData
+}
+
+function select(userData, change = () => {}) {
+  const legacy = new DatabaseSync(path.join(userData, LEGACY_FILE), { readOnly: true })
+  const domain = new DatabaseSync(path.join(userData, DOMAIN_FILE))
+  try {
+    change(domain)
+    return findMigrationReopenedTabs(legacy, domain)
+  } finally {
+    domain.close()
+    legacy.close()
+  }
 }
 
 function read(userData, sql) {
@@ -125,24 +141,44 @@ function run(userData, ...args) {
 describe('close-migration-reopened-tabs', () => {
   it('selects only untouched tabs the faulty pass opened', () => {
     const userData = writeProfile()
-    const legacy = new DatabaseSync(path.join(userData, LEGACY_FILE), { readOnly: true })
-    const domain = new DatabaseSync(path.join(userData, DOMAIN_FILE))
-    try {
-      const found = findMigrationReopenedTabs(legacy, domain)
-      // L0 and L1 were open before the pass, L4 was open in the older journal, L6 has new turns,
-      // and the copy of L3 holds a turn only an older build saved.
-      expect(found.close.map((tab) => tab.session)).toEqual(['L2', copyId('L5')])
-      expect(found.kept).toEqual({ writtenSince: 1, openBefore: 3, olderBuildCopy: 1 })
-      expect(found.copies.duplicates.map((copy) => copy.original)).toEqual(['L1', 'L5'])
-      expect(found.copies.olderBuildTurns).toBe(1)
+    const found = select(userData)
+    // L0 and L1 were open before the pass (L1's copy proves it, and L0 sits below it), L4 was open in the older journal, L6 has new turns, N was
+    // made here, L7's tab is the user's, and the copy of L3 holds a revision only an older build saved.
+    expect(found.close.map((tab) => tab.session)).toEqual(['L2', copyId('L5')])
+    expect(found.kept).toEqual({
+      writtenSince: 1,
+      openBefore: 1,
+      olderBuildCopy: 1,
+      notFromJournal: 1
+    })
+    expect(found.copies.duplicates.map((copy) => copy.original)).toEqual(['L1', 'L5'])
+    expect(found.copies.olderBuildTurns).toBe(1)
 
-      // Without a duplicate copy's tab, nothing proves the run came from the faulty pass.
+    // Without a duplicate copy's tab, nothing proves the tabs came from the faulty pass.
+    const unproven = select(userData, (domain) =>
       domain.prepare('DELETE FROM agent_session_tabs WHERE session_id=?').run(copyId('L5'))
-      expect(findMigrationReopenedTabs(legacy, domain).close).toEqual([])
-    } finally {
-      domain.close()
-      legacy.close()
-    }
+    )
+    expect(unproven.close).toEqual([])
+  })
+
+  it('selects every untouched chat when the pass tabbed the whole unrecorded list', () => {
+    const found = select(writeProfile({ unrecorded: true }))
+    expect(found.close.map((tab) => tab.session)).toEqual([
+      'L0',
+      'L1',
+      'L2',
+      'L3',
+      'L4',
+      'L5',
+      copyId('L1'),
+      copyId('L5')
+    ])
+    expect(found.kept).toEqual({
+      writtenSince: 1,
+      openBefore: 0,
+      olderBuildCopy: 1,
+      notFromJournal: 1
+    })
   })
 
   it('dry run changes nothing; apply backs up, closes those tabs, and a rerun is a no-op', () => {
@@ -150,7 +186,7 @@ describe('close-migration-reopened-tabs', () => {
     const before = snapshot(userData)
     const dry = run(userData)
     expect(dry.status).toBe(0)
-    expect(dry.stdout).toContain('Would close 2 of 8 chat tabs')
+    expect(dry.stdout).toContain('Would close 2 of 9 chat tabs')
     expect(snapshot(userData)).toEqual(before)
 
     const applied = run(userData, '--apply')
@@ -160,13 +196,13 @@ describe('close-migration-reopened-tabs', () => {
     roots.push(backup)
     expect(snapshot(backup)).toEqual(before)
     expect(read(userData, 'SELECT session_id FROM agent_session_tabs ORDER BY position')).toEqual(
-      ['L0', 'L1', copyId('L3'), 'L4', 'L6', 'N'].map((session_id) => ({ session_id }))
+      ['L0', 'L1', copyId('L3'), 'L4', 'L6', 'N', 'L7'].map((session_id) => ({ session_id }))
     )
-    expect(read(userData, 'SELECT count(*) AS n FROM agent_session_records')).toEqual([{ n: 11 }])
+    expect(read(userData, 'SELECT count(*) AS n FROM agent_session_records')).toEqual([{ n: 12 }])
 
     const rerun = run(userData, '--apply')
     expect(rerun.stdout).toContain('Already repaired')
-    expect(read(userData, 'SELECT count(*) AS n FROM agent_session_tabs')).toEqual([{ n: 6 }])
+    expect(read(userData, 'SELECT count(*) AS n FROM agent_session_tabs')).toEqual([{ n: 7 }])
   })
 
   // Chromium's SingletonLock symlink is how macOS and Linux show a running Orca.
@@ -175,6 +211,20 @@ describe('close-migration-reopened-tabs', () => {
     symlinkSync(`${hostname()}-${process.pid}`, path.join(userData, 'SingletonLock'))
     expect(findRunningOrca(userData, { processName: () => 'Orca' })).toContain(String(process.pid))
     expect(findRunningOrca(userData, { processName: () => 'launchd' })).toBeNull()
+
+    // orcad.lock outlives Orca; a reused PID or another machine's record must not read as this one.
+    const lockDir = mkdtempSync(path.join(tmpdir(), 'orca-tab-repair-lock-'))
+    roots.push(lockDir)
+    const lock = { pid: process.pid, startedAtMs: 1_000_000, machineIdentity: 'here', host: 'h' }
+    writeFileSync(path.join(lockDir, 'orcad.lock'), JSON.stringify(lock))
+    const probe = { processName: () => 'Orca', machineIdentity: () => 'here' }
+    expect(findRunningOrca(lockDir, { ...probe, processStartedAtMs: () => 1_000_000 })).toContain(
+      'running'
+    )
+    expect(findRunningOrca(lockDir, { ...probe, processStartedAtMs: () => 9_000_000 })).toBeNull()
+    expect(findRunningOrca(lockDir, { ...probe, machineIdentity: () => 'there' })).toContain(
+      'delete that file'
+    )
 
     const before = snapshot(userData)
     const refused = run(userData, '--apply')
