@@ -8,9 +8,8 @@ export function resolveTerminalBrowserCommand(
   if (!cliLauncher) {
     return 'orca'
   }
-  // Why: xdg-open word-splits BROWSER and every reader splits it on the PATH delimiter.
-  const listDelimiter = platform === 'win32' ? ';' : ':'
-  if (!/\s/.test(cliLauncher) && !cliLauncher.includes(listDelimiter)) {
+  // Why: xdg-open splits BROWSER on spaces and ':', Python reads '%s' as a template, gh eats '\'.
+  if (platform !== 'win32' && !/[\s:]|%s/.test(cliLauncher)) {
     return cliLauncher
   }
   // The launcher's directory was just put first on PATH, so its bare name reaches it.
