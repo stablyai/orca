@@ -2,7 +2,10 @@ import { agentVerdictDisplayMark } from '../../../../../shared/agent-status/life
 import { interactivePromptLabel } from '../../../../../shared/native-chat/input/native-chat-interactive-prompt'
 import { sayNativeChatApprovalTranslated } from '../../native-chat/prompts/native-chat-interactive-prompt'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import type { DashboardCard, DashboardCardSubagent } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
+import type {
+  DashboardCard,
+  DashboardCardSubagent
+} from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import type { DashboardAgentRow } from '../rows/dashboard-agent-row'
 import { dashboardCardParentPaneKey } from '../rows/agent-row-lineage'
 import { lastEnteredDoneAt } from '../rows/agent-finished-timestamp'
@@ -22,8 +25,8 @@ import {
   rowTask
 } from './dashboard-card-labels'
 import type { DashboardSnapshotInput } from './build-dashboard-snapshot'
-import { selectTerminalLayoutsForWorktree } from '../../sidebar/workspace-card/activity/worktree-agent-row-selectors'
-import { selectRuntimePaneTitlesForWorktree } from '../../sidebar/workspace-card/activity/worktree-card-status-inputs'
+import type { selectTerminalLayoutsForWorktree } from '../../sidebar/workspace-card/activity/worktree-agent-row-selectors'
+import type { selectRuntimePaneTitlesForWorktree } from '../../sidebar/workspace-card/activity/worktree-card-status-inputs'
 
 export function buildDashboardSnapshotCard(args: {
   state: DashboardSnapshotInput

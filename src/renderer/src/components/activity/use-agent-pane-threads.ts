@@ -1,3 +1,8 @@
+import {
+  selectDetectedWorktreesByRepo,
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import { useDeferredValue, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { useStructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-name-observation'
@@ -88,11 +93,11 @@ export function useAllAgentPaneThreads({ badgeOnly = false }: { badgeOnly?: bool
           repos: storeData.repos,
           resolveWorktree: storeData.getKnownWorktreeById,
           resolveWorktreeInputs: [
-            storeData.worktreesByRepo,
-            storeData.folderWorkspaces,
+            selectWorktreesByRepo(storeData),
+            selectFolderWorkspaces(storeData),
             storeData.projectGroups,
             storeData.repos,
-            storeData.detectedWorktreesByRepo,
+            selectDetectedWorktreesByRepo(storeData),
             storeData.floatingWorkspacePath
           ],
           acknowledgedAgentsByPaneKey: storeData.acknowledgedAgentsByPaneKey,

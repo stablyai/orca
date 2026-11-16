@@ -1,3 +1,8 @@
+import {
+  selectDetectedWorktreesByRepo,
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import type {
   DashboardCard,
   DashboardWorkspace,
@@ -55,7 +60,7 @@ export function dashboardSnapshotReuseInputs(state: DashboardSnapshotInput): unk
     getTranslationScope(),
     state.chatNames,
     state.repos,
-    state.worktreesByRepo,
+    selectWorktreesByRepo(state),
     state.tabsByWorktree,
     state.unifiedTabsByWorktree,
     state.migrationUnsupportedByPtyId,
@@ -68,8 +73,8 @@ export function dashboardSnapshotReuseInputs(state: DashboardSnapshotInput): unk
     state.hostedReviewCache,
     state.prCache,
     state.workspaceStatuses,
-    state.detectedWorktreesByRepo,
-    state.folderWorkspaces,
+    selectDetectedWorktreesByRepo(state),
+    selectFolderWorkspaces(state),
     state.projectGroups,
     state.sshTargetLabels,
     state.sshConnectionStates,
