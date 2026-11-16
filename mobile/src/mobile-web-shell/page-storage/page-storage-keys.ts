@@ -24,6 +24,7 @@ export const TERMINAL_SHORTCUT_STORAGE_KEYS = [
 export const TERMINAL_SETTINGS_STORAGE_KEYS = [
   ...TERMINAL_SHORTCUT_STORAGE_KEYS,
   'orca:terminalTextScale',
+  'orca:terminalFontStyle',
   'orca:terminalAutocompleteEnabled',
   'orca:terminalLinkOpenMode'
 ] as const
@@ -42,7 +43,9 @@ export const PAGE_STORAGE_EXACT_KEYS = [
   /** Whether a terminal link opens in Orca's browser or the phone's. */
   'orca:terminalLinkOpenMode',
   /** The split terminal's chosen direction. */
-  'orca:terminalSplitLayout'
+  'orca:terminalSplitLayout',
+  /** Terminal font, line spacing and weight. */
+  'orca:terminalFontStyle'
 ] as const
 
 /**
@@ -50,7 +53,10 @@ export const PAGE_STORAGE_EXACT_KEYS = [
  * reader refines each key against its own list and refuses the whole frame on one it lacks, so
  * the host sends these only to a page whose `ready` named them in `storageKeys`.
  */
-export const NEGOTIATED_PAGE_STORAGE_KEYS = ['orca:terminalSplitLayout'] as const
+export const NEGOTIATED_PAGE_STORAGE_KEYS = [
+  'orca:terminalSplitLayout',
+  'orca:terminalFontStyle'
+] as const
 
 /** Whether a page that declared `storageKeys` (null: declared nothing) reads this key in `init`. */
 export function pageReadsStorageKey(key: string, declared: readonly string[] | null): boolean {
