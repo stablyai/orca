@@ -6,7 +6,10 @@ import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
 } from '../../../../shared/file-access/cross-platform-path'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../../shared/execution-host/execution-host'
 import type { WslMoveRowRef } from '../../../../shared/wsl-move/wsl-move-driver-types'
 import { openWslMoveDialogFor } from '../wsl-move/wsl-move-entry'
 import { wslMoveDistroOfPath } from '../wsl-move/wsl-move-scope-rows'
