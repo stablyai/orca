@@ -2,10 +2,7 @@ import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import {
-  getVersionManagerBinPaths,
-  resolveCliCommand
-} from './shell/command-resolution/node-cli-command-resolution'
+import { getVersionManagerBinPaths, resolveCliCommand } from './node-cli-command-resolution'
 
 /** Default Node seeds fallback when login probing times out or omits nvm. Newest-first hid CLIs installed under the default (#10932). */
 function makeNvmHome(options: {

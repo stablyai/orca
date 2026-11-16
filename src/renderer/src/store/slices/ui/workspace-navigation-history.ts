@@ -4,7 +4,7 @@ import { findFirstIndexedWorktree } from '../../../lib/workspace/ownership/workt
 import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import type { JiraIssue } from '../../../../../shared/jira/jira-types'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
-import type { GitLabWorkItem } from '../../../../../shared/gitlab-types'
+import type { GitLabWorkItem } from '../../../../../shared/gitlab/gitlab-types'
 import {
   getTaskSourceCacheScope,
   type TaskSourceContext

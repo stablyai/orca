@@ -1,4 +1,7 @@
-import { COMMAND_TOKEN_SCAN_MAX_CHARS, getCommandTokenPathBasename } from './command-token-scanner'
+import {
+  COMMAND_TOKEN_SCAN_MAX_CHARS,
+  getCommandTokenPathBasename
+} from './shell/command-resolution/command-token-scanner'
 import { tokenizeCommandLine } from './agent-status/process/agent-command-line-entrypoint'
 
 // The published launcher names per platform, plus the dev build's.

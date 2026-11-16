@@ -26,7 +26,7 @@ import { applyAgentStatusHooksEnabled } from '../../../agent-hooks/installation/
 import { isWslHostOrcadProcess } from '../../../ipc/wsl-guest-windows-drive-path'
 import { isAgentStatusHooksEnabledForAgent } from '../../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
-import { normalizePRAutoRefreshCadence } from '../../../../shared/review-refresh-policy'
+import { normalizePRAutoRefreshCadence } from '../../../../shared/source-control/hosted-review/review-refresh-policy'
 import {
   agentLaunchSettingsMutationUpdates,
   projectAgentLaunchSettings,

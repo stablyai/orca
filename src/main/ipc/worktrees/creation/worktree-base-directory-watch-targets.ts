@@ -8,7 +8,7 @@ import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import {
   getRuntimePathBasename,
   normalizeRuntimePathForComparison
-} from '../../../../shared/cross-platform-path'
+} from '../../../../shared/file-access/cross-platform-path'
 import { isWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { mapWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
 import { getWorktreeMirrorDistro } from '../../../workspaces/execution-host/project-runtime-git-options'

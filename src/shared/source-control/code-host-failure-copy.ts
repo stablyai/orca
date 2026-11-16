@@ -1,4 +1,4 @@
-import type { ClassifiedError } from './classified-error'
+import type { ClassifiedError } from '../errors/classified-error'
 
 // One English table for GitHub/GitLab operation failures: main builds the wire `error`, the renderer translates by code.
 export const CODE_HOST_FAILURE_COPY = {

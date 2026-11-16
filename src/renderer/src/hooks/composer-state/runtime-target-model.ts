@@ -7,7 +7,7 @@ import type {
   SshConnectionStatus
 } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type { OrcaVmRecipe } from '../../../../shared/orca-yaml-hook-types'
+import type { OrcaVmRecipe } from '../../../../shared/workspace-setup/orca-yaml-hook-types'
 import type { AgentStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import type { ExecutionHostPlatformFact } from '@/runtime/hosts/platform/execution-host-platform-fact'
 import type { NewWorkspaceProjectOption } from '@/lib/workspace/creation/new-workspace-project-options'

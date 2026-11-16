@@ -1,5 +1,5 @@
 import type { Repo } from '../../../../shared/repository/repo-types'
-import type { GitLabProjectRef } from '../../../../shared/gitlab-types'
+import type { GitLabProjectRef } from '../../../../shared/gitlab/gitlab-types'
 import {
   normalizeTaskSourceContext,
   type TaskSourceContext

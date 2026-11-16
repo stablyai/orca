@@ -4,13 +4,13 @@
 import {
   AUTOMATION_OWNER_CONFLICT_CODES,
   AutomationOwnerConflictError
-} from './automations/ownership/automation-owner-conflict'
-import type { AutomationOwnerRef } from './automations/ownership/automation-owner-ref'
+} from '../ownership/automation-owner-conflict'
+import type { AutomationOwnerRef } from '../ownership/automation-owner-ref'
 import type {
   ExternalAutomationAction,
   ExternalAutomationProvider,
   ExternalAutomationTarget
-} from './automations/external/external-automation'
+} from './external-automation'
 
 export const EXTERNAL_AUTOMATION_PROVIDERS = [
   'openclaw'

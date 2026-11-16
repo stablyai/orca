@@ -1,7 +1,7 @@
 import type {
   PersistedTrustedOrcaHookRepo,
   PersistedTrustedOrcaHooks
-} from './orca-yaml-hook-types'
+} from '../orca-yaml-hook-types'
 
 export type OrcaHookTrustKind = Exclude<keyof PersistedTrustedOrcaHookRepo, 'all'>
 

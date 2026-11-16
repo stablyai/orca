@@ -1,6 +1,6 @@
 import { posix, win32 } from 'node:path'
 import { normalizeGitHubPRMergeMethodSettings } from '../../../../shared/github/pull-requests/merge/pull-request-merge-methods'
-import { mergeCommandEnvironment } from '../../../../shared/command-environment'
+import { mergeCommandEnvironment } from '../../../../shared/shell/launch/command-environment'
 import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
 import { githubHostExecOptions } from '../../repositories/github-repository-host'
 import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'

@@ -1,5 +1,5 @@
-import type { TuiAgent } from './agent-launch/catalog/tui-agent'
-import type { CliWorkspaceProvenance } from './worktree/types'
+import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
+import type { CliWorkspaceProvenance } from '../types'
 
 /** CLI create context is descriptive; host-stamped createdAt prevents skewed client clocks changing sort order. */
 export type CliWorkspaceProvenanceRequest = {

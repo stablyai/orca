@@ -1,4 +1,4 @@
-import { LINEAR_AUTHENTICATION_ERROR } from '../../../shared/integration-credential-errors'
+import { LINEAR_AUTHENTICATION_ERROR } from '../../../shared/secure-storage/integration-credential-errors'
 import type { LinearIssue } from '../../../shared/linear/issue-types'
 import type {
   LinearCustomViewModel,

@@ -1,6 +1,6 @@
 import { getEphemeralVmRecipeResultCheckoutMode } from './ephemeral-vm-recipes'
 import type { EphemeralVmRecipeResult } from './ephemeral-vm-recipes'
-import type { OrcaVmRecipe } from '../../orca-yaml-hook-types'
+import type { OrcaVmRecipe } from '../../workspace-setup/orca-yaml-hook-types'
 import { ephemeralVmFailure, type EphemeralVmFailure } from './ephemeral-vm-failure-copy'
 
 export function getEphemeralVmRecipeResultSchemaVersion(recipe: OrcaVmRecipe): 1 | 2 {

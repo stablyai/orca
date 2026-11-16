@@ -1,5 +1,5 @@
 import type { GlobalSettings } from './global-settings-types'
-import type { RepoHookSettings } from './orca-yaml-hook-types'
+import type { RepoHookSettings } from './workspace-setup/orca-yaml-hook-types'
 import type { PersistedState } from './persisted-state-types'
 import type { PersistedUIState } from './persisted-ui-state-types'
 import type { AgentActivityDisplayMode } from './ui-chrome-types'

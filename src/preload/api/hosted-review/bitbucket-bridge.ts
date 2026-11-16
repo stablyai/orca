@@ -1,6 +1,6 @@
 import { ipcRenderer } from 'electron'
 import type { PreloadApi } from '../../api-types'
-import type { BitbucketConnectResult } from '../../../shared/bitbucket-credentials'
+import type { BitbucketConnectResult } from '../../../shared/bitbucket/bitbucket-credentials'
 
 export const bitbucketApi = {
   connect: (args: {
