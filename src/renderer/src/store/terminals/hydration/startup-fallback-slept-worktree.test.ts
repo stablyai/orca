@@ -13,7 +13,9 @@ const RECENT_ID = `${REPO_ID}::/work/recent`
 function seedStore() {
   const store = createTestStore()
   store.setState({
-    repos: [{ id: REPO_ID, path: '/work/main', displayName: 'demo', badgeColor: '#000', addedAt: 1 }],
+    repos: [
+      { id: REPO_ID, path: '/work/main', displayName: 'demo', badgeColor: '#000', addedAt: 1 }
+    ],
     worktreesByRepo: {
       [REPO_ID]: [
         makeWorktree({ id: MAIN_ID, repoId: REPO_ID, path: '/work/main', isMainWorktree: true }),

@@ -18,8 +18,7 @@ export function pickFallbackActiveWorktree({
   const listed = session.activeWorktreeIdsOnShutdown
   const live = listed ? new Set(listed) : null
   const awake = candidates.filter(
-    (worktree) =>
-      !live || (tabsByWorktree[worktree.id]?.length ?? 0) === 0 || live.has(worktree.id)
+    (worktree) => !live || (tabsByWorktree[worktree.id]?.length ?? 0) === 0 || live.has(worktree.id)
   )
   const lastVisited = session.lastVisitedAtByWorktreeId
   return (
