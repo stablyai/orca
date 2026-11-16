@@ -9903,7 +9903,8 @@
           "details": "Detalhes",
           "failed": "Não foi possível atualizar {{value0}}",
           "morePlugins": "e mais {{value0}} plugins",
-          "uncompared": "O Orca não conseguiu compará-la com a versão que você aprovou."
+          "uncompared": "O Orca não conseguiu compará-la com a versão que você aprovou.",
+          "held": "{{value0}} mudou depois da sua revisão, então aguarda sua revisão em Configurações → Plugins."
         },
         "PluginInstallTrustDialog": {
           "titleFolder": "Confirme que você confia nesta pasta",

@@ -13344,7 +13344,8 @@
           "details": "Details",
           "failed": "{{value0}} konnte nicht aktualisiert werden",
           "morePlugins": "und {{value0}} weitere Plugins",
-          "uncompared": "Orca konnte es nicht mit der genehmigten Version vergleichen."
+          "uncompared": "Orca konnte es nicht mit der genehmigten Version vergleichen.",
+          "held": "{{value0}} hat sich nach deiner Prüfung geändert und wartet daher in Einstellungen → Plugins auf deine Prüfung."
         },
         "PluginThemeUseNow": {
           "assignedLight": "{{value0}} als helles Design festgelegt",

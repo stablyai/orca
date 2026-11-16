@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import type { PluginMarketplaceHostInstallPreview } from '../../../../../preload/api/plugins/plugin-host-api'
 import type { PluginUpdateReviewNotice } from '../../../../../shared/plugins/catalog/plugin-update-policy'
 import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
+import type { PluginManifest } from '../../../../../shared/plugins/manifest/plugin-manifest'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { openPluginUpdateReviewDialog } from '@/store/plugins/updates/plugin-update-review-dialog'
@@ -19,7 +20,7 @@ import { pluginPublisherNotice } from '../presentation/plugin-publisher-trust'
 import { PluginNotOfficialWarning } from './PluginNotOfficialWarning'
 import { PluginPublisherBadge } from './PluginConsentProvenance'
 import { PluginUpdateAdditionList, pluginKeyOwner } from './PluginUpdateReview'
-import { usePluginUpdateAdditions } from './use-plugin-update-additions'
+import { pluginUpdateAdditions, readInstalledManifest } from './plugin-update-additions'
 
 /** Plugins the toast shows; more than this goes to the dialog, with no approval in the toast. */
 const SHOWN_PLUGINS = 3
@@ -27,6 +28,7 @@ const SHOWN_PLUGINS = 3
 type Loaded = {
   previews: ReadonlyMap<string, PluginMarketplaceHostInstallPreview>
   installed: ReadonlyMap<string, PluginHostListEntry>
+  manifests: ReadonlyMap<string, PluginManifest | null>
 }
 
 // Why settings.Plugin keys: that namespace is protected, so a language pack cannot soften the warning.
@@ -48,14 +50,18 @@ function singleTitle(notice: PluginUpdateReviewNotice): string {
 function ToastPlugin({
   notice,
   preview,
-  installed
+  installed,
+  installedManifest
 }: {
   notice: PluginUpdateReviewNotice
   preview: PluginMarketplaceHostInstallPreview | null
   installed: PluginHostListEntry | null
+  installedManifest: PluginManifest | null
 }): React.JSX.Element {
   const t = useTranslate()
-  const { lines, compared, ready } = usePluginUpdateAdditions(installed, preview)
+  const { lines, compared } = preview
+    ? pluginUpdateAdditions(installed, preview, installedManifest, t)
+    : { lines: [], compared: true }
   const publisherNotice = preview
     ? pluginPublisherNotice({
         official: preview.official,
@@ -99,11 +105,38 @@ function ToastPlugin({
         </p>
       ) : null}
       {/* Why every line: "Approve & update" here approves all of it. */}
-      {ready && lines.length > 0 ? (
-        <PluginUpdateAdditionList lines={lines} className="text-xs" />
-      ) : null}
+      {lines.length > 0 ? <PluginUpdateAdditionList lines={lines} className="text-xs" /> : null}
     </div>
   )
+}
+
+function announceInstalled(
+  approved: readonly PluginUpdateReviewNotice[],
+  held: readonly PluginUpdateReviewNotice[]
+): void {
+  const [one] = approved
+  if (one) {
+    toast.success(
+      approved.length === 1
+        ? translate('auto.store.pluginAutoUpdates.one', '{{value0}} updated to {{value1}}', {
+            value0: one.name,
+            value1: one.version
+          })
+        : translate('auto.store.pluginAutoUpdates.many', '{{value0}} plugins updated', {
+            value0: approved.length
+          })
+    )
+  }
+  for (const notice of held) {
+    // Why say so: the bytes changed after the toast read them, so the reviewed approval doesn't apply.
+    toast.warning(
+      translate(
+        'auto.components.settings.PluginUpdateReviewToast.held',
+        '{{value0}} changed after you reviewed it, so it waits for your review in Settings → Plugins.',
+        { value0: notice.name }
+      )
+    )
+  }
 }
 
 /**
@@ -112,19 +145,20 @@ function ToastPlugin({
  * update was compared and can install: otherwise the user needs the dialog's full access list.
  */
 export function PluginUpdateReviewToast({
-  toastId,
   notices,
-  onClose
+  onResolved
 }: {
-  toastId: string | number
   notices: readonly PluginUpdateReviewNotice[]
-  onClose: () => void
+  /** These notices are handled (installed, dismissed, or handed to the dialog). */
+  onResolved: (notices: readonly PluginUpdateReviewNotice[]) => void
 }): React.JSX.Element {
   const t = useTranslate()
   const orcaVersion = useOrcaVersion()
   const [loaded, setLoaded] = useState<Loaded | null>(null)
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
+  // Why kept: a retry after a partial failure must not reinstall the ones that landed.
+  const [finished, setFinished] = useState<ReadonlySet<string>>(() => new Set())
   useEffect(() => {
     let stale = false
     void Promise.all([
@@ -136,12 +170,19 @@ export function PluginUpdateReviewToast({
             .catch(() => null)
         )
       ),
-      window.api.plugins.list().catch((): PluginHostListEntry[] => [])
-    ]).then(([previews, plugins]) => {
+      window.api.plugins.list().catch((): PluginHostListEntry[] => []),
+      Promise.all(
+        notices.map(
+          async (notice) =>
+            [notice.pluginKey, await readInstalledManifest(notice.pluginKey)] as const
+        )
+      )
+    ]).then(([previews, plugins, manifests]) => {
       if (!stale) {
         setLoaded({
           previews: new Map(previews.flatMap((entry) => (entry ? [entry] : []))),
-          installed: new Map(plugins.map((plugin) => [plugin.pluginKey, plugin] as const))
+          installed: new Map(plugins.map((plugin) => [plugin.pluginKey, plugin] as const)),
+          manifests: new Map(manifests)
         })
       }
     })
@@ -151,18 +192,17 @@ export function PluginUpdateReviewToast({
   }, [notices])
 
   const keys = notices.map((notice) => notice.pluginKey)
-  const dismiss = (): void => {
-    onClose()
-    toast.dismiss(toastId)
-  }
+  const dismiss = (): void => onResolved(notices)
   const details = (): void => {
-    dismiss()
+    onResolved(notices)
     openPluginUpdateReviewDialog(keys)
   }
   const previews = loaded ? keys.map((key) => loaded.previews.get(key) ?? null) : []
   const quick =
     loaded !== null &&
     notices.length <= SHOWN_PLUGINS &&
+    // Why the installed entry too: without it the toast can't name the source or what was held.
+    keys.every((key) => loaded.installed.has(key)) &&
     previews.every(
       (preview) =>
         preview !== null &&
@@ -174,13 +214,26 @@ export function PluginUpdateReviewToast({
     setBusy(true)
     setFailure(null)
     const failed: string[] = []
+    const approved: PluginUpdateReviewNotice[] = []
+    const held: PluginUpdateReviewNotice[] = []
+    const landed = new Set(finished)
     // Why sequential: each install re-reads the plugin list; parallel installs race that refresh.
-    for (const [index, preview] of previews.entries()) {
-      if (preview && !(await installReviewedUpdate(preview))) {
-        failed.push(notices[index]?.name ?? preview.pluginKey)
+    for (const [index, notice] of notices.entries()) {
+      const preview = previews[index]
+      if (!preview || landed.has(notice.pluginKey)) {
+        continue
       }
+      const result = await installReviewedUpdate(preview)
+      if (result === 'failed') {
+        failed.push(notice.name)
+        continue
+      }
+      landed.add(notice.pluginKey)
+      ;(result === 'approved' ? approved : held).push(notice)
     }
+    setFinished(landed)
     setBusy(false)
+    announceInstalled(approved, held)
     if (failed.length > 0) {
       setFailure(
         t('auto.components.settings.PluginUpdateReviewToast.failed', 'Couldn’t update {{value0}}', {
@@ -189,17 +242,7 @@ export function PluginUpdateReviewToast({
       )
       return
     }
-    dismiss()
-    toast.success(
-      notices.length === 1
-        ? translate('auto.store.pluginAutoUpdates.one', '{{value0}} updated to {{value1}}', {
-            value0: notices[0]?.name,
-            value1: notices[0]?.version
-          })
-        : translate('auto.store.pluginAutoUpdates.many', '{{value0}} plugins updated', {
-            value0: notices.length
-          })
-    )
+    onResolved(notices)
   }
   const [only] = notices
 
@@ -237,6 +280,7 @@ export function PluginUpdateReviewToast({
                 notice={notice}
                 preview={loaded.previews.get(notice.pluginKey) ?? null}
                 installed={loaded.installed.get(notice.pluginKey) ?? null}
+                installedManifest={loaded.manifests.get(notice.pluginKey) ?? null}
               />
             ))}
             {notices.length > SHOWN_PLUGINS ? (

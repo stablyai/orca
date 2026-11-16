@@ -13475,7 +13475,8 @@
           "details": "詳細",
           "failed": "{{value0}} を更新できませんでした",
           "morePlugins": "ほか {{value0}} 件のプラグイン",
-          "uncompared": "Orca は承認済みのバージョンと比較できませんでした。"
+          "uncompared": "Orca は承認済みのバージョンと比較できませんでした。",
+          "held": "{{value0}} は確認後に変更されたため、設定 → プラグイン で確認を待っています。"
         },
         "PluginInstallTrustDialog": {
           "titleFolder": "このフォルダーを信頼できることを確認してください",

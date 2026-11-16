@@ -1,6 +1,7 @@
 import { Check, ChevronDown } from 'lucide-react'
 import type { PluginMarketplaceHostInstallPreview } from '../../../../../preload/api/plugins/plugin-host-api'
 import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
+import type { PluginManifest } from '../../../../../shared/plugins/manifest/plugin-manifest'
 import type { pluginExecutionProfile } from '../../../../../shared/plugins/contributions/plugin-execution-profile'
 import { reachablePluginCapabilities } from '../../../../../shared/plugins/capabilities/plugin-capability-reach'
 import { builtInActionTitle } from '../page/PluginCommandReplacementRow'
@@ -25,6 +26,8 @@ export type UpdateCandidate = {
   error: boolean
   /** Oldest Orca the update runs on, when this Orca is older. */
   needsOrca: string | null
+  /** Read with the preview, so a review's lines are complete before it can be approved. */
+  installedManifest: PluginManifest | null
 }
 
 /** The installed repository when main found the catalog now points the update somewhere else. */

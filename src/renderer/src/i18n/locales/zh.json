@@ -13475,7 +13475,8 @@
           "details": "详情",
           "failed": "无法更新 {{value0}}",
           "morePlugins": "以及另外 {{value0}} 个插件",
-          "uncompared": "Orca 无法将其与你批准的版本进行比较。"
+          "uncompared": "Orca 无法将其与你批准的版本进行比较。",
+          "held": "{{value0}} 在你审核后发生了变化，因此正在 设置 → 插件 中等待你审核。"
         },
         "PluginInstallTrustDialog": {
           "titleFolder": "请确认你信任此文件夹",

@@ -13325,7 +13325,8 @@
           "details": "Détails",
           "failed": "Impossible de mettre à jour {{value0}}",
           "morePlugins": "et {{value0}} autres plugins",
-          "uncompared": "Orca n’a pas pu la comparer à la version que vous avez approuvée."
+          "uncompared": "Orca n’a pas pu la comparer à la version que vous avez approuvée.",
+          "held": "{{value0}} a changé après votre examen ; il attend donc votre examen dans Réglages → Plugins."
         },
         "PluginInstallTrustDialog": {
           "titleFolder": "Assurez-vous de faire confiance à ce dossier",

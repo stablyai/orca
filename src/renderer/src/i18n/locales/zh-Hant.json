@@ -13166,7 +13166,8 @@
           "details": "詳細資料",
           "failed": "無法更新 {{value0}}",
           "morePlugins": "以及另外 {{value0}} 個外掛程式",
-          "uncompared": "Orca 無法將其與你核准的版本比較。"
+          "uncompared": "Orca 無法將其與你核准的版本比較。",
+          "held": "{{value0}} 在你審核後有所變更，因此正在 設定 → 外掛程式 中等待你審核。"
         },
         "PluginThemeUseNow": {
           "assignedLight": "已將 {{value0}} 設為淺色主題",

@@ -122,7 +122,11 @@ function Frame({
       <div className="plugin-security-chrome relative grid gap-4 rounded-lg border border-black/14 bg-dialog-surface p-6 text-foreground dark:border-white/14">
         <XIcon className="absolute top-4 right-4 size-4 opacity-70" />
         <h2 className="text-lg leading-none font-semibold">{title}</h2>
-        {next ? <PluginUpdateReview entry={entry} preview={next} /> : children}
+        {next ? (
+          <PluginUpdateReview entry={entry} preview={next} installedManifest={installedManifest} />
+        ) : (
+          children
+        )}
         <div className="flex justify-end gap-2">
           <Button variant="ghost">Cancel</Button>
           <Button>Approve &amp; update</Button>
@@ -217,13 +221,14 @@ export const grouped = defineFixture({
     <Frame title="Review 2 updates">
       <div className="divide-y divide-border">
         {[
-          { item: entry, next: excalidrawNext },
-          { item: mermaidEntry, next: mermaidNext }
-        ].map(({ item, next }) => (
+          { item: entry, next: excalidrawNext, held: installedManifest },
+          { item: mermaidEntry, next: mermaidNext, held: mermaidManifest('0.4.0') }
+        ].map(({ item, next, held }) => (
           <div key={item.pluginKey} className="py-3 first:pt-0">
             <PluginUpdateReview
               entry={item}
               preview={next}
+              installedManifest={held}
               selection={{ checked: true, disabled: false, onCheckedChange: () => undefined }}
             />
           </div>
@@ -254,9 +259,8 @@ export const toastOne = defineFixture({
   render: () => (
     <div className="p-6">
       <PluginUpdateReviewToast
-        toastId="fixture"
         notices={[notice(installedExcalidraw, '2.3.1')]}
-        onClose={() => undefined}
+        onResolved={() => undefined}
       />
     </div>
   )
@@ -268,9 +272,8 @@ export const toastMany = defineFixture({
   render: () => (
     <div className="p-6">
       <PluginUpdateReviewToast
-        toastId="fixture"
         notices={[notice(installedExcalidraw, '2.3.1'), notice(installedMermaid, '0.5.0')]}
-        onClose={() => undefined}
+        onResolved={() => undefined}
       />
     </div>
   )

@@ -13458,7 +13458,8 @@
           "details": "Ayrıntılar",
           "failed": "{{value0}} güncellenemedi",
           "morePlugins": "ve {{value0}} eklenti daha",
-          "uncompared": "Orca bunu onayladığınız sürümle karşılaştıramadı."
+          "uncompared": "Orca bunu onayladığınız sürümle karşılaştıramadı.",
+          "held": "{{value0}} incelemenizden sonra değişti, bu yüzden Ayarlar → Eklentiler bölümünde incelemenizi bekliyor."
         },
         "PluginThemeUseNow": {
           "assignedLight": "{{value0}} açık temanız olarak ayarlandı",

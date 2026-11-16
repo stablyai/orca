@@ -1,5 +1,7 @@
 import { Plus } from 'lucide-react'
 import type { PluginMarketplaceHostInstallPreview } from '../../../../../preload/api/plugins/plugin-host-api'
+import { splitQualifiedPluginKey } from '../../../../../shared/plugins/catalog/plugin-marketplace'
+import type { PluginManifest } from '../../../../../shared/plugins/manifest/plugin-manifest'
 import { pluginExecutionProfile } from '../../../../../shared/plugins/contributions/plugin-execution-profile'
 import { useTranslate } from '@/i18n/use-translate'
 import { Checkbox } from '../../ui/checkbox'
@@ -9,9 +11,11 @@ import { pluginPublisherNotice } from '../presentation/plugin-publisher-trust'
 import { PluginNotOfficialWarning } from './PluginNotOfficialWarning'
 import { PluginPublisherBadge } from './PluginConsentProvenance'
 import { AllAccess } from './PluginUpdateCandidate'
-import { usePluginUpdateAdditions } from './use-plugin-update-additions'
+import { pluginUpdateAdditions } from './plugin-update-additions'
 
-export const pluginKeyOwner = (pluginKey: string): string => pluginKey.split('.')[0] ?? ''
+/** The publisher from the catalog key, never the manifest's own claim. */
+export const pluginKeyOwner = (pluginKey: string): string =>
+  splitQualifiedPluginKey(pluginKey)?.publisher ?? ''
 
 /** One "+" line per addition; shared by the review dialog and the toast. */
 export function PluginUpdateAdditionList({
@@ -42,16 +46,18 @@ export function PluginUpdateAdditionList({
 export function PluginUpdateReview({
   entry,
   preview,
+  installedManifest,
   selection
 }: {
   entry: PluginListEntry
   preview: PluginMarketplaceHostInstallPreview
+  installedManifest: PluginManifest | null
   selection?: { checked: boolean; disabled: boolean; onCheckedChange: (checked: boolean) => void }
 }): React.JSX.Element {
   const t = useTranslate()
   const installed = entry.installed
   const execution = pluginExecutionProfile(preview.manifest)
-  const { lines, compared, ready } = usePluginUpdateAdditions(installed, preview)
+  const { lines, compared } = pluginUpdateAdditions(installed, preview, installedManifest, t)
   const notice = pluginPublisherNotice({
     official: preview.official,
     execution,
@@ -70,13 +76,6 @@ export function PluginUpdateReview({
 
   return (
     <div data-plugin-update-review={entry.pluginKey} className="space-y-3">
-      {notice !== 'none' ? (
-        <PluginNotOfficialWarning
-          notice={notice}
-          publisher={preview.manifest.publisher ?? null}
-          moment="update"
-        />
-      ) : null}
       <div className="flex items-center gap-3">
         <PluginRowArt entry={entry} />
         <div className="min-w-0 flex-1 space-y-1">
@@ -102,6 +101,13 @@ export function PluginUpdateReview({
           />
         ) : null}
       </div>
+      {notice !== 'none' ? (
+        <PluginNotOfficialWarning
+          notice={notice}
+          publisher={pluginKeyOwner(entry.pluginKey)}
+          moment="update"
+        />
+      ) : null}
       {compared ? null : (
         <p className="text-sm text-muted-foreground">
           {t(
@@ -110,7 +116,7 @@ export function PluginUpdateReview({
           )}
         </p>
       )}
-      {ready && lines.length > 0 ? (
+      {lines.length > 0 ? (
         <div className="space-y-2">
           <p className="text-sm text-muted-foreground">
             {t('auto.components.settings.PluginUpdateReview.newInVersion', 'New in this version:')}

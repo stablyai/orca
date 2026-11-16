@@ -1,14 +1,16 @@
 import type { PluginMarketplaceHostInstallPreview } from '../../../../../preload/api/plugins/plugin-host-api'
 import { satisfiesOrcaEngineRange } from '../../../../../shared/plugins/manifest/plugin-manifest'
 
+/** `held`: installed, but its bytes differ from the reviewed ones, so it waits for review. */
+export type ReviewedUpdateResult = 'approved' | 'held' | 'failed'
+
 /**
  * Installs the reviewed release, then approves exactly the fingerprint the user was shown. Why only
  * on a match: other bytes than the reviewed ones wait for review on the plugin's page.
- * Resolves whether the install landed.
  */
 export async function installReviewedUpdate(
   preview: PluginMarketplaceHostInstallPreview
-): Promise<boolean> {
+): Promise<ReviewedUpdateResult> {
   try {
     const result = await window.api.plugins.installMarketplacePlugin({
       marketplaceSourceId: preview.marketplaceSourceId,
@@ -16,17 +18,21 @@ export async function installReviewedUpdate(
       pluginKey: preview.pluginKey,
       resolvedCommit: preview.resolvedCommit
     })
-    if (result.ok && result.consentFingerprint === preview.consentFingerprint) {
-      await window.api.plugins.consent({
-        pluginKey: preview.pluginKey,
-        reviewedFingerprint: preview.consentFingerprint,
-        decision: 'approve'
-      })
+    if (!result.ok) {
+      return 'failed'
     }
-    return result.ok
+    if (result.consentFingerprint !== preview.consentFingerprint) {
+      return 'held'
+    }
+    await window.api.plugins.consent({
+      pluginKey: preview.pluginKey,
+      reviewedFingerprint: preview.consentFingerprint,
+      decision: 'approve'
+    })
+    return 'approved'
   } catch (cause) {
     console.warn('[plugins] reviewed update failed:', cause)
-    return false
+    return 'failed'
   }
 }
 

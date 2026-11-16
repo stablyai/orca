@@ -337,6 +337,7 @@
     "auto.components.settings.PluginUpdateReviewToast.details",
     "auto.components.settings.PluginUpdateReviewToast.dismiss",
     "auto.components.settings.PluginUpdateReviewToast.failed",
+    "auto.components.settings.PluginUpdateReviewToast.held",
     "auto.components.settings.PluginUpdateReviewToast.manyTitle",
     "auto.components.settings.PluginUpdateReviewToast.morePlugins",
     "auto.components.settings.PluginUpdateReviewToast.movedTitle",

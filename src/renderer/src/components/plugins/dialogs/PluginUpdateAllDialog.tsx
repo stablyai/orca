@@ -11,6 +11,7 @@ import {
   type UpdateCandidate
 } from '../review/PluginUpdateCandidate'
 import { PluginUpdateReview } from '../review/PluginUpdateReview'
+import { readInstalledManifest } from '../review/plugin-update-additions'
 import {
   installReviewedUpdate,
   installUpdate,
@@ -78,23 +79,31 @@ export function PluginUpdateAllDialog({
     void Promise.all(
       plugins.map(async (entry): Promise<UpdateCandidate> => {
         try {
-          const preview = await window.api.plugins.previewMarketplaceUpdate({
-            pluginKey: entry.pluginKey
-          })
+          const [preview, installedManifest] = await Promise.all([
+            window.api.plugins.previewMarketplaceUpdate({ pluginKey: entry.pluginKey }),
+            readInstalledManifest(entry.pluginKey)
+          ])
           return {
             entry,
             preview,
             error: false,
-            needsOrca: requiredNewerOrca(preview, orcaVersionRef.current)
+            needsOrca: requiredNewerOrca(preview, orcaVersionRef.current),
+            installedManifest
           }
         } catch (cause) {
           console.warn('[plugins] update preview failed:', cause)
-          return { entry, preview: null, error: true, needsOrca: null }
+          return { entry, preview: null, error: true, needsOrca: null, installedManifest: null }
         }
       })
     ).then((next) => {
       if (!stale) {
         setCandidates(next)
+        // Why unticked beside plain updates: those tick by default, and a grant needs a deliberate yes.
+        if (next.some((candidate) => !needsOwnApproval(candidate))) {
+          setSkipped(
+            new Set(next.filter(needsOwnApproval).map((candidate) => candidate.entry.pluginKey))
+          )
+        }
       }
     })
     return () => {
@@ -139,8 +148,9 @@ export function PluginUpdateAllDialog({
       if (!preview) {
         continue
       }
+      // Why held counts as done here: it landed and waits on the plugin's page, as before.
       const ok = approvals.includes(candidate)
-        ? await installReviewedUpdate(preview)
+        ? (await installReviewedUpdate(preview)) !== 'failed'
         : await installUpdate(preview)
       if (ok) {
         done.push(entry.pluginKey)
@@ -188,7 +198,11 @@ export function PluginUpdateAllDialog({
         {candidates === null ? (
           <Loader2 className="mx-auto my-4 size-4 animate-spin text-muted-foreground" />
         ) : alone?.preview ? (
-          <PluginUpdateReview entry={alone.entry} preview={alone.preview} />
+          <PluginUpdateReview
+            entry={alone.entry}
+            preview={alone.preview}
+            installedManifest={alone.installedManifest}
+          />
         ) : (
           <div className="space-y-4">
             {approvals.length > 0 ? (
@@ -208,6 +222,7 @@ export function PluginUpdateAllDialog({
                         <PluginUpdateReview
                           entry={candidate.entry}
                           preview={candidate.preview}
+                          installedManifest={candidate.installedManifest}
                           selection={{
                             checked: picked(candidate),
                             disabled: busy,

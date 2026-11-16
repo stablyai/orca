@@ -12771,7 +12771,8 @@
           "details": "세부 정보",
           "failed": "{{value0}}을(를) 업데이트할 수 없습니다",
           "morePlugins": "외 플러그인 {{value0}}개",
-          "uncompared": "Orca가 승인한 버전과 비교하지 못했습니다."
+          "uncompared": "Orca가 승인한 버전과 비교하지 못했습니다.",
+          "held": "{{value0}}이(가) 검토 후 변경되어 설정 → 플러그인에서 검토를 기다리고 있습니다."
         },
         "PluginInstallTrustDialog": {
           "titleFolder": "이 폴더를 신뢰하는지 확인하세요",
