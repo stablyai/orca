@@ -78,6 +78,7 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
       'src/renderer/src/components/sidebar/mobile-sidebar-onboarding-badge.ts',
       'src/renderer/src/components/sidebar/SeveredTerminalDaemonBanner.tsx',
       'src/renderer/src/components/sidebar/SidebarToolbar.tsx',
+      'src/renderer/src/components/task-page/jira/boards/task-page-jira-board-column-order.ts',
       'src/renderer/src/components/terminal-pane/render-health/diagnostics/terminal-freeze-breadcrumbs.ts',
       'src/renderer/src/components/terminal-pane/render-health/terminal-render-desync-trigger.ts',
       'src/renderer/src/components/terminal-pane/diagnostics/startup/terminal-startup-timing.ts',
@@ -236,11 +237,12 @@ export const SQLITE_TABLE_DISPOSITIONS: Record<string, WslMoveFieldDisposition> 
         'legacy_mail_receipts',
         'legacy_operation_receipts',
         'removed_orchestration_work',
-        'removed_orchestration_work_coverage'
+        'removed_orchestration_work_coverage',
+        'orchestration_maintenance'
       ],
       notApplicableDisposition(
         53,
-        'Idempotency receipts: a replay returns the bytes first answered.'
+        'Idempotency receipts (a replay returns the bytes first answered) and when maintenance last ran.'
       )
     ),
     ...tables(

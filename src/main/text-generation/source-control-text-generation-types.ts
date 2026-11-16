@@ -1,12 +1,14 @@
+import type { ProviderChild } from '../provider-process/provider-child'
+import type { ChildProcess } from 'node:child_process'
+import type { EventEmitter } from 'node:events'
 import type { AgentSessionUnavailable } from '../../shared/agent-session/agent-session-availability'
-import type { spawnProcess } from '@orca/process-host'
 import type { AgentGenerationFailureOutput } from './failures/agent-failure-output'
 import type {
   CommitMessageAgentCapability,
   CommitMessageModelCapability
 } from '../../shared/source-control/ai/generation/commit-message-agent-spec'
 import type { CommitMessagePlan } from '../../shared/source-control/ai/generation/commit-message-plan'
-import type { TextGenerationFailureFields } from '../../shared/text-generation-failure-copy'
+import type { TextGenerationFailureFields } from '../../shared/text-generation/text-generation-failure-copy'
 
 export type GenerateCommitMessageResult =
   | { success: true; message: string; agentLabel?: string }
@@ -97,10 +99,15 @@ export type LocalProcessExecution<T> = {
   processClosed: Promise<void>
 }
 
-export type SpawnedSourceControlAgentProcess = ReturnType<typeof spawnProcess> & {
-  /** True when the child is the POSIX provider supervisor: SIGTERM stops the agent's group, then itself. */
-  readonly supervised?: boolean
-}
+export type SpawnedSourceControlAgentProcess = Pick<
+  ChildProcess,
+  'pid' | 'kill' | 'stdin' | 'stdout' | 'stderr' | 'exitCode' | 'signalCode'
+> &
+  EventEmitter &
+  Pick<ProviderChild, 'leaderExited' | 'ready' | 'outcomeLost'> & {
+    /** True when the POSIX lifecycle adapter owns the agent group. */
+    readonly supervised?: boolean
+  }
 
 export type LocalGenerationTarget = Extract<CommitMessageGenerationTarget, { kind: 'local' }>
 export type RemoteGenerationTarget = Extract<CommitMessageGenerationTarget, { kind: 'remote' }>

@@ -1,5 +1,5 @@
 // Which server workspaces layout frames draw: a leaf, so store slices can ask without the sync graph.
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 
 // Why one source per workspace: frames and the mirror writing the same tree would fight.
 const frameDrawnWorktreeIdsByEnvironment = new Map<string, ReadonlySet<string>>()

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { useAppStore } from '../../../store/index'
-import { isResourceViewInactive } from '../../../../../shared/resource-view-admission'
+import { isResourceViewInactive } from '../../../../../shared/diagnostics/resource-view-admission'
 
 export function useResourceMemorySnapshot(active: boolean): () => Promise<void> {
   const lifetime = useRef<{

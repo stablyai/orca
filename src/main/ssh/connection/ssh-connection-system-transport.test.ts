@@ -1,9 +1,13 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
+import type * as ChildProcessModule from 'node:child_process'
+import { EventEmitter } from 'node:events'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { PassThrough } from 'node:stream'
 import { ssh2Mock } from './testing/ssh-connection-test-client'
 import {
+  findSystemSshMock,
   getOrcaControlSocketPathMock,
   removeControlSocketPathMock,
   resetSshConnectionMocks,
@@ -24,6 +28,31 @@ import { writeFileViaSystemSsh } from '../system-transport/file-transfer/system-
 import { CONNECT_TIMEOUT_MS } from './ssh-connection-timing'
 import { initSshHostKeyStoreFile, trustHostKey } from '../host-keys/ssh-host-key-store'
 import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
+import type * as SystemSshCommand from '../system-transport/system-ssh-command'
+
+const { spawnMock, actualSystemSshCommand } = vi.hoisted(() => {
+  const actual: { module?: typeof SystemSshCommand } = {}
+  return { spawnMock: vi.fn(), actualSystemSshCommand: actual }
+})
+vi.mock('node:child_process', async (importOriginal) => ({
+  ...(await importOriginal<typeof ChildProcessModule>()),
+  spawn: spawnMock
+}))
+
+function fakeSshProcessExitingOnStdinEnd(stdout: string) {
+  const proc = Object.assign(new EventEmitter(), {
+    stdin: new PassThrough(),
+    stdout: new PassThrough(),
+    stderr: new PassThrough(),
+    kill: vi.fn()
+  })
+  spawnMock.mockReturnValue(proc)
+  proc.stdin.resume()
+  // Like a real child, close only after its stdout has drained.
+  proc.stdout.once('end', () => proc.emit('close', 0))
+  proc.stdin.on('finish', () => proc.stdout.end(stdout))
+  return proc
+}
 
 vi.mock('../authentication/ssh2-module-load', async () =>
   (await import('./testing/ssh-connection-test-client')).createSsh2LoaderModule()
@@ -36,11 +65,12 @@ vi.mock('../system-transport/system-ssh-args', async (importOriginal) =>
     await importOriginal()
   )
 )
-vi.mock('../system-transport/system-ssh-command', async (importOriginal) =>
-  (await import('./testing/ssh-connection-test-harness')).withSystemSshCommandMocks(
-    await importOriginal()
+vi.mock('../system-transport/system-ssh-command', async (importOriginal) => {
+  actualSystemSshCommand.module = await importOriginal<typeof SystemSshCommand>()
+  return (await import('./testing/ssh-connection-test-harness')).withSystemSshCommandMocks(
+    actualSystemSshCommand.module
   )
-)
+})
 vi.mock(
   '../system-transport/file-transfer/system-ssh-file-binary-transfer',
   async (importOriginal) =>
@@ -124,6 +154,34 @@ describe('SshConnection', () => {
       })
     )
     expect(conn.canRunConcurrentExecCommands()).toBe(false)
+  })
+
+  it('ends the ssh child input for a command that sends none', async () => {
+    findSystemSshMock.mockReturnValue('/usr/bin/ssh')
+    vi.mocked(resolveWithSshG).mockResolvedValueOnce(createResolvedConfig())
+    const conn = new SshConnection(
+      createTarget({ configHost: 'fdpass-host', systemSshConnectionReuse: false }),
+      createCallbacks()
+    )
+    await conn.connect()
+    const actual = actualSystemSshCommand.module
+    if (!actual) {
+      throw new Error('system-ssh-command mock factory did not run')
+    }
+    spawnSystemSshCommandMock.mockImplementation(actual.spawnSystemSshCommand)
+    const proc = fakeSshProcessExitingOnStdinEnd('answer')
+
+    const channel = await conn.execWithClosedStdin('probe')
+    const stdout = await new Promise<string>((resolve) => {
+      let received = ''
+      channel.on('data', (data: Buffer) => {
+        received += data.toString()
+      })
+      channel.once('close', () => resolve(received))
+    })
+
+    expect(stdout).toBe('answer')
+    expect(proc.stdin.writableFinished).toBe(true)
   })
 
   it('retries a generic system SSH probe timeout without ControlMaster', async () => {

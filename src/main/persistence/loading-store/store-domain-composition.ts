@@ -7,7 +7,7 @@ import { LoadedStateParsingOperations } from './profile-loading/loaded-state-par
 import { StateSerializationSecretHandlingOperations } from './profile-writing/state-serialization-secret-handling'
 import { PrimaryStateWriteOperations } from './profile-writing/primary-state-writes'
 import { scheduleSave, WriteSchedulingOperations } from './profile-writing/write-scheduling'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 import { WriteFlushBarrierOperations } from './profile-writing/write-flush-barriers'
 import { ProfilePreferences } from './profile-preferences/profile-preferences'
 import { RepoLifecycleOperations } from './project-catalog/repo-lifecycle-operations'

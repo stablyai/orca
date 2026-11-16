@@ -7,7 +7,7 @@ import type { BrowserLinkOpeningSettings } from './browser/navigation/browser-li
 import type { BrowserPasswordsGlobalSettings } from './browser/passwords/browser-passwords-types'
 import type { BrowserMemorySaverGlobalSettings } from './browser/guest-lifecycle/browser-memory-saver'
 import type { ClaudeAccountSwitchSettings } from './agent-accounts/claude/claude-account-switch-settings'
-import type { ExternalConversationSettings } from './external-conversation-settings'
+import type { ExternalConversationSettings } from './connectors/external-conversation-settings'
 import type { NativeChatGlobalSettings } from './native-chat/native-chat-appearance-settings'
 import type { NotchStatusSettings } from './notch/notch-status-settings'
 import type { NativeChatIdleStopSettings } from './native-chat/native-chat-idle-stop'
@@ -29,6 +29,8 @@ import type { KeybindingGlobalSettings } from './keybindings/global-settings'
 import type { WorkspaceCleanupPolicySettings } from './workspace-cleanup/workspace-cleanup-policy'
 import type { PRAutoRefreshSettings } from './source-control/hosted-review/review-refresh-policy'
 import type { ManagedAccountNameSettings } from './agent-accounts/managed-account-display-names'
+import type { NewTabMenuSettings } from './new-tab-menu/new-tab-menu-layout'
+import type { UiLanguageSettings } from './i18n/ui-language-settings'
 
 /** Settings groups owned by their feature modules and composed into GlobalSettings. */
 export type GlobalSettingsBase = AntigravityChatAuthSettings &
@@ -61,4 +63,6 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   KeybindingGlobalSettings &
   WorkspaceCleanupPolicySettings &
   PRAutoRefreshSettings &
-  ManagedAccountNameSettings
+  ManagedAccountNameSettings &
+  NewTabMenuSettings &
+  UiLanguageSettings

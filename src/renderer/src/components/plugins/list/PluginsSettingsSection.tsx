@@ -9,7 +9,7 @@ import { useAppStore } from '@/store/index'
 import { PluginDevelopmentDialog } from '../dialogs/PluginDevelopmentDialog'
 import { PluginInstallDialog } from '../dialogs/PluginInstallDialog'
 import { sourceInstallTrustPrompt } from '../presentation/plugin-install-trust'
-import { confirmPluginInstallTrust } from '@/store/plugins/installation/plugin-install-trust-request'
+import { usePluginInstallTrust } from '../state/use-plugin-install-trust'
 import { PluginRemoveDialog } from '../dialogs/PluginRemoveDialog'
 import { PluginRollbackDialog } from '../dialogs/PluginRollbackDialog'
 import { PluginsHeaderActions } from './PluginSettingsMenu'
@@ -43,6 +43,7 @@ export function PluginsSettingsSection({
   updateSettings
 }: PluginsSettingsSectionProps): React.JSX.Element {
   const t = useTranslate()
+  const confirmTrust = usePluginInstallTrust(mounted)
   const [plugins, setPlugins] = useState<PluginHostListEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -203,7 +204,7 @@ export function PluginsSettingsSection({
   const removePlugin = plugins.find((plugin) => plugin.pluginKey === removePluginId) ?? null
 
   const install = async (source: PluginHostInstallSource): Promise<void> => {
-    if (!(await confirmPluginInstallTrust(sourceInstallTrustPrompt(source)))) {
+    if (!(await confirmTrust(sourceInstallTrustPrompt(source)))) {
       return
     }
     const result = await window.api.plugins.install(source)

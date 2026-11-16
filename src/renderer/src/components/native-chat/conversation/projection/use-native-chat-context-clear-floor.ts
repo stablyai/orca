@@ -1,3 +1,4 @@
+import { useNativeChatPaneLifetimeEffect } from '../../pane/ownership/native-chat-pane-lifetime'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
@@ -87,23 +88,31 @@ export function useNativeChatContextClearFloor(
     latest,
     current.sent?.tail ?? null
   )
-  useEffect(() => {
-    if (fading === null) {
-      return
-    }
-    // A press that already faded the transcript out swaps as soon as its divider lands.
-    const elapsed = fadedSince === null ? 0 : Date.now() - fadedSince
-    const timer = setTimeout(
-      () =>
-        setState((prior) =>
-          prior.fading === fading
-            ? { ...prior, floor: fading, fading: null, fadedSince: null, clears: prior.clears + 1 }
-            : prior
-        ),
-      Math.max(0, NATIVE_CHAT_CONTEXT_CLEAR_FADE_MS - elapsed)
-    )
-    return () => clearTimeout(timer)
-  }, [fadedSince, fading])
+  useNativeChatPaneLifetimeEffect(
+    useCallback(() => {
+      if (fading === null) {
+        return
+      }
+      // A press that already faded the transcript out swaps as soon as its divider lands.
+      const elapsed = fadedSince === null ? 0 : Date.now() - fadedSince
+      const timer = setTimeout(
+        () =>
+          setState((prior) =>
+            prior.fading === fading
+              ? {
+                  ...prior,
+                  floor: fading,
+                  fading: null,
+                  fadedSince: null,
+                  clears: prior.clears + 1
+                }
+              : prior
+          ),
+        Math.max(0, NATIVE_CHAT_CONTEXT_CLEAR_FADE_MS - elapsed)
+      )
+      return () => clearTimeout(timer)
+    }, [fadedSince, fading])
+  )
 
   const floor = current.floor
   const rows = useMemo(() => agentSessionTranscriptRows(items, floor), [floor, items])

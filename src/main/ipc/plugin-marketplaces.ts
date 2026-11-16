@@ -21,6 +21,7 @@ import type {
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { pluginFileTypeSchema } from '../../shared/plugins/contributions/plugin-file-type'
 import { findPluginFileTypeSuggestion } from '../plugins/catalog/plugin-file-type-suggestion'
+import { refreshInstalledPluginCatalog } from '../plugins/catalog/plugin-marketplace-shared-refresh'
 
 export type PluginMarketplaceHandlerServices = {
   marketplace: PluginMarketplaceService
@@ -127,6 +128,9 @@ export function registerPluginMarketplaceHandlers(
   })
   ipcMain.handle('plugins:previewMarketplaceUpdate', async (_event, args: unknown) => {
     const { pluginKey } = installedPluginSchema.parse(args)
+    // Why refresh: the review is the user checking for updates, so a stale cached catalog would
+    // offer the installed version back ("2.3.1 → 2.3.1, already installed").
+    await refreshInstalledPluginCatalog(services, pluginKey)
     const preview = await services.installer.previewInstalledUpdate(pluginKey)
     const installed = pluginService.findValidPlugin(pluginKey)
     if (!installed) {

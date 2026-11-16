@@ -17,7 +17,8 @@ export function pruneDeregisteredRepoUiResidue(
   for (const record of [
     ui.explorerDisplayRootByWorktree,
     ui.showDotfilesByWorktree,
-    ui.gitGraphFiltersByWorktree
+    ui.gitGraphFiltersByWorktree,
+    ui.notificationsMutedByWorktree
   ]) {
     for (const worktreeId of Object.keys(record ?? {})) {
       if (isOrphanWorktree(worktreeId)) {

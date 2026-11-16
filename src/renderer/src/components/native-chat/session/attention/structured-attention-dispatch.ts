@@ -25,6 +25,7 @@ import {
   readAgentAttentionNotificationSound
 } from '@/attention/agent-attention-notification-delivery'
 import { useAppStore } from '@/store'
+import { isWorktreeNotificationDeliveryMuted } from '@/attention/worktree-notification-mute'
 import { canonicalOrchestrationForRow } from '@/runtime/agent-orchestration/visible-agent-orchestration'
 import { isCoordinatorOnlyChatNews } from '../../../../../../shared/orchestration/workers/dispatched-worker-attention'
 import { getNotificationWorkspaceLabels } from '../../../../attention/notification-workspace-labels'
@@ -100,6 +101,10 @@ function dispatchStructuredAttention(
     requestDelivery: (request) => {
       // Unread writes can synchronously cause a genuine read before delivery.
       if (promptWasRead()) {
+        return
+      }
+      // Per-worktree mute keeps the unread writes above but drops the interruption.
+      if (isWorktreeNotificationDeliveryMuted(useAppStore.getState(), request.workspaceId)) {
         return
       }
       // The receiving subscription identifies the paired source even when tab ownership is ambiguous.

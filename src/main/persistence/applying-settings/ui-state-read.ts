@@ -17,7 +17,7 @@ import {
   normalizeVisibleExecutionHostIds,
   normalizeExecutionHostOrder
 } from '../../../shared/execution-host'
-import { normalizeManualRepoOrder } from '../../../shared/manual-repo-order'
+import { normalizeManualRepoOrder } from '../../../shared/repository/manual-repo-order'
 import { normalizeBrowserPageZoomLevel } from '../../../shared/browser/site-settings/browser-page-zoom'
 import { normalizeFeatureTipIds } from '../../../shared/feature-education/feature-tips'
 import { normalizeContextualTourIds } from '../../../shared/feature-education/contextual-tours/contextual-tours'
@@ -25,6 +25,7 @@ import { normalizeFeatureInteractions } from '../../../shared/feature-education/
 import {
   normalizeGroupBy,
   normalizeProjectOrderBy,
+  normalizeNotificationsMutedByWorktree,
   normalizeRightSidebarExplorerView,
   normalizeRightSidebarTab,
   normalizeShowDotfilesByWorktree,
@@ -74,6 +75,9 @@ export function getPersistedUI(
     ),
     gitGraphFiltersByWorktree: normalizeGitGraphFilters(state.ui?.gitGraphFiltersByWorktree),
     showDotfilesByWorktree: normalizeShowDotfilesByWorktree(state.ui?.showDotfilesByWorktree),
+    notificationsMutedByWorktree: normalizeNotificationsMutedByWorktree(
+      state.ui?.notificationsMutedByWorktree
+    ),
     featureTipsSeenIds: normalizeFeatureTipIds(state.ui?.featureTipsSeenIds),
     contextualToursSeenIds: normalizeContextualTourIds(state.ui?.contextualToursSeenIds),
     featureInteractions: normalizeFeatureInteractions(state.ui?.featureInteractions),

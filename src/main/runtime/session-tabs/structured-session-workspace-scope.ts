@@ -11,7 +11,7 @@ import { getLocalProjectWorktreeGitOptions } from '../../workspaces/execution-ho
 import {
   isFloatingWorkspaceId,
   isFloatingWorkspaceSelector
-} from '../../../shared/floating-workspace-worktree'
+} from '../../../shared/workspace/identity/floating-workspace-worktree'
 import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { composeWorktreeId, splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'

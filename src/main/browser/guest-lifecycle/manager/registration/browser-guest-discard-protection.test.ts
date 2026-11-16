@@ -4,30 +4,28 @@ import {
   installBrowserGuestDiscardProtection,
   readBrowserGuestDiscardAdmission,
   readBrowserGuestDiscardProtection,
-  markInitialBrowserGuest,
   registerBrowserSessionNotificationGrant,
   setBrowserGuestSemanticVisibility
 } from './browser-guest-discard-protection'
 import { reportBrowserSessionWebRequest } from '../../../sessions/requests/browser-session-web-request-observer'
 import { BROWSER_GUEST_PROTECTION_REPORT } from '../../../../../shared/browser/guest-lifecycle/browser-guest-discard-protection'
 
-it('retains earlier drafts and POST/unknown history while admitting observed clean GET history', () => {
+it('protects only the current document, never earlier history', () => {
   const frames: object[] = []
   let audible = false
   let crashed = false
+  let url = 'about:blank'
   const mainFrame = { frames, send: vi.fn<(channel: string, generation: string) => void>() }
-  let length = 1
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: event fixture implements this policy's native surface.
   const guest = Object.assign(new EventEmitter(), {
     id: 7,
     mainFrame,
     session: {},
+    getURL: () => url,
     isDestroyed: () => false,
     isCrashed: () => crashed,
-    isCurrentlyAudible: () => audible,
-    navigationHistory: { length: () => length, getActiveIndex: () => length - 1 }
+    isCurrentlyAudible: () => audible
   }) as unknown as Electron.WebContents
-  markInitialBrowserGuest(guest)
   const changed = vi.fn()
   const stop = installBrowserGuestDiscardProtection(guest, changed)
   const report = (dirty: boolean): void => {
@@ -39,27 +37,24 @@ it('retains earlier drafts and POST/unknown history while admitting observed cle
       { generation, dirty, pictureInPicture: false, contentType: 'text/html' }
     )
   }
-  let requestId = 0
-  const navigate = (url: string, method = 'GET', committed = true): void => {
+  const navigate = (next: string, status = 200, method = 'GET'): void => {
+    url = next
     guest.emit('did-start-navigation', {
       url,
       frame: mainFrame,
       isMainFrame: true,
       isSameDocument: false
     })
-    const details = {
-      id: ++requestId,
+    reportBrowserSessionWebRequest(guest.session, 'onBeforeRequest', {
+      id: 1,
       url,
       method,
       frame: guest.mainFrame,
       resourceType: 'mainFrame',
       webContentsId: 7,
       timestamp: 0
-    }
-    reportBrowserSessionWebRequest(guest.session, 'onBeforeRequest', details)
-    if (committed) {
-      guest.emit('did-navigate', {}, url, 200, 'OK')
-    }
+    })
+    guest.emit('did-navigate', {}, url, status, 'OK')
     guest.emit('dom-ready')
     report(false)
   }
@@ -102,46 +97,21 @@ it('retains earlier drafts and POST/unknown history while admitting observed cle
       expect(changed).not.toHaveBeenCalled()
       expect(mainFrame.send).toHaveBeenCalledTimes(challenges)
     }
-    length = 2
-    navigate('https://example.test/after-frame')
     frames.length = 0
-    report(false)
-    expect(readBrowserGuestDiscardProtection(guest).reason).toBe('history')
-    length = 1
-    navigate('https://example.test/sole-clean')
-    expect(readBrowserGuestDiscardProtection(guest).protection).toBe('discardable')
-    length = 2
-    navigate('https://example.test/b')
-    guest.emit('did-navigate-in-page', {}, 'https://example.test/b#step', true)
-    expect(readBrowserGuestDiscardProtection(guest).protection).toBe('discardable')
-    report(true)
-    length = 3
-    navigate('https://example.test/c')
-    expect(readBrowserGuestDiscardProtection(guest).reason).toBe('history')
-    guest.emit('dom-ready')
-    report(false)
-    expect(readBrowserGuestDiscardProtection(guest).reason).toBe('history')
-    length = 1
-    navigate('https://example.test/clean')
-    expect(readBrowserGuestDiscardProtection(guest).protection).toBe('discardable')
-    navigate('https://example.test/post', 'POST')
-    expect(readBrowserGuestDiscardProtection(guest).reason).toBe('history')
-    length = 2
-    navigate('https://example.test/after-post')
-    expect(readBrowserGuestDiscardProtection(guest).reason).toBe('history')
-    length = 1
-    navigate('https://example.test/new-sole-get')
-    expect(readBrowserGuestDiscardProtection(guest).protection).toBe('discardable')
-    navigate('https://example.test/uncommitted', 'GET', false)
-    expect(readBrowserGuestDiscardProtection(guest).reason).toBe('history')
-    navigate('https://example.test/overlap')
-    expect(readBrowserGuestDiscardProtection(guest).reason).toBe('history')
-    navigate('https://example.test/settled')
+    navigate('https://example.test/after-frame')
     expect(readBrowserGuestDiscardProtection(guest).protection).toBe('discardable')
     report(true)
     guest.emit('dom-ready')
     report(false)
     expect(readBrowserGuestDiscardProtection(guest).reason).toBe('edits')
+    guest.emit('did-navigate-in-page', {}, 'https://example.test/after-frame#step', true)
+    expect(readBrowserGuestDiscardProtection(guest).reason).toBe('edits')
+    navigate('https://example.test/result', 200, 'POST')
+    expect(readBrowserGuestDiscardProtection(guest).reason).toBe('post')
+    // Earlier edited and POST pages, and non-2xx pages, do not keep the current page.
+    navigate('https://example.test/missing', 404)
+    expect(readBrowserGuestDiscardProtection(guest).protection).toBe('discardable')
+    report(true)
     const oldGeneration = mainFrame.send.mock.lastCall?.[1]
     guest.emit('did-start-navigation', {
       url: 'https://example.test/aborted',
@@ -160,9 +130,10 @@ it('retains earlier drafts and POST/unknown history while admitting observed cle
     report(false)
     expect(readBrowserGuestDiscardProtection(guest).reason).toBe('edits')
     guest.emit('unresponsive')
+    expect(readBrowserGuestDiscardProtection(guest).protection).toBe('unknown')
     guest.emit('responsive')
     report(false)
-    expect(readBrowserGuestDiscardProtection(guest).protection).not.toBe('discardable')
+    expect(readBrowserGuestDiscardProtection(guest).reason).toBe('edits')
     crashed = true
     expect(readBrowserGuestDiscardProtection(guest).protection).toBe('gone')
   } finally {
@@ -188,13 +159,11 @@ it('protects active page features from the private observer and at idle admissio
     isCrashed: () => false,
     isLoading: () => loading,
     isBeingCaptured: () => captured,
-    isCurrentlyAudible: () => audible,
-    navigationHistory: { length: () => 1, getActiveIndex: () => 0 }
+    isCurrentlyAudible: () => audible
   }) as unknown as Electron.WebContents
   registerBrowserSessionNotificationGrant(guest.session, (pageUrl) =>
     grants.has(new URL(pageUrl).origin)
   )
-  markInitialBrowserGuest(guest)
   const stop = installBrowserGuestDiscardProtection(guest, vi.fn())
   const report = (fields: { pictureInPicture?: boolean; contentType?: string }): void => {
     guest.emit(
@@ -212,15 +181,6 @@ it('protects active page features from the private observer and at idle admissio
       frame: mainFrame,
       isMainFrame: true,
       isSameDocument: false
-    })
-    reportBrowserSessionWebRequest(guest.session, 'onBeforeRequest', {
-      id: 1,
-      url,
-      method: 'GET',
-      frame: guest.mainFrame,
-      resourceType: 'mainFrame',
-      webContentsId: 8,
-      timestamp: 0
     })
     guest.emit('did-navigate', {}, url, 200, 'OK')
     guest.emit('dom-ready')
@@ -248,7 +208,7 @@ it('protects active page features from the private observer and at idle admissio
     expect(admission(false)).toBe('capture')
     captured = false
     url = 'file:///Users/me/notes.html'
-    expect(admission(false)).toBe('url')
+    expect(readBrowserGuestDiscardProtection(guest).reason).toBe('url')
     url = 'https://example.test/'
     grants.add('https://example.test')
     expect(admission(false)).toBe('clean')
@@ -271,6 +231,15 @@ it('protects active page features from the private observer and at idle admissio
     expect(admission(false)).toBe('clean')
     // Showing the page does not clear the background activity latch.
     setBrowserGuestSemanticVisibility(guest, true)
+    expect(admission()).toBe('background-activity')
+    // A new document starts clean, and its later background updates still count.
+    setBrowserGuestSemanticVisibility(guest, false)
+    guest.emit('did-navigate')
+    loading = true
+    guest.emit('page-title-updated', {}, 'Other page')
+    loading = false
+    expect(admission()).toBe('clean')
+    guest.emit('page-favicon-updated', {}, ['https://example.test/a.ico'])
     expect(admission()).toBe('background-activity')
   } finally {
     stop()

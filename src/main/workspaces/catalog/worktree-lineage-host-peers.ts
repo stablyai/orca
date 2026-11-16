@@ -6,7 +6,7 @@ import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import {
   getConnectedWorktreeLineageIds,
   projectResolvedWorktreeLineage
-} from '../../../shared/resolved-worktree-lineage'
+} from '../../../shared/worktree/lineage/resolved-worktree-lineage'
 import { readAllWorktreeMetaForHost } from '../../persistence/host-qualified-worktree-meta'
 import { areWorktreePathsEqual } from '../../git/worktrees/catalog/worktree-path-comparison'
 import { mergeWorktree } from '../../ipc/worktree-metadata-merge'

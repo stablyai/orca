@@ -244,7 +244,6 @@ export function AppearanceInterfaceSection({
       {SHOW_UI_LANGUAGE_SETTING ? (
         <AppearanceLanguageSetting
           uiLanguage={settings.uiLanguage}
-          updateSettings={updateSettings}
           forceVisible={forceVisiblePrimary}
         />
       ) : null}

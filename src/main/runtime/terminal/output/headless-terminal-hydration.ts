@@ -3,7 +3,7 @@ import type {
   RuntimePtyWorktreeRecord
 } from '../records/runtime-terminal-state-records'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import { splitFreebuffScreenUpdates } from '../../../../shared/freebuff-screen-status'
+import { splitFreebuffScreenUpdates } from '../../../../shared/agent-status/output/freebuff-screen-status'
 import { OrcaRuntimeWithSerializeMainTerminalBuffer } from './terminal-buffer-operations'
 import { observeFreebuffTerminalStatus } from './freebuff-terminal-status'
 import {

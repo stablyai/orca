@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import type { WorkspaceVisibleTabType } from '../../../../shared/tab-types'
+import type { WorkspaceVisibleTabType } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { resolveRepairedActiveTerminalTabId } from './active-terminal-repair'
 
