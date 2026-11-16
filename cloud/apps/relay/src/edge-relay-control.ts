@@ -41,9 +41,14 @@ export type EdgeControlFlags = {
   // answered with `url` (a front door in ORCA_RELAY_EDGE_FRONT_DOOR_URLS) instead of the edge's
   // own URL. Sticky: a host switches only on a real reconnect or a move onto the edge, at a newer
   // epoch (EdgeRoute in edge-relay.ts, which also states the mixed-version operating rule). A
-  // region's country exclusion wins: an excluded host is never answered it. Absent: no host is
-  // newly mapped, and mapped hosts return to the edge URL on their next reconnect. A bad value
-  // drops only this key (reported in ignoredKeys); the rest of the object still applies.
+  // region's country exclusion wins over `countries`: an excluded host is never answered it by
+  // country. A host listed in `hosts` is an operator's choice for that one host: it is in the edge
+  // cohort (inEdgeCohort) and answered `url` whatever its country, exclusion included, so an
+  // excluded country's host can reach the edge only through the front door. Dropping it from the
+  // list puts it back under the exclusion and rollout (an excluded host leaves the edge at its next
+  // ask or the evacuation sweep). Absent: no host is newly mapped, and mapped hosts return to the
+  // edge URL on their next reconnect. A bad value drops only this key (reported in ignoredKeys);
+  // the rest of the object still applies.
   frontDoor?: EdgeFrontDoorFlag
 }
 
@@ -232,9 +237,20 @@ export function edgeCountryExcluded(flags: EdgeControlFlags, region: RelayRegion
   return flags.regionExcludeCountries?.[region]?.includes(country) === true
 }
 
+// Whether the flag lists this host by id on a front door in the boot allowlist (`frontDoorUrls`).
+export function edgeFrontDoorListsHost(
+  flags: EdgeControlFlags,
+  frontDoorUrls: ReadonlySet<string> | undefined,
+  relayHostId: string
+): boolean {
+  const door = flags.frontDoor
+  return door !== undefined && frontDoorUrls?.has(door.url) === true && door.hosts?.includes(relayHostId) === true
+}
+
 // The front door a host's ask maps to, or undefined for the edge's own URL. `frontDoorUrls`: the
 // boot allowlist (a flag naming any other URL maps nobody). `country` null: unknown, which only a
 // host listed by id can be mapped with. `byCountry`: the ask's country matched (not only the id).
+// A host listed by id is mapped even when the region excludes its country (see frontDoor).
 export function edgeFrontDoorFor(
   flags: EdgeControlFlags,
   frontDoorUrls: ReadonlySet<string> | undefined,
@@ -244,7 +260,8 @@ export function edgeFrontDoorFor(
 ): { url: string; byCountry: boolean } | undefined {
   const door = flags.frontDoor
   if (door === undefined || frontDoorUrls?.has(door.url) !== true) { return undefined }
-  if (edgeCountryExcluded(flags, region, country)) { return undefined }
+  const listed = door.hosts?.includes(relayHostId) === true
+  if (!listed && edgeCountryExcluded(flags, region, country)) { return undefined }
   const byCountry = country !== null && door.countries?.includes(country) === true
-  return byCountry || door.hosts?.includes(relayHostId) === true ? { url: door.url, byCountry } : undefined
+  return byCountry || listed ? { url: door.url, byCountry } : undefined
 }
