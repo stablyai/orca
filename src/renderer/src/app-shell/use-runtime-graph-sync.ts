@@ -12,6 +12,7 @@ import {
   setRuntimeGraphSyncEnabled
 } from '../runtime/sync-runtime-graph/graph-sync-scheduler'
 import { useAppStore } from '../store'
+import { isPairedWebClientWindow } from './chrome/desktop-window-chrome'
 
 /** Keeps the mobile runtime graph republished as the store's session-visible state changes. */
 export function useRuntimeGraphSync(): void {
@@ -72,9 +73,11 @@ export function useRuntimeGraphSync(): void {
   )
 
   useEffect(() => {
-    const stopStatusPublication = workspaceSessionReady
-      ? startRendererStatusPublication(useAppStore, scheduleRuntimeGraphSync)
-      : undefined
+    // Why: a paired web client has no local main to publish status to.
+    const stopStatusPublication =
+      workspaceSessionReady && !isPairedWebClientWindow()
+        ? startRendererStatusPublication(useAppStore, scheduleRuntimeGraphSync)
+        : undefined
     setRuntimeGraphSyncEnabled(workspaceSessionReady)
     return () => {
       stopStatusPublication?.()
