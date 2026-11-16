@@ -102,26 +102,45 @@ else
   # so for each changed source this also runs (a) every test in its folder and (b) every test under src/ that
   # imports it by module name (relative path, '@/' alias, vi.mock or dynamic import). Over-selection is fine.
   all_tests=$(git ls-files 'src/*.test.ts' 'src/*.test.tsx')
-  while IFS= read -r file; do
-    case "$file" in
-      *.test.ts | *.test.tsx) if [[ -f "$file" ]]; then tests+=("$file"); fi ;;
-      *.ts | *.tsx)
-        folder=$(dirname "$file")
-        while IFS= read -r t; do
-          if [[ -n "$t" && "$(dirname "$t")" == "$folder" ]]; then tests+=("$t"); fi
-        done <<<"$all_tests"
-        module=$(basename "${file%.*}")
-        if [[ "$module" == index ]]; then module=$(basename "$folder"); fi
-        while IFS= read -r t; do
-          if [[ -n "$t" ]]; then tests+=("$t"); fi
-        done < <(printf "%s\n" "$all_tests" | xargs grep -lE "['\"][^'\"]*/${module}(\\.tsx?)?['\"]" 2>/dev/null || true)
-        ;;
-    esac
-  done < <(git diff --name-only --diff-filter=AMR "$base"...HEAD -- 'src/*')
-  # (c) Vitest's own module graph: every test that transitively imports a changed file (`vitest list --changed`).
-  # Name matching alone missed #462's REG-5: the multiplex tests import an aggregator (methods/terminal/terminal) that
-  # imports the changed modules, one folder up.
-  if [[ -n "$(git diff --name-only "$base"...HEAD -- 'src/*')" ]]; then
+  changed_src=$(git diff --name-only --diff-filter=AMR "$base"...HEAD -- 'src/*')
+  n_changed=$(printf "%s\n" "$changed_src" | grep -c . || true)
+  # A wide change (an upstream sync touches thousands of files) selects nearly everything anyway, and the per-file
+  # selection below costs O(changed x tests). Over the threshold, run every src test instead.
+  if ((n_changed > ${PREMERGE_SELECT_ALL_OVER:-300})); then
+    echo "premerge: $n_changed changed src files (over ${PREMERGE_SELECT_ALL_OVER:-300}); selecting every src test file"
+    while IFS= read -r t; do
+      if [[ -n "$t" && -f "$t" ]]; then tests+=("$t"); fi
+    done <<<"$all_tests"
+  elif ((n_changed > 0)); then
+    folders=()
+    modules=()
+    while IFS= read -r file; do
+      case "$file" in
+        *.test.ts | *.test.tsx) if [[ -f "$file" ]]; then tests+=("$file"); fi ;;
+        *.ts | *.tsx)
+          folders+=("$(dirname "$file")")
+          module=$(basename "${file%.*}")
+          if [[ "$module" == index ]]; then module=$(basename "$(dirname "$file")"); fi
+          modules+=("$module")
+          ;;
+      esac
+    done <<<"$changed_src"
+    if ((${#folders[@]})); then
+      # (a) every test in a changed source's folder: one pass over the test list.
+      while IFS= read -r t; do
+        if [[ -n "$t" ]]; then tests+=("$t"); fi
+      done < <(printf "%s\n" "$all_tests" |
+        awk 'NR == FNR { want[$0] = 1; next } { d = $0; sub(/\/[^\/]*$/, "", d); if (d in want) print }' \
+          <(printf "%s\n" "${folders[@]}" | sort -u) -)
+      # (b) every test that imports a changed module by name: one grep over all tests for all names.
+      names=$(printf "%s\n" "${modules[@]}" | sort -u | sed 's/[][\.*^$+?(){}|/]/\\&/g' | paste -sd '|' -)
+      while IFS= read -r t; do
+        if [[ -n "$t" ]]; then tests+=("$t"); fi
+      done < <(printf "%s\n" "$all_tests" | xargs grep -lE "['\"][^'\"]*/(${names})(\\.tsx?)?['\"]" 2>/dev/null || true)
+    fi
+    # (c) Vitest's own module graph: every test that transitively imports a changed file (`vitest list --changed`).
+    # Name matching alone missed #462's REG-5: the multiplex tests import an aggregator (methods/terminal/terminal) that
+    # imports the changed modules, one folder up.
     node config/scripts/workspace-package-build/build-workspace-packages.mjs >/dev/null
     node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --runtime=node >/dev/null
     graph=$(node config/scripts/test-runtime/execution-policy/run-vitest.mjs list --config config/vitest.config.ts \
