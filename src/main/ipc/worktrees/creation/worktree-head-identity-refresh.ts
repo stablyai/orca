@@ -28,6 +28,8 @@ export type WorktreeHeadIdentityRefreshState = {
   inFlight: boolean
   queuedScope: WorktreeHeadIdentityScope | null
   queuedEmit: boolean
+  /** Callers whose freshness depends on the next pass publishing every scoped head. */
+  queuedUnverified: (() => void)[]
   /** One-shot catch-up armed only by a scoped pass; see `scheduleRebaseline`. */
   rebaselineTimer: ReturnType<typeof setTimeout> | null
 }
@@ -43,6 +45,7 @@ export function createWorktreeHeadIdentityRefreshState(): WorktreeHeadIdentityRe
     inFlight: false,
     queuedScope: null,
     queuedEmit: false,
+    queuedUnverified: [],
     rebaselineTimer: null
   }
 }
@@ -92,15 +95,20 @@ function resolveScope(
     : scope
 }
 
-/** Publish actual head moves; structural callers rebaseline silently because their catalog refresh carries the heads. */
+/** Publish actual head moves; structural callers rebaseline silently because their catalog refresh carries the heads.
+ *  `onUnverified` runs when this request's pass fails or cannot prove every head was published. */
 export async function refreshWorktreeHeadIdentities(
   host: HeadIdentityWatchHost,
   state: WorktreeHeadIdentityRefreshState,
   emit: boolean,
-  scope: WorktreeHeadIdentityScope = FULL_HEAD_IDENTITY_SCOPE
+  scope: WorktreeHeadIdentityScope = FULL_HEAD_IDENTITY_SCOPE,
+  onUnverified?: () => void
 ): Promise<void> {
   if (host.disposed || host.mainWindow.isDestroyed()) {
     return
+  }
+  if (onUnverified) {
+    state.queuedUnverified.push(onUnverified)
   }
   if (state.inFlight) {
     state.queuedScope = mergeHeadIdentityScopes(
@@ -115,8 +123,11 @@ export async function refreshWorktreeHeadIdentities(
     ? mergeHeadIdentityScopes(state.queuedScope, scope)
     : scope
   const requestedEmit = emit || state.queuedEmit
+  const unverifiedCallbacks = state.queuedUnverified
   state.queuedScope = null
   state.queuedEmit = false
+  state.queuedUnverified = []
+  let verified = false
   // Promote before skipping empty scope so structural-only churn cannot starve full rereads.
   const effectiveScope = resolveScope(state, requestedScope)
   // Empty scopes prove no head moved; promoted structural passes stay silent because catalog notification covers every repo.
@@ -155,6 +166,8 @@ export async function refreshWorktreeHeadIdentities(
     }
     // Commit baseline after notification so a partial send failure retries instead of burying the move.
     state.baseline = nextBaseline
+    // Without a prior baseline nothing was diffed, so no move could have been published.
+    verified = complete && baseline !== null
   } catch (error) {
     console.warn(`[worktree-base-watcher] head identity read failed for ${host.path}:`, error)
     // Failed reads invalidate partial memo state; force a full refresh next time.
@@ -162,6 +175,11 @@ export async function refreshWorktreeHeadIdentities(
     state.lastFullReadAtMs = 0
   } finally {
     state.inFlight = false
+    if (!verified && !host.disposed && !host.mainWindow.isDestroyed()) {
+      for (const callback of unverifiedCallbacks) {
+        callback()
+      }
+    }
     if (state.queuedScope && !host.disposed) {
       // Keep queued scope for a later live-window call if this rerun cannot proceed.
       void refreshWorktreeHeadIdentities(host, state, state.queuedEmit, state.queuedScope)

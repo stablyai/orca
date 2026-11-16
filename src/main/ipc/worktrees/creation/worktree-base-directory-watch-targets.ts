@@ -85,7 +85,8 @@ async function maybeAddBaseTarget(
   const config = {
     repoId: repo.id,
     repoName: getRuntimePathBasename(repo.path).replace(/\.git$/, ''),
-    nestWorkspaces: pathSettings.nestWorkspaces
+    nestWorkspaces: pathSettings.nestWorkspaces,
+    headMovesNeedListing: mirrorDistro !== undefined
   }
   // A root mirrored into WSL is a UNC path either way; probing the distro's home (which can kill a
   // booting distro) would only lead to the same skip, so keep just the Git-common watch.
