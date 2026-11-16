@@ -23,14 +23,29 @@ type OutgrownChildReading = Pick<StructuredAgentSessionHostSession, 'child'> & {
   journal: Pick<AgentSessionJournal, 'reads'>
 }
 
-/** Wait for the lead’s wake-up after child completion; unlike idle sweep, immediate restart has no window. */
-function owesWakeUp(
+/** How long an account move waits for the lead's wake-up after child work ends. A stopped task
+ *  or a provider that never wakes the lead would otherwise hold the person's message forever. */
+export const STRUCTURED_AGENT_SESSION_ACCOUNT_MOVE_WAKE_UP_MS = 2 * 60_000
+
+/** The newest child completion the lead has not answered. Unlike idle sweep, immediate restart has
+ *  no window; an account move (`since`) waits only for recent ones, and never for a stopped task. */
+function owedWakeUp(
   ended: number | undefined,
-  childWork: readonly AgentChildWorkView[] | undefined
-): boolean {
-  return (childWork ?? []).some(
-    (work) => work.settledAt !== undefined && (ended === undefined || work.settledAt > ended)
-  )
+  childWork: readonly AgentChildWorkView[] | undefined,
+  since?: number
+): number | undefined {
+  let newest: number | undefined
+  for (const work of childWork ?? []) {
+    const settled = work.settledAt
+    if (
+      settled !== undefined &&
+      (ended === undefined || settled > ended) &&
+      (since === undefined || (settled >= since && work.outcome !== 'cancelled'))
+    ) {
+      newest = Math.max(newest ?? settled, settled)
+    }
+  }
+  return newest
 }
 
 /** Compare the actual launch mode so replacement cannot loop. */
@@ -81,25 +96,34 @@ async function launchedUnderOtherAccount(
 /** What the old child still owes before it may retire; null when it owes nothing. */
 async function owedWork(
   work: OutgrownChildWorkReads,
-  ended: (current: JournalWorkAnswer<'child-work'> | null) => number | undefined
-): Promise<StructuredAgentSessionAccountTransition['waitsFor'] | null> {
+  ended: (current: JournalWorkAnswer<'child-work'> | null) => number | undefined,
+  wakeUpSince?: number
+): Promise<Pick<StructuredAgentSessionAccountTransition, 'waitsFor' | 'wakeUpUntil'> | null> {
   const current = await work.currentWork()
   if (current?.activeTurn === true) {
-    return 'turn'
+    return { waitsFor: 'turn' }
   }
   if (current?.actionablePrompt === true) {
-    return 'prompt'
+    return { waitsFor: 'prompt' }
   }
   if (work.childWorkOpen()) {
-    return 'child-work'
+    return { waitsFor: 'child-work' }
   }
   if (work.providerHoldsDispatch()) {
-    return 'held-send'
+    return { waitsFor: 'held-send' }
   }
   if (work.hasOpenDispatch()) {
-    return 'dispatch'
+    return { waitsFor: 'dispatch' }
   }
-  return owesWakeUp(ended(current), work.childWork()) ? 'wake-up' : null
+  const settled = owedWakeUp(ended(current), work.childWork(), wakeUpSince)
+  return settled === undefined
+    ? null
+    : {
+        waitsFor: 'wake-up',
+        ...(wakeUpSince === undefined
+          ? {}
+          : { wakeUpUntil: settled + STRUCTURED_AGENT_SESSION_ACCOUNT_MOVE_WAKE_UP_MS })
+      }
 }
 
 type OutgrownChildWorkReads = StructuredAgentSessionChildWorkReads & {
@@ -113,6 +137,8 @@ export type StructuredAgentSessionAccountTransition = {
   waitsFor: 'turn' | 'prompt' | 'child-work' | 'held-send' | 'dispatch' | 'wake-up'
   from: AgentSessionAccountHome | null
   to: AgentSessionAccountHome | null
+  /** With `wake-up`: when the move stops waiting for it. */
+  wakeUpUntil?: number
 }
 
 export type StructuredAgentSessionOutgrownChild =
@@ -124,6 +150,7 @@ export type StructuredAgentSessionOutgrownChild =
 type AccountTransitionDeps = {
   work: OutgrownChildWorkReads
   launchAccountHome?: () => Promise<AgentSessionAccountHome | null>
+  now: () => number
 }
 
 /** The account move a running child defers, read without stopping anything. */
@@ -135,17 +162,20 @@ export async function readStructuredAgentSessionAccountTransition(
   if (!session || !child || child.phase === 'starting' || child.close) {
     return null
   }
-  const to = await launchedUnderOtherAccount(child, deps.launchAccountHome)
-  const facts = to ? null : await session.journal.reads.outgrownChild({ fence: child.fence })
-  if (!to && !facts?.signedOut) {
+  // Owed work is read first: the account a start would use is the costlier read.
+  const owed = await owedWork(
+    deps.work,
+    (current) => current?.newestTurnCompletedAt,
+    deps.now() - STRUCTURED_AGENT_SESSION_ACCOUNT_MOVE_WAKE_UP_MS
+  )
+  if (!owed) {
     return null
   }
-  const waitsFor = await owedWork(deps.work, (current) =>
-    facts ? facts.newestTurnCompletedAt : current?.newestTurnCompletedAt
-  )
-  return waitsFor
-    ? { cause: to ? 'account' : 'signed-out', waitsFor, from: child.accountHome ?? null, to }
-    : null
+  const to = await launchedUnderOtherAccount(child, deps.launchAccountHome)
+  if (!to && !(await session.journal.reads.outgrownChild({ fence: child.fence })).signedOut) {
+    return null
+  }
+  return { cause: to ? 'account' : 'signed-out', ...owed, from: child.accountHome ?? null, to }
 }
 
 /** Retire under serialization only when no work is owed; failed Stop leaves a close for startup to join. */
@@ -184,14 +214,19 @@ export async function retireOutgrownStructuredAgentSessionChild(
   ) {
     return { kind: 'current' }
   }
-  const waitsFor = await owedWork(deps.work, () => facts.newestTurnCompletedAt)
-  if (waitsFor) {
-    return signedOut || to
+  const moves = signedOut || to !== null
+  const owed = await owedWork(
+    deps.work,
+    () => facts.newestTurnCompletedAt,
+    moves ? deps.now() - STRUCTURED_AGENT_SESSION_ACCOUNT_MOVE_WAKE_UP_MS : undefined
+  )
+  if (owed) {
+    return moves
       ? {
           kind: 'deferred',
           transition: {
             cause: to ? 'account' : 'signed-out',
-            waitsFor,
+            ...owed,
             from: child.accountHome ?? null,
             to
           }
@@ -216,6 +251,6 @@ export async function structuredAgentSessionChildOwesWork(
   const current = await work.currentWork()
   return (
     structuredAgentSessionChildHasOpenWork(work, current) ||
-    owesWakeUp(current?.newestTurnCompletedAt, work.childWork())
+    owedWakeUp(current?.newestTurnCompletedAt, work.childWork()) !== undefined
   )
 }

@@ -12,6 +12,8 @@ export type JournalWorkRead =
       now: number
       facts: JournalSqlQueueFacts
       allowSteer: boolean
+      /** Live: cards not from another agent wait for an account move. */
+      awaitsAccountMove?: true
       resolved?: JournalSqlWorkResult
     }
   | { kind: 'opening-send'; fence: number }

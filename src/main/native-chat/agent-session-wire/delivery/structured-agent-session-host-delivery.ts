@@ -28,11 +28,11 @@ import type {
 import { structuredAgentSessionConversationFence } from '../host/structured-agent-session-provider-child'
 import { readStructuredAgentSessionFailureWordsContext } from '../operations/structured-agent-session-send-preparation'
 import { settleInterruptedStructuredAgentSessionCommands } from '../rewind/structured-rewind-recovery'
+import { structuredAgentSessionChildOwesWork } from '../recovery/structured-agent-session-outgrown-child'
 import {
-  structuredAgentSessionChildOwesWork,
-  type StructuredAgentSessionAccountTransition
-} from '../recovery/structured-agent-session-outgrown-child'
-import { createStructuredAgentSessionOutgrownChildHost } from '../recovery/structured-agent-session-outgrown-child-host'
+  createStructuredAgentSessionOutgrownChildHost,
+  type StructuredAgentSessionAccountTransitionRead
+} from '../recovery/structured-agent-session-outgrown-child-host'
 import { structuredAgentSessionImmediatePermission } from '../options/structured-agent-session-launch-permission'
 import type { StructuredAgentSessionAcquireAborts } from '../startup/structured-agent-session-acquire-aborts'
 import { settleStructuredAgentSessionLeftovers } from '../termination/structured-agent-session-leftover-settlement'
@@ -53,8 +53,8 @@ export type StructuredAgentSessionConversationDelivery = {
     sessionId: string,
     opened: OpenedStructuredAgentSessionConversation
   ) => Promise<void>
-  /** The account move the running child defers; read under the chat's serialization. */
-  accountTransition: (sessionId: string) => Promise<StructuredAgentSessionAccountTransition | null>
+  /** The account move the running child defers. */
+  accountTransition: StructuredAgentSessionAccountTransitionRead
 }
 
 export function createStructuredAgentSessionConversationDelivery(input: {
@@ -94,7 +94,11 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     deps,
     sessions,
     clientDelivery: input.clientDelivery,
-    stopOutgrownAgent: input.stopOutgrownAgent
+    stopOutgrownAgent: input.stopOutgrownAgent,
+    wake: (sessionId) => {
+      input.clientDelivery.publishStatusAndSettlement(sessionId)
+      void loop.wake(sessionId)
+    }
   })
   const loop = new StructuredAgentSessionDeliveryLoop({
     activityChanged: (id) => sessions.get(id)?.workChanged?.(),
@@ -263,6 +267,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     adoptOpened,
     dispose: () => {
       loop.dispose()
+      outgrown.dispose()
       stopResettling()
     },
     open: (sessionId, options) =>

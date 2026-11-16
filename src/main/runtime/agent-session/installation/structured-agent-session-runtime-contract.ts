@@ -67,6 +67,8 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   conversationNaming?: StructuredAgentSessionHostDeps['conversationNaming']
   /** See `StructuredAgentSessionHostDeps.hasOpenDispatch`. */
   hasOpenDispatch?: StructuredAgentSessionHostDeps['hasOpenDispatch']
+  /** See `StructuredAgentSessionHostDeps.accountMoveWakes`. */
+  accountMoveWakes?: StructuredAgentSessionHostDeps['accountMoveWakes']
   /** See `StructuredAgentSessionHostDeps.queuedAgentMessageOwed`. */
   queuedAgentMessageOwed?: StructuredAgentSessionHostDeps['queuedAgentMessageOwed']
   resolveCodexAccountKind?: (home: string) => AgentSessionAccountKind | undefined

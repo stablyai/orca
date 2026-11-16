@@ -130,12 +130,8 @@ export function sendQueuedStructuredAgentMessage(
           ? { ok: true, value: { clientMessageId: submission.clientMessageId, submission } }
           : invalid('This queued message was already sent.')
       }
-      // A new turn would run on the account the chat is leaving; a steer joins the running one.
-      if (
-        row.body.from === undefined &&
-        work.activeTurnId() === null &&
-        (await context.accountTransition?.(ctx.sessionId))
-      ) {
+      // Even a steer would run on the account the chat is leaving.
+      if (row.body.from === undefined && (await context.accountTransition?.(ctx.sessionId))) {
         return invalid(
           'This message sends on the account you switched to once the agent finishes its current work.'
         )

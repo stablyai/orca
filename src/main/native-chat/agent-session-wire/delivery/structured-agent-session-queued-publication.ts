@@ -57,6 +57,8 @@ export function structuredQueueSendGate(
         kind: 'input',
         resolved: resolved?.readSource,
         allowSteer: false,
+        // The drain's own last reading, so the next card named is the one it would send.
+        ...(host.sessions.get(sessionId)?.awaitsAccountMove ? { awaitsAccountMove: true } : {}),
         now: now(),
         facts: journal.queuedMessages.facts(journal.queuedMessages.answerMail(cards))
       },

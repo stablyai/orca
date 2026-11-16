@@ -18,8 +18,9 @@ export function start(
     send: (params) => host.send({ callerKey: 'trusted-local:usage-limit-continue' }, params),
     publish: delivery.publishStatus,
     now: context.now,
-    awaitsAccountMove: (id) =>
-      context.serialize(id, async () => !!(await context.accountTransition?.(id)))
+    // A read, outside the chat's lane: one busy chat must not delay every other continue.
+    awaitsAccountMove: async (id, launchHome) =>
+      !!(await context.accountTransition?.(id, launchHome))
   })
   limit.start()
   return limit

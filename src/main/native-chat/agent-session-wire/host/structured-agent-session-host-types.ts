@@ -158,6 +158,9 @@ export type StructuredAgentSessionHostSession = {
   operationalRevision?: number
   /** One live restart action owns progress. */
   restartResume?: NonNullable<AgentSessionStatusSummary['restartResume']> & { operationId: string }
+  /** Live: the running agent still owes work on an account the chat is leaving, so cards not
+   *  from another agent wait. Last read by admission or the queue drain; never stored. */
+  awaitsAccountMove?: true
 }
 
 export type StructuredAgentSessionHostDeps = {
@@ -205,6 +208,9 @@ export type StructuredAgentSessionHostDeps = {
   hasOpenDispatch?: (
     record: Pick<AgentSessionRecord, 'sessionId' | 'location' | 'conversationCommand'>
   ) => boolean
+  /** Fires when a held account move may have settled with no journal write of its own: a
+   *  Dispatch closing, or the account selection changing. */
+  accountMoveWakes?: { subscribe: (listener: () => void) => () => void }
   /** Read-only custody for an agent's queued mail; absent: always owed. */
   queuedAgentMessageOwed?: (sessionId: string, from: AgentMessageSource) => QueuedMessageOwed
   /** Advisory tab-hidden notice; failures are logged. */

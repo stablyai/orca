@@ -90,6 +90,7 @@ export async function installOnJournal(
       ? { conversationNaming: withProviderNaming(deps.conversationNaming, nameProvider) }
       : {}),
     ...(deps.hasOpenDispatch ? { hasOpenDispatch: deps.hasOpenDispatch } : {}),
+    ...(deps.accountMoveWakes ? { accountMoveWakes: deps.accountMoveWakes } : {}),
     ...(deps.queuedAgentMessageOwed ? { queuedAgentMessageOwed: deps.queuedAgentMessageOwed } : {}),
     ...(deps.startupLimits ? { startupLimits: deps.startupLimits } : {}),
     ...(deps.onSessionTabHidden ? { onSessionTabHidden: deps.onSessionTabHidden } : {}),

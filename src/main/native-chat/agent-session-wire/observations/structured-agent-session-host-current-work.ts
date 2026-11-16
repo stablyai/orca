@@ -16,7 +16,7 @@ export type StructuredAgentSessionCurrentWorkHost = {
     ):
       | Pick<
           StructuredAgentSessionHostSession,
-          'journal' | 'lastEndedChild' | 'operationalRevision' | 'child'
+          'journal' | 'lastEndedChild' | 'operationalRevision' | 'child' | 'awaitsAccountMove'
         >
       | undefined
   }

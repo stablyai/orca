@@ -22,6 +22,7 @@ import { waitsForCodexTurnOptions } from '../options/structured-agent-session-me
 import { sameProviderChild } from '../host/structured-agent-session-provider-child'
 import { DeliveryProgress } from './structured-agent-session-delivery-progress'
 import { selectableStructuredSubmission } from './structured-agent-session-input-selection'
+import { awaitsAccountMove } from './structured-agent-session-account-move-hold'
 
 type Prepared =
   | 'stop'
@@ -199,7 +200,15 @@ export class StructuredAgentSessionDeliveryLoop {
     if (failedStart) {
       return this.fail(sessionId, failedStart, oldest.clientMessageId)
     }
-    await this.deps.retireOutgrownChild(sessionId, undefined, oldest)
+    if (
+      await awaitsAccountMove(
+        session,
+        oldest,
+        await this.deps.retireOutgrownChild(sessionId, undefined, oldest)
+      )
+    ) {
+      return this.stop(sessionId)
+    }
     const child = this.deps.sessions.get(sessionId)?.child
     if (!child || child.close) {
       return { start: await progress.claim(sessionId, this.deps, oldest.clientMessageId) }
@@ -261,7 +270,10 @@ export class StructuredAgentSessionDeliveryLoop {
     }
     if (waited) {
       // Verify awaited-child identity before rechecking launch permissions.
-      await this.deps.retireOutgrownChild(sessionId, undefined, next)
+      const outgrown = await this.deps.retireOutgrownChild(sessionId, undefined, next)
+      if (await awaitsAccountMove(session, next, outgrown)) {
+        return this.stop(sessionId)
+      }
       if (session.child !== awaitedChild) {
         return 'continue'
       }

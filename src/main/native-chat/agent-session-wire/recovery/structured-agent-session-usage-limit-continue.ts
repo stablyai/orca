@@ -199,7 +199,10 @@ export class StructuredAgentSessionUsageLimitContinue {
         const retryAt = attempt ? attempt.at + 60_000 * 2 ** Math.max(0, attempt.count - 1) : 0
         const ready = this.holds.ready(id, cut, this.deps.now(), retryAt)
         // Only due chats ask; a continue sent now would wait behind the old agent's work anyway.
-        const awaiting = ready && (await this.deps.awaitsAccountMove?.(id)) === true
+        const awaiting =
+          ready &&
+          (await this.deps.awaitsAccountMove?.(id, this.holds.launchHome(id, this.deps.host))) ===
+            true
         if (awaiting !== this.awaitingMove.has(id)) {
           if (awaiting) {
             this.awaitingMove.add(id)

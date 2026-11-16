@@ -1,3 +1,4 @@
+import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { StructuredAgentSessionHostDeps as HostDeps } from '../host/structured-agent-session-host-types'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 import type { sendStructuredAgentSessionTurn } from '../operations/structured-agent-session-host-mutations'
@@ -21,5 +22,8 @@ export type UsageLimitContinueDeps = UsageLimitCutReads & {
   publish: (id: string) => void
   now: () => number
   /** Whether the chat's running agent still owes work on the account it is leaving. */
-  awaitsAccountMove?: (id: string) => Promise<boolean>
+  awaitsAccountMove?: (
+    id: string,
+    launchHome?: () => Promise<AgentSessionAccountHome | null>
+  ) => Promise<boolean>
 }
