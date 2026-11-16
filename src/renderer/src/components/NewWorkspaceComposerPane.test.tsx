@@ -4,16 +4,16 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+type PaneRequest = { id: number; data: { initialRepoId?: string } }
+
 const storeState: {
   activeModal: string
-  activeWorktreeId: string | null
-  modalData: { initialRepoId?: string } | undefined
-  closeWorkspaceComposer: ReturnType<typeof vi.fn>
+  workspaceComposerPaneRequest: PaneRequest | null
+  closeWorkspaceComposerPane: ReturnType<typeof vi.fn>
 } = {
-  activeModal: 'new-workspace-composer',
-  activeWorktreeId: 'wt-1',
-  modalData: undefined,
-  closeWorkspaceComposer: vi.fn()
+  activeModal: 'none',
+  workspaceComposerPaneRequest: null,
+  closeWorkspaceComposerPane: vi.fn()
 }
 
 vi.mock('@/store', () => ({
@@ -60,22 +60,21 @@ function pressEscape(target: EventTarget, init: KeyboardEventInit = {}): Keyboar
   return event
 }
 
+beforeEach(() => {
+  storeState.activeModal = 'none'
+  storeState.workspaceComposerPaneRequest = { id: 1, data: {} }
+  storeState.closeWorkspaceComposerPane.mockReset()
+})
+
+afterEach(() => {
+  act(() => {
+    root?.unmount()
+  })
+  root = null
+  document.body.innerHTML = ''
+})
+
 describe('NewWorkspaceComposerPane', () => {
-  beforeEach(() => {
-    storeState.activeModal = 'new-workspace-composer'
-    storeState.activeWorktreeId = 'wt-1'
-    storeState.modalData = undefined
-    storeState.closeWorkspaceComposer.mockReset()
-  })
-
-  afterEach(() => {
-    act(() => {
-      root?.unmount()
-    })
-    root = null
-    document.body.innerHTML = ''
-  })
-
   it('focuses the prompt on open', () => {
     const prompt = renderPane()
     expect(document.activeElement).toBe(prompt)
@@ -84,7 +83,7 @@ describe('NewWorkspaceComposerPane', () => {
   it('closes on Escape pressed inside the pane', () => {
     const prompt = renderPane()
     const event = pressEscape(prompt)
-    expect(storeState.closeWorkspaceComposer).toHaveBeenCalledTimes(1)
+    expect(storeState.closeWorkspaceComposerPane).toHaveBeenCalledTimes(1)
     expect(event.defaultPrevented).toBe(true)
   })
 
@@ -92,13 +91,15 @@ describe('NewWorkspaceComposerPane', () => {
     const prompt = renderPane()
     prompt.addEventListener('keydown', (event) => event.preventDefault())
     pressEscape(prompt)
-    expect(storeState.closeWorkspaceComposer).not.toHaveBeenCalled()
+    expect(storeState.closeWorkspaceComposerPane).not.toHaveBeenCalled()
   })
+})
 
+describe('NewWorkspaceComposerPane Escape ownership', () => {
   it('ignores the Escape that cancels an IME composition', () => {
     const prompt = renderPane()
     pressEscape(prompt, { isComposing: true })
-    expect(storeState.closeWorkspaceComposer).not.toHaveBeenCalled()
+    expect(storeState.closeWorkspaceComposerPane).not.toHaveBeenCalled()
   })
 
   it('ignores Escape typed into another surface such as the sidebar', () => {
@@ -106,22 +107,20 @@ describe('NewWorkspaceComposerPane', () => {
     const sidebarInput = document.createElement('input')
     document.body.appendChild(sidebarInput)
     pressEscape(sidebarInput)
-    expect(storeState.closeWorkspaceComposer).not.toHaveBeenCalled()
+    expect(storeState.closeWorkspaceComposerPane).not.toHaveBeenCalled()
   })
 
-  it('closes when the active workspace changes', () => {
-    renderPane()
-    storeState.activeWorktreeId = 'wt-2'
-    act(() => {
-      root?.render(<NewWorkspaceComposerPane />)
-    })
-    expect(storeState.closeWorkspaceComposer).toHaveBeenCalledTimes(1)
+  it('leaves Escape to a dialog opened over the pane', () => {
+    storeState.activeModal = 'delete-worktree'
+    const prompt = renderPane()
+    pressEscape(prompt)
+    expect(storeState.closeWorkspaceComposerPane).not.toHaveBeenCalled()
   })
 
   it('reseeds the composer when it is reopened for another project', () => {
-    storeState.modalData = { initialRepoId: 'repo-1' }
+    storeState.workspaceComposerPaneRequest = { id: 1, data: { initialRepoId: 'repo-1' } }
     renderPane()
-    storeState.modalData = { initialRepoId: 'repo-2' }
+    storeState.workspaceComposerPaneRequest = { id: 2, data: { initialRepoId: 'repo-2' } }
     act(() => {
       root?.render(<NewWorkspaceComposerPane />)
     })

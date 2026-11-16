@@ -11,6 +11,13 @@ import type { OrcaHookTrustKind } from '../../../../../shared/workspace-setup/ho
 import type { SettingsNavigationTarget } from '../../../components/settings/navigation/settings-navigation-types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 
+export type WorkspaceComposerPaneRequest = {
+  /** Stable per open; a reopen gets a new id so the composer reseeds. */
+  id: number
+  data: Record<string, unknown>
+  origin: { worktreeId: string | null; pendingCreationId: string | null }
+}
+
 export type UISliceContextual = {
   openSettingsPage: () => void
   closeSettingsPage: () => void
@@ -58,12 +65,13 @@ export type UISliceContextual = {
     | 'chat-account-usage'
     | 'node-dist-mirror'
   modalData: Record<string, unknown>
-  /** The pane-hosted composer's data while another modal holds the slot; closing that modal restores it. */
-  parkedComposerModalData: Record<string, unknown> | null
+  /** The prompt-first composer hosted in the center pane; independent of the modal slot. */
+  workspaceComposerPaneRequest: WorkspaceComposerPaneRequest | null
+  /** Routes the composer to the center pane when the prompt-first context permits it. */
   openModal: (modal: UISliceContextual['activeModal'], data?: Record<string, unknown>) => void
   closeModal: () => void
-  /** Closes the composer whether it holds the slot or is parked behind another modal. */
-  closeWorkspaceComposer: () => void
+  /** Settles this pane request; a no-op once a newer request replaced it. */
+  closeWorkspaceComposerPane: (request: WorkspaceComposerPaneRequest) => void
   featureTipsSeenIds: FeatureTipSeenId[]
   markFeatureTipsSeen: (ids: FeatureTipId[]) => void
   /** Main's once-decided Chat UI launch tip variant; null until read. */

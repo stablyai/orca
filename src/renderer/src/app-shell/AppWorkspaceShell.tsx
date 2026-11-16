@@ -35,6 +35,8 @@ const ArtifactsPage = lazy(() => import('../components/artifacts/ArtifactsPage')
 const WorkspaceSpacePage = lazy(() => import('../components/workspace-space/WorkspaceSpacePage'))
 const MobilePage = lazy(() => import('../components/mobile/MobilePage'))
 const Terminal = lazy(() => import('../components/Terminal'))
+import { useWorkspaceComposerPaneNavigationDismissal } from '../components/new-workspace/composer/use-workspace-composer-pane-navigation-dismissal'
+
 const NewWorkspaceComposerPane = lazy(() => import('../components/NewWorkspaceComposerPane'))
 
 type WorktreeSidebarScrollRefs = {
@@ -96,6 +98,7 @@ function ActivePage({ layout }: { layout: AppChromeLayout }): React.JSX.Element 
     composerPaneActive,
     creationLayoutActive
   } = layout
+  useWorkspaceComposerPaneNavigationDismissal()
   return (
     <>
       {composerPaneActive ? <NewWorkspaceComposerPane /> : null}

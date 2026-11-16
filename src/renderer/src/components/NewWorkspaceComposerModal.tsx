@@ -35,7 +35,7 @@ import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { getWorkspaceComposerInitialFocusTarget } from '@/lib/workspace/creation/workspace-composer-initial-focus'
-import { useComposerDialogYieldsToPane } from '@/components/new-workspace/composer/use-composer-dialog-yields-to-pane'
+import { isModalSurfaceIdle } from '@/lib/workspace/creation/workspace-composer-pane-surface'
 import { DialogComposerHeading } from '@/components/new-workspace/composer/DialogComposerHeading'
 import '@/components/sidebar/workspace-creation/folder/folder-workspace-source-repos'
 import { getFolderWorkspacePrimaryActionLabel } from '@/components/sidebar/workspace-creation/folder/folder-workspace-source-selection'
@@ -54,9 +54,8 @@ export default function NewWorkspaceComposerModal(): React.JSX.Element | null {
   const visible = useAppStore((s) => s.activeModal === 'new-workspace-composer')
   const modalData = useAppStore((s) => s.modalData as ComposerModalData | undefined)
   const closeModal = useAppStore((s) => s.closeModal)
-  const yieldsToPane = useComposerDialogYieldsToPane(visible)
 
-  if (!visible || yieldsToPane) {
+  if (!visible) {
     return null
   }
 
@@ -269,7 +268,7 @@ export function WorkspaceComposerBody({
           action: {
             label: translate('auto.lib.composerCreateHandoff.reopen', 'Reopen'),
             onClick: () => {
-              if (!isSubmissionCancelled() && useAppStore.getState().activeModal === 'none') {
+              if (!isSubmissionCancelled() && isModalSurfaceIdle(useAppStore.getState())) {
                 useAppStore.getState().openModal('new-workspace-composer', snapshot)
               }
             }

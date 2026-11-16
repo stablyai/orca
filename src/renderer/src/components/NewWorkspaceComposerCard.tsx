@@ -1,6 +1,7 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import { selectOpenWorkspaceComposerData } from '@/lib/workspace/creation/workspace-composer-pane-surface'
 import { useAppStore } from '@/store/index'
 import { cn } from '@/lib/class-names'
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
@@ -92,7 +93,7 @@ export default function NewWorkspaceComposerCard(
     applyDrop: props.onNativeFileDrop
   })
   const openModal = useAppStore((state) => state.openModal)
-  const activeModal = useAppStore((state) => state.activeModal)
+  const composerOpen = useAppStore((state) => selectOpenWorkspaceComposerData(state) !== null)
   const defaultTuiAgent = useAppStore((state) => state.settings?.defaultTuiAgent ?? null)
   const promptFirst = useAppStore((state) => state.settings?.promptFirstComposer === true)
   const disabledTuiAgents = useAppStore(
@@ -316,9 +317,7 @@ export default function NewWorkspaceComposerCard(
     'workspace-creation',
     projectOptions.length > 0 && Boolean(selectedProjectId),
     contextualTourSource ??
-      (activeModal === 'new-workspace-composer'
-        ? 'workspace_creation_modal'
-        : 'workspace_creation_visible')
+      (composerOpen ? 'workspace_creation_modal' : 'workspace_creation_visible')
   )
 
   return (
