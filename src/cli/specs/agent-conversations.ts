@@ -26,7 +26,7 @@ export const AGENT_CONVERSATION_COMMAND_SPECS: CommandSpec[] = [
       '<id> is the `orca_session_id:` ID from `orca agent list` or Copy Orca Session ID.',
       'An agent resumed in two panes shows both; one that is closed shows none. A listed sleeping terminal agent shows its last state and where it wakes when its workspace is reopened.'
     ],
-    examples: ['orca agent show orca_session_id:claude_1234 --json']
+    examples: ['orca agent show orca_session_id:3540ecf3-47c3-4876-b825-81bf5d6b3595 --json']
   },
   {
     path: ['agent', 'read'],
@@ -41,8 +41,8 @@ export const AGENT_CONVERSATION_COMMAND_SPECS: CommandSpec[] = [
       'A terminal agent can be read while Orca knows where its transcript is: while it is open, or asleep in a workspace. On Windows, a sleeping agent that ran in WSL can be read once its tab is reopened.'
     ],
     examples: [
-      'orca agent read orca_session_id:claude_1234 --limit 10',
-      'orca agent read orca_session_id:codex_1234 --json'
+      'orca agent read orca_session_id:3540ecf3-47c3-4876-b825-81bf5d6b3595 --limit 10',
+      'orca agent read orca_session_id:3540ecf3-47c3-4876-b825-81bf5d6b3595 --json'
     ]
   }
 ]
