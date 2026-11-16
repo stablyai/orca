@@ -1,4 +1,4 @@
-import { existsSync, utimesSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, statSync, writeFileSync } from 'node:fs'
 import { expect, it, vi } from 'vitest'
 import type Database from '../../sqlite/sync-database'
 import { journalDomainImportState } from './journal-domain-import-rows'
@@ -111,34 +111,22 @@ it('after a downgrade to an older Orca, the re-upgrade shows its new chat and ke
   expect(existsSync(filename)).toBe(true)
 })
 
-const meta = (db: Database.Database, key: string) =>
-  db.prepare('SELECT value FROM agent_session_store_meta WHERE key=?').get(key)?.value
+it('keeps the original of a store copied before the copy record existed', async () => {
+  // Every store v1.4.260/261 copied: file times can't prove nothing wrote the original since.
+  const { filename, db, launch, errors } = await profile()
+  db.exec("DELETE FROM agent_session_store_meta WHERE key='journal.legacy-copied-source.v1'")
+  await launch().run()
+  expect(errors).toEqual([])
+  expect(companions(filename)).toContain(filename)
+})
 
-it('judges a store copied before the copy record once, from whether the original was written since', async () => {
-  const unwritten = await profile({
-    // Finished per-chat import markers an earlier build left behind hold nothing the rows don't.
+it('accepts finished per-chat import markers earlier builds left behind', async () => {
+  const { filename, launch, errors } = await profile({
     seed: (legacy) => legacy.exec("INSERT INTO journal_imports VALUES('unopened','epoch',1)")
   })
-  unwritten.db.exec(
-    "DELETE FROM agent_session_store_meta WHERE key='journal.legacy-copied-source.v1'"
-  )
-  await unwritten.launch().run()
-  expect(unwritten.errors).toEqual([])
-  expect(companions(unwritten.filename)).toEqual([])
-
-  const written = await profile()
-  written.db.exec(
-    "DELETE FROM agent_session_store_meta WHERE key='journal.legacy-copied-source.v1'"
-  )
-  const later = new Date(Date.now() + 60_000)
-  utimesSync(written.filename, later, later)
-  await initializeJournalDomainDatabase(written.root)
-  await written.launch().run()
-  expect(companions(written.filename)).toContain(written.filename)
-  expect(meta(written.db, 'journal.legacy-copied-source.v1')).toBe('written-after-copy')
-  // The judgment stands even once the files look unchanged again.
-  await written.launch().run()
-  expect(companions(written.filename)).toContain(written.filename)
+  await launch().run()
+  expect(errors).toEqual([])
+  expect(companions(filename)).toEqual([])
 })
 
 it('reopens the source to conversions when the lock helper fails', async () => {
@@ -156,4 +144,48 @@ it('reopens the source to conversions when the lock helper fails', async () => {
   expect(release).toHaveBeenCalledTimes(1)
   expect(errors).toHaveLength(1)
   expect(existsSync(filename)).toBe(true)
+})
+
+it('still retires after a metadata-only change, with a marker for an epoch a /clear replaced', async () => {
+  const { root, filename, launch, errors } = await profile({
+    seed: (legacy) => legacy.exec("INSERT INTO journal_imports VALUES('unopened','replaced',9)")
+  })
+  chmodSync(filename, 0o600)
+  await initializeJournalDomainDatabase(root)
+  await launch().run()
+  expect(errors).toEqual([])
+  expect(companions(filename)).toEqual([])
+})
+
+it('finishes removing the absorbed WAL a removal left behind its main file, and no other', async () => {
+  const { filename, db, launch } = await profile()
+  await launch().run()
+  writeFileSync(`${filename}-wal`, 'absorbed frames')
+  const wal = statSync(`${filename}-wal`, { bigint: true })
+  const retiring = (ino: bigint) =>
+    JSON.stringify({
+      version: 2,
+      phase: 'retiring',
+      store: 'store',
+      proof: JSON.stringify({
+        wal: {
+          kind: 'nonempty',
+          size: String(wal.size),
+          ino: String(ino),
+          mtimeNs: String(wal.mtimeNs)
+        }
+      })
+    })
+  const save = (value: string) =>
+    db
+      .prepare(
+        "UPDATE agent_session_store_meta SET value=? WHERE key='journal.legacy-retirement.v2'"
+      )
+      .run(value)
+  save(retiring(wal.ino + 1n))
+  await launch().run()
+  expect(existsSync(`${filename}-wal`)).toBe(true)
+  save(retiring(wal.ino))
+  await launch().run()
+  expect(existsSync(`${filename}-wal`)).toBe(false)
 })

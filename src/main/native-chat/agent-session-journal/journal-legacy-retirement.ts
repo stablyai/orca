@@ -1,4 +1,3 @@
-import { lstat } from 'node:fs/promises'
 import { JournalLegacyRetentionError } from './journal-legacy-retention-error'
 import { ownsOrcadProfileDirectory } from '../../orcad/instance-lock/orcad-instance-lock-hold'
 import { journalDatabasePath } from './database/journal-host-database'
@@ -35,16 +34,66 @@ import type { JournalSqlMaintenanceResult } from './journal-sql-maintenance'
 type RetirementState = Extract<JournalSqlMaintenanceResult, { kind: 'legacy-retirement-state' }>
 type CopiedSource = Extract<JournalLegacySourceReceipt, { disposition: 'copied-source' }>
 
-/** Saved for a store whose original was written after its copy: it is never retired. */
-const WRITTEN_AFTER_COPY = 'written-after-copy'
-
-/** Absent means a release before this record copied the profile, which is always earlier. */
+/**
+ * Absent means a release before this record copied the profile, which is always earlier; a copy
+ * made without a known version waits only for the first launch that knows its own.
+ */
 function laterVersion(running: string, convertedBy: string | null): boolean {
   return (
     isValidAppVersion(running) &&
     (convertedBy === null ||
-      (isValidAppVersion(convertedBy) && compareAppVersions(running, convertedBy) > 0))
+      !isValidAppVersion(convertedBy) ||
+      compareAppVersions(running, convertedBy) > 0)
   )
+}
+
+/**
+ * Written since the copy means its bytes or its WAL changed, or it was replaced; a metadata-only
+ * change (permissions, a backup's archive bit) moves ctime and nothing else.
+ */
+function unwrittenSinceCopy(copied: string, current: CopiedSource): boolean {
+  let saved: unknown
+  try {
+    saved = JSON.parse(copied)
+  } catch {
+    return false
+  }
+  const written = projectWrites(saved)
+  return written !== null && written === projectWrites(current)
+}
+
+function projectWrites(receipt: unknown): string | null {
+  if (!isRecord(receipt) || receipt.disposition !== 'copied-source' || !isRecord(receipt.main)) {
+    return null
+  }
+  const { dev, ino, size, mtimeNs } = receipt.main
+  return JSON.stringify([dev, ino, size, mtimeNs, receipt.wal])
+}
+
+/** The WAL a saved retirement proved absorbed, so a removal cut short after the main file can finish. */
+function absorbedWal(
+  saved: string | null
+): { size: string; ino?: string; mtimeNs?: string } | undefined {
+  try {
+    const record: unknown = saved ? JSON.parse(saved) : null
+    if (!isRecord(record) || record.phase !== 'retiring' || typeof record.proof !== 'string') {
+      return undefined
+    }
+    const proof: unknown = JSON.parse(record.proof)
+    const wal = isRecord(proof) && isRecord(proof.wal) ? proof.wal : undefined
+    return wal?.kind === 'nonempty' &&
+      typeof wal.size === 'string' &&
+      typeof wal.ino === 'string' &&
+      typeof wal.mtimeNs === 'string'
+      ? { size: wal.size, ino: wal.ino, mtimeNs: wal.mtimeNs }
+      : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 /**
@@ -113,7 +162,10 @@ export class JournalLegacyRetirement {
     // No other Orca runs this profile while we hold its lock, so an absent original stays absent.
     if (!(await legacyFilePresent(this.filename))) {
       if (this.ownsProfile()) {
-        await removeLeftoverLegacyCompanions(this.filename)
+        await removeLeftoverLegacyCompanions(
+          this.filename,
+          absorbedWal((await this.savedState()).retirement)
+        )
       }
       this.done = true
       return
@@ -213,9 +265,10 @@ export class JournalLegacyRetirement {
     ) {
       return null
     }
+    // A store copied before the copy record existed can't show the original was never written
+    // after its copy: file times can't prove it, so its original is kept.
     const domain = journalDomainDatabasePath(this.directory)
-    const copied = saved.copiedSource ?? (await this.recordCopiedSource(domain, current))
-    if (!sameJournalLegacySource(copied, current)) {
+    if (saved.copiedSource === null || !unwrittenSinceCopy(saved.copiedSource, current)) {
       return null
     }
     if (await legacyFilePresent(`${this.filename}-journal`)) {
@@ -227,26 +280,6 @@ export class JournalLegacyRetirement {
       store: await legacyDestinationMain(domain),
       walBytes: current.wal.kind === 'empty' ? '0' : current.wal.size
     }
-  }
-
-  /**
-   * A store copied before the copy record existed: once, judge from the files whether anything
-   * wrote the original after the store was created, and keep that judgment for good.
-   */
-  private async recordCopiedSource(domain: string, current: CopiedSource): Promise<string> {
-    const created = (await lstat(domain, { bigint: true })).birthtimeNs
-    const walWritten =
-      current.wal.kind === 'nonempty' && current.wal.mtimeNs !== undefined
-        ? BigInt(current.wal.mtimeNs)
-        : 0n
-    const value =
-      created !== 0n && BigInt(current.main.mtimeNs) <= created && walWritten <= created
-        ? JSON.stringify(current)
-        : WRITTEN_AFTER_COPY
-    if ((await this.writer.maintain({ kind: 'legacy-copied-source-save', value })) !== true) {
-      throw new Error('legacy copy record commit was not acknowledged')
-    }
-    return (await this.savedState()).copiedSource ?? WRITTEN_AFTER_COPY
   }
 
   private async matches(observation: LegacyProofObservation): Promise<boolean> {

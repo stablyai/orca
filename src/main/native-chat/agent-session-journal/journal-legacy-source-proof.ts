@@ -109,12 +109,16 @@ function readSourcePage(db: Database.Database, cursor: LegacyProofCursor): Legac
         continue
       }
       const quoted = `"${table.replaceAll('"', '""')}"`
-      // Per-chat import markers (#23613) were left behind when #26038 removed those imports; a
-      // marker whose rows all landed in journal_rows records nothing those rows don't hold.
+      // Per-chat import markers (#23613) were left behind when #26038 removed those imports. One
+      // whose rows all landed in journal_rows, or whose epoch a later /clear replaced (its rows
+      // were discarded then), records nothing the journal still holds.
       const unaccounted =
         table === 'journal_imports'
-          ? `SELECT 1 FROM journal_imports i WHERE NOT EXISTS (SELECT 1 FROM journal_rows r
-              WHERE r.session_id=i.session_id AND r.epoch=i.epoch AND r.seq>=i.tip) LIMIT 1`
+          ? `SELECT 1 FROM journal_imports i
+              WHERE EXISTS (SELECT 1 FROM journal_sessions s
+                WHERE s.session_id=i.session_id AND s.epoch=i.epoch)
+              AND NOT EXISTS (SELECT 1 FROM journal_rows r
+                WHERE r.session_id=i.session_id AND r.epoch=i.epoch AND r.seq>=i.tip) LIMIT 1`
           : `SELECT 1 FROM ${quoted} LIMIT 1`
       if (db.prepare(unaccounted).get()) {
         throw new JournalLegacyRetentionError(

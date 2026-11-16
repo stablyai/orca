@@ -38,7 +38,6 @@ import type { JournalSqlStoredRecords } from './journal-sql-database-read'
 
 export type JournalSqlMaintenance =
   | { kind: 'legacy-retirement-state' }
-  | { kind: 'legacy-copied-source-save'; value: string }
   | {
       kind: 'legacy-retirement-save'
       value: string
@@ -94,13 +93,6 @@ export function applyJournalSqlMaintenance(
         retirement: value(JOURNAL_LEGACY_RETIREMENT)
       }
     }
-    case 'legacy-copied-source-save':
-      // Recorded once; a later save never replaces what an earlier launch judged.
-      db.prepare('INSERT OR IGNORE INTO agent_session_store_meta(key,value) VALUES(?,?)').run(
-        JOURNAL_LEGACY_COPIED_SOURCE,
-        operation.value
-      )
-      return true
     case 'legacy-retirement-save':
       db.prepare('INSERT OR REPLACE INTO agent_session_store_meta(key,value) VALUES(?,?)').run(
         JOURNAL_LEGACY_RETIREMENT,

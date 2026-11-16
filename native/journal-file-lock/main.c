@@ -31,6 +31,8 @@ static int read_command(unsigned long long *wal) {
     if (*wal > (~0ULL - 9) / 10) return 0;
     *wal = *wal * 10 + (unsigned long long)(*p - '0');
   }
+  /* Sizes are compared as signed file offsets, where a negative one would mean "any size". */
+  if (*wal > 0x7fffffffffffffffULL) return 0;
   return strcmp(p, "\n") == 0 || strcmp(p, "\r\n") == 0;
 }
 
@@ -138,6 +140,8 @@ static int read_command(unsigned long long *wal) {
     if (*wal > (~0ULL - 9) / 10) return 0;
     *wal = *wal * 10 + (unsigned long long)(*p - '0');
   }
+  /* Sizes are compared as signed file offsets, where a negative one would mean "any size". */
+  if (*wal > 0x7fffffffffffffffULL) return 0;
   return strcmp(p, "\n") == 0 || strcmp(p, "\r\n") == 0;
 }
 

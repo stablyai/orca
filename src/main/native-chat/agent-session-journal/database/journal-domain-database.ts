@@ -76,7 +76,7 @@ export async function initializeJournalDomainDatabase(stateDirectory: string): P
       meta.run(JOURNAL_LEGACY_SOURCE_RECEIPT, JSON.stringify(sourceReceipt))
       meta.run(JOURNAL_LEGACY_COPIED_SOURCE, JSON.stringify(sourceReceipt))
       meta.run(JOURNAL_LEGACY_REVISIONS_KEPT, '1')
-      // An unknown version still keeps the original through this launch's process.
+      // An unknown version is no later than any, and waits for a launch that knows its own.
       meta.run(JOURNAL_LEGACY_CONVERTED_BY, journalRunningOrcaVersion() ?? 'unknown')
       const checkpoint = db.prepare('PRAGMA wal_checkpoint(TRUNCATE)').get()
       if (checkpoint?.busy !== 0 || checkpoint.log !== checkpoint.checkpointed) {
