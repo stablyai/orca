@@ -22,9 +22,16 @@
 
 /* Returns 1 for "retire <bytes>", storing the WAL size the caller absorbed. */
 static int read_command(unsigned long long *wal) {
-  char line[64], end[4];
-  if (!fgets(line, sizeof line, stdin)) return 0;
-  return sscanf(line, "retire %llu%3s", wal, end) == 1;
+  char line[64];
+  const char *p = line + 7;
+  if (!fgets(line, sizeof line, stdin) || strncmp(line, "retire ", 7) != 0) return 0;
+  if (*p < '0' || *p > '9') return 0;
+  *wal = 0;
+  for (; *p >= '0' && *p <= '9'; p++) {
+    if (*wal > (~0ULL - 9) / 10) return 0;
+    *wal = *wal * 10 + (unsigned long long)(*p - '0');
+  }
+  return strcmp(p, "\n") == 0 || strcmp(p, "\r\n") == 0;
 }
 
 /* A companion may be absent; a WAL is removed only at exactly the size the caller absorbed. */
@@ -122,9 +129,16 @@ int wmain(int argc, wchar_t **argv) {
 
 /* Returns 1 for "retire <bytes>", storing the WAL size the caller absorbed. */
 static int read_command(unsigned long long *wal) {
-  char line[64], end[4];
-  if (!fgets(line, sizeof line, stdin)) return 0;
-  return sscanf(line, "retire %llu%3s", wal, end) == 1;
+  char line[64];
+  const char *p = line + 7;
+  if (!fgets(line, sizeof line, stdin) || strncmp(line, "retire ", 7) != 0) return 0;
+  if (*p < '0' || *p > '9') return 0;
+  *wal = 0;
+  for (; *p >= '0' && *p <= '9'; p++) {
+    if (*wal > (~0ULL - 9) / 10) return 0;
+    *wal = *wal * 10 + (unsigned long long)(*p - '0');
+  }
+  return strcmp(p, "\n") == 0 || strcmp(p, "\r\n") == 0;
 }
 
 /* 1 when absent or acceptable (size < 0: any size), 0 when it blocks removal. */
