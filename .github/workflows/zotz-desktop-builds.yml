@@ -143,6 +143,7 @@ jobs:
     needs: build
     if: ${{ !cancelled() && github.event_name != 'pull_request' && github.repository == 'HugoRodriguezDEV/zotz' }}
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     permissions:
       contents: write
     steps:
