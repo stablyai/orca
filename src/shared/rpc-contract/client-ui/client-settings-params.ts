@@ -137,10 +137,8 @@ export const SettingsUpdate = z
     nativeChatPermissionMode: z.enum(AGENT_CHAT_PERMISSION_MODES).optional(),
     workspaceCleanupPolicy: WorkspaceCleanupRulesParam.optional(),
     prAutoRefresh: z.enum(PR_AUTO_REFRESH_CADENCES).optional(),
-    newTabMenuLayout: z
-      .unknown()
-      .transform((value) => normalizeNewTabMenuLayout(value))
-      .optional()
+    newTabMenuLayout: z.unknown().transform(normalizeNewTabMenuLayout).optional(),
+    floatingTerminalNewTabMenuLayout: z.unknown().transform(normalizeNewTabMenuLayout).optional()
   })
   .strict()
   .default({})

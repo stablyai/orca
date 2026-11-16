@@ -56,13 +56,15 @@ export function TabBarCreateRowCustomizer({
   ]
   const lockedIds = new Set([...visible, ...hidden].filter((item) => item.locked).map((i) => i.id))
 
-  const commit = (nextIds: string[]): void => {
+  /** Saves the arrangement unless it would hide a locked item; returns whether it saved. */
+  const commit = (nextIds: string[]): boolean => {
     const divider = nextIds.indexOf(HIDDEN_DIVIDER_ID)
     const nextHidden = nextIds.slice(divider + 1)
     if (nextHidden.some((id) => lockedIds.has(id))) {
-      return
+      return false
     }
     onArrange(nextIds.slice(0, divider), nextHidden)
+    return true
   }
   const move = (id: string, delta: number): void => {
     const from = ids.indexOf(id)
@@ -70,8 +72,9 @@ export function TabBarCreateRowCustomizer({
     if (from === -1 || to < 0 || to >= ids.length) {
       return
     }
-    focusAfterMove.current = id
-    commit(arrayMove(ids, from, to))
+    if (commit(arrayMove(ids, from, to))) {
+      focusAfterMove.current = id
+    }
   }
   const toggle = (id: string, isVisible: boolean): void => {
     const visibleIds = visible.map((item) => item.id).filter((other) => other !== id)
@@ -288,13 +291,13 @@ function CustomizerRow({
               bindingCount={bindings.length}
               recording={recordingActionId === actionId}
               onStartRecording={(id) => {
-                editor.setErrors({})
+                editor.clearErrors()
                 onRecordingChange(id)
               }}
               onCancelRecording={() => onRecordingChange(null)}
               onCapture={(id, input) => {
                 void editor.captureBinding(id, input, 0).then((saved) => {
-                  if (saved && editor.mountedRef.current) {
+                  if (saved) {
                     onRecordingChange(null)
                   }
                 })

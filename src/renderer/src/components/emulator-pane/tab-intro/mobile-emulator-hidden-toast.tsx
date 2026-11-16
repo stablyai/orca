@@ -10,7 +10,7 @@ export function showMobileEmulatorHiddenToast({ undo }: { undo: () => void }): v
       id: MOBILE_EMULATOR_HIDDEN_TOAST_ID,
       description: translate(
         'emulatorPane.tabIntro.hiddenFromMenuHint',
-        'Bring it back from the arrow at the end of the icon row.'
+        'Bring it back from the gear at the end of the icon row.'
       ),
       action: {
         label: translate('emulatorPane.tabIntro.undoHide', 'Undo'),

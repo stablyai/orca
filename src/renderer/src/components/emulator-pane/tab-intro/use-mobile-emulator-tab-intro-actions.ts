@@ -1,16 +1,15 @@
 import { useCallback } from 'react'
 import { useAppStore } from '@/store/index'
 import { showMobileEmulatorHiddenToast } from './mobile-emulator-hidden-toast'
+import { CREATE_ROW_MOBILE_EMULATOR_ID } from '../../tab-bar/tab-bar-create-row-item'
 import { withNewTabMenuItemHidden } from '../../../../../shared/new-tab-menu/new-tab-menu-layout'
-
-const MOBILE_EMULATOR_MENU_ITEM_ID = 'mobile-emulator'
 
 function setMobileEmulatorHiddenInMenu(hidden: boolean): Promise<void> {
   const state = useAppStore.getState()
   return state.updateSettings({
     newTabMenuLayout: withNewTabMenuItemHidden(
       state.settings?.newTabMenuLayout,
-      MOBILE_EMULATOR_MENU_ITEM_ID,
+      CREATE_ROW_MOBILE_EMULATOR_ID,
       hidden
     )
   })

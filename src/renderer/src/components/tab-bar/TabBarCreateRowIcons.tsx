@@ -1,0 +1,96 @@
+import React from 'react'
+import { cn } from '@/lib/class-names'
+import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
+import { formatShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
+import { useAppStore } from '@/store'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { TabStripScrollIndicator } from './TabStripScrollIndicator'
+import { getTabStripScrollMaskClassName } from './tab-strip-scroll-metrics'
+import type { useCreateRowScroller } from './use-create-row-scroller'
+import type { TabBarCreateRowItem } from './tab-bar-create-row-item'
+
+export const CREATE_ROW_HIGHLIGHT_CLASS = 'bg-black/8 text-foreground dark:bg-white/14'
+
+/** The create row's scrolling strip of icon buttons, each labelled by a tooltip. */
+export function TabBarCreateRowIcons({
+  items,
+  highlightedIndex,
+  scroller,
+  idPrefix,
+  onEscape,
+  onHover,
+  onRun
+}: {
+  items: readonly TabBarCreateRowItem[]
+  highlightedIndex: number | null
+  scroller: ReturnType<typeof useCreateRowScroller>
+  /** Icon ids are `${idPrefix}-${index}` so the row can point aria-activedescendant at them. */
+  idPrefix: string
+  /** Controlled tooltips sit above the menu and take Escape first; it must still close the menu. */
+  onEscape: () => void
+  onHover: (index: number | null) => void
+  onRun: (item: TabBarCreateRowItem) => void
+}): React.JSX.Element {
+  const keybindings = useAppStore((state) => state.keybindings)
+  return (
+    <div
+      // Why: only the gear opens the customizer; the strip (icons, gaps, scroll rail) never does.
+      className={cn(
+        'group/tab-strip relative flex min-w-0 flex-1',
+        // A lane under the icons so the scroll rail never sits on them.
+        scroller.overflow.hasOverflow && 'pb-1.5'
+      )}
+      onPointerMove={(event) => event.preventDefault()}
+      onClick={(event) => event.preventDefault()}
+    >
+      <div
+        ref={scroller.attachScroller}
+        className={cn(
+          'flex min-w-0 flex-1 gap-0.5 overflow-x-auto overflow-y-hidden scrollbar-none',
+          getTabStripScrollMaskClassName(scroller.overflow)
+        )}
+      >
+        {items.map((item, index) => {
+          const highlighted = index === highlightedIndex
+          const [shortcut] = item.actionId
+            ? formatShortcutKeyComboDetails(item.actionId, keybindings)
+            : []
+          return (
+            <Tooltip key={item.id} open={highlighted}>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  id={`${idPrefix}-${index}`}
+                  tabIndex={-1}
+                  aria-label={item.label}
+                  className={cn(
+                    'flex h-7 w-9 shrink-0 items-center justify-center rounded-[7px] text-muted-foreground outline-hidden',
+                    highlighted && CREATE_ROW_HIGHLIGHT_CLASS
+                  )}
+                  // Why move, not enter: scrolling slides icons under a resting cursor without a real hover.
+                  onPointerMove={() => onHover(index)}
+                  onPointerLeave={() => onHover(null)}
+                  onClick={() => onRun(item)}
+                >
+                  {item.icon}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={6} onEscapeKeyDown={onEscape}>
+                <span className="flex items-center gap-2">
+                  {item.label}
+                  {shortcut ? (
+                    <ShortcutKeyCombo keys={shortcut.keys} doubleTap={shortcut.doubleTap} />
+                  ) : null}
+                </span>
+              </TooltipContent>
+            </Tooltip>
+          )
+        })}
+      </div>
+      <TabStripScrollIndicator
+        hasOverflow={scroller.overflow.hasOverflow}
+        scrollContainerRef={scroller.scrollerRef}
+      />
+    </div>
+  )
+}

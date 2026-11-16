@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../../store/index'
@@ -18,6 +18,7 @@ import { buildShortcutRowVisibility } from './shortcut-row-visibility'
 import { KeybindingFileDiagnostics } from './KeybindingFileDiagnostics'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { useKeybindingActionEditor } from './use-keybinding-action-editor'
+import { useShortcutRecorderFocus } from './use-shortcut-recorder-focus'
 import type { KeybindingActionId, KeybindingInput } from '../../../../../shared/keybindings/types'
 
 export function ShortcutsPane(): React.JSX.Element {
@@ -62,11 +63,7 @@ export function ShortcutsPane(): React.JSX.Element {
   const [shortcutQuery, setShortcutQuery] = useState('')
   const [shortcutFilter, setShortcutFilter] = useState<ShortcutFilter>('all')
 
-  // Suspend global shortcuts so recorded chords reach the editor.
-  useEffect(() => {
-    window.api.ui.setShortcutRecorderFocused(recordingActionId !== null)
-    return () => window.api.ui.setShortcutRecorderFocused(false)
-  }, [recordingActionId])
+  useShortcutRecorderFocus(recordingActionId !== null)
 
   const { groups, conflictByAction } = catalog
   const { filterCounts, shortcutRows, visibleShortcutCount, visibleShortcutGroups } = useMemo(
@@ -107,7 +104,7 @@ export function ShortcutsPane(): React.JSX.Element {
     actionId: KeybindingActionId,
     input: KeybindingInput
   ): Promise<void> => {
-    if ((await captureBindingAt(actionId, input, recordingBindingIndex)) && mountedRef.current) {
+    if (await captureBindingAt(actionId, input, recordingBindingIndex)) {
       setRecordingActionId(null)
       setRecordingBindingIndex(null)
     }

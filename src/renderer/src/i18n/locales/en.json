@@ -25876,7 +25876,7 @@
   },
   "tabBar": {
     "createRow": {
-      "label": "{{item}}. Left and Right choose; the last stop customizes this row.",
+      "label": "New tab actions. Left and Right choose; the last one customizes this row.",
       "shownLabel": "In the + menu",
       "hint": "Drag to reorder, or {{modifier}}↑/↓. Space shows or hides. Hidden items still open from search and their shortcuts.",
       "reset": "Reset Order",
@@ -25895,7 +25895,7 @@
   "emulatorPane": {
     "tabIntro": {
       "hiddenFromMenu": "Mobile Emulator removed from the + menu",
-      "hiddenFromMenuHint": "Bring it back from the arrow at the end of the icon row.",
+      "hiddenFromMenuHint": "Bring it back from the gear at the end of the icon row.",
       "undoHide": "Undo"
     }
   }

@@ -11,7 +11,8 @@ import {
   Sheet,
   Smartphone,
   TerminalSquare,
-  Workflow
+  Workflow,
+  type LucideIcon
 } from 'lucide-react'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import {
@@ -66,23 +67,30 @@ const BUILT_IN: TabBarCreateRowItem[] = [
   }
 ]
 
+const pluginFile = (
+  key: string,
+  label: string,
+  plugin: string,
+  Icon: LucideIcon
+): TabBarCreateRowItem => ({
+  id: `plugin-file:${key}`,
+  label,
+  detail: plugin,
+  icon: <Icon className={ICON} />,
+  run: noop
+})
+
 // Plugin file types are what push the row past the menu's width in practice.
 const PLUGIN_FILES: TabBarCreateRowItem[] = [
-  ['excalidraw', 'New Excalidraw', 'Excalidraw', PenTool],
-  ['drawio', 'New Diagram', 'Draw.io', Network],
-  ['sheet', 'New Spreadsheet', 'Sheets', Sheet],
-  ['slides', 'New Slides', 'Slides', Presentation],
-  ['kanban', 'New Board', 'Kanban', Kanban],
-  ['flow', 'New Flowchart', 'Mermaid', Workflow],
-  ['canvas', 'New Image Canvas', 'Canvas', Image],
-  ['snippet', 'New Snippet', 'Snippets', Code]
-].map(([key, label, plugin, Icon]) => ({
-  id: `plugin-file:${String(key)}`,
-  label: String(label),
-  detail: String(plugin),
-  icon: typeof Icon === 'string' ? null : <Icon className={ICON} />,
-  run: noop
-}))
+  pluginFile('excalidraw', 'New Excalidraw', 'Excalidraw', PenTool),
+  pluginFile('drawio', 'New Diagram', 'Draw.io', Network),
+  pluginFile('sheet', 'New Spreadsheet', 'Sheets', Sheet),
+  pluginFile('slides', 'New Slides', 'Slides', Presentation),
+  pluginFile('kanban', 'New Board', 'Kanban', Kanban),
+  pluginFile('flow', 'New Flowchart', 'Mermaid', Workflow),
+  pluginFile('canvas', 'New Image Canvas', 'Canvas', Image),
+  pluginFile('snippet', 'New Snippet', 'Snippets', Code)
+]
 
 function Menu({ items }: { items: TabBarCreateRowItem[] }): React.JSX.Element {
   return (
@@ -94,7 +102,7 @@ function Menu({ items }: { items: TabBarCreateRowItem[] }): React.JSX.Element {
             Search tabs, files, URLs, agents…
           </div>
           <DropdownMenuSeparator className="my-0 mb-1.5" />
-          <TabBarCreateRow items={items} customizable />
+          <TabBarCreateRow items={items} customizable layoutSetting="newTabMenuLayout" />
           <DropdownMenuSeparator />
           <DropdownMenuItem>Claude</DropdownMenuItem>
           <DropdownMenuItem>Codex</DropdownMenuItem>

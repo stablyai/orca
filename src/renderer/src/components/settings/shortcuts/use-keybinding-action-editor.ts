@@ -33,13 +33,13 @@ import {
 import { appendBinding, replaceBindingAt } from './shortcut-binding-list-mutations'
 
 const isMac = navigator.userAgent.includes('Mac')
-export const SHORTCUT_EDITOR_PLATFORM: NodeJS.Platform = isMac
+const SHORTCUT_EDITOR_PLATFORM: NodeJS.Platform = isMac
   ? 'darwin'
   : navigator.userAgent.includes('Windows')
     ? 'win32'
     : 'linux'
 
-export type KeybindingActionErrors = Partial<Record<KeybindingActionId, string>>
+type KeybindingActionErrors = Partial<Record<KeybindingActionId, string>>
 
 /** Validates, conflict-checks, and persists shortcut edits the same way wherever they are recorded. */
 export function useKeybindingActionEditor() {
@@ -178,7 +178,7 @@ export function useKeybindingActionEditor() {
     }
   }
 
-  /** Records `input` into `bindingIndex`, appending when the index is past the current list. */
+  /** Records `input` into `bindingIndex` (appending past the end); true once saved and still mounted. */
   const captureBinding = async (
     actionId: KeybindingActionId,
     input: KeybindingInput,
@@ -194,12 +194,13 @@ export function useKeybindingActionEditor() {
       bindingIndex === null || bindingIndex >= current.length
         ? appendBinding(current, captured.value)
         : replaceBindingAt(current, bindingIndex, captured.value)
-    return saveBindings(actionId, next)
+    return (await saveBindings(actionId, next)) && mountedRef.current
   }
 
   const clearError = (actionId: KeybindingActionId): void => {
     setErrors((prev) => ({ ...prev, [actionId]: undefined }))
   }
+  const clearErrors = (): void => setErrors({})
 
   return {
     platform,
@@ -209,6 +210,7 @@ export function useKeybindingActionEditor() {
     errors,
     setErrors,
     clearError,
+    clearErrors,
     mountedRef,
     effectiveBindingsForAction,
     saveBindings,

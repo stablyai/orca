@@ -1,5 +1,8 @@
 import type { GlobalSettings } from '../../shared/global-settings-types'
-import { normalizeNewTabMenuLayout } from '../../shared/new-tab-menu/new-tab-menu-layout'
+import {
+  NEW_TAB_MENU_LAYOUT_SETTING,
+  normalizeNewTabMenuLayout
+} from '../../shared/new-tab-menu/new-tab-menu-layout'
 
 type LegacyTerminalScrollbackSettingsUpdate = Partial<GlobalSettings> & {
   terminalScrollbackBytes?: unknown
@@ -30,8 +33,10 @@ export function sanitizeRendererSettingsUpdate(
   ) {
     delete sanitizedArgs.browserPasswordsFillRequiresReauth
   }
-  if ('newTabMenuLayout' in sanitizedArgs) {
-    sanitizedArgs.newTabMenuLayout = normalizeNewTabMenuLayout(sanitizedArgs.newTabMenuLayout)
+  for (const key of Object.values(NEW_TAB_MENU_LAYOUT_SETTING)) {
+    if (key in sanitizedArgs) {
+      sanitizedArgs[key] = normalizeNewTabMenuLayout(sanitizedArgs[key])
+    }
   }
   return sanitizedArgs
 }

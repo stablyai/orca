@@ -14,7 +14,12 @@ import {
 import type { TabBarProps } from './tab-bar-props'
 import { resolveWindowsShellLaunchTarget } from './windows-shell-launch'
 import { TabBarCreateRow } from './TabBarCreateRow'
-import type { TabBarCreateRowItem } from './tab-bar-create-row-item'
+import { NEW_TAB_MENU_LAYOUT_SETTING } from '../../../../shared/new-tab-menu/new-tab-menu-layout'
+import {
+  CREATE_ROW_MOBILE_EMULATOR_ID,
+  CREATE_ROW_TERMINAL_ID,
+  type TabBarCreateRowItem
+} from './tab-bar-create-row-item'
 
 const ICON_CLASS = 'size-4'
 
@@ -49,7 +54,7 @@ export function TabBarStaticCreateMenu({
 }): React.ReactNode {
   const t = useTranslate()
   const {
-    newTabMenuOrder = 'default',
+    newTabMenuSurface = 'tab-bar',
     onNewTerminalTab,
     onNewTerminalWithShell,
     onNewBrowserTab,
@@ -58,14 +63,13 @@ export function TabBarStaticCreateMenu({
     onOpenFileTab
   } = props
   const pluginNewFiles = usePluginNewFiles()
-  const simulatorAvailable =
-    !terminalOnly && mobileEmulatorEnabled && mobileEmulatorCreationEnabled && !!onNewSimulatorTab
+  const simulatorAvailable = !terminalOnly && mobileEmulatorEnabled && mobileEmulatorCreationEnabled
 
   const terminalItems: TabBarCreateRowItem[] =
     windowsShellEntries && onNewTerminalWithShell
       ? windowsShellEntries.map((entry, index) => ({
           // Why: the first entry is the default shell, which New Terminal's shortcut opens.
-          id: index === 0 ? 'terminal' : `terminal:${entry.shell}`,
+          id: index === 0 ? CREATE_ROW_TERMINAL_ID : `${CREATE_ROW_TERMINAL_ID}:${entry.shell}`,
           locked: index === 0,
           label: `${t('auto.components.tab.bar.TabBar.7c1313d237', 'New Terminal:')} ${entry.label}`,
           icon: <ShellIcon shell={entry.shell} size={16} />,
@@ -84,7 +88,7 @@ export function TabBarStaticCreateMenu({
         }))
       : [
           {
-            id: 'terminal',
+            id: CREATE_ROW_TERMINAL_ID,
             locked: true,
             label: t('auto.components.tab.bar.TabBar.d364f3c8d4', 'New Terminal'),
             icon: <TerminalSquare className={ICON_CLASS} />,
@@ -148,10 +152,10 @@ export function TabBarStaticCreateMenu({
         ]
       : []
   const simulatorItems: TabBarCreateRowItem[] =
-    simulatorAvailable && onNewSimulatorTab
+    onNewSimulatorTab && simulatorAvailable
       ? [
           {
-            id: 'mobile-emulator',
+            id: CREATE_ROW_MOBILE_EMULATOR_ID,
             label: workspaceHasSimulatorTab
               ? t('auto.components.tab.bar.TabBar.b426bb2615', 'Go to Mobile Emulator')
               : t('auto.components.tab.bar.TabBar.fd2b42aaa3', 'New Mobile Emulator'),
@@ -160,11 +164,15 @@ export function TabBarStaticCreateMenu({
             run: onNewSimulatorTab
           }
         ]
-      : !terminalOnly && !mobileEmulatorEnabled && mobileEmulatorCreationEnabled
+      : // Only surfaces that can host an emulator offer turning it back on.
+        newTabMenuSurface === 'tab-bar' &&
+          !terminalOnly &&
+          !mobileEmulatorEnabled &&
+          mobileEmulatorCreationEnabled
         ? [
             {
               // Why: the customizer is where people look for a missing icon, so it can turn the feature back on.
-              id: 'mobile-emulator',
+              id: CREATE_ROW_MOBILE_EMULATOR_ID,
               label: t('auto.components.tab.bar.TabBar.fd2b42aaa3', 'New Mobile Emulator'),
               icon: <Smartphone className={ICON_CLASS} />,
               actionId: 'tab.newSimulator',
@@ -174,7 +182,7 @@ export function TabBarStaticCreateMenu({
           ]
         : []
   const items =
-    newTabMenuOrder === 'markdown-first'
+    newTabMenuSurface === 'floating-panel'
       ? [
           ...markdownItems,
           ...openMarkdownItems,
@@ -194,8 +202,9 @@ export function TabBarStaticCreateMenu({
     <TabBarCreateRow
       items={items}
       customizable={!terminalOnly}
+      layoutSetting={NEW_TAB_MENU_LAYOUT_SETTING[newTabMenuSurface]}
       renderBelow={(shownIds) =>
-        showMobileEmulatorIntroCallout && isMacOs && shownIds.has('mobile-emulator') ? (
+        showMobileEmulatorIntroCallout && isMacOs && shownIds.has(CREATE_ROW_MOBILE_EMULATOR_ID) ? (
           <MobileEmulatorTabIntroCallout />
         ) : null
       }

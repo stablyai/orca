@@ -4,10 +4,19 @@ export type NewTabMenuLayout = {
   hidden: string[]
 }
 
+/** Order and visibility of each surface's + menu create row; unset keeps the built-in arrangement. */
 export type NewTabMenuSettings = {
-  /** Order and visibility of the + menu's create row; unset keeps the built-in arrangement. */
   newTabMenuLayout?: NewTabMenuLayout
+  floatingTerminalNewTabMenuLayout?: NewTabMenuLayout
 }
+
+/** Surfaces offer different items in a different default order, so each keeps its own layout. */
+export type NewTabMenuSurface = 'tab-bar' | 'floating-panel'
+
+export const NEW_TAB_MENU_LAYOUT_SETTING = {
+  'tab-bar': 'newTabMenuLayout',
+  'floating-panel': 'floatingTerminalNewTabMenuLayout'
+} as const satisfies Record<NewTabMenuSurface, keyof NewTabMenuSettings>
 
 const MAX_LAYOUT_IDS = 128
 const MAX_LAYOUT_ID_LENGTH = 512

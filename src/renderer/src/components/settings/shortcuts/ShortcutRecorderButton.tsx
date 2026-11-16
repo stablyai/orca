@@ -220,15 +220,16 @@ export function ShortcutRecorderButton({
           className={cn(
             'flex items-center justify-end overflow-hidden rounded-md border text-xs outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50',
             compact
-              ? 'h-5 min-w-9 shrink-0 px-1.5 text-[11px] text-muted-foreground'
+              ? 'h-5 min-w-9 shrink-0 px-1.5 text-2xs text-muted-foreground'
               : 'min-h-7 min-w-[5.5rem] max-w-[14rem] gap-1.5 px-2 py-1',
-            recording
-              ? 'border-ring bg-accent text-accent-foreground ring-[3px] ring-ring/30'
-              : compact
-                ? binding === null
-                  ? 'border-dashed border-border hover:border-muted-foreground/60 hover:text-foreground focus-visible:text-foreground'
-                  : 'border-border/80 hover:border-muted-foreground/60 hover:text-foreground focus-visible:text-foreground'
-                : 'border-transparent hover:border-border/70 hover:bg-background'
+            recording && 'border-ring bg-accent text-accent-foreground ring-[3px] ring-ring/30',
+            !recording &&
+              !compact &&
+              'border-transparent hover:border-border/70 hover:bg-background',
+            !recording &&
+              compact &&
+              'border-border/80 hover:border-muted-foreground/60 hover:text-foreground focus-visible:text-foreground',
+            !recording && compact && binding === null && 'border-dashed border-border'
           )}
         >
           {recording || binding === null ? (
