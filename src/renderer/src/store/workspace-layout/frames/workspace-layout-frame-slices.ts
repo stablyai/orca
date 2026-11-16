@@ -21,7 +21,7 @@ import { openFileOfLayoutEditorView } from '../../slices/editor/tabs/open-file-l
 import type { OpenFile } from '../../slices/editor/types/open-file'
 import { editorTabLabelOf } from '../../slices/editor/tabs/editor-tab-label'
 import { isEditorTabContentType } from '../../slices/editor/tabs/editor-tab-content-type'
-import type { EditorTabView } from '../../../../../shared/editor-tab-view-types'
+import type { EditorTabView } from '../../../../../shared/editor/views/editor-tab-view-types'
 import { migrateHydratedEditorTabsAndGroups } from '../../slices/editor/file-ids/hydrated-editor-file-ids'
 import { buildHydratedTabState } from '../../slices/tabs/tabs-hydration'
 import { buildByIdIndex } from '../../../../../shared/collections/first-row-by-id-index'

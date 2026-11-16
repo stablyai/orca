@@ -1,7 +1,7 @@
-import type { GlobalSettings } from './global-settings-types'
-import { DEFAULT_APP_FONT_FAMILY } from './constants'
-import { isPluginFontFamilyOf } from './plugins/contributions/plugin-font-contribution'
-import { defaultTerminalFontFamily } from './terminal/appearance/terminal-platform-defaults'
+import type { GlobalSettings } from '../../global-settings-types'
+import { DEFAULT_APP_FONT_FAMILY } from '../../constants'
+import { isPluginFontFamilyOf } from '../contributions/plugin-font-contribution'
+import { defaultTerminalFontFamily } from '../../terminal/appearance/terminal-platform-defaults'
 
 /** Font choices that named a removed plugin's family go back to their defaults. */
 export function pluginFontSettingsAfterRemoval(

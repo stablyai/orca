@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import type { SupportedUiLocale } from '../../../src/shared/ui-locale'
+import type { SupportedUiLocale } from '../../../src/shared/i18n/ui-locale'
 import { SHA256_PATTERN } from '../../../src/shared/mobile-web-bundle/manifest-contract'
 import {
   MOBILE_WEB_BUNDLE_LOCALE_CATALOG_METHOD,

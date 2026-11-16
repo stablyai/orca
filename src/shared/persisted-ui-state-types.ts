@@ -11,7 +11,7 @@ import type { UsagePercentageDisplay } from './agent-usage/display/usage-percent
 import type { StatusBarUsageMode } from './status-bar/status-bar-usage-mode'
 import type { StatusBarUsageFormat } from './status-bar/status-bar-usage-format'
 import type { PersistedTrustedOrcaHooks } from './orca-yaml-hook-types'
-import type { CustomPet } from './pet-types'
+import type { CustomPet } from './pets/pet-types'
 import type {
   ActivityGroupBy,
   AgentActivityDisplayMode,

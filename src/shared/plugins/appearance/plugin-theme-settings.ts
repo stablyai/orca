@@ -1,13 +1,13 @@
-import type { GlobalSettings } from './global-settings-types'
+import type { GlobalSettings } from '../../global-settings-types'
 import type {
   AppThemeSlotSelection,
   CodeEditorThemeChoice
 } from './plugin-appearance-settings-types'
-import type { TerminalPluginPalette } from './terminal-themes/terminal-color-overrides'
+import type { TerminalPluginPalette } from '../../terminal-themes/terminal-color-overrides'
 import {
   hasUsableTerminalThemeColors,
   normalizeTerminalColorOverrides
-} from './terminal-themes/terminal-custom-themes'
+} from '../../terminal-themes/terminal-custom-themes'
 
 type PluginThemeSettings = Pick<
   GlobalSettings,
