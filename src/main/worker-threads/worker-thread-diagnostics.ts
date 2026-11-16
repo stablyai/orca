@@ -96,15 +96,17 @@ async function sampleHeapPressure(live: Set<LiveWorker>): Promise<void> {
 function workerHeapUsed(worker: Worker): Promise<number> {
   let timer: ReturnType<typeof setTimeout> | undefined
   const timeout = new Promise<never>((_, reject) => {
-    timer = setTimeout(() => reject(new Error('worker heap read timed out')), WORKER_HEAP_READ_TIMEOUT_MS)
+    timer = setTimeout(
+      () => reject(new Error('worker heap read timed out')),
+      WORKER_HEAP_READ_TIMEOUT_MS
+    )
   })
   return Promise.race([
     Promise.resolve()
       .then(() => worker.getHeapStatistics())
       .then((stats) => stats.used_heap_size),
     timeout
-  ])
-    .finally(() => clearTimeout(timer))
+  ]).finally(() => clearTimeout(timer))
 }
 
 function ledgerData(prefix: string, slot: WorkerSendLedgerEntry): CrashReportBreadcrumbData {
