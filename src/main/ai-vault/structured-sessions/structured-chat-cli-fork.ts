@@ -14,7 +14,7 @@ import type {
   AiVaultPrepareSessionResumeResult,
   AiVaultSessionResumePreparation
 } from '../../../shared/ai-vault/resume/ai-vault-resume-preparation'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/execution-host'
 import { isWslUncPath } from '../../../shared/file-access/wsl-paths'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { structuredAgentRuntimeMetadata } from '../../runtime/agent-session/installation/structured-agent-runtime-metadata'
@@ -114,7 +114,8 @@ export async function prepareStructuredChatCliFork(
       ...result,
       cliForkSource: {
         agent: copy.agent,
-        sourceAgent: metadata.sessionHistory.rowAgents.at(-1) ?? agent,
+        // Older clients add this agent's launch flags to the copy's; its own CLI adds none.
+        sourceAgent: copy.agent,
         sessionId: copy.sessionId,
         filePath: copy.filePath ?? '',
         codexHome: null,

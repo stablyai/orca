@@ -1,5 +1,5 @@
-import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'
-import type { StatusBarItem } from '../../../../../shared/ui-chrome-types'
+import type { PersistedUIState } from '../../../../../shared/orca-profiles/persisted-ui-state-types'
+import type { StatusBarItem } from '../../../../../shared/ui-chrome/ui-chrome-types'
 import { migrateStatusBarItems } from './ui-slice-hydration-sanitizers'
 
 const DEFAULT_ON_PORTS_STATUS_BAR_ITEM: StatusBarItem = 'ports'

@@ -2,7 +2,7 @@ import { AGENT_SESSION_GOAL_CONTROL_COPY } from '../../../../shared/agent-sessio
 import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { resolvedCodexGoalSettings } from '../turns/codex-structured-message-options'
 import { throwIfSignalAborted } from '../../../../shared/concurrency/abort-signal-reason'
-import type { AgentSessionThreadGoalChange } from '../../../../shared/agent-session/agent-session-thread-goal-wire'
+import type { AgentSessionThreadGoalChange } from '../../../../shared/agent-session/thread-goals/agent-session-thread-goal-wire'
 import { isCodexAppServerRequestError } from '../../app-server/codex-app-server-request-error'
 import type { CodexSession } from '../session-lifecycle/codex-structured-session-state'
 

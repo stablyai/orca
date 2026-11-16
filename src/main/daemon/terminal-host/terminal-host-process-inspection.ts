@@ -1,5 +1,5 @@
 import type { TerminalForegroundObservation } from '../../../shared/terminal/pty/lifecycle/terminal-foreground-observation'
-import { pruneRetiredPtyIncarnations } from '../../../shared/retired-pty-incarnations'
+import { pruneRetiredPtyIncarnations } from '../../../shared/terminal/pty/lifecycle/retired-pty-incarnations'
 import { getInspectableTerminalHostSession } from './terminal-host-session-access'
 import { isShellProcess } from '../../../shared/agent-status/process/shell-process-detection'
 import { recognizeAgentProcess } from '../../../shared/agent-status/process/agent-process-recognition'

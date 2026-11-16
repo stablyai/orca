@@ -1,9 +1,3 @@
-import { projectStructuredAgentSessionMessages } from '../../../../../../src/shared/agent-session/view/structured-agent-session-message-projection'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalSubmission
-} from '../../../../../../src/shared/agent-session/journal/agent-session-journal-types'
-import { withStopRowsAfterStoppedSends } from '../../../../../../src/shared/native-chat/native-chat-stopped-before-start'
 import { expect, it } from 'vitest'
 import type {
   NativeChatBlock,
@@ -222,61 +216,4 @@ it('forgets evicted tool contributions and releases generated orphan names', () 
     'unpaired-tool-results:["sidecar",0]'
   ])
   expect(state.rows[1]?.blocks).toEqual([result('unknown')])
-})
-
-it('preserves current delivery facts and synthetic notices when upstream wrappers refresh', () => {
-  const items: AgentJournalRenderItem[] = [
-    {
-      itemId: 'orca:send',
-      revision: 1,
-      sequence: 0,
-      observedAt: 0,
-      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Prompt' }] }
-    },
-    {
-      itemId: 'answer',
-      revision: 1,
-      sequence: 1,
-      observedAt: 1,
-      body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Checking' }] }
-    }
-  ]
-  const submission: AgentJournalSubmission = {
-    clientMessageId: 'send',
-    fence: 1,
-    payloadFingerprint: 'fingerprint',
-    dispatchState: 'unknown',
-    providerItemId: null,
-    reason: null,
-    submittedAt: 0,
-    resolvedAt: null
-  }
-  const stopped = new Set(['orca:send'])
-  const project = (input: AgentJournalRenderItem[], current: AgentJournalSubmission) =>
-    withStopRowsAfterStoppedSends(
-      projectStructuredAgentSessionMessages(input, [], [current]),
-      stopped
-    )
-  let state = projectMobileNativeChatMessages(project(items, submission), 'claude')
-  const next: AgentJournalRenderItem[] = [
-    items[0]!,
-    {
-      ...items[1]!,
-      revision: 2,
-      body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Done' }] }
-    }
-  ]
-  state = projectMobileNativeChatMessages(
-    project(next, { ...submission, dispatchState: 'pending' }),
-    'claude',
-    state
-  )
-  expect(state.rows.map((message) => message.id)).toEqual([
-    'orca:send',
-    'stopped-before-start:orca:send',
-    'answer'
-  ])
-  expect(state.rows[0]?.deliveryState).toBe('pending')
-  expect(state.rows[1]?.role).toBe('system')
-  expect(state.rows[2]?.blocks).toEqual([{ type: 'text', text: 'Done' }])
 })

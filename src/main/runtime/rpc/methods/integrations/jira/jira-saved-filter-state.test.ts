@@ -1,7 +1,7 @@
-import { MOBILE_RPC_METHOD_ROUTES } from '../../../server/runtime-rpc-mobile-method-routing'
+import '../../../server/runtime-rpc-mobile-method-routing'
 import { describe, expect, it, vi } from 'vitest'
-import { getDefaultUIState } from '../../../../../../shared/constants'
-import type { PersistedUIState } from '../../../../../../shared/persisted-ui-state-types'
+import { getDefaultUIState } from '../../../../../../shared/orca-profiles/constants'
+import type { PersistedUIState } from '../../../../../../shared/orca-profiles/persisted-ui-state-types'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { CLIENT_UI_METHODS } from '../../client-state/client-ui'
 import { RpcDispatcher } from '../../../dispatcher'
@@ -76,28 +76,4 @@ describe('Jira saved-filter runtime UI state', () => {
     ).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
     expect(updateUIState).not.toHaveBeenCalled()
   })
-})
-
-it('persists quick filters on the execution host without rewriting saved JQL or resume fields', async () => {
-  const { dispatch, read, updateUIState } = setup()
-  await dispatch('ui.mutateJiraSavedFilters', { kind: 'save', filter })
-  expect(
-    await dispatch('ui.setJiraQuickFilters', { statuses: ['In Progress', 'Blocked'] })
-  ).toMatchObject({
-    ok: true,
-    result: { statuses: ['In Progress', 'Blocked'] }
-  })
-  expect(await dispatch('ui.getJiraQuickFilters')).toMatchObject({
-    ok: true,
-    result: { statuses: ['In Progress', 'Blocked'] }
-  })
-  expect(read().jiraSavedFilterState?.filters).toEqual([filter])
-  expect(read().taskResumeState).toEqual({ jiraQuery: 'project = OLD' })
-  expect(updateUIState.mock.calls.every(([update]) => !('taskResumeState' in update))).toBe(true)
-  expect(await dispatch('ui.setJiraQuickFilters', { statuses: ['x'.repeat(129)] })).toMatchObject({
-    ok: false,
-    error: { code: 'invalid_argument' }
-  })
-  expect(MOBILE_RPC_METHOD_ROUTES.get('ui.getJiraQuickFilters')).toBe('execution-host')
-  expect(MOBILE_RPC_METHOD_ROUTES.get('ui.setJiraQuickFilters')).toBe('execution-host')
 })

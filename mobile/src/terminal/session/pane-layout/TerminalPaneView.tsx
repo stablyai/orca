@@ -1,3 +1,4 @@
+import type { TerminalFontStyle } from '../../preferences/terminal-font-style'
 import { useCallback, useEffect, useState } from 'react'
 import { AppState, StyleSheet, View, Text, Pressable } from 'react-native'
 import { useFocusEffect } from 'expo-router'
@@ -30,6 +31,7 @@ type TerminalPaneViewProps = {
   keyboardLift: number
   terminalTheme?: RuntimeMobileTerminalTheme
   textScale: number
+  fontStyle: TerminalFontStyle
   onRef: (handle: string, ref: TerminalWebViewHandle | null) => void
   // Must keep one identity: the pane reports its document gone when it unmounts.
   onDocumentReleased: (handle: string) => void
@@ -64,6 +66,7 @@ export function TerminalPaneView({
   keyboardLift,
   terminalTheme,
   textScale,
+  fontStyle,
   onRef,
   onDocumentReleased,
   onWebReady,
@@ -174,6 +177,7 @@ export function TerminalPaneView({
             ]}
             terminalTheme={terminalTheme}
             textScale={textScale}
+            fontStyle={fontStyle}
             shownAtMount={visible}
             interactionActive={visible && appActive && routeFocused}
             onWebReady={() => onWebReady(handle)}

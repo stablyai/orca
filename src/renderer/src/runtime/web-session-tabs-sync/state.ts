@@ -14,7 +14,7 @@ import type {
   BrowserPage,
   BrowserWorkspace
 } from '../../../../shared/browser/workspaces/browser-workspace-types'
-import type { Tab } from '../../../../shared/tab-types'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type {
   TerminalLayoutSnapshot,
   TerminalTab
@@ -157,6 +157,31 @@ export const hostSessionTabMappingKeysByEnvironmentAndWorktree = new Map<
   string,
   Map<string, Set<string>>
 >()
+const MAX_TRACKED_MAPPING_REVISIONS = 4096
+let hostSessionTabMappingChangeSequence = 0
+let hostSessionTabMappingsResetAt = 0
+const hostSessionTabMappingChangedAtByWorktree = new Map<string, number>()
+/** Records which workspace's host tab mappings changed; no workspace means all of them. */
+export function markHostSessionTabMappingsChanged(worktreeId?: string): void {
+  hostSessionTabMappingChangeSequence += 1
+  // Entries outlive removed workspaces; a reset bounds them and hands every workspace a new revision.
+  if (
+    worktreeId === undefined ||
+    hostSessionTabMappingChangedAtByWorktree.size >= MAX_TRACKED_MAPPING_REVISIONS
+  ) {
+    hostSessionTabMappingsResetAt = hostSessionTabMappingChangeSequence
+    hostSessionTabMappingChangedAtByWorktree.clear()
+  } else {
+    hostSessionTabMappingChangedAtByWorktree.set(worktreeId, hostSessionTabMappingChangeSequence)
+  }
+}
+/** Differs from an earlier read exactly when this workspace's host tab mappings may have changed. */
+export function hostSessionTabMappingRevision(worktreeId: string): number {
+  return Math.max(
+    hostSessionTabMappingsResetAt,
+    hostSessionTabMappingChangedAtByWorktree.get(worktreeId) ?? 0
+  )
+}
 export const hostWorkingClientBoundaryByPaneKey = new Map<
   string,
   {

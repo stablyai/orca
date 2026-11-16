@@ -1,4 +1,4 @@
-import { parseExecutionHostId } from '../../shared/execution-host'
+import { parseExecutionHostId } from '../../shared/execution-host/execution-host'
 import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 import { ipcMain } from 'electron'
 import type { Store } from '../persistence/loading-store/store'

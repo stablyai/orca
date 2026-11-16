@@ -1,5 +1,5 @@
 import { toast } from 'sonner'
-import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
+import { toRuntimeExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { WslHostServerStop } from '../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'

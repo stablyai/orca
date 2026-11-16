@@ -10,8 +10,8 @@ import type { AgentJournalThreadGoal } from '../../../../../../shared/agent-sess
 import {
   agentSessionThreadGoalElapsedSeconds,
   agentSessionThreadGoalOfferedStatusChange
-} from '../../../../../../shared/agent-session/agent-session-thread-goal'
-import type { AgentSessionThreadGoalChange } from '../../../../../../shared/agent-session/agent-session-thread-goal-wire'
+} from '../../../../../../shared/agent-session/thread-goals/agent-session-thread-goal'
+import type { AgentSessionThreadGoalChange } from '../../../../../../shared/agent-session/thread-goals/agent-session-thread-goal-wire'
 import { formatAgentSessionThreadGoalElapsed } from '../../../../../../shared/agent-session/view/agent-session-thread-goal-presentation'
 import { nativeChatThreadGoalStatusLabel } from './native-chat-thread-goal-presentation'
 

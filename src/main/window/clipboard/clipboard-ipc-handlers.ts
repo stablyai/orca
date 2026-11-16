@@ -5,7 +5,7 @@ import { runProcess } from '@orca/process-host'
 import type { Store } from '../../persistence/loading-store/store'
 import { PATH_ACCESS_DENIED_MESSAGE } from '../../ipc/filesystem/access/filesystem-auth'
 import { resolveDesktopAuthorizedPath } from '../../ipc/filesystem/access/local-file-access-resolution'
-import { isENOENT } from '../../ipc/filesystem/access/filesystem-path-containment'
+import { isENOENT } from '../../filesystem/local-file-io/filesystem-path-containment'
 import {
   assertTrustedClipboardSender,
   assertTrustedClipboardTextSender

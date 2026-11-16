@@ -4,7 +4,7 @@ import {
   resolveRuntimePaneTitleLeafId,
   resolveRuntimePaneTitleLeafIdFromSparseSlots
 } from '../../../../shared/workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
-import { FIRST_PANE_ID } from '../../../../shared/pane-key'
+import { FIRST_PANE_ID } from '../../../../shared/workspace-layout/pane-key'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { normalizeCompatibleAgentTitleForOwner } from '../../../../shared/agent-status/title/agent-title-owner'
 import { resolvePaneAgentOwnerRecord } from '../../../../shared/agent-status/identity/pane-agent-owner'

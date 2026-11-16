@@ -2,6 +2,7 @@
 import { outlineCacheRows } from './native-chat-4a-ops-outline-cache'
 import { historyShape } from './native-chat-4a-history-shape'
 import { randomUUID } from 'node:crypto'
+import { createOrcaSessionId } from '../../../../src/shared/agent-session/identity/orca-session-address'
 import { operationId } from './native-chat-4a-arm'
 import { rendererTime, rpc } from './native-chat-4a-probes'
 import type { Sample } from './native-chat-4a-report'
@@ -217,7 +218,7 @@ export async function recordRows(ctx: RunContext): Promise<void> {
   }
   await sampled(ctx, adopted, ctx.workload.samples, () =>
     measured(ctx, async () => {
-      const sessionId = ctx.arm.protocol.createStructuredAgentSessionId('claude', randomUUID)
+      const sessionId = createOrcaSessionId(randomUUID)
       const worktree = `id:${ctx.manifest.workspace.worktreeIds[1]}`
       const resumeFrom = { providerSessionId: provider }
       const fingerprint = ctx.arm.protocol.structuredAgentSessionPayloadFingerprint({

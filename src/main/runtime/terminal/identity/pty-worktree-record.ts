@@ -9,7 +9,7 @@ import { maxTimestamp } from '../../workspaces/process-listing/runtime-worktree-
 import type { RuntimeSyncedLeaf } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { inferWorktreeIdFromPtyId } from '../../workspaces/catalog/runtime-worktree-path-identity'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import {
   mainDecidesLeafLiveness,
   mainPaneRecordFacts,

@@ -10,7 +10,7 @@ import { getDefaultBaseRefAsync as getBaseRefDefault } from '../../git/refs/reso
 import { getRemoteCount } from '../../git/remotes/repo-remote-queries'
 import { searchRemoteRefPage } from '../../git/refs/resolution/repo-remote-ref-search'
 import { searchBaseRefDetails } from '../../git/refs/resolution/repo-base-ref-search'
-import { getRepoRoutingConnectionId } from '../../../shared/execution-host'
+import { getRepoRoutingConnectionId } from '../../../shared/execution-host/execution-host'
 import { blockedWslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
 
 type RuntimeRepositoryRefQueryDependencies = {

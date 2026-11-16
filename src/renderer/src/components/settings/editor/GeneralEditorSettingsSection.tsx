@@ -5,7 +5,7 @@ import {
   DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS,
   MAX_EDITOR_AUTO_SAVE_DELAY_MS,
   MIN_EDITOR_AUTO_SAVE_DELAY_MS
-} from '../../../../../shared/constants'
+} from '../../../../../shared/editor/saving/editor-auto-save-delay'
 import { clampNumber } from '@/lib/terminal/appearance/terminal-theme'
 import { Input } from '../../ui/input'
 import { Label } from '../../ui/label'
@@ -27,7 +27,7 @@ import {
   updateAutoSaveDelayDraftState
 } from './auto-save-delay-draft'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 
 type GeneralEditorSettingsSectionProps = {
   settings: GlobalSettings

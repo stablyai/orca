@@ -5,11 +5,11 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
-import { ALL_EXECUTION_HOSTS_SCOPE } from '../../../../../../shared/execution-host'
+import { ALL_EXECUTION_HOSTS_SCOPE } from '../../../../../../shared/execution-host/execution-host'
 import type {
   VisibleWorkspaceHostIds,
   WorkspaceHostScope
-} from '../../../../../../shared/ui-chrome-types'
+} from '../../../../../../shared/ui-chrome/ui-chrome-types'
 import { pickerExecutionHosts } from '../../../../../../shared/execution-host/managed-orcad-execution-host'
 import {
   getCheckedHostRows,

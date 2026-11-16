@@ -4,7 +4,10 @@ import {
   getRepoIdFromWorktreeId,
   splitWorktreeIdForFilesystem
 } from '../../../shared/worktree/id'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../shared/execution-host/execution-host'
 import { planWorktreeFolderRename } from '../../ipc/worktree-folder-rename-target'
 import { hostWorktreeTargetForRepo } from '../../persistence/host-qualified-worktree-meta'
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'

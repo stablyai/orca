@@ -15,7 +15,9 @@ import {
   threeTabSurfaceRuntime
 } from './session-tabs-layout-moves.test-fixture'
 
-vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
+vi.mock('../../../shared/workspace-layout/layout-owner-switch', () => ({
+  ORCA_LAYOUT_OWNER_IS_MAIN: true
+}))
 
 describe('session.tabs on a windowless server (switch on)', () => {
   it("a tab main renames reaches a subscribed phone's rows", async () => {

@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { AppState } from '../../store/types'
 import { resolveAgentDashboardMode } from '../../components/dashboard/settings/agent-dashboard-open-mode'
 

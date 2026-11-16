@@ -5,7 +5,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { isStructuredAgentSessionCommandEntry } from '../../../../shared/agent-session/structured-agent-session-command-entry'
+import { isStructuredAgentSessionCommandEntry } from '../../../../shared/agent-session/requests/structured-agent-session-command-entry'
 import type { AgentSessionUsageLimit } from '../../../../shared/agent-session/failures/agent-session-usage-limit'
 import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { JournalSqlDatabase } from '../../agent-session-journal/database/journal-sql-database'
@@ -13,7 +13,7 @@ import { journalSqlReads } from '../../agent-session-journal/journal-sql-reads'
 import {
   nativeChatUsageLimitOfRow,
   type NativeChatUsageLimitCut
-} from '../../../../shared/native-chat/native-chat-usage-limit-cut'
+} from '../../../../shared/native-chat/transcript/continuation/native-chat-usage-limit-cut'
 
 /** Automatic continues a chain may spend before Orca leaves the chat to the person. */
 export const USAGE_LIMIT_CONTINUE_CHAIN_LIMIT = 5

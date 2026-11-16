@@ -1,5 +1,8 @@
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
-import type { TabGroup, WorkspaceVisibleTabType } from '../../../../../shared/tab-types'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import type {
+  TabGroup,
+  WorkspaceVisibleTabType
+} from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { isPaletteCurrentWorktree } from '../../workspace/search/palette-repo-resolution'
 
