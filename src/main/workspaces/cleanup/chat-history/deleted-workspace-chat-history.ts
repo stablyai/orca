@@ -67,12 +67,12 @@ export async function sweepDeletedWorkspaceChatHistory(
   deps: ChatHistorySweepDeps
 ): Promise<ChatHistorySweepResult> {
   const result: ChatHistorySweepResult = { deleted: 0, failed: 0, freedBytes: 0 }
-  const parents = await workspaceParentDirectories(deps.store)
+  const spellings = new FolderSpellings()
+  const listed = await listedWorkspaceSpellings(deps.store, spellings)
+  const parents = await workspaceParentDirectories(deps.store, listed, spellings)
   if (parents.length === 0) {
     return result
   }
-  const spellings = new FolderSpellings()
-  const listed = await listedWorkspaceSpellings(deps.store, spellings)
   const sessions = await listInScope(deps, parents)
   const checks = new Map<string, Promise<boolean>>()
   const once = (key: string, check: () => Promise<boolean>): Promise<boolean> => {
@@ -96,7 +96,9 @@ export async function sweepDeletedWorkspaceChatHistory(
     const place = workspaceFolderOf(session.cwd, parents)
     if (
       !place ||
-      holdsListedPath(await spellings.of(place.folder), listed) ||
+      (await once(`listed:${place.folder}`, async () =>
+        holdsListedPath(await spellings.of(place.folder), listed)
+      )) ||
       // A missing parent is an unmounted volume or a moved folder, not a deleted workspace.
       !(await once(`parent:${place.parent}`, () => isMountedDirectory(place.parent))) ||
       !(await once(`folder:${place.folder}`, () => isMissing(place.folder)))

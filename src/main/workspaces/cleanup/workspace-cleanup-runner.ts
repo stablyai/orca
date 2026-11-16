@@ -163,6 +163,13 @@ export class WorkspaceCleanupRunner {
     return this.enabledRules.size > 0 || this.chatHistoryOn
   }
 
+  private chatHistorySweepDue(trigger: WorkspaceCleanupRunTrigger, now: number): boolean {
+    return (
+      this.readChatHistoryOn() &&
+      (trigger !== 'hourly' || now - this.lastChatHistorySweepAt >= CHAT_HISTORY_SWEEP_INTERVAL_MS)
+    )
+  }
+
   private globalRules(): WorkspaceCleanupRules {
     return this.deps.store.getSettings().workspaceCleanupPolicy ?? getDefaultWorkspaceCleanupRules()
   }
@@ -183,8 +190,11 @@ export class WorkspaceCleanupRunner {
     try {
       // A run already going may have read the rules before the change that scheduled this one.
       await this.current?.catch(() => undefined)
-      // Off by default: with nothing on, a scheduled run costs nothing and leaves no record.
-      if (this.unsubscribe && this.hasWork()) {
+      // Off by default: with nothing due, a scheduled run costs nothing and leaves no record.
+      if (
+        this.unsubscribe &&
+        (this.enabledRules.size > 0 || this.chatHistorySweepDue(trigger, Date.now()))
+      ) {
         await (this.current ?? this.track(this.execute(trigger)))
       }
     } catch (error) {
@@ -296,12 +306,7 @@ export class WorkspaceCleanupRunner {
         rows.push({ ...ref, reason, ...outcome })
       }
       // After removals, so this run's deleted workspaces are gone from disk when the sweep looks.
-      if (
-        this.readChatHistoryOn() &&
-        !this.abort.signal.aborted &&
-        (trigger !== 'hourly' ||
-          startedAt - this.lastChatHistorySweepAt >= CHAT_HISTORY_SWEEP_INTERVAL_MS)
-      ) {
+      if (this.chatHistorySweepDue(trigger, startedAt) && !this.abort.signal.aborted) {
         this.lastChatHistorySweepAt = startedAt
         chatHistory = await deleteChatHistoryOfDeletedWorkspaces(this.deps.store, this.abort.signal)
       }

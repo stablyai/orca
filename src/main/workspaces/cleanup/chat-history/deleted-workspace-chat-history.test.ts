@@ -43,6 +43,8 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
     mkdirSync(join(appWorkspaces, 'live'), { recursive: true })
     mkdirSync(join(root, 'repos', 'app'), { recursive: true })
     mkdirSync(join(root, 'repos', 'sibling'), { recursive: true })
+    // A flat workspace from before nesting, named like the `docs` repo.
+    mkdirSync(join(workspaces, 'docs'), { recursive: true })
     const gone = join(appWorkspaces, 'gone')
     const store = {
       getSettings: () => ({
@@ -74,12 +76,20 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
           badgeColor: '',
           addedAt: 0,
           worktreeBasePath: '..'
+        },
+        {
+          id: 'docs',
+          path: join(root, 'repos', 'docs'),
+          displayName: 'docs',
+          badgeColor: '',
+          addedAt: 0
         }
       ],
       // Archived: the row stays while its folder is gone, including one nested in a gone folder.
       getAllWorktreeMeta: () => ({
         [`app::${join(appWorkspaces, 'archived')}`]: {},
         [`app::${join(appWorkspaces, 'team', 'feature')}`]: {},
+        [`app::${join(workspaces, 'docs')}`]: {},
         // Renamed: chats recorded under the old folder still belong to it.
         [`app::${join(appWorkspaces, 'live')}`]: {
           priorWorktreeIds: [`app::${join(appWorkspaces, 'old-name')}`]
@@ -105,7 +115,8 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
         session('renamed.jsonl', join(appWorkspaces, 'old-name')),
         session('folder-workspace.jsonl', join(appWorkspaces, 'folder-workspace')),
         session('nested-archived.jsonl', join(appWorkspaces, 'team', 'feature')),
-        session('not-a-workspace.jsonl', join(root, 'repos', 'sibling', 'old-tool'))
+        session('not-a-workspace.jsonl', join(root, 'repos', 'sibling', 'old-tool')),
+        session('flat-workspace-subfolder.jsonl', join(workspaces, 'docs', 'packages', 'old'))
       ],
       isEnabled: () => true,
       deleteSessions: async (targets) => {
