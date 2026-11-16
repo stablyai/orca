@@ -6,7 +6,11 @@ import type { WorkerThreadRole } from './worker-thread-roles'
  * workers exhaust a `ulimit -v` host (#37538). Worker JIT code stays far below this. */
 export const WORKER_CODE_RANGE_MB = 64
 
-export type WorkerThreadObserver = (worker: Worker, role: WorkerThreadRole) => void
+export type WorkerThreadObserver = {
+  /** Runs before construction: a worker copies environment data when it is created. */
+  beforeSpawn: () => void
+  spawned: (worker: Worker, role: WorkerThreadRole) => void
+}
 
 let observer: WorkerThreadObserver | undefined
 /** Thread id per spawned worker; owners may strip every listener (removeAllListeners). */
@@ -33,13 +37,18 @@ export function spawnWorkerThread(
 ): Worker {
   releaseExitedWorkers()
   ensureWorkerSendLedger()
+  try {
+    observer?.beforeSpawn()
+  } catch {
+    // Diagnostics never fail a spawn.
+  }
   const worker = new Worker(filename, {
     ...options,
     resourceLimits: { codeRangeSizeMb: WORKER_CODE_RANGE_MB, ...options.resourceLimits }
   })
   spawned.set(worker, worker.threadId)
   try {
-    observer?.(worker, options.name)
+    observer?.spawned(worker, options.name)
   } catch {
     // Diagnostics never fail a spawn.
   }

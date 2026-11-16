@@ -10,6 +10,19 @@ describe('describeWorkerMessage', () => {
     expect(shape).toEqual({ kind: 'records', items: 2, bytes: 40, depth: 4, truncated: false })
   })
 
+  it('never reads an accessor, which could change the message being sent', () => {
+    let reads = 0
+    const message = {
+      type: 'state',
+      get value() {
+        reads += 1
+        return reads
+      }
+    }
+    describeWorkerMessage(message)
+    expect(reads).toBe(0)
+  })
+
   it('stays bounded on cyclic, deep and huge payloads', () => {
     const cyclic: Record<string, unknown> = { type: 'loop' }
     cyclic.self = cyclic

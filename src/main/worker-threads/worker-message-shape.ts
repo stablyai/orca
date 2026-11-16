@@ -61,13 +61,17 @@ export function describeWorkerMessage(message: unknown): WorkerMessageShape {
   return { kind: messageKind(message), items, bytes, depth, truncated }
 }
 
+/** Own data properties only: reading an accessor could change or fail the message being sent. */
 function* objectValues(
   value: Record<string, unknown>,
   onKey: (key: string) => void
 ): Generator<unknown> {
   for (const key in value) {
-    onKey(key)
-    yield value[key]
+    const property = Object.getOwnPropertyDescriptor(value, key)
+    if (property && 'value' in property) {
+      onKey(key)
+      yield property.value
+    }
   }
 }
 
@@ -75,10 +79,10 @@ function messageKind(message: unknown): string {
   if (message === null || typeof message !== 'object') {
     return typeof message
   }
-  const record = message as Record<string, unknown>
   for (const field of ['type', 'kind', 'command', 'op']) {
-    if (typeof record[field] === 'string') {
-      return record[field]
+    const value = Object.getOwnPropertyDescriptor(message, field)?.value
+    if (typeof value === 'string') {
+      return value
     }
   }
   return 'object'

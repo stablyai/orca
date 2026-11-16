@@ -1,3 +1,4 @@
+import { appendFileSync, renameSync, statSync } from 'node:fs'
 import { getHeapStatistics } from 'node:v8'
 import {
   getEnvironmentData,
@@ -6,7 +7,7 @@ import {
   setEnvironmentData,
   threadId
 } from 'node:worker_threads'
-import { describeWorkerMessage } from './worker-message-shape'
+import { describeWorkerMessage, type WorkerMessageShape } from './worker-message-shape'
 import type { WorkerThreadRole } from './worker-thread-roles'
 
 /**
@@ -15,21 +16,28 @@ import type { WorkerThreadRole } from './worker-thread-roles'
  * stuck receiving that message. Fixed size: SLOTS workers, no allocation per send.
  */
 const LEDGER_KEY = 'orca.worker-send-ledger.v1'
+const LARGE_SEND_LOG_KEY = 'orca.worker-large-send-log.v1'
 const SLOTS = 48
-const SLOT_BYTES = 176
+const SLOT_BYTES = 184
 const TEXT_BYTES = 40
 const OWNER = 0
-const SENDS = 4
-const LAST_AT = 8
-const LAST_BYTES = 16
-const LAST_ITEMS = 24
-const MAX_BYTES = 32
-const HEAP_USED = 40
-const LAST_DEPTH = 48
-const LAST_TRUNCATED = 52
-const ROLE = 56
+const LAST_DEPTH = 4
+const SENDS = 8
+const LAST_AT = 16
+const LAST_BYTES = 24
+const LAST_ITEMS = 32
+const MAX_BYTES = 40
+const HEAP_USED = 48
+const LAST_TRUNCATED = 56
+const ROLE = 64
 const LAST_KIND = ROLE + TEXT_BYTES
 const MAX_KIND = LAST_KIND + TEXT_BYTES
+
+/** A send this large can stall or exhaust the receiving thread; it is logged before posting. */
+const LARGE_SEND_BYTES = 16 * 2 ** 20
+const LARGE_SEND_ITEMS = 50_000
+const LARGE_SEND_DEPTH = 100
+const LARGE_SEND_LOG_MAX_BYTES = 256 * 1024
 
 export type WorkerSendLedgerEntry = {
   role: string
@@ -51,10 +59,21 @@ function sharedLedger(): SharedArrayBuffer | undefined {
   return ledger instanceof SharedArrayBuffer ? ledger : undefined
 }
 
+function ownerIndex(slot: number): number {
+  return (slot * SLOT_BYTES) / 4
+}
+
 /** Main thread, before spawning: workers created afterwards inherit the ledger. */
 export function ensureWorkerSendLedger(): void {
   if (isMainThread && !sharedLedger()) {
     setEnvironmentData(LEDGER_KEY, new SharedArrayBuffer(SLOTS * SLOT_BYTES))
+  }
+}
+
+/** Main thread: where workers append sends large enough to take down the receiver. */
+export function setWorkerLargeSendLog(path: string): void {
+  if (isMainThread) {
+    setEnvironmentData(LARGE_SEND_LOG_KEY, path)
   }
 }
 
@@ -77,14 +96,28 @@ function readText(view: DataView, offset: number): string {
   return text
 }
 
-function claimSlot(ledger: SharedArrayBuffer, owner: number): DataView | undefined {
+/** A free slot, else the one idle longest: a parent killed before freeing its children's slots
+ * must not exhaust the ledger. An evicted worker stops writing once it sees the new owner. */
+function claimSlot(ledger: SharedArrayBuffer, owner: number): number | undefined {
   const owners = new Int32Array(ledger)
   for (let slot = 0; slot < SLOTS; slot += 1) {
-    if (Atomics.compareExchange(owners, (slot * SLOT_BYTES) / 4, 0, owner) === 0) {
-      return new DataView(ledger, slot * SLOT_BYTES, SLOT_BYTES)
+    if (Atomics.compareExchange(owners, ownerIndex(slot), 0, owner) === 0) {
+      return slot
     }
   }
-  return undefined
+  let stalest = 0
+  let stalestAt = Infinity
+  for (let slot = 0; slot < SLOTS; slot += 1) {
+    const at = new DataView(ledger, slot * SLOT_BYTES, SLOT_BYTES).getFloat64(LAST_AT, true)
+    if (at < stalestAt) {
+      stalest = slot
+      stalestAt = at
+    }
+  }
+  const previous = Atomics.load(owners, ownerIndex(stalest))
+  return Atomics.compareExchange(owners, ownerIndex(stalest), previous, owner) === previous
+    ? stalest
+    : undefined
 }
 
 /** Worker side, once at startup. Recording never blocks or fails the post itself. */
@@ -95,14 +128,25 @@ export function installWorkerSendLedger(role: WorkerThreadRole): void {
     return
   }
   const slot = claimSlot(ledger, threadId)
-  if (!slot) {
+  if (slot === undefined) {
     return
   }
-  writeText(slot, ROLE, role)
+  const owners = new Int32Array(ledger)
+  const view = new DataView(ledger, slot * SLOT_BYTES, SLOT_BYTES)
+  new Uint8Array(ledger, slot * SLOT_BYTES + 4, SLOT_BYTES - 4).fill(0)
+  writeText(view, ROLE, role)
+  view.setFloat64(LAST_AT, Date.now(), true)
+  const largeSendLog = getEnvironmentData(LARGE_SEND_LOG_KEY)
   const post = port.postMessage.bind(port) as (value: unknown, transfer?: unknown) => void
   port.postMessage = ((value: unknown, transfer?: unknown) => {
     try {
-      recordSend(slot, value)
+      if (Atomics.load(owners, ownerIndex(slot)) === threadId) {
+        const shape = describeWorkerMessage(value)
+        recordSend(view, shape)
+        if (typeof largeSendLog === 'string' && isLargeSend(shape)) {
+          logLargeSend(largeSendLog, role, shape)
+        }
+      }
     } catch {
       // Diagnostics only.
     }
@@ -110,20 +154,45 @@ export function installWorkerSendLedger(role: WorkerThreadRole): void {
   }) as typeof port.postMessage
 }
 
-function recordSend(slot: DataView, value: unknown): void {
-  const shape = describeWorkerMessage(value)
-  slot.setInt32(SENDS, slot.getInt32(SENDS, true) + 1, true)
-  slot.setFloat64(LAST_AT, Date.now(), true)
-  slot.setFloat64(LAST_BYTES, shape.bytes, true)
-  slot.setFloat64(LAST_ITEMS, shape.items, true)
-  slot.setInt32(LAST_DEPTH, shape.depth, true)
-  slot.setInt32(LAST_TRUNCATED, shape.truncated ? 1 : 0, true)
-  writeText(slot, LAST_KIND, shape.kind)
-  if (shape.bytes > slot.getFloat64(MAX_BYTES, true)) {
-    slot.setFloat64(MAX_BYTES, shape.bytes, true)
-    writeText(slot, MAX_KIND, shape.kind)
+function recordSend(view: DataView, shape: WorkerMessageShape): void {
+  view.setFloat64(SENDS, view.getFloat64(SENDS, true) + 1, true)
+  view.setFloat64(LAST_AT, Date.now(), true)
+  view.setFloat64(LAST_BYTES, shape.bytes, true)
+  view.setFloat64(LAST_ITEMS, shape.items, true)
+  view.setInt32(LAST_DEPTH, shape.depth, true)
+  view.setInt32(LAST_TRUNCATED, shape.truncated ? 1 : 0, true)
+  writeText(view, LAST_KIND, shape.kind)
+  if (shape.bytes > view.getFloat64(MAX_BYTES, true)) {
+    view.setFloat64(MAX_BYTES, shape.bytes, true)
+    writeText(view, MAX_KIND, shape.kind)
   }
-  slot.setFloat64(HEAP_USED, getHeapStatistics().used_heap_size, true)
+  view.setFloat64(HEAP_USED, getHeapStatistics().used_heap_size, true)
+}
+
+function isLargeSend(shape: WorkerMessageShape): boolean {
+  return (
+    shape.bytes >= LARGE_SEND_BYTES ||
+    shape.items >= LARGE_SEND_ITEMS ||
+    shape.depth >= LARGE_SEND_DEPTH
+  )
+}
+
+/** Written before posting, so it survives the receiver aborting or hanging on this message. */
+function logLargeSend(path: string, role: string, shape: WorkerMessageShape): void {
+  if ((statSync(path, { throwIfNoEntry: false })?.size ?? 0) > LARGE_SEND_LOG_MAX_BYTES) {
+    renameSync(path, `${path}.1`)
+  }
+  appendFileSync(
+    path,
+    `${JSON.stringify({
+      at: new Date().toISOString(),
+      pid: process.pid,
+      role,
+      threadId,
+      ...shape,
+      heapUsedMB: Math.round(getHeapStatistics().used_heap_size / 2 ** 20)
+    })}\n`
+  )
 }
 
 /** Readers may see a slot mid-write; every field is independently meaningful. */
@@ -135,7 +204,7 @@ export function readWorkerSendLedger(): WorkerSendLedgerEntry[] {
   const owners = new Int32Array(ledger)
   const entries: WorkerSendLedgerEntry[] = []
   for (let slot = 0; slot < SLOTS; slot += 1) {
-    const owner = Atomics.load(owners, (slot * SLOT_BYTES) / 4)
+    const owner = Atomics.load(owners, ownerIndex(slot))
     if (owner === 0) {
       continue
     }
@@ -143,7 +212,7 @@ export function readWorkerSendLedger(): WorkerSendLedgerEntry[] {
     entries.push({
       role: readText(view, ROLE),
       threadId: owner,
-      sends: view.getInt32(SENDS, true),
+      sends: view.getFloat64(SENDS, true),
       lastAt: view.getFloat64(LAST_AT, true),
       lastKind: readText(view, LAST_KIND),
       lastItems: view.getFloat64(LAST_ITEMS, true),
@@ -158,7 +227,7 @@ export function readWorkerSendLedger(): WorkerSendLedgerEntry[] {
   return entries
 }
 
-/** The parent frees an exited worker's slot; its thread id is never reused in this process. */
+/** The parent frees an exited worker's slot; thread ids are never reused in a process. */
 export function releaseWorkerSendLedgerSlot(owner: number): void {
   const ledger = sharedLedger()
   if (!ledger) {
@@ -166,9 +235,10 @@ export function releaseWorkerSendLedgerSlot(owner: number): void {
   }
   const owners = new Int32Array(ledger)
   for (let slot = 0; slot < SLOTS; slot += 1) {
-    const index = (slot * SLOT_BYTES) / 4
-    if (Atomics.load(owners, index) === owner) {
-      new Uint8Array(ledger, slot * SLOT_BYTES, SLOT_BYTES).fill(0)
+    if (Atomics.load(owners, ownerIndex(slot)) === owner) {
+      // Clear while still owned, then publish the slot as free.
+      new Uint8Array(ledger, slot * SLOT_BYTES + 4, SLOT_BYTES - 4).fill(0)
+      Atomics.compareExchange(owners, ownerIndex(slot), owner, 0)
       return
     }
   }

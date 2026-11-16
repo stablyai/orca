@@ -1,83 +1,110 @@
+import { join } from 'node:path'
 import { getHeapStatistics } from 'node:v8'
 import type { Worker } from 'node:worker_threads'
+import { crashReporter } from 'electron'
 import type { CrashReportBreadcrumbData } from '../../shared/crash-reporting/crash-reporting'
 import {
   recordCoalescedDurableCrashBreadcrumb,
   recordDurableCrashBreadcrumb
 } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
-import { readWorkerSendLedger, type WorkerSendLedgerEntry } from './worker-send-ledger'
+import { resolveObservabilityConsent } from '../observability'
+import { getLogsDirectory } from '../observability/logs-directory'
+import {
+  readWorkerSendLedger,
+  setWorkerLargeSendLog,
+  type WorkerSendLedgerEntry
+} from './worker-send-ledger'
 import type { WorkerThreadRole } from './worker-thread-roles'
 import { observeWorkerThreads } from './worker-thread-spawn'
 
-const SAMPLE_INTERVAL_MS = 60_000
 /**
  * The main thread and every worker share one V8 pointer cage (~3.25 GB measured on Electron 43):
- * when it fills, whichever isolate allocates next aborts the whole app. Report the isolates that
- * hold it well before then, so the next failure names the one that grew.
+ * when it fills, whichever isolate allocates next aborts the whole app. Committed heap per isolate
+ * goes into the crash report's annotations, and a breadcrumb names the largest isolates once the
+ * total is high, so the next such crash names the isolate that grew.
  */
-const HEAP_PRESSURE_BYTES = 1.5 * 2 ** 30
-const REPORTED_WORKERS = 6
+const SAMPLE_INTERVAL_MS = 60_000
+const PRESSURED_SAMPLE_INTERVAL_MS = 10_000
+const PRESSURED_BYTES = 2 ** 30
+const BREADCRUMB_BYTES = 1.5 * 2 ** 30
+const BREADCRUMB_MIN_INTERVAL_MS = 10 * 60_000
+const REPORTED_WORKERS = 4
 /** A worker blocked in native code (SQLite) answers only when it returns to JS. */
 const WORKER_HEAP_READ_TIMEOUT_MS = 2_000
+/** Electron truncates crash annotation values past this many bytes. */
+const ANNOTATION_MAX_LENGTH = 127
 const MB = 2 ** 20
 
 type LiveWorker = { worker: Worker; role: WorkerThreadRole; threadId: number }
+type WorkerHeap = { entry: LiveWorker; heap: number }
 
 export function installWorkerThreadDiagnostics(): void {
   const live = new Set<LiveWorker>()
-  let sampling: ReturnType<typeof setInterval> | undefined
-  let inFlight = false
-  observeWorkerThreads((worker, role) => {
-    const entry = { worker, role, threadId: worker.threadId }
-    live.add(entry)
-    worker.on('error', (error: Error & { code?: unknown }) => {
-      const ledger = readWorkerSendLedger().find((slot) => slot.threadId === entry.threadId)
-      recordDurableCrashBreadcrumb('worker_thread_failed', {
-        role,
-        code: typeof error?.code === 'string' ? error.code : null,
-        ...(ledger ? ledgerData('', ledger) : {}),
-        mainHeapMB: Math.round(getHeapStatistics().used_heap_size / MB)
-      })
-    })
-    sampling ??= setInterval(() => {
-      if (!inFlight) {
-        inFlight = true
-        void sampleHeapPressure(live).finally(() => (inFlight = false))
-      }
-    }, SAMPLE_INTERVAL_MS)
+  let largeSendLogSet = false
+  let sampling: ReturnType<typeof setTimeout> | undefined
+  const schedule = (delayMs: number): void => {
+    sampling = setTimeout(() => {
+      void sampleHeaps(live)
+        .catch(() => 0)
+        .then((total) =>
+          schedule(total >= PRESSURED_BYTES ? PRESSURED_SAMPLE_INTERVAL_MS : SAMPLE_INTERVAL_MS)
+        )
+    }, delayMs)
     sampling.unref?.()
+  }
+  observeWorkerThreads({
+    beforeSpawn: () => {
+      if (!largeSendLogSet && resolveObservabilityConsent().localFileEnabled) {
+        largeSendLogSet = true
+        setWorkerLargeSendLog(join(getLogsDirectory(), 'worker-large-sends.ndjson'))
+      }
+    },
+    spawned: (worker, role) => {
+      const entry = { worker, role, threadId: worker.threadId }
+      live.add(entry)
+      worker.on('error', (error: Error & { code?: unknown }) => {
+        const ledger = readWorkerSendLedger().find((slot) => slot.threadId === entry.threadId)
+        recordDurableCrashBreadcrumb('worker_thread_failed', {
+          role,
+          code: typeof error?.code === 'string' ? error.code : null,
+          ...(ledger ? ledgerData('', ledger) : {}),
+          mainHeapMB: Math.round(getHeapStatistics().total_heap_size / MB)
+        })
+      })
+      if (!sampling) {
+        schedule(SAMPLE_INTERVAL_MS)
+      }
+    }
   })
 }
 
-async function sampleHeapPressure(live: Set<LiveWorker>): Promise<void> {
+/** Returns the committed heap of main plus every live worker. */
+async function sampleHeaps(live: Set<LiveWorker>): Promise<number> {
   for (const entry of live) {
     if (entry.worker.threadId === -1) {
       live.delete(entry)
     }
   }
-  const mainHeap = getHeapStatistics().used_heap_size
+  const mainHeap = getHeapStatistics().total_heap_size
   const ledger = new Map(readWorkerSendLedger().map((slot) => [slot.threadId, slot]))
-  const heaps = await Promise.all(
+  const heaps: WorkerHeap[] = await Promise.all(
     [...live].map(async (entry) => ({
       entry,
-      heap: await workerHeapUsed(entry.worker).catch(
+      heap: await workerHeap(entry.worker).catch(
         () => (ledger.get(entry.threadId)?.heapUsedMB ?? 0) * MB
       )
     }))
   )
+  heaps.sort((a, b) => b.heap - a.heap)
   const total = heaps.reduce((sum, { heap }) => sum + heap, mainHeap)
-  if (total < HEAP_PRESSURE_BYTES) {
-    return
-  }
-  const data: CrashReportBreadcrumbData = {
-    totalHeapMB: Math.round(total / MB),
-    mainHeapMB: Math.round(mainHeap / MB),
-    workers: heaps.length
-  }
-  heaps
-    .sort((a, b) => b.heap - a.heap)
-    .slice(0, REPORTED_WORKERS)
-    .forEach(({ entry, heap }, index) => {
+  annotateCrashReport(mainHeap, total, heaps, ledger)
+  if (total >= BREADCRUMB_BYTES) {
+    const data: CrashReportBreadcrumbData = {
+      totalHeapMB: Math.round(total / MB),
+      mainHeapMB: Math.round(mainHeap / MB),
+      workers: heaps.length
+    }
+    heaps.slice(0, REPORTED_WORKERS).forEach(({ entry, heap }, index) => {
       const slot = ledger.get(entry.threadId)
       Object.assign(data, {
         [`w${index}_role`]: entry.role,
@@ -85,15 +112,61 @@ async function sampleHeapPressure(live: Set<LiveWorker>): Promise<void> {
         ...(slot ? ledgerData(`w${index}_`, slot) : {})
       })
     })
-  recordCoalescedDurableCrashBreadcrumb({
-    name: 'worker_heap_pressure',
-    data,
-    coalesceKey: 'worker_heap_pressure',
-    minIntervalMs: SAMPLE_INTERVAL_MS
-  })
+    recordCoalescedDurableCrashBreadcrumb({
+      name: 'worker_heap_pressure',
+      data,
+      coalesceKey: 'worker_heap_pressure',
+      minIntervalMs: BREADCRUMB_MIN_INTERVAL_MS
+    })
+  }
+  return total
 }
 
-function workerHeapUsed(worker: Worker): Promise<number> {
+/** A cage-wide OOM aborts before any JS runs, so the minidump carries the last sample. */
+function annotateCrashReport(
+  mainHeap: number,
+  total: number,
+  heaps: readonly WorkerHeap[],
+  ledger: ReadonlyMap<number, WorkerSendLedgerEntry>
+): void {
+  const annotations: [string, string][] = [
+    [
+      'orca-isolate-heap',
+      `main=${Math.round(mainHeap / MB)}MB total=${Math.round(total / MB)}MB ` +
+        `workers=${heaps.length} at=${new Date().toISOString()}`
+    ]
+  ]
+  for (let index = 0; index < REPORTED_WORKERS; index += 1) {
+    const sample = heaps[index]
+    annotations.push([
+      `orca-worker-${index}`,
+      sample ? workerAnnotation(sample, ledger.get(sample.entry.threadId)) : ''
+    ])
+  }
+  try {
+    for (const [key, value] of annotations) {
+      if (value) {
+        crashReporter.addExtraParameter(key, value.slice(0, ANNOTATION_MAX_LENGTH))
+      } else {
+        crashReporter.removeExtraParameter(key)
+      }
+    }
+  } catch {
+    // Crash reporting may be off; diagnostics only.
+  }
+}
+
+function workerAnnotation(sample: WorkerHeap, slot: WorkerSendLedgerEntry | undefined): string {
+  const heap = `${sample.entry.role} heap=${Math.round(sample.heap / MB)}MB`
+  if (!slot) {
+    return heap
+  }
+  const lastKB = Math.round(slot.lastBytes / 1024)
+  const maxKB = Math.round(slot.maxBytes / 1024)
+  return `${heap} last=${slot.lastKind}/${slot.lastItems}/${lastKB}KB max=${slot.maxKind}/${maxKB}KB`
+}
+
+function workerHeap(worker: Worker): Promise<number> {
   let timer: ReturnType<typeof setTimeout> | undefined
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(
@@ -104,7 +177,7 @@ function workerHeapUsed(worker: Worker): Promise<number> {
   return Promise.race([
     Promise.resolve()
       .then(() => worker.getHeapStatistics())
-      .then((stats) => stats.used_heap_size),
+      .then((stats) => stats.total_heap_size),
     timeout
   ]).finally(() => clearTimeout(timer))
 }

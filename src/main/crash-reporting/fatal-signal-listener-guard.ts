@@ -4,7 +4,7 @@
  * Chromium's fatal OOM trap re-fires forever at full CPU instead of crashing with a report.
  * The listener itself never runs: the faulting thread never returns to the event loop.
  */
-const SYNCHRONOUS_FAULT_SIGNALS: ReadonlySet<string> = new Set([
+const SYNCHRONOUS_FAULT_SIGNALS: ReadonlySet<string | symbol> = new Set([
   'SIGTRAP',
   'SIGABRT',
   'SIGIOT',
@@ -15,19 +15,34 @@ const SYNCHRONOUS_FAULT_SIGNALS: ReadonlySet<string> = new Set([
   'SIGSEGV'
 ])
 
+const LISTENER_METHODS = [
+  'on',
+  'addListener',
+  'once',
+  'prependListener',
+  'prependOnceListener'
+] as const
+
 type SignalListenerTarget = Pick<
   NodeJS.Process,
-  'on' | 'removeAllListeners' | 'removeListener'
+  (typeof LISTENER_METHODS)[number] | 'removeAllListeners'
 >
 
+/**
+ * Refuses these listeners before Node starts libuv's handler, so the crash reporter's own handler
+ * (Linux) or the default action stays in place. Once per process, before modules that add them.
+ */
 export function installFatalSignalListenerGuard(target: SignalListenerTarget = process): void {
   for (const signal of SYNCHRONOUS_FAULT_SIGNALS) {
-    target.removeAllListeners(signal)
+    target.removeAllListeners(signal as string)
   }
-  target.on('newListener', (event: string | symbol, listener: (...args: unknown[]) => void) => {
-    if (typeof event === 'string' && SYNCHRONOUS_FAULT_SIGNALS.has(event)) {
-      // The listener is attached only after 'newListener' returns.
-      queueMicrotask(() => target.removeListener(event, listener))
-    }
-  })
+  for (const method of LISTENER_METHODS) {
+    const original = target[method] as (...args: unknown[]) => unknown
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: same signature; the wrapper forwards every other event unchanged.
+    target[method] = function (this: unknown, event: unknown, ...rest: unknown[]) {
+      return SYNCHRONOUS_FAULT_SIGNALS.has(event as string | symbol)
+        ? target
+        : original.call(this, event, ...rest)
+    } as SignalListenerTarget[typeof method]
+  }
 }
