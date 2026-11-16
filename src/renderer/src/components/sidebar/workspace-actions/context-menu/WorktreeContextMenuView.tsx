@@ -195,9 +195,10 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
             <CloudWorkspaceMenuItems
               worktreeId={worktree.id}
               hostId={getWorktreeExecutionHostId(worktree, repo ?? undefined)}
+              // Next to Restart / Archive, not after the cloud group.
+              moveItem={<WorktreeCloudTransferMenuItem worktreeId={worktree.id} />}
             />
           )}
-          {!isMultiContext && <WorktreeCloudTransferMenuItem worktreeId={worktree.id} />}
           {!isMultiContext && (
             <DropdownMenuItem onSelect={handleToggleRead} disabled={isDeleting}>
               {worktree.isUnread ? <BellOff className="size-3.5" /> : <Bell className="size-3.5" />}
