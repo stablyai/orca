@@ -1,8 +1,7 @@
 import { Switch } from '../ui/switch'
 import {
   DEFAULT_PERFORCE_SETTINGS,
-  normalizePerforceSettings,
-  type PerforceSettings
+  normalizePerforceSettings
 } from '../../../../shared/perforce/perforce-settings'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { translate } from '@/i18n/i18n'
@@ -16,6 +15,7 @@ import {
 import { PerforceAiAgentFields } from './PerforceAiFields'
 import { PerforceConnectionTest } from './PerforceConnectionTest'
 import { PerforceCopySettingsFields } from './PerforceCopySettingsFields'
+import { usePerforceSettingsUpdate } from './use-perforce-settings-update'
 import {
   CommitInput,
   P4_PATH_PLACEHOLDER,
@@ -31,9 +31,7 @@ type PerforcePaneProps = {
 
 export function PerforcePane({ settings, updateSettings }: PerforcePaneProps): React.JSX.Element {
   const perforce = normalizePerforceSettings(settings.perforce)
-  const update = (patch: Partial<PerforceSettings>): void => {
-    void updateSettings({ perforce: { ...perforce, ...patch } })
-  }
+  const update = usePerforceSettingsUpdate(settings.perforce, updateSettings)
   const catalog = new Map(getPerforceSettingsCatalog().map((item) => [item.id, item]))
 
   const setting = (id: PerforceSettingId, body: React.ReactNode): React.JSX.Element | null => {
