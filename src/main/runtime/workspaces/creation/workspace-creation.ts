@@ -31,7 +31,7 @@ import { assertWslMoveRepoWritable } from '../../../persistence/moving-wsl-proje
 import { resolveManagedWorktreeCreateStartup } from '../startup/managed-worktree-create-startup'
 import type { WorkspaceCreationHandle } from '../lifecycle/workspace-lifecycle-creations'
 import { workspaceLifecycleKey } from '../lifecycle/workspace-lifecycle-commands'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { applyWorkspaceCreatePluginHook } from '../../../plugins/hooks/workspace-create-plugin-hook'
 import { withProjectWorktreeCreate } from '../../../workspaces/creation/worktree-create-in-flight'
 import { createdWorktreeLifecycleIdentity } from '../lifecycle/worktree-lifecycle-event'

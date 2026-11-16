@@ -1,4 +1,5 @@
 import type { ClaudeEnvPatch } from './environment'
+import type { UsageReadingAccount } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 
 export type ClaudeRuntimeAuthPreparation = {
   configDir: string
@@ -9,6 +10,8 @@ export type ClaudeRuntimeAuthPreparation = {
   /** Set only by a `--account` launch on a host account that is not the selected one. */
   pinnedAccountId?: string
   provenance: string
+  /** The saved account whose login this reads; absent for System default and covered accounts. */
+  readingAccount?: UsageReadingAccount
   /** Report unavailable usage without throwing out the entire polling cycle. */
   usageError?: string
 }

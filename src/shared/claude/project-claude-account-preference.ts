@@ -48,6 +48,21 @@ export function normalizeRepoAgentAccounts(value: unknown): RepoAgentAccounts | 
   return claude ? { claude } : null
 }
 
+/** Normalizes a non-null update in place and drops a malformed one; `null` stays a clear. */
+export function sanitizeRepoAgentAccountsUpdate(updates: {
+  agentAccounts?: RepoAgentAccounts | null
+}): void {
+  if (updates.agentAccounts == null) {
+    return
+  }
+  const normalized = normalizeRepoAgentAccounts(updates.agentAccounts)
+  if (normalized) {
+    updates.agentAccounts = normalized
+  } else {
+    delete updates.agentAccounts
+  }
+}
+
 export function repoAgentAccountsEqual(
   a: RepoAgentAccounts | null | undefined,
   b: RepoAgentAccounts | null | undefined

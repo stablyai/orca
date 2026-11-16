@@ -24,7 +24,7 @@ import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation
 import type { PtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
 import type { PtyBindingSourceExpectation } from '../../../persistence/loading-store/store'
 import type { TerminalPanePlacement } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-placement'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
 import type { PtyProcessInfo } from '../../../providers/pty/process-info'
 import type { PtySpawnResult } from '../../../providers/pty/spawn-result'

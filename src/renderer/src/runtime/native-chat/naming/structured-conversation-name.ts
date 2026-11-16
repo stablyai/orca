@@ -4,7 +4,7 @@ import {
   useAppStateValue
 } from '@/store/retained-views/app-state-view'
 import { useCallback, useEffect, useMemo } from 'react'
-import type { Tab } from '../../../../../shared/tab-types'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { isAgentSessionConversationName } from '../../../../../shared/agent-session/agent-session-conversation-name'
 import type {
   AgentSessionNamingError,

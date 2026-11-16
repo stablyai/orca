@@ -5,7 +5,7 @@ import { agentProviderSessionsEqual } from '../../../../../shared/agent-session/
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import { getProviderSessionClaimKey } from '../../../../../shared/sleeping-record-legacy-pane-key'
+import { getProviderSessionClaimKey } from '../../../../../shared/agent-session/lifecycle/resume/sleeping-record-legacy-pane-key'
 import {
   activationTreatsNoteAsFinished,
   isStrandedWorkspaceSleepRecord,

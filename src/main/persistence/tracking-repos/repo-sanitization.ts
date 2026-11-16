@@ -1,6 +1,6 @@
 import type { RepoProjectHostSetupMethod } from '../../../shared/project/project-types'
 import type { Repo } from '../../../shared/repository/repo-types'
-import { editorFormatterSchema } from '../../../shared/editor-formatter'
+import { editorFormatterSchema } from '../../../shared/editor/formatting/editor-formatter'
 import type { GitRemoteIdentity } from '../../../shared/git/remotes/git-remote-identity'
 import { normalizeRepoBadgeColor } from '../../../shared/repository/appearance/repo-badge-color'
 import { sanitizeRepoIcon } from '../../../shared/repository/appearance/repo-icon'
@@ -9,7 +9,7 @@ import {
   type GhAccountBinding
 } from '../../../shared/github/accounts/account-binding'
 import { normalizeJiraProjectReference } from '../../../shared/jira/jira-project-reference'
-import { normalizeRepoAgentAccounts } from '../../../shared/claude/project-claude-account-preference'
+import { sanitizeRepoAgentAccountsUpdate } from '../../../shared/claude/project-claude-account-preference'
 import type { RepoAgentAccounts } from '../../../shared/claude/project-claude-account-preference'
 import { sanitizeAgentWorkspaceTrustDecision } from '../../../shared/agent-launch/permissions/agent-workspace-trust-decision'
 import {
@@ -90,6 +90,7 @@ export function sanitizeRepoUpdatesForPersistence<
   > & {
     ghAccount?: GhAccountBinding | null
     agentAccounts?: RepoAgentAccounts | null
+    browserProfileId?: string | null
   }
 >(updates: T): T {
   const sanitized = { ...updates }
@@ -168,6 +169,13 @@ export function sanitizeRepoUpdatesForPersistence<
       sanitized.agentWorkspaceTrust = agentWorkspaceTrust
     }
   }
+  if (
+    'browserProfileId' in sanitized &&
+    sanitized.browserProfileId != null &&
+    (typeof sanitized.browserProfileId !== 'string' || !sanitized.browserProfileId.trim())
+  ) {
+    delete sanitized.browserProfileId
+  }
   // Null explicitly clears ghAccount; only malformed shapes are discarded.
   if ('ghAccount' in sanitized && sanitized.ghAccount != null) {
     const ghAccount = normalizeGhAccountBinding(sanitized.ghAccount)
@@ -177,14 +185,7 @@ export function sanitizeRepoUpdatesForPersistence<
       sanitized.ghAccount = ghAccount
     }
   }
-  if ('agentAccounts' in sanitized && sanitized.agentAccounts != null) {
-    const agentAccounts = normalizeRepoAgentAccounts(sanitized.agentAccounts)
-    if (!agentAccounts) {
-      delete sanitized.agentAccounts
-    } else {
-      sanitized.agentAccounts = agentAccounts
-    }
-  }
+  sanitizeRepoAgentAccountsUpdate(sanitized)
   if ('customWorktreeVisibilitySources' in sanitized) {
     const sources = normalizeCustomWorktreeVisibilitySources(
       sanitized.customWorktreeVisibilitySources

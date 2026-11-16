@@ -1,4 +1,4 @@
-import { normalizeRuntimePathSeparators } from '../../cross-platform-path'
+import { normalizeRuntimePathSeparators } from '../../file-access/cross-platform-path'
 import {
   normalizeCustomWorktreeVisibilitySources,
   normalizeWorktreeVisibilitySourcePreferences

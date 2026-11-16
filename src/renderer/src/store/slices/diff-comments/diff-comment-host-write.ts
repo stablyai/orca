@@ -1,4 +1,4 @@
-import type { DiffComment } from '../../../../../shared/diff-comment-types'
+import type { DiffComment } from '../../../../../shared/file-review/diff-comment-types'
 import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
 import { callRuntimeRpc } from '../../../runtime/rpc/calls/runtime-rpc-call'
 import type { DiffCommentOwner } from './diff-comment-owner'

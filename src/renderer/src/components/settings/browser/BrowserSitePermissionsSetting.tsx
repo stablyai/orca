@@ -3,35 +3,63 @@ import { useEffect, useState } from 'react'
 import type { BrowserSessionProfile } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   BROWSER_SITE_PERMISSIONS,
+  browserExternalAppPermissionScheme,
+  isBrowserExternalAppPermission,
   isBrowserSitePermissionDecision,
-  type BrowserSitePermission,
-  type BrowserSitePermissionEntry
+  type BrowserSitePermissionEntry,
+  type BrowserSitePermissionKey
 } from '../../../../../shared/browser/site-settings/browser-site-permission'
 import { Label } from '../../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
 import {
+  browserExternalAppPermissionLabel,
   browserSitePermissionLabel,
   browserSitePermissionSiteName
 } from '../../browser-pane/browser-site-permission-copy'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsRow } from '../form-controls/SettingsFormControls'
 import { getBrowserSitePermissionsSearchEntry } from './browser-site-permissions-search'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import { useAppStore } from '../../../store/index'
-import { useTranslate } from '@/i18n/use-translate'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { translateBrowserSessionProfileLabel } from '@/lib/browser/profiles/browser-session-profile-label'
+
+// Permissions in prompt order, then apps by scheme; apps can't be blocked, only asked again.
+function sitePermissionRows(
+  entry: BrowserSitePermissionEntry,
+  t: Translate
+): { permission: BrowserSitePermissionKey; label: string; canBlock: boolean }[] {
+  const permissions = BROWSER_SITE_PERMISSIONS.filter((permission) => entry.decisions[permission])
+  // One shared prefix, so key order is scheme order.
+  const apps = Object.keys(entry.decisions).filter(isBrowserExternalAppPermission).sort()
+  return [
+    ...permissions.map((permission) => ({
+      permission,
+      label: browserSitePermissionLabel(permission, t),
+      canBlock: true
+    })),
+    ...apps.map((permission) => ({
+      permission,
+      label: browserExternalAppPermissionLabel(browserExternalAppPermissionScheme(permission), t),
+      canBlock: false
+    }))
+  ]
+}
 
 function SitePermissionRow({
   entry,
   permission,
+  label,
+  canBlock,
   onChange
 }: {
   entry: BrowserSitePermissionEntry
-  permission: BrowserSitePermission
-  onChange: (permission: BrowserSitePermission, value: string) => void
+  permission: BrowserSitePermissionKey
+  label: string
+  canBlock: boolean
+  onChange: (permission: BrowserSitePermissionKey, value: string) => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const label = browserSitePermissionLabel(permission, t)
   return (
     <SettingsRow
       label={label}
@@ -47,9 +75,11 @@ function SitePermissionRow({
             <SelectItem value="allow">
               {t('settings.browser.sitePermissions.allow', 'Allow')}
             </SelectItem>
-            <SelectItem value="block">
-              {t('settings.browser.sitePermissions.block', 'Block')}
-            </SelectItem>
+            {canBlock ? (
+              <SelectItem value="block">
+                {t('settings.browser.sitePermissions.block', 'Block')}
+              </SelectItem>
+            ) : null}
             <SelectItem value="ask">
               {t('settings.browser.sitePermissions.ask', 'Ask again')}
             </SelectItem>
@@ -100,7 +130,7 @@ export function BrowserSitePermissionsSetting(): React.JSX.Element {
     }
   }, [profileId])
 
-  const changeDecision = (origin: string, permission: BrowserSitePermission, value: string) => {
+  const changeDecision = (origin: string, permission: BrowserSitePermissionKey, value: string) => {
     const writtenProfileId = profileId
     void window.api.browser
       .sitePermissionsSet({
@@ -162,16 +192,16 @@ export function BrowserSitePermissionsSetting(): React.JSX.Element {
               <p className="truncate pt-2 text-sm font-medium" title={entry.origin}>
                 {browserSitePermissionSiteName(entry.origin, t)}
               </p>
-              {BROWSER_SITE_PERMISSIONS.filter((permission) => entry.decisions[permission]).map(
-                (permission) => (
-                  <SitePermissionRow
-                    key={permission}
-                    entry={entry}
-                    permission={permission}
-                    onChange={(changed, value) => changeDecision(entry.origin, changed, value)}
-                  />
-                )
-              )}
+              {sitePermissionRows(entry, t).map(({ permission, label, canBlock }) => (
+                <SitePermissionRow
+                  key={permission}
+                  entry={entry}
+                  permission={permission}
+                  label={label}
+                  canBlock={canBlock}
+                  onChange={(changed, value) => changeDecision(entry.origin, changed, value)}
+                />
+              ))}
             </div>
           ))}
         </div>

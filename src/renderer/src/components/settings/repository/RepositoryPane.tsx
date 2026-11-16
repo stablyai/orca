@@ -1,6 +1,8 @@
-import type { RepositoryPaneRepoUpdate } from './repository-pane-repo-update'
 import { useCallback, useRef, useState } from 'react'
-import type { OrcaHooks, RepoHookSettings } from '../../../../../shared/orca-yaml-hook-types'
+import type {
+  OrcaHooks,
+  RepoHookSettings
+} from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
 import type {
   Project,
   ProjectHostSetup,
@@ -10,7 +12,8 @@ import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { SourceControlAiSettingsPatch } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import { getRepoKindLabel, isFolderRepo } from '../../../../../shared/repository/repo-kind'
 import { useFolderSetupSupport } from '@/lib/workspace/creation/setup/folder-setup-support'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
+// oxfmt-ignore
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { Label } from '../../ui/label'
 import { useShallow } from 'zustand/react/shallow'
 import { RepositoryHooksSection } from './hooks/RepositoryHooksSection'
@@ -25,13 +28,14 @@ import { RepositoryRemoveProjectSection } from './RepositoryRemoveProjectSection
 import type { SettingsProjectRemovalScope } from '../navigation/settings-project-list'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { useAppStore } from '@/store/index'
-import { getRepositoryIconSectionId } from './repository-settings-targets'
-import { RepositoryIconPicker } from './identity/RepositoryIconPicker'
+import { RepositoryIconSection } from './identity/RepositoryIconSection'
 import { getRepositoryPaneSearchMetadata } from './repository-search'
 import { RepositoryHostSetupsSection } from './hosts/RepositoryHostSetupsSection'
 import { RepoSettingsDraftInput } from './RepositorySettingsDraftInput'
 import { RepositoryForkSyncSection } from './source-control/RepositoryForkSyncSection'
 import { RepositoryAgentTrustSection } from './RepositoryAgentTrustSection'
+import { RepositoryBrowserProfileSection } from './RepositoryBrowserProfileSection'
+import type { RepositoryPaneRepoUpdate } from './repository-pane-repo-update'
 import { RepositoryGitHubAccountSection } from './source-control/RepositoryGitHubAccountSection'
 import { useTranslate } from '@/i18n/use-translate'
 import { RepositoryWindowsRuntimeSection } from './runtime/RepositoryWindowsRuntimeSection'
@@ -259,28 +263,11 @@ export function RepositoryPane({
           />
         </SearchableSetting>
 
-        <SearchableSetting
-          title={t('auto.components.settings.RepositoryPane.e856e61455', 'Project icon')}
-          description={t(
-            'auto.components.settings.RepositoryPane.e641c359de',
-            'Project icon and color used in the sidebar and tabs.'
-          )}
-          keywords={[
-            repo.displayName,
-            repo.path,
-            'project icon',
-            'repository icon',
-            'color',
-            'badge',
-            'emoji',
-            'favicon'
-          ]}
-          className="space-y-2 py-3"
-          id={getRepositoryIconSectionId(repo.id)}
+        <RepositoryIconSection
+          repo={repo}
+          updateRepo={updateSelectedRepo}
           forceVisible={forceFullPaneForRepoMatch}
-        >
-          <RepositoryIconPicker repo={repo} updateRepo={updateSelectedRepo} />
-        </SearchableSetting>
+        />
 
         <RepositoryJiraProjectSection
           key={`${selectedHostId}:${repo.id}`}
@@ -296,6 +283,12 @@ export function RepositoryPane({
         />
 
         <RepositoryClaudeAccountSection
+          repo={repo}
+          updateRepo={updateSelectedRepo}
+          forceVisible={forceFullPaneForRepoMatch}
+        />
+
+        <RepositoryBrowserProfileSection
           repo={repo}
           updateRepo={updateSelectedRepo}
           forceVisible={forceFullPaneForRepoMatch}

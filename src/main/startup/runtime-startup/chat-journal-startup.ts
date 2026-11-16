@@ -1,6 +1,7 @@
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { isHostShuttingDown } from '../quit/host-shutdown-state'
 import { mainProcessState as state } from '../main-process-state'
+import { reclaimManagedRuntimeReleasesAtLaunch } from '../../runtime/rpc/methods/host-management/managed-runtime-install'
 
 // Background chat-journal maintenance waits for this Electron host's serving milestone.
 const serving = Promise.withResolvers<void>()
@@ -28,10 +29,15 @@ export function beginChatJournalStartup(
   )
 }
 
-/** Serving milestone: maintenance and CI-line watches start after the bounded first-window fence, never the renderer. */
+/** Serving milestone: maintenance, CI-line watches and runtime release reclaim start after the bounded first-window fence, never the renderer. */
 export function chatJournalHostServing(): void {
   serving.resolve()
   void windowFence
     .catch(() => {})
-    .then(() => state.runtime?.startPullRequestWatches({ admit: true }))
+    .then(() => {
+      if (state.runtime) {
+        state.runtime.startPullRequestWatches({ admit: true })
+        reclaimManagedRuntimeReleasesAtLaunch(state.runtime)
+      }
+    })
 }

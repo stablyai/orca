@@ -4,7 +4,7 @@ import type {
   CloneTargetArgs,
   CloneTargetCheck
 } from '../../../shared/git/clone/clone-target-check'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type { GhAccountBinding } from '../../../shared/github/accounts/account-binding'
 import type { RepoAgentAccounts } from '../../../shared/claude/project-claude-account-preference'
 import type {
@@ -89,6 +89,7 @@ export type RepositoryApi = {
       ghAccount?: GhAccountBinding | null
       agentAccounts?: RepoAgentAccounts | null
       workspaceCleanupPolicy?: Repo['workspaceCleanupPolicy'] | null
+      browserProfileId?: string | null
     }
   }) => Promise<Repo>
   pickFolder: () => Promise<string | null>

@@ -1,5 +1,5 @@
-import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
+import type { PersistedUIState } from '../../../shared/orca-profiles/persisted-ui-state-types'
 import type { PluginEventName } from '../../../shared/plugins/manifest/plugin-manifest'
 import {
   resolvePluginEditorTypography,

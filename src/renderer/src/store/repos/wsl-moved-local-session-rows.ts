@@ -5,7 +5,7 @@
  * copies under the same tab ids, so they must leave before the host partitions merge in.
  */
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { normalizeWorkspaceSessionKeyToWorkspaceId } from '../../../../shared/workspace/identity/workspace-scope'
 import {
   filterWorkspaceRows,

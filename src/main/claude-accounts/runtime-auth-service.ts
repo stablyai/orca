@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { getAppEnvironment } from '../../shared/app-environment'
+import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { toWindowsWslPath } from '../../shared/file-access/wsl-paths'
 import { resolveLocalAccountRuntimeTarget } from '../../shared/agent-accounts/local-account-runtime'
 import type { Store } from '../persistence/loading-store/store'

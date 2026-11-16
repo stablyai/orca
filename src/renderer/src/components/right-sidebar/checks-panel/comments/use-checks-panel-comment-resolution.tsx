@@ -23,7 +23,7 @@ import { isReviewThreadResolutionInFlight } from '@/store/github/review-threads/
 import { worktreeLaunchWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
 import { errorMessage } from '../../../../../../shared/errors/error-message'
-import type { GitLabDiscussionResolveResult } from '../../../../../../shared/gitlab-types'
+import type { GitLabDiscussionResolveResult } from '../../../../../../shared/gitlab/gitlab-types'
 
 type ChecksPanelCommentResolutionInput = Pick<
   ChecksPanelControllerState,

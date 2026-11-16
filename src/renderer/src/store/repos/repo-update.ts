@@ -4,13 +4,13 @@ import type { Repo } from '../../../../shared/repository/repo-types'
 import { sanitizeRepoIcon } from '../../../../shared/repository/appearance/repo-icon'
 import { normalizeRepoBadgeColor } from '../../../../shared/repository/appearance/repo-badge-color'
 import { normalizeGhAccountBinding } from '../../../../shared/github/accounts/account-binding'
-import { normalizeRepoAgentAccounts } from '../../../../shared/claude/project-claude-account-preference'
+import { sanitizeRepoAgentAccountsUpdate } from '../../../../shared/claude/project-claude-account-preference'
 import { normalizeJiraProjectReference } from '../../../../shared/jira/jira-project-reference'
 import { sanitizeAgentWorkspaceTrustDecision } from '../../../../shared/agent-launch/permissions/agent-workspace-trust-decision'
 import { findRepoForHost, repoMatchesHostIdentity } from './repo-host-identity'
 import { getRepoHostIdentityForParts } from '../../../../shared/repository/repo-host-identity'
 import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   normalizeCustomWorktreeVisibilitySources,
   normalizeWorktreeVisibilitySourcePreferences
@@ -72,14 +72,7 @@ export function sanitizeRepoUpdate(updates: RepoUpdate): RepoUpdate {
       sanitized.ghAccount = normalized
     }
   }
-  if ('agentAccounts' in sanitized && sanitized.agentAccounts != null) {
-    const normalized = normalizeRepoAgentAccounts(sanitized.agentAccounts)
-    if (!normalized) {
-      delete sanitized.agentAccounts
-    } else {
-      sanitized.agentAccounts = normalized
-    }
-  }
+  sanitizeRepoAgentAccountsUpdate(sanitized)
   if ('customWorktreeVisibilitySources' in sanitized) {
     const sources = normalizeCustomWorktreeVisibilitySources(
       sanitized.customWorktreeVisibilitySources
@@ -182,6 +175,13 @@ export function createRepoUpdateActions(
           ) {
             return false
           }
+          // A host from before per-repo browser profiles drops the field and still answers with its row.
+          if (
+            sanitizedUpdates.browserProfileId !== undefined &&
+            (updatedRepo?.browserProfileId ?? null) !== sanitizedUpdates.browserProfileId
+          ) {
+            return false
+          }
           set((s) => {
             const nextRepos = s.repos.map((r) => {
               const matchesOwner = ownerHasExplicitHost
@@ -211,6 +211,7 @@ export function createRepoUpdateActions(
                 externalWorktreeVisibility,
                 agentWorktreeVisibility,
                 workspaceCleanupPolicy,
+                browserProfileId,
                 ...updatesWithoutClearSentinels
               } = sanitizedUpdates
               mergedRepo = { ...mergedRepo, ...updatesWithoutClearSentinels }
@@ -267,6 +268,13 @@ export function createRepoUpdateActions(
                 mergedRepo = repoWithoutCleanupPolicy
               } else if (workspaceCleanupPolicy !== undefined) {
                 mergedRepo = { ...mergedRepo, workspaceCleanupPolicy }
+              }
+              if (browserProfileId === null) {
+                const { browserProfileId: _browserProfileId, ...repoWithoutBrowserProfile } =
+                  mergedRepo
+                mergedRepo = repoWithoutBrowserProfile
+              } else if (browserProfileId !== undefined) {
+                mergedRepo = { ...mergedRepo, browserProfileId }
               }
               return s.githubSourceCollections?.adopt(mergedRepo) ?? mergedRepo
             })

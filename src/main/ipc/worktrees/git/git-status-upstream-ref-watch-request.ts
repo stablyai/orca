@@ -10,7 +10,7 @@ import {
 import { setWorktreeGitStatusRefWatch } from '../creation/worktree-base-directory-watcher'
 import type { GitStatusRefBindingRequest } from './worktree-git-status-ref-watch'
 import { requireReachableGitRoute } from '../../../providers/execution-host-provider-dispatch'
-import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
+import { getConnectionExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { assertWslUncPathRunning } from '../../../wsl/filesystem/wsl-unc-access-gate'
 
 const UPSTREAM_REF_RESOLUTION_TIMEOUT_MS = 15_000

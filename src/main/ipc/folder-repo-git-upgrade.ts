@@ -3,10 +3,13 @@ import { join } from 'node:path'
 import type { BrowserWindow } from 'electron'
 import type { Repo } from '../../shared/repository/repo-types'
 import type { Store } from '../persistence/loading-store/store'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../shared/execution-host/execution-host'
 import { isFolderRepo } from '../../shared/repository/repo-kind'
 import { findExtraFolderWorkspaceIds } from '../workspaces/catalog/folder-workspace-meta-presence'
-import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../shared/file-access/cross-platform-path'
 import { isWslUncPath } from '../../shared/file-access/wsl-paths'
 import { resolveFolderToGitConversion } from '../workspaces/catalog/folder-repo-git-conversion'
 import { prepareLocalWorktreeRootForRepo } from '../workspaces/creation/worktree-root-preparation'

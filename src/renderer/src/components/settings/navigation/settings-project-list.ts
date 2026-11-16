@@ -4,10 +4,10 @@ import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import { projectHostSetupProjectionFromRepos } from '../../../../../shared/project/host-setup/project-host-setup-projection'
 import { getRepoHostIdentityForParts } from '../../../../../shared/repository/repo-host-identity'
-import { normalizeRuntimePathForComparison } from '../../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../../shared/file-access/cross-platform-path'
 import {
   buildProjectGroupingIndex,
   isCheckoutScopedProjectSetup,

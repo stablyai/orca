@@ -1,5 +1,5 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { dirname, join } from 'node:path'
 import { resolveOrcaManagedCodexHomePath } from '../../configuration/homes/codex-home-paths'
 import '../toml/config-toml-trust'

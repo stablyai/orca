@@ -15,7 +15,7 @@ import {
   getRepoExecutionHostId,
   getRepoRoutingConnectionId,
   type ExecutionHostId
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import { getDefaultBaseRefAsync as getBaseRefDefault } from '../../git/refs/resolution/repo-default-base-ref'
 import { getRemoteCount } from '../../git/remotes/repo-remote-queries'
 import { searchBaseRefDetails } from '../../git/refs/resolution/repo-base-ref-search'

@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../global-settings-types'
+import type { GlobalSettings } from '../settings/global-settings-types'
 
 /** Which login-shell variables a structured native chat child inherits. */
 export type NativeChatShellEnvironmentPolicy = {

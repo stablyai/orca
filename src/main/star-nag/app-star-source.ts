@@ -1,4 +1,4 @@
-import type { AppStarSource } from '../../shared/gh-star-source'
+import type { AppStarSource } from '../../shared/github/repositories/gh-star-source'
 import type { StarNagPromptSource } from '../../shared/telemetry/star-nag-telemetry'
 
 export function getStarNagAppStarSource(source: StarNagPromptSource): AppStarSource {

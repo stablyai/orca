@@ -1,5 +1,5 @@
 import { useTranslate } from '@/i18n/use-translate'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { Label } from '../ui/label'
 import { Switch } from '../ui/switch'
 import { SearchableSetting } from './section-layout/SearchableSetting'

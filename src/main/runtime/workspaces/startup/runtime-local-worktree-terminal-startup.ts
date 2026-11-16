@@ -1,6 +1,6 @@
 import { paneIdentity } from '../../terminal/identity/runtime-terminal-pane-identity'
 import { appendWorktreeTerminalFailure as appendFailure } from './worktree-terminal-start-warning'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { shouldSeedWorktreePrimaryTerminal } from '../../../../shared/worktree/creation/worktree-first-surface'
 import type { CreateWorktreeResult } from '../../../../shared/worktree/create-types'
 import type { Repo } from '../../../../shared/repository/repo-types'

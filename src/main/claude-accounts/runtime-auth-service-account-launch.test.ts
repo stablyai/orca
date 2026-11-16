@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getDefaultSettings } from '../../shared/constants'
-import type { GlobalSettings } from '../../shared/global-settings-types'
+import { getDefaultSettings } from '../../shared/orca-profiles/constants'
+import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 import type { ClaudeManagedAccount } from '../../shared/agent-accounts/managed-account-types'
 
 const fakes = vi.hoisted(() => ({
@@ -15,7 +15,7 @@ const fakes = vi.hoisted(() => ({
     publish: () => {}
   }
 }))
-vi.mock('../../shared/app-environment', () => ({
+vi.mock('../../shared/app-lifecycle/app-environment', () => ({
   getAppEnvironment: () => ({ getPath: () => '/data' })
 }))
 vi.mock('../wsl/discovery/distro-catalog', () => ({

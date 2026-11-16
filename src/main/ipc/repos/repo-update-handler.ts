@@ -8,7 +8,7 @@ import {
   type ExecutionHostId,
   getRepoExecutionHostId,
   normalizeExecutionHostId
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import { normalizeRepoBadgeColor } from '../../../shared/repository/appearance/repo-badge-color'
 import { sanitizeRepoIcon } from '../../../shared/repository/appearance/repo-icon'
 import {
@@ -77,6 +77,7 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
           hiddenAt?: Repo['hiddenAt'] | null
           ghAccount?: GhAccountBinding | null
           agentAccounts?: RepoAgentAccounts | null
+          browserProfileId?: string | null
         }
       }
     ): Promise<Repo | null> => {
@@ -117,15 +118,12 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
         }
       }
       if ('agentAccounts' in updates) {
-        if (updates.agentAccounts == null) {
-          updates.agentAccounts = null
+        const raw = updates.agentAccounts
+        const normalized = raw == null ? null : normalizeRepoAgentAccounts(raw)
+        if (raw != null && !normalized) {
+          delete updates.agentAccounts
         } else {
-          const normalized = normalizeRepoAgentAccounts(updates.agentAccounts)
-          if (!normalized) {
-            delete updates.agentAccounts
-          } else {
-            updates.agentAccounts = normalized
-          }
+          updates.agentAccounts = normalized
         }
       }
       // Worktree materialization trims each path; reject malformed arrays at the IPC boundary.

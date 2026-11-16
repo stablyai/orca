@@ -1,7 +1,9 @@
 // Restored panes share main's starter across first-view, CLI and orchestration triggers.
 import { describe, expect, it, vi } from 'vitest'
 
-vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
+vi.mock('../../../../shared/workspace-layout/layout-owner-switch', () => ({
+  ORCA_LAYOUT_OWNER_IS_MAIN: true
+}))
 
 // Fragments stay side-effect ordered: mocks, then lifecycle, then fixtures.
 await import('../../orca-runtime-tests/runtime-test-module-registration.spec')

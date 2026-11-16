@@ -22,9 +22,10 @@
     "details": "links.count > 0 || (options.show.issue && links.issue) || (options.show.linearIssue && links.linearIssue) || (options.show.jiraIssue && links.jiraIssue) || (!vars.newStyle && options.show.pr && review != null) || (options.show.comment && vars.hasComment) || (options.show.automation && provenance.automation) || (options.show.cli && provenance.cli)",
     "ports": "options.show.ports && ports.count > 0",
     "indicators": "vars.details || vars.ports",
-    "metaIndicators": "!vars.compact && vars.metaRow && vars.indicators",
-    "titleIndicators": "!vars.metaRow && vars.indicators",
-    "hasMetaRow": "vars.metaRow ? vars.metaRepo || vars.hostBadge || vars.folderInMeta || vars.branch || vars.identityInMeta || vars.detachedInMeta || vars.conflict || git.cacheTimerActive || vars.metaIndicators : vars.conflict || git.cacheTimerActive",
+    "metaLead": "vars.metaRepo || vars.hostBadge || vars.folderInMeta || vars.branch || vars.identityInMeta || vars.detachedInMeta || vars.conflict || git.cacheTimerActive",
+    "metaIndicators": "vars.metaRow && vars.indicators && (vars.classic || vars.metaLead)",
+    "titleIndicators": "vars.indicators && !vars.metaIndicators",
+    "hasMetaRow": "vars.metaRow ? vars.metaLead || vars.metaIndicators : vars.conflict || git.cacheTimerActive",
     "star": "vars.compact && ws.isMain && !vars.folder",
     "headerActions": "vars.star || place.deleteQuickAction",
     "inlineAgents": "options.show.inlineAgents && !vars.compact",
@@ -74,6 +75,7 @@
                   "when": "ws.isSparse",
                   "props": { "hasHoverDetails": "=vars.hoverDetails && !ws.isRenaming" }
                 },
+                { "el": "NotificationsMuted" },
                 {
                   "el": "HostBadge",
                   "when": "vars.newStyle && !vars.metaRow && vars.hostBadge",

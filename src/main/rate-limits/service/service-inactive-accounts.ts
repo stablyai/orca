@@ -146,6 +146,7 @@ export abstract class RateLimitServiceInactiveAccounts extends RateLimitServiceP
           // Read the managed home directly; do not materialize credentials in the shared runtime.
           const fresh = await fetchCodexRateLimits({
             codexHomePath: home.managedHomePath,
+            readingAccount: account.readingAccount,
             networkProxySettings: this.networkProxySettingsResolver?.(),
             signal
           })

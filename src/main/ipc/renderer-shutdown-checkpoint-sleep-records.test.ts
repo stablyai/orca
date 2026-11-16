@@ -16,7 +16,9 @@ const { handlers } = vi.hoisted(() => ({
   handlers: new Map<string, (event: { returnValue?: unknown }, args: unknown) => unknown>()
 }))
 
-vi.mock('../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
+vi.mock('../../shared/workspace-layout/layout-owner-switch', () => ({
+  ORCA_LAYOUT_OWNER_IS_MAIN: true
+}))
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
   safeStorage: { isEncryptionAvailable: () => false },

@@ -1,5 +1,5 @@
 import { posix, win32 } from 'node:path'
-import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
+import { isWindowsAbsolutePathLike } from '../../../../shared/file-access/cross-platform-path'
 import { RepoRefMaintenance } from '../../../../shared/git/maintenance/repo-ref-maintenance'
 import {
   PACK_REFS_ARGS,

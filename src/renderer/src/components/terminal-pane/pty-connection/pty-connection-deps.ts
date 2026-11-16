@@ -3,7 +3,7 @@ import type { isClaudeAgent } from '../../../../../shared/agent-status/title/age
 import type { detectAgentStatusFromTitle } from '../../../../../shared/agent-status/title/agent-title-status'
 import type { TerminalLaunchInputAttemptOwner } from './startup/terminal-launch-input-attempt'
 import type { WorkspaceAttentionSlice } from '../../../store/slices/workspace-attention/workspace-attention-contract'
-import type { NotificationWorkspaceOwner } from '../../../../../shared/notification-source'
+import type { NotificationWorkspaceOwner } from '../../../../../shared/notifications/notification-source'
 import type { PtyTransport, PtyTransportRecoveryState } from '../pty-transport/pty-transport-types'
 import type { SessionRestoredBannerReason } from '../session-restore/session-restored-banner-pane-state'
 import type { ReplayingPanesRef } from '../snapshots/replay-guard'

@@ -1,7 +1,7 @@
 import type { RuntimeRpcResponse } from '../rpc/runtime-rpc-envelope'
 import type { RemoteRuntimeClientError } from '../remote-runtime-client-error'
 import type { RemoteRuntimePreparedRequest } from '../requests/remote-runtime-prepared-request-admission'
-import type { RuntimeCapability } from '../../protocol-version'
+import type { RuntimeCapability } from '../protocol/protocol-version'
 import type {
   RemoteRuntimeSocketDeathCause,
   RemoteRuntimeSocketLivenessOptions

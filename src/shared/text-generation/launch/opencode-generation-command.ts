@@ -1,4 +1,4 @@
-import { findOptionOccurrence } from '../../command-option-occurrence'
+import { findOptionOccurrence } from '../../cli/command-option-occurrence'
 import type { CommitMessagePlan } from '../../source-control/ai/generation/commit-message-plan'
 
 export function isDirectOpenCodeGenerationCommand(binary: string, prefixArgs: string[]): boolean {

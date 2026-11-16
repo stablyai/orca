@@ -3,7 +3,7 @@
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getDefaultSettings } from '../../../../shared/constants'
+import { getDefaultSettings } from '../../../../shared/orca-profiles/constants'
 import { i18n } from '../../i18n/i18n'
 import { useAppStore } from '../../store'
 import { renderClaudeAccountsSection } from './accounts/claude/accounts-pane-claude-section'
@@ -37,7 +37,12 @@ function buildModel(updateSettings: AccountsPaneSectionModel['updateSettings']) 
     codexConfigSyncWarning: null,
     codexRateLimits: null,
     codexRateLimitTarget: { runtime: 'host', wslDistro: null },
+    claudeAccountPlans: new Map(),
+    codexAccountPlans: new Map(),
     setRemoveCodexTarget: vi.fn(),
+    setRenameTarget: vi.fn(),
+    renameAccount: vi.fn(async () => {}),
+    renamingAccountKeys: new Set(),
     runCodexAccountAction: vi.fn(async () => {}),
     recordOpenCodeSettingEdit: vi.fn(),
     accountRuntime,

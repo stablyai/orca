@@ -1,5 +1,5 @@
 import type { CliErrorContext } from './cli-error-context'
-import { computerUseErrorRecoveryData } from '../../shared/computer-use-error-recovery'
+import { computerUseErrorRecoveryData } from '../../shared/computer/computer-use-error-recovery'
 import {
   matchAutomationOwnerConflict,
   stripAutomationOwnerConflictCode

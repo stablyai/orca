@@ -5,7 +5,7 @@ import { deleteAiVaultSessionFile, type AiVaultSessionPathRemover } from './sess
 import { invalidateSessionParseCacheEntry } from '../parse-cache/session-parse-cache-store'
 import { invalidateAiVaultBackgroundCache } from '../scan-service/session-scanner-background'
 import type { AiVaultAgent } from '../../../shared/ai-vault/contracts/ai-vault-types'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/execution-host'
 import type {
   AiVaultDeleteSessionArgs,
   AiVaultDeleteSessionResult

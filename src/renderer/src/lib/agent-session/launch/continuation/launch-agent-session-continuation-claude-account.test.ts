@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
-import { getDefaultSettings } from '../../../../../../shared/constants'
+import { getDefaultSettings } from '../../../../../../shared/orca-profiles/constants'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { launchAgentSessionContinuation } from './launch-agent-session-continuation'

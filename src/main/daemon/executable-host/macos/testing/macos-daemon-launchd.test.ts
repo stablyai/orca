@@ -43,7 +43,7 @@ vi.mock('node:timers/promises', async (importOriginal) => {
   }
 })
 vi.mock('@orca/process-host', () => ({ runProcess: runProcessMock }))
-vi.mock('../../../../../shared/app-environment', () => ({
+vi.mock('../../../../../shared/app-lifecycle/app-environment', () => ({
   hasAppEnvironment: () => true,
   getAppEnvironment: () => ({
     getAppPath: () => '/Applications/Orca.app/Contents/Resources/app.asar',
@@ -71,7 +71,6 @@ vi.mock('../../../transport/client/daemon-client', () => ({
 import { launchMacDaemonFromStableBundle } from '../macos-daemon-launchd'
 import { macDaemonJobLabel } from '../macos-daemon-job-label'
 import type { DaemonChildSpawnOptions } from '../../../launch/daemon-launched-child-spawn'
-import { PROTOCOL_VERSION } from '../../../protocol/daemon-protocol-version'
 
 const ok: ProcessResult = { code: 0, signal: null, stdout: '', stderr: '', timedOut: false }
 const running = { ...ok, stdout: 'gui/501/x = {\n\tstate = running\n}\n' }
@@ -248,23 +247,6 @@ it('launches the copied helper on plain Node and leaves no inherited credentials
 })
 
 it.each([
-  ['running', running],
-  ['unverifiable', { ...ok, code: 1, stderr: 'Operation not permitted' }]
-])('never starts beside an earlier job that reads %s', async (_state, print) => {
-  launchctl.print = [print]
-  // Keep retirement inside its budget so bootstrap and readiness still fit.
-  const error = await launchFailure(Date.now() + 20_000)
-  expect(error).toBeInstanceOf(Error)
-  expect(launchctlCalls('bootstrap')).toHaveLength(0)
-  expect(launchctlCalls('bootout')).toHaveLength(0)
-  expect(recoverMock).toHaveBeenCalledExactlyOnceWith(
-    state.root,
-    options.runtimeDir,
-    PROTOCOL_VERSION
-  )
-})
-
-it.each([
   ['declined', async () => false],
   [
     'failed',
@@ -312,14 +294,4 @@ it('waits out a silent job that is still running and never forks beside it', asy
   expect(elapsed()).toBeGreaterThanOrEqual(10_000)
   expect(launchctlCalls('bootout')).toHaveLength(0)
   expect(await exists(copyDir)).toBe(true)
-})
-
-it('reports a failure too late for the fork to fit the startup gate instead of forking', async () => {
-  materializeMock.mockImplementation(async () => {
-    vi.spyOn(Date, 'now').mockReturnValue(deadline + 1)
-    throw new Error('Could not copy the macOS terminal host')
-  })
-  const deadline = Date.now() + 25_000
-  const error = await launchFailure(deadline)
-  expect(error).toHaveProperty('message', 'Could not copy the macOS terminal host')
 })

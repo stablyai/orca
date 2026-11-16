@@ -1,4 +1,4 @@
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../../../shared/workspace/status/workspace-statuses'
 import { worktreeWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
@@ -13,7 +13,7 @@ import { UNCACHED_LINKED_PR_STATE } from '../../../../shared/worktree/catalog/ru
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { runtimeVisibleFolderWorkspaces } from '../catalog/runtime-visible-catalog'
 import type { ResolvedWorktree } from '../catalog/runtime-worktree-path-identity'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import { runtimeWorktreePsRowKey } from './runtime-worktree-summary-paths'
 
@@ -146,7 +146,7 @@ export function buildRuntimeWorktreePsSummaries(args: {
   )
   for (const folderWorkspace of runtimeVisibleFolderWorkspaces(args.store)) {
     const projectGroup = projectGroupById.get(folderWorkspace.projectGroupId)
-    if (!projectGroup?.parentPath) {
+    if (!projectGroup) {
       continue
     }
     const worktree = folderWorkspaceToWorktree(folderWorkspace)

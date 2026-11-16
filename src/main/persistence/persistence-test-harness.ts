@@ -9,8 +9,8 @@ import {
   worktreeWorkspaceKey
 } from '../../shared/workspace/identity/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
-import type { PersistedState } from '../../shared/persisted-state-types'
-import { getDefaultPersistedState } from '../../shared/constants'
+import type { PersistedState } from '../../shared/orca-profiles/persisted-state-types'
+import { getDefaultPersistedState } from '../../shared/orca-profiles/constants'
 import type { SshRemotePtyLease } from '../../shared/remote-runtime/ssh/ssh-types'
 import { hydrateWorktreeMetaAliasProjection } from './loading-store/worktree-metadata/worktree-meta-alias-projection'
 import { Store } from './loading-store/store'
@@ -18,7 +18,7 @@ import { getDataFile, initDataPath } from './loading-store/user-data-path'
 import type { StoreRuntimeOptions } from './loading-store/store-runtime-state'
 import { ProfileStateSqliteAuthority } from './profile-state/profile-state-sqlite-authority'
 import { openProfileStateDatabaseReadOnly } from './profile-state/database/profile-state-database'
-import { profileStateDatabaseFile } from '../../shared/profile-state-storage-paths'
+import { profileStateDatabaseFile } from '../../shared/orca-profiles/profile-state-storage-paths'
 import { exportProfileStateJson } from './profile-state/documents/profile-state-documents'
 
 export const testState = { dir: '' }

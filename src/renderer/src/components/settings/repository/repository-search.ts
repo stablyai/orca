@@ -4,7 +4,7 @@ import { isFolderRepo } from '../../../../../shared/repository/repo-kind'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import type { SettingsSearchEntry } from '../search/settings-search'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
@@ -18,6 +18,7 @@ import {
 } from './worktrees/repository-git-worktree-search-entries'
 import { getRepositoryFormatterSearchEntry } from './RepositoryFormatterSection'
 import { getRepositoryAgentTrustSearchEntry } from './RepositoryAgentTrustSection'
+import { getRepositoryBrowserProfileSearchEntry } from './RepositoryBrowserProfileSection'
 import { getRepositoryWorkspaceCleanupSearchEntry } from './workspace-cleanup/repository-workspace-cleanup-search'
 import {
   getRepositoryClaudeAccountSearchEntry,
@@ -185,6 +186,7 @@ function getRepositorySearchParts(
   const { removeProject, sidebarVisibility } = getRepositoryPresenceSearchEntries(repo, t)
   return {
     agentTrust: getRepositoryAgentTrustSearchEntry(),
+    browserProfile: getRepositoryBrowserProfileSearchEntry(t),
     jira,
     displayName,
     icon,
@@ -209,6 +211,7 @@ export function getRepositoryPaneSearchEntries(
   const entries = [
     getRepositoryFormatterSearchEntry(t),
     parts.agentTrust,
+    parts.browserProfile,
     parts.jira,
     parts.displayName,
     parts.icon,
@@ -249,6 +252,7 @@ export function getRepositoryPaneSearchMetadata(
   const worktrees = isFolderRepo(repo) ? undefined : getRepositoryGitWorktreeSearchMetadata(repo, t)
   const identity = [
     parts.agentTrust,
+    parts.browserProfile,
     parts.jira,
     parts.displayName,
     parts.icon,

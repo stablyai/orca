@@ -1,5 +1,5 @@
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
-import type { TabGroupLayoutNode } from '../../../../../shared/tab-types'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
+import type { TabGroupLayoutNode } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { AppState } from '@/store/types'
 
 export type FloatingWorkspaceSurfaceModel =

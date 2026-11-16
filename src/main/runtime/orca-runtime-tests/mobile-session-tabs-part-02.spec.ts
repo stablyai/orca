@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import './runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
 import '../orca-runtime-test-mocks/setup.spec'
-import '../../../shared/constants'
+import '../../../shared/orca-profiles/constants'
 
 import {
   HEADLESS_LEAF_ID,

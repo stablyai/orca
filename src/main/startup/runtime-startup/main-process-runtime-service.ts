@@ -9,7 +9,7 @@ import {
   applySessionSearchSettingsChange,
   installChildSessionSearchService
 } from '../../ai-vault-search/session-search-enablement'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/execution-host'
 import { sessionSearchScopeCatalogFromStore } from '../../ai-vault-search/scope/session-search-store-scope-catalog'
 import { getCanonicalUserDataPath } from '../../persistence/loading-store/user-data-path'
 import { app } from 'electron'
@@ -48,7 +48,7 @@ import {
 import { bindTerminalPaneStatusLifecycle } from '../../ipc/pty/pane/terminal-pane-status-lifecycle'
 import { startAgentStateRulesLiveUpdates } from '../../runtime/agent-state-rules/agent-state-rules-live-update'
 import { recordDurableCrashBreadcrumb } from '../../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 import { openOffscreenBrowserPageLink } from '../../runtime/browser/commands/offscreen-browser-page-link'
 
 export function getDesktopWindowStatus(): RuntimeDesktopWindowStatus {

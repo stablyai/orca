@@ -3,7 +3,7 @@ import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/pr
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
-import { countLooseRefs } from '../../../../shared/loose-ref-count'
+import { countLooseRefs } from '../../../../shared/git/maintenance/loose-ref-count'
 import { RepoRefMaintenance } from '../../../../shared/git/maintenance/repo-ref-maintenance'
 import {
   _resetLocalRepoRefMaintenanceForTests,

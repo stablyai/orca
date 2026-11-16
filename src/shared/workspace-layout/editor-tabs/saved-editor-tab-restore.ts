@@ -1,6 +1,6 @@
 // Share startup restore filtering between window hydration and main load so neither retains editor tabs the other cannot draw.
 
-import type { Tab, TabContentType } from '../../tab-types'
+import type { Tab, TabContentType } from '../tab-groups/tab-types'
 
 /** Diff, conflict and check tabs: their documents live in memory only and are never saved. */
 export function isTransientEditorContentType(contentType: TabContentType): boolean {

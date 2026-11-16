@@ -1,12 +1,12 @@
 import * as z from 'zod'
-import { normalizeExecutionHostId } from '../../execution-host'
+import { normalizeExecutionHostId } from '../../execution-host/execution-host'
 import type { ProjectHostSetupMethod } from '../../project/project-types'
 import type {
   ProjectGroup,
   ProjectGroupCreatedFrom
 } from '../../project/groups/project-group-types'
 import type { RepoKind } from '../../repository/repo-types'
-import type { ProjectOrderBy } from '../../ui-chrome-types'
+import type { ProjectOrderBy } from '../../ui-chrome/ui-chrome-types'
 import { hostUnionArms, salvagedOptional, salvagingArray } from '../../validation/zod-salvage'
 
 // Read sidebar-feed/mobileRelay.projectSections catalogs; MobileProjectSectionCatalog is the sender shape.
@@ -89,7 +89,7 @@ export const ProjectSectionCatalogSchema = z.object({
   setups: salvagingArray(setupSchema),
   // Until the phone has read the shared UI value (projectOrderBy, ui.get), it orders by this.
   projectOrderBy: z.enum(PROJECT_ORDER_BY_ARMS).catch('manual'),
-  // Every host's project groups, for a list built from the sidebar feed; older desktops omit it.
+  // Every host's project groups, which the phone's list nests under; older desktops omit it.
   projectGroups: salvagedOptional('projectGroups', salvagingArray(ProjectGroupSchema))
 })
 

@@ -1,5 +1,5 @@
 import type { RepoIconPickResult } from '../../../shared/repository/appearance/repo-icon-pick-failure-copy'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type { ShellPathExistence } from '../../../shared/file-access/path-existence-batch'
 import type {
   ShellOpenExternalEditorRequest,

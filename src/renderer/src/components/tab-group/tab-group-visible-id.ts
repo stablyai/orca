@@ -1,4 +1,4 @@
-import type { Tab } from '../../../../shared/tab-types'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 
 export function resolveGroupTabFromVisibleId(
   groupTabs: readonly Tab[],

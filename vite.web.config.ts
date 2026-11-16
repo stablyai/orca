@@ -5,6 +5,10 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { createPdfjsViewerAssetsPlugin } from './config/build-plugins/pdfjs-viewer-assets'
 import { createViteCacheRetentionPlugin } from './config/build-plugins/vite-cache-retention'
+import {
+  ignoreIneffectiveDynamicImport,
+  RENDERER_CHUNK_SIZE_WARNING_LIMIT_KB
+} from './config/build-plugins/rollup-warning-filter'
 import { reactPluginOptions } from './config/build-plugins/react-compiler'
 import { resolveBuildSourceCommit } from './config/scripts/build-identity/build-source-commit.mjs'
 
@@ -34,8 +38,10 @@ export default defineConfig({
     outDir: resolve('out/web'),
     emptyOutDir: true,
     reportCompressedSize: false,
+    chunkSizeWarningLimit: RENDERER_CHUNK_SIZE_WARNING_LIMIT_KB,
     rollupOptions: {
-      input: resolve('src/renderer/web-index.html')
+      input: resolve('src/renderer/web-index.html'),
+      onwarn: ignoreIneffectiveDynamicImport
     }
   },
   worker: {

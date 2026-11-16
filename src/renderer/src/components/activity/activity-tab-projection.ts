@@ -1,4 +1,4 @@
-import type { Tab } from '../../../../shared/tab-types'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 
 /**
  * Stable view of the unified tab map for the activity pipeline.

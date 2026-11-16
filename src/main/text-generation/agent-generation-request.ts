@@ -1,5 +1,5 @@
 import { conversationNameTaskPrompt } from '../../shared/source-control/ai/generation/conversation-name-generation'
-import { textGenerationFailureCodeFields } from '../../shared/text-generation-failure-copy'
+import { textGenerationFailureCodeFields } from '../../shared/text-generation/text-generation-failure-copy'
 import { runClaudeGenerationAttempts } from '../../shared/text-generation/launch/claude-background-run-isolation'
 import { stripPrefilledReasoningPreamble } from '../../shared/source-control/ai/generation/commit-message-agent-output'
 import type { CommandTemplateBackslash } from '../../shared/source-control/ai/generation/commit-message-prompt'

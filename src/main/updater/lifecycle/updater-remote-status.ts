@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import type { UpdateCheckOptions, UpdateStatus } from '../../../shared/update-status-types'
+import type { UpdateCheckOptions, UpdateStatus } from '../../../shared/updater/update-status-types'
 import type {
   RemoteServerUpdateInstallResult,
   RemoteServerUpdaterSnapshot,
