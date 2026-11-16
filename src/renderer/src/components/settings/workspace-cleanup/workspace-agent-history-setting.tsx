@@ -6,8 +6,8 @@ import { uiNumberFormat } from '@/i18n/ui-intl-formatters'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import type {
-  WorkspaceAgentHistoryDeleteResult,
-  WorkspaceAgentHistoryMeasurement
+  WorkspaceAgentHistoryMeasurement,
+  WorkspaceAgentHistoryTally
 } from '../../../../../shared/workspace-agent-history/workspace-agent-history-types'
 import { errorMessage } from '../../../../../shared/errors/error-message'
 import { formatBytes } from '../../../../../shared/format-bytes'
@@ -86,11 +86,14 @@ function formatCount(value: number): string {
 function requestHistoryDelete(
   planId: string
 ): Promise<
-  { ok: true; result: WorkspaceAgentHistoryDeleteResult } | { ok: false; message: string }
+  | { kind: 'deleted'; result: WorkspaceAgentHistoryTally }
+  | { kind: 'stale' }
+  | { kind: 'failed'; message: string }
 > {
   return window.api.aiVault.deleteDeletedWorkspaceHistory(planId).then(
-    (result) => ({ ok: true as const, result }),
-    (error: unknown) => ({ ok: false as const, message: errorMessage(error) })
+    (result) =>
+      'stale' in result ? { kind: 'stale' as const } : { kind: 'deleted' as const, result },
+    (error: unknown) => ({ kind: 'failed' as const, message: errorMessage(error) })
   )
 }
 
@@ -143,7 +146,7 @@ function DeletedWorkspacesHistoryRow(): React.JSX.Element {
     setDeleting(true)
     lastMeasurement = null
     const outcome = await requestHistoryDelete(planId)
-    if (outcome.ok && 'stale' in outcome.result) {
+    if (outcome.kind === 'stale') {
       // Another Settings view measured since this dialog opened; the row re-measures below.
       toast.error(
         t(
@@ -151,7 +154,7 @@ function DeletedWorkspacesHistoryRow(): React.JSX.Element {
           'Nothing was deleted because the counts changed. Review them and delete again.'
         )
       )
-    } else if (outcome.ok) {
+    } else if (outcome.kind === 'deleted') {
       const { result } = outcome
       const skipped = result.transcripts.inUse + result.transcripts.failed + result.chats.inUse
       toast.success(
