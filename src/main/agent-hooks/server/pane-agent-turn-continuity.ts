@@ -4,7 +4,7 @@ import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/
 import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import { sameAgentStatusTerminalOwner } from '../../../shared/agent-status/identity/agent-status-terminal-owner'
 
-/** A boundary for the conversation whose turn the pane last accepted keeps that turn's verdict. */
+/** Resume startup reports keep the conversation's accepted verdict until a new turn. */
 export function resumedAcceptedTurn(
   previous: EnrichedAgentHookEventPayload,
   incoming: AgentHookEventPayload,
@@ -14,7 +14,8 @@ export function resumedAcceptedTurn(
     (incoming.payload.agentType === 'claude' || previous.observation?.origin === 'launch') &&
     (incoming.payload.sessionBoundary === true ||
       (origin === 'osc' && previous.observation?.origin === 'launch')) &&
-    incoming.payload.state === 'done' &&
+    (incoming.payload.state === 'done' ||
+      (origin === 'osc' && incoming.payload.state === 'working')) &&
     incoming.toolAgentId === undefined &&
     previous.payload.state === 'done' &&
     previous.payload.sessionBoundary !== true &&

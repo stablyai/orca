@@ -14,6 +14,10 @@ import {
   type RootTestServer
 } from '../presence/server-hook-root.test-fixtures'
 import {
+  AgentStatusObservedPaneIdentities,
+  AgentStatusObservedPaneIdentityCapture
+} from '../../../../runtime/terminal/identity/agent-status-observed-pane-identity'
+import {
   readHookRootEvidence,
   readPaneTmuxHost
 } from '../../../../../shared/agent-hook-listener/presence/hook-process-root-evidence'
@@ -50,9 +54,30 @@ it.each([
       (request) => readHookRootEvidence(request, io),
       (request) => readPaneTmuxHost(io, request)
     )
+    const identities = new AgentStatusObservedPaneIdentities()
+    const observed = new AgentStatusObservedPaneIdentityCapture(identities)
+    const runtime = {
+      getAgentStatusTerminalHandleForPaneKey: () => 'terminal-a',
+      getTerminalProcessIncarnation: () => 'execution-a',
+      getAgentStatusOrchestrationContextForPaneKey: () => undefined
+    }
+    observed.attach(runtime)
+    server.subscribeEnrichedStatus((row) => observed.observe(row))
+    server.setCliWriterExecutionMatcher(identities, runtime)
     runningPane(4050, CLIENT, ...TMUX)
     await turn(server)
     expect(server.row()).toMatchObject({ state: 'working', providerSession: {} })
+    await server.checkAgentPresenceSince(PANE, 0)
+    // A fresh hook can land between capture's presence check and the PTY's physical stop.
+    await turn(server)
+    server.setTerminalPaneLifecycle({
+      ownsProcess: () => true,
+      isStopping: () => true,
+      isReversibleStop: () => true,
+      isPlaced: () => true
+    })
+    expect(server.settleTerminalPaneSleep(PANE, 'pty')).toBe(false)
+    expect(server.row()).toMatchObject({ state: 'working' })
     const capture = await captureWorktreeSleepResumeRecords({
       worktreeId: 'wt-1',
       paneKeysByPtyId: new Map([['pty', [PANE]]]),

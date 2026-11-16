@@ -15,7 +15,7 @@ import { nativeChatTranscriptPathOnExecutionHost } from '../../../../native-chat
 import { nativeChatTranscriptDistro } from '../../../../native-chat/transcript-discovery/native-chat-open-wake'
 import { WSL_HOOK_RELAY_CONNECTION_PREFIX } from '../../../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import { AgentHookServer, _internals } from '../../agent-hook-server'
-import { buildBody, PANE, postHookEvent } from '../server.test-fixtures'
+import { buildBody, ingestProgramStatusOsc, PANE, postHookEvent } from '../server.test-fixtures'
 
 vi.mock('../../../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../../../telemetry/cohort-classifier', () => ({ getCohortAtEmit: () => ({}) }))
@@ -28,6 +28,7 @@ let server: AgentHookServer
 let stopping: boolean
 let placed: boolean
 let pty: { id: string; birth: string }
+let saved: SleepingAgentSessionRecord | undefined
 const read = () => server.getStatusSnapshotForPane(PANE)[0]
 
 beforeEach(async () => {
@@ -36,9 +37,11 @@ beforeEach(async () => {
   stopping = false
   placed = true
   pty = { id: 'pty', birth: 'birth' }
+  saved = undefined
   server = new AgentHookServer()
   const owns = (id: string, incarnation?: string) => id === pty.id && incarnation === pty.birth
   server.setTerminalPaneLifecycle({
+    readSavedRecord: () => saved,
     ownsProcess: (_key, id, incarnation) => owns(id, incarnation),
     isStopping: () => stopping,
     isReversibleStop: (id, incarnation) => stopping && owns(id, incarnation),
@@ -323,6 +326,82 @@ it.each(['claude', 'codex'] as const)(
       paneSleep: { ptyId: 'pty-2' }
     })
     expect(emitted.mock.calls.filter(([row]) => !row.isReplay)).toHaveLength(0)
+  }
+)
+
+it.each(['retained', 'evicted'] as const)(
+  'keeps Claude Interrupted through startup work before its verified root hook (%s row)',
+  async (row) => {
+    server.setHookRootEvidenceReader(async () => ({ verdict: 'root' }))
+    await agentHook('claude', 'UserPromptSubmit', 4001)
+    await sleepPane('claude', 'pty-1', 4001)
+    for (const pid of [4002, 4003]) {
+      const capture = await captureWorktreeSleepResumeRecords({
+        worktreeId: 'wt-1',
+        paneKeysByPtyId: new Map([[pty.id, [PANE]]]),
+        launchByPtyId: new Map(),
+        readRowsForPane: (paneKey) => server.getStatusSnapshotForPane(paneKey),
+        checkAgentPresence: null,
+        capturedAt: Date.now()
+      })
+      saved = capture.get(pty.id)!.records[0]!
+      if (row === 'evicted') {
+        server.dropStatusEntry(PANE, { preserveResumeIdentity: false })
+      }
+      server.retireSleepingPaneOnSpawn(PANE, {
+        agentType: 'claude',
+        providerSession: { key: 'session_id', id: 'claude-session' }
+      })
+      server.recordLaunchResumeIdentity({
+        paneKey: PANE,
+        worktreeId: 'wt-1',
+        agentType: 'claude',
+        providerSession: { key: 'session_id', id: 'claude-session' },
+        launchedAt: Date.now()
+      })
+      // Startup work precedes SessionStart; neither report opens a user turn.
+      for (const state of ['working', 'idle']) {
+        ingestProgramStatusOsc(server, `\x1b]7501;app=claude-code:state=${state}\x1b\\`)
+        expect(read()).toMatchObject({
+          state: 'done',
+          interrupted: true,
+          prompt: 'Finished work',
+          mainAgent: { state: 'done', outcome: 'cancellation' }
+        })
+      }
+      const response = await postHookEvent(
+        server,
+        buildBody(
+          { hook_event_name: 'SessionStart', session_id: 'claude-session', source: 'resume' },
+          {
+            launchToken: `wake-${pid}`,
+            agentProcess: JSON.stringify({
+              pid,
+              platform: process.platform,
+              startTime: `birth-${pid}`
+            })
+          }
+        )
+      )
+      expect(response.status).toBe(204)
+      expect(read()).toMatchObject({
+        state: 'done',
+        interrupted: true,
+        mainAgent: { state: 'done', outcome: 'cancellation' }
+      })
+      await sleepPane('claude', `pty-${pid}`, pid)
+      expect(read()).toMatchObject({ state: 'done', interrupted: true })
+    }
+    server.retireSleepingPaneOnSpawn(PANE, {
+      agentType: 'claude',
+      providerSession: { key: 'session_id', id: 'claude-session' }
+    })
+    await agentHook('claude', 'UserPromptSubmit', 4004)
+    expect(read()).toMatchObject({ state: 'working', prompt: 'Finished work' })
+    expect(read()?.interrupted).not.toBe(true)
+    await agentHook('claude', 'Stop', 4004)
+    expect(read()).toMatchObject({ state: 'done' })
+    expect(read()?.interrupted).not.toBe(true)
   }
 )
 

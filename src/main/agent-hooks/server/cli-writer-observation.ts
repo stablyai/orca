@@ -10,6 +10,8 @@ import {
 } from '../../../shared/agent-status/process/agent-process-presence'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
+import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
+import { sameAgentStatusTerminalOwner } from '../../../shared/agent-status/identity/agent-status-terminal-owner'
 
 // Execution metadata follows the conversation binding and disappears at serialization.
 export const OPEN_CODE_WRITER_TOPOLOGY = Symbol('openCodeWriterTopology')
@@ -120,6 +122,21 @@ export function deriveCliWriterTopology<T extends AgentHookEventPayload>(
 ): T {
   const binding = row.providerSession
   if (!binding || !(OPEN_CODE_WRITER_TOPOLOGY in binding)) {
+    if (
+      binding &&
+      baseline &&
+      cliWriterTopology(baseline) === 'shared' &&
+      !newRun &&
+      row.payload.agentType === baseline.payload.agentType &&
+      sameAgentStatusTerminalOwner(baseline, row) &&
+      agentProviderSessionsEqual(row.payload.agentType, baseline.providerSession, binding) &&
+      (!sender ||
+        !baseline.agentPresence?.process ||
+        isSameAgentProcess(sender, baseline.agentPresence.process)) &&
+      matches?.(row, baseline)
+    ) {
+      return tmuxCliWriterEvent(row)
+    }
     return row
   }
   const inherited = baseline?.providerSession === binding
