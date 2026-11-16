@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repository/repo-types'
-import { getDefaultSettings } from '../../../../shared/constants'
+import { getDefaultSettings } from '../../../../shared/orca-profiles/constants'
 import { hashOrcaHookTrustContent } from '../../../workspace-hooks/created-worktree-setup-trust'
 import { runApprovedCreatedWorktreeSetup } from './created-worktree-approved-setup'
 import { provisionWorktreeTerminals } from '../startup/runtime-worktree-terminal-provisioning'
@@ -16,7 +16,6 @@ vi.mock('../../../workspace-hooks/worktree-runner-script', () => ({
 
 const BRANCH_YAML =
   'scripts:\n  setup: make bootstrap\ndefaultTabs:\n  - title: dev\n    command: pnpm dev\n  - title: notes\n'
-const BRANCH_TRUST_CONTENT = 'make bootstrap\n\n# defaultTabs[1] dev\npnpm dev'
 
 let worktreePath: string
 let repo: Repo
