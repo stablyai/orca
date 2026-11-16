@@ -27,6 +27,11 @@ import {
 
 /** The Orca version that copied this profile; its original journal stays until a later version runs. */
 export const JOURNAL_LEGACY_CONVERTED_BY = 'journal.legacy-converted-by.v1'
+/**
+ * The original as this store copied it. Unlike the reconcile's receipt it is never rewritten, so
+ * an original that still matches it was never written after the copy.
+ */
+export const JOURNAL_LEGACY_COPIED_SOURCE = 'journal.legacy-copied-source.v1'
 
 /** This host's own release: the desktop's, or the bundle orcad stamps for itself at start. */
 export function journalRunningOrcaVersion(): string | null {
@@ -69,6 +74,7 @@ export async function initializeJournalDomainDatabase(stateDirectory: string): P
         'INSERT OR REPLACE INTO agent_session_store_meta (key, value) VALUES (?, ?)'
       )
       meta.run(JOURNAL_LEGACY_SOURCE_RECEIPT, JSON.stringify(sourceReceipt))
+      meta.run(JOURNAL_LEGACY_COPIED_SOURCE, JSON.stringify(sourceReceipt))
       meta.run(JOURNAL_LEGACY_REVISIONS_KEPT, '1')
       // An unknown version still keeps the original through this launch's process.
       meta.run(JOURNAL_LEGACY_CONVERTED_BY, journalRunningOrcaVersion() ?? 'unknown')

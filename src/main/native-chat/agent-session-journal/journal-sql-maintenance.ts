@@ -5,7 +5,10 @@ import {
 } from './journal-legacy-retirement-state'
 import { JOURNAL_LEGACY_SOURCE_RECEIPT } from './database/journal-legacy-source-receipt'
 import { JOURNAL_LEGACY_REVISIONS_KEPT } from './database/journal-legacy-reconcile'
-import { JOURNAL_LEGACY_CONVERTED_BY } from './database/journal-domain-database'
+import {
+  JOURNAL_LEGACY_CONVERTED_BY,
+  JOURNAL_LEGACY_COPIED_SOURCE
+} from './database/journal-domain-database'
 import { rekeyWslDriveUncChats } from '../../wsl/filesystem/wsl-drive-unc-chat-rekey'
 import type { JournalForkStageOperation, JournalForkStageResult } from './journal-fork-stages'
 import { saveJournalDomainOutlineCache, type JournalOutlineCache } from './journal-domain-outline'
@@ -35,6 +38,7 @@ import type { JournalSqlStoredRecords } from './journal-sql-database-read'
 
 export type JournalSqlMaintenance =
   | { kind: 'legacy-retirement-state' }
+  | { kind: 'legacy-copied-source-save'; value: string }
   | {
       kind: 'legacy-retirement-save'
       value: string
@@ -86,9 +90,17 @@ export function applyJournalSqlMaintenance(
         receipt: value(JOURNAL_LEGACY_SOURCE_RECEIPT),
         kept: value(JOURNAL_LEGACY_REVISIONS_KEPT) !== null,
         convertedBy: value(JOURNAL_LEGACY_CONVERTED_BY),
+        copiedSource: value(JOURNAL_LEGACY_COPIED_SOURCE),
         retirement: value(JOURNAL_LEGACY_RETIREMENT)
       }
     }
+    case 'legacy-copied-source-save':
+      // Recorded once; a later save never replaces what an earlier launch judged.
+      db.prepare('INSERT OR IGNORE INTO agent_session_store_meta(key,value) VALUES(?,?)').run(
+        JOURNAL_LEGACY_COPIED_SOURCE,
+        operation.value
+      )
+      return true
     case 'legacy-retirement-save':
       db.prepare('INSERT OR REPLACE INTO agent_session_store_meta(key,value) VALUES(?,?)').run(
         JOURNAL_LEGACY_RETIREMENT,

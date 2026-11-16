@@ -1,5 +1,5 @@
-import { existsSync, writeFileSync } from 'node:fs'
-import { expect, it } from 'vitest'
+import { existsSync, utimesSync, writeFileSync } from 'node:fs'
+import { expect, it, vi } from 'vitest'
 import type Database from '../../sqlite/sync-database'
 import { journalDomainImportState } from './journal-domain-import-rows'
 import { initializeJournalDomainDatabase } from './database/journal-domain-database'
@@ -43,6 +43,11 @@ it('keeps the original whenever the store cannot prove it holds all of it', asyn
   const same = await profile({ copiedBy: '1.0.1' })
   await same.launch('1.0.1').run()
   expect(companions(same.filename)).toContain(same.filename)
+
+  // So does an older version, after a downgrade.
+  const older = await profile()
+  await older.launch('0.9.0').run()
+  expect(companions(older.filename)).toContain(older.filename)
 
   // A launch that doesn't own the profile never deletes.
   const foreign = await profile()
@@ -103,5 +108,52 @@ it('after a downgrade to an older Orca, the re-upgrade shows its new chat and ke
     db.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?').get('made-after-downgrade')
   ).toBeDefined()
   await launch('1.0.2').run()
+  expect(existsSync(filename)).toBe(true)
+})
+
+const meta = (db: Database.Database, key: string) =>
+  db.prepare('SELECT value FROM agent_session_store_meta WHERE key=?').get(key)?.value
+
+it('judges a store copied before the copy record once, from whether the original was written since', async () => {
+  const unwritten = await profile({
+    // Finished per-chat import markers an earlier build left behind hold nothing the rows don't.
+    seed: (legacy) => legacy.exec("INSERT INTO journal_imports VALUES('unopened','epoch',1)")
+  })
+  unwritten.db.exec(
+    "DELETE FROM agent_session_store_meta WHERE key='journal.legacy-copied-source.v1'"
+  )
+  await unwritten.launch().run()
+  expect(unwritten.errors).toEqual([])
+  expect(companions(unwritten.filename)).toEqual([])
+
+  const written = await profile()
+  written.db.exec(
+    "DELETE FROM agent_session_store_meta WHERE key='journal.legacy-copied-source.v1'"
+  )
+  const later = new Date(Date.now() + 60_000)
+  utimesSync(written.filename, later, later)
+  await initializeJournalDomainDatabase(written.root)
+  await written.launch().run()
+  expect(companions(written.filename)).toContain(written.filename)
+  expect(meta(written.db, 'journal.legacy-copied-source.v1')).toBe('written-after-copy')
+  // The judgment stands even once the files look unchanged again.
+  await written.launch().run()
+  expect(companions(written.filename)).toContain(written.filename)
+})
+
+it('reopens the source to conversions when the lock helper fails', async () => {
+  const { filename, launch, errors, readers } = await profile()
+  const release = vi.spyOn(readers, 'releaseSourceReaders')
+  await launch('1.0.1', true, async () => ({
+    held: () => true,
+    retire: async () => {
+      throw new Error('helper stopped')
+    },
+    close: async () => {
+      throw new Error('helper stopped')
+    }
+  })).run()
+  expect(release).toHaveBeenCalledTimes(1)
+  expect(errors).toHaveLength(1)
   expect(existsSync(filename)).toBe(true)
 })

@@ -13,7 +13,7 @@ import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
 import type { JournalSqlConversions } from './journal-sql-conversions'
 
 /** The original as its receipt shows it, and the store the proof converts into. */
-export type LegacyProofObservation = { proof: string; destination: string }
+export type LegacyProofObservation = { proof: string; store: string }
 
 /** One observation owns verified work, a refusal and pending conversion progress. */
 export class JournalLegacyProof {
@@ -34,7 +34,7 @@ export class JournalLegacyProof {
 
   /** A changed original or store discards progress; the same one keeps it across attempts. */
   observe(observation: LegacyProofObservation): void {
-    const descriptor = `${observation.proof}\n${observation.destination}`
+    const descriptor = `${observation.proof}\n${observation.store}`
     if (descriptor !== this.descriptor) {
       this.descriptor = descriptor
       this.refusal = undefined
@@ -49,11 +49,7 @@ export class JournalLegacyProof {
       return true
     }
     const refusal = decodeLegacySourceRefusal(saved)
-    if (
-      !refusal ||
-      refusal.proof !== observation.proof ||
-      refusal.destination !== observation.destination
-    ) {
+    if (!refusal || refusal.proof !== observation.proof || refusal.store !== observation.store) {
       return false
     }
     this.refusal = refusal
@@ -82,7 +78,7 @@ export class JournalLegacyProof {
           phase: 'refused',
           policy: LEGACY_SOURCE_REFUSAL_POLICY,
           proof: observation.proof,
-          destination: observation.destination,
+          store: observation.store,
           reason: error.reason
         }
         await this.saveRefusal()

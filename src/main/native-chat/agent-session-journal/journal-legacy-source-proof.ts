@@ -109,7 +109,14 @@ function readSourcePage(db: Database.Database, cursor: LegacyProofCursor): Legac
         continue
       }
       const quoted = `"${table.replaceAll('"', '""')}"`
-      if (db.prepare(`SELECT 1 FROM ${quoted} LIMIT 1`).get()) {
+      // Per-chat import markers (#23613) were left behind when #26038 removed those imports; a
+      // marker whose rows all landed in journal_rows records nothing those rows don't hold.
+      const unaccounted =
+        table === 'journal_imports'
+          ? `SELECT 1 FROM journal_imports i WHERE NOT EXISTS (SELECT 1 FROM journal_rows r
+              WHERE r.session_id=i.session_id AND r.epoch=i.epoch AND r.seq>=i.tip) LIMIT 1`
+          : `SELECT 1 FROM ${quoted} LIMIT 1`
+      if (db.prepare(unaccounted).get()) {
         throw new JournalLegacyRetentionError(
           'legacy source has unaccounted recovery data',
           'source-recovery'

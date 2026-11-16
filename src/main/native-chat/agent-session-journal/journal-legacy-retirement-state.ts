@@ -15,6 +15,7 @@ export type JournalLegacyRetirementState = {
   receipt: string | null
   kept: boolean
   convertedBy: string | null
+  copiedSource: string | null
   retirement: string | null
 }
 
@@ -24,7 +25,7 @@ export type LegacySourceRefusal = {
   phase: 'refused'
   policy: typeof LEGACY_SOURCE_REFUSAL_POLICY
   proof: string
-  destination: string
+  store: string
   reason: LegacySourceRefusalReason
 }
 
@@ -36,7 +37,7 @@ export type LegacySourceRetiring = {
   version: 2
   phase: 'retiring'
   proof: string
-  destination: string
+  store: string
 }
 
 export function decodeLegacySourceRefusal(value: string | null): LegacySourceRefusal | null {
@@ -57,8 +58,8 @@ export function decodeLegacySourceRefusal(value: string | null): LegacySourceRef
     data.policy !== LEGACY_SOURCE_REFUSAL_POLICY ||
     !('proof' in data) ||
     typeof data.proof !== 'string' ||
-    !('destination' in data) ||
-    typeof data.destination !== 'string' ||
+    !('store' in data) ||
+    typeof data.store !== 'string' ||
     !('reason' in data) ||
     typeof data.reason !== 'string'
   ) {
@@ -71,7 +72,7 @@ export function decodeLegacySourceRefusal(value: string | null): LegacySourceRef
         phase: 'refused',
         policy: LEGACY_SOURCE_REFUSAL_POLICY,
         proof: data.proof,
-        destination: data.destination,
+        store: data.store,
         reason
       }
     : null

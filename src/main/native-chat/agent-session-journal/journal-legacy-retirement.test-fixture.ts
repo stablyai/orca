@@ -128,7 +128,11 @@ export async function profile(
   }
   const errors: unknown[] = []
   /** A launch of the Orca at `version`, owning the profile unless told otherwise. */
-  const launch = (version = '1.0.1', owns = true) =>
+  const launch = (
+    version = '1.0.1',
+    owns = true,
+    lock = native ? acquireJournalLegacyFileLock : fakeLock
+  ) =>
     new JournalLegacyRetirement(
       root,
       writer,
@@ -137,10 +141,10 @@ export async function profile(
       async () => true,
       (error) => errors.push(error),
       () => owns,
-      native ? acquireJournalLegacyFileLock : fakeLock,
+      lock,
       undefined,
       native ? undefined : { check: async () => {}, present: () => {} },
       version
     )
-  return { root, filename, db, launch, errors, source }
+  return { root, filename, db, launch, errors, source, readers }
 }

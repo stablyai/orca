@@ -6,7 +6,7 @@ import {
 import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import { spawnProcess } from '@orca/process-host'
 import { createRequire } from 'node:module'
-import { access } from 'node:fs/promises'
+import { access, constants } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { currentWorkerEntryLayout } from '../../worker-threads/worker-thread-entry-path'
 
@@ -159,12 +159,15 @@ async function startLegacyHelper(
   } finally {
     clearTimeout(startup)
   }
-  /** The helper removes the journal itself while holding the lock; true only once it reported so. */
-  const retire = async (): Promise<boolean> => {
-    if (check || exited || signal.aborted) {
+  /**
+   * The helper removes the journal itself while holding the lock, with a WAL of exactly the size
+   * whose frames were absorbed; true only once it reported so.
+   */
+  const retire = async (walBytes: string): Promise<boolean> => {
+    if (check || exited || signal.aborted || !/^\d+$/.test(walBytes)) {
       return false
     }
-    child.stdin.write('retire\n')
+    child.stdin.write(`retire ${walBytes}\n`)
     // Unlinking a large file can take seconds; a helper stopped mid-way leaves only companions.
     await close(RETIRE_GRACE_MS)
     return retired
@@ -204,7 +207,11 @@ export function createJournalLegacyFileEligibility(): {
 
 async function requireJournalLegacyFileLock(): Promise<void> {
   try {
-    await access(await journalLegacyFileLockPath())
+    // An install that dropped the executable bit (SFTP uploads do) can't run the helper.
+    await access(
+      await journalLegacyFileLockPath(),
+      process.platform === 'win32' ? constants.F_OK : constants.X_OK
+    )
   } catch {
     throw new JournalLegacyRetentionError('legacy journal lock asset is unavailable')
   }

@@ -8,13 +8,19 @@ import {
 } from './database/journal-domain-database'
 import {
   legacyDestinationIdentity,
+  legacyDestinationMain,
   legacyFilePresent,
   removeLeftoverLegacyCompanions
 } from './journal-legacy-retirement-files'
+import {
+  compareAppVersions,
+  isValidAppVersion
+} from '../../../shared/app-lifecycle/identity/app-version'
 import type { LegacySourceRetiring } from './journal-legacy-retirement-state'
 import {
   readJournalLegacySourceReceipt,
-  sameJournalLegacySource
+  sameJournalLegacySource,
+  type JournalLegacySourceReceipt
 } from './database/journal-legacy-source-receipt'
 import {
   acquireJournalLegacyFileLock,
@@ -27,6 +33,19 @@ import { JournalLegacyProof, type LegacyProofObservation } from './journal-legac
 import type { JournalSqlMaintenanceResult } from './journal-sql-maintenance'
 
 type RetirementState = Extract<JournalSqlMaintenanceResult, { kind: 'legacy-retirement-state' }>
+type CopiedSource = Extract<JournalLegacySourceReceipt, { disposition: 'copied-source' }>
+
+/** Saved for a store whose original was written after its copy: it is never retired. */
+const WRITTEN_AFTER_COPY = 'written-after-copy'
+
+/** Absent means a release before this record copied the profile, which is always earlier. */
+function laterVersion(running: string, convertedBy: string | null): boolean {
+  return (
+    isValidAppVersion(running) &&
+    (convertedBy === null ||
+      (isValidAppVersion(convertedBy) && compareAppVersions(running, convertedBy) > 0))
+  )
+}
 
 /**
  * Deletes the original journal once this store provably holds all of it: on a later Orca version
@@ -105,8 +124,10 @@ export class JournalLegacyRetirement {
       return
     }
     const saved = await this.savedState()
-    // Retirement runs on an update: the version that copied the profile keeps the original.
-    const observation = saved.convertedBy === this.version ? null : await this.observe(saved)
+    // Retirement runs on an update: the version that copied the profile, or an older one, keeps it.
+    const observation = laterVersion(this.version, saved.convertedBy)
+      ? await this.observe(saved)
+      : null
     if (!observation || this.proof.refused(saved.retirement, observation)) {
       this.done = true
       return
@@ -120,18 +141,22 @@ export class JournalLegacyRetirement {
       return
     }
     // One full-sync commit makes every converted row durable before the original goes.
+    const destination = await legacyDestinationIdentity(journalDomainDatabasePath(this.directory))
+    if (destination.main !== observation.store) {
+      return
+    }
     const retiring: LegacySourceRetiring = {
       version: 2,
       phase: 'retiring',
       proof: observation.proof,
-      destination: observation.destination
+      store: observation.store
     }
     if (
       (await this.writer.maintain({
         kind: 'legacy-retirement-save',
         value: JSON.stringify(retiring),
         durable: true,
-        destination: JSON.parse(observation.destination)
+        destination
       })) !== true
     ) {
       throw new Error('legacy retirement commit was not acknowledged')
@@ -148,10 +173,14 @@ export class JournalLegacyRetirement {
       if (!lease.held() || !this.ownsProfile() || !(await this.matches(observation))) {
         return
       }
-      this.done = await lease.retire()
+      this.done = await lease.retire(observation.walBytes)
     } finally {
-      await lease?.close()
-      this.readers.releaseSourceReaders(recycled)
+      try {
+        await lease?.close()
+      } finally {
+        // Conversions wait on this gate; a failed helper must never keep it closed.
+        this.readers.releaseSourceReaders(recycled)
+      }
     }
   }
 
@@ -169,23 +198,24 @@ export class JournalLegacyRetirement {
   }
 
   /**
-   * The original as the last older-Orca reconcile absorbed it, never written since this store
-   * copied it. A write after the copy can change records, tabs and queues that no chat revision
-   * shows, so such an original is kept; null keeps it for this attempt.
+   * The original exactly as this store copied it, and as the last older-Orca reconcile absorbed
+   * it. A write after the copy can change records, tabs and queues that no chat revision shows, so
+   * such an original is kept; null keeps it.
    */
-  private async observe(saved: RetirementState): Promise<LegacyProofObservation | null> {
+  private async observe(
+    saved: RetirementState
+  ): Promise<(LegacyProofObservation & { walBytes: string }) | null> {
     const current = await readJournalLegacySourceReceipt(this.filename)
     if (
       !saved.kept ||
       current.disposition !== 'copied-source' ||
-      current.wal.kind !== 'empty' ||
       !sameJournalLegacySource(saved.receipt ?? undefined, current)
     ) {
       return null
     }
     const domain = journalDomainDatabasePath(this.directory)
-    const copied = (await lstat(domain, { bigint: true })).birthtimeNs
-    if (copied === 0n || BigInt(current.main.mtimeNs) > copied) {
+    const copied = saved.copiedSource ?? (await this.recordCopiedSource(domain, current))
+    if (!sameJournalLegacySource(copied, current)) {
       return null
     }
     if (await legacyFilePresent(`${this.filename}-journal`)) {
@@ -193,15 +223,37 @@ export class JournalLegacyRetirement {
     }
     return {
       proof: JSON.stringify(current),
-      destination: JSON.stringify(await legacyDestinationIdentity(domain))
+      // The store file alone: its WAL is recreated on every open, which no refusal should outlive.
+      store: await legacyDestinationMain(domain),
+      walBytes: current.wal.kind === 'empty' ? '0' : current.wal.size
     }
+  }
+
+  /**
+   * A store copied before the copy record existed: once, judge from the files whether anything
+   * wrote the original after the store was created, and keep that judgment for good.
+   */
+  private async recordCopiedSource(domain: string, current: CopiedSource): Promise<string> {
+    const created = (await lstat(domain, { bigint: true })).birthtimeNs
+    const walWritten =
+      current.wal.kind === 'nonempty' && current.wal.mtimeNs !== undefined
+        ? BigInt(current.wal.mtimeNs)
+        : 0n
+    const value =
+      created !== 0n && BigInt(current.main.mtimeNs) <= created && walWritten <= created
+        ? JSON.stringify(current)
+        : WRITTEN_AFTER_COPY
+    if ((await this.writer.maintain({ kind: 'legacy-copied-source-save', value })) !== true) {
+      throw new Error('legacy copy record commit was not acknowledged')
+    }
+    return (await this.savedState()).copiedSource ?? WRITTEN_AFTER_COPY
   }
 
   private async matches(observation: LegacyProofObservation): Promise<boolean> {
     const domain = journalDomainDatabasePath(this.directory)
     return (
       JSON.stringify(await readJournalLegacySourceReceipt(this.filename)) === observation.proof &&
-      JSON.stringify(await legacyDestinationIdentity(domain)) === observation.destination
+      (await legacyDestinationMain(domain)) === observation.store
     )
   }
 }

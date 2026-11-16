@@ -16,7 +16,7 @@ export const ORCAD_PROVIDER_EXEC_SLOT_FILE = 'provider-exec/orca-provider-exec'
 
 /** Files every install path must mark executable; SFTP and plain copies drop the mode. */
 export function isOrcadExecutableArtifact(filename: string): boolean {
-  return /(?:^|\/)(?:rg|spawn-helper|orca-provider-exec)$/.test(filename)
+  return /(?:^|\/)(?:rg|spawn-helper|orca-provider-exec|journal-file-lock)$/.test(filename)
 }
 
 export function orcadBunRuntimeFilename(target: string): string {

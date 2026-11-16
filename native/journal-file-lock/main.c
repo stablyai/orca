@@ -4,9 +4,10 @@
  * file between the last check and the removal.
  *
  *   journal-file-lock <main> --check   prints "eligible" when the file may be locked here
- *   journal-file-lock <main>           prints "locked"; then a "retire" line on stdin removes
- *                                      the main file, an empty -wal and the -shm, and prints
- *                                      "retired". End of input releases the lock untouched.
+ *   journal-file-lock <main>           prints "locked"; then a "retire <wal bytes>" line on stdin
+ *                                      removes the main file, a -wal of exactly that size (the
+ *                                      caller proved its frames were absorbed) and the -shm, and
+ *                                      prints "retired". End of input releases the lock untouched.
  *
  * Exit codes: 0 done, 2 usage, 3 open/stat failed, 4 unsupported file or storage, 5 close
  * failed, 6 lock held by another process, 7 companions not removable (main kept), 8 removal
@@ -19,14 +20,15 @@
 #include <string.h>
 #include <wchar.h>
 
-static int read_command(void) {
-  char line[16];
+/* Returns 1 for "retire <bytes>", storing the WAL size the caller absorbed. */
+static int read_command(unsigned long long *wal) {
+  char line[64], end[4];
   if (!fgets(line, sizeof line, stdin)) return 0;
-  return strcmp(line, "retire\n") == 0 || strcmp(line, "retire\r\n") == 0;
+  return sscanf(line, "retire %llu%3s", wal, end) == 1;
 }
 
-/* A companion may be absent; a WAL that holds frames is never removed. */
-static int companion_ok(const wchar_t *main, const wchar_t *suffix, int must_be_empty) {
+/* A companion may be absent; a WAL is removed only at exactly the size the caller absorbed. */
+static int companion_ok(const wchar_t *main, const wchar_t *suffix, long long size) {
   wchar_t name[32768];
   if (swprintf(name, 32768, L"%ls%ls", main, suffix) < 0) return 0;
   WIN32_FILE_ATTRIBUTE_DATA data;
@@ -34,7 +36,9 @@ static int companion_ok(const wchar_t *main, const wchar_t *suffix, int must_be_
     return GetLastError() == ERROR_FILE_NOT_FOUND || GetLastError() == ERROR_PATH_NOT_FOUND;
   }
   if (data.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) return 0;
-  return !must_be_empty || (data.nFileSizeHigh == 0 && data.nFileSizeLow == 0);
+  return size < 0 ||
+         (((unsigned long long)data.nFileSizeHigh << 32) | data.nFileSizeLow) ==
+             (unsigned long long)size;
 }
 
 static int remove_companion(const wchar_t *main, const wchar_t *suffix) {
@@ -78,7 +82,8 @@ int wmain(int argc, wchar_t **argv) {
     return CloseHandle(file) ? 0 : 5;
   }
   puts("locked"); fflush(stdout);
-  if (!read_command()) {
+  unsigned long long wal = 0;
+  if (!read_command(&wal)) {
     return CloseHandle(file) ? 0 : 5;
   }
   /* A rollback journal of any size means an interrupted transaction: keep everything. */
@@ -86,7 +91,7 @@ int wmain(int argc, wchar_t **argv) {
     wchar_t rollback[32768];
     if (swprintf(rollback, 32768, L"%ls-journal", argv[1]) < 0 ||
         GetFileAttributesW(rollback) != INVALID_FILE_ATTRIBUTES ||
-        !companion_ok(argv[1], L"-wal", 1) || !companion_ok(argv[1], L"-shm", 0)) {
+        !companion_ok(argv[1], L"-wal", (long long)wal) || !companion_ok(argv[1], L"-shm", -1)) {
       CloseHandle(file); return 7;
     }
   }
@@ -115,19 +120,20 @@ int wmain(int argc, wchar_t **argv) {
 #include <sys/vfs.h>
 #endif
 
-static int read_command(void) {
-  char line[16];
+/* Returns 1 for "retire <bytes>", storing the WAL size the caller absorbed. */
+static int read_command(unsigned long long *wal) {
+  char line[64], end[4];
   if (!fgets(line, sizeof line, stdin)) return 0;
-  return strcmp(line, "retire\n") == 0;
+  return sscanf(line, "retire %llu%3s", wal, end) == 1;
 }
 
-/* 1 when absent or acceptable, 0 when it blocks removal. */
-static int companion_ok(const char *main, const char *suffix, int must_be_empty) {
+/* 1 when absent or acceptable (size < 0: any size), 0 when it blocks removal. */
+static int companion_ok(const char *main, const char *suffix, long long size) {
   char name[PATH_MAX];
   struct stat info;
   if (snprintf(name, sizeof name, "%s%s", main, suffix) >= (int)sizeof name) return 0;
   if (lstat(name, &info) != 0) return errno == ENOENT;
-  return S_ISREG(info.st_mode) && (!must_be_empty || info.st_size == 0);
+  return S_ISREG(info.st_mode) && (size < 0 || (long long)info.st_size == size);
 }
 
 static int remove_companion(const char *main, const char *suffix) {
@@ -185,14 +191,15 @@ int main(int argc, char **argv) {
     close(fd); return 4;
   }
   puts("locked"); fflush(stdout);
-  if (!read_command()) {
+  unsigned long long wal = 0;
+  if (!read_command(&wal)) {
     return close(fd) == 0 ? 0 : 5;
   }
   /* Still holding the lock: the path must name the locked file, with nothing pending beside it. */
   if (lstat(argv[1], &named) || info.st_dev != named.st_dev || info.st_ino != named.st_ino) {
     close(fd); return 4;
   }
-  if (!companion_ok(argv[1], "-wal", 1) || !companion_ok(argv[1], "-shm", 0)) {
+  if (!companion_ok(argv[1], "-wal", (long long)wal) || !companion_ok(argv[1], "-shm", -1)) {
     close(fd); return 7;
   }
   /* A rollback journal of any size means an interrupted transaction: keep everything. */
