@@ -1,15 +1,7 @@
-import {
-  Check,
-  ChevronDown,
-  Copy,
-  Crosshair,
-  MessageSquarePlus,
-  PenTool,
-  Trash2
-} from 'lucide-react'
+import { useState } from 'react'
+import { Check, Copy, Crosshair, MessageSquarePlus, PenTool, Trash2 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { ButtonGroup } from '@/components/ui/button-group'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -84,22 +76,52 @@ function MenuToolRow({
   )
 }
 
-/** Grab, Annotate and Draw are one mode with three flavours: Annotate on the button, the rest in its menu. */
-export function BrowserAnnotateSplitButton({
+/** Grab and Draw rows, shared by the annotate icon's right-click menu and each surface's ⋯ menu. */
+export function BrowserAnnotateToolMenuItems({
+  tools,
+  markup,
+  onDraw
+}: {
+  tools: BrowserChromeElementTools
+  markup: BrowserChromeMarkupTool
+  onDraw?: () => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <>
+      <MenuToolRow
+        icon={Crosshair}
+        label={t('auto.components.browser.pane.BrowserPane.fdfc7fe0ef', 'Grab page element')}
+        shortcut={tools.grabShortcutLabel}
+        checked={tools.activeIntent === 'copy'}
+        disabled={tools.disabled}
+        onSelect={() => tools.onStartIntent('copy')}
+      />
+      <MenuToolRow
+        icon={PenTool}
+        label={t('auto.components.browser-pane.markup.drawButton', 'Draw on screenshot')}
+        checked={markup.active}
+        disabled={markup.disabled}
+        onSelect={onDraw ?? markup.onToggle}
+      />
+    </>
+  )
+}
+
+/** Grab, Annotate and Draw are one mode with three flavours: click annotates, right-click offers the rest. */
+export function BrowserAnnotateToolButton({
   tools,
   markup,
   notes,
-  compact,
   showTourAnchors
 }: {
   tools: BrowserChromeElementTools
   markup: BrowserChromeMarkupTool
   notes?: BrowserChromeNoteActions | null
-  /** Narrow rows drop the label; the icon and count stay. */
-  compact: boolean
   showTourAnchors: boolean
 }): React.JSX.Element {
   const t = useTranslate()
+  const [menuOpen, setMenuOpen] = useState(false)
   const { showHint, dismissHint } = useMarkupDrawHintState(
     markup.canShowDiscoveryHint,
     !markup.disabled && !markup.active
@@ -108,8 +130,6 @@ export function BrowserAnnotateSplitButton({
     'auto.components.browser.pane.BrowserPane.fc9be38f6f',
     'Annotate page element'
   )
-  const grabLabel = t('auto.components.browser.pane.BrowserPane.fdfc7fe0ef', 'Grab page element')
-  const drawLabel = t('auto.components.browser-pane.markup.drawButton', 'Draw on screenshot')
 
   const mode = markup.active
     ? { icon: PenTool, label: t('browser.toolbar.draw', 'Draw') }
@@ -134,7 +154,6 @@ export function BrowserAnnotateSplitButton({
     markup.onToggle()
   }
   const hasNotes = Boolean(notes) && tools.annotationCount > 0
-  const menuHasActions = !tools.disabled || !markup.disabled || hasNotes
   const primaryTooltip = active
     ? mode.label
     : tools.annotateShortcutLabel
@@ -156,90 +175,76 @@ export function BrowserAnnotateSplitButton({
           ? { 'data-contextual-tour-target': 'browser-annotation-control' }
           : {})}
       >
-        <ButtonGroup>
-          <Tooltip>
+        <DropdownMenu modal={false} open={menuOpen} onOpenChange={setMenuOpen}>
+          {/* Why: suppress the tooltip while the menu is open — both anchor below the button and would overlap. */}
+          <Tooltip open={menuOpen ? false : undefined}>
             <TooltipTrigger asChild>
-              <Button
-                variant={active ? 'default' : 'outline'}
-                size="sm"
-                onClick={onPrimary}
-                disabled={!active && tools.disabled}
-                aria-label={annotateLabel}
-                aria-pressed={active}
-              >
-                <ModeIcon />
-                {compact ? null : <span>{mode.label}</span>}
-                {tools.annotationCount > 0 ? (
-                  <span
-                    className={cn(
-                      'flex min-w-4 items-center justify-center rounded-full px-1 text-3xs leading-4 font-semibold',
-                      active
-                        ? 'bg-primary-foreground text-primary'
-                        : 'bg-primary text-primary-foreground'
-                    )}
-                  >
-                    {tools.annotationCount}
-                  </span>
-                ) : null}
-              </Button>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant={active ? 'default' : 'muted-field-icon'}
+                  size="icon-xs"
+                  className="relative"
+                  disabled={!active && tools.disabled}
+                  aria-label={annotateLabel}
+                  aria-pressed={active}
+                  // Same gestures as Reload: left click runs the tool, right click opens the menu.
+                  onPointerDown={(event) => {
+                    if (event.button === 0) {
+                      event.preventDefault()
+                    }
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      onPrimary()
+                    }
+                  }}
+                  onClick={onPrimary}
+                  onContextMenu={(event) => {
+                    event.preventDefault()
+                    setMenuOpen(true)
+                  }}
+                >
+                  <ModeIcon className="size-3.5" />
+                  {tools.annotationCount > 0 ? (
+                    <span className="pointer-events-none absolute -top-1 -right-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-3xs leading-none font-semibold text-primary-foreground ring-2 ring-background">
+                      {tools.annotationCount}
+                    </span>
+                  ) : null}
+                </Button>
+              </DropdownMenuTrigger>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={4}>
               {primaryTooltip}
             </TooltipContent>
           </Tooltip>
-          <DropdownMenu modal={false}>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant={active ? 'default' : 'outline'}
-                size="icon-sm"
-                disabled={!menuHasActions}
-                aria-label={t('browser.toolbar.annotateOptions', 'More annotate tools')}
-              >
-                <ChevronDown />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-64">
-              <MenuToolRow
-                icon={MessageSquarePlus}
-                label={annotateLabel}
-                shortcut={tools.annotateShortcutLabel}
-                checked={tools.activeIntent === 'annotate'}
-                disabled={tools.disabled}
-                onSelect={() => tools.onStartIntent('annotate')}
-              />
-              <MenuToolRow
-                icon={Crosshair}
-                label={grabLabel}
-                shortcut={tools.grabShortcutLabel}
-                checked={tools.activeIntent === 'copy'}
-                disabled={tools.disabled}
-                onSelect={() => tools.onStartIntent('copy')}
-              />
-              <MenuToolRow
-                icon={PenTool}
-                label={drawLabel}
-                checked={markup.active}
-                disabled={markup.disabled}
-                onSelect={startDraw}
-              />
-              {notes && hasNotes ? (
-                <>
-                  <DropdownMenuSeparator />
-                  <MenuToolRow
-                    icon={Copy}
-                    label={t('browser.toolbar.copyAllNotes', 'Copy all notes')}
-                    onSelect={notes.onCopyAll}
-                  />
-                  <MenuToolRow
-                    icon={Trash2}
-                    label={t('browser.toolbar.clearNotes', 'Clear notes')}
-                    onSelect={notes.onClear}
-                  />
-                </>
-              ) : null}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </ButtonGroup>
+          <DropdownMenuContent align="end" className="w-64">
+            <MenuToolRow
+              icon={MessageSquarePlus}
+              label={annotateLabel}
+              shortcut={tools.annotateShortcutLabel}
+              checked={tools.activeIntent === 'annotate'}
+              disabled={tools.disabled}
+              onSelect={() => tools.onStartIntent('annotate')}
+            />
+            <BrowserAnnotateToolMenuItems tools={tools} markup={markup} onDraw={startDraw} />
+            {notes && hasNotes ? (
+              <>
+                <DropdownMenuSeparator />
+                <MenuToolRow
+                  icon={Copy}
+                  label={t('browser.toolbar.copyAllNotes', 'Copy all notes')}
+                  onSelect={notes.onCopyAll}
+                />
+                <MenuToolRow
+                  icon={Trash2}
+                  label={t('browser.toolbar.clearNotes', 'Clear notes')}
+                  onSelect={notes.onClear}
+                />
+              </>
+            ) : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </span>
     </MarkupDrawHintPopover>
   )

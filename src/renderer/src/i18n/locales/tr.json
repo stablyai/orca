@@ -6283,8 +6283,7 @@
           "issueCommand": "Sorun komutu",
           "newVmRecipe": "Yeni VM tarifi",
           "vmRecipe": "VM tarifi",
-          "thisRepository": "bu repository",
-          "alwaysTrustRepo": "<repo/> içindeki <code>orca.yaml</code> dosyasına her zaman güven"
+          "thisRepository": "bu repository"
         },
         "PendingWorktreeRow": {
           "af21e953d1": "Worktree oluşturmayı iptal et",
@@ -23393,7 +23392,6 @@
     "setupTrust": {
       "reviewTitle": "Bu otomasyonun yeni kurulum komutları onaylansın mı?",
       "reviewBody": "Dalının <code>orca.yaml</code> kurulum komutları değiştiği için bir çalıştırma kurulumu atladı. Onaylarsanız sonraki çalıştırmalar bu komutları kullanır. Yalnızca <repo/> deposuna güveniyorsanız onaylayın.",
-      "approve": "Onayla",
       "approved": "Kurulum onaylandı. Bu otomasyonun sonraki çalıştırmaları onu çalıştıracak.",
       "skippedSinceApproved": "Dalının orca.yaml kurulum komutları değiştiği için bu çalıştırmada kurulum çalışmadı. Komutlar o zamandan beri onaylandı; sonraki çalıştırmalar onları çalıştıracak.",
       "skippedReview": "Kurulum çalışmadı: bu çalıştırmanın dalındaki orca.yaml kurulum komutları bu otomasyon için onaylananlardan farklı. Sonraki çalıştırmalarda kurulumun çalışması için onları inceleyin.",
