@@ -48,7 +48,7 @@ async function isClaudeInForeground(
   agentTeams: boolean
 ): Promise<boolean | 'unchecked'> {
   if (isClientOnlyUnverifiableInspection(inspection)) {
-    return false
+    return inspection.reason === 'terminal_gone' ? false : 'unchecked'
   }
   if (isClaudeProcess(inspection.foregroundProcess, agentTeams)) {
     return true
@@ -69,7 +69,8 @@ export type LocalClaudePane = ClaudeSessionMoveCandidate & {
   sessionId: string | undefined
   /** False when neither a live row nor a saved record names the session, so no restart can resume it. */
   resumable: boolean
-  /** Agent Teams' wrapper evidence for this pane: its own process read, or a one-pane tab's launch. */
+  hasClaudeEvidence: boolean
+  /** A live process read, since any Orca command shares Agent Teams' executable name. */
   agentTeams: boolean
 }
 
@@ -77,19 +78,15 @@ function isClaudeAgent(agent: string | null | undefined): boolean {
   return agent === 'claude' || agent === 'claude-agent-teams'
 }
 
-/** A tab-wide launch names only a one-pane tab's agent; a split leaf may run anything. */
-function paneLaunchAgent(state: AppState, tab: TerminalTab): string | undefined {
-  const leaves = state.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId ?? {}
-  return Object.keys(leaves).length === 1 ? tab.launchAgent : undefined
-}
-
-/** Why: hooks off, or not reported yet, leave no status row; the process read or launch still say Claude. */
-function hasRowlessClaudeEvidence(state: AppState, tab: TerminalTab, paneKey: string): boolean {
+function hasRowlessClaudeEvidence(
+  state: AppState,
+  paneKey: string,
+  launchAgent: string | undefined
+): boolean {
   const foreground = state.paneForegroundAgentByPaneKey[paneKey]
-  if (foreground?.shellForeground) {
-    return false
-  }
-  return isClaudeAgent(foreground?.agent) || isClaudeAgent(paneLaunchAgent(state, tab))
+  return (
+    !foreground?.shellForeground && (isClaudeAgent(foreground?.agent) || isClaudeAgent(launchAgent))
+  )
 }
 
 export function* localClaudePanes(
@@ -100,13 +97,14 @@ export function* localClaudePanes(
   const isLaneInScope = getCodexAccountSwitchLaneMatcher({ owner, target })
   for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
     for (const tab of tabs) {
-      const boundPtyIds = state.ptyIdsByTabId[tab.id] ?? []
-      const leaves = state.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId ?? {}
-      for (const [leafId, ptyId] of Object.entries(leaves)) {
+      const boundPtyIds = new Set(state.ptyIdsByTabId[tab.id] ?? [])
+      const leaves = Object.entries(state.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId ?? {})
+      const launchAgent = leaves.length === 1 ? tab.launchAgent : undefined
+      for (const [leafId, ptyId] of leaves) {
         if (
           !ptyId ||
           !isTerminalLeafId(leafId) ||
-          !boundPtyIds.includes(ptyId) ||
+          !boundPtyIds.has(ptyId) ||
           isForeignMachineCodexPtyId(ptyId)
         ) {
           continue
@@ -117,14 +115,17 @@ export function* localClaudePanes(
           continue
         }
         // Why the record: a dismissed row leaves the saved session the restart itself resumes.
-        const record = entry ? undefined : state.sleepingAgentSessionsByPaneKey[paneKey]
+        const record = state.sleepingAgentSessionsByPaneKey[paneKey]
         const saved = record?.agent === 'claude' ? record.providerSession : undefined
-        if (!entry && !saved && !hasRowlessClaudeEvidence(state, tab, paneKey)) {
+        const hasClaudeEvidence = hasRowlessClaudeEvidence(state, paneKey, launchAgent)
+        if (!entry && !saved && !hasClaudeEvidence) {
           continue
         }
         const { laneKey } = resolveCodexPaneSelectionLane({ state, tab, ptyId })
-        const providerSession = normalizeAgentProviderSession(entry?.providerSession ?? saved)
-        const foregroundAgent = state.paneForegroundAgentByPaneKey[paneKey]?.agent
+        const providerSession =
+          normalizeAgentProviderSession(entry?.providerSession) ??
+          normalizeAgentProviderSession(saved)
+        const foreground = state.paneForegroundAgentByPaneKey[paneKey]
         yield {
           ptyId,
           worktreeId,
@@ -135,10 +136,12 @@ export function* localClaudePanes(
           inLane: isLaneInScope(laneKey),
           transcriptPath: providerSession?.transcriptPath,
           sessionId: providerSession?.id,
-          resumable: Boolean(entry || saved),
+          resumable: Boolean(providerSession),
+          hasClaudeEvidence,
           agentTeams:
-            foregroundAgent === 'claude-agent-teams' ||
-            paneLaunchAgent(state, tab) === 'claude-agent-teams'
+            foreground?.agent === 'claude-agent-teams' &&
+            foreground.agentEvidence === 'process-read' &&
+            !foreground.shellForeground
         }
       }
     }
@@ -156,12 +159,13 @@ export async function isClaudeRunning(
   // Why: a Windows host cannot see processes inside WSL, so the guest's hooks and shell marks decide.
   if (isWslLane(pane.laneKey)) {
     const paneKey = makePaneKey(pane.tabId, pane.leafId)
-    return pane.resumable
-      ? resolvePaneAgentSessionId(state, paneKey) !== null
-      : hasRowlessClaudeEvidence(state, pane.tab, paneKey)
+    if (state.paneForegroundAgentByPaneKey[paneKey]?.shellForeground) {
+      return false
+    }
+    return resolvePaneAgentSessionId(state, paneKey) !== null || pane.hasClaudeEvidence
   }
   return inspectRuntimeTerminalProcess(pane.ptyId).then(
     (inspection) => isClaudeInForeground(pane.ptyId, inspection, pane.agentTeams),
-    () => false
+    () => 'unchecked'
   )
 }

@@ -65,7 +65,6 @@ function seedClaudePane(
   })
 }
 
-
 describe('detached Claude account-move restart', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window
 

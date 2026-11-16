@@ -215,8 +215,22 @@ describe('findMovableClaudeSessions', () => {
   it('finds an Agent Teams pane, whose packaged `orca claude-teams` wrapper leads the foreground', async () => {
     seedPanes([
       { n: 1, agentType: 'claude', launchAgent: 'claude-agent-teams' },
-      { n: 2, agentType: 'claude' }
+      { n: 2, agentType: 'claude', launchAgent: 'claude-agent-teams' }
     ])
+    useAppStore.setState({
+      paneForegroundAgentByPaneKey: {
+        [makePaneKey(tabId(1), leafId(1))]: {
+          agent: 'claude-agent-teams',
+          agentEvidence: 'process-read',
+          shellForeground: false
+        },
+        [makePaneKey(tabId(2), leafId(2))]: {
+          agent: 'claude-agent-teams',
+          agentEvidence: 'launch-record',
+          shellForeground: false
+        }
+      }
+    })
     vi.mocked(inspectRuntimeTerminalProcess).mockResolvedValue({
       foregroundProcess: 'Orca',
       hasChildProcesses: true
@@ -255,29 +269,90 @@ describe('findMovableClaudeSessions', () => {
     ])
   })
 
-  it('moves a session whose status row was dismissed, from its saved record', async () => {
-    seedPanes([{ n: 1 }])
-    const paneKey = makePaneKey(tabId(1), leafId(1))
-    useAppStore.setState({
-      sleepingAgentSessionsByPaneKey: {
-        [paneKey]: {
-          paneKey,
+  it.each([false, true])(
+    'moves a saved session when its live row lacks the session (live row: %s)',
+    async (live) => {
+      seedPanes([{ n: 1, ...(live ? { agentType: 'claude' as const, sessionId: null } : {}) }])
+      const paneKey = makePaneKey(tabId(1), leafId(1))
+      useAppStore.setState({
+        sleepingAgentSessionsByPaneKey: {
+          [paneKey]: {
+            paneKey,
+            worktreeId: 'wt1',
+            agent: 'claude',
+            providerSession: {
+              key: 'session_id',
+              id: SESSION_ID,
+              transcriptPath: `${FOLDER_A}/projects/-repo/${SESSION_ID}.jsonl`
+            },
+            prompt: '',
+            state: 'done',
+            capturedAt: 1,
+            updatedAt: 1
+          }
+        }
+      })
+
+      expect(await movable()).toEqual([ptyId(1)])
+    }
+  )
+
+  it.each(['timeout', 'transport_loss', 'rejected'])(
+    'reports a row-less Claude pane when inspection is unavailable (%s)',
+    async (reason) => {
+      seedPanes([{ n: 1, launchAgent: 'claude' }])
+      if (reason === 'rejected') {
+        vi.mocked(inspectRuntimeTerminalProcess).mockRejectedValue(new Error('inspection failed'))
+      } else {
+        vi.mocked(inspectRuntimeTerminalProcess).mockResolvedValue({
+          verdict: 'unverifiable',
+          reason,
+          foregroundProcess: null,
+          hasChildProcesses: false
+        })
+      }
+      const onUnchecked = vi.fn()
+      const found = await findClaudeSwitchSessions({
+        owner: LOCAL,
+        target: HOST,
+        fromAccountId: 'acct-a',
+        toAccountId: 'acct-b',
+        onUnchecked
+      })
+      expect(found).toEqual({ onAccount: [], elsewhere: [], cantMove: [] })
+      expect(onUnchecked).toHaveBeenCalledWith([
+        {
+          ptyId: 'pty-1',
           worktreeId: 'wt1',
+          tabId: 'tab-1',
+          leafId: '0195f2ce-1111-4000-8000-000000000001'
+        }
+      ])
+    }
+  )
+
+  it('reports a WSL Claude with a live row but no session to resume', async () => {
+    seedPanes([{ n: 1, agentType: 'claude', sessionId: null }])
+    laneByPtyId[ptyId(1)] = 'wsl:Ubuntu'
+    useAppStore.setState({
+      paneForegroundAgentByPaneKey: {
+        [makePaneKey(tabId(1), leafId(1))]: {
           agent: 'claude',
-          providerSession: {
-            key: 'session_id',
-            id: SESSION_ID,
-            transcriptPath: `${FOLDER_A}/projects/-repo/${SESSION_ID}.jsonl`
-          },
-          prompt: '',
-          state: 'done',
-          capturedAt: 1,
-          updatedAt: 1
+          agentEvidence: 'process-read',
+          shellForeground: false
         }
       }
     })
-
-    expect(await movable()).toEqual([ptyId(1)])
+    const found = await scan('acct-a', { runtime: 'wsl', wslDistro: 'Ubuntu' })
+    expect(found.cantMove).toEqual([
+      {
+        ptyId: 'pty-1',
+        worktreeId: 'wt1',
+        tabId: 'tab-1',
+        leafId: '0195f2ce-1111-4000-8000-000000000001',
+        reason: 'no-session'
+      }
+    ])
   })
 
   // WSL stores UNC and guest config paths, hooks report guest transcripts, and Windows sees only wsl.exe in the pane tree.
