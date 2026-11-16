@@ -1,6 +1,7 @@
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { useAppStore } from '@/store'
 import type { Worktree } from '../../../../../../shared/worktree/types'
+import type { WorktreeCardProperty } from '../../../../../../shared/ui-chrome-types'
 import { FIXTURE_REPO, makeWorktree } from '../../worktree-card-slot-fixture-seeds'
 import WorktreeCard from './WorktreeCard'
 
@@ -19,7 +20,19 @@ const workspace: Worktree = {
   ]
 }
 
-function fixture(detailsRow: boolean, indicators = true) {
+function fixture(
+  detailsRow: boolean,
+  indicators = true,
+  properties: WorktreeCardProperty[] = [
+    'status',
+    'branch',
+    'host',
+    'issue',
+    'comment',
+    'cli',
+    'ports'
+  ]
+) {
   return defineFixture({
     width: 320,
     setup: () =>
@@ -33,9 +46,7 @@ function fixture(detailsRow: boolean, indicators = true) {
               worktreeCardDetailsRow: detailsRow
             }
           : null,
-        worktreeCardProperties: indicators
-          ? ['status', 'branch', 'host', 'issue', 'comment', 'cli', 'ports']
-          : ['status', 'branch'],
+        worktreeCardProperties: indicators ? properties : ['status', 'branch'],
         workspacePortScan: {
           key: 'details-row',
           result: {
@@ -77,6 +88,14 @@ function fixture(detailsRow: boolean, indicators = true) {
 export const shown = fixture(true)
 export const hidden = fixture(false)
 export const displayOptionsOff = fixture(false, false)
+// Details row on, but nothing to show on the left: the icons stay on the title line.
+export const shownIndicatorsOnly = fixture(true, true, [
+  'status',
+  'issue',
+  'comment',
+  'cli',
+  'ports'
+])
 export const hiddenWithConflict = defineFixture({
   ...fixture(false),
   store: { gitConflictOperationByWorktree: { [workspace.id]: 'cherry-pick' } }
