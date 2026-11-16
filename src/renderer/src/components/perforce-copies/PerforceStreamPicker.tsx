@@ -116,8 +116,8 @@ export function PerforceStreamPicker({
         value={mode}
         // Radix sends '' when the active item is re-clicked; keep the current mode then.
         onValueChange={(next) => {
-          if (next) {
-            onChange(choiceFor(next as StreamMode, selected, sourceStream))
+          if (next === 'new' || next === 'existing') {
+            onChange(choiceFor(next, selected, sourceStream))
           }
         }}
         className="w-full"
