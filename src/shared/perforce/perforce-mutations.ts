@@ -129,18 +129,21 @@ export async function isReadOnlyWorkspaceFile(cwd: string, filePath: string): Pr
 }
 
 /** Checks a read-only workspace file out for edit; writable, missing, and non-file paths are left alone. */
-export async function checkoutIfReadOnly(cwd: string, filePath: string): Promise<void> {
+export async function checkoutIfReadOnly(
+  cwd: string,
+  filePath: string
+): Promise<PerforceOperationResult> {
   const absolute = resolveInWorkspace(cwd, filePath)
   try {
-    if (!(await lstat(absolute)).isFile()) {
-      return
+    if ((await lstat(absolute)).isFile()) {
+      await access(absolute, constants.W_OK)
     }
-    await access(absolute, constants.W_OK)
   } catch (error) {
     if (isErrnoCode(error, 'EACCES') || isErrnoCode(error, 'EPERM')) {
-      await editFiles(cwd, [filePath])
+      return editFiles(cwd, [filePath])
     }
   }
+  return { success: true, output: '' }
 }
 
 function isErrnoCode(error: unknown, code: string): boolean {

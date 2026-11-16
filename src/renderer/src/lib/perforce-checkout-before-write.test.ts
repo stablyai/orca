@@ -10,6 +10,7 @@ type State = {
   isPerforce: boolean
   readOnly: boolean
   answer: boolean
+  checkoutError: string | null
   calls: string[]
 }
 
@@ -18,6 +19,7 @@ const state = vi.hoisted((): State => ({
   isPerforce: true,
   readOnly: true,
   answer: true,
+  checkoutError: null,
   calls: []
 }))
 
@@ -43,7 +45,12 @@ vi.mock('../runtime/runtime-perforce-client', () => ({
     params: { filePath: string }
   ) => {
     state.calls.push(`${operation}:${params.filePath}`)
-    return operation === 'isReadOnlyFile' ? state.readOnly : undefined
+    if (operation === 'isReadOnlyFile') {
+      return state.readOnly
+    }
+    return state.checkoutError === null
+      ? { success: true, output: '' }
+      : { success: false, output: '', error: state.checkoutError }
   }
 }))
 
@@ -54,6 +61,7 @@ beforeEach(() => {
   state.isPerforce = true
   state.readOnly = true
   state.answer = true
+  state.checkoutError = null
   state.calls = []
 })
 
@@ -73,6 +81,13 @@ describe('checkoutPerforceFileBeforeWrite', () => {
       PERFORCE_EDIT_DECLINED_MESSAGE
     )
     expect(state.calls).toEqual(['isReadOnlyFile:a.cs', 'ask:a.cs'])
+  })
+
+  it("cancels the save with p4's reason when the file cannot be opened for edit", async () => {
+    state.checkoutError = 'a.cs - locked by someone@else'
+    await expect(checkoutPerforceFileBeforeWrite(CONTEXT, '/ws/a.cs')).rejects.toThrow(
+      'locked by someone@else'
+    )
   })
 
   it('opens without asking when set to, and stays out of the way when set to never', async () => {
