@@ -37,7 +37,7 @@
 19 src/main/native-chat/agent-session-attachments/agent-session-attachment-claims.ts
 3 src/main/native-chat/agent-session-journal/database/journal-checkpoint-owner.ts
 13 src/main/native-chat/agent-session-journal/database/journal-database.ts
-7 src/main/native-chat/agent-session-journal/database/journal-domain-database.ts
+9 src/main/native-chat/agent-session-journal/database/journal-domain-database.ts
 2 src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts
 20 src/main/native-chat/agent-session-journal/database/journal-domain-profile-import.ts
 1 src/main/native-chat/agent-session-journal/database/journal-host-database.ts
@@ -102,7 +102,7 @@
 10 src/main/native-chat/agent-session-journal/journal-fork-stage-page.ts
 12 src/main/native-chat/agent-session-journal/journal-fork-stages.ts
 4 src/main/native-chat/agent-session-journal/journal-fork-workspace.ts
-28 src/main/native-chat/agent-session-journal/journal-legacy-source-proof.ts
+30 src/main/native-chat/agent-session-journal/journal-legacy-source-proof.ts
 2 src/main/native-chat/agent-session-journal/journal-open-queue-withdrawal.ts
 4 src/main/native-chat/agent-session-journal/journal-sql-accepted-inputs.ts
 6 src/main/native-chat/agent-session-journal/journal-sql-automatic-submission-command.ts
