@@ -1,6 +1,7 @@
 import type React from 'react'
 import { Trans } from 'react-i18next'
 import type { OrcaUninstallPlan } from '../../../../../../shared/uninstall/orca-uninstall-types'
+import { finalSentenceStop } from '../../../../../../shared/text/sentence-joining'
 import { i18n } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { SettingsGroupDisclosure } from '../../section-layout/SettingsGroupDisclosure'
@@ -49,7 +50,8 @@ function describePlanParts(plan: OrcaUninstallPlan, t: Translate, intlLocale: st
     return t('settings.uninstall.summary.nothing', 'Nothing outside the app to remove.')
   }
   const list = new Intl.ListFormat(intlLocale, { type: 'conjunction' }).format(parts)
-  return `${list.charAt(0).toLocaleUpperCase(intlLocale)}${list.slice(1)}.`
+  const sentence = `${list.charAt(0).toLocaleUpperCase(intlLocale)}${list.slice(1)}`
+  return `${sentence}${finalSentenceStop(sentence)}`
 }
 
 function OrcaUninstallSummary({
