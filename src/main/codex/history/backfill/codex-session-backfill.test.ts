@@ -336,6 +336,7 @@ describe('startCodexSessionBackfillInBackground', () => {
       writeManagedSession(join('2026', '03', day, 'rollout-new.jsonl'), 'new\n')
     }
     await startCodexSessionBackfillInBackground()
+    await startCodexSessionBackfillInBackground()
     expect(
       readFileSync(join(getSystemSessionsRoot(), '2026', '03', '01', 'rollout-new.jsonl'), 'utf-8')
     ).toBe('new\n')

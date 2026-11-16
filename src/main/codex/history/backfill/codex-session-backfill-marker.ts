@@ -106,8 +106,15 @@ export function writeCodexSessionBackfillMarker(
     launchActive: !clearCovered || options.resumed,
     scanFrom:
       generationCurrent && !options.progress.truncated
-        ? (options.progress.recentDates.at(-1) ?? current?.scanFrom)
+        ? options.resumed
+          ? current?.scanCheckpoint
+          : (options.progress.recentDates.at(-1) ?? current?.scanFrom)
         : current?.scanFrom,
+    scanCheckpoint: generationCurrent
+      ? options.progress.truncated
+        ? (current?.scanCheckpoint ?? options.progress.recentDates.at(-1))
+        : undefined
+      : current?.scanCheckpoint,
     scanCursor: generationCurrent ? options.progress.cursor : current?.scanCursor,
     // Empty bounded scans must not erase the count from the full-history baseline.
     baselineScannedFiles:
