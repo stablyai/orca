@@ -95,4 +95,15 @@ describe('who pushes and PRs go out as, in source control', () => {
     expect((await show({ you: { connected: false } })).textContent).toBe('')
     expect((await show(null)).textContent).toBe('')
   })
+
+  it('a workspace that changed owners: the bot for good, with no Connect GitHub', async () => {
+    const c = await show({
+      githubActing: { actingAs: 'bot', reason: 'transferred' },
+      you: { connected: false }
+    })
+    expect(c.textContent).toContain(
+      'Pushes and PRs go out as Orca bot (this workspace changed owners)'
+    )
+    expect(connectButton(c)).toBeNull()
+  })
 })
