@@ -2206,7 +2206,8 @@
       "newTab": "New tab",
       "quickCommands": "Quick commands",
       "fileExplorer": "File explorer",
-      "sourceControl": "Source control"
+      "sourceControl": "Source control",
+      "textSize": "Text size"
     },
     "headerMoreActionsSheet": {
       "agentHistory": "Agent History",
@@ -3015,6 +3016,14 @@
       "next": "Next tab",
       "previous": "Previous tab",
       "hint": "Shows all tabs"
+    },
+    "textSizeSheet": {
+      "chatTitle": "Chat text",
+      "size": "Size",
+      "moreChat": "More text settings",
+      "terminalTitle": "Terminal text",
+      "pointsAndColumns": "{{points}} · {{count}} columns",
+      "moreTerminal": "More terminal settings"
     }
   },
   "chat": {
