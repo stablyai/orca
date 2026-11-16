@@ -9,6 +9,10 @@ import {
 import { createUntitledMarkdownFile } from '@/lib/editor/file-operations/create-untitled-markdown'
 import { translate } from '@/i18n/i18n'
 import { getDiskBaselineSignature } from '../../../../../../shared/file-write/disk-baseline-signature'
+import {
+  recordSelfWrite,
+  SELF_WRITE_REMOTE_TTL_MS
+} from '../../external-changes/editor-self-write-registry'
 
 function closedUnsavedFilesToastTitle(count: number, workspace: string): string {
   return translate(
@@ -80,6 +84,11 @@ export async function reopenClosedUnsavedFiles(
       const store = useAppStore.getState()
       const fileId = store.openFile(fileInfo, { preview: false, focusEditor: !asDirtyDrafts })
       if (asDirtyDrafts) {
+        const runtimeEnvironmentId = useAppStore
+          .getState()
+          .openFiles.find((open) => open.id === fileId)?.runtimeEnvironmentId
+        // Why: our own create's watcher echo would otherwise flag the dirty tab as changed on disk.
+        recordSelfWrite(fileInfo.filePath, '', runtimeEnvironmentId, SELF_WRITE_REMOTE_TTL_MS)
         // Why: this create made the file empty; without that baseline every save is refused as stale.
         store.setLastKnownDiskSignature(fileId, getDiskBaselineSignature(''))
         store.setEditorDraft(fileId, file.content)
