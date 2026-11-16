@@ -71,7 +71,7 @@ export function startClaudeUsageLimitAccountSwitch(
   deps: ClaudeUsageLimitAccountSwitchDeps
 ): () => void {
   const now = deps.now ?? Date.now
-  const known = new Map<string, Omit<ClaudeUsageLimitCandidate, 'id'>>()
+  const known = new Map<string, Omit<ClaudeUsageLimitCandidate, 'id'> & { reading: string }>()
   /** Kept apart from `known`, which the next reading of the account would overwrite. */
   const refusedUntil = new Map<string, number>()
   let switching = false
@@ -82,12 +82,19 @@ export function startClaudeUsageLimitAccountSwitch(
     normalizeClaudeRuntimeSelection(deps.settings()).host
 
   const remember = (accountId: string, limits: ProviderRateLimits | null): void => {
+    // Why the same reading is skipped: a spent window with no reset gets its deadline from now,
+    // so re-reading a cached row would push it out on every notification.
     if (limits?.status !== 'ok') {
+      return
+    }
+    const reading = JSON.stringify([limits.updatedAt, limits.session, limits.weekly])
+    if (known.get(accountId)?.reading === reading) {
       return
     }
     known.set(accountId, {
       weeklyResetsAt: limits.weekly?.resetsAt ?? known.get(accountId)?.weeklyResetsAt ?? null,
-      skipUntil: claudeUsageLimitEndsAt(limits, now())
+      skipUntil: claudeUsageLimitEndsAt(limits, now()),
+      reading
     })
   }
 
@@ -130,9 +137,14 @@ export function startClaudeUsageLimitAccountSwitch(
         return
       }
     }
-    const next = nextClaudeAccountAfterUsageLimit(candidatesFor(selected), now())
+    const candidates = candidatesFor(selected)
+    const next = nextClaudeAccountAfterUsageLimit(candidates, now())
     if (!next) {
-      noCandidateUntil = now() + UNKNOWN_SKIP_MS
+      // Wait no longer than the first candidate's reset, so an account that frees up is taken.
+      noCandidateUntil = Math.min(
+        now() + UNKNOWN_SKIP_MS,
+        ...candidates.flatMap((candidate) => candidate.skipUntil ?? [])
+      )
       return
     }
     try {

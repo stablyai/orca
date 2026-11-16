@@ -56,6 +56,7 @@ function host(options: { enabled?: boolean; readingAccount?: string } = {}) {
     activeAccountId: 'a'
   }
   let listener: (state: RateLimitState) => void = () => {}
+  const clock = { now: NOW }
   const select = vi.fn(async (accountId: string) => {
     accounts.activeAccountId = accountId
   })
@@ -77,7 +78,7 @@ function host(options: { enabled?: boolean; readingAccount?: string } = {}) {
     }),
     listAccounts: () => accounts,
     select,
-    now: () => NOW
+    now: () => clock.now
   })
   const publish = async (
     claude: ProviderRateLimits,
@@ -99,7 +100,7 @@ function host(options: { enabled?: boolean; readingAccount?: string } = {}) {
       await Promise.resolve()
     }
   }
-  return { publish, select, stop }
+  return { publish, select, stop, clock }
 }
 
 let stop: (() => void) | undefined
@@ -134,6 +135,37 @@ describe('nextClaudeAccountAfterUsageLimit', () => {
 })
 
 describe('startClaudeUsageLimitAccountSwitch', () => {
+  it('takes an account again as soon as its own limit has reset', async () => {
+    const run = host()
+    stop = run.stop
+    const spent = { b: reading(window(100, 0.1, 300), null), c: reading(window(100, 2, 300), null) }
+    await run.publish(reading(null, window(100, 8)), spent)
+    expect(run.select).not.toHaveBeenCalled()
+    // b's 5-hour window reset a minute ago (6 minutes in); the 15-minute pause must not outlast it.
+    run.clock.now = NOW + 7 * 60_000
+    await run.publish({ ...reading(null, window(100, 8)), updatedAt: run.clock.now }, spent)
+    expect(run.select.mock.calls).toEqual([['b']])
+  })
+
+  it('does not extend a spent account with no known reset each time its reading repeats', async () => {
+    const run = host()
+    stop = run.stop
+    const noReset = {
+      usedPercent: 100,
+      windowMinutes: 10080,
+      resetsAt: null,
+      resetDescription: null
+    }
+    const inactive = { b: reading(null, noReset), c: reading(null, noReset) }
+    await run.publish(reading(null, window(50, 8)), inactive)
+    run.clock.now = NOW + 10 * 60_000
+    await run.publish({ ...reading(null, window(60, 8)), updatedAt: run.clock.now }, inactive)
+    // 16 minutes after the first sighting: the 15-minute pass-over has run out.
+    run.clock.now = NOW + 16 * 60_000
+    await run.publish({ ...reading(null, window(100, 8)), updatedAt: run.clock.now }, inactive)
+    expect(run.select).toHaveBeenCalledTimes(1)
+  })
+
   it('selects the account whose weekly limit resets soonest once the selected one is spent', async () => {
     const run = host()
     stop = run.stop
