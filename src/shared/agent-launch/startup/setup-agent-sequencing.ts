@@ -120,6 +120,7 @@ export function createSequencedSetupAgentCommands(args: {
 function buildPosixSetupScript(setupCommand: string, markerPath: string, nonce: string): string {
   const marker = quotePosixShellUnlessPlainNoAt(markerPath)
   const tmp = quotePosixShellUnlessPlainNoAt(`${markerPath}.tmp`)
+  const claim = quotePosixShellUnlessPlainNoAt(`${markerPath}.claim`)
   const nonceValue = quotePosixShellUnlessPlainNoAt(nonce)
 
   return [
@@ -127,11 +128,10 @@ function buildPosixSetupScript(setupCommand: string, markerPath: string, nonce: 
     `rm -f ${tmp} 2>/dev/null`,
     setupCommand,
     'status=$?',
-    `printf '%s:%s\\n' ${nonceValue} "$status" > ${tmp}`,
-    `ln ${tmp} ${marker} 2>/dev/null || true`,
+    `if ( set -C; : > ${claim} ) 2>/dev/null; then printf '%s:%s\\n' ${nonceValue} "$status" > ${tmp} && { [ -e ${marker} ] || mv ${tmp} ${marker}; }; fi`,
     `rm -f ${tmp}`,
     `IFS=: read -r seen accepted < ${marker} || true`,
-    `if [ "$seen" = ${nonceValue} ] && [[ "$accepted" =~ ^[0-9]+$ ]]; then status=$accepted; else status=1; fi`,
+    `if [ "$seen" = ${nonceValue} ] && [[ "$accepted" =~ ^[0-9]+$ ]]; then status=$accepted; else exit 1; fi`,
     `printf '\\033]777;${setupCompletionPrefix(nonce)}%s\\007' "$status"`,
     'exit "$status"'
   ].join('; ')
@@ -148,7 +148,6 @@ function buildPosixStartupScript(
   const nonceValue = quotePosixShellUnlessPlainNoAt(nonce)
   const timeout = Math.max(1, Math.floor(waitTimeoutSeconds))
   const startupSuccessCommand = buildPosixStartupSuccessCommand(startupCommand)
-  // Keep the interactive wrapper one line to avoid visible quote-continuation prompts.
   const script = [
     'waitdir="";',
     'for waitroot in "${TMPDIR:-/tmp}" /tmp; do',
@@ -185,13 +184,10 @@ function buildPosixStartupScript(
 }
 
 function buildPosixStartupSuccessCommand(startupCommand: string): string {
-  if (
-    hasUnquotedPosixCommandSeparator(startupCommand) ||
-    hasLeadingPosixEnvAssignment(startupCommand)
-  ) {
-    return `eval ${quotePosixShellUnlessPlainNoAt(startupCommand)}; exit "$?"`
-  }
-  return `exec ${startupCommand}`
+  const separated = hasUnquotedPosixCommandSeparator(startupCommand)
+  return separated || hasLeadingPosixEnvAssignment(startupCommand)
+    ? `eval ${quotePosixShellUnlessPlainNoAt(startupCommand)}; exit "$?"`
+    : `exec ${startupCommand}`
 }
 
 function hasLeadingPosixEnvAssignment(command: string): boolean {
@@ -249,11 +245,12 @@ function buildWindowsSetupCommand(
     '$process.WaitForExit()',
     '$setupStatus = $process.ExitCode',
     '$utf8 = [System.Text.UTF8Encoding]::new($false)',
-    '[System.IO.File]::WriteAllText($tmp, ($nonce + ":" + $setupStatus + [Environment]::NewLine), $utf8)',
-    'try { [IO.File]::Move($tmp, $marker) } catch { if (-not [IO.File]::Exists($marker)) { throw } }',
+    '$claimed = $false',
+    'try { $claim = [IO.File]::Open($marker + ".claim", [IO.FileMode]::CreateNew); $claim.Dispose(); $claimed = $true } catch { if (-not [IO.File]::Exists($marker + ".claim")) { throw } }',
+    'if ($claimed) { [IO.File]::WriteAllText($tmp, ($nonce + ":" + $setupStatus + [Environment]::NewLine), $utf8); if (-not [IO.File]::Exists($marker)) { [IO.File]::Move($tmp, $marker) } }',
     'Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue',
     '$accepted = [IO.File]::ReadAllText($marker).Trim()',
-    'if ($accepted -match "^([0-9A-Za-z_-]+):([0-9]+)$" -and $Matches[1] -eq $nonce) { $setupStatus = [int]$Matches[2] } else { $setupStatus = 1 }',
+    'if ($accepted -match "^([0-9A-Za-z_-]+):([0-9]+)$" -and $Matches[1] -eq $nonce) { $setupStatus = [int]$Matches[2] } else { exit 1 }',
     `[Console]::Write(([char]27).ToString() + ']777;${setupCompletionPrefix(nonce)}' + $setupStatus + [char]7)`,
     'exit $setupStatus'
   ].join('; ')

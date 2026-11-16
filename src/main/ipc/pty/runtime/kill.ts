@@ -1,3 +1,4 @@
+import { OPERATOR_CLOSE_EXIT_CAUSE } from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import type { IPtyProvider } from '../../../providers/pty/provider-contract'
 import { SSH_PROVIDER_UNREGISTERED_REASON } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import { isCurrentPtyExit, ptyOwnership, ptyIncarnationById } from '../provider/ownership-state'
@@ -40,7 +41,14 @@ export function publishSyntheticExit(
   if (evidence instanceof PtyRetirementWithoutProof) {
     deps.runtime?.markPtyLivenessUnverifiable?.(ptyId, evidence.unverifiableReason)
   }
-  deps.runtime?.onPtyExit(ptyId, code, incarnationId)
+  if (evidence instanceof PtyExitProof && evidence.source !== 'shutdown-acknowledged') {
+    deps.runtime?.onPtyExit(ptyId, code, incarnationId, {
+      hostExitConfirmed: true,
+      cause: OPERATOR_CLOSE_EXIT_CAUSE
+    })
+  } else {
+    deps.runtime?.onPtyExit(ptyId, code, incarnationId)
+  }
   deps.rememberSyntheticKillExit(ptyId, incarnationId)
   deps.sendPtyExitToRenderer({ id: ptyId, code, ...(incarnationId ? { incarnationId } : {}) })
 }

@@ -35,7 +35,7 @@ describe('createSequencedSetupAgentCommands', () => {
       const directory = join(tempDir, 'setup-completions')
       mkdirSync(directory)
       for (let index = 0; index < count; index++) {
-        for (const suffix of ['.done', '.done.tmp']) {
+        for (const suffix of ['.done', '.done.tmp', '.done.claim']) {
           const file = join(directory, `old-${index}${suffix}`)
           writeFileSync(file, 'old:0')
           utimesSync(file, new Date(0), new Date(0))
@@ -60,6 +60,7 @@ describe('createSequencedSetupAgentCommands', () => {
       expect(result.code).toBe(0)
       expect(readdirSync(directory).sort()).toEqual([
         'new-attempt.done',
+        'new-attempt.done.claim',
         'recent.done',
         'recent.done.tmp'
       ])

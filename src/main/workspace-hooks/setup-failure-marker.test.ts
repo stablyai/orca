@@ -5,6 +5,10 @@ import { afterEach, expect, it } from 'vitest'
 import { runProcess } from '@orca/process-host'
 import { SetupTerminalCompletions } from '../runtime/terminal/wait/setup-terminal-completions'
 import { createSequencedSetupAgentCommands } from '../../shared/agent-launch/startup/setup-agent-sequencing'
+import { OrcaRuntimeService } from '../runtime/orca-runtime'
+import { publishSyntheticExit } from '../ipc/pty/runtime/kill'
+import { PtyExitProof } from '../pty/process-retirement/pty-exit-proof'
+import type { SetupAttemptRecipe } from '../../shared/agent-launch/startup/setup-attempt-recipe'
 import { publishSetupFailureMarker } from './setup-failure-marker'
 
 const roots: string[] = []
@@ -52,6 +56,10 @@ it.each([false, true])(
       deadline: Date.now() + 3000
     })
     registry.begin('setup', 'handle', 'closed-attempt', 'workspace')
+    // A dead writer may have acquired publication before it could commit its complete result.
+    writeFileSync(`${marker}.claim`, '')
+    registry.exit('setup', false)
+    await registry.forWorkspace('workspace')
     registry.exit('setup', true)
     await publication
     const run = (command: string, env?: Record<string, string>) =>
@@ -69,5 +77,64 @@ it.each([false, true])(
     expect(existsSync(effect)).toBe(success)
     expect(readFileSync(marker, 'utf8')).toBe(success ? 'closed-attempt:0\n' : 'closed-attempt:1\n')
     expect(readFileSync(join(directory, 'new-attempt.done'), 'utf8')).toBe('new-attempt:0\n')
+  }
+)
+
+class ClosingSetupRuntime extends OrcaRuntimeService {
+  arm(recipe: SetupAttemptRecipe): void {
+    this.setupTerminalCompletions.bindRecipe('workspace', recipe)
+    this.setupTerminalCompletions.begin('setup', 'handle', recipe.nonce, 'workspace')
+  }
+}
+
+it.each(['confirmed-stop', 'physical-negative-exit'] as const)(
+  'ends shell readers after an unverified stop followed by %s',
+  async (confirmation) => {
+    const root = mkdtempSync(join(tmpdir(), 'setup-close-proof-'))
+    roots.push(root)
+    const windows = process.platform === 'win32'
+    const runner = join(root, windows ? 'runner.cmd' : 'runner.sh')
+    const effect = join(root, 'started')
+    const commands = createSequencedSetupAgentCommands({
+      runnerScriptPath: runner,
+      platform: windows ? 'windows' : 'posix',
+      nonce: 'late-confirmed-close',
+      startupCommand: `echo started > "${effect}"`,
+      agent: 'codex',
+      waitTimeoutSeconds: 3
+    })
+    const runtime = new ClosingSetupRuntime()
+    runtime.arm({
+      runnerScriptPath: runner,
+      platform: windows ? 'windows' : 'posix',
+      nonce: 'late-confirmed-close',
+      deadline: Date.now() + 3000
+    })
+    await runtime.onPtyExit('setup', -1)
+    expect(existsSync(join(root, 'setup-completions', 'late-confirmed-close.done'))).toBe(false)
+    if (confirmation === 'physical-negative-exit') {
+      await runtime.onPtyExit('setup', -1, undefined, { providerExitObserved: true })
+    } else {
+      publishSyntheticExit(
+        { runtime, rememberSyntheticKillExit() {}, sendPtyExitToRenderer() {} },
+        'setup',
+        -1,
+        undefined,
+        PtyExitProof.from('stop-confirmed', undefined)
+      )
+    }
+    const result = await runProcess({
+      program: windows ? 'cmd.exe' : 'bash',
+      args: windows
+        ? ['/d', '/s', '/c', commands.startupCommand]
+        : ['-lc', commands.startupCommand],
+      env: { ...process.env, ...commands.startupEnv },
+      timeoutMs: 5000
+    })
+    expect(result.code).toBe(1)
+    expect(existsSync(effect)).toBe(false)
+    expect(readFileSync(join(root, 'setup-completions', 'late-confirmed-close.done'), 'utf8')).toBe(
+      'late-confirmed-close:1\n'
+    )
   }
 )

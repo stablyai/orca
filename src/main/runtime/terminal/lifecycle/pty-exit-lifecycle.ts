@@ -106,7 +106,10 @@ export abstract class OrcaRuntimeWithOnPtyExit extends RuntimePtyExitSurfaceRead
     }
     const processDeathCertified =
       exitCode >= 0 || options.hostExitConfirmed === true || options.providerExitObserved === true
-    this.setupTerminalCompletions.exit(ptyId, processDeathCertified && !stopNeverConfirmed)
+    this.setupTerminalCompletions.exit(
+      ptyId,
+      processDeathCertified && (!stopNeverConfirmed || options.providerExitObserved === true)
+    )
     const endedOnItsOwn =
       processDeathCertified &&
       !stopRequested &&

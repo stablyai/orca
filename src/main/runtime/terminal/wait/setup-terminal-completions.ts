@@ -11,10 +11,12 @@ type WorkspaceAttempt = {
   completion: Promise<SetupCompletion>
   finish: (exitCode: number | null) => void
   bound: boolean
-  settled: boolean
+  result?: SetupCompletion
   recipe?: SetupAttemptRecipe
   available: Promise<void>
   publish: () => void
+  cancel: () => void
+  cancelled: boolean
   publication?: AbortController
 }
 
@@ -26,7 +28,6 @@ type Attempt = {
   refuse?: () => void
 }
 
-/** Capture before dispatch; the outcome lives with the PTY record, independently of its output. */
 export class SetupTerminalCompletions {
   private readonly attempts = new Map<string, Attempt>()
   private readonly requiredByWorkspace = new Map<string, WorkspaceAttempt>()
@@ -77,33 +78,34 @@ export class SetupTerminalCompletions {
   begin(ptyId: string, handle: string, token: string, workspaceId?: string): void {
     this.forget(ptyId)
     const answer = Promise.withResolvers<SetupCompletion>()
-    const finish = (exitCode: number | null): void => answer.resolve({ exitCode })
+    let finishWorkspace: ((exitCode: number | null) => void) | undefined
+    const finish = (exitCode: number | null): void => {
+      finishWorkspace?.(exitCode)
+      answer.resolve({ exitCode })
+    }
     const scanner = createSetupCompletionScanner(token, finish)
     const attempt: Attempt = { handle, scan: scanner.scan, completion: answer.promise, finish }
     this.attempts.set(ptyId, attempt)
     this.byHandle.set(handle, attempt)
     if (workspaceId) {
       let workspace = this.requiredByWorkspace.get(workspaceId)
-      if (!workspace || workspace.bound || workspace.settled) {
-        this.beginWorkspace(workspaceId)
-        workspace = this.requiredByWorkspace.get(workspaceId)!
+      if (!workspace || workspace.bound || workspace.result) {
+        workspace = this.beginWorkspace(workspaceId)
       }
       workspace.bound = true
       const captured = workspace
       attempt.refuse = () => {
-        if (captured.settled || !captured.recipe || captured.publication) {
+        const { cancelled, result, recipe, publication } = captured
+        if (cancelled || result?.exitCode != null || !recipe || publication) {
           return
         }
         const abort = new AbortController()
         captured.publication = abort
-        void this.publishFailure(
-          captured.recipe,
-          AbortSignal.any([abort.signal, AbortSignal.timeout(5000)])
-        )
+        void this.publishFailure(recipe, AbortSignal.any([abort.signal, AbortSignal.timeout(5000)]))
           .catch(() => {})
           .finally(() => this.retireWorkspaceAttempt(workspaceId, captured))
       }
-      void answer.promise.then(({ exitCode }) => workspace.finish(exitCode))
+      finishWorkspace = (exitCode) => captured.finish(exitCode)
     }
   }
 
@@ -112,10 +114,9 @@ export class SetupTerminalCompletions {
     if (
       !workspace ||
       (workspace.recipe && workspace.recipe.nonce !== recipe.nonce) ||
-      (workspace.settled && !workspace.recipe)
+      (workspace.result && !workspace.recipe)
     ) {
-      this.beginWorkspace(workspaceId)
-      workspace = this.requiredByWorkspace.get(workspaceId)!
+      workspace = this.beginWorkspace(workspaceId)
     }
     workspace.recipe ??= recipe
     workspace.publish()
@@ -184,7 +185,7 @@ export class SetupTerminalCompletions {
 
   async gate(workspaceId: string): Promise<WorkspaceAttempt | undefined> {
     const workspace = this.requiredByWorkspace.get(workspaceId)
-    if (workspace && !workspace.recipe && !workspace.settled) {
+    if (workspace && !workspace.recipe && !workspace.result) {
       await workspace.available
     }
     return workspace
@@ -194,7 +195,7 @@ export class SetupTerminalCompletions {
     return this.requiredByWorkspace.get(workspaceId)?.completion
   }
 
-  beginWorkspace(workspaceId: string): void {
+  beginWorkspace(workspaceId: string): WorkspaceAttempt {
     const answer = Promise.withResolvers<SetupCompletion>()
     let timer: ReturnType<typeof setTimeout> | undefined
     const available = Promise.withResolvers<void>()
@@ -203,21 +204,37 @@ export class SetupTerminalCompletions {
       publish: () => available.resolve(),
       completion: answer.promise,
       bound: false,
-      settled: false,
+      cancelled: false,
+      cancel: () => {
+        workspace.cancelled = true
+        workspace.publication?.abort()
+        clearTimeout(timer)
+      },
       finish: (exitCode) => {
-        if (workspace.settled) {
+        if (workspace.result) {
+          if (exitCode !== null && workspace.result.exitCode === null) {
+            workspace.result = { exitCode }
+            if (!workspace.publication) {
+              this.retireWorkspaceAttempt(workspaceId, workspace)
+            }
+          }
           return
         }
-        workspace.settled = true
+        workspace.result = { exitCode }
         workspace.publish()
-        clearTimeout(timer)
+        if (exitCode !== null) {
+          clearTimeout(timer)
+        }
         answer.resolve({ exitCode })
-        if (!workspace.publication) {
+        if (exitCode !== null && !workspace.publication) {
           this.retireWorkspaceAttempt(workspaceId, workspace)
         }
       }
     }
-    timer = setTimeout(() => workspace.finish(null), DEFAULT_SETUP_WAIT_TIMEOUT_SECONDS * 1000)
+    timer = setTimeout(() => {
+      workspace.finish(null)
+      this.retireWorkspaceAttempt(workspaceId, workspace)
+    }, DEFAULT_SETUP_WAIT_TIMEOUT_SECONDS * 1000)
     timer.unref()
     this.requiredByWorkspace.set(workspaceId, workspace)
     let active = this.activeByWorkspace.get(workspaceId)
@@ -226,22 +243,19 @@ export class SetupTerminalCompletions {
       this.activeByWorkspace.set(workspaceId, active)
     }
     active.add(workspace)
+    return workspace
   }
 
   preparedWorkspace(workspaceId: string, required: boolean): void {
-    if (!this.requiredByWorkspace.has(workspaceId)) {
-      this.beginWorkspace(workspaceId)
-    }
+    const workspace = this.requiredByWorkspace.get(workspaceId) ?? this.beginWorkspace(workspaceId)
     if (!required) {
-      this.requiredByWorkspace.get(workspaceId)!.finish(0)
+      workspace.finish(0)
     }
   }
 
   refuseWorkspace(workspaceId: string): void {
-    if (!this.requiredByWorkspace.has(workspaceId)) {
-      this.beginWorkspace(workspaceId)
-    }
-    this.requiredByWorkspace.get(workspaceId)!.finish(null)
+    const workspace = this.requiredByWorkspace.get(workspaceId) ?? this.beginWorkspace(workspaceId)
+    workspace.finish(null)
   }
 
   forgetWorkspace(workspaceId: string): void {
@@ -255,7 +269,7 @@ export class SetupTerminalCompletions {
     }
     this.dependentIdsByWorkspace.delete(workspaceId)
     for (const attempt of this.activeByWorkspace.get(workspaceId) ?? []) {
-      attempt.publication?.abort()
+      attempt.cancel()
       attempt.finish(null)
     }
     this.activeByWorkspace.delete(workspaceId)
@@ -279,6 +293,7 @@ export class SetupTerminalCompletions {
   }
 
   private retireWorkspaceAttempt(workspaceId: string, attempt: WorkspaceAttempt): void {
+    attempt.cancel()
     const active = this.activeByWorkspace.get(workspaceId)
     active?.delete(attempt)
     if (active?.size === 0) {

@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { link, mkdir, unlink, writeFile } from 'node:fs/promises'
+import { lstat, mkdir, rename, unlink, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import type { SetupAttemptRecipe } from '../../shared/agent-launch/startup/setup-attempt-recipe'
 import { setupMarkerPath } from '../../shared/agent-launch/startup/setup-marker-cleanup'
@@ -10,6 +10,7 @@ import { assertWslUncPathRunning } from '../wsl/filesystem/wsl-unc-access-gate'
 export async function publishSetupFailureMarker(recipe: SetupAttemptRecipe, signal: AbortSignal) {
   const marker = windowsFsPath(setupMarkerPath(recipe.runnerScriptPath, recipe.nonce))
   const temporary = `${marker}.${randomUUID()}.tmp`
+  let temporaryCreated = false
   try {
     signal.throwIfAborted()
     await assertWslUncPathRunning(marker)
@@ -20,12 +21,34 @@ export async function publishSetupFailureMarker(recipe: SetupAttemptRecipe, sign
       }
     })
     signal.throwIfAborted()
+    temporaryCreated = true
     await writeFile(temporary, `${recipe.nonce}:1\n`, { flag: 'wx', signal })
     signal.throwIfAborted()
-    await link(temporary, marker)
+    await writeFile(`${marker}.claim`, '', { flag: 'wx', signal }).catch(
+      (error: NodeJS.ErrnoException) => {
+        if (error.code !== 'EEXIST') {
+          throw error
+        }
+      }
+    )
+    signal.throwIfAborted()
+    try {
+      await lstat(marker)
+      return
+    } catch (error) {
+      if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) {
+        throw error
+      }
+    }
+    signal.throwIfAborted()
+    await rename(temporary, marker)
   } catch {
     // An existing result wins; inaccessible or retired runners remain fail closed.
   } finally {
-    await unlink(temporary).catch(() => {})
+    if (temporaryCreated) {
+      await assertWslUncPathRunning(temporary)
+        .then(() => unlink(temporary))
+        .catch(() => {})
+    }
   }
 }
