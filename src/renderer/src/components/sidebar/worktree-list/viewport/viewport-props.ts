@@ -8,7 +8,6 @@ import type {
 } from '@/store/slices/ui/ui-slice-contract-core'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
-import type { TagSectionOrder } from '../../../../../../shared/sidebar-list/sections/tag-section-order'
 import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome-types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type {
@@ -49,7 +48,6 @@ export type VirtualizedWorktreeViewportProps = {
   groupBy: WorktreeGroupBy
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
   projectOrderBy: ProjectOrderBy
-  tagOrder: TagSectionOrder
   toggleGroup: (key: string) => void
   onToggleAllProjects?: () => void
   collapsedGroups: Set<string>

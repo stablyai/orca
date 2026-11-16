@@ -66,6 +66,15 @@ export function applyNormalizedWorktreeTags<T extends { tags?: string[] }>(recor
   return record
 }
 
+/** Replaces a record's tags with their normalized form; an empty result drops the key. */
+export function setWorktreeTags<T extends { tags?: string[] }>(
+  record: T,
+  tags: readonly string[]
+): T {
+  record.tags = [...tags]
+  return applyNormalizedWorktreeTags(record)
+}
+
 export type WorktreeTagChanges = {
   /** Replaces the whole set before add/remove apply. */
   replace?: readonly string[]

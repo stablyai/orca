@@ -234,7 +234,6 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       return
     }
     await assertGitLabLinkFlagProjectsMatch(flags, client, { worktree })
-    const tagParams = await getWorktreeSetTagParams(flags, client)
     const parentFields = await resolveSetParentFields(flags, cwd, client)
     const pending = callNamingParentEnvironment<RuntimeWorktreeSetResult>(client, 'worktree.set', {
       worktree,
@@ -245,7 +244,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       comment: getOptionalStringFlagAllowingEmpty(flags, 'comment'),
       workspaceStatus: getOptionalStringFlag(flags, 'workspace-status'),
       ...readFlags,
-      ...tagParams,
+      ...(await getWorktreeSetTagParams(flags, client)),
       ...parentFields,
       noParent: flags.get('no-parent') === true
     })
