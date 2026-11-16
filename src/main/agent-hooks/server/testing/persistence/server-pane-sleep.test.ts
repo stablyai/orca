@@ -3,7 +3,10 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getDefaultWorkspaceSession } from '../../../../../shared/constants'
-import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type {
+  AgentProviderSessionMetadata,
+  SleepingAgentSessionRecord
+} from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   applyWorktreeSleepResumeRecords,
   captureWorktreeSleepResumeRecords
@@ -214,7 +217,7 @@ it.each(['idle Codex', 'Claude hook', 'failed resume', 'ordinary exit'] as const
 )
 
 it('retires a hookless resumed Codex quit to its shell, and keeps a later relaunch', async () => {
-  const providerSession = { key: 'session_id', id: 'woken-session' }
+  const providerSession: AgentProviderSessionMetadata = { key: 'session_id', id: 'woken-session' }
   const saved: SleepingAgentSessionRecord = {
     paneKey: PANE,
     tabId: 'tab-1',
