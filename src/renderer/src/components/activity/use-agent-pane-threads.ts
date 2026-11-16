@@ -1,4 +1,4 @@
-import { useDeferredValue, useMemo } from 'react'
+import { useDeferredValue, useEffect, useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { useStructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-name-observation'
 import { isRunningActivityState } from './activity-event-state'
@@ -8,7 +8,10 @@ import {
   type AgentPaneThreadsStoreData,
   type AllAgentPaneThreadsStoreData
 } from './use-agent-pane-thread-store-data'
-import { projectAgentPaneThreads } from './activity-thread-projection'
+import {
+  projectAgentPaneThreads,
+  retainActivityThreadProjection
+} from './activity-thread-projection'
 import { collectHiddenChildAgentPaneKeys } from './activity-thread-child-agent'
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
@@ -40,13 +43,11 @@ export function useAllAgentPaneThreads({ badgeOnly = false }: { badgeOnly?: bool
   const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
   const chatNames = useStructuredChatTabNames()
 
+  const mode = badgeOnly ? 'live' : 'all'
+  useEffect(() => retainActivityThreadProjection(mode), [mode])
   const allThreads = useMemo(
-    () =>
-      projectAgentPaneThreads(
-        { storeData, agentStatusEpoch, chatNames },
-        badgeOnly ? 'live' : 'all'
-      ),
-    [storeData, agentStatusEpoch, chatNames, badgeOnly]
+    () => projectAgentPaneThreads({ storeData, agentStatusEpoch, chatNames }, mode),
+    [storeData, agentStatusEpoch, chatNames, mode]
   )
 
   return { storeData, allThreads }

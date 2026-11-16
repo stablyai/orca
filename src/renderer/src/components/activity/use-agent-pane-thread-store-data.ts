@@ -58,6 +58,11 @@ let tabProjection: {
   projected: ActivityTabProjection | null
 } = { raw: null, projected: null }
 
+/** Drop the window-wide tab projection once no Activity reader is mounted. */
+export function releaseActivityTabProjection(): void {
+  tabProjection = { raw: null, projected: null }
+}
+
 function selectActivityTabs(raw: AppState['unifiedTabsByWorktree']): ActivityTabProjection {
   if (tabProjection.raw === raw && tabProjection.projected) {
     return tabProjection.projected

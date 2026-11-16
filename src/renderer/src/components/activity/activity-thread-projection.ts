@@ -7,10 +7,17 @@ import {
 import type { StructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-tab-name'
 import { buildActivityEvents } from './activity-event-builder'
 import { freshActivityLiveAgentState } from './activity-event-state'
-import { createActivityEventBuildCache } from './activity-event-build-cache'
+import {
+  createActivityEventBuildCache,
+  resetActivityEventBuildCache
+} from './activity-event-build-cache'
+import { standaloneActivityWorktreeScope } from './activity-standalone-worktree'
 import { buildAgentPaneThreads, createAgentPaneThreadReuseCache } from './activity-thread-builder'
 import type { AgentPaneThread } from './activity-thread-types'
-import type { AllAgentPaneThreadsStoreData } from './use-agent-pane-thread-store-data'
+import {
+  releaseActivityTabProjection,
+  type AllAgentPaneThreadsStoreData
+} from './use-agent-pane-thread-store-data'
 
 export type ActivityProjectionInputs = {
   storeData: AllAgentPaneThreadsStoreData
@@ -28,22 +35,48 @@ type ThreadProjection = {
   threads: AgentPaneThread[]
 }
 
+type ProjectionMode = 'all' | 'live'
+
+function createThreadProjection(): ThreadProjection {
+  return {
+    cache: createAgentPaneThreadReuseCache(),
+    build: null,
+    generatedTitlesEnabled: false,
+    threads: []
+  }
+}
+
 // One producer per window: Activity, the sidebar and the phone publisher read the same build.
 const eventBuildCache = createActivityEventBuildCache()
-let eventsProjection: { inputs: ActivityProjectionInputs; build: ActivityEventsBuild } | null = null
+let eventsProjection: {
+  inputs: ActivityProjectionInputs
+  scope: string
+  build: ActivityEventsBuild
+} | null = null
 const NO_THREADS: AgentPaneThread[] = []
-const threadProjections: Record<'all' | 'live', ThreadProjection> = {
-  all: {
-    cache: createAgentPaneThreadReuseCache(),
-    build: null,
-    generatedTitlesEnabled: false,
-    threads: []
-  },
-  live: {
-    cache: createAgentPaneThreadReuseCache(),
-    build: null,
-    generatedTitlesEnabled: false,
-    threads: []
+const threadProjections: Record<ProjectionMode, ThreadProjection> = {
+  all: createThreadProjection(),
+  live: createThreadProjection()
+}
+const mountedConsumers: Record<ProjectionMode, number> = { all: 0, live: 0 }
+
+function releaseEventsProjection(): void {
+  eventsProjection = null
+  resetActivityEventBuildCache(eventBuildCache)
+}
+
+/** Count a mounted reader; the last one out drops the projection so retired workspaces are not retained. */
+export function retainActivityThreadProjection(mode: ProjectionMode): () => void {
+  mountedConsumers[mode] += 1
+  return () => {
+    mountedConsumers[mode] -= 1
+    if (mountedConsumers[mode] === 0) {
+      threadProjections[mode] = createThreadProjection()
+    }
+    if (mountedConsumers.all === 0 && mountedConsumers.live === 0) {
+      releaseEventsProjection()
+      releaseActivityTabProjection()
+    }
   }
 }
 
@@ -56,7 +89,12 @@ function sameInputs(a: ActivityProjectionInputs, b: ActivityProjectionInputs): b
 }
 
 function projectActivityEvents(inputs: ActivityProjectionInputs): ActivityEventsBuild {
-  if (eventsProjection && sameInputs(eventsProjection.inputs, inputs)) {
+  const scope = standaloneActivityWorktreeScope()
+  if (
+    eventsProjection &&
+    eventsProjection.scope === scope &&
+    sameInputs(eventsProjection.inputs, inputs)
+  ) {
     return eventsProjection.build
   }
   const { storeData, chatNames } = inputs
@@ -89,7 +127,7 @@ function projectActivityEvents(inputs: ActivityProjectionInputs): ActivityEvents
     },
     eventBuildCache
   )
-  eventsProjection = { inputs, build }
+  eventsProjection = { inputs, scope, build }
   return build
 }
 
@@ -108,8 +146,12 @@ export function projectAgentPaneThreads(
   inputs: ActivityProjectionInputs,
   mode: 'all' | 'live'
 ): AgentPaneThread[] {
-  // A badge with nothing live skips the build; the shared cache stays warm for full readers.
   if (mode === 'live' && !hasLiveActivity(inputs)) {
+    // An empty badge alone keeps nothing; with a full reader mounted the shared build stays warm.
+    if (mountedConsumers.all === 0) {
+      releaseEventsProjection()
+      threadProjections.live = createThreadProjection()
+    }
     return NO_THREADS
   }
   const build = projectActivityEvents(inputs)
