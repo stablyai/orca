@@ -130,3 +130,38 @@ describe('Plugins shortcut from a browser guest', () => {
     expect(local.send).not.toHaveBeenCalled()
   })
 })
+
+describe('Right sidebar panel shortcuts from a plugin frame', () => {
+  const explorer = {
+    key: 'E',
+    code: 'KeyE',
+    meta: process.platform === 'darwin',
+    control: process.platform !== 'darwin',
+    shift: true
+  }
+
+  it('replays the chord once, consuming repeats', () => {
+    const { context, event, send } = fixture()
+    context.getKeybindings = () => ({})
+    context.browserPage = false
+    expect(forwardGuestShortcutInput(context, event, explorer)).toBe(true)
+    expect(send).toHaveBeenCalledWith(
+      'ui:browserPageTabShortcut',
+      expect.objectContaining(explorer)
+    )
+    expect(forwardGuestShortcutInput(context, event, { ...explorer, isAutoRepeat: true })).toBe(
+      true
+    )
+    expect(send).toHaveBeenCalledOnce()
+  })
+
+  it('leaves the chord with an IME composition', () => {
+    const { context, event, send } = fixture()
+    context.getKeybindings = () => ({})
+    context.browserPage = false
+    expect(forwardGuestShortcutInput(context, event, { ...explorer, isComposing: true })).toBe(
+      false
+    )
+    expect(send).not.toHaveBeenCalled()
+  })
+})
