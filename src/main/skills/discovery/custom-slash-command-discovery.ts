@@ -11,6 +11,10 @@ import { readSkillSummary } from './skill-discovery-summary'
 import { runSkillCandidateTasks } from '../filesystem/skill-candidate-concurrency'
 import { findRootFiles } from './skill-root-file-walk'
 import { isSkillRootUnavailableError, SkillScanCoalescer } from './skill-scan-coalescer'
+import {
+  isUnreadableStoppedWslCwd,
+  type StoppedWslRootsReadScope
+} from './skill-discovery-stopped-wsl-roots'
 
 type CommandDiscoveryPathApi = Pick<typeof posix, 'join' | 'relative'>
 
@@ -20,6 +24,22 @@ export type CustomSlashCommandRoot = { path: string; scope: CustomSlashCommandSc
 // every open pane, so the fan-out this bounds is identical.
 const COMMAND_ROOT_SCAN_TTL_MS = 10_000
 const MAX_CACHED_COMMAND_ROOTS = 256
+
+// Why a deadline: discoverSkills awaits commands next to the skill-root scans,
+// and a stat on a hung mount must not hold back skills that already scanned.
+export const COMMAND_SCAN_DEADLINE_MS = 5_000
+
+/** Resolves [] once the deadline passes; a rejection still propagates. */
+export function withCommandScanDeadline(
+  scan: Promise<DiscoveredSlashCommand[]>,
+  deadlineMs = COMMAND_SCAN_DEADLINE_MS
+): Promise<DiscoveredSlashCommand[]> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const deadline = new Promise<DiscoveredSlashCommand[]>((resolve) => {
+    timer = setTimeout(() => resolve([]), deadlineMs)
+  })
+  return Promise.race([scan, deadline]).finally(() => clearTimeout(timer))
+}
 
 const commandRootScans = new SkillScanCoalescer<DiscoveredSlashCommand[]>(MAX_CACHED_COMMAND_ROOTS)
 
@@ -122,4 +142,21 @@ export async function discoverCustomSlashCommands(args: {
     roots.map((root) => scanCommandRootShared(root, pathApi, args.refresh === true))
   )
   return dedupeCustomSlashCommands(scans.flat())
+}
+
+/** Commands for a targeted skill scan; bounded so a stalled command root never withholds skills. */
+export async function discoverSkillScanCommands(args: {
+  homeDir: string
+  cwd?: string
+  includeCwd?: boolean
+  refresh: boolean
+  readStoppedWslRootsFor?: StoppedWslRootsReadScope
+}): Promise<DiscoveredSlashCommand[]> {
+  const cwd = args.includeCwd !== false ? args.cwd : undefined
+  if (cwd === undefined || (await isUnreadableStoppedWslCwd(cwd, args.readStoppedWslRootsFor))) {
+    return []
+  }
+  return withCommandScanDeadline(
+    discoverCustomSlashCommands({ homeDir: args.homeDir, cwd, refresh: args.refresh })
+  )
 }
