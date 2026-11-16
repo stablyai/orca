@@ -166,8 +166,7 @@ function absorbChat(
   // didn't is new, unless it has none: then it may have been deleted here.
   if (
     shown === undefined &&
-    (!pass.changed ||
-      (!converted && (chat !== undefined || (!pass.kept && revision === 'null'))))
+    (!pass.changed || (!converted && (chat !== undefined || (!pass.kept && revision === 'null'))))
   ) {
     pass.baselines.push([id, revision])
     return

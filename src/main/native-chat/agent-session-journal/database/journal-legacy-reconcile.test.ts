@@ -289,9 +289,7 @@ it('keeps only what an older Orca wrote after a file from before revisions were 
     .run('empty', JSON.stringify({ sessionId: 'empty', lease: { sessionId: 'empty' } }))
   original.prepare("DELETE FROM agent_session_tabs WHERE session_id!='open'").run()
   // As every older Orca that saves tabs leaves its index.
-  original
-    .prepare("INSERT INTO agent_session_store_meta VALUES('session_tabs_recorded','1')")
-    .run()
+  original.prepare("INSERT INTO agent_session_store_meta VALUES('session_tabs_recorded','1')").run()
   const first = await upgrade(root)
   expect(await first.convert('idle')).toBe('epoch')
   expect(await first.convert('converted')).toBe('epoch')
@@ -307,9 +305,11 @@ it('keeps only what an older Orca wrote after a file from before revisions were 
   cleanup.push(later.close)
   const known = ['closed', 'converted', 'idle', 'open', 'started-older']
   const [copy] = later.db
-    .prepare(`SELECT session_id FROM agent_session_records WHERE session_id NOT IN (${known
-      .map(() => '?')
-      .join(',')})`)
+    .prepare(
+      `SELECT session_id FROM agent_session_records WHERE session_id NOT IN (${known
+        .map(() => '?')
+        .join(',')})`
+    )
     .all(...known)
     .map((row) => String(row.session_id))
   expect(items(later.db, copy!)).toContain('older-turn')
