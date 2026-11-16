@@ -141,9 +141,7 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
 
   private async start(bootstrap: ReturnType<typeof readBootstrapStatus> | null): Promise<void> {
     if (this.raw.pid === undefined) {
-      throw this.failure
-        ? await this.failure
-        : await new Promise<Error>((resolve) => this.raw.once('error', resolve))
+      throw await (this.failure ?? new Promise<Error>((resolve) => this.raw.once('error', resolve)))
     }
     if (!bootstrap || !this.gate || !this.control || !this.raw.pid) {
       throw new Error('Provider bootstrap control pipes are unavailable')
@@ -227,12 +225,14 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
   }
 
   private transportEnded(completion?: ProviderControlCompletion): void {
-    if (completion || this.settled || !this.released || this.stop.reaping || this.leaderExited) {
+    if (this.settled || !this.released || this.outcome != null) {
       this.forceReap(completion)
       return
     }
     this.faultOwnership.stopAfterCapture(this.publication, () => {
-      if (!this.settled && !this.stop.reaping && !this.leaderExited) {
+      if (completion || this.stop.reaping || this.leaderExited) {
+        this.forceReap(completion)
+      } else if (!this.settled) {
         this.input.end()
         this.stop.ownerLost(this.connected, () => this.startTerm(true))
       }

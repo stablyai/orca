@@ -130,6 +130,11 @@ function launch() {
     closes,
     remove,
     removeAfterNativeExit,
+    finishParent(frame = '') {
+      outcome.end(frame)
+      stdout.end()
+      stderr.end()
+    },
     releaseCapture: () => captureReleased.resolve(),
     ownershipEntered: ownershipEntered.promise,
     refuseOwnership: () => ownershipResult.resolve(false),
@@ -223,6 +228,39 @@ describe.skipIf(process.platform === 'win32')('lost-parent watcher retirement pr
     expect([...run.records]).toEqual([])
     expect(run.remove).not.toHaveBeenCalled()
     expect(run.closes).toEqual([{ code: null, signal: null, outcomeLost: true }])
+    expect(run.errors).toEqual([])
+  })
+
+  it('retains unresolved tools when native completion arrives before the lost leader outcome', async () => {
+    run = launch()
+    await run.child.ready
+    probes.readRow.mockResolvedValue('unverifiable')
+
+    run.control.push('group-absent\n')
+    run.control.push(null)
+    await flushContinuations()
+    run.finishParent()
+    await vi.runAllTimersAsync()
+    await flushContinuations()
+
+    expect([...run.records]).toEqual(['provider-record'])
+    expect(run.closes).toEqual([{ code: null, signal: null, outcomeLost: true }])
+    expect(run.removeAfterNativeExit).not.toHaveBeenCalled()
+    expect(run.errors).toEqual([])
+  })
+
+  it('releases normal completion without claiming intentionally detached tools', async () => {
+    run = launch()
+    await run.child.ready
+    run.finishParent('{"code":0,"signal":null}\n')
+    await flushContinuations()
+    run.control.push('group-absent\n')
+    run.control.push(null)
+    await vi.runAllTimersAsync()
+    await flushContinuations()
+
+    expect([...run.records]).toEqual([])
+    expect(run.closes).toEqual([{ code: 0, signal: null, outcomeLost: false }])
     expect(run.errors).toEqual([])
   })
 
