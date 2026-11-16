@@ -157,6 +157,7 @@ export function EditorEditFileSurface({
         fileContent={fileContent}
         onSave={handleSave}
         reloadContent={reloadContent}
+        viewStateKey={`${editorViewStateKey}:plugin-editor:${customEditor.key}`}
       />
     )
   }
@@ -299,6 +300,7 @@ export function EditorEditFileSurface({
       key={`${activeFile.id}\u0000${customEditor.key}`}
       editor={customEditor}
       fileId={activeFile.id}
+      viewStateKey={`${editorViewStateKey}:plugin-editor:${customEditor.key}`}
       content={currentContent}
       readOnly={activeFile.readOnly === true}
       onContentChange={handleContentChange}

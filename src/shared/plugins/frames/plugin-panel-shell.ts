@@ -73,6 +73,7 @@ function frameApiScript(surface: PluginFrameSurface, transport: FrameTransport):
   var api = Object.freeze(C.api)
   var methods = C.methods.slice()
   var latest = null
+  var viewState = null
   var waiting = []
   var helloSeen = false
   var starting = []
@@ -178,6 +179,8 @@ function frameApiScript(surface: PluginFrameSurface, transport: FrameTransport):
       applyTheme(m.payload)
     } else if (m.kind === 'evt' && m.event === E.push) {
       receivePush(m.payload)
+    } else if (m.kind === 'evt' && m.event === E.editorViewState && C.surface === 'editor') {
+      viewState = m.payload === undefined ? null : m.payload
     } else if (m.kind === 'evt' && m.event === E.editorDocument && C.surface === 'editor') {
       latest = Object.freeze(m.payload)
       waiting.splice(0).forEach(function (resolve) { resolve(latest) })

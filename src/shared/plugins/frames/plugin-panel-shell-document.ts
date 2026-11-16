@@ -1,7 +1,7 @@
 /**
  * Part of the frame shell's IIFE (plugin-panel-shell.ts): an editor's `orca.document`, including
  * `session()`, the document sync every editor otherwise rebuilds. Uses the shell's `call`, `on`,
- * `latest`, `waiting`, `starting` and `helloSeen`.
+ * `post`, `latest`, `viewState`, `waiting`, `starting` and `helloSeen`.
  *
  * The baseline (`base`, `baseVersion`, `baseContent`) moves only when Orca accepts an edit or sends
  * a document while nothing is unaccepted, so a refused edit leaves a draft that is still dirty
@@ -49,7 +49,13 @@ export const PLUGIN_FRAME_DOCUMENT_SCRIPT = `
         return Object.freeze({ dispose: function () { live = false; subscription.dispose() } })
       },
       applyEdit: applyEdit,
-      session: documentSession
+      session: documentSession,
+      getViewState: function () { return viewState },
+      // Why a JSON copy: Orca hands it back to a later frame, which only ever gets plain JSON.
+      setViewState: function (state) {
+        viewState = state == null ? null : JSON.parse(JSON.stringify(state))
+        post({ kind: 'evt', event: E.editorViewState, payload: viewState })
+      }
     })
   }
   function sameContent(a, b) {

@@ -58,7 +58,7 @@ function harness(options: Omit<CustomEditorHostOptions, 'getFrameWindow'>) {
       }
     }
   }
-  return { host, send, answerFlushes }
+  return { host, send, answerFlushes, posted }
 }
 
 function setupWith(initial: { text: string; onMergesOutside: () => void }) {
@@ -150,5 +150,30 @@ describe('custom editor document channel', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('hands a remounted frame the view its last frame kept, before the document', () => {
+    let kept: unknown = null
+    const doc = { text: 'a', readOnly: false }
+    const options = {
+      getDocument: () => doc,
+      onEdit: vi.fn(),
+      getViewState: () => kept,
+      onViewState: (state: unknown) => {
+        kept = state
+      }
+    }
+    const first = harness(options)
+    first.send(READY)
+    first.send({ orca: 1, kind: 'evt', event: 'editor.viewState', payload: { zoom: 2 } })
+    const second = harness(options)
+    second.send(READY)
+    const messages = second.posted.filter(isPluginJsonObject)
+    expect(messages.map((message) => message.event)).toEqual([
+      'hello',
+      'editor.viewState',
+      'editor.document'
+    ])
+    expect(messages[1]?.payload).toEqual({ zoom: 2 })
   })
 })

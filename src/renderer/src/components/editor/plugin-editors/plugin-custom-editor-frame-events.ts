@@ -9,7 +9,10 @@ import type { CustomEditorHostOptions } from './plugin-custom-editor-host-types'
 export function handleCustomEditorFrameEvent(
   event: PluginEvent,
   context: PluginFrameMessageContext,
-  options: Pick<CustomEditorHostOptions, 'onFrameProgress' | 'onKeyChord' | 'onMergesOutside'>
+  options: Pick<
+    CustomEditorHostOptions,
+    'onFrameProgress' | 'onKeyChord' | 'onMergesOutside' | 'onViewState'
+  >
 ): boolean {
   if (event.event === FRAME_EVENTS.editorMerges) {
     options.onMergesOutside?.()
@@ -17,6 +20,10 @@ export function handleCustomEditorFrameEvent(
   }
   if (event.event === FRAME_EVENTS.editorSubscribed) {
     options.onFrameProgress?.('subscribed')
+    return false
+  }
+  if (event.event === FRAME_EVENTS.editorViewState) {
+    options.onViewState?.(event.payload ?? null)
     return false
   }
   const chord =

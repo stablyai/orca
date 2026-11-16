@@ -250,6 +250,11 @@ export function createCustomEditorHost(options: CustomEditorHostOptions): Custom
       },
       onReady() {
         ready = true
+        const viewState = options.getViewState?.() ?? null
+        // Before the document, so the editor has its view when it first draws.
+        if (viewState !== null) {
+          post(pluginEvent(FRAME_EVENTS.editorViewState, viewState))
+        }
         pushDocument(true)
       },
       onEvent(event, context) {

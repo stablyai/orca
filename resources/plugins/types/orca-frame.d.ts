@@ -6,6 +6,7 @@ declare module 'orca/frame' {
     Disposable,
     HostApi,
     HostApiVersion,
+    JsonValue,
     PluginBridgeApi,
     PluginEvents,
     SecretsApi,
@@ -53,6 +54,12 @@ declare module 'orca/frame' {
     applyEdit(edit: EditorEdit): Promise<null>
     /** Document sync in one call; resolves once theme, locale and the first document are in. */
     session<T = string>(options?: EditorSessionOptions<T>): Promise<EditorSession<T>>
+    /** What `setViewState` last kept for this tab, or null. A tab's editor reopens (tab switch,
+     *  plugin reload) with it while Orca runs; it is in once the first document is. */
+    getViewState(): JsonValue
+    /** Keeps this tab's view (scroll, zoom; never document content); null forgets it. Throws for
+     *  values JSON cannot hold. Debounce it: it spends the frame's message budget. */
+    setViewState(state: JsonValue): void
   }
   /** `decode`/`encode` default to plain text; a bytes editor passes both. */
   export type EditorSessionOptions<T> = {

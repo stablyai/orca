@@ -231,10 +231,11 @@ export function createPluginFrameEnvelopeHandler(
           options.declarative.onGuestEvent?.(message.event, message.payload)
         } else {
           // A guest's shell-posted chords are page-forgeable; only the preload's count there.
-          // Why subscribed and merges pass: not input; page script posts both via `orca.document`.
+          // Why these pass: not input; page script posts them via `orca.document`.
           if (
             message.event === FRAME_EVENTS.editorSubscribed ||
             message.event === FRAME_EVENTS.editorMerges ||
+            message.event === FRAME_EVENTS.editorViewState ||
             context.transport !== 'guest' ||
             context.trustedChord === true
           ) {
