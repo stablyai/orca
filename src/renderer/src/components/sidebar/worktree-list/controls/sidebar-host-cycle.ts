@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { ALL_EXECUTION_HOSTS_SCOPE } from '../../../../../../shared/execution-host'
+import { ALL_EXECUTION_HOSTS_SCOPE } from '../../../../../../shared/execution-host/execution-host'
 import {
   cycleVisibleHostRow,
   resolveVisibleWorkspaceHostIds
