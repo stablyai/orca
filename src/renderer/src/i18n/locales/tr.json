@@ -15129,7 +15129,8 @@
             "scanning": "{{value0}} taranıyor",
             "checking": "{{value0}} kontrol ediliyor",
             "agentCheckedCount_other": "{{agent}}: {{total}} olası geçmiş kaydından {{settled}} tanesi kontrol edildi",
-            "agentCheckedCount_one": "{{agent}}: {{total}} olası geçmiş kaydından {{settled}} tanesi kontrol edildi"
+            "agentCheckedCount_one": "{{agent}}: {{total}} olası geçmiş kaydından {{settled}} tanesi kontrol edildi",
+            "historyRefreshed": "Geçmiş yenilendi"
           },
           "run": {
             "source": {
@@ -21718,7 +21719,9 @@
         "unreachable": "erişilemiyor",
         "scopeNotFound": "arama kapsamı orada bulunamadı",
         "agentNotSupported": "ajan desteklenmiyor"
-      }
+      },
+      "consentTranscriptIndex": "Arama, oturum ayrıntılarında ve mesaj önizlemelerinde eşleşme arar. Konuşmaların tamamında aramak için tam metin aramasını açın (yerel dökümleri sansürlemeden dizinler). Eşleştirilmiş cihazlar da bunlarda arama yapabilir.",
+      "noMatchesToShow": "Gösterilecek eşleşen oturum yok."
     }
   },
   "sessionHistory": {

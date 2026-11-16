@@ -14677,7 +14677,8 @@
             "checking": "Comprobando {{value0}}",
             "agentCheckedCount_one": "{{agent}}: {{settled}} de {{total}} candidato del historial comprobado",
             "agentCheckedCount_other": "{{agent}}: {{settled}} de {{total}} candidatos del historial comprobados",
-            "agentCheckedCount_many": "{{agent}}: {{settled}} de {{total}} candidatos del historial comprobados"
+            "agentCheckedCount_many": "{{agent}}: {{settled}} de {{total}} candidatos del historial comprobados",
+            "historyRefreshed": "Historial actualizado"
           },
           "ssh": {
             "unrestored": {
@@ -21832,7 +21833,9 @@
         "unreachable": "inaccesible",
         "scopeNotFound": "ámbito de búsqueda no encontrado allí",
         "agentNotSupported": "agente no compatible"
-      }
+      },
+      "consentTranscriptIndex": "La búsqueda coincide con los detalles de las sesiones y las vistas previas de los mensajes. Para buscar en conversaciones completas, activa la búsqueda de texto completo (indexa las transcripciones locales, sin ocultar contenido). Los dispositivos emparejados también pueden buscar en ellas.",
+      "noMatchesToShow": "No hay sesiones coincidentes para mostrar."
     }
   },
   "sessionHistory": {

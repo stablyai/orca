@@ -14982,7 +14982,8 @@
             "scanning": "{{value0}} wird durchsucht",
             "checking": "{{value0}} wird geprüft",
             "agentCheckedCount_one": "{{agent}}: {{settled}} von {{total}} möglichem Verlaufseintrag geprüft",
-            "agentCheckedCount_other": "{{agent}}: {{settled}} von {{total}} möglichen Verlaufseinträgen geprüft"
+            "agentCheckedCount_other": "{{agent}}: {{settled}} von {{total}} möglichen Verlaufseinträgen geprüft",
+            "historyRefreshed": "Verlauf aktualisiert"
           },
           "run": {
             "source": {
@@ -21578,7 +21579,9 @@
         "unreachable": "nicht erreichbar",
         "scopeNotFound": "Suchbereich dort nicht gefunden",
         "agentNotSupported": "Agent nicht unterstützt"
-      }
+      },
+      "consentTranscriptIndex": "Die Suche berücksichtigt Sitzungsdetails und Nachrichtenvorschauen. Um vollständige Unterhaltungen zu durchsuchen, die Volltextsuche aktivieren (indexiert lokale Transkripte, ohne Schwärzung). Gekoppelte Geräte können sie ebenfalls durchsuchen.",
+      "noMatchesToShow": "Keine passenden Sitzungen zum Anzeigen."
     }
   },
   "sessionHistory": {

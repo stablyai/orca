@@ -15427,7 +15427,8 @@
             "agentCheckedCount_one": "{{agent}}: проверено {{settled}} из {{total}} возможной записи истории",
             "agentCheckedCount_few": "{{agent}}: проверено {{settled}} из {{total}} возможных записей истории",
             "agentCheckedCount_many": "{{agent}}: проверено {{settled}} из {{total}} возможных записей истории",
-            "agentCheckedCount_other": "{{agent}}: проверено {{settled}} из {{total}} возможной записи истории"
+            "agentCheckedCount_other": "{{agent}}: проверено {{settled}} из {{total}} возможной записи истории",
+            "historyRefreshed": "История обновлена"
           },
           "run": {
             "source": {
@@ -22263,7 +22264,9 @@
         "unreachable": "нет соединения",
         "scopeNotFound": "область поиска там не найдена",
         "agentNotSupported": "агент не поддерживается"
-      }
+      },
+      "consentTranscriptIndex": "Поиск идёт по сведениям о сессиях и превью сообщений. Чтобы искать по полным разговорам, включите полнотекстовый поиск (индексирует локальные записи без скрытия содержимого). Сопряжённые устройства тоже смогут искать по ним.",
+      "noMatchesToShow": "Нет подходящих сессий для отображения."
     }
   },
   "sessionHistory": {

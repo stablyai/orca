@@ -15108,7 +15108,8 @@
             "databaseCount_other": "{{value0}} 個のデータベース",
             "scanning": "{{value0}}をスキャン中",
             "checking": "{{value0}} を確認中",
-            "agentCheckedCount_other": "{{agent}}: 履歴候補 {{total}} 件中 {{settled}} 件を確認済み"
+            "agentCheckedCount_other": "{{agent}}: 履歴候補 {{total}} 件中 {{settled}} 件を確認済み",
+            "historyRefreshed": "履歴を更新しました"
           },
           "run": {
             "source": {
@@ -22694,7 +22695,9 @@
         "unreachable": "接続不可",
         "scopeNotFound": "そのホストに検索範囲が見つかりません",
         "agentNotSupported": "Agent 未対応"
-      }
+      },
+      "consentTranscriptIndex": "検索ではセッションの詳細とメッセージのプレビューが照合されます。会話の全文を検索するには、全文検索を有効にしてください（ローカルのトランスクリプトをマスキングせずにインデックス化します）。ペアリングされたデバイスからも検索できます。",
+      "noMatchesToShow": "表示できる一致するセッションはありません。"
     }
   },
   "sessionHistory": {
