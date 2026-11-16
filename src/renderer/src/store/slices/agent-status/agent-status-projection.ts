@@ -1,5 +1,9 @@
 import { structuredAgentSessionOwnerInputs } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import type { AppState } from '../../types'
+import {
+  movedAgentSenderChannels,
+  samePublishingHosts
+} from '@/runtime/native-chat/agent-senders/agent-sender-index'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import {
   readTerminalLeafAgentTypes,
@@ -216,9 +220,11 @@ export class AgentStatusProjection {
     const { previous } = topology
     const ownerInputs = structuredAgentSessionOwnerInputs(state)
     const oldOwnerInputs = previous ? structuredAgentSessionOwnerInputs(previous) : []
+    const sendersChanged =
+      previous?.agentSenderPublicationsByHost !== state.agentSenderPublicationsByHost
     const senderLocationsChanged =
       !previous ||
-      previous.agentSenderPublicationsByHost !== state.agentSenderPublicationsByHost ||
+      (sendersChanged && !samePublishingHosts(previous, state)) ||
       previous.tabsByWorktree !== state.tabsByWorktree ||
       previous.unifiedTabsByWorktree !== state.unifiedTabsByWorktree ||
       ownerInputs.some((value, index) => value !== oldOwnerInputs[index]) ||
@@ -228,6 +234,11 @@ export class AgentStatusProjection {
           (Boolean(change.previous?.terminalHandle || change.current?.terminalHandle) &&
             change.previous?.worktreeId !== change.current?.worktreeId)
       )
+    // Only a publication moved: notify the senders whose answer it moved, not every card.
+    const movedSenders =
+      previous && sendersChanged && !senderLocationsChanged
+        ? movedAgentSenderChannels(previous, state, data.listeners.keys())
+        : []
     const publishCounts = stageProjectionCounts(data, state, rows.prepared)
     return () => {
       data.fullResync ||= fullResync
@@ -236,6 +247,9 @@ export class AgentStatusProjection {
       }
       if (senderLocationsChanged) {
         data.notices.add('sender-locations')
+      }
+      for (const channel of movedSenders) {
+        data.notices.add(channel)
       }
       publishCounts()
       publishTerminalTypes()
