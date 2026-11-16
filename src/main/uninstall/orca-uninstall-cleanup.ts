@@ -24,6 +24,7 @@ import {
   removePluginHookFiles
 } from '../agent-hooks/installation/opencode-pi-plugin-hook-files'
 import type { OrcaInstallIdentity } from './orca-install-identity'
+import { collapseHomePath } from '../../shared/skills/bundled/bundled-skill-locations'
 
 /** What the desktop app and `orca uninstall` each supply; the cleanup itself is shared. */
 export type OrcaUninstallHost = {
@@ -68,13 +69,18 @@ export async function buildOrcaUninstallPlan(host: OrcaUninstallHost): Promise<O
     .filter((status) => status.managedHooksPresent)
     .map((status) => ({
       agent: status.agent,
-      paths: status.configPath ? [status.configPath] : [],
+      paths: status.configPath ? [collapseHomePath(status.configPath, host.homeDir)] : [],
       state: 'present',
       detail: null
     }))
   const pluginAgents: OrcaUninstallAgentEntry[] = findPluginHookFiles({
     homeDir: host.homeDir
-  }).map((entry) => ({ ...entry, state: 'present', detail: null }))
+  }).map((entry) => ({
+    ...entry,
+    paths: entry.paths.map((path) => collapseHomePath(path, host.homeDir)),
+    state: 'present',
+    detail: null
+  }))
   const cli = await host.getCliStatus().catch(() => null)
   const scripts = hookScriptsDir(host.homeDir)
   return {
@@ -83,13 +89,17 @@ export async function buildOrcaUninstallPlan(host: OrcaUninstallHost): Promise<O
     cliCommand: isOrcaOwnedCli(cli)
       ? {
           commandName: cli.commandName,
-          location: cli.commandPath ?? cli.commandName,
+          location: cli.commandPath
+            ? collapseHomePath(cli.commandPath, host.homeDir)
+            : cli.commandName,
           state: 'present',
           detail: null
         }
       : null,
     backgroundService: serviceEntry(host),
-    hookScripts: existsSync(scripts) ? { location: scripts, state: 'present', detail: null } : null,
+    hookScripts: existsSync(scripts)
+      ? { location: collapseHomePath(scripts, host.homeDir), state: 'present', detail: null }
+      : null,
     hosts: await host.listHosts(),
     otherOrcaBuildName: host.identity.otherOrcaBuildName,
     appPath: host.identity.appPath,
