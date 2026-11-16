@@ -30,8 +30,6 @@ export const isRetiredGithubAndroidApp =
 export const isGooglePlayInstall =
   Platform.OS === 'android' && (OrcaPlayStorePresence?.isInstalledByPlayStore() ?? false)
 
-export const GOOGLE_PLAY_URL = 'https://play.google.com/store/apps/details?id=dev.orca.app'
-
 function deviceIsInMainlandChina(): boolean {
   try {
     return isLikelyInMainlandChina({
@@ -45,8 +43,8 @@ function deviceIsInMainlandChina(): boolean {
 }
 
 /**
- * A GitHub (sideloaded) install outside mainland China is sent to Google Play, which updates it in
- * place because both carry Google's signing key. Mainland China keeps GitHub: Play is unreachable.
+ * A GitHub (sideloaded) install outside mainland China can update from Google Play, because both carry
+ * Google's signing key. Mainland China keeps GitHub: Play is unreachable.
  */
 export const prefersGooglePlayUpdate = shouldPreferGooglePlay({
   isAndroid: Platform.OS === 'android',
@@ -101,7 +99,11 @@ export function useAppUpdateState(): AppUpdateState {
   return useSyncExternalStore(appUpdateChecker.subscribe, appUpdateChecker.getSnapshot)
 }
 
-/** Opens the update's page: Google Play where it applies, else the GitHub release (Android) or App Store (iOS). */
+/**
+ * Opens the page of the update the check found: the GitHub release (Android) or App Store (iOS).
+ * Why not Play for GitHub installs: Play production is published by hand after GitHub, so it can
+ * lack the version the check found and offer nothing to update.
+ */
 export function openAppUpdate(url: string): void {
-  void Linking.openURL(prefersGooglePlayUpdate ? GOOGLE_PLAY_URL : url).catch(() => {})
+  void Linking.openURL(url).catch(() => {})
 }
