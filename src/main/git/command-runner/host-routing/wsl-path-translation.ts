@@ -6,8 +6,12 @@ import {
 import { parseWslPath } from '../../../wsl/filesystem/unc-path-access'
 
 /** Windows arguments need Linux spellings for WSL Git: UNC paths become native and drives map under /mnt. */
-export function translateArgsForWsl(args: string[]): string[] {
-  return args.map(translateArgForWsl)
+export function translateArgsForWsl(
+  args: string[],
+  literalArgIndices: readonly number[] = []
+): string[] {
+  const literals = new Set(literalArgIndices)
+  return args.map((arg, index) => (literals.has(index) ? arg : translateArgForWsl(arg)))
 }
 
 export function translateArgForWsl(arg: string): string {

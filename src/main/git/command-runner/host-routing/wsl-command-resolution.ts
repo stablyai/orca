@@ -89,6 +89,8 @@ export function resolveCommand(
   cwd: string | undefined,
   wslDistroOverride?: string,
   options: {
+    /** Task text must bypass path translation even when it looks like a Windows path. */
+    literalArgIndices?: readonly number[]
     useWslLoginShell?: boolean
     captureLoginShellOutput?: boolean
     wslGitReadEnvironment?: WslGitReadEnvironment
@@ -116,7 +118,7 @@ export function resolveCommand(
   // Every WSL Git/CLI run is about to start the distro; gated polls stop trusting a 'stopped' read.
   noteWslDistroLaunched(wsl.distro)
 
-  const translatedArgs = translateArgsForWsl(args)
+  const translatedArgs = translateArgsForWsl(args, options.literalArgIndices)
   // WSL does not inherit unlisted Windows env vars; carry locale pins in the command.
   const localePrefix =
     command === 'git'
