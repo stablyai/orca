@@ -27,3 +27,6 @@ export type WorkspaceAgentHistoryTally = {
 
 /** A measure, with the id a confirmed delete passes back so it removes only what was shown. */
 export type WorkspaceAgentHistoryMeasurement = WorkspaceAgentHistoryTally & { planId: string }
+
+/** A delete's outcome; `stale` means a newer measure replaced the confirmed one, so nothing was deleted. */
+export type WorkspaceAgentHistoryDeleteResult = WorkspaceAgentHistoryTally | { stale: true }

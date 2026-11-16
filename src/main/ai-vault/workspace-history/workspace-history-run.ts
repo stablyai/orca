@@ -103,6 +103,14 @@ export async function runWorkspaceHistory(
   const countedInodes = new Set<string>()
   let freshOwner = createWorkspaceHistoryOwner(request.ownership)
   let freshOwnerAt = Date.now()
+  // Ownership is re-proved on fresh disk state: a volume can disconnect while the scan runs.
+  const ownsNow = (session: AiVaultSession): Promise<boolean> => {
+    if (Date.now() - freshOwnerAt > OWNER_REFRESH_MS) {
+      freshOwner = createWorkspaceHistoryOwner(request.ownership)
+      freshOwnerAt = Date.now()
+    }
+    return freshOwner(session)
+  }
   for (const [index, session] of owned.entries()) {
     if (index % DELETE_BATCH_SIZE === 0) {
       await yieldToEventLoop()
@@ -112,7 +120,7 @@ export async function runWorkspaceHistory(
       // Database rows name the database file; the session is a row inside it.
       const row = splitOpenCodeSqliteCandidate(
         workspaceHistorySessionKey(session),
-        session.agent === 'zcode' ? 'zcode' : 'opencode'
+        sqliteKind(session)
       )
       if (row) {
         result.candidates.push(workspaceHistorySessionKey(session))
@@ -138,12 +146,7 @@ export async function runWorkspaceHistory(
     if (request.mode === 'measure') {
       continue
     }
-    // Ownership is re-proved on fresh disk state: a volume can disconnect while the scan runs.
-    if (Date.now() - freshOwnerAt > OWNER_REFRESH_MS) {
-      freshOwner = createWorkspaceHistoryOwner(request.ownership)
-      freshOwnerAt = Date.now()
-    }
-    if (!(await freshOwner(session))) {
+    if (!(await ownsNow(session))) {
       result.failed++
       continue
     }
@@ -172,9 +175,20 @@ export async function runWorkspaceHistory(
     }
     await yieldToEventLoop()
     throwIfAiVaultScanCancelled(signal)
+    const sessionIds: string[] = []
+    for (const [sessionId, session] of rows) {
+      if (await ownsNow(session)) {
+        sessionIds.push(sessionId)
+      } else {
+        result.failed++
+      }
+    }
+    if (sessionIds.length === 0) {
+      continue
+    }
     const outcome = await deleteWorkspaceHistorySqliteSessions(
       dbPath,
-      [...rows.keys()],
+      sessionIds,
       request.inUseSince,
       signal
     )
@@ -191,9 +205,14 @@ export async function runWorkspaceHistory(
 
 /** A database row is keyed by database and session; a file session by its transcript path. */
 function workspaceHistorySessionKey(session: AiVaultSession): string {
-  return SQLITE_AGENTS.has(session.agent) && !session.filePath.includes('#')
+  return SQLITE_AGENTS.has(session.agent) &&
+    !splitOpenCodeSqliteCandidate(session.filePath, sqliteKind(session))
     ? buildOpenCodeSqliteCandidatePath(session.filePath, session.sessionId)
     : session.filePath
+}
+
+function sqliteKind(session: AiVaultSession): 'opencode' | 'zcode' {
+  return session.agent === 'zcode' ? 'zcode' : 'opencode'
 }
 
 // Companions go first, so a refusal part way leaves the transcript listed for a retry. Codex aliases

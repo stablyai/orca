@@ -22513,6 +22513,7 @@
           "deleted": "Agent sessions deleted: {{sessions}}. Orca chats deleted: {{chats}}.",
           "skipped": "Kept because in use or not removable: {{count}}.",
           "deleteFailed": "Couldn't delete history from deleted workspaces.",
+          "deleteStale": "Nothing was deleted because the counts changed. Review them and delete again.",
           "retry": "Try again"
         }
       },

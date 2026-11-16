@@ -145,14 +145,17 @@ describe('runWorkspaceHistory', () => {
     expect(existsSync(rollout)).toBe(true)
   })
 
-  it('deletes an OpenCode session whose path already names its database row', async () => {
-    const dbPath = join(root, 'opencode', 'opencode.db')
+  it.each([
+    ['already names its database row', 'opencode', '#ses_1'],
+    ['is a database under a folder with # in its name', 'alice#work', '']
+  ])('deletes an OpenCode session whose path %s', async (_name, folder, rowSuffix) => {
+    const dbPath = join(root, folder, 'opencode.db')
     const workspace = join(root, 'workspaces', 'gone')
     deleteWorkspaceHistorySqliteSessions.mockResolvedValue({ deleted: ['ses_1'], busy: [] })
     scanAiVaultSessions.mockResolvedValue({
       sessions: [
         {
-          ...codexSession(`${dbPath}#ses_1`, workspace, '2026-11-01T00:00:00.000Z'),
+          ...codexSession(`${dbPath}${rowSuffix}`, workspace, '2026-11-01T00:00:00.000Z'),
           agent: 'opencode',
           sessionId: 'ses_1'
         }

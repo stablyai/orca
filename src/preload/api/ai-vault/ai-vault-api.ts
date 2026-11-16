@@ -29,8 +29,8 @@ import type {
 } from '../../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import type { ExecutionHostId, ExecutionHostScope } from '../../../shared/execution-host'
 import type {
-  WorkspaceAgentHistoryMeasurement,
-  WorkspaceAgentHistoryTally
+  WorkspaceAgentHistoryDeleteResult,
+  WorkspaceAgentHistoryMeasurement
 } from '../../../shared/workspace-agent-history/workspace-agent-history-types'
 import type {
   AiVaultScanProgress,
@@ -67,7 +67,7 @@ export type AiVaultApi = {
   /** Counts this computer's history from workspaces that no longer exist. */
   measureDeletedWorkspaceHistory: () => Promise<WorkspaceAgentHistoryMeasurement>
   /** Deletes only what the measure with this plan id showed. */
-  deleteDeletedWorkspaceHistory: (planId: string) => Promise<WorkspaceAgentHistoryTally>
+  deleteDeletedWorkspaceHistory: (planId: string) => Promise<WorkspaceAgentHistoryDeleteResult>
   /** Fires when any app window regains OS focus. */
   onWindowFocused: (callback: () => void) => () => void
   /** The local scan entry for a request key, if it is still retained. */

@@ -9,6 +9,7 @@ import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-work
 import type { OrcaWorkspaceLayout } from '../../shared/orca-workspace-layout'
 import type {
   WorkspaceAgentHistoryChatTally,
+  WorkspaceAgentHistoryDeleteResult,
   WorkspaceAgentHistoryMeasurement,
   WorkspaceAgentHistoryTally
 } from '../../shared/workspace-agent-history/workspace-agent-history-types'
@@ -110,11 +111,11 @@ export function measureDeletedWorkspaceAgentHistory(): Promise<WorkspaceAgentHis
 /** Deletes what the confirmed measure showed, never anything found since; a stale plan is refused. */
 export function deleteDeletedWorkspaceAgentHistory(
   planId: string
-): Promise<WorkspaceAgentHistoryTally> {
+): Promise<WorkspaceAgentHistoryDeleteResult> {
   return serialize(async () => {
     const plan = lastPlan
     if (plan?.id !== planId) {
-      throw new Error('This measurement is out of date. Measure again before deleting.')
+      return { stale: true as const }
     }
     lastPlan = null
     const { candidates: _candidates, ...tally } = await runAlreadyDeleted('delete', plan.only)

@@ -765,6 +765,7 @@
     "components.settings.workspaceCleanup.agentHistory.confirmTitle",
     "components.settings.workspaceCleanup.agentHistory.delete",
     "components.settings.workspaceCleanup.agentHistory.deleteFailed",
+    "components.settings.workspaceCleanup.agentHistory.deleteStale",
     "components.settings.workspaceCleanup.agentHistory.deleted",
     "components.settings.workspaceCleanup.agentHistory.deleting",
     "components.settings.workspaceCleanup.agentHistory.description",
