@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { getDefaultSettings } from '../../../../../../shared/constants'
+import { getDefaultSettings } from '../../../../../../shared/orca-profiles/constants'
 
 // Why: Radix Select needs pointer/layout APIs happy-dom lacks; a native select keeps value testable.
 vi.mock('../../../ui/select', () => ({

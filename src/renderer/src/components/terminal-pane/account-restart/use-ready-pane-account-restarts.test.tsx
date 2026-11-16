@@ -15,7 +15,7 @@ import type { AgentProviderSessionMetadata } from '../../../../../shared/agent-s
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
 import type * as paneSelectionLane from '@/lib/agent-session/accounts/codex-pane-selection-lane'
 import type * as sonner from 'sonner'
-import { getDefaultSettings } from '../../../../../shared/constants'
+import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
 import type { ClaudeAccountSwitchRunningSessions } from '../../../../../shared/agent-accounts/claude/claude-account-switch-settings'
 import { recordQueuedClaudeRestarts } from '@/lib/agent-session/accounts/claude/claude-queued-restart-records'
 import { useReadyPaneAccountRestarts } from './use-ready-pane-account-restarts'

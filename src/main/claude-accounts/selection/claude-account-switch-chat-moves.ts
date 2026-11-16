@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { moveStructuredAgentSessionChatsToSelectedAccount } from '../../native-chat/agent-session-wire/recovery/structured-agent-session-account-switch'
 

@@ -3,7 +3,7 @@ import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { provideLayoutFrameTerminalPanes } from '@/runtime/workspace-layout/frames/layout-frame-terminal-panes'
 
-import { getDefaultSettings } from '../../../../../../shared/constants'
+import { getDefaultSettings } from '../../../../../../shared/orca-profiles/constants'
 import { awaitsCodexRestartAnswer, blocksCodexPaneInput } from '../../../codex-restart-notice-state'
 import {
   installCodexDetachedPaneRestartExecutor,

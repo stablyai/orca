@@ -14,7 +14,7 @@ import {
 } from '@/lib/provider-accounts/claude-account-switch-sessions'
 import { buildPaneAccountRestartStartup } from '@/lib/agent-session/accounts/agent-account-restart-startup'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
-import { getDefaultSettings } from '../../../../../../shared/constants'
+import { getDefaultSettings } from '../../../../../../shared/orca-profiles/constants'
 import { AGENT_SESSION_ACCOUNT_SWITCH_TERMINAL_CONTINUATION_MESSAGE as FOLLOW_UP } from '../../../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-continuation'
 import { ptyDataHandlers } from '../../pty-transport/shutdown/pty-shutdown-data-suspension'
 import { lookUpDiscoveredClaudeRestart } from '../discovered-claude-restart'
