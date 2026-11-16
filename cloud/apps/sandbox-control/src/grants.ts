@@ -274,7 +274,7 @@ export async function sweepHeldTeamGrants(deps: LifecycleDeps): Promise<{ worksp
   const { results } = await deps.db
     .prepare(
       `SELECT g.* FROM workspace_grants g JOIN sandboxes s ON s.id = g.sandbox_id
-       WHERE g.status IN ('issuing', 'active') AND g.user_id <> s.user_id AND s.ownership_transferred_at IS NULL AND s.status <> 'destroyed'
+       WHERE g.status IN ('issuing', 'active') AND g.user_id <> s.user_id AND s.visibility = 'team' AND s.ownership_transferred_at IS NULL AND s.status <> 'destroyed'
        ORDER BY g.sandbox_id LIMIT 500`
     )
     .all<GrantRow>()

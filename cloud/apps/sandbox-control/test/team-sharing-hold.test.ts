@@ -104,13 +104,26 @@ describe('TEAM_SHARING held (the default)', () => {
     expect((await resolveSandboxSecrets(db, keyring, row)).env.MY_TOKEN).toBeUndefined()
     expect(await sweepHeldTeamGrants(life)).toEqual({ workspaces: 1, revoked: 1, queued: 0 })
     expect(h.raw.prepare('SELECT status, revoke_reason FROM workspace_grants WHERE user_id = ?').get('bob')).toEqual({ status: 'revoked', revoke_reason: 'team_sharing_held' })
-    // Cleared: it is the owner's alone, so it acts private for credentials too.
+    // Review M1: revoked during this session, so what Bob started may still run: shared until the next boot.
+    expect(await sharedWorkspaceMode(db, row)).toBe(true)
+    expect((await resolveSandboxSecrets(db, keyring, row)).env.MY_TOKEN).toBeUndefined()
+    // A new session (restart): the owner's alone, so it acts private for credentials too.
+    h.advance(1_000)
+    expect((await h.call('POST', `/v1/sandboxes/${id}/restart`, { bearer: alice })).status).toBe(200)
     expect(await sharedWorkspaceMode(db, row)).toBe(false)
     expect((await resolveSandboxSecrets(db, keyring, row)).env.MY_TOKEN).toBe('personal-value')
     // Nothing left to sweep; and with sharing on again, nothing is swept at all.
     expect(await sweepHeldTeamGrants(life)).toEqual({ workspaces: 0, revoked: 0, queued: 0 })
     configureTeamSharing({ TEAM_SHARING: 'on' })
     expect(await sharedWorkspaceMode(db, row)).toBe(true)
+  })
+
+  it('review L1: the sweep leaves private workspaces alone', async () => {
+    const t = await held()
+    t.h.raw
+      .prepare(`INSERT INTO workspace_grants (id, sandbox_id, account_id, user_id, device_kind, device_label, status, created_at) VALUES ('grt_p', ?, 'org:acme', 'bob', 'desktop', 'b', 'active', 1)`)
+      .run(t.id)
+    expect(await sweepHeldTeamGrants((await lifecycleDeps(t.h.env, t.h.deps))!)).toEqual({ workspaces: 0, revoked: 0, queued: 0 })
   })
 })
 
