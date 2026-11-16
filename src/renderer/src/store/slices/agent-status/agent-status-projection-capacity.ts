@@ -40,7 +40,7 @@ export function projectionEvictionKeys(
     }
     drafts.set(statuses, draft)
   }
-  const classify = classifyPaneKeyLiveness(layouts)
+  const classify = classifyPaneKeyLiveness(layouts, data.represented)
   for (const [key, row] of statuses.replacementsSince(draft.offset)) {
     draft.dead.delete(key)
     draft.fresh.delete(key)
