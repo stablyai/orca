@@ -62,6 +62,8 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   name: '--name <name>          Name for the new worktree or automation',
   'no-parent': '--no-parent            Force no parent lineage for unrelated work',
   'no-screenshot': '--no-screenshot       Skip screenshot capture after the operation',
+  screenshot:
+    '--screenshot          Capture a screenshot after the action (actions skip it by default)',
   'screenshot-format': '--screenshot-format <png|jpeg> Screenshot image format (default png)',
   'screenshot-scale':
     '--screenshot-scale <n> At most n screenshot pixels per window point; 1 drops Retina detail',
