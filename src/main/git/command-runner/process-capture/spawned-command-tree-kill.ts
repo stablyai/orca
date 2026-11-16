@@ -1,6 +1,9 @@
 import { spawn, type ChildProcess } from 'node:child_process'
 import { admitSelfInitiatedTreeKill } from '../../../pty/process-retirement/own-chromium-tree-kill-guard'
-import { WorkerThreadChildProcess } from '../../../worker-thread-child-process/worker-thread-child-process'
+import {
+  isAbandonedWorkerChildError,
+  WorkerThreadChildProcess
+} from '../../../worker-thread-child-process/worker-thread-child-process'
 
 const WINDOWS_TREE_KILL_WAIT_MS = 2_000
 const WORKER_PID_WAIT_MS = 5_000
@@ -78,16 +81,39 @@ function killOnceWorkerReportsPid(child: WorkerThreadChildProcess): Promise<void
     return Promise.resolve()
   }
   return new Promise((resolve) => {
-    const settle = (next: () => Promise<void> | void): void => {
-      clearTimeout(timer)
+    let settled = false
+    const settle = (): void => {
+      if (!settled) {
+        settled = true
+        clearTimeout(timer)
+        resolve()
+      }
+    }
+    const detach = (): void => {
       child.off('spawn', onSpawn)
       child.off('close', onClose)
-      void Promise.resolve(next()).then(resolve)
+      child.off('error', onError)
     }
-    const onSpawn = (): void => settle(() => killSpawnedCommandTree(child))
-    const onClose = (): void => settle(() => undefined)
-    const timer = setTimeout(() => settle(() => void child.kill()), WORKER_PID_WAIT_MS)
-    child.once('spawn', onSpawn)
-    child.once('close', onClose)
+    // A late PID still gets the tree kill, even after the caller stopped waiting for it.
+    const onSpawn = (): void => {
+      detach()
+      void killSpawnedCommandTree(child).then(settle)
+    }
+    const onClose = (): void => {
+      detach()
+      settle()
+    }
+    const onError = (error: Error): void => {
+      if (isAbandonedWorkerChildError(error)) {
+        onClose()
+      }
+    }
+    const timer = setTimeout(() => {
+      child.kill()
+      settle()
+    }, WORKER_PID_WAIT_MS)
+    child.on('spawn', onSpawn)
+    child.on('close', onClose)
+    child.on('error', onError)
   })
 }

@@ -102,6 +102,26 @@ describe('Git command tree termination', () => {
     await pending
     expect(rootKill).not.toHaveBeenCalled()
   })
+  it('still kills the tree when the worker reports the PID after the wait', async () => {
+    vi.useFakeTimers()
+    try {
+      const child = new WorkerThreadChildProcess(1, () => true)
+      vi.spyOn(child, 'kill').mockReturnValue(true)
+      spawnMock.mockReturnValue(childWithPid(5678))
+      const pending = killSpawnedCommandTree(child)
+      await vi.advanceTimersByTimeAsync(10_000)
+      await pending
+      expect(spawnMock).not.toHaveBeenCalled()
+
+      child.receive({ type: 'spawn', id: 1, pid: 4321 })
+      expect(spawnMock).toHaveBeenCalledWith('taskkill', ['/pid', '4321', '/t', '/f'], {
+        stdio: 'ignore',
+        windowsHide: true
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
   it.skipIf(originalPlatform !== 'win32').each([0, 128])(
     'does not taskkill an actual native Windows child after exit %i',
     async (exitCode) => {

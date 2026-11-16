@@ -169,7 +169,8 @@ function streamInSpan(
           } else {
             child.once('close', reportTermination)
           }
-          child.once('error', (error) => {
+          // Not once: an earlier child error must not hide a later worker abandonment.
+          child.on('error', (error) => {
             if (!child.pid || isAbandonedWorkerChildError(error)) {
               reportTermination()
             }
