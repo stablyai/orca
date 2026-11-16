@@ -27578,8 +27578,6 @@
       "usage": "CPU {{cpu}}% · Memory {{used}} / {{total}} GB",
       "syncOff": "Off",
       "syncError": "Couldn’t sync",
-      "mirroringAndContext": "Mirroring · .context synced",
-      "mirroring": "Mirroring",
       "contextSynced": ".context synced",
       "more": "More actions",
       "details": "Details",
@@ -29193,7 +29191,6 @@
     }
   },
   "orcaCloudSync": {
-    "menuItem": "Mirror to this computer…",
     "gb": "{{value}} GB",
     "mb": "{{value}} MB",
     "kb": "{{value}} KB",
@@ -29218,15 +29215,13 @@
     "syncedEmpty": "Synced · {{ago}}",
     "contextLabel": ".context folder",
     "contextHelper": "Plans and screenshots from this workspace, synced to this computer.",
-    "mirrorLabel": "Mirror to this computer",
-    "mirrorHelper": "A read-only copy of this workspace’s files, kept up to date while it runs.",
     "openFolder": "Open folder",
     "copied": "Copied",
     "copyPath": "Copy path",
     "tryAgain": "Try again",
     "editedHere_one": "{{count}} file changed on this computer. Edits here don’t sync back. The cloud copy replaces it when it changes.",
     "editedHere_other": "{{count}} files changed on this computer. Edits here don’t sync back. The cloud copy replaces them when it changes.",
-    "overLimit": "The mirror is limited to {{size}}. Larger files and anything past the limit aren’t copied.",
+    "overLimit": "The .context folder is limited to {{size}}. Larger files and anything past the limit aren’t copied.",
     "tooLarge": "Files over {{size}} aren’t copied.",
     "removal": "The copy on this computer is removed too."
   },

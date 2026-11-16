@@ -10,7 +10,6 @@ import { useIsWorktreeGoingToSleep } from '@/lib/worktree-sleep-view'
 import { CloudWorkspaceStatusPanel } from './CloudWorkspaceStatusPanel'
 import { useCloudStatusPolling, useCloudWorkspaceView } from './use-cloud-workspace-view'
 import { useCloudPanelActions } from './use-cloud-panel-actions'
-import { onCloudSyncFocusRequest } from '@/lib/orca-cloud/cloud-sync-store'
 
 const PANEL_POLL_MS = 5_000
 const HOVER_OPEN_MS = 250
@@ -104,15 +103,6 @@ function CloudWorkspaceMarkInner({
       timer.current = setTimeout(() => setOpen(null), HOVER_CLOSE_MS)
     }
   }
-  // "Mirror to this computer…" in the workspace menu opens this panel on its sync section.
-  useEffect(
-    () =>
-      onCloudSyncFocusRequest(workspaceId, () => {
-        clearTimer()
-        setOpen('pinned')
-      }),
-    [workspaceId, clearTimer]
-  )
   useCloudStatusPolling(workspaceId, PANEL_POLL_MS, open !== null)
   const close = useCallback(() => setOpen(null), [])
   const actions = useCloudPanelActions(workspaceId, close)

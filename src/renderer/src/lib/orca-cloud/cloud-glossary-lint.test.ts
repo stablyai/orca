@@ -63,8 +63,8 @@ const RULES: Rule[] = [
   {
     term: 'this Mac',
     pattern: /Sync to a local directory|\bthis Mac\b/i,
-    use: 'Mirror to this computer / this computer',
-    row: 'Mirror to this computer'
+    use: 'this computer',
+    row: 'On this computer'
   },
   { term: 'credits', pattern: /\bcredits?\b/i, use: 'sandbox hours', row: 'Time unit' },
   {

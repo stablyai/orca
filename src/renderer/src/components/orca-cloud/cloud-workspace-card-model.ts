@@ -124,7 +124,7 @@ export function cloudCardAttentionLabel(item: CloudCardAttention, t: Translate):
 
 /** The "On this computer ›" row's short status. */
 export function cloudCardOnComputerStatus(view: CloudSyncView | null, t: Translate): string {
-  if (!view || (!view.choice.context && !view.choice.mirror)) {
+  if (!view || !view.choice.context) {
     return t('orcaCloudWorkspace.card.syncOff', 'Off')
   }
   if (view.phase === 'error') {
@@ -133,12 +133,7 @@ export function cloudCardOnComputerStatus(view: CloudSyncView | null, t: Transla
   if (view.phase === 'starting' || view.phase === 'copying') {
     return t('orcaCloudSync.syncing', 'Syncing…')
   }
-  if (view.choice.mirror && view.choice.context) {
-    return t('orcaCloudWorkspace.card.mirroringAndContext', 'Mirroring · .context synced')
-  }
-  return view.choice.mirror
-    ? t('orcaCloudWorkspace.card.mirroring', 'Mirroring')
-    : t('orcaCloudWorkspace.card.contextSynced', '.context synced')
+  return t('orcaCloudWorkspace.card.contextSynced', '.context synced')
 }
 
 export type CloudCardPrimary = 'sleep' | 'wake' | 'restart' | 'unarchive' | null

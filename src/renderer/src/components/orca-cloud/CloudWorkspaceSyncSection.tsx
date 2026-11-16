@@ -1,6 +1,6 @@
-// The card's "On this computer" sub-panel: `.context` sync (on by default) and the read-only mirror
-// (off by default); with the mirror on, where the files are and how current they are. Quiet by
-// design: no toasts; progress is announced politely and at most every ~10 s.
+// The card's "On this computer" sub-panel: `.context` sync (on by default), where the files are
+// and how current they are. Quiet by design: no toasts; progress is announced politely and at
+// most every ~10 s.
 import React, { useContext, useEffect, useId, useRef, useState } from 'react'
 import { ConfirmationDialogContext } from '@/components/confirmation-dialog-context'
 import { Copy, FolderOpen } from 'lucide-react'
@@ -14,9 +14,7 @@ import {
   openCloudSyncFolder,
   retryCloudSync,
   setCloudSyncChoice,
-  takeCloudSyncFocus,
-  useCloudSync,
-  useCloudSyncFocusRequest
+  useCloudSync
 } from '@/lib/orca-cloud/cloud-sync-store'
 import type { CloudSyncView } from '../../../../shared/cloud-sync/cloud-sync-contract'
 
@@ -74,7 +72,7 @@ function ago(t: T, at: number, now: number): string {
     : t('orcaCloudSync.hoursAgo', '{{count}} h ago', { count: Math.floor(minutes / 60) })
 }
 
-/** The status line under the switches. */
+/** The status line under the switch. */
 export function cloudSyncStatusLine(view: CloudSyncView, t: T, now: number): string | null {
   if (view.phase === 'off') {
     return null
@@ -127,14 +125,12 @@ function SyncRow({
   label,
   description,
   checked,
-  onCheckedChange,
-  switchRef
+  onCheckedChange
 }: {
   label: string
   description: string
   checked: boolean
   onCheckedChange: (next: boolean) => void
-  switchRef?: React.Ref<HTMLButtonElement>
 }): React.JSX.Element {
   const id = useId()
   return (
@@ -148,7 +144,6 @@ function SyncRow({
         </p>
       </div>
       <Switch
-        ref={switchRef}
         id={`${id}-switch`}
         aria-describedby={`${id}-desc`}
         checked={checked}
@@ -201,21 +196,16 @@ export function CloudWorkspaceSyncSection({
   const live = useCloudSync(workspaceId)
   const view = injected === undefined ? live : injected
   const now = useNow(30_000)
-  const section = useRef<HTMLElement | null>(null)
-  const mirrorSwitch = useRef<HTMLButtonElement | null>(null)
-  const focusRequested = useCloudSyncFocusRequest(workspaceId)
   const [copied, setCopied] = useState(false)
   const announcement = useAnnouncement(view, t)
   const confirm = useContext(ConfirmationDialogContext)
 
-  /** Turning a row off removes copies; changed ones are only removed after asking (as archive/delete). */
-  const choose = async (patch: { context?: boolean; mirror?: boolean }): Promise<void> => {
+  /** Turning sync off removes copies; changed ones are only removed after asking (as archive/delete). */
+  const choose = async (context: boolean): Promise<void> => {
     if (!view) {
       return
     }
-    const next = { ...view.choice, ...patch }
-    const removes = (view.choice.mirror && !next.mirror) || (!next.context && !next.mirror)
-    if (removes && view.editedHere > 0 && confirm) {
+    if (!context && view.choice.context && view.editedHere > 0 && confirm) {
       const ok = await confirm({
         title: t('orcaCloudSync.removeConfirmTitle', 'Remove the copy on this computer?'),
         description: t(
@@ -234,35 +224,19 @@ export function CloudWorkspaceSyncSection({
         return
       }
     }
-    await setCloudSyncChoice(workspaceId, patch)
+    await setCloudSyncChoice(workspaceId, { context })
   }
-
-  useEffect(() => {
-    if (!focusRequested || !view) {
-      return
-    }
-    // After the popover's own open-focus, which runs once this effect has.
-    const frame = requestAnimationFrame(() => {
-      if (takeCloudSyncFocus(workspaceId)) {
-        section.current?.scrollIntoView({ block: 'nearest' })
-        mirrorSwitch.current?.focus()
-      }
-    })
-    return () => cancelAnimationFrame(frame)
-  }, [focusRequested, view, workspaceId])
 
   if (!view) {
     return null
   }
-  const on = view.choice.context || view.choice.mirror
-  const mirror = view.choice.mirror
+  const on = view.choice.context
   const status = cloudSyncStatusLine(view, t, now)
   const tooLarge = view.skippedLarge > 0
   const overLimit = view.overLimit > 0
 
   return (
     <section
-      ref={section}
       aria-labelledby={labelledBy}
       className="flex flex-col gap-2.5"
       data-cloud-sync-section={workspaceId}
@@ -274,30 +248,14 @@ export function CloudWorkspaceSyncSection({
           'Plans and screenshots from this workspace, synced to this computer.'
         )}
         checked={view.choice.context}
-        onCheckedChange={(next) => void choose({ context: next })}
+        onCheckedChange={(next) => void choose(next)}
       />
-      {on && !mirror && status ? (
-        <p className="-mt-1 tabular-nums text-muted-foreground" data-cloud-sync-status="context">
+      {on && status ? (
+        <p className="-mt-1 tabular-nums text-muted-foreground" data-cloud-sync-status>
           {status}
         </p>
       ) : null}
-      <SyncRow
-        switchRef={mirrorSwitch}
-        label={t('orcaCloudSync.mirrorLabel', 'Mirror to this computer')}
-        description={t(
-          'orcaCloudSync.mirrorHelper',
-          'A read-only copy of this workspace’s files, kept up to date while it runs.'
-        )}
-        checked={view.choice.mirror}
-        onCheckedChange={(next) => void choose({ mirror: next })}
-      />
-
-      {mirror && status ? (
-        <p className="-mt-1 tabular-nums text-muted-foreground" data-cloud-sync-status="mirror">
-          {status}
-        </p>
-      ) : null}
-      {mirror ? (
+      {on ? (
         <div className="flex flex-col gap-1.5">
           <code
             className="block min-w-0 break-words rounded bg-muted/50 px-1.5 py-0.5 font-mono text-[11px] text-foreground"
@@ -365,7 +323,7 @@ export function CloudWorkspaceSyncSection({
             overLimit
               ? t(
                   'orcaCloudSync.overLimit',
-                  'The mirror is limited to {{size}}. Larger files and anything past the limit aren’t copied.',
+                  'The .context folder is limited to {{size}}. Larger files and anything past the limit aren’t copied.',
                   { size: syncSize(t, view.limits.maxBytes) }
                 )
               : t('orcaCloudSync.tooLarge', 'Files over {{size}} aren’t copied.', {

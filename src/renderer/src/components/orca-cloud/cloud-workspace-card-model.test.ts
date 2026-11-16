@@ -56,16 +56,10 @@ describe('calm cloud workspace card', () => {
 
   it('sums up On this computer in a few words', () => {
     expect(cloudCardOnComputerStatus(null, t)).toBe('Off')
-    expect(cloudCardOnComputerStatus(sync({ context: false, mirror: false }, 'off'), t)).toBe('Off')
-    expect(cloudCardOnComputerStatus(sync({ context: true, mirror: false }), t)).toBe(
-      '.context synced'
-    )
-    expect(cloudCardOnComputerStatus(sync({ context: true, mirror: true }), t)).toBe(
-      'Mirroring · .context synced'
-    )
-    expect(cloudCardOnComputerStatus(sync({ context: true, mirror: true }, 'error'), t)).toBe(
-      'Couldn’t sync'
-    )
+    expect(cloudCardOnComputerStatus(sync({ context: false }, 'off'), t)).toBe('Off')
+    expect(cloudCardOnComputerStatus(sync({ context: true }), t)).toBe('.context synced')
+    expect(cloudCardOnComputerStatus(sync({ context: true }, 'copying'), t)).toBe('Syncing…')
+    expect(cloudCardOnComputerStatus(sync({ context: true }, 'error'), t)).toBe('Couldn’t sync')
   })
 
   it('keeps one footer action per state; Restart only where it is the fix', () => {

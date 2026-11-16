@@ -49,11 +49,10 @@ const entry = (status: HostedWorkspaceStatus): CloudStatusEntry => ({
 const FOLDER = '/Users/me/orca/cloud/Hello-World/fix-login-redirect'
 
 function view(id: string, over: Partial<CloudSyncView>): CloudSyncView {
-  const choice = over.choice ?? { context: true, mirror: false }
-  const openPath = choice.mirror ? FOLDER : `${FOLDER}/.context`
+  const openPath = `${FOLDER}/.context`
   return {
     workspaceId: id,
-    choice,
+    choice: { context: true },
     folder: FOLDER,
     phase: 'synced',
     files: 12,
@@ -63,9 +62,7 @@ function view(id: string, over: Partial<CloudSyncView>): CloudSyncView {
     editedHere: 0,
     skippedLarge: 0,
     overLimit: 0,
-    limits: choice.mirror
-      ? { maxBytes: 2_000_000_000, maxFileBytes: 100_000_000 }
-      : { maxBytes: 250_000_000, maxFileBytes: 50_000_000 },
+    limits: { maxBytes: 250_000_000, maxFileBytes: 50_000_000 },
     error: null,
     openPath,
     displayPath: openPath.replace('/Users/me', '~'),
@@ -99,7 +96,7 @@ function panel(
   })
 }
 
-/** Default: `.context` on, mirror off. */
+/** Default: `.context` on. */
 export const contextSynced = panel('fx-context', {})
 export const contextSyncing = panel('fx-context-start', {
   phase: 'starting',
@@ -107,47 +104,31 @@ export const contextSyncing = panel('fx-context-start', {
   bytes: 0,
   lastSyncedAt: null
 })
-export const mirrorCopying = panel('fx-mirror-copying', {
-  choice: { context: true, mirror: true },
+export const contextCopying = panel('fx-context-copying', {
   phase: 'copying',
-  progress: { done: 120, total: 1_204 }
-})
-export const mirrorSynced = panel('fx-mirror', {
-  choice: { context: true, mirror: true },
-  files: 1_204,
-  bytes: 38_400_000,
-  lastSyncedAt: Date.now() - 2 * 60_000
+  progress: { done: 12, total: 48 }
 })
 export const asleepWaiting = panel(
   'fx-asleep',
   {
-    choice: { context: true, mirror: true },
     phase: 'waiting',
-    files: 1_204,
-    bytes: 38_400_000,
     lastSyncedAt: Date.now() - 63 * 60_000
   },
   'sleeping'
 )
-export const editedHere = panel('fx-edited', {
-  choice: { context: true, mirror: true },
-  files: 1_204,
-  bytes: 38_400_000,
-  editedHere: 3
-})
+export const editedHere = panel('fx-edited', { editedHere: 3 })
 export const overLimit = panel('fx-limit', {
-  choice: { context: true, mirror: true },
-  files: 61_000,
-  bytes: 1_990_000_000,
-  overLimit: 812,
+  files: 4_820,
+  bytes: 249_000_000,
+  overLimit: 180,
   skippedLarge: 2
 })
 export const syncError = panel('fx-error', {
   phase: 'error',
   error: 'worktree_not_found'
 })
-export const bothOff = panel('fx-off', {
-  choice: { context: false, mirror: false },
+export const syncOff = panel('fx-off', {
+  choice: { context: false },
   phase: 'off',
   files: 0,
   bytes: 0,
