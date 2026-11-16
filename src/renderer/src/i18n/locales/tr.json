@@ -12082,7 +12082,7 @@
             "terminalRun": "SSH dahil terminalinizde komut çalıştır"
           },
           "decisionFailed": "İzin kararı kaydedilemedi. Tekrar deneyin.",
-          "fullAccessWarning": "Tam erişim: normal bir program gibi çalışır; dosyalarınızı okuyabilir, ağı kullanabilir, başka programlar çalıştırabilir ve terminalleriniz ile ajanlarınız dahil Orca'yı kontrol edebilir.",
+          "fullAccessWarning": "Tam erişim: normal bir program gibi çalışır; dosyalarınızı okuyabilir, kayıtlı oturum bilgilerinizi ve SSH anahtarlarınızı kullanabilir, ağı kullanabilir, başka programlar çalıştırabilir ve terminalleriniz ile ajanlarınız dahil Orca'yı kontrol edebilir.",
           "uiWarning": "Görünümünü çizmek için yayıncının kodunu Orca içinde çalıştırır. Orca nelerin erişebileceğini gösterir ve etkinleştirmeden önce sorar."
         },
         "PluginConsentProvenance": {
