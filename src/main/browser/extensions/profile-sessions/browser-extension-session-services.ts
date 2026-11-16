@@ -16,7 +16,10 @@ import {
   forgetBrowserExtensionContentScriptRestore,
   restoreBrowserExtensionContentScripts
 } from '../api-runtime/browser-extension-content-scripts'
-import { setBrowserSessionRequestDecider } from '../../sessions/requests/browser-session-request-decisions'
+import {
+  setBrowserSessionRequestDecider,
+  type BrowserSessionRequestDecider
+} from '../../sessions/requests/browser-session-request-decisions'
 import { browserExtensionDnrRequestDecider } from '../declarative-net-request/session/browser-extension-dnr-requests'
 import {
   attachBrowserExtensionDnr,
@@ -34,6 +37,19 @@ const servedSessions = new WeakSet<Electron.Session>()
 
 // Why below startup's 3s wait: a worker that never answers must not use the whole budget alone.
 const CONTENT_SCRIPT_RESTORE_TIMEOUT_MS = 2_500
+
+type RequestDecision = ReturnType<BrowserSessionRequestDecider['beforeRequest']>
+
+function whenProxyReady(session: Electron.Session, action: () => RequestDecision): RequestDecision {
+  const ready = browserExtensionProxyRequestReadiness(session)
+  if (typeof ready === 'boolean') {
+    return ready ? action() : { cancel: true }
+  }
+  return ready.then(
+    (allowed) => (allowed ? (action() ?? {}) : { cancel: true }),
+    () => ({ cancel: true })
+  )
+}
 
 /** A download from an unregistered extension page (popup, popout) belongs to the active tab. */
 function resolveExtensionDownloadOwner(webContentsId: number): string | null {
@@ -62,12 +78,25 @@ export function installBrowserExtensionSessionServices(): void {
       if (!/^(https?|wss?):/.test(details.url)) {
         return decide()
       }
-      const ready = browserExtensionProxyRequestReadiness(session)
-      return typeof ready === 'boolean'
-        ? ready
-          ? decide()
-          : { cancel: true }
-        : ready.then((allowed) => (allowed ? (decide() ?? {}) : { cancel: true }))
+      return whenProxyReady(session, () => {
+        let decision: RequestDecision
+        try {
+          decision = decide()
+        } catch (error) {
+          return whenProxyReady(session, () => {
+            throw error
+          })
+        }
+        return decision && 'then' in decision
+          ? decision.then(
+              (response) => whenProxyReady(session, () => response) ?? {},
+              (error: unknown) =>
+                whenProxyReady(session, () => {
+                  throw error
+                }) ?? {}
+            )
+          : whenProxyReady(session, () => decision)
+      })
     }
   })
   browserManager.setUnownedDownloadOwnerResolver(resolveExtensionDownloadOwner)
