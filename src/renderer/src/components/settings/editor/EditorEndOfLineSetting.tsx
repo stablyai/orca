@@ -54,8 +54,8 @@ export function EditorEndOfLineSetting({
         onChange={(editorEndOfLine) => updateSettings({ editorEndOfLine })}
         options={[
           { value: 'auto', label: t('settings.editorEndOfLine.auto', 'Auto') },
-          { value: 'lf', label: 'LF' },
-          { value: 'crlf', label: 'CRLF' }
+          { value: 'lf', label: t('settings.editorEndOfLine.lf', 'LF') },
+          { value: 'crlf', label: t('settings.editorEndOfLine.crlf', 'CRLF') }
         ]}
       />
     </SearchableSetting>

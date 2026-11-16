@@ -8,6 +8,7 @@ import {
 } from '../../../../../../shared/editor/saving/editor-end-of-line'
 import { resolveEditorFileHostPlatform } from '../identity/editor-file-host-platform'
 import { markForeignLineBreaks, newModelLineEndingState } from './new-model-line-ending-state'
+import { getWrittenContentDiskSignature } from '../../../../../../shared/file-write/disk-baseline-signature'
 import {
   beginProgrammaticContentSync,
   endProgrammaticContentSync,
@@ -36,6 +37,7 @@ export function resolveOpenFileNewModelLineEnding(
 type LineEndingModel = Pick<
   editor.ITextModel,
   | 'getLineCount'
+  | 'getValue'
   | 'getEOL'
   | 'setEOL'
   | 'pushEOL'
@@ -81,15 +83,24 @@ export function applyNewModelLineEnding(
   }
 }
 
+// Why bytes, not the dirty flag: Markdown dirty state ignores trailing whitespace such as a new line.
+function isSavedWithLineBreaks(model: LineEndingModel, diskSignature: string): boolean {
+  return (
+    model.getLineCount() > 1 &&
+    !newModelLineEndingState(model).foreignLineBreaks &&
+    getWrittenContentDiskSignature(model.getValue()) === diskSignature
+  )
+}
+
 /** Keeps a new model on its ending through undo, late host reports, and setting changes. */
 export function trackNewModelLineEnding(
   model: LineEndingModel,
   lineEnding: EditorLineEnding | null,
   modelKey: string,
-  /** The buffer matches the file on disk; saved line breaks are never converted. */
-  isClean = false
+  /** Signature of the bytes last known on disk; saved line breaks are never converted. */
+  diskSignature?: string
 ): { dispose(): void } {
-  if (isClean && model.getLineCount() > 1) {
+  if (diskSignature && isSavedWithLineBreaks(model, diskSignature)) {
     markForeignLineBreaks(model)
   }
   applyNewModelLineEnding(model, lineEnding, modelKey)
@@ -123,15 +134,15 @@ export function useNewModelLineEnding(
   const lineEnding = useAppStore((state) =>
     resolveOpenFileNewModelLineEnding(state, fileId, language)
   )
-  const isClean = useAppStore(
-    (state) => state.openFiles?.find((entry) => entry.id === fileId)?.isDirty === false
+  const diskSignature = useAppStore(
+    (state) => state.openFiles?.find((entry) => entry.id === fileId)?.lastKnownDiskSignature
   )
   useEffect(() => {
     const model = mountedEditor?.getModel()
     if (!model || model.uri.toString() !== modelUri) {
       return
     }
-    const tracker = trackNewModelLineEnding(model, lineEnding, modelUri, isClean)
+    const tracker = trackNewModelLineEnding(model, lineEnding, modelUri, diskSignature)
     return () => tracker.dispose()
-  }, [mountedEditor, modelUri, lineEnding, isClean])
+  }, [mountedEditor, modelUri, lineEnding, diskSignature])
 }

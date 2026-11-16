@@ -1464,7 +1464,9 @@
       "title": "End of line",
       "description": "Line ending for new files and files with no line breaks yet. Auto follows the system that runs the file’s workspace: LF for Linux, macOS, and WSL, CRLF for Windows. Files with line breaks keep theirs.",
       "keywordLineEnding": "line ending",
-      "auto": "Auto"
+      "auto": "Auto",
+      "lf": "LF",
+      "crlf": "CRLF"
     },
     "repositoryFormatter": {
       "description": "Use this project’s formatter for Format on Save.",

@@ -3,6 +3,8 @@ import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
 import { afterEach, describe, expect, it } from 'vitest'
 import { applyNewModelLineEnding, trackNewModelLineEnding } from './editor-new-model-line-ending'
 import { syncContentOnMount, syncContentUpdate } from './monaco-content-sync'
+import { isEditorContentUnchanged } from './editor-content-dirty-state'
+import { getWrittenContentDiskSignature } from '../../../../../../shared/file-write/disk-baseline-signature'
 import {
   beginProgrammaticContentSync,
   endProgrammaticContentSync,
@@ -28,6 +30,10 @@ function type(model: monaco.editor.ITextModel, text: string): void {
 }
 
 const settle = () => new Promise<void>((resolve) => queueMicrotask(resolve))
+
+/** The disk signature a save of the model's current text leaves behind. */
+const saveToDisk = (model: monaco.editor.ITextModel) =>
+  getWrittenContentDiskSignature(model.getValue())
 
 function writeExternally(
   model: monaco.editor.ITextModel,
@@ -143,9 +149,9 @@ describe('line ending of a new model', () => {
     type(model, 'one\ntwo')
     typing.dispose()
     // Saved to disk, then End of Line changes to LF.
-    const saved = trackNewModelLineEnding(model, '\r\n', 'key', true)
-    saved.dispose()
-    const changed = trackNewModelLineEnding(model, '\n', 'key', true)
+    const disk = saveToDisk(model)
+    trackNewModelLineEnding(model, '\r\n', 'key', disk).dispose()
+    const changed = trackNewModelLineEnding(model, '\n', 'key', disk)
     expect(model.getValue()).toBe('one\r\ntwo')
     changed.dispose()
   })
@@ -154,11 +160,28 @@ describe('line ending of a new model', () => {
     const model = windowsModel()
     trackNewModelLineEnding(model, '\r\n', 'key').dispose()
     type(model, 'one\ntwo')
-    trackNewModelLineEnding(model, '\r\n', 'key', true).dispose()
+    const disk = saveToDisk(model)
+    trackNewModelLineEnding(model, '\r\n', 'key', disk).dispose()
     type(model, 'one\ntwo\nthree')
-    const changed = trackNewModelLineEnding(model, '\n', 'key', false)
+    const changed = trackNewModelLineEnding(model, '\n', 'key', disk)
     expect(model.getValue()).toBe('one\r\ntwo\r\nthree')
     changed.dispose()
+  })
+
+  it('converts an unsaved Markdown line break that the dirty check ignores', () => {
+    const model = monaco.editor.createModel('# Title', 'markdown')
+    model.setEOL(CRLF)
+    models.push(model)
+    const disk = saveToDisk(model)
+    const pending = trackNewModelLineEnding(model, null, 'key', disk)
+    type(model, '# Title\n')
+    // Markdown dirty state ignores trailing whitespace, so this edit still reads as clean.
+    expect(isEditorContentUnchanged(model.getValue(), '# Title', true)).toBe(true)
+    pending.dispose()
+    const known = trackNewModelLineEnding(model, '\n', 'key', disk)
+    type(model, '# Title\nBody')
+    expect(model.getValue()).toBe('# Title\nBody')
+    known.dispose()
   })
 
   it('keeps undo offsets valid across a late conversion of typed lines', async () => {

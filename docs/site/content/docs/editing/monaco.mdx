@@ -14,7 +14,7 @@ Enable **Insert Final Newline** under [Settings → General → Editor](/docs/se
 
 ## Line endings
 
-New files, and files that opened with no line breaks, use the line ending of the system that runs the file's workspace: LF on Linux and macOS hosts, WSL hosts, and Windows projects that run in WSL; CRLF on Windows otherwise. Choose LF or CRLF under **End of Line** in [Settings → General → Editor](/docs/settings) to always use one. Files that opened with line breaks keep their ending, text written into the file from outside the editor keeps its own ending, and shell scripts always start with LF.
+New files, and files that opened with no line breaks, use the line ending of the system that runs the file's workspace: LF on Linux and macOS hosts, WSL hosts, and Windows projects that run in WSL; CRLF on Windows otherwise. Choose LF or CRLF under **End of Line** in [Settings → General → Editor](/docs/settings) to always use one. Files that opened with line breaks keep their ending, text written into the file from outside the editor keeps its own ending, and shell scripts always start with LF. With autosave on, lines saved before a remote host reports its system keep the ending used until then.
 
 ## Multi-cursor, go-to, find
 
