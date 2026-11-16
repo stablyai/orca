@@ -48,6 +48,8 @@ export type AcpStructuredLaunch = StructuredAgentCommand & {
   fullAccess: boolean
   /** The saved model the launch line carries. */
   launchModel?: string
+  /** The launched program's version, when the launch checked it. */
+  version?: string
   resume: {
     sessionId: string
     key: string
@@ -201,6 +203,7 @@ export function acpStructuredLaunchPart(
         args: [...prefixArgs, ...args],
         fullAccess,
         ...(model ? { launchModel: model } : {}),
+        ...(launchVersion.version ? { version: launchVersion.version } : {}),
         resume: head
           ? {
               sessionId: head.handle.nativeId,

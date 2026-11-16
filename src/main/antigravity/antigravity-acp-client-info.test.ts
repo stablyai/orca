@@ -10,9 +10,10 @@ afterEach(async () => {
 
 const MANAGED = acpLaunchSpecFor('antigravity')!
 
-async function initializeClientInfo(spec: AcpLaunchSpec): Promise<unknown> {
+async function initializeClientInfo(spec: AcpLaunchSpec, version?: string): Promise<unknown> {
   const rig = await openAcpAdapterRig({
     spec,
+    ...(version ? { launch: { version } } : {}),
     initialize: { authMethods: [{ id: 'oauth-personal', name: 'Google' }] }
   })
   await rig.acquire()
@@ -20,10 +21,18 @@ async function initializeClientInfo(spec: AcpLaunchSpec): Promise<unknown> {
   return (params as { clientInfo?: unknown }).clientInfo
 }
 
+const ZED = { name: 'zed', version: '0.0.0' }
+const ORCA = { name: 'orca', version: '1' }
+const HOST = MANAGED.hostBackend!.spec
+
 it.each([
-  ['the pinned managed server', MANAGED, { name: 'zed', version: '0.0.0' }],
-  ["the host's agy", MANAGED.hostBackend!.spec, { name: 'orca', version: '1' }],
-  ['other agents', GROK, { name: 'orca', version: '1' }]
-])('initializes %s with the identity that unlocks its models', async (_label, spec, expected) => {
-  expect(await initializeClientInfo(spec)).toEqual(expected)
-})
+  ['the pinned managed server', MANAGED, undefined, ZED],
+  ["the host's agy 1.5.2", HOST, '1.5.2', ORCA],
+  ["the host's agy of unknown version", HOST, undefined, ZED],
+  ['other agents', GROK, undefined, ORCA]
+])(
+  'initializes %s with the identity that unlocks its models',
+  async (_label, spec, version, expected) => {
+    expect(await initializeClientInfo(spec, version)).toEqual(expected)
+  }
+)

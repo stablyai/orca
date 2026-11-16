@@ -32,8 +32,9 @@ export type AcpLaunchSpec = {
   /** Scrubs inherited Orca plumbing and returns keys to omit entirely. */
   scrubEnvironment?(env: Record<string, string>, inherited: NodeJS.ProcessEnv): string[]
   dialect: AcpDialect
-  /** Sent by initialize when the agent grants features by client name; Orca's otherwise. */
-  clientInfo?: Implementation
+  /** Initialize's identity for the launched version (null when unknown), for agents that grant
+   *  features by client name; absent sends Orca's. */
+  clientInfo?(version: string | null): Implementation
   loginCommand: readonly string[]
   /** Selects authentication from the execution host's resolved launch inputs. */
   authMethod?(input: {
