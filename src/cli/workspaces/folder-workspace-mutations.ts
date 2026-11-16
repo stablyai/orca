@@ -25,6 +25,8 @@ import { RuntimeClientError } from '../runtime/connection/types'
 import type { RuntimeClient } from '../runtime/client'
 import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { getWorktreeReadFlags } from './worktree-unread-flag'
+import { getWorktreeSetTagParams } from './worktree-tag-flags'
+import { applyWorktreeTagChanges } from '../../shared/worktree/metadata/worktree-tags'
 
 type Flags = Map<string, string | boolean>
 
@@ -106,6 +108,7 @@ async function setFolderWorkspace(
   const workspaceStatus = getOptionalStringFlag(flags, 'workspace-status')
   const { isUnread } = getWorktreeReadFlags(flags)
   await assertUniqueIdMutationSupported(client)
+  const tags = await getFolderWorkspaceSetTags(client, flags, folderId)
   const updated = await client.call<{ folderWorkspace: FolderWorkspace | null }>(
     'folderWorkspace.update',
     {
@@ -115,7 +118,8 @@ async function setFolderWorkspace(
         ...(displayName !== undefined ? { name: displayName } : {}),
         ...(comment !== undefined ? { comment } : {}),
         ...(workspaceStatus !== undefined ? { workspaceStatus } : {}),
-        ...(isUnread !== undefined ? { isUnread } : {})
+        ...(isUnread !== undefined ? { isUnread } : {}),
+        ...(tags !== undefined ? { tags } : {})
       }
     }
   )
@@ -123,6 +127,27 @@ async function setFolderWorkspace(
     throw folderGone(folderId)
   }
   return showFolderWorkspace(client, folderId)
+}
+
+/** folderWorkspace.update takes the whole tag set, so --tag/--untag apply to the folder's current tags. */
+async function getFolderWorkspaceSetTags(
+  client: RuntimeClient,
+  flags: Flags,
+  folderId: string
+): Promise<string[] | undefined> {
+  const params = await getWorktreeSetTagParams(flags, client)
+  if (!params) {
+    return undefined
+  }
+  const current =
+    params.addTags || params.removeTags
+      ? (await showFolderWorkspace(client, folderId)).result.worktree.tags
+      : undefined
+  return applyWorktreeTagChanges(current, {
+    replace: params.tags,
+    add: params.addTags,
+    remove: params.removeTags
+  })
 }
 
 /** `worktree rm` on a folder workspace: Orca forgets it; the folder stays on disk. False for any other selector. */
