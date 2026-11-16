@@ -42,7 +42,7 @@ export type CodexAtRestSkillsDeps = CodexStructuredInvocationDeps & {
   resolveLaunchArgs: () => Promise<string[]> | string[]
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
   /** Apply launch-time home sync so the probe sees the same configuration. */
-  prepareHome?: (home: string) => void
+  prepareHome?: (home: string) => void | Promise<void>
   now?: () => number
   runSession?: typeof runCodexAppServerSession
   sleep?: (ms: number) => Promise<void>
@@ -208,7 +208,7 @@ export async function probe(
         }
         if (batch.length > 0) {
           try {
-            deps.prepareHome?.(pool.accountHomePath)
+            await deps.prepareHome?.(pool.accountHomePath)
             batch.forEach((request) => request.admitted())
             await answer(rpc, batch, signal)
           } catch (error) {

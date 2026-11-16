@@ -23,6 +23,33 @@ afterEach(() => {
 })
 
 describe('upsertHookTrustEntries', () => {
+  it('leaves an unchanged approval followed by another table byte-identical', () => {
+    const original = [
+      '[hooks.state."/home/me/.codex/hooks.json:stop:0:0"]',
+      'enabled = true',
+      'trusted_hash = "sha256:KEEP"',
+      '',
+      '[features]',
+      'daemon_auto_start = false',
+      ''
+    ].join('\n')
+    writeFileSync(configPath, original, 'utf-8')
+
+    upsertHookTrustEntries(configPath, [
+      {
+        sourcePath: '/home/me/.codex/hooks.json',
+        eventLabel: 'stop',
+        groupIndex: 0,
+        handlerIndex: 0,
+        command: 'echo stop',
+        trustedHash: 'sha256:KEEP',
+        enabled: true
+      }
+    ])
+
+    expect(readFileSync(configPath, 'utf-8')).toBe(original)
+  })
+
   it('collapses duplicate blocks for the same hook key while preserving unrelated hook state', () => {
     const sourcePath = 'C:\\Users\\me\\AppData\\Roaming\\orca\\codex-runtime-home\\home\\hooks.json'
     const key = `${sourcePath}:session_start:0:0`
@@ -179,6 +206,7 @@ describe('upsertHookTrustEntries batch order', () => {
         '[hooks.state."/x/hooks.json:pre_tool_use:0:0"]',
         'enabled = true',
         'trusted_hash = "A"',
+        '',
         '[hooks.state."/x/hooks.json:stop:0:0"]',
         'enabled = true',
         'trusted_hash = "B"',

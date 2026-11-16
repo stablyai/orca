@@ -166,9 +166,15 @@ function upsertTrustSlots(
   if (otherMatches.length > 0) {
     return false
   }
+  const firstText = slots[0].chunks.join('')
   const enabled = explicitEnabled ?? !slots.some((slot) => isBlockDisabled(slot.chunks.join('')))
   const block = buildTrustBlocks(keys, hash, enabled)
-  return replaceHookTrustSlots(document, slots, `${block}\n`, normalizedKeys)
+  return replaceHookTrustSlots(
+    document,
+    slots,
+    `${block}${keepBlockSeparator(firstText)}`,
+    normalizedKeys
+  )
 }
 
 function upsertTrustBlocks(
@@ -193,11 +199,17 @@ function upsertTrustBlocks(
   ranges.forEach((range, index) => {
     deduped += content.slice(cursor, range.start)
     if (index === 0) {
-      deduped += `${block}\n`
+      deduped += `${block}${keepBlockSeparator(content.slice(range.start, range.end))}`
     }
     cursor = range.end
   })
   return deduped + content.slice(cursor)
+}
+
+// Keep the gap before the next table so rewriting an unchanged approval leaves the file unchanged.
+function keepBlockSeparator(replaced: string): string {
+  const separator = replaced.slice(replaced.trimEnd().length)
+  return separator.includes('\n') ? separator : '\n'
 }
 
 // The header line cannot match, so scanning the whole range equals scanning its body.
