@@ -4,9 +4,13 @@ import {
   releaseTerminalFocusForOutsidePointerDown,
   releaseTerminalFocusForWindowBlur,
   resyncTerminalFocusForWindowFocus,
-  setRegularTerminalInputFocusAttribute
+  setRegularTerminalInputFocusAttribute,
+  syncFocusAfterFailedReclaim
 } from './regular-terminal-focus-ownership'
-import { refreshTerminalImeInputContext } from '../ime/terminal-ime-input-context-refresh'
+import {
+  isTextEntryElement,
+  refreshTerminalImeInputContext
+} from '../ime/terminal-ime-input-context-refresh'
 
 export function useRegularTerminalInputFocus({
   containerRef
@@ -34,10 +38,14 @@ export function useRegularTerminalInputFocus({
         return
       }
       syncFocused(true)
-      if (isXtermHelperTextarea(event.relatedTarget) && event.relatedTarget !== event.target) {
+      // Why any text field: macOS keeps the input context of the field focus came from (an address
+      // bar, a browser page's IME field, another terminal), so composed text never arrives (#23864).
+      if (isTextEntryElement(event.relatedTarget) && event.relatedTarget !== event.target) {
         refreshingImeInputContext = true
         try {
-          refreshTerminalImeInputContext(event.target, {})
+          refreshTerminalImeInputContext(event.target, {
+            onRefocusSkipped: (active) => syncFocusAfterFailedReclaim(active, syncFocused)
+          })
         } finally {
           refreshingImeInputContext = false
         }

@@ -10,6 +10,23 @@ export type TerminalImeInputContextRefreshOptions = {
 }
 
 const refreshingHelpers = new WeakSet<HTMLElement>()
+// Why: overlapping refreshes drop the first typed character (#9233); one per frame is enough.
+const pendingRefocus = new WeakSet<HTMLElement>()
+
+/** A field the OS input method composes into, whose input context can outlive its focus. */
+export function isTextEntryElement(target: EventTarget | null): boolean {
+  if (target instanceof HTMLTextAreaElement) {
+    return true
+  }
+  if (target instanceof HTMLInputElement) {
+    return TEXT_INPUT_TYPES.has(target.type)
+  }
+  return target instanceof HTMLElement && target.isContentEditable
+}
+
+// Why an allowlist: date, color, range and the like never compose, and a needless refresh risks #9233.
+// `type` reads back as 'text' when the attribute is missing or unknown.
+const TEXT_INPUT_TYPES = new Set(['text', 'search', 'email', 'password', 'tel', 'url'])
 
 export function isTerminalImeInputContextRefreshing(target: EventTarget | null): boolean {
   return target instanceof HTMLElement && refreshingHelpers.has(target)
@@ -43,6 +60,9 @@ export function refreshTerminalImeInputContext(
     return false
   }
 
+  if (pendingRefocus.has(helper)) {
+    return true
+  }
   const ownerDocument = helper.ownerDocument
   // Blur/refocus rebuilds stale macOS NSTextInputContext after xterm focus handoffs so CJK input resumes.
   refreshingHelpers.add(helper)
@@ -53,7 +73,9 @@ export function refreshTerminalImeInputContext(
   }
 
   const schedule = options.scheduleRefocus ?? scheduleNextFrame
+  pendingRefocus.add(helper)
   schedule(() => {
+    pendingRefocus.delete(helper)
     if (!helper.isConnected) {
       options.onRefocusSkipped?.(ownerDocument.activeElement)
       return
