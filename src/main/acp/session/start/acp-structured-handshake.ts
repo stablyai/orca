@@ -129,12 +129,16 @@ export async function initializeAcpStructuredSession(
     } catch (refused) {
       let error: unknown = refused
       try {
-        const movedTo = await acpSessionOtherFolder(refused, resume.sessionId, launch.cwd, {
-          dialect: spec.dialect,
-          initialized,
-          connection,
-          assertStarting
-        })
+        const movedTo = await retryAcpRequest(
+          () =>
+            acpSessionOtherFolder(refused, resume.sessionId, launch.cwd, {
+              dialect: spec.dialect,
+              initialized,
+              connection,
+              assertStarting
+            }),
+          { signal: input.signal, assertCurrent: assertStarting }
+        )
         if (movedTo) {
           ;({ opened: started, frames: replayed, lane: liveLane } = await reopenIn(movedTo))
         }

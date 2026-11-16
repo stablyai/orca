@@ -226,7 +226,8 @@ describe('reattaching a Grok chat the journal holds', () => {
 })
 
 describe('reopening an OpenCode chat whose conversation the agent moved to another folder', () => {
-  it('reopens it in the folder OpenCode lists, starting no new session', async () => {
+  it('reopens it in the folder OpenCode lists after a temporary listing failure, starting no new session', async () => {
+    let listingFailed = false
     const rig = await openAcpAdapterRig({
       spec: acpLaunchSpecFor('opencode2')!,
       launch: {
@@ -253,14 +254,21 @@ describe('reopening an OpenCode chat whose conversation the agent moved to anoth
           }
           agent.reply(frame, { configOptions: GROK_CONFIG_OPTIONS })
         })
-        agent.on('session/list', (frame) =>
+        agent.on('session/list', (frame) => {
+          if (!listingFailed) {
+            listingFailed = true
+            agent.fail(frame, -32603, 'Internal service failure', {
+              errorName: 'ServiceUnavailableError'
+            })
+            return
+          }
           agent.reply(frame, {
             sessions: [
               { sessionId: 'ses_other', cwd: '/workspace/project' },
               { sessionId: 'ses_moved', cwd: '/workspace/project-worktree' }
             ]
           })
-        )
+        })
       }
     })
     await rig.acquire()
