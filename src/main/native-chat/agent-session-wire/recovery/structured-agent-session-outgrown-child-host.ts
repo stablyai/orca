@@ -60,6 +60,9 @@ export function createStructuredAgentSessionOutgrownChildHost(input: {
   const unlessStopping = async (sessionId: string) =>
     (await clientDelivery.readStopping(sessionId)) ? undefined : sessions.get(sessionId)
   const holds = new AccountMoveHolds(input.wake, () => deps.accountMoveWakes, now, sessions)
+  // Reads run outside the chat's lane; only the newest may set or clear its hold.
+  const latestRead = new Map<string, number>()
+  let reads = 0
 
   return {
     retainedWork,
@@ -101,6 +104,8 @@ export function createStructuredAgentSessionOutgrownChildHost(input: {
       })
     },
     accountTransition: (async (sessionId, launchHome) => {
+      const read = ++reads
+      latestRead.set(sessionId, read)
       const transition = await readStructuredAgentSessionAccountTransition(
         await unlessStopping(sessionId),
         {
@@ -109,10 +114,14 @@ export function createStructuredAgentSessionOutgrownChildHost(input: {
           now
         }
       )
-      holds.observe(sessions.get(sessionId), sessionId, transition)
+      if (latestRead.get(sessionId) === read) {
+        latestRead.delete(sessionId)
+        holds.observe(sessions.get(sessionId), sessionId, transition)
+      }
       return transition
     }) satisfies StructuredAgentSessionAccountTransitionRead,
     accountMoveSettled: (sessionId: string): null => {
+      latestRead.delete(sessionId)
       holds.observe(sessions.get(sessionId), sessionId, null)
       return null
     },
