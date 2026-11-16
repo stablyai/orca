@@ -1240,6 +1240,12 @@ html.native-shell .app-layout {
   transform: translateY(-50%);
 }
 
+/* Wide (in-flow) seams paint the editor surface so panes don't read as floating cards, in every window mode. */
+.tab-group-split-resize-handle.is-wide,
+:root:is([data-window-material], [data-theme-background]) .tab-group-split-resize-handle.is-wide {
+  background-color: var(--editor-surface);
+}
+
 /* Wide (in-flow) seams extend the line into a perpendicular parent gap; the parent owns that hit area. */
 .tab-group-split-resize-handle.is-wide::after {
   pointer-events: none;
