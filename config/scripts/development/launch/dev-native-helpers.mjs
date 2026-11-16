@@ -1,5 +1,7 @@
 import { buildSwiftCliHelper } from '../../native-build/macos/swift-cli-helper-macos.mjs'
 
+export { buildDevSwiftCliHelpers } from '../../native-build/macos/swift-cli-helper-macos.mjs'
+
 /**
  * NSScreen's notch geometry has no Electron API, so without this helper every MacBook renders the
  * notch as a centred capsule in dev and the hardware-notch path is never exercised.

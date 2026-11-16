@@ -24,7 +24,6 @@ import {
   isDevBundleInUse,
   selectStaleDevBundleDirs
 } from '../electron-bundle-cache/dev-electron-bundle-cache.mjs'
-import { buildDevScreenGeometryHelper } from './dev-screen-geometry-helper.mjs'
 import { startDevStorageReclaim } from '../../worktree-storage/dev-storage-reclaim.mjs'
 import {
   announceDevInstance,
@@ -46,7 +45,7 @@ import {
 import { withRolldownThreadLimit } from '../../tool-invocation/rolldown-thread-limit.mjs'
 import { withDevRolldownRuntimeEnv } from './dev-rolldown-runtime-env.mjs'
 import { copyPrivateTree } from '../../artifact-storage/reflink-copy/space-sharing-copy.mjs'
-import { buildDevSwiftCliHelpers } from '../../native-build/macos/swift-cli-helper-macos.mjs'
+import { buildDevScreenGeometryHelper, buildDevSwiftCliHelpers } from './dev-native-helpers.mjs'
 import {
   DEV_BUNDLE_ID,
   getDevBundlePlistPatches,
