@@ -83,7 +83,7 @@ it('preserves post-capture changes and binding removals across an in-flight snap
   restarted.stop()
 })
 
-it('recovers a rejected Promise with a snapshot and permanently stops a superseded sender', async () => {
+it('recovers a rejected Promise with a snapshot and re-arms a superseded sender on the next accepted graph', async () => {
   const batches: RendererStatusPublication[] = []
   let attempt = 0
   const send = vi.fn(async (batch: RendererStatusPublication): Promise<RendererStatusAck> => {
@@ -91,23 +91,37 @@ it('recovers a rejected Promise with a snapshot and permanently stops a supersed
     if (++attempt === 1) {
       throw new Error('IPC unavailable')
     }
-    return attempt === 2 ? { accepted: true } : { accepted: false, reason: 'superseded' }
+    return attempt === 3 ? { accepted: false, reason: 'superseded' } : { accepted: true }
   })
+  const requestGraph = vi.fn()
   const sender = new RendererStatusSender(
     'old',
     () => null,
     () => [],
-    send
+    send,
+    { seq: 0 },
+    requestGraph
   )
+  sender.changed(null)
+  expect(requestGraph).toHaveBeenCalledTimes(1)
   sender.graphAccepted()
   await vi.advanceTimersToNextTimerAsync()
   await vi.advanceTimersToNextTimerAsync()
   expect(batches.map((batch) => batch.type)).toEqual(['snapshot', 'snapshot'])
   sender.changed(null)
+  expect(requestGraph).toHaveBeenCalledTimes(1)
   await vi.advanceTimersToNextTimerAsync()
-  sender.graphAccepted()
   sender.changed(null)
   await vi.runAllTimersAsync()
   expect(send).toHaveBeenCalledTimes(3)
+  expect(requestGraph).toHaveBeenCalledTimes(2)
+  sender.graphAccepted()
+  await vi.runAllTimersAsync()
+  expect(batches.map((batch) => batch.type)).toEqual([
+    'snapshot',
+    'snapshot',
+    'snapshot',
+    'snapshot'
+  ])
   sender.stop()
 })

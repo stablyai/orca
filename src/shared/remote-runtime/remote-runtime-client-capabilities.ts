@@ -15,7 +15,7 @@ import {
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
   SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY
 } from './protocol/session-tabs-runtime-capabilities'
-import type { RuntimeCapability } from '../protocol-version'
+import type { RuntimeCapability } from './protocol/protocol-version'
 import {
   TERMINAL_QUICK_COMMAND_LARGE_LISTS_RUNTIME_CAPABILITY,
   TERMINAL_QUICK_COMMAND_LONG_PROMPTS_RUNTIME_CAPABILITY

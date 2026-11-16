@@ -1,4 +1,5 @@
 import type { SqliteRow } from '../../sqlite/sqlite-statement'
+import { CODEX_ASYNC_QUESTION_TOOL } from '../../../shared/native-chat/input/questions/codex-async-question-input'
 import { AGENT_SESSION_ITEM_WIRE_VERSION } from '../agent-session-wire/publication/history/agent-session-item-presentation-contract'
 import {
   readJournalDomainStopStates,
@@ -56,6 +57,16 @@ export function* sqlJournalStatusItems(
       predicates.push(
         "root=1 AND message_role='assistant' AND command_entry=0 AND assistant_prose=1"
       )
+      break
+    case 'async-question-candidates':
+      // A text match keeps per-commit status reads from decoding every reply; the shared rule decides.
+      predicates.push(
+        "root=1 AND message_role='assistant' AND command_entry=0 AND instr(payload_json,?)>0"
+      )
+      params.push(CODEX_ASYNC_QUESTION_TOOL)
+      predicates.push('(sequence,sequence_index,ordinal)>(?,?,?)')
+      params.push(selection.after.sequence, selection.after.sequenceIndex, selection.after.ordinal)
+      ascending = true
       break
     case 'assistant-exists':
       predicates.push("message_role='assistant'")

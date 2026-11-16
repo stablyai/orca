@@ -30,7 +30,7 @@ import { applyCumulativeAck } from '../delivery/accounting'
 import { sendModelRestoreNeededMarker } from '../delivery/payload'
 import { isMainWindowPtyIpcEvent } from './write-input'
 import { acknowledgePaintedColdRestore } from './painted-cold-restore-ack'
-import type { PaintedRestoreAck } from '../../../../shared/painted-restore-ack'
+import type { PaintedRestoreAck } from '../../../../shared/terminal/replay/painted-restore-ack'
 import type { PtyIpcSession } from '../session'
 
 export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {

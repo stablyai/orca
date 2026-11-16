@@ -11,7 +11,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { setAppEnvironment } from '../../../shared/app-environment'
+import { setAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 
 const { getPathMock } = vi.hoisted(() => ({
   getPathMock: vi.fn<(name: string) => string>()

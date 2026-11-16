@@ -38,7 +38,7 @@ import {
   readProfileStateCopySavedTimes
 } from './persistence/profile-state/startup/profile-state-startup-recovery-dialog'
 import { profileStateDesktopRecoveryArgs } from './startup/profile-startup/profile-state-recovery-preflight'
-import { profileStateRepairSectionApproval } from '../shared/profile-state-recovery-command'
+import { profileStateRepairSectionApproval } from '../shared/orca-profiles/profile-state-recovery-command'
 import { prepareEarlyMainUiLanguage, translateMain } from './i18n/main-i18n'
 import { ProfileStateRecoveryRequiredError } from './persistence/profile-state/recovery/profile-state-recovery-required'
 import { getProfileUserDataPath } from './orca-profiles/profile-storage-paths'
@@ -53,7 +53,10 @@ import { installWindowsIsolatedSpawner } from './startup/windows-startup/windows
 import { dropE2eSpawnLogOutsideE2e } from './startup/testing/e2e-spawn-log-env'
 import type { MainWindowOpenOptions } from './window/main-window/main-window-contracts'
 import type { DesktopActivationRequest } from './startup/serve-launch/serve-desktop-activation'
-import { argvRequestsBackgroundOpen, BACKGROUND_OPEN_ARG } from '../shared/background-open-argv'
+import {
+  argvRequestsBackgroundOpen,
+  BACKGROUND_OPEN_ARG
+} from '../shared/app-lifecycle/launch/background-open-argv'
 import { setBackgroundWindowOpener } from './window/activation/background-window-open'
 
 // Before anything spawns, so no daemon, PTY or agent inherits it outside e2e.

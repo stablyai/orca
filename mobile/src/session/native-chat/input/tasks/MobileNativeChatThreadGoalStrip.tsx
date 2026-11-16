@@ -15,7 +15,6 @@ import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
-import { COMPOSER_TUCK } from '../../composer/field/mobile-native-chat-composer-styles'
 import { queuedMessageStyles } from '../queued-messages/mobile-native-chat-queued-message-styles'
 import type { MobileStructuredThreadGoal } from './use-mobile-structured-thread-goal'
 
@@ -67,7 +66,10 @@ export function MobileNativeChatThreadGoalStrip({
     </View>
   )
   return (
-    <View style={[queuedMessageStyles.box, styles.tab]} testID="thread-goal-strip">
+    <View
+      style={[queuedMessageStyles.box, queuedMessageStyles.composerTab]}
+      testID="thread-goal-strip"
+    >
       {expanded ? (
         <>
           <View style={styles.openLine}>
@@ -177,11 +179,6 @@ const LINE_MIN_HEIGHT = 34
 const CHEVRON_SIZE = 32
 
 const styles = themedStyleSheet(() => ({
-  // The queued-message box, docked on the composer's top edge and tucked under it.
-  tab: {
-    marginHorizontal: spacing.xs,
-    marginBottom: -COMPOSER_TUCK
-  },
   line: {
     minHeight: LINE_MIN_HEIGHT,
     flexDirection: 'row',

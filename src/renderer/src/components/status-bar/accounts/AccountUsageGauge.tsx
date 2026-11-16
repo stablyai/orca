@@ -73,9 +73,11 @@ export function AccountUsageGauge({
       aria-label={formatUsagePercentageLabel(headline.window.usedPercent, display, t)}
       className={`flex items-center justify-end gap-2 ${isFetching ? 'animate-pulse motion-reduce:animate-none' : ''}`}
     >
+      {/* Why health: account rows only render inside a provider's details card. */}
       <UsageBar
         usedPercent={headline.window.usedPercent}
         display={display}
+        tone="health"
         className="h-[5px] w-[30px] shrink-0"
       />
       <UsageValue

@@ -25,3 +25,9 @@ export function structuredAgentSessionModePickDraft(
     caret: tokenStart
   }
 }
+
+/** Goal mode strips an optional /goal prefix instead of treating it as objective text. */
+export function structuredAgentSessionGoalObjective(text: string): string {
+  const goal = /^\/goal(?:\s+([\s\S]*))?$/i.exec(text.trimEnd())
+  return goal ? (goal[1]?.trim() ?? '') : text.trim()
+}

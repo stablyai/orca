@@ -86,7 +86,7 @@ describe('setAgentStatuses', () => {
     store.setState({ terminalLayoutsByTabId: { 'tab-1': layout } })
     store.getState().setAgentStatus(FIRST_PANE, { state: 'working', prompt: 'same turn' })
     const row = store.getState().agentStatusByPaneKey.get(FIRST_PANE)
-    const stop = startRendererStatusPublication(store)
+    const stop = startRendererStatusPublication(store, () => undefined)
     try {
       rendererStatusGraphAccepted()
       await vi.advanceTimersByTimeAsync(16)
@@ -178,7 +178,7 @@ describe('setAgentStatuses', () => {
         getPtyIdForPane: () => 'live',
         getTabWideAgentHintLeafId: () => leafId
       })
-      const stop = startRendererStatusPublication(store)
+      const stop = startRendererStatusPublication(store, () => undefined)
       try {
         rendererStatusGraphAccepted()
         await vi.advanceTimersByTimeAsync(16)

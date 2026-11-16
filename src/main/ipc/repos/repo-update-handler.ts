@@ -74,6 +74,7 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
             | null
           hiddenAt?: Repo['hiddenAt'] | null
           ghAccount?: GhAccountBinding | null
+          browserProfileId?: string | null
         }
       }
     ): Promise<Repo | null> => {

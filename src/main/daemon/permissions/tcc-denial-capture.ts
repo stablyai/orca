@@ -10,7 +10,7 @@ import {
   bucketHelperAge,
   type FullDiskAccessValue,
   type HelperOrigin
-} from '../../../shared/daemon-tcc-denial-capture'
+} from '../../../shared/terminal/daemon/daemon-tcc-denial-capture'
 import { LOCAL_BUILD_COMPATIBILITY_CONTRACT } from '../../../shared/remote-runtime/orcad-distribution/local-build-compatibility-contract'
 import type { DeveloperPermissionStatus } from '../../../shared/developer-permissions-types'
 import type { EventProps } from '../../../shared/telemetry/telemetry-event-classification'
