@@ -21,7 +21,7 @@ import {
   forkSourceTooltipText
 } from '../../native-chat/fork/fork-marked-name-text'
 import { stripLeadingAgentTitleDecoration } from '../../../../../shared/agent-status/title/agent-title-decoration'
-import { defaultAgentChatLabel } from '../../../../../shared/agent-session/agent-session-chat-label'
+import { defaultAgentChatLabel } from '../../../../../shared/agent-session/conversation-naming/agent-session-chat-label'
 import { useAppStore } from '../../../store/index'
 import { agentTypeToIconAgent } from '../../../../../shared/agent-status/presentation/agent-type-icon-agent'
 import { formatSimulatorTabLabel } from '@/lib/simulator/tabs/simulator-tab-label'

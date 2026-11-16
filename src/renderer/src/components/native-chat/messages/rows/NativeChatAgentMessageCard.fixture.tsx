@@ -5,7 +5,7 @@ import {
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
-import type { AgentMessageSource } from '../../../../../../shared/agent-session/agent-session-message-source'
+import type { AgentMessageSource } from '../../../../../../shared/agent-session/journal/agent-session-message-source'
 import { NativeChatAgentMessageCard } from './NativeChatAgentMessageCard'
 import { MessageRow } from './NativeChatMessageRow'
 import { projectStructuredAgentStartItem } from '../../../../../../shared/native-chat/transcript/messages/structured-agent-start-projection'

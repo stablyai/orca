@@ -1,12 +1,12 @@
 import { runCoordinatorKey } from '../../addressing/orchestration-caller-identity'
-import { readAnswerSenderSnapshot } from '../../../../../shared/agent-session/answer-sender-snapshot'
+import { readAnswerSenderSnapshot } from '../../../../../shared/agent-session/journal/answer-sender-snapshot'
 /** Snapshot distinct sender provenance and join mail to its surviving Run, Dispatch and message records. */
 
 import type {
   AgentMessageSource,
   AgentMessageSender,
   OrchestrationMailNotice
-} from '../../../../../shared/agent-session/agent-session-message-source'
+} from '../../../../../shared/agent-session/journal/agent-session-message-source'
 import type { AgentJournalMessageItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { MessageRow } from '../../db/orchestration-records'
 import type { OrchestrationDb } from '../../db/orchestration-db'

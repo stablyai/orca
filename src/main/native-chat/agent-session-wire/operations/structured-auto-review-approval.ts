@@ -1,12 +1,12 @@
 // The person approves one action the agent's automatic review denied, as Codex's own UI offers.
 
-import { readCodexAutoReviewDenialFrame } from '../../../../shared/agent-session/codex-auto-review-denial'
+import { readCodexAutoReviewDenialFrame } from '../../../../shared/agent-session/requests/approvals/codex-auto-review-denial'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   AUTO_REVIEW_APPROVAL_PRESENTATION,
   type AgentSessionAutoReviewApprovalResult
-} from '../../../../shared/agent-session/agent-session-auto-review-approval'
+} from '../../../../shared/agent-session/requests/approvals/agent-session-auto-review-approval'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession

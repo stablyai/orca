@@ -2,7 +2,7 @@
 
 import { homedir } from 'node:os'
 import { delimiter, isAbsolute } from 'node:path'
-import type { AgentSessionAgentAvailability } from '../../../../shared/agent-session/agent-session-agent-availability'
+import type { AgentSessionAgentAvailability } from '../../../../shared/agent-session/agent-discovery/agent-session-agent-availability'
 import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
@@ -21,7 +21,7 @@ import {
 import type { StructuredAgentRuntimeMetadata } from '../installation/structured-agent-runtime-registration-types'
 import { recaptureHostShellEnvironment } from '../environment/structured-agent-shell-environment'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
-import { structuredChatUnavailableOnPlatform } from '../../../../shared/agent-session/structured-chat-platform-support'
+import { structuredChatUnavailableOnPlatform } from '../../../../shared/agent-session/capabilities/structured-chat-platform-support'
 
 export type StructuredAgentAvailabilityReader = (
   agents: readonly AgentSessionAgentAvailability[]

@@ -1,4 +1,4 @@
-import type { AgentSessionBackgroundTask } from '../../../../shared/agent-session/agent-session-background-task-wire'
+import type { AgentSessionBackgroundTask } from '../../../../shared/agent-session/background-tasks/agent-session-background-task-wire'
 import {
   boundCodexCommandDescription,
   codexChildCommandDescription

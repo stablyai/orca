@@ -1,7 +1,7 @@
 import {
   CLAUDE_MODEL_FALLBACK_COPY,
   claudeModelFallbackLabels
-} from '../../../../../../src/shared/native-chat/claude-model-fallback'
+} from '../../../../../../src/shared/native-chat/transcript/notices/claude-model-fallback'
 import { useContext, useId, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { AlertCircle, AlertTriangle, Info } from 'lucide-react-native'
@@ -10,7 +10,7 @@ import {
   nativeChatNoticeBlock,
   nativeChatNoticeLook,
   type NativeChatNoticeTone
-} from '../../../../../../src/shared/native-chat/native-chat-notice'
+} from '../../../../../../src/shared/native-chat/transcript/notices/native-chat-notice'
 import {
   isTextBlock,
   type NativeChatBlock,
@@ -20,7 +20,7 @@ import { readWholeAgentSessionFailureFact } from '../../../../../../src/shared/a
 import { agentSessionFailureDetailText } from '../../../../../../src/shared/agent-session/failures/agent-session-failure-quoted-detail'
 import { agentSessionFailureSentence } from '../../../../../../src/shared/agent-session/failures/agent-session-failure-words'
 import { agentSessionSignInCommand } from '../../../../../../src/shared/agent-session/lifecycle/launch/agent-session-setup-commands'
-import { nativeChatOrcaStopRowText } from '../../../../../../src/shared/native-chat/native-chat-orca-stop-words'
+import { nativeChatOrcaStopRowText } from '../../../../../../src/shared/native-chat/transcript/continuation/native-chat-orca-stop-words'
 import {
   MobileNativeChatForkedFromContext,
   MobileNativeChatNoticeContext,
@@ -39,7 +39,7 @@ import { nativeChatUsageLimitText } from './native-chat-usage-limit-copy'
 import { sayMobileAgentSessionFailure } from '../../agent-session/agent-session-failure-copy'
 import type { Translate } from '../../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION } from '../../../../../../src/shared/native-chat/native-chat-stopped-before-start'
+import { NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION } from '../../../../../../src/shared/native-chat/transcript/pending-sends/native-chat-stopped-before-start'
 import { MONO_SIZE, TEXT_SIZE, scaledType } from '../messages/mobile-native-chat-message-styles'
 import { MobileNativeChatOwnedScrollView } from '../viewport/MobileNativeChatOwnedScrollView'
 import { toolStyles } from '../tool-results/mobile-native-chat-tool-styles'

@@ -1,6 +1,6 @@
 import type { JournalDomainItemWrite, JournalDomainItemCommit } from './journal-domain-item-write'
 import { capturePRPendingAction } from '../../github/pr-watch/pr-pending-actions'
-import { PULL_REQUEST_EVENT_PRESENTATION } from '../../../shared/native-chat/native-chat-pull-request-event'
+import { PULL_REQUEST_EVENT_PRESENTATION } from '../../../shared/native-chat/transcript/notices/native-chat-pull-request-event'
 import { JournalSqlScope } from './journal-sql-scope'
 import {
   journalDomainNewestTurn,
