@@ -1,3 +1,11 @@
+import { toast } from 'sonner'
+import { useAppStore } from '@/store'
+import { translate } from '@/i18n/i18n'
+import { isModalSurfaceIdle } from '@/lib/workspace/creation/workspace-composer-pane-surface'
+import {
+  formatWorkspaceCreateError,
+  getWorkspaceCreateErrorToastMessage
+} from '@/lib/workspace/creation/workspace-create-error-format'
 import type { useComposerState } from '@/hooks/useComposerState'
 import type { ComposerModalData } from './composer-modal-data'
 
@@ -23,4 +31,23 @@ export function buildComposerRecoverySnapshot(
     linkedWorkItem: cardProps.linkedWorkItem,
     recovery
   }
+}
+
+export function showComposerRecoveryError(
+  error: unknown,
+  snapshot: ComposerModalData,
+  isSubmissionCancelled: () => boolean,
+  restorePrompt?: () => void
+): void {
+  toast.error(getWorkspaceCreateErrorToastMessage(formatWorkspaceCreateError(error)), {
+    action: {
+      label: translate('auto.lib.composerCreateHandoff.reopen', 'Reopen'),
+      onClick: () => {
+        if (!isSubmissionCancelled() && isModalSurfaceIdle(useAppStore.getState())) {
+          restorePrompt?.()
+          useAppStore.getState().openModal('new-workspace-composer', snapshot)
+        }
+      }
+    }
+  })
 }

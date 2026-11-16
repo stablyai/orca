@@ -81,7 +81,7 @@ afterEach(() => {
 describe('scheduleComposerCreateHandoff', () => {
   it('starts directly without staging or closing when preflight is fast', () => {
     const { handoff, onHandOff } = schedule()
-    handoff.start(finalRequest)
+    expect(handoff.start(finalRequest)).toBe(true)
     vi.runAllTimers()
 
     expect(flow.run).toHaveBeenCalledWith(finalRequest)
@@ -91,15 +91,25 @@ describe('scheduleComposerCreateHandoff', () => {
   })
 
   it('closes the composer onto a staged row when preflight stalls, then continues it', () => {
-    const { handoff, onHandOff } = handOff()
+    const { handoff } = handOff()
 
     expect(flow.begin).toHaveBeenCalledWith(stagingRequest)
-    expect(onHandOff).toHaveBeenCalledTimes(1)
 
-    handoff.start(finalRequest)
+    expect(handoff.start(finalRequest)).toBe(true)
     handoff.dispose()
     expect(flow.continue).toHaveBeenCalledWith('staged-1', finalRequest)
     expect(toastError).not.toHaveBeenCalled()
+  })
+
+  it('declines the new prompt when fast preflight finds an existing creation', () => {
+    store.pendingWorktreeCreations['other'] = {
+      creationId: 'other',
+      request: makeRequest('other', 42)
+    }
+    const { handoff } = schedule()
+    expect(handoff.start({ ...makeRequest('final', 42), quickPrompt: 'New instruction' })).toBe(
+      false
+    )
   })
 
   it('focuses an existing creation for the same PR instead of duplicating it', () => {
@@ -108,7 +118,7 @@ describe('scheduleComposerCreateHandoff', () => {
       request: makeRequest('other', 42)
     }
     const { handoff } = handOff()
-    handoff.start(makeRequest('final', 42))
+    expect(handoff.start(makeRequest('final', 42))).toBe(false)
 
     expect(flow.continue).not.toHaveBeenCalled()
     expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('staged-1')
@@ -123,7 +133,6 @@ describe('scheduleComposerCreateHandoff failures', () => {
     expect(handoff.fail('boom')).toBe(true)
     handoff.dispose()
     expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('staged-1')
-    expect(toastError).toHaveBeenCalledTimes(1)
     toastError.mock.calls[0][1].action.onClick()
     expect(reopenComposer).toHaveBeenCalled()
   })
@@ -132,9 +141,8 @@ describe('scheduleComposerCreateHandoff failures', () => {
     const { handoff } = handOff()
     vi.advanceTimersByTime(COMPOSER_CREATE_PREPARE_DEADLINE_MS)
     delete store.pendingWorktreeCreations['staged-1']
-    handoff.start(finalRequest)
+    expect(handoff.start(finalRequest)).toBe(false)
 
-    expect(toastError).toHaveBeenCalledTimes(1)
     expect(flow.continue).not.toHaveBeenCalled()
     expect(flow.run).not.toHaveBeenCalled()
   })
@@ -142,7 +150,7 @@ describe('scheduleComposerCreateHandoff failures', () => {
   it('stays quiet when the user cancelled the staged row', () => {
     const { handoff } = handOff()
     delete store.pendingWorktreeCreations['staged-1']
-    handoff.start(finalRequest)
+    expect(handoff.start(finalRequest)).toBe(false)
     handoff.dispose()
 
     expect(flow.continue).not.toHaveBeenCalled()

@@ -249,15 +249,14 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         return
       }
 
-      if (persistDraft) {
-        clearNewWorkspaceDraft()
-      }
-      options?.onAccepted?.()
-
-      if (handoff) {
-        handoff.start(request)
-      } else {
-        runBackgroundWorktreeCreation(request)
+      const accepted = handoff
+        ? handoff.start(request)
+        : Boolean(runBackgroundWorktreeCreation(request))
+      if (accepted) {
+        if (persistDraft) {
+          clearNewWorkspaceDraft()
+        }
+        options?.onAccepted?.()
       }
 
       // The composer already closed at handoff; closing again could dismiss a newer modal.

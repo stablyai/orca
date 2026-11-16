@@ -1,9 +1,4 @@
 import type { ComposerModalData } from './new-workspace/composer/composer-modal-data'
-import { toast } from 'sonner'
-import {
-  formatWorkspaceCreateError,
-  getWorkspaceCreateErrorToastMessage
-} from '@/lib/workspace/creation/workspace-create-error-format'
 import type {
   AgentPickerDraft,
   AgentPickerEntry
@@ -32,17 +27,19 @@ import { useAgentsOfferedForLaunch } from '@/lib/agent-session/launch/inventory/
 import { shouldAllowComposerEnterSubmitTarget } from '@/lib/workspace/creation/new-workspace-enter-guard'
 import { isScreenSubmitShortcut } from '@/lib/keyboard/screen-submit-shortcut'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
-import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { getWorkspaceComposerInitialFocusTarget } from '@/lib/workspace/creation/workspace-composer-initial-focus'
-import { isModalSurfaceIdle } from '@/lib/workspace/creation/workspace-composer-pane-surface'
 import { DialogComposerHeading } from '@/components/new-workspace/composer/DialogComposerHeading'
 import '@/components/sidebar/workspace-creation/folder/folder-workspace-source-repos'
 import { getFolderWorkspacePrimaryActionLabel } from '@/components/sidebar/workspace-creation/folder/folder-workspace-source-selection'
 import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import type { NativeChatComposerHandle } from '@/components/native-chat/composer/native-chat-composer-types'
-import { buildComposerRecoverySnapshot } from '@/components/new-workspace/composer/composer-recovery-snapshot'
+import { captureWorkspaceComposerPromptRecovery } from '@/components/new-workspace/composer/workspace-composer-prompt-recovery'
+import {
+  buildComposerRecoverySnapshot,
+  showComposerRecoveryError
+} from '@/components/new-workspace/composer/composer-recovery-snapshot'
 
 // Keep Add Project’s clone/SSH machinery outside the composer entry render, matching App loading.
 const HostedAddRepoDialog = lazyWithRetry(
@@ -243,6 +240,7 @@ export function WorkspaceComposerBody({
       if (createDisabled) {
         return false
       }
+      const restorePrompt = promptFirst ? captureWorkspaceComposerPromptRecovery() : undefined
       let accepted = false
       await submitQuick(quickAgent, {
         // Blank Terminal is the setup-only create: no agent, and no extra shell beside setup.
@@ -261,16 +259,7 @@ export function WorkspaceComposerBody({
             agent: quickAgent,
             note: cardProps.note
           })
-          toast.error(getWorkspaceCreateErrorToastMessage(formatWorkspaceCreateError(error)), {
-            action: {
-              label: translate('auto.lib.composerCreateHandoff.reopen', 'Reopen'),
-              onClick: () => {
-                if (!isSubmissionCancelled() && isModalSurfaceIdle(useAppStore.getState())) {
-                  useAppStore.getState().openModal('new-workspace-composer', snapshot)
-                }
-              }
-            }
-          })
+          showComposerRecoveryError(error, snapshot, isSubmissionCancelled, restorePrompt)
         },
         ...quickWorkspacePickerInputs(
           pickerDraft,
@@ -282,6 +271,7 @@ export function WorkspaceComposerBody({
     },
     [
       createDisabled,
+      promptFirst,
       quickAgent,
       launchSelection.choice,
       submitQuick,

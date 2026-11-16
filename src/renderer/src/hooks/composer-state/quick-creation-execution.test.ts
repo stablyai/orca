@@ -4,9 +4,12 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/orca-profiles/constants'
 import { useAppStore } from '@/store'
+import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
 import type { PreparedQuickSubmit } from './composer-submit-model'
 import { useQuickCreationExecution } from './quick-creation-execution'
-const background = vi.hoisted(() => vi.fn())
+const background = vi.hoisted(() =>
+  vi.fn<(request: WorktreeCreationRequest) => string>(() => 'creation-1')
+)
 vi.mock('@/lib/workspace/creation/worktree-creation-flow', () => ({
   runBackgroundWorktreeCreation: background
 }))
@@ -124,13 +127,13 @@ it('carries the accepted route across preparation and retains CLI startup/prompt
         branchIntent: 'open-existing-v2'
       })
       if (route === 'terminal-tui') {
-        expect(request.startup).toMatchObject({
+        expect(request?.startup).toMatchObject({
           launchAgent: 'opencode',
           command: expect.stringContaining('opencode')
         })
-        expect(request.startup.command).toContain('Fix the checkout')
+        expect(request?.startup?.command).toContain('Fix the checkout')
       } else {
-        expect(request.startup).toBeUndefined()
+        expect(request?.startup).toBeUndefined()
       }
     }
   } finally {
@@ -189,4 +192,21 @@ it('reports acceptance only for a creation that goes ahead, so a refused draft i
   await act(create)
   expect(onAccepted).toHaveBeenCalledOnce()
   expect(background).toHaveBeenCalledOnce()
+})
+
+it('does not accept a prompt when the handoff declines the request', async () => {
+  const { result } = renderExecution(getDefaultSettings('/test'), async () => prepared)
+  const onAccepted = vi.fn()
+  await act(() =>
+    result.current.executeQuickCreation(
+      { kind: 'none' },
+      'opencode',
+      'fix',
+      null,
+      'repo-1',
+      { typedPrompt: 'Keep this instruction', onAccepted },
+      { start: () => false, isHandedOff: () => true, fail: () => true, dispose: () => {} }
+    )
+  )
+  expect(onAccepted).not.toHaveBeenCalled()
 })

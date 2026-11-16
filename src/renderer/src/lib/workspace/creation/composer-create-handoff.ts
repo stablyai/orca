@@ -18,8 +18,8 @@ export const COMPOSER_CREATE_HANDOFF_DELAY_MS = 1_500
 export const COMPOSER_CREATE_PREPARE_DEADLINE_MS = 5 * 60_000
 
 export type ComposerCreateHandoff = {
-  /** Starts creation, continuing the staged sidebar row when one exists. */
-  start: (request: WorktreeCreationRequest) => void
+  /** True only when this request was accepted, not when an existing creation was revealed. */
+  start: (request: WorktreeCreationRequest) => boolean
   /** True once a staged sidebar row owns the submit. */
   isHandedOff: () => boolean
   /** Reports a handed-off failure; returns false when the composer still owns it. */
@@ -99,16 +99,12 @@ export function scheduleComposerCreateHandoff({
   return {
     start: (request) => {
       if (finished) {
-        return
+        return false
       }
       finish()
-      if (stagedCreationId === null) {
-        runBackgroundWorktreeCreation(request)
-        return
-      }
       const store = useAppStore.getState()
-      if (!store.pendingWorktreeCreations[stagedCreationId]) {
-        return
+      if (stagedCreationId !== null && !store.pendingWorktreeCreations[stagedCreationId]) {
+        return false
       }
       // Why: the staged row could not carry links resolved during preflight, so dedupe now.
       const others = Object.fromEntries(
@@ -116,14 +112,20 @@ export function scheduleComposerCreateHandoff({
       )
       const existingCreationId = findPendingLinkedWorkItemCreationId(others, request)
       if (existingCreationId) {
-        store.removePendingWorktreeCreation(stagedCreationId)
+        if (stagedCreationId !== null) {
+          store.removePendingWorktreeCreation(stagedCreationId)
+        }
         store.updatePendingWorktreeCreation(existingCreationId, { loaderVisible: true })
         store.setActivePendingWorktreeCreation(existingCreationId)
         store.setActiveView('terminal')
         store.setSidebarOpen(true)
-        return
+        return false
       }
-      continueBackgroundWorktreeCreation(stagedCreationId, request)
+      if (stagedCreationId === null) {
+        runBackgroundWorktreeCreation(request)
+        return true
+      }
+      return continueBackgroundWorktreeCreation(stagedCreationId, request)
     },
     isHandedOff: () => stagedCreationId !== null,
     fail,

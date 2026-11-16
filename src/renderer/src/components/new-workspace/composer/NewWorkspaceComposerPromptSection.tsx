@@ -9,8 +9,7 @@ import { getRepoMainWorktreeId } from '../../../../../shared/worktree/id'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { NewWorkspaceComposerCardProps } from './new-workspace-composer-card-props'
 
-/** One prompt draft for workspace creation, kept across project, host and agent changes. */
-export const WORKSPACE_CREATION_PROMPT_SCOPE_KEY = 'new-workspace-composer:prompt'
+import { WORKSPACE_CREATION_PROMPT_SCOPE_KEY } from './workspace-composer-prompt-recovery'
 const FALLBACK_PROMPT_AGENT: TuiAgent = 'claude'
 
 type NewWorkspaceComposerPromptSectionProps = Pick<
