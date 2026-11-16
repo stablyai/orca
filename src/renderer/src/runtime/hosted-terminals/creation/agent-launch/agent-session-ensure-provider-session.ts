@@ -1,6 +1,6 @@
 import type { AgentProviderSessionMetadata } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { AGENT_SESSION_RESUME_EFFORT_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-create-capabilities'
-import { AGENT_SESSION_RESTORE_SOURCE_PANE_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
+import { AGENT_SESSION_RESUME_EFFORT_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/lifecycle/operations/agent-session-create-capabilities'
+import { AGENT_SESSION_RESTORE_SOURCE_PANE_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
 import { runtimeEnvironmentSupportsCapability } from '../../../rpc/compatibility/runtime-capability-proof'
 import { isRuntimeCompatBlockError } from '../../../rpc/compatibility/runtime-protocol-compat'
 import { toHostSessionPaneKey } from '../../../../../../shared/workspace-layout/terminal-surface-id'

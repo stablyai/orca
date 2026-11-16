@@ -31,19 +31,19 @@ import {
 import {
   isStructuredAgentSessionToolAction,
   structuredAgentSessionToolCallBlock
-} from '../structured-agent-session-tool-call-block'
+} from './messages/structured-agent-session-tool-call-block'
 
 import type { NativeChatBlock, NativeChatMessage } from '../../native-chat/native-chat-types'
 import { sha256 } from '../../hashing/sha256'
-import { readAgentMessageSource } from '../agent-session-message-source'
+import { readAgentMessageSource } from '../journal/agent-session-message-source'
 import { structuredAgentSessionStatusStartedAt } from './structured-agent-session-status-started-at'
 import { owesStructuredAgentSessionWork } from './structured-agent-session-owed-work'
 import type { StructuredAgentSessionWorkScope } from './structured-agent-session-main-agent-working'
 import {
   agentSessionCurrentContextBody,
   agentSessionCurrentContextRows
-} from '../agent-session-context-clear'
-import { nativeChatStatusTurnOutcome } from '../../native-chat/native-chat-orca-stop-cut'
+} from '../conversation-context/agent-session-context-clear'
+import { nativeChatStatusTurnOutcome } from '../../native-chat/transcript/continuation/native-chat-orca-stop-cut'
 
 /** Only transport-clipped output has a fetchable remainder; older saved truncations have none. */
 function toolResult(

@@ -6081,8 +6081,7 @@
           "issueCommand": "Issue コマンド",
           "newVmRecipe": "新しい VM レシピ",
           "vmRecipe": "VM レシピ",
-          "thisRepository": "このリポジトリ",
-          "alwaysTrustRepo": "<repo/> の <code>orca.yaml</code> を常に信頼する"
+          "thisRepository": "このリポジトリ"
         },
         "PendingWorktreeRow": {
           "af21e953d1": "ワークツリーの作成をキャンセルする",
@@ -21985,7 +21984,6 @@
       "annotate": "注釈",
       "grab": "取得",
       "draw": "描き込み",
-      "annotateOptions": "その他の注釈ツール",
       "copyAllNotes": "すべてのメモをコピー",
       "clearNotes": "メモをクリア",
       "resetZoom": "ズームをリセット",
@@ -22984,7 +22982,7 @@
         "restartOne": "セッションを再起動",
         "keep": "そのままにする",
         "session": "Claude セッション",
-        "settingDescription": "再起動すると、ターミナル内の各会話が新しいアカウントで継続されます。",
+        "settingDescription": "再起動すると、ターミナル内の各会話が新しいアカウントで継続されます。処理中のセッションは現在の作業を中断します。",
         "settingTitle": "ターミナルで Claude を実行中にアカウントを切り替える場合",
         "restartingOne": "{{account}} で Claude セッションを 1 件再起動中",
         "restartingOther": "{{account}} で Claude セッションを {{count}} 件再起動中",
@@ -23004,11 +23002,13 @@
         "uncheckedOne": "1 つのターミナルで Claude を確認できませんでした。そこで Claude が実行中の場合、再起動するまで {{previous}} のままになります。",
         "uncheckedOther": "{{count}} 個のターミナルで Claude を確認できませんでした。そこで実行中の Claude は、再起動するまで {{previous}} のままになります。",
         "restartCount_other": "{{count}} 件のセッションを再起動",
-        "reviewBody_other": "ほかの {{count}} 件の Claude セッションは {{next}} に移動されませんでした。",
-        "body_other": "{{count}} 件の Claude セッションがまだ {{previous}} で実行中です。再起動すると、各会話が {{next}} で続行されます。処理中のセッションは待機状態になってから再起動します。",
+        "reviewBody_other": "{{count}} 件の Claude セッションは {{next}} に移動されませんでした。",
+        "body_other": "{{count}} 件の Claude セッションがまだ {{previous}} で実行中です。再起動すると、各会話が {{next}} で続行されます。処理中のセッションは現在の作業を中断してすぐに再起動します。",
         "reasonSharedSession": "別のペインでも開いています",
         "sharedOne": "別のペインで同じ会話が開いているため、1 件の Claude セッションは {{previous}} のままです。再起動すると別のペインの会話が再び開く可能性があります。",
-        "sharedOther": "別のペインで同じ会話が開いているため、{{count}} 件の Claude セッションは {{previous}} のままです。再起動すると別のペインの会話が再び開く可能性があります。"
+        "sharedOther": "別のペインで同じ会話が開いているため、{{count}} 件の Claude セッションは {{previous}} のままです。再起動すると別のペインの会話が再び開く可能性があります。",
+        "strandedOne": "1 件の Claude セッションがまだ {{previous}} で実行中の可能性があります。切り替えるには手動で再起動してください。",
+        "strandedOther": "{{count}} 件の Claude セッションがまだ {{previous}} で実行中の可能性があります。切り替えるには手動で再起動してください。"
       },
       "oauthUsage": {
         "title": "Claude の使用量の定期取得",
@@ -24614,7 +24614,6 @@
     "setupTrust": {
       "reviewTitle": "このオートメーションの新しいセットアップコマンドを承認しますか？",
       "reviewBody": "ブランチの <code>orca.yaml</code> のセットアップコマンドが変更されたため、実行でセットアップがスキップされました。承認すると、以降の実行でこれらのコマンドが使われます。<repo/> を信頼できる場合のみ承認してください。",
-      "approve": "承認",
       "approved": "セットアップを承認しました。このオートメーションの以降の実行で実行されます。",
       "skippedSinceApproved": "ブランチの orca.yaml のセットアップコマンドが変更されたため、この実行ではセットアップが実行されませんでした。その後承認されたため、以降の実行では実行されます。",
       "skippedReview": "セットアップは実行されませんでした。この実行のブランチにある orca.yaml のセットアップコマンドが、このオートメーションで承認済みのものと異なります。以降の実行でセットアップを実行するには、内容を確認してください。",

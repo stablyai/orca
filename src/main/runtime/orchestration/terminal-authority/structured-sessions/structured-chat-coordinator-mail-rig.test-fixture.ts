@@ -10,7 +10,7 @@ import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/age
 import '../../../../../shared/remote-runtime/protocol/protocol-version'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type { StructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-host'
-import { activeProviderContext } from '../../../../../shared/agent-session/agent-session-provider-context'
+import { activeProviderContext } from '../../../../../shared/agent-session/conversation-context/agent-session-provider-context'
 import { OrcaRuntimeService } from '../../../orca-runtime'
 import {
   createStore,
@@ -310,7 +310,11 @@ afterEach(async () => {
 // Asynchronous pointer edges need slack under parallel load.
 export const WAIT = { timeout: 10_000, interval: 10 }
 
-export { isWholeMail, turnText } from './structured-chat-coordinator-fake-codex-fixture'
+export {
+  isMailPointer,
+  isWholeMail,
+  turnText
+} from './structured-chat-coordinator-fake-codex-fixture'
 
 export function restartRuntime(): void {
   runtime = startRuntime()

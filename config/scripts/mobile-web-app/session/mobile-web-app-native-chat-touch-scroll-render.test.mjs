@@ -19,13 +19,17 @@ import { createRoot } from 'react-dom/client'
 import { Text, View } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { MobileNativeChatPageScroll } from './src/session/native-chat/transcript/viewport/MobileNativeChatPageScroll'
+import { publishPageStorage } from './src/mobile-web-shell/bridge/page-storage/page-async-storage'
 import {
   MobileNativeChatPinchZoom,
   useMobileNativeChatPinchGesture
 } from './src/session/native-chat/transcript/viewport/mobile-native-chat-pinch-zoom'
 
+// A pinch saves the size on release; accept that write as the app would.
+publishPageStorage({}, () => true, 'host', '')
+
 function Transcript() {
-  const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture('chat')
+  const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
   return <View style={{ height: 600, width: '100%' }}>
     <Text testID="font-scale">{fontScale}</Text>
     <GestureHandlerRootView style={{ flex: 1 }}>

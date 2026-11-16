@@ -6023,8 +6023,7 @@
           "issueCommand": "議題命令",
           "newVmRecipe": "新的 VM 配方",
           "vmRecipe": "VM 配方",
-          "thisRepository": "此存放庫",
-          "alwaysTrustRepo": "一律信任 <repo/> 中的 <code>orca.yaml</code>"
+          "thisRepository": "此存放庫"
         },
         "PendingWorktreeRow": {
           "af21e953d1": "取消工作樹建立",
@@ -21595,7 +21594,7 @@
         "busy": "工作中",
         "idle": "閒置",
         "settingTitle": "Claude 執行期間切換帳戶時",
-        "settingDescription": "重新啟動後，所有進行中的對話都會使用新帳戶繼續。",
+        "settingDescription": "重新啟動後，所有進行中的對話都會使用新帳戶繼續。忙碌的工作階段會中斷目前的工作。",
         "keyword": {
           "restart": "重新啟動",
           "running": "執行中"
@@ -21619,11 +21618,13 @@
         "notMovedOther": "另有 {{count}} 個工作階段未移轉。",
         "review": "審查",
         "restartCount_other": "重新啟動 {{count}} 個工作階段",
-        "reviewBody_other": "其他 {{count}} 個 Claude 工作階段未移至 {{next}}。",
-        "body_other": "{{count}} 個 Claude 工作階段仍在 {{previous}} 上執行。重新啟動後，各對話將在 {{next}} 上繼續。忙碌的工作階段會等待閒置後再重新啟動。",
+        "reviewBody_other": "{{count}} 個 Claude 工作階段未移至 {{next}}。",
+        "body_other": "{{count}} 個 Claude 工作階段仍在 {{previous}} 上執行。重新啟動後，各對話將在 {{next}} 上繼續。忙碌的工作階段會中斷目前的工作並立即重新啟動。",
         "reasonSharedSession": "在另一個窗格中也已開啟",
         "sharedOne": "由於另一個窗格開啟了相同對話，1 個 Claude 工作階段會保留在 {{previous}}。重新啟動可能會重新開啟另一個窗格的對話。",
-        "sharedOther": "由於另一個窗格開啟了相同對話，{{count}} 個 Claude 工作階段會保留在 {{previous}}。重新啟動可能會重新開啟另一個窗格的對話。"
+        "sharedOther": "由於另一個窗格開啟了相同對話，{{count}} 個 Claude 工作階段會保留在 {{previous}}。重新啟動可能會重新開啟另一個窗格的對話。",
+        "strandedOne": "1 個 Claude 工作階段可能仍在 {{previous}} 上。請手動重新啟動以切換。",
+        "strandedOther": "{{count}} 個 Claude 工作階段可能仍在 {{previous}} 上。請手動重新啟動以切換。"
       },
       "oauthUsage": {
         "title": "Claude 用量輪詢",
@@ -22917,7 +22918,6 @@
     "setupTrust": {
       "reviewTitle": "要核准此自動化的新設定命令嗎？",
       "reviewBody": "由於分支的 <code>orca.yaml</code> 設定命令已變更，某次執行略過了設定。核准後，之後的執行將使用這些命令。僅在你信任 <repo/> 時核准。",
-      "approve": "核准",
       "approved": "已核准設定。此自動化之後的執行將執行它。",
       "skippedSinceApproved": "由於分支的 orca.yaml 設定命令已變更，此次執行未執行設定。這些命令此後已獲核准，之後的執行將執行它們。",
       "skippedReview": "設定未執行：此次執行分支中的 orca.yaml 設定命令與此自動化已核准的命令不同。請審查它們，以便之後的執行執行設定。",

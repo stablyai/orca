@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { StructuredAttentionOrigin } from '../../shared/agent-session/agent-session-attention'
+import type { StructuredAttentionOrigin } from '../../shared/agent-session/view/agent-session-attention'
 import type { NotificationDispatchRequest } from '../../shared/notifications/notification-settings-types'
 import {
   getDispatchHandler,

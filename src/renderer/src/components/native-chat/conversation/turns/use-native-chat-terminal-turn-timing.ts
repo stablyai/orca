@@ -8,8 +8,8 @@ import {
   nativeChatLatestTurnId,
   nativeChatTerminalSettledTurns,
   nativeChatTranscriptSettledTurns
-} from '../../../../../../shared/native-chat/native-chat-terminal-turn'
-import { resolveNativeChatHookState } from '../../../../../../shared/native-chat/native-chat-live-status'
+} from '../../../../../../shared/native-chat/transcript/turns/native-chat-terminal-turn'
+import { resolveNativeChatHookState } from '../../../../../../shared/native-chat/transcript/streaming/native-chat-live-status'
 
 /** Keep host live/latest-turn timing and historical transcript durations across pane remounts. */
 export function useNativeChatTerminalTurnTiming(
