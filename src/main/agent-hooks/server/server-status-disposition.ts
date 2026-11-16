@@ -1,7 +1,10 @@
 import { createHash } from 'node:crypto'
 
 import { isNewTurnEvent } from '../../../shared/agent-hook-listener/provider-event-routing'
-import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
+import {
+  parseLegacyNumericPaneKey,
+  parsePaneKey
+} from '../../../shared/workspace-layout/stable-pane-id'
 import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import {
   CLOSED_AGENT_STATUS_PANE_KEYS_MAX,
@@ -9,9 +12,9 @@ import {
   RETIRED_PANE_FENCES_MAX
 } from './server-constants'
 import type { RetiredPaneAlias, RetiredPaneFence } from './server-types'
-import { AgentHookServerStatusInference } from './server-status-inference'
+import { AgentHookServerCodexQuestionSkip } from './server-codex-question-skip'
 
-export abstract class AgentHookServerStatusDisposition extends AgentHookServerStatusInference {
+export abstract class AgentHookServerStatusDisposition extends AgentHookServerCodexQuestionSkip {
   protected markTabClosedForAgentStatus(tabId: string): void {
     // Refresh insertion order so only the oldest closed tabs are evicted.
     this.closedAgentStatusTabIds.delete(tabId)

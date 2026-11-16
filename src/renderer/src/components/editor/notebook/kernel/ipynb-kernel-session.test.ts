@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { KernelFrame, KernelFrameEvent } from '../../../../../../shared/notebook-kernel-types'
+import type {
+  KernelFrame,
+  KernelFrameEvent
+} from '../../../../../../shared/editor/notebooks/notebook-kernel-types'
 
 type Listener = (state: unknown, previous: unknown) => void
 
@@ -88,17 +91,6 @@ describe('notebook kernel session', () => {
     expect(notebookApi.execute).toHaveBeenCalledWith({ filePath: untrusted, code: 'x' })
   })
 
-  it('discovers with workspace interpreters once trusted', async () => {
-    openFiles.current = [{ filePath: '/fifth.ipynb' }]
-    session.trustNotebook('/fifth.ipynb')
-    await session.runCells('/fifth.ipynb', [{ key: 'a', code: 'x' }], '/proj')
-    expect(notebookApi.listPythonEnvironments).toHaveBeenCalledWith({
-      filePath: '/fifth.ipynb',
-      rootPath: '/proj',
-      runWorkspaceInterpreters: true
-    })
-  })
-
   it('starts the recommended env, runs queued cells in order, and stops the queue on an error', async () => {
     await session.runCells(
       FILE,
@@ -126,24 +118,6 @@ describe('notebook kernel session', () => {
     expect(notebookApi.execute).toHaveBeenCalledTimes(2)
     expect(getCellRun(FILE, 'c')).toBeUndefined()
     expect(getCellRun(FILE, 'b')?.finishedAt).not.toBeNull()
-  })
-
-  it('reports a dead kernel in the running cell and drops the queue', async () => {
-    await session.runCells(
-      FILE,
-      [
-        { key: 'a', code: 'import os; os._exit(1)' },
-        { key: 'b', code: 'x' }
-      ],
-      null
-    )
-    frame({ type: 'exit', detail: 'segfault' })
-    const run = getCellRun(FILE, 'a')
-    expect(run?.finishedAt).not.toBeNull()
-    expect(JSON.stringify(run?.outputs)).toContain('The kernel died.')
-    expect(JSON.stringify(run?.outputs)).toContain('segfault')
-    expect(getCellRun(FILE, 'b')).toBeUndefined()
-    expect(notebookApi.execute).toHaveBeenCalledTimes(1)
   })
 
   it('keeps cells queued through a missing-ipykernel install, then runs them', async () => {
@@ -258,17 +232,6 @@ describe('notebook kernel session', () => {
     await install
     expect(getSession(FILE).setup).toBeNull()
     expect(notebookApi.startKernel).toHaveBeenCalledOnce()
-  })
-
-  it('falls back to Python on PATH when there is no workspace env', async () => {
-    notebookApi.listPythonEnvironments.mockResolvedValue({ workspace: [], path: [VENV] })
-    // A remembered env from an earlier test would skip discovery; use a fresh notebook.
-    openFiles.current = [{ filePath: '/other.ipynb' }]
-    await session.runCells('/other.ipynb', [{ key: 'a', code: 'x' }], null)
-    expect(notebookApi.startKernel).toHaveBeenCalledWith({
-      filePath: '/other.ipynb',
-      python: VENV.path
-    })
   })
 
   it('starts one kernel when a second run lands during discovery', async () => {

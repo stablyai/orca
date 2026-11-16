@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { normalizeHookPayload } from './normalize-hook-payload'
 import { createHookListenerState, type HookListenerState } from '../listener-state'
-import { makePaneKey } from '../../stable-pane-id'
+import { makePaneKey } from '../../workspace-layout/stable-pane-id'
 
 const PANE_KEY = makePaneKey('claude-elicitation', '11111111-1111-4111-8111-111111111111')
 

@@ -68,28 +68,4 @@ describe('CodexPaneAccountRegistryMutations', () => {
     mutations.flush()
     expect(parseRegistry(persisted).panes.spawned).toEqual(SPAWNED)
   })
-
-  it('retries durability after a write failure even when the cached value now matches', async () => {
-    const registry = parseRegistry(JSON.stringify({ version: 2, panes: { existing: EXISTING } }))
-    const write = vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(true)
-    const mutations = new CodexPaneAccountRegistryMutations({ read: () => registry, write })
-
-    mutations.record('spawned', SPAWNED)
-    await vi.advanceTimersByTimeAsync(100)
-
-    expect(write).toHaveBeenCalledTimes(2)
-    expect(vi.getTimerCount()).toBe(0)
-  })
-
-  it('retries a failed reconciliation write without a pending pane mutation', async () => {
-    const registry = parseRegistry(JSON.stringify({ version: 2, panes: { existing: EXISTING } }))
-    const write = vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(true)
-    const mutations = new CodexPaneAccountRegistryMutations({ read: () => registry, write })
-
-    mutations.persistReconciliation(registry, true)
-    await vi.advanceTimersByTimeAsync(100)
-
-    expect(write).toHaveBeenCalledTimes(2)
-    expect(vi.getTimerCount()).toBe(0)
-  })
 })

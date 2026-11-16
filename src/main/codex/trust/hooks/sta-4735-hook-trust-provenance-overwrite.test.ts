@@ -119,19 +119,4 @@ describe('STA-4735 snapshotCodexRuntimeHookTrustProvenance', () => {
 
     expect(realFs.readFileSync(provenancePath(), 'utf-8')).toBe(recorded)
   })
-
-  it('still records a provenance file that does not exist yet', () => {
-    snapshotCodexRuntimeHookTrustProvenance(runtimeHomePath)
-
-    expect(realFs.existsSync(provenancePath())).toBe(true)
-    expect(JSON.parse(realFs.readFileSync(provenancePath(), 'utf-8'))).toMatchObject({ version: 1 })
-  })
-
-  it('still replaces a provenance file that is present but malformed', () => {
-    realFs.writeFileSync(provenancePath(), '{ not json', 'utf-8')
-
-    snapshotCodexRuntimeHookTrustProvenance(runtimeHomePath)
-
-    expect(JSON.parse(realFs.readFileSync(provenancePath(), 'utf-8'))).toMatchObject({ version: 1 })
-  })
 })

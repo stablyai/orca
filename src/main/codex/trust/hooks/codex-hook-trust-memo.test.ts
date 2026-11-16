@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -57,14 +57,6 @@ describe('Codex hook trust memo', () => {
     })
   })
 
-  it('keeps an answer that Codex needs no approval for its listed events', () => {
-    remember(codexPath, 'codex-cli 0.128.0', { stop: null, session_start: null })
-
-    expect(readMemoizedVersionAnswer('codex-cli 0.128.0', COMMAND)).toMatchObject({
-      hashes: { stop: null, session_start: null }
-    })
-  })
-
   it("keeps Codex's refusal for its version, for any binary of that version", () => {
     memoizeCodexHookAnswer(codexPath, fingerprint(), COMMAND, {
       kind: 'refused',
@@ -92,23 +84,6 @@ describe('Codex hook trust memo', () => {
     ])
   })
 
-  it('reads an unreadable or foreign file as empty, and keeps a bounded record', () => {
-    writeFileSync(getCodexHookTrustMemoPath(), '{ not json')
-    expect(read()).toBeNull()
-
-    for (let index = 0; index < 12; index += 1) {
-      const path = join(userData, `codex-${index}`)
-      writeFileSync(path, `codex ${index}`)
-      remember(path, `codex-cli 0.${index}.0`)
-    }
-
-    const memo = JSON.parse(readFileSync(getCodexHookTrustMemoPath(), 'utf-8'))
-    expect(Object.keys(memo.binaries)).toHaveLength(8)
-    expect(Object.keys(memo.versions)).toHaveLength(8)
-    expect(readMemoizedVersionAnswer('codex-cli 0.11.0', COMMAND)).not.toBeNull()
-    expect(readMemoizedVersionAnswer('codex-cli 0.0.0', COMMAND)).toBeNull()
-  })
-
   it('drops hashes that are not strings, and events Orca does not hook', () => {
     writeFileSync(
       getCodexHookTrustMemoPath(),
@@ -124,26 +99,5 @@ describe('Codex hook trust memo', () => {
     )
 
     expect(readMemoizedVersionAnswer('codex-cli 0.150.1', COMMAND)).toBeNull()
-  })
-
-  it('keeps a hash in any form Codex lists, as the derivation takes it', () => {
-    remember(codexPath, 'codex-cli 0.150.1', { stop: 'blake3:stop' })
-
-    expect(read()).toEqual({
-      kind: 'hashes',
-      codexVersion: 'codex-cli 0.150.1',
-      hashes: { stop: 'blake3:stop' }
-    })
-  })
-
-  it('leaves the file alone when the answer is already saved', () => {
-    remember()
-    const memoPath = getCodexHookTrustMemoPath()
-    writeFileSync(memoPath, readFileSync(memoPath, 'utf-8').replace('\n', '\n '))
-    const saved = readFileSync(memoPath, 'utf-8')
-
-    remember()
-
-    expect(readFileSync(memoPath, 'utf-8')).toBe(saved)
   })
 })

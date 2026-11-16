@@ -27,7 +27,8 @@ import { ProgramStatusRecordSet, type ProgramStatusRecord } from './records'
 /** OSC 7501 `app` ids whose Orca agent id differs. Other apps pass through verbatim. */
 const APP_TO_AGENT_TYPE: Readonly<Record<string, string>> = {
   'claude-code': 'claude',
-  'grok-build': 'grok'
+  'grok-build': 'grok',
+  'kiro-cli': 'kiro'
 }
 
 function agentTypeForProgramStatusApp(app: string | undefined): string | undefined {
@@ -154,10 +155,17 @@ export function createProgramStatusProjector(now: () => number = Date.now): Prog
       case 'error':
         return { state: 'done', outcome: 'failure' }
       case 'idle':
-        // Idle may follow startup work (Codex), so it proves rest, not cancellation; interrupt keystrokes own that verdict.
+        if (newInvocation || lastRoot === null || lastRoot.sessionBoundary === true) {
+          return { state: 'done', sessionBoundary: true }
+        }
         // Keep unseen done results when the same invocation rests.
-        return !newInvocation && lastRoot?.state === 'done' && lastRoot.sessionBoundary !== true
-          ? lastRoot
+        if (lastRoot.state === 'done') {
+          return lastRoot
+        }
+        // OpenCode ends every turn with idle, never done, so its idle after work is a turn end with no verdict.
+        // Others' idle may follow startup work (Codex), so it proves rest; interrupt keystrokes own cancellation.
+        return root.app === 'opencode'
+          ? { state: 'done' }
           : { state: 'done', sessionBoundary: true }
     }
   }
@@ -166,7 +174,9 @@ export function createProgramStatusProjector(now: () => number = Date.now): Prog
     const at = now()
     const live = new Set<string>()
     const children: AgentSubagentSnapshot[] = []
-    for (const record of records.descendants()) {
+    // OpenCode keys its records by peer root sessions (its own and other panes'), never by child sessions.
+    const subagentRecords = records.root()?.app === 'opencode' ? [] : records.descendants()
+    for (const record of subagentRecords) {
       const state = subagentState(record)
       if (record.id === null || state === null) {
         continue

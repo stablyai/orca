@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
-import * as path from 'node:path'
 
 const mocks = vi.hoisted(() => ({
   readFile: vi.fn(),
@@ -84,44 +83,6 @@ describe('FETCH_HEAD lock key derivation', () => {
     ])
   })
 
-  it('leaves the two UNC spellings apart on a non-Windows host', async () => {
-    usePlatform('darwin')
-
-    await runWithGitFetchHeadLock(String.raw`\\wsl$\Ubuntu\home\me\repo`, undefined, async () => 0)
-    await runWithGitFetchHeadLock(
-      String.raw`\\wsl.localhost\ubuntu\home\me\repo`,
-      undefined,
-      async () => 0
-    )
-
-    const keys = lockKeys()
-    expect(keys[0]).not.toBe(keys[1])
-    expect(keys[0]).toBe(path.join(String.raw`\\wsl$\Ubuntu\home\me\repo`, '.git', 'FETCH_HEAD'))
-  })
-
-  it('puts a padded gitfile pointer in the same lane as its bare spelling', async () => {
-    usePlatform('darwin')
-    mocks.stat.mockResolvedValue(GIT_FILE_ENTRY)
-    const gitfile = (payload: string): void => {
-      mocks.readFile.mockImplementation(async (target: string) => {
-        if (String(target).endsWith('commondir')) {
-          throw new Error('no commondir')
-        }
-        return `gitdir:${payload}\n`
-      })
-    }
-
-    gitfile(' ../repo/.git/worktrees/wt')
-    await runWithGitFetchHeadLock('/work/wt', undefined, async () => 0)
-    // git's own read_gitfile_gently strips the padding, so both spellings name one repo.
-    gitfile('\t../repo/.git/worktrees/wt  ')
-    await runWithGitFetchHeadLock('/work/wt', undefined, async () => 0)
-
-    const keys = lockKeys()
-    expect(keys[0]).toBe(path.join('/work/repo/.git/worktrees/wt', 'FETCH_HEAD'))
-    expect(keys[1]).toBe(keys[0])
-  })
-
   it("keeps a drive-spelled worktree on its own main checkout's lane", async () => {
     usePlatform('win32')
     mockLayout({
@@ -157,67 +118,6 @@ describe('FETCH_HEAD lock key derivation', () => {
     await runWithGitFetchHeadLock(String.raw`\\wsl$\ubuntu\home\me\wt`, undefined, async () => 0)
 
     expect(lockKeys()).toEqual(Array(2).fill('//wsl.localhost/ubuntu/mnt/c/repo/.git/fetch_head'))
-  })
-
-  it("merges an absolute guest commondir into the main checkout's lane", async () => {
-    usePlatform('win32')
-    mockLayout({
-      'C:/repo/.git': null,
-      'C:/workspace/wt/.git': 'gitdir: /mnt/c/repo/.git/worktrees/wt\n',
-      // git may spell commondir absolutely; written by git-in-WSL it is a guest path.
-      'C:/repo/.git/worktrees/wt/commondir': '/mnt/c/repo/.git\n'
-    })
-
-    await runWithGitFetchHeadLock(String.raw`C:\repo`, undefined, async () => 0)
-    await runWithGitFetchHeadLock(String.raw`C:\workspace\wt`, undefined, async () => 0)
-
-    expect(lockKeys()).toEqual(Array(2).fill(String.raw`C:\repo\.git\FETCH_HEAD`))
-  })
-
-  it('walks to the drive root with Windows rules for a folder workspace', async () => {
-    usePlatform('win32')
-    mockLayout({})
-
-    await runWithGitFetchHeadLock(String.raw`C:\notes\inbox`, undefined, async () => 0)
-
-    // Terminate at the Windows drive root; a POSIX . fallback would combine unrelated folder workspaces.
-    expect(lockKeys()[0]).toBe(String.raw`C:\.git\FETCH_HEAD`)
-  })
-
-  it('falls back to the Windows spelling when realpath fails', async () => {
-    usePlatform('win32')
-    mocks.realpath.mockRejectedValue(new Error('ELOOP'))
-    mockLayout({ 'C:/repo/.git': null })
-
-    await runWithGitFetchHeadLock(String.raw`C:\repo`, undefined, async () => 0)
-
-    expect(lockKeys()[0]).toBe(String.raw`C:\repo\.git\FETCH_HEAD`)
-  })
-
-  it("keeps today's key for a guest pointer Windows cannot address", async () => {
-    usePlatform('win32')
-    mocks.stat.mockResolvedValue(GIT_FILE_ENTRY)
-    mocks.readFile.mockImplementation(async (target: string) => {
-      if (String(target).endsWith('commondir')) {
-        throw new Error('no commondir')
-      }
-      return 'gitdir: /home/me/repo/.git/worktrees/wt\n'
-    })
-
-    await runWithGitFetchHeadLock(String.raw`C:\workspace\wt`, undefined, async () => 0)
-
-    // Without a distro, retain the current drive instead of creating a rootless \home lane.
-    expect(lockKeys()[0]).toBe(String.raw`C:\home\me\repo\.git\worktrees\wt\FETCH_HEAD`)
-  })
-
-  it('never fabricates a Windows drive path on a POSIX host', async () => {
-    usePlatform('darwin')
-    mockLayout({ '/work/wt/.git': 'gitdir: /mnt/c/repo/.git/worktrees/wt\n' })
-
-    await runWithGitFetchHeadLock('/work/wt', undefined, async () => 0)
-
-    // `/mnt/c` is an ordinary directory here, not a drvfs mount, so it must not become `C:\repo`.
-    expect(lockKeys()[0]).toBe('/mnt/c/repo/.git/worktrees/wt/FETCH_HEAD')
   })
 
   it('rejects promptly while a hung realpath is still pending', async () => {

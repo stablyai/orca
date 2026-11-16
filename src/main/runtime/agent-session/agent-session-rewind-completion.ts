@@ -1,16 +1,16 @@
 import {
   cancelAgentSessionUsageLimitContinue,
   type UsageLimitContinueIdentity
-} from '../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
+} from '../../../shared/agent-session/lifecycle/stopping/agent-session-usage-limit-continue'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { AgentSessionRewindRecord } from '../../../shared/agent-session/lifecycle/agent-session-rewind'
+import type { AgentSessionRewindRecord } from '../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 import type { AgentSessionStoreState } from './records/agent-session-store-state'
 import { settleAgentSessionOperationInto } from './ownership/agent-session-operation-admission'
 import {
   agentSessionProviderHandleChainHead,
   appendAgentSessionProviderHandleLink
-} from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
-import { agentSessionProviderHandleKey } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+} from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
+import { agentSessionProviderHandleKey } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 
 function rewindProviderChain(
@@ -47,7 +47,8 @@ export function commitAgentSessionRewindCompletion(
   fence: number,
   rewind: AgentSessionRewindRecord,
   cursor: AgentJournalCursor,
-  cancel?: UsageLimitContinueIdentity
+  cancel?: UsageLimitContinueIdentity,
+  childBoundary?: NonNullable<AgentSessionRecord['forkedFrom']>['childBoundary']
 ): void {
   const record = draft.records.get(sessionId)
   if (
@@ -59,9 +60,21 @@ export function commitAgentSessionRewindCompletion(
   ) {
     throw new Error('agent_session_rewind:stale-context')
   }
-  const { retained: _retained, hydrationVerified: _hydrationVerified, ...current } = rewind
+  const {
+    retained: _retained,
+    hydrationVerified: _hydrationVerified,
+    providerRevert: _providerRevert,
+    ...current
+  } = rewind
+  if (current.providerFork) {
+    const { coverage: _coverage, ...fork } = current.providerFork
+    current.providerFork = fork
+  }
   draft.records.set(sessionId, {
     ...(cancel ? cancelAgentSessionUsageLimitContinue(record, cancel) : record),
+    ...(childBoundary && record.forkedFrom
+      ? { forkedFrom: { ...record.forkedFrom, childBoundary } }
+      : {}),
     providerHandleChain: rewindProviderChain(record, rewind, fence),
     rewind: {
       ...current,

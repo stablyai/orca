@@ -1,8 +1,9 @@
-import { redactPtyIdForDiagnostics } from '../../../../shared/pty-delivery-diagnostics'
+import { redactPtyIdForDiagnostics } from '../../../../shared/terminal/pty/diagnostics/pty-delivery-diagnostics'
 import type { PtyModelRestoreReason } from '../../../../shared/terminal/replay/pty-model-restore-marker'
 import { mainDeliveryBreadcrumbs } from './debug'
 import { recordPtyRendererDeliveryPressure } from './accounting'
 import type { PtyDataPayload, PtyIpcSession } from '../session'
+import { escapeBoundaryFields, type PtyEscapeBoundary } from './pty-escape-boundary'
 
 export function makePtyDataPayload(
   id: string,
@@ -11,12 +12,9 @@ export function makePtyDataPayload(
   containsBackgroundOutput: boolean | undefined,
   rawLength = data.length,
   transformed = false,
-  gapEscapeState?: string
+  startEscapeBoundary?: PtyEscapeBoundary
 ): PtyDataPayload {
-  const payload: PtyDataPayload = { id, data }
-  if (gapEscapeState) {
-    payload.gapEscapeState = gapEscapeState
-  }
+  const payload: PtyDataPayload = { id, data, ...escapeBoundaryFields(startEscapeBoundary) }
   if (typeof startSeq === 'number') {
     payload.seq = startSeq + rawLength
   }

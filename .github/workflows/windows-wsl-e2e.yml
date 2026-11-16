@@ -62,7 +62,7 @@ jobs:
           --reporter=list,json
       - name: Require all nine WSL executions
         if: always()
-        run: node config/scripts/verify-wsl-e2e-participation.mjs test-results/wsl-results.json
+        run: node config/scripts/runtime-verification/participation/verify-wsl-e2e-participation.mjs test-results/wsl-results.json
       - name: Verify native Windows and WSL file-backed terminal images
         env:
           SKIP_BUILD: '1'
@@ -95,7 +95,7 @@ jobs:
           --reporter=list,json
       - name: Require all three E9 guard executions
         if: always()
-        run: node config/scripts/verify-wsl-no-background-boot-participation.mjs test-results/wsl-no-background-boot-results.json
+        run: node config/scripts/runtime-verification/participation/verify-wsl-no-background-boot-participation.mjs test-results/wsl-no-background-boot-results.json
       - name: Upload terminal image proof
         uses: actions/upload-artifact@v7
         if: always()

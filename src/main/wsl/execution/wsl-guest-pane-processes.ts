@@ -1,5 +1,5 @@
 /** Windows sees only wsl.exe and bridge bash lacks OSC 7; inherited ORCA_PANE_KEY identifies shell folders inside the guest. */
-import { isShellProcess } from '../../../shared/shell-process-detection'
+import { isShellProcess } from '../../../shared/agent-status/process/shell-process-detection'
 import {
   isWslDistroRunning,
   wasWslDistroLastSeenRunningSettled

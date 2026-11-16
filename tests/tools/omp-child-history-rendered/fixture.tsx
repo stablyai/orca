@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { TooltipProvider } from '../../../src/renderer/src/components/ui/tooltip'
-import { AiVaultSessionVirtualList } from '../../../src/renderer/src/components/right-sidebar/AiVaultSessionVirtualList'
+import { AiVaultSessionVirtualList } from '../../../src/renderer/src/components/right-sidebar/ai-vault/session-list/AiVaultSessionVirtualList'
 import type { AiVaultSession } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import './fixture.css'
 
@@ -147,6 +147,7 @@ function App() {
             onOpenLog={ignore}
             onRevealLog={ignore}
             onOpenCwd={ignore}
+            onRevealArtifacts={ignore}
             onRequestDelete={ignore}
           />
         </div>

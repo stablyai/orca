@@ -1,10 +1,11 @@
-import { createCodexProviderActivityReader } from '../../../native-chat/agent-session-wire/provider-frame-activity'
+import { createCodexProviderActivityReader } from '../../../native-chat/agent-session-wire/providers/provider-frame-activity'
 import { recordCodexContextUsage } from './codex-context-usage'
 import { CODEX_TOKEN_USAGE_METHOD } from '../background-work/codex-subagent-activity'
 import {
   CODEX_JOURNAL_ADMITTED,
   type CodexJournalTranslationAdmission,
   type CodexJournalTranslator,
+  type CodexHistoryTranslator,
   type CodexJournalTranslatorDeps
 } from './codex-structured-journal-contracts'
 import { settleCodexJournalSession } from './codex-structured-journal-settlement'
@@ -27,6 +28,20 @@ import type { CodexStructuredSessionEvent } from '../session-lifecycle/codex-str
 export function createCodexJournalTranslator(
   deps: CodexJournalTranslatorDeps
 ): CodexJournalTranslator {
+  const { restoreThread: _history, ...live } = createCodexTranslation(deps)
+  return live
+}
+
+export function createCodexHistoryTranslator(
+  deps: CodexJournalTranslatorDeps
+): CodexHistoryTranslator {
+  const { restoreThread, dispose } = createCodexTranslation(deps)
+  return { restoreThread, dispose }
+}
+
+function createCodexTranslation(
+  deps: CodexJournalTranslatorDeps
+): CodexJournalTranslator & CodexHistoryTranslator {
   const {
     activeTurns,
     commands,
@@ -95,7 +110,6 @@ export function createCodexJournalTranslator(
       return restoreCodexJournalThread({
         threadId,
         thread,
-        historyImport: deps.historyImport,
         currentTurnIds: activeTurns.byThread,
         ordinals: items.ordinals,
         handleItem: (event) =>
@@ -196,9 +210,21 @@ export function createCodexJournalTranslator(
         return CODEX_JOURNAL_ADMITTED
       }
       if (event.method === 'turn/started' || event.method === 'turn/completed') {
-        return event.method === 'turn/started'
-          ? turnBoundaries.start(event)
-          : turnBoundaries.complete(event)
+        if (event.method === 'turn/started') {
+          return turnBoundaries.start(event)
+        }
+        const turnId = readCodexTurnId(event.params) ?? activeTurns.current(event.threadId)
+        const failure = genericFrames.appendCompletionFailure(event.params, event.threadId, (id) =>
+          commands.errorShown({ turnId: id })
+        )
+        if (!failure.accepted) {
+          return failure
+        }
+        const admission = turnBoundaries.complete(event)
+        if (admission.accepted && turnId) {
+          genericFrames.forgetTurnFailure(event.threadId, turnId)
+        }
+        return admission
       }
       const compaction = compactions.handle(event)
       if (compaction) {

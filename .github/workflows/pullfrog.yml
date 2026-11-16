@@ -42,14 +42,14 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          sparse-checkout: config/scripts/pullfrog-review-scope.cjs
+          sparse-checkout: config/scripts/workflow/pr-admission/pullfrog-review-scope.cjs
           sparse-checkout-cone-mode: false
           persist-credentials: false
       - uses: actions/github-script@v8
         id: scope
         with:
           script: |
-            const { reviewScope } = require('./config/scripts/pullfrog-review-scope.cjs')
+            const { reviewScope } = require('./config/scripts/workflow/pr-admission/pullfrog-review-scope.cjs')
             await reviewScope({ github, context, core })
 
   pullfrog:

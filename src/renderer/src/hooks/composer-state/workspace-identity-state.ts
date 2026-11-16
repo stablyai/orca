@@ -3,6 +3,7 @@ import type { ComposerModel } from './composer-model'
 type WorkspaceIdentityStateInput = Pick<
   ComposerModel,
   | 'initialBaseBranch'
+  | 'initialParentWorktreeId'
   | 'initialLinearBranchName'
   | 'initialLinkedWorkItem'
   | 'linkedWorkItem'
@@ -17,7 +18,10 @@ type WorkspaceIdentityStateInput = Pick<
 
 import { useState, useMemo, useCallback, type SetStateAction } from 'react'
 import type { CreateWorktreeArgs } from '../../../../shared/worktree/create-types'
-import { getLinkedWorkItemProvider, isGitLabIssueUrl } from '@/lib/new-workspace'
+import {
+  getWorkspaceSourceProvider,
+  isGitLabIssueUrl
+} from '../../../../shared/new-workspace/workspace-source'
 import {
   type SmartNameMode,
   isBlockingJiraUrlIntent
@@ -28,7 +32,7 @@ import {
   filterEnabledTuiAgents,
   isTuiAgentEnabled
 } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
-import { getAgentCatalog } from '@/lib/agent-catalog'
+import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import { useAppStore } from '@/store'
 
 /** Older drafts lack naming intent; restore baseBranch as the branch pick it represented when saved. */
@@ -42,6 +46,7 @@ export function resolveDraftBaseBranchNamesWorkspace(args: {
 export function useWorkspaceIdentityState(input: WorkspaceIdentityStateInput) {
   const {
     initialBaseBranch,
+    initialParentWorktreeId,
     initialLinearBranchName,
     initialLinkedWorkItem,
     linkedWorkItem,
@@ -63,7 +68,7 @@ export function useWorkspaceIdentityState(input: WorkspaceIdentityStateInput) {
     }
     if (
       initialLinkedWorkItem?.type === 'issue' &&
-      getLinkedWorkItemProvider(initialLinkedWorkItem) === 'github'
+      getWorkspaceSourceProvider(initialLinkedWorkItem) === 'github'
     ) {
       return String(initialLinkedWorkItem.number)
     }
@@ -123,7 +128,9 @@ export function useWorkspaceIdentityState(input: WorkspaceIdentityStateInput) {
     updateBranchNameOverride(value)
   }, [])
 
-  const [parentWorktreeId, setParentWorktreeId] = useState<string | null>(null)
+  const [parentWorktreeId, setParentWorktreeId] = useState<string | null>(
+    initialParentWorktreeId ?? null
+  )
 
   const [branchNameOverridePreservesNameEdits, setBranchNameOverridePreservesNameEdits] = useState(
     Boolean(initialLinearBranchName)

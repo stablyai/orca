@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
-import { awaitWindowsHostGitEnvironmentReady } from '../../git/runner'
-import { getRemoteCommitUrl, getRemoteFileUrl } from '../../git/repo'
+import { awaitWindowsHostGitEnvironmentReady } from '../../git/command-runner/host-routing/windows-host-git-environment'
+import { getRemoteCommitUrl, getRemoteFileUrl } from '../../git/remotes/repo-remote-queries'
 import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-worktree-roots-cache'
 import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'
 import { validateFullGitObjectId } from './access/filesystem-path-containment'

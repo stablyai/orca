@@ -12,11 +12,11 @@ import type {
   openCodexAppServerConnection
 } from '../../app-server/codex-app-server-connection'
 import { CodexAppServerUnsupportedError } from '../../app-server/codex-app-server-session'
-import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { CodexStructuredSessionAdapter } from '../session-lifecycle/codex-structured-session-adapter'
 import { codexTurnLifecycleFake } from '../journal/codex-turn-lifecycle-fake'
 import type { CodexStructuredSessionAdapterDeps } from '../session-lifecycle/codex-structured-session-state'
-import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 export const CODEX_TEST_THREAD_ID = 'thread-abc'
 
@@ -99,6 +99,7 @@ export async function acquiredCodexAdapter(input: {
   sink?: StructuredAgentSessionEventSink
   requestTimeoutMs?: number
   permissionMode?: AgentChatPermissionChoice
+  onHeldSendsChanged?: CodexStructuredSessionAdapterDeps['onHeldSendsChanged']
 }): Promise<CodexStructuredSessionAdapter> {
   const adapter = new CodexStructuredSessionAdapter({
     resolveLaunch: async () => ({
@@ -111,7 +112,10 @@ export async function acquiredCodexAdapter(input: {
     openConnection: input.codex.openConnection,
     readProcessStartTime: async () => 1_700_000_000_000,
     now: () => 1_700_000_000_500,
-    onDispatchSettledLate: (settlement) => input.settlements.push(settlement),
+    onDispatchSettledLate: (settlement) => {
+      input.settlements.push(settlement)
+    },
+    ...(input.onHeldSendsChanged ? { onHeldSendsChanged: input.onHeldSendsChanged } : {}),
     ...(input.requestTimeoutMs === undefined ? {} : { requestTimeoutMs: input.requestTimeoutMs })
   })
   const identity: AgentSessionJournalIdentity = {

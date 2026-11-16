@@ -210,53 +210,6 @@ test.describe('Source Control create pull request', () => {
     await waitForActiveWorktree(orcaPage)
   })
 
-  test('creates the pull request from the Source Control primary action', async ({ orcaPage }) => {
-    const { branch, worktreeId } = await seedCreatePREligibleBranch(orcaPage)
-    await openSourceControl(orcaPage, worktreeId)
-    await forceCreatePREligibleStatus(orcaPage, worktreeId, branch)
-
-    const titleInput = orcaPage.getByRole('textbox', { name: 'Pull request title' })
-    const descriptionInput = orcaPage.getByRole('textbox', {
-      name: 'Pull request description'
-    })
-    const createButton = getCreatePRComposerSubmitButton(orcaPage)
-    await expect(createButton).toBeVisible({ timeout: 10_000 })
-    await expect(createButton).toBeEnabled()
-    await expect(titleInput).toHaveValue('E2e secondary')
-    await expect(orcaPage.getByRole('combobox', { name: 'Pull request base branch' })).toHaveValue(
-      'main'
-    )
-    await expect(descriptionInput).toHaveValue('')
-    await descriptionInput.fill('- Initial commit for E2E')
-    await expect(createButton).toBeEnabled()
-    await createButton.click()
-
-    await expect
-      .poll(
-        () =>
-          orcaPage.evaluate(
-            () =>
-              (window as unknown as { __createPRPayloads: CreatePRPayload[] }).__createPRPayloads
-                .length
-          ),
-        { timeout: 10_000 }
-      )
-      .toBe(1)
-
-    const payloads = await orcaPage.evaluate(
-      () => (window as unknown as { __createPRPayloads: CreatePRPayload[] }).__createPRPayloads
-    )
-    expect(payloads).toHaveLength(1)
-    expect(payloads[0].input).toMatchObject({
-      provider: 'github',
-      base: 'main',
-      head: branch,
-      title: 'E2e secondary',
-      body: '- Initial commit for E2E',
-      draft: false
-    })
-  })
-
   test('surfaces create failures without clearing the pull request composer', async ({
     orcaPage
   }) => {

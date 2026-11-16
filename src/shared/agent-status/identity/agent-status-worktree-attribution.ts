@@ -1,11 +1,11 @@
-import type { Tab } from '../../tab-types'
+import type { Tab } from '../../workspace-layout/tab-groups/tab-types'
 import { structuredAgentSessionPaneKey } from '../../agent-session/view/structured-agent-session-projection'
 import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext
 } from '../contracts/agent-status-types'
-import { isWebTerminalSurfaceTabId } from '../../terminal-surface-id'
-import { parseLegacyNumericPaneKey, parsePaneKey } from '../../stable-pane-id'
+import { isWebTerminalSurfaceTabId } from '../../workspace-layout/terminal-surface-id'
+import { parseLegacyNumericPaneKey, parsePaneKey } from '../../workspace-layout/stable-pane-id'
 
 export type AgentStatusPaneIdentity = { tabId: string; paneId: string }
 

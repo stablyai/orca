@@ -1,5 +1,7 @@
 import { getDeepSeekBuildTitleStatus } from './providers/dsb-terminal-title'
 import { qoderTitleStatus } from './providers/qoder-terminal-title'
+import { isJcodeIdentityTerminalTitle } from './providers/jcode-terminal-title'
+import { cursorTitleStatus } from './providers/cursor-terminal-title'
 import {
   AGY_AGENT_NAME_RE,
   DROID_AGENT_NAME_RE,
@@ -26,19 +28,20 @@ import {
   isPiAgentTitle,
   isPiTerminalTitle,
   isGeminiTerminalTitle,
-  isGrokRotatingWorkingTitle
+  isGrokRotatingWorkingTitle,
+  type AgentStatus
 } from './agent-title-core'
 import { isDshTerminalTitle } from './providers/dsh-terminal-title'
-import type { AgentStatus } from './agent-title-core'
+
 import { isOpenCodeNativeTitle } from './providers/opencode-terminal-title'
 import {
   getPiCompatibleTitleSeparatorStatus,
   getPiCompatibleSyntheticAgentStatus
 } from './providers/pi-compatible-synthetic-title'
 import { getPiStateTitleStatus } from './providers/pi-state-title-marker'
-import { getWrapperTitleSegments } from '../../terminal-title-wrapper-segments'
-import { resolveExplicitTerminalTitleAgentType } from '../../terminal-title-agent-type'
-import { memoizeTitleClassification } from '../../terminal-title-classification-memo'
+import { getWrapperTitleSegments } from './terminal-title-wrapper-segments'
+import { resolveExplicitTerminalTitleAgentType } from './terminal-title-agent-type'
+import { memoizeTitleClassification } from './terminal-title-classification-memo'
 
 /** Where a working agent settled: at rest, or on a prompt that needs the user. */
 export type AgentIdleStatus = Exclude<AgentStatus, 'working'>
@@ -234,6 +237,10 @@ function computeAgentStatusFromTitle(title: string): AgentStatus | null {
   if (qoderStatus) {
     return qoderStatus
   }
+  const cursorStatus = cursorTitleStatus(title)
+  if (cursorStatus) {
+    return cursorStatus
+  }
   if (!title || isClaudeManagementTitle(title)) {
     return null
   }
@@ -271,6 +278,10 @@ function computeAgentStatusFromTitle(title: string): AgentStatus | null {
   }
 
   if (title.startsWith(`${CLAUDE_IDLE} `) || title === CLAUDE_IDLE) {
+    return 'idle'
+  }
+  // Activity comes from jcodePaneTitleStatus; the identity alone says Jcode is at rest.
+  if (isJcodeIdentityTerminalTitle(title)) {
     return 'idle'
   }
   // Read π ! as blocked before generic idle or OMP user waits disappear.

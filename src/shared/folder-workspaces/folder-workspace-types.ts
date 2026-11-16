@@ -1,22 +1,16 @@
 import type { ExecutionHostId } from '../execution-host'
-import type { TaskSourceContext } from '../task-source-context'
+import type { TaskSourceContext } from '../work-items/task-source-context'
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
-import type { DiffComment } from '../diff-comment-types'
-import type { SmartTier } from '../sidebar-list/sort-stamps'
-import type { OrcadRetainedMarker } from '../orcad-retained-marker'
-import type { ExternalConversationLink } from '../external-conversation-link'
+import type { DiffComment } from '../file-review/diff-comment-types'
+import type { SmartTier } from '../sidebar-list/sorting/sort-stamps'
+import type { OrcadRetainedMarker } from '../remote-runtime/orcad-lifecycle/orcad-retained-marker'
+import type { ExternalConversationLink } from '../connectors/external-conversation-link'
 import type {
   WorkspaceCreatorProvenance,
   WorkspaceLinkedItem,
   WorkspaceAttachment,
   WorkspaceStatus
 } from '../worktree/types'
-
-export type WorkspaceScope =
-  | { type: 'worktree'; worktreeId: string }
-  | { type: 'folder'; folderWorkspaceId: string }
-
-export type WorkspaceKey = `worktree:${string}` | `folder:${string}`
 
 export type FolderWorkspace = {
   id: string

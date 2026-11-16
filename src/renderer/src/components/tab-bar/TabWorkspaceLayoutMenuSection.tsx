@@ -7,8 +7,9 @@ import {
   ContextMenuShortcut
 } from '@/components/ui/context-menu'
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Columns2 } from 'lucide-react'
-import type { TabSplitDirection } from '../../store/slices/tabs'
+import type { TabSplitDirection } from '../../store/slices/tabs/tabs-slice-contract'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { canMoveTabToNewPaneColumn, moveTabToNewPaneColumn } from './tab-move-to-pane-column'
 
 const PANE_COLUMN_DIRECTIONS: TabSplitDirection[] = ['right', 'left', 'down', 'up']
@@ -26,16 +27,16 @@ function paneColumnDirectionIcon(direction: TabSplitDirection): React.JSX.Elemen
   }
 }
 
-function paneColumnDirectionLabel(direction: TabSplitDirection): string {
+function paneColumnDirectionLabel(direction: TabSplitDirection, t: Translate = translate): string {
   switch (direction) {
     case 'right':
-      return translate('auto.components.tab.bar.TabWorkspaceLayoutMenuSection.right', 'Right')
+      return t('auto.components.tab.bar.TabWorkspaceLayoutMenuSection.right', 'Right')
     case 'left':
-      return translate('auto.components.tab.bar.TabWorkspaceLayoutMenuSection.left', 'Left')
+      return t('auto.components.tab.bar.TabWorkspaceLayoutMenuSection.left', 'Left')
     case 'down':
-      return translate('auto.components.tab.bar.TabWorkspaceLayoutMenuSection.down', 'Down')
+      return t('auto.components.tab.bar.TabWorkspaceLayoutMenuSection.down', 'Down')
     case 'up':
-      return translate('auto.components.tab.bar.TabWorkspaceLayoutMenuSection.up', 'Up')
+      return t('auto.components.tab.bar.TabWorkspaceLayoutMenuSection.up', 'Up')
   }
 }
 
@@ -52,6 +53,7 @@ export function TabWorkspaceLayoutMenuSection({
   trailingSeparator?: boolean
   shortcutLabels?: Partial<Record<TabSplitDirection, string>>
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (!canMoveTabToNewPaneColumn(unifiedTabId, groupId)) {
     return null
   }
@@ -62,7 +64,7 @@ export function TabWorkspaceLayoutMenuSection({
       <ContextMenuSub>
         <ContextMenuSubTrigger className="[&>svg:last-child]:size-3.5">
           <Columns2 className="size-3.5 shrink-0" />
-          {translate(
+          {t(
             'auto.components.tab.bar.TabWorkspaceLayoutMenuSection.moveToPaneColumn',
             'Move Tab to Split'
           )}
@@ -79,7 +81,7 @@ export function TabWorkspaceLayoutMenuSection({
               }}
             >
               {paneColumnDirectionIcon(direction)}
-              {paneColumnDirectionLabel(direction)}
+              {paneColumnDirectionLabel(direction, t)}
               {shortcutLabels?.[direction] ? (
                 <ContextMenuShortcut>{shortcutLabels[direction]}</ContextMenuShortcut>
               ) : null}

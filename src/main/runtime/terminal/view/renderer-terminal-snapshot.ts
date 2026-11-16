@@ -1,6 +1,6 @@
 import { OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobileTerminals } from '../../session-tabs/renderer-session-terminal-rescue'
 import type { TerminalOscLinkRange } from '../../../../shared/terminal/links/terminal-osc-link-ranges'
-import type { RuntimeLeafRecord } from '../../runtime-terminal-state-records'
+import type { RuntimeLeafRecord } from '../records/runtime-terminal-state-records'
 
 export abstract class OrcaRuntimeWithWaitForLeafPtyId extends OrcaRuntimeWithRestoreLivePairedRendererSessionOwnedMobileTerminals {
   protected abstract issueHandle(leaf: RuntimeLeafRecord): string

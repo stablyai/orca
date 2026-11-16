@@ -1,39 +1,34 @@
 import type { GlobalSettings } from './global-settings-types'
-import type { RepoHookSettings } from './orca-yaml-hook-types'
+import type { RepoHookSettings } from './workspace-setup/orca-yaml-hook-types'
 import type { PersistedState } from './persisted-state-types'
 import type { PersistedUIState } from './persisted-ui-state-types'
 import type { AgentActivityDisplayMode } from './ui-chrome-types'
-import type { WorkspaceSessionState } from './workspace-session-state-types'
-import { EMPTY_CODEX_RESET_CREDIT_ATTEMPT_LEDGER } from './codex-reset-credit-attempt-ledger'
-import { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
-import type { VoiceSettings } from './speech-types'
-import { cloneDefaultWorkspaceStatuses } from './workspace-statuses'
-import { DEFAULT_WORKTREE_CARD_PROPERTIES } from './worktree/card-properties'
-import { DEFAULT_AGENTS_GROUP_BY, DEFAULT_AGENTS_READ_FILTER } from './agents-view-thread-filters'
-import { DEFAULT_USAGE_PERCENTAGE_DISPLAY } from './usage-percentage-display'
-import { DEFAULT_STATUS_BAR_USAGE_MODE } from './status-bar-usage-mode'
+import type { WorkspaceSessionState } from './workspace-session/workspace-session-state-types'
+import { EMPTY_CODEX_RESET_CREDIT_ATTEMPT_LEDGER } from './agent-accounts/codex/codex-reset-credit-attempt-ledger'
+import { DEFAULT_STATUS_BAR_ITEMS } from './status-bar/status-bar-defaults'
+import type { VoiceSettings } from './speech/speech-types'
+import { DICTATION_LANGUAGE_AUTO } from './speech/models/dictation-language'
+import { DEFAULT_UNLOAD_MODEL_AFTER_MINUTES } from './speech/models/voice-model-unload'
+import { cloneDefaultWorkspaceStatuses } from './workspace/status/workspace-statuses'
+import { DEFAULT_WORKTREE_CARD_PROPERTIES } from './worktree/row-display/card-properties'
+import {
+  DEFAULT_AGENTS_GROUP_BY,
+  DEFAULT_AGENTS_READ_FILTER
+} from './agent-status/presentation/agents-view-thread-filters'
+import { DEFAULT_USAGE_PERCENTAGE_DISPLAY } from './agent-usage/display/usage-percentage-display'
+import { DEFAULT_STATUS_BAR_USAGE_MODE } from './status-bar/status-bar-usage-mode'
+import { DEFAULT_STATUS_BAR_USAGE_FORMAT } from './status-bar/status-bar-usage-format'
 import { buildDefaultSettings } from './default-global-settings'
-import { DEFAULT_SETUP_AGENT_STARTUP_POLICY } from './setup-agent-startup-policy'
-import { DEFAULT_BROWSER_PAGE_ZOOM_LEVEL } from './browser-page-zoom'
-import { getDefaultNotificationSettings } from './notification-settings-defaults'
-import { getDefaultOnboardingState } from './onboarding-defaults'
+import { DEFAULT_SETUP_AGENT_STARTUP_POLICY } from './agent-launch/startup/setup-agent-startup-policy'
+import { DEFAULT_BROWSER_PAGE_ZOOM_LEVEL } from './browser/site-settings/browser-page-zoom'
+import { getDefaultNotificationSettings } from './notifications/notification-settings-defaults'
+import { getDefaultOnboardingState } from './onboarding/onboarding-defaults'
 import {
   defaultTerminalFontFamily,
+  defaultTerminalFontWeight,
   getDefaultPrimarySelectionMiddleClickPaste,
   getDefaultTerminalRightClickToPaste
 } from './terminal/appearance/terminal-platform-defaults'
-
-export { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
-export {
-  COMPACT_WORKTREE_CARD_PROPERTIES,
-  DEFAULT_WORKTREE_CARD_PROPERTIES,
-  TASK_WORKTREE_CARD_PROPERTIES,
-  getWorktreeCardModeProperties,
-  getWorktreeCardModeUpdates,
-  isCurrentCompactWorktreeCardProperties,
-  isDefaultedCompactWorktreeCardProperties,
-  normalizeWorktreeCardProperties
-} from './worktree/card-properties'
 
 export const SCHEMA_VERSION = 1
 export const DEFAULT_APP_FONT_FAMILY = 'Geist'
@@ -44,24 +39,6 @@ export const DEFAULT_TERMINAL_INACTIVE_PANE_OPACITY = 0.9
 
 export function normalizeAgentActivityDisplayMode(value: unknown): AgentActivityDisplayMode {
   return value === 'full' || value === 'compact' ? value : DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE
-}
-
-export const ORCA_BROWSER_PARTITION = 'persist:orca-browser'
-// Why: inert blank-tab URL shared by main/renderer so the attach policy can allow just this one data URL and reject others.
-export const ORCA_BROWSER_BLANK_URL = 'data:text/html,'
-
-export const BROWSER_FAMILY_LABELS: Record<string, string> = {
-  chrome: 'Google Chrome',
-  chromium: 'Chromium',
-  comet: 'Comet',
-  helium: 'Helium',
-  vivaldi: 'Vivaldi',
-  arc: 'Arc',
-  edge: 'Microsoft Edge',
-  brave: 'Brave',
-  firefox: 'Firefox',
-  safari: 'Safari',
-  manual: 'File'
 }
 
 /** ProseMirror mounts whole documents. M-series Electron measurements at 300/450/600KB: longest tasks 0.66/1.02/1.41s; 600KB typing p95 39ms (#17134/#17147/#17158). Use cheap pre-parse byte guard, then source mode with Open anyway. */
@@ -80,7 +57,7 @@ export const ORPHAN_WORKTREE_ID = '__orphan__'
 // Why: synthetic local workspace; persistence pruning must classify it without the repo catalog.
 export const FLOATING_TERMINAL_WORKTREE_ID = 'global-floating-terminal'
 
-export { DEFAULT_REPO_BADGE_COLOR, REPO_COLORS } from './repo-badge-color'
+export { DEFAULT_REPO_BADGE_COLOR, REPO_COLORS } from './repository/appearance/repo-badge-color'
 
 /** Expose the stock root so callers can distinguish an untouched default from a user-selected directory. */
 export function getDefaultWorkspaceDir(homeDir: string): string {
@@ -98,6 +75,10 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     primarySelectionDefaultedForLinux:
       typeof process !== 'undefined' && process.platform === 'linux',
     terminalFontFamily: defaultTerminalFontFamily(),
+    terminalFontWeight: defaultTerminalFontWeight(),
+    // Fresh Windows profiles start on Regular, so a later 500 is a choice, not the old default.
+    terminalFontWeightWindowsRegular:
+      typeof process !== 'undefined' && process.platform === 'win32' ? 'done' : undefined,
     terminalInactivePaneOpacity: DEFAULT_TERMINAL_INACTIVE_PANE_OPACITY,
     terminalRightClickToPaste: getDefaultTerminalRightClickToPaste(),
     notifications: getDefaultNotificationSettings(),
@@ -111,13 +92,15 @@ export function getDefaultVoiceSettings(): VoiceSettings {
     enabled: false,
     sttModel: '',
     modelsDir: '',
-    language: 'en',
+    dictationLanguage: DICTATION_LANGUAGE_AUTO,
     dictationMode: 'toggle' as const,
+    dictationHoldToRecord: true,
+    removeFillerWords: true,
     terminalConfirmBeforeInsert: false,
-    userModels: [],
     openAiApiKeyConfigured: false,
     microphoneDeviceId: null,
-    microphoneDeviceLabel: null
+    microphoneDeviceLabel: null,
+    unloadModelAfterMinutes: DEFAULT_UNLOAD_MODEL_AFTER_MINUTES
   }
 }
 
@@ -178,6 +161,7 @@ export function getDefaultUIState(): PersistedUIState {
     rightSidebarTab: 'explorer',
     rightSidebarExplorerView: 'files',
     rightSidebarWidth: 350,
+    activityBarPosition: 'top',
     markdownTocPanelWidth: 240,
     combinedDiffFileTreeWidth: 256,
     groupBy: 'repo',
@@ -200,6 +184,7 @@ export function getDefaultUIState(): PersistedUIState {
     _explorerDisplayRootMigrated: true,
     explorerDisplayRootByWorktree: {},
     showDotfilesByWorktree: {},
+    notificationsMutedByWorktree: {},
     filterRepoIds: [],
     agentsVisibleHostIds: null,
     agentsFilterRepoIds: [],
@@ -230,6 +215,7 @@ export function getDefaultUIState(): PersistedUIState {
     statusBarVisible: true,
     usagePercentageDisplay: DEFAULT_USAGE_PERCENTAGE_DISPLAY,
     statusBarUsageMode: DEFAULT_STATUS_BAR_USAGE_MODE,
+    statusBarUsageFormat: { ...DEFAULT_STATUS_BAR_USAGE_FORMAT },
     dismissedUpdateVersion: null,
     dismissedUnexpectedSignoutVersion: null,
     lastUpdateCheckAt: null,

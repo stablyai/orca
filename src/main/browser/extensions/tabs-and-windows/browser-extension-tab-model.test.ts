@@ -17,7 +17,7 @@ vi.mock('electron', () => ({
     }
   }
 }))
-vi.mock('../../browser-manager', () => ({
+vi.mock('../../guest-lifecycle/manager/browser-manager', () => ({
   browserManager: {
     getGuestWebContentsId: (pageId: string) => mocks.pages.get(pageId)?.id ?? null,
     getWebContentsIdByTabId: () =>
@@ -25,11 +25,11 @@ vi.mock('../../browser-manager', () => ({
     getWorktreeIdForTab: (pageId: string) => mocks.pages.get(pageId)?.worktreeId
   }
 }))
-vi.mock('../../../runtime/browser/browser-tab-renderer-create', () => ({
+vi.mock('../../../runtime/browser/tabs/browser-tab-renderer-create', () => ({
   createBrowserTabInRenderer: mocks.createTab
 }))
-vi.mock('../../../runtime/browser/browser-tab-renderer-close', () => ({}))
-vi.mock('../../../runtime/browser/browser-tab-renderer-activate', () => ({}))
+vi.mock('../../../runtime/browser/tabs/browser-tab-renderer-close', () => ({}))
+vi.mock('../../../runtime/browser/tabs/browser-tab-renderer-activate', () => ({}))
 vi.mock('../../../ipc/browser/browser-tab-registration-wait', () => ({
   waitForTabRegistration: vi.fn()
 }))
@@ -79,7 +79,7 @@ describe('an extension tab opened while Orca starts', () => {
       mocks.pages.set('welcome', { id: 21, session: mocks.workSession, worktreeId: 'wt-a' })
       return { browserPageId: 'welcome' }
     })
-    const opening = openBrowserExtensionTab('work', 'https://welcome.test', true)
+    const opening = openBrowserExtensionTab('work', 'https://welcome.test', { active: true })
     await Promise.resolve()
     expect(mocks.createTab).not.toHaveBeenCalled()
     window.rendererReady()
@@ -87,7 +87,7 @@ describe('an extension tab opened while Orca starts', () => {
 
     // A reload waits for the new document to restore again.
     window.reload()
-    const reopening = openBrowserExtensionTab('work', 'https://welcome.test', true)
+    const reopening = openBrowserExtensionTab('work', 'https://welcome.test', { active: true })
     await Promise.resolve()
     expect(mocks.createTab).toHaveBeenCalledTimes(1)
     window.rendererReady()

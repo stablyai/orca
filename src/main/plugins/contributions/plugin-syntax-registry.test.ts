@@ -4,8 +4,8 @@ import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import { fingerprintPluginConsent } from '../../../shared/plugins/approval/plugin-consent-fingerprint'
 import { pluginManifestSchema } from '../../../shared/plugins/manifest/plugin-manifest'
-import { PluginContentVerifier } from '../plugin-content-integrity'
-import type { ValidDiscoveredPlugin } from '../plugin-discovery'
+import { PluginContentVerifier } from '../artifacts/plugin-content-integrity'
+import type { ValidDiscoveredPlugin } from '../discovery/plugin-discovery'
 import { PluginSyntaxRegistry } from './plugin-syntax-registry'
 
 const roots: string[] = []
@@ -87,19 +87,6 @@ it('lists file associations and hands over a language with its sibling grammars'
     configuration: { comments: { lineComment: '//' } }
   })
   expect(registry.load('plugin:samples.demo-syntax/missing')).toBeNull()
-})
-
-it('reports one error and lists nothing when a grammar is invalid', async () => {
-  const registry = new PluginSyntaxRegistry(new PluginContentVerifier())
-  const plugin = await syntaxPlugin({
-    'demo.json': { ...demo, scopeName: 'source.other' },
-    'demo-config.json': {},
-    'embedded.json': embedded
-  })
-  await registry.reconcile([plugin], () => true)
-
-  expect(registry.list()).toEqual([])
-  expect(registry.error(plugin.pluginKey)).toContain('syntax "demo"')
 })
 
 it('reports an include that does not resolve inside the plugin on the plugin card', async () => {

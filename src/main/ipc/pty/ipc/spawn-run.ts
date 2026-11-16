@@ -16,7 +16,7 @@ import { commitPtyIpcSpawn } from './spawn-commit'
 import { createPtyIpcSpawnState } from './spawn-state'
 import { triggerPtySpawnPushTargetMaterialization } from './spawn-push-target-materialization'
 import type { PtySpawnIpcArgs, PtySpawnIpcDeps } from './spawn-types'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { refuseClosedPaneSpawn } from './closed-pane-spawn-refusal'
 import { resolveStablePaneOwner } from '../pane/stable-owner'
 import { excludeReplacedPaneOwner } from '../pane/replaced-pane-owner'
@@ -118,5 +118,10 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, request: PtySpawnIpc
   })
   return args.agentLaunch === undefined
     ? outcome.result
-    : requireAcceptedSpawn(outcome, AGENT_LAUNCH_PANE_REFUSED_CODE)
+    : typeof args.agentLaunch === 'object' &&
+        args.agentLaunch !== null &&
+        'returnLaunchFailure' in args.agentLaunch &&
+        args.agentLaunch.returnLaunchFailure === true
+      ? requireAcceptedSpawn(outcome)
+      : requireAcceptedSpawn(outcome, AGENT_LAUNCH_PANE_REFUSED_CODE)
 }

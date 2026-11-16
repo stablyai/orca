@@ -1,5 +1,5 @@
-import { z } from 'zod'
-import type { ExecutionHostHealth } from '../../execution-host-health'
+import * as z from 'zod'
+import type { ExecutionHostHealth } from '../../execution-host/execution-host-health'
 
 // Why: both are answered by the paired desktop itself; the phone lists servers the desktop shows.
 export const MOBILE_RELAY_HOSTS_LIST_METHOD = 'mobileRelay.hosts.list'
@@ -17,6 +17,8 @@ export type MobileRelayHost = {
   stoppedOnDesktop?: true
   /** This desktop's own WSL host, not connected there and not known stopped; older phones show "Connecting". */
   unavailableOnDesktop?: true
+  /** The server's store identity as the desktop verified it; cross-store records name it. */
+  installationId?: string
 }
 
 export type MobileRelayHostsListResult = { hosts: MobileRelayHost[] }
@@ -35,6 +37,8 @@ export type MobileRelayServerWorktreeRow = Record<string, unknown> & {
   hostId: `runtime:${string}`
   /** The desktop calls this row another client's; the phone applies the shared filter value. */
   desktopOtherClient?: true
+  /** The workspace runs on an environment this desktop created from a recipe; deleting it can destroy that. */
+  recipeEnvironment?: { name: string; destroys: boolean }
 }
 
 /** The server's own `worktree.ps` rows as the desktop last fetched them, refreshed when the server answers. */

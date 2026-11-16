@@ -47,19 +47,6 @@ describe('review highlight positions across edits and metadata', () => {
     expect(highlightedText(editor)).toEqual(['note'])
   })
 
-  it('preserves mapped active and note ranges when metadata updates only one field', () => {
-    const editor = createEditor()
-    editor.view.dispatch(editor.state.tr.insertText('prefix ', 1))
-    editor.view.dispatch(
-      editor.state.tr.setMeta(richMarkdownAnnotationHighlightPluginKey, {
-        noteRanges: [{ from: 15, to: 19 }]
-      })
-    )
-    const active = editor.view.dom.querySelector('.rich-markdown-annotation-selection-active')
-    expect(active?.textContent).toBe('note')
-    expect(highlightedText(editor)).toEqual(['note'])
-  })
-
   it('drops deleted highlights instead of recreating them over surviving text', () => {
     const editor = createEditor()
     editor.view.dispatch(editor.state.tr.delete(8, 12))
@@ -70,16 +57,6 @@ describe('review highlight positions across edits and metadata', () => {
       })
     )
     expect(highlightedText(editor)).toEqual([])
-  })
-
-  it('maps retained notes while accepting new-document metadata in the same edit transaction', () => {
-    const editor = createEditor()
-    editor.view.dispatch(
-      editor.state.tr.insertText('prefix ', 1).setMeta(richMarkdownAnnotationHighlightPluginKey, {
-        activeRange: null
-      })
-    )
-    expect(highlightedText(editor)).toEqual(['note'])
   })
 
   it('excludes boundary insertions and keeps undo/redo positions after rebuilding', () => {

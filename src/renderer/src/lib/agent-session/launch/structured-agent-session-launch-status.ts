@@ -2,9 +2,10 @@ import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-ag
 import { structuredLaunchesHoldingIdentity } from './structured-agent-session-launch-holders'
 import {
   structuredLaunchIdentity,
-  structuredLaunchStates,
   type StructuredAgentLaunchStatus
 } from './structured-agent-session-launch-registry'
+import { structuredLaunchStates } from './structured-agent-session-launch-state-store'
+import { structuredAgentSessionLaunchHasRetainedInput } from './structured-agent-session-launch-input'
 
 /** Whether a chat for this pair is being created here: its own first create, or an adoption. */
 export function getStructuredAgentLaunchStatus(
@@ -15,7 +16,14 @@ export function getStructuredAgentLaunchStatus(
   // A failed chat is not, nor an unconfirmed or retried blank one: a new launch opens its own chat.
   const identity = structuredLaunchIdentity(worktreeId, agent)
   const states = structuredLaunchesHoldingIdentity(
-    (candidate) => candidate === identity || candidate.startsWith(`${identity}:resume:`)
+    (candidate) =>
+      candidate === identity ||
+      candidate.startsWith(`${identity}:resume:`) ||
+      candidate.startsWith(`${identity}:fork:`)
+  ).filter(
+    (state) =>
+      !state.operationEnded &&
+      !structuredAgentSessionLaunchHasRetainedInput(worktreeId, state.intent.sessionId)
   )
   if (states.length === 0) {
     return 'idle'

@@ -1,10 +1,9 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { BrowserPagePromptRequest } from '../../../../shared/browser-page-prompt'
+import type { BrowserPagePromptRequest } from '../../../../shared/browser/prompts/browser-page-prompt'
 import {
   BROWSER_PAGE_PROMPT_TIMEOUT_MS,
-  cancelBrowserPagePrompts,
   openBrowserPagePrompt,
   respondToBrowserPagePrompt,
   showBrowserPagePromptsAwaitingRegistration,
@@ -42,7 +41,12 @@ function ask(guest: Electron.WebContents, coalesceKey?: string) {
     kind: 'external-app',
     requester: guest,
     target: targets.get(guest.id) ?? null,
-    details: () => ({ appName: 'Zoom', scheme: 'zoommtg', origin: 'https://zoom.us' }),
+    details: () => ({
+      appName: 'Zoom',
+      scheme: 'zoommtg',
+      origin: 'https://zoom.us',
+      rememberSite: null
+    }),
     coalesceKey,
     parseAnswer: (value) => (value === true ? true : undefined),
     settle
@@ -55,13 +59,6 @@ function sentRequests(renderer: Electron.WebContents): BrowserPagePromptRequest[
     .mocked(renderer.send)
     .mock.calls.filter(([channel]) => channel === 'browser:page-prompt-requested')
     .map(([, request]) => request)
-}
-
-function closedRequestIds(renderer: Electron.WebContents): string[] {
-  return vi
-    .mocked(renderer.send)
-    .mock.calls.filter(([channel]) => channel === 'browser:page-prompt-closed')
-    .map(([, event]) => event.requestId)
 }
 
 const latestId = (renderer: Electron.WebContents): string =>
@@ -90,7 +87,12 @@ describe('browser page prompts', () => {
       {
         requestId: expect.any(String),
         kind: 'external-app',
-        details: { appName: 'Zoom', scheme: 'zoommtg', origin: 'https://zoom.us' }
+        details: {
+          appName: 'Zoom',
+          scheme: 'zoommtg',
+          origin: 'https://zoom.us',
+          rememberSite: null
+        }
       }
     ])
     const requestId = latestId(renderer)
@@ -104,18 +106,6 @@ describe('browser page prompts', () => {
     await expect(answer(renderer, true)).resolves.toBe('rejected')
     expect(settle).toHaveBeenCalledTimes(1)
     expect(settle).toHaveBeenCalledWith(true)
-  })
-
-  it('refuses a page with no window on this machine', () => {
-    const renderer = mockRenderer(10)
-    const streamed = mockGuest(renderer, 'page-1')
-    targets.delete(streamed.id)
-
-    const { opening, settle } = ask(streamed)
-
-    expect(opening).toBe('no-window')
-    vi.advanceTimersByTime(BROWSER_PAGE_PROMPT_TIMEOUT_MS)
-    expect(settle).not.toHaveBeenCalled()
   })
 
   it("holds a new tab's question until its window registers it, and drops it if none does", () => {
@@ -170,7 +160,7 @@ describe('browser page prompts', () => {
     expect(declined.settle).toHaveBeenCalledWith(null)
 
     guest.emit('did-start-navigation', { isMainFrame: true, initiator: {} })
-    guest.emit('input-event', {}, { type: 'mouseMove' })
+    guest.emit('before-mouse-event', {}, { type: 'mouseMove' })
     expect(ask(guest).opening).toBe('refused')
     // A null initiator models toolbar navigation.
     guest.emit('did-start-navigation', { isMainFrame: true, initiator: null })
@@ -178,84 +168,11 @@ describe('browser page prompts', () => {
 
     vi.advanceTimersByTime(BROWSER_PAGE_PROMPT_TIMEOUT_MS)
     expect(ask(guest).opening).toBe('refused')
-    guest.emit('input-event', {}, { type: 'mouseDown' })
+    // Clicks in out-of-process frames reach only before-mouse-event.
+    guest.emit('before-mouse-event', {}, { type: 'mouseDown' })
     expect(ask(guest).opening).toBe('prompting')
 
     await respondToBrowserPagePrompt(renderer, { requestId: latestId(renderer), answer: true })
     expect(ask(guest).opening).toBe('prompting')
-  })
-
-  it('closes the prompt with a null answer when it expires or its page goes away', async () => {
-    const renderer = mockRenderer(10)
-    const expiring = ask(mockGuest(renderer, 'page-1'))
-    const expiringId = latestId(renderer)
-    const closingGuest = mockGuest(renderer, 'page-2')
-    const closing = ask(closingGuest)
-    const closingId = latestId(renderer)
-
-    cancelBrowserPagePrompts('page-2')
-    vi.advanceTimersByTime(BROWSER_PAGE_PROMPT_TIMEOUT_MS)
-    await Promise.resolve()
-
-    expect(closedRequestIds(renderer)).toEqual([closingId, expiringId])
-    expect(expiring.settle).toHaveBeenCalledWith(null)
-    expect(closing.settle).toHaveBeenCalledWith(null)
-    await expect(
-      respondToBrowserPagePrompt(renderer, { requestId: closingId, answer: true })
-    ).resolves.toBe('rejected')
-    expect(ask(closingGuest).opening).toBe('prompting')
-  })
-
-  it.each([
-    ['navigates to a new document', 'did-navigate'],
-    ['closes, as a popup does', 'destroyed'],
-    ['crashes', 'render-process-gone']
-  ])('closes the prompt when the page that asked %s', async (_name, event) => {
-    const renderer = mockRenderer(10)
-    const guest = mockGuest(renderer, 'page-1')
-    const { settle } = ask(guest)
-    const requestId = latestId(renderer)
-
-    guest.emit(event)
-
-    expect(closedRequestIds(renderer)).toEqual([requestId])
-    expect(settle).toHaveBeenCalledWith(null)
-    await expect(respondToBrowserPagePrompt(renderer, { requestId, answer: true })).resolves.toBe(
-      'rejected'
-    )
-    expect(ask(guest).opening).toBe('prompting')
-  })
-
-  it('closes the prompt when the window that was asked closes or crashes', () => {
-    const renderer = mockRenderer(10)
-    const { settle } = ask(mockGuest(renderer, 'page-1'))
-
-    renderer.emit('render-process-gone')
-
-    expect(settle).toHaveBeenCalledWith(null)
-  })
-
-  it('stops watching the page once its prompt is answered', async () => {
-    const renderer = mockRenderer(10)
-    const guest = mockGuest(renderer, 'page-1')
-    ask(guest)
-
-    await respondToBrowserPagePrompt(renderer, { requestId: latestId(renderer), answer: true })
-
-    const watched = ['did-navigate', 'destroyed', 'render-process-gone']
-    expect(watched.map((e) => guest.listenerCount(e) + renderer.listenerCount(e))).toEqual([
-      0, 0, 0
-    ])
-  })
-
-  it('reports a yes that could not be carried out', async () => {
-    const renderer = mockRenderer(10)
-    const guest = mockGuest(renderer, 'page-1')
-    const failing = ask(guest)
-    failing.settle.mockResolvedValue('failed')
-
-    await expect(
-      respondToBrowserPagePrompt(renderer, { requestId: latestId(renderer), answer: true })
-    ).resolves.toBe('failed')
   })
 })

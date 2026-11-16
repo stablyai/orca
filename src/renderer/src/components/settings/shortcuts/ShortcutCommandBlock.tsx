@@ -6,7 +6,7 @@ import type {
   KeybindingDefinition,
   KeybindingInput
 } from '../../../../../shared/keybindings/types'
-import { cn } from '../../../lib/utils'
+import { cn } from '../../../lib/class-names'
 import { Badge } from '../../ui/badge'
 import { Button } from '../../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
@@ -16,7 +16,7 @@ import { ShortcutBindingSubRow } from './ShortcutBindingSubRow'
 import { ShortcutRecorderButton } from './ShortcutRecorderButton'
 import { ShortcutRemoveButton } from './ShortcutRemoveButton'
 import type { ShortcutTerminalStatus } from './shortcut-terminal-status'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type ShortcutCommandBlockProps = {
   item: KeybindingDefinition
@@ -63,6 +63,7 @@ export function ShortcutCommandBlock({
   onDisableAction,
   onEnableAction
 }: ShortcutCommandBlockProps): React.JSX.Element {
+  const t = useTranslate()
   const hasBinding = effective.length > 0
   const isMulti = effective.length >= 2
   // An explicit empty override means the user turned the action off entirely.
@@ -73,19 +74,22 @@ export function ShortcutCommandBlock({
   const canEnable = isDisabled && previousBindings.length > 0
 
   const doubleTapHint = platform === 'darwin' ? '⇧⇧' : '⇧ ⇧'
-  const recordingMessage = translate(
+  const recordingMessage = t(
     'auto.components.settings.ShortcutCommandBlock.eb72c52c28',
     'Press a shortcut, or double-tap a modifier (e.g. {{value0}}). Esc cancels.',
     { value0: doubleTapHint }
   )
-  const helperMessage = error
+  // A rejected chord keeps the recorder listening, so pair the error with a retry hint.
+  const recordingHint = isRecording
     ? error
-    : isRecording
-      ? recordingMessage
-      : warnings.length > 0
-        ? warnings.join(' ')
-        : ''
-  const helperTone = error || (!isRecording && warnings.length > 0) ? 'error' : 'muted'
+      ? t(
+          'auto.components.settings.ShortcutCommandBlock.retryAfterError',
+          'Press another shortcut, or Esc to cancel.'
+        )
+      : recordingMessage
+    : ''
+  const warningMessage = !error && !isRecording ? warnings.join(' ') : ''
+  const helperTone = error || warningMessage ? 'error' : 'muted'
 
   const recorderFor = (binding: string | null, index: number): React.JSX.Element => (
     <ShortcutRecorderButton
@@ -108,7 +112,7 @@ export function ShortcutCommandBlock({
   return (
     <SearchableSetting
       title={item.title}
-      description={translate(
+      description={t(
         'auto.components.settings.ShortcutCommandBlock.70b5d25583',
         '{{value0}} shortcut',
         { value0: groupTitle }
@@ -117,8 +121,8 @@ export function ShortcutCommandBlock({
       forceVisible
       className="group/shortcut flex max-w-none flex-col"
     >
-      <div className="flex min-h-9 items-center gap-3 rounded-md px-2 py-1 transition-colors hover:bg-accent/40 focus-within:bg-accent/40">
-        <div className="flex min-w-0 flex-1 items-center gap-2">
+      <div className="-mx-2 flex min-h-9 items-center gap-3 rounded-md px-2 py-1 transition-colors hover:bg-accent/40 focus-within:bg-accent/40">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
           <TruncatedSidebarLabel
             text={item.title}
             className={cn('text-sm', isDisabled ? 'text-muted-foreground' : 'text-foreground')}
@@ -127,12 +131,12 @@ export function ShortcutCommandBlock({
           />
           {modified ? (
             <Badge variant="outline" className="shrink-0 text-[11px]">
-              {translate('auto.components.settings.ShortcutCommandBlock.287e07ddde', 'Modified')}
+              {t('auto.components.settings.ShortcutCommandBlock.287e07ddde', 'Modified')}
             </Badge>
           ) : null}
           {isDisabled ? (
             <Badge variant="outline" className="shrink-0 text-[11px] text-muted-foreground">
-              {translate('auto.components.settings.ShortcutCommandBlock.3c83cd7d1c', 'Disabled')}
+              {t('auto.components.settings.ShortcutCommandBlock.3c83cd7d1c', 'Disabled')}
             </Badge>
           ) : null}
           {terminalStatus && hasBinding ? (
@@ -164,7 +168,7 @@ export function ShortcutCommandBlock({
                     variant="ghost"
                     size="icon-xs"
                     className="text-muted-foreground hover:text-foreground"
-                    aria-label={translate(
+                    aria-label={t(
                       'auto.components.settings.ShortcutCommandBlock.a0e2ef0e61',
                       'Add another shortcut for {{value0}}',
                       { value0: item.title }
@@ -175,7 +179,7 @@ export function ShortcutCommandBlock({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="top" sideOffset={4}>
-                  {translate(
+                  {t(
                     'auto.components.settings.ShortcutCommandBlock.245c83af24',
                     'Add another shortcut'
                   )}
@@ -190,7 +194,7 @@ export function ShortcutCommandBlock({
                     variant="ghost"
                     size="icon-xs"
                     className="text-muted-foreground hover:text-foreground"
-                    aria-label={translate(
+                    aria-label={t(
                       'auto.components.settings.ShortcutCommandBlock.07939d084e',
                       'Reset {{value0}} to default',
                       { value0: item.title }
@@ -201,7 +205,7 @@ export function ShortcutCommandBlock({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="top" sideOffset={4}>
-                  {translate(
+                  {t(
                     'auto.components.settings.ShortcutCommandBlock.9b02917027',
                     'Reset to default'
                   )}
@@ -216,7 +220,7 @@ export function ShortcutCommandBlock({
                     variant="ghost"
                     size="icon-xs"
                     className="text-muted-foreground hover:text-destructive"
-                    aria-label={translate(
+                    aria-label={t(
                       'auto.components.settings.ShortcutCommandBlock.a799f90f82',
                       'Disable {{value0}}',
                       { value0: item.title }
@@ -227,7 +231,7 @@ export function ShortcutCommandBlock({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="top" sideOffset={4}>
-                  {translate(
+                  {t(
                     'auto.components.settings.ShortcutCommandBlock.25e6e76618',
                     'Disable shortcut'
                   )}
@@ -252,14 +256,14 @@ export function ShortcutCommandBlock({
                 variant="ghost"
                 size="xs"
                 className="text-muted-foreground hover:text-foreground"
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.settings.ShortcutCommandBlock.482a60225d',
                   'Enable {{value0}}',
                   { value0: item.title }
                 )}
                 onClick={() => onEnableAction(item.id)}
               >
-                {translate('auto.components.settings.ShortcutCommandBlock.6287677c37', 'Enable')}
+                {t('auto.components.settings.ShortcutCommandBlock.6287677c37', 'Enable')}
               </Button>
             ) : (
               <Tooltip>
@@ -269,7 +273,7 @@ export function ShortcutCommandBlock({
                     variant="ghost"
                     size="icon-xs"
                     className="text-muted-foreground hover:text-foreground"
-                    aria-label={translate(
+                    aria-label={t(
                       'auto.components.settings.ShortcutCommandBlock.01481b964c',
                       'Add shortcut for {{value0}}',
                       { value0: item.title }
@@ -280,10 +284,7 @@ export function ShortcutCommandBlock({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="top" sideOffset={4}>
-                  {translate(
-                    'auto.components.settings.ShortcutCommandBlock.035a822ef0',
-                    'Add shortcut'
-                  )}
+                  {t('auto.components.settings.ShortcutCommandBlock.035a822ef0', 'Add shortcut')}
                 </TooltipContent>
               </Tooltip>
             )
@@ -293,7 +294,7 @@ export function ShortcutCommandBlock({
         </div>
       </div>
 
-      {helperMessage ? (
+      {error || recordingHint || warningMessage ? (
         <span
           className={cn(
             'block whitespace-normal px-2 text-[11px] leading-4',
@@ -301,7 +302,12 @@ export function ShortcutCommandBlock({
           )}
           aria-live="polite"
         >
-          {helperMessage}
+          {/* Separate nodes so ending recording keeps the error text (and a selection on it) mounted. */}
+          {error ? <span>{error}</span> : null}
+          {recordingHint ? (
+            <span className={error ? 'ms-1' : undefined}>{recordingHint}</span>
+          ) : null}
+          {warningMessage}
         </span>
       ) : null}
 

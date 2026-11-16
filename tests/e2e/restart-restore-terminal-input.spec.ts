@@ -25,8 +25,8 @@ import {
   probeOwnershipRebuildRevival
 } from './helpers/terminal-input-probes'
 import { waitForRestoredTerminalInputReady } from './helpers/restored-terminal-input-readiness'
-import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
-import { PTY_SESSION_ID_SEPARATOR } from '../../src/shared/pty-session-id-format'
+import { PROTOCOL_VERSION } from '../../src/main/daemon/protocol/daemon-protocol-version'
+import { PTY_SESSION_ID_SEPARATOR } from '../../src/shared/terminal/pty/lifecycle/pty-session-id-format'
 
 const REQUIRE_WINDOWS_TERMINAL_RESTART_E2E =
   process.env.ORCA_REQUIRE_WINDOWS_TERMINAL_RESTART_E2E === '1'

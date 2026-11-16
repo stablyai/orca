@@ -1,15 +1,15 @@
 import type {
   RuntimeMobileSessionTabsRemovedResult,
   RuntimeMobileSessionTabsResult
-} from '../../../../shared/runtime-types'
+} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   MAX_TRACKED_SESSION_TABS_INVENTORY_OMISSIONS,
   VISIBILITY_INVENTORY_REMOVAL_EPOCH,
   latestSessionTabsSnapshotByWorktree,
   sessionTabsInventoryOmissionsByWorktree,
-  type TrackedWebSessionTabsWorktree
+  type TrackedWebSessionTabsWorktree,
+  sessionTabsFreshnessKey
 } from './state'
-import { sessionTabsFreshnessKey } from './tracking'
 
 function omissionKey(environmentId: string, worktreeId: string): string {
   return `${environmentId}:${worktreeId}`

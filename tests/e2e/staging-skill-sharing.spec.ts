@@ -3,13 +3,13 @@ import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
-import type { SkillBundleInstallResult } from '../../src/shared/skill-bundle-install-contract'
-import type { SkillCloudPublishResult } from '../../src/shared/skill-cloud-contract'
-import type { SkillInstallDestination } from '../../src/shared/skill-install-contract'
+import type { SkillBundleInstallResult } from '../../src/shared/skills/installation/skill-bundle-install-contract'
+import type { SkillCloudPublishResult } from '../../src/shared/skills/sharing/skill-cloud-contract'
+import type { SkillInstallDestination } from '../../src/shared/skills/installation/skill-install-contract'
 import type {
   SkillBundleShareInstallOperation,
   SkillSharePreview
-} from '../../src/shared/skill-sharing-contract'
+} from '../../src/shared/skills/sharing/skill-sharing-contract'
 import { expect, test } from './helpers/orca-app'
 import {
   launchHeadlessPairedRuntimeHost,

@@ -16,9 +16,9 @@ import {
   isClaudeCompactCompletionConsumed,
   markClaudeCompactCompletionConsumed,
   resolveLegacyCompactTrigger
-} from '../../../shared/agent-hook-listener/providers/claude-compact-completion'
+} from '../../../shared/agent-hook-listener/providers/claude/lifecycle/claude-compact-completion'
 import { launchTokenHash } from '../../../shared/agent-hook-listener/transport/agent-hook-spool'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type { IncomingAgentHookEvent } from './server-types'
 import {
   AGENT_STATUS_LEGACY_UNADVERTISED_PEER_CAPABILITIES,

@@ -3,14 +3,15 @@ import type { AgentDefaultSurface } from '../../../../shared/native-chat/native-
 import { normalizeAgentDefaultSurface } from '../../../../shared/native-chat/native-chat-providers'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { AGENT_DEFAULT_SURFACE_SECTION_ID } from '../settings/agents/agents-search'
+import { CHAT_LAUNCH_DEFAULT_SECTION_ID } from '../settings/chat/chat-launch-search'
 import {
   trackAgentDefaultSurfaceChanged,
   trackChatUiFeatureTipAction
 } from './feature-tip-telemetry'
 
 export async function setAgentDefaultSurfaceFromFeatureTip(
-  surface: AgentDefaultSurface
+  surface: AgentDefaultSurface,
+  { confirmWithToast = true }: { confirmWithToast?: boolean } = {}
 ): Promise<boolean> {
   const { settings, updateSettingsOrThrow } = useAppStore.getState()
   const fromSurface = normalizeAgentDefaultSurface(settings?.agentDefaultSurface)
@@ -27,17 +28,25 @@ export async function setAgentDefaultSurfaceFromFeatureTip(
       source: 'launch_card',
       launch_tip_shown: true
     })
+    if (surface === 'chat' && confirmWithToast) {
+      toast.success(
+        translate(
+          'featureTips.chatUiHere.switched',
+          'Chat UI is now the default for new agents. You can switch back any time in Settings → Chat UI.'
+        )
+      )
+    }
     return true
   } catch {
     toast.error(
       surface === 'chat'
         ? translate(
             'featureTips.chatUiHere.saveFailed',
-            'Could not turn on Chat UI. Choose Chat in Settings → Agents.'
+            'Could not turn on Chat UI. Turn it on in Settings → Chat UI.'
           )
         : translate(
             'featureTips.chatUiHere.terminalSaveFailed',
-            'Could not switch to terminal. Choose Terminal in Settings → Agents.'
+            'Could not switch to terminal. Turn off Chat UI in Settings → Chat UI.'
           )
     )
     return false
@@ -46,11 +55,6 @@ export async function setAgentDefaultSurfaceFromFeatureTip(
 
 export function openChatUiFeatureTipSettings(): void {
   const { openSettingsTarget, openSettingsPage } = useAppStore.getState()
-  openSettingsTarget({
-    pane: 'agents',
-    repoId: null,
-    hostScope: { kind: 'local' },
-    sectionId: AGENT_DEFAULT_SURFACE_SECTION_ID
-  })
+  openSettingsTarget({ pane: 'chat', repoId: null, sectionId: CHAT_LAUNCH_DEFAULT_SECTION_ID })
   openSettingsPage()
 }

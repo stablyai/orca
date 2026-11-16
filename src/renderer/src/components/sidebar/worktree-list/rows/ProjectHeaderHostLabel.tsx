@@ -6,8 +6,9 @@ import {
   WslHostMark,
   wslHostRunsOnLabel
 } from '@/components/wsl-host-mark/WslHostMark'
-import { isRepoHeaderActionTarget } from '../../project-header-drag-contract'
+import { isRepoHeaderActionTarget } from '../drag/project-header-drag-contract'
 import type { ProjectHeaderHostContext } from './project-header-host-context'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function ProjectHeaderHostLabel({
   context
@@ -54,6 +55,7 @@ function ProjectHeaderIdentityTooltip({
   label: string
   children: React.JSX.Element
 }): React.JSX.Element {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
   const actionOwnsTooltip = useRef(false)
   const wslDistro = useWslHostDistro(context.hostId)
@@ -90,7 +92,7 @@ function ProjectHeaderIdentityTooltip({
         sideOffset={8}
         className="max-w-80 whitespace-normal break-words text-left"
       >
-        {label} — {wslDistro ? wslHostRunsOnLabel(wslDistro) : context.label}
+        {label} — {wslDistro ? wslHostRunsOnLabel(wslDistro, t) : context.label}
         {context.detail !== context.label ? <div>{context.detail}</div> : null}
       </TooltipContent>
     </Tooltip>

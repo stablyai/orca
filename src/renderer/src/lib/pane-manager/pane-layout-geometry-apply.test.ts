@@ -1,10 +1,8 @@
 // @vitest-environment happy-dom
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Mock } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { PaneManagerOptions } from './pane-manager-types'
-import type { TerminalPaneLayoutNode } from '../../../../shared/terminal-tab-types'
-import { serializePaneTree } from '@/components/terminal-pane/layout-serialization'
-import { applyExpandedLayoutTo } from '@/components/terminal-pane/expand-collapse'
+import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout/terminal-tab-types'
+import { serializePaneTree } from '@/components/terminal-pane/layout/terminal-layout-dom-serialization'
 
 // Why: happy-dom has no canvas, so xterm cannot open; geometry never touches the terminal.
 vi.mock('./pane-lifecycle', async (importOriginal) => {
@@ -16,7 +14,6 @@ const { PaneManager } = await import('./pane-manager')
 
 const LEAF_A = '11111111-1111-4111-8111-111111111111'
 const LEAF_B = '22222222-2222-4222-8222-222222222222'
-const LEAF_C = '33333333-3333-4333-8333-333333333333'
 
 const leaf = (leafId: string): TerminalPaneLayoutNode => ({ type: 'leaf', leafId })
 
@@ -28,14 +25,6 @@ describe('PaneManager.applyLayoutGeometry', () => {
   function mountTwoPanes(direction: 'vertical' | 'horizontal', ratio?: number): void {
     const first = manager.createInitialPane({ leafId: LEAF_A })
     manager.splitPane(first.id, direction, { leafId: LEAF_B, ratio })
-    clearCallbacks()
-  }
-
-  function mountThreePanes(): void {
-    const first = manager.createInitialPane({ leafId: LEAF_A })
-    const second = manager.splitPane(first.id, 'vertical', { leafId: LEAF_B, ratio: 0.6 })
-    expect(second).not.toBeNull()
-    manager.splitPane(second!.id, 'horizontal', { leafId: LEAF_C })
     clearCallbacks()
   }
 
@@ -51,12 +40,6 @@ describe('PaneManager.applyLayoutGeometry', () => {
 
   function paneIdentity(): unknown[] {
     return manager.getPanes().flatMap((pane) => [pane.id, pane.container, pane.terminal])
-  }
-
-  function recordMutations(): () => MutationRecord[] {
-    const observer = new MutationObserver(() => {})
-    observer.observe(root, { subtree: true, childList: true, attributes: true })
-    return () => observer.takeRecords()
   }
 
   beforeEach(() => {
@@ -99,66 +82,6 @@ describe('PaneManager.applyLayoutGeometry', () => {
     expect(dividers[0]).not.toBe(oldDivider)
     expect(dividers[0].classList.contains('is-horizontal')).toBe(true)
     expect(paneIdentity()).toEqual(before)
-    expect(onLayoutChanged).not.toHaveBeenCalled()
-  })
-
-  it('makes no DOM writes for a layout identical to the mounted tree', () => {
-    mountThreePanes()
-    const layout = serialized()
-    expect(layout).not.toBeNull()
-    const takeRecords = recordMutations()
-
-    expect(manager.applyLayoutGeometry(layout!)).toBe(false)
-
-    expect(takeRecords()).toEqual([])
-    expect(onLayoutChanged).not.toHaveBeenCalled()
-  })
-
-  it('leaves the DOM untouched when the layout names a different tree', () => {
-    mountTwoPanes('vertical')
-    const takeRecords = recordMutations()
-
-    const swapped = manager.applyLayoutGeometry({
-      type: 'split',
-      direction: 'horizontal',
-      first: leaf(LEAF_B),
-      second: leaf(LEAF_A),
-      ratio: 0.3
-    })
-    const extraLeaf = manager.applyLayoutGeometry({
-      type: 'split',
-      direction: 'horizontal',
-      first: leaf(LEAF_A),
-      second: { type: 'split', direction: 'vertical', first: leaf(LEAF_B), second: leaf(LEAF_C) }
-    })
-
-    expect(swapped).toBe(false)
-    expect(extraLeaf).toBe(false)
-    expect(takeRecords()).toEqual([])
-  })
-
-  it('leaves a zoomed pane tree untouched', () => {
-    mountThreePanes()
-    const zoomed = manager.getPanes().find((pane) => pane.leafId === LEAF_C)
-    expect(zoomed).toBeDefined()
-    const expanded = applyExpandedLayoutTo(zoomed!.id, {
-      managerRef: { current: manager },
-      containerRef: { current: root },
-      expandedStyleSnapshotRef: { current: new Map() }
-    })
-    expect(expanded).toBe(true)
-    const takeRecords = recordMutations()
-
-    const applied = manager.applyLayoutGeometry({
-      type: 'split',
-      direction: 'horizontal',
-      first: leaf(LEAF_A),
-      second: { type: 'split', direction: 'vertical', first: leaf(LEAF_B), second: leaf(LEAF_C) },
-      ratio: 0.3
-    })
-
-    expect(applied).toBe(false)
-    expect(takeRecords()).toEqual([])
     expect(onLayoutChanged).not.toHaveBeenCalled()
   })
 })

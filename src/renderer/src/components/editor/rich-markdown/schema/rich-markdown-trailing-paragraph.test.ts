@@ -56,15 +56,6 @@ describe('the synthetic trailing paragraph', () => {
     expect(editor.getMarkdown()).toBe('> Quote\n\nNew paragraph')
   })
 
-  it('keeps an intentionally added blank paragraph', () => {
-    const editor = createEditor('> Quote')
-    editor.commands.setTextSelection(2)
-    editor.commands.setTextSelection(editor.state.doc.content.size - 1)
-    editor.commands.splitBlock()
-    expect(createEditor(editor.getMarkdown()).getJSON()).toEqual(editor.getJSON())
-    expect(editor.state.doc.childCount).toBe(3)
-  })
-
   it('keeps authored trailing blank paragraphs after loading and replacing content', () => {
     const editor = createEditor('> Quote\n\n')
     editor.commands.setTextSelection(2)

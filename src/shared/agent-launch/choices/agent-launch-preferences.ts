@@ -9,7 +9,7 @@ import { isTuiAgent } from '../catalog/tui-agent-config'
 import {
   composeAgentLaunchModel,
   hasIndependentAgentLaunchOptions
-} from '../../agent-session/options/agent-session-option-launch'
+} from '../../agent-session/options/launch/agent-session-option-launch'
 
 /** Compose model/effort for this terminal; send permission mode only where the agent has a flag. */
 export function toAgentLaunchPreferences(
@@ -49,3 +49,14 @@ export function agentLaunchNeedsPreparedCommand(
 }
 
 export const agentPermissionNeedsPreparedCommand = agentLaunchNeedsPreparedCommand
+
+export function toAgentSessionOptionValues(values: Readonly<Record<string, unknown>> | undefined) {
+  return values === undefined
+    ? undefined
+    : Object.fromEntries(
+        Object.entries(values).filter(
+          (entry): entry is [string, string | boolean] =>
+            typeof entry[1] === 'string' || typeof entry[1] === 'boolean'
+        )
+      )
+}

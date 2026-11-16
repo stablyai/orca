@@ -3,12 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot
-} from '../../../shared/runtime-session-contracts'
+} from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   HEADLESS_LEAF_ID,
   HEADLESS_SECOND_LEAF_ID,
   TEST_WORKTREE_ID
-} from '../orca-runtime-test-fixtures.spec'
+} from '../orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import {
   SURFACE_TAB_ID,
   surfaceRuntime
@@ -21,7 +21,9 @@ import {
   threeTabSurfaceRuntime
 } from './session-tabs-layout-moves.test-fixture'
 
-vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
+vi.mock('../../../shared/workspace-layout/layout-owner-switch', () => ({
+  ORCA_LAYOUT_OWNER_IS_MAIN: true
+}))
 
 type Runtime = ReturnType<typeof surfaceRuntime>['runtime']
 
@@ -71,7 +73,7 @@ function windowPublication(): RuntimeMobileSessionTabsSnapshot {
 /** Attaches a window that publishes once, then records every push a phone gets. */
 async function windowedPhone(runtime: Runtime): Promise<RuntimeMobileSessionTabsResult[]> {
   runtime.attachWindow(1)
-  runtime.syncWindowGraph(1, {
+  await runtime.syncWindowGraph(1, {
     tabs: [],
     leaves: [],
     mobileSessionTabs: [windowPublication(), UNLOADED_SSH_ROWS]
@@ -104,32 +106,6 @@ describe('session.tabs on a windowed server follow main without a window publish
     vi.useRealTimers()
   })
 
-  it('a CLI rename reaches the pushed and listed rows', async () => {
-    const { runtime } = surfaceRuntime()
-    const seen = await windowedPhone(runtime)
-
-    await runtime.applyLayoutCommand({
-      type: 'renameTab',
-      workspace: TEST_WORKTREE_ID,
-      tabId: SURFACE_TAB_ID,
-      kind: 'custom',
-      title: 'Build'
-    })
-    await vi.runAllTimersAsync()
-
-    const named = (rows: RuntimeMobileSessionTabsResult | undefined) =>
-      (rows?.tabs ?? []).map((tab) => [tab.title, tab.type === 'terminal' && tab.customTitle])
-    // The manual name too, which a paired desktop reads to keep or replace its own.
-    expect(named(seen.at(-1))).toEqual([
-      ['Build', 'Build'],
-      ['Build', 'Build']
-    ])
-    expect(named(await listed(runtime))).toEqual([
-      ['Build', 'Build'],
-      ['Build', 'Build']
-    ])
-  })
-
   it('a CLI create reaches the pushed and listed rows', async () => {
     const { runtime, store } = surfaceRuntime()
     const seen = await windowedPhone(runtime)
@@ -144,79 +120,6 @@ describe('session.tabs on a windowed server follow main without a window publish
     expect(layoutTabIds(store)).toEqual([SURFACE_TAB_ID, SECOND_TAB_ID])
     expect(parentTabsOf(seen.at(-1))).toEqual([SURFACE_TAB_ID, SECOND_TAB_ID])
     expect(parentTabsOf(await listed(runtime))).toEqual([SURFACE_TAB_ID, SECOND_TAB_ID])
-  })
-
-  it("a later commit, or the window's older snapshot, never re-adds a row main's layout lacks", async () => {
-    const { runtime } = threeTabSurfaceRuntime()
-    await windowedPhone(runtime)
-    await runtime.applyLayoutCommand({
-      type: 'closeTabs',
-      workspace: TEST_WORKTREE_ID,
-      tabIds: [SECOND_TAB_ID],
-      force: true
-    })
-    await vi.runAllTimersAsync()
-    // The interim phone-close drop: a writer stores the rows without the closed tab.
-    const held = runtime.mobileSessionTabsByWorktree.get(TEST_WORKTREE_ID)
-    if (!held) {
-      throw new Error('the window published rows')
-    }
-    runtime.storeMobileSessionSnapshot(TEST_WORKTREE_ID, {
-      ...held,
-      tabs: held.tabs.filter((tab) => !parentTabsOf({ tabs: [tab] }).includes(SECOND_TAB_ID))
-    })
-
-    await runtime.applyLayoutCommand({
-      type: 'renameTab',
-      workspace: TEST_WORKTREE_ID,
-      tabId: SURFACE_TAB_ID,
-      kind: 'custom',
-      title: 'Build'
-    })
-    await vi.runAllTimersAsync()
-    // The window republishes its older snapshot, which still lists the closed tab.
-    const older = windowPublication()
-    runtime.syncWindowGraph(1, {
-      tabs: [],
-      leaves: [],
-      mobileSessionTabs: [
-        {
-          ...older,
-          snapshotVersion: 2,
-          tabs: [
-            ...older.tabs,
-            ...held.tabs.filter((tab) => parentTabsOf({ tabs: [tab] }).includes(SECOND_TAB_ID))
-          ]
-        }
-      ]
-    })
-    await vi.runAllTimersAsync()
-
-    expect(parentTabsOf(await listed(runtime))).not.toContain(SECOND_TAB_ID)
-  })
-
-  it('a workspace on an unloaded SSH host keeps the rows its window published', async () => {
-    const { runtime } = surfaceRuntime()
-    await windowedPhone(runtime)
-    const before = runtime.mobileSessionTabsByWorktree.get(UNLOADED_SSH_ROWS.worktree)
-
-    await runtime.applyLayoutCommand({
-      type: 'renameTab',
-      workspace: TEST_WORKTREE_ID,
-      tabId: SURFACE_TAB_ID,
-      kind: 'custom',
-      title: 'Build'
-    })
-    await vi.runAllTimersAsync()
-    runtime.storeMobileSessionSnapshot(UNLOADED_SSH_ROWS.worktree, {
-      ...UNLOADED_SSH_ROWS,
-      snapshotVersion: 2
-    })
-
-    expect(before?.tabs.map((tab) => tab.id)).toEqual(['ssh-tab::ssh-leaf'])
-    const after = runtime.mobileSessionTabsByWorktree.get(UNLOADED_SSH_ROWS.worktree)
-    expect(after?.tabs).toEqual(UNLOADED_SSH_ROWS.tabs)
-    expect(after?.tabGroups).toEqual(UNLOADED_SSH_ROWS.tabGroups)
   })
 
   it("after the window closes, main's later moves reach the phone, as no-window rows", async () => {

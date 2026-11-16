@@ -1,12 +1,17 @@
-import { AcpAgentError } from '../acp/acp-errors'
-import { isAgentSessionPreSpawnError } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import { AntigravityChatAuthConfigError } from '../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
+import { AcpAgentError } from '../acp/transport/acp-errors'
+import '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import { isAgentSessionPreSpawnError } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import { AntigravitySignInSentence } from './antigravity-chat-account'
 
 export const SIGN_IN_FAILED = 'Google sign-in for Antigravity failed. Start sign-in again.'
 
 export function antigravitySignInFailure(error: unknown): string {
   const cause = isAgentSessionPreSpawnError(error) ? error.cause : error
-  if (cause instanceof AntigravitySignInSentence) {
+  if (
+    cause instanceof AntigravitySignInSentence ||
+    cause instanceof AntigravityChatAuthConfigError
+  ) {
     return cause.message
   }
   if (isAgentSessionPreSpawnError(error) && error.reason === 'runtimeNotInstalled') {
@@ -27,17 +32,3 @@ export function antigravitySignInFailure(error: unknown): string {
   }
   return SIGN_IN_FAILED
 }
-
-export function antigravitySignInSessionFailure(error: unknown): never {
-  const plain = error instanceof AcpAgentError && error.code === -32603
-  throw plain && antigravitySignInFailure(error) === SIGN_IN_FAILED
-    ? new AntigravitySignInSentence(
-        'Antigravity authenticated, but could not initialize a session or load models.'
-      )
-    : error
-}
-
-export const SECOND_LINK = {
-  phase: 'failed',
-  error: 'Antigravity started more than one Google sign-in request.'
-} as const

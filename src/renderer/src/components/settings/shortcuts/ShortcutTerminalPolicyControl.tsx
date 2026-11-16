@@ -3,7 +3,7 @@ import type { TerminalShortcutPolicy } from '../../../../../shared/keybindings/t
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsRow } from '../form-controls/SettingsFormControls'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function ShortcutTerminalPolicyControl({
   terminalShortcutPolicy,
@@ -16,14 +16,15 @@ export function ShortcutTerminalPolicyControl({
     terminalShortcutPolicy?: TerminalShortcutPolicy
   }) => Promise<void> | void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <SearchableSetting
       id="terminal-shortcut-policy"
-      title={translate(
-        'auto.components.settings.ShortcutTerminalPolicyControl.c3a554288e',
-        'Shortcuts in Terminal'
+      title={t(
+        'auto.components.settings.ShortcutTerminalPolicyControl.7d81bebd89',
+        'Shortcuts in terminal'
       )}
-      description={translate(
+      description={t(
         'auto.components.settings.ShortcutTerminalPolicyControl.0f55c6f15c',
         'Choose whether Orca or the focused terminal wins when shortcuts overlap.'
       )}
@@ -31,11 +32,11 @@ export function ShortcutTerminalPolicyControl({
       className="max-w-none"
     >
       <SettingsRow
-        label={translate(
-          'auto.components.settings.ShortcutTerminalPolicyControl.c3a554288e',
-          'Shortcuts in Terminal'
+        label={t(
+          'auto.components.settings.ShortcutTerminalPolicyControl.7d81bebd89',
+          'Shortcuts in terminal'
         )}
-        description={translate(
+        description={t(
           'auto.components.settings.ShortcutTerminalPolicyControl.c43c7ff5f9',
           'Decide who first intercepts shortcuts'
         )}
@@ -53,13 +54,13 @@ export function ShortcutTerminalPolicyControl({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="orca-first">
-                {translate(
+                {t(
                   'auto.components.settings.ShortcutTerminalPolicyControl.63308571d8',
                   'Orca first'
                 )}
               </SelectItem>
               <SelectItem value="terminal-first">
-                {translate(
+                {t(
                   'auto.components.settings.ShortcutTerminalPolicyControl.0762983d13',
                   'Terminal first'
                 )}

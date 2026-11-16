@@ -1,4 +1,4 @@
-import '../../orca-runtime-test-lifecycle.spec'
+import '../../orca-runtime-tests/orca-runtime-test-lifecycle.spec'
 import { expect, it, vi } from 'vitest'
 import {
   identityFixture,
@@ -10,7 +10,7 @@ import {
   makeRuntimeStoreWithWorkspaceSession,
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH
-} from '../../orca-runtime-test-fixtures.spec'
+} from '../../orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 
 function sessions() {
@@ -98,4 +98,31 @@ it('discovers the actual restored placement only after layout apply and re-reads
     release.resolve()
     watched.close()
   }
+})
+
+it('keeps current pane selection ordered across rebinds and detached same-ID writes', () => {
+  const f = identityFixture()
+  const suffix = PANE.slice(PANE.indexOf(':'))
+  const otherPane = `tab-other${suffix}`
+  f.add('pty-first', 'term_first', otherPane, false)
+  f.add('pty-second', 'term_second', PANE, true)
+  const first = f.owner.ptysById.get('pty-first')!
+  const second = f.owner.ptysById.get('pty-second')!
+  expect(f.owner.getPtyRecordForPaneKey(PANE)).toBe(second)
+  f.owner.setPtyConnected(first, true)
+  expect(f.owner.getPtyRecordForPaneKey(PANE)).toBe(first)
+  f.owner.setPtyConnected(first, false)
+  f.owner.setPtyConnected(second, false)
+  expect(f.owner.getPtyRecordForPaneKey(PANE)).toBe(second)
+
+  const movedPane = 'tab-moved:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+  f.owner.source.setRecordedSurface(second, 'tab-moved', movedPane, 1)
+  expect(f.owner.getPtyRecordForPaneKey(movedPane)).toBe(second)
+  expect(f.owner.getPtyRecordForPaneKey(PANE)).toBe(first)
+  const replacement = f.owner.source.createPty({ ...second, paneKey: PANE })
+  f.owner.source.setRecordedSurface(second, 'tab-detached', movedPane, 2)
+  expect(f.owner.getPtyRecordForPaneKey(movedPane)).toBeNull()
+  expect(f.owner.getPtyRecordForPaneKey(PANE)).toBe(replacement)
+  f.owner.source.removePty('pty-second')
+  expect(f.owner.getPtyRecordForPaneKey(PANE)).toBe(first)
 })

@@ -30,11 +30,12 @@ import {
 } from './providers/pi-compatible-synthetic-title'
 import { isDshTerminalTitle } from './providers/dsh-terminal-title'
 import { hasQoderTitleLabelPayload, isQoderTerminalTitle } from './providers/qoder-terminal-title'
+import { isJcodeIdentityTerminalTitle } from './providers/jcode-terminal-title'
 import {
   SYNTHETIC_AGENT_TITLE_AGENTS,
   SYNTHETIC_AGENT_TITLE_PROFILES
 } from './synthetic-agent-title'
-import type { TerminalAgent } from '../../terminal-agent'
+import type { TerminalAgent } from '../identity/terminal-agent'
 import {
   agentForNativeFrame,
   agentForNamedTitlePrefix,
@@ -265,6 +266,7 @@ function collectObserverAnchors(title: string): TerminalAgent[] {
         ? 'dsb'
         : null) ??
       agentForNativeFrame(segment) ??
+      (isJcodeIdentityTerminalTitle(segment) ? 'jcode' : null) ??
       agentForWholeTitle(segment) ??
       agentForSyntheticTitle(segment) ??
       (ANTIGRAVITY_MODEL_TITLE_RE.test(undecorated) ? 'antigravity' : null) ??

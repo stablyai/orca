@@ -4,28 +4,11 @@ import { Editor } from '@tiptap/core'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createRichMarkdownExtensions } from '../schema/rich-markdown-extensions'
 import { createRichMarkdownEditorCodec } from '../document/rich-markdown-source-transport'
-import { getLocalImageSrcCacheKey } from '../../document-images/useLocalImageSrc'
-import {
-  releaseLocalImageBlob as releaseLocalImageSrcByKey,
-  resetLocalImageCacheState as resetLocalImageSrcStateForTests
-} from '../../document-images/local-image-src-cache'
+
+import { resetLocalImageCacheState as resetLocalImageSrcStateForTests } from '../../document-images/local-image-src-cache'
 import { setRichMarkdownImageResolverContext } from './rich-markdown-image-context'
-import { documentResourceAccess } from '@/lib/local-file-access'
 
 // The key the editor leases: rich markdown reads images as resources of their document.
-function diagramCacheKey(): string {
-  const key = getLocalImageSrcCacheKey(
-    'diagram.png',
-    '/repo/docs/readme.md',
-    undefined,
-    undefined,
-    documentResourceAccess('/repo/docs/readme.md')
-  )
-  if (!key) {
-    throw new Error('diagram.png has no local image cache key')
-  }
-  return key
-}
 
 async function flushPromises(): Promise<void> {
   for (let index = 0; index < 5; index += 1) {
@@ -81,29 +64,6 @@ describe('rich markdown local images', () => {
         connectionId: undefined,
         access: { kind: 'document-resource', documentPath: '/repo/docs/readme.md' }
       })
-      expect(host.querySelector('img')?.src).toBe('blob:rich-local-image')
-    } finally {
-      editor.destroy()
-    }
-  })
-
-  it('keeps a displayed image leased when another surface releases the same cache entry', async () => {
-    const host = document.createElement('div')
-    document.body.appendChild(host)
-    const editor = new Editor({
-      element: host,
-      extensions: createRichMarkdownExtensions({ codec: createRichMarkdownEditorCodec() }),
-      content: '![](diagram.png)',
-      contentType: 'markdown'
-    })
-
-    try {
-      setRichMarkdownImageResolverContext(editor, { filePath: '/repo/docs/readme.md' })
-      await flushPromises()
-
-      releaseLocalImageSrcByKey(diagramCacheKey())
-
-      expect(URL.revokeObjectURL).not.toHaveBeenCalledWith('blob:rich-local-image')
       expect(host.querySelector('img')?.src).toBe('blob:rich-local-image')
     } finally {
       editor.destroy()

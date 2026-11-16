@@ -2,7 +2,7 @@ import { Buffer } from 'node:buffer'
 import type { IncomingHttpHeaders } from 'node:http'
 
 import type { AgentHookSource } from './transport/agent-hook-relay'
-import { parsePaneKey } from '../stable-pane-id'
+import { parsePaneKey } from '../workspace-layout/stable-pane-id'
 import { MAX_PANE_KEY_LEN, warnOnHookEnvOrVersionMismatch } from './listener-limits'
 import type { HookListenerState } from './listener-state'
 import { parseAgentHookJson } from './request-body'

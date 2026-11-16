@@ -9,7 +9,7 @@ import {
   pluginDeclarativeActExpansion,
   pluginDeclarativeActTarget
 } from '../declarative/plugin-declarative-act-targets'
-import type { PluginPanelActDriver } from '../../right-sidebar/plugin-panel-act-driver'
+import type { PluginPanelActDriver } from '../../right-sidebar/plugin-panels/health/plugin-panel-act-driver'
 import { runPluginPanelActs } from './plugin-view-acts'
 
 export const cb = (id: string) => ({ $callback: id })

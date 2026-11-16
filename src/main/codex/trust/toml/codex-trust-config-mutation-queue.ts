@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 
 const tailByTomlPath = new Map<string, Promise<void>>()
 // Preserve lane ownership across awaits so nested installer calls cannot deadlock.

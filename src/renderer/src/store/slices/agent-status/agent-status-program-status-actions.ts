@@ -4,7 +4,7 @@ import {
   programStatusFacetsEqual,
   type ProgramStatusFacet
 } from '../../../../../shared/program-status/facet'
-import { resolveAgentPaneAuthorityKey } from '../agent-pane-authority'
+import { resolveAgentPaneAuthorityKey } from './agent-pane-authority'
 
 export function createAgentStatusProgramStatusActions(
   runtime: AgentStatusRuntime
@@ -15,7 +15,7 @@ export function createAgentStatusProgramStatusActions(
       paneKey = resolveAgentPaneAuthorityKey(paneKey)
       let changed = false
       set((s, changedPaneKeys) => {
-        const existing = s.agentStatusByPaneKey[paneKey]
+        const existing = s.agentStatusByPaneKey.get(paneKey)
         // Why no row creation: the facet rides an existing row and never decides one exists.
         if (
           !existing ||
@@ -28,10 +28,9 @@ export function createAgentStatusProgramStatusActions(
         const { programStatus: _previous, ...rest } = existing
         // Why the entry alone: timing, history, sort and attention must not read a facet tick as news.
         return {
-          agentStatusByPaneKey: {
-            ...s.agentStatusByPaneKey,
-            [paneKey]: programStatus ? { ...rest, programStatus } : rest
-          }
+          agentStatusByPaneKey: s.agentStatusByPaneKey.replace([
+            [paneKey, programStatus ? { ...rest, programStatus } : rest]
+          ])
         }
       })
       return changed

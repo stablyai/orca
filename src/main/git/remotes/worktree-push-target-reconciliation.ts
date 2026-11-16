@@ -4,7 +4,7 @@
 import { gitExecFileAsync } from '../command-runner/git-exec-file'
 import { listWorktrees } from '../worktrees/catalog/worktree-scan-cache'
 import type { GitPushTarget } from '../../../shared/worktree/types'
-import { WORKTREE_ID_SEPARATOR } from '../../../shared/pty-session-id-format'
+import { WORKTREE_ID_SEPARATOR } from '../../../shared/terminal/pty/lifecycle/pty-session-id-format'
 import { worktreeIdentityKey } from '../../../shared/worktree/id'
 import { parseGitRemoteFetchUrls } from '../../../shared/git/remotes/git-remote-url-index'
 import {

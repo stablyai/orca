@@ -8,26 +8,27 @@ import {
   normalizeAgentDefaultSurface,
   normalizeNativeChatProviderChoices
 } from '../../../shared/native-chat/native-chat-providers'
-import { resolveNestedWorkerMaxDepth } from '../../../shared/nested-worker-depth'
+import { resolveNestedWorkerMaxDepth } from '../../../shared/orchestration/workers/nested-worker-depth'
 import { sanitizeAgentLaunchProfileUpdates } from '../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import { normalizeTerminalQuickCommands } from '../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { assertTerminalQuickCommandsStorable } from '../../../shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
 import { normalizeTerminalCustomThemes } from '../../../shared/terminal-themes/terminal-custom-themes'
 import { normalizePluginOwnedSettings } from '../../../shared/plugins/capabilities/plugin-owned-settings'
-import { legacyMatchTerminalSidebarWrite } from '../../../shared/plugin-theme-settings'
-import { normalizeTerminalDefaultShell } from '../../../shared/terminal-default-shell'
+import { legacyMatchTerminalSidebarWrite } from '../../../shared/plugins/appearance/plugin-theme-settings'
+import { normalizeTerminalDefaultShell } from '../../../shared/shell/launch/terminal-default-shell'
 import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal/appearance/terminal-cursor-style-settings'
 import { normalizeDesktopTerminalScrollbackRows } from '../../../shared/terminal/replay/terminal-scrollback-policy'
 import { normalizeTerminalMinimumContrastRatio } from '../../../shared/terminal-themes/terminal-minimum-contrast-settings'
-import { normalizeTaskProviderSettings } from '../../../shared/task-providers'
-import { normalizeOpenInApplications } from '../../../shared/open-in-applications'
-import { normalizeTerminalShortcutPolicy } from '../../../shared/keybindings'
+import { normalizeTaskProviderSettings } from '../../../shared/work-items/task-providers'
+import { normalizeOpenInApplications } from '../../../shared/editor/launch/open-in-applications'
+import { normalizeTerminalShortcutPolicy } from '../../../shared/keybindings/effective'
 import { normalizeSourceControlGroupOrder } from '../../../shared/source-control/listing/source-control-group-order'
-import { normalizeAppIconId } from '../../../shared/app-icon'
-import { normalizeUiLanguage } from '../../../shared/ui-language'
-import { normalizeWorktreeVisibilityDefaults } from '../../../shared/external-worktree-visibility'
+import { normalizeAppIconId } from '../../../shared/app-lifecycle/identity/app-icon'
+import { normalizeUiLanguage } from '../../../shared/i18n/ui-language'
+import { normalizeWorktreeVisibilityDefaults } from '../../../shared/worktree/visibility/external-worktree-visibility'
 import { normalizePRBotAuthorOverrides } from '../../../shared/source-control/review-comments/pr-bot-author-overrides'
-import { normalizeMachineName } from '../../../shared/machine-name'
+import { normalizeMachineName } from '../../../shared/remote-runtime/host-metadata/machine-name'
+import { normalizeWorkspaceCleanupRules } from '../../../shared/workspace-cleanup/workspace-cleanup-policy'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
   addMobilePairingCustomAddress,
@@ -42,7 +43,7 @@ import { normalizeNotificationSettings } from './onboarding-normalization'
 import { retireLegacyInstructionsForClearedTextActionRecipes } from './source-control-settings'
 import {
   buildWorkspaceDirHistoryForUpdate,
-  expandWorkspaceDirHome,
+  normalizeWorkspaceDirSetting,
   stripRetiredGlobalSettings
 } from './terminal-settings-migrations'
 
@@ -59,7 +60,7 @@ export function updateSettings(
   updates: Partial<GlobalSettings>,
   options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
 ): GlobalSettings {
-  const sanitizedUpdates = expandWorkspaceDirHome(stripRetiredGlobalSettings(updates))
+  const sanitizedUpdates = normalizeWorkspaceDirSetting(stripRetiredGlobalSettings(updates))
   const linkBehavior = updates.terminalLinkClickBehavior
   if (linkBehavior === 'actions' || linkBehavior === 'open' || linkBehavior === 'none') {
     // Loaded defaults are ambiguous; synchronize the legacy switch only on an explicit write.
@@ -111,6 +112,11 @@ export function updateSettings(
         external: 'hide'
       })
     }
+  }
+  if ('workspaceCleanupPolicy' in updates) {
+    sanitizedUpdates.workspaceCleanupPolicy = normalizeWorkspaceCleanupRules(
+      updates.workspaceCleanupPolicy
+    )
   }
   sanitizeAgentLaunchProfileUpdates(sanitizedUpdates, updates)
   if ('nativeChatPermissionMode' in updates || 'agentPermissionDefault' in updates) {

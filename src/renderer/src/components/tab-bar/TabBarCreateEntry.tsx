@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Input } from '@/components/ui/input'
+import { cn } from '@/lib/class-names'
 import { useRuntimeFileListForWorktree } from '../quick-open-file-list'
 import {
   createTabEntryAllowAbsolutePathsSelector,
@@ -7,14 +8,15 @@ import {
   isTabEntryAbsolutePathLike
 } from './tab-create-entry-action'
 import {
-  configuredAgentPickerLaunchOption,
-  findMatchingTabAgentLaunchOptions,
-  matchingAgentPickerLaunchOptions
+  agentResultSetupOption,
+  matchingAgentLaunchOptions,
+  tabAgentLaunchOptionDisabled
 } from './tab-agent-launch-options'
 import { findMatchingTabCreateMenuOptions } from './tab-create-menu-options'
 import { getActiveOptionId, type ActiveOption } from './tab-create-entry-active-option'
 import {
   EntryActionRow,
+  useEntrySetupSubmenu,
   EntryStatusRow,
   RESULT_LISTBOX_ID,
   resultOptionDomId
@@ -25,10 +27,11 @@ import { useOmniboxBrowserHistory } from './use-omnibox-browser-history'
 import { useTabEntryMenuReturnFocus } from './use-tab-entry-menu-return-focus'
 import { activateOpenTabSearchResult } from './open-tab-selection-routing'
 import { useTabCreateEntrySearchResults } from './use-tab-create-entry-search-results'
-import { DEFAULT_SEARCH_ENGINE } from '../../../../shared/browser-url'
-import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
-import { useAppStore } from '@/store'
-import { isQuickOpenQueryTooLarge } from '../quick-open-search'
+import { DEFAULT_SEARCH_ENGINE } from '../../../../shared/browser/navigation/browser-url'
+import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
+import { useAppStore } from '@/store/index'
+import { useFileListWorktree } from '@/store/workspaces/selection/use-selected-worktree'
+import { isQuickOpenQueryTooLarge } from '../../../../shared/quick-open/quick-open-path-search'
 import { parseForcedSearchQuery } from './tab-create-entry-forced-search'
 import { useNetworkSafeTabEntrySelection } from './tab-create-entry-network-selection'
 import { focusTabEntryMenuItemAtEdge } from './tab-create-entry-keyboard-focus'
@@ -39,6 +42,7 @@ import {
 import { EMPTY_AGENT_OPTIONS, EMPTY_MENU_OPTIONS } from './tab-create-entry-empty-options'
 import type { TabEntryActionClassification } from './tab-create-entry-classifier'
 import type { TabBarCreateEntryProps } from './tab-create-entry-props'
+import { useTranslate } from '@/i18n/use-translate'
 
 export default function TabBarCreateEntry(props: TabBarCreateEntryProps): React.JSX.Element {
   return <TabBarCreateEntrySession key={String(props.menuOpen)} {...props} />
@@ -58,8 +62,10 @@ function TabBarCreateEntrySession({
   onQueryChange,
   onQueueSwitchFocus,
   onSelectMenuOption,
+  terminalPending,
   worktreeId
 }: TabBarCreateEntryProps): React.JSX.Element {
+  const t = useTranslate()
   const [query, setQuery] = useState('')
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -67,6 +73,7 @@ function TabBarCreateEntrySession({
   const [selectionGuidance, setSelectionGuidance] = useState<string | null>(null)
   // null = follow ranking (deferred tabs can prepend); set on arrow keys only.
   const [pinnedOptionId, setPinnedOptionId] = useState<string | null>(null)
+  const setupSubmenu = useEntrySetupSubmenu()
   const inputRef = useRef<HTMLInputElement>(null)
   const submissionIdRef = useRef(0)
   useEffect(
@@ -96,9 +103,7 @@ function TabBarCreateEntrySession({
   )
   const allowAbsolutePaths = useAppStore(allowAbsolutePathsSelector)
   // Deduplicate using the workspace filesystem; the client platform cannot establish path case sensitivity.
-  const worktreePath = useAppStore((state) =>
-    menuOpen ? (state.getKnownWorktreeById(worktreeId)?.path ?? null) : null
-  )
+  const worktreePath = useFileListWorktree(menuOpen ? worktreeId : null)?.path ?? null
   const localPlatform = getRendererAppPlatform() === 'win32' ? 'windows' : 'posix'
   const searchEngine = useAppStore(
     (state) => state.browserDefaultSearchEngine ?? DEFAULT_SEARCH_ENGINE
@@ -153,11 +158,8 @@ function TabBarCreateEntrySession({
     () =>
       terminalQueryMode
         ? EMPTY_AGENT_OPTIONS
-        : [
-            ...matchingAgentPickerLaunchOptions(agentPickerEntries ?? [], query),
-            ...findMatchingTabAgentLaunchOptions(query, agentOptions)
-          ],
-    [agentOptions, agentPickerEntries, query, terminalQueryMode]
+        : matchingAgentLaunchOptions(agentPickerEntries, agentOptions, query, terminalPending),
+    [agentOptions, agentPickerEntries, query, terminalPending, terminalQueryMode]
   )
 
   const disabled = !onOpenEntry
@@ -193,7 +195,7 @@ function TabBarCreateEntrySession({
     statusOption != null &&
     (statusOption.classification.kind === 'empty' || statusOption.classification.kind === 'blocked')
       ? statusOption.classification.message
-      : getTabEntryOmniboxPlaceholder()
+      : getTabEntryOmniboxPlaceholder(t)
 
   const submitOption = (option?: ActiveOption) => {
     if (disabled || pending) {
@@ -237,7 +239,7 @@ function TabBarCreateEntrySession({
       return
     }
     if (selectedOption.kind === 'agent') {
-      if (selectedOption.option.disabled) {
+      if (tabAgentLaunchOptionDisabled(selectedOption.option)) {
         return false
       }
       const accepted = onLaunchAgentOption
@@ -274,9 +276,15 @@ function TabBarCreateEntrySession({
       })
   }
 
+  const hasStatusRows = Boolean(
+    error || switchError || selectionGuidance || (activeOptions.length > 0 && statusOption)
+  )
+  const hasResultRows = !error && (activeOptions.length > 0 || hasQuery)
+  const hasBodyRows = hasStatusRows || hasResultRows
+
   return (
     <form
-      className="pb-1"
+      className={hasBodyRows ? 'pb-1' : undefined}
       onSubmit={(event) => {
         event.preventDefault()
         submitOption()
@@ -315,7 +323,7 @@ function TabBarCreateEntrySession({
       }}
       onPointerDown={(event) => event.stopPropagation()}
     >
-      <div className="tab-entry-omnibox relative -mx-1 flex items-center px-3 text-xs text-foreground">
+      <div className="tab-entry-omnibox relative -mx-1 -mt-1 flex items-center px-3 text-xs text-foreground">
         <Input
           ref={inputRef}
           value={query}
@@ -342,39 +350,29 @@ function TabBarCreateEntrySession({
               ? resultOptionDomId(activeSelectedIndex)
               : undefined
           }
-          aria-label={getTabEntryOmniboxPlaceholder()}
+          aria-label={getTabEntryOmniboxPlaceholder(t)}
           aria-invalid={error ? true : undefined}
           aria-errormessage={error ? 'tab-create-entry-error' : undefined}
-          placeholder={getTabEntryOmniboxPlaceholder()}
+          placeholder={getTabEntryOmniboxPlaceholder(t)}
           className="h-9 rounded-none border-0 bg-transparent px-0 text-xs font-normal text-foreground shadow-none placeholder:font-normal placeholder:text-muted-foreground focus-visible:border-0 focus-visible:ring-0 aria-invalid:border-0 aria-invalid:ring-0 md:text-xs dark:bg-transparent"
         />
       </div>
       {/* Keep a mounted live region above usable rows so stale-target failures announce without removing other choices. */}
-      <div role="status">
+      <div role="status" className={hasStatusRows ? 'space-y-1 px-1' : undefined}>
         {error ? (
-          <div className="mt-1 px-1" id="tab-create-entry-error">
+          <div id="tab-create-entry-error">
             <EntryStatusRow message={error} />
           </div>
         ) : null}
-        {switchError ? (
-          <div className="mt-1 px-1">
-            <EntryStatusRow message={switchError} />
-          </div>
-        ) : null}
-        {selectionGuidance ? (
-          <div className="mt-1 px-1">
-            <EntryStatusRow message={selectionGuidance} />
-          </div>
-        ) : null}
+        {switchError ? <EntryStatusRow message={switchError} /> : null}
+        {selectionGuidance ? <EntryStatusRow message={selectionGuidance} /> : null}
         {activeOptions.length > 0 && statusOption ? (
-          <div className="mt-1 px-1">
-            <EntryStatusRow loading={fileList.loading} message={statusMessage} />
-          </div>
+          <EntryStatusRow loading={fileList.loading} message={statusMessage} />
         ) : null}
       </div>
-      {!error && (activeOptions.length > 0 || hasQuery) ? (
+      {hasResultRows ? (
         <div
-          className="mt-1 space-y-0.5 px-1"
+          className={cn('space-y-0.5 px-1', hasStatusRows && 'mt-1')}
           id={RESULT_LISTBOX_ID}
           role={activeOptions.length > 0 ? 'listbox' : undefined}
         >
@@ -385,20 +383,17 @@ function TabBarCreateEntrySession({
                 id={resultOptionDomId(index)}
                 option={option}
                 selected={index === activeSelectedIndex}
+                setupOpen={setupSubmenu.openId === getActiveOptionId(option)}
+                onSetupOpenChange={(open) => setupSubmenu.change(getActiveOptionId(option), open)}
+                onHover={() => setupSubmenu.hover(getActiveOptionId(option))}
                 onUseAgent={
                   option.kind === 'agent' && option.option.pickerEntry
                     ? (draft) =>
-                        submitOption({
-                          kind: 'agent',
-                          option: configuredAgentPickerLaunchOption(option.option, draft)
-                        })
+                        submitOption(agentResultSetupOption(option, draft, terminalPending))
                     : undefined
                 }
-                disabled={
-                  disabled ||
-                  pending ||
-                  (option.kind === 'agent' && option.option.disabled === true)
-                }
+                terminalPending={terminalPending}
+                disabled={disabled || pending}
                 loading={pending && index === activeSelectedIndex}
                 onClick={() => {
                   setSelectionGuidance(null)

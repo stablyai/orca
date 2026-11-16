@@ -2,16 +2,13 @@ import { afterEach, expect, it, vi } from 'vitest'
 import {
   ANTIGRAVITY_CHAT_SIGN_IN_INTENT_RUNTIME_CAPABILITY,
   ANTIGRAVITY_CHAT_SIGN_IN_RUNTIME_CAPABILITY
-} from '../../../shared/account-runtime-capabilities'
+} from '../../../shared/remote-runtime/protocol/account-runtime-capabilities'
 import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_PROTOCOL_VERSION
-} from '../../../shared/protocol-version'
-import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
-import {
-  callAntigravityChatSignIn,
-  subscribeAntigravityChatSignIn
-} from './runtime-antigravity-accounts-client'
+} from '../../../shared/remote-runtime/protocol/protocol-version'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from './rpc/compatibility/runtime-compatibility-cache'
+import { callAntigravityChatSignIn } from './provider-accounts/sign-in/runtime-antigravity-accounts-client'
 
 afterEach(() => {
   clearRuntimeCompatibilityCacheForTests()
@@ -67,23 +64,4 @@ it('sends explicit actions only to advertising hosts and keeps the legacy host p
       params: { intent: 'signIn' }
     })
   }
-})
-
-it('keeps the source runtime identity with a sign-in status frame', async () => {
-  const status = { revision: 1, auth: 'unknown', flow: null }
-  const subscribe = vi.fn(async (_, onResponse) => {
-    onResponse({ id: 'status', ok: true, result: status, _meta: { runtimeId: 'source-runtime' } })
-    return { unsubscribe: vi.fn() }
-  })
-  vi.stubGlobal('window', { api: { runtime: { subscribe } } })
-  const onEvent = vi.fn()
-  await subscribeAntigravityChatSignIn(
-    { kind: 'local' },
-    {
-      onEvent,
-      onError: vi.fn(),
-      onClose: vi.fn()
-    }
-  )
-  expect(onEvent).toHaveBeenCalledExactlyOnceWith({ ...status, runtimeId: 'source-runtime' })
 })

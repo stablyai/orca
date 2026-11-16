@@ -1,7 +1,7 @@
 import type * as pty from 'node-pty'
-import { PhysicalExitTracker } from '../../../shared/physical-exit-tracker'
+import { PhysicalExitTracker } from '../../../shared/process-observation/physical-exit-tracker'
 import { killWithDescendantSweep } from '../../pty/process-retirement/pty-descendant-termination'
-import { terminateShutdownDescendants } from '../../daemon/terminal-descendant-shutdown'
+import { terminateShutdownDescendants } from '../../daemon/sessions/terminal-descendant-shutdown'
 import {
   forceKillPosixPtyProcessGroups,
   forceKillPosixPtyProcessGroupsSync
@@ -17,6 +17,7 @@ import {
   ptyForceKillTimers,
   ptyPhysicalExits,
   ptyProcesses,
+  ptyReportsChildExitStatus,
   ptyShutdownOperations,
   ptyTerminationMode,
   ptyLoadGeneration,
@@ -205,7 +206,8 @@ async function shutdownTrackedPty(
     await killWithDescendantSweep(proc.pid, signalRoot, {
       ownsRoot: () => ptyProcesses.get(id) === proc,
       terminateOwnedTree: () => terminatePtyJob(proc),
-      terminateDescendants: terminateShutdownDescendants,
+      terminateDescendants: (snapshot) =>
+        terminateShutdownDescendants(snapshot, ptyReportsChildExitStatus.get(id) === false),
       // Group SIGKILL must wait out the SIGTERM grace so agents can run exit hooks (Claude SessionEnd).
       awaitEscalation: () => operation.immediate
     })

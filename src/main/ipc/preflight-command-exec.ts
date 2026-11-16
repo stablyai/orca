@@ -1,10 +1,10 @@
-import { quotePosixShell } from '../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 import { execFile } from 'node:child_process'
 import path from 'node:path'
 import { homedir } from 'node:os'
 import { promisify } from 'node:util'
-import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
-import { getSystemCliInstallDirectories } from '../../shared/system-cli-install-dirs'
+import { buildPosixCommandPathLookupScript } from '../../shared/shell/command-resolution/posix-command-path-lookup'
+import { getSystemCliInstallDirectories } from '../../shared/shell/command-resolution/system-cli-install-dirs'
 import { runProcess } from '@orca/process-host'
 import {
   beginLocalCommandSelection,

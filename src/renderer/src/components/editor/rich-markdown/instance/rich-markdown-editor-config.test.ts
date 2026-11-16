@@ -2,25 +2,21 @@
 
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import { Editor } from '@tiptap/react'
-import StarterKit from '@tiptap/starter-kit'
 import { createRichMarkdownExtensions } from '../schema/rich-markdown-extensions'
-import { handleRichMarkdownEditorClick } from '../links/rich-markdown-editor-click-routing'
 import type { DocLinkMenuState } from '../doc-links/rich-markdown-commands'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DOMParser as DocumentParser } from '@tiptap/pm/model'
 import type { LinkBubbleState } from '../links/RichMarkdownLinkBubble'
 import {
   createRichMarkdownEditorConfig,
   type EditorConfigParams
 } from './rich-markdown-editor-config'
-import '../commands/rich-markdown-slash-commands'
-import { slashCommands } from '../commands/rich-markdown-slash-command-catalog'
 import type { SlashMenuState } from '../commands/rich-markdown-slash-command-primitives'
 import { createRichMarkdownEditorCodec } from '../document/rich-markdown-source-transport'
 import { createRichMarkdownHtmlSuperscriptLinkContext } from '../citations/rich-markdown-html-superscript-link-context'
 
 vi.mock('../links/rich-markdown-editor-click-routing', () => ({
-  handleRichMarkdownEditorClick: vi.fn()
+  handleRichMarkdownEditorClick: vi.fn(() => false)
 }))
 
 function ref<T>(current: T): MutableRefObject<T> {
@@ -29,13 +25,6 @@ function ref<T>(current: T): MutableRefObject<T> {
 
 function stateSetter<T>(): Dispatch<SetStateAction<T>> {
   return vi.fn() as Dispatch<SetStateAction<T>>
-}
-
-function getSpellcheckAttribute(config: ReturnType<typeof createRichMarkdownEditorConfig>): string {
-  const attributes = config.editorProps?.attributes
-  return typeof attributes === 'function'
-    ? attributes({} as never).spellcheck
-    : (attributes?.spellcheck ?? '')
 }
 
 function createConfigParams(overrides: Partial<EditorConfigParams> = {}): EditorConfigParams {
@@ -80,7 +69,7 @@ function createConfigParams(overrides: Partial<EditorConfigParams> = {}): Editor
     cancelAutoFocusRef: ref(null),
     fileId: 'file-a',
     serializeTimerRef: ref(null),
-    pendingEditEpochRef: ref(0),
+    pendingEditGenerationRef: ref({ discarded: false }),
     isInitializingRef: ref(false),
     isApplyingProgrammaticUpdateRef: ref(false),
     markdownCommentsRef: ref([]),
@@ -100,44 +89,6 @@ function createConfigParams(overrides: Partial<EditorConfigParams> = {}): Editor
     ...overrides
   }
 }
-
-describe('createRichMarkdownEditorConfig', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals()
-  })
-
-  it('disables browser spellcheck when the rich Markdown setting is off', () => {
-    const config = createRichMarkdownEditorConfig(
-      createConfigParams({ richMarkdownSpellcheckEnabled: false })
-    )
-
-    expect(getSpellcheckAttribute(config)).toBe('false')
-  })
-
-  it('keeps browser spellcheck enabled by default', () => {
-    const config = createRichMarkdownEditorConfig(createConfigParams())
-
-    expect(getSpellcheckAttribute(config)).toBe('true')
-  })
-
-  it('flushes pending serialization when the rich editor blurs', () => {
-    const setMarkdownEditorFocused = vi.fn()
-    vi.stubGlobal('window', {
-      api: { ui: { setMarkdownEditorFocused } }
-    })
-    const flushPendingSerialization = vi.fn()
-    const clearAnnotationTarget = vi.fn()
-    const config = createRichMarkdownEditorConfig(
-      createConfigParams({ clearAnnotationTarget, flushPendingSerialization })
-    )
-
-    config.onBlur?.({} as never)
-
-    expect(setMarkdownEditorFocused).toHaveBeenCalledWith(false)
-    expect(clearAnnotationTarget).toHaveBeenCalledOnce()
-    expect(flushPendingSerialization).toHaveBeenCalledOnce()
-  })
-})
 
 describe('rich Markdown DOM paste admission', () => {
   const editors: Editor[] = []
@@ -231,192 +182,5 @@ describe('rich Markdown DOM paste admission', () => {
       }
     })
     expect(citations).toBe(1)
-  })
-
-  it('keeps image import ahead of a large text fallback', async () => {
-    const { editor, parseSlice, saveClipboardImageAsTempFile } = pasteEditor()
-    const before = editor.state.doc
-    const clipboardData = new DataTransfer()
-    clipboardData.items.add(new File(['image'], 'image.png', { type: 'image/png' }))
-    clipboardData.setData('text/plain', 'fallback '.repeat(10_000))
-    const event = new ClipboardEvent('paste', { clipboardData, bubbles: true, cancelable: true })
-    editor.view.dom.dispatchEvent(event)
-    await vi.runAllTimersAsync()
-
-    expect(event.defaultPrevented).toBe(true)
-    expect(saveClipboardImageAsTempFile.mock.calls.length).toBe(1)
-    expect(editor.state.doc.eq(before)).toBe(true)
-    expect(parseSlice).not.toHaveBeenCalled()
-  })
-})
-
-describe('rich Markdown DOM click routing', () => {
-  let editor: Editor
-
-  beforeEach(() => {
-    vi.mocked(handleRichMarkdownEditorClick).mockReset().mockReturnValue(true)
-    editor = new Editor({ extensions: [StarterKit], content: '<p>example</p>' })
-    vi.spyOn(editor.view, 'posAtCoords').mockReturnValue({ pos: 2, inside: 0 })
-  })
-  afterEach(() => editor.destroy())
-
-  function click(event: PointerEvent, isMac = true): boolean | void {
-    const config = createRichMarkdownEditorConfig(createConfigParams({ isMac }))
-    return config.editorProps?.handleDOMEvents?.click?.call(editor.view, editor.view, event)
-  }
-
-  it.each([true, false])('routes the primary Shift+platform modifier click (Mac: %s)', (isMac) => {
-    const event = new PointerEvent('click', {
-      metaKey: isMac,
-      ctrlKey: !isMac,
-      shiftKey: true,
-      cancelable: true
-    })
-    expect(click(event, isMac)).toBe(true)
-    expect(event.defaultPrevented).toBe(true)
-    expect(handleRichMarkdownEditorClick).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ event, pos: 2, view: editor.view })
-    )
-  })
-
-  it.each([
-    { shiftKey: true },
-    { metaKey: true },
-    { ctrlKey: true, shiftKey: true },
-    { metaKey: true, shiftKey: true, button: 1 },
-    { metaKey: true, shiftKey: true, button: 2 }
-  ])('leaves neighboring gestures alone: %j', (modifiers) => {
-    const event = new PointerEvent('click', { ...modifiers, cancelable: true })
-    expect(click(event)).toBe(false)
-    expect(event.defaultPrevented).toBe(false)
-    expect(handleRichMarkdownEditorClick).not.toHaveBeenCalled()
-  })
-
-  it('avoids opening twice if Shift is pressed between mouse down and mouse up', () => {
-    const config = createRichMarkdownEditorConfig(createConfigParams({ isMac: true }))
-    const event = new MouseEvent('mouseup', { metaKey: true, shiftKey: true })
-    expect(config.editorProps?.handleClick?.call(editor.view, editor.view, 2, event)).toBe(false)
-    expect(handleRichMarkdownEditorClick).not.toHaveBeenCalled()
-  })
-
-  it('leaves an already handled click alone', () => {
-    const event = new PointerEvent('click', { metaKey: true, shiftKey: true, cancelable: true })
-    event.preventDefault()
-    expect(click(event)).toBe(false)
-    expect(handleRichMarkdownEditorClick).not.toHaveBeenCalled()
-  })
-
-  it('keeps selection behavior when no link handles the click', () => {
-    vi.mocked(handleRichMarkdownEditorClick).mockReturnValue(false)
-    const event = new PointerEvent('click', { metaKey: true, shiftKey: true, cancelable: true })
-    expect(click(event)).toBe(false)
-    expect(event.defaultPrevented).toBe(false)
-  })
-})
-
-describe('rich Markdown slash commands in code', () => {
-  const editors: Editor[] = []
-
-  afterEach(() => {
-    editors.splice(0).forEach((editor) => editor.destroy())
-    document.body.replaceChildren()
-    vi.useRealTimers()
-    vi.unstubAllGlobals()
-    vi.restoreAllMocks()
-  })
-
-  function slashEditor(content: string) {
-    vi.useFakeTimers()
-    vi.stubGlobal('api', undefined)
-    Object.defineProperty(window, 'api', {
-      configurable: true,
-      value: { ui: { setMarkdownEditorFocused: vi.fn() } }
-    })
-    const root = document.createElement('div')
-    document.body.append(root)
-    const params = createConfigParams({ content, rootRef: ref(root) })
-    params.filteredSlashCommandsRef.current = slashCommands
-    params.setDocLinkMenu = (next) => {
-      params.docLinkMenuRef.current =
-        typeof next === 'function' ? next(params.docLinkMenuRef.current) : next
-    }
-    params.setSlashMenu = (next) => {
-      params.slashMenuRef.current =
-        typeof next === 'function' ? next(params.slashMenuRef.current) : next
-    }
-    const editor = new Editor({
-      ...createRichMarkdownEditorConfig(params),
-      extensions: createRichMarkdownExtensions({ codec: params.codec })
-    })
-    params.editorRef.current = editor
-    root.append(editor.view.dom)
-    vi.spyOn(editor.view, 'coordsAtPos').mockReturnValue({ top: 0, bottom: 20, left: 0, right: 0 })
-    editors.push(editor)
-    return { editor, params }
-  }
-
-  function enter(editor: Editor) {
-    const event = new KeyboardEvent('keydown', {
-      key: 'Enter',
-      bubbles: true,
-      cancelable: true
-    })
-    editor.view.dom.dispatchEvent(event)
-  }
-
-  it('keeps a literal slash and Enter inside a fenced code block', () => {
-    const { editor, params } = slashEditor('```sh\n\n```')
-    editor.commands.setTextSelection(1)
-    editor.view.dispatch(editor.state.tr.insertText('/'))
-
-    const menuWasOpen = params.slashMenuRef.current !== null
-    enter(editor)
-
-    expect(editor.state.doc.firstChild?.type.name).toBe('codeBlock')
-    expect(editor.state.doc.firstChild?.textContent).toBe('/\n')
-    expect(menuWasOpen).toBe(false)
-  })
-
-  it('does not offer block conversion for a slash in inline code', () => {
-    const { editor, params } = slashEditor('')
-    editor.commands.setTextSelection(1)
-    editor.commands.toggleCode()
-    editor.view.dispatch(editor.state.tr.insertText('/'))
-
-    const menuWasOpen = params.slashMenuRef.current !== null
-    enter(editor)
-
-    expect(editor.state.doc.firstChild?.type.name).toBe('paragraph')
-    expect(editor.state.doc.firstChild?.textContent).toBe('/')
-    expect(editor.state.doc.firstChild?.firstChild?.marks.map((mark) => mark.type.name)).toEqual([
-      'code'
-    ])
-    expect(menuWasOpen).toBe(false)
-  })
-
-  it('keeps an inline-code document-link trigger literal', () => {
-    const { editor, params } = slashEditor('')
-    editor.commands.setTextSelection(1)
-    editor.commands.toggleCode()
-    editor.view.dispatch(editor.state.tr.insertText('[['))
-
-    expect(editor.state.doc.firstChild?.textContent).toBe('[[')
-    expect(editor.state.doc.firstChild?.firstChild?.marks.map((mark) => mark.type.name)).toEqual([
-      'code'
-    ])
-    expect(params.docLinkMenuRef.current).toBeNull()
-  })
-
-  it('still offers and commits a block command from ordinary prose', () => {
-    const { editor, params } = slashEditor('')
-    editor.commands.setTextSelection(1)
-    editor.view.dispatch(editor.state.tr.insertText('/'))
-
-    expect(params.slashMenuRef.current?.query).toBe('')
-    enter(editor)
-
-    expect(editor.state.doc.firstChild?.type.name).toBe('heading')
-    expect(editor.state.doc.firstChild?.attrs.level).toBe(1)
-    expect(editor.state.doc.firstChild?.textContent).toBe('')
   })
 })

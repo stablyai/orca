@@ -1,9 +1,9 @@
 import { useCallback } from 'react'
-import { requireGitOwnerTarget } from '../../worktree-git-owner-target'
-import { getConnectionId } from '@/lib/connection-context'
-import { getRuntimeGitBranchCompare } from '@/runtime/runtime-git-diff-client'
+import { requireGitOwnerTarget } from '../sync/worktree-git-owner-target'
+import { operationGitContext } from '../listing/operation-target'
+import { getRuntimeGitBranchCompare } from '@/runtime/source-control/git/runtime-git-diff-client'
 import type { HostedReviewCreationEligibility } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
-import { refreshGitStatusForWorktreeStrict } from '../../git-status-refresh'
+import { refreshGitStatusForWorktreeStrict } from '../sync/git-status-refresh'
 import type { CreatePrIntentRunToken } from './create-pr-intent-flow'
 import { buildCreatePrIntentUnavailableEligibility } from './hosted-review-creation-eligibility-snapshot'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'
@@ -15,7 +15,6 @@ import type { SourceControlLinkedReviews } from './use-linked-reviews'
 /** Pin between-step probes to the run’s worktree/host so navigation cannot retarget them. */
 export function useSourceControlCreatePrIntentProbes({
   activeRepo,
-  activeRepoTarget,
   beginGitBranchCompareRequest,
   fallbackGitHubPRNumber,
   getCreatePrIntentOperationTarget,
@@ -33,7 +32,6 @@ export function useSourceControlCreatePrIntentProbes({
   updateWorktreeGitIdentity
 }: {
   activeRepo: SourceControlWorktreeContext['activeRepo']
-  activeRepoTarget: SourceControlWorktreeContext['activeRepoTarget']
   beginGitBranchCompareRequest: SourceControlStoreActions['beginGitBranchCompareRequest']
   fallbackGitHubPRNumber: SourceControlLinkedReviews['fallbackGitHubPRNumber']
   getCreatePrIntentOperationTarget: SourceControlCreatePrIntentTarget['getCreatePrIntentOperationTarget']
@@ -58,19 +56,15 @@ export function useSourceControlCreatePrIntentProbes({
       }
       const requestKey = `${token.worktreeId}:${baseRef}:${Date.now()}:create-pr-intent`
       beginGitBranchCompareRequest(token.worktreeId, requestKey, baseRef)
+      // The pinned copy answers, so a same-id twin on another host is never compared.
       const result = await getRuntimeGitBranchCompare(
-        {
-          target: requireGitOwnerTarget(activeRepoTarget),
-          worktreeId: token.worktreeId,
-          worktreePath: token.worktreePath,
-          connectionId: getConnectionId(token.worktreeId) ?? undefined
-        },
+        operationGitContext(getCreatePrIntentOperationTarget(token)),
         baseRef
       )
       setGitBranchCompareResult(token.worktreeId, requestKey, result)
       return result.summary.status === 'ready' ? (result.summary.commitsAhead ?? 0) : undefined
     },
-    [activeRepoTarget, beginGitBranchCompareRequest, setGitBranchCompareResult]
+    [beginGitBranchCompareRequest, getCreatePrIntentOperationTarget, setGitBranchCompareResult]
   )
 
   const readHostedReviewCreationEligibilityForIntent = useCallback(

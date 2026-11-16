@@ -2,7 +2,8 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
-import { PickerModal, type PickerOption } from '../components/PickerModal'
+import { MobileSegmentedControl } from '../components/controls/MobileSegmentedControl'
+import { PickerModal, type PickerOption } from '../components/sheets/PickerModal'
 import { pressedStyle } from '../theme/mobile-theme'
 import { automationStyles as styles } from './automation-styles'
 import { FieldTextInput } from '../components/composer-input/FieldTextInput'
@@ -113,5 +114,28 @@ export function AutomationMetadata({ label, value }: { label: string; value: str
         {value}
       </Text>
     </View>
+  )
+}
+// The bar's Automations / Runs switch, inset like Source Control's.
+export function AutomationTabs(props: {
+  selected: 'automations' | 'runs'
+  onSelect: (tab: 'automations' | 'runs') => void
+  disabled: boolean
+}) {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
+  return (
+    <MobileSegmentedControl
+      fill
+      tabs
+      style={styles.tabs}
+      segments={[
+        { value: 'automations', label: t('automations.mobile.automations', 'Automations') },
+        { value: 'runs', label: t('automations.mobile.runs', 'Runs') }
+      ]}
+      selected={props.selected}
+      onSelect={props.onSelect}
+      disabled={props.disabled}
+    />
   )
 }

@@ -10,6 +10,8 @@ import type {
   RuntimeEnvironmentStoreSyncSubscriber
 } from './ipc-events/runtime-environment-subscription-selection'
 
+import { createRuntimeClientEventsSync } from './runtime-client-events-sync'
+
 type RuntimeEnvironmentStoreSubscriber = RuntimeEnvironmentStoreSyncSubscriber
 type RuntimeEnvironmentStoreState = RuntimeEnvironmentStoreSyncState
 
@@ -32,65 +34,76 @@ function makeRuntimeEnvironmentStoreState(args: {
 }
 
 describe('createRuntimeEnvironmentStoreSyncSubscriber', () => {
-  it('does no host enumeration or key building for 1,000 unrelated local, SSH, and folder writes', () => {
-    const environments = Array.from({ length: 100 }, (_, index) => ({
-      id: `runtime-${index}`,
-      createdAt: index + 1
-    }))
-    const statuses = new Map(
-      environments.map((environment) => [
-        environment.id,
-        { status: { runtimeId: `peer-${environment.id}` }, checkedAt: 1 }
-      ])
-    )
-    let currentState = makeRuntimeEnvironmentStoreState({ environments, statuses })
-    let hostEnumerations = 0
-    let keyBuilds = 0
-    let syncs = 0
+  it('retires removed registry members despite retained status and follows active host changes', async () => {
+    const environments = [
+      { id: 'A', createdAt: 1 },
+      { id: 'B', createdAt: 2 }
+    ]
+    const statuses = new Map([
+      ['A', { status: { runtimeId: 'peer-a' }, checkedAt: 1 }],
+      ['B', { status: { runtimeId: 'peer-b' }, checkedAt: 1 }]
+    ])
+    let state = makeRuntimeEnvironmentStoreState({ environments, statuses })
+    const subscriptions: string[] = []
+    const retirements: string[] = []
+    const wakes: (readonly string[] | undefined)[] = []
+    const manager = createRuntimeClientEventsSync({
+      getDesiredEnvironmentIds: () => getRuntimeClientEventEnvironmentIds(state),
+      subscribe: (id) => {
+        subscriptions.push(id)
+        return Promise.resolve({
+          unsubscribe: () => {
+            retirements.push(id)
+          }
+        })
+      },
+      onEvent: vi.fn()
+    })
     const subscriber = createRuntimeEnvironmentStoreSyncSubscriber({
-      initialDesiredEnvironmentIds: getRuntimeClientEventEnvironmentIds(currentState),
-      initialReachableEnvironmentIds: getReachableRuntimeEnvironmentIds(currentState),
-      getDesiredEnvironmentIds: (state) => {
-        hostEnumerations += 1
-        return getRuntimeClientEventEnvironmentIds(state)
-      },
-      getReachableEnvironmentIds: (state) => {
-        hostEnumerations += 1
-        return getReachableRuntimeEnvironmentIds(state)
-      },
-      buildEnvironmentKey: (environmentIds) => {
-        keyBuilds += 1
-        return [...environmentIds].sort().join('\0')
-      },
+      initialDesiredEnvironmentIds: getRuntimeClientEventEnvironmentIds(state),
+      initialReachableEnvironmentIds: getReachableRuntimeEnvironmentIds(state),
+      getDesiredEnvironmentIds: getRuntimeClientEventEnvironmentIds,
+      getReachableEnvironmentIds: getReachableRuntimeEnvironmentIds,
+      buildEnvironmentKey: (ids) => [...ids].sort().join(':'),
       requestProjectRefresh: vi.fn(),
       markEnvironmentSshStateStale: vi.fn(),
-      sync: () => {
-        syncs += 1
+      sync: (ids) => {
+        wakes.push(ids)
+        manager.sync(ids)
       }
     })
-    keyBuilds = 0
-
-    for (let write = 0; write < 1_000; write += 1) {
-      const previousState = currentState
-      currentState = {
-        ...currentState,
-        // These represent the high-frequency boundaries that must stay outside
-        // runtime-host discovery: local terminal state, direct SSH state, and
-        // folder-workspace catalog churn.
-        settings: {
-          activeRuntimeEnvironmentId: currentState.settings?.activeRuntimeEnvironmentId ?? null,
-          terminalFontSize: write
-        },
-        pendingStartupByTabId: { [`local-tab-${write}`]: true },
-        sshConnectionStates: new Map([[`direct-ssh-${write}`, { status: 'connected' }]]),
-        folderWorkspaces: [{ id: `folder-${write}` }]
-      } as unknown as RuntimeEnvironmentStoreState
-      subscriber(currentState, previousState)
+    const publish = (next: RuntimeEnvironmentStoreState): void => {
+      const previous = state
+      state = next
+      subscriber(state, previous)
     }
-
-    expect(hostEnumerations).toBe(0)
-    expect(keyBuilds).toBe(0)
-    expect(syncs).toBe(0)
+    manager.sync()
+    await Promise.resolve()
+    publish(makeRuntimeEnvironmentStoreState({ environments: [environments[1]], statuses }))
+    expect(retirements).toEqual(['A'])
+    expect(wakes).toEqual([[]])
+    publish(
+      makeRuntimeEnvironmentStoreState({
+        environments: [environments[1]],
+        statuses,
+        activeEnvironmentId: 'C'
+      })
+    )
+    await Promise.resolve()
+    expect(subscriptions).toEqual(['A', 'B', 'C'])
+    expect(wakes).toEqual([[], ['C']])
+    publish(
+      makeRuntimeEnvironmentStoreState({
+        environments: [environments[1]],
+        statuses,
+        activeEnvironmentId: 'D'
+      })
+    )
+    await Promise.resolve()
+    expect(retirements).toEqual(['A', 'C'])
+    expect(subscriptions).toEqual(['A', 'B', 'C', 'D'])
+    expect(wakes).toEqual([[], ['C'], ['D']])
+    manager.stop()
   })
 
   it('syncs each connect, disconnect, re-pair, runtime generation, and nested SSH generation once', () => {

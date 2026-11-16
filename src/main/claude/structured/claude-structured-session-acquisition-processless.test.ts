@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import { AgentSessionPreSpawnError } from '../../native-chat/agent-session-wire/structured-agent-session-adapter-errors'
+import { AgentSessionPreSpawnError } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import type {
   ClaudeStreamJsonConnection,
   openClaudeStreamJsonConnection
@@ -44,6 +44,7 @@ describe('Claude structured processless acquisition', () => {
         applyFlagSettings: async () => {},
         send: async () => {},
         stopTask: async () => {},
+        backgroundTask: async () => false,
         close
       }
       return connection

@@ -1,4 +1,5 @@
 import { isQoderTerminalTitle } from './providers/qoder-terminal-title'
+import { isJcodeIdentityTerminalTitle } from './providers/jcode-terminal-title'
 import { getPiStateTitleBrand } from './providers/pi-state-title-marker'
 import {
   AGY_AGENT_NAME_RE,
@@ -19,7 +20,7 @@ import {
   getPiCompatibleSyntheticAgentLabel,
   getPiCompatibleTitleBrand
 } from './providers/pi-compatible-synthetic-title'
-import { memoizeTitleClassification } from '../../terminal-title-classification-memo'
+import { memoizeTitleClassification } from './terminal-title-classification-memo'
 
 /** Scope prompt-cache timers to Claude title conventions. */
 function computeIsClaudeAgent(title: string): boolean {
@@ -110,7 +111,7 @@ function computeAgentLabel(title: string): string | null {
   if (titleHasAgentName(title, 'devin')) {
     return 'Devin'
   }
-  if (titleHasAgentName(title, 'jcode')) {
+  if (titleHasAgentName(title, 'jcode') || isJcodeIdentityTerminalTitle(title)) {
     return 'Jcode'
   }
   if (titleHasAgentName(title, 'antigravity') || AGY_AGENT_NAME_RE.test(title)) {

@@ -1,6 +1,6 @@
 import { withFreshOmpLaunch, isFreshOmpLaunchCommand } from './omp-fresh-launch'
 import { withOmpDraftCleanup } from './omp-draft-launch'
-import '../../shell-process-detection'
+import '../../agent-status/process/shell-process-detection'
 import type { SleepingAgentLaunchConfig } from '../../agent-session/lifecycle/agent-session-resume'
 import {
   clearEnvCommand,
@@ -11,7 +11,7 @@ import {
 } from './tui-agent-startup-shell'
 import { TUI_AGENT_CONFIG } from '../catalog/tui-agent-config'
 import type { StartupCommandDelivery } from './codex-startup-delivery'
-import { buildSleepingAgentLaunchConfig } from '../../agent-session/lifecycle/sleeping-agent-launch-config'
+import { buildSleepingAgentLaunchConfig } from '../../agent-session/lifecycle/resume/sleeping-agent-launch-config'
 import { planHermesStartupQuery } from './hermes-startup-query'
 import { inlineAgentDraftFitsPlatform } from './agent-draft-platform-limit'
 import type { TuiAgent } from '../catalog/tui-agent'

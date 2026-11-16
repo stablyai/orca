@@ -1,7 +1,7 @@
 import React from 'react'
 import { Loader2 } from 'lucide-react'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   SOURCE_CONTROL_TREE_FILE_PADDING_PX,
   SOURCE_CONTROL_TREE_INDENT_PX,
@@ -19,17 +19,18 @@ export function SubmodulePlaceholderRow({
   state: 'loading' | 'empty' | 'error' | 'truncated'
   message?: string
 }): React.JSX.Element {
+  const t = useTranslate()
   const fallback =
     state === 'error'
-      ? getSubmoduleErrorLabel()
+      ? getSubmoduleErrorLabel(t)
       : state === 'empty'
-        ? getSubmoduleEmptyLabel()
+        ? getSubmoduleEmptyLabel(t)
         : state === 'truncated'
-          ? translate(
+          ? t(
               'auto.components.right.sidebar.SourceControl.submoduleTruncated',
               'More submodule changes were omitted'
             )
-          : getSubmoduleLoadingLabel()
+          : getSubmoduleLoadingLabel(t)
   return (
     <div
       className={cn(

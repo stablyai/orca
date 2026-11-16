@@ -16,7 +16,7 @@ import {
   normalizeClaudePromptId,
   normalizeGrokPromptId
 } from '../../../shared/agent-hook-listener/listener-limits'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type { AgentHookAuthorityEvidence, EnrichedAgentHookEventPayload } from './server-types'
 import { isValidPaneKey, isValidPiProviderSessionOnly } from './server-status-identity'
 
@@ -153,6 +153,9 @@ export function sanitizeHydratedEntry(
   const hostTurn = readHostTurnRecord(record.hostTurn)
   return {
     paneKey,
+    ...(payload.state === 'done' && payload.sessionBoundary !== true && !providerSessionOnly
+      ? { paneSleep: readPaneSleep(record.paneSleep) }
+      : {}),
     agentPresence: readAgentProcessPresence(record.agentPresence),
     source,
     tabId: typeof tabId === 'string' ? tabId : undefined,
@@ -263,3 +266,4 @@ export function authorityCommitmentsMatch(
     left.worktreeId === right.worktreeId
   )
 }
+import { readPaneSleep } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'

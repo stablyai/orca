@@ -40,8 +40,7 @@ const RELEASE_SKELETON: Record<string, string> = Object.fromEntries(
     'src/shared/placeholder.ts',
     'src/preload/placeholder.ts',
     'src/renderer/src/placeholder.ts',
-    'src/types/placeholder.ts',
-    'mobile/src/worktree/agent-row-display.ts'
+    'src/types/placeholder.ts'
   ].map((path) => [path, 'export {}\n'])
 )
 
@@ -216,6 +215,25 @@ const RELEASE_PROCESS_HOST = {
     "import { runProcess } from '@orca/process-host'\nexport const tool = () => `tool:${runProcess()}`\n",
   'src/packages/release-tool/src/index.test.mjs': 'throw new Error("stale spec")\n'
 }
+
+describe('release phone row reader', () => {
+  it.each([
+    'mobile/src/worktree/agent-row-display.ts',
+    'mobile/src/worktree/agent-lineage/agent-row-display.ts'
+  ])("loads main's row reader path from a release that ships it at %s", async (released) => {
+    const { repo, commit } = commitRelease({ [released]: `export const at = '${released}'\n` })
+    const staging = temporaryDirectory('orca-cross-version-row-reader-')
+
+    await extractReleaseCheckoutTree(repo, staging, commit)
+    const checkout = { ref: 'v0.0.0-synthetic', commit, label: 'v0.0.0-synthetic', root: staging }
+    const reader = await importReleaseCheckoutModule(
+      checkout,
+      'mobile/src/worktree/agent-lineage/agent-row-display.ts'
+    )
+
+    expect(reader.at).toBe(released)
+  })
+})
 
 describe('release checkout workspace packages', () => {
   it('loads the release workspace package rather than the current one', async () => {

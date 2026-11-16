@@ -1,8 +1,8 @@
 import { useEffect } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { useAppStore } from '@/store'
-import { BROWSER_USER_AGENT_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
+import { useAppStore } from '@/store/index'
+import { BROWSER_USER_AGENT_SETTINGS_TARGET_ID } from '@/components/settings/navigation/settings-navigation-types'
 
 export function useBrowserIdentityMigrationNotice(): void {
   useEffect(() => {
