@@ -65,12 +65,15 @@ export function buildFolderStatusMap(entries: GitStatusEntry[]): Map<string, Git
     }
 
     const segments = splitPathSegments(entry.path)
-    if (segments.length <= 1) {
+    // A dirty submodule is a directory in the explorer, so it carries its own folder status.
+    const folderSegments =
+      entry.submodule && !entry.submoduleRoot ? segments : segments.slice(0, -1)
+    if (folderSegments.length === 0) {
       continue
     }
 
     let currentPath = ''
-    for (const segment of segments.slice(0, -1)) {
+    for (const segment of folderSegments) {
       currentPath = currentPath ? joinPath(currentPath, segment) : segment
       const statuses = folderStatuses.get(currentPath)
       if (statuses) {
