@@ -198,11 +198,11 @@ it.each([100, 1000])(
     const fixture = makeRuntimeStoreWithWorkspaceSession(makeWorkspaceSessionWithHeadlessTerminal())
     const runtime = new OrcaRuntimeService(fixture.runtimeStore)
     vi.spyOn(runtime, 'getTerminalWorktreeIdForPaneKey').mockReturnValue(TEST_WORKTREE_ID)
-    fixture.runtimeStore.runDurableMutation.mockClear()
+    const durableMutation = vi.spyOn(fixture.runtimeStore, 'runDurableMutation')
     for (let i = 0; i < count; i++) {
       runtime.retireExitedPaneResume(`absent-tab-${i}:11111111-1111-4111-8111-111111111111`, 200)
     }
     await runtime.readSavedResumeSource(TEST_WORKTREE_ID, PANE_KEY)
-    expect(fixture.runtimeStore.runDurableMutation).not.toHaveBeenCalled()
+    expect(durableMutation).not.toHaveBeenCalled()
   }
 )
