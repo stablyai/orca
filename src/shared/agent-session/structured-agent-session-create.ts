@@ -40,20 +40,6 @@ export type StructuredAgentSessionFirstMessage = {
   selection?: Readonly<Record<string, string>>
 }
 
-/** Provider-prefixed IDs use underscore-only suffix tokens for embedding in tab IDs/log keys. */
-export function createStructuredAgentSessionId(
-  agent: StructuredAgentId,
-  randomUuid: () => string
-): string {
-  return `${agent}_${randomUuid().replaceAll('-', '_')}`
-}
-
-/** Validate only the generated suffix token so hyphenated agent names remain wire-compatible. */
-export function isStructuredAgentSessionIdFor(agent: string, sessionId: string): boolean {
-  const prefix = `${agent}_`
-  return sessionId.startsWith(prefix) && /^[A-Za-z0-9_]+$/.test(sessionId.slice(prefix.length))
-}
-
 /** Share create fingerprints across clients and host recomputation; ambiguous transport failures replay this durable envelope. */
 export function structuredAgentSessionCreateParams(args: {
   sessionId: string

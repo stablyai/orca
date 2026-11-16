@@ -8,7 +8,7 @@ import {
   getRepoExecutionHostId,
   getSshTargetIdForExecutionHost,
   type ExecutionHostId
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import {
   runtimeRepoSelectorHostId,
   runtimeRepoSelectorText,

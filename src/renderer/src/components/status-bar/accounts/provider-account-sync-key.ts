@@ -1,6 +1,6 @@
 import { sameProviderAccountData } from '@/runtime/provider-accounts/observations/observed-provider-accounts'
 import type { ClaudeAccountSettings } from './status-bar-claude-accounts'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 
 // Cache by settings identity because Zustand reevaluates selectors on every store write and roster serialization is expensive.
 const claudeKeyBySettings = new WeakMap<GlobalSettings, string>()

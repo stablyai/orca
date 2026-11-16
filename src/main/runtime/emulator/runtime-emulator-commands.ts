@@ -14,7 +14,7 @@ import { assertWorktreeInputNotShadowedByDeviceHub } from '../../emulator/emulat
 import type { EmulatorActiveSession, EmulatorSessionInfo } from '../../emulator/emulator-types'
 import type { SimulatorDevice } from '../../emulator/simctl-simulator-devices'
 import type { EmulatorDevice } from '../../emulator/backends/emulator-backend'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 
 type EmulatorHostSettings = Pick<
   GlobalSettings,

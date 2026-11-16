@@ -2,7 +2,7 @@ import {
   isUnresolvedOwnerHostId,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import { getHostSettingOverride } from '../../../../../shared/execution-host/host-setting-overrides'
 import { getTranslatedExecutionHostLabel } from '@/components/sidebar/execution-host-label'
 import type { Translate } from '@/i18n/use-translate'

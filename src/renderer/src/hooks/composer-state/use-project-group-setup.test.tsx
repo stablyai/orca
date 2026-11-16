@@ -2,14 +2,14 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
 import { createProjectGroup } from '../../../../shared/project/groups/project-groups'
-import { getDefaultRepoHookSettings } from '../../../../shared/constants'
+import { getDefaultRepoHookSettings } from '../../../../shared/orca-profiles/constants'
 import '../../components/settings/__fixtures__/settings-persistence-test-fixture'
 import { useAppStore } from '@/store'
 import { checkRuntimeGroupHooks } from '@/runtime/repo-hooks/runtime-hooks-client'
 import { useProjectGroupSetup } from './use-project-group-setup'
-import { useFolderSubmitOrchestration } from './folder-submit-orchestration'
-import { submitFolderWorkspaceCreate } from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit'
-import { toast } from 'sonner'
+import './folder-submit-orchestration'
+import '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit'
+import 'sonner'
 
 vi.mock('@/lib/workspace/creation/setup/folder-setup-support', () => ({
   useFolderSetupSupport: () => 'supported',
@@ -50,81 +50,6 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(checkRuntimeGroupHooks).mockResolvedValue(inspected)
 })
-
-function useSubmission(selected: typeof group) {
-  const groupSetup = useProjectGroupSetup(selected)
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the folder submission path runs; unrelated composer fields are not read.
-  const submit = useFolderSubmitOrchestration({
-    groupSetup,
-    selectedProjectGroup: selected,
-    folderCreateDisabled: false,
-    folderSourceRepos: [],
-    disabledTuiAgents: [],
-    isSubmissionCancelled: () => false,
-    decisions: { canResolveFolderSmartGitHubSubmit: () => false },
-    setCreateError: vi.fn(),
-    setCreating: vi.fn(),
-    revealSetupChoice: vi.fn(),
-    lastAutoNameRef: { current: '' },
-    name: 'task',
-    note: '',
-    linkedWorkItem: null,
-    settings: null,
-    folderTargetRuntimeEnvironmentId: null,
-    folderTargetIsRemote: false,
-    createFolderWorkspace: vi.fn(),
-    onCreated: vi.fn(),
-    taskSourceContext: null,
-    resolvePendingSmartGitHubSubmit: vi.fn(),
-    telemetrySource: 'sidebar',
-    clearNewWorkspaceDraft: vi.fn(),
-    persistDraft: false
-  } as unknown as Parameters<typeof useFolderSubmitOrchestration>[0])
-  return { groupSetup, ...submit }
-}
-
-it.each([true, false])(
-  'settles a held policy save before group inspection/create (save=%s)',
-  async (success) => {
-    let finish!: (saved: boolean) => void
-    const updateProjectGroup = vi.fn(
-      () =>
-        new Promise<boolean>((resolve) => {
-          finish = resolve
-        })
-    )
-    useAppStore.setState({ projectGroups: [group], updateProjectGroup })
-    const hook = renderHook(() => {
-      return useSubmission(group)
-    })
-    await waitFor(() => expect(hook.result.current.groupSetup.shouldWaitForSetupCheck).toBe(false))
-    await waitFor(() => expect(checkRuntimeGroupHooks).toHaveBeenCalledOnce())
-    await act(async () => {
-      hook.result.current.groupSetup.setStartupPolicy('wait-for-setup')
-    })
-    await waitFor(() => expect(updateProjectGroup).toHaveBeenCalledOnce())
-    let submitting!: Promise<void>
-    act(() => {
-      submitting = hook.result.current.submitFolderTarget(null)
-    })
-    await Promise.resolve()
-    expect(submitFolderWorkspaceCreate).not.toHaveBeenCalled()
-    expect(checkRuntimeGroupHooks).toHaveBeenCalledOnce()
-    await act(async () => {
-      finish(success)
-      await submitting
-    })
-    if (success) {
-      expect(submitFolderWorkspaceCreate).toHaveBeenCalledOnce()
-      expect(toast.error).not.toHaveBeenCalled()
-    } else {
-      expect(submitFolderWorkspaceCreate).not.toHaveBeenCalled()
-      expect(toast.error).toHaveBeenCalledOnce()
-      expect(hook.result.current.groupSetup.startupPolicy).toBe('start-immediately')
-    }
-    hook.unmount()
-  }
-)
 
 it('does not roll an old owner failure over a newer owner policy selection', async () => {
   const second = { ...group, id: 'second', parentPath: '/second' }

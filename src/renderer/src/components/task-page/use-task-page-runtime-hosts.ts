@@ -12,7 +12,7 @@ import type { TaskSourceContext } from '../../../../shared/work-items/task-sourc
 import type { RuntimeProviderPreflightStatus } from '@/components/task-source-provider-availability'
 import { buildExecutionHostRegistry } from '../../../../shared/execution-host/execution-host-registry'
 import { getHostDisplayLabelOverrides } from '../../../../shared/execution-host/host-setting-overrides'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/work-items/task-source-runtime-capabilities'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { PreflightStatus } from '../../../../preload/api/preflight/preflight-api'

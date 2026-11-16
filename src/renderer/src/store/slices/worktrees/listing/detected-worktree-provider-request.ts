@@ -6,7 +6,7 @@ import { getRuntimeEnvironmentConnectionGeneration } from '../../runtime-status/
 import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import type { DetectedWorktreeListResult } from '../../../../../../shared/worktree/types'
 import type { RuntimeWorktreeListResult } from '../../../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import type {

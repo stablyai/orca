@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { intentPresentation } from '@/lib/browser/workspace/workspace-browser-tab-presentation'
 import { parseAppSshPtyId } from '../../../../../../shared/remote-runtime/ssh/ssh-pty-id'
-import { parseRoutableExecutionHostId } from '../../../../../../shared/execution-host'
+import { parseRoutableExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   parseRemoteRuntimePtyId,
   isRemoteRuntimePtyId

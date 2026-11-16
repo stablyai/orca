@@ -16,7 +16,7 @@ import { test as base, expect } from './orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './store'
 import { buildFakeAgentCommandOverride } from './fake-agent-command-override'
 import { resolveCliCommand } from '../../../src/shared/shell/command-resolution/node-cli-command-resolution'
-import { createStructuredAgentSessionId } from '../../../src/shared/agent-session/structured-agent-session-create'
+import { createOrcaSessionId } from '../../../src/shared/agent-session/identity/orca-session-address'
 import {
   createStructuredAgentSessionOperationId,
   structuredAgentSessionCreateFingerprint
@@ -86,7 +86,7 @@ export const test = base.extend<{ claudeStub: ClaudeStub }>({
 
 /** Creates a chat the way the CLI or a paired phone does: on the host, not in the window. */
 export async function createChatOnHost(page: Page, worktreeId: string): Promise<string> {
-  const sessionId = createStructuredAgentSessionId('claude', randomUUID)
+  const sessionId = createOrcaSessionId(randomUUID)
   const worktree = `id:${worktreeId}`
   const params = {
     envelope: {

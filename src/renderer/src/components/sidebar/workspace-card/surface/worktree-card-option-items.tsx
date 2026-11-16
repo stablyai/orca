@@ -10,7 +10,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
-import type { WorktreeCardProperty } from '../../../../../../shared/ui-chrome-types'
+import type { WorktreeCardProperty } from '../../../../../../shared/ui-chrome/ui-chrome-types'
 import { getWorkspaceCardPropertiesValue } from '../../../../../../shared/workspace-view/workspace-view-options'
 import {
   AGENT_ACTIVITY_DISPLAY_OPTIONS,

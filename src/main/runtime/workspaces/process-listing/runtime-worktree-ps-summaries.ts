@@ -13,7 +13,7 @@ import { UNCACHED_LINKED_PR_STATE } from '../../../../shared/worktree/catalog/ru
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import { runtimeVisibleFolderWorkspaces } from '../catalog/runtime-visible-catalog'
 import type { ResolvedWorktree } from '../catalog/runtime-worktree-path-identity'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import { runtimeWorktreePsRowKey } from './runtime-worktree-summary-paths'
 

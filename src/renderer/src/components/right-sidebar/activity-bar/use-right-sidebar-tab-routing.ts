@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useAppStore } from '@/store/index'
-import type { ActiveRightSidebarTab } from '../../../../../shared/ui-chrome-types'
+import type { ActiveRightSidebarTab } from '../../../../../shared/ui-chrome/ui-chrome-types'
 import type { PluginPanelsFetchStatus } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { normalizeRightSidebarRoute } from '@/store/slices/right-sidebar/right-sidebar-route'
 import { resolveRightSidebarEffectiveTab } from './right-sidebar-effective-tab'

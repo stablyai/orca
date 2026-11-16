@@ -12,7 +12,7 @@ import type {
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import type { AgentStatusClearIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-types'
+import type { LegacyPaneKeyAliasEntry } from '../../../shared/orca-profiles/persisted-state-types'
 import type { SpoolRecord } from '../../../shared/agent-hook-listener/transport/agent-hook-spool'
 
 import type {
