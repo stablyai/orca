@@ -21639,6 +21639,7 @@
       "activeAgentNeedsPermission": "アクティブな Agent には許可が必要です。",
       "statusUnverified": "{{target}} Agent の状態を確認できませんでした。",
       "approvalUnseen": "{{target}} Agent が承認を待っている可能性があります。ターンが終わってからメモを送信してください。",
+      "hostUpdateRequired": "{{target}} Agent のホストの Orca を更新すると、メモを送信できます。",
       "notReady": "{{target}} Agent は、まだ入力を受け付けられる状態ではありませんでした。",
       "notWritable": "{{target}} Agent はメモを受け付けませんでした。",
       "selectedSubmitFailed": "メモは選択中のターミナルにすでに貼り付けられている可能性がありますが、送信できませんでした。",
@@ -24954,7 +24955,8 @@
   "agentSendTargets": {
     "disabledReason": {
       "needsPermission": "Agent に許可が必要です",
-      "approvalUnseen": "Agent が承認を待っている可能性があります"
+      "approvalUnseen": "Agent が承認を待っている可能性があります",
+      "hostUpdateRequired": "この Agent に送信するには、このホストの Orca を更新してください"
     }
   },
   "wslDistroHold": {

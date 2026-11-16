@@ -12,6 +12,7 @@ import type { RuntimePaneTitleLeafResolution } from '../../../../../shared/works
 import {
   deriveRunningAgentSendTargets,
   deriveStatuslessStructuredAgentSendTargets,
+  hookSilentAgentSendRefusal,
   runningAgentMessageTarget
 } from './running-agent-targets'
 import type { RunningAgentSendTarget, RunningAgentTargetState } from './running-agent-targets'
@@ -19,7 +20,6 @@ import type { AgentType } from '../../../../../shared/agent-status/contracts/age
 import type { AppState } from '@/store/types'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import type { AgentMessageTarget } from './agent-message-target'
-import { agentHidesApprovalsFromHooks } from '../../../../../shared/agent-status/approval/hook-silent-approval-agents'
 
 export type NotesSendAgentTargetState = RunningAgentTargetState &
   Pick<AppState, 'runtimePaneTitlesByTabId'>
@@ -145,9 +145,7 @@ function deriveTitleHintAgentTarget(
   const disabledReason =
     titleEvidence.status === 'permission'
       ? 'Agent needs permission'
-      : agentHidesApprovalsFromHooks(agentType)
-        ? 'Agent may be waiting for approval'
-        : undefined
+      : hookSilentAgentSendRefusal(state, tab, ptyId, null, titleEvidence.title)
 
   return {
     paneKey: makePaneKey(tab.id, leafId),
@@ -164,7 +162,8 @@ function deriveTitleHintAgentTarget(
 function refusesForAgentState(target: NotesSendAgentTarget): boolean {
   return (
     target.disabledReason === 'Agent needs permission' ||
-    target.disabledReason === 'Agent may be waiting for approval'
+    target.disabledReason === 'Agent may be waiting for approval' ||
+    target.disabledReason === 'Update Orca on this host to send to this agent'
   )
 }
 

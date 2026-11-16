@@ -1,4 +1,3 @@
-import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { RuntimeTerminalSend } from '../../../../../../shared/terminal/runtime/runtime-terminal-send-contract'
 import {
   sanitizeBracketedPasteText as sanitizeTerminalPasteText,
@@ -58,7 +57,7 @@ export async function sendPromptWithGuardedPasteAndEnter(
   runtimeTarget: Parameters<typeof callRuntimeRpc>[0],
   terminalHandle: string,
   prompt: string,
-  options: { allowLegacyFallback: boolean; submit?: boolean; agentType?: AgentType | null }
+  options: { allowLegacyFallback: boolean; submit?: boolean }
 ): Promise<ActiveAgentNotesSendResult> {
   const initialAgentStatus = await getTerminalAgentSendReadiness(
     runtimeTarget,

@@ -23588,7 +23588,8 @@
   "agentSendTargets": {
     "disabledReason": {
       "needsPermission": "Agent benötigt eine Genehmigung",
-      "approvalUnseen": "Agent wartet möglicherweise auf eine Genehmigung"
+      "approvalUnseen": "Agent wartet möglicherweise auf eine Genehmigung",
+      "hostUpdateRequired": "Aktualisiere Orca auf diesem Host, um an diesen Agent zu senden"
     }
   },
   "wslDistroHold": {

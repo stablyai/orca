@@ -33,8 +33,10 @@ function state(
   statusEntry: AgentStatusEntry,
   livePtyIds: string[] | undefined,
   tabTitle = 'kiro-cli',
-  root: TerminalPaneLayoutNode | null = null
+  root: TerminalPaneLayoutNode | null = null,
+  guardedHosts: string[] = []
 ): RunningAgentTargetState {
+  const ptyId = livePtyIds?.[0] ?? 'pty-1'
   const tab: TerminalTab = {
     id: 'tab-1',
     ptyId: null,
@@ -54,11 +56,12 @@ function state(
         root,
         activeLeafId: root ? SIBLING_LEAF_ID : LEAF_ID,
         expandedLeafId: null,
-        ptyIdsByLeafId: { [LEAF_ID]: 'pty-1' }
+        ptyIdsByLeafId: { [LEAF_ID]: ptyId }
       }
     },
     ptyIdsByTabId: livePtyIds === undefined ? {} : { 'tab-1': livePtyIds },
-    runtimePaneTitlesByTabId: {}
+    runtimePaneTitlesByTabId: {},
+    sendApprovalGuardEnvironmentIds: new Set(guardedHosts)
   }
 }
 
@@ -126,6 +129,18 @@ describe('deriveRunningAgentSendTargets terminal liveness', () => {
       disabledReason: 'Agent may be waiting for approval'
     })
     expect(onlyTarget(state(entry({ state: 'working', agentType: 'claude' }), ['pty-1']))).toEqual({
+      status: 'eligible',
+      disabledReason: undefined
+    })
+  })
+
+  it('refuses a Kiro pane on a paired host whose send guard predates approval-hiding agents', () => {
+    const remotePty = 'remote:host-1@@term-1'
+    expect(onlyTarget(state(entry({}), [remotePty]))).toEqual({
+      status: 'disabled',
+      disabledReason: 'Update Orca on this host to send to this agent'
+    })
+    expect(onlyTarget(state(entry({}), [remotePty], 'kiro-cli', null, ['host-1']))).toEqual({
       status: 'eligible',
       disabledReason: undefined
     })

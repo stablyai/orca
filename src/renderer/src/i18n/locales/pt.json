@@ -24623,7 +24623,8 @@
   "agentSendTargets": {
     "disabledReason": {
       "needsPermission": "O agente precisa de permissão",
-      "approvalUnseen": "O agente pode estar aguardando aprovação"
+      "approvalUnseen": "O agente pode estar aguardando aprovação",
+      "hostUpdateRequired": "Atualize o Orca neste host para enviar a este agente"
     }
   },
   "wslDistroHold": {

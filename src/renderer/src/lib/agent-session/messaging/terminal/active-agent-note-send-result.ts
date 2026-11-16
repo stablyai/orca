@@ -9,6 +9,8 @@ export type ActiveAgentNotesSendStatus =
   | 'permission'
   /** Mid-turn, and the host cannot see this agent's approval menus. */
   | 'approval-unseen'
+  /** The agent's host predates the guard that keeps sends out of approval menus. */
+  | 'host-update-required'
   | 'status-unavailable'
   | 'not-ready'
   | 'not-writable'
@@ -33,6 +35,7 @@ export type ActiveAgentNotesSendFailureCode =
   | 'status-unavailable'
   | 'terminal-send-permission'
   | 'terminal-send-approval-unseen'
+  | 'host-send-approval-guard-missing'
   | 'terminal-send-refused'
   | 'terminal_not_writable'
   | 'submit-readiness-lost'
@@ -98,6 +101,13 @@ export function activeAgentNotesSendFailureMessage(
       message = translate(
         'components.agentNotes.approvalUnseen',
         'The {{target}} agent may be waiting for approval. Send the notes when its turn ends.',
+        { target }
+      )
+      break
+    case 'host-update-required':
+      message = translate(
+        'components.agentNotes.hostUpdateRequired',
+        "Update Orca on the {{target}} agent's host to send it notes.",
         { target }
       )
       break

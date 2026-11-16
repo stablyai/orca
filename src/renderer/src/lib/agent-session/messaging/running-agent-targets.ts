@@ -4,13 +4,18 @@ import type {
   AgentType
 } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
-import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
+import { makePaneKey, parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { structuredAgentSessionPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { isStructuredTab } from '../../../../../shared/agent-session/view/structured-agent-session-tab'
 import type { AgentMessageTarget } from './agent-message-target'
 import { detectAgentSendTitleStatus } from './agent-send-title-status'
 import { resolveRuntimePaneTitleLeafResolution } from '../../../../../shared/workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
 import { agentHidesApprovalsFromHooks } from '../../../../../shared/agent-status/approval/hook-silent-approval-agents'
+import { resolveTerminalTitleAgentType } from '../../../../../shared/agent-status/title/terminal-title-agent-type'
+import {
+  ptyHostGuardsSendApprovals,
+  selectSendApprovalGuardEnvironmentIds
+} from '@/runtime/hosts/capabilities/send-approval-guard-hosts'
 
 export type RunningAgentTargetState = Pick<
   AppState,
@@ -20,7 +25,10 @@ export type RunningAgentTargetState = Pick<
   | 'terminalLayoutsByTabId'
   | 'ptyIdsByTabId'
 > &
-  Partial<Pick<AppState, 'runtimePaneTitlesByTabId'>>
+  Partial<Pick<AppState, 'runtimePaneTitlesByTabId' | 'runtimeStatusByEnvironmentId'>> & {
+    /** Selected instead of the whole host-status map so unrelated host updates don't rescan targets. */
+    sendApprovalGuardEnvironmentIds?: ReadonlySet<string>
+  }
 
 type RunningAgentSendTargetEligibility = {
   status: 'eligible' | 'disabled'
@@ -111,9 +119,8 @@ function deriveTerminalAgentSendTargets(
     let disabledReason: string | undefined
 
     // Idle agents emit no hooks, so row age never disables a live pane; the host's process/screen check gates the send.
-    const liveTitleStatus = ptyId
-      ? detectLiveAgentPaneStatus(state, parsed.tabId, parsed.leafId, tab.title)
-      : null
+    const liveTitle = ptyId ? resolveLeafTitle(state, parsed.tabId, parsed.leafId, tab.title) : null
+    const liveTitleStatus = liveTitle === null ? null : detectAgentSendTitleStatus(liveTitle)
     // An unanswered prompt sends no further hooks and idle titles can persist under open dialogs, so only the agent's next report clears it.
     if (!ptyId) {
       disabledReason = 'Terminal is no longer available'
@@ -123,12 +130,8 @@ function deriveTerminalAgentSendTargets(
       liveTitleStatus === 'permission'
     ) {
       disabledReason = 'Agent needs permission'
-    } else if (
-      (entry.state !== 'done' && agentHidesApprovalsFromHooks(entry.agentType)) ||
-      (tab.launchAgent !== entry.agentType && agentHidesApprovalsFromHooks(tab.launchAgent))
-    ) {
-      // Its hooks report working through an approval menu, which a pasted Enter would answer; another agent's row can't vouch for it.
-      disabledReason = 'Agent may be waiting for approval'
+    } else {
+      disabledReason = hookSilentAgentSendRefusal(state, tab, ptyId, entry, liveTitle)
     }
 
     targets.push({
@@ -182,23 +185,72 @@ function deriveStructuredAgentSendTargets(
   return targets
 }
 
-function detectLiveAgentPaneStatus(
+// The tab title is the active surface's; it belongs to this leaf only when the tab has no split.
+function resolveLeafTitle(
   state: RunningAgentTargetState,
   tabId: string,
   leafId: string,
   tabTitle: string
-): ReturnType<typeof detectAgentSendTitleStatus> {
+): string | null {
   const layout = state.terminalLayoutsByTabId[tabId]
   const paneTitles = state.runtimePaneTitlesByTabId?.[tabId]
   const paneTitleResolution = resolveRuntimePaneTitleLeafResolution(layout, paneTitles, leafId)
-  // The tab title is the active surface's; it belongs to this leaf only when the tab has no split.
   const tabTitleIsLeafs =
     !paneTitleResolution.hasAnyPaneTitle && (!layout?.root || layout.root.type === 'leaf')
-  const title = paneTitleResolution.title ?? (tabTitleIsLeafs ? tabTitle : null)
-  if (title === null) {
-    return null
+  return paneTitleResolution.title ?? (tabTitleIsLeafs ? tabTitle : null)
+}
+
+const NO_GUARDED_HOSTS: ReadonlySet<string> = new Set()
+
+/** Why a pane that may run an agent whose hooks report working through approval menus can't take a paste and Enter now. */
+export function hookSilentAgentSendRefusal(
+  state: RunningAgentTargetState,
+  tab: Pick<TerminalTab, 'ptyId' | 'launchAgent'>,
+  ptyId: string,
+  entry: Pick<AgentStatusEntry, 'state' | 'agentType'> | null | undefined,
+  leafTitle: string | null
+): string | undefined {
+  // Any one identity is enough: a row another agent left behind can't vouch for the agent now running. launchAgent names only the tab's original PTY.
+  const agent = [
+    entry?.agentType,
+    ptyId === tab.ptyId ? tab.launchAgent : null,
+    leafTitle === null ? null : resolveTerminalTitleAgentType(leafTitle)
+  ].find(agentHidesApprovalsFromHooks)
+  if (!agent) {
+    return undefined
   }
-  return detectAgentSendTitleStatus(title)
+  const guardedHosts =
+    state.sendApprovalGuardEnvironmentIds ??
+    (state.runtimeStatusByEnvironmentId
+      ? selectSendApprovalGuardEnvironmentIds(state.runtimeStatusByEnvironmentId)
+      : NO_GUARDED_HOSTS)
+  if (!ptyHostGuardsSendApprovals(guardedHosts, ptyId)) {
+    return 'Update Orca on this host to send to this agent'
+  }
+  return entry?.state === 'done' && entry.agentType === agent
+    ? undefined
+    : 'Agent may be waiting for approval'
+}
+
+/** The pane's refusal for a send that bypasses the target list, such as the focused terminal. */
+export function terminalPaneSendRefusal(
+  state: RunningAgentTargetState,
+  worktreeId: string,
+  tabId: string,
+  leafId: string
+): string | undefined {
+  const tab = state.tabsByWorktree[worktreeId]?.find((candidate) => candidate.id === tabId)
+  const ptyId = state.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId?.[leafId]
+  if (!tab || !ptyId) {
+    return undefined
+  }
+  return hookSilentAgentSendRefusal(
+    state,
+    tab,
+    ptyId,
+    state.agentStatusByPaneKey.get(makePaneKey(tabId, leafId)),
+    resolveLeafTitle(state, tabId, leafId, tab.title)
+  )
 }
 
 export function resolveRunningAgentSendTarget(

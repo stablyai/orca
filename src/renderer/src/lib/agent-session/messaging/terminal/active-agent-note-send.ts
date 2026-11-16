@@ -1,12 +1,10 @@
-import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import { resolveTerminalTitleAgentType } from '../../../../../../shared/agent-status/title/terminal-title-agent-type'
-import { agentHidesApprovalsFromHooks } from '../../../../../../shared/agent-status/approval/hook-silent-approval-agents'
-import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import type { RuntimeTerminalWait } from '../../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { useAppStore } from '@/store/index'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import { terminalPaneSendRefusal } from '../running-agent-targets'
 import { findActiveRuntimeTerminal, getActiveTerminalNoteTarget } from './active-agent-note-target'
 import type { ActiveTerminalNoteTarget } from './active-agent-note-target'
 import type { ActiveAgentNotesSendResult } from './active-agent-note-send-result'
@@ -70,7 +68,16 @@ async function sendNotesToActiveAgentSessionInternal({
   if (!noteTarget) {
     return reportNoteSendFailure({ status: 'no-active-terminal', code: 'no-note-target' }, null)
   }
-  const agentType = noteTargetAgentType(state, worktreeId, noteTarget)
+  // Checked before any write: an older host's guard can't see these agents' approval menus.
+  const refusal = terminalPaneSendRefusal(state, worktreeId, noteTarget.tabId, noteTarget.leafId)
+  if (refusal) {
+    return reportNoteSendFailure(
+      refusal === 'Agent may be waiting for approval'
+        ? { status: 'approval-unseen', code: 'terminal-send-approval-unseen' }
+        : { status: 'host-update-required', code: 'host-send-approval-guard-missing' },
+      noteTarget
+    )
+  }
   const runtimeTarget = runtimeTargetForOwnerEnvironment(
     runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
   )
@@ -88,18 +95,13 @@ async function sendNotesToActiveAgentSessionInternal({
   }
   if (explicitNoteTarget) {
     return reportNoteSendFailure(
-      await sendPromptWithGuardedPasteAndEnter(runtimeTarget, terminal.handle, trimmedPrompt, {
-        allowLegacyFallback: false,
-        submit,
-        agentType
-      }),
+      await sendPromptToExplicitAgentTarget(runtimeTarget, terminal.handle, trimmedPrompt, submit),
       noteTarget
     )
   }
   const effectiveTimeoutMs = timeoutMs ?? ACTIVE_AGENT_SEND_TIMEOUT_MS
   const initialAgentStatus = await getTerminalAgentSendReadiness(runtimeTarget, terminal.handle, {
-    allowLegacyFallback: true,
-    agentType
+    allowLegacyFallback: true
   })
   if (initialAgentStatus.status !== 'sendable') {
     return reportNoteSendFailure(
@@ -151,8 +153,7 @@ async function sendNotesToActiveAgentSessionInternal({
     throw error
   }
   const finalAgentStatus = await getTerminalAgentSendReadiness(runtimeTarget, terminal.handle, {
-    allowLegacyFallback: true,
-    agentType
+    allowLegacyFallback: true
   })
   if (finalAgentStatus.status !== 'sendable') {
     return reportNoteSendFailure(
@@ -168,8 +169,7 @@ async function sendNotesToActiveAgentSessionInternal({
     return reportNoteSendFailure(
       await sendPromptWithGuardedPasteAndEnter(runtimeTarget, terminal.handle, trimmedPrompt, {
         allowLegacyFallback: false,
-        submit,
-        agentType
+        submit
       }),
       noteTarget
     )
@@ -181,21 +181,14 @@ async function sendNotesToActiveAgentSessionInternal({
   )
 }
 
-// The renderer's own row names the agent so an older host's working report can't reach Enter.
-function noteTargetAgentType(
-  state: ReturnType<typeof useAppStore.getState>,
-  worktreeId: string,
-  noteTarget: ActiveTerminalNoteTarget
-): AgentType | null {
-  const row = state.agentStatusByPaneKey.get(makePaneKey(noteTarget.tabId, noteTarget.leafId))
-  const tab = state.tabsByWorktree[worktreeId]?.find(
-    (candidate) => candidate.id === noteTarget.tabId
-  )
-  // A launch-owned agent whose hooks hide approvals outranks a row another agent left behind.
-  if (tab?.launchAgent && agentHidesApprovalsFromHooks(tab.launchAgent)) {
-    return tab.launchAgent
-  }
-  return (
-    row?.agentType ?? tab?.launchAgent ?? (tab ? resolveTerminalTitleAgentType(tab.title) : null)
-  )
+async function sendPromptToExplicitAgentTarget(
+  runtimeTarget: RuntimeClientTarget,
+  terminalHandle: string,
+  prompt: string,
+  submit: boolean
+): Promise<ActiveAgentNotesSendResult> {
+  return await sendPromptWithGuardedPasteAndEnter(runtimeTarget, terminalHandle, prompt, {
+    allowLegacyFallback: false,
+    submit
+  })
 }

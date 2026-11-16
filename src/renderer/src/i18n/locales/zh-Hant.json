@@ -23254,7 +23254,8 @@
   "agentSendTargets": {
     "disabledReason": {
       "needsPermission": "代理程式需要權限",
-      "approvalUnseen": "代理程式可能正在等待核准"
+      "approvalUnseen": "代理程式可能正在等待核准",
+      "hostUpdateRequired": "請更新此主機上的 Orca 才能傳送給此代理程式"
     }
   },
   "wslDistroHold": {

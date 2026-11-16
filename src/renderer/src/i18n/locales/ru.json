@@ -24325,7 +24325,8 @@
   "agentSendTargets": {
     "disabledReason": {
       "needsPermission": "Агенту требуется разрешение",
-      "approvalUnseen": "Возможно, агент ждёт подтверждения"
+      "approvalUnseen": "Возможно, агент ждёт подтверждения",
+      "hostUpdateRequired": "Обновите Orca на этом хосте, чтобы отправлять этому агенту"
     }
   },
   "wslDistroHold": {
