@@ -106,8 +106,8 @@ export async function resolveAgentConversation(
       )
 }
 
-/** The Orca ID `text` spells: an `orca_session_id:` address or a bare ID, whose UUID Orca mints
- *  with underscores where a UUID is usually written with hyphens. */
+/** The Orca ID `text` spells: an `orca_session_id:` address or a bare ID. Older IDs spell their
+ *  UUID with underscores, so a hyphenated legacy `<agent>_<uuid>` is respelled to match. */
 function orcaSessionIdOf(text: string): OrcaSessionId | null {
   const bare = (
     text.startsWith(ORCA_SESSION_ADDRESS_PREFIX)
