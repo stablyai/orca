@@ -68,7 +68,8 @@ function normalizedDescription(description: string | null | undefined): string {
   return description?.replace(/\s+/g, ' ').trim() ?? ''
 }
 
-const PICKER_RESULT_LIMIT = 50
+const COMMAND_RESULT_LIMIT = 50
+const SKILL_RESULT_LIMIT = 500
 const SCOPE_PRIORITY: Record<SkillSourceKind, number> = {
   repo: 0,
   home: 1,
@@ -82,8 +83,8 @@ export function buildNativeChatPickerItems(
   query: string,
   skillSigil: '/' | '$',
   sessionSkills?: readonly Commands.NativeChatSessionSkill[],
-  /** Rows kept per group; a caller that needs every skill passes Infinity. */
-  limit = PICKER_RESULT_LIMIT,
+  /** Override both group limits; a caller that needs every skill passes Infinity. */
+  limit?: number,
   /** `$` matches skill names only, so a shell word like `$CODEX_HOME` never hits a description. */
   trigger: '/' | '$' = '/',
   commandAvailable?: (name: string) => boolean
@@ -139,7 +140,52 @@ export function buildNativeChatPickerItems(
     query,
     trigger === '/'
   )
-  return [...commandItems.slice(0, limit), ...skillItems.slice(0, limit)]
+  const skillLimit = limit ?? SKILL_RESULT_LIMIT
+  return [
+    ...commandItems.slice(0, limit ?? COMMAND_RESULT_LIMIT),
+    ...(query
+      ? skillItems.slice(0, skillLimit)
+      : limitSkillsAcrossScopes(skillItems, skillLimit))
+  ]
+}
+
+// Budget the unfiltered list across scopes, then retain its existing display order.
+function limitSkillsAcrossScopes(
+  skills: Extract<NativeChatPickerItem, { kind: 'skill' }>[],
+  limit: number
+): Extract<NativeChatPickerItem, { kind: 'skill' }>[] {
+  if (skills.length <= limit) {
+    return skills
+  }
+  const byScope = new Map<number, Extract<NativeChatPickerItem, { kind: 'skill' }>[]>()
+  for (const skill of skills) {
+    const scope = skillScopePriority(skill)
+    const queue = byScope.get(scope)
+    if (queue) {
+      queue.push(skill)
+    } else {
+      byScope.set(scope, [skill])
+    }
+  }
+  const queues = [...byScope.values()]
+  const picked = new Set<NativeChatPickerItem>()
+  for (let depth = 0; picked.size < limit; depth += 1) {
+    let advanced = false
+    for (const queue of queues) {
+      if (picked.size >= limit) {
+        break
+      }
+      const next = queue[depth]
+      if (next) {
+        picked.add(next)
+        advanced = true
+      }
+    }
+    if (!advanced) {
+      break
+    }
+  }
+  return skills.filter((skill) => picked.has(skill))
 }
 
 function mergeNativeChatSkills(
