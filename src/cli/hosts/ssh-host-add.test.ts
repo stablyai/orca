@@ -32,28 +32,84 @@ describe('orca host add', () => {
     vi.restoreAllMocks()
   })
 
-  it('registers explicit connection options and prints a usable selector without connection details', async () => {
-    mocks.callMock.mockResolvedValueOnce({
-      ok: true,
-      result: { capabilities: ['ssh.target-management.v1'] }
-    })
-    mocks.callMock.mockResolvedValueOnce({
-      id: 'add-1',
-      ok: true,
-      result: {
+  it.each([
+    { portArgs: ['--port', '2222'], expectedPort: 2222 },
+    { portArgs: [], expectedPort: 22 }
+  ])(
+    'registers connection options with port $expectedPort and prints a redacted selector',
+    async ({ portArgs, expectedPort }) => {
+      mocks.callMock.mockResolvedValueOnce({
+        ok: true,
+        result: { capabilities: ['ssh.target-management.v1'] }
+      })
+      mocks.callMock.mockResolvedValueOnce({
+        id: 'add-1',
+        ok: true,
+        result: {
+          target: {
+            id: 'ssh-build',
+            label: 'Build box',
+            host: '192.0.2.10',
+            username: 'dev',
+            identityFile: '/keys/build',
+            proxyCommand: 'ssh gateway -W %h:%p'
+          },
+          repoReadoptions: []
+        },
+        _meta: { runtimeId: 'desktop' }
+      })
+
+      await main([
+        'host',
+        'add',
+        '--name',
+        'Build box',
+        '--hostname',
+        '192.0.2.10',
+        '--user',
+        'dev',
+        ...portArgs,
+        '--identity-file',
+        '/keys/build',
+        '--jump-host',
+        'bastion',
+        '--proxy-command',
+        'ssh gateway -W %h:%p',
+        '--json'
+      ])
+
+      expect(mocks.callMock).toHaveBeenCalledWith('ssh.addTarget', {
         target: {
-          id: 'ssh-build',
           label: 'Build box',
           host: '192.0.2.10',
           username: 'dev',
+          port: expectedPort,
           identityFile: '/keys/build',
+          jumpHost: 'bastion',
           proxyCommand: 'ssh gateway -W %h:%p'
+        }
+      })
+      expect(JSON.parse(vi.mocked(console.log).mock.calls[0][0])).toEqual({
+        id: 'add-1',
+        ok: true,
+        result: {
+          host: {
+            kind: 'ssh',
+            name: 'Build box',
+            id: 'ssh-build',
+            selector: '--host ssh:ssh-build'
+          }
         },
-        repoReadoptions: []
-      },
-      _meta: { runtimeId: 'desktop' }
-    })
+        _meta: { runtimeId: 'desktop' }
+      })
+    }
+  )
 
+  it.each([
+    { portArgs: ['--port', '65536'] },
+    { portArgs: ['--port='] },
+    { portArgs: ['--port', ''] }
+  ])('refuses invalid port arguments $portArgs before either RPC', async ({ portArgs }) => {
     await main([
       'host',
       'add',
@@ -63,50 +119,7 @@ describe('orca host add', () => {
       '192.0.2.10',
       '--user',
       'dev',
-      '--port',
-      '2222',
-      '--identity-file',
-      '/keys/build',
-      '--jump-host',
-      'bastion',
-      '--proxy-command',
-      'ssh gateway -W %h:%p',
-      '--json'
-    ])
-
-    expect(mocks.callMock).toHaveBeenCalledWith('ssh.addTarget', {
-      target: {
-        label: 'Build box',
-        host: '192.0.2.10',
-        username: 'dev',
-        port: 2222,
-        identityFile: '/keys/build',
-        jumpHost: 'bastion',
-        proxyCommand: 'ssh gateway -W %h:%p'
-      }
-    })
-    expect(JSON.parse(vi.mocked(console.log).mock.calls[0][0])).toEqual({
-      id: 'add-1',
-      ok: true,
-      result: {
-        host: { kind: 'ssh', name: 'Build box', id: 'ssh-build', selector: '--host ssh:ssh-build' }
-      },
-      _meta: { runtimeId: 'desktop' }
-    })
-  })
-
-  it('refuses an invalid port before attempting registration', async () => {
-    await main([
-      'host',
-      'add',
-      '--name',
-      'Build box',
-      '--hostname',
-      '192.0.2.10',
-      '--user',
-      'dev',
-      '--port',
-      '65536',
+      ...portArgs,
       '--json'
     ])
 

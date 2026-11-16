@@ -15,6 +15,7 @@ import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/ru
 
 export const SSH_HOST_ADD_HANDLERS: Record<string, CommandHandler> = {
   'host add': async ({ client, flags, json }) => {
+    getPresentStringFlag(flags, 'port')
     const target: SshEditableTargetInput = {
       label: getRequiredStringFlag(flags, 'name'),
       host: getRequiredStringFlag(flags, 'hostname'),
