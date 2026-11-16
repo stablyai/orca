@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { TerminalSetupVerdict } from '../../../../shared/terminal/pty/lifecycle/terminal-setup-status'
+import { sharedPromiseSettlementWaiters } from '../../../../shared/concurrency/promise-settlement-waiters'
 
 type SetupCompletion = { exitCode: number | null }
 
@@ -25,7 +26,7 @@ export class SetupTerminalDependents {
     ptyId: string,
     completion: Promise<SetupCompletion>
   ): () => void {
-    const cancelled = Promise.withResolvers<SetupCompletion>()
+    const cancelled = new AbortController()
     const dependent: {
       workspaceId: string
       verdict: TerminalSetupVerdict
@@ -34,8 +35,15 @@ export class SetupTerminalDependents {
     } = {
       workspaceId,
       verdict: { dependencyId: randomUUID(), state: 'pending' } satisfies TerminalSetupVerdict,
-      completion: Promise.race([completion, cancelled.promise]),
-      cancel: () => cancelled.resolve({ exitCode: null })
+      completion: sharedPromiseSettlementWaiters(completion)
+        .wait({ signal: cancelled.signal, deferSettled: true, abortInMicrotask: true })
+        .catch((error: unknown) => {
+          if (cancelled.signal.aborted) {
+            return { exitCode: null }
+          }
+          throw error
+        }),
+      cancel: () => cancelled.abort()
     }
     this.forgetDependent(ptyId)
     this.dependents.set(ptyId, dependent)
