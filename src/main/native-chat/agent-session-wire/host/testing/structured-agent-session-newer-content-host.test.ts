@@ -33,6 +33,7 @@ beforeEach(() => {
 
 afterEach(async () => {
   vi.restoreAllMocks()
+  await hostTestState().host.flushAllStreamedEvents()
   await closeTestJournalHostDatabases()
   await Promise.all(
     relaunchedRoots.splice(0).map((dir) => rm(dir, { recursive: true, force: true }))
@@ -96,15 +97,11 @@ async function relaunch(): Promise<StructuredAgentSessionHost> {
 }
 
 it('ends a turn whose provider output would not read back as failed, and the next send works', async () => {
-  const closeSession = vi.fn(async () => true)
-  Object.assign(hostTestState().host.deps.adapter, { closeSession })
-  // Match real adapters’ generation identity so Stop can settle the turn.
-  const { acquire } = hostTestState()
-  const acquired = acquire.getMockImplementation()!
-  acquire.mockImplementation(async (input) => ({
-    ...(await acquired(input)),
-    acquisitionGeneration: `generation-${acquire.mock.calls.length}`
-  }))
+  const released = Promise.withResolvers<void>()
+  Object.assign(hostTestState().host.deps.adapter, {
+    closeSession: async () => true,
+    acknowledgeSessionRelease: () => released.resolve()
+  })
   await attach()
   emit(1, {
     kind: 'status',
@@ -119,10 +116,8 @@ it('ends a turn whose provider output would not read back as failed, and the nex
     blocks: [{ type: 'tool-call', name: 'Bash', input: null, callId: '  ' }]
   })
   const { host, store } = hostTestState()
-  await vi.waitFor(() => {
-    expect(closeSession).toHaveBeenCalledWith(SESSION)
-    expect(store.getRecord(SESSION)?.lease).toMatchObject({ claimStatus: 'released' })
-  })
+  await released.promise
+  expect(store.getRecord(SESSION)?.lease).toMatchObject({ claimStatus: 'released' })
 
   expect(await historyBodies(host)).toEqual(
     expect.arrayContaining([
@@ -130,8 +125,16 @@ it('ends a turn whose provider output would not read back as failed, and the nex
       expect.objectContaining({ kind: 'status', failure: { kind: 'hostFault' } })
     ])
   )
+  const delivered = Promise.withResolvers<void>()
+  const { dispatch } = hostTestState()
+  const dispatchMessage = dispatch.getMockImplementation()!
+  dispatch.mockImplementation(async (input) => {
+    const result = await dispatchMessage(input)
+    delivered.resolve()
+    return result
+  })
   expect(await send(host, 'the next message')).toMatchObject({ ok: true })
-  await vi.waitFor(() => expect(hostTestState().acquire).toHaveBeenCalledTimes(2))
+  await delivered.promise
 
   const reopened = await relaunch()
   expect(await historyBodies(reopened)).toContainEqual(
