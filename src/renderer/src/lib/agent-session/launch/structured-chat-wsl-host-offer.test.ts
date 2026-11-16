@@ -47,6 +47,7 @@ import {
   type WslHostChatOffer,
   type WslHostChatOfferState
 } from './structured-chat-wsl-host-offer'
+import { acceptWslHostOffer } from '@/components/sidebar/wsl-host-offer-actions'
 import { structuredChatUnavailableToast } from './structured-agent-session-launch-failure'
 import { structuredSessionNotices } from '@/components/native-chat/messages/notices/native-chat-structured-session-notices'
 
@@ -191,6 +192,67 @@ describe('wslHostChatOfferAction', () => {
     wslHostChatOfferAction({ ...offer, distro: 'Debian' }).onClick()
     await vi.waitFor(() => expect(mocks.openMove).toHaveBeenCalledTimes(2))
     expect(order).toEqual(['start Ubuntu', 'end Ubuntu', 'start Debian', 'end Debian'])
+  })
+
+  it('shares one queue with the add-project offer, so restores never interleave', async () => {
+    const finishes: Record<string, (result: WslHostAddResult) => void> = {}
+    mocks.addWslHost.mockImplementation(
+      ({ distro }) =>
+        new Promise((resolve) => {
+          finishes[distro] = resolve
+        })
+    )
+    const offerDeps = {
+      readWslHostsSetting: () => mocks.settings.experimentalWslHosts,
+      updateSettings: mocks.updateSettingsOrThrow,
+      addWslHost: mocks.addWslHost,
+      addLocalPath: vi.fn(async () => undefined),
+      moveAddedProject: vi.fn()
+    }
+    const accepted = acceptWslHostOffer(
+      { path: '\\\\wsl.localhost\\Debian\\repo', distro: 'Debian', source: 'local_folder_picker' },
+      offerDeps
+    )
+    wslHostChatOfferAction(offer).onClick()
+    await vi.waitFor(() => expect(finishes.Debian).toBeDefined())
+    // The chat's Ubuntu run waits; it hasn't read the setting the offer just turned on.
+    expect(mocks.addWslHost).toHaveBeenCalledTimes(1)
+    finishes.Debian({ ok: false, kind: 'failed', message: 'Debian could not start.' })
+    expect(await accepted).toMatchObject({ ok: false })
+    await vi.waitFor(() => expect(finishes.Ubuntu).toBeDefined())
+    finishes.Ubuntu({ ok: true, environmentId: 'env-ubuntu' })
+    await vi.waitFor(() => expect(mocks.openMove).toHaveBeenCalled())
+    // The failed offer restored "off" before the chat's run read it; the chat's success stays on.
+    expect(mocks.settings.experimentalWslHosts).toBe(true)
+    expect(offerDeps.addLocalPath).not.toHaveBeenCalled()
+  })
+
+  it('lets the add-project offer join a chat setup of the same distro', async () => {
+    let finishAdd: (result: WslHostAddResult) => void = () => undefined
+    mocks.addWslHost.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finishAdd = resolve
+        })
+    )
+    wslHostChatOfferAction(offer).onClick()
+    await vi.waitFor(() => expect(mocks.addWslHost).toHaveBeenCalledTimes(1))
+    const offerDeps = {
+      readWslHostsSetting: () => mocks.settings.experimentalWslHosts,
+      updateSettings: mocks.updateSettingsOrThrow,
+      addWslHost: mocks.addWslHost,
+      addLocalPath: vi.fn(async () => undefined),
+      moveAddedProject: vi.fn()
+    }
+    const accepted = acceptWslHostOffer(
+      { path: '\\\\wsl.localhost\\ubuntu\\repo', distro: 'ubuntu', source: 'local_folder_picker' },
+      offerDeps
+    )
+    finishAdd({ ok: true, environmentId: 'env-ubuntu' })
+    expect(await accepted).toBeNull()
+    expect(mocks.addWslHost).toHaveBeenCalledTimes(1)
+    expect(offerDeps.addLocalPath).toHaveBeenCalledTimes(1)
+    expect(offerDeps.moveAddedProject).toHaveBeenCalledTimes(1)
   })
 
   it('opens the move straight away when the host is ready', async () => {

@@ -8,7 +8,11 @@ import { useAppStore } from '@/store/index'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 import { readIpcErrorDetail } from '@/runtime/errors/ipc-error'
 import { readWslHostOfferGate } from '@/components/sidebar/wsl-host-offer'
-import { runWslDistroAsHost } from '@/components/sidebar/wsl-host-offer-actions'
+import {
+  runningWslDistroAsHost,
+  runWslDistroAsHost,
+  subscribeWslDistroHostRuns
+} from '@/components/sidebar/wsl-host-offer-actions'
 import { addWslHostDistro } from '@/components/sidebar/host-admission/wsl/add-wsl-host-distro'
 import { wslHostAddRefusalMessage } from '@/components/sidebar/wsl-host-failure-text'
 import { openWslMoveDialogFor } from '@/components/wsl-move/wsl-move-entry'
@@ -83,30 +87,13 @@ export function wslHostChatOfferText(t: Translate = translate): string {
   )
 }
 
-// One setup per distro, shared by every surface; a second click joins the first.
-const settingUp = new Map<string, Promise<void>>()
-const settingUpListeners = new Set<() => void>()
-// Setups run one at a time so each restores the setting it read, not another's.
-let setupQueue: Promise<unknown> = Promise.resolve()
-
-function notifySettingUp(): void {
-  for (const listener of settingUpListeners) {
-    listener()
-  }
-}
-
-function subscribeSettingUp(listener: () => void): () => void {
-  settingUpListeners.add(listener)
-  return () => settingUpListeners.delete(listener)
-}
-
 export function isWslHostChatOfferSettingUp(distro: string): boolean {
-  return settingUp.has(distro.toLowerCase())
+  return runningWslDistroAsHost(distro) !== undefined
 }
 
-/** True while this distro's host is being set up from any chat refusal. */
+/** True while this distro is being set up as a host from any surface. */
 export function useWslHostChatOfferSettingUp(distro: string | null | undefined): boolean {
-  return useSyncExternalStore(subscribeSettingUp, () =>
+  return useSyncExternalStore(subscribeWslDistroHostRuns, () =>
     distro ? isWslHostChatOfferSettingUp(distro) : false
   )
 }
@@ -133,36 +120,20 @@ export function wslHostChatOfferAction(
 }
 
 /** Resolves when this click's work is done; a click during a setup joins it and opens nothing. */
-export function runWslHostChatOffer(
+export async function runWslHostChatOffer(
   hostReady: boolean,
   distro: string,
   only: WslMoveRowRef
 ): Promise<void> {
-  const key = distro.toLowerCase()
-  const running = settingUp.get(key)
+  const running = runningWslDistroAsHost(distro)
   if (running) {
-    return running
+    await running.catch(() => undefined)
+    return
   }
-  if (hostReady) {
-    // The user's Move in the dialog is what moves the project.
+  // The user's Move in the dialog is what moves the project.
+  if (hostReady || (await setUpWslHostForChat(distro))) {
     openWslMoveDialogFor(distro, only)
-    return Promise.resolve()
   }
-  const setup = setupQueue
-    .then(() => setUpWslHostForChat(distro))
-    .then((added) => {
-      if (added) {
-        openWslMoveDialogFor(distro, only)
-      }
-    })
-    .finally(() => {
-      settingUp.delete(key)
-      notifySettingUp()
-    })
-  setupQueue = setup.catch(() => undefined)
-  settingUp.set(key, setup)
-  notifySettingUp()
-  return setup
 }
 
 async function setUpWslHostForChat(distro: string): Promise<boolean> {
