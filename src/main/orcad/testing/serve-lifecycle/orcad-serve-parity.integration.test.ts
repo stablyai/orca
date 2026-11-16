@@ -51,15 +51,7 @@ afterEach(async () => {
     try {
       await killProfileDaemons(root)
     } catch (error) {
-      // The daemon's own log says where a daemon that will not exit is stuck.
-      const log = join(root, 'logs', 'daemon.log')
-      failures.push(
-        existsSync(log)
-          ? new Error(`daemon.log tail:\n${boundedText(readFileSync(log, 'utf8'))}`, {
-              cause: error
-            })
-          : error
-      )
+      failures.push(withDaemonLogTail(root, error))
     }
   }
   if (failures.length > 0) {
@@ -76,6 +68,16 @@ afterEach(async () => {
     throw new AggregateError(failures, 'Test root removal incomplete')
   }
 })
+
+/** The daemon's own log says where a daemon that will not exit is stuck; reading it is best effort. */
+function withDaemonLogTail(root: string, error: unknown): unknown {
+  try {
+    const tail = boundedText(readFileSync(join(root, 'logs', 'daemon.log'), 'utf8'))
+    return new Error(`daemon.log tail:\n${tail}`, { cause: error })
+  } catch {
+    return error
+  }
+}
 
 /** Clear Vitest markers so daemon-entry starts its server. */
 function serveEnv(userData: string): NodeJS.ProcessEnv {
