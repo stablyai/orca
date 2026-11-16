@@ -1,4 +1,4 @@
-import type { IssueSourcePreference } from '../../../shared/repo-types'
+import type { IssueSourcePreference } from '../../../shared/repository/repo-types'
 import type { LocalGitExecOptions } from '../repositories/github-repository-identity'
 import { getOriginGitHubApiRepository } from '../repositories/github-api-repository-remote-probe'
 import { resolveGitHubApiRepositoryCandidates } from '../repositories/github-api-repository'

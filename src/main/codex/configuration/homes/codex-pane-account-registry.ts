@@ -1,5 +1,5 @@
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
-import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { dirname, join } from 'node:path'
 import { getOrcaUserDataPath } from './codex-home-paths'
 import { CodexPaneAccountRegistryMutations } from './codex-pane-account-registry-mutations'

@@ -1,11 +1,14 @@
-import type { RuntimeMetadata } from '../../../shared/runtime-bootstrap'
-import { isSameUserDataPath } from '../../../shared/serve-user-data-path'
-import { readRuntimeSourceStamp, type RuntimeSourceStamp } from '../../../shared/runtime-source-env'
+import type { RuntimeMetadata } from '../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
+import { isSameUserDataPath } from '../../../shared/remote-runtime/serve-supervisor/serve-user-data-path'
+import {
+  readRuntimeSourceStamp,
+  type RuntimeSourceStamp
+} from '../../../shared/remote-runtime/host-catalog/runtime-source-env'
 import type {
   ExpectedRuntimeSource,
   RuntimeRpcResponse
-} from '../../../shared/runtime-rpc-envelope'
-import type { RuntimeStatus } from '../../../shared/runtime-session-contracts'
+} from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { RuntimeStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { getPlatformUserDataPath } from '../profile/metadata'
 import { sendRequest } from './transport'
 import { RuntimeClientError } from './types'

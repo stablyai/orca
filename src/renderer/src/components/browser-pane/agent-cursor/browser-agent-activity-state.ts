@@ -1,6 +1,6 @@
 // Display-only mirror of main's agent activity; main decides which pages agents drive.
 import { useSyncExternalStore } from 'react'
-import type { BrowserAgentCursorEvent } from '../../../../../shared/browser-agent-activity-contract'
+import type { BrowserAgentCursorEvent } from '../../../../../shared/browser/automation/browser-agent-activity-contract'
 
 /** A mounted page draws the cursor and glow; `show` says whether it will report the arrival. */
 type BrowserAgentCursorSink = {

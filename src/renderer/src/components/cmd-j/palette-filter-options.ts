@@ -2,19 +2,19 @@ import { isWorktreeRetiredByRemoval } from '../../../../shared/worktree/removal/
 import {
   getRepoDisplayLabelKey,
   getRepoDisplayLabelsByPath
-} from '../../../../shared/repo-display-labels'
+} from '../../../../shared/repository/appearance/repo-display-labels'
 import {
   getRepoExecutionHostId,
   getWorktreeExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
-import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Project, ProjectHostSetup } from '../../../../shared/project/project-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { withoutHiddenRepos } from '../../../../shared/hidden-projects'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { getProjectHeaderRevealTarget } from '../../../../shared/project-section-grouping'
-import type { ProjectGroupingModel } from '../../../../shared/project-section-grouping'
+import { getProjectHeaderRevealTarget } from '../../../../shared/sidebar-list/sections/project-section-grouping'
+import type { ProjectGroupingModel } from '../../../../shared/sidebar-list/sections/project-section-grouping'
 import type { SidebarHostOption } from '../sidebar/worktree-list/controls/sidebar-host-options'
 import { translateHostDisplayLabel } from '../sidebar/execution-host-label'
 import {

@@ -3,7 +3,7 @@ import {
   stringifyJsonWithinByteLimit
 } from '../json-stream/node-bounded-json-stringify'
 import { RemoteRuntimeClientError } from './remote-runtime-client-error'
-import type { RuntimeOrchestrationEnvelope } from '../runtime-rpc-envelope'
+import type { RuntimeOrchestrationEnvelope } from './rpc/runtime-rpc-envelope'
 
 export const REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES = 4 * 1024 * 1024
 // Why: a host refuses a larger client frame by closing the socket (1009), failing every call on it.

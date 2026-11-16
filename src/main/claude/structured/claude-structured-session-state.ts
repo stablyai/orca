@@ -97,6 +97,8 @@ export type ClaudeDispatchWaiter = {
   requestedAt: number | null
   /** Set when the provider replay settled this waiter before send returned. */
   settledUuid?: string
+  /** Sent with priority `now`: the step it interrupts hands its open turn to this send. */
+  steers?: true
   /** Settled with no echo (failed write, child exit, doubt after start); a replay may name it. */
   retired?: boolean
   /** The CLI's last non-terminal `command_lifecycle` state for this send; in memory only. */

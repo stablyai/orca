@@ -3,13 +3,13 @@ import { posix } from 'node:path'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { resolveFolderWorkspaceHost } from '../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../../../shared/project-group-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import {
   isDrvfsLinuxPath,
   resolveWslRepoWorktreeBasePath,
   wslUncPathToLinux
-} from '../../../../shared/wsl-paths'
+} from '../../../../shared/file-access/wsl-paths'
 
 export type WslMoveScopeRefusal =
   /** Distro access does not make Windows-drive projects Linux-owned. */

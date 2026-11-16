@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useEffectEvent, useRef } from 'react'
 import { formatKeybinding } from '../../../../../shared/keybindings/formatting'
 import { isDoubleTapBinding } from '../../../../../shared/keybindings/normalization'
 import type { KeybindingActionId, KeybindingInput } from '../../../../../shared/keybindings/types'
@@ -6,7 +6,7 @@ import {
   ModifierDoubleTapDetector,
   modifierFromKeyEvent,
   toModifierDoubleTapEvent
-} from '../../../../../shared/modifier-double-tap-detector'
+} from '../../../../../shared/keybindings/modifier-double-tap-detector'
 import { cn } from '../../../lib/class-names'
 import { ShortcutKeyCombo } from '../../ShortcutKeyCombo'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
@@ -68,6 +68,24 @@ export function ShortcutRecorderButton({
       doubleTapDetectorRef.current?.reset()
     }
     // ShortcutsPane owns the global recorder-focus flag across rows.
+  }, [recording])
+
+  // Leave the row error in place so it can still be read or copied; Esc or the next recording clears it.
+  const cancelIfClickedAway = useEffectEvent((): void => {
+    if (document.activeElement !== recordButtonRef.current) {
+      onCancelRecording()
+    }
+  })
+
+  // Keys only reach a focused recorder, so a click elsewhere would strand it recording. Cancel on
+  // click, not blur: window switches keep recording, and the row only collapses after the click
+  // has landed. Capture phase runs before the clicked control's own handler.
+  useEffect(() => {
+    if (!recording) {
+      return
+    }
+    window.addEventListener('click', cancelIfClickedAway, true)
+    return () => window.removeEventListener('click', cancelIfClickedAway, true)
   }, [recording])
 
   const handleRecordKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>): void => {

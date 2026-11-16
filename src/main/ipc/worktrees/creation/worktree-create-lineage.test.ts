@@ -3,7 +3,7 @@ import type { CreateWorktreeArgs } from '../../../../shared/worktree/create-type
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
+import { worktreeWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import {
   assertAttachableParentWorkspace,
   recordWorkspaceLineageForCreatedWorktree

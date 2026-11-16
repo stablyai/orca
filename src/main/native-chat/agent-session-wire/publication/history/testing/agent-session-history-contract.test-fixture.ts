@@ -13,7 +13,7 @@ import {
 } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { serializeRemoteRuntimePayload } from '../../../../../../shared/remote-runtime/remote-runtime-memory-limits'
 import { createTrackedJournalOpener } from '../../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
-import { withTestAgentSessionDatabase } from '../../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { withTestAgentSessionDatabase } from '../../../../../runtime/agent-session/records/agent-session-record-store-persistence.test-fixture'
 import {
   JOURNAL_DOMAIN_ITEM_COLUMNS,
   journalDomainItemColumns

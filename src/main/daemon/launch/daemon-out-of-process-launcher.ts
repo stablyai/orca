@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { childProcessHasExited } from '@orca/process-host/process-tree-termination'
-import type { DaemonReplaceReason } from '../../../shared/daemon-lifecycle-telemetry'
+import type { DaemonReplaceReason } from '../../../shared/telemetry/daemon-lifecycle-telemetry'
 import { DaemonClient } from '../transport/client/daemon-client'
 import {
   DaemonEndpointOwnershipError,

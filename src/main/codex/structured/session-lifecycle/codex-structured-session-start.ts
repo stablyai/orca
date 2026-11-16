@@ -3,7 +3,7 @@ import type { AgentSessionAccountKind } from '../../../../shared/agent-session/a
 import {
   throwIfSignalAborted,
   waitForPromiseWithSignal
-} from '../../../../shared/abort-signal-reason'
+} from '../../../../shared/concurrency/abort-signal-reason'
 import type { StructuredAgentSessionAcquireInput } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type {
   StructuredAgentSessionProviderOpenInput,

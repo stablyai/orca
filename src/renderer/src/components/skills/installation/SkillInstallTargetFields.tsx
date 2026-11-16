@@ -7,8 +7,8 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-import { SKILL_INSTALL_CAPABILITY } from '../../../../../shared/skill-install-capability'
-import type { SkillInstallProviderId } from '../../../../../shared/skill-install-providers'
+import { SKILL_INSTALL_CAPABILITY } from '../../../../../shared/skills/capabilities/skill-install-capability'
+import type { SkillInstallProviderId } from '../../../../../shared/skills/installation/skill-install-providers'
 import { SkillInstallAgentPicker } from './SkillInstallAgentPicker'
 import { SkillInstallWorkspaceCombobox } from './SkillInstallWorkspaceCombobox'
 import type { SkillInstallWorkspaceChoice } from './skill-install-workspace-choices'

@@ -7,7 +7,7 @@ import { runPortScanCommandInProcess } from './port-scan-command-execution'
 import { scanWorkspacePorts } from './local-workspace-port-scanner'
 import { killWorkspacePort } from './workspace-port-ownership'
 import { resetWorkspacePortScanTimeoutBackoffForTests } from './local-workspace-port-scan-state'
-import { LSOF_NONBLOCKING_ARGS } from '../../shared/lsof-nonblocking-args'
+import { LSOF_NONBLOCKING_ARGS } from '../../shared/process-observation/lsof-nonblocking-args'
 
 const spawnMock = vi.hoisted(() => vi.fn())
 vi.mock('@orca/process-host', () => ({ spawnProcess: spawnMock }))

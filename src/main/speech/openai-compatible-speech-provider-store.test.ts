@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 async function loadStoreModule() {
   vi.resetModules()
-  const { setSecretStore } = await import('../../shared/secret-store')
+  const { setSecretStore } = await import('../../shared/secure-storage/secret-store')
   setSecretStore({
     decryptString: (value: Buffer) => value.toString('utf8'),
     encryptString: (value: string) => Buffer.from(value),

@@ -3,8 +3,11 @@ import type { ConnectionState } from '../../transport/connection/connection-stat
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { triggerError, triggerSuccess } from '../../platform/haptics/haptics'
 import { translate } from '../../i18n/mobile-i18n'
-import { useHostProtocolGates } from '../../components/host-protocol-gates-context'
-import { launchAgentWithPrompt, promptedLaunchNotice } from '../review/pr-ai-triage-launch'
+import { useHostProtocolGates } from '../../components/host-connection/host-protocol-gates-context'
+import {
+  launchAgentWithPrompt,
+  promptedLaunchNotice
+} from '../review/agent-launch/pr-ai-triage-launch'
 import type { LaunchedAgentOpens } from '../../session/agent-launch/launched-agent-opener'
 import { resolveMobileAgentLaunchAvailability } from '../../session/agent-launch/mobile-agent-launch-availability'
 import {

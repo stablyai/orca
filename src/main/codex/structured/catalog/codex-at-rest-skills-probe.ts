@@ -1,5 +1,5 @@
-import { delayUnlessAborted } from '../../../../shared/abort-aware-delay'
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { delayUnlessAborted } from '../../../../shared/concurrency/abort-aware-delay'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import * as Pools from './codex-at-rest-skills-probe-pools'
 import {
   isLegacyAgentSessionAccountHome,

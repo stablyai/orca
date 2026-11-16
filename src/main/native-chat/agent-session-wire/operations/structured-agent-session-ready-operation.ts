@@ -26,7 +26,7 @@ import type { StructuredAgentSessionDeliveryPlace } from '../delivery/structured
 import type { StructuredAgentSessionStartClaim } from '../startup/structured-agent-session-agent-start'
 import type { StructuredAgentSessionStartReadiness } from '../startup/structured-agent-session-start-readiness'
 
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 
 import {
   operationDidNotRun,

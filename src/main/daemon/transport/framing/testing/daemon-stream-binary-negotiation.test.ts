@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { DaemonClient } from '../../client/daemon-client'
-import { encodeNdjson } from '../../../../../shared/main-process-ndjson-framer'
+import { encodeNdjson } from '../../../../../shared/json-stream/main-process-ndjson-framer'
 import { getDaemonSocketPath } from '../../../launch/daemon-spawner'
 
 const TERMINAL_TEXT = '\x1b[1;32m✔\x1b[0m done ┌──┐ \u{1F680} "q" \\\r\n'

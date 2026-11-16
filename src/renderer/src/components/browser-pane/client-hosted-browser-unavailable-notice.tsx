@@ -13,7 +13,7 @@ import {
   ReopenBrowserPageOnServerButton,
   reopenOnServerCaveat
 } from './ReopenBrowserPageOnServerButton'
-import '../../../../shared/protocol-version'
+import '../../../../shared/remote-runtime/protocol/protocol-version'
 import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../../shared/browser/runtime/browser-runtime-capabilities'
 
 /** No guest exists here to retry; offer reopening on a capable server when hosting is unavailable or belongs to another desktop. */

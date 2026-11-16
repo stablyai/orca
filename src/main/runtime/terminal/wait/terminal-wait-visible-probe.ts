@@ -2,7 +2,7 @@ import { OrcaRuntimeWithCreateAgentPromptRenderGate } from '../input/terminal-ag
 import type { RuntimeProviderSnapshotReadOptions } from '../output/provider-snapshot-read-options'
 import type { TerminalWaiter } from './terminal-waiter'
 import { VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from '../output/provider-snapshot-budget'
-import { withTimeout } from '../../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 import {
   detectTerminalWaitBlockedReason,
   isKnownReadyPromptBody,
@@ -13,7 +13,7 @@ import { restoreProjectedComposerDraft } from '../view/orca-runtime-terminal-pro
 import type {
   RuntimeTerminalWait,
   RuntimeTerminalWaitBlockedReason
-} from '../../../../shared/runtime-terminal-contracts'
+} from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import {
   buildPtyTerminalWaitBlockedResult,
   buildPtyTerminalWaitResult

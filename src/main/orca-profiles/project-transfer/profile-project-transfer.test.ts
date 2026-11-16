@@ -6,9 +6,9 @@ import { getDefaultPersistedState } from '../../../shared/constants'
 import {
   ORCA_PROFILE_INDEX_SCHEMA_VERSION,
   type OrcaProfileIndex
-} from '../../../shared/orca-profiles'
+} from '../../../shared/orca-profiles/orca-profiles'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import {
   exportProfileStateJson,
   importProfileStateJson

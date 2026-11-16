@@ -1,13 +1,16 @@
 import os from 'node:os'
 import { app } from 'electron'
-import { isCrashReportReason } from '../../../shared/crash-reporting'
-import type { CrashReportBreadcrumbData } from '../../../shared/crash-reporting'
+import { isCrashReportReason } from '../../../shared/crash-reporting/crash-reporting'
+import type { CrashReportBreadcrumbData } from '../../../shared/crash-reporting/crash-reporting'
 import {
   sanitizeCrashReportDetails,
   sanitizeCrashReportString
-} from '../../../shared/crash-report-redaction'
-import { decodePosixWaitStatus, describePosixWaitStatus } from '../../../shared/posix-wait-status'
-import { rendererCrashBreadcrumbOrigin } from '../../../shared/crash-breadcrumb-origin'
+} from '../../../shared/crash-reporting/crash-report-redaction'
+import {
+  decodePosixWaitStatus,
+  describePosixWaitStatus
+} from '../../../shared/crash-reporting/posix-wait-status'
+import { rendererCrashBreadcrumbOrigin } from '../../../shared/crash-reporting/crash-breadcrumb-origin'
 import type { CrashReportStore } from '../reports/crash-report-store'
 import { getCrashBreadcrumbSnapshot } from '../breadcrumbs/crash-breadcrumb-store'
 import {
@@ -26,11 +29,8 @@ import {
 } from './process-gone-classification'
 import { buildProcessGoneCrashDetails } from './process-gone-diagnostics'
 import { buildSuppressedProcessGoneBreadcrumbData } from './suppressed-process-gone-breadcrumb'
-import {
-  getProcessGoneDedupeKey,
-  processGoneDedupe,
-  type ProcessGoneDedupe
-} from './process-gone-dedupe'
+import { getProcessGoneDedupeKey, processGoneDedupe } from './process-gone-dedupe'
+import type { ProcessGoneDedupe } from './process-gone-dedupe'
 import {
   findSiblingChildDeaths,
   siblingProcessDeathDetails

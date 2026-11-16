@@ -1,12 +1,12 @@
 // orca.yaml environment recipes and plugin VM recipes as an environment provider: each lifecycle
 // call runs the recipe's shell step, exactly as the runtime service did before the driver seam.
 import { z } from 'zod'
-import type { OrcaVmRecipe } from '../../shared/orca-yaml-hook-types'
+import type { OrcaVmRecipe } from '../../shared/workspace-setup/orca-yaml-hook-types'
 import {
   EphemeralVmRecipeResultSchema,
   type EphemeralVmRecipeResult,
   type JsonValue
-} from '../../shared/ephemeral-vm-recipes'
+} from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipes'
 import {
   runEphemeralVmRecipeCleanup,
   runEphemeralVmRecipeResume,
@@ -16,8 +16,8 @@ import {
   type EphemeralVmRecipeContext,
   type EphemeralVmRecipeLifecycleArgs,
   type EphemeralVmRecipeStartArgs
-} from '../../shared/ephemeral-vm-recipe-runner'
-import { EPHEMERAL_VM_FAILURE_COPY } from '../../shared/ephemeral-vm-failure-copy'
+} from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-runner'
+import { EPHEMERAL_VM_FAILURE_COPY } from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-failure-copy'
 import { getProvisionedRootResumeIntegrityError } from '../ephemeral-vm/resume-integrity'
 import {
   EnvironmentProviderError,

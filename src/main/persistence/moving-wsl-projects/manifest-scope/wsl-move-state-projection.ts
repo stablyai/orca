@@ -7,7 +7,7 @@ import type { WorkspaceSessionState } from '../../../../shared/workspace-session
 import {
   normalizeWorkspaceSessionKeyToWorkspaceId,
   parseWorkspaceKey
-} from '../../../../shared/workspace-scope'
+} from '../../../../shared/workspace/identity/workspace-scope'
 import {
   getExecutionHostIdFromWorktreeHostIdentity,
   isWorktreeHostIdentity

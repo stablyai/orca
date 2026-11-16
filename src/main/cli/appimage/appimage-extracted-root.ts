@@ -12,7 +12,7 @@ import {
   appImageCacheDigest,
   appImageNamespaceKey,
   resolveAppImageCacheKey
-} from '../../../shared/appimage-cache-identity'
+} from '../../../shared/desktop-distribution/appimage/appimage-cache-identity'
 import {
   APPIMAGE_EXTRACTION_TIMEOUT_MS,
   getAppImageActiveExtractionPath,

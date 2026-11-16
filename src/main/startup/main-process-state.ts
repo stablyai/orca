@@ -1,5 +1,5 @@
 import type { BackendSupervisor } from '../backend-desktop/backend-supervisor'
-import type { AutomationUsageClient } from '../../shared/backend-service-contract'
+import type { AutomationUsageClient } from '../../shared/backend/backend-service-contract'
 import { type BrowserWindow, type Tray, app } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
 import type { StatsCollector } from '../stats/collector'

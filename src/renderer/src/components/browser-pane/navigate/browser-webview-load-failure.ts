@@ -1,5 +1,5 @@
-import { redactKagiSessionToken } from '../../../../../shared/browser-url'
-import type { BrowserLoadError } from '../../../../../shared/browser-workspace-types'
+import { redactKagiSessionToken } from '../../../../../shared/browser/navigation/browser-url'
+import type { BrowserLoadError } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import type { BrowserPageFailLoadEvent } from '../describe-page/browser-page-types'
 
 /** Use the current guest URL when validatedURL is absent; a lazy fallback avoids guest reads for ignored events. */

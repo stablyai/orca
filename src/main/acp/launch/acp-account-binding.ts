@@ -1,4 +1,4 @@
-import type { AntigravityChatAuthConfig } from '../../../shared/antigravity-chat-auth-config'
+import type { AntigravityChatAuthConfig } from '../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import { chmod, mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
@@ -28,13 +28,17 @@ export type AcpAccountBinding = {
 
 export function directoryAccountBinding(
   variable: string,
-  defaultHome: (homePath: string) => string
+  defaultHome: (homePath: string, launchEnv: NodeJS.ProcessEnv) => string
 ): AcpAccountBinding {
   return {
     pin: { accountHomeVariable: variable },
     resolve: async ({ launchEnv }) => ({
       variable,
-      path: resolveStructuredEnvAccountHomePath({ launchEnv, variable, defaultPath: defaultHome })
+      path: resolveStructuredEnvAccountHomePath({
+        launchEnv,
+        variable,
+        defaultPath: (homePath) => defaultHome(homePath, launchEnv)
+      })
     }),
     environment: (home, env) => {
       if (!isLegacyAgentSessionAccountHome(home) || home.variable !== variable) {

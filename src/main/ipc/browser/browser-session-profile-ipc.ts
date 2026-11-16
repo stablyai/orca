@@ -1,5 +1,5 @@
 import { retainLocalGoogleCookieClearTarget } from '../../browser/cookies/browser-google-cookie-clear-target'
-import { browserCookieImportFailure } from '../../../shared/browser-cookie-import-failure-copy'
+import { browserCookieImportFailure } from '../../../shared/browser/cookies/browser-cookie-import-failure-copy'
 import { registerGoogleCookieClearHandlers } from './browser-google-cookie-clear-ipc'
 import { registerClientHostCookieImportHandlers } from './browser-client-host-cookie-import-ipc'
 import { BrowserWindow, ipcMain } from 'electron'
@@ -17,7 +17,7 @@ import type {
   BrowserCookieImportResult,
   BrowserSessionProfile,
   BrowserSessionProfileScope
-} from '../../../shared/browser-workspace-types'
+} from '../../../shared/browser/workspaces/browser-workspace-types'
 import type { ManagedBrowserProfileOwner } from '../../../shared/browser/profiles/browser-profile-scope'
 import { ensureManagedBrowserProfile } from '../../browser/sessions/profiles/browser-managed-session-profiles'
 import {
@@ -29,10 +29,10 @@ import {
   setBrowserSitePermissionDecisions
 } from '../../browser/site-settings/permissions/browser-site-permission-store'
 import {
-  isBrowserSitePermission,
-  isBrowserSitePermissionDecision,
+  isBrowserSitePermissionKey,
+  isValidBrowserSitePermissionDecision,
   type BrowserSitePermissionEntry
-} from '../../../shared/browser-site-permission'
+} from '../../../shared/browser/site-settings/browser-site-permission'
 
 export function registerBrowserSessionProfileHandlers(): void {
   ipcMain.removeHandler('browser:session:listProfiles')
@@ -167,8 +167,9 @@ export function registerBrowserSessionProfileHandlers(): void {
         return []
       }
       if (
-        !isBrowserSitePermission(args.permission) ||
-        (args.decision !== null && !isBrowserSitePermissionDecision(args.decision))
+        !isBrowserSitePermissionKey(args.permission) ||
+        (args.decision !== null &&
+          !isValidBrowserSitePermissionDecision(args.permission, args.decision))
       ) {
         throw new Error('Unsupported site permission change')
       }

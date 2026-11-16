@@ -1,5 +1,8 @@
 import { join } from 'node:path'
-import { findGrokChatHistoryByCwd, resolveGrokHomeDir } from '../../shared/grok-session-paths'
+import {
+  findGrokChatHistoryByCwd,
+  resolveGrokHomeDir
+} from '../../shared/agent-hook-listener/providers/grok/grok-session-paths'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
 import { directoryTranscriptImport } from '../native-chat/conversation-adoption/structured-agent-cli-conversations'
 

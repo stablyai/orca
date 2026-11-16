@@ -1,4 +1,7 @@
-import { hasReachedAppVersion, isValidAppVersion } from '../../../shared/app-version'
+import {
+  hasReachedAppVersion,
+  isValidAppVersion
+} from '../../../shared/app-lifecycle/identity/app-version'
 import { runProcess } from '@orca/process-host'
 import path from 'node:path'
 

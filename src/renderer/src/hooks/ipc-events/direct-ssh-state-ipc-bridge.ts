@@ -7,7 +7,10 @@ import { hydrateDirectSshInitialState } from './direct-ssh-initial-state-hydrati
 import { syncSshConfigTargetsPassively } from '../../runtime/hosts/ssh/ssh-config-passive-sync'
 import { applySshManagedServerTransition } from './ssh-managed-server-state-effects'
 import { createDirectSshUnrestoredForwardSync } from './direct-ssh-unrestored-forward-sync'
-import type { DirectSshAuthority, SshConnectionState } from '../../../../shared/ssh-types'
+import type {
+  DirectSshAuthority,
+  SshConnectionState
+} from '../../../../shared/remote-runtime/ssh/ssh-types'
 
 type AuthorityDeadline = { timer: ReturnType<typeof setTimeout>; settle: () => void }
 

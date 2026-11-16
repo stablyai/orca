@@ -29,8 +29,8 @@ export function buildSearchQueryString(
   if (query.assignee) {
     parts.push(`assignee:${quoteGitHubSearchValue(query.assignee)}`)
   }
-  if (query.author) {
-    parts.push(`author:${quoteGitHubSearchValue(query.author)}`)
+  for (const author of query.authors) {
+    parts.push(`author:${quoteGitHubSearchValue(author)}`)
   }
   if (query.reviewRequested) {
     parts.push(`review-requested:${quoteGitHubSearchValue(query.reviewRequested)}`)
@@ -57,7 +57,7 @@ export function defaultOpenWorkItemQuery(): ParsedTaskQuery {
     state: 'open',
     draft: false,
     assignee: null,
-    author: null,
+    authors: [],
     reviewRequested: null,
     reviewedBy: null,
     labels: [],

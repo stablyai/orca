@@ -12,7 +12,7 @@ import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import Database from '../../../sqlite/sync-database'
 import '../database/profile-state-database'
-import { profileStateDatabaseFile } from '../../../../shared/profile-state-storage-paths'
+import { profileStateDatabaseFile } from '../../../../shared/orca-profiles/profile-state-storage-paths'
 
 import '../documents/profile-state-document-validation'
 

@@ -1,4 +1,4 @@
-import type { BuiltInWindowsTerminalShell } from '../../../../shared/windows-terminal-shell'
+import type { BuiltInWindowsTerminalShell } from '../../../../shared/shell/launch/windows-terminal-shell'
 
 export function resolveWindowsShellLaunchTarget(
   shell: BuiltInWindowsTerminalShell,

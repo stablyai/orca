@@ -105,6 +105,7 @@
   --color-question-option-border: var(--question-option-border);
   --color-chat-focus-ring: var(--chat-focus-ring);
   --color-unread: var(--unread);
+  --color-unread-inverse: var(--unread-inverse);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -168,6 +169,8 @@
     var(--tab-active-foreground, var(--foreground))
   );
   --color-tab-inactive-foreground: var(--tab-inactive-foreground, var(--muted-foreground));
+  /* Active right sidebar tool line: the theme's tab indicator, else the foreground it always used. */
+  --color-activity-bar-indicator: var(--tab-active-indicator, var(--foreground));
   /* The theme's accent where one is set (link color); the built-in note blue otherwise. */
   --color-theme-accent: var(--text-link, var(--callout-note));
   --color-git-graph-ref: var(--git-graph-ref);
@@ -226,8 +229,8 @@
   --editor-surface: #ffffff;
   --foreground: #0a0a0a;
   --chat-canvas-mix: 0%;
-  --chat-foreground-mix: 82%;
-  --chat-strong-mix: 92%;
+  --chat-foreground-mix: 88%;
+  --chat-strong-mix: 98%;
   --chat-faint-mix: 100%;
   --chat-user-mix: 4%;
   --chat-user-border-mix: 7%;
@@ -272,6 +275,8 @@
   --question-option-border-mix: 16%;
   /* A finished agent result the user hasn't seen; blue so it never reads as a state color. */
   --unread: var(--color-blue-500);
+  /* The unread dot on an inverted surface (tips): blue-500 keeps 3:1 on both the near-black and near-white inverse. */
+  --unread-inverse: var(--color-blue-500);
   /* Keep PR-state hues stable across theme changes. */
   --workspace-status-done: #c7a594;
   --workspace-status-review: #16a34a;
@@ -353,8 +358,8 @@
   --editor-surface: #1e1e1e;
   --foreground: #f0f0f0;
   --chat-canvas-mix: 5%;
-  --chat-foreground-mix: 78%;
-  --chat-strong-mix: 90%;
+  --chat-foreground-mix: 88%;
+  --chat-strong-mix: 98%;
   --chat-faint-mix: 83%;
   --chat-user-mix: 7%;
   --chat-user-border-mix: 6%;

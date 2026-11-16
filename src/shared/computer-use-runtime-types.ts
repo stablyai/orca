@@ -80,7 +80,7 @@ export type ComputerSnapshotData = {
 
 export type ComputerScreenshotData = {
   data?: string
-  format: 'png'
+  format: 'png' | 'jpeg'
   width: number
   height: number
   scale: number
@@ -225,6 +225,8 @@ export type ComputerLaunchAppResult = {
 
 export type ComputerListAppsResult = {
   apps: (ComputerAppInfo & {
+    // macOS: the app has no Dock icon; it is listed only while it shows a window.
+    accessory?: boolean
     isRunning: boolean
     lastUsedAt: string | null
     useCount: number | null

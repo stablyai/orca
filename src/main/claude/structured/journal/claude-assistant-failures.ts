@@ -3,7 +3,7 @@ import {
   providerDiagnostic
 } from '../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
-import { BoundedMap } from '../../../../shared/bounded-map'
+import { BoundedMap } from '../../../../shared/collections/bounded-map'
 import { claudeRecord, claudeText } from './claude-structured-item-translation'
 import type { AgentSessionAccountKind } from '../../../../shared/agent-session/agent-session-availability'
 

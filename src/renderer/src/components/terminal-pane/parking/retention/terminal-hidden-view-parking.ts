@@ -2,7 +2,7 @@ import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/re
 import { isRemoteExecutionHostPtyId } from '../../../../../../shared/execution-host/remote-execution-host-pty-id'
 import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/hosted-terminals/identity/remote-runtime-pty-owner'
 import { PTY_SESSION_ID_SEPARATOR } from '../../../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
-import { parseAppSshPtyId } from '../../../../../../shared/ssh-pty-id'
+import { parseAppSshPtyId } from '../../../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 
 // Hysteresis avoids quick-switch remounts; bounded hot-retain keeps recent worktrees warm. Reducing remount frequency matters more than replay size.

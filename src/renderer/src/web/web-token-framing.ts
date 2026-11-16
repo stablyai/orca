@@ -4,7 +4,7 @@ import {
 } from '../../../shared/remote-runtime/e2ee/paired-e2ee-client-handshake'
 import type { PairedE2EEFramingPolicy } from '../../../shared/remote-runtime/e2ee/paired-e2ee-framing-policy'
 import { E2EE_V2_TOKEN_CAPABILITIES_RUNTIME_CAPABILITY } from '../../../shared/remote-runtime/pairing/device-key-capability'
-import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { WEB_PAIRED_E2EE_PRIMITIVES } from './web-paired-e2ee-primitives'
 import {
   isWebHostLatchedToE2EEV2,

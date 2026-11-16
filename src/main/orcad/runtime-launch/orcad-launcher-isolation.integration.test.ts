@@ -7,9 +7,9 @@ import { runProcess } from '@orca/process-host'
 import {
   ORCAD_LAUNCHER_FILENAME,
   ORCAD_SERVER_ENTRY_FILENAME
-} from '../../../shared/orcad-artifacts'
-import { NODE_RUNTIME_PIN } from '../../../shared/node-runtime-pin'
-import '../../../shared/orcad-build-identity'
+} from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
+import { NODE_RUNTIME_PIN } from '../../../shared/node-runtime/node-runtime-pin'
+import '../../../shared/remote-runtime/orcad-distribution/orcad-build-identity'
 import {
   locatePinnedNodeForTests,
   skipForMissingInputs,

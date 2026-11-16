@@ -9,7 +9,7 @@ import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from './structured-agent-session-runtime'
-import { seedTestAgentSessionRecordStore } from './records/agent-session-record-store-test-harness'
+import { seedTestAgentSessionRecordStore } from './records/agent-session-record-store-persistence.test-fixture'
 import { nativeChatScratchFolderFor } from '../../native-chat/conversation-files/native-chat-scratch-folder'
 import { foundAgentSessionRecord } from './records/agent-session-record-founding'
 import { closeTestJournalHostDatabases } from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'

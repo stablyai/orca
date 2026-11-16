@@ -1,9 +1,9 @@
 import type {
   ProviderRateLimits,
   RateLimitRuntimeTarget
-} from '../../../../../../shared/rate-limit-types'
-import type { CodexSystemDefaultIdentity } from '../../../../../../shared/managed-account-types'
-import { isCodexAuthError } from '../../../../../../shared/codex-auth-errors'
+} from '../../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { CodexSystemDefaultIdentity } from '../../../../../../shared/agent-accounts/managed-account-types'
+import { isCodexAuthError } from '../../../../../../shared/agent-accounts/codex/codex-auth-errors'
 
 type AccountRuntime = {
   runtime: 'host' | 'wsl'

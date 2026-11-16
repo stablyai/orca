@@ -6,7 +6,7 @@ import { MAX_AUTOMATION_PRECHECK_OUTPUT_CHARS } from '../../../shared/automation
 import { getSshConnectionManager } from '../../ssh/targets/ssh-target-registry'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { admitSelfInitiatedTreeKill } from '../../pty/process-retirement/own-chromium-tree-kill-guard'
-import { errorMessage } from '../../../shared/error-message'
+import { errorMessage } from '../../../shared/errors/error-message'
 
 type AutomationPrecheckExecutionTarget =
   | {

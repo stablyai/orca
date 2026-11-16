@@ -1,7 +1,7 @@
 import { Download, Loader2, ShieldCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DialogFooter } from '@/components/ui/dialog'
-import type { SkillInstallResult } from '../../../../../shared/skill-install-contract'
+import type { SkillInstallResult } from '../../../../../shared/skills/installation/skill-install-contract'
 import { useTranslate } from '@/i18n/use-translate'
 
 type SkillInstallDialogFooterProps = {
