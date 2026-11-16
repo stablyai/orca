@@ -23,6 +23,7 @@
     "../src/cli/runtime/connection/runtime-pid-liveness.ts",
     "../src/renderer/src/store/slices/worktrees/create/worktree-create-payload.ts",
     "../src/renderer/src/runtime/repo-hooks/orca-hook-trust.ts",
+    "../src/renderer/src/runtime/agent-status/renderer-status-sender.ts",
     "../src/renderer/src/components/browser-pane/navigate/browser-page-download-activity.ts",
     "../src/renderer/src/components/browser-pane/host-guest/browser-guest-activity.ts",
     "../src/renderer/src/components/browser-pane/host-guest/browser-guest-page-retention.ts",
