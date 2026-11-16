@@ -1,8 +1,11 @@
 import { parseExecutionHostId, type ExecutionHostId } from '../../../src/shared/execution-host'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ComponentProps } from 'react'
-import type { PersistedTrustedOrcaHooks } from '../../../src/shared/orca-yaml-hook-types'
-import type { OrcaHookTrustDrawer, OrcaHookTrustPrompt } from '../components/OrcaHookTrustDrawer'
+import type { PersistedTrustedOrcaHooks } from '../../../src/shared/workspace-setup/orca-yaml-hook-types'
+import type {
+  OrcaHookTrustDrawer,
+  OrcaHookTrustPrompt
+} from '../components/hook-trust/OrcaHookTrustDrawer'
 import { persistSetupHookTrustApproval } from '../new-workspace/creation/setup-hook-trust'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { prepareAutomationSetup } from './automation-setup-preparation'

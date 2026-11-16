@@ -1,5 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query'
-import type { PageDeviceStore } from '../mobile-web-shell/bridge/page-device-store'
+import type { PageDeviceStore } from '../mobile-web-shell/bridge/page-storage/page-device-store'
 import { primeStoredChatTranscripts } from '../session/native-chat/transcript/persistence/mobile-native-chat-transcript-store'
 import { firstPaintChatTranscriptIdentity, firstPaintQueryKeys } from './first-paint-query-keys'
 import { createHostQueryPersistence } from './host-query-persistence'

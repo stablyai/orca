@@ -20,7 +20,7 @@ import {
   type StructuredAgentSessionSendEvidence
 } from '../../../../../../../shared/agent-session/requests/structured-agent-session-send-evidence'
 import { ensureRuntimeEnvironmentCompatible } from '@/runtime/rpc/compatibility/runtime-compatibility-probe'
-import type { RuntimeClientTarget } from '../../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { isRuntimeCompatBlockError } from '@/runtime/rpc/compatibility/runtime-protocol-compat'
 import {

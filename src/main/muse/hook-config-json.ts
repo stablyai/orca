@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs'
-import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
 import { applyEdits, modify, parse as parseJsonc, type ParseError } from 'jsonc-parser'
 import { isPlainObject } from '../agent-hooks/installation/configuration/hooks-json-read'
 

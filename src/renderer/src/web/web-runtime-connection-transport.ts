@@ -13,7 +13,7 @@ import {
 import type { WebRuntimeAuthPlan } from './web-runtime-credential-source'
 import { WebRuntimeConnectionTimers } from './web-runtime-connection-timers'
 import type { PairedE2EEClientHandshake } from '../../../shared/remote-runtime/e2ee/paired-e2ee-client-handshake'
-import { withWebClientUpgradeMarker } from '../../../shared/web-origin-security'
+import { withWebClientUpgradeMarker } from '../../../shared/remote-runtime/pairing/web-origin-security'
 import type { WebRuntimeTransportSubscription } from './web-runtime-subscription-contract'
 import { WebRuntimeSubscriptionRegistry } from './web-runtime-subscription-registry'
 import { WebRuntimeRequestRegistry } from './web-runtime-request-registry'

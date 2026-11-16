@@ -11,7 +11,7 @@ import {
   writeDataFile
 } from '../persistence-test-harness'
 
-import { normalizeRuntimePathSeparators } from '../../../shared/cross-platform-path'
+import { normalizeRuntimePathSeparators } from '../../../shared/file-access/cross-platform-path'
 
 vi.mock('electron', () => ({
   app: {

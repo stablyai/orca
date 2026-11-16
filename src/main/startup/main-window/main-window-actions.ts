@@ -9,7 +9,7 @@ import {
   type WebContents
 } from 'electron'
 import { isNativeBrowserPopupWindow } from '../../browser/guest-lifecycle/popups/presentation/native-browser-popup-windows'
-import type { UpdateCheckOptions } from '../../../shared/update-status-types'
+import type { UpdateCheckOptions } from '../../../shared/updater/update-status-types'
 import type { AppMenuQuitHandlers } from '../../menu/app-menu-quit-item'
 import type { createWebContentsTimedFlag } from './web-contents-timed-flag'
 import { recordCrashBreadcrumb } from '../../crash-reporting/breadcrumbs/crash-breadcrumb-store'
@@ -51,9 +51,9 @@ import type { MainWindowOpenOptions } from '../../window/main-window/main-window
 import type { DesktopActivationRequest } from '../serve-launch/serve-desktop-activation'
 
 // Inject the opener to avoid an actions/lifecycle import cycle.
-let openWindow: (options?: MainWindowOpenOptions) => BrowserWindow
+let openWindow: (options?: MainWindowOpenOptions) => BrowserWindow | Promise<BrowserWindow>
 export function setMainWindowOpener(
-  opener: (options?: MainWindowOpenOptions) => BrowserWindow
+  opener: (options?: MainWindowOpenOptions) => BrowserWindow | Promise<BrowserWindow>
 ): void {
   openWindow = opener
 }
@@ -78,7 +78,9 @@ export function showMainWindowFromTray(): void {
     return
   }
   if (!isQuittingForUpdate()) {
-    openWindow()
+    void Promise.resolve(openWindow()).catch((error: unknown) =>
+      console.warn('[window] Failed to open main window', error)
+    )
   }
 }
 

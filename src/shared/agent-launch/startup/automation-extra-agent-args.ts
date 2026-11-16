@@ -4,7 +4,7 @@ import {
 } from '../../agent-session/options/launch/agent-session-option-agent-args'
 import { getAgentSessionOptionLaunchCatalog } from '../../agent-session/options/agent-session-option-catalog'
 import { PI_THINKING_LEVELS } from '../../agent-session/options/reconciliation/structured-agent-session-effective-effort'
-import { findOptionOccurrence } from '../../command-option-occurrence'
+import { findOptionOccurrence } from '../../cli/command-option-occurrence'
 import {
   quoteStartupArg,
   tokenizeStartupCommand,

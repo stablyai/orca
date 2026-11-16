@@ -3,8 +3,8 @@ import { readTestHostJournal } from '../../../../native-chat/agent-session-journ
 // A finished structured worker takes follow-up work in its own chat through worker-start --terminal <handle>, or a send to its Dispatch.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import '../../../../../shared/orca-session-address'
-import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
+import '../../../../../shared/agent-session/identity/orca-session-address'
+import { testOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address-test-fixture'
 import { idOf } from '../../../rpc/orchestration/callers/session.test-fixture'
 import {
   COORDINATOR,

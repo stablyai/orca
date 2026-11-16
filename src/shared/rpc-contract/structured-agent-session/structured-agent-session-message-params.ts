@@ -3,7 +3,7 @@ import { AgentSessionSelectionSchema } from '../../agent-session/options/protoco
 import { Identifier } from './structured-agent-session-identifiers'
 import { MutationEnvelope } from './structured-agent-session-mutation-envelope'
 import { isAgentSessionOptions } from '../../agent-session/lifecycle/agent-session-record'
-import { measureUtf8ByteLength } from '../../utf8-byte-limits'
+import { measureUtf8ByteLength } from '../../text/utf8-byte-limits'
 
 export const AgentSessionOptions = z.record(z.string(), z.string()).refine(isAgentSessionOptions)
 

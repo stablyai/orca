@@ -79,11 +79,16 @@ vi.mock('../native-chat/input/prompts/MobileNativeChatAsk', () => ({
 vi.mock('../native-chat/input/session-options/MobileNativeChatSessionOptionPickers', () => ({
   MobileNativeChatSessionOptionPickers: 'SessionOptions'
 }))
+vi.mock('../native-chat/mcp/MobileNativeChatMcpTray', () => ({
+  MobileNativeChatMcpTray: 'McpTray'
+}))
 vi.mock('../native-chat/composer/menus/MobileNativeChatComposerMenu', () => ({
   MobileNativeChatComposerSuggestions: 'Suggestions'
 }))
-vi.mock('../../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionSheetModal' }))
-vi.mock('../../components/DragReorderList', () => ({ DragReorderList: 'DragReorderList' }))
+vi.mock('../../components/sheets/ActionSheetModal', () => ({
+  ActionSheetModal: 'ActionSheetModal'
+}))
+vi.mock('../../components/reorder/DragReorderList', () => ({ DragReorderList: 'DragReorderList' }))
 vi.mock('react-native-reanimated', async () => {
   const { useRef } = await import('react')
   return {
@@ -92,4 +97,4 @@ vi.mock('react-native-reanimated', async () => {
     useSharedValue: (value: unknown) => useRef({ value }).current
   }
 })
-vi.mock('../../components/MobileMarkdown', () => ({ MobileMarkdown: 'Markdown' }))
+vi.mock('../../components/markdown/MobileMarkdown', () => ({ MobileMarkdown: 'Markdown' }))

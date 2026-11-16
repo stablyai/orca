@@ -6,7 +6,7 @@ import {
   DESKTOP_BROWSER_BRIDGE_UNAVAILABLE_MESSAGE,
   type DesktopBrowserBridgeEvent,
   type DesktopBrowserBridgeResultParams
-} from '../../../shared/desktop-browser-bridge-protocol'
+} from '../../../shared/browser/client-hosting/desktop-browser-bridge-protocol'
 
 // Stay below the subscription's 32-unacknowledged-request bound or completed results could strand.
 export const MAX_PENDING_PER_ATTACHMENT = 16

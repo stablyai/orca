@@ -1,6 +1,6 @@
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { useTranslate } from '@/i18n/use-translate'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { AGENT_SESSION_USAGE_LIMIT_AUTO_CONTINUE_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/agent-session-create-capabilities'
 import {
   useChatSettingsOwnPermissions,

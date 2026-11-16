@@ -17,7 +17,7 @@ import { resolveBrowserRouteGuestPopupOpener } from '../../routing/guest-authori
 import type { RpcCallerIdentity } from '../../../runtime/rpc/callers/rpc-caller-identity'
 
 export abstract class BrowserManagerVisibility extends BrowserManagerState {
-  private readonly capturePaintHolds = new Map<Electron.WebContents, Map<string, number>>()
+  protected readonly capturePaintHolds = new Map<Electron.WebContents, Map<string, number>>()
   protected readonly agentActivity = new BrowserAgentActivity({
     pageIdForGuest: (guestWebContentsId) =>
       this.resolveBrowserTabIdForGuestWebContentsId(guestWebContentsId),

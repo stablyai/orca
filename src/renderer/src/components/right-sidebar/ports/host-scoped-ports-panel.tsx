@@ -13,7 +13,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import type {
   WorkspacePort,
   WorkspacePortHostScanResult
-} from '../../../../../shared/workspace-ports'
+} from '../../../../../shared/workspace/ports/workspace-ports'
 import { parseExecutionHostId } from '../../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'

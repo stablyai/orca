@@ -8,7 +8,7 @@ import type { AgentHookRelayEnvelope } from '../../../shared/agent-hook-listener
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type { probeAgentProcessPresence } from '../../../shared/agent-status/process/agent-process-presence-probe'
 import { readHookRootEvidence } from '../../../shared/agent-hook-listener/presence/hook-process-root-evidence'
-import type { ProcessTableRow } from '../../../shared/process-table-snapshot'
+import type { ProcessTableRow } from '../../../shared/process-observation/tables/process-table-snapshot'
 
 const probe = vi.hoisted(() => vi.fn<typeof probeAgentProcessPresence>(async () => 'live'))
 vi.mock('../../../shared/agent-status/process/agent-process-presence-probe', () => ({

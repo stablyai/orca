@@ -4,10 +4,8 @@ import {
   claudeProviderHandle
 } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { scaleDirectory, scaleRecord } from './agent-session-scale.test-fixture'
-import {
-  openTestAgentSessionRecordStore,
-  seedTestAgentSessionRecordStore
-} from './agent-session-record-store-test-harness'
+import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
+import { seedTestAgentSessionRecordStore } from './agent-session-record-store-persistence.test-fixture'
 import { conversationRecordReader } from '../../orchestration/addressing/session-lineage/structured-session-lineage'
 import { lookupOrcaAgentSession } from '../../orchestration/mailbox/routing/structured-session-mail-address'
 

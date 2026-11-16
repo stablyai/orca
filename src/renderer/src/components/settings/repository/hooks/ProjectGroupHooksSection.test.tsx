@@ -3,11 +3,11 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import '../../__fixtures__/settings-persistence-test-fixture'
 import { useAppStore } from '@/store'
-import { createProjectGroup } from '../../../../../../shared/project-groups'
+import { createProjectGroup } from '../../../../../../shared/project/groups/project-groups'
 import { ProjectGroupHooksSection } from './ProjectGroupHooksSection'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { checkRuntimeGroupHooks } from '@/runtime/repo-hooks/runtime-hooks-client'
-import type { GroupHookCheckResult } from '../../../../../../shared/project-group-hooks'
+import type { GroupHookCheckResult } from '../../../../../../shared/project/groups/project-group-hooks'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 

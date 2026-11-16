@@ -1,4 +1,4 @@
-import { measureUtf8ByteLength } from '../../../../../../shared/utf8-byte-limits'
+import { measureUtf8ByteLength } from '../../../../../../shared/text/utf8-byte-limits'
 
 export const WORKSPACE_STATUS_DRAG_TYPE = 'application/x-orca-worktree-id'
 export const WORKSPACE_STATUS_DRAG_IDS_TYPE = 'application/x-orca-worktree-ids'

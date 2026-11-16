@@ -11,7 +11,7 @@ import {
   nativeChatRowRendersContent
 } from '../native-chat/transcript/row-content/native-chat-row-content'
 import { withoutSentImagePromptMarkers } from '../native-chat/transcript/images/native-chat-sent-image-prompt-markers'
-import { iterateProcessOutputLines } from '../process-output-field-scanner'
+import { iterateProcessOutputLines } from '../process-observation/process-output-field-scanner'
 import { agentJournalSubmissionKey } from './journal/agent-session-journal-item-key'
 import { dispatchWasWithdrawn } from './requests/structured-agent-session-dispatch-rejection'
 import { projectStructuredAgentSessionMessages } from './view/structured-agent-session-message-projection'

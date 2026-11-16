@@ -1,4 +1,4 @@
-import { CODEX_MINIMUM_SUPPORTED_VERSION } from '../../../shared/codex-cli-installation'
+import { CODEX_MINIMUM_SUPPORTED_VERSION } from '../../../shared/agent-launch/startup/codex-cli-installation'
 import type { StructuredAgentSessionRuntimeDeps } from '../agent-session/installation/structured-agent-session-runtime-contract'
 
 /** Runtime deps that put a scripted Codex child where the real app-server would spawn. It speaks

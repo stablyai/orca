@@ -3,7 +3,7 @@ import { readCodexJournalRecord } from '../journal/codex-structured-journal-tran
 import { codexItemIdentity, readCodexThreadItem } from '../items/codex-thread-item-identity'
 import { CodexTurnOrdinals } from '../journal/codex-turn-ordinals'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import {

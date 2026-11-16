@@ -29,7 +29,7 @@ let init
 function screenSource(name, target) {
   const source = join(projectDir, 'mobile/src')
   return `import { View, Text, Pressable } from 'react-native'
-import { MobileAgentIcon } from ${JSON.stringify(join(source, 'components/MobileAgentIcon'))}
+import { MobileAgentIcon } from ${JSON.stringify(join(source, 'components/icons/MobileAgentIcon'))}
 import { useRouteHandoff } from ${JSON.stringify(join(source, 'navigation/route-handoff'))}
 export default function Screen() {
   const router = useRouteHandoff()

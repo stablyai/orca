@@ -20,7 +20,7 @@ import {
 } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
-import { formatBytes } from '../../../../../shared/format-bytes'
+import { formatBytes } from '../../../../../shared/text/format-bytes'
 import type {
   WorkspaceCleanupRun,
   WorkspaceCleanupRunRow

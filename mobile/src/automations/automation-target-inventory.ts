@@ -11,7 +11,7 @@ import { buildWorkspaceRunContext } from '../../../src/shared/work-items/task-so
 import {
   PREFLIGHT_HOST_QUALIFIED_RUNTIME_CAPABILITY,
   PREFLIGHT_WORKSPACE_SCOPED_RUNTIME_CAPABILITY
-} from '../../../src/shared/preflight-runtime-capabilities'
+} from '../../../src/shared/remote-runtime/protocol/preflight-runtime-capabilities'
 import { hostStatusProbe } from '../transport/connection/host-status-probe-operations'
 import { readHostStatusReply } from '../query/host-status-query'
 import { newTabRepoListRead } from '../session/agent-launch/mobile-runtime-repo-operations'

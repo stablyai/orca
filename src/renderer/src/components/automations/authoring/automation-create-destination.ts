@@ -10,7 +10,7 @@ import {
   isSameAutomationOwner
 } from '../../../../../shared/automations/ownership/automation-owner-key'
 import { getRepoSshConnectionId, parseExecutionHostId } from '../../../../../shared/execution-host'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type {
   AutomationCatalogHydrationEvidence,
   AutomationHostCatalogEntry

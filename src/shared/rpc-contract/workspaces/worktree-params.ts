@@ -10,10 +10,10 @@ import {
   OptionalString,
   TriStateLinkedIssue
 } from '../rpc-param-primitives'
-import { RUNTIME_NAVIGATION_TARGETS } from '../../runtime-navigation'
+import { RUNTIME_NAVIGATION_TARGETS } from '../../remote-runtime/session-graph/runtime-navigation'
 import { WorkspaceLinkedItemSchema } from '../../workspace-attachments/workspace-linked-item-schema'
 import { WorkspaceAttachmentsSchema } from '../../workspace-attachments/workspace-attachment-schema'
-import { DiffCommentSchema, MobileDiffReviewSchema } from '../../diff-comment-schema'
+import { DiffCommentSchema, MobileDiffReviewSchema } from '../../file-review/diff-comment-schema'
 import { TaskSourceContextSchema } from '../../work-items/task-source-context-schema'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../workspace-attachments/workspace-linked-item-source-context'
 import { CrossStoreParentRefSchema } from './cross-store-parent-params'

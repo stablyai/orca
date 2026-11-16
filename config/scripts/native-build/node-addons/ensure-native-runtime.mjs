@@ -15,6 +15,7 @@ import {
 import { runProcessSync } from '@orca/process-host'
 import { describeProcessFailure } from '../../tool-invocation/process-failure-message.mjs'
 import {
+  nativeRuntimeModules,
   isSharedNativePackage,
   isSourceBuildDir,
   nodePtyBuildArtifactPaths,
@@ -38,12 +39,7 @@ const runtime = readRuntimeArg()
 // Why: `pnpm rebuild:node` must rebuild even a loadable node-pty; a shared slot still reuses its usable entry.
 const forceRebuild = process.argv.includes('--force')
 
-const NATIVE_MODULES = [
-  'node-pty',
-  ...(process.platform === 'win32'
-    ? ['@orca/windows-registry', '@orca/windows-security', '@vscode/windows-process-tree']
-    : [])
-]
+const NATIVE_MODULES = nativeRuntimeModules()
 const NODE_PTY_CONPTY_RUNTIME_FILES = ['conpty.dll', 'OpenConsole.exe']
 const CHILD_CHECK_FLAG = '--check-only'
 
@@ -290,6 +286,10 @@ function loadNativeModule(moduleName) {
           'source. Rebuild it (pnpm run rebuild:electron) rather than using the published prebuild.'
       )
     }
+    return
+  }
+  if (moduleName === '@orca/windows-notifications') {
+    require(moduleName).getFocusAssistState()
     return
   }
   if (moduleName === '@orca/windows-registry') {

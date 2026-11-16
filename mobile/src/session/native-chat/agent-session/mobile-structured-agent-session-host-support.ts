@@ -20,6 +20,7 @@ import {
   AGENT_SESSION_STEER_DRAFT_RUNTIME_CAPABILITY,
   AGENT_SESSION_PHONE_ATTACHMENTS_RUNTIME_CAPABILITY,
   AGENT_SESSION_PHONE_THREAD_GOAL_RUNTIME_CAPABILITY,
+  AGENT_SESSION_MCP_RUNTIME_CAPABILITY,
   AGENT_SESSION_PHONE_REWIND_RUNTIME_CAPABILITY,
   AGENT_SESSION_PHONE_USAGE_LIMIT_CONTINUE_CANCEL_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGE_SKILLS_EDIT_RUNTIME_CAPABILITY
@@ -36,7 +37,7 @@ import {
   AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY,
   AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY
 } from '../../../../../src/shared/agent-session/agent-session-permission-modes-capability'
-import { SKILL_DISCOVER_WORKSPACE_CAPABILITY } from '../../../../../src/shared/skill-install-capability'
+import { SKILL_DISCOVER_WORKSPACE_CAPABILITY } from '../../../../../src/shared/skills/capabilities/skill-install-capability'
 import { AGENT_SESSION_PHONE_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY } from '../../../../../src/shared/agent-session/agent-session-continue-interrupted-capability'
 
 export type StructuredAgentSessionHostSupport = {
@@ -79,6 +80,8 @@ export type StructuredAgentSessionHostSupport = {
   continueInterrupted?: boolean
   /** Older hosts report goals but refuse the phone's goal changes. */
   phoneThreadGoal?: boolean
+  /** The host answers `agentSession.mcp` for the `/mcp` tray. */
+  mcp?: boolean
   /** Older hosts advertise rewind but refuse it from a phone. */
   phoneRewind?: boolean
   /** The host continues a usage-limited chat at its reset and publishes that on the status feed. */
@@ -127,6 +130,7 @@ export function structuredAgentSessionHostSupport(
       AGENT_SESSION_PHONE_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY
     ),
     phoneThreadGoal: capabilities.includes(AGENT_SESSION_PHONE_THREAD_GOAL_RUNTIME_CAPABILITY),
+    mcp: capabilities.includes(AGENT_SESSION_MCP_RUNTIME_CAPABILITY),
     phoneRewind: capabilities.includes(AGENT_SESSION_PHONE_REWIND_RUNTIME_CAPABILITY),
     usageLimitAutoContinue: capabilities.includes(
       AGENT_SESSION_USAGE_LIMIT_AUTO_CONTINUE_RUNTIME_CAPABILITY

@@ -3,14 +3,14 @@ import type {
   RuntimeRequestSelection,
   RuntimeOrchestrationEnvelope,
   RuntimeRpcResponse
-} from '../../../shared/runtime-rpc-envelope'
+} from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { AGENT_SESSION_RENAME_ONLY_CLIENT_CAPABILITY } from '../../../shared/agent-session/structured-agent-session-surface-capabilities'
-import { REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY } from '../../../shared/worktree-runtime-capabilities'
+import { REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY } from '../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import { CLI_AGENT_CALLER_CLIENT_CAPABILITY } from '../../../shared/remote-runtime/cli-agent-caller-capability'
 import { sendRemoteRuntimeRequestOnSocket } from '../../../shared/remote-runtime/requests/remote-runtime-request-socket'
-import type { RuntimeStatus } from '../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { RuntimeClientError } from './types'
 
 // Paired CLI callers are not exempt from the host's agent.launch or chat rename gates like the local socket is.

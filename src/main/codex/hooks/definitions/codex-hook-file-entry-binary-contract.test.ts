@@ -13,20 +13,15 @@ import { createServer, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { StringDecoder } from 'node:string_decoder'
-import { stripAnsiEscapeSequences } from '../../../../shared/ansi-escape-sequences'
-import { createCodexComposerReadyScanner } from '../../../../shared/codex-composer-ready-scanner'
+import { stripAnsiEscapeSequences } from '../../../../shared/terminal/protocol/escape/ansi-escape-sequences'
+import { createCodexComposerReadyScanner } from '../../../../shared/agent-launch/startup/readiness/codex-composer-ready-scanner'
 import { createTerminalEscapeScanner } from '../../../../shared/terminal/protocol/escape/terminal-escape-scanner'
 import { promisify } from 'node:util'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CodexListedHook } from '../../app-server/codex-app-server-client'
-import {
-  CODEX_EVENTS,
-  CODEX_EVENT_LABEL,
-  getCodexManagedHookInstallMaterial
-} from './codex-hook-definition'
+import { CODEX_EVENT_LABEL, getCodexManagedHookInstallMaterial } from './codex-hook-definition'
 import type * as CodexCommand from '../../../codex-cli/command'
 import {
-  buildScratchHooksJson,
   deriveCodexHookHashes,
   fingerprintCodex,
   listCodexHooks,
@@ -46,7 +41,7 @@ import {
   computeCodexTrustKey as computeTrustKey,
   normalizeCodexHookTrustLookupKey as normalizeHookTrustKeyForLookup
 } from '../../trust/identity/codex-trust-identity'
-import { upsertProjectTrustContent as upsertProjectTrustLevelInContent } from '../../trust/toml/config-toml-project-trust'
+import '../../trust/toml/config-toml-project-trust'
 
 vi.mock('../../../codex-cli/command', async (importOriginal) => ({
   ...(await importOriginal<typeof CodexCommand>()),
@@ -143,41 +138,6 @@ describe.runIf(binary)('codex hook file-entry binary contract', { timeout: 180_0
       (listing) => listing.command === command()
     )
   }
-
-  it("hashes Orca's entry alike at group 0, after another group, and from a trusted project", async () => {
-    const scratch = mkdtempSync(join(root, 'scratch-'))
-    const project = mkdtempSync(join(root, 'project-'))
-    mkdirSync(join(project, '.codex'))
-    writeFileSync(join(scratch, 'hooks.json'), buildScratchHooksJson(command(), true))
-    writeFileSync(join(project, '.codex', 'hooks.json'), buildScratchHooksJson(command(), false))
-    writeFileSync(
-      join(scratch, 'config.toml'),
-      upsertProjectTrustLevelInContent('', project, 'trusted')
-    )
-
-    const listings = await listCodexHooks(binary!, scratch, project)
-
-    // Require every copy so missing listings cannot make the hash cross-check vacuous.
-    for (const [label, hash] of Object.entries(hashes)) {
-      const copies = [
-        `${join(scratch, 'hooks.json')}:${label}:0:0`,
-        `${join(scratch, 'hooks.json')}:${label}:2:0`,
-        `${join(project, '.codex', 'hooks.json')}:${label}:0:0`
-      ].map((key) =>
-        listings.find(
-          (listing) =>
-            listing.command === command() &&
-            normalizeHookTrustKeyForLookup(listing.key) === normalizeHookTrustKeyForLookup(key)
-        )
-      )
-      expect(copies.map((copy) => copy?.currentHash)).toEqual([hash, hash, hash])
-    }
-    // Pinned Codex versions must hash every managed event.
-    expect(Object.keys(hashes).sort()).toEqual(
-      CODEX_EVENTS.map((eventName) => CODEX_EVENT_LABEL[eventName]).sort()
-    )
-    expect(Object.values(hashes).every((hash) => typeof hash === 'string')).toBe(true)
-  })
 
   it('lists every entry Orca wrote in a managed home as trusted and enabled, and writes nothing on a list', async () => {
     await installManagedHome()

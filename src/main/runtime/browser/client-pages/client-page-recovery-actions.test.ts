@@ -125,7 +125,7 @@ it('rejects superseded goto promptly while its native cleanup is held, and prese
     const first = h.attach()
     await Promise.all([initial, unfinished])
     expect(
-      h.hostRuntime.snapshotForClient(WORKSPACE, 'device-a').clientHostedPagesUnreconciled
+      (await h.hostRuntime.snapshotForClient(WORKSPACE, 'device-a')).clientHostedPagesUnreconciled
     ).toBe(true)
     const following = h.hold('next')
     const goto = h.hostRuntime.routeClientHostedBrowserRpc(
@@ -164,7 +164,7 @@ it('rejects superseded goto promptly while its native cleanup is held, and prese
     await h.published('unfinished')
     await vi.waitFor(() => expect(h.snapshots.some((s) => s.reconciled)).toBe(true))
     expect(
-      h.hostRuntime.snapshotForClient(WORKSPACE, 'device-a').clientHostedPagesUnreconciled
+      (await h.hostRuntime.snapshotForClient(WORKSPACE, 'device-a')).clientHostedPagesUnreconciled
     ).toBeUndefined()
     expect(await action(h, 'navigate', 'about:blank')).toMatchObject({ ok: true })
     await h.published('slow')

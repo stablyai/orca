@@ -1,4 +1,4 @@
-import { parseWslUncPath } from '../../shared/wsl-paths'
+import { parseWslUncPath } from '../../shared/file-access/wsl-paths'
 
 // The bridge preserves the caller's distro even when /mnt/c makes cwd a Windows drive path.
 export function getWslAccountTarget(cwd: string): { runtime: 'wsl'; wslDistro: string } | null {

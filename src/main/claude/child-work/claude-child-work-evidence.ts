@@ -151,8 +151,13 @@ export function claudeChildOperation(
     return []
   }
   const { agentId, openTool } = activityOf(parentRef)
-  const input = openTool ? deriveToolInputPreview(openTool.name, openTool.input) : undefined
   const model = claudeChildMessageModel(message)
+  // A returned call stays the child's latest work until its next call or its ending; clearing it
+  // here blanked the roster line between every call of a subagent that only runs tools.
+  if (!openTool && !model) {
+    return []
+  }
+  const input = openTool ? deriveToolInputPreview(openTool.name, openTool.input) : undefined
   return [
     {
       type: 'operation',

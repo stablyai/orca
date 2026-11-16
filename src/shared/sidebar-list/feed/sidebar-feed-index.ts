@@ -11,8 +11,8 @@ import {
   getRepoHostIdentity,
   getRepoHostIdentityForParts,
   type HostScopedRepoKey
-} from '../../repo-host-identity'
-import type { Repo } from '../../repo-types'
+} from '../../repository/repo-host-identity'
+import type { Repo } from '../../repository/repo-types'
 import {
   getWorktreeHostIdentity,
   type HostScopedWorktreeKey

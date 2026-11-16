@@ -98,7 +98,7 @@ export default function AgentListVerdictPublisher(): null {
     }
   }, [])
   const verdicts = useMemo(
-    () => buildAgentListVerdicts(allThreads, Object.keys(storeData.agentStatusByPaneKey)),
+    () => buildAgentListVerdicts(allThreads, Array.from(storeData.agentStatusByPaneKey.keys())),
     [allThreads, storeData.agentStatusByPaneKey]
   )
   useEffect(() => {

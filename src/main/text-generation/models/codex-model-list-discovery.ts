@@ -2,11 +2,11 @@ import { StringDecoder } from 'node:string_decoder'
 import type { Writable } from 'node:stream'
 import type { AgentSessionModelOption } from '../../../shared/agent-session/agent-session-wire'
 import type { CommitMessageModel } from '../../../shared/source-control/ai/generation/commit-message-agent-spec'
-import { createIncrementalNdjsonFramer } from '../../../shared/main-process-ndjson-framer'
+import { createIncrementalNdjsonFramer } from '../../../shared/json-stream/main-process-ndjson-framer'
 import { createCodexAppServerRecordDispatcher } from '../../codex/app-server/codex-app-server-record-dispatch'
 import { isProviderRecord } from '../../provider-process/provider-json-record'
 import { listCodexModelPages } from '../../codex/structured/catalog/codex-structured-model-catalog'
-import type { AgentModelProbeSpec } from '../../../shared/agent-model-probe-spec'
+import type { AgentModelProbeSpec } from '../../../shared/agent-session/options/model-catalog/agent-model-probe-spec'
 import { discoveredModelsResult } from './commit-message-model-discovery-policy'
 import type {
   DiscoverCommitMessageModelsResult,

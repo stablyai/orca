@@ -12,7 +12,7 @@ const jiti = createJiti(import.meta.url, {
   alias: { '@': fileURLToPath(new URL('../../../../src/renderer/src', import.meta.url)) }
 })
 const { compareBaseSensitivityLocaleText } = await jiti.import(
-  '../../../../src/shared/locale-text-collators.ts'
+  '../../../../src/shared/i18n/locale-text-collators.ts'
 )
 const { sortJiraIssues } = await jiti.import(
   '../../../../src/renderer/src/components/jira-issue-sorter.ts'

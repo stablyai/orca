@@ -26,7 +26,7 @@ import {
   type AgentSessionProviderContextBoundary
 } from '../agent-session-provider-context'
 import { isStructuredAgentId } from './provider-handles/agent-session-provider-handle-encoding'
-import { isNonNegativeSafeInteger } from '../../ssh-retained-payload-limits'
+import { isNonNegativeSafeInteger } from '../../remote-runtime/ssh/ssh-retained-payload-limits'
 import {
   isAgentSessionAccountHome,
   isOptionalAgentSessionLaunchedAccount,
@@ -109,6 +109,8 @@ export type AgentSessionForkedFrom = {
   itemId: string
   /** Where the inherited history ends in this chat's own journal. */
   childBoundary: { kind: 'item'; itemId: string } | { kind: 'start' }
+  /** Saved under the source's shown name; absent on forks older builds titled "<source> fork". */
+  plainName?: true
 }
 
 export type AgentSessionRecord = {

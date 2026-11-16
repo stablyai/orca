@@ -6,6 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { StrictMode, type ReactNode } from 'react'
 import { useStore } from 'zustand'
 import { ConfirmationDialogContext } from '../../../confirmation-dialog-context'
+import { TooltipProvider } from '../../../ui/tooltip'
 import {
   createTestStore,
   createBrowserMockApi
@@ -112,7 +113,7 @@ function SessionSection() {
 function mount(node: ReactNode) {
   return render(
     <ConfirmationDialogContext.Provider value={mocks.confirm}>
-      {node}
+      <TooltipProvider>{node}</TooltipProvider>
     </ConfirmationDialogContext.Provider>
   )
 }
@@ -283,3 +284,18 @@ it.each(['success', 'rejection'])(
     )
   }
 )
+
+it('always confirms before clearing default cookies', async () => {
+  const clearDefault = vi.fn(async () => true)
+  store.setState({ clearDefaultSessionCookies: clearDefault })
+  mount(<SessionSection />)
+  const button = screen.getByRole('button', { name: 'Clear default cookies' })
+  mocks.confirm.mockResolvedValueOnce(false)
+  await act(async () => fireEvent.click(button))
+  expect(mocks.confirm).toHaveBeenCalledTimes(1)
+  expect(clearDefault).not.toHaveBeenCalled()
+  await act(async () => fireEvent.click(button))
+  await act(async () => fireEvent.click(button))
+  expect(mocks.confirm).toHaveBeenCalledTimes(3)
+  expect(clearDefault).toHaveBeenCalledTimes(2)
+})

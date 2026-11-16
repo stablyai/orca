@@ -17,7 +17,7 @@ import { RuntimeClient } from '../../src/cli/runtime/client'
 import type {
   RuntimeTerminalListResult,
   RuntimeTerminalSummary
-} from '../../src/shared/runtime-types'
+} from '../../src/shared/terminal/runtime/runtime-terminal-contracts'
 import {
   buildFakeAgentCommandOverride,
   FAKE_AGENT_WINDOWS_SHELL

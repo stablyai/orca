@@ -1,4 +1,4 @@
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import { useAppStore } from '@/store/index'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { runtimeTargetForRepoOwner } from '@/lib/workspace/ownership/repo-runtime-owner'

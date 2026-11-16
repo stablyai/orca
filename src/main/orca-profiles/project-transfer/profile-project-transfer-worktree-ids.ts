@@ -1,5 +1,5 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 
 import { isRepoWorktreeId } from './profile-project-worktree-identity'
 import {

@@ -1,5 +1,5 @@
 import { checkAcpLaunchVersion } from './acp-launch-version'
-import { overlayEnvironmentVariables } from '../../../shared/environment-overlay'
+import { overlayEnvironmentVariables } from '../../../shared/shell/launch/environment-overlay'
 
 import {
   assertStructuredAgentResolutionCurrent,
@@ -13,14 +13,14 @@ import {
 import {
   resolveAntigravityChatAuthConfig,
   type AntigravityChatAuthConfig
-} from '../../../shared/antigravity-chat-auth-config'
+} from '../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { assertAntigravityChatAuthPublished } from '../../antigravity/antigravity-chat-auth-publication'
 import { prepareAntigravityAcpProxyEnvironment } from '../../antigravity/antigravity-acp-proxy-environment'
 import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import { agentSessionProviderHandleKey } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
-import type { resolveCliCommand } from '../../../shared/node-cli-command-resolution'
+import type { resolveCliCommand } from '../../../shared/shell/command-resolution/node-cli-command-resolution'
 import type { AgentCliVersionReader } from '../../agent-launch/preflight/agent-cli-version-probe'
 import { AgentCliInstallationError } from '../../native-chat/agent-launch/agent-cli-installation-error'
 import type { StructuredAgentLaunchPartResolver } from '../../runtime/agent-session/launch/structured-agent-launch-composition'

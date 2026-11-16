@@ -10,7 +10,7 @@ import {
   hostTestOperationId
 } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session/records/agent-session-recovery-capsule'
-import { OrcadProfileShutdown } from '../host-runtime/orcad-profile-shutdown'
+import { BackendCoreProfileShutdown } from '../../backend/core-profile-shutdown'
 import { Store } from '../../persistence/loading-store/store'
 import {
   closeTestStores,
@@ -134,7 +134,7 @@ it('saves working-chat offers before profile cleanup and keeps them after repeat
 it('joins successful removal metadata and journal before profile ownership is released', async () => {
   vi.useFakeTimers()
   const root = dataRoot()
-  const profile = new OrcadProfileShutdown()
+  const profile = new BackendCoreProfileShutdown()
   const dataFile = join(root, 'orca-data.json')
   const store = createSqliteTestStore(Store, { dataFile })
   profile.store = store

@@ -5,7 +5,7 @@ import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runti
 import { resolveAgentStartupPlanInputs } from '../../../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import { sourceControlActionAgentArgs } from '../../../../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
 import { readLaunchPermissionChoice } from '../../../../../../shared/agent-launch/permissions/tui-agent-permission-choice'
-import { resolveHostAgentStartupShell } from '../../../../../../shared/windows-terminal-shell'
+import { resolveHostAgentStartupShell } from '../../../../../../shared/shell/launch/windows-terminal-shell'
 import type { AgentLaunchChoices } from '../../../../../../shared/agent-launch/choices/agent-launch-choices'
 import { structuredAgentLabel } from '../structured-agent-session-launch-label'
 import type { SessionOptionValue } from '../../../../../../shared/native-chat/input/native-chat-session-options'

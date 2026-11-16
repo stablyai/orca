@@ -50,6 +50,7 @@ import {
   useMobileStructuredThreadGoalSend
 } from '../input/tasks/use-mobile-structured-thread-goal'
 import { useMobileStructuredTranscript } from '../transcript/ingestion/use-mobile-structured-transcript'
+import { useMobileStructuredMcpPanel } from '../mcp/use-mobile-structured-mcp-panel'
 import { useMobileStructuredAgentRewind } from './use-mobile-structured-agent-rewind'
 import { useMobileNativeChatUsageLimit } from '../status/use-mobile-native-chat-usage-limit'
 
@@ -72,7 +73,6 @@ export function useMobileStructuredAgentSession(
   } = args
   // Gate queueing by capability while accepting published cards from every host.
   const queueCapable = hostSupport?.queuedMessages === true
-  const commandsWait = queueCapable && hostSupport?.queuedCommands === true
   const queueFollowUps = useQueueFollowUps(client, connected && enabled, sessionId, paired, enabled)
   const sessionKey = structuredChatTranscriptIdentity(sourceIdentity, agent, sessionId)
   const commandPendingRef = useRef(false)
@@ -109,7 +109,6 @@ export function useMobileStructuredAgentSession(
     unloadedTurnRevisions: state.unloadedTurnRevisions,
     hostSupport
   })
-  const sendController = useMobileStructuredCommandController(options)
   const { contextUsageSupport, ...optionFields } = options
 
   const { respondPermission, respondQuestion } = useMobileStructuredPromptResponses({
@@ -142,11 +141,6 @@ export function useMobileStructuredAgentSession(
     connected,
     mutate
   })
-  const hostStopping = useMobileStructuredSessionHostStopping({
-    client,
-    sessionId,
-    enabled: enabled && connected && hostSupport?.statusFeed === true
-  })
   const stopPress = useMobileStructuredStopPress(sessionKey)
   const { canStop, sendsOut } = useMobileStructuredStopOffer({
     sessionKey,
@@ -159,7 +153,11 @@ export function useMobileStructuredAgentSession(
     turnId,
     isWorking,
     canStop,
-    hostStopping,
+    hostStopping: useMobileStructuredSessionHostStopping({
+      client,
+      sessionId,
+      enabled: enabled && connected && hostSupport?.statusFeed === true
+    }),
     stopPressed: stopPress.pressed,
     queueCapable,
     queueFollowUps,
@@ -172,8 +170,9 @@ export function useMobileStructuredAgentSession(
     workingStartedAt: turnTiming.workingStartedAt,
     working: isWorking || queueSendsNext,
     mutate,
-    commands: sendController
+    commands: useMobileStructuredCommandController(options)
   })
+  const mcp = useMobileStructuredMcpPanel(args, sessionKey, goal.commands)
   const sendWithOutcomeUngated = useMobileStructuredSendWithOutcome({
     agent,
     client,
@@ -182,14 +181,14 @@ export function useMobileStructuredAgentSession(
     queueCapable,
     queueFollowUps,
     steerCapable: hostSupport?.steerDraft === true,
-    commandsWait,
+    commandsWait: queueCapable && hostSupport?.queuedCommands === true,
     stateRef,
     stopping: turnIndicator.stopping,
     ...sends,
     commandPending: commandPendingRef,
     onClearSent: transcript.onClearSent,
     sendsOut,
-    controller: goal.commands,
+    controller: mcp.commands,
     sessionCommands: args.sessionCommands,
     onSendError,
     queueSendsNext,
@@ -304,6 +303,7 @@ export function useMobileStructuredAgentSession(
       isWorking || queueSendsNext
     ),
     threadGoal: goal.threadGoal,
+    mcpPanel: mcp.mcpPanel,
     rewind,
     usageLimit
   }
