@@ -91,8 +91,6 @@ export function useRegularTerminalInputFocus({
         })
       ) {
         releasedHelperOnWindowBlur = null
-        // Resync already rebuilt or reclaimed this helper; its refocus must not start a second refresh.
-        consumePageFocusLossForTerminalIme()
       }
     }
     if (
