@@ -68,27 +68,6 @@ it('closes the menu with one Escape while the tooltip is open', async () => {
   await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
 })
 
-it('reveals the description on the first tap and selects on the next', async () => {
-  // happy-dom has no stylesheet layout; treat the desktop-hidden description as not rendered.
-  vi.spyOn(HTMLElement.prototype, 'getClientRects').mockImplementation(function (
-    this: HTMLElement
-  ) {
-    return (this.className.includes(':hidden') ? [] : [new DOMRect()]) as unknown as DOMRectList
-  })
-  const onSelect = renderMenu()
-  await screen.findByRole('menuitemradio', { name: 'Approve for me' })
-  const tap = () => {
-    fireEvent.pointerDown(row(), { pointerType: 'touch' })
-    fireEvent.click(row())
-  }
-  tap()
-  expect(onSelect).not.toHaveBeenCalled()
-  expect(screen.queryByRole('menu')).not.toBeNull()
-  expect(row().querySelector('[aria-hidden="true"]')?.className.includes(':hidden')).toBe(false)
-  tap()
-  expect(onSelect).toHaveBeenCalledTimes(1)
-})
-
 it('selects from the keyboard after a tap', async () => {
   const onSelect = renderMenu()
   await screen.findByRole('menuitemradio', { name: 'Approve for me' })

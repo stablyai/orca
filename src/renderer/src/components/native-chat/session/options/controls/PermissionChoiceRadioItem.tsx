@@ -53,7 +53,6 @@ export function PermissionChoiceRadioItem({
           value={value}
           // Why not `disabled`: menus keep disabled items focusable so keyboard users can read why.
           aria-disabled={disabled || undefined}
-          className="aria-disabled:opacity-40"
           onPointerDown={(event) => {
             touchPress.current = event.pointerType === 'touch'
           }}
@@ -82,7 +81,7 @@ export function PermissionChoiceRadioItem({
               event.relatedTarget.getAttribute('role') === 'menu'
           }}
         >
-          <div className="min-w-0">
+          <div className={cn('min-w-0', disabled && 'opacity-40')}>
             {children}
             <div
               ref={inlineRef}
@@ -106,7 +105,7 @@ export function PermissionChoiceRadioItem({
           sideOffset={8}
           collisionPadding={8}
           className={cn(
-            'pointer-events-auto max-w-[min(16rem,var(--radix-tooltip-content-available-width))] text-pretty',
+            'pointer-events-auto max-w-[min(16rem,var(--radix-tooltip-content-available-width))]',
             TOOLTIP_ONLY_WHEN_ROOM
           )}
           // Why: the tooltip is the top layer, so without this the first Escape closes only it.
