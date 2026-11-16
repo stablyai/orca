@@ -4374,7 +4374,6 @@
       "src/shared/native-chat/input/native-chat-session-option-state.test.ts": 55,
       "src/shared/native-chat/input/native-chat-slash-commands.test.ts": 49,
       "src/shared/native-chat/input/native-chat-task-list-history.test.ts": 49,
-      "src/shared/native-chat/native-chat-appearance-settings.test.ts": 49,
       "src/shared/native-chat/native-chat-href-routing.test.ts": 56,
       "src/shared/native-chat/native-chat-live-status.test.ts": 61,
       "src/shared/native-chat/native-chat-orca-stop-cut.test.ts": 180,
