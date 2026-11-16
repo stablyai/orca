@@ -195,19 +195,25 @@ else
     done
   fi
 fi
-for app in $(git diff --name-only "$base"...HEAD -- cloud/apps | cut -d/ -f1-3 | sort -u); do
+# cloud/ is its own pnpm workspace (own lockfile). Its apps import the built workspace packages (@orca-cloud/*) and
+# their own dependencies (pg, ...), so install it and build its packages before running any cloud app suite.
+cloud_apps=$(git diff --name-only "$base"...HEAD -- cloud/apps | cut -d/ -f1-3 | sort -u)
+cloud_pkgs=$(git diff --name-only "$base"...HEAD -- cloud/apps cloud/packages | cut -d/ -f1-3 | sort -u)
+if [[ -n "$cloud_pkgs" ]]; then
+  (cd cloud && pnpm install --frozen-lockfile >/dev/null && pnpm -r --filter "./packages/**" build >/dev/null)
+fi
+for app in $cloud_apps; do
   if [[ -d "$app" ]]; then (cd "$app" && npx vitest run); fi
 done
 # The root `pnpm typecheck` above covers no cloud/ package, and vitest strips types, so cloud packages' own type errors
 # went unseen (261 in sandbox-control by 2026-11-13). Typecheck each touched cloud package that is listed as clean.
-# cloud/ is its own pnpm workspace (own lockfile): install it and build its packages first, as its own scripts expect.
+# The cloud workspace was installed and built above.
 tc_list=config/scripts/cloud-integration/premerge-typecheck-packages.txt
 tc_pkgs=()
-for pkg in $(git diff --name-only "$base"...HEAD -- cloud/apps cloud/packages | cut -d/ -f1-3 | sort -u); do
+for pkg in $cloud_pkgs; do
   if [[ -d "$pkg" ]] && grep -qx "$pkg" "$tc_list" 2>/dev/null; then tc_pkgs+=("$pkg"); fi
 done
 if ((${#tc_pkgs[@]})); then
-  (cd cloud && pnpm install --frozen-lockfile >/dev/null && pnpm -r --filter "./packages/**" build >/dev/null)
   for pkg in "${tc_pkgs[@]}"; do
     echo "premerge: typecheck $pkg"
     (cd "$pkg" && pnpm typecheck)
