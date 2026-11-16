@@ -1,5 +1,5 @@
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 
 export type PullRequestFieldName = 'base' | 'title' | 'body' | 'draft'
 export type PullRequestFieldRevisions = Record<PullRequestFieldName, number>

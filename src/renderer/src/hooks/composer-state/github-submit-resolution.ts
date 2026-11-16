@@ -35,7 +35,7 @@ import { resolveGitHubWorkItemIdentity } from '../../../../shared/new-workspace/
 import { getWorkspaceSourceProvider } from '../../../../shared/new-workspace/workspace-source'
 import { resolveGitHubPrStartPointForRepo } from '@/lib/source-control/review/github-pr-start-point'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   getSmartGitHubSubmitResolution,
   getSmartGitHubSubmitIntent,

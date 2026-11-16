@@ -32,7 +32,7 @@ const LAYOUT_ORACLE_PREFIXES = [
   'src/renderer/src/lib/agent-session/identity/pane-agent-session-id.ts',
   'src/renderer/src/runtime/hosts/wsl/wsl-host-availability.ts',
   'src/renderer/src/lib/workspace/ownership/workspace-runtime-environment.ts',
-  'src/renderer/src/components/tab-group/tab-drag-drop-commit.ts',
+  'src/renderer/src/components/tab-group/drag/tab-drag-drop-commit.ts',
   'src/renderer/src/app-shell/use-runtime-graph-sync.ts',
   'src/renderer/src/runtime/sync-runtime-graph',
   'src/renderer/src/runtime/web-session-tabs-sync',
@@ -49,7 +49,7 @@ const LAYOUT_ORACLE_PREFIXES = [
   'src/main/runtime/session-tabs/mobile-session-preservation.ts',
   'src/main/runtime/workspaces/session-hosts/get-runtime-id.ts',
   'src/renderer/src/components/terminal/terminal-tab-actions.ts',
-  'src/renderer/src/components/tab-bar/web-runtime-tab-move-mirror.ts',
+  'src/renderer/src/runtime/web-session-tabs-sync/placement/web-runtime-tab-move-mirror.ts',
   'src/shared/rpc-contract/workspace-layout/workspace-layout-params.ts',
   'src/renderer/src/store/slices/tabs/recently-closed-tabs.ts',
   // The client the oracle reads every view through.

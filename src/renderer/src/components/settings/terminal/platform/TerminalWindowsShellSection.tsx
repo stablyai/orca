@@ -1,9 +1,9 @@
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../../../../shared/shell/launch/windows-terminal-shell'
 import { SettingsRow, SettingsSegmentedControl } from '../../form-controls/SettingsFormControls'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { useTranslate } from '@/i18n/use-translate'
-import { ShellIcon } from '../../../tab-bar/shell-icons'
+import { ShellIcon } from '../../../terminal/shells/ShellIcon'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 
 type TerminalWindowsShellSectionProps = {

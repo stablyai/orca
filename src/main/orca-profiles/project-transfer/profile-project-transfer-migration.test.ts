@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getDefaultPersistedState } from '../../../shared/constants'
+import { getDefaultPersistedState } from '../../../shared/orca-profiles/constants'
 import { ORCA_PROFILE_INDEX_SCHEMA_VERSION } from '../../../shared/orca-profiles/orca-profiles'
 import type { Repo } from '../../../shared/repository/repo-types'
 import * as profileStateDocuments from '../../persistence/profile-state/documents/profile-state-documents'

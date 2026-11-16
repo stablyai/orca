@@ -1,4 +1,4 @@
-import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-types'
+import type { LegacyPaneKeyAliasEntry } from '../../../shared/orca-profiles/persisted-state-types'
 import type { MigrationUnsupportedPtyEntry } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import {
   canRegisterPaneKeyAlias,

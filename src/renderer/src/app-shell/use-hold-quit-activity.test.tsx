@@ -2,7 +2,7 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { createStore } from 'zustand/vanilla'
-import { getDefaultSettings } from '../../../shared/constants'
+import { getDefaultSettings } from '../../../shared/orca-profiles/constants'
 import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status/contracts/agent-status-freshness'
 import { createFreshnessScheduler } from '@/store/slices/agent-status/agent-status-freshness-scheduler'

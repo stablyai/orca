@@ -5,7 +5,7 @@ import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-t
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { BrowserPage } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import { getBrowserPageRemoteOwnerEnvironmentId } from '../browser/ownership/remote-browser-tab-ownership'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { getRemoteRuntimePtyEnvironmentId } from '../hosted-terminals/identity/remote-runtime-pty-owner'
 import type { WebSessionTabsSyncState } from './state'
 import { environmentIdsMirroringLocalTab } from './tracking-mappings'

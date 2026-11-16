@@ -1,3 +1,7 @@
+import type { z } from 'zod'
+import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import type { OrchestrationWorkerReadResult } from '../../../../../../shared/orchestration/workers/orchestration-worker-output'
 import { exposeDispatchContext } from './observation/dispatch-context-exposure'
 import { contextOnlyAbandonWarning } from '../../../../orchestration/workers/lifecycle/context-only-dispatch-release'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
@@ -93,7 +97,6 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
       const db = runtime.getOrchestrationDb()
       const dispatch = db.getDispatchContextById(params.dispatch)
       const worker = db.getWorkerDispatch(params.dispatch)
-      const terminalHandle = worker?.agent_terminal_handle ?? dispatch?.assignee_handle
       // A start that never ran in a terminal has only its failure, on any host.
       if (worker?.state === 'failed' && !failedWorkerStartHasOutput(db, worker, dispatch)) {
         throw new OrchestrationError(
@@ -121,97 +124,8 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
           `Dispatch ${params.dispatch} was not found.`
         )
       }
-      if (!terminalHandle) {
-        throw new OrchestrationError(
-          'dispatch_not_found',
-          `Worker Dispatch ${params.dispatch} has no agent terminal.`
-        )
-      }
-      const resource = db.getWorkerTerminalResourceByOwner(params.dispatch)
-      if (resource && ['releasing', 'unknown', 'released'].includes(resource.release_state)) {
-        // Archive capture is not close evidence; recheck the execution host while releasing.
-        let liveness: 'live' | 'unverifiable' | 'exited' =
-          resource.release_state === 'released' ? 'exited' : 'unverifiable'
-        if (resource.release_state === 'releasing') {
-          const observed = await inspectWorkerTerminal(runtime, db, params.dispatch)
-          liveness =
-            observed.status === 'live'
-              ? 'live'
-              : observed.status === 'exited'
-                ? 'exited'
-                : 'unverifiable'
-        }
-        if (isStructuredWorkerHandle(resource.terminal_handle)) {
-          // A released chat's history is read from its closed session, which needs the host after a restart.
-          await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
-        }
-        const archived = await readArchivedWorkerOutput({
-          db,
-          dispatchId: params.dispatch,
-          workerState: worker?.state ?? 'unsupervised',
-          resource,
-          source: params.source,
-          cursor: params.cursor,
-          limit: params.limit,
-          liveness
-        })
-        return { ...archived, projection: projectFleetWorker(runtime, db, params.dispatch) }
-      }
-      const observation = await inspectWorkerTerminal(runtime, db, params.dispatch)
-      if (!observation.exact) {
-        throw new OrchestrationError(
-          'worker_identity_changed',
-          `Worker Dispatch ${params.dispatch} no longer resolves to its exact process.`
-        )
-      }
-      // Read through the handle inspectWorkerTerminal proved live, including incarnation-fenced remints.
-      const liveHandle = observation.terminalHandle ?? terminalHandle
-      const structured = await readStructuredWorkerOutput({
-        db,
-        dispatchId: params.dispatch,
-        workerState: worker?.state ?? 'unsupervised',
-        // Reuse observation: reading a journal proves host installation, never provider-child liveness.
-        liveness:
-          observation.status === 'live' || observation.status === 'exited'
-            ? observation.status
-            : 'unverifiable',
-        source: params.source,
-        cursor: params.cursor,
-        limit: params.limit
-      })
-      if (structured) {
-        return structured
-      }
-      const output = await readExactWorkerOutput({
-        runtime,
-        dispatchId: params.dispatch,
-        terminalHandle: liveHandle,
-        workerState: worker?.state ?? 'unsupervised',
-        terminalStatus:
-          observation.status === 'exited'
-            ? 'exited'
-            : observation.status === 'unverifiable'
-              ? 'unknown'
-              : 'running',
-        terminalLiveness:
-          observation.status === 'unverifiable'
-            ? 'unverifiable'
-            : observation.status === 'exited'
-              ? 'exited'
-              : 'live',
-        attachedAt: worker?.created_at ?? dispatch.dispatched_at ?? dispatch.created_at,
-        source: params.source,
-        cursor: params.cursor,
-        limit: params.limit
-      })
-      const afterRead = await inspectWorkerTerminal(runtime, db, params.dispatch)
-      if (!afterRead.exact) {
-        throw new OrchestrationError(
-          'worker_identity_changed',
-          `Worker Dispatch ${params.dispatch} changed process while output was read.`
-        )
-      }
-      // Two verdicts: status.liveness is the PTY's, the projection is the agent's.
+      // Two verdicts: status.liveness is the output source's, the projection is the agent's.
+      const output = await readLocalWorkerOutput(runtime, params, dispatch, worker)
       return { ...output, projection: projectFleetWorker(runtime, db, params.dispatch) }
     }
   }),
@@ -296,3 +210,104 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
     }
   })
 ]
+
+/** Every local read source (archive, chat, terminal) returns here, so one projection decorates them all. */
+async function readLocalWorkerOutput(
+  runtime: OrcaRuntimeService,
+  params: z.infer<typeof WorkerReadParams>,
+  dispatch: NonNullable<ReturnType<OrchestrationDb['getDispatchContextById']>>,
+  worker: ReturnType<OrchestrationDb['getWorkerDispatch']>
+): Promise<OrchestrationWorkerReadResult> {
+  const db = runtime.getOrchestrationDb()
+  const terminalHandle = worker?.agent_terminal_handle ?? dispatch.assignee_handle
+  if (!terminalHandle) {
+    throw new OrchestrationError(
+      'dispatch_not_found',
+      `Worker Dispatch ${params.dispatch} has no agent terminal.`
+    )
+  }
+  const resource = db.getWorkerTerminalResourceByOwner(params.dispatch)
+  if (resource && ['releasing', 'unknown', 'released'].includes(resource.release_state)) {
+    // Archive capture is not close evidence; recheck the execution host while releasing.
+    let liveness: 'live' | 'unverifiable' | 'exited' =
+      resource.release_state === 'released' ? 'exited' : 'unverifiable'
+    if (resource.release_state === 'releasing') {
+      const observed = await inspectWorkerTerminal(runtime, db, params.dispatch)
+      liveness =
+        observed.status === 'live'
+          ? 'live'
+          : observed.status === 'exited'
+            ? 'exited'
+            : 'unverifiable'
+    }
+    if (isStructuredWorkerHandle(resource.terminal_handle)) {
+      // A released chat's history is read from its closed session, which needs the host after a restart.
+      await runtime.ensureStructuredAgentSessionHost().catch(() => undefined)
+    }
+    return readArchivedWorkerOutput({
+      db,
+      dispatchId: params.dispatch,
+      workerState: worker?.state ?? 'unsupervised',
+      resource,
+      source: params.source,
+      cursor: params.cursor,
+      limit: params.limit,
+      liveness
+    })
+  }
+  const observation = await inspectWorkerTerminal(runtime, db, params.dispatch)
+  if (!observation.exact) {
+    throw new OrchestrationError(
+      'worker_identity_changed',
+      `Worker Dispatch ${params.dispatch} no longer resolves to its exact process.`
+    )
+  }
+  // Read through the handle inspectWorkerTerminal proved live, including incarnation-fenced remints.
+  const liveHandle = observation.terminalHandle ?? terminalHandle
+  const structured = await readStructuredWorkerOutput({
+    db,
+    dispatchId: params.dispatch,
+    workerState: worker?.state ?? 'unsupervised',
+    // Reuse observation: reading a journal proves host installation, never provider-child liveness.
+    liveness:
+      observation.status === 'live' || observation.status === 'exited'
+        ? observation.status
+        : 'unverifiable',
+    source: params.source,
+    cursor: params.cursor,
+    limit: params.limit
+  })
+  if (structured) {
+    return structured
+  }
+  const output = await readExactWorkerOutput({
+    runtime,
+    dispatchId: params.dispatch,
+    terminalHandle: liveHandle,
+    workerState: worker?.state ?? 'unsupervised',
+    terminalStatus:
+      observation.status === 'exited'
+        ? 'exited'
+        : observation.status === 'unverifiable'
+          ? 'unknown'
+          : 'running',
+    terminalLiveness:
+      observation.status === 'unverifiable'
+        ? 'unverifiable'
+        : observation.status === 'exited'
+          ? 'exited'
+          : 'live',
+    attachedAt: worker?.created_at ?? dispatch.dispatched_at ?? dispatch.created_at,
+    source: params.source,
+    cursor: params.cursor,
+    limit: params.limit
+  })
+  const afterRead = await inspectWorkerTerminal(runtime, db, params.dispatch)
+  if (!afterRead.exact) {
+    throw new OrchestrationError(
+      'worker_identity_changed',
+      `Worker Dispatch ${params.dispatch} changed process while output was read.`
+    )
+  }
+  return output
+}

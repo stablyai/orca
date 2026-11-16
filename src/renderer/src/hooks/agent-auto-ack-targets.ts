@@ -1,4 +1,4 @@
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/workspace/identity/floating-workspace-id'
 import { isOrcaWindowForegroundFocused } from '@/attention/orca-window-foreground-focus'
 import { isStructuredTab } from '../../../shared/agent-session/view/structured-agent-session-tab'
 import type {

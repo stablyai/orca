@@ -16,7 +16,7 @@ import {
 } from './ssh-ipc-context'
 import { broadcastSshTargetRemoved } from './ssh-renderer-broadcast'
 import { clearHostSettingOverride } from '../../../shared/execution-host/host-setting-overrides'
-import { toSshExecutionHostId } from '../../../shared/execution-host'
+import { toSshExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { runTargetLifecycle } from './ssh-target-lifecycle-queue'
 import { forgetPortForwardRestoreState } from './ssh-managed-port-forward-restore'
 import { errorMessage } from '../../../shared/errors/error-message'

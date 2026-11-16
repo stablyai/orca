@@ -1,5 +1,5 @@
 import type { ClassifiedError } from '../../errors/classified-error'
-import type { ExecutionHostId } from '../../execution-host'
+import type { ExecutionHostId } from '../../execution-host/execution-host'
 import type { PRCheckDetail } from '../checks/check-types'
 import type { GitHubIssueTimelineItem, PRComment } from '../comments/comment-types'
 import type {

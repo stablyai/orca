@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { getDefaultSettings } from '../../../../shared/constants'
+import { getDefaultSettings } from '../../../../shared/orca-profiles/constants'
 import { createTestStore } from '../testing/app-store-test-fixture'
 
 afterEach(() => vi.unstubAllGlobals())

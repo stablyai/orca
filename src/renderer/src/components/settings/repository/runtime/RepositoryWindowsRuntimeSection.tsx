@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import type { Project, ProjectUpdateArgs } from '../../../../../../shared/project/project-types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
