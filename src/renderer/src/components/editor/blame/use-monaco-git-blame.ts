@@ -161,8 +161,9 @@ export function useMonacoGitBlame(params: {
 
     // Main answers from its commit-keyed cache unless HEAD moved, so reloading is one rev-parse.
     const loads = { generation: 0 }
-    // `headMoved`: a HEAD change, after which the old baseline is no longer trustworthy.
-    const load = (headMoved = false): void => {
+    // `focus`: HEAD probably unchanged, so a failed reply keeps blame. `status`: the HEAD entry
+    // appeared or vanished, so HEAD may have moved. `headMoved`: it did; hide the old baseline now.
+    const load = (reason: 'focus' | 'status' | 'headMoved'): void => {
       // Invalidate any pending reply first, including when no target resolves below.
       loads.generation += 1
       const generation = loads.generation
@@ -176,7 +177,7 @@ export function useMonacoGitBlame(params: {
         update()
         return
       }
-      if (headMoved && loadedRef.current) {
+      if (reason === 'headMoved' && loadedRef.current) {
         // The old baseline no longer matches HEAD: hide it (the status bar dims) until the reply.
         loading = true
         loadedRef.current = null
@@ -201,8 +202,8 @@ export function useMonacoGitBlame(params: {
           sameFile &&
           previous &&
           (result.kind === 'unchanged' ||
-            // A failed focus reload keeps blame; after HEAD moved the old baseline is stale.
-            (result.kind === 'unavailable' && !headMoved) ||
+            // Only a failed focus reload keeps blame; HEAD may have moved otherwise.
+            (result.kind === 'unavailable' && reason === 'focus') ||
             (result.kind === 'ready' && result.headOid === previous.blame.headOid))
         if (keep) {
           loadedRef.current = { ...previous, target }
@@ -236,7 +237,7 @@ export function useMonacoGitBlame(params: {
       // Commits made in a terminal or in a child repo surface when the user returns to the editor.
       ed.onDidFocusEditorText(() => {
         update()
-        load()
+        load('focus')
       })
     ]
     const unsubscribeHead = useAppStore.subscribe((state, previous) => {
@@ -246,10 +247,10 @@ export function useMonacoGitBlame(params: {
         return
       }
       // The first status after launch, or a failed status read, isn't HEAD moving: no flicker.
-      load(before !== undefined && after !== undefined)
+      load(before !== undefined && after !== undefined ? 'headMoved' : 'status')
     })
     update()
-    load()
+    load('status')
     return () => {
       disposed = true
       for (const disposable of disposables) {
