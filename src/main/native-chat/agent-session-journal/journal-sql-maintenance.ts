@@ -1,4 +1,11 @@
 import type { LegacyDestinationIdentity } from './journal-legacy-retirement-files'
+import {
+  JOURNAL_LEGACY_RETIREMENT,
+  type JournalLegacyRetirementState
+} from './journal-legacy-retirement-state'
+import { JOURNAL_LEGACY_SOURCE_RECEIPT } from './database/journal-legacy-source-receipt'
+import { JOURNAL_LEGACY_REVISIONS_KEPT } from './database/journal-legacy-reconcile'
+import { JOURNAL_LEGACY_CONVERTED_BY } from './database/journal-domain-database'
 import { rekeyWslDriveUncChats } from '../../wsl/filesystem/wsl-drive-unc-chat-rekey'
 import type { JournalForkStageOperation, JournalForkStageResult } from './journal-fork-stages'
 import { saveJournalDomainOutlineCache, type JournalOutlineCache } from './journal-domain-outline'
@@ -52,7 +59,7 @@ export type JournalSqlMaintenance =
 export type JournalSqlProjectionState = JournalDomainImportState
 
 export type JournalSqlMaintenanceResult =
-  | { kind: 'legacy-retirement-state'; receipt: string | null; retirement: string | null }
+  | ({ kind: 'legacy-retirement-state' } & JournalLegacyRetirementState)
   | { kind: 'records'; records: JournalSqlStoredRecords }
   | JournalForkStageResult
   | JournalSqlProjectionState
@@ -76,13 +83,15 @@ export function applyJournalSqlMaintenance(
           ?.value?.toString() ?? null
       return {
         kind: 'legacy-retirement-state',
-        receipt: value('journal.legacy-source-copy.v1'),
-        retirement: value('journal.legacy-retirement.v1')
+        receipt: value(JOURNAL_LEGACY_SOURCE_RECEIPT),
+        kept: value(JOURNAL_LEGACY_REVISIONS_KEPT) !== null,
+        convertedBy: value(JOURNAL_LEGACY_CONVERTED_BY),
+        retirement: value(JOURNAL_LEGACY_RETIREMENT)
       }
     }
     case 'legacy-retirement-save':
       db.prepare('INSERT OR REPLACE INTO agent_session_store_meta(key,value) VALUES(?,?)').run(
-        'journal.legacy-retirement.v1',
+        JOURNAL_LEGACY_RETIREMENT,
         operation.value
       )
       return true

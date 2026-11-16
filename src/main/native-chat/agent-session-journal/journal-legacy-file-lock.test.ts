@@ -87,7 +87,17 @@ it.skipIf(process.env.ORCA_JOURNAL_NATIVE_LOCK_TEST !== '1')(
       await lock.close()
     }
     expect(readFileSync(filename)).toEqual(before)
-    const second = await acquireJournalLegacyFileLock(filename, signal.signal)
-    await second.close()
+    // A WAL that holds frames keeps everything; an empty one goes with the file it belongs to.
+    writeFileSync(`${filename}-wal`, 'frames')
+    const refused = await acquireJournalLegacyFileLock(filename, signal.signal)
+    await expect(refused.retire()).rejects.toThrow('legacy companions still hold data')
+    expect(existsSync(filename)).toBe(true)
+    writeFileSync(`${filename}-wal`, '')
+    writeFileSync(`${filename}-shm`, '')
+    const retiring = await acquireJournalLegacyFileLock(filename, signal.signal)
+    expect(await retiring.retire()).toBe(true)
+    expect([filename, `${filename}-wal`, `${filename}-shm`].filter((f) => existsSync(f))).toEqual(
+      []
+    )
   }
 )

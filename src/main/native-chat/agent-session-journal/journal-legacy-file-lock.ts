@@ -26,6 +26,8 @@ export async function journalLegacyFileLockPath(): Promise<string> {
   }
 }
 
+const RETIRE_GRACE_MS = 60_000
+
 /** Lock mode waits for exit before source access; metadata failures can settle immediately. */
 async function startLegacyHelper(
   filename: string,
@@ -78,7 +80,9 @@ async function startLegacyHelper(
         const error =
           code === 4
             ? new JournalLegacyIneligibleError('legacy storage or file identity is unsupported')
-            : new Error('legacy journal lock is unavailable')
+            : code === 7
+              ? new JournalLegacyRetentionError('legacy companions still hold data')
+              : new Error('legacy journal lock is unavailable')
         ready.reject(error)
         reject(error)
       }
@@ -103,10 +107,10 @@ async function startLegacyHelper(
         })
     }
   }
-  const close = () =>
+  const close = (graceMs = 250) =>
     (closing ??= (async () => {
       child.stdin.end()
-      forceTimer = setTimeout(force, 250)
+      forceTimer = setTimeout(force, graceMs)
       try {
         await done
       } finally {
@@ -124,13 +128,14 @@ async function startLegacyHelper(
     abort()
   }
   let output = ''
+  let retired = false
   child.stdout.on('data', (chunk: Buffer) => {
     output += chunk.toString()
-    if (
-      output === (check ? 'eligible\n' : 'locked\n') ||
-      output === (check ? 'eligible\r\n' : 'locked\r\n')
-    ) {
+    const lines = output.replace(/\r\n/g, '\n')
+    if (lines === (check ? 'eligible\n' : 'locked\n')) {
       ready.resolve()
+    } else if (lines === 'locked\nretired\n') {
+      retired = true
     } else if (output.length > 64) {
       ready.reject(new Error('invalid legacy lock acknowledgement'))
     }
@@ -154,7 +159,17 @@ async function startLegacyHelper(
   } finally {
     clearTimeout(startup)
   }
-  return { held: () => !exited && !signal.aborted, close }
+  /** The helper removes the journal itself while holding the lock; true only once it reported so. */
+  const retire = async (): Promise<boolean> => {
+    if (check || exited || signal.aborted) {
+      return false
+    }
+    child.stdin.write('retire\n')
+    // Unlinking a large file can take seconds; a helper stopped mid-way leaves only companions.
+    await close(RETIRE_GRACE_MS)
+    return retired
+  }
+  return { held: () => !exited && !signal.aborted, close: () => close(), retire }
 }
 
 export function acquireJournalLegacyFileLock(

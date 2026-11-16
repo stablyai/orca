@@ -6,6 +6,7 @@ import {
 } from './journal-legacy-retention-error'
 import { readStoredQueuedMessageRow } from './queued-messages/queued-message-stored-row'
 import type Database from '../../sqlite/sync-database'
+import type { SqliteRow } from '../../sqlite/sqlite-statement'
 
 const PROFILE_TABLES = new Set([
   ...JOURNAL_DOMAIN_PROFILE_TABLES.map(({ name }) => name),
@@ -147,21 +148,40 @@ function readSourcePage(db: Database.Database, cursor: LegacyProofCursor): Legac
             ? 'session_id,epoch'
             : 'session_id,epoch,generation'
     const indexed = table === 'journal_rows' || table === 'journal_outcomes'
-    const statement = db.prepare(
-      indexed
-        ? table === 'journal_rows'
-          ? `SELECT DISTINCT session_id,epoch FROM journal_rows ${cursor.after === null ? '' : 'WHERE (session_id,epoch)>(?,?)'} ORDER BY session_id,epoch LIMIT 128`
-          : `SELECT DISTINCT generation FROM journal_outcomes ${cursor.after === null ? '' : 'WHERE generation>?'} ORDER BY generation LIMIT 128`
-        : `SELECT rowid AS rowid,${columns} FROM ${table} ${cursor.after === null ? '' : 'WHERE rowid>?'} ORDER BY rowid LIMIT 128`
-    )
-    statement.setReadBigInts(true)
-    const rows = statement.all(
-      ...(cursor.after === null
-        ? []
-        : table === 'journal_rows'
-          ? [cursor.after, cursor.epoch!]
-          : [BigInt(cursor.after)])
-    )
+    let rows: SqliteRow[]
+    if (indexed) {
+      // One seek per distinct key: a DISTINCT over the index would read every row of a huge chat
+      // inside a single statement, which no pause between pages can interrupt.
+      const next = db.prepare(
+        table === 'journal_rows'
+          ? 'SELECT session_id,epoch FROM journal_rows WHERE (session_id,epoch)>(?,?) ORDER BY session_id,epoch LIMIT 1'
+          : 'SELECT generation FROM journal_outcomes WHERE generation>? ORDER BY generation LIMIT 1'
+      )
+      next.setReadBigInts(true)
+      rows = []
+      let after: SqliteRow[string][] =
+        cursor.after === null
+          ? table === 'journal_rows'
+            ? ['', '']
+            : [-1n]
+          : table === 'journal_rows'
+            ? [cursor.after, cursor.epoch!]
+            : [BigInt(cursor.after)]
+      while (rows.length < 128) {
+        const row = next.get(...after)
+        if (!row) {
+          break
+        }
+        rows.push(row)
+        after = table === 'journal_rows' ? [row.session_id, row.epoch] : [row.generation]
+      }
+    } else {
+      const statement = db.prepare(
+        `SELECT rowid AS rowid,${columns} FROM ${table} ${cursor.after === null ? '' : 'WHERE rowid>?'} ORDER BY rowid LIMIT 128`
+      )
+      statement.setReadBigInts(true)
+      rows = statement.all(...(cursor.after === null ? [] : [BigInt(cursor.after)]))
+    }
     for (const row of rows) {
       if (
         table === 'queued_messages' &&

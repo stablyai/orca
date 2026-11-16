@@ -109,7 +109,6 @@ export class JournalSqlBackgroundMaintenance {
 
   async settled(): Promise<void> {
     await this.running
-    await this.legacyRetirement?.flushCredit()
   }
 
   private async boundary(): Promise<boolean> {

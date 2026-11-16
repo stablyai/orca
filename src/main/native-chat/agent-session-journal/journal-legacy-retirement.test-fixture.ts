@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, vi } from 'vitest'
@@ -22,42 +22,63 @@ import { JournalLegacyRetirement } from './journal-legacy-retirement'
 
 export const cleanup: (() => void)[] = []
 afterEach(() => {
-  vi.useRealTimers()
-  vi.restoreAllMocks()
+  vi.unstubAllEnvs()
   for (const close of cleanup.splice(0).toReversed()) {
     close()
   }
 })
 
+const native = process.env.ORCA_JOURNAL_NATIVE_LOCK_TEST === '1'
+
+/** Without the built helper, the same removal the helper performs once it holds the lock. */
+async function fakeLock(filename: string) {
+  return {
+    held: () => true,
+    close: async () => {},
+    retire: async () => {
+      for (const name of [filename, `${filename}-wal`, `${filename}-shm`]) {
+        if (existsSync(name)) {
+          unlinkSync(name)
+        }
+      }
+      return true
+    }
+  }
+}
+
+/** An older Orca's writable open of the original, adding one chat with saved history. */
+export function olderOrcaChat(filename: string, sessionId: string): void {
+  const { db } = openJournalDatabase(filename)
+  runJournalTransaction(db, () => {
+    publishJournalSessionEpoch(db, { sessionId, workspaceId: 'workspace' }, 'epoch')
+    for (const row of journalSqlRetryRows(true)) {
+      insertJournalRow(db, sessionId, row)
+    }
+    db.prepare('INSERT INTO agent_session_records VALUES(?,?)').run(
+      sessionId,
+      JSON.stringify({ sessionId, lease: { sessionId } })
+    )
+  })
+  db.close()
+}
+
+/** A profile an Orca at `copiedBy` copied, holding one unconverted chat with history. */
 export async function profile(
-  seed?: (db: Database.Database) => void,
-  eligibility?: ConstructorParameters<typeof JournalLegacyRetirement>[9]
+  options: { copiedBy?: string; seed?: (db: Database.Database) => void } = {}
 ) {
   const root = mkdtempSync(join(tmpdir(), 'orca-legacy-retirement-'))
   cleanup.push(() => rmSync(root, { recursive: true, force: true }))
   const filename = journalDatabasePath(root)
-  const { db: legacy } = openJournalDatabase(filename)
-  runJournalTransaction(legacy, () => {
-    publishJournalSessionEpoch(
-      legacy,
-      { sessionId: 'unopened', workspaceId: 'folder-without-git' },
-      'epoch'
-    )
-    for (const row of journalSqlRetryRows(true)) {
-      insertJournalRow(legacy, 'unopened', row)
-    }
-  })
-  seed?.(legacy)
-  legacy.close()
-  const { db } = openJournalDomainDatabase(await initializeJournalDomainDatabase(root))
-  let closed = false
-  const closeDomain = () => {
-    if (!closed) {
-      db.close()
-      closed = true
-    }
+  olderOrcaChat(filename, 'unopened')
+  if (options.seed) {
+    const { db: legacy } = openJournalDatabase(filename)
+    options.seed(legacy)
+    legacy.close()
   }
-  cleanup.push(closeDomain)
+  vi.stubEnv('ORCA_APP_VERSION', options.copiedBy ?? '1.0.0')
+  const domainFile = await initializeJournalDomainDatabase(root)
+  const { db } = openJournalDomainDatabase(domainFile)
+  cleanup.push(() => db.close())
   let original: Database.Database | undefined
   const source = () =>
     (original ??= new Database(filename, { readonly: true, fileMustExist: true }))
@@ -106,11 +127,8 @@ export async function profile(
     }
   }
   const errors: unknown[] = []
-  const lock =
-    process.env.ORCA_JOURNAL_NATIVE_LOCK_TEST === '1'
-      ? acquireJournalLegacyFileLock
-      : async () => ({ held: () => true, close: async () => {} })
-  const reopen = () =>
+  /** A launch of the Orca at `version`, owning the profile unless told otherwise. */
+  const launch = (version = '1.0.1', owns = true) =>
     new JournalLegacyRetirement(
       root,
       writer,
@@ -118,59 +136,11 @@ export async function profile(
       conversions,
       async () => true,
       (error) => errors.push(error),
-      () => true,
-      lock,
+      () => owns,
+      native ? acquireJournalLegacyFileLock : fakeLock,
       undefined,
-      eligibility ??
-        (process.env.ORCA_JOURNAL_NATIVE_LOCK_TEST === '1'
-          ? undefined
-          : { check: async () => {}, present: () => {} })
+      native ? undefined : { check: async () => {}, present: () => {} },
+      version
     )
-  const retirement = reopen()
-  const receiptState = () =>
-    JSON.parse(
-      String(
-        db
-          .prepare(
-            "SELECT value FROM agent_session_store_meta WHERE key='journal.legacy-retirement.v1'"
-          )
-          .get()!.value
-      )
-    )
-  const saveState = (state: unknown) =>
-    db
-      .prepare(
-        "UPDATE agent_session_store_meta SET value=? WHERE key='journal.legacy-retirement.v1'"
-      )
-      .run(JSON.stringify(state))
-  const arm = () => {
-    const row = db
-      .prepare(
-        "SELECT value FROM agent_session_store_meta WHERE key='journal.legacy-retirement.v1'"
-      )
-      .get()
-    const state = JSON.parse(String(row!.value))
-    state.credit = 604800000
-    state.process = 'prior-process'
-    db.prepare(
-      "UPDATE agent_session_store_meta SET value=? WHERE key='journal.legacy-retirement.v1'"
-    ).run(JSON.stringify(state))
-  }
-  return {
-    root,
-    filename,
-    db,
-    retirement,
-    reopen,
-    conversions,
-    errors,
-    arm,
-    source,
-    receiptState,
-    saveState,
-    writer,
-    closeDomain,
-    readers,
-    recycle: readers.recycleSourceReaders
-  }
+  return { root, filename, db, launch, errors, source }
 }

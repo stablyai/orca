@@ -25,6 +25,14 @@ import {
   JOURNAL_LEGACY_SOURCE_RECEIPT
 } from './journal-legacy-source-receipt'
 
+/** The Orca version that copied this profile; its original journal stays until a later version runs. */
+export const JOURNAL_LEGACY_CONVERTED_BY = 'journal.legacy-converted-by.v1'
+
+/** This host's own release: the desktop's, or the bundle orcad stamps for itself at start. */
+export function journalRunningOrcaVersion(): string | null {
+  return process.env.ORCA_APP_VERSION?.trim() || null
+}
+
 export function journalDomainDatabasePath(stateDirectory: string): string {
   return join(stateDirectory, 'agent-session-domain.db')
 }
@@ -62,6 +70,8 @@ export async function initializeJournalDomainDatabase(stateDirectory: string): P
       )
       meta.run(JOURNAL_LEGACY_SOURCE_RECEIPT, JSON.stringify(sourceReceipt))
       meta.run(JOURNAL_LEGACY_REVISIONS_KEPT, '1')
+      // An unknown version still keeps the original through this launch's process.
+      meta.run(JOURNAL_LEGACY_CONVERTED_BY, journalRunningOrcaVersion() ?? 'unknown')
       const checkpoint = db.prepare('PRAGMA wal_checkpoint(TRUNCATE)').get()
       if (checkpoint?.busy !== 0 || checkpoint.log !== checkpoint.checkpointed) {
         throw new Error('chat initialization could not fold its private WAL')
