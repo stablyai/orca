@@ -126,6 +126,21 @@ describe('syncCopyWorktrees', () => {
     expect(changed).toBe(true)
     expect(Object.keys(meta)).toEqual([orphaned])
   })
+
+  it('records a copy on its own host when another host has the same copy id', () => {
+    const id = `repo-1::${join(COPIES, 'copy-1')}`
+    const { store, forget } = memoryStore({
+      [id]: { displayName: 'copy-1', perforceStream: '//g/dev', hostId: 'local' }
+    })
+    const setWorktreeMeta = vi.spyOn(store, 'setWorktreeMeta')
+    syncCopyWorktrees(
+      store,
+      { ...REPO, connectionId: 'box' },
+      listing([{ name: 'copy-1', folderExists: true, clientExists: true }]),
+      forget
+    )
+    expect(setWorktreeMeta.mock.calls[0]?.[0]).toMatchObject({ id, hostId: 'ssh:box' })
+  })
 })
 
 describe('adoptCopyAtPath', () => {
