@@ -133,7 +133,7 @@ export function memberGitRoutes(deps: MemberGitDeps) {
                 header: 'authorization',
                 placeholders: [`Bearer ${placeholder}`, `token ${placeholder}`],
                 readsBody: (method, path) =>
-                  (method.toUpperCase() === 'POST' && path.split('?')[0] === '/graphql') || /\/pulls\/\d+\/reviews(\/\d+\/events)?$/.test(path.split('?')[0] ?? ''),
+                  (method.toUpperCase() === 'POST' && path.split('?')[0] === '/graphql') || REVIEW_PATH.test(path.split('?')[0] ?? ''),
                 credential: async (request) => memberApiCredential(deps, row, identity, allowed, request)
               }
         )
@@ -274,14 +274,20 @@ async function targetsInWorkspaceRepo(deps: MemberGitDeps, row: SandboxRow, appT
   return true
 }
 
+/** A pull request review, or a pending review's submission (case-insensitive, optional trailing slash). */
+const REVIEW_PATH = /\/pulls\/\d+\/reviews(\/\d+\/events)?\/?$/i
+
 /** REST approval: a review, or a pending review's submission, with event APPROVE (any case). */
 function restApproves(request: { method: string; path: string; body: string | null }): boolean {
   const pathname = request.path.split('?')[0] ?? ''
-  if (request.method.toUpperCase() !== 'POST' || !/\/pulls\/\d+\/reviews(\/\d+\/events)?$/.test(pathname)) {
+  if (request.method.toUpperCase() !== 'POST' || !REVIEW_PATH.test(pathname)) {
     return false
   }
+  if (request.body === null) {
+    return true
+  }
   try {
-    const event = (JSON.parse(request.body ?? '{}') as { event?: unknown } | null)?.event
+    const event = (JSON.parse(request.body) as { event?: unknown } | null)?.event
     return String(event ?? '').toUpperCase() === 'APPROVE'
   } catch {
     // Unreadable: treat as an approval (fails toward the installation token).
@@ -293,7 +299,7 @@ function restApproves(request: { method: string; path: string; body: string | nu
 function restMerges(request: { method: string; path: string }): boolean {
   const pathname = request.path.split('?')[0] ?? ''
   const method = request.method.toUpperCase()
-  return (method === 'PUT' && /\/pulls\/\d+\/merge$/.test(pathname)) || (method === 'POST' && /^\/repos\/[^/]+\/[^/]+\/merges$/.test(pathname))
+  return (method === 'PUT' && /\/pulls\/\d+\/merge\/?$/i.test(pathname)) || (method === 'POST' && /^\/repos\/[^/]+\/[^/]+\/merges\/?$/i.test(pathname))
 }
 
 /** More than one person can use this workspace (owner plus other active grantees). */

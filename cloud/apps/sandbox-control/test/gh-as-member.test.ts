@@ -149,6 +149,8 @@ describe('review M2: approvals never as a member; merges only in a one-person wo
       await t.api('/repos/acme/app/pulls/7/reviews/3/events', 'POST', { event })
       expect(t.upstream.at(-1)!.authorization).toBe(APP)
     }
+    await t.api('/repos/acme/app/Pulls/7/Reviews/', 'POST', { event: 'APPROVE' })
+    expect(t.upstream.at(-1)!.authorization).toBe(APP)
     await t.api('/repos/acme/app/pulls/7/reviews', 'POST', { event: 'REQUEST_CHANGES', body: 'x' })
     expect(t.upstream.at(-1)!.authorization).toBe(`Bearer ${MEMBER_TOKEN}`)
     await t.api('/repos/acme/app/pulls/7/reviews', 'POST', { event: 'COMMENT', body: 'x' })
