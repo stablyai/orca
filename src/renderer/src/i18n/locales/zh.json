@@ -558,7 +558,6 @@
       "defaultSurfaceKeptChat_other": "{{agents}} 按你的设置继续以聊天方式打开。",
       "defaultSurfaceSetAllChat": "全部设为聊天",
       "defaultSurfaceSetAllTerminal": "全部设为终端",
-      "sameAsChoice": "与 {{agent}} 相同 · {{choice}}",
       "modelListFallback": "内置列表。Orca 无法从此主机获取模型列表。",
       "chatUnavailableOnWindows": "{{value0}} Chat 暂不支持 Windows，因此 {{value0}} 会在此主机的终端中打开。macOS 或 Linux 主机上的聊天仍可正常使用。",
       "undetectedCommandHint": "如果 {{agent}} CLI 安装在 PATH 之外，请输入其在此主机上的可执行文件完整路径。",
@@ -603,9 +602,6 @@
         "launchOptions": "模型和权限",
         "savedLaunchOptions": "已保存的选项：{{value0}}。旧版服务器使用其自身的权限设置",
         "effort": "推理强度"
-      },
-      "actionPermissions": {
-        "sameAsAgent": "与 {{agent}} 相同"
       }
     },
     "ssh": {
@@ -6120,8 +6116,7 @@
           "issueCommand": "议题命令",
           "newVmRecipe": "新的 VM 配方",
           "vmRecipe": "VM 配方",
-          "thisRepository": "此仓库",
-          "alwaysTrustRepo": "始终信任 <repo/> 中的 <code>orca.yaml</code>"
+          "thisRepository": "此仓库"
         },
         "PendingWorktreeRow": {
           "af21e953d1": "取消工作树创建",
@@ -22378,7 +22373,6 @@
       "annotate": "注释",
       "grab": "抓取",
       "draw": "绘制",
-      "annotateOptions": "更多注释工具",
       "copyAllNotes": "复制所有注释",
       "clearNotes": "清除注释",
       "resetZoom": "重置缩放",
@@ -22462,6 +22456,10 @@
     },
     "wslMoved": {
       "movedToHost": "已移至 {{distro}} 主机",
+      "sectionTitle": "已移至 WSL 主机 ({{count}})",
+      "hide": "从此列表隐藏",
+      "hiddenToast": "已从此列表隐藏 {{name}}",
+      "hiddenToastDescription": "“重新在此电脑上使用”仍在 {{distro}} 主机下的菜单中。",
       "useHere": "重新在此电脑上使用",
       "useHereTitle": "要重新在此电脑上使用 {{name}} 吗？",
       "useHereDescription": "Orca 会按移动前的状态在这里打开此项目。你的代码不受影响：它从未移动。移动后在 {{distro}} 主机上所做的更改（例如新标签页和聊天）会留在主机上，不会回来。与它一起移动的项目也会一起回来。在你于 {{distro}} 主机上将其移除之前，项目也会一直保留在那里。此窗口将重新加载",
@@ -23403,7 +23401,7 @@
         "dontAskAgainHint": "可在设置 → AI 服务商账户中关闭此选项",
         "listLabel": "待重启的 Claude 会话",
         "settingTitle": "Claude 在终端中运行期间切换账户时",
-        "settingDescription": "重启后，每个终端对话都会在新账户上继续。",
+        "settingDescription": "重启后，每个终端对话都会在新账户上继续。忙碌的会话会中断当前工作。",
         "settingRestart": "总是重启",
         "session": "Claude 会话",
         "restartingOther": "正在 {{account}} 上重启 {{count}} 个 Claude 会话",
@@ -23423,11 +23421,13 @@
         "notMovedOther": "另有 {{count}} 个会话未移动",
         "review": "查看",
         "restartCount_other": "重启 {{count}} 个会话",
-        "reviewBody_other": "其他 {{count}} 个 Claude 会话未移至 {{next}}",
-        "body_other": "{{count}} 个 Claude 会话仍在 {{previous}} 上运行。重启后，各对话将在 {{next}} 上继续。忙碌的会话会等待空闲后再重启",
+        "reviewBody_other": "{{count}} 个 Claude 会话未移至 {{next}}",
+        "body_other": "{{count}} 个 Claude 会话仍在 {{previous}} 上运行。重启后，各对话将在 {{next}} 上继续。忙碌的会话会中断当前工作并立即重启",
         "reasonSharedSession": "在另一个窗格中也已打开",
         "sharedOne": "由于另一个窗格打开了同一对话，1 个 Claude 会话将保持在 {{previous}}。重新启动可能会重新打开另一个窗格的对话。",
-        "sharedOther": "由于另一个窗格打开了同一对话，{{count}} 个 Claude 会话将保持在 {{previous}}。重新启动可能会重新打开另一个窗格的对话。"
+        "sharedOther": "由于另一个窗格打开了同一对话，{{count}} 个 Claude 会话将保持在 {{previous}}。重新启动可能会重新打开另一个窗格的对话。",
+        "strandedOne": "1 个 Claude 会话可能仍在 {{previous}} 上。请手动重启以切换",
+        "strandedOther": "{{count}} 个 Claude 会话可能仍在 {{previous}} 上。请手动重启以切换"
       },
       "oauthUsage": {
         "title": "Claude 用量轮询",
@@ -24031,7 +24031,9 @@
       "chooseTransition": "选择状态更改：",
       "cancel": "取消",
       "noTransition": "{{key}} 没有可转到 {{column}} 的状态更改",
-      "queryTooLong": "Jira 查询过长，请缩短查询或清除筛选条件"
+      "queryTooLong": "Jira 查询过长，请缩短查询或清除筛选条件",
+      "reorderColumn": "重新排列 {{column}}",
+      "reorderColumnHint": "此列中的议题：{{count}}。使用左右方向键移动此列。"
     },
     "favourites": {
       "activeLabel": "Jira 收藏：{{name}}",
@@ -24760,7 +24762,6 @@
     "waitForImageUploads": "请等待图片上传完成，然后重试创建 PR"
   },
   "agentPicker": {
-    "catalogUnsupported": "此主机上无法使用 {{agent}} 模型。你可以保留当前选择或使用参数。",
     "catalogUnsupportedLaunch": "此主机上无法使用 {{agent}} 模型。当前选择仍会生效。",
     "catalogFailed": "无法加载 {{agent}} 模型。请关闭并重新打开智能体选择器以重试。",
     "catalogSignIn": "请登录 {{agent}} 以加载模型，然后重新打开智能体选择器。",
@@ -24776,11 +24777,9 @@
     "setByArguments": "由参数设置",
     "searchModels": "搜索模型",
     "noModels": "没有与搜索匹配的模型。",
-    "toggleArguments": "切换参数显示",
     "argumentsTerminalHint": "仅适用于终端（CLI）启动",
     "searchAgentModels": "搜索 {{agent}} 模型…",
     "moreModelsWithCount": "更多模型 ({{total}})",
-    "use": "使用",
     "select": "选择智能体",
     "promptPlaceholder": "添加提示词（可选）：/ 选择技能，@ 选择文件",
     "promptPlaceholderFilesOnly": "添加提示词（可选）：@ 选择文件",
@@ -25011,7 +25010,6 @@
     "setupTrust": {
       "reviewTitle": "要批准此自动化的新设置命令吗？",
       "reviewBody": "由于分支的 <code>orca.yaml</code> 设置命令已更改，某次运行跳过了设置。批准后，之后的运行将使用这些命令。仅在你信任 <repo/> 时批准。",
-      "approve": "批准",
       "approved": "已批准设置。此自动化之后的运行将执行它。",
       "skippedSinceApproved": "由于分支的 orca.yaml 设置命令已更改，此次运行未执行设置。这些命令此后已获批准，之后的运行将执行它们。",
       "skippedReview": "设置未运行：此次运行分支中的 orca.yaml 设置命令与此自动化已批准的命令不同。请审查它们，以便之后的运行执行设置。",

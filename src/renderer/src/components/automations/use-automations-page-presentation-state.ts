@@ -1,6 +1,9 @@
 import { capturedAutomationOwner } from './hosts/automation-captured-owner'
 import { useCallback, useEffect, useMemo } from 'react'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import { getHostDisplayLabelOverrides } from '../../../../shared/execution-host/host-setting-overrides'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import { getAutomationTargetAvailability } from './hosts/automation-target-availability'

@@ -4,7 +4,7 @@ import {
   PULL_REQUEST_EVENT_PRESENTATION,
   pullRequestEventClientMessageId,
   pullRequestEventText
-} from '../../../shared/native-chat/native-chat-pull-request-event'
+} from '../../../shared/native-chat/transcript/notices/native-chat-pull-request-event'
 import type { PRWatchStorage } from './pr-watch-storage'
 import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
 import type { PRPendingDelivery } from './pr-check-event-tables'

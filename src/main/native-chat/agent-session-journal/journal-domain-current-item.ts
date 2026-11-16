@@ -1,4 +1,4 @@
-import { isAgentSessionContextClear } from '../../../shared/agent-session/agent-session-context-clear'
+import { isAgentSessionContextClear } from '../../../shared/agent-session/conversation-context/agent-session-context-clear'
 import { beforeJournalRequestWrite } from './journal-writer-request-events'
 import {
   JOURNAL_DOMAIN_ITEM_COLUMNS,
@@ -15,7 +15,7 @@ import {
   refreshJournalDomainQueueFailureReports
 } from './journal-domain-queue-failures'
 import { isTurnOrClear, reportedTurnItemId } from './queued-messages/journal-queue-failure-policy'
-import { isStructuredAgentSessionCommandEntry } from '../../../shared/agent-session/structured-agent-session-command-entry'
+import { isStructuredAgentSessionCommandEntry } from '../../../shared/agent-session/requests/structured-agent-session-command-entry'
 import type { JournalStopSettleFact } from './journal-writer-host-facts'
 import { normalizeJournalDomainItemBody } from './journal-domain-item-normalization'
 import { observeJournalDomainTurnScope } from './journal-domain-turn-scope'

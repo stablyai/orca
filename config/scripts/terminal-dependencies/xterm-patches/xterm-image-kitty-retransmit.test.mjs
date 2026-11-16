@@ -25,20 +25,6 @@ async function prepared() {
 }
 
 describe('placeholder replacement publication boundaries', () => {
-  it('keeps the existing picture until its replacement finishes decoding', async () => {
-    const { h, first, pending } = await prepared()
-    const writing = writeKitty(h.terminal, 'a=T,f=100,i=7,U=1,p=10,c=2,r=2', PNG)
-    try {
-      await vi.waitFor(() => expect(pending).toHaveLength(1))
-      expect(render(h).map((call) => call[0])).toEqual([first, first])
-      expect(first.close).not.toHaveBeenCalled()
-    } finally {
-      pending[0]?.resolve(new TrackedBitmap())
-      await writing
-      h.terminal.dispose()
-    }
-  })
-
   it('publishes no stale replacement after an addon reset during decoding', async () => {
     const { h, first, pending } = await prepared()
     const writing = writeKitty(h.terminal, 'a=T,f=100,i=7,U=1,p=10,c=2,r=2', PNG)

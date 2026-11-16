@@ -20,7 +20,7 @@ import type { TerminalCommandPaint } from '../input/terminal-command-paint'
 import type { PtyShellOwnershipMirror } from '../query/pty-shell-ownership-mirror'
 import type { LaunchEvidence } from '../launch/launch-evidence'
 import type { TerminalExitCause } from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
-import type { AgentSessionOwnerBinding } from '../../../../shared/agent-session/agent-session-host-authority'
+import type { AgentSessionOwnerBinding } from '../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 
 type RuntimeTerminalTailState = {
   tailBuffer: string[]

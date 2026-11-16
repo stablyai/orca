@@ -3,24 +3,19 @@ import type { ActionSheetAction } from '../../../components/sheets/ActionSheetMo
 import { translate } from '../../../i18n/mobile-i18n'
 import { resolveMobileNativeChat, type MobileNativeChatTab } from './mobile-native-chat-eligibility'
 
-type ToggleTab = MobileNativeChatTab & {
-  id: string
-  terminal: string | null
-}
-
 export function getMobileNativeChatToggleActions(args: {
-  terminalHandle: string | null
-  tabs: readonly ToggleTab[]
+  tab: (MobileNativeChatTab & { id: string }) | null
   isTabChatView: (tabId: string) => boolean
   nativeChatTranscriptIsLocalReadable: boolean
   onClose: () => void
   onToggle: (tabId: string) => void
 }): ActionSheetAction[] {
-  const { terminalHandle, tabs, isTabChatView, onClose, onToggle } = args
-  const tab = terminalHandle
-    ? tabs.find((candidate) => candidate.terminal === terminalHandle)
-    : null
-  if (!tab || !resolveMobileNativeChat(tab, args.nativeChatTranscriptIsLocalReadable)) {
+  const { tab, isTabChatView, onClose, onToggle } = args
+  // Structured agent-session tabs have no same-tab terminal to switch to.
+  if (
+    tab?.type !== 'terminal' ||
+    !resolveMobileNativeChat(tab, args.nativeChatTranscriptIsLocalReadable)
+  ) {
     return []
   }
   const isChat = isTabChatView(tab.id)

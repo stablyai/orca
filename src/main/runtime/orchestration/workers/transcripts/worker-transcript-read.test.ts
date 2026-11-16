@@ -215,4 +215,55 @@ describe('worker transcript reads', () => {
       limited: false
     })
   })
+
+  it('carries the newest turn marker of a Claude transcript, completed only by an explicit end', async () => {
+    const claudePath = join(directory, 'session-a.jsonl')
+    const row = (record: Record<string, unknown>) =>
+      `${JSON.stringify({ sessionId: 'session-a', timestamp: '2026-11-15T12:00:00.000Z', ...record })}\n`
+    const read = () =>
+      readWorkerTranscript({ agent: 'claude', sessionId: 'session-a', transcriptPath: claudePath })
+    await writeFile(
+      claudePath,
+      row({
+        type: 'user',
+        uuid: 'u1',
+        message: { role: 'user', content: [{ type: 'text', text: 'return FINISHED' }] }
+      })
+    )
+    expect(await read()).toMatchObject({ ok: true, turn: { state: 'working' } })
+
+    const assistant = (uuid: string, stopReason?: string) =>
+      row({
+        type: 'assistant',
+        uuid,
+        message: {
+          id: uuid,
+          role: 'assistant',
+          content: [{ type: 'text', text: 'FINISHED' }],
+          ...(stopReason ? { stop_reason: stopReason } : {})
+        }
+      })
+    await appendFile(claudePath, assistant('u2'))
+    expect(await read()).not.toHaveProperty('turn')
+    await appendFile(claudePath, assistant('u3', 'end_turn'))
+    expect(await read()).toMatchObject({ ok: true, turn: { state: 'completed' } })
+  })
+
+  it('carries whether a Codex rollout completed its task', async () => {
+    const event = (payload: Record<string, unknown>) =>
+      `${JSON.stringify({ timestamp: '2026-07-24T12:00:00.000Z', type: 'event_msg', payload })}\n`
+    const read = () =>
+      readWorkerTranscript({ agent: 'codex', sessionId: 'session-exact', transcriptPath })
+    await writeFile(
+      transcriptPath,
+      event({ type: 'task_started', turn_id: 't1' }) +
+        event({ type: 'user_message', message: 'return FINISHED' })
+    )
+    expect(await read()).toMatchObject({ ok: true, turn: { state: 'working' } })
+    await appendFile(
+      transcriptPath,
+      `${codexMessage('reply', 'FINISHED')}\n${event({ type: 'task_complete', turn_id: 't1' })}`
+    )
+    expect(await read()).toMatchObject({ ok: true, turn: { state: 'completed' } })
+  })
 })

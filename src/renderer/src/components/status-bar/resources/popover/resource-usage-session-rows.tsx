@@ -4,7 +4,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import type { BrowserWorkspace } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
-import { ORPHAN_WORKTREE_ID } from '../../../../../../shared/constants'
+import { ORPHAN_WORKTREE_ID } from '../../../../../../shared/terminal/pty/orphan-worktree-id'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { UNATTRIBUTED_REPO_ID } from '../workspace-attribution/merge-snapshot-and-sessions'
 import type {

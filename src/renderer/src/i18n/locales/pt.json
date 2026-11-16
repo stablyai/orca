@@ -471,6 +471,10 @@
     },
     "wslMoved": {
       "movedToHost": "Movido para o host {{distro}}",
+      "sectionTitle": "Movidos para hosts WSL ({{count}})",
+      "hide": "Ocultar desta lista",
+      "hiddenToast": "{{name}} foi ocultado desta lista",
+      "hiddenToastDescription": "“Usar novamente neste computador” continua no menu dele, no host {{distro}}.",
       "useHere": "Usar novamente neste computador",
       "useHereTitle": "Usar {{name}} novamente neste computador?",
       "useHereDescription": "O Orca vai abrir este projeto aqui como ele estava antes da movimentação. Seu código não é afetado: ele nunca foi movido. As alterações feitas no host {{distro}} desde a movimentação, como novas abas e chats, ficam no host e não voltam. Os projetos movidos junto com este também voltam. O projeto também continua no host {{distro}} até você removê-lo de lá. Esta janela será recarregada.",
@@ -1798,7 +1802,6 @@
       "defaultSurfaceKeptChat_other": "{{agents}} continuam como chats, como você definiu.",
       "defaultSurfaceSetAllChat": "Definir todos como Chat",
       "defaultSurfaceSetAllTerminal": "Definir todos como Terminal",
-      "sameAsChoice": "Igual a {{agent}} · {{choice}}",
       "modelListFallback": "Lista integrada. O Orca não conseguiu obter uma lista de modelos deste host.",
       "chatUnavailableOnWindows": "O {{value0}} Chat ainda não está disponível no Windows, então o {{value0}} abre em um terminal neste host. Chats em um host macOS ou Linux continuam funcionando.",
       "undetectedCommandHint": "Se a CLI do {{agent}} estiver instalada fora do PATH, informe o caminho completo do executável neste host.",
@@ -1830,9 +1833,6 @@
         "launchOptions": "Modelo e permissões",
         "savedLaunchOptions": "Opções salvas: {{value0}}. Servidores mais antigos usam as próprias configurações de permissão.",
         "effort": "Esforço"
-      },
-      "actionPermissions": {
-        "sameAsAgent": "Igual a {{agent}}"
       }
     },
     "ssh": {
@@ -12380,8 +12380,7 @@
           "issueCommand": "Comando de issue",
           "newVmRecipe": "Nova receita de VM",
           "vmRecipe": "Receita de VM",
-          "thisRepository": "este repositório",
-          "alwaysTrustRepo": "Sempre confiar em <code>orca.yaml</code> de <repo/>"
+          "thisRepository": "este repositório"
         },
         "ProjectGroupDeleteDialog": {
           "ca65b78f78": "Cancelar",
@@ -22891,7 +22890,7 @@
         "busy": "Trabalhando",
         "idle": "Ociosa",
         "settingTitle": "Ao trocar de conta com o Claude em execução",
-        "settingDescription": "Reiniciar continua cada conversa em execução na nova conta.",
+        "settingDescription": "Reiniciar continua cada conversa em execução na nova conta. As sessões ocupadas interrompem o que estão fazendo.",
         "keyword": {
           "restart": "reiniciar",
           "running": "em execução"
@@ -22917,15 +22916,17 @@
         "restartCount_one": "Reiniciar {{count}} sessão",
         "restartCount_other": "Reiniciar {{count}} sessões",
         "restartCount_many": "Reiniciar {{count}} sessões",
-        "reviewBody_one": "{{count}} outra sessão do Claude não foi movida para {{next}}.",
-        "reviewBody_other": "{{count}} outras sessões do Claude não foram movidas para {{next}}.",
-        "reviewBody_many": "{{count}} outras sessões do Claude não foram movidas para {{next}}.",
-        "body_one": "{{count}} sessão do Claude ainda está em execução em {{previous}}. Ao reiniciar, a conversa continua em {{next}}. As sessões ocupadas aguardam ficar ociosas antes de reiniciar.",
-        "body_other": "{{count}} sessões do Claude ainda estão em execução em {{previous}}. Ao reiniciar, cada conversa continua em {{next}}. As sessões ocupadas aguardam ficar ociosas antes de reiniciar.",
-        "body_many": "{{count}} sessões do Claude ainda estão em execução em {{previous}}. Ao reiniciar, cada conversa continua em {{next}}. As sessões ocupadas aguardam ficar ociosas antes de reiniciar.",
+        "reviewBody_one": "{{count}} sessão do Claude não foi movida para {{next}}.",
+        "reviewBody_other": "{{count}} sessões do Claude não foram movidas para {{next}}.",
+        "reviewBody_many": "{{count}} sessões do Claude não foram movidas para {{next}}.",
+        "body_one": "{{count}} sessão do Claude ainda está em execução em {{previous}}. Ao reiniciar, a conversa continua em {{next}}. As sessões ocupadas interrompem o que estão fazendo e reiniciam agora.",
+        "body_other": "{{count}} sessões do Claude ainda estão em execução em {{previous}}. Ao reiniciar, cada conversa continua em {{next}}. As sessões ocupadas interrompem o que estão fazendo e reiniciam agora.",
+        "body_many": "{{count}} sessões do Claude ainda estão em execução em {{previous}}. Ao reiniciar, cada conversa continua em {{next}}. As sessões ocupadas interrompem o que estão fazendo e reiniciam agora.",
         "reasonSharedSession": "Também aberta em outro painel",
         "sharedOne": "1 sessão do Claude permanece em {{previous}} porque outro painel tem a mesma conversa aberta. Reiniciar pode reabrir a conversa do outro painel.",
-        "sharedOther": "{{count}} sessões do Claude permanecem em {{previous}} porque outro painel tem a mesma conversa aberta. Reiniciar pode reabrir a conversa do outro painel."
+        "sharedOther": "{{count}} sessões do Claude permanecem em {{previous}} porque outro painel tem a mesma conversa aberta. Reiniciar pode reabrir a conversa do outro painel.",
+        "strandedOne": "1 sessão do Claude pode ainda estar em {{previous}}. Reinicie-a manualmente para trocar.",
+        "strandedOther": "{{count}} sessões do Claude podem ainda estar em {{previous}}. Reinicie-as manualmente para trocar."
       },
       "oauthUsage": {
         "title": "Consulta de uso do Claude",
@@ -23378,7 +23379,9 @@
       "chooseTransition": "Escolha uma alteração de status:",
       "cancel": "Cancelar",
       "noTransition": "Nenhuma alteração de status para {{column}} está disponível para {{key}}.",
-      "queryTooLong": "A consulta do Jira é muito longa. Encurte a consulta ou limpe os filtros."
+      "queryTooLong": "A consulta do Jira é muito longa. Encurte a consulta ou limpe os filtros.",
+      "reorderColumn": "Reordenar {{column}}",
+      "reorderColumnHint": "Issues nesta coluna: {{count}}. Use as setas para a esquerda e para a direita para movê-la."
     },
     "favourites": {
       "loadFailed": "Não foi possível carregar os favoritos do Jira.",
@@ -24046,7 +24049,6 @@
     }
   },
   "agentPicker": {
-    "catalogUnsupported": "Os modelos de {{agent}} não estão disponíveis neste host. Você pode manter suas escolhas ou usar argumentos.",
     "catalogUnsupportedLaunch": "Os modelos de {{agent}} não estão disponíveis neste host. Suas escolhas atuais continuam valendo.",
     "catalogFailed": "Não foi possível carregar os modelos de {{agent}}. Feche e reabra o seletor de agentes para tentar novamente.",
     "catalogSignIn": "Entre em {{agent}} para carregar seus modelos e reabra o seletor de agentes.",
@@ -24062,11 +24064,9 @@
     "setByArguments": "Definido pelos seus argumentos",
     "searchModels": "Pesquisar modelos",
     "noModels": "Nenhum modelo corresponde à pesquisa.",
-    "toggleArguments": "Mostrar ou ocultar argumentos",
     "argumentsTerminalHint": "Aplica-se apenas a inicializações no terminal (CLI)",
     "searchAgentModels": "Pesquisar modelos de {{agent}}…",
     "moreModelsWithCount": "Mais modelos ({{total}})",
-    "use": "Usar",
     "select": "Selecionar agente",
     "promptPlaceholder": "Adicione um prompt (opcional): / para skills, @ para arquivos",
     "promptPlaceholderFilesOnly": "Adicione um prompt (opcional): @ para arquivos",
@@ -24286,7 +24286,6 @@
     "setupTrust": {
       "reviewTitle": "Aprovar os novos comandos de configuração desta automação?",
       "reviewBody": "Uma execução pulou a configuração porque os comandos de configuração no <code>orca.yaml</code> da branch mudaram. Ao aprovar, as próximas execuções usarão esses comandos. Aprove apenas se você confia em <repo/>.",
-      "approve": "Aprovar",
       "approved": "Configuração aprovada. As próximas execuções desta automação vão executá-la.",
       "skippedSinceApproved": "A configuração não foi executada nesta execução porque os comandos de configuração no orca.yaml da branch mudaram. Eles já foram aprovados, então as próximas execuções vão executá-los.",
       "skippedReview": "A configuração não foi executada: a branch desta execução tem comandos de configuração no orca.yaml diferentes dos aprovados para esta automação. Revise-os para que as próximas execuções executem a configuração.",

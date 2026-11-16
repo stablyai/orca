@@ -4,7 +4,7 @@ import type { Translate } from '@/i18n/use-translate'
 import {
   classifyExplicitUrl,
   classifyHostUrl
-} from '@/components/tab-bar/tab-create-entry-url-classification'
+} from '@/components/tab-bar/create-entry/tab-create-entry-url-classification'
 import { isCmdJPaletteQueryTooLarge } from './palette-results'
 import { getBrowserWorkspaceActionAvailability } from './quick-action-context'
 import { runBrowserWorkspaceAction, type CmdJQuickAction } from './quick-actions'

@@ -17,7 +17,7 @@ import { toRuntimeWorktreeSelector } from '../../../../runtime/rpc/targets/runti
 import { translate } from '@/i18n/i18n'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { encodePushTargetClearForRuntimeRpc } from './hosted-review-link-update-encoding'
 
 type PendingDisplayNameWrite = {

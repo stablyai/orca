@@ -8,7 +8,7 @@ import type {
   CreateWorktreeArgs,
   CreateWorktreeResult
 } from '../../../../../../shared/worktree/create-types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { WorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import type {
   CrossStoreInferredSource,
@@ -34,6 +34,7 @@ export type CreateWorktreeCallOptions = {
   }
   legacyStartup?: () => WorktreeStartupLaunch | undefined
   setupOnly?: boolean
+  hookTrustContext?: 'vm'
   /** Hash of the confirmed setup content; see CreateWorktreeArgs. */
   approvedSetupHash?: string
   approvedSetupHashes?: string[]

@@ -1,6 +1,6 @@
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { ComputerUsePermissionStatusResult } from '../../../../shared/computer/computer-use-permissions-types'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { Repo } from '../../../../shared/repository/repo-types'
 
 export type SetupScriptProbeState = {

@@ -13,7 +13,7 @@ import { noteStructuredAgentSessionClose } from '../creation/structured-agent-se
 import {
   captureStructuredSessionSurface,
   retireCapturedStructuredSessionSurface
-} from '../../../../agent-session/structured-agent-session-close'
+} from '../../../../agent-session/lifecycle/structured-agent-session-close'
 
 export const STRUCTURED_AGENT_SESSION_CLOSE_METHOD = defineMethod({
   // Close only provider/in-memory state, preserving record/journal for future attachment.

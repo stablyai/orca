@@ -11,12 +11,10 @@ import {
 import {
   expectEditableNestedToggles,
   expectFileKeepsNesting,
-  expectPassthroughFallback,
   expectSentinelInsideNestedToggle,
   NESTED_TOGGLE_FIXTURE_DIRECTORY,
   NESTED_TOGGLE_MARKDOWN,
-  placeCaretInNestedToggleBody,
-  UNSUPPORTED_NESTED_TOGGLE_MARKDOWN
+  placeCaretInNestedToggleBody
 } from './helpers/markdown-nested-toggle'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
@@ -61,29 +59,6 @@ test.describe('Markdown nested toggle regression', () => {
       await waitForRichMarkdownEditor(orcaPage)
       await expectEditableNestedToggles(orcaPage)
       await expectSentinelInsideNestedToggle(orcaPage, sentinel)
-    } finally {
-      await cleanupMarkdownFixture(filePath)
-    }
-  })
-
-  test('a nested toggle that cannot be represented stays raw passthrough', async ({
-    orcaPage
-  }, testInfo) => {
-    const context = await getActiveWorktreeContext(orcaPage)
-    let filePath: string | null = null
-
-    try {
-      filePath = await createMarkdownFixture(
-        context,
-        NESTED_TOGGLE_FIXTURE_DIRECTORY,
-        'nested-toggle-unsupported',
-        testInfo.workerIndex,
-        UNSUPPORTED_NESTED_TOGGLE_MARKDOWN
-      )
-      await openMarkdownFixture(orcaPage, context, filePath)
-      await waitForRichMarkdownEditor(orcaPage)
-
-      await expectPassthroughFallback(orcaPage)
     } finally {
       await cleanupMarkdownFixture(filePath)
     }

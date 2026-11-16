@@ -3,10 +3,10 @@ import { replayPendingRuntimeRepoRemovalsForReadyServers } from '@/store/repos/p
 import {
   DEFAULT_HIDE_SLEEPING_WORKSPACES,
   DEFAULT_SHOW_SLEEPING_WORKSPACES
-} from '../../../../shared/constants'
+} from '../../../../shared/workspace-view/sleeping-workspace-visibility'
 import { DEFAULT_STATUS_BAR_ITEMS } from '../../../../shared/status-bar/status-bar-defaults'
 import { DEFAULT_WORKTREE_CARD_PROPERTIES } from '../../../../shared/worktree/row-display/card-properties'
-import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
+import type { PersistedUIState } from '../../../../shared/orca-profiles/persisted-ui-state-types'
 
 export function hydratePersistedUIAfterStartupRead({
   persistedUI,

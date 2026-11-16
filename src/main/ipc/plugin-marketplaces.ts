@@ -18,7 +18,7 @@ import type {
   PluginAutoUpdateState,
   PluginUpdateReviewNotice
 } from '../../shared/plugins/catalog/plugin-update-policy'
-import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 import { pluginFileTypeSchema } from '../../shared/plugins/contributions/plugin-file-type'
 import { findPluginFileTypeSuggestion } from '../plugins/catalog/plugin-file-type-suggestion'
 import { refreshInstalledPluginCatalog } from '../plugins/catalog/plugin-marketplace-shared-refresh'

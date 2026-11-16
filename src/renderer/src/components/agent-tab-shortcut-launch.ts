@@ -5,7 +5,7 @@ import { createNonSecureContextUuid } from '../../../shared/identifiers/non-secu
 import { translate } from '@/i18n/i18n'
 import { selectFloatingWorkspacePanelVisible } from '@/store/workspaces/floating/floating-workspace-panel-selector'
 import { useAppStore } from '../store'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/workspace/identity/floating-workspace-id'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {
   captureAgentTabLaunchContext,

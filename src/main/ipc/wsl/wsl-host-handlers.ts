@@ -45,11 +45,12 @@ import { reconcileWslHostBridgePorts } from '../../../shared/remote-runtime/host
 import { getPreferredPairedRuntimeConnection } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { requestOrcadTerminalCensus } from '../../managed-server/lifecycle/orcad-terminal-census-client'
 import type { WslHostRuntimeAccess } from '../../wsl/host-lifecycle/wsl-host-server-stop'
+import { changesWslHostAccounts } from '../../wsl/orcad/wsl-orcad-host-account-push'
 import {
-  changesWslHostAccounts,
-  pushWslOrcadHostAccountEnv
-} from '../../wsl/orcad/wsl-orcad-host-account-push'
-import { wslOrcadHostSupports } from '../../wsl/orcad/wsl-orcad-host-environments'
+  addWslHostThenSeedPermission,
+  pushHostAccounts,
+  seedHostPermission
+} from './wsl-host-desktop-settings-push'
 import { wslHostConnectOptions } from '../../wsl/host-lifecycle/wsl-host-connect-request'
 import { wireWslNodeRuntimePrefetch } from '../../wsl/execution/wsl-node-runtime-prefetch'
 
@@ -82,22 +83,6 @@ function wslHostRuntimeAccess(getUserDataPath: () => string): WslHostRuntimeAcce
         0
       )
   }
-}
-
-function pushHostAccounts(
-  getUserDataPath: () => string,
-  environmentId: string,
-  distro: string
-): void {
-  const call = (method: string, params: unknown) =>
-    callRuntimeEnvironment(getUserDataPath(), environmentId, method, params)
-  void pushWslOrcadHostAccountEnv({
-    environmentId,
-    distro,
-    call,
-    hostSupports: (capability) =>
-      wslOrcadHostSupports(environmentId, capability, () => call('status.get', undefined))
-  })
 }
 
 type WslHostHandlerArgs = {
@@ -265,7 +250,11 @@ export async function registerWslHostHandlers(args: WslHostHandlerArgs): Promise
       if (!wslHostsAcceptNewWork()) {
         return wslHostAddRefusal('disabled', 'newWorkPaused')
       }
-      const result = await wsl.add(request)
+      const result = await addWslHostThenSeedPermission(
+        () => wsl.add(request),
+        (environmentId) =>
+          seedHostPermission(args.getUserDataPath(), args.store.getSettings(), environmentId)
+      )
       if (result.ok) {
         noteWslHostUserAction({ kind: 'added', distro: request.distro })
       }

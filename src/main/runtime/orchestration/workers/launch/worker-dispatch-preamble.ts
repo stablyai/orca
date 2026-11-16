@@ -78,12 +78,8 @@ Do only this task, yourself: no subagents or helper workers unless the task asks
 \`\`\`sh
 ${
   params.unreadMail
-    ? chat
-      ? `  # Messages for this task arrive next, one at a time.
-
-`
-      : `  # Messages for this task are waiting; read them:
-  ${cli} orchestration check --terminal ${params.workerHandle}
+    ? `  # Messages for this task are waiting; read them:
+  ${cli} orchestration check${chat ? '' : ` --terminal ${params.workerHandle}`}
 
 `
     : ''

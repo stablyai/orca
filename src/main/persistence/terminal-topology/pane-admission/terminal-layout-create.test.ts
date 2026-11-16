@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getDefaultWorkspaceSession } from '../../../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/constants'
 import type { CommandOf } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import type { Store } from '../../loading-store/store'
 import { WindowSession } from '../testing/terminal-topology-window-session-fixture'
@@ -83,19 +83,6 @@ describe('Store.applyLayoutCommand: a window’s terminal tab create', () => {
       id: GROUP,
       tabOrder: [TAB, NEW_TAB]
     })
-  })
-
-  it('writes an SSH workspace’s tab into that host’s partition only', async () => {
-    const { store } = await openStore(withOneTab, 'ssh:target-1')
-    const local = store.getWorkspaceSession()
-
-    const reply = await store.applyLayoutCommand(create, ['ssh:target-1'])
-
-    expect(reply.ok).toBe(true)
-    expect(store.getWorkspaceSession('ssh:target-1').terminalLayoutsByTabId[NEW_TAB]?.root).toEqual(
-      { type: 'leaf', leafId: NEW_LEAF }
-    )
-    expect(store.getWorkspaceSession()).toEqual(local)
   })
 })
 

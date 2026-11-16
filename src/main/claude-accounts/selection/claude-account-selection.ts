@@ -3,7 +3,7 @@ import type {
   ClaudeManagedAccountSummary,
   ClaudeRateLimitAccountsState
 } from '../../../shared/agent-accounts/managed-account-types'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import {
   getManagedAccountDisplayName,
   normalizeManagedAccountDisplayName,

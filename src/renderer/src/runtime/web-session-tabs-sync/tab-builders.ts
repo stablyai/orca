@@ -4,7 +4,7 @@ import type { BrowserWorkspace } from '../../../../shared/browser/workspaces/bro
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { OpenFile } from '../../store/slices/editor/types/open-file'
-import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
+import { toRuntimeExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { ReadyEditorSurface, MirroredEditorTab } from './state'
 import type { WebSessionExistingTabIndex } from './placement/web-session-existing-tab-index'
 import { isReadyEditorTab } from './terminal-surfaces'

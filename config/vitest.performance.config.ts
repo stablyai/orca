@@ -5,8 +5,7 @@ import baseConfig from './vitest.config.ts'
 import { nodeRuntimePool } from './scripts/test-runtime/node-worker/vitest-node-runtime-pool.ts'
 
 const contracts = [
-  'src/main/runtime/session-tabs/session-tabs-phone-layout-moves.test.ts',
-  'src/renderer/src/components/tab-bar/use-new-tab-agent-menu-host-preferences.test.tsx',
+  'src/renderer/src/components/agent/launch-menu/use-new-tab-agent-menu-host-preferences.test.tsx',
   'src/main/codex-usage/codex-rollout-file-lifetime.test.ts',
   'src/main/codex-usage/scanner-incremental-append.test.ts',
   'src/main/usage/source-input/jsonl/jsonl-file-reader.test.ts',

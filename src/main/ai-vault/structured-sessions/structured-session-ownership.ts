@@ -1,4 +1,4 @@
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/execution-host'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -11,7 +11,7 @@ import { CLAUDE_STRUCTURED_AGENT } from '../../claude/structured/claude-structur
 import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
 import { resolveOrcaManagedCodexHomePath } from '../../codex/configuration/homes/codex-home-paths'
 import { agentSessionOwnerObservationIsLive } from '../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
-import { defaultAgentChatLabel } from '../../../shared/agent-session/agent-session-chat-label'
+import { defaultAgentChatLabel } from '../../../shared/agent-session/conversation-naming/agent-session-chat-label'
 import type { AiVaultListResult } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { historyRowFallsBackToChatLabel } from '../../../shared/agent-session/view/structured-chat-row-name'
 import type { AiVaultSearchResponse } from '../../../shared/ai-vault/search/ai-vault-search-types'
@@ -21,7 +21,7 @@ import {
 } from '../../../shared/ai-vault/search/ai-vault-search-transport'
 import type { AiVaultPrepareSessionResumeArgs } from '../../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import { ensureStructuredAgentSessionHostUnlessRefused } from '../../runtime/agent-session/structured-agent-session-host-refusal'
+import { ensureStructuredAgentSessionHostUnlessRefused } from '../../runtime/agent-session/installation/structured-agent-session-host-refusal'
 import {
   listStructuredProviderSessionOwnership,
   terminalResumeBlocked,

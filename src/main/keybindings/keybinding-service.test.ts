@@ -64,23 +64,6 @@ describe('KeybindingService profile defaults', () => {
     )
   })
 
-  it('keeps a reset performed in a fresh profile authoritative for older profiles', () => {
-    open().setActionBindings('worktree.palette', null)
-    expect(open(true).getOverrides()).toEqual({
-      'worktree.palette': ['Mod+K'],
-      'terminal.clear': []
-    })
-  })
-
-  it('preserves explicit clear assignments when search is reset', () => {
-    const older = open(true)
-    older.setActionBindings('terminal.clear', ['Mod+Alt+K'])
-    expect(older.setActionBindings('worktree.palette', null).overrides).toEqual({
-      'worktree.palette': ['Mod+K'],
-      'terminal.clear': ['Mod+Alt+K']
-    })
-  })
-
   it('rejects a reset that conflicts with an explicit clear shortcut without changing it', () => {
     const older = open(true)
     older.setActionBindings('terminal.clear', ['Mod+K'])

@@ -6,7 +6,7 @@ import {
   getRepoExecutionHostId,
   parseExecutionHostId,
   toRuntimeExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
