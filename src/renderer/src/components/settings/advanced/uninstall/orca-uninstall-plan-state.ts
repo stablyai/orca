@@ -12,10 +12,6 @@ export function isOrcaUninstallProblem(state: OrcaUninstallEntryState): boolean 
   return state === 'error' || state === 'needs-user'
 }
 
-export function isOrcaUninstallSettled(state: OrcaUninstallEntryState): boolean {
-  return state === 'removed' || state === 'kept-shared'
-}
-
 export function getOrcaUninstallStepStates(
   plan: OrcaUninstallPlan,
   step: OrcaUninstallStep
@@ -38,6 +34,26 @@ export function countOrcaUninstallProblems(plan: OrcaUninstallPlan): number {
   return ORCA_UNINSTALL_STEPS.flatMap((step) => getOrcaUninstallStepStates(plan, step)).filter(
     isOrcaUninstallProblem
   ).length
+}
+
+/** Kept for a reason that can still clear (an agent that failed), not because another Orca build uses it. */
+export function countOrcaUninstallPendingKept(plan: OrcaUninstallPlan): number {
+  if (plan.otherOrcaBuildName) {
+    return 0
+  }
+  return ORCA_UNINSTALL_STEPS.flatMap((step) => getOrcaUninstallStepStates(plan, step)).filter(
+    (state) => state === 'kept-shared'
+  ).length
+}
+
+/** The scripts stay while any agent still runs them; once a retry clears the last agent they can go. */
+export function shouldRemoveHookScriptsAfterAgentRetry(plan: OrcaUninstallPlan): boolean {
+  return (
+    plan.otherOrcaBuildName === null &&
+    plan.hookScripts !== null &&
+    plan.hookScripts.state !== 'removed' &&
+    plan.agents.every((entry) => entry.state === 'removed' || entry.state === 'kept-shared')
+  )
 }
 
 // An entry the step ran on but the returned plan no longer lists is gone from disk.

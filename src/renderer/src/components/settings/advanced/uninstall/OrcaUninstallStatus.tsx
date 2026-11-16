@@ -1,13 +1,13 @@
 import type React from 'react'
-import { Check, CircleAlert, Copy, Loader2 } from 'lucide-react'
+import { Check, CircleAlert, CircleMinus, Copy, Loader2 } from 'lucide-react'
 import type { OrcaUninstallEntryState } from '../../../../../../shared/uninstall/orca-uninstall-types'
 import { useClipboardTextCopyFeedback } from '@/hooks/clipboard/use-clipboard-text-copy-feedback'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
-import { isOrcaUninstallProblem, isOrcaUninstallSettled } from './orca-uninstall-plan-state'
+import { isOrcaUninstallProblem } from './orca-uninstall-plan-state'
 
-export type OrcaUninstallSlotKind = 'running' | 'ok' | 'problem' | 'blank'
+export type OrcaUninstallSlotKind = 'running' | 'ok' | 'kept' | 'problem' | 'blank'
 
 export function getOrcaUninstallSlotKind(
   states: readonly OrcaUninstallEntryState[],
@@ -19,8 +19,15 @@ export function getOrcaUninstallSlotKind(
   if (states.some(isOrcaUninstallProblem)) {
     return 'problem'
   }
-  if (states.length > 0 && states.every(isOrcaUninstallSettled)) {
+  // Green means gone from disk; anything kept reads neutral so it never passes for Done.
+  if (states.length > 0 && states.every((state) => state === 'removed')) {
     return 'ok'
+  }
+  if (
+    states.some((state) => state === 'kept-shared') &&
+    states.every((state) => state !== 'present')
+  ) {
+    return 'kept'
   }
   return 'blank'
 }
@@ -31,7 +38,7 @@ export function OrcaUninstallStatusIcon({
   detail
 }: {
   kind: OrcaUninstallSlotKind
-  /** The one-line reason, shown on hover for problem rows. */
+  /** The one-line reason, shown on hover for problem and kept rows. */
   detail?: string | null
 }): React.JSX.Element {
   const t = useTranslate()
@@ -51,9 +58,18 @@ export function OrcaUninstallStatusIcon({
       />
     )
   }
-  if (kind === 'problem') {
-    const label = detail || t('settings.uninstall.status.problem', 'Needs attention')
-    const icon = <CircleAlert aria-label={label} className="size-3.5 text-destructive" />
+  if (kind === 'problem' || kind === 'kept') {
+    const label =
+      detail ||
+      (kind === 'problem'
+        ? t('settings.uninstall.status.problem', 'Needs attention')
+        : t('settings.uninstall.status.kept', 'Kept'))
+    const icon =
+      kind === 'problem' ? (
+        <CircleAlert aria-label={label} className="size-3.5 text-destructive" />
+      ) : (
+        <CircleMinus aria-label={label} className="size-3.5 text-muted-foreground" />
+      )
     if (!detail) {
       return icon
     }

@@ -32,7 +32,8 @@ const AGENTS: [string, string[]][] = [
 
 function makePlan(
   state: (part: string) => OrcaUninstallEntryState,
-  installKind: OrcaUninstallInstallKind = 'mac-app'
+  installKind: OrcaUninstallInstallKind = 'mac-app',
+  otherOrcaBuildName: string | null = 'Orca RC'
 ): OrcaUninstallPlan {
   return {
     installKind,
@@ -53,7 +54,11 @@ function makePlan(
       state: state('service'),
       detail: null
     },
-    hookScripts: { location: '~/.orca/agent-hooks', state: state('scripts'), detail: null },
+    hookScripts: {
+      location: '~/.orca/agent-hooks',
+      state: state('scripts'),
+      detail: state('scripts') === 'kept-shared' ? 'Still used by codex.' : null
+    },
     hosts: [
       {
         hostId: 'devbox',
@@ -72,7 +77,7 @@ function makePlan(
         manualCommand: 'rm -rf ~/.orca-remote'
       }
     ],
-    otherOrcaBuildName: 'Orca RC',
+    otherOrcaBuildName,
     appPath: '/Applications/Orca.app',
     removeAppCommand: installKind === 'mac-homebrew' ? 'brew uninstall --cask orca' : null
   }
@@ -167,15 +172,23 @@ export const partialFailure = defineFixture({
   render: () => (
     <Frame
       value={model(
-        makePlan((part) => {
-          if (part === 'agent:codex') {
-            return 'error'
-          }
-          if (part === 'host:gpu-box') {
-            return 'needs-user'
-          }
-          return 'removed'
-        }),
+        makePlan(
+          (part) => {
+            if (part === 'agent:codex') {
+              return 'error'
+            }
+            if (part === 'host:gpu-box') {
+              return 'needs-user'
+            }
+            // Codex still runs the scripts, so the run kept them.
+            if (part === 'scripts') {
+              return 'kept-shared'
+            }
+            return 'removed'
+          },
+          'mac-app',
+          null
+        ),
         'done'
       )}
     />

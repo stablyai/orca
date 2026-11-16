@@ -11,7 +11,8 @@ import { translate } from '@/i18n/i18n'
 import {
   markOrcaUninstallStepFailed,
   mergeOrcaUninstallStepResult,
-  runOrcaUninstallSteps
+  runOrcaUninstallSteps,
+  shouldRemoveHookScriptsAfterAgentRetry
 } from './orca-uninstall-plan-state'
 
 export type OrcaUninstallPhase = 'idle' | 'running' | 'done'
@@ -97,30 +98,44 @@ export function useOrcaUninstall(): OrcaUninstallModel {
 
   const retry = useCallback(
     (args: OrcaUninstallRunStepArgs): void => {
-      const keys = args.only?.map((id) => orcaUninstallRetryKey(args.step, id)) ?? [
-        orcaUninstallRetryKey(args.step)
-      ]
-      setRetrying((prev) => new Set([...prev, ...keys]))
-      const fold = (update: (current: OrcaUninstallPlan) => OrcaUninstallPlan): void => {
-        if (mountedRef.current && planRef.current) {
-          // Into the latest plan, since retries can finish out of order.
-          applyPlan(update(planRef.current))
+      const run = (stepArgs: OrcaUninstallRunStepArgs): void => {
+        const keys = stepArgs.only?.map((id) => orcaUninstallRetryKey(stepArgs.step, id)) ?? [
+          orcaUninstallRetryKey(stepArgs.step)
+        ]
+        setRetrying((prev) => new Set([...prev, ...keys]))
+        const fold = (update: (current: OrcaUninstallPlan) => OrcaUninstallPlan): void => {
+          if (mountedRef.current && planRef.current) {
+            // Into the latest plan, since retries can finish out of order.
+            applyPlan(update(planRef.current))
+          }
         }
+        window.api.orcaUninstall
+          .runStep(stepArgs)
+          .then(
+            (next) => {
+              fold((current) => mergeOrcaUninstallStepResult(current, next, stepArgs))
+              // The run kept the scripts for the agent that failed; now nothing uses them.
+              if (
+                stepArgs.step === 'agent-hooks' &&
+                mountedRef.current &&
+                planRef.current &&
+                shouldRemoveHookScriptsAfterAgentRetry(planRef.current)
+              ) {
+                run({ step: 'hook-scripts' })
+              }
+            },
+            (error) => {
+              console.error(`[uninstall] retry of ${stepArgs.step} failed:`, error)
+              fold((current) => markOrcaUninstallStepFailed(current, stepArgs, failureDetail()))
+            }
+          )
+          .finally(() => {
+            if (mountedRef.current) {
+              setRetrying((prev) => new Set([...prev].filter((key) => !keys.includes(key))))
+            }
+          })
       }
-      window.api.orcaUninstall
-        .runStep(args)
-        .then(
-          (next) => fold((current) => mergeOrcaUninstallStepResult(current, next, args)),
-          (error) => {
-            console.error(`[uninstall] retry of ${args.step} failed:`, error)
-            fold((current) => markOrcaUninstallStepFailed(current, args, failureDetail()))
-          }
-        )
-        .finally(() => {
-          if (mountedRef.current) {
-            setRetrying((prev) => new Set([...prev].filter((key) => !keys.includes(key))))
-          }
-        })
+      run(args)
     },
     [applyPlan, mountedRef]
   )

@@ -1542,12 +1542,14 @@
         "loading": "Checking what Orca installed…",
         "done": "Removed. Delete the app to finish.",
         "problems_one": "1 item needs you before you delete the app.",
-        "problems_other": "{{count}} items need you before you delete the app."
+        "problems_other": "{{count}} items need you before you delete the app.",
+        "stillInUse": "Some Orca files are still in use, so they stay for now."
       },
       "status": {
         "running": "Removing",
         "done": "Done",
-        "problem": "Needs attention"
+        "problem": "Needs attention",
+        "kept": "Kept"
       },
       "stepFailed": "Orca could not finish this step.",
       "finishFailed": "Orca could not do that."

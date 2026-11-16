@@ -4,7 +4,10 @@ import type { OrcaUninstallPlan } from '../../../../../../shared/uninstall/orca-
 import { i18n } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { SettingsGroupDisclosure } from '../../section-layout/SettingsGroupDisclosure'
-import { countOrcaUninstallProblems } from './orca-uninstall-plan-state'
+import {
+  countOrcaUninstallPendingKept,
+  countOrcaUninstallProblems
+} from './orca-uninstall-plan-state'
 import { OrcaUninstallFooter } from './OrcaUninstallFooter'
 import { OrcaUninstallRows } from './OrcaUninstallRows'
 import { useOrcaUninstall, type OrcaUninstallModel } from './use-orca-uninstall'
@@ -68,6 +71,16 @@ function OrcaUninstallSummary({
   }
   if (model.phase === 'done') {
     const problems = countOrcaUninstallProblems(plan)
+    if (problems === 0 && countOrcaUninstallPendingKept(plan) > 0) {
+      return (
+        <>
+          {t(
+            'settings.uninstall.summary.stillInUse',
+            'Some Orca files are still in use, so they stay for now.'
+          )}
+        </>
+      )
+    }
     return (
       <>
         {problems === 0
