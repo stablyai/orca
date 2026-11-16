@@ -1,5 +1,5 @@
 import type { PreloadApi } from '../../../../preload/api-types'
-import { legacyBaseRefSearchResult } from '../../../../shared/base-ref-search-result'
+import { legacyBaseRefSearchResult } from '../../../../shared/worktree/base-refs/base-ref-search-result'
 import type { CloneTargetCheck } from '../../../../shared/git/clone/clone-target-check'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import { getDefaultCreateProjectParent } from '@/components/sidebar/project-admission/create/create-project-defaults'

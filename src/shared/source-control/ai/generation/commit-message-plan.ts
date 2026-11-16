@@ -2,7 +2,7 @@ import {
   textGenerationFailure,
   type TextGenerationFailureFields
 } from '../../../text-generation-failure-copy'
-import { findOptionOccurrence } from '../../../command-option-occurrence'
+import { findOptionOccurrence } from '../../../cli/command-option-occurrence'
 import { planAgentBinary } from '../../../agent-launch/startup/agent-command-plan'
 
 import type { CommandTemplateBackslash } from './commit-message-prompt'

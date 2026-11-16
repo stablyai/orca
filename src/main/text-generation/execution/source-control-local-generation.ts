@@ -1,5 +1,5 @@
 import { wslDistroForCommand } from '../../../shared/file-access/wsl-paths'
-import { mergeCommandEnvironment } from '../../../shared/command-environment'
+import { mergeCommandEnvironment } from '../../../shared/shell/launch/command-environment'
 import type { CommitMessagePlan } from '../../../shared/source-control/ai/generation/commit-message-plan'
 import {
   resolveCodexHomeProcessLockKeyForSpawnEnv,

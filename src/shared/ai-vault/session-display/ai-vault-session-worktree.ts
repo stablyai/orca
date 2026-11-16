@@ -13,7 +13,7 @@ import {
   isRuntimePathAbsolute,
   normalizeRuntimePathForComparison,
   normalizeRuntimePathSeparators
-} from '../../cross-platform-path'
+} from '../../file-access/cross-platform-path'
 import type { AiVaultSession } from '../contracts/ai-vault-types'
 import type { Worktree } from '../../worktree/types'
 import { matchAiVaultSessionCwdCandidates } from '../scanning/ai-vault-session-cwd-candidates'

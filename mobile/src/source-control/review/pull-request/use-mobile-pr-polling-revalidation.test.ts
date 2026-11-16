@@ -3,7 +3,7 @@ import { environmentManager, QueryClientProvider, type QueryClient } from '@tans
 import { act, create } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PRInfo } from '../../../../../src/shared/github/pull-requests/pull-request-types'
-import type { PRAutoRefreshCadence } from '../../../../../src/shared/review-refresh-policy'
+import type { PRAutoRefreshCadence } from '../../../../../src/shared/source-control/hosted-review/review-refresh-policy'
 import { createOrcaQueryClient } from '../../../query/orca-query-client'
 import { hostQueryKey } from '../../../query/host-query-key'
 import type { RpcResponse } from '../../../transport/rpc/rpc-wire-types'

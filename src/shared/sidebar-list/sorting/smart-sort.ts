@@ -4,7 +4,7 @@ import type { TerminalLayoutSnapshot, TerminalTab } from '../../workspace-layout
 import type { Worktree } from '../../worktree/types'
 import type { MigrationUnsupportedPtyEntry } from '../../agent-status/contracts/agent-status-ipc-payload'
 import { tabHasLivePty } from '../../tab-has-live-pty'
-import { getRuntimePathBasename } from '../../cross-platform-path'
+import { getRuntimePathBasename } from '../../file-access/cross-platform-path'
 import {
   buildWorkspaceRowComparator,
   recentActivityWithCreateGrace,

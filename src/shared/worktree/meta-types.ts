@@ -1,6 +1,6 @@
 import type { ExecutionHostId } from '../execution-host'
 import type { TaskSourceContext } from '../work-items/task-source-context'
-import type { EphemeralVmCheckoutMode } from '../orca-yaml-hook-types'
+import type { EphemeralVmCheckoutMode } from '../workspace-setup/orca-yaml-hook-types'
 import type {
   AutomationWorkspaceProvenance,
   CliWorkspaceProvenance,

@@ -2,7 +2,7 @@ import '../../../github/api/rate-limit'
 import type {
   GitHubCreateIssueFields,
   GitHubIssueUpdate
-} from '../../../../shared/issue-mutation-types'
+} from '../../../../shared/work-items/issue-mutation-types'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import type { GitHubPRReviewCommentInput } from '../../../../shared/github/comments/comment-types'
 import type { Repo } from '../../../../shared/repository/repo-types'

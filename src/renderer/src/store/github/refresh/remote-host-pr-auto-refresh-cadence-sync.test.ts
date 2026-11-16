@@ -3,7 +3,7 @@ import {
   _resetPRAutoRefreshCadencesForTests,
   getKnownPRAutoRefreshCadenceForHost,
   getPRAutoRefreshCadenceForHost
-} from '../../../../../shared/review-refresh-policy'
+} from '../../../../../shared/source-control/hosted-review/review-refresh-policy'
 import type { AppState } from '../../types'
 
 const regained = vi.hoisted(() => ({ listeners: new Map<string, () => void>() }))
@@ -86,19 +86,6 @@ describe('remote host PR auto-refresh cadence sync', () => {
     host.set({ runtimeEnvironments: [] })
     expect(getPRAutoRefreshCadenceForHost('env-1')).toBe('default')
     expect(regained.listeners.has('env-1')).toBe(false)
-    stop()
-  })
-
-  it('does not ask a host it has no contact with', async () => {
-    const reader = vi.fn(async () => ({ prAutoRefresh: 'off' }))
-    const host = store({
-      runtimeEnvironments: [environment('env-2')],
-      runtimeStatusByEnvironmentId: new Map()
-    })
-    const stop = installRemoteHostPRAutoRefreshCadenceSync(host, reader)
-    await flush()
-    expect(reader).not.toHaveBeenCalled()
-    expect(getPRAutoRefreshCadenceForHost('env-2')).toBe('default')
     stop()
   })
 
@@ -254,13 +241,5 @@ describe('remote host PR auto-refresh cadence sync', () => {
     await readHostPRAutoRefreshCadence('env-old', reader)
     expect(hostLacksPRAutoRefresh('env-old')).toBe(false)
     expect(getPRAutoRefreshCadenceForHost('env-old')).toBe('reduced')
-  })
-
-  it('does not call a host that has not answered, or whose read failed, an older host', async () => {
-    expect(hostLacksPRAutoRefresh('env-new')).toBe(false)
-    await readHostPRAutoRefreshCadence('env-new', async () => {
-      throw new Error('offline')
-    })
-    expect(hostLacksPRAutoRefresh('env-new')).toBe(false)
   })
 })

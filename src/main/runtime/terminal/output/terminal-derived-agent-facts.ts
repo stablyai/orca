@@ -8,7 +8,7 @@ import {
 } from '../../../daemon/emulation/osc7-uri-extraction'
 import { parseFileUriPathParts } from '../../../daemon/emulation/osc7-file-uri'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
-import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
+import { isWindowsAbsolutePathLike } from '../../../../shared/file-access/cross-platform-path'
 import type { ProcessedAgentStatusChunk } from '../../../../shared/agent-status/transport/agent-status-osc'
 import { mapExplicitAgentStateToRuntimeTerminalStatus } from '../../workspaces/process-listing/runtime-worktree-status-projection'
 import { programStatusStateOutlivesProgram } from '../../../../shared/program-status/protocol'

@@ -28,7 +28,7 @@ import {
   effectiveExternalWorktreeVisibility,
   isLegacyRepoForExternalWorktreeVisibility
 } from '../../../../../../shared/worktree/visibility/external-worktree-visibility'
-import { getRuntimePathBasename } from '../../../../../../shared/cross-platform-path'
+import { getRuntimePathBasename } from '../../../../../../shared/file-access/cross-platform-path'
 import {
   getWorktreeVisibilityOverrideNotice,
   getWorktreeVisibilitySourceNote,

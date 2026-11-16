@@ -4,7 +4,7 @@ import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import {
   reviewRefreshIntervalMs,
   type PRAutoRefreshCadence
-} from '../../../../shared/review-refresh-policy'
+} from '../../../../shared/source-control/hosted-review/review-refresh-policy'
 import {
   hostedReviewRepoScope,
   scopeGeneration
