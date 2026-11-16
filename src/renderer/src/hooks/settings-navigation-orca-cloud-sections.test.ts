@@ -46,7 +46,7 @@ describe('Orca Cloud settings group', () => {
       'cloud-local-commands',
       'cloud-api-keys'
     ])
-    // Routines are parked until they join Automations (cloud-routines-ui.ts): no section, no search.
+    // Routines are managed in the web console: no section, no search.
     expect(
       sections
         .flatMap((section) => section.searchEntries ?? [])

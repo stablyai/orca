@@ -255,6 +255,7 @@ export function compileNetworkPolicy(input: EgressPolicyInput): NetworkPolicy {
         ...(scope?.methods ? { method: [...scope.methods] } : {})
       }
       if (route.via === 'transform') {
+        assertTransformScope(scope)
         return { match, transform: [{ headers: { ...(route.extraHeaders ?? {}), [header]: route.value } }] }
       }
       if (route.via === 'respond') {
@@ -275,6 +276,23 @@ export function compileNetworkPolicy(input: EgressPolicyInput): NetworkPolicy {
     allow['*'] = []
   }
   return { allow }
+}
+
+/**
+ * Design §4.4: a firewall swap is never scoped by a path PREFIX. The firewall matches the raw path and the host
+ * normalizes it (`/a/%2e%2e/b`), so a prefix can't pin a credential to part of an API. The one exception scopes by
+ * method only: `/` with GET/HEAD (APPROVALS-REFUSED: reads swapped, everything else inspected by the proxy).
+ */
+function assertTransformScope(scope: PathMatch | null): void {
+  if (!scope || scope.exact !== undefined) {
+    return
+  }
+  // A scope with neither compiles to a `/` prefix (compileNetworkPolicy above).
+  const prefix = scope.startsWith ?? '/'
+  const readsOnly = prefix === '/' && scope.methods !== undefined && scope.methods.length > 0 && scope.methods.every((method) => method === 'GET' || method === 'HEAD')
+  if (!readsOnly) {
+    throw new Error(`a transform can't be scoped by a path prefix (${prefix}); only '/' with GET/HEAD is allowed`)
+  }
 }
 
 function denyRule(): NetworkPolicyRule {

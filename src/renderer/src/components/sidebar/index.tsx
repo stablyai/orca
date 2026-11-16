@@ -4,7 +4,6 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
 import SidebarHeader from './SidebarHeader'
 import SidebarNav from './SidebarNav'
-import { SidebarFollowingPanel } from './team/SidebarFollowingPanel'
 import { setSidebarLiveWidth } from './sidebar-live-width'
 import SetupScriptPromptCard from './SetupScriptPromptCard'
 import WorktreeList from './worktree-list/listing/WorktreeList'
@@ -189,7 +188,6 @@ function Sidebar({
           {sidebarOpen && (
             <>
               <SidebarNav />
-              <SidebarFollowingPanel />
               <SidebarHeader
                 activityBadgeTarget={setAgentBadgeTarget}
                 onWorkspaceBoardMenuOpenChange={setWorkspaceBoardMenuOpen}

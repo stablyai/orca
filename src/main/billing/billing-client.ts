@@ -1,11 +1,7 @@
 // HTTP calls behind "Plan & billing": mint a short-lived billing token from Orca Cloud auth,
 // then call the billing service with it. Pure (fetch injected) so it is testable without Electron.
 import { z } from 'zod'
-import type {
-  OrcaBillingEntitlement,
-  OrcaBillingOverageArgs,
-  OrcaBillingTeamPlan
-} from '../../shared/orca-billing'
+import type { OrcaBillingEntitlement, OrcaBillingTeamPlan } from '../../shared/orca-billing'
 import { OrcaCloudRequestError } from '../orca-profiles/cloud-auth/profile-cloud-client'
 import { normalizeEntitlement } from './billing-entitlement-schema'
 
@@ -34,7 +30,6 @@ const ErrorBody = z.object({ error: z.string().max(64) })
 const TokenBody = z.object({
   billingToken: z.string().min(1).max(MAX_TOKEN_LENGTH)
 })
-const UrlBody = z.object({ url: z.string() })
 const JsonObject = z.record(z.string(), z.unknown())
 
 async function readErrorCode(response: Response): Promise<string | null> {
@@ -153,25 +148,6 @@ export async function billingRequest(
   return json.data
 }
 
-// Only Stripe's hosted pages may be opened from a billing response.
-const STRIPE_HOSTS = new Set(['checkout.stripe.com', 'billing.stripe.com'])
-
-export function assertStripeHostedUrl(value: unknown): string {
-  if (typeof value !== 'string' || !URL.canParse(value)) {
-    throw new Error('invalid_billing_url')
-  }
-  const url = new URL(value)
-  if (
-    url.protocol !== 'https:' ||
-    !STRIPE_HOSTS.has(url.hostname) ||
-    url.username ||
-    url.password
-  ) {
-    throw new Error('invalid_billing_url')
-  }
-  return url.toString()
-}
-
 export async function fetchEntitlement(
   endpoints: BillingEndpoints,
   token: string,
@@ -179,35 +155,6 @@ export async function fetchEntitlement(
 ): Promise<OrcaBillingEntitlement> {
   return normalizeEntitlement(
     await billingRequest(endpoints, token, 'GET', 'v1/billing/entitlements', undefined, fetchImpl)
-  )
-}
-
-export async function createPortalUrl(
-  endpoints: BillingEndpoints,
-  token: string,
-  fetchImpl: typeof fetch = fetch
-): Promise<string> {
-  const body = await billingRequest(endpoints, token, 'POST', 'v1/billing/portal', {}, fetchImpl)
-  return assertStripeHostedUrl(UrlBody.safeParse(body).data?.url)
-}
-
-export async function updateOverage(
-  endpoints: BillingEndpoints,
-  token: string,
-  args: OrcaBillingOverageArgs,
-  fetchImpl: typeof fetch = fetch
-): Promise<OrcaBillingEntitlement> {
-  return normalizeEntitlement(
-    await billingRequest(
-      endpoints,
-      token,
-      'POST',
-      'v1/billing/overage',
-      args.spendCapCents === undefined
-        ? { enabled: args.enabled }
-        : { enabled: args.enabled, spendCapCents: args.spendCapCents },
-      fetchImpl
-    )
   )
 }
 

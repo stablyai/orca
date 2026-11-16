@@ -1,18 +1,13 @@
 // One action set per cloud workspace, the same on every surface: the "Open cloud
 // workspace…" list's ⋯ menu and the sidebar's context menu both render these groups, in this order:
-// Open, Share, Lifecycle, Danger. Each surface leaves out only what it already shows elsewhere (the
+// Open, Owner, Lifecycle, Danger. Each surface leaves out only what it already shows elsewhere (the
 // sidebar row *is* the open workspace; the list has no local-only items) and never invents its own.
-import { cloudTeamSharingEnabled } from '@/lib/orca-cloud/cloud-team-sharing-flag'
 import type { CloudWorkspace } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 
 export type CloudWorkspaceAction =
   | 'open'
   | 'read'
   | 'wake'
-  | 'copyLink'
-  | 'copyWorkspaceLink'
-  | 'share'
-  | 'makePrivate'
   | 'reassignOwner'
   | 'restart'
   | 'sleep'
@@ -21,14 +16,11 @@ export type CloudWorkspaceAction =
   | 'delete'
 
 export type CloudWorkspaceActionGroup = {
-  id: 'open' | 'share' | 'lifecycle' | 'danger'
+  id: 'open' | 'owner' | 'lifecycle' | 'danger'
   actions: CloudWorkspaceAction[]
 }
 
-export type CloudWorkspaceActionInput = Pick<
-  CloudWorkspace,
-  'status' | 'archivedAt' | 'visibility'
-> & {
+export type CloudWorkspaceActionInput = Pick<CloudWorkspace, 'status' | 'archivedAt'> & {
   surface: 'list' | 'sidebar'
   canOpen: boolean
   canManage: boolean
@@ -38,8 +30,6 @@ export type CloudWorkspaceActionInput = Pick<
   canRestart: boolean
   /** Teammates to hand it to (the list only). */
   hasMembers?: boolean
-  /** Share with team / Make private offered (default: the account's capability). */
-  teamSharing?: boolean
 }
 
 export function cloudWorkspaceActionGroups(
@@ -51,20 +41,9 @@ export function cloudWorkspaceActionGroups(
   if (list && input.canOpen) {
     open.push(...(input.readableAsleep ? (['read', 'wake'] as const) : (['open'] as const)))
   }
-  if (list) {
-    open.push('copyLink')
-  }
-  open.push('copyWorkspaceLink')
 
-  const share: CloudWorkspaceAction[] = []
-  if (input.canManage && (input.teamSharing ?? cloudTeamSharingEnabled())) {
-    share.push(input.visibility === 'private' ? 'share' : 'makePrivate')
-  }
-  if (input.canManage) {
-    if (list && input.hasMembers) {
-      share.push('reassignOwner')
-    }
-  }
+  const owner: CloudWorkspaceAction[] =
+    input.canManage && list && input.hasMembers ? ['reassignOwner'] : []
 
   const lifecycle: CloudWorkspaceAction[] = []
   if (input.canManage) {
@@ -82,7 +61,7 @@ export function cloudWorkspaceActionGroups(
   return (
     [
       { id: 'open', actions: open },
-      { id: 'share', actions: share },
+      { id: 'owner', actions: owner },
       { id: 'lifecycle', actions: lifecycle },
       { id: 'danger', actions: danger }
     ] satisfies CloudWorkspaceActionGroup[]

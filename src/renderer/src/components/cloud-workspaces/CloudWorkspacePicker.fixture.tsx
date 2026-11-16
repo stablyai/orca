@@ -1,5 +1,5 @@
-// "Open cloud workspace…" (replaces the Home list): a teammate's shared workspace, one started on
-// another computer, the empty and error states, and the focused lists other surfaces open it with.
+// "Open cloud workspace…" (replaces the Home list): workspaces started on another computer, the
+// empty and error states, and the focused lists other surfaces open it with.
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { CloudWorkspacePickerDialog } from './CloudWorkspacePicker'
 import {
@@ -10,7 +10,6 @@ import {
 import {
   AUTH_STATUS,
   FIXTURE_NOW,
-  presence,
   stubCloudWorkspacesApi,
   workspace
 } from './cloud-workspaces.test-fixture'
@@ -29,22 +28,15 @@ function rows(): CloudWorkspace[] {
   return [
     workspace({
       title: 'Refund webhooks',
-      repo: { url: 'https://github.com/acme/payments.git', branch: 'refund-webhooks' },
-      ownerUserId: 'user_grace',
-      createdBy: 'user_grace',
-      access: 'can_open',
-      presence: [presence('user_grace', 'typing')]
+      repo: { url: 'https://github.com/acme/payments.git', branch: 'refund-webhooks' }
     }),
     workspace({
       title: 'Ledger migration',
-      ownerUserId: 'user_linus',
-      createdBy: 'user_linus',
-      access: 'can_open',
       status: 'suspended',
       lastActivityAt: FIXTURE_NOW - 3 * 3_600_000
     }),
     workspace({
-      // Yours, started on your laptop: this computer has no row for it yet.
+      // Started on your laptop: this computer has no row for it yet.
       title: 'Docs search',
       repo: { url: 'https://github.com/acme/docs.git', branch: 'search' },
       status: 'suspended',
@@ -75,8 +67,8 @@ function picker(
   })
 }
 
-/** From the Add project menu or the palette: a teammate's shared one, and one from another computer. */
-export const sharedByTeammate = picker(
+/** From the Add project menu or the palette: ones started on another computer. */
+export const notInSidebar = picker(
   { kind: 'open' },
   () => Promise.resolve({ ok: true, value: rows() }),
   '[data-cloud-workspace-row]'
@@ -94,13 +86,6 @@ export const error = picker(
   { kind: 'open' },
   () => Promise.resolve({ ok: false, error: 'unavailable' }),
   '[data-slot="inline-error"]'
-)
-
-/** A teammate's profile, "Show all": their workspaces. */
-export const teammate = picker(
-  { kind: 'teammate', userId: 'user_grace' },
-  () => Promise.resolve({ ok: true, value: rows() }),
-  '[data-cloud-workspace-row]'
 )
 
 /** At the running-sandbox limit: your running ones, to put one to sleep. */

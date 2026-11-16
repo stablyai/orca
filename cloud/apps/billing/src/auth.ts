@@ -21,6 +21,10 @@ const ClaimsSchema = z.object({
   // in confirmed emails. The GitHub user id is present when the user signed in with GitHub.
   emailVerified: z.boolean().optional(),
   githubUserId: z.string().regex(/^\d{1,20}$/).optional(),
+  // The browser's address when auth minted the token for a web console request (auth's console
+  // proxy proves it). The trial's per-address limit counts it in place of cf-connecting-ip, which
+  // for a console call is auth's own address. Anything that is not an IP is ignored, not refused.
+  clientIp: z.union([z.ipv4(), z.ipv6()]).optional().catch(undefined),
   purpose: z.literal('billing')
 })
 
@@ -31,6 +35,8 @@ export type BillingCaller = {
   email?: string
   emailVerified?: boolean
   githubUserId?: string
+  /** The browser behind a console request (auth's `clientIp` claim). */
+  clientIp?: string
 }
 
 const keySets = new Map<string, JWTVerifyGetKey>()
@@ -157,7 +163,8 @@ export async function authenticateDesktop(
       canManage: !claims.org || claims.orgRole === 'owner' || claims.orgRole === 'admin',
       email: claims.email,
       ...(claims.emailVerified === undefined ? {} : { emailVerified: claims.emailVerified }),
-      ...(claims.githubUserId ? { githubUserId: claims.githubUserId } : {})
+      ...(claims.githubUserId ? { githubUserId: claims.githubUserId } : {}),
+      ...(claims.clientIp ? { clientIp: claims.clientIp } : {})
     }
   } catch {
     return null

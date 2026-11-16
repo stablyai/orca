@@ -4,13 +4,13 @@ import { CloudWorkspaceSchema } from './cloud-workspaces-wire'
 const acting = CloudWorkspaceSchema.shape.githubActing
 const you = CloudWorkspaceSchema.shape.you
 
-describe('git actor wire fields', () => {
+describe('wire fields', () => {
   it('parses member and bot, and tolerates older or newer control planes', () => {
+    // `until` (the retired shared-workspace window) still parses and is dropped.
     expect(acting.parse({ actingAs: 'member', userId: 'u1', login: 'ada', until: 5 })).toEqual({
       actingAs: 'member',
       userId: 'u1',
-      login: 'ada',
-      until: 5
+      login: 'ada'
     })
     expect(acting.parse({ actingAs: 'bot', reason: 'window_expired' })).toEqual({
       actingAs: 'bot',

@@ -129,21 +129,13 @@ function failureActions(
           ? [
               {
                 key: 'billing',
+                // Overage, the spend cap and payment are changed on the web console's billing page.
                 label:
                   failure.kind === 'payment'
-                    ? t(
-                        'auto.components.worktree.creation.VmBuildFailureCard.updatePayment',
-                        'Update payment method'
-                      )
+                    ? t('worktreeCreation.billingBlock.updateInBrowser', 'Update in browser')
                     : failure.kind === 'spendCap'
-                      ? t(
-                          'auto.components.worktree.creation.VmBuildFailureCard.raiseSpendCap',
-                          'Raise spend cap'
-                        )
-                      : t(
-                          'auto.components.worktree.creation.VmBuildFailureCard.turnOnOverage',
-                          'Turn on overage'
-                        ),
+                      ? t('worktreeCreation.billingBlock.raiseInBrowser', 'Raise in browser')
+                      : t('worktreeCreation.billingBlock.turnOnInBrowser', 'Turn on in browser'),
                 icon: <CreditCard />,
                 onClick: actions.onOpenBilling
               },

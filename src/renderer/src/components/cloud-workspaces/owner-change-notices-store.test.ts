@@ -23,7 +23,6 @@ function memoryStorage(): Pick<Storage, 'getItem' | 'setItem'> {
 function identity(overrides: Partial<CloudWorkspaceIdentity>): CloudWorkspaceIdentity {
   return {
     number: 7,
-    link: null,
     title: 'Checkout retries',
     ownerUserId: 'user_ada',
     createdAt: NOW - 10 * DAY,

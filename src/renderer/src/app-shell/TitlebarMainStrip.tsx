@@ -11,7 +11,6 @@ import { hasCustomTitleBar } from './app-window-chrome'
 import type { AppChromeLayout } from './use-app-chrome-layout'
 import { RunActionButton } from '../components/run-actions/RunActionButton'
 import { CloudWorkspaceOwnerChangedChip } from '../components/cloud-workspaces/CloudWorkspaceOwnerChangedChip'
-import { CloudWorkspacePeople } from '../components/cloud-workspaces/CloudWorkspacePeople'
 
 export function RightSidebarToggle(): React.JSX.Element {
   const t = useTranslate()
@@ -71,10 +70,7 @@ export function TitlebarMainStrip({ layout }: { layout: AppChromeLayout }): Reac
         />
       )}
       {layout.workspaceChromeActive && !layout.creationLayoutActive && activeWorktreeId ? (
-        <>
-          <CloudWorkspacePeople worktreeId={activeWorktreeId} />
-          <CloudWorkspaceOwnerChangedChip worktreeId={activeWorktreeId} />
-        </>
+        <CloudWorkspaceOwnerChangedChip worktreeId={activeWorktreeId} />
       ) : null}
       {layout.workspaceChromeActive && !layout.creationLayoutActive && activeWorktreeId ? (
         <RunActionButton worktreeId={activeWorktreeId} />

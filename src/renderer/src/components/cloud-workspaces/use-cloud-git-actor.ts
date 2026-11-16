@@ -1,7 +1,7 @@
 // Who the cloud workspace a worktree belongs to acts as on GitHub (its
-// `githubActing` and the viewer's `you`), for the source control panel (one read per workspace). Re-read when Orca is focused,
-// when a shared workspace's hour lapses (`until`), and every two minutes while mounted, since
-// another member sending also changes it.
+// `githubActing` and the viewer's `you`), for the source control panel (one read per workspace).
+// Re-read when Orca is focused (connecting GitHub finishes in the browser) and every two minutes
+// while mounted (a GitHub connection can lapse server-side).
 import { useEffect, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
 import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
@@ -51,7 +51,6 @@ export function useCloudGitActor(worktreeId: string | null): CloudGitActing | nu
     },
     () => (sandboxId ? (entries.get(sandboxId)?.value ?? null) : null)
   )
-  const until = value?.githubActing?.actingAs === 'member' ? value.githubActing.until : undefined
   useEffect(() => {
     if (!sandboxId) {
       return
@@ -69,16 +68,5 @@ export function useCloudGitActor(worktreeId: string | null): CloudGitActing | nu
       stopTicking()
     }
   }, [sandboxId])
-  useEffect(() => {
-    if (!sandboxId || until === undefined) {
-      return
-    }
-    // A second past the window, so the server already answers with the bot.
-    const timer = setTimeout(
-      () => void refreshCloudGitActor(sandboxId, true),
-      Math.max(0, until - Date.now()) + 1_000
-    )
-    return () => clearTimeout(timer)
-  }, [sandboxId, until])
   return value
 }

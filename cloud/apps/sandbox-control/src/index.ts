@@ -28,11 +28,10 @@
 // cannot enroll devices, manage secrets or connect GitHub.
 //   /v1/team/workspaces[/:id[/presence|wake|lease|grants[/:grantId]]], /v1/team/links/resolve, /v1/team/prompts,
 //   /v1/team/prefs (src/workspace-prefs.ts), /v1/team/org (src/org-slugs.ts)
-//          team workspace registry, presence, per-device grants (src/workspaces.ts, src/grants.ts)
-//          POST /v1/team/workspaces/:id/wake?wait=30s: any member who can open it wakes it (single-flight,
+//          workspace registry (owner only), presence reports (no-op), the owner's device grants (src/workspaces.ts, src/grants.ts)
+//          POST /v1/team/workspaces/:id/wake?wait=30s: its owner wakes it (single-flight,
 //          billed to the account, counted on the owner's seat like every wake) -> {state, endpoint: null, …}
-//   /v1/team/members/:userId/(profile|poke), /v1/team/pokes[/settings|/seen]
-//          teammate profiles (usage heatmap, recent workspaces) and opt-in Pokes (src/team-presence.ts)
+//   /v1/team/members/*, /v1/team/pokes*, PUT|DELETE …/follow: 410 gone (removed with team sharing; one release)
 // /v1/sandboxes/* is the owner's lifecycle API: only the workspace's owner (and, for suspend and
 // destroy, an org admin) can reach a row there, because resume hands back an orcad pairing offer.
 // Browser (GitHub redirects): GET /v1/github/setup, GET /v1/github/callback
@@ -62,7 +61,6 @@ import { provisionWorkspaceToken } from './api/settings'
 import { docsPage, openApiDocument } from './api/openapi'
 import { handleDeviceSessionsRoute } from './device-sessions'
 import { removeMember } from './member-removal'
-import { setFollow } from './workspace-follows'
 import { createRoutinesApi } from './routines/api'
 import { handleRoutineHook, isRoutineHookPath } from './routines/hooks'
 import { tickRoutines } from './routines/runs'
@@ -231,6 +229,7 @@ import {
   LinkOtherOrgError,
   PatchSchema,
   PresenceSchema,
+  reportPresence,
   WORKSPACE_ERROR_STATUS,
   WorkspaceError,
   canOpen,
@@ -239,13 +238,11 @@ import {
   listWorkspaces,
   patchWorkspace,
   assertCanManageWorkspace,
-  reportPresence,
   requireVisible,
   resolveLink,
   workspaceViews
 } from './workspaces'
 import { MemberNamesSchema, rememberMemberNames, rememberCallerName } from './member-names'
-import { TeamPresenceError, teamPresenceRoute } from './team-presence'
 import { sweepSessionCpu } from './session-cpu'
 import type { SandboxCaller } from './auth'
 
@@ -1255,6 +1252,11 @@ function githubActingOptions(env: Env): GithubActingOptions {
   return {
     enabled: (accountId) => env.GH_AS_MEMBER === 'on' && env.MEMBER_GIT_IDENTITY !== 'off' && memberGit(accountId)
   }
+}
+
+/** Removed with team sharing: profiles, Pokes, follows. 410 with a reason older desktops can show (one release). */
+function teamFeatureGone(): Response {
+  return json({ error: 'gone', reason: 'team_features_removed' }, 410)
 }
 
 /** Git as the owner (MEMBER_GIT_IDENTITY: unset = on for every account, `off`, `on`, or `accounts:<id>,<id>`). */
@@ -2407,24 +2409,8 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
     return request.method === 'GET' ? json(await listWorkspaces(db, caller, url, now, githubActingOptions(env))) : fail('not_found', 404)
   }
   if (url.pathname.startsWith('/v1/team/members/') || url.pathname.startsWith('/v1/team/pokes')) {
-    try {
-      const answer = await teamPresenceRoute(db, caller, request, url, now, () => readJson(request), {
-        activitySharing: env.TEAMMATE_ACTIVITY_SHARING === 'team' ? 'team' : 'opt_in'
-      })
-      return answer === null ? fail('not_found', 404) : json(answer)
-    } catch (error) {
-      if (error instanceof TeamPresenceError) {
-        const response = json(
-          { error: error.code, ...(error.reason ? { reason: error.reason } : {}), ...(error.retryAfterMs ? { retryAfterMs: error.retryAfterMs } : {}) },
-          error.status
-        )
-        if (error.retryAfterMs) {
-          response.headers.set('retry-after', String(Math.ceil(error.retryAfterMs / 1000)))
-        }
-        return response
-      }
-      throw error
-    }
+    // Teammate profiles and Pokes are gone with team sharing; older desktops get a clear answer for one release.
+    return teamFeatureGone()
   }
   const match = /^\/v1\/team\/workspaces\/(sbx_[0-9a-f]{24})(?:\/(presence|follow|wake|lease|grants|sent|read-snapshot)(?:\/(grt_[0-9a-f]{24}))?)?$/.exec(url.pathname)
   if (!match) {
@@ -2456,11 +2442,11 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
     return json({ ok: true })
   }
   if (route === 'PUT follow' || route === 'DELETE follow') {
-    // Following needs seeing it; an admin addressing a private row for management can't follow it.
+    // Following is gone with team sharing (only the owner sees a workspace).
     if (!canSee(caller, row)) {
       throw new WorkspaceError('not_found')
     }
-    return json(await setFollow(db, caller, row, route === 'PUT follow', now))
+    return teamFeatureGone()
   }
   if (route === 'POST presence') {
     const body = PresenceSchema.safeParse(await readJson(request))

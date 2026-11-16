@@ -132,7 +132,8 @@ export function installLocalCommands(userDataPath: string): void {
       return record
         ? {
             isOwner: record.access === 'owner',
-            shared: record.visibility !== 'private',
+            // Only a control plane that still shares workspaces says `team`; then it asks first.
+            shared: record.visibility === 'team',
             title: record.title
           }
         : null

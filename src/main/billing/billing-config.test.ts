@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from 'vitest'
 vi.mock('electron', () => ({ app: { isPackaged: false } }))
 
 import { getBillingEndpoints } from './billing-config'
-import { billingOverageArgsFromUnknown } from '../ipc/profiles/orca-profile-billing-handlers'
 
 const authConfig = { apiBaseUrl: 'https://login.onorca.dev' }
 
@@ -25,22 +24,5 @@ describe('billing config', () => {
     const env = { ORCA_BILLING_API_URL: 'http://127.0.0.1:8790' }
     expect(getBillingEndpoints(authConfig, env, false)?.billingApiUrl).toBe('http://127.0.0.1:8790')
     expect(getBillingEndpoints(authConfig, env, true)).toBeNull()
-  })
-})
-
-describe('billing IPC args', () => {
-  it('accepts overage toggles with an optional whole-cent cap', () => {
-    expect(billingOverageArgsFromUnknown({ enabled: false })).toEqual({ enabled: false })
-    expect(billingOverageArgsFromUnknown({ enabled: true, spendCapCents: 5000 })).toEqual({
-      enabled: true,
-      spendCapCents: 5000
-    })
-    for (const bad of [
-      { enabled: 'yes' },
-      { enabled: true, spendCapCents: -1 },
-      { enabled: true, spendCapCents: 1.5 }
-    ]) {
-      expect(() => billingOverageArgsFromUnknown(bad)).toThrow('invalid_orca_billing_overage')
-    }
   })
 })

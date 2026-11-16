@@ -14,9 +14,7 @@ import { OrcaCloudSignInSheet } from './components/settings/agent-accounts/sign-
 import { AgentHostPanel } from './components/agent-host-panel/AgentHostPanel'
 import { SecretRequestUnseenNotifier } from './components/agent-pane/SecretRequestUnseenNotifier'
 import { LocalCommandApprovalDialogHost } from './components/local-commands/LocalCommandApprovalDialog'
-import { TeammateProfileDialog } from './components/teammates/TeammateProfileDialog'
 import { CloudWorkspacePickerDialog } from './components/cloud-workspaces/CloudWorkspacePicker'
-import { PokesNotifier } from './components/teammates/PokesNotifier'
 import { OwnerChangeNotices } from './components/cloud-workspaces/OwnerChangeNotices'
 import { BrowserPagePrompts } from './components/browser-pane/browser-page-prompts'
 import { LinkRoutingPreferenceDialogProvider } from './components/link-routing-preference-dialog'
@@ -137,9 +135,7 @@ function App(): React.JSX.Element {
             <OrcaCloudSignInSheet />
             <SecretRequestUnseenNotifier />
             <LocalCommandApprovalDialogHost />
-            <TeammateProfileDialog />
             <CloudWorkspacePickerDialog />
-            <PokesNotifier />
             <OwnerChangeNotices />
           </LinkRoutingPreferenceDialogProvider>
         </ConfirmationDialogProvider>

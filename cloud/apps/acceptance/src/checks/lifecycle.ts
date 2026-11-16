@@ -323,7 +323,7 @@ export const lifecycleChecks: Record<string, Check> = {
     // Cloud half of per-workspace ports (#216/#233), headless over the pairing: the VM's first workspace
     // gets the launcher block (3000), a second worktree on the same VM gets its own registry block, both
     // are persisted and survive sleep/wake. The local half (distinct blocks, stable across app restart)
-    // was proven in the real app on m4air (desktop-20261110-033734).
+    // was proven in the real app (desktop-20261110-033734).
     const box = await ctx.sandboxes.create(ctx.solo, { workspaceId: `w9-ports-${ctx.run.file.runId}`, repo: { url: config.testRepo }, ...(process.env.ORCA_ACCEPTANCE_REGION ? { region: process.env.ORCA_ACCEPTANCE_REGION } : {}) })
     if (box.status !== 200) {
       return { status: 'fail', detail: `create ${box.status}` }
@@ -360,7 +360,7 @@ export const lifecycleChecks: Record<string, Check> = {
         aPort === 3000 && a1.endsWith('/10/3000') && bPort >= 20000 && bPort <= 31999 && bPort !== aPort && a1 === a2 && b1 === b2
       return {
         status: ok ? 'pass' : 'fail',
-        detail: `cloud VM ports (ORCA_PORT/COUNT/CONDUCTOR_PORT): first workspace ${a1}, second worktree ${b1}; after sleep/wake ${a2} and ${b2}; registry ${registry.slice(0, 200)}. Local blocks (distinct, stable across restart) proven on m4air desktop-20261110-033734.`,
+        detail: `cloud VM ports (ORCA_PORT/COUNT/CONDUCTOR_PORT): first workspace ${a1}, second worktree ${b1}; after sleep/wake ${a2} and ${b2}; registry ${registry.slice(0, 200)}. Local blocks (distinct, stable across restart) proven in the real app desktop-20261110-033734.`,
         evidence: [log('port registry', registry)]
       }
     } finally {

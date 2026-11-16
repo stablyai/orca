@@ -42,14 +42,14 @@ function identity(members: { solo?: string; files: Record<string, string> }, env
 
 describe('orca-git-identity in a one-person workspace', () => {
   it('acts as the solo member with no attested sender (a TUI typed into directly)', () => {
-    expect(identity({ solo: 'user_neil', files: { user_neil: '1+neil@users.noreply.github.com' } })).toMatchObject({ status: 0, email: '1+neil@users.noreply.github.com' })
-    expect(identity({ solo: 'user_neil', files: { user_neil: '1+neil@users.noreply.github.com' } }, { ORCA_GIT_AS: 'user_neil' }).status).toBe(0)
+    expect(identity({ solo: 'user_dana', files: { user_dana: '1+dana@users.noreply.github.com' } })).toMatchObject({ status: 0, email: '1+dana@users.noreply.github.com' })
+    expect(identity({ solo: 'user_dana', files: { user_dana: '1+dana@users.noreply.github.com' } }, { ORCA_GIT_AS: 'user_dana' }).status).toBe(0)
   })
 
   it('never for anyone else, and not at all once the workspace is shared (no solo mark)', () => {
-    const other = identity({ solo: 'user_neil', files: { user_neil: '1+neil@users.noreply.github.com' } }, { ORCA_GIT_AS: 'user_bob' })
+    const other = identity({ solo: 'user_dana', files: { user_dana: '1+dana@users.noreply.github.com' } }, { ORCA_GIT_AS: 'user_bob' })
     expect(other.status).toBe(4)
-    expect(identity({ files: { user_neil: '1+neil@users.noreply.github.com' } }).status).toBe(3)
+    expect(identity({ files: { user_dana: '1+dana@users.noreply.github.com' } }).status).toBe(3)
     // A mark naming someone with no identity installed: the workspace identity.
     expect(identity({ solo: 'user_ghost', files: {} }).status).toBe(3)
   })

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 // A held launch re-decides on every account change, and Start never trusts the
-// cached read. Real repro: set up -> "Start Claude" -> the sign-in is revoked
+// cached read. Real repro (dev-mac, #568 proof P3b): set up -> "Start Claude" -> the sign-in is revoked
 // -> the strip still said "Start Claude", and Start launched Claude onto the revoked account.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OrcaCloudAgentsStatus } from '../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'
@@ -72,7 +72,7 @@ async function setUpHold(paneKey: string): Promise<{ outcome: () => string }> {
   return { outcome: () => outcome }
 }
 
-describe('a held launch whose coverage changed since it was held', () => {
+describe('a held launch that is already covered', () => {
   it('setup finished here: "is set up · Start" (muted, not the amber key), and it waits for Start', async () => {
     const hold = await setUpHold('tab:s1')
     setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'active' }))

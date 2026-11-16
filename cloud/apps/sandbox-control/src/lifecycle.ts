@@ -71,7 +71,6 @@ import { recordSessionEnd } from './session-cpu'
 import { flushUsage, queueUsage } from './usage'
 import { SANDBOX_VCPUS } from './machine-size'
 import { isRegionalFailure } from './regions'
-import { forgetWorkspaceFollows } from './workspace-follows'
 import { learnArchiveHook, resetArchiveHookMemo } from './archive-hook'
 
 export const LEASE_MS = 30 * 60_000
@@ -108,7 +107,7 @@ export type LifecycleDeps = {
     keyring: Keyring
     egressPlaceholders: boolean | ReadonlySet<string>
     egressPlaceholdersOff?: ReadonlySet<string>
-    /** AGENT_ACCOUNTS_CLAUDE/_CODEX minus the kill switch: which agents may use an Orca-account credential. */
+    /** The agent-account flags minus the kill switch: which agents may use an Orca-account credential. */
     accountProviders?: Record<'claude' | 'codex', boolean>
   }
   now: () => number
@@ -410,14 +409,14 @@ export function firewallClasses(deps: Pick<LifecycleDeps, 'config'>, row: Pick<S
       out.add(name)
     }
   } else if (deps.config.codexFirewallSwap) {
-    // Codex's hot calls only, in proxy mode (#776).
+    // (#776): Codex's hot calls only, in proxy mode.
     out.add('codex')
   }
   return out
 }
 
 /**
- * Firewall swap mode (EGRESS_SWAP_MODE=firewall): the values the firewall needs. Same eligibility as the egress
+ * EGRESS firewall mode: the values the firewall needs. Same eligibility as the egress
  * proxy's per-request checks (index.ts): the owner's own account, never on a shared workspace, only while
  * the provider is on and the token is usable; a key only while it is still meant for that host.
  */
@@ -864,7 +863,7 @@ export async function compileSandboxPolicy(
 }
 
 /**
- * Scrub primitive (the last session policy survives a stop and is re-applied on resume): write the
+ * Primitive (the last session policy survives a stop and is re-applied on resume): write the
  * token-free compile to the stopped sandbox's persistent record. Returns the provider's outcome.
  */
 /**
@@ -959,7 +958,7 @@ async function writeBootPolicy(deps: LifecycleDeps, row: SandboxRow, sessionId: 
   await deps.db.prepare('UPDATE sandboxes SET policy_stale_at = ? WHERE id = ?').bind(deps.now(), row.id).run().catch(() => undefined)
 }
 
-/** Stamps what a boot's policy was compiled from (design §7.2): the create and wake writes don't go through apply. */
+/** Stamps what a boot's policy was compiled from: the create and wake writes don't go through apply. */
 async function stampBootPolicy(deps: LifecycleDeps, row: SandboxRow): Promise<void> {
   await deps.db
     .prepare('UPDATE sandboxes SET policy_config_hash = ?, policy_generation = MAX(COALESCE(policy_generation, 0), ?) WHERE id = ?')
@@ -1078,7 +1077,7 @@ export function applySandboxPolicy(
   options: { sessionId?: string } = {}
 ): Promise<AppliedPolicy> {
   // No in-isolate chain: a chained promise from a cancelled request would never settle and hang every later
-  // write for this sandbox. Ordering is the D1 generation's job (and the re-check after the write).
+  // write for this sandbox. Ordering is the D1 generation's job.
   return applyOnce(deps, row, reason, options.sessionId ?? row.session_id)
 }
 
@@ -1265,7 +1264,7 @@ async function installMemberGit(deps: LifecycleDeps, row: SandboxRow, sessionId:
   await refreshGitCredentials(deps, row, sessionId)
   const configs = await memberGitConfigs({ db: deps.db, identity: deps.memberIdentity! }, row)
   const coauthors = await memberCoauthors(deps.db, row, new Set(configs.map((config) => config.userId)))
-  // The owner acts as themselves in the VM with no attested sender (only the owner can use a
+  // GH-SOLO: the owner acts as themselves in the VM with no attested sender (only the owner can use a
   // workspace), as the egress proxy does (memberMayAct). Only when their identity (or co-author line) is installed.
   const solo = [...configs, ...coauthors].some((member) => member.userId === row.user_id) ? row.user_id : null
   const encode = (value: unknown) => btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify(value))))
@@ -1702,7 +1701,7 @@ export async function stopForSuspend(
       await recordSnapshots(deps.db, row.id, [stopped.snapshotId], deps.now())
     }
     await queueUsage(deps.db, row, deps.now())
-    // Internal CPU review: never throws, never touches the meter.
+    // Never throws, never touches the meter.
     await recordSessionEnd(deps.db, row, deps.now(), stopped.usage, deps.now())
   } else {
     await queueUsage(deps.db, row, deps.now())
@@ -1925,8 +1924,6 @@ export async function destroySandbox(deps: LifecycleDeps, row: SandboxRow): Prom
   await markSnapshotsDeleted(deps.db, row.id, deps.now())
   // Archive metadata (repo state, file tree) goes with the workspace.
   await deps.db.prepare('DELETE FROM sandbox_archives WHERE sandbox_id = ?').bind(row.id).run()
-  // Nobody follows a workspace that is gone.
-  await forgetWorkspaceFollows(deps.db, row.id)
   // So does its sealed read snapshot.
   await deleteReadSnapshot(deps.db, row.id)
   // And its per-workspace agent Source overrides.

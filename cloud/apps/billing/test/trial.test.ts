@@ -23,7 +23,7 @@ function startCheck(accountId: string, runningSandboxes = 0) {
 describe('trial grant', () => {
   it('offers a new team 2 sandbox hours, then grants them once with no card', async () => {
     const h = await createHarness()
-    const owner = await as(h, { sub: 'u1', org: 'o1', orgRole: 'owner', email: 'neil@acme.dev' })
+    const owner = await as(h, { sub: 'u1', org: 'o1', orgRole: 'owner', email: 'dana@acme.dev' })
     const before = await h.call('GET', '/v1/billing/entitlements', { headers: owner })
     expect(before.body.reason).toBe('no_subscription')
     expect(before.body.offers.trial).toEqual({ includedSeconds: 7200 })
@@ -55,7 +55,7 @@ describe('trial grant', () => {
 
   it('needs a team: a personal account is offered it but cannot claim it', async () => {
     const h = await createHarness()
-    const solo = await as(h, { sub: 'u1', email: 'neil@acme.dev' })
+    const solo = await as(h, { sub: 'u1', email: 'dana@acme.dev' })
     const view = await h.call('GET', '/v1/billing/entitlements', { headers: solo })
     expect(view.body.reason).toBe('no_subscription')
     expect(view.body.offers.trial).toEqual({ includedSeconds: 7200 })
@@ -77,8 +77,8 @@ describe('trial abuse limits', () => {
 
   it('keys verified email after normalization (+tags, Gmail dots)', async () => {
     const h = await createHarness()
-    await h.call('POST', '/v1/billing/trial', { headers: await as(h, { sub: 'u1', org: 'o1', email: 'neil.parker@gmail.com' }) })
-    const alias = await as(h, { sub: 'u9', org: 'o9', email: 'NeilParker+cloud@googlemail.com' })
+    await h.call('POST', '/v1/billing/trial', { headers: await as(h, { sub: 'u1', org: 'o1', email: 'dana.lee@gmail.com' }) })
+    const alias = await as(h, { sub: 'u9', org: 'o9', email: 'DanaLee+cloud@googlemail.com' })
     expect((await h.call('POST', '/v1/billing/trial', { headers: alias })).body).toEqual({ error: 'trial_unavailable' })
   })
 
@@ -142,6 +142,32 @@ describe('trial abuse limits', () => {
     expect((await h.call('POST', '/v1/billing/trial', { headers: over })).body).toEqual({ error: 'trial_unavailable' })
     const otherIp = await as(h, { sub: 'ux', org: 'ox', email: 'px@acme.dev' }, '198.51.100.1')
     expect((await h.call('POST', '/v1/billing/trial', { headers: otherIp })).status).toBe(200)
+  })
+
+  it('counts the browser address auth vouched for (console), not the address billing sees', async () => {
+    const h = await createHarness()
+    // Every console call comes from auth's address; the token names the browser's.
+    const AUTH_EGRESS = '34.1.2.3'
+    for (let i = 0; i < TRIAL_GRANTS_PER_IP_PER_DAY; i++) {
+      const browser = await as(h, { sub: `u${i}`, org: `o${i}`, email: `p${i}@acme.dev`, clientIp: `198.51.100.${i + 10}` }, AUTH_EGRESS)
+      expect((await h.call('POST', '/v1/billing/trial', { headers: browser })).status).toBe(200)
+    }
+    // Auth's address was never counted: one more browser still gets a trial.
+    const fresh = await as(h, { sub: 'uy', org: 'oy', email: 'py@acme.dev', clientIp: '198.51.100.200' }, AUTH_EGRESS)
+    expect((await h.call('POST', '/v1/billing/trial', { headers: fresh })).status).toBe(200)
+    // The browser's address is: the same browser on yet another team hits its limit.
+    for (let i = 0; i < TRIAL_GRANTS_PER_IP_PER_DAY - 1; i++) {
+      const again = await as(h, { sub: `v${i}`, org: `q${i}`, email: `v${i}@acme.dev`, clientIp: '198.51.100.200' }, AUTH_EGRESS)
+      expect((await h.call('POST', '/v1/billing/trial', { headers: again })).status).toBe(200)
+    }
+    const over = await as(h, { sub: 'vz', org: 'qz', email: 'vz@acme.dev', clientIp: '198.51.100.200' }, AUTH_EGRESS)
+    expect((await h.call('POST', '/v1/billing/trial', { headers: over })).body).toEqual({ error: 'trial_unavailable' })
+  })
+
+  it('ignores a clientIp claim that is not an address, and still accepts the token', async () => {
+    const h = await createHarness()
+    const odd = await as(h, { sub: 'u1', org: 'o1', orgRole: 'owner', email: 'a@acme.dev', clientIp: 'not-an-ip' })
+    expect((await h.call('POST', '/v1/billing/trial', { headers: odd })).status).toBe(200)
   })
 })
 

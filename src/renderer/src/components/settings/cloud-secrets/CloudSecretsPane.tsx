@@ -6,7 +6,7 @@ import { Button } from '../../ui/button'
 import { Label } from '../../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../ui/tabs'
-import { CloudApiEmptyState } from '../cloud-api/cloud-api-parts'
+import { CloudEmptyState } from '../orca-cloud/CloudEmptyState'
 import { cloudSecretScopeLabel } from './cloud-secrets-copy'
 import { CloudSecretList, type CloudSecretPeople } from './CloudSecretList'
 import { CloudSecretsEffectiveView } from './CloudSecretsEffectiveView'
@@ -328,7 +328,7 @@ export function CloudSecretsPane({
           <div className="space-y-3 pt-2">
             {repos.length === 0 ? (
               <div className="rounded-md border border-border/60">
-                <CloudApiEmptyState
+                <CloudEmptyState
                   icon={FolderPlus}
                   title={t('cloudSecrets.repo.noReposTitle', 'No GitHub repositories yet')}
                   description={t(

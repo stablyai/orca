@@ -1,10 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
-const teamSharing = vi.hoisted(() => ({ on: true }))
-vi.mock('@/lib/orca-cloud/cloud-team-sharing-flag', () => ({
-  CLOUD_SHARE_LINK_ACTION_ID: 'cloudWorkspace.copyLink',
-  cloudTeamSharingEnabled: () => teamSharing.on,
-  useCloudTeamSharingEnabled: () => teamSharing.on
-}))
+import { describe, expect, it } from 'vitest'
 import {
   cloudWorkspaceActionGroups,
   type CloudWorkspaceActionInput
@@ -14,7 +8,6 @@ const base: CloudWorkspaceActionInput = {
   surface: 'list',
   status: 'running',
   archivedAt: null,
-  visibility: 'private',
   canOpen: true,
   canManage: true,
   readableAsleep: false,
@@ -26,19 +19,17 @@ const flat = (input: Partial<CloudWorkspaceActionInput>) =>
   cloudWorkspaceActionGroups({ ...base, ...input }).map((g) => `${g.id}:${g.actions.join(',')}`)
 
 describe('one action list for every surface', () => {
-  it('the list: Open, Share, Lifecycle, Danger in that order, with Restart', () => {
+  it('the list: Open, Owner, Lifecycle, Danger in that order, with Restart', () => {
     expect(flat({})).toEqual([
-      'open:open,copyLink,copyWorkspaceLink',
-      'share:share,reassignOwner',
+      'open:open',
+      'owner:reassignOwner',
       'lifecycle:restart,sleep,archive',
       'danger:delete'
     ])
   })
 
-  it('the sidebar gets the same Share and Lifecycle actions, minus list-only items', () => {
-    expect(flat({ surface: 'sidebar', visibility: 'team' })).toEqual([
-      'open:copyWorkspaceLink',
-      'share:makePrivate',
+  it('the sidebar gets the same Lifecycle actions, minus list-only items', () => {
+    expect(flat({ surface: 'sidebar' })).toEqual([
       'lifecycle:restart,sleep,archive',
       'danger:delete'
     ])
@@ -50,27 +41,18 @@ describe('one action list for every surface', () => {
 
   it('asleep in the list reads the saved copy, and Wake is its own action', () => {
     expect(flat({ status: 'suspended', readableAsleep: true, canRestart: false })[0]).toBe(
-      'open:read,wake,copyLink,copyWorkspaceLink'
+      'open:read,wake'
     )
   })
 
-  it('a teammate who cannot manage it only opens and copies links', () => {
-    expect(flat({ canManage: false })).toEqual(['open:open,copyLink,copyWorkspaceLink'])
+  it('someone who cannot manage it only opens it', () => {
+    expect(flat({ canManage: false })).toEqual(['open:open'])
   })
 
-  it('no Share with team or Make private while sharing is held', () => {
-    teamSharing.on = false
-    try {
-      for (const visibility of ['private', 'team'] as const) {
-        const actions = cloudWorkspaceActionGroups({ ...base, visibility }).flatMap(
-          (g) => g.actions
-        )
-        expect(actions).not.toContain('share')
-        expect(actions).not.toContain('makePrivate')
-        expect(actions).toContain('archive')
-      }
-    } finally {
-      teamSharing.on = true
-    }
+  it('offers no sharing actions', () => {
+    const actions: string[] = cloudWorkspaceActionGroups(base).flatMap((g) => g.actions)
+    expect(actions).not.toContain('share')
+    expect(actions).not.toContain('makePrivate')
+    expect(actions).not.toContain('copyLink')
   })
 })

@@ -57,7 +57,7 @@ describe('detectForegroundCommand', () => {
   })
 
   it('still reads fish-style "~>" prompts', () => {
-    expect(detectForegroundCommand(['neil@sbx ~/app> pnpm dev', 'ready'])).toEqual({
+    expect(detectForegroundCommand(['dana@sbx ~/app> pnpm dev', 'ready'])).toEqual({
       command: 'pnpm dev'
     })
   })

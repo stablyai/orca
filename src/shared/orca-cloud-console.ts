@@ -10,7 +10,9 @@ export const ORCA_CLOUD_CONSOLE_SECTIONS = [
   'team',
   'billing',
   'enterprise',
-  'audit-log'
+  'audit-log',
+  'api',
+  'routines'
 ] as const
 export type OrcaCloudConsoleSection = (typeof ORCA_CLOUD_CONSOLE_SECTIONS)[number]
 
@@ -23,6 +25,29 @@ export type OrcaCloudConsoleBillingHint = { plan: string; interval: OrcaBillingI
 
 /** Desktop capability flag auth sets once its console ticket accepts `plan` and `interval`. */
 export const ORCA_CLOUD_CONSOLE_BILLING_HINT_CAPABILITY = 'console.billing_hint'
+
+/**
+ * Desktop capability flag auth sets once its console ticket accepts the API pages (`api`,
+ * `routines`). An older auth would refuse them, so they go out as `home` until it advertises this.
+ */
+export const ORCA_CLOUD_CONSOLE_CLOUD_API_CAPABILITY = 'console.cloud_api'
+
+const CLOUD_API_CONSOLE_SECTIONS: readonly OrcaCloudConsoleSection[] = ['api', 'routines']
+
+/**
+ * The page the ticket asks for: an API page only when auth advertises it and there is an active
+ * team (auth refuses `api`/`routines` without an orgId); otherwise the console home.
+ */
+export function cloudConsoleTicketPage(
+  section: OrcaCloudConsoleSection,
+  flags: Record<string, boolean> | undefined,
+  orgId: string | null
+): OrcaCloudConsoleSection {
+  return CLOUD_API_CONSOLE_SECTIONS.includes(section) &&
+    (flags?.[ORCA_CLOUD_CONSOLE_CLOUD_API_CAPABILITY] !== true || !orgId)
+    ? 'home'
+    : section
+}
 
 export type OrcaCloudConsoleOpenArgs = {
   section: OrcaCloudConsoleSection

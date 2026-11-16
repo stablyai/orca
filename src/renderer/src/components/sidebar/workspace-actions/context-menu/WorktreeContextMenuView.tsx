@@ -11,10 +11,7 @@ import { Bell, BellOff, Pencil, Pin, PinOff, Unlink } from 'lucide-react'
 import { cn } from '@/lib/class-names'
 import { WorktreeDeveloperMenu } from '../open/WorktreeDeveloperMenu'
 import { WorkspaceSleepMenuItems } from '../sleep/WorkspaceSleepMenuItems'
-import {
-  CloudCopyWorkspaceLinkItem,
-  CloudWorkspaceMenuItems
-} from '@/components/orca-cloud/CloudWorkspaceMenuItems'
+import { CloudWorkspaceMenuItems } from '@/components/orca-cloud/CloudWorkspaceMenuItems'
 import { prefetchCloudWorkspaceRecord } from '@/components/orca-cloud/use-cloud-workspace-record'
 import { useIsCloudHostRow, usePrimeCloudRowBindings } from '@/lib/orca-cloud/cloud-host-rows'
 import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host'
@@ -208,7 +205,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
                 : t('auto.components.sidebar.WorktreeContextMenu.f50603c6b2', 'Mark Unread')}
             </DropdownMenuItem>
           )}
-          {/* Cloud rows end with Delete, alone (the Danger group); local rows keep it here. */}
+          {/* Cloud rows end with Delete, alone (its own danger group); local rows keep it here. */}
           {isCloud ? null : <WorktreeContextMenuDeleteItems model={model} />}
           <DropdownMenuSeparator />
           {!isMultiContext && (
@@ -240,17 +237,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
                 connectionId={repo?.connectionId ?? null}
                 disabled={isDeleting}
               />
-              <WorktreeCopySubMenu
-                model={model}
-                leading={
-                  isCloud ? (
-                    <CloudCopyWorkspaceLinkItem
-                      worktreeId={worktree.id}
-                      hostId={getWorktreeExecutionHostId(worktree, repo ?? undefined)}
-                    />
-                  ) : undefined
-                }
-              />
+              <WorktreeCopySubMenu model={model} />
               {/* Nesting and project groups are this computer's arrangement; not for cloud. */}
               {isCloud ? null : <WorktreeLineageSubMenu model={model} />}
               {isCloud ? null : <WorktreeProjectGroupSubMenu model={model} />}

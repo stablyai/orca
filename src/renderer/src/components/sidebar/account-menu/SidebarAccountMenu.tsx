@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useMountedRef } from '@/hooks/useMountedRef'
+import { useOrcaCloudEnabled } from '@/hooks/useOrcaCloudEnabled'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
@@ -64,6 +65,9 @@ export function SidebarAccountMenu(): React.JSX.Element {
   const setupProgress = useSetupGuideProgress(true, false, false)
   const settingsShortcut = useOptionalShortcutLabel('app.settings')
   const registeredItems = useRegisteredAccountMenuItems()
+  // Team, Plan & billing, the trial row and the team switcher are Orca Cloud: the rollout flag
+  // hides them all. Sign-in stays: an Orca account is used beyond Orca Cloud.
+  const orcaCloudEnabled = useOrcaCloudEnabled()
   const [menuOpen, setMenuOpen] = useState(false)
   const [feedbackOpen, setFeedbackOpen] = useState(false)
   // Retain the mounted dialog through its closing animation.
@@ -75,7 +79,7 @@ export function SidebarAccountMenu(): React.JSX.Element {
   // The plan's hours are the team's, so they sit on the team row below, not under your name.
   const billingResult = useBillingState().result
   const usage = accountMenuUsageLines(billingResult, t, locale)
-  const visibleItems = selectVisibleAccountMenuItems(registeredItems, authStatus)
+  const visibleItems = selectVisibleAccountMenuItems(registeredItems, authStatus, orcaCloudEnabled)
   // Freeze the item list while the menu is open: a billing answer arriving mid-read must not
   // swap rows under the pointer (e.g. Upgrade replacing Plan & billing).
   const [frozenItems, setFrozenItems] = useState<typeof visibleItems | null>(null)
@@ -214,10 +218,12 @@ export function SidebarAccountMenu(): React.JSX.Element {
                 </span>
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              {identity.signedIn ? <AccountMenuTrialRow result={billingResult} /> : null}
+              {identity.signedIn && orcaCloudEnabled ? (
+                <AccountMenuTrialRow result={billingResult} />
+              ) : null}
             </>
           ) : null}
-          <SidebarTeamSubmenu authStatus={authStatus} usage={usage} />
+          {orcaCloudEnabled ? <SidebarTeamSubmenu authStatus={authStatus} usage={usage} /> : null}
           {extensionItems.length > 0 ? (
             <>
               {extensionItems.map((item) => {

@@ -8,12 +8,13 @@ import {
 } from '../orca-cloud/OrcaCloudSettingsPanes'
 import { OrcaCloudAccountsSection } from '../agent-accounts/OrcaCloudAccountsSection'
 import { OrcaCloudAccountsDescription } from '../agent-accounts/OrcaCloudAccountsDescription'
+import { CloudConsoleLinkRow } from '../orca-cloud/CloudConsoleLinkRow'
 import { SettingsSection } from '../section-layout/SettingsSection'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { SettingsRenderContext } from './settings-render-context'
 
-/** Settings › Orca Cloud: the account-backed panes. Orca API keys and Routines follow them. */
+/** Settings › Orca Cloud: the account-backed panes. */
 export function renderOrcaCloudSettingsSections(
   context: SettingsRenderContext,
   t: Translate = translate
@@ -42,7 +43,21 @@ export function renderOrcaCloudSettingsSections(
     { id: 'cloud-skills', pane: <OrcaCloudSkillsSyncPane /> },
     { id: 'cloud-environments', pane: <OrcaCloudEnvironmentsPane /> },
     { id: 'cloud-mcp', pane: <OrcaCloudMcpPane /> },
-    { id: 'cloud-local-commands', pane: <OrcaCloudLocalCommandsSettingsPane /> }
+    { id: 'cloud-local-commands', pane: <OrcaCloudLocalCommandsSettingsPane /> },
+    // Managed in the web console; the desktop keeps one row that opens it.
+    {
+      id: 'cloud-api-keys',
+      pane: (
+        <CloudConsoleLinkRow
+          section="api"
+          label={t('settings.cloudConsole.api.title', 'API keys & connected apps')}
+          description={t(
+            'settings.cloudConsole.api.description',
+            'Create and revoke keys, and disconnect apps.'
+          )}
+        />
+      )
+    }
   ]
   return (
     <>

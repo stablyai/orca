@@ -163,15 +163,6 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     allowShiftOnlyKeybindings: true
   },
   {
-    id: 'cloudWorkspace.copyLink',
-    title: 'Copy cloud workspace link',
-    group: 'Global',
-    scope: 'global',
-    searchKeywords: ['shortcut', 'cloud', 'workspace', 'link', 'share', 'copy', 'team'],
-    // Why: Mod+Shift+C is browser.annotateElement and Mod+Alt+Shift+C copies a relative path.
-    defaultBindings: platformBindings(['Mod+Alt+Shift+L'])
-  },
-  {
     id: 'tab.moveLeft',
     title: 'Move active tab left',
     group: 'Tabs',

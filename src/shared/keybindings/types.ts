@@ -129,7 +129,6 @@ export type KeybindingActionId =
   | 'terminal.splitDown'
   | 'terminal.switchInputSource'
   | 'terminal.toggleNativeChat'
-  | 'cloudWorkspace.copyLink'
   | PluginKeybindingActionId
 
 export type KeybindingOverrides = Partial<Record<KeybindingActionId, string[]>>

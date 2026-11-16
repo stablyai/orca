@@ -28,7 +28,7 @@ const PRODUCTION_CLIENT_ID = 'orca-desktop'
 const PRODUCTION_RELAY_DIRECTOR_URL = 'https://relay.onorca.dev'
 
 // Packaged main omits NODE_ENV; use packaged status to gate development auth overrides.
-function isPackagedOrcaBuild(): boolean {
+export function isPackagedOrcaBuild(): boolean {
   try {
     return app?.isPackaged === true
   } catch {

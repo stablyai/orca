@@ -23,7 +23,7 @@ describe('compileNetworkPolicy: path-scoped claims and path forwards', () => {
           host: 'chatgpt.com',
           header: 'Authorization',
           placeholders: ['Bearer PH'],
-          paths: [{ exact: '/a', methods: ['POST'] }, { startsWith: '/b/' }],
+          paths: [{ exact: '/a', methods: ['POST'] }, { exact: '/b/c' }],
           via: 'transform',
           value: 'Bearer REAL',
           extraHeaders: { 'chatgpt-account-id': 'acct' }
@@ -35,7 +35,7 @@ describe('compileNetworkPolicy: path-scoped claims and path forwards', () => {
     const ph = [{ key: { exact: 'authorization' }, value: { exact: 'Bearer PH' } }]
     expect(policy.allow['chatgpt.com']).toEqual([
       { match: { headers: ph, path: { exact: '/a' }, method: ['POST'] }, transform: [{ headers: { 'chatgpt-account-id': 'acct', authorization: 'Bearer REAL' } }] },
-      { match: { headers: ph, path: { startsWith: '/b/' } }, transform: [{ headers: { 'chatgpt-account-id': 'acct', authorization: 'Bearer REAL' } }] },
+      { match: { headers: ph, path: { exact: '/b/c' } }, transform: [{ headers: { 'chatgpt-account-id': 'acct', authorization: 'Bearer REAL' } }] },
       { match: { headers: ph }, forwardURL: 'https://p.example/x' },
       { response: { statusCode: 403, body: 'orca-egress-denied', contentType: 'text/plain' } }
     ])

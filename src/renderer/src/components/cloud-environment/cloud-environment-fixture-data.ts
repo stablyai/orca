@@ -35,7 +35,7 @@ export function sampleBuild(overrides: Partial<EnvironmentBuildView> = {}): Envi
     number: 7,
     status: 'succeeded',
     active: false,
-    createdBy: 'Neil Parker',
+    createdBy: 'Dana Lee',
     createdAt,
     startedAt: createdAt + 18_000,
     snapshotStartedAt: createdAt + 142_000,

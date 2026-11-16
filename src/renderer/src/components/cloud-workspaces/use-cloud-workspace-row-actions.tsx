@@ -1,28 +1,23 @@
 // What a cloud workspace row can do from "Open cloud workspace…": open (or read an Asleep one's
-// saved copy), copy its link, share or hand it over, sleep, archive and delete. Opening goes through
-// openCloudWorkspace, the same path as a workspace link and a teammate's profile.
+// saved copy), hand it over, sleep, archive and delete. Opening goes through openCloudWorkspace, the
+// same path as a workspace link.
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
-import { refreshCloudMessageSenders } from '@/lib/cloud-message-sender'
 import type {
   CloudWorkspace,
-  CloudWorkspacePatch,
-  CloudWorkspacePresence
+  CloudWorkspacePatch
 } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 import { useOrgRoster } from '../billing/team/use-org-roster'
 import type { MemberDirectory } from './cloud-workspace-format'
 import { describeError } from './cloud-workspace-errors'
-import { focusCloudChat } from './cloud-chat-focus'
 import * as archive from './cloud-workspace-home-archive'
-import { focusedKind, frontCloudChat } from './cloud-workspace-links'
-import { copyCloudWorkspaceLink, openCloudWorkspace } from './open-cloud-workspace'
+import { openCloudWorkspace } from './open-cloud-workspace'
 import { showCloudWorkspaceOpenInPicker } from './cloud-workspace-open-feedback'
 import type { RowActions } from './CloudWorkspaceRowMenu'
 import { CloudWorkspaceConfirmDialog, type PendingConfirm } from './CloudWorkspaceConfirmDialog'
 import { CloudReadSnapshotSheet } from './CloudReadSnapshotSheet'
 import { useCloudReadPanel } from './use-cloud-read-panel'
-import { toastSharedWithTeam } from './shared-with-team-toast'
 import { useCloudWorkspaceOwnerChange } from './use-cloud-workspace-owner-change'
 
 /** Names for every member id the rows show, and whether you are a team owner or admin. */
@@ -84,9 +79,8 @@ export function useCloudWorkspaceRowActions({
   // shows at once if it closes mid-open.
   useEffect(() => (openingId ? showCloudWorkspaceOpenInPicker(openingId) : undefined), [openingId])
 
-  /** Opens the workspace, then (going to a teammate's chat) the chat they have in front. */
   const open = useCallback(
-    async (w: CloudWorkspace, chatId?: string | null) => {
+    async (w: CloudWorkspace) => {
       setOpeningId(w.id)
       const fromPanel = readingRef.current === w.id
       if (fromPanel) {
@@ -105,9 +99,6 @@ export function useCloudWorkspaceRowActions({
         }
         setReadingId((current) => (current === w.id ? null : current))
         onOpened()
-        if (chatId) {
-          await focusCloudChat(outcome.worktreeId, chatId)
-        }
       } finally {
         setOpeningId((current) => (current === w.id ? null : current))
       }
@@ -116,12 +107,7 @@ export function useCloudWorkspaceRowActions({
   )
 
   const patch = useCallback(
-    async (w: CloudWorkspace, change: CloudWorkspacePatch, confirmed = false) => {
-      // Making private and handing over ownership take access away; both ask first.
-      if (!confirmed && change.visibility === 'private') {
-        setConfirm({ kind: 'private', workspace: w })
-        return
-      }
+    async (w: CloudWorkspace, change: CloudWorkspacePatch) => {
       if (change.ownerUserId) {
         // Always asked first, and made from the confirmation (it stays open
         // while the workspace goes to sleep, and shows a refusal in place).
@@ -134,20 +120,6 @@ export function useCloudWorkspaceRowActions({
         return
       }
       replace(result.value)
-      if (change.visibility !== undefined) {
-        // Shared or private changes whether messages there carry the sender line.
-        void refreshCloudMessageSenders().catch(() => undefined)
-      }
-      if (change.visibility === 'team') {
-        toastSharedWithTeam(t)
-      } else if (change.visibility === 'private') {
-        toast.success(
-          t(
-            'auto.components.cloudWorkspaces.nowPrivate',
-            'Now private. Teammates’ devices were disconnected.'
-          )
-        )
-      }
       refresh()
     },
     [refresh, replace, t]
@@ -157,18 +129,6 @@ export function useCloudWorkspaceRowActions({
     () => ({
       open: (w) => void open(w),
       read: (w) => setReadingId(w.id),
-      copyLink: (w) => void copyCloudWorkspaceLink(w.id),
-      copyWorkspaceLink: (w) => {
-        const front = frontCloudChat()
-        if (front?.sandboxId === w.id && front.chatId) {
-          void copyCloudWorkspaceLink(w.id, front.chatId)
-        }
-      },
-      focusedItem: (w) => {
-        const front = frontCloudChat()
-        return front?.sandboxId === w.id ? focusedKind(front.chatId) : null
-      },
-      goToChat: (w: CloudWorkspace, member: CloudWorkspacePresence) => void open(w, member.chatId),
       patch: (w, change) => void patch(w, change),
       ...archive.homeArchiveActions({ selfId, t, refresh, confirmArchive: setConfirm })
     }),
@@ -202,14 +162,9 @@ export function useCloudWorkspaceRowActions({
               archive.runConfirmed(confirm, t, refresh)
               return
             }
-            if (confirm.kind === 'owner') {
-              void ownerChange
-                .run(confirm.workspace, confirm.ownerUserId)
-                .then((changed) => changed && setConfirm(null))
-              return
-            }
-            setConfirm(null)
-            void patch(confirm.workspace, { visibility: 'private' }, true)
+            void ownerChange
+              .run(confirm.workspace, confirm.ownerUserId)
+              .then((changed) => changed && setConfirm(null))
           }}
         />
       )}

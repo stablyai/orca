@@ -76,7 +76,7 @@ function capture(terminal: Terminal, leafId: string, agentPane = false): void {
   captureWakeScrollback(leafId, terminal, { sleptAt: SLEPT_AT, agentPane, maxRows: 5000 })
 }
 
-describe('pre-sleep scrollback across a wake', () => {
+describe('wake scrollback', () => {
   it('a shell pane: `seq 1 2000` above the divider, the woken prompt right below, pinned to the bottom', async () => {
     const terminal = pane()
     const seq = Array.from({ length: 2000 }, (_, index) => String(index + 1)).join('\r\n')
@@ -216,8 +216,7 @@ describe('pre-sleep scrollback across a wake', () => {
     expect(text(terminal)).toEqual(['$'])
   })
 
-  // Seen in a real run: by "asleep" a resubscribe had replaced 2000 rows with the host's 1000-row
-  // snapshot.
+  // dev-mac run: by "asleep" a resubscribe had replaced 2000 rows with the host's 1000-row snapshot.
   it('captures once per sleep (at going to sleep): a later look at a replaced buffer changes nothing', async () => {
     const terminal = pane(10)
     const seq = Array.from({ length: 2000 }, (_, index) => String(index + 1)).join('\r\n')
@@ -322,11 +321,11 @@ describe('pre-sleep scrollback across a wake', () => {
     const started = performance.now()
     await noteBeforeCloudReplay('leaf-10k', terminal, 'remote:env@@t', () => true)
     const elapsed = performance.now() - started
-    console.info(`[wake scrollback] pre-replay copy of a 10k-line pane: ${elapsed.toFixed(1)} ms`)
+    console.info(`[wake-scrollback] pre-replay copy of a 10k-line pane: ${elapsed.toFixed(1)} ms`)
     expect(elapsed).toBeLessThan(2000)
   })
 
-  // Waking remounts the pane at the bottom; the place the person scrolled to comes back.
+  // dev-mac (c): waking remounts the pane at the bottom; the place the person scrolled to comes back.
   it('a scroll made while waking survives the remount and is put back after the restore', async () => {
     const before = pane(5)
     await write(before, Array.from({ length: 50 }, (_, index) => `row ${index}`).join('\r\n'))

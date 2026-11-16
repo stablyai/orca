@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useCloudTeamSharingEnabled } from '@/lib/orca-cloud/cloud-team-sharing-flag'
 import { TriangleAlert } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -55,7 +54,6 @@ export function LocalCommandApprovalDialogView({
   /** Denies this request and turns local commands off for the workspace. */
   onTurnOff: () => void
 }): React.JSX.Element {
-  const teamSharing = useCloudTeamSharingEnabled()
   const t = useTranslate()
   // A long command must be scrolled to its end before it can be allowed: nothing stays out of view.
   const [readToEnd, setReadToEnd] = useState(false)
@@ -163,15 +161,6 @@ export function LocalCommandApprovalDialogView({
           {t(
             'localCommands.prompt.nonAscii',
             'This command has characters outside plain ASCII, which can look like other letters. Check it carefully.'
-          )}
-        </p>
-      ) : null}
-      {/* No teammates can message while sharing is held. */}
-      {prompt.shared && teamSharing ? (
-        <p className="text-xs text-muted-foreground">
-          {t(
-            'localCommands.prompt.shared',
-            "Teammates share this workspace, so a teammate's message may have led to this request."
           )}
         </p>
       ) : null}

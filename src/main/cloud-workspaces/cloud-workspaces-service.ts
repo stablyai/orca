@@ -1,5 +1,5 @@
-// Team cloud workspaces in the desktop: the org registry, opening a teammate's workspace through a
-// per-device E2EE grant, live presence and keeping an opened workspace awake.
+// Cloud workspaces in the desktop: the org registry, opening a workspace this device didn't create
+// through a per-device E2EE grant, and keeping an opened (paired) workspace awake.
 import { hostname } from 'node:os'
 import { listEphemeralVmRuntimes } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
 import { openSealedGrant } from '../../shared/cloud-workspaces/sealed-grant'
@@ -28,11 +28,11 @@ import {
   type ReadPinAccess
 } from './cloud-read-snapshot-reader'
 
-const PRESENCE_BEAT_MS = 20_000
-/** Renew a teammate-opened workspace's lease well before the control plane's 30 min lease lapses. */
+/** How often a paired workspace in front checks whether its lease is due. */
+const LEASE_CHECK_MS = 20_000
+/** Renew a paired workspace's lease well before the control plane's 30 min lease lapses. */
 const LEASE_BEAT_MS = 10 * 60_000
 const LEASE_EXTEND_MS = 30 * 60_000
-const TYPING_HOLD_MS = 6_000
 /** An opened grant's signer waits this long for its pairing to complete before it is dropped. */
 const PAIRING_REPIN_TTL_MS = 15 * 60_000
 const MAX_PENDING_REPINS = 16
@@ -85,14 +85,9 @@ export function createCloudWorkspacesService(deps: {
     getAccessToken: deps.config.getAccessToken,
     fetch: deps.fetch ?? deps.config.fetch
   })
-  let active: {
-    sandboxId: string
-    chatId: string | null
-    typingUntil: number
-    leased: boolean
-  } | null = null
-  // One heartbeat per active workspace: presence every beat, the lease when it is due. It stops as
-  // soon as the renderer reports nothing in front (also when the window is hidden or idle).
+  let active: { sandboxId: string; leased: boolean } | null = null
+  // One heartbeat per active workspace, renewing the lease when it is due. It stops as soon as the
+  // renderer reports nothing in front (also when the window is hidden or idle).
   let heartbeat: ReturnType<typeof setInterval> | null = null
   let leaseSandboxId: string | null = null
   let leaseRenewedAt = 0
@@ -143,18 +138,7 @@ export function createCloudWorkspacesService(deps: {
     return out
   }
 
-  async function beat(): Promise<void> {
-    const current = active
-    if (!current) {
-      return
-    }
-    const state = Date.now() < current.typingUntil ? 'typing' : 'viewing'
-    await client
-      .presence(current.sandboxId, { clientId: deps.clientId, state, chatId: current.chatId })
-      .catch(() => undefined)
-  }
-
-  /** The owner's own lease scheduler keeps their VM up; a teammate's desktop renews while open. */
+  /** The owner's own lease scheduler keeps their VM up; a paired desktop renews while open. */
   function renewLeaseIfDue(): void {
     const current = active
     if (!current?.leased) {
@@ -213,7 +197,6 @@ export function createCloudWorkspacesService(deps: {
         return reader.read(id)
       }),
     get: (id: string) => wrap(() => client.get(id)),
-    follow: (id: string, follow: boolean) => wrap(() => client.follow(id, follow)),
     patch: (id: string, patch: CloudWorkspacePatch) =>
       wrap(async () => (await client.patch(id, patch)).workspace),
     resolveLink: (target: CloudWorkspaceLinkTarget, chatId?: string | null) =>
@@ -221,25 +204,17 @@ export function createCloudWorkspacesService(deps: {
     getPrefs: () => wrap(() => client.getPrefs()),
     putPrefs: (document: CloudWorkspacePrefsDocument, revision: number) =>
       wrap(() => client.putPrefs(document, revision, deps.clientId)),
-    getOrgSlug: (name?: string | null) => wrap(() => client.getOrgSlug(name)),
     listGrants: (id: string) => wrap(() => client.listGrants(id)),
     revokeGrant: (id: string, grantId: string) =>
       wrap(async () => void (await client.revokeGrant(id, grantId))),
     getOrgPrompts: () => wrap(() => client.getOrgPrompts()),
     putOrgPrompts: (document: OrgPrompts['document'], revision: number) =>
       wrap(() => client.putOrgPrompts(document, revision)),
-    teammateProfile: (userId: string, utcOffsetMin: number) =>
-      wrap(() => client.teammateProfile(userId, utcOffsetMin)),
-    poke: (userId: string) => wrap(() => client.poke(userId)),
-    pokeInbox: () => wrap(() => client.pokeInbox()),
-    setPokesEnabled: (enabled: boolean) => wrap(() => client.setPokesEnabled(enabled)),
-    markPokesSeen: (ids: string[]) => wrap(() => client.markPokesSeen(ids)),
     changeOwner: (id: string, ownerUserId: string) =>
       wrap(() => client.changeOwner(id, ownerUserId)),
     ownerNotices: () => wrap(() => client.ownerNotices()),
     dismissOwnerNotice: (id: string) => wrap(() => client.dismissOwnerNotice(id)),
     localWorkspaces: () => localWorkspaces(),
-    noteSent: (id: string) => wrap(() => client.noteSent(id)),
     sleep: (id: string) => wrap(() => client.sleep(id)),
     /** Wake a workspace this desktop paired with (no local VM record to resume). */
     wake: (id: string) => wrap(async () => void (await client.wake(id))),
@@ -287,51 +262,17 @@ export function createCloudWorkspacesService(deps: {
         }
       }),
 
-    /** The renderer reports which cloud workspace is in front (null when none) and composer typing. */
-    setActive(args: {
-      sandboxId: string | null
-      chatId?: string | null
-      typing?: boolean
-      leased?: boolean
-    }): void {
+    /** The renderer reports which cloud workspace is in front (null when none). */
+    setActive(args: { sandboxId: string | null; leased?: boolean }): void {
       if (!args.sandboxId) {
-        const previous = active
         active = null
         stopTimers()
-        if (previous) {
-          void client
-            .presence(previous.sandboxId, { clientId: deps.clientId, state: 'left' })
-            .catch(() => undefined)
-        }
         return
       }
-      const changed = active?.sandboxId !== args.sandboxId
-      const previousChatId = active?.chatId ?? null
-      if (changed && active) {
-        void client
-          .presence(active.sandboxId, { clientId: deps.clientId, state: 'left' })
-          .catch(() => undefined)
-      }
-      active = {
-        sandboxId: args.sandboxId,
-        // undefined keeps the chat (typing beats); null means no chat is in front any more.
-        chatId: args.chatId !== undefined ? args.chatId : changed ? null : (active?.chatId ?? null),
-        typingUntil: args.typing
-          ? Date.now() + TYPING_HOLD_MS
-          : changed
-            ? 0
-            : (active?.typingUntil ?? 0),
-        leased: args.leased ?? active?.leased ?? false
-      }
-      if (changed || args.typing || active.chatId !== previousChatId) {
-        void beat()
-      }
+      active = { sandboxId: args.sandboxId, leased: args.leased ?? active?.leased ?? false }
       renewLeaseIfDue()
       if (!heartbeat) {
-        heartbeat = setInterval(() => {
-          void beat()
-          renewLeaseIfDue()
-        }, PRESENCE_BEAT_MS)
+        heartbeat = setInterval(renewLeaseIfDue, LEASE_CHECK_MS)
         heartbeat.unref?.()
       }
     },

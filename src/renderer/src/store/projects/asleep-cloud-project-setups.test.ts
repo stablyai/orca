@@ -8,7 +8,7 @@ import { cloneDefaultWorkspaceStatuses } from '../../../../shared/workspace/stat
 import { getProjectHostSetupProjectionFromState } from './project-host-setup-selector'
 import type { EphemeralVmWorkspaceRuntime } from '../slices/ephemeral-vm/ephemeral-vm-lifecycle'
 
-// The state after an app restart with an Orca Cloud workspace asleep, as seen in a real run:
+// The state after an app restart with an Orca Cloud workspace asleep, as seen on dev-mac:
 // the runtime's catalog never loaded, so terminal hydration left a placeholder repo named after
 // the workspace folder, and there is no setup filing it under its project.
 const local: Repo = {

@@ -19,6 +19,8 @@ export type AccountMenuItem = {
   requiresTeamAdmin?: boolean
   /** Hide from owners and admins of the active team (they get a different entry in its place). */
   hideFromTeamAdmin?: boolean
+  /** An Orca Cloud entry: hidden while the rollout flag hides Orca Cloud (useOrcaCloudEnabled). */
+  orcaCloud?: boolean
   /** 'accent' marks a call to action (e.g. upgrade); default rows stay neutral. */
   tone?: 'accent'
   onSelect: () => void
@@ -57,10 +59,12 @@ export function getRegisteredAccountMenuItems(): readonly AccountMenuItem[] {
 
 export function selectVisibleAccountMenuItems(
   registered: readonly AccountMenuItem[],
-  authStatus: OrcaProfileAuthStatus | null
+  authStatus: OrcaProfileAuthStatus | null,
+  orcaCloudEnabled: boolean
 ): AccountMenuItem[] {
   const flags = authStatus?.state === 'connected' ? authStatus.capabilities?.flags : undefined
   return registered
+    .filter((item) => !item.orcaCloud || orcaCloudEnabled)
     .filter((item) => !item.requiredCapability || flags?.[item.requiredCapability] === true)
     .filter((item) => !item.requiresSignIn || authStatus?.state === 'connected')
     .filter((item) => !item.requiresTeamAdmin || canManageActiveTeam(authStatus))

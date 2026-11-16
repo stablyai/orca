@@ -11,7 +11,7 @@ const ACCOUNT: Model = {
     { agent: 'claude', via: 'account' },
     { agent: 'codex', via: 'account' }
   ],
-  label: 'nw@stably.ai',
+  label: 'nw@example.com',
   expiring: null
 }
 const BROWSER: Model = {

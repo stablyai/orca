@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import {
-  cloudChatIdForTab,
-  encodeCloudChatId,
   findCloudChatTarget,
   parseCloudChatId,
   type CloudChatTerminalLayout
@@ -29,45 +27,19 @@ const handleOf = (ptyId: string): string | null =>
   ptyId.startsWith('remote:') ? ptyId.slice('remote:'.length) : null
 
 describe('cloud chat ids', () => {
-  it('round-trips session and terminal ids in the control-plane alphabet', () => {
-    expect(encodeCloudChatId({ kind: 'session', id: 'ses_123' })).toBe('s:ses_123')
-    expect(encodeCloudChatId({ kind: 'terminal', id: 'term-9.a' })).toBe('t:term-9.a')
+  it('parses session and terminal ids in the control-plane alphabet', () => {
     expect(parseCloudChatId('s:ses_123')).toEqual({ kind: 'session', id: 'ses_123' })
     expect(parseCloudChatId('t:term-9.a')).toEqual({ kind: 'terminal', id: 'term-9.a' })
   })
 
-  it('base64url-encodes ids with other characters and rejects what still does not fit', () => {
-    const encoded = encodeCloudChatId({ kind: 'terminal', id: 'pane/2 ✓' })
-    expect(encoded).toMatch(/^tb:[A-Za-z0-9_-]+$/)
-    expect(parseCloudChatId(encoded!)).toEqual({ kind: 'terminal', id: 'pane/2 ✓' })
-    expect(encodeCloudChatId({ kind: 'session', id: 'x'.repeat(127) })).toBeNull()
-    expect(encodeCloudChatId({ kind: 'session', id: '' })).toBeNull()
+  it('decodes base64url ids with other characters', () => {
+    expect(parseCloudChatId('tb:cGFuZS8yIOKckw')).toEqual({ kind: 'terminal', id: 'pane/2 ✓' })
   })
 
   it('rejects malformed chat ids', () => {
     for (const bad of ['', 'x:1', 's:', 'sb:***', 'tb:%%', `s:${'a'.repeat(200)}`]) {
       expect(parseCloudChatId(bad)).toBeNull()
     }
-  })
-
-  it('names the chat a tab shows', () => {
-    const layout: CloudChatTerminalLayout = {
-      activeLeafId: 'leaf-b',
-      ptyIdsByLeafId: { 'leaf-a': 'remote:term-a', 'leaf-b': 'remote:term-b' }
-    }
-    expect(cloudChatIdForTab(tab({}), layout, handleOf)).toBe('t:term-b')
-    expect(
-      cloudChatIdForTab(
-        tab({ contentType: 'agent-session', entityId: 'ses_1' }),
-        undefined,
-        handleOf
-      )
-    ).toBe('s:ses_1')
-    expect(
-      cloudChatIdForTab(tab({}), { activeLeafId: 'l', ptyIdsByLeafId: { l: 'local-1' } }, handleOf)
-    ).toBeNull()
-    expect(cloudChatIdForTab(tab({ contentType: 'editor' }), undefined, handleOf)).toBeNull()
-    expect(cloudChatIdForTab(null, undefined, handleOf)).toBeNull()
   })
 
   it('routes a chat id to the session tab or the terminal pane that shows it', () => {

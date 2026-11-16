@@ -27,9 +27,6 @@ export const empty = defineFixture({
       <Card>
         <PickerEmptyState reason={{ kind: 'none-running' }} />
       </Card>
-      <Card>
-        <PickerEmptyState reason={{ kind: 'teammate', name: 'Grace Hopper' }} />
-      </Card>
     </div>
   )
 })

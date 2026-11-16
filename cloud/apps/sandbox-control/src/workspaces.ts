@@ -1,14 +1,13 @@
-// Team workspace registry: the cloud-owned list of an org's workspaces (who made it, who owns it,
-// repo/branch, state, last activity, visibility, section, cost) and who is in each one right now.
+// Workspace registry: the cloud-owned list of an org's workspaces (who made it, who owns it, repo/branch, state,
+// last activity, section, cost). Workspaces are never shared: each is its owner's alone.
 //   GET   /v1/team/workspaces?scope=mine|team|all&by=<userId>&repo=<url>&section=<s>&archived=exclude|include|only&routines=exclude|include
+//          (`team` is an alias of `mine`, kept for older mobile builds)
 //   GET   /v1/team/workspaces/:id
-//   PATCH /v1/team/workspaces/:id {title?, branch?, visibility?, section?, archived?, ownerUserId?, tokenUsdMicros?}
-//   POST  /v1/team/workspaces/:id/presence {clientId, state: viewing|typing|left, chatId?}
-//   PUT|DELETE /v1/team/workspaces/:id/follow   (workspace-follows.ts)
+//   PATCH /v1/team/workspaces/:id {title?, branch?, visibility?: 'private', section?, archived?, ownerUserId?, tokenUsdMicros?}
+//   POST  /v1/team/workspaces/:id/presence {clientId, state, chatId?}   (no-op beyond the owner's activity)
 //   GET   /v1/team/links/resolve?w=<sandboxId>&c=<chatId>  or  ?org=<slug>&n=<number>&c=<chatId>
-// Access rule: a workspace is visible to its owner, and to every member of the owning org when
-// visibility is `team`. Org owners/admins additionally see private rows' metadata (scope=all) so a
-// departed member's workspaces can be reassigned or archived — metadata only, never access.
+// Access rule: a workspace is visible to its owner only. Org owners/admins additionally see every row's metadata
+// (scope=all) so a departed member's workspaces can be reassigned or archived — metadata only, never access.
 import { githubActingViews, type GithubActingOptions, type GithubActingView } from './git-actor'
 import type { TeamMembershipCheck } from './team-membership'
 import { z } from 'zod'
@@ -16,9 +15,7 @@ import type { SandboxCaller } from './auth'
 import type { MachineSize } from './entitlements'
 import { getSandbox, touchActivity, transferOwnership, updateRegistry, type SandboxRow } from './store'
 import { memberNamesFor } from './member-names'
-import { recordTokenSpend } from './member-usage'
 import { readSnapshotTimes } from './read-snapshots'
-import { followersFor, visibleFollowers } from './workspace-follows'
 import { sandboxView } from './wire'
 import { accountForSlug, orgIdOf, slugForAccount } from './org-slugs'
 import { ORCA_CLOUD_OVERAGE_CENTS_PER_HOUR } from '../../../../src/shared/hosted-sandbox/hosted-sandbox-wire'
@@ -90,28 +87,6 @@ export async function requireVisible(db: D1Database, caller: SandboxCaller, id: 
     throw new WorkspaceError('not_found')
   }
   return row
-}
-
-type PresenceRow = { sandbox_id: string; user_id: string; client_id: string; state: 'viewing' | 'typing'; chat_id: string | null; updated_at: number }
-
-async function presenceFor(db: D1Database, ids: readonly string[], now: number): Promise<Map<string, PresenceRow[]>> {
-  const out = new Map<string, PresenceRow[]>()
-  if (ids.length === 0) {
-    return out
-  }
-  const { results } = await db
-    .prepare(
-      `SELECT * FROM workspace_presence WHERE updated_at > ? AND sandbox_id IN (${ids.map(() => '?').join(', ')})
-       ORDER BY updated_at DESC`
-    )
-    .bind(now - PRESENCE_TTL_MS, ...ids)
-    .all<PresenceRow>()
-  for (const row of results) {
-    const list = out.get(row.sandbox_id) ?? []
-    list.push(row)
-    out.set(row.sandbox_id, list)
-  }
-  return out
 }
 
 async function computeMsFor(db: D1Database, ids: readonly string[]): Promise<Map<string, number>> {
@@ -194,35 +169,20 @@ export async function workspaceViews(
   acting?: GithubActingOptions
 ) {
   const ids = rows.map((r) => r.id)
-  const [presence, compute, granted, readAt, slug, follows, githubActing] = await Promise.all([
-    presenceFor(db, ids, now),
+  const [compute, granted, readAt, slug, githubActing] = await Promise.all([
     computeMsFor(db, ids),
     activeGrantUsers(db, ids, caller.userId),
     readSnapshotTimes(db, ids),
     rows.length > 0 ? slugForAccount(db, caller.accountId) : Promise.resolve(null),
-    followersFor(db, ids),
     // Who pushes and PRs go out as, only on rows the caller may open.
     acting ? githubActingFor(db, caller, rows, now, acting) : Promise.resolve(new Map<string, GithubActingView>())
   ])
-  const followersOf = (row: SandboxRow) => visibleFollowers(row, canSee(caller, row), follows.get(row.id) ?? [])
-  const referenced = (row: SandboxRow, live: readonly PresenceRow[]) =>
-    [row.user_id, row.created_by, row.last_activity_by, ...live.map((p) => p.user_id), ...followersOf(row)].filter(
-      (id): id is string => typeof id === 'string'
-    )
-  const names = await memberNamesFor(
-    db,
-    caller.accountId,
-    rows.flatMap((row) => referenced(row, presence.get(row.id) ?? []))
-  )
+  const referenced = (row: SandboxRow) =>
+    [row.user_id, row.created_by, row.last_activity_by].filter((id): id is string => typeof id === 'string')
+  const names = await memberNamesFor(db, caller.accountId, rows.flatMap(referenced))
   return rows.map((row) => {
     const access = accessFor(caller, row, granted.has(row.id))
-    // Private rows an admin sees for management show who/what, never live presence.
-    const showPresence = access !== 'none'
-    const live = showPresence ? (presence.get(row.id) ?? []) : []
-    const followers = followersOf(row)
-    const memberNames = Object.fromEntries(
-      referenced(row, live).flatMap((id) => (names.has(id) ? [[id, names.get(id)!]] : []))
-    )
+    const memberNames = Object.fromEntries(referenced(row).flatMap((id) => (names.has(id) ? [[id, names.get(id)!]] : [])))
     return {
       ...sandboxView(row),
       title: row.name,
@@ -244,10 +204,10 @@ export async function workspaceViews(
       lastActivityBy: row.last_activity_by,
       cost: costView(row, compute.get(row.id) ?? 0, now),
       access,
-      presence: live.map((p) => ({ userId: p.user_id, clientId: p.client_id, state: p.state, chatId: p.chat_id, at: p.updated_at })),
-      // Who follows it (oldest first), and whether the caller does.
-      followers,
-      following: followers.includes(caller.userId),
+      // Presence and follows went with team sharing (only the owner sees a workspace); kept empty for clients.
+      presence: [],
+      followers: [],
+      following: false,
       // Display names (token `name` claim) for the ids above; the roster wins where it has one.
       memberNames,
       // When its sleeping read-only copy was saved ("As of"); only for those who may read it.
@@ -264,7 +224,7 @@ const ListQuery = z.object({
   repo: z.string().min(1).max(2048).optional(),
   section: z.string().min(1).max(64).optional(),
   archived: z.enum(['exclude', 'include', 'only']).default('exclude'),
-  /** Routine runs stay off Home unless asked for (`include`), like a routine filter. */
+  /** Routine runs stay off Home unless asked for (`include`), like Conductor's routine filter. */
   routines: z.enum(['exclude', 'include']).default('exclude')
 })
 
@@ -455,12 +415,6 @@ export async function patchWorkspace(
   if (!next) {
     throw new WorkspaceError('not_found')
   }
-  if (patch.tokenUsdMicros !== undefined) {
-    // Dated per reporter for teammate profiles' heatmap; the label above is only a running total.
-    await recordTokenSpend(db, row.account_id, caller.userId, row.token_usd_micros, patch.tokenUsdMicros, now).catch((error: unknown) =>
-      console.warn('member_usage_write_failed', String(error))
-    )
-  }
   const ownerChanged = transferring
   // Archiving goes through the lifecycle (archive_via_lifecycle above); the team route revokes on archive itself.
   return { row: next, revoke: ownerChanged ? 'all_but_new_owner' : 'none' }
@@ -474,6 +428,10 @@ export const PresenceSchema = z
   })
   .strict()
 
+/**
+ * Older desktops still report presence. No one but the owner sees a workspace, so nothing is stored; a viewing or
+ * typing report still counts as the owner's activity (Home's "last active").
+ */
 export async function reportPresence(
   db: D1Database,
   caller: SandboxCaller,
@@ -484,26 +442,10 @@ export async function reportPresence(
   if (!canSee(caller, row)) {
     throw new WorkspaceError('not_found')
   }
-  if (body.state === 'left') {
-    await db
-      .prepare('DELETE FROM workspace_presence WHERE sandbox_id = ? AND user_id = ? AND client_id = ?')
-      .bind(row.id, caller.userId, body.clientId)
-      .run()
-  } else {
-    await db.batch([
-      db
-        .prepare(
-          `INSERT INTO workspace_presence (sandbox_id, user_id, client_id, state, chat_id, updated_at) VALUES (?, ?, ?, ?, ?, ?)
-           ON CONFLICT (sandbox_id, user_id, client_id) DO UPDATE SET state = excluded.state, chat_id = excluded.chat_id, updated_at = excluded.updated_at`
-        )
-        .bind(row.id, caller.userId, body.clientId, body.state, body.chatId ?? null, now),
-      // Keep the table small: stale rows are noise for every reader.
-      db.prepare('DELETE FROM workspace_presence WHERE sandbox_id = ? AND updated_at < ?').bind(row.id, now - 10 * PRESENCE_TTL_MS)
-    ])
+  if (body.state !== 'left') {
     await touchActivity(db, row.id, caller.userId, now)
   }
-  const [view] = await workspaceViews(db, caller, [row], now)
-  return { presence: view!.presence }
+  return { presence: [] }
 }
 
 const ChatParam = z.string().min(1).max(128).regex(/^[A-Za-z0-9_.:-]+$/).optional()

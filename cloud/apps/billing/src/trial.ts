@@ -96,7 +96,7 @@ export type TrialInput = {
   emailVerified?: boolean
   githubUserId?: string
   githubOwnerId?: string
-  /** cf-connecting-ip of the request that asked for the grant. */
+  /** The asker's address: auth's `clientIp` claim for a console call, else cf-connecting-ip. */
   ip?: string
 }
 

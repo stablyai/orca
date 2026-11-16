@@ -97,13 +97,13 @@ describe('cloud setup service', () => {
       (name: string, final = true) =>
       async () => ({ name, final })
     expect(
-      await cloudSetupDeviceLabel({ platform: 'darwin', detect: named("m4air's MacBook Air") })
-    ).toBe("m4air's MacBook Air")
+      await cloudSetupDeviceLabel({ platform: 'darwin', detect: named("dev-mac's MacBook Air") })
+    ).toBe("dev-mac's MacBook Air")
     // scutil timed out or failed: the cleaned hostname, as before.
     expect(
       await cloudSetupDeviceLabel({
         platform: 'darwin',
-        detect: named('m4airs-MacBook-Air', false)
+        detect: named('devs-MacBook-Air', false)
       })
     ).toBe(setupDeviceLabel())
     // Off macOS the hostname is the name.

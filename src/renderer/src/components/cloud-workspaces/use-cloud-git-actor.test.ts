@@ -1,4 +1,4 @@
-// One read per workspace, deduped; re-read when forced (the window lapsing).
+// One read per workspace, deduped; re-read when forced.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { refreshCloudGitActor } from './use-cloud-git-actor'
 
@@ -14,7 +14,7 @@ describe('refreshCloudGitActor', () => {
   it('dedupes reads in flight and within the fresh window; a forced read goes through', async () => {
     const gitActor = vi.fn(async () => ({
       ok: true,
-      value: { id: 'sbx_a', githubActing: { actingAs: 'bot', reason: 'window_expired' } }
+      value: { id: 'sbx_a', githubActing: { actingAs: 'bot', reason: 'reconnect' } }
     }))
     vi.stubGlobal('window', { api: { cloudWorkspaces: { get: gitActor } } })
     await Promise.all([refreshCloudGitActor('sbx_a'), refreshCloudGitActor('sbx_a')])

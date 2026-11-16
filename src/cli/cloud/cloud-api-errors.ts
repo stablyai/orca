@@ -208,7 +208,7 @@ export function cloudApiError(
       'cloud_forbidden',
       `This Orca API key is missing the ${reason ?? 'required'} scope.`,
       data([
-        'Create an Orca API key with that scope in Orca → Settings → Orca API keys, then run `orca cloud login`.'
+        'Create an Orca API key with that scope in the Orca Cloud console (Orca → Settings → API keys & connected apps), then run `orca cloud login`.'
       ])
     )
   }

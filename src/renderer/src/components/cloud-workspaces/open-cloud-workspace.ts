@@ -17,7 +17,6 @@ import {
   getWorktreeExecutionHostId,
   toRuntimeExecutionHostId
 } from '../../../../shared/execution-host'
-import { refreshCloudMessageSenders } from '@/lib/cloud-message-sender'
 import { describeError, isUnknownServerFailure } from './cloud-workspace-errors'
 import {
   type OpenFeedbackFailure,
@@ -267,8 +266,6 @@ async function pairAndReveal(
     )
     throw error
   }
-  // Messages to this workspace now carry the sender line if it is shared with the team.
-  void refreshCloudMessageSenders().catch(() => undefined)
   return await connectAndReveal(added.environment.id, name, options, workspace.repo?.branch ?? null)
 }
 
@@ -292,14 +289,14 @@ async function openOnce(
         )
         return { ok: true, worktreeId: local.worktreeId }
       }
-      // Owned but created on another device (or reassigned to me): pair this device like a teammate.
+      // Owned but created on another device (or reassigned to me): pair this device with a grant.
     }
     if (workspace.access === 'none') {
       return {
         ok: false,
         message: translate(
-          'auto.components.cloudWorkspaces.noAccess',
-          "You don't have access to this workspace. Ask its owner to share it with the team."
+          'auto.components.cloudWorkspaces.noAccessOwnerOnly',
+          "You don't have access to this workspace. Only its owner can open it."
         )
       }
     }
@@ -341,6 +338,3 @@ export function openCloudWorkspace(
   opening.set(workspace.id, attempt)
   return attempt
 }
-
-// Copy link lives beside it; re-exported so callers keep one import.
-export { copyCloudWorkspaceLink, shareLinkFor } from './cloud-workspace-share-link'

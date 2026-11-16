@@ -120,7 +120,8 @@ function trialInput(caller: BillingCaller, request: Request): TrialInput {
     email: caller.email,
     emailVerified: caller.emailVerified,
     githubUserId: caller.githubUserId,
-    ip: request.headers.get('cf-connecting-ip') ?? undefined
+    // A console call reaches billing from auth: count the browser's address auth vouched for.
+    ip: caller.clientIp ?? request.headers.get('cf-connecting-ip') ?? undefined
   }
 }
 

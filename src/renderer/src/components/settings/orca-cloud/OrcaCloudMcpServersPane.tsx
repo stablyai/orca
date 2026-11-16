@@ -5,7 +5,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import type { EphemeralVmRuntimeRecord } from '../../../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
-import { CloudApiEmptyState } from '../cloud-api/cloud-api-parts'
+import { CloudEmptyState } from './CloudEmptyState'
 import { CloudMcpSyncSection } from '../runtime-environments/cloud-mcp/CloudMcpSyncSection'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 
@@ -67,7 +67,7 @@ export function OrcaCloudMcpServersView({
   if (workspaces.length === 0) {
     return (
       <SettingsGroup>
-        <CloudApiEmptyState
+        <CloudEmptyState
           icon={Plug}
           title={t('settings.orcaCloud.mcp.emptyTitle', 'No cloud workspace is running')}
           description={t(

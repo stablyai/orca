@@ -4,14 +4,6 @@ import { z } from 'zod'
 
 const Id = z.string().min(1).max(128)
 
-export const CloudWorkspacePresenceSchema = z.object({
-  userId: Id,
-  clientId: Id,
-  state: z.enum(['viewing', 'typing']),
-  chatId: Id.nullable(),
-  at: z.number()
-})
-
 export const CloudWorkspaceCostSchema = z.object({
   computeMs: z.number().min(0),
   rateUsdMicrosPerHour: z.number().min(0),
@@ -39,10 +31,10 @@ export const CloudWorkspaceSchema = z.object({
   title: z.string().nullable(),
   // Its number in the account, shown as W-123 (formatWorkspaceNumber). Older control planes omit it.
   number: z.number().int().positive().nullable().optional().catch(undefined),
-  // The link to copy (org slug + number, or the sandbox id form). Older control planes omit it.
-  link: z.string().max(512).optional().catch(undefined),
   repo: z.object({ url: z.string(), branch: z.string().nullable() }).nullable(),
-  visibility: z.enum(['private', 'team']),
+  // Team sharing is gone: control planes report `private` (or nothing). Read only by local commands,
+  // which still ask first if an older control plane says `team`.
+  visibility: z.enum(['private', 'team']).optional().catch(undefined),
   section: z.string().nullable(),
   archivedAt: z.number().nullable(),
   createdBy: Id,
@@ -51,7 +43,6 @@ export const CloudWorkspaceSchema = z.object({
   lastActivityBy: Id.nullable(),
   cost: CloudWorkspaceCostSchema,
   access: z.enum(['owner', 'granted', 'can_open', 'none']),
-  presence: z.array(CloudWorkspacePresenceSchema),
   // Display names (each member's token `name` claim) for the ids above. Labels only, and the org
   // roster wins where it has an entry. Older control planes omit it.
   memberNames: z.record(z.string(), z.string().max(80)).optional().catch(undefined),
@@ -63,24 +54,19 @@ export const CloudWorkspaceSchema = z.object({
   fromRoutine: z.boolean().optional().catch(undefined),
   // The routine that started it, for routine runs (shown as "Routine · <name>").
   routineName: z.string().max(200).nullable().optional().catch(undefined),
-  // Who follows it (oldest first) and whether the caller does. Older control planes
-  // omit them.
-  followers: z.array(Id).max(500).optional().catch(undefined),
-  following: z.boolean().optional().catch(undefined),
   // Set once its owner was ever changed (a workspace made from one inherits it).
-  // From then on it runs like a shared workspace for good. Older control planes omit it.
+  // From then on it runs in shared credential mode for good. Older control planes omit it.
   ownershipTransferredAt: z.number().nullable().optional().catch(undefined),
-  // Who pushes and PRs go out as right now (the control plane's own rule: the only person, or a shared
-  // workspace's latest sender within the window; else the Orca bot). `until`: when a shared workspace's window
-  // lapses (re-read then). Approvals always, and merges in shared workspaces, still go out as the bot. Present only
-  // on rows the caller may open; older control planes omit it.
+  // Who pushes and PRs go out as right now (the control plane's own rule: the owner, else the Orca
+  // bot). Approvals always go out as the bot. Present only on rows the caller may open; older control planes omit
+  // it. Older control planes may still send the retired multi-member reasons (`no_sender_yet`,
+  // `sender_not_connected`, `window_expired`, which read as the plain bot line) and `until` (dropped).
   githubActing: z
     .discriminatedUnion('actingAs', [
       z.object({
         actingAs: z.literal('member'),
         userId: Id,
-        login: z.string().max(39),
-        until: z.number().optional()
+        login: z.string().max(39)
       }),
       z.object({
         actingAs: z.literal('bot'),
@@ -107,7 +93,6 @@ export const CloudWorkspaceSchema = z.object({
 })
 
 export type CloudWorkspace = z.infer<typeof CloudWorkspaceSchema>
-export type CloudWorkspacePresence = z.infer<typeof CloudWorkspacePresenceSchema>
 
 /** What Home's Routine runs switch hides (counts and hours stay in the team's totals). */
 export const CloudWorkspaceRoutineRunsSchema = z.object({
@@ -125,15 +110,6 @@ export const CloudWorkspaceListResponseSchema = z.object({
   routineRuns: CloudWorkspaceRoutineRunsSchema.optional().catch(undefined)
 })
 export const CloudWorkspaceResponseSchema = z.object({ workspace: CloudWorkspaceSchema })
-/** PUT/DELETE /v1/team/workspaces/:id/follow. */
-export const CloudWorkspaceFollowSchema = z.object({
-  following: z.boolean(),
-  followers: z.array(Id)
-})
-export type CloudWorkspaceFollow = z.infer<typeof CloudWorkspaceFollowSchema>
-export const CloudWorkspacePresenceResponseSchema = z.object({
-  presence: z.array(CloudWorkspacePresenceSchema)
-})
 export const CloudWorkspaceLinkResponseSchema = z.object({
   workspace: CloudWorkspaceSchema,
   chatId: Id.nullable()
@@ -198,7 +174,7 @@ export const SealedReadSnapshotSchema = z.object({
 export const CloudReadSnapshotResponseSchema = z.object({ snapshot: SealedReadSnapshotSchema })
 
 export type CloudWorkspaceListQuery = {
-  scope?: 'mine' | 'team' | 'all'
+  scope?: 'mine' | 'all'
   by?: string
   repo?: string
   section?: string
@@ -210,7 +186,6 @@ export type CloudWorkspaceListQuery = {
 export type CloudWorkspacePatch = {
   title?: string | null
   branch?: string | null
-  visibility?: 'private' | 'team'
   section?: string | null
   archived?: boolean
   ownerUserId?: string
@@ -263,42 +238,19 @@ export const EMPTY_CLOUD_WORKSPACE_PREFS: CloudWorkspacePrefsDocument = {
   collapsed: []
 }
 
-/** /v1/team/org: the org's URL slug for links (null for personal accounts or before it is named). */
-export const CloudOrgSlugSchema = z.object({
-  slug: z.string().nullable(),
-  orgId: z.string().nullable()
-})
-export type CloudOrgSlug = z.infer<typeof CloudOrgSlugSchema>
-
 /** What a link names: a sandbox id (orca://cloud/w/<id>) or an org slug and number (orca://cloud/<slug>/W-<n>). */
 export type CloudWorkspaceLinkTarget =
   | { kind: 'id'; workspaceId: string }
   | { kind: 'number'; org: string; number: number }
 
 /**
- * Deep links (desktop and mobile):
+ * Deep links (desktop and mobile), opened here; this desktop no longer produces them:
  *   orca://cloud/w/<sandboxId>[/c/<chatId>]       works for any account
- *   orca://cloud/<org-slug>/W-<n>[/c/<chatId>]    what Copy link gives in a team
+ *   orca://cloud/<org-slug>/W-<n>[/c/<chatId>]    the org slug and W-number form
  */
 const ID_LINK = /^orca:\/\/cloud\/w\/(sbx_[0-9a-f]{24})(?:\/c\/([A-Za-z0-9_.:%-]{1,256}))?\/?$/
 const NUMBER_LINK =
   /^orca:\/\/cloud\/([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?)\/[Ww]-(\d{1,9})(?:\/c\/([A-Za-z0-9_.:%-]{1,256}))?\/?$/
-
-export function cloudWorkspaceLink(id: string, chatId?: string | null): string {
-  return `orca://cloud/w/${id}${chatId ? `/c/${encodeURIComponent(chatId)}` : ''}`
-}
-
-/** The server's link for a workspace (slug form when it has one), with a chat appended. */
-export function cloudWorkspaceShareLink(
-  workspace: { id: string; link?: string },
-  chatId?: string | null
-): string {
-  const base = workspace.link && parseCloudWorkspaceLink(workspace.link) ? workspace.link : null
-  if (!base) {
-    return cloudWorkspaceLink(workspace.id, chatId)
-  }
-  return `${base.replace(/\/$/, '')}${chatId ? `/c/${encodeURIComponent(chatId)}` : ''}`
-}
 
 function decodeChat(raw: string | undefined): string | null | undefined {
   if (!raw) {

@@ -1,28 +1,21 @@
 import React from 'react'
-import { AlertTriangle, Loader2 } from 'lucide-react'
+import { AlertTriangle, ExternalLink, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
-import type {
-  OrcaBillingEntitlement,
-  OrcaBillingOverageResult
-} from '../../../../shared/orca-billing'
-import { overageFailureCopy } from '../billing/plan-billing-copy'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
+import type { OrcaBillingEntitlement } from '../../../../shared/orca-billing'
 import { openPlansDialog } from '@/components/billing/plans/plans-dialog-store'
-import { formatCents } from '../../../../shared/orca-billing-usage-alerts'
+import { openCloudConsole } from '@/lib/orca-cloud/open-cloud-console'
 
-/** The four ways billing can refuse a create (JA-21 progressive billing). */
+/** The four ways billing can refuse a create. */
 export type BillingBlockKind = 'plan' | 'hoursUsed' | 'spendCap' | 'payment'
 
 export type BillingBlockerPhase =
   | { kind: 'idle' }
-  | { kind: 'saving' }
-  | { kind: 'error'; message: string }
-  /** A fix elsewhere: the plans dialog (then the console) or the payment portal. Re-check on
-   *  return, or with Check again. */
-  | { kind: 'browser'; checking: boolean; stillBlocked: boolean; via: 'plans' | 'portal' }
+  /** A fix elsewhere: the plans dialog (then the console), or the console's billing page for
+   *  overage, the spend cap and payment. Re-check on return, or with Check again. */
+  | { kind: 'browser'; checking: boolean; stillBlocked: boolean; via: 'plans' | 'console' }
 
-/** Why there is no plan, in billing's words: only a plan that existed has "ended" (EP-11). */
+/** Why there is no plan, in billing's words: only a plan that existed has "ended". */
 function planBlockBody(
   reason: string | null | undefined,
   t: Translate,
@@ -63,7 +56,7 @@ function planBlockBody(
 export function blockerCopy(
   kind: BillingBlockKind,
   t: Translate,
-  /** Billing's refusal reason: says whether a plan ended, a trial ran out, or there never was one (EP-11). */
+  /** Billing's refusal reason: says whether a plan ended, a trial ran out, or there never was one. */
   reason?: string | null,
   /** Owners/admins read "Your trial…"; members their team's (glossary). */
   canManageBilling?: boolean
@@ -114,48 +107,47 @@ export type VmBuildBillingBlockerViewProps = {
   reason?: string | null
   canManageBilling: boolean
   phase: BillingBlockerPhase
-  /** Spend cap reached: the field's starting value, in whole dollars. */
-  suggestedCapDollars: number
-  /** Billing's default cap for "Turn on with a $X cap"; null: plain "Turn on overage" (ENTITLEMENTS-C). */
-  defaultCapCents: number | null
-  onTurnOnOverage: () => void
-  onRaiseCap: (dollars: number) => void
   onComparePlans: () => void
-  onUpdatePayment: () => void
+  /** Overage, the spend cap and payment are changed on the web console's billing page. */
+  onOpenBilling: () => void
   onCheckAgain: () => void
   onBackToDraft: () => void
 }
 
+/** The button that opens the console's billing page, worded for the fix it leads to. */
+function openBillingLabel(kind: BillingBlockKind, t: Translate): string {
+  switch (kind) {
+    case 'spendCap':
+      return t('worktreeCreation.billingBlock.raiseInBrowser', 'Raise in browser')
+    case 'payment':
+      return t('worktreeCreation.billingBlock.updateInBrowser', 'Update in browser')
+    case 'hoursUsed':
+    case 'plan':
+      return t('worktreeCreation.billingBlock.turnOnInBrowser', 'Turn on in browser')
+  }
+}
+
 /**
  * The creating sheet's billing blocker: replaces the steps when billing refuses a create. Nothing
- * was created and no hours were used; the draft is kept, and an in-app fix continues the create.
+ * was created and no hours were used; the draft is kept, and the create continues once billing
+ * says a sandbox can start.
  */
 export function VmBuildBillingBlockerView({
   kind,
   reason,
   canManageBilling,
   phase,
-  suggestedCapDollars,
-  defaultCapCents,
-  onTurnOnOverage,
-  onRaiseCap,
   onComparePlans,
-  onUpdatePayment,
+  onOpenBilling,
   onCheckAgain,
   onBackToDraft
 }: VmBuildBillingBlockerViewProps): React.JSX.Element {
   const t = useTranslate()
-  const locale = useIntlLocale()
   const copy = blockerCopy(kind, t, reason, canManageBilling)
-  const capId = React.useId()
-  const [cap, setCap] = React.useState(String(suggestedCapDollars))
   const headingRef = React.useRef<HTMLHeadingElement>(null)
   React.useLayoutEffect(() => {
     headingRef.current?.focus({ preventScroll: true })
   }, [kind])
-  const saving = phase.kind === 'saving'
-  const capDollars = Number(cap)
-  const capValid = /^\d+$/.test(cap.trim()) && capDollars > 0
   const inBrowser = phase.kind === 'browser'
 
   return (
@@ -212,71 +204,15 @@ export function VmBuildBillingBlockerView({
                   </Button>
                 </div>
               </div>
-            ) : kind === 'spendCap' ? (
-              <form
-                className="flex flex-wrap items-end gap-2"
-                onSubmit={(event) => {
-                  event.preventDefault()
-                  if (!saving && capValid) {
-                    onRaiseCap(capDollars)
-                  }
-                }}
-              >
-                <div className="space-y-1">
-                  <label htmlFor={capId} className="block text-xs font-medium">
-                    {t('auto.components.billing.capLabel2', 'Monthly spend cap')}
-                  </label>
-                  <div className="flex items-center gap-1">
-                    <span className="text-muted-foreground">$</span>
-                    <Input
-                      id={capId}
-                      inputMode="numeric"
-                      className="w-24"
-                      value={cap}
-                      aria-invalid={!capValid || undefined}
-                      onChange={(event) => setCap(event.target.value)}
-                    />
-                  </div>
-                </div>
-                <Button
-                  type="submit"
-                  size="sm"
-                  aria-busy={saving || undefined}
-                  aria-disabled={saving || !capValid || undefined}
-                >
-                  {saving ? <Loader2 className="animate-spin" /> : null}
-                  {t(
-                    'worktreeCreation.billingBlock.raiseCapAndContinue',
-                    'Raise spend cap and continue'
-                  )}
-                </Button>
-              </form>
             ) : (
               <div className="flex flex-wrap gap-2">
-                {kind === 'hoursUsed' ? (
-                  <Button
-                    type="button"
-                    size="sm"
-                    aria-busy={saving || undefined}
-                    aria-disabled={saving || undefined}
-                    onClick={saving ? undefined : onTurnOnOverage}
-                  >
-                    {saving ? <Loader2 className="animate-spin" /> : null}
-                    {defaultCapCents === null
-                      ? t('auto.components.billing.overage.turnOnNoCap', 'Turn on overage')
-                      : t('auto.components.billing.overage.turnOn', 'Turn on with a {{cap}} cap', {
-                          cap: formatCents(defaultCapCents, locale)
-                        })}
+                {kind === 'plan' ? null : (
+                  <Button type="button" size="sm" onClick={onOpenBilling}>
+                    {openBillingLabel(kind, t)}
+                    <ExternalLink />
                   </Button>
-                ) : null}
-                {kind === 'payment' ? (
-                  <Button type="button" size="sm" onClick={onUpdatePayment}>
-                    {t(
-                      'auto.components.worktree.creation.VmBuildFailureCard.updatePayment',
-                      'Update payment method'
-                    )}
-                  </Button>
-                ) : (
+                )}
+                {kind === 'plan' || kind === 'hoursUsed' ? (
                   <Button
                     type="button"
                     size="sm"
@@ -285,17 +221,12 @@ export function VmBuildBillingBlockerView({
                   >
                     {t('auto.components.billing.comparePlans', 'Compare plans')}
                   </Button>
-                )}
+                ) : null}
               </div>
             )
           ) : (
             <p className="text-muted-foreground">{copy.ask}</p>
           )}
-          {phase.kind === 'error' ? (
-            <p role="status" className="text-destructive-text">
-              {phase.message}
-            </p>
-          ) : null}
         </div>
       </div>
       <Button
@@ -312,9 +243,9 @@ export function VmBuildBillingBlockerView({
 }
 
 /**
- * The live blocker: in-app fixes (overage, a higher cap) save and continue the create at once; a
- * browser fix (a plan or payment, in the web console) re-checks once when Orca regains focus, or
- * on Check again.
+ * The live blocker: every fix is in the browser (a plan through the plans dialog, overage, the
+ * spend cap and payment on the console's billing page). It re-checks once when Orca regains focus,
+ * or on Check again, and the create continues on its own once billing allows it.
  */
 export function VmBuildBillingBlocker({
   kind,
@@ -330,46 +261,13 @@ export function VmBuildBillingBlocker({
   onContinue: () => void
   onBackToDraft: () => void
 }): React.JSX.Element {
-  const t = useTranslate()
-  const locale = useIntlLocale()
   const [phase, setPhase] = React.useState<BillingBlockerPhase>({
     kind: 'idle'
   })
-  // Plan numbers come from billing, never guessed (ENTITLEMENTS-C): a reached cap suggests one more
-  // default cap on top; without billing's default, double the current cap.
-  const currentCap = entitlement?.overage.spendCapCents ?? 0
-  const defaultCapCents = entitlement?.offers?.team.defaultSpendCapCents ?? null
-  const suggestedCapDollars = Math.round((currentCap + (defaultCapCents ?? currentCap)) / 100)
-  const maxCap = entitlement?.offers?.team.maxSpendCapCents ?? null
-
-  const saveOverage = async (spendCapCents: number | null): Promise<void> => {
-    setPhase({ kind: 'saving' })
-    const outcome = await window.api.orcaProfiles
-      .billingSetOverage(
-        spendCapCents === null ? { enabled: true } : { enabled: true, spendCapCents }
-      )
-      .catch((error: unknown): OrcaBillingOverageResult => ({
-        status: 'failed',
-        error: String(error)
-      }))
-    if (outcome.status === 'ok') {
-      onContinue()
-      return
-    }
-    setPhase({
-      kind: 'error',
-      message:
-        overageFailureCopy(outcome, t, maxCap, locale) ??
-        t(
-          'worktreeCreation.billingBlock.saveFailed',
-          'Couldn’t save that. Try again, or change it in Plan & billing.'
-        )
-    })
-  }
 
   const checkBilling = React.useCallback(async (): Promise<void> => {
-    const via = (current: BillingBlockerPhase): 'plans' | 'portal' =>
-      current.kind === 'browser' ? current.via : 'portal'
+    const via = (current: BillingBlockerPhase): 'plans' | 'console' =>
+      current.kind === 'browser' ? current.via : 'console'
     setPhase((current) => ({
       kind: 'browser',
       checking: true,
@@ -377,7 +275,8 @@ export function VmBuildBillingBlocker({
       via: via(current)
     }))
     const status = await window.api.orcaProfiles.billingStatus().catch(() => null)
-    // The service's own verdict: a fixed payment makes new sandboxes startable again.
+    // The service's own verdict: overage on, a higher cap or a fixed payment makes new sandboxes
+    // startable again.
     if (status?.status === 'ok' && status.entitlement.canStartSandbox) {
       onContinue()
       return
@@ -410,17 +309,13 @@ export function VmBuildBillingBlocker({
       reason={entitlement?.reason ?? null}
       canManageBilling={canManageBilling}
       phase={phase}
-      suggestedCapDollars={suggestedCapDollars}
-      defaultCapCents={defaultCapCents}
-      onTurnOnOverage={() => void saveOverage(defaultCapCents)}
-      onRaiseCap={(dollars) => void saveOverage(dollars * 100)}
       onComparePlans={() => {
         setPhase({ kind: 'browser', checking: false, stillBlocked: false, via: 'plans' })
         openPlansDialog()
       }}
-      onUpdatePayment={() => {
-        setPhase({ kind: 'browser', checking: false, stillBlocked: false, via: 'portal' })
-        void window.api.orcaProfiles.billingOpenPortal().catch(() => {})
+      onOpenBilling={() => {
+        setPhase({ kind: 'browser', checking: false, stillBlocked: false, via: 'console' })
+        void openCloudConsole('billing')
       }}
       onCheckAgain={() => void checkBilling()}
       onBackToDraft={onBackToDraft}

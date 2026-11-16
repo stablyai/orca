@@ -1,5 +1,6 @@
 import type { OrcaBillingStatusResult } from '../../../../shared/orca-billing'
 import { openPlansDialog } from '@/components/billing/plans/plans-dialog-store'
+import { openCloudConsole } from '@/lib/orca-cloud/open-cloud-console'
 import { useAppStore } from '@/store/index'
 import { sandboxHoursLeft } from '@/components/billing/plan-billing-format'
 import {
@@ -126,11 +127,11 @@ export function getOrcaCloudPick(access: OrcaCloudRunTargetAccess): OrcaCloudPic
         : { kind: 'blocked' }
     case 'out-of-hours':
       return access.canManageBilling
-        ? { kind: 'act', run: openOverageSettings }
+        ? { kind: 'act', run: openBillingInBrowser }
         : { kind: 'blocked' }
     case 'payment-issue':
       return access.canManageBilling
-        ? { kind: 'act', run: () => void window.api.orcaProfiles.billingOpenPortal() }
+        ? { kind: 'act', run: openBillingInBrowser }
         : { kind: 'blocked' }
     case 'loading':
     case 'unknown':
@@ -139,17 +140,9 @@ export function getOrcaCloudPick(access: OrcaCloudRunTargetAccess): OrcaCloudPic
   }
 }
 
-/** Section id on the overage controls in Settings › Orca Cloud › Plan & billing (switch and cap). */
-export const ORCA_BILLING_OVERAGE_SECTION_ID = 'orca-billing-overage'
-
-function openOverageSettings(): void {
-  const state = useAppStore.getState()
-  state.openSettingsTarget({
-    pane: 'cloud-billing',
-    repoId: null,
-    sectionId: ORCA_BILLING_OVERAGE_SECTION_ID
-  })
-  state.openSettingsPage()
+/** Overage and payment are changed on the web console's billing page. */
+function openBillingInBrowser(): void {
+  void openCloudConsole('billing')
 }
 
 /** Hours left in tenths, rounded down: the one rule shared with Plan & billing. */

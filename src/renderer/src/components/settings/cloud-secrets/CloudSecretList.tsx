@@ -13,7 +13,7 @@ import { Skeleton } from '../../ui/skeleton'
 import { Button } from '../../ui/button'
 import { cloudSecretsErrorCopy } from './cloud-secrets-copy'
 import { CloudSecretEditor, type CloudSecretEditorTarget } from './CloudSecretEditor'
-import { CloudApiEmptyState } from '../cloud-api/cloud-api-parts'
+import { CloudEmptyState } from '../orca-cloud/CloudEmptyState'
 import { CloudSecretsPasteEnv } from './CloudSecretsPasteEnv'
 import { CloudSecretChips } from './CloudSecretVmBadge'
 import { CloudSecretHint } from './CloudSecretHint'
@@ -313,7 +313,7 @@ export function CloudSecretList({
       </p>
       {secrets.length === 0 && mode.kind === 'idle' ? (
         <div className="rounded-md border border-border/60">
-          <CloudApiEmptyState
+          <CloudEmptyState
             icon={KeyRound}
             title={emptyTitle}
             description={emptyDetail}

@@ -1,25 +1,19 @@
-// App-level wiring for team cloud workspaces: orca://cloud links, presence for the workspace in
-// front, and the copy-link shortcut. Installed once from main.tsx; no React tree needed.
-import { cloudTeamSharingEnabled } from '@/lib/orca-cloud/cloud-team-sharing-flag'
+// App-level wiring for cloud workspaces: opening orca://cloud links, and which workspace is in front
+// (a paired one's lease stays renewed while it is). Installed once from main.tsx; no React tree needed.
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
-import { keybindingMatchesAction } from '../../../../shared/keybindings/matching'
 import { parseCloudWorkspaceLink } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 import { reportCloudWorkspaceLinkFailure } from './cloud-workspace-link-failure'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
-import { copyCloudWorkspaceLink, openCloudWorkspace } from './open-cloud-workspace'
-import { currentCloudChatId, focusCloudChat } from './cloud-chat-focus'
+import { openCloudWorkspace } from './open-cloud-workspace'
+import { focusCloudChat } from './cloud-chat-focus'
 import { cloudWorkspacesAvailable } from './use-cloud-workspaces'
 import { installCloudWorkspaceSync } from './cloud-workspace-sync'
 import { rememberCloudWorkspaces } from './cloud-workspace-identity'
 import { installCloudAccessLostNotice } from './cloud-access-lost-toast'
 
-/** No input for this long and the desktop stops reporting presence (and renewing a lease). */
+/** No input for this long and the desktop stops renewing a paired workspace's lease. */
 const IDLE_MS = 15 * 60_000
-const TYPING_REPORT_MS = 3_000
-/** Tab and pane switches settle before the chat in front is re-read (layouts churn while resizing). */
-const CHAT_SYNC_DEBOUNCE_MS = 300
 
 export async function handleCloudWorkspaceLink(link: string): Promise<void> {
   const parsed = parseCloudWorkspaceLink(link)
@@ -45,34 +39,9 @@ export async function handleCloudWorkspaceLink(link: string): Promise<void> {
   }
 }
 
-type Front = {
-  sandboxId: string
-  owner: boolean
-  worktreeId: string
-  chatId: string | null
-} | null
-let front: Front = null
+type Front = { sandboxId: string; owner: boolean } | null
 
-/**
- * ⌘⌥⇧L: the workspace's own link (its W-number), like the cloud workspace
- * list's "Copy link to W-n". A link to the focused chat or terminal is a separate menu item, never the shortcut.
- */
-export function copyShortcutLink(sandboxId: string): Promise<boolean> {
-  return copyCloudWorkspaceLink(sandboxId, null)
-}
-
-/** What a focused chat id points at: `t:` terminals, anything else an agent chat. */
-export function focusedKind(chatId: string | null | undefined): 'chat' | 'terminal' | null {
-  return !chatId ? null : chatId.startsWith('t:') ? 'terminal' : 'chat'
-}
-
-/** The cloud workspace in front and the chat focused in it, for "Copy link" with the chat. */
-export function frontCloudChat(): { sandboxId: string; chatId: string | null } | null {
-  return front ? { sandboxId: front.sandboxId, chatId: front.chatId } : null
-}
-
-const frontKey = (value: Front): string =>
-  value ? `${value.sandboxId}:${value.owner}:${value.chatId ?? ''}` : ''
+const frontKey = (value: Front): string => (value ? `${value.sandboxId}:${value.owner}` : '')
 
 async function resolveFront(): Promise<Front> {
   const state = useAppStore.getState()
@@ -85,29 +54,17 @@ async function resolveFront(): Promise<Front> {
     (l) => l.worktreeId === worktreeId
   )
   if (local) {
-    return {
-      sandboxId: local.sandboxId,
-      owner: true,
-      worktreeId,
-      chatId: currentCloudChatId(worktreeId)
-    }
+    return { sandboxId: local.sandboxId, owner: true }
   }
   if (hostId) {
     const bindings = await window.api.cloudWorkspaces.environmentBindings()
     for (const [sandboxId, binding] of Object.entries(bindings)) {
       if (toRuntimeExecutionHostId(binding.environmentId) === hostId) {
-        return { sandboxId, owner: false, worktreeId, chatId: currentCloudChatId(worktreeId) }
+        return { sandboxId, owner: false }
       }
     }
   }
   return null
-}
-
-/** Targets whose own surface answers the chord: a browser guest/overlay, or a list row. */
-function shortcutOwnedElsewhere(target: Element | null): boolean {
-  return Boolean(
-    target?.closest('webview, [data-browser-overlay-tab-id], [data-cloud-workspace-row]')
-  )
 }
 
 export function installCloudWorkspaceLinks(): () => void {
@@ -128,7 +85,7 @@ export function installCloudWorkspaceLinks(): () => void {
   )
   void api.consumePendingLink().then((link) => link && void handleCloudWorkspaceLink(link))
 
-  // Presence: report the cloud workspace in front; teammates' desktops also keep its lease alive.
+  // Report the cloud workspace in front: a paired (not owned) one's lease is renewed while it is.
   // A hidden or idle window reports nothing, so an unattended desktop does not hold a VM awake.
   let last = ''
   let sequence = 0
@@ -149,27 +106,10 @@ export function installCloudWorkspaceLinks(): () => void {
       return
     }
     last = key
-    front = next
     await api.setActive(
-      next
-        ? { sandboxId: next.sandboxId, leased: !next.owner, chatId: next.chatId }
-        : { sandboxId: null }
+      next ? { sandboxId: next.sandboxId, leased: !next.owner } : { sandboxId: null }
     )
   }
-  // Switching chats inside the same workspace needs no IPC to find the workspace again.
-  const syncChat = (): void => {
-    if (!front) {
-      return
-    }
-    const chatId = currentCloudChatId(front.worktreeId)
-    if (chatId === front.chatId) {
-      return
-    }
-    front = { ...front, chatId }
-    last = frontKey(front)
-    void api.setActive({ sandboxId: front.sandboxId, leased: !front.owner, chatId })
-  }
-  let chatTimer: ReturnType<typeof setTimeout> | undefined
   cleanups.push(
     useAppStore.subscribe((state, previous) => {
       if (
@@ -177,20 +117,9 @@ export function installCloudWorkspaceLinks(): () => void {
         state.activeWorkspaceExecutionHostId !== previous.activeWorkspaceExecutionHostId
       ) {
         void sync()
-        return
-      }
-      if (
-        state.activeGroupIdByWorktree !== previous.activeGroupIdByWorktree ||
-        state.groupsByWorktree !== previous.groupsByWorktree ||
-        state.unifiedTabsByWorktree !== previous.unifiedTabsByWorktree ||
-        state.terminalLayoutsByTabId !== previous.terminalLayoutsByTabId
-      ) {
-        clearTimeout(chatTimer)
-        chatTimer = setTimeout(syncChat, CHAT_SYNC_DEBOUNCE_MS)
       }
     })
   )
-  cleanups.push(() => clearTimeout(chatTimer))
   void sync()
 
   let idleTimer: ReturnType<typeof setTimeout> | undefined
@@ -224,41 +153,8 @@ export function installCloudWorkspaceLinks(): () => void {
     window.removeEventListener('pointerdown', onInput, true)
   })
 
-  let lastTypingAt = 0
-  const onKeyDown = (event: KeyboardEvent): void => {
-    onInput()
-    if (!front) {
-      return
-    }
-    const target = event.target instanceof HTMLElement ? event.target : null
-    if (
-      !event.defaultPrevented &&
-      cloudTeamSharingEnabled() &&
-      !shortcutOwnedElsewhere(target) &&
-      keybindingMatchesAction(
-        'cloudWorkspace.copyLink',
-        event,
-        getShortcutPlatform(),
-        useAppStore.getState().keybindings
-      )
-    ) {
-      event.preventDefault()
-      void copyShortcutLink(front.sandboxId)
-      return
-    }
-    const editing = target?.isContentEditable || target?.tagName === 'TEXTAREA'
-    if (
-      editing &&
-      !event.metaKey &&
-      !event.ctrlKey &&
-      Date.now() - lastTypingAt > TYPING_REPORT_MS
-    ) {
-      lastTypingAt = Date.now()
-      void api.setActive({ sandboxId: front.sandboxId, typing: true, leased: !front.owner })
-    }
-  }
-  window.addEventListener('keydown', onKeyDown, true)
-  cleanups.push(() => window.removeEventListener('keydown', onKeyDown, true))
+  window.addEventListener('keydown', onInput, true)
+  cleanups.push(() => window.removeEventListener('keydown', onInput, true))
   const onUnload = (): void => void api.setActive({ sandboxId: null })
   window.addEventListener('beforeunload', onUnload)
   cleanups.push(() => window.removeEventListener('beforeunload', onUnload))
