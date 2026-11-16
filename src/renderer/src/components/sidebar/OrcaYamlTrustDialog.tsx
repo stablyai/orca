@@ -372,7 +372,7 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
           </Button>
           <Button onClick={() => resolveAndClose('run')}>
             {reviewCopy?.confirmLabel ??
-              t('auto.components.sidebar.OrcaYamlTrustDialog.f3e2b868fb', 'Run hooks')}
+              t('auto.components.sidebar.OrcaYamlTrustDialog.f3e2b868fb', 'Run')}
           </Button>
         </DialogFooter>
       </DialogContent>

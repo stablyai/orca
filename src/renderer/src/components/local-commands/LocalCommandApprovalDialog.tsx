@@ -231,7 +231,7 @@ export function LocalCommandApprovalDialogView({
                 disabled={disabled}
                 onClick={() => onDecide('always-allow')}
               >
-                {t('localCommands.prompt.alwaysAllow', 'Always allow this command')}
+                {t('localCommands.prompt.alwaysAllow', 'Always allow')}
               </Button>
             </TooltipTrigger>
             <TooltipContent side="top" sideOffset={4}>

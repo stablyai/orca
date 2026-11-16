@@ -356,8 +356,8 @@ export function SharePortDialog({
               >
                 {creating && <Loader2 className="size-4 animate-spin motion-reduce:animate-none" />}
                 {audience === 'public'
-                  ? t('auto.components.right.sidebar.CloudShare.createPublic', 'Create public link')
-                  : t('auto.components.right.sidebar.CloudShare.create', 'Create link')}
+                  ? t('auto.components.right.sidebar.CloudShare.createPublic', 'Create')
+                  : t('auto.components.right.sidebar.CloudShare.create', 'Create')}
               </Button>
             </>
           )}

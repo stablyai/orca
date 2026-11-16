@@ -36,12 +36,6 @@
     "reason": "recipe-VM branch; cloud branch says sandbox"
   },
   {
-    "path": "src/renderer/src/components/worktree-creation/VmDeleteConfirmDialog.tsx",
-    "term": "VM",
-    "match": "Delete VM",
-    "reason": "recipe-VM branch; cloud branch says sandbox"
-  },
-  {
     "path": "src/renderer/src/components/worktree-creation/vm-build-failure-copy.ts",
     "term": "VM",
     "match": "The VM is up, but some environment checks need attention",

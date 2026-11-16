@@ -374,8 +374,8 @@ function EditorForm({
           <Button type="submit" size="sm" aria-disabled={submitting} aria-busy={submitting}>
             {submitting ? <Loader2 className="animate-spin motion-reduce:animate-none" /> : null}
             {routine
-              ? t('auto.components.settings.cloudRoutines.editor.save', 'Save changes')
-              : t('auto.components.settings.cloudRoutines.editor.create', 'Create routine')}
+              ? t('auto.components.settings.cloudRoutines.editor.save', 'Save')
+              : t('auto.components.settings.cloudRoutines.editor.create', 'Create')}
           </Button>
         </DialogFooter>
       </div>

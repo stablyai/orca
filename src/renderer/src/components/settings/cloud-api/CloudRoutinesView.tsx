@@ -232,7 +232,7 @@ export function CloudRoutinesView(props: CloudRoutinesViewProps): React.JSX.Elem
             )}
           </p>
         }
-        confirmLabel={t('auto.components.settings.cloudRoutines.delete.confirm', 'Delete routine')}
+        confirmLabel={t('auto.components.settings.cloudRoutines.delete.confirm', 'Delete')}
         returnFocusTo={() => {
           // The deleted row is gone: land on the next row's Run now, else New routine.
           if (
