@@ -82,11 +82,10 @@ export function openSnapshot(file) {
  * The tabs the faulty pass opened that nothing was written in since.
  *
  * The pass appended a tab per chat it touched to the end of the tab list, in the older journal's
- * record order, with an id derived from the chat; reopening a chat later gives its tab a random id.
- * A copy's tab can only come from the pass, so every tab from the first copy tab on that the pass
- * could have made counts. Before the first copy, the pass's tabs continue down while the record
- * order keeps falling, and stop at a tab that was there before. A store that hadn't recorded its
- * tab list yet instead got a tab for every chat at once, in id order.
+ * record order, with an id derived from the chat. A copy's tab can only come from the pass, and a
+ * tab opened later lands after it, so every tab from the first to the last copy tab is the pass's.
+ * Beyond them, the pass's tabs continue while the record order keeps its direction and every gap is
+ * a chat in between whose tab was closed since; a tab that was there before stops it.
  */
 export function findMigrationReopenedTabs(legacy, domain) {
   const has = (db, table) =>
@@ -140,12 +139,26 @@ export function findMigrationReopenedTabs(legacy, domain) {
     }
     return held
   }
-  // A duplicate: its original here holds every item at that revision or later (a removal leaves a
-  // tombstone) and got as far. A copy of turns an older build saved holds something it doesn't.
+  const items = (id) =>
+    new Map(
+      domain
+        .prepare('SELECT item_id,revision,payload_json FROM journal_items WHERE session_id=?')
+        .all(id)
+        .map((row) => [String(row.item_id), row])
+    )
+  // A duplicate: its original here holds every item as is, or a later revision of it (a removal
+  // leaves a tombstone), and got as far. A copy of turns an older build saved differs somewhere.
   const isDuplicate = (copy, id) => {
-    const held = revisions(id, ['journal_items', 'journal_item_tombstones'])
-    for (const [item, revision] of revisions(copy, ['journal_items'])) {
-      if (!((held.get(item) ?? -1) >= revision)) {
+    const held = items(id)
+    const removed = revisions(id, ['journal_item_tombstones'])
+    for (const [item, row] of items(copy)) {
+      const theirs = held.get(item)
+      const same =
+        theirs !== undefined &&
+        (Number(theirs.revision) > Number(row.revision) ||
+          (Number(theirs.revision) === Number(row.revision) &&
+            theirs.payload_json === row.payload_json))
+      if (!same && !((removed.get(item) ?? -1) >= Number(row.revision))) {
         return false
       }
     }
@@ -218,49 +231,42 @@ export function findMigrationReopenedTabs(legacy, domain) {
   )
   // Without a duplicate's tab, nothing proves the faulty pass ran rather than a real downgrade's.
   const faulty = anchors.some((index) => duplicates.has(tabs[index].session))
-  const first = faulty ? anchors[0] : tabs.length
-  // An unrecorded tab list: every chat here, in id order, ahead of the copies; nothing was open.
-  const prefix = tabs.slice(0, first)
-  const wholeList =
-    faulty &&
-    prefix.length > 0 &&
-    prefix.every((tab, i) => derivedId(tab) && (i === 0 || prefix[i - 1].session < tab.session)) &&
-    prefix.some((tab) => order(tab) === undefined && records.has(tab.session))
-  let start = first
-  if (wholeList) {
-    start = 0
-  } else {
-    for (let i = first - 1; i >= 0; i--) {
-      const tab = tabs[i]
-      const next = tabs[start]
-      const r = order(tab)
-      // Tabs the pass closed since leave gaps, each one a chat between these two in record order.
-      if (
-        r === undefined ||
-        !passId(tab) ||
-        openBefore(tab) ||
-        r >= order(next) ||
-        next.position - tab.position - 1 > order(next) - r - 1
-      ) {
-        break
-      }
-      start = i
+  const pass = []
+  if (faulty) {
+    const first = anchors[0]
+    const last = anchors.at(-1)
+    // Each gap is a tab the pass opened and the user closed since: a chat between these two.
+    const follows = (lower, upper) => {
+      const a = order(lower)
+      const b = order(upper)
+      return (
+        a !== undefined &&
+        b !== undefined &&
+        passId(lower) &&
+        passId(upper) &&
+        upper.position - lower.position - 1 <= b - a - 1
+      )
     }
+    let low = first
+    while (low > 0 && !openBefore(tabs[low - 1]) && follows(tabs[low - 1], tabs[low])) {
+      low -= 1
+    }
+    let high = last
+    while (high + 1 < tabs.length && follows(tabs[high], tabs[high + 1])) {
+      high += 1
+    }
+    pass.push(...tabs.slice(low, high + 1).filter(passId))
   }
 
   const close = []
   const kept = { writtenSince: 0, openBefore: 0, olderBuildCopy: 0, notFromJournal: 0 }
-  for (const [index, tab] of tabs.entries()) {
-    if (index < start || !passId(tab)) {
-      continue
-    }
+  for (const tab of pass) {
     const original = copyOf.get(tab.session)
     if (original !== undefined && !duplicates.has(tab.session)) {
       kept.olderBuildCopy += 1
     } else if (order(tab) === undefined) {
-      // A chat made here; the unrecorded-list case tabbed it too, but it has no original to compare.
       kept.notFromJournal += 1
-    } else if (!(wholeList && index < first) && openBefore(tab)) {
+    } else if (openBefore(tab)) {
       kept.openBefore += 1
     } else if (!untouched(tab.session)) {
       kept.writtenSince += 1
@@ -347,10 +353,22 @@ export function findRunningOrca(userData, probe = {}) {
   if (!alive(record.pid) || !looksLikeOrca(record.pid)) {
     return null
   }
-  const actual = typeof record.startedAtMs === 'number' ? startedAt(record.pid) : null
-  // A different start time means the PID now belongs to another process.
-  if (actual !== null && Math.abs(actual - record.startedAtMs) > 5000) {
-    return null
+  const platform = probe.platform ?? process.platform
+  if (record.linuxStartTicks !== undefined && record.bootId !== undefined) {
+    // Linux records carry the kernel's own start identity; wall time there drifts.
+    const actual = (probe.linuxIncarnation ?? linuxIncarnation)(record.pid)
+    if (
+      actual !== null &&
+      (actual.bootId !== record.bootId || actual.startTicks !== record.linuxStartTicks)
+    ) {
+      return null
+    }
+  } else if (platform !== 'linux' && typeof record.startedAtMs === 'number') {
+    const actual = startedAt(record.pid)
+    // A different start time means the PID now belongs to another process.
+    if (actual !== null && Math.abs(actual - record.startedAtMs) > 5000) {
+      return null
+    }
   }
   return `Orca is running (process ${record.pid})`
 }
@@ -391,6 +409,21 @@ function processStartedAtMs(pid) {
       : run('ps', ['-p', String(pid), '-o', 'lstart='])
   const ms = output ? Date.parse(output.trim()) : Number.NaN
   return Number.isFinite(ms) ? ms : null
+}
+
+function linuxIncarnation(pid) {
+  try {
+    const stat = readFileSync(`/proc/${pid}/stat`, 'utf8')
+    // Field 22, counted after the parenthesised command name, which may hold spaces.
+    const startTicks = stat
+      .slice(stat.lastIndexOf(')') + 1)
+      .trim()
+      .split(/\s+/)[19]
+    const bootId = readFileSync('/proc/sys/kernel/random/boot_id', 'utf8').trim()
+    return startTicks && bootId ? { startTicks, bootId } : null
+  } catch {
+    return null
+  }
 }
 
 /** The same machine identity Orca writes into orcad.lock. */
