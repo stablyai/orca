@@ -1,6 +1,6 @@
 import {
   compareCodexSessionBackfillDates,
-  getCodexSessionBackfillDate,
+  getCodexSessionBackfillScanDates,
   getCodexSessionBackfillDatesBetween,
   toCodexSessionBackfillDateKey
 } from './codex-session-backfill-scan-dates'
@@ -169,8 +169,9 @@ export function createCodexSessionMigrationScheduler(args: {
     scheduledTimer = setTimeout(() => {
       scheduledTimer = null
       if (generation !== undefined) {
-        const currentDate = getCodexSessionBackfillDate()
-        scheduledScanDates.set(toCodexSessionBackfillDateKey(currentDate), currentDate)
+        for (const scanDate of getCodexSessionBackfillScanDates()) {
+          scheduledScanDates.set(toCodexSessionBackfillDateKey(scanDate), scanDate)
+        }
       }
       const scanDates = [...scheduledScanDates.values()].sort(compareCodexSessionBackfillDates)
       scheduledScanDates.clear()
@@ -187,8 +188,9 @@ export function createCodexSessionMigrationScheduler(args: {
     }
     scheduledRunGeneration += 1
     scheduledFullScan ||= fullScanRequired
-    const launchDate = getCodexSessionBackfillDate()
-    scheduledScanDates.set(toCodexSessionBackfillDateKey(launchDate), launchDate)
+    for (const scanDate of getCodexSessionBackfillScanDates()) {
+      scheduledScanDates.set(toCodexSessionBackfillDateKey(scanDate), scanDate)
+    }
     armScheduledRun(scheduledRunGeneration)
   }
 

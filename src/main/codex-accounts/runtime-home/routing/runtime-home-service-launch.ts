@@ -13,7 +13,7 @@ import { normalizeCodexRuntimeSelection } from '../../account-management/runtime
 import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
 import { hasCustomCodexHomeOverrideForLaunch } from '../../../codex/configuration/homes/codex-real-home-path'
 import { markCodexSessionBackfillMarkerPending } from '../../../codex/history/backfill/codex-session-backfill-marker'
-import { getCodexSessionBackfillDate } from '../../../codex/history/backfill/codex-session-backfill-scan-dates'
+import { getCodexSessionBackfillScanDates } from '../../../codex/history/backfill/codex-session-backfill-scan-dates'
 import { resolveCodexSessionBackfillPaths } from '../../../codex/history/backfill/codex-session-backfill'
 import type { CodexSessionBackfillDate } from '../../../codex/history/backfill/codex-session-backfill-types'
 import { ManagedCodexHomeTemporarilyUnavailableError } from '../../managed-homes/host-codex-managed-home-ownership'
@@ -211,7 +211,7 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
     const markerOwesFullScan = markCodexSessionBackfillMarkerPending(
       paths.markerPath,
       paths.systemSessionsRoot,
-      scanDates.length > 0 ? scanDates : [getCodexSessionBackfillDate()]
+      scanDates.length > 0 ? scanDates : getCodexSessionBackfillScanDates()
     )
     // Carry the marker's full-scan requirement across restarts after pending-window overflow.
     this.pendingHostSystemDefaultSessionMigrationNeedsFullScan ||= markerOwesFullScan

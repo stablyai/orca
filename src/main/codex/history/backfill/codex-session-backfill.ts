@@ -22,7 +22,7 @@ import {
   type CodexSessionBackfillBaseline
 } from './codex-session-backfill-marker'
 import {
-  getCodexSessionBackfillDate,
+  getCodexSessionBackfillScanDates,
   mergeCodexSessionBackfillDates
 } from './codex-session-backfill-scan-dates'
 import type {
@@ -119,7 +119,7 @@ function resolveCodexSessionBackfillScanPlan(
     return { scanDates }
   }
   // With certified history, a launch pass only needs the date receiving new rollouts.
-  return options.ignoreCompletionMarker ? { scanDates: [getCodexSessionBackfillDate()] } : null
+  return options.ignoreCompletionMarker ? { scanDates: getCodexSessionBackfillScanDates() } : null
 }
 
 /** Hardlink mutable rollouts without replacing existing targets; cross-volume snapshots cannot stay coherent. */

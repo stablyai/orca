@@ -19,7 +19,7 @@ describe('codex session backfill scan dates', () => {
     ).toContainEqual(expected)
   })
 
-  it.each([
+  it.each<[string, string, CodexSessionBackfillDate[]]>([
     [
       '2026-03-08T07:30:00Z',
       '2026-03-10T06:30:00Z',
