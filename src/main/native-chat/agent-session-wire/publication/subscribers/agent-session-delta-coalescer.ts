@@ -79,12 +79,10 @@ export function createAgentSessionDeltaCoalescer(
       observedBytes: number
       truncated: boolean
       dirty: boolean
-      dirtySince: number
+      cancelTimer: (() => void) | null
     }
   >()
   let totalRetainedBytes = 0
-  let cancelTimer: (() => void) | null = null
-  let timerAt = Infinity
   const evictable = new Set<string>()
 
   const flushKey = (key: string): boolean => {
@@ -92,6 +90,8 @@ export function createAgentSessionDeltaCoalescer(
     if (!stream?.dirty) {
       return true
     }
+    stream.cancelTimer?.()
+    stream.cancelTimer = null
     if (deps.shouldEmit?.(key, stream.textLength) === false) {
       stream.dirty = false
       return true
@@ -103,68 +103,50 @@ export function createAgentSessionDeltaCoalescer(
       truncated: stream.truncated
     })
     if (emitted === false) {
+      scheduleFlush(key)
       return false
     }
     stream.dirty = false
     return true
   }
 
-  const dueAt = (key: string, now: number): number =>
-    Math.max(streams.get(key)!.dirtySince + windowMs, now + (deps.dueIn?.(key) ?? 0))
-
-  const scheduleFlush = (key?: string): void => {
-    const now = performance.now()
-    let next = key !== undefined && streams.get(key)?.dirty ? dueAt(key, now) : Infinity
-    if (key === undefined) {
-      for (const [id, stream] of streams) {
-        if (stream.dirty) {
-          next = Math.min(next, dueAt(id, now))
-        }
-      }
-    }
-    if (next >= timerAt) {
+  const scheduleFlush = (key: string, minimumMs = windowMs): void => {
+    const stream = streams.get(key)
+    if (!stream?.dirty || stream.cancelTimer) {
       return
     }
-    cancelTimer?.()
-    timerAt = next
-    cancelTimer = schedule(
+    stream.cancelTimer = schedule(
       () => {
-        cancelTimer = null
-        timerAt = Infinity
-        const wokeAt = performance.now()
-        for (const [id, stream] of streams) {
-          if (!stream.dirty || (deps.dueIn && dueAt(id, wokeAt) > wokeAt)) {
-            continue
-          }
-          if (!flushKey(id)) {
-            stream.dirtySince = wokeAt
-          }
+        stream.cancelTimer = null
+        if (streams.get(key) !== stream || !stream.dirty) {
+          return
         }
-        scheduleFlush()
+        if ((deps.dueIn?.(key) ?? 0) > 0) {
+          scheduleFlush(key, 1)
+        } else if (!flushKey(key)) {
+          scheduleFlush(key)
+        }
       },
-      Math.max(0, next - now)
+      Math.max(minimumMs, deps.dueIn?.(key) ?? 0)
     )
   }
 
   const flushAll = (only?: (key: string) => boolean): boolean => {
-    cancelTimer?.()
-    cancelTimer = null
-    timerAt = Infinity
     let emitted = true
     for (const key of streams.keys()) {
-      if (!only || only(key)) {
-        if (!flushKey(key)) {
-          streams.get(key)!.dirtySince = performance.now()
-          emitted = false
-        }
+      if ((!only || only(key)) && !flushKey(key)) {
+        scheduleFlush(key)
+        emitted = false
       }
     }
-    scheduleFlush()
     return emitted
   }
 
   return {
     append: (key, delta) => {
+      if (delta.length === 0) {
+        return true
+      }
       let stream = streams.get(key)
       if (!stream) {
         // Flush before eviction so a new untrusted ID cannot erase observed output.
@@ -195,7 +177,7 @@ export function createAgentSessionDeltaCoalescer(
           observedBytes: 0,
           truncated: false,
           dirty: false,
-          dirtySince: 0
+          cancelTimer: null
         }
         if (!deps.isProtected?.(key)) {
           evictable.add(key)
@@ -222,13 +204,10 @@ export function createAgentSessionDeltaCoalescer(
         stream.chunks = next.chunks
         stream.retainedBytes = next.retainedBytes
         stream.truncated = next.truncated
-        if (!stream.dirty) {
-          stream.dirtySince = performance.now()
-        }
         stream.dirty = true
       }
       streams.set(key, stream)
-      // Share one timer across streams to bound wakeups per window.
+      // Each dirty stream owns its deadline; a wake never scans unrelated streams.
       scheduleFlush(key)
       return true
     },
@@ -237,15 +216,16 @@ export function createAgentSessionDeltaCoalescer(
     forget: (key) => {
       const stream = streams.get(key)
       if (stream) {
+        stream.cancelTimer?.()
         totalRetainedBytes -= stream.retainedBytes
         streams.delete(key)
         evictable.delete(key)
       }
     },
     dispose: () => {
-      cancelTimer?.()
-      cancelTimer = null
-      timerAt = Infinity
+      for (const stream of streams.values()) {
+        stream.cancelTimer?.()
+      }
       streams.clear()
       evictable.clear()
       totalRetainedBytes = 0
@@ -278,6 +258,8 @@ export function createAgentSessionDeltaCoalescer(
     markFlushed: (key) => {
       const stream = streams.get(key)
       if (stream) {
+        stream.cancelTimer?.()
+        stream.cancelTimer = null
         stream.dirty = false
       }
     }

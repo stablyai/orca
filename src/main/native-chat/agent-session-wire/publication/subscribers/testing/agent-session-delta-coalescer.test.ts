@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createAgentSessionDeltaCoalescer } from '../agent-session-delta-coalescer'
 
 /** Drive scheduling without wall-clock timing. */
@@ -51,3 +51,59 @@ describe('agent-session delta coalescer', () => {
     expect(emitted).toEqual([['first', 'preserve me']])
   })
 })
+
+afterEach(() => vi.useRealTimers())
+
+it('does not save unchanged text when a provider sends empty deltas', () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
+  const saved: string[] = []
+  const coalescer = createAgentSessionDeltaCoalescer({ emit: (_key, text) => saved.push(text) })
+  coalescer.append('reply', 'reply')
+  vi.advanceTimersByTime(60)
+  for (let i = 0; i < 10; i++) {
+    coalescer.append('reply', '')
+    vi.advanceTimersByTime(400)
+  }
+  expect(saved).toEqual(['reply'])
+  coalescer.append('reply', ' tail')
+  coalescer.flushAll()
+  expect(saved).toEqual(['reply', 'reply tail'])
+  coalescer.dispose()
+})
+
+it.each([16, 160])(
+  'schedules %i staggered streams without checking unrelated deadlines',
+  (count) => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
+    const savedAt = new Map<string, number>()
+    let checks = 0
+    const saved = new Map<string, string>()
+    const coalescer = createAgentSessionDeltaCoalescer({
+      dueIn: (key) => {
+        checks++
+        const previous = savedAt.get(key)
+        return previous === undefined ? 0 : Math.max(0, 400 - (performance.now() - previous))
+      },
+      emit: (key, text) => {
+        saved.set(key, text)
+        savedAt.set(key, performance.now())
+      }
+    })
+    for (let i = 0; i < count; i++) {
+      coalescer.append(String(i), 'prefix')
+      vi.advanceTimersByTime(1)
+    }
+    vi.advanceTimersByTime(400)
+    checks = 0
+    for (let i = 0; i < count; i++) {
+      coalescer.append(String(i), ' tail')
+      vi.advanceTimersByTime(1)
+    }
+    vi.advanceTimersByTime(400)
+    expect(saved.size).toBe(count)
+    expect([...saved.values()].every((text) => text === 'prefix tail')).toBe(true)
+    expect(checks).toBeLessThanOrEqual(count * 4)
+    coalescer.dispose()
+    expect(vi.getTimerCount()).toBe(0)
+  }
+)

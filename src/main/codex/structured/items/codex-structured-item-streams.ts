@@ -175,7 +175,7 @@ export function createCodexStructuredItemStreams(
       threadId === undefined ? undefined : (key) => producers.get(key)?.threadId === threadId
     )
     for (const key of pendingCheckpoints) {
-      // flushAll already placed every stream's first row; re-saving other threads would bypass their cadence.
+      // A thread barrier leaves other threads on their own save deadlines.
       if (threadId !== undefined && producers.get(key)?.threadId !== threadId) {
         continue
       }
