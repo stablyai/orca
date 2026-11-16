@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
-import { SERVE_LAUNCHD_LABEL_PREFIX } from '../../../../shared/serve-bundle-coordination'
+import { SERVE_LAUNCHD_LABEL_PREFIX } from '../../../../shared/remote-runtime/serve-supervisor/serve-bundle-coordination'
 
 export type ServeServiceManager = 'launchd' | 'systemd'
 

@@ -1,10 +1,10 @@
 import { ProjectGroupHooksSection } from '../repository/hooks/ProjectGroupHooksSection'
-import { projectGroupHookOwner } from '../../../../../shared/workspace-hook-owner'
+import { projectGroupHookOwner } from '../../../../../shared/workspace-setup/hooks/workspace-hook-owner'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID
 } from '../../../../../shared/execution-host'
-import { getRepoHostIdentity } from '../../../../../shared/repo-host-identity'
+import { getRepoHostIdentity } from '../../../../../shared/repository/repo-host-identity'
 import { RepositoryPane } from '../repository/RepositoryPane'
 import { SettingsSection } from '../section-layout/SettingsSection'
 import {

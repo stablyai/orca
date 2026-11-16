@@ -1,4 +1,4 @@
-import type { WorkspacePort } from '../../../../../shared/workspace-ports'
+import type { WorkspacePort } from '../../../../../shared/workspace/ports/workspace-ports'
 
 export function getLocalWorkspacePortSections(
   scan: { ports: WorkspacePort[] } | null | undefined,

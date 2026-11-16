@@ -7,7 +7,7 @@ import { resolveCompatibleAgentTypeForOwner } from '../../../../../../../shared/
 import { isShellProcess } from '../../../../../../../shared/agent-status/process/shell-process-detection'
 import type { TerminalAgent } from '../../../../../../../shared/agent-status/identity/terminal-agent'
 import { createPaneForegroundProcessReader } from './pane-foreground-process-reader'
-import { FOREGROUND_COMMAND_READS } from '../../../../../../../shared/foreground-command-settle'
+import { FOREGROUND_COMMAND_READS } from '../../../../../../../shared/terminal/pty/foreground/foreground-command-settle'
 import type {
   ForegroundReadReason,
   PaneForegroundAgentTrackerDeps

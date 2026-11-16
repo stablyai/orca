@@ -2,7 +2,7 @@ import type { Dispatch, SetStateAction } from 'react'
 
 import { translate } from '@/i18n/i18n'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { TaskPageGitHubMutationIntent } from '@/components/task-page/github/mutations/task-page-github-work-item-mutation-patches'
 import {
   normalizeGitHubReviewerLogins,
@@ -13,7 +13,7 @@ import { toast } from 'sonner'
 import type { GitHubAssignableUser } from '../../../../../../shared/github/pull-requests/pull-request-types'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../../shared/github/repositories/repository-identity'
 import type { GitHubWorkItem } from '../../../../../../shared/github/work-items/work-item-types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { TaskSourceContext } from '../../../../../../shared/work-items/task-source-context'
 import type { TaskPageGitHubWorkItemMutationRunner } from '../mutations/task-page-github-work-item-mutation-types'
 import { buildRequestedReviewUsers } from './task-page-github-review-model'

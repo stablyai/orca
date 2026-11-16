@@ -87,6 +87,7 @@ vi.mock('../repositories/github-api-repository', async (importOriginal) => {
   }
 })
 import { createIssue } from './issue-create'
+import { getIssue } from './issues'
 import { updateIssue } from './issue-update'
 
 import { _resetOriginGitHubApiRepositoryCache } from '../repositories/github-api-repository-remote-probe'
@@ -108,6 +109,34 @@ describe('issue source operations', () => {
       source: await getIssueOwnerRepoMock(),
       fellBack: false
     }))
+  })
+
+  it('reads a linked issue from its saved repository instead of the upstream heuristic', async () => {
+    getIssueOwnerRepoMock.mockResolvedValue({ owner: 'parent', repo: 'repo' })
+    ghExecFileAsyncMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({
+        number: 247,
+        title: 'Fork issue',
+        state: 'open',
+        html_url: 'https://github.com/fork/repo/issues/247',
+        labels: []
+      })
+    })
+
+    await expect(
+      getIssue('/repo-root', 247, null, {}, { owner: 'fork', repo: 'repo', host: 'github.com' })
+    ).resolves.toMatchObject({ title: 'Fork issue' })
+    expect(ghExecFileAsyncMock).toHaveBeenCalledWith(
+      ['api', '--cache', '300s', 'repos/fork/repo/issues/247'],
+      { cwd: '/repo-root', host: 'github.com' }
+    )
+    expect(getIssueOwnerRepoMock).not.toHaveBeenCalled()
+
+    // An invalid saved slug must not fall through to gh's cwd repository.
+    await expect(
+      getIssue('/repo-root', 247, null, {}, { owner: 'fork', repo: '../parent' })
+    ).resolves.toBeNull()
+    expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1)
   })
 
   it('reports partial success when oversized-body patch fails', async () => {

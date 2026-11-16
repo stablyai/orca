@@ -307,6 +307,9 @@ export async function main(root, argv) {
     ORCA_CODE_QUALITY_BASE: mergeBase,
     ...(process.stdout.isTTY ? { FORCE_COLOR: '1' } : {})
   }
+  if (process.stdout.isTTY) {
+    delete env.NO_COLOR
+  }
   if (
     plan.typecheckProjects.length > 0 ||
     plan.unitTests.related.length + plan.unitTests.colocated.length > 0

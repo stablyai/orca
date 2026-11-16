@@ -8,7 +8,7 @@ import {
   useAppStateViewActive,
   useAppStateValue
 } from '@/store/retained-views/app-state-view'
-import { nativeChatPreferenceFor } from '../../../../shared/structured-native-chat-launch-route'
+import { nativeChatPreferenceFor } from '../../../../shared/agent-launch/choices/structured-native-chat-launch-route'
 import type { AgentMenuRowsTarget, NewTabAgentMenuModel } from './new-tab-agent-menu-model'
 export type { AgentMenuRowsTarget, NewTabAgentMenuModel } from './new-tab-agent-menu-model'
 import { useMemo } from 'react'

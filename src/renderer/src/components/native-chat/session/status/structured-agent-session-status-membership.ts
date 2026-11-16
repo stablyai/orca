@@ -45,6 +45,35 @@ export function sameSemanticTab(previous: StructuredTab, next: StructuredTab): b
   )
 }
 
+/** Unchanged feed facts for an unchanged tab cannot change its projection or companions. */
+export function sameCapturedInput(
+  previous: ProjectionInput | undefined,
+  next: ProjectionInput
+): boolean {
+  return (
+    previous !== undefined &&
+    sameSemanticTab(previous.tab, next.tab) &&
+    previous.summary === next.summary &&
+    previous.observation === next.observation &&
+    previous.failedAt === next.failedAt &&
+    previous.sleptAt === next.sleptAt &&
+    previous.directory === next.directory
+  )
+}
+
+export function sameStatusInput(
+  previous: ProjectionInput | undefined,
+  next: ProjectionInput
+): boolean {
+  return (
+    previous !== undefined &&
+    sameSemanticTab(previous.tab, next.tab) &&
+    previous.summary === next.summary &&
+    previous.observation === next.observation &&
+    previous.failedAt === next.failedAt
+  )
+}
+
 /** Which chat tabs the status bridge projects, updated per changed tab rather than rebuilt. */
 export function createStructuredSessionMembership() {
   const members = new Map<string, Member>()

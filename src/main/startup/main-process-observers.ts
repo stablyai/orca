@@ -2,7 +2,7 @@ import { BackendSupervisor } from '../backend-desktop/backend-supervisor'
 import { app, powerMonitor } from 'electron'
 import { join } from 'node:path'
 import { AgentAwakeService } from '../power/agent-awake-service'
-import { normalizeComputerAwakeMode } from '../../shared/computer-awake-mode'
+import { normalizeComputerAwakeMode } from '../../shared/app-lifecycle/computer-awake-mode'
 import { registerSystemResumeBroadcast } from '../power/system-resume-broadcast'
 import { recordWakeSignal } from '../power/wake-signal-clock'
 import { readDesktopAwayState } from '../notifications/desktop-away-state'
@@ -83,9 +83,30 @@ export function initializeMainProcessObservers(): void {
     isQuitting: () => state.isQuitting,
     getWorkingAgentCount: () => state.agentAwakeService?.getWorkingAgentCount() ?? 0
   })
-  const unsubscribeStatusChanges = agentHookServer.subscribeStatusChanges((statuses) => {
-    state.agentAwakeService?.setStatuses(statuses)
-  })
+  const unsubscribeStatusChanges = agentHookServer.subscribeStatusRowMutations(
+    ({ before, after }) => {
+      for (const paneKey of new Set([before?.paneKey, after?.paneKey])) {
+        if (!paneKey) {
+          continue
+        }
+        const row = agentHookServer
+          .getStatusSnapshotForPane(paneKey)
+          .find((row) => !row.providerSessionOnly)
+        state.agentAwakeService?.updateStatus(
+          paneKey,
+          row
+            ? {
+                paneKey,
+                state: row.state,
+                receivedAt: row.receivedAt,
+                observedInCurrentRuntime:
+                  row.isReplay !== true && row.restoredUnconfirmed !== true && !row.paneSleep
+              }
+            : undefined
+        )
+      }
+    }
+  )
   const unsubscribeStatusFreshness = agentHookServer.subscribeStatusFreshness((status) => {
     state.agentAwakeService?.observeStatusFreshness(status)
   })

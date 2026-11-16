@@ -1,4 +1,4 @@
-import { getAppEnvironment } from '../../../../shared/app-environment'
+import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
 import type { RuntimeRpcClientActivity } from '../../../runtime/rpc/server/runtime-rpc'
 import type { OrcadIdleExitEvidence } from './orcad-idle-exit-monitor'
 import {
@@ -22,7 +22,7 @@ import {
   requestOrcadWslHolderRelease,
   withdrawOrcadWslHolderRelease
 } from '../../instance-lock/orcad-wsl-holder-release'
-import type { OrcadIdleStopRecord } from '../../../../shared/orcad-idle-exit'
+import type { OrcadIdleStopRecord } from '../../../../shared/remote-runtime/orcad-lifecycle/orcad-idle-exit'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 
 let requestIdleShutdown: OrcadShutdownTrigger | null = null

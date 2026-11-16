@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { getDefaultUIState } from '../../../shared/constants'
-import { omitPairingLocalUiFields } from '../../../shared/pairing-local-ui-fields'
+import { omitPairingLocalUiFields } from '../../../shared/remote-runtime/pairing/pairing-local-ui-fields'
 import { capturePersistedUIWriteBaseline } from '@/store/slices/ui/persisted-ui-write-baseline'
 import {
   writeProjectOrderMode,

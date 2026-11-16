@@ -2,7 +2,7 @@ import {
   buildMobileProjectSectionCatalog,
   type MobileProjectSectionCatalog
 } from '../../../../shared/mobile-project-sections-contract'
-import type { ProjectHostSetupProjection } from '../../../../shared/project-host-setup-projection'
+import type { ProjectHostSetupProjection } from '../../../../shared/project/host-setup/project-host-setup-projection'
 import { getProjectHostSetupProjectionFromState } from '@/store/projects/project-host-setup-selector'
 import type { AppState } from '@/store/types'
 
@@ -11,16 +11,22 @@ type CatalogSource = {
   projection: ProjectHostSetupProjection
   projectOrderBy: AppState['projectOrderBy']
   personalProjectOrder?: AppState['personalProjectOrder']
+  projectGroups: AppState['projectGroups']
   catalog: MobileProjectSectionCatalog
 }
 
 let cachedCatalogSource: CatalogSource | null = null
 
-/** What the sidebar groups Project headers by: state.repos in its order and the selector's projection. */
+/** What the sidebar groups Project headers by: state.repos in its order, the selector's projection and project groups. */
 export function getProjectSectionCatalogFromState(
   state: Pick<
     AppState,
-    'repos' | 'projects' | 'projectHostSetups' | 'projectOrderBy' | 'personalProjectOrder'
+    | 'repos'
+    | 'projects'
+    | 'projectHostSetups'
+    | 'projectOrderBy'
+    | 'personalProjectOrder'
+    | 'projectGroups'
   >
 ): MobileProjectSectionCatalog | null {
   // Why: graph publication must not fail on a store slice that holds no repo catalog.
@@ -34,7 +40,8 @@ export function getProjectSectionCatalogFromState(
     cached.repos === state.repos &&
     cached.projection === projection &&
     cached.projectOrderBy === state.projectOrderBy &&
-    cached.personalProjectOrder === state.personalProjectOrder
+    cached.personalProjectOrder === state.personalProjectOrder &&
+    cached.projectGroups === state.projectGroups
   ) {
     return cached.catalog
   }
@@ -42,7 +49,7 @@ export function getProjectSectionCatalogFromState(
     state.repos,
     projection,
     state.projectOrderBy,
-    undefined,
+    state.projectGroups,
     state.personalProjectOrder
   )
   cachedCatalogSource = {
@@ -50,6 +57,7 @@ export function getProjectSectionCatalogFromState(
     projection,
     projectOrderBy: state.projectOrderBy,
     personalProjectOrder: state.personalProjectOrder,
+    projectGroups: state.projectGroups,
     catalog
   }
   return catalog

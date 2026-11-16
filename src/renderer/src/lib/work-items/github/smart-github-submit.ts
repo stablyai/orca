@@ -5,7 +5,7 @@ import {
   getTaskSourceCacheScope
 } from '../../../../../shared/work-items/task-source-context'
 
-import { getLinkedWorkItemWorkspaceName } from '../../../../../shared/workspace-name'
+import { getLinkedWorkItemWorkspaceName } from '../../../../../shared/workspace/naming/workspace-name'
 import type { LinkedWorkItemSummary } from '../../workspace/creation/new-workspace'
 import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/repositories/links'
 import { resolveGitHubWorkItemIdentity } from '../../../../../shared/new-workspace/github-work-item-identity'

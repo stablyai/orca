@@ -1,9 +1,9 @@
 import type { WorktreeCatalogVersion } from './catalog/catalog-version'
 import type { ExecutionHostId } from '../execution-host'
 import type { ArchiveHookOverride } from './removal/archive-hook-removal-gate'
-import type { WorkspaceSource } from '../workspace-source'
+import type { WorkspaceSource } from '../workspace/creation/workspace-source'
 import type { TaskSourceContext } from '../work-items/task-source-context'
-import type { WorkspaceKey } from '../workspace-scope'
+import type { WorkspaceKey } from '../workspace/identity/workspace-scope'
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 import type {
   GitPushTarget,

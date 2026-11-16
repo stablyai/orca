@@ -24,7 +24,7 @@ import {
   hasValidWorkspaceCleanupUnverifiedConsent,
   hasWorkspaceCleanupRiskEscalated
 } from './workspace-cleanup-preflight-failures'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import { scanWorkspaceCleanupHosts } from './workspace-cleanup-host-scan'
 
 /** Distinct from every ExecutionHostId, so a hostless row cannot alias one. */

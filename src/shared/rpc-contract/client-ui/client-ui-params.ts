@@ -1,19 +1,19 @@
 import { GitHistoryRefName } from '../source-control/git-params'
 import { z } from 'zod'
-import { isFeatureTipSeenId } from '../../feature-tips'
+import { isFeatureTipSeenId } from '../../feature-education/feature-tips'
 import {
   WORKTREE_CARD_PROPERTIES,
   normalizeWorktreeCardProperties
 } from '../../worktree/row-display/card-properties'
 import { isPluginPanelTabKey } from '../../plugins/frames/plugin-tab-key'
-import { isFeatureInteractionId } from '../../feature-interactions'
-import type { FeatureInteractionId } from '../../feature-interaction-catalog'
+import { isFeatureInteractionId } from '../../feature-education/interactions/feature-interactions'
+import type { FeatureInteractionId } from '../../feature-education/interactions/feature-interaction-catalog'
 import {
   ACTIVITY_GROUP_BY_VALUES,
   THREAD_READ_FILTER_VALUES
 } from '../../agents-view-thread-filters'
-import { isReleaseChannel } from '../../release-channel'
-import type { ReleaseChannel } from '../../release-channel'
+import { isReleaseChannel } from '../../updater/release-channel'
+import type { ReleaseChannel } from '../../updater/release-channel'
 import { ClientUiWorkspaceFilterFields } from './client-ui-workspace-filter-fields-params'
 import { TaskResumeState } from './task-resume-state-params'
 import { WorkspaceCleanup } from '../workspace-cleanup/workspace-cleanup-ui-params'

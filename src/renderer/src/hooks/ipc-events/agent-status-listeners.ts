@@ -65,6 +65,10 @@ export function registerAgentStatusListeners(args: {
   unsubs.push(
     window.api.agentStatus.onSet((data) => {
       enqueueLiveAgentStatus(data)
+      // A successful stop can resolve before the ordinary burst timer; publish its handoff first.
+      if (data.paneSleep) {
+        drainQueuedLiveAgentStatusesForPane(data.paneKey)
+      }
     })
   )
   const unsubscribeAgentStatusClear = window.api.agentStatus.onClear?.(
@@ -86,6 +90,7 @@ export function registerAgentStatusListeners(args: {
         for (let index = pendingAgentStatusEvents.length - 1; index >= 0; index -= 1) {
           const pending = pendingAgentStatusEvents[index].data
           if (
+            !pending.paneSleep &&
             pending.connectionId === data.connectionId &&
             pending.receivedAt <= effectiveWatermark
           ) {
@@ -95,6 +100,7 @@ export function registerAgentStatusListeners(args: {
         for (let index = liveAgentStatusBurstQueue.length - 1; index >= 0; index -= 1) {
           const queued = liveAgentStatusBurstQueue[index]
           if (
+            !queued.paneSleep &&
             queued.connectionId === data.connectionId &&
             queued.receivedAt <= effectiveWatermark
           ) {
@@ -128,7 +134,8 @@ export function registerAgentStatusListeners(args: {
       if (
         data.statusUnavailable !== true &&
         data.programStatusRemoved !== true &&
-        store.agentStatusByPaneKey[data.paneKey]?.state === 'done'
+        !store.agentStatusByPaneKey.get(data.paneKey)?.paneSleep &&
+        store.agentStatusByPaneKey.get(data.paneKey)?.state === 'done'
       ) {
         return
       }

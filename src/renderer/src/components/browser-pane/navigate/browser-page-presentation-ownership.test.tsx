@@ -162,9 +162,8 @@ it('accounts before reentrant loss and retains a committed write when its subscr
     throw new Error('subscriber-after-commit')
   })
   try {
-    expect(() => useAppStore.getState().setRemoteBrowserPageHandle('page-a', handle)).toThrow(
-      'subscriber-after-commit'
-    )
+    expect(() => useAppStore.getState().setRemoteBrowserPageHandle('page-a', handle)).not.toThrow()
+    expect(notified).toBe(true)
     expect(disposition('page-a')).toBe('unavailable')
     loss()
     expect(disposition('page-a')).toBe('unavailable')

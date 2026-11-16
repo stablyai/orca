@@ -16,7 +16,7 @@ import {
   type AppIconId,
   type BuiltInAppIconId,
   type CustomAppIconImportFailureCode
-} from '../../../../../shared/app-icon'
+} from '../../../../../shared/app-lifecycle/identity/app-icon'
 import { Button } from '../../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
 import { useTranslate, type Translate } from '@/i18n/use-translate'

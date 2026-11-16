@@ -1,8 +1,8 @@
-import type { Repo } from '../../repo-types'
-import type { WorktreeOccurrencePlan } from '../../worktree-occurrence-plan'
+import type { Repo } from '../../repository/repo-types'
+import type { WorktreeOccurrencePlan } from '../lineage/worktree-occurrence-plan'
 import type { WorkspaceStatusDefinition, Worktree } from '../../worktree/types'
 import type { ExecutionHostId } from '../../execution-host'
-import { getWorkspaceStatusFromGroupKey } from '../../workspace-statuses'
+import { getWorkspaceStatusFromGroupKey } from '../../workspace/status/workspace-statuses'
 import type { PRGroupKey } from '../../workspace-view/workspace-pr-groups'
 import type { NoticeHostContext } from '../hosts/host-labels'
 import {
@@ -14,7 +14,7 @@ import {
 } from '../hosts/host-labels'
 import type { OrderedGroupEntry, WorktreeGroupEntry } from './worktree-group-entry'
 import type { RenderableFolderWorkspace } from '../folders/folder-workspace-lanes'
-import type { ProjectGroupingIndex } from '../../project-section-grouping'
+import type { ProjectGroupingIndex } from './project-section-grouping'
 import {
   appendWorktreeRows,
   buildImportedWorktreesCardRow,

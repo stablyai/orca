@@ -6,7 +6,7 @@ import { getStructuredAgentSessionStatusFeed } from '@/runtime/native-chat/statu
 import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import { useNow } from '@/hooks/use-now'
 import { AGENT_SESSION_USAGE_LIMIT_AUTO_CONTINUE_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/agent-session-create-capabilities'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   isNativeChatUsageLimitCutSchedulable,
   type NativeChatUsageLimitCut

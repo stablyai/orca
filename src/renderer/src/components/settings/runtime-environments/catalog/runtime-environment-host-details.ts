@@ -3,18 +3,18 @@ import type { Translate } from '@/i18n/use-translate'
 import {
   evaluateRuntimeCompat,
   type RuntimeCompatVerdict
-} from '../../../../../../shared/protocol-compat'
+} from '../../../../../../shared/remote-runtime/protocol/protocol-compat'
 import { describeRuntimeCompatBlock } from '@/runtime/hosts/display/runtime-host-copy'
 import {
   MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
   RUNTIME_PROTOCOL_VERSION
-} from '../../../../../../shared/protocol-version'
+} from '../../../../../../shared/remote-runtime/protocol/protocol-version'
 import {
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
-} from '../../../../../../shared/worktree-runtime-capabilities'
+} from '../../../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import { TASK_SOURCE_CONTEXT_RUNTIME_CAPABILITY } from '../../../../../../shared/work-items/task-source-runtime-capabilities'
-import type { RuntimeStatus } from '../../../../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import '@/runtime/hosts/connections/runtime-host-connection-state'
 import {
   runtimeHostConnectionState,

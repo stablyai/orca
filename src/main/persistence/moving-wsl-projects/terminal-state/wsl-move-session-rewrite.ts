@@ -20,7 +20,10 @@ import {
   filterWorkspaceRows,
   workspaceIdsNamedByPartition
 } from '../../../../shared/workspace-session/workspace-session-stranded-partition-adoption'
-import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
+import {
+  parseWorkspaceKey,
+  worktreeWorkspaceKey
+} from '../../../../shared/workspace/identity/workspace-scope'
 import type { WslMoveRewriteScope } from '../desktop-state/wsl-move-rewrite-scope'
 
 type SessionGlobals = Pick<

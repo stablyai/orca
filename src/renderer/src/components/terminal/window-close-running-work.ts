@@ -4,7 +4,7 @@ import {
   structuredAgentSessionTargetForTab
 } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { getStructuredAgentSessionStatusFeed } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
-import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import { parseAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import { collectTabPtyIds } from './running-terminal-close-guard'
 import { probePtyRunningWork } from './pty-running-work-probe'
 

@@ -1,9 +1,12 @@
 import type { PersonalProjectOrder } from './personal-project-order'
-import type { ProjectGroup } from './project-group-types'
-import type { ProjectHostSetupProjection } from './project-host-setup-projection'
-import type { ProjectSectionProject, ProjectSectionSetup } from './project-section-grouping'
-import type { RepoIcon } from './repo-icon'
-import type { Repo } from './repo-types'
+import type { ProjectGroup } from './project/groups/project-group-types'
+import type { ProjectHostSetupProjection } from './project/host-setup/project-host-setup-projection'
+import type {
+  ProjectSectionProject,
+  ProjectSectionSetup
+} from './sidebar-list/sections/project-section-grouping'
+import type { RepoIcon } from './repository/appearance/repo-icon'
+import type { Repo } from './repository/repo-types'
 import type { ProjectOrderBy } from './ui-chrome-types'
 
 // Desktop owns the sidebar grouping inputs the phone must match.
@@ -30,7 +33,7 @@ export type MobileProjectSectionCatalog = {
   setups: ProjectSectionSetup[]
   projectOrderBy: ProjectOrderBy
   personalProjectOrder?: PersonalProjectOrder
-  /** Every host's project groups, which a feed reader lists folder workspaces under; older desktops omit it. */
+  /** Every host's project groups, which the phone nests projects and folder workspaces under; older desktops omit it. */
   projectGroups?: ProjectGroup[]
 }
 
@@ -85,6 +88,9 @@ export function buildMobileProjectSectionCatalog(
     })),
     projectOrderBy,
     ...(personalProjectOrder ? { personalProjectOrder } : {}),
-    ...(projectGroups ? { projectGroups: [...projectGroups] } : {})
+    // Why: like repos, groups reach phones without their hook commands.
+    ...(projectGroups
+      ? { projectGroups: projectGroups.map(({ hookSettings: _hooks, ...group }) => group) }
+      : {})
   }
 }

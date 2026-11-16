@@ -8,13 +8,13 @@ import WorktreeList from './worktree-list/listing/WorktreeList'
 import SidebarWorkspaceOptionsMenu from './worktree-list/controls/SidebarWorkspaceOptionsMenu'
 import { useAppStore } from '@/store'
 import { getDefaultUIState } from '../../../../shared/constants'
-import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
+import { projectHostSetupProjectionFromRepos } from '../../../../shared/project/host-setup/project-host-setup-projection'
 import { mutatePersonalProjectOrder } from '../../../../shared/personal-project-order-writes'
 import {
   RecordProjectOpenParams,
   SetProjectPinnedParams
 } from '../../../../shared/rpc-contract/personal-project-order-params'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
 

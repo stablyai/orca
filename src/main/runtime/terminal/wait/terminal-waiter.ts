@@ -1,7 +1,7 @@
 import type {
   RuntimeTerminalWaitCondition,
   RuntimeTerminalWait
-} from '../../../../shared/runtime-terminal-contracts'
+} from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 
 export type TerminalWaiter = {
   handle: string

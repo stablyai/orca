@@ -1,9 +1,9 @@
-import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
+import { projectHostSetupProjectionFromRepos } from '../../../../shared/project/host-setup/project-host-setup-projection'
 import { planSidebarRows } from '../../../../shared/sidebar-list/sidebar-row-plan'
-import { cloneDefaultWorkspaceStatuses } from '../../../../shared/workspace-statuses'
+import { cloneDefaultWorkspaceStatuses } from '../../../../shared/workspace/status/workspace-statuses'
 import { describe, expect, it } from 'vitest'
 import { repo, worktree } from './worktree-list/grouping/worktree-list-groups-test-fixtures'
-import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
 describe('personal project order through sidebar rows', () => {
   const alpha = {
     ...repo,

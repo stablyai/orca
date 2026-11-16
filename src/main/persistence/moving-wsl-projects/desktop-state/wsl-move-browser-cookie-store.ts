@@ -29,7 +29,7 @@ export function productionWslMoveBrowserCookieCopyDependencies(
       browserSessionsInitialized() &&
       BrowserWindow.getAllWindows().some((window) => !window.isDestroyed()),
     orcaProfileId: activeBrowserRoutePartitionOrcaProfileId,
-    listEnvironments: () => listEnvironments(userDataPath),
+    listEnvironments: async () => await listEnvironments(userDataPath),
     listBrowserProfiles: () => browserSessionRegistry.listProfiles(),
     resolveHostStorage: wslHostBrowserRouteStorage,
     bindHostPartition: bindWslHostBrowserRoutePartition,

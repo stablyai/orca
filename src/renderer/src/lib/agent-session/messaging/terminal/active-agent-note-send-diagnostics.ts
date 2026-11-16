@@ -3,7 +3,7 @@ import type {
   ActiveAgentNotesSendFailureCode,
   ActiveAgentNotesSendResult
 } from './active-agent-note-send-result'
-import { hasRuntimeRpcErrorCode } from '../../../../../../shared/runtime-rpc-error-code'
+import { hasRuntimeRpcErrorCode } from '../../../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 
 export const TERMINAL_RUNTIME_FAILURE_CODES = [
   'terminal_handle_stale',

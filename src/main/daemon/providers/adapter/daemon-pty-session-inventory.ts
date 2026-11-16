@@ -5,8 +5,8 @@ import {
   isAgentSessionOwnerBinding,
   type AgentSessionOwnerBinding
 } from '../../../../shared/agent-session/agent-session-host-authority'
-import { MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES } from '../../../../shared/claimed-agent-pty-owner'
-import { cloneAgentSessionOwnerBinding } from '../../../../shared/claimed-agent-pty-owner-snapshot'
+import { MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES } from '../../../../shared/agent-session/lifecycle/leases/claimed-agent-pty-owner'
+import { cloneAgentSessionOwnerBinding } from '../../../../shared/agent-session/lifecycle/leases/claimed-agent-pty-owner-snapshot'
 import { recordAuthenticatedInventory } from '../../observability/daemon-audit-classifier'
 import { isMissingWindowsNamedPipeError } from '../../endpoint/identity/daemon-endpoint-errors'
 import { DaemonPtyProcessInspection } from './daemon-pty-process-inspection'

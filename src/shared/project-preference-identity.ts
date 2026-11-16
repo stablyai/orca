@@ -1,5 +1,5 @@
 import { toSshExecutionHostId, type ExecutionHostId } from './execution-host'
-import type { ProjectSectionSetup } from './project-section-grouping'
+import type { ProjectSectionSetup } from './sidebar-list/sections/project-section-grouping'
 
 export function projectPreferenceKeyForSetup(setup: ProjectSectionSetup): string {
   if (setup.projectId.startsWith('github:') || setup.projectId.startsWith('git:')) {

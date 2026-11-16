@@ -1,10 +1,10 @@
-import { isAntigravityReferenceSession } from '../../../../../../shared/antigravity-session-origin'
+import { isAntigravityReferenceSession } from '../../../../../../shared/agent-session/lifecycle/provider-handles/antigravity-session-origin'
 // Native resume requires provider conversation lookup, unlike terminal resume's PTY-hosting gate.
 
 import { isWslStoredAiVaultSessionFile } from '../../../../../../shared/ai-vault/resume/ai-vault-resume-target'
-import { normalizeRuntimePathForComparison } from '../../../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../../../shared/file-access/cross-platform-path'
 import { parseRoutableExecutionHostId } from '../../../../../../shared/execution-host'
-import { adoptsCliConversations } from '../../../../../../shared/structured-agent-cli-conversation-adoption'
+import { adoptsCliConversations } from '../../../../../../shared/agent-session/view/structured-agent-cli-conversation-adoption'
 import {
   isAiVaultSessionResumableContent,
   type AiVaultSession

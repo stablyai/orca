@@ -1,9 +1,10 @@
 import type { ExecutionHostId } from '../../../../src/shared/execution-host'
-import type { RuntimeWorktreePsSummary } from '../../../../src/shared/runtime-types'
+import type { RuntimeWorktreePsSummary } from '../../../../src/shared/worktree/catalog/runtime-worktree-contracts'
+import type { ProjectGroup } from '../../../../src/shared/project/groups/project-group-types'
 import type {
   ProjectSectionModel,
   ProjectSectionRepo
-} from '../../../../src/shared/project-section-grouping'
+} from '../../../../src/shared/sidebar-list/sections/project-section-grouping'
 import type { ProjectOrderBy } from '../../../../src/shared/ui-chrome-types'
 import type { WorkspaceRowFilters } from '../../../../src/shared/workspace-view/workspace-row-filters'
 
@@ -94,6 +95,8 @@ export type ProjectSectionCatalog = {
   repos: readonly SectionRepo[]
   /** Null until the desktop's catalog answers; rows then group by repo, as the desktop's would. */
   grouping: ProjectSectionModel | null
+  /** The desktop's project groups on the shown hosts; projects nest under them as in its sidebar. */
+  projectGroups: readonly ProjectGroup[]
   /** Manual header rank; undefined keeps first-row order. */
   repoOrder: ReadonlyMap<string, number> | undefined
   projectOrderBy: ProjectOrderBy

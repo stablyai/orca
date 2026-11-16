@@ -1,10 +1,10 @@
 import type { AgentSessionAttachmentClipboardTarget } from '../../../shared/agent-session/agent-session-attachments'
-import type { ClipboardImageThumbnail } from '../../../shared/clipboard-image'
-import type { ReadClipboardTextOptions } from '../../../shared/clipboard-text'
+import type { ClipboardImageThumbnail } from '../../../shared/clipboard/clipboard-image'
+import type { ReadClipboardTextOptions } from '../../../shared/clipboard/clipboard-text'
 import type {
   RichMarkdownContextMenuCommandPayload,
   RichMarkdownContextMenuTableTarget
-} from '../../../shared/rich-markdown-context-menu'
+} from '../../../shared/editor/markdown/rich-markdown-context-menu'
 
 export type UiWindowApi = {
   readClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>

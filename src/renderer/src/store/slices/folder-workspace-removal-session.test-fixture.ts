@@ -1,5 +1,5 @@
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import type { AppState } from '../types'
 
 export function folderWorkspaceRemovalSessionState(

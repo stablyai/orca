@@ -1,6 +1,6 @@
 import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../project-group-types'
-import type { Repo } from '../repo-types'
+import type { ProjectGroup } from '../project/groups/project-group-types'
+import type { Repo } from '../repository/repo-types'
 import type { ProjectOrderBy } from '../ui-chrome-types'
 import type { WorktreeLineage } from '../worktree/lineage-types'
 import type { SidebarLineageParentIdentities } from './lineage/worktree-lineage-projection'
@@ -19,11 +19,11 @@ import {
   buildProjectGroupingIndex,
   getProjectGroupingForRepo,
   type ProjectSectionModel
-} from '../project-section-grouping'
+} from './sections/project-section-grouping'
 import {
   buildWorktreeOccurrencePlan,
   type WorktreeOccurrenceSection
-} from '../worktree-occurrence-plan'
+} from './lineage/worktree-occurrence-plan'
 import { getWorktreeHostIdentity } from '../worktree/host-qualified-identity'
 import type { OrderedGroupEntry, WorktreeGroupEntry } from './sections/worktree-group-entry'
 
@@ -52,7 +52,7 @@ import type {
 } from './row-types'
 import { orderMainWorktreeFirst } from './sections/section-order'
 import { appendImportedWorktreeLines } from './sections/imported-worktree-lines'
-import { withRepoSectionDisplayLabels } from '../project-section-order'
+import { withRepoSectionDisplayLabels } from './sections/project-section-order'
 import { buildOrderedGroups } from './sections/worktree-grouping'
 import type { WorkspaceSortBy } from '../workspace-view/workspace-row-sort'
 

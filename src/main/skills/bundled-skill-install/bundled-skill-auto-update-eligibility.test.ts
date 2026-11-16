@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { readFile, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { bundledSkillNudgeEntries } from '../../../shared/bundled-skill-summary'
+import { bundledSkillNudgeEntries } from '../../../shared/skills/bundled/bundled-skill-summary'
 import type { BundledSkillSource } from './bundled-skill-sources'
 import {
   nativeBundledSkillFilesystem,

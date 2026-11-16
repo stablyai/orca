@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { projectHostSetupProjectionFromRepos } from './project-host-setup-projection'
+import { projectHostSetupProjectionFromRepos } from './project/host-setup/project-host-setup-projection'
 import {
   projectPreferenceKeyForSetup,
   resolveProjectPreferenceKey
 } from './project-preference-identity'
-import type { Repo } from './repo-types'
+import type { Repo } from './repository/repo-types'
 
 const local: Repo = {
   id: 'same',

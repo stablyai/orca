@@ -6,21 +6,21 @@ import { createElement, useEffect } from 'react'
 import { act, type create } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultUIState } from '../../../src/shared/constants'
-import { projectHostSetupProjectionFromRepos } from '../../../src/shared/project-host-setup-projection'
+import { projectHostSetupProjectionFromRepos } from '../../../src/shared/project/host-setup/project-host-setup-projection'
 import { buildMobileProjectSectionCatalog } from '../../../src/shared/mobile-project-sections-contract'
 import { mutatePersonalProjectOrder } from '../../../src/shared/personal-project-order-writes'
 import {
   RecordProjectOpenParams,
   SetProjectPinnedParams
 } from '../../../src/shared/rpc-contract/personal-project-order-params'
-import type { Repo } from '../../../src/shared/repo-types'
+import type { Repo } from '../../../src/shared/repository/repo-types'
 import { useHostWorktreeActions } from './workspace-actions/use-host-worktree-actions'
 import { useHostViewSettings } from './view-settings/use-host-view-settings'
 import { useHostScreenState } from './use-host-screen-state'
 import { stubRpcClient } from '../transport/rpc/rpc-client-test-stub'
 import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
-import { ProjectSectionCatalogSchema } from '../../../src/shared/project-section-catalog-schema'
+import { ProjectSectionCatalogSchema } from '../../../src/shared/sidebar-list/catalog/project-section-catalog-schema'
 
 vi.mock('expo-router', () => ({}))
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
@@ -201,7 +201,13 @@ it.each(['recent', 'frequent', 'name', 'manual'] as const)(
       },
       settledOperations: []
     }
-    const catalog = buildProjectSectionCatalog({ ...served, personalProjectOrder }, [], null, mode)
+    const catalog = buildProjectSectionCatalog(
+      { ...served, personalProjectOrder },
+      [],
+      [],
+      null,
+      mode
+    )
     const sections = buildSections(
       [
         { ...rows[0], lastActivityAt: 1 },
@@ -231,6 +237,7 @@ it.each(['recent', 'frequent', 'name', 'manual'] as const)(
           }
         }
       },
+      [],
       [],
       null,
       mode

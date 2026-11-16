@@ -1,4 +1,4 @@
-import { isEligibleLocalCertificateHost, isWildcardBindHost } from '../browser-url'
+import { isEligibleLocalCertificateHost, isWildcardBindHost } from './navigation/browser-url'
 
 // Chromium emits icon updates only when the URL list changes; rendering and navigation listeners must share origin/icon rules.
 

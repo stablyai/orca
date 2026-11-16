@@ -16,7 +16,7 @@ export function captureTerminalLaunchContext(
   return {
     startup,
     registration: state.agentLaunchConfigByPaneKey[session.cacheKey],
-    status: state.agentStatusByPaneKey[session.cacheKey],
+    status: state.agentStatusByPaneKey.get(session.cacheKey),
     paneStartup: session.paneStartup
   }
 }
@@ -55,8 +55,8 @@ export function applyTerminalLaunchResult(
       currentStartup !== context.paneStartup &&
       currentStartup.resumeSource !== startup?.resumeSource) ||
     (currentRegistration && currentRegistration !== context.registration) ||
-    (state.agentStatusByPaneKey[session.cacheKey] &&
-      state.agentStatusByPaneKey[session.cacheKey] !== context.status)
+    (state.agentStatusByPaneKey.get(session.cacheKey) &&
+      state.agentStatusByPaneKey.get(session.cacheKey) !== context.status)
   try {
     if (
       rejected &&

@@ -1,4 +1,4 @@
-import type { EmulatorSelectionRequired } from '../../../../../shared/emulator-opening-preferences'
+import type { EmulatorSelectionRequired } from '../../../../../shared/emulator/emulator-opening-preferences'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 export function emulatorOpeningMessage(

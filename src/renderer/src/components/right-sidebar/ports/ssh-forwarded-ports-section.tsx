@@ -3,7 +3,10 @@ import { ChevronRight, Plus } from 'lucide-react'
 import { useAppStore } from '@/store/index'
 import { cn } from '@/lib/class-names'
 import { Button } from '@/components/ui/button'
-import type { PortForwardEntry, UnrestoredPortForward } from '../../../../../shared/ssh-types'
+import type {
+  PortForwardEntry,
+  UnrestoredPortForward
+} from '../../../../../shared/remote-runtime/ssh/ssh-types'
 import { useTranslate } from '@/i18n/use-translate'
 import { SshForwardedPortRow } from './ssh-forwarded-port-row'
 import { SshUnrestoredPortRow } from './ssh-unrestored-port-row'

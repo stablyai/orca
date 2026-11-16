@@ -79,6 +79,7 @@ function useLegacyHostListSections({
       buildProjectSectionCatalog(
         state.servedProjectSections,
         state.desktopRepos,
+        state.hostProjectGroups,
         state.view.filters.visibleHostIds,
         state.view.projectOrderBy,
         state.view.personalProjectOrder
@@ -86,6 +87,7 @@ function useLegacyHostListSections({
     [
       state.servedProjectSections,
       state.desktopRepos,
+      state.hostProjectGroups,
       state.view.filters.visibleHostIds,
       state.view.projectOrderBy,
       state.view.personalProjectOrder

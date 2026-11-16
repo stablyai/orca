@@ -10,7 +10,7 @@ import {
   settleStructuredAgentSessionBuiltinCatalog,
   type StructuredAgentSessionOptionState
 } from '../../../../../../../shared/agent-session/options/structured-agent-session-options'
-import type { RuntimeClientTarget } from '../../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import { recordHostModelCatalogSnapshot } from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
 import {
@@ -21,7 +21,7 @@ import type { StructuredAgentSessionOptionRecord } from '../../../../../../../sh
 import {
   isHostModelListingWaitInFlight,
   joinHostModelListingWait
-} from '../../../../../../../shared/host-model-listing-waits'
+} from '../../../../../../../shared/agent-session/options/model-catalog/host-model-listing-waits'
 import { usesModelSpecificAcpEfforts } from '../../../../../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 import { AGENT_SESSION_MODEL_EFFORT_DISCOVERY_CAPABILITY } from '../../../../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 

@@ -3,7 +3,7 @@ import { i18n, translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { openAntigravitySignInSettings } from '@/components/provider-accounts/open-antigravity-sign-in-settings'
 import { agentSessionSetupFor } from '../../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { NativeChatActionButton } from '../composer/controls/NativeChatActionButton'
 import { useNativeChatHostSetupView } from './native-chat-host-setup'
 

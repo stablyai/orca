@@ -6,7 +6,7 @@ import type {
   ProjectHeaderDragRect,
   RepoHeaderRow
 } from './project-header-drop'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 
 export type RepoDragState = {
   draggingRepoId: string | null
