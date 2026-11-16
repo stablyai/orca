@@ -299,7 +299,6 @@
 1 test-no-real-time-wait:tests/e2e/terminal-macos-system-key-remap.spec.ts
 3 test-no-real-time-wait:tests/e2e/terminal-opencode-emoji-table-rendering.spec.ts
 4 test-no-real-time-wait:tests/e2e/terminal-pane-close-layout-consistency.spec.ts
-2 test-no-real-time-wait:tests/e2e/terminal-pane-title-editing.spec.ts
 4 test-no-real-time-wait:tests/e2e/terminal-parked-memory.spec.ts
 2 test-no-real-time-wait:tests/e2e/terminal-pinned-viewport-streaming-switch.spec.ts
 2 test-no-real-time-wait:tests/e2e/terminal-pinned-viewport-worktree-switch.spec.ts
