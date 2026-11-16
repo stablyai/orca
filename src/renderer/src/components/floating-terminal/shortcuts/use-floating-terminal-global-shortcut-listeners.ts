@@ -13,7 +13,7 @@ import type { FloatingTerminalPanelLocalState } from '../state/use-floating-term
 import type { FloatingTerminalPanelShortcuts } from './use-floating-terminal-panel-shortcuts'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import { moveActiveTab } from '@/lib/workspace/tabs/workspace-tab-commands'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 
 const FLOATING_TAB_SWITCH_ACTIONS: readonly KeybindingActionId[] = [
   'tab.nextSameType',

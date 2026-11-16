@@ -1,13 +1,13 @@
 import { shallow } from 'zustand/shallow'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
-import type { WorkspaceHostScope } from '../../../../../../shared/ui-chrome-types'
+import type { WorkspaceHostScope } from '../../../../../../shared/ui-chrome/ui-chrome-types'
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { buildExecutionHostRegistry } from '../../../../../../shared/execution-host/execution-host-registry'
 import type {
   EphemeralVmHostLifecycle,

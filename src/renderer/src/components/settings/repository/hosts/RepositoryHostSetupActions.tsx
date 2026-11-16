@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useCloneFolderOverride } from '../../../sidebar/project-admission/clone-folder/use-clone-folder-override'
 import { getProjectCloneCheckTarget } from '../../../../store/projects/project-host-routing'
 import { Plus, X } from 'lucide-react'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type {
   ProjectHostSetup,
   ProjectHostSetupCreateResult,

@@ -2,7 +2,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   getWorktreeExecutionHostId,
   type ExecutionHostId
-} from '../../../../src/shared/execution-host'
+} from '../../../../src/shared/execution-host/execution-host'
 import { folderWorkspaceToWorktree } from '../../../../src/shared/folder-workspaces/folder-workspace-worktree'
 import { getFolderWorkspaceHostId } from '../../../../src/shared/sidebar-list/hosts/folder-workspace-host-id'
 import type { HostSectionRow } from '../../../../src/shared/sidebar-list/hosts/host-section-rows'

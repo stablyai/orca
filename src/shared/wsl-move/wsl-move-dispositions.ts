@@ -1,6 +1,6 @@
 /** Exhaustive state dispositions for local WSL project moves. Typed stores are compile-checked; tests census localStorage/SQLite. Sibling tables cover UI, storage and out-of-store state.
  * Item numbers refer to docs/design/wsl-via-orcad-lossless-mover.md §2. */
-import type { PersistedState } from '../persisted-state-types'
+import type { PersistedState } from '../orca-profiles/persisted-state-types'
 import type { WorkspaceSessionState } from '../workspace-session/workspace-session-state-types'
 
 export type WslMoveDisposition =

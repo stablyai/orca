@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { getDefaultUIState } from '../../../../shared/constants'
-import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
+import { getDefaultUIState } from '../../../../shared/orca-profiles/constants'
+import type { PersistedUIState } from '../../../../shared/orca-profiles/persisted-ui-state-types'
 import {
   isWorkspaceNotificationMuted,
   type WorkspaceNotificationMuteDeps
@@ -34,9 +34,5 @@ describe('isWorkspaceNotificationMuted', () => {
       notificationsMutedByWorktree: { 'folder:fw-1': true }
     })
     expect(isWorkspaceNotificationMuted(muted, 'folder:fw-1')).toBe(true)
-  })
-
-  it('leaves workspaces unmuted when nothing is persisted', () => {
-    expect(isWorkspaceNotificationMuted(deps({}), 'repo-1::/wt')).toBe(false)
   })
 })

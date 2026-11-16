@@ -12,7 +12,7 @@ import {
   isTerminalQuickCommandComplete
 } from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/workspace/identity/floating-workspace-id'
 import { runQuickCommandInNewTab } from '@/lib/terminal/quick-commands/run-quick-command-in-new-tab'
 import type { TerminalQuickCommand } from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
@@ -23,7 +23,10 @@ import {
   type HostedTerminalQuickCommand,
   useTerminalQuickCommandHosts
 } from '@/hooks/use-terminal-quick-command-hosts'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import { useProjectHostSetupProjection } from '@/store/projects/use-project-host-setup-projection'
 import { terminalQuickCommandMatchesWorkspaceProject } from '@/lib/terminal/quick-commands/terminal-quick-command-project-scope'
 

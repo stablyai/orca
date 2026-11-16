@@ -1,6 +1,6 @@
 import { CLIENT_PLATFORM } from '@/lib/workspace/creation/new-workspace'
 import { REMOTE_RUNTIME_PTY_HONOURS_TAB_SHELL_OVERRIDE } from '@/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-shell'
-import { parseExecutionHostId } from '../../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { isWslUncPath } from '../../../../../shared/file-access/wsl-paths'
 import { isWindowsAbsolutePathLike } from '../../../../../shared/file-access/cross-platform-path'

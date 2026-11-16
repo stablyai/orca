@@ -3,7 +3,7 @@ import type {
   AutomationWorkspaceProvenance,
   CliWorkspaceProvenance
 } from '../../../shared/worktree/types'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type { NestedWorktreeRemovalApproval } from '../../../shared/worktree/removal/nested-removal'
 import type { ListDetectedWorktreesArgs } from '../../../shared/worktree/catalog/detected-worktree-provider-contract'
 import { WorkspaceLinkedItemSchema } from '../../../shared/workspace-attachments/workspace-linked-item-schema'

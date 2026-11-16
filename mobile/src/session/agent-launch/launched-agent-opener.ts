@@ -1,5 +1,5 @@
 import { useNavigation } from 'expo-router'
-import type { ExecutionHostId } from '../../../../src/shared/execution-host'
+import type { ExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
 import { HOST_SESSION_ROUTE } from '../../navigation/host-stack-navigation'
 import { stringifyRouteHref } from '../../navigation/route-href'
 import { useShellSessionHandoff } from '../../navigation/route-handoff'

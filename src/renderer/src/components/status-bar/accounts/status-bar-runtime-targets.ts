@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { RateLimitRuntimeTarget } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { resolveLocalAccountRuntimeTarget } from '../../../../../shared/agent-accounts/local-account-runtime'
 import { getRendererAppPlatform } from '../../../app-shell/platform/renderer-app-platform'

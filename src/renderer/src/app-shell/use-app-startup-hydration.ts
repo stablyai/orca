@@ -35,7 +35,7 @@ import {
   isOwnedSshTargetId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import { listRuntimeSessionHostsForStartup } from './startup-runtime-session-hosts'
 import { mapWithConcurrency } from '../../../shared/concurrency/map-with-concurrency'
 import { collectWslMovedWorkspaceKeysFromSession } from '../store/repos/wsl-moved-projects'

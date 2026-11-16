@@ -12,7 +12,7 @@ import {
   waitForPaneIdentitySnapshot
 } from './helpers/terminal'
 import { waitForPtyShellEcho } from './terminal-pty-readiness'
-import type { GlobalSettings } from '../../src/shared/global-settings-types'
+import type { GlobalSettings } from '../../src/shared/settings/global-settings-types'
 
 const QUESTION = 'Tabs or spaces?'
 

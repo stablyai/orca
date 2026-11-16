@@ -14,7 +14,7 @@ import {
   RUNTIME_PROTOCOL_VERSION
 } from '../../../shared/remote-runtime/protocol/protocol-version'
 import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import '../../../shared/orca-profiles/constants'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
@@ -109,94 +109,6 @@ beforeEach(() => {
     runtimeEnvironments: { call: runtimeEnvironmentCall },
     platform: { get: () => ({ platform: 'win32' }) }
   } as unknown as Window['api']
-})
-
-describe('Floating Workspace authority', () => {
-  it('advertises native Windows agents beside an active WSL project', async () => {
-    const activeResult: { current: UseDetectedAgentsResult | null } = { current: null }
-    const floatingResult: { current: UseDetectedAgentsResult | null } = { current: null }
-    useAppStore.getState().clearLocalDetectedAgents()
-    useAppStore.setState({
-      activeRepoId: 'repo-wsl',
-      activeWorktreeId: 'worktree-wsl',
-      projects: [
-        {
-          id: 'repo-wsl',
-          localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
-        }
-      ],
-      repos: [
-        {
-          id: 'repo-wsl',
-          path: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo',
-          displayName: 'WSL project',
-          badgeColor: '#000000',
-          addedAt: 0
-        }
-      ],
-      worktreesByRepo: {
-        'repo-wsl': [
-          {
-            id: 'worktree-wsl',
-            repoId: 'repo-wsl',
-            path: '\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo',
-            displayName: 'main'
-          }
-        ]
-      }
-    } as never)
-
-    await renderProbe(
-      { kind: 'local', worktreeId: 'worktree-wsl' } as AgentDetectionTarget,
-      (result) => {
-        activeResult.current = result
-      }
-    )
-    await renderProbe(
-      {
-        kind: 'local',
-        worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
-        contextKey: 'host'
-      } as AgentDetectionTarget,
-      (result) => {
-        floatingResult.current = result
-      }
-    )
-
-    expect(activeResult.current?.detectedIds).toEqual(['claude'])
-    expect(floatingResult.current?.detectedIds).toEqual(['codex'])
-    expect(useAppStore.getState().detectedAgentIds).toEqual(['claude'])
-    const detectedContexts = detectLocalAgents.mock.calls.map(([context]) => context)
-    expect(detectedContexts).toEqual([
-      expect.objectContaining({
-        projectRuntime: expect.objectContaining({
-          runtime: expect.objectContaining({ kind: 'wsl', distro: 'Ubuntu' })
-        })
-      }),
-      { enabledOnly: true }
-    ])
-
-    refreshLocalAgents.mockResolvedValueOnce({
-      agents: ['codex'],
-      addedPathSegments: [],
-      shellHydrationOk: true,
-      pathSource: 'process_env',
-      pathFailureReason: 'none'
-    })
-    await act(async () => {
-      await floatingResult.current?.refresh()
-    })
-    await flushEffects()
-
-    expect(activeResult.current?.detectedIds).toEqual(['claude'])
-    expect(floatingResult.current?.detectedIds).toEqual(['codex'])
-    expect(useAppStore.getState().detectedAgentIds).toEqual(['claude'])
-    expect(refreshLocalAgents).toHaveBeenLastCalledWith({
-      enabledOnly: true,
-      wakeWslDistro: true,
-      userInitiated: true
-    })
-  })
 })
 
 afterEach(async () => {

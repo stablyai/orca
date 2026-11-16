@@ -6,7 +6,10 @@ import '../../workspace/ownership/workspace-catalog-owner-index'
 import { findIndexedRepoOwner } from '../../workspace/ownership/repo-owner-index'
 import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { defaultAgentChatLabel } from '../../../../../shared/agent-session/agent-session-chat-label'
 import { structuredAgentSessionTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'

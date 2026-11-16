@@ -16,7 +16,7 @@ import type { ProjectGroup } from '../../../shared/project/groups/project-group-
 import type { Repo } from '../../../shared/repository/repo-types'
 import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 
-import { getDefaultPersistedState } from '../../../shared/constants'
+import { getDefaultPersistedState } from '../../../shared/orca-profiles/constants'
 import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { installFakeAppEnvironment } from '../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import { resetRetirementCollisionKeyCacheForTests } from '../../workspaces/removal/retirement/worktree-name-retirement'

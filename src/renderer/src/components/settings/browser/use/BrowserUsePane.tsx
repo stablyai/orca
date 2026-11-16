@@ -8,7 +8,7 @@ import {
 import { useActiveProjectSkillRuntime } from '@/hooks/skills/runtime/useActiveProjectSkillRuntime'
 import { cn } from '@/lib/class-names'
 import { useAppStore } from '../../../../store/index'
-import '../../../../../../shared/constants'
+import '../../../../../../shared/orca-profiles/constants'
 import { BROWSER_FAMILY_LABELS } from '../../../../../../shared/browser/browser-family-labels'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { matchesSettingsSearch } from '../../search/settings-search'

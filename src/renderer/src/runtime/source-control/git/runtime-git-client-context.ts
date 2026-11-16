@@ -6,7 +6,7 @@ import {
   getCommitMessageModelDiscoveryHostKeyForScope,
   getRepoCommitMessageModelDiscoveryHostKey
 } from '../../../../../shared/source-control/ai/generation/commit-message-host-key'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type { HostedReviewProvider } from '../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import { splitWorktreeIdForFilesystem } from '../../../../../shared/worktree/id'

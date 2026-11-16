@@ -1,7 +1,7 @@
 import { normalizeGitGraphFilters } from '../../../../shared/git/history/git-graph-filters'
 import { resolveStatusBarCompactChangeNoticeDismissed } from '../../../../shared/status-bar/status-bar-compact-change-notice'
 import { migrateExplorerDisplayRoots } from '../../../../shared/file-listing/file-explorer-display-root'
-import '../../../../shared/constants'
+import '../../../../shared/orca-profiles/constants'
 import {
   getWorktreeCardModeProperties,
   isCurrentCompactWorktreeCardProperties,
@@ -23,7 +23,7 @@ import {
   readDeprecatedExperimentFlag,
   resolveSetupGuideSidebarDismissedOnLoad
 } from '../../applying-settings/onboarding-normalization'
-import type { PersistedState } from '../../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import type { OnboardingState } from '../../../../shared/onboarding/onboarding-state-types'
 
 export function normalizeLoadedUiState(

@@ -7,7 +7,7 @@ import {
   getRepoExecutionHostId,
   getRepoSshConnectionId,
   LOCAL_EXECUTION_HOST_ID
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import { resolveQualifiedFolderWorkspaceResult } from '../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { isFloatingWorkspaceId } from '../../../shared/workspace/identity/floating-workspace-worktree'
 import { isFolderRepo } from '../../../shared/repository/repo-kind'
