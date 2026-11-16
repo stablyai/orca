@@ -145,10 +145,13 @@ export function sessionSlashCommandSuggestions(
     .filter((entry) => !isSessionSkill(entry, agent))
     .map((entry) => {
       const description = entry.description ?? described.get(entry.name)
+      const argumentHint =
+        entry.argumentHint ??
+        (agent === 'antigravity' && entry.name === 'swarm' ? '<task | board>' : undefined)
       return {
         name: entry.name,
         ...(description ? { description } : {}),
-        ...(entry.argumentHint ? { argumentHint: entry.argumentHint } : {}),
+        ...(argumentHint ? { argumentHint } : {}),
         ...(entry.kindUnspecified ? { kindUnspecified: true as const } : {}),
         ...(entry.builtin ? { builtin: true as const } : {})
       }
