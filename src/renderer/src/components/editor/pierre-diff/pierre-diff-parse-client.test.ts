@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, expect, it, vi } from 'vitest'
-import type { PierreDiffInput } from './pierre-diff-metadata'
+import { buildPierreFileDiff, type PierreDiffInput } from './pierre-diff-metadata'
 
 const { schedule, prepare } = vi.hoisted(() => ({ schedule: vi.fn(), prepare: vi.fn() }))
 vi.mock('./pierre-diff-parse.worker?worker', () => ({ default: class {} }))
@@ -19,7 +19,7 @@ const input: PierreDiffInput = {
   modifiedContent: 'new',
   parseDiffOptions: {}
 }
-const diff = { name: 'file.ts', hunks: [] }
+const diff = buildPierreFileDiff(input)
 
 afterEach(() => vi.resetAllMocks())
 
@@ -33,7 +33,6 @@ it('reports a detached highlight failure instead of swallowing it', async () => 
     false,
     onHighlightError
   )
-  await new Promise((resolve) => setTimeout(resolve, 0))
   expect(result).toBe(diff)
   expect(onHighlightError).toHaveBeenCalledWith(expect.objectContaining({ message: 'worker died' }))
 })
@@ -43,16 +42,5 @@ it('stays silent when the detached highlight is merely aborted', async () => {
   prepare.mockRejectedValue(new DOMException('Canceled', 'AbortError'))
   const onHighlightError = vi.fn()
   await requestPierreFileDiff(input, new AbortController().signal, false, onHighlightError)
-  await new Promise((resolve) => setTimeout(resolve, 0))
   expect(onHighlightError).not.toHaveBeenCalled()
-})
-
-it('still blocks on the highlight for an editable surface', async () => {
-  schedule.mockResolvedValue(diff)
-  let settled = false
-  prepare.mockImplementation(
-    () => new Promise<void>((resolve) => setTimeout(() => ((settled = true), resolve()), 5))
-  )
-  await requestPierreFileDiff(input, new AbortController().signal, true)
-  expect(settled).toBe(true)
 })

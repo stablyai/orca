@@ -629,3 +629,97 @@ diff --git a/dist/components/VirtualizedFileDiff.d.ts b/dist/components/Virtuali
 +++ b/dist/components/VirtualizedFileDiff.d.ts
 @@ -15,0 +16 @@
 +  readonly layoutVersion: number;
+diff --git a/dist/utils/parseDiffFromFile.js b/dist/utils/parseDiffFromFile.js
+--- a/dist/utils/parseDiffFromFile.js
++++ b/dist/utils/parseDiffFromFile.js
+@@ -1,6 +1,7 @@
+ import { composeCacheKey } from "./composeCacheKey.js";
+ import { processFile } from "./parsePatchFiles.js";
+-import { createTwoFilesPatch } from "diff";
++import { createTwoFilesPatch, formatPatch } from "diff";
++import { splitFileContents } from "./splitFileContents.js";
+ //#region src/utils/parseDiffFromFile.ts
+ const MISSING_FILE_NAME = "/dev/null";
+ /**
+@@ -13,7 +14,11 @@
+ 	if (oldFile === null && newFile === null) throw new Error("parseDiffFromFile: You must pass oldFile, newFile, or both");
+ 	const resolvedOldFile = oldFile ?? createMissingFile();
+ 	const resolvedNewFile = newFile ?? createMissingFile();
+-	const patch = createTwoFilesPatch(resolvedOldFile.name, resolvedNewFile.name, resolvedOldFile.contents, resolvedNewFile.contents, resolvedOldFile.header, resolvedNewFile.header, options);
++	const patch = createTwoFilesPatch(resolvedOldFile.name, resolvedNewFile.name, resolvedOldFile.contents, resolvedNewFile.contents, resolvedOldFile.header, resolvedNewFile.header, {
++		...options,
++		maxEditLength: Math.min(options?.maxEditLength ?? 2048, 2048),
++		timeout: Math.min(options?.timeout ?? 50, 50)
++	}) ?? replacementPatch(resolvedOldFile, resolvedNewFile);
+ 	const fileData = processFile(patch, {
+ 		cacheKey: (() => {
+ 			const oldCacheKey = oldFile?.cacheKey;
+@@ -36,6 +41,34 @@
+ 	if (language != null) fileData.lang = language;
+ 	return fileData;
+ }
++// Bound both worker parses and synchronous edit recomputes with the same fallback.
++function replacementPatch(oldFile, newFile) {
++	const oldLines = splitFileContents(oldFile.contents);
++	const newLines = splitFileContents(newFile.contents);
++	let start = 0;
++	while (start < oldLines.length && start < newLines.length && oldLines[start] === newLines[start]) start++;
++	let oldEnd = oldLines.length;
++	let newEnd = newLines.length;
++	while (oldEnd > start && newEnd > start && oldLines[oldEnd - 1] === newLines[newEnd - 1]) {
++		oldEnd--;
++		newEnd--;
++	}
++	const oldCount = oldEnd - start;
++	const newCount = newEnd - start;
++	const lines = [];
++	const append = (entries, end, prefix) => {
++		for (let index = start; index < end; index++) {
++			const line = entries[index];
++			lines.push(prefix + (line.endsWith("\n") ? line.slice(0, -1) : line));
++			if (!line.endsWith("\n")) lines.push("\\ No newline at end of file");
++		}
++	};
++	append(oldLines, oldEnd, "-");
++	append(newLines, newEnd, "+");
++	return formatPatch({ oldFileName: oldFile.name, newFileName: newFile.name, oldHeader: oldFile.header, newHeader: newFile.header,
++		hunks: oldCount === 0 && newCount === 0 ? [] : [{ oldStart: start + 1, oldLines: oldCount, newStart: start + 1, newLines: newCount, lines }]
++	});
++}
+ function createMissingFile() {
+ 	return {
+ 		name: MISSING_FILE_NAME,
+diff --git a/dist/utils/editSessionHunks.js b/dist/utils/editSessionHunks.js
+--- a/dist/utils/editSessionHunks.js
++++ b/dist/utils/editSessionHunks.js
+@@ -217,15 +217,27 @@
+ 	return true;
+ }
+ function parseSessionChangeBlocks(diff, parseDiffOptions, getPreviousAdditionLine) {
+-	if (findDivergenceCore(diff.deletionLines, diff.additionLines) == null) return [];
++	const core = findDivergenceCore(diff.deletionLines, diff.additionLines);
++	if (core == null) return [];
++	// Retain boundary context for the existing blank-line alignment rules.
++	const start = Math.max(0, core.start - 4);
++	const deletionEnd = Math.min(diff.deletionLines.length, core.deletionEnd + 4);
++	const additionEnd = Math.min(diff.additionLines.length, core.additionEnd + 4);
+ 	const parsed = parseDiffFromFile({
+ 		name: diff.prevName ?? diff.name,
+-		contents: diff.deletionLines.join("")
++		contents: diff.deletionLines.slice(start, deletionEnd).join("")
+ 	}, {
+ 		name: diff.name,
+-		contents: diff.additionLines.join(""),
++		contents: diff.additionLines.slice(start, additionEnd).join(""),
+ 		lang: diff.lang
+ 	}, parseDiffOptions);
++	parsed.deletionLines = diff.deletionLines;
++	parsed.additionLines = diff.additionLines;
++	for (const hunk of parsed.hunks) {
++		hunk.deletionLineIndex += start;
++		hunk.additionLineIndex += start;
++		hunk.hunkContent = hunk.hunkContent.map(content => offsetHunkContent(content, start, start));
++	}
+ 	let previousBlocks;
+ 	const resolveSlide = (block, maxSlide) => {
+ 		previousBlocks ??= collectPureChangeBlocks(diff.hunks);

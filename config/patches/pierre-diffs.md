@@ -61,3 +61,12 @@ deadline retires and replaces a stalled read-only highlight worker.
 counter. The overview ruler reads this counter in post-render callbacks and uses
 `getLinePosition` only after diff/layout changes, including context expansion;
 scroll-only renders do not recompute marker geometry.
+
+All file-content parses share a 50 ms / 2,048-edit line-diff budget, including
+worker parses and synchronous edit-session recomputes. On exhaustion, the existing
+patch processor receives one replacement hunk after exact common leading and
+trailing lines are trimmed. Both file bodies and missing-final-newline markers
+remain intact. This follows the existing bounded-diff/replacement pattern.
+Edit-session hunk rebuilding parses only the divergence region with four lines
+of boundary context, then restores absolute coordinates before existing blank-line
+alignment and expansion remapping. No editor or selection behavior is replaced.

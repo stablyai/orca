@@ -1,5 +1,9 @@
 import PierreDiffParseWorker from './pierre-diff-parse.worker?worker'
-import { getPierreDiffCacheIdentity } from './pierre-diff-cache-identity'
+import {
+  cachePierreDiff,
+  getCachedPierreDiff,
+  getPierreDiffCacheIdentity
+} from './pierre-diff-cache-identity'
 import type { PierreDiffInput } from './pierre-diff-metadata'
 import { createPierreDiffParseScheduler } from './pierre-diff-parse-scheduler'
 import { preparePierreDiffHighlight } from './pierre-diff-highlight'
@@ -8,6 +12,9 @@ const scheduler = createPierreDiffParseScheduler(() => new PierreDiffParseWorker
 let nextRequestId = 0
 
 export async function requestPierreDiffMetadata(input: PierreDiffInput, signal: AbortSignal) {
+  if (signal.aborted) {
+    throw new DOMException('Canceled', 'AbortError')
+  }
   const identity = getPierreDiffCacheIdentity(
     JSON.stringify([
       input.cacheKey,
@@ -20,7 +27,13 @@ export async function requestPierreDiffMetadata(input: PierreDiffInput, signal: 
     input.originalContent,
     input.modifiedContent
   )
-  return scheduler.request({ id: ++nextRequestId, identity, input }, signal)
+  const cached = getCachedPierreDiff(identity)
+  if (cached) {
+    return cached
+  }
+  const diff = await scheduler.request({ id: ++nextRequestId, identity, input }, signal)
+  cachePierreDiff(identity, diff)
+  return diff
 }
 
 export async function requestPierreFileDiff(

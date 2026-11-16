@@ -12,6 +12,29 @@ const input = {
 }
 
 describe('Pierre diff content identity and navigation', () => {
+  it('falls back to one trimmed replacement when a large diff exceeds the line-diff budget', () => {
+    const oldBlock = 'old\n'.repeat(1_100)
+    const newBlock = 'new\n'.repeat(1_100)
+    const diff = buildPierreFileDiff({
+      ...input,
+      originalContent: `prefix\n${oldBlock}inside\n${oldBlock}suffix`,
+      modifiedContent: `prefix\n${newBlock}inside\n${newBlock}suffix`
+    })
+    expect(diff.hunks).toHaveLength(1)
+    expect(diff.hunks[0].hunkContent).toEqual([
+      {
+        type: 'change',
+        additions: 2_201,
+        deletions: 2_201,
+        additionLineIndex: 1,
+        deletionLineIndex: 1
+      }
+    ])
+    expect(diff.additionLines[0]).toBe('prefix\n')
+    expect(diff.additionLines.at(-1)).toBe('suffix')
+    expect(diff.additionLines[1_101]).toBe('inside\n')
+  })
+
   it('reuses unchanged content but invalidates edits, external updates, and whitespace options', () => {
     const first = buildPierreFileDiff(input)
     expect(buildPierreFileDiff(input).cacheKey).toBe(first.cacheKey)
