@@ -41,19 +41,29 @@ export function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalS
 
 export function createStore(settings: GlobalSettings) {
   let resetLedger: CodexResetCreditAttemptLedger = { version: 1, attempts: [] }
+  const settingsListeners = new Set<(updates: Partial<GlobalSettings>) => void>()
   return {
     getSettings: vi.fn(() => settings),
-    updateSettings: vi.fn((updates: Partial<GlobalSettings>) => {
-      settings = {
-        ...settings,
-        ...updates,
-        notifications: {
-          ...settings.notifications,
-          ...updates.notifications
+    updateSettings: vi.fn(
+      (updates: Partial<GlobalSettings>, options?: { notifyListeners?: boolean }) => {
+        settings = {
+          ...settings,
+          ...updates,
+          notifications: {
+            ...settings.notifications,
+            ...updates.notifications
+          }
         }
+        if (options?.notifyListeners) {
+          settingsListeners.forEach((listener) => listener(updates))
+        }
+        return settings
       }
-      return settings
-    }),
+    ),
+    onSettingsChanged: (listener: (updates: Partial<GlobalSettings>) => void) => {
+      settingsListeners.add(listener)
+      return () => settingsListeners.delete(listener)
+    },
     getCodexResetCreditAttemptLedger: vi.fn(() => structuredClone(resetLedger)),
     replaceCodexResetCreditAttemptLedgerAndFlush: vi.fn(
       async (next: CodexResetCreditAttemptLedger) => {

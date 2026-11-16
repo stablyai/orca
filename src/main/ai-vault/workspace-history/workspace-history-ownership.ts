@@ -9,7 +9,7 @@ import {
 import { isPathInsideOrEqual } from '../../../shared/file-access/cross-platform-path'
 import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 import type { OrcaWorkspaceLayout } from '../../../shared/worktree/paths/orca-workspace-layout'
-import { isENOENT } from '../../ipc/filesystem/access/filesystem-path-containment'
+import { isENOENT } from '../../filesystem/local-file-io/filesystem-path-containment'
 
 export type WorkspaceHistoryScope =
   /** Workspaces Orca just deleted; a transcript is theirs by the folder it ran in. */

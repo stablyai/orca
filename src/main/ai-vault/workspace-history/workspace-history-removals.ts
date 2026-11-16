@@ -11,7 +11,7 @@ import { sessionFileExecutionNamespace } from '../../../shared/ai-vault/scanning
 import { AI_VAULT_AGENT_SOURCES } from '../discovery/session-scanner-agent-sources'
 import { isDiscoverableSessionFile } from '../discovery/session-file-discovery'
 import { validateAiVaultSessionDeleteTarget } from '../deletion/session-delete-target'
-import { isENOENT } from '../../ipc/filesystem/access/filesystem-path-containment'
+import { isENOENT } from '../../filesystem/local-file-io/filesystem-path-containment'
 import type { AiVaultScanOptions } from '../session-scanner-types'
 
 export type WorkspaceHistoryRemovalContext = {

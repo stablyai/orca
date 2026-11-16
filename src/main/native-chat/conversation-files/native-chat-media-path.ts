@@ -16,7 +16,7 @@ import {
   resolveGrokSessionsDir
 } from '../../../shared/agent-hook-listener/providers/grok/grok-session-paths'
 import { readNodeFileWithinLimit } from '../../../shared/file-content/node-bounded-file-reader'
-import { isENOENT } from '../../ipc/filesystem/access/filesystem-path-containment'
+import { isENOENT } from '../../filesystem/local-file-io/filesystem-path-containment'
 import { needsWslHostResolution } from '../transcript-discovery/host-readable-transcript-path'
 import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
 import { admitTranscriptPath } from '../transcript-discovery/transcript-path-admission'
