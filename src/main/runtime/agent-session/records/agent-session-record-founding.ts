@@ -7,7 +7,7 @@ import {
   AGENT_SESSION_RECORD_SCHEMA_VERSION,
   type AgentSessionRecord
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import { normalizeAgentSessionConversationName } from '../../../../shared/agent-session/agent-session-conversation-name'
+import { normalizeAgentSessionConversationName } from '../../../../shared/agent-session/conversation-naming/agent-session-conversation-name'
 
 export type AgentSessionRecordIdentity = Pick<
   AgentSessionRecord,

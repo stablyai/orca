@@ -29,7 +29,7 @@ import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-path
 import { isFloatingWorkspaceSelector } from '../../../shared/workspace/identity/floating-workspace-worktree'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
-import type { StructuredAgentCreateSupportReply } from '../../../shared/agent-session/structured-agent-create-support-reply'
+import type { StructuredAgentCreateSupportReply } from '../../../shared/agent-session/lifecycle/operations/structured-agent-create-support-reply'
 
 export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends StructuredSessionWorkspaceScope {
   protected abstract restoreStructuredAgentSessionTabsOnce(

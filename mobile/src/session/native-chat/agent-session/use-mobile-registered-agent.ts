@@ -3,7 +3,7 @@ import {
   AGENT_SESSION_AGENTS_METHOD,
   decodeAgentSessionAgentsResult,
   type AgentSessionRegisteredAgent
-} from '../../../../../src/shared/agent-session/agent-session-registered-agents'
+} from '../../../../../src/shared/agent-session/agent-discovery/agent-session-registered-agents'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 
 const AGENTS_READ_RETRIES_MS = [2_000, 8_000, 30_000]

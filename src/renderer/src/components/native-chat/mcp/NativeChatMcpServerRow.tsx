@@ -3,7 +3,7 @@ import type {
   AgentSessionMcpOperation,
   AgentSessionMcpServer,
   AgentSessionMcpSignIn
-} from '../../../../../shared/agent-session/agent-session-mcp'
+} from '../../../../../shared/agent-session/options/protocol/agent-session-mcp'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'

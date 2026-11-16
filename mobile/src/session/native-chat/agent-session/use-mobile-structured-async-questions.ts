@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useSyncExternalStore } from 'react'
 import { asyncQuestionSourceScope } from '../../../../../src/shared/native-chat/input/native-chat-ask'
-import { AGENT_SESSION_SKIP_ASYNC_QUESTIONS_RUNTIME_CAPABILITY } from '../../../../../src/shared/agent-session/agent-session-runtime-capabilities'
+import { AGENT_SESSION_SKIP_ASYNC_QUESTIONS_RUNTIME_CAPABILITY } from '../../../../../src/shared/agent-session/capabilities/agent-session-runtime-capabilities'
 import { useRouteRelaysCapability } from '../../../worktree/execution-hosts/workspace-server-context'
 import { mobileStructuredSessionStatusFeed } from './mobile-structured-session-status-feed'
 import { callAgentSession } from './mobile-structured-agent-session-rpc'

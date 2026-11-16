@@ -15,7 +15,7 @@ import {
   type StyleProp,
   type TextStyle
 } from 'react-native'
-import type { NativeChatVisualDirective } from '../../../../../src/shared/native-chat/native-chat-visual-directive'
+import type { NativeChatVisualDirective } from '../../../../../src/shared/native-chat/visuals/native-chat-visual-directive'
 import { isMobileMermaidLanguage } from './mobile-mermaid-language'
 import { mobileMathMeasureText } from '../math/mobile-markdown-math-nodes'
 import { mobileMarkdownTableColumnWidths } from './mobile-markdown-table-columns'

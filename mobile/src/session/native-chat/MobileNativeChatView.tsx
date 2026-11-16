@@ -16,7 +16,7 @@ import type {
   NativeChatSettledTurns
 } from '../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
 import type { NativeChatTurnJournal } from '../../../../src/shared/native-chat/transcript/turns/native-chat-turn-membership'
-import type { NativeChatResolvedPrompt } from '../../../../src/shared/native-chat/native-chat-resolution-receipt'
+import type { NativeChatResolvedPrompt } from '../../../../src/shared/native-chat/input/questions/native-chat-resolution-receipt'
 import type { NativeChatContextUsageSummary } from '../../../../src/shared/native-chat/native-chat-context-usage-summary'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { MobileNativeChatInputLockStatus } from './composer/field/MobileNativeChatInputLockStatus'
@@ -37,7 +37,7 @@ import { useMobileNativeChatTurnDisclosure } from './transcript/turn-state/use-m
 import { mobileNativeChatComposerPlaceholder } from './composer/field/use-mobile-native-chat-input-lease'
 import { MobileNativeChatLiveLine } from './transcript/messages/MobileNativeChatLiveLine'
 import { MobileNativeChatAwaitingInputRow } from './transcript/messages/MobileNativeChatAwaitingInputRow'
-import type { NativeChatAwaitingInput } from '../../../../src/shared/native-chat/native-chat-terminal-turn'
+import type { NativeChatAwaitingInput } from '../../../../src/shared/native-chat/transcript/turns/native-chat-terminal-turn'
 import { MobileNativeChatFloatingControls } from './lower-region/MobileNativeChatFloatingControls'
 import type { PendingNativeChatImage } from './composer/attachments/mobile-native-chat-image-attachment'
 import type { MobilePastedImages } from './composer/attachments/mobile-native-chat-composer-paste'

@@ -7,7 +7,7 @@ import {
 } from './native-chat-agent-message-sender-source'
 import type { AgentMessageSenderTarget } from './native-chat-agent-message-sender-target'
 import type { AppState } from '@/store/types'
-import type { AgentMessageSender } from '../../../../../../shared/agent-session/agent-session-message-source'
+import type { AgentMessageSender } from '../../../../../../shared/agent-session/journal/agent-session-message-source'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   agentMessageSenderCandidateLocation,
@@ -15,7 +15,7 @@ import {
   resolveAgentMessageSenderTarget
 } from './native-chat-agent-message-sender-target'
 import { parseOrcaSessionAddress } from '../../../../../../shared/agent-session/identity/orca-session-address'
-import { agentMessageSavedKind } from '../../../../../../shared/agent-session/agent-message-presentation'
+import { agentMessageSavedKind } from '../../../../../../shared/agent-session/view/messages/agent-message-presentation'
 
 /** A terminal may outlive its sender; only a saved actor reference selects current activity. */
 function activitySender(

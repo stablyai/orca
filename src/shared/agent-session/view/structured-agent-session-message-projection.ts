@@ -8,12 +8,12 @@ import { STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING } from '../requests/structu
 import { agentJournalSubmissionKey } from '../journal/agent-session-journal-item-key'
 import { selectAgentSessionCurrentRequests } from '../requests/agent-session-current-requests'
 import { isQueuedAgentJournalSubmission } from '../requests/agent-session-queued-submission'
-import { collapseProviderRetryRuns } from '../../native-chat/native-chat-provider-retry-runs'
+import { collapseProviderRetryRuns } from '../../native-chat/transcript/notices/native-chat-provider-retry-runs'
 import {
   keepStoppedSendsInSendOrder,
   placeStoppedSends,
   withStopRowsAfterStoppedSends
-} from '../../native-chat/native-chat-stopped-before-start'
+} from '../../native-chat/transcript/pending-sends/native-chat-stopped-before-start'
 import { compareNativeChatTranscriptMessages } from '../../native-chat/transcript/native-chat-transcript-projection'
 import type { NativeChatMessage } from '../../native-chat/native-chat-types'
 import { dispatchWasWithdrawn } from '../requests/structured-agent-session-dispatch-rejection'
@@ -22,7 +22,7 @@ import { isActionableStructuredAgentSessionPrompt } from './structured-agent-ses
 import {
   agentSessionContextSequenceFor,
   isAgentSessionContextClear
-} from '../agent-session-context-clear'
+} from '../conversation-context/agent-session-context-clear'
 
 /** Client echo until host publication; an acknowledged read past recordedCursor supersedes it. */
 export type StructuredAgentSessionOptimisticMessage = {

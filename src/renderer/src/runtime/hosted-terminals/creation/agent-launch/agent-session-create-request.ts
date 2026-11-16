@@ -2,11 +2,11 @@ import { AGENT_LAUNCH_CHOICES_CAPABILITY } from '../../../../../../shared/agent-
 import {
   AGENT_SESSION_TRUST_WORKTREE_RUNTIME_CAPABILITY,
   AGENT_SESSION_CREATE_OPTIONS_RUNTIME_CAPABILITY
-} from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
+} from '../../../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
 import type {
   AgentLaunchPreferences,
   AgentPromptDelivery
-} from '../../../../../../shared/agent-session/agent-session-host-authority'
+} from '../../../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import type { SessionOptionValue } from '../../../../../../shared/native-chat/input/native-chat-session-options'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import {
