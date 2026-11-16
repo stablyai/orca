@@ -78,27 +78,32 @@ async function readByteRange(
 ): Promise<ArrayBuffer> {
   const output = new Uint8Array(Math.max(0, end - start))
   let failed = false
-  const reads: Promise<void>[] = []
-  for (let offset = start; offset < end; offset += MAX_FILE_RANGE_READ_BYTES) {
-    const length = Math.min(MAX_FILE_RANGE_READ_BYTES, end - offset)
-    reads.push(
-      readChunkInSlot(slots, async () => {
-        // Why: a failed slice rejects once; its queued reads should not keep the host busy.
-        if (failed) {
-          return
-        }
-        const bytes = await readRange(offset, length)
-        if (bytes.length !== length) {
-          throw new Error('Parquet file changed while it was being read. Reload the preview.')
-        }
-        output.set(bytes, offset - start)
-      }).catch((error: unknown) => {
+  let nextOffset = start
+  // Why: each worker holds at most one pending slot request, so a large slice never queues every chunk.
+  const worker = async (): Promise<void> => {
+    while (!failed && nextOffset < end) {
+      const offset = nextOffset
+      nextOffset += MAX_FILE_RANGE_READ_BYTES
+      const length = Math.min(MAX_FILE_RANGE_READ_BYTES, end - offset)
+      try {
+        await readChunkInSlot(slots, async () => {
+          // Why: a failed slice rejects once; its queued reads should not keep the host busy.
+          if (failed) {
+            return
+          }
+          const bytes = await readRange(offset, length)
+          if (bytes.length !== length) {
+            throw new Error('Parquet file changed while it was being read. Reload the preview.')
+          }
+          output.set(bytes, offset - start)
+        })
+      } catch (error) {
         failed = true
         throw error
-      })
-    )
+      }
+    }
   }
-  await Promise.all(reads)
+  await Promise.all(Array.from({ length: MAX_CONCURRENT_FILE_RANGE_READS }, worker))
   return output.buffer
 }
 

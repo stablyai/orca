@@ -11,6 +11,7 @@ import { RuntimeRpcCallError } from '../../rpc/calls/runtime-rpc-result'
 import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'
 import { decodeBase64Bytes } from '@/lib/base64-bytes'
 import { withRemoteRangeReadSlot } from './runtime-remote-range-read-slots'
+import { captureRuntimeEnvironmentRequestRevision } from '../../rpc/environment-revisions/runtime-environment-revision'
 import {
   remoteFileRequest,
   type RemoteFileLocator
@@ -84,15 +85,17 @@ export function readRemoteRuntimeFileChunk(
   length: number
 ): Promise<RuntimeFileReadChunkResult> {
   const { method, params } = remoteFileRequest(remote.worktree, remote, 'readChunk')
+  // Why: capture before queuing so a re-pair while waiting for a slot cannot retarget this read.
+  const expectedEnvironmentPairingRevision = captureRuntimeEnvironmentRequestRevision(
+    remote.target.environmentId,
+    remote.expectedEnvironmentPairingRevision
+  )
   return withRemoteRangeReadSlot(remote.target.environmentId, () =>
     callRuntimeRpc<RuntimeFileReadChunkResult>(
       remote.target,
       method,
       { ...params, offset, length },
-      {
-        timeoutMs: 60_000,
-        expectedEnvironmentPairingRevision: remote.expectedEnvironmentPairingRevision
-      }
+      { timeoutMs: 60_000, expectedEnvironmentPairingRevision }
     )
   )
 }
