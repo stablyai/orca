@@ -21667,7 +21667,13 @@
         "restartGaveUp_many": "No se pudo reiniciar el servidor Orca en {{distro}} después de {{count}} intentos",
         "serviceUnconfirmed": "El servicio WSL no confirmó si la distro está en ejecución.",
         "peerCheckFailed": "Orca no pudo consultar al host WSL si otro Orca en este equipo aún lo usa: {{detail}}",
-        "removalUnrecorded": "Orca no pudo registrar qué quedó en ejecución tras esta eliminación: {{detail}}"
+        "removalUnrecorded": "Orca no pudo registrar qué quedó en ejecución tras esta eliminación: {{detail}}",
+        "installLockWait_one": "Esperando a que termine otra instalación de Orca en esta distribución. Si no termina, Orca la retomará en aproximadamente {{count}} minuto.",
+        "installLockWait_many": "Esperando a que termine otra instalación de Orca en esta distribución. Si no termina, Orca la retomará en aproximadamente {{count}} minutos.",
+        "installLockWait_other": "Esperando a que termine otra instalación de Orca en esta distribución. Si no termina, Orca la retomará en aproximadamente {{count}} minutos.",
+        "installLockWaitGivesUp_one": "Esperando a que termine otra instalación de Orca en esta distribución. Si no termina, Orca dejará de esperar en aproximadamente {{count}} minuto.",
+        "installLockWaitGivesUp_many": "Esperando a que termine otra instalación de Orca en esta distribución. Si no termina, Orca dejará de esperar en aproximadamente {{count}} minutos.",
+        "installLockWaitGivesUp_other": "Esperando a que termine otra instalación de Orca en esta distribución. Si no termina, Orca dejará de esperar en aproximadamente {{count}} minutos."
       }
     },
     "agentSummary": {

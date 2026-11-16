@@ -22117,7 +22117,9 @@
         "restartGaveUp_other": "{{count}} 回試行しましたが、{{distro}} 内の Orca サーバーを再起動できませんでした",
         "serviceUnconfirmed": "WSL サービスからディストリビューションが実行中かどうかの確認が得られませんでした。",
         "peerCheckFailed": "Orca は WSL ホストに、このコンピューター上の別の Orca がまだ使用しているかを問い合わせられませんでした: {{detail}}",
-        "removalUnrecorded": "Orca は、今回の削除後も実行中のものを記録できませんでした: {{detail}}"
+        "removalUnrecorded": "Orca は、今回の削除後も実行中のものを記録できませんでした: {{detail}}",
+        "installLockWait_other": "このディストリビューションで別の Orca のインストールが終わるのを待っています。終わらない場合、約 {{count}} 分後に Orca が引き継ぎます。",
+        "installLockWaitGivesUp_other": "このディストリビューションで別の Orca のインストールが終わるのを待っています。終わらない場合、約 {{count}} 分後に Orca は待機をやめます。"
       }
     },
     "agentSummary": {
