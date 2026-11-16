@@ -14,6 +14,13 @@ vi.mock('../../../workspace-hooks/worktree-runner-script', () => ({
   resolveSetupRunnerShell: () => undefined
 }))
 
+const layout = vi.hoisted(() => ({ ownerIsMain: false }))
+vi.mock('../../../../shared/workspace-layout/layout-owner-switch', () => ({
+  get ORCA_LAYOUT_OWNER_IS_MAIN() {
+    return layout.ownerIsMain
+  }
+}))
+
 const BRANCH_YAML =
   'scripts:\n  setup: make bootstrap\ndefaultTabs:\n  - title: dev\n    command: pnpm dev\n  - title: notes\n'
 
@@ -50,6 +57,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  layout.ownerIsMain = false
   rmSync(worktreePath, { recursive: true, force: true })
 })
 
@@ -82,5 +90,40 @@ describe('runApprovedCreatedWorktreeSetup', () => {
         hashOrcaHookTrustContent('# defaultTabs[1] dev\npnpm dev')
       )
     ).rejects.toThrow('Could not start')
+  })
+
+  it('starts approved default-tab commands although the layout already holds those tabs', async () => {
+    layout.ownerIsMain = true
+    writeFileSync(
+      join(worktreePath, 'orca.yaml'),
+      'defaultTabs:\n  - title: dev\n    command: pnpm dev\n'
+    )
+    const commands: (string | undefined)[] = []
+    provisionManagedWorktreeTerminals.mockImplementation((args) =>
+      provisionWorktreeTerminals(
+        {
+          canSpawn: () => true,
+          createTerminal: async (_selector, options) => {
+            commands.push(options.command)
+            return { handle: 'h' }
+          },
+          applyDefaultTabs: async () => [],
+          setTabTitle: async () => {},
+          setTabColor: async () => {},
+          getPtyId: () => undefined,
+          recordSetupCompletionToken: () => {}
+        },
+        args
+      )
+    )
+
+    await expect(
+      runApprovedCreatedWorktreeSetup(
+        runtimeFor(),
+        'id:wt',
+        hashOrcaHookTrustContent('# defaultTabs[1] dev\npnpm dev')
+      )
+    ).resolves.toEqual({ status: 'started' })
+    expect(commands).toEqual(['pnpm dev'])
   })
 })

@@ -53,6 +53,8 @@ export type WorktreeTerminalProvisioningArgs = {
   worktreePath: string
   setup?: CreateWorktreeResult['setup']
   defaultTabs?: CreateWorktreeResult['defaultTabs']
+  /** Approved commands for tabs the create already opened: start them as new tabs, not deduped by the layout. */
+  defaultTabsBesideExisting?: true
   primaryTerminalHandle?: string | null
   hasStartupTerminal: boolean
   setupOnly?: boolean
@@ -71,7 +73,8 @@ export async function createWorktreeDefaultTabTerminals(
   worktreeId: string,
   defaultTabs: CreateWorktreeResult['defaultTabs'] | undefined,
   surfacing: TerminalSurfacing = {},
-  startupHandle?: string
+  startupHandle?: string,
+  besideExisting?: true
 ): Promise<DefaultTabTerminals> {
   if (!defaultTabs || defaultTabs.tabs.length === 0 || !host.canSpawn()) {
     return { handles: [], failed: false }
@@ -81,7 +84,7 @@ export async function createWorktreeDefaultTabTerminals(
   if (startupHandle && first) {
     await dressAsDefaultTab(host, worktreeId, startupHandle, first)
   }
-  if (ORCA_LAYOUT_OWNER_IS_MAIN && host.applyDefaultTabs) {
+  if (ORCA_LAYOUT_OWNER_IS_MAIN && host.applyDefaultTabs && !besideExisting) {
     return startDefaultTabsInLayout(
       host,
       host.applyDefaultTabs,
@@ -214,7 +217,8 @@ export async function provisionWorktreeTerminals(
       args.worktreeId,
       setupOnly ? undefined : args.defaultTabs,
       surfacing,
-      args.hasStartupTerminal ? (args.primaryTerminalHandle ?? undefined) : undefined
+      args.hasStartupTerminal ? (args.primaryTerminalHandle ?? undefined) : undefined,
+      args.defaultTabsBesideExisting
     )
     failed = defaultTabTerminals.failed
     const primaryHandle = args.primaryTerminalHandle ?? defaultTabTerminals.handles[0] ?? null

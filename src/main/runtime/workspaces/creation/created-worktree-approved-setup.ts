@@ -86,7 +86,7 @@ export async function runApprovedCreatedWorktreeSetup(
     worktreeId: worktree.id,
     worktreePath: worktree.path,
     ...(setup ? { setup: { ...setup, ...(group ? { cwd: hooksRoot } : {}) } } : {}),
-    ...(defaultTabs ? { defaultTabs } : {}),
+    ...(defaultTabs ? { defaultTabs, defaultTabsBesideExisting: true as const } : {}),
     hasStartupTerminal: true,
     setupCommandPlatform: getSetupRunnerCommandPlatformForPath(
       setup?.runnerScriptPath ?? '',

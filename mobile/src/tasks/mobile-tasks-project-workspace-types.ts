@@ -123,6 +123,8 @@ export type OrcaYamlTrustPrompt = WorkspaceCreateArgs &
   OrcaHookTrustPrompt & {
     /** The workspace exists; only its skipped setup is under review. Opening it ends the review. */
     created?: { worktreeId: string; open: (notice?: string) => void }
+    /** An approval is saving or running; the drawer stays busy and ignores other choices. */
+    approving?: true
   }
 
 export type WorkspaceCreateDraft = {

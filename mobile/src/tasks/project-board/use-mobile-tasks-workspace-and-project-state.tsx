@@ -229,7 +229,7 @@ export function useMobileTasksWorkspaceAndProjectState(model: RouteAndItemStateM
     setLinearStatusPickerItem,
     setupPrompt,
     setSetupPrompt,
-    // A created workspace's setup review keeps its item busy; clearing the review frees it.
+    // A created workspace's review, including its approved run, keeps its item busy until it settles.
     creatingKey:
       creatingKey ?? (orcaYamlTrustPrompt?.created ? orcaYamlTrustPrompt.item.key : null),
     setCreatingKey,

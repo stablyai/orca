@@ -22,6 +22,7 @@ import {
 } from '../new-workspace/creation/setup-hook-trust'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { AutomationDraft } from './automation-draft'
+import { automationSetupRedecided } from './automation-setup-redecision'
 import { AutomationDraftValidationError } from './automation-error'
 import {
   automationRepoSchema,
@@ -43,15 +44,7 @@ export async function prepareAutomationSetup(args: {
   ) => Promise<'run' | 'skip' | null>
 }): Promise<AutomationDraft | null> {
   const { client, draft, original, targets, current } = args
-  if (
-    original &&
-    !draft.targetEdited &&
-    !draft.setupDecisionEdited &&
-    draft.setupId === original.setupId &&
-    draft.workspaceMode === original.workspaceMode &&
-    draft.workspaceId === original.workspaceId &&
-    draft.setupDecision === original.setupDecision
-  ) {
+  if (original && !automationSetupRedecided(draft, original)) {
     return draft
   }
   if (draft.workspaceMode !== 'new_per_run') {

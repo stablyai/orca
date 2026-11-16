@@ -12,7 +12,8 @@ import { createMayRunSetup, resolveCreateSetupApproval } from '../setup-hook-tru
 import {
   composerSetupHooksCreateSource,
   createWorkspaceFromComposerSource,
-  resolveComposerSelectionBase
+  resolveComposerSelectionBase,
+  composerCreateRepoId
 } from '../source-workspace-create'
 import { createdSetupReviewPrompt } from '../created-worktree-setup-review'
 import {
@@ -182,6 +183,16 @@ export function useNewWorkspaceCreateSubmit(args: {
       const selection =
         options.selection ??
         (composed && (await resolveComposerSelectionBase(client, composed, selectedRepo.id)))
+      const createRepoId = composerCreateRepoId(selection, selectedRepo.id)
+      // Setup is checked and shown for the repo the create lands in, which a work item may not share.
+      const setupRepo =
+        createRepoId === selectedRepo.id
+          ? selectedRepo
+          : args.repos.find((repo) => repo.id === createRepoId)
+      if (!setupRepo) {
+        args.setError("This item's project isn't available on this host.")
+        return
+      }
       let setupApproval = options.setupApproval
       // The checkout may lack setup the created branch has, so check whenever setup isn't skipped.
       if (createMayRunSetup(setupDecision, args.setupRunPolicy) && !setupApproval) {
@@ -189,7 +200,7 @@ export function useNewWorkspaceCreateSubmit(args: {
           client,
           trust: args.trustedOrcaHooks,
           repos: args.repos,
-          repo: selectedRepo,
+          repo: setupRepo,
           createSource: selection ? composerSetupHooksCreateSource(selection) : { kind: 'base' }
         })
         if ('ask' in resolved) {
@@ -255,7 +266,7 @@ export function useNewWorkspaceCreateSubmit(args: {
         // The host skipped setup because the created branch's differs from what was approved.
         setupTrust.ask({
           ...createdSetupReviewPrompt({
-            repo: selectedRepo,
+            repo: setupRepo,
             repos: args.repos,
             trust: args.trustedOrcaHooks,
             mismatch

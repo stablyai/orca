@@ -86,6 +86,17 @@ export async function resolveComposerSelectionBase<Selection extends MobileCompo
     : selection
 }
 
+/** The repo the create lands in: a GitHub or GitLab item keeps its own repo when another is selected. */
+export function composerCreateRepoId(
+  selection: MobileComposerCreateSelection | null | undefined,
+  selectedRepoId: string
+): string {
+  return selection?.kind === 'work-item' &&
+    (selection.item.provider === 'github' || selection.item.provider === 'gitlab')
+    ? (selection.item.repoId ?? selectedRepoId)
+    : selectedRepoId
+}
+
 /** The ref the create checks out, so its setup prompt shows that ref's orca.yaml. */
 export function composerSetupHooksCreateSource(
   selection: MobileComposerCreateSelection

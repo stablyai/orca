@@ -214,9 +214,6 @@ export function renderMobileTasksSetupTrustDrawer(model: ConnectionPresentationM
   )
 }
 
-// Prompts whose approval is in flight; the prompt object lives as long as its drawer.
-const approvingPrompts = new WeakSet<OrcaYamlTrustPrompt>()
-
 export function renderMobileTasksOrcaYamlTrustDrawer(model: ConnectionPresentationModel) {
   const {
     client,
@@ -243,21 +240,23 @@ export function renderMobileTasksOrcaYamlTrustDrawer(model: ConnectionPresentati
     )
   const approve = (alwaysTrust: boolean) => {
     const prompt = orcaYamlTrustPrompt
-    // A second tap while the first approval runs must not run setup or open the workspace twice.
-    if (!prompt || approvingPrompts.has(prompt)) {
+    // One choice per prompt: a second tap or a decline while this runs must not act again.
+    if (!prompt || prompt.approving) {
       return
     }
-    approvingPrompts.add(prompt)
+    setOrcaYamlTrustPrompt({ ...prompt, approving: true })
     void (async () => {
       let notice: string | undefined
       try {
         const setupApproval = await persistSetupHookTrust(prompt, alwaysTrust)
-        setOrcaYamlTrustPrompt(null)
         if (prompt.created) {
           notice = client
             ? await runReviewedCreatedSetup(client, prompt.created.worktreeId, prompt.contentHash)
             : createdSetupRunFailed()
-        } else if (setupApproval) {
+          return
+        }
+        setOrcaYamlTrustPrompt(null)
+        if (setupApproval) {
           await createWithSetup(prompt, setupApproval)
         }
       } catch (err) {
@@ -266,14 +265,14 @@ export function renderMobileTasksOrcaYamlTrustDrawer(model: ConnectionPresentati
           return
         }
         // The prompt stays up after a failed save, so it may be approved again.
-        approvingPrompts.delete(prompt)
+        setOrcaYamlTrustPrompt(prompt)
         setError(
           err instanceof Error
             ? err.message
             : translate('tasks.workspaceTrustDrawers.trustFailed', 'Failed to trust setup script.')
         )
       } finally {
-        // The workspace exists either way; opening it ends the review.
+        // The workspace exists either way; opening it ends the review and frees its item.
         if (prompt.created) {
           setOrcaYamlTrustPrompt(null)
           prompt.created.open(notice)
@@ -284,6 +283,9 @@ export function renderMobileTasksOrcaYamlTrustDrawer(model: ConnectionPresentati
   // Declining a created workspace's setup leaves it as is and opens it.
   const decline = (create: boolean) => {
     const prompt = orcaYamlTrustPrompt
+    if (prompt?.approving) {
+      return
+    }
     setOrcaYamlTrustPrompt(null)
     if (prompt?.created) {
       prompt.created.open()
@@ -297,8 +299,8 @@ export function renderMobileTasksOrcaYamlTrustDrawer(model: ConnectionPresentati
       prompt={orcaYamlTrustPrompt}
       busy={
         orcaYamlTrustPrompt != null &&
-        !orcaYamlTrustPrompt.created &&
-        creatingKey === orcaYamlTrustPrompt.item.key
+        (orcaYamlTrustPrompt.approving === true ||
+          (!orcaYamlTrustPrompt.created && creatingKey === orcaYamlTrustPrompt.item.key))
       }
       zIndex={TASK_SECONDARY_DRAWER_Z_INDEX + 1}
       onRunOnce={() => approve(false)}
