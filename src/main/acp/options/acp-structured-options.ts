@@ -1,12 +1,9 @@
-import { acpSelectChoices } from './acp-select-choices'
+import { acpEffortOption, acpSelectChoices } from './acp-select-choices'
+import { acpModelMenuModels, withFastModeOption } from './acp-model-menu'
 import { acpInitializeForkSupport } from '../capabilities/acp-fork-support'
-import { buildSessionModelOptions } from './acp-session-model-options'
-import type {
-  AgentSessionOptionChoice,
-  AgentSessionSlashCommand
-} from '../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionSlashCommand } from '../../../shared/agent-session/agent-session-wire'
 
-import type { AgentSessionOptionsResult } from '../../../shared/agent-session/options/agent-session-options-result'
+import type { AgentSessionOptionsResult } from '../../../shared/agent-session/options/protocol/agent-session-options-result'
 import type { AcpDialect } from '../acp-dialects/acp-dialect'
 import {
   unpickedSessionConfiguredChoice,
@@ -28,17 +25,23 @@ export type AcpOptionWrite =
   | { method: 'config'; configId: string; value: string }
   | { method: 'model'; modelId: string }
 
+function isSelect(option: SessionConfigOption): option is SelectOption {
+  return option.type === 'select'
+}
+
 export class AcpStructuredOptions {
   constructor(
     private readonly dialect: Pick<
       AcpDialect,
       | 'modelEfforts'
+      | 'familyEfforts'
       | 'withheldCommands'
       | 'effortChangesModel'
       | 'effortSelectsThinkingVariant'
       | 'clampsUnlistedEffort'
       | 'builtinCommands'
       | 'normalizeConfigOptions'
+      | 'fastConfigId'
     > = {}
   ) {}
 
@@ -90,7 +93,9 @@ export class AcpStructuredOptions {
       this.unobservedCurrent.add(key)
     }
     if (key === 'model') {
+      // Each model has its own effort and Fast defaults, so both are written again.
       this.appliedInput.delete('effort')
+      this.appliedInput.delete('fastMode')
       this.unobservedCurrent.add('effort')
     }
     if (key === 'effort' && this.dialect.effortChangesModel) {
@@ -156,7 +161,7 @@ export class AcpStructuredOptions {
       if (this.select('model')) {
         this.unobservedCurrent.delete('model')
       }
-      if (this.select('thought_level')) {
+      if (this.effortOption()) {
         this.unobservedCurrent.delete('effort')
       }
     }
@@ -210,7 +215,7 @@ export class AcpStructuredOptions {
 
   /** Whether the session's effort menu accepts this value; a clamping dialect accepts any. */
   offersEffort(value: string): boolean {
-    const option = this.select('thought_level')
+    const option = this.effortOption()
     return !!(
       option &&
       (this.dialect.clampsUnlistedEffort || acpSelectChoices(option).some((c) => c.value === value))
@@ -219,6 +224,10 @@ export class AcpStructuredOptions {
 
   /** The agent write for a picker change; mcode's on/off effort rewrites the model's thinking variant. */
   write(key: string, value: string): AcpOptionWrite | null {
+    if (key === 'fastMode') {
+      const fast = this.fastOption()
+      return fast ? { method: 'config', configId: fast.id, value } : null
+    }
     if (key === 'model') {
       const option = this.select('model')
       return option
@@ -239,42 +248,29 @@ export class AcpStructuredOptions {
           }
         }
       }
-      const option = this.select('thought_level')
+      const option = this.effortOption()
       return option ? { method: 'config', configId: option.id, value } : null
     }
     return null
   }
 
   /** Native choices never establish an unobserved model's capability or configured default. */
-  read(): Pick<AgentSessionOptionsResult, 'models' | 'current' | 'forkSupport'> {
+  read(): Pick<
+    AgentSessionOptionsResult,
+    'models' | 'current' | 'forkSupport' | 'fastModeSupport'
+  > {
     const modelOption = this.select('model')
-    const effortOption = this.select('thought_level')
-    const toChoice = (id: string, label: string, description?: string | null) => ({
-      id,
-      label,
-      ...(description && { description })
-    })
-    const sessionEfforts: AgentSessionOptionChoice[] = effortOption
-      ? acpSelectChoices(effortOption).map((c) => ({
-          value: c.value,
-          label: c.name,
-          ...(c.description && { description: c.description })
-        }))
-      : []
+    const effortOption = this.effortOption()
     const currentModel = (modelOption?.currentValue ?? this.models?.currentModelId) || undefined
-    const listed = modelOption
-      ? acpSelectChoices(modelOption).map((c) => toChoice(c.value, c.name, c.description))
-      : (this.models?.availableModels.map((m) => toChoice(m.modelId, m.name, m.description)) ?? [])
-    const models = buildSessionModelOptions({
-      listed,
-      currentModel,
-      sessionEfforts,
-      hasModelOrEffort: !!(modelOption || effortOption),
-      availableModels: this.models?.availableModels,
-      dialect: this.dialect
+    const models = acpModelMenuModels({
+      dialect: this.dialect,
+      modelOption,
+      effortOption,
+      state: this.models,
+      currentModel
     })
     const confirmed = [...(currentModel ? ['model'] : []), ...(effortOption ? ['effort'] : [])]
-    return {
+    const menu = {
       models,
       forkSupport: this.forkSupport,
       current: {
@@ -283,6 +279,7 @@ export class AcpStructuredOptions {
         confirmed
       }
     }
+    return withFastModeOption(menu, this.fastOption())
   }
 
   /** Unpicked new-session default: null if unlisted, undefined if the session cannot establish it. */
@@ -334,8 +331,21 @@ export class AcpStructuredOptions {
   private currentValues(): Readonly<Record<string, string | undefined>> {
     return {
       model: (this.select('model')?.currentValue ?? this.models?.currentModelId) || undefined,
-      effort: this.select('thought_level')?.currentValue
+      effort: this.effortOption()?.currentValue
     }
+  }
+
+  private effortOption(): SelectOption | null {
+    return acpEffortOption(this.configOptions)
+  }
+
+  private fastOption(): SelectOption | null {
+    const id = this.dialect.fastConfigId
+    if (!id) {
+      return null
+    }
+    const option = this.configOptions.find((entry) => entry.id === id)
+    return option && isSelect(option) ? option : null
   }
 
   /** The select row for a category; model also matches the legacy id-only row. */

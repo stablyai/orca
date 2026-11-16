@@ -12,8 +12,8 @@ import '../attempt-outcome-projection'
 import {
   formatOrcaSessionAddress,
   type OrcaSessionId
-} from '../../../../../shared/orca-session-address'
-import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
+} from '../../../../../shared/agent-session/identity/orca-session-address'
+import { testOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address-test-fixture'
 
 const CHAT_X_ID = testOrcaSessionId('1b6f0c3a-7d2e-4a91-8c55-2e9d4b7a0f13')
 const CHAT_X = formatOrcaSessionAddress(CHAT_X_ID)

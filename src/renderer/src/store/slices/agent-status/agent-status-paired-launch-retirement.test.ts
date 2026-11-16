@@ -33,7 +33,7 @@ it('a paired host retiring a launch ends its note for OSC updates and cold resto
         { providerSession: SESSION, launchToken: 'launch-1' }
       )
   const frame = (launchAttested: boolean) => {
-    const agentStatus = { ...store.getState().agentStatusByPaneKey[PANE]!, updatedAt: tick() }
+    const agentStatus = { ...store.getState().agentStatusByPaneKey.get(PANE)!, updatedAt: tick() }
     const surface = {
       type: 'terminal' as const,
       id: `host-tab::${LEAF}`,
@@ -75,7 +75,7 @@ it('a paired host retiring a launch ends its note for OSC updates and cold resto
     providerSession: SESSION,
     cmdOverrides: {},
     ...resolveResumeLaunchRecipe(
-      state.getAgentLaunchConfigForStatusEntry(state.agentStatusByPaneKey[PANE]!),
+      state.getAgentLaunchConfigForStatusEntry(state.agentStatusByPaneKey.get(PANE)!),
       'claude',
       SESSION
     ),

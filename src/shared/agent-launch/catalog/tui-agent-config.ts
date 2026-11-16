@@ -2,7 +2,7 @@ import type { TuiAgent } from './tui-agent'
 import {
   getOrcaCliCommandNameForPlatform,
   skipsLinuxOrcaCliRename
-} from '../../orca-cli-command-name'
+} from '../../cli/orca-cli-command-name'
 import type { TuiAgentConfig, TuiAgentConfigSource } from './tui-agent-config-types'
 
 function resolveTuiAgentConfig(source: TuiAgentConfigSource): TuiAgentConfig {

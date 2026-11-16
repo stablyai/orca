@@ -24,7 +24,7 @@ import {
   tokenizeStartupCommand,
   type AgentStartupShell
 } from '../../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
-import { resolveHostAgentStartupShell } from '../../../../../../shared/windows-terminal-shell'
+import { resolveHostAgentStartupShell } from '../../../../../../shared/shell/launch/windows-terminal-shell'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { SessionOptionValue } from '../../../../../../shared/native-chat/input/native-chat-session-options'
 

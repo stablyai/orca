@@ -25,6 +25,7 @@ import { launchBridgeApp, listBridgeApps } from './desktop-script-apps'
 import {
   optionalNumberParam,
   optionalStringParam,
+  screenshotRequestParams,
   stringParam
 } from './desktop-script-provider-params'
 import {
@@ -130,7 +131,7 @@ export class DesktopScriptProviderClient {
       app,
       windowId: optionalNumberParam(params, 'windowId'),
       windowIndex: optionalNumberParam(params, 'windowIndex'),
-      noScreenshot: params.noScreenshot === true,
+      ...screenshotRequestParams(params),
       restoreWindow: params.restoreWindow === true
     })
     return this.rememberAndRender(app, response, params.noScreenshot === true, params)
@@ -176,7 +177,7 @@ export class DesktopScriptProviderClient {
       value: optionalStringParam(params, 'value'),
       windowBounds: null,
       ...actionWindowTarget,
-      noScreenshot: params.noScreenshot === true,
+      ...screenshotRequestParams(params),
       restoreWindow: params.restoreWindow === true
     })
     const action = verifyDesktopAction(

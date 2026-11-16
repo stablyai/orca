@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import type { GitDiffResult } from './git-diff-compare-types'
 import { assertGitDiffWithinTransportBudget } from './git-diff-transport-budget'
-import { REMOTE_RPC_MAX_CONTENT_BYTES } from '../../remote-rpc-content-budget'
+import { REMOTE_RPC_MAX_CONTENT_BYTES } from '../../remote-runtime/rpc/remote-rpc-content-budget'
 
 const BUDGET = REMOTE_RPC_MAX_CONTENT_BYTES
 

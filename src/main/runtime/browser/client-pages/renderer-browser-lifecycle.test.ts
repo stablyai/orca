@@ -10,8 +10,8 @@ import { TEST_WORKTREE_ID, store } from '../../orca-runtime-tests/orca-runtime-t
 import '../../../../shared/constants'
 
 import type { BrowserTabInfo } from '../../../../shared/browser/runtime/runtime-browser-contracts'
-import type { RuntimeMobileSessionBrowserTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
-import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionBrowserTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 
@@ -60,8 +60,8 @@ function browserRuntime(closeTab = vi.fn(async (_pageId: string) => {}), runtime
     id === 1 ? { isDestroyed: () => false } : null
   )
   runtime.attachWindow(1)
-  const sync = (snapshots: RuntimeMobileSessionTabsSnapshot[]) =>
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: snapshots })
+  const sync = async (snapshots: RuntimeMobileSessionTabsSnapshot[]) =>
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: snapshots })
   // Desktop webviews share the bridge inventory with offscreen pages but the backend does not own them.
   const addDesktopPage = (browserPageId: string) => {
     desktopPageIds.add(browserPageId)
@@ -83,7 +83,7 @@ it('finishes an offscreen close against the latest renderer revision without los
   const closing = Promise.withResolvers<void>()
   const closeTab = vi.fn(async (_pageId: string) => closing.promise)
   const { runtime, livePages, sync, addPage, list } = browserRuntime(closeTab)
-  sync([publication()])
+  await sync([publication()])
   addPage('runtime-page')
   runtime.notifyMobileSessionTabsChanged(TEST_WORKTREE_ID)
   expect((await list()).tabs.map((tab) => tab.id)).toEqual(['renderer-tab', 'runtime-page'])
@@ -99,7 +99,7 @@ it('finishes an offscreen close against the latest renderer revision without los
     browserPageId: 'renderer-new-page',
     isActive: false
   }
-  sync([{ ...publication('renderer-2'), tabs: [rendererTab, newerTab] }])
+  await sync([{ ...publication('renderer-2'), tabs: [rendererTab, newerTab] }])
   livePages.delete('runtime-page')
   closing.resolve()
   await expect(close).resolves.toMatchObject({ closed: true })
@@ -115,15 +115,15 @@ it('finishes an offscreen close against the latest renderer revision without los
   expect(closeTab).toHaveBeenCalledTimes(1)
   expect((await list()).tabs.map((tab) => tab.id)).toEqual(['renderer-tab', 'renderer-new'])
 
-  sync([publication('renderer-2', 2)])
+  await sync([publication('renderer-2', 2)])
   expect((await list()).tabs.map((tab) => tab.id)).toEqual(['renderer-tab'])
-  sync([{ ...publication('renderer-2', 1), tabs: [rendererTab, newerTab] }])
+  await sync([{ ...publication('renderer-2', 1), tabs: [rendererTab, newerTab] }])
   expect((await list()).tabs.map((tab) => tab.id)).toEqual(['renderer-tab'])
 })
 
 it('does not tombstone a renderer browser when the acknowledged close fails', async () => {
   const { runtime, sync, list } = browserRuntime()
-  sync([publication()])
+  await sync([publication()])
   const closeSessionTab = vi.fn(async () => {
     throw new Error('renderer_disconnected')
   })
@@ -152,7 +152,7 @@ it('does not tombstone a renderer browser when the acknowledged close fails', as
 
 it('keeps a replacement client page through a stale placement retirement and retires only the live generation', async () => {
   const { runtime, sync, list } = browserRuntime()
-  sync([publication()])
+  await sync([publication()])
   const pages = getRuntimeBrowserPageRegistry(runtime)
   const original = {
     kind: 'client' as const,
@@ -192,7 +192,7 @@ it('finishes a pending runtime close after renderer detach without losing other 
   const closing = Promise.withResolvers<void>()
   const closeTab = vi.fn(async (_pageId: string) => closing.promise)
   const { runtime, livePages, sync, addPage, list } = browserRuntime(closeTab)
-  sync([publication()])
+  await sync([publication()])
   addPage('closing-page')
   addPage('surviving-page')
   runtime.notifyMobileSessionTabsChanged(TEST_WORKTREE_ID)
@@ -201,7 +201,7 @@ it('finishes a pending runtime close after renderer detach without losing other 
   })
   await vi.waitFor(() => expect(closeTab).toHaveBeenCalledWith('closing-page'))
 
-  sync([])
+  await sync([])
   const detached = await list()
   expect(detached.tabs.map((tab) => tab.id)).toEqual(['closing-page', 'surviving-page'])
   expect(detached.publicationEpoch).toMatch(/^headless-hydrated:/)
@@ -214,7 +214,7 @@ it('finishes a pending runtime close after renderer detach without losing other 
     'closing-page'
   )
 
-  sync([publication('renderer-returned')])
+  await sync([publication('renderer-returned')])
   const returned = await list()
   expect(returned.publicationEpoch).toBe('renderer-returned')
   expect(returned.tabs.map((tab) => tab.id)).toEqual(['renderer-tab', 'surviving-page'])

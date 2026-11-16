@@ -1,5 +1,5 @@
-import { rateLimitSpentUntil } from '../../../../shared/rate-limit-spent-windows'
-import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
+import { rateLimitSpentUntil } from '../../../../shared/agent-usage/rate-limits/rate-limit-spent-windows'
+import type { ProviderRateLimits } from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import {
   isNativeChatUsageLimitCutSchedulable,
   NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS,
@@ -13,8 +13,8 @@ import {
   agentSessionAccountHomesEqual,
   isLegacyAgentSessionAccountHome,
   type AgentSessionAccountHome
-} from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
+} from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { usageLimitContinueIdentity as identity } from './structured-agent-session-usage-limit-chain'
 
 /** The polled usage of the account a chat continues on, as the host attributes it. */

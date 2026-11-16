@@ -2,7 +2,7 @@ import { spawnProcess } from '@orca/process-host'
 import {
   pathEnvRelativeTo,
   withCliRuntimeOnPath
-} from '../../../shared/node-cli-command-resolution'
+} from '../../../shared/shell/command-resolution/node-cli-command-resolution'
 import { resolveGuestNativeAgentCommand } from '../../codex-cli/command'
 import { createProviderSpawnSpec } from '../../provider-process/provider-process-supervisor'
 import { guardSupervisedProviderGroup } from '../../provider-process/provider-group-orphan-guard'

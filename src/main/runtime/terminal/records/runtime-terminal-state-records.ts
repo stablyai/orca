@@ -5,8 +5,8 @@ import type {
   SleepingAgentLaunchConfig
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { PtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
-import type { RuntimeSyncedLeaf } from '../../../../shared/runtime-session-contracts'
-import type { RuntimeTerminalRowMetadata } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeSyncedLeaf } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeTerminalRowMetadata } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { TerminalOscLinkRange } from '../../../../shared/terminal/links/terminal-osc-link-ranges'
 import type { TerminalSideEffectFact } from '../../../../shared/terminal/output/terminal-side-effect-facts'
 import type { TerminalTitleTracker } from '../../../../shared/terminal/output/terminal-output-side-effects'

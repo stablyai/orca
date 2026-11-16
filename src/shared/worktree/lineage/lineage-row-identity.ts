@@ -1,4 +1,8 @@
-import { parseWorkspaceKey, worktreeWorkspaceKey, type WorkspaceKey } from '../../workspace-scope'
+import {
+  parseWorkspaceKey,
+  worktreeWorkspaceKey,
+  type WorkspaceKey
+} from '../../workspace/identity/workspace-scope'
 import type { CrossStoreParentRef } from '../lineage-types'
 import type { Worktree } from '../types'
 

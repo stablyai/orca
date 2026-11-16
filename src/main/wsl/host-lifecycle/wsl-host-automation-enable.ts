@@ -28,11 +28,11 @@ export async function openWslHostAutomationApi(
   environmentId: string
 ): Promise<WslHostAutomationApi> {
   const service = getWslHostService()
-  if (!service?.recordForEnvironment(environmentId)) {
+  if (!service || !(await service.recordForEnvironment(environmentId))) {
     throw new Error('wsl_move_host_unavailable')
   }
   await service.ensureForRuntimeCall(environmentId)
-  const environment = resolveEnvironment(userDataPath, environmentId)
+  const environment = await resolveEnvironment(userDataPath, environmentId)
   const pairing = parsePairingCode(encodePairingOffer(getPreferredPairingOffer(environment)))
   if (!pairing) {
     throw new Error('orcad_migration_pairing_code_invalid')

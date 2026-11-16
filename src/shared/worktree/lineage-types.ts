@@ -1,4 +1,4 @@
-import type { WorkspaceKey } from '../workspace-scope'
+import type { WorkspaceKey } from '../workspace/identity/workspace-scope'
 
 export type WorktreeLineageOrigin = 'orchestration' | 'cli' | 'manual'
 export type WorktreeLineageCaptureConfidence = 'explicit' | 'inferred'

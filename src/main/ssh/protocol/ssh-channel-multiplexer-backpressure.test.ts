@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SshChannelMultiplexer } from './ssh-channel-multiplexer'
 import type { MultiplexerTransport } from './ssh-multiplexer-transport-writer'
 import { encodeFrame, MessageType } from './remote-frame-protocol'
-import { HEADER_LENGTH } from '../../../shared/relay-frame-decoder'
+import { HEADER_LENGTH } from '../../../shared/remote-runtime/relay/relay-frame-decoder'
 
 type MockTransport = MultiplexerTransport & {
   data: (chunk: Buffer) => void

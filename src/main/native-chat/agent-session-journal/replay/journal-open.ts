@@ -9,13 +9,11 @@ import { readJournalLegacyCards } from '../queued-messages/journal-queue-import'
 import { journalInputOrder } from '../input-order/journal-input-order'
 import { journalOutcomeSource } from '../outcomes/journal-outcome-format'
 import { readJournalOutcomes } from '../outcomes/journal-outcome-table'
-import '../outcomes/journal-outcome-codec'
 import {
   JournalOutcomeDecodeError,
   AgentSessionJournalError
 } from '../writing/journal-write-guards'
 
-import { journalInputAcceptance } from '../input-order/journal-input-provenance'
 import {
   applyJournalRow,
   applyMarker5JournalRow,
@@ -26,6 +24,7 @@ import { iterateJournalEpochRows, readJournalSessionEpoch } from '../durable-row
 import { parseJournalRow } from '../durable-rows/journal-row-schema'
 
 import type Database from '../../../sqlite/sync-database'
+import type { JournalOutcomeReadOptions } from '../outcomes/journal-outcome-table'
 
 /** The physical anchor is sequence 1; later epoch rows are context boundaries. */
 const FIRST_JOURNAL_SEQUENCE = 1
@@ -48,31 +47,30 @@ export function replayJournal(db: Database.Database, sessionId: string): Journal
   if (epoch === null) {
     return null
   }
-  return foldJournalFromState(
-    db,
-    createJournalReducerState(sessionId, epoch, (id) => journalInputAcceptance(db, sessionId, id))
-  )
+  return foldJournalFromState(db, createJournalReducerState(sessionId, epoch))
 }
 
 /** The read is synchronous, like main's replay: it blocks once for one chat's saved records (its
  * frozen input prefix, then each outcome key's newest record), and nothing can interleave with it.
  * Admission comes first, so a newer chat is never folded. */
-export function restoreJournal(db: Database.Database, sessionId: string): JournalLoad | null {
+export function restoreJournal(
+  db: Database.Database,
+  sessionId: string,
+  options?: JournalOutcomeReadOptions
+): JournalLoad | null {
   const epoch = readJournalSessionEpoch(db, sessionId)
   if (epoch === null) {
     return null
   }
-  const empty = createJournalReducerState(sessionId, epoch, (id) =>
-    journalInputAcceptance(db, sessionId, id)
-  )
+  const empty = createJournalReducerState(sessionId, epoch)
   try {
     const source = journalOutcomeSource(db, sessionId, epoch)
     if (!source) {
-      const loaded = foldJournalFromState(db, empty)
+      const loaded = foldJournalFromState(db, empty, Infinity, 'sources', false)
       if (!loaded.newer && !loaded.damage) {
         const personal = restoredJournalPersonAcceptance(db, loaded.state)
         const owner = journalInputOrder(loaded.state)
-        for (const input of loaded.state.submissions.values()) {
+        for (const input of memoryJournalMap(loaded.state.submissions).values()) {
           if (input.dispatchState === 'accepted' && personal(input)) {
             owner.seedPersonAcceptance(input.acceptedSequence ?? 0)
           }
@@ -99,7 +97,7 @@ export function restoreJournal(db: Database.Database, sessionId: string): Journa
     const prefixRevisions =
       baseline &&
       new Map(
-        [...baseline.submissions].map(([id, submission]) => {
+        [...memoryJournalMap(baseline.submissions)].map(([id, submission]) => {
           if (submission.dispatchState === 'accepted') {
             acceptedPrefix.set(id, submission)
           }
@@ -110,13 +108,14 @@ export function restoreJournal(db: Database.Database, sessionId: string): Journa
           ] as const
         })
       )
-    const state = readJournalOutcomes(db, sessionId, epoch, source, baseline)
+    const state = readJournalOutcomes(db, sessionId, epoch, source, baseline, options)
     if (source.marker === 5 && source.prefix > 0) {
       const observations = foldJournalFromState(
         db,
         createJournalReducerState(sessionId, epoch),
         source.prefix,
-        'sources'
+        'sources',
+        false
       )
       if (observations.newer || observations.damage) {
         return observations
@@ -124,7 +123,7 @@ export function restoreJournal(db: Database.Database, sessionId: string): Journa
       // Admission evidence cannot resurrect common keys retired by the frozen decoder or tail.
       state.inputs = observations.state.inputs
       state.inputs.candidates.clear()
-      acceptedPrefix = observations.state.submissions
+      acceptedPrefix = memoryJournalMap(observations.state.submissions)
     }
     restoreRetainedJournalInputs(db, state, source, prefixRevisions, acceptedPrefix)
     restoreHistoricalPersonAcceptance(db, state, source)
@@ -151,12 +150,13 @@ function foldJournalFromState(
 ): JournalLoad {
   const { sessionId, epoch, lastSequence } = state
   const fold = startJournalRowFold({ sessionId, epoch, interpretation, deferNativeCleanup }, state)
-  for (const entry of iterateJournalEpochRows(
+  const rows = iterateJournalEpochRows(
     db,
     sessionId,
     epoch,
     lastSequence === 0 ? Number.MIN_SAFE_INTEGER : lastSequence
-  )) {
+  )
+  for (const entry of rows) {
     if (entry.seq > through || !fold.add(entry)) {
       break
     }
@@ -175,9 +175,8 @@ export function startJournalRowFold(
     untilDamage?: boolean
     interpretation?: 'marker5' | 'sources'
     deferNativeCleanup?: boolean
-    originalAcceptance?: Parameters<typeof createJournalReducerState>[2]
   },
-  state = createJournalReducerState(input.sessionId, input.epoch, input.originalAcceptance)
+  state = createJournalReducerState(input.sessionId, input.epoch)
 ): {
   add: (entry: { seq: number; rowJson: string; ts?: number }) => boolean
   finish: () => JournalLoad
@@ -233,7 +232,7 @@ export function startJournalRowFold(
       journalInputOrder(state).finishReconstruction(state)
       journalInputOrder(state).legacy?.lineage.restoreFrontier(
         state.lastSequence,
-        state.inputEntries.values()
+        state.inputEntries
       )
     }
     state.oldestSequence = FIRST_JOURNAL_SEQUENCE
@@ -248,4 +247,4 @@ export function startJournalRowFold(
   return { add: input.untilDamage ? (entry) => add(entry) && damage === null : add, finish }
 }
 
-import './journal-read-row'
+import { memoryJournalMap } from '../journal-memory-collections'

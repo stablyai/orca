@@ -1,6 +1,6 @@
 import type React from 'react'
 import { getAgentCatalog, getAgentLabel } from '../../../lib/agent-catalog/agent-catalog'
-import { ClaudeIcon, DroidIcon, OpenAIIcon } from '@/components/status-bar/icons'
+import { ClaudeIcon, DroidIcon, OpenAIIcon } from '@/components/status-bar/accounts/provider-icons'
 import type { TerminalAgent } from '../../../../../shared/agent-status/identity/terminal-agent'
 import {
   AgentLetterIcon,

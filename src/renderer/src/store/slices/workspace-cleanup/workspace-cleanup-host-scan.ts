@@ -1,6 +1,6 @@
 /** Each process scans the repos it owns: desktop main over IPC, every paired or SSH host's own server over RPC. */
 import type { AppState } from '../../types'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import {
   getRepoExecutionHostId,
   parseRoutableExecutionHostId,
@@ -16,7 +16,7 @@ import {
 import { createUnreachableHostCleanupCandidate } from '../../../../../shared/workspace-cleanup/workspace-cleanup-unreachable-host-candidate'
 import { shortWorkspaceCleanupBranchName } from '../../../../../shared/workspace-cleanup/workspace-cleanup-candidate-fields'
 import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'
-import { hasRuntimeRpcErrorCode } from '../../../../../shared/runtime-rpc-error-code'
+import { hasRuntimeRpcErrorCode } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import { callRuntimeRpc } from '../../../runtime/rpc/calls/runtime-rpc-call'
 import { selectWorktreesByRepo } from '../../workspaces/catalog/workspace-record-fields'
 import {

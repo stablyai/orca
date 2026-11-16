@@ -9,7 +9,7 @@ import {
   MCODE_MODEL_DESCRIPTIONS,
   MCODE_MODEL_LABELS,
   mcodeModelDescription
-} from '../../../shared/agent-session/options/agent-session-option-catalog-mcode'
+} from '../../../shared/agent-session/options/catalog-providers/agent-session-option-catalog-mcode'
 
 /** Names a session-menu model choice canonically, keeping mcode's raw description when set. */
 function resolveMcodeModelNameAndDescription(choice: SessionConfigSelectOption): {

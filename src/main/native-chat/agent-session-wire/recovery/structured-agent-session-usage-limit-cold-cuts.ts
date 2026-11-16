@@ -1,13 +1,14 @@
 import type { HostUsageLimitCut } from './structured-agent-session-usage-limit-chain'
 import type { StructuredAgentSessionHostDeps as HostDeps } from '../host/structured-agent-session-host-types'
 
-type Deps = {
-  logger: HostDeps['logger']
+export type UsageLimitCutReads = {
   sessions: ReadonlyMap<string, unknown>
   /** Reads an unopened chat's saved cut; history-sized, so the sweep budgets it. */
-  readSavedCut: (id: string) => HostUsageLimitCut | null
-  readLoadedCut: (id: string) => HostUsageLimitCut | null
+  readSavedCut: (id: string) => Promise<HostUsageLimitCut | null>
+  readLoadedCut: (id: string) => Promise<HostUsageLimitCut | null>
 }
+
+type Deps = UsageLimitCutReads & { logger: HostDeps['logger'] }
 
 /** The cuts of chats that aren't loaded, read from history a few per pass. */
 export class UsageLimitColdCuts {
@@ -26,25 +27,25 @@ export class UsageLimitColdCuts {
     return this.cuts.has(id)
   }
 
-  read(id: string, cold = false): HostUsageLimitCut | null {
+  async read(id: string, cold = false): Promise<HostUsageLimitCut | null> {
     if (this.deps.sessions.has(id)) {
       this.cuts.delete(id)
       return this.deps.readLoadedCut(id)
     }
     if (!this.cuts.has(id) && cold) {
-      this.cuts.set(id, this.deps.readSavedCut(id))
+      this.cuts.set(id, await this.deps.readSavedCut(id))
     }
     return this.cuts.get(id) ?? null
   }
 
   /** At most three history reads per pass; a read that throws stays retryable without starving others. */
-  readUnread(visible: readonly string[]): void {
+  async readUnread(visible: readonly string[]): Promise<void> {
     const pass = ++this.passes
     const unread = visible.filter((id) => !this.deps.sessions.has(id) && !this.cuts.has(id))
     unread.sort((a, b) => (this.failures.get(a) ?? 0) - (this.failures.get(b) ?? 0))
     for (const id of unread.slice(0, 3)) {
       try {
-        this.read(id, true)
+        await this.read(id, true)
         this.failures.delete(id)
       } catch (error) {
         if (!this.failures.has(id)) {

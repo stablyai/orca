@@ -20,7 +20,7 @@ import {
   indexPersistedPtyWorktreeBindings,
   type PersistedPtyBindingIndexes
 } from '../identity/runtime-worktree-binding-index'
-import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import { parseAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import { indexFloatingSnapshotPtyBindings } from './floating-snapshot-pty-bindings'
 import { NO_OBSERVING_PROVIDER_REASON } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import { buildControllerTerminalIdentities } from './orca-runtime-build-controller-terminal-identities'

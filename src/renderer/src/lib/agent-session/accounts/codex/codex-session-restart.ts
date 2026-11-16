@@ -1,3 +1,4 @@
+import { getManagedAccountInlineLabel } from '../../../../../../shared/agent-accounts/managed-account-display-names'
 import { useAppStore } from '@/store/index'
 import {
   confirmRuntimeTerminalForegroundProcess,
@@ -22,8 +23,8 @@ import {
   resolveCodexPaneSelectionLane
 } from '../codex-pane-selection-lane'
 import type { AppState } from '@/store/types'
-import type { CodexAccountSelectionTarget } from '../../../../../../shared/codex-selection-lane'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { CodexAccountSelectionTarget } from '../../../../../../shared/agent-accounts/codex/codex-selection-lane'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 
 export type CodexPaneScanResult = {
@@ -253,7 +254,12 @@ export async function markRestoredStaleCodexSessionsForRestart(args?: {
 
 // Same-email accounts need the same workspace or ID distinction as the switcher.
 export function resolveCodexRestartPromptAccountLabel(
-  accounts: readonly { id: string; email: string; workspaceLabel?: string | null }[],
+  accounts: readonly {
+    id: string
+    email: string
+    displayName?: string
+    workspaceLabel?: string | null
+  }[],
   accountId: string | null | undefined
 ): string {
   if (accountId == null) {
@@ -267,7 +273,9 @@ export function resolveCodexRestartPromptAccountLabel(
   const sharesEmail = accounts.some(
     (entry) => entry.id !== account.id && normalizeCodexAccountEmail(entry.email) === email
   )
-  return sharesEmail ? getCodexAccountDisplayLabel(account, accounts) : account.email
+  return sharesEmail
+    ? getCodexAccountDisplayLabel(account, accounts)
+    : getManagedAccountInlineLabel(account)
 }
 
 async function createCodexAccountLabelResolver(): Promise<(accountId: string | null) => string> {

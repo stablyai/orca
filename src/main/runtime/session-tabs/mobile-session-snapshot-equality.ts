@@ -1,7 +1,17 @@
-import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 // Compare rebuilt snapshots by value, excluding newly minted publicationEpoch/snapshotVersion.
 export function headlessMobileSnapshotContentUnchanged(
+  existing: RuntimeMobileSessionTabsSnapshot,
+  next: RuntimeMobileSessionTabsSnapshot
+): boolean {
+  return (
+    mobileSnapshotVisibleContentUnchanged(existing, next) &&
+    mobileSnapshotValueEqual(existing.browserPageInventory, next.browserPageInventory)
+  )
+}
+
+export function mobileSnapshotVisibleContentUnchanged(
   existing: RuntimeMobileSessionTabsSnapshot,
   next: RuntimeMobileSessionTabsSnapshot
 ): boolean {
@@ -72,5 +82,17 @@ export function mobileSnapshotIdentityUnchanged(
         isHeadlessBuiltPublication(next.publicationEpoch))) &&
     (next.retiredTerminalSurfaces === undefined ||
       mobileSnapshotValueEqual(next.retiredTerminalSurfaces, existing.retiredTerminalSurfaces))
+  )
+}
+
+/** Catalog-only changes stay local while renderer admission still advances. */
+export function mobileSnapshotInventoryOnlyChanged(
+  existing: RuntimeMobileSessionTabsSnapshot,
+  next: RuntimeMobileSessionTabsSnapshot
+): boolean {
+  return (
+    !mobileSnapshotValueEqual(existing.browserPageInventory, next.browserPageInventory) &&
+    mobileSnapshotIdentityUnchanged(existing, next) &&
+    mobileSnapshotVisibleContentUnchanged(existing, next)
   )
 }

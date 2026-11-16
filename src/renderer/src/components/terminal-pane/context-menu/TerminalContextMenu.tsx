@@ -205,6 +205,7 @@ function TerminalContextMenuItems({
       expand: formatPrimaryShortcutLabel('terminal.expandPane', keybindings),
       setTitle: formatPrimaryShortcutLabel('terminal.setTitle', keybindings),
       clearPaneTitle: formatPrimaryShortcutLabel('terminal.clearPaneTitle', keybindings),
+      copySessionId: formatOptionalPrimaryShortcutLabel('terminal.copySessionId', keybindings),
       close: formatPrimaryShortcutLabel('terminal.closePane', keybindings),
       nativeChat: formatOptionalPrimaryShortcutLabel('terminal.toggleNativeChat', keybindings)
     }),
@@ -325,6 +326,9 @@ function TerminalContextMenuItems({
         <DropdownMenuItem onSelect={onCopyAgentSessionId}>
           <Copy />
           {t('components.terminalPane.TerminalContextMenu.copySessionId', 'Copy Session ID')}
+          {shortcuts.copySessionId ? (
+            <DropdownMenuShortcut>{shortcuts.copySessionId}</DropdownMenuShortcut>
+          ) : null}
         </DropdownMenuItem>
       ) : null}
       {agentIdCopy ? (

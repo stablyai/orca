@@ -12,9 +12,17 @@ import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import { getTabDragLabel, resolveTerminalItemTab, type TabBarItem } from './tab-bar-item-model'
 import type { TabBarItemActions } from './use-tab-bar-item-actions'
 import {
-  useStructuredChatTabConversationName,
+  useStructuredChatTabNaming,
   useStructuredChatTabNamingFailure
 } from '@/runtime/native-chat/naming/structured-conversation-name'
+import { readStructuredChatSessionNamingOnTabHost } from '@/runtime/native-chat/naming/structured-chat-tab-name'
+import {
+  forkMarkedNameText,
+  forkSourceTooltipText
+} from '../native-chat/fork/fork-marked-name-text'
+import { stripLeadingAgentTitleDecoration } from '../../../../shared/agent-status/title/agent-title-decoration'
+import { defaultAgentChatLabel } from '../../../../shared/agent-session/agent-session-chat-label'
+import { useAppStore } from '../../store/index'
 import { agentTypeToIconAgent } from '../../../../shared/agent-status/presentation/agent-type-icon-agent'
 import { formatSimulatorTabLabel } from '@/lib/simulator/tabs/simulator-tab-label'
 import { useTranslate } from '@/i18n/use-translate'
@@ -66,9 +74,10 @@ function TabBarItemRow({
   const t = useTranslate()
   // Why: the tabs' labels come from `translate()`, which a skipped render would leave in the old language.
   useTranslation()
-  const conversationName = useStructuredChatTabConversationName(
+  const chatNaming = useStructuredChatTabNaming(
     item.type === 'agent-session' ? item.data : undefined
   )
+  const conversationName = chatNaming.name
   const namingFailure = useStructuredChatTabNamingFailure(
     item.type === 'agent-session' ? item.data : undefined
   )
@@ -122,6 +131,27 @@ function TabBarItemRow({
   }
   if (item.type === 'agent-session') {
     const nativeChat = { sessionId: item.data.entityId, agent: item.data.agentSessionAgent }
+    const chatTab = item.data
+    const forkSourceId = chatNaming.forkSourceId
+    const fork = forkSourceId
+      ? {
+          markedTitle: forkMarkedNameText(
+            t,
+            chatTab.customLabel ??
+              stripLeadingAgentTitleDecoration(conversationName ?? chatTab.label)
+          ),
+          describeSource: () =>
+            forkSourceTooltipText(
+              t,
+              readStructuredChatSessionNamingOnTabHost(
+                chatTab,
+                forkSourceId,
+                useAppStore.getState()
+              ),
+              defaultAgentChatLabel(chatTab.agentSessionAgent)
+            )
+        }
+      : undefined
     return (
       <SortableTab
         {...sortableTabProps}
@@ -141,6 +171,7 @@ function TabBarItemRow({
         nativeChat={nativeChat}
         // A tab the user named does not show the generated name, so neither does its failure.
         namingFailure={item.data.customLabel ? null : namingFailure}
+        fork={fork}
       />
     )
   }

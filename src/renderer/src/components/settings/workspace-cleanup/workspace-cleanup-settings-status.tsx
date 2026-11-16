@@ -1,7 +1,7 @@
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import { useAppStore } from '@/store'
-import { formatBytes } from '../../../../../shared/format-bytes'
+import { formatBytes } from '../../../../../shared/text/format-bytes'
 import type { WorkspaceCleanupReport } from '../../../../../shared/workspace-cleanup/workspace-cleanup-run'
 import { Button } from '../../ui/button'
 import { SearchableSetting } from '../section-layout/SearchableSetting'

@@ -4,6 +4,7 @@ import { resolveNativeChatTranscriptAgent } from '../../../../../shared/native-c
 import type { OrchestrationWorkerReadFallbackReason } from '../../../../../shared/orchestration/workers/orchestration-worker-output'
 import { resolveSessionFilePath } from '../../../../native-chat/session-file-resolver'
 import { nativeChatLineDecoderForAgent } from '../../../../native-chat/transcript-tail-reader'
+import { decodeClaudeTranscriptLine } from '../../../../native-chat/transcript-decoding/transcript-line-decoders-claude'
 import {
   boundWorkerTranscriptMessages,
   clampWorkerTranscriptLimit
@@ -55,7 +56,11 @@ export async function readWorkerTranscript(args: {
   if (!transcriptAgent) {
     return { ok: false, reason: 'provider_unsupported', warnings: [] }
   }
-  const decode = nativeChatLineDecoderForAgent(args.agent)
+  // Workers read text; the chat's wordless turn markers have none to give.
+  const decode =
+    transcriptAgent === 'claude'
+      ? decodeClaudeTranscriptLine
+      : nativeChatLineDecoderForAgent(args.agent)
   if (!decode) {
     return { ok: false, reason: 'provider_unsupported', warnings: [] }
   }

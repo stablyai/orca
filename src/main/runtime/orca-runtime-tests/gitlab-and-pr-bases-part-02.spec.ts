@@ -9,7 +9,7 @@ import {
   getPullRequestPushTargetMock
 } from '../orca-runtime-test-mocks/setup.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
-import '../../../shared/review-head-tracking-ref'
+import '../../../shared/worktree/hosted-review/review-head-tracking-ref'
 import { TEST_REPO_ID, TEST_REPO_PATH, store } from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {

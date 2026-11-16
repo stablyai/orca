@@ -1,6 +1,6 @@
 import type { AgentSessionCancelResult } from '../../../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSubagentRoster } from '../../../../../shared/agent-session/view/structured-agent-session-subagent-roster'
-import type { StructuredSessionBackgroundTasksView } from '../../../../../shared/structured-session-background-tasks-view'
+import type { StructuredSessionBackgroundTasksView } from '../../../../../shared/agent-session/view/structured-session-background-tasks-view'
 import { NativeChatStructuredSessionStatus } from '../tools/tasks/NativeChatStructuredSessionStatus'
 import { useStructuredSessionTaskStop } from '../tools/tasks/use-structured-session-task-stop'
 import { useTranslate } from '@/i18n/use-translate'

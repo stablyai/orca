@@ -12,7 +12,7 @@ import {
   MCODE_MODEL_LABELS,
   MCODE_ON_OFF_EFFORT_CHOICES,
   mcodeModelDescription
-} from '../../../shared/agent-session/options/agent-session-option-catalog-mcode'
+} from '../../../shared/agent-session/options/catalog-providers/agent-session-option-catalog-mcode'
 
 const providerConfigSchema = z.looseObject({
   name: z.string().optional(),

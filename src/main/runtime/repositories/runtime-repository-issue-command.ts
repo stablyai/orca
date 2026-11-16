@@ -1,11 +1,11 @@
 import { getRepoDialableSshTargetId } from '../../../shared/execution-host'
 import type { GitRuntimeOptions } from '../../git/command-runner/git-runtime-options'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import {
   readIssueCommandUnlessWslStopped,
   writeIssueCommandUnlessWslStopped
 } from '../../workspace-hooks/issue-command-file'
-import { isFolderRepo } from '../../../shared/repo-kind'
+import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import { joinWorktreeRelativePath } from '../files/paths/runtime-relative-paths'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'

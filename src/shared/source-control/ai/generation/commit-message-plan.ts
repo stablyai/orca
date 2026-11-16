@@ -1,8 +1,8 @@
 import {
   textGenerationFailure,
   type TextGenerationFailureFields
-} from '../../../text-generation-failure-copy'
-import { findOptionOccurrence } from '../../../command-option-occurrence'
+} from '../../../text-generation/text-generation-failure-copy'
+import { findOptionOccurrence } from '../../../cli/command-option-occurrence'
 import { planAgentBinary } from '../../../agent-launch/startup/agent-command-plan'
 
 import type { CommandTemplateBackslash } from './commit-message-prompt'
@@ -28,8 +28,8 @@ import {
   isDirectOpenCodeGenerationCommand,
   openCodeGenerationLauncherBoundary,
   mergeOpenCodeGenerationArgs
-} from '../../../opencode-generation-command'
-import { buildAntigravityGenerationInput } from '../../../antigravity-generation-stream'
+} from '../../../text-generation/launch/opencode-generation-command'
+import { buildAntigravityGenerationInput } from '../../../text-generation/output/antigravity-generation-stream'
 
 // Share pure request/prompt-to-spawn validation and argv planning between local main and SSH JSON-RPC generators.
 

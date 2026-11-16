@@ -1,7 +1,7 @@
 import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
 
 /** The package Orca's patch row names; DSH imports it from each profile. */
 export const DSH_HOOK_EXECUTOR_PACKAGE = '@deepseek-ai/dsh-hooks-claude-code'

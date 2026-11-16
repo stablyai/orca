@@ -1,4 +1,4 @@
-import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/types'
+import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/connection/types'
 import { classifyAgentLaunchReplayRefusal } from '../../shared/agent-launch/contracts/agent-launch-replay-refusal'
 import {
   recoverableOrchestrationArgs,

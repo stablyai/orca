@@ -1,4 +1,4 @@
-import type { Tab, TabGroup } from '../../../../../shared/tab-types'
+import type { Tab, TabGroup } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 
 import { translate } from '@/i18n/i18n'
 

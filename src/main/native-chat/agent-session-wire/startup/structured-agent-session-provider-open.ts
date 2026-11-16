@@ -1,4 +1,4 @@
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import type { StructuredAgentSessionProviderChildIdentity } from '../host/structured-agent-session-host-types'
 import {
