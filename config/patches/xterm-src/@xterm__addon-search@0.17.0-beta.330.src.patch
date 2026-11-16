@@ -1,5 +1,5 @@
 diff --git a/src/SearchAddon.ts b/src/SearchAddon.ts
-index e5fd31cfb0d6c0267278daaf459b32e47b5f854f..f15c8d46008d4911447abb88a46a373278d6299e 100644
+index e5fd31cfb0d6c0267278daaf459b32e47b5f854f..e89e4dde18d860f858b44bf2745db19829f386cd 100644
 --- a/src/SearchAddon.ts
 +++ b/src/SearchAddon.ts
 @@ -35,6 +35,8 @@ export class SearchAddon extends Disposable implements ITerminalAddon, ISearchAp
@@ -7,7 +7,7 @@ index e5fd31cfb0d6c0267278daaf459b32e47b5f854f..f15c8d46008d4911447abb88a46a3732
    private _highlightTimeout = this._register(new MutableDisposable<IDisposable>());
    private _lineCache = this._register(new MutableDisposable<SearchLineCache>());
 +  private _selectionChangedByUser = false;
-+  private _highlightsStale = false;
++  private _selectionAfterFind = '';
  
    // Component instances
    private _state = new SearchState();
@@ -19,50 +19,47 @@ index e5fd31cfb0d6c0267278daaf459b32e47b5f854f..f15c8d46008d4911447abb88a46a3732
      this._register(toDisposable(() => this.clearDecorations()));
    }
  
-@@ -71,6 +74,10 @@ export class SearchAddon extends Disposable implements ITerminalAddon, ISearchAp
-     this._highlightTimeout.clear();
+@@ -72,12 +75,25 @@ export class SearchAddon extends Disposable implements ITerminalAddon, ISearchAp
      if (this._state.cachedSearchTerm && this._state.lastSearchOptions?.decorations) {
        this._highlightTimeout.value = disposableTimeout(() => {
-+        if (this._terminal?.hasSelection() && (this._selectionChangedByUser || !this._resultTracker.selectedDecoration)) {
-+          this._highlightsStale = true;
+         const term = this._state.cachedSearchTerm;
++        if (this._selectionChangedByUser || this._terminal?.getSelection() !== this._selectionAfterFind) {
++          this._refreshHighlights(term!, this._state.lastSearchOptions!);
 +          return;
 +        }
-         const term = this._state.cachedSearchTerm;
          this._state.clearCachedTerm();
          this.findPrevious(term!, { ...this._state.lastSearchOptions, incremental: true }, { noScroll: true });
-@@ -107,11 +114,12 @@ export class SearchAddon extends Disposable implements ITerminalAddon, ISearchAp
+       }, 200);
+     }
+   }
  
-     this._state.lastSearchOptions = searchOptions;
- 
--    if (this._state.shouldUpdateHighlighting(term, searchOptions)) {
-+    if (this._state.shouldUpdateHighlighting(term, searchOptions) || (this._highlightsStale && searchOptions?.decorations)) {
-       this._highlightAllMatches(term, searchOptions!);
++  private _refreshHighlights(term: string, searchOptions: ISearchOptions): void {
++    const activeMatch = this._resultTracker.selectedDecoration?.match;
++    this._highlightAllMatches(term, searchOptions);
++    if (activeMatch && searchOptions.decorations && this._resultTracker.findResultIndex(activeMatch) !== -1) {
++      this._resultTracker.selectedDecoration = this._decorationManager?.createActiveDecoration(activeMatch, searchOptions.decorations);
++    }
++    this._fireResults(searchOptions);
++  }
++
+   public clearDecorations(retainCachedSearchTerm?: boolean): void {
+     this._resultTracker.clearSelectedDecoration();
+     this._decorationManager?.clearHighlightDecorations();
+@@ -112,6 +128,8 @@ export class SearchAddon extends Disposable implements ITerminalAddon, ISearchAp
      }
  
      const found = this._findNextAndSelect(term, searchOptions, internalSearchOptions);
 +    this._selectionChangedByUser = false;
++    this._selectionAfterFind = this._terminal.getSelection();
      this._fireResults(searchOptions);
      this._state.cachedSearchTerm = term;
  
-@@ -124,6 +132,7 @@ export class SearchAddon extends Disposable implements ITerminalAddon, ISearchAp
-     if (!this._terminal || !this._engine || !this._decorationManager) {
-       throw new Error('Cannot use addon until it has been loaded');
-     }
-+    this._highlightsStale = false;
-     if (!this._state.isValidSearchTerm(term)) {
-       this.clearDecorations();
-       return;
-@@ -188,11 +197,12 @@ export class SearchAddon extends Disposable implements ITerminalAddon, ISearchAp
- 
-     this._state.lastSearchOptions = searchOptions;
- 
--    if (this._state.shouldUpdateHighlighting(term, searchOptions)) {
-+    if (this._state.shouldUpdateHighlighting(term, searchOptions) || (this._highlightsStale && searchOptions?.decorations)) {
-       this._highlightAllMatches(term, searchOptions!);
+@@ -193,6 +211,8 @@ export class SearchAddon extends Disposable implements ITerminalAddon, ISearchAp
      }
  
      const found = this._findPreviousAndSelect(term, searchOptions, internalSearchOptions);
 +    this._selectionChangedByUser = false;
++    this._selectionAfterFind = this._terminal.getSelection();
      this._fireResults(searchOptions);
      this._state.cachedSearchTerm = term;
  
