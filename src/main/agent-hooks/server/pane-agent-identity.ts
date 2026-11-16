@@ -32,7 +32,7 @@ export function paneAgentIdentity(args: {
       ...placeholder
     } = row
     const status: AgentStatusIpcPayload = row.providerSessionOnly
-      ? { ...placeholder, state: 'done' }
+      ? { ...placeholder, state: 'done', sessionBoundary: true }
       : row
     // Sleep is a resumable physical stop: its exit retires the process, never the conversation.
     if (row.paneSleep) {
@@ -62,6 +62,9 @@ export function paneAgentIdentity(args: {
       stateStartedAt: saved.updatedAt,
       providerSession: promoted.providerSession,
       state: 'done',
+      ...(saved.state === 'done' ? {} : { sessionBoundary: true }),
+      ...(saved.interrupted !== undefined ? { interrupted: saved.interrupted } : {}),
+      ...(saved.mainAgent ? { mainAgent: saved.mainAgent } : {}),
       prompt: promoted.prompt,
       agentType: promoted.agent,
       ...(promoted.lastAssistantMessage

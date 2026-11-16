@@ -70,9 +70,9 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
   ): PaneAgentIdentity | null {
     const resolved = this.resolvePaneKeyAlias(paneKey)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this server stores enriched accepted rows in the listener's base-typed cache.
-    const row = this.state.lastStatusByPaneKey.get(resolved) as
-      | EnrichedAgentHookEventPayload
-      | undefined
+    const row =
+      (this.state.lastStatusByPaneKey.get(resolved) as EnrichedAgentHookEventPayload | undefined) ??
+      this.getTmuxSelectedStatus(resolved)
     if (!row) {
       savedRecord ??= this.terminalPaneLifecycle?.readSavedRecord?.(resolved)
     }

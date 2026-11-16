@@ -33,6 +33,10 @@ describe('main canonical tmux projection', () => {
   it('publishes one canonical outer row, blocks legacy overwrites, and cleans the exact outer and inner subjects', async () => {
     expect((await postHookEvent(server, tmuxTestBody(), '/hook/opencode')).status).toBe(204)
     expect(server.hasLegacyRow()).toBe(false)
+    expect(server.paneAgentIdentity(TMUX_TEST_PANE)).toMatchObject({
+      status: { paneKey: TMUX_TEST_PANE, state: 'done' },
+      ended: false
+    })
     expect(
       server.attestCompatibilityAuthority({
         paneKey: TMUX_TEST_PANE,

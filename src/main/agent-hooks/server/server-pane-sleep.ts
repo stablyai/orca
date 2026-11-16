@@ -72,11 +72,17 @@ export abstract class AgentHookServerPaneSleep extends AgentHookServerAuthorityF
     const resolved = this.resolvePaneKeyAlias(paneKey)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this server stores enriched accepted rows in the listener's base-typed cache.
     const identity = this.paneAgentIdentity(resolved)
-    const previous =
+    const previous: EnrichedAgentHookEventPayload | undefined =
       (this.state.lastStatusByPaneKey.get(resolved) as EnrichedAgentHookEventPayload | undefined) ??
       (identity
         ? {
-            ...identity.status,
+            paneKey: resolved,
+            tabId: identity.status.tabId,
+            worktreeId: identity.status.worktreeId,
+            connectionId: identity.status.connectionId,
+            receivedAt: identity.status.receivedAt,
+            stateStartedAt: identity.status.stateStartedAt,
+            providerSession: identity.status.providerSession,
             payload: pickParsedAgentStatusPayload(identity.status)
           }
         : undefined)
@@ -141,7 +147,11 @@ export abstract class AgentHookServerPaneSleep extends AgentHookServerAuthorityF
                 }
               : {})
           }
-        : { ...payload, state: identity.status.state },
+        : {
+            ...payload,
+            state: identity.status.state,
+            ...(identity.status.sessionBoundary ? { sessionBoundary: true } : {})
+          },
       paneSleep: { ptyId, ...(incarnationId ? { incarnationId } : {}) },
       agentPresence: {
         agent: previous.payload.agentType ?? 'unknown',

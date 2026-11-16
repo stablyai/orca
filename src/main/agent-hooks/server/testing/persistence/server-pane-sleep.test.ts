@@ -307,7 +307,12 @@ it.each(['claude', 'codex'] as const)(
     }
     await sleepPane(agent, 'pty-1', 4001)
     expect(server.paneAgentIdentity(PANE)).toMatchObject({
-      status: { agentType: agent, state: 'done', paneSleep: { ptyId: 'pty-1' } },
+      status: {
+        agentType: agent,
+        state: 'done',
+        sessionBoundary: true,
+        paneSleep: { ptyId: 'pty-1' }
+      },
       ended: false
     })
   }

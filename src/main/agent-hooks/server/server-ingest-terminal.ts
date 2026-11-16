@@ -29,6 +29,7 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
     const previous = this.state.lastStatusByPaneKey.get(paneKey)
     if (
       previous &&
+      !previous.agentPresence?.ended &&
       ((previous.payload.agentType === event.agentType &&
         agentProviderSessionsEqual(
           event.agentType,
