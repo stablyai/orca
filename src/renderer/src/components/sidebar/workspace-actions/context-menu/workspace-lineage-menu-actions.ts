@@ -68,10 +68,11 @@ export function getWorkspaceLineageMenuActions(args: {
 const EMPTY_IDS: readonly string[] = []
 
 function selectWorkspaceActivity(state: AppState): WorkspaceActivityMaps {
+  const browserTabsByWorktree = selectAwakeBrowserTabsByWorktree(state)
   return {
     tabsByWorktree: state.tabsByWorktree,
     ptyIdsByTabId: state.ptyIdsByTabId,
-    browserTabsByWorktree: selectAwakeBrowserTabsByWorktree(state),
+    browserTabsByWorktree,
     unifiedTabsByWorktree: state.unifiedTabsByWorktree,
     agentStatusByPaneKey: state.agentStatusByPaneKey,
     structuredChatSleptAtByPaneKey: state.structuredChatSleptAtByPaneKey

@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
+import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
 import { useWorktreeContextMenuModel } from './use-worktree-context-menu-model'
 
 afterEach(() => {
@@ -23,7 +24,7 @@ function renderOpenMenu() {
   useAppStore.setState({
     repos: [TEST_REPO],
     worktreesByRepo: { [TEST_REPO.id]: [worktree, other] },
-    tabsByWorktree: { [worktree.id]: [{ id: 'tab-1' }] } as never,
+    tabsByWorktree: { [worktree.id]: [makeTab({ id: 'tab-1', worktreeId: worktree.id })] },
     ptyIdsByTabId: {}
   })
   let renders = 0
@@ -44,19 +45,19 @@ describe('an open workspace menu ignores store writes that change nothing it sho
     for (let i = 0; i < 20; i += 1) {
       act(() => {
         const state = useAppStore.getState()
+        state.setAgentStatus(
+          `pane-${i}`,
+          { state: 'working', prompt: `prompt ${i}`, agentType: 'codex' },
+          'codex',
+          { updatedAt: i, stateStartedAt: i },
+          { tabId: `other-${i}`, worktreeId: other.id }
+        )
         useAppStore.setState({
-          agentStatusByPaneKey: {
-            ...state.agentStatusByPaneKey,
-            [`pane-${i}`]: { updatedAt: i } as never
-          },
           tabsByWorktree: {
             ...state.tabsByWorktree,
-            [other.id]: [{ id: `other-${i}` }] as never
+            [other.id]: [makeTab({ id: `other-${i}`, worktreeId: other.id })]
           },
-          ptyIdsByTabId: {
-            ...state.ptyIdsByTabId,
-            [`other-${i}`]: [`pty-${i}`]
-          },
+          ptyIdsByTabId: { ...state.ptyIdsByTabId, [`other-${i}`]: [`pty-${i}`] },
           unifiedTabsByWorktree: { ...state.unifiedTabsByWorktree },
           deleteStateByWorktreeId: { ...state.deleteStateByWorktreeId }
         })
