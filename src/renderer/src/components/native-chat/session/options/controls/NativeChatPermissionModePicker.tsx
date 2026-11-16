@@ -168,7 +168,12 @@ function NativeChatPermissionModePickerInner({
           {label}
         </TooltipContent>
       </Tooltip>
-      <DropdownMenuContent align="start" side="top" collisionPadding={8} className="w-72">
+      <DropdownMenuContent
+        align="start"
+        side="top"
+        collisionPadding={8}
+        className="w-72 max-w-(--radix-dropdown-menu-content-available-width)"
+      >
         <DropdownMenuRadioGroup
           aria-label={title}
           value={current ?? (inherit ? INHERIT_VALUE : undefined)}
