@@ -7,7 +7,7 @@ let moving = false
 let rerunRequested = false
 let unsubscribe: (() => void) | null = null
 
-/** Moves drafts of workspaces gone at startup into dirty untitled tabs of the active workspace, the common hot-exit pattern; failures stay stranded and retry when the active workspace or a host connection changes. */
+/** Moves drafts of workspaces gone at startup into dirty untitled tabs of the active workspace, the common hot-exit pattern; failures stay stranded and retry when the active workspace, its host or a host connection changes. */
 export function recoverStrandedEditorDrafts(): void {
   if (Object.keys(useAppStore.getState().strandedEditorDrafts).length === 0) {
     return
@@ -17,6 +17,7 @@ export function recoverStrandedEditorDrafts(): void {
     unsubscribe = useAppStore.subscribe((state, prev) => {
       if (
         state.activeWorktreeId !== prev.activeWorktreeId ||
+        state.activeWorkspaceExecutionHostId !== prev.activeWorkspaceExecutionHostId ||
         state.sshConnectionStates !== prev.sshConnectionStates ||
         state.sshStateByEnvironment !== prev.sshStateByEnvironment
       ) {
