@@ -226,7 +226,7 @@ export function CloudWorkspaceSyncSection({
             defaultValue_one: '{{count}} changed file on this computer will be removed.'
           }
         ),
-        confirmLabel: t('orcaCloudSync.removeCopy', 'Remove copy'),
+        confirmLabel: t('orcaCloudSync.removeCopy', 'Remove'),
         confirmVariant: 'destructive',
         initialFocus: 'cancel'
       })

@@ -323,7 +323,7 @@ export function CloudApiKeysView(props: CloudApiKeysViewProps): React.JSX.Elemen
             ) : null}
           </>
         }
-        confirmLabel={t('auto.components.settings.cloudApi.revoke.confirm', 'Revoke key')}
+        confirmLabel={t('auto.components.settings.cloudApi.revoke.confirm', 'Revoke')}
         returnFocusTo={focusAfterRevoke}
         onConfirm={async () => {
           if (!revoking) {

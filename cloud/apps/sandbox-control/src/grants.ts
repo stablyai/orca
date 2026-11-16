@@ -12,7 +12,7 @@ import { z } from 'zod'
 import type { SandboxCaller } from './auth'
 import { isDeviceSessionLive } from './device-sessions'
 import { markRevoked, runVmRevoke, type GrantRow } from './grant-revokes'
-import { LifecycleError, settleMemberGit, resumeSandbox, syncMemberGit, type LifecycleDeps, type Ready } from './lifecycle'
+import { DROP_SOLO_SCRIPT, LifecycleError, settleMemberGit, resumeSandbox, syncMemberGit, type LifecycleDeps, type Ready } from './lifecycle'
 import { ensureEntryPoints } from './golden-images'
 import type { CommandResult } from './sandbox-provider'
 import { ORCAD_PORT } from './sandbox-vm-commands'
@@ -134,6 +134,14 @@ export async function issueGrant(
     .run()
   let output: z.infer<typeof GrantOutputSchema>
   try {
+    // GH-SOLO: anyone but a still-untransferred owner makes it (possibly) shared: drop the VM's one-person mark
+    // first, and refuse the grant if that fails (lifecycle.ts DROP_SOLO_SCRIPT).
+    if (caller.userId !== row.user_id || row.ownership_transferred_at != null) {
+      const dropped = await deps.provider.runCommand(live.sessionId, { command: 'bash', args: ['-c', DROP_SOLO_SCRIPT], sudo: true, timeoutMs: 15_000 })
+      if (dropped.exitCode !== 0) {
+        throw new Error(`drop_solo_exit_${dropped.exitCode}`)
+      }
+    }
     const result = await withEntryPoints(deps, live.sessionId, GRANT_COMMAND, () =>
       deps.provider.runCommand(live.sessionId, {
         command: GRANT_COMMAND,

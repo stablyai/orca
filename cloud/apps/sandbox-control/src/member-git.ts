@@ -82,6 +82,30 @@ export async function actingMember(db: D1Database, row: SandboxRow, now: number,
   return pickActing(row, grantees, latest, now, sharedMaxMs)
 }
 
+/**
+ * GH-SOLO: the one person who can use this workspace, or null. From the people set itself (active grantees, plus
+ * the untransferred owner, who may have no grant row: the create's own pairing code), never from "no expiry".
+ * Someone else's grant still being issued or revoked (their device may be pairing, or not yet unpaired) means not
+ * solo.
+ */
+export async function soloMember(db: D1Database, row: SandboxRow): Promise<string | null> {
+  const { results } = await db
+    .prepare(`SELECT DISTINCT user_id, status FROM workspace_grants WHERE sandbox_id = ? AND status IN ('issuing', 'active', 'revoking')`)
+    .bind(row.id)
+    .all<{ user_id: string; status: string }>()
+  const pick = pickActing(
+    row,
+    results.filter((r) => r.status === 'active').map((r) => r.user_id),
+    null,
+    0,
+    null
+  )
+  if (!('userId' in pick)) {
+    return null
+  }
+  return results.some((r) => r.user_id !== pick.userId) ? null : pick.userId
+}
+
 export type ActingMember = { userId: string; until: number | null } | { none: 'no_send' | 'stale' }
 
 /** The rule itself, on already-read rows (the workspace list reads them for every row in one go). */

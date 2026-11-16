@@ -196,7 +196,7 @@ function ImportReviewContent({
             })
           }
         >
-          {t('cloudEnvironment.import.apply', 'Apply to draft')}
+          {t('cloudEnvironment.import.apply', 'Apply')}
         </Button>
       </DialogFooter>
     </DialogContent>

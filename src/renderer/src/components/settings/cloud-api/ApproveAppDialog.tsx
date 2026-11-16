@@ -235,8 +235,8 @@ export function ApproveAppDialog({
               >
                 {busy ? <Loader2 className="animate-spin motion-reduce:animate-none" /> : null}
                 {expired
-                  ? t('auto.components.settings.cloudApi.approve.regenerate', 'Generate a new code')
-                  : t('auto.components.settings.cloudApi.approve.generate', 'Generate code')}
+                  ? t('auto.components.settings.cloudApi.approve.regenerate', 'Regenerate')
+                  : t('auto.components.settings.cloudApi.approve.generate', 'Generate')}
               </Button>
             </>
           )}

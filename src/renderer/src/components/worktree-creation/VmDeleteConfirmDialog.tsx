@@ -52,15 +52,11 @@ export function VmDeleteConfirmDialog({
         </DialogHeader>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            {t('auto.components.worktree.creation.VmDeleteConfirmDialog.keep', 'Keep it')}
+            {t('auto.components.worktree.creation.VmDeleteConfirmDialog.keep', 'Keep')}
           </Button>
           <Button type="button" variant="destructive" onClick={onConfirm}>
-            {cloud
-              ? t(
-                  'auto.components.worktree.creation.VmBuildFailureCard.deleteSandbox',
-                  'Delete sandbox'
-                )
-              : t('auto.components.worktree.creation.VmBuildFailureCard.deleteVm', 'Delete VM')}
+            {/* The title names the sandbox or VM; the button is the verb. */}
+            {t('auto.components.worktree.creation.VmDeleteConfirmDialog.delete', 'Delete')}
           </Button>
         </DialogFooter>
       </DialogContent>

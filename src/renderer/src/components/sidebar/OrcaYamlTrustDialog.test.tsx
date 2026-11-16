@@ -86,7 +86,7 @@ async function approveWithAlwaysTrust(): Promise<void> {
   act(() => {
     document.body.querySelector<HTMLInputElement>('input[type="checkbox"]')?.click()
   })
-  clickButton('Run hooks')
+  clickButton('Run')
 }
 
 describe('OrcaYamlTrustDialog Always trust', () => {
@@ -126,7 +126,7 @@ describe('OrcaYamlTrustDialog created branch review', () => {
     serveSetupScript('pnpm install')
     const primary = confirmSetup()
     await waitForPrompt()
-    clickButton('Run hooks')
+    clickButton('Run')
     await expect(primary).resolves.toBe('run')
     const primaryHash = useAppStore.getState().trustedOrcaHooks['repo-1']?.setup?.contentHash
 
@@ -140,7 +140,7 @@ describe('OrcaYamlTrustDialog created branch review', () => {
     const review = reviewBranch()
     await waitForPrompt()
     expect(document.body.textContent).toContain('pnpm install && pnpm build')
-    clickButton('Run hooks')
+    clickButton('Run')
     const approval = await review
     expect(approval.decision).toBe('run')
 

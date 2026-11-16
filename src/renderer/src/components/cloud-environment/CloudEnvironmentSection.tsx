@@ -283,7 +283,7 @@ function CloudEnvironmentController({
         'New workspaces will start from build #{{number}}. Existing workspaces keep theirs.',
         { number: String(build.number) }
       ),
-      confirmLabel: t('cloudEnvironment.activate.confirm', 'Use this build')
+      confirmLabel: t('cloudEnvironment.activate.confirm', 'Use')
     }).then((accepted) => {
       if (accepted) {
         void env.activate(build)

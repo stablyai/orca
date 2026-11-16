@@ -140,7 +140,7 @@ export function AgentApiKeyRemoveFromAccountConfirm({
   return (
     <div
       role="group"
-      aria-label={t('agentApiKeys.remove.confirmLabel', 'Remove {{name}}', {
+      aria-label={t('agentApiKeys.remove.confirmLabel', 'Remove', {
         name: envName
       })}
       className="ml-[22px] space-y-2 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs"
