@@ -8,6 +8,7 @@ import { paneKeyPtyId } from './key-state'
 import { ptyIncarnationById } from '../provider/ownership-state'
 import { isLocalHookConnectionId } from '../../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import { getProviderForPty } from '../provider/registry'
+import { isShellProcess } from '../../../../shared/agent-status/process/shell-process-detection'
 import { isRemoteExecutionHostPtyId } from '../../../../shared/execution-host/remote-execution-host-pty-id'
 
 export function bindTerminalPaneStatusLifecycle(
@@ -27,8 +28,7 @@ export function bindTerminalPaneStatusLifecycle(
         if (!pane.ptyId || isRemoteExecutionHostPtyId(pane.ptyId) || launch === null) {
           return false
         }
-        // Host proof: the shell alone holds the PTY, with no stopped job behind it.
-        const shellAlone = await getProviderForPty(pane.ptyId).confirmShellForeground?.(pane.ptyId)
+        const shellAlone = await confirmShellAlone(pane.ptyId)
         const current = runtime.resolveTerminalPane(paneKey)
         return (
           shellAlone === true &&
@@ -107,4 +107,22 @@ export function bindTerminalPaneStatusLifecycle(
     }
   })
   agentHookServer.pruneUnplacedSleepingPanes()
+}
+
+/** The shell alone holds the PTY, with no stopped job behind it. The daemon's proof needs prompt
+ *  marks, which cmd and Git Bash often lack; Windows shells stop no jobs, so their quiet foreground
+ *  and childless tree suffice there. */
+async function confirmShellAlone(ptyId: string): Promise<boolean> {
+  const provider = getProviderForPty(ptyId)
+  if ((await provider.confirmShellForeground?.(ptyId)) === true) {
+    return true
+  }
+  if (process.platform !== 'win32') {
+    return false
+  }
+  const [children, foreground] = await Promise.all([
+    provider.hasChildProcesses(ptyId),
+    provider.confirmForegroundProcess?.(ptyId)
+  ])
+  return children === false && typeof foreground === 'string' && isShellProcess(foreground)
 }

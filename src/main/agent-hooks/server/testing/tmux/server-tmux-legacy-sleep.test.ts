@@ -201,7 +201,8 @@ it('does not resume a checkpoint the pane reaches through its tmux client after 
     readRowsForPane: (key) => server.getStatusSnapshotForPane(key),
     readSavedRecord: async () => saved,
     readIdentity: (key, record) => server.paneAgentIdentity(key, record),
-    checkAgentPresence: (key, since) => server.checkAgentPresenceSince(key, since ?? 0),
+    checkAgentPresence: (key, since) =>
+      server.checkAgentPresenceSince(key, since ?? 0, { sleepCapture: true }),
     capturedAt: NOW + 1_000
   })
   expect(saved).toBeUndefined()

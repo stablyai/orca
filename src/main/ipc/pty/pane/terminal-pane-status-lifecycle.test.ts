@@ -1,4 +1,4 @@
-import { expect, it, vi } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import type { AgentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { bindTerminalPaneStatusLifecycle } from './terminal-pane-status-lifecycle'
@@ -12,15 +12,37 @@ vi.mock('../../../agent-hooks/server/agent-hook-server', () => ({
 }))
 vi.mock('../provider/registry', () => ({ getProviderForPty }))
 
+const platform = process.platform
+afterEach(() => Object.defineProperty(process, 'platform', { value: platform }))
+
 it.each([
-  ['shell alone after the launched agent quit', true, 'held', false, true],
-  ['shell alone after a reattach left the launch unknown', true, 'unknown', false, true],
-  ['no shell-alone proof (stopped job, agent foreground, unanswered)', false, 'held', false, false],
-  ['intervening command retired the launch', true, 'gone', false, false],
-  ['successor launch during inspection', true, 'held', true, false]
+  ['shell alone after the launched agent quit', 'darwin', true, 'zsh', 'held', false, true],
+  [
+    'shell alone after a reattach left the launch unknown',
+    'darwin',
+    true,
+    'zsh',
+    'unknown',
+    false,
+    true
+  ],
+  [
+    'no shell-alone proof (stopped job, agent foreground)',
+    'darwin',
+    false,
+    'zsh',
+    'held',
+    false,
+    false
+  ],
+  ['intervening command retired the launch', 'darwin', true, 'zsh', 'gone', false, false],
+  ['successor launch during inspection', 'darwin', true, 'zsh', 'held', true, false],
+  ['unmarked cmd.exe back alone on Windows', 'win32', false, 'cmd.exe', 'held', false, true],
+  ['agent still foreground on Windows', 'win32', false, 'codex.exe', 'held', false, false]
 ] as const)(
   'proves an unmarked process exit only for the current launch: %s',
-  async (_, shellAlone, evidence, replaced, expected) => {
+  async (_, os, shellAlone, foreground, evidence, replaced, expected) => {
+    Object.defineProperty(process, 'platform', { value: os })
     const launch = { agentArgs: '', agentEnv: {} }
     let currentLaunch = evidence === 'held' ? launch : evidence === 'gone' ? null : undefined
     getProviderForPty.mockReturnValue({
@@ -29,7 +51,9 @@ it.each([
           currentLaunch = { agentArgs: '--resume next', agentEnv: {} }
         }
         return shellAlone
-      }
+      },
+      hasChildProcesses: async () => foreground !== 'cmd.exe',
+      confirmForegroundProcess: async () => foreground
     })
     // SAFETY: This binding's exit probe only reads these two runtime capabilities.
     const runtime = {
