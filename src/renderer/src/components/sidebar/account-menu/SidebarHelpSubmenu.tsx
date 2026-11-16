@@ -26,7 +26,10 @@ import { SetupGuideProgressRing } from '../../setup-guide/SetupGuideProgressRing
 import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
 import type * as SidebarFeedbackDialogModule from '../sidebar-feedback/SidebarFeedbackDialog'
 import { useTranslate } from '@/i18n/use-translate'
-import { getUpdateCheckClickOptions, getUpdateCheckHint } from '@/app-shell/updates/update-check-click-options'
+import {
+  getUpdateCheckClickOptions,
+  getUpdateCheckHint
+} from '@/app-shell/updates/update-check-click-options'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 // Keep feedback off the boot graph; menu warming and selection share the same lazy module entry.
