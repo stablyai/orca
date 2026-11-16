@@ -70,6 +70,13 @@ export abstract class OrcaRuntimeWithAgentSessionResumeOwnership extends OrcaRun
     tab: RuntimeMobileSessionTerminalTab
   ): Promise<PaneResumeStartup | Record<string, never> | undefined> {
     const stored = this.getPaneSleepingAgentRecord(worktreeId, tab)
+    const identity = this.readPaneAgentIdentity(
+      makePaneKey(tab.parentTabId, tab.leafId),
+      stored ?? undefined
+    )
+    if (identity?.ended || identity?.processTopology === 'shared') {
+      return {}
+    }
     const record = stored
       ? this.isPaneOwnedResumeRecord(stored)
         ? stored
