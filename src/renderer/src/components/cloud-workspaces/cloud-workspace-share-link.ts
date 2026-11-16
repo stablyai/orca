@@ -1,13 +1,17 @@
 // A cloud workspace's share link: the org slug + W-number link when known, else the sandbox-id form.
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { cloudWorkspaceShareLink } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
+import {
+  cloudWorkspaceShareLink,
+  type CloudWorkspace
+} from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
+import { toastPrivateLinkCopied } from './private-link-copied-toast'
 import { cloudWorkspaceIdentity, rememberCloudWorkspaces } from './cloud-workspace-identity'
 
 // How long Copy link waits on the control plane before settling for the sandbox-id link.
 const LINK_LOOKUP_MS = 3_000
 
-async function lookUpLink(id: string): Promise<string | null> {
+async function lookUpWorkspace(id: string): Promise<CloudWorkspace | null> {
   let timer: ReturnType<typeof setTimeout> | undefined
   try {
     const fetched = await Promise.race([
@@ -20,7 +24,7 @@ async function lookUpLink(id: string): Promise<string | null> {
       return null
     }
     rememberCloudWorkspaces([fetched.value])
-    return fetched.value.link ?? null
+    return fetched.value
   } catch {
     return null
   } finally {
@@ -34,7 +38,7 @@ async function lookUpLink(id: string): Promise<string | null> {
  * offline, signed out) still gets a working link.
  */
 export async function shareLinkFor(id: string, chatId?: string | null): Promise<string> {
-  const link = cloudWorkspaceIdentity(id)?.link ?? (await lookUpLink(id))
+  const link = cloudWorkspaceIdentity(id)?.link ?? (await lookUpWorkspace(id))?.link ?? null
   return cloudWorkspaceShareLink({ id, ...(link ? { link } : {}) }, chatId)
 }
 
@@ -57,6 +61,14 @@ export async function copyCloudWorkspaceLink(
     return false
   }
   if (options.quiet) {
+    return true
+  }
+  // SHARE-LINK-PRIVATE: a private workspace's link opens for its owner only. Known from the copy's
+  // own lookup (or the cache); an unknown visibility keeps the plain toast.
+  const known = cloudWorkspaceIdentity(id)
+  const visibility = known?.visibility ?? (await lookUpWorkspace(id))?.visibility
+  if (visibility === 'private') {
+    toastPrivateLinkCopied(id, Boolean(chatId), cloudWorkspaceIdentity(id)?.access === 'owner')
     return true
   }
   toast.success(
