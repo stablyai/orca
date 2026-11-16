@@ -3076,6 +3076,7 @@
       "permissionsLabel": "Permissions, {{value}}",
       "backToModels": "Back to models",
       "appliesAfterTurn": "Applies when this turn finishes",
+      "heldPickFailed": "A setting picked during the turn wasn't applied.",
       "dispatchUnconfirmed": "Sent to the agent — not confirmed",
       "permissions": "Permissions",
       "applying": "Applying…",

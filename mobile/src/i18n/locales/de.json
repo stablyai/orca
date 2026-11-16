@@ -436,6 +436,7 @@
       "appliesAfterTurn": "Wird nach diesem Durchgang angewendet",
       "backToModels": "Zurück zu den Modellen",
       "dispatchUnconfirmed": "An den Agenten gesendet — nicht bestätigt",
+      "heldPickFailed": "Eine während des Durchgangs gewählte Einstellung wurde nicht angewendet.",
       "modelFullAccessLabel": "Modell, {{value}}, Vollzugriff",
       "modelLabel": "Modell, {{value}}",
       "permissions": "Berechtigungen",

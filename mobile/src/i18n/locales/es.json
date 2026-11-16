@@ -440,6 +440,7 @@
       "appliesAfterTurn": "Se aplica cuando termine este turno",
       "backToModels": "Volver a los modelos",
       "dispatchUnconfirmed": "Enviado al agente — sin confirmar",
+      "heldPickFailed": "No se aplicó un ajuste elegido durante el turno.",
       "modelFullAccessLabel": "Modelo, {{value}}, acceso total",
       "modelLabel": "Modelo, {{value}}",
       "permissions": "Permisos",

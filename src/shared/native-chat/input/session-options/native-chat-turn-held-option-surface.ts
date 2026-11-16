@@ -11,9 +11,12 @@ import {
 
 // Per chat, so a surface rebuilt mid-turn keeps the picks; leaving the chat drops them.
 const heldPicksByScope = new Map<string, NativeChatTurnOptionPicks>()
+// Counts drops per chat, so a surface still showing or sending dropped picks lets them go.
+const dropsByScope = new Map<string, number>()
 
 export function dropNativeChatTurnHeldOptionPicks(scopeKey: string): void {
   heldPicksByScope.delete(scopeKey)
+  setBoundedScopeCacheEntry(dropsByScope, scopeKey, (dropsByScope.get(scopeKey) ?? 0) + 1)
 }
 
 export type NativeChatTurnHeldOptionSurface = NativeChatPtySessionOptionsSurface & {
@@ -62,6 +65,17 @@ export function holdNativeChatOptionPicksDuringTurns(args: {
     )
     return working ? withoutMidTurnActions(shown) : shown
   }
+  const drops = (): number => dropsByScope.get(scopeKey) ?? 0
+  let seenDrops = drops()
+  // True once when the chat was left since last seen; its sending picks go with it.
+  const tookDrop = (): boolean => {
+    if (drops() === seenDrops) {
+      return false
+    }
+    seenDrops = drops()
+    sending = NO_NATIVE_CHAT_TURN_OPTION_PICKS
+    return true
+  }
   let snapshot = build()
   const publish = (): SessionOptionDescriptor[] => {
     snapshot = build()
@@ -79,6 +93,10 @@ export function holdNativeChatOptionPicksDuringTurns(args: {
   }
   const sendHeld = async (picks: NativeChatTurnOptionPicks): Promise<void> => {
     for (const id of modelFirst(picks)) {
+      if (tookDrop()) {
+        publish()
+        return
+      }
       const pick = picks.get(id)
       // A direct pick after the turn already replaced this one.
       if (!pick || sending.get(id) !== pick) {
@@ -105,6 +123,7 @@ export function holdNativeChatOptionPicksDuringTurns(args: {
       return () => listeners.delete(listener)
     },
     setOption: (id, value) => {
+      tookDrop()
       const descriptor = inner.getSnapshot().find((row) => row.id === id)
       if (!working || !takesNativeChatTurnOptionPick(descriptor)) {
         if (held().has(id) || sending.has(id)) {
@@ -114,13 +133,19 @@ export function holdNativeChatOptionPicksDuringTurns(args: {
         }
         return inner.setOption(id, value)
       }
-      setHeld(withNativeChatTurnOptionPick(held(), descriptor, value))
+      // Compared with the running value now, which a report may have changed since the first pick.
+      const others = new Map([...held()].filter(([heldId]) => heldId !== id))
+      setHeld(withNativeChatTurnOptionPick(others, descriptor, value))
       return Promise.resolve({ snapshot: publish() })
     },
     sendingHeldPick: () => sending.keys().next().value ?? null,
     setWorking: (next) => {
+      const dropped = tookDrop()
       const picks = held()
       if (next === working && (next || picks.size === 0)) {
+        if (dropped) {
+          publish()
+        }
         return
       }
       working = next

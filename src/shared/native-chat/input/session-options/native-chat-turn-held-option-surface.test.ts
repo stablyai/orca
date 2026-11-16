@@ -2,7 +2,10 @@ import { randomUUID } from 'node:crypto'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { seedNativeChatAppliedSessionOptions } from './native-chat-session-option-cache'
 import { createNativeChatPtySessionOptions } from './native-chat-pty-session-options'
-import { holdNativeChatOptionPicksDuringTurns } from './native-chat-turn-held-option-surface'
+import {
+  dropNativeChatTurnHeldOptionPicks,
+  holdNativeChatOptionPicksDuringTurns
+} from './native-chat-turn-held-option-surface'
 
 describe('native chat turn-held option picks', () => {
   let scopeKey: string
@@ -11,8 +14,7 @@ describe('native chat turn-held option picks', () => {
     seedNativeChatAppliedSessionOptions(scopeKey, 'claude', { model: 'opus' })
   })
 
-  const create = () => {
-    const dispatch = vi.fn().mockResolvedValue({})
+  const create = (dispatch = vi.fn().mockResolvedValue({})) => {
     const surface = holdNativeChatOptionPicksDuringTurns({
       surface: createNativeChatPtySessionOptions({
         agent: 'claude',
@@ -54,5 +56,45 @@ describe('native chat turn-held option picks', () => {
     surface.setWorking(false)
     await Promise.resolve()
     expect(dispatch).not.toHaveBeenCalled()
+  })
+
+  it('compares a repeated pick with the model the agent reports now', async () => {
+    const { dispatch, surface, model } = create()
+    surface.setWorking(true)
+    await surface.setOption('model', 'sonnet')
+    surface.reportSessionOptions({ model: 'haiku' })
+    await surface.setOption('model', 'opus')
+    expect(model()).toMatchObject({ kind: { currentValue: 'opus' }, appliesAfterTurn: true })
+
+    surface.setWorking(false)
+    await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(1))
+    expect(dispatch.mock.calls[0]?.[0]).toBe('/model opus')
+  })
+
+  it('stops sending and showing picks of a chat that was left', async () => {
+    let finishFirst: (() => void) | undefined
+    const dispatch = vi.fn(
+      () =>
+        new Promise<object>((resolve) => {
+          finishFirst ??= () => resolve({})
+        })
+    )
+    const { surface } = create(dispatch)
+    surface.setWorking(true)
+    await surface.setOption('model', 'sonnet')
+    await surface.setOption('effort', 'low')
+    surface.setWorking(false)
+    await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(1))
+    dropNativeChatTurnHeldOptionPicks(scopeKey)
+    finishFirst?.()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(dispatch).toHaveBeenCalledTimes(1)
+
+    const other = create()
+    other.surface.setWorking(true)
+    await other.surface.setOption('model', 'haiku')
+    dropNativeChatTurnHeldOptionPicks(scopeKey)
+    other.surface.setWorking(true)
+    expect(other.model()?.appliesAfterTurn).toBeUndefined()
   })
 })

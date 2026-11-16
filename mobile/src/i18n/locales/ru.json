@@ -444,6 +444,7 @@
       "appliesAfterTurn": "Применится после завершения текущего ответа",
       "backToModels": "Назад к моделям",
       "dispatchUnconfirmed": "Отправлено агенту — получение не подтверждено",
+      "heldPickFailed": "Настройка, выбранная во время ответа, не применена.",
       "modelFullAccessLabel": "Модель: {{value}}, полный доступ",
       "modelLabel": "Модель: {{value}}",
       "permissions": "Разрешения",

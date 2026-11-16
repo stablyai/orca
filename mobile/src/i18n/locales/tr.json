@@ -436,6 +436,7 @@
       "appliesAfterTurn": "Bu tur tamamlandığında uygulanır",
       "backToModels": "Modellere dön",
       "dispatchUnconfirmed": "Ajana gönderildi, onaylanmadı",
+      "heldPickFailed": "Tur sırasında seçilen bir ayar uygulanmadı.",
       "modelFullAccessLabel": "Model, {{value}}, tam erişim",
       "modelLabel": "Model, {{value}}",
       "permissions": "İzinler",

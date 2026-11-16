@@ -49,6 +49,7 @@ export function useMobileNativeChatSessionOptionController(args: {
   }
   toggleTabChatView: (tabId: string) => void
   worktreeId: string
+  onOptionError?: (message: string) => void
 }): {
   nativeChatSessionOptions: MobileNativeChatSessionOptionPickersProps | null
   recordCommand: (command: string) => void
@@ -110,7 +111,8 @@ export function useMobileNativeChatSessionOptionController(args: {
     isWorking,
     dispatchCommand,
     onAgentPicker: handleAgentPicker,
-    writeSettings
+    writeSettings,
+    onOptionError: args.onOptionError
   })
   const noted = useNativeChatTurnNotedOptionPicks({
     scope: activeChatStructured

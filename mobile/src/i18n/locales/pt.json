@@ -463,6 +463,7 @@
       "permissions": "Permissões",
       "permissionsLabel": "Permissões, {{value}}",
       "appliesAfterTurn": "Aplica-se quando este turno terminar",
+      "heldPickFailed": "Uma configuração escolhida durante o turno não foi aplicada.",
       "applying": "Aplicando…",
       "optionsSection": "Opções"
     },

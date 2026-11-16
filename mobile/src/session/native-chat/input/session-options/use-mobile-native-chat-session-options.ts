@@ -36,6 +36,7 @@ import {
 } from '../../../../../../src/shared/native-chat/input/session-options/native-chat-session-option-state'
 import { setBoundedScopeCacheEntry } from '../../../../../../src/shared/native-chat/native-chat-scope-cache'
 import { sayMobileNativeChatSessionOption } from './native-chat-session-option-copy'
+import { translate } from '../../../../i18n/mobile-i18n'
 
 export type MobileNativeChatSessionOptionsController = {
   optionSurface?: SessionOptionsSurface
@@ -78,6 +79,7 @@ type HookArgs = {
   onAgentPicker?: () => void
   /** Saves picks as the host's launch defaults, as desktop does. */
   writeSettings?: (mutation: NativeChatSessionOptionSettingsMutation) => void
+  onOptionError?: (message: string) => void
 }
 
 const EMPTY_SNAPSHOT: SessionOptionDescriptor[] = []
@@ -159,7 +161,20 @@ function createMobileSurfaceEntry(args: {
     canSwitchOmpModel: args.canSwitchOmpModel,
     models: null,
     retired: false,
-    surface: holdNativeChatOptionPicksDuringTurns({ surface: ptySurface, scopeKey: identity })
+    surface: holdNativeChatOptionPicksDuringTurns({
+      surface: ptySurface,
+      scopeKey: identity,
+      onHeldPickFailed: () => {
+        if (activeIdentity.current === identity) {
+          latest.current.onOptionError?.(
+            translate(
+              'chat.sessionOptionPickers.heldPickFailed',
+              "A setting picked during the turn wasn't applied."
+            )
+          )
+        }
+      }
+    })
   }
   return entry
 }

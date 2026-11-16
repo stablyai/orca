@@ -436,6 +436,7 @@
       "appliesAfterTurn": "이번 턴이 끝나면 적용됩니다",
       "backToModels": "모델 목록으로 돌아가기",
       "dispatchUnconfirmed": "에이전트에 전송됨 — 확인되지 않음",
+      "heldPickFailed": "턴 중에 선택한 설정이 적용되지 않았습니다.",
       "modelFullAccessLabel": "모델, {{value}}, 전체 액세스",
       "modelLabel": "모델, {{value}}",
       "permissions": "권한",
