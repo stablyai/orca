@@ -70,7 +70,7 @@ export type HostedEnvironmentClient = {
   ): Promise<ReadableStream<Uint8Array>>
 }
 
-export type HostedEnvironmentClientOptions = {
+type HostedEnvironmentClientOptions = {
   baseUrl: string
   getAccessToken: (signal?: AbortSignal) => Promise<string>
   fetch?: (input: URL, init: RequestInit) => Promise<Response>

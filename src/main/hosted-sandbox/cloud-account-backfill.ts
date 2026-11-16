@@ -21,7 +21,7 @@ function sandboxIdOf(runtime: EphemeralVmRuntimeRecord): string | null {
   return typeof id === 'string' && id ? id : null
 }
 
-export type CloudAccountBackfill = {
+type CloudAccountBackfill = {
   /**
    * Lists the active team's sandboxes when a live record is unfiled, the team changed, or the last
    * list is older than `relistMs` (the first run, at startup, always lists). `force` lists now

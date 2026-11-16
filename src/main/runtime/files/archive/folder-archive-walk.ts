@@ -19,7 +19,7 @@ export type FolderArchiveEntry = {
   ino: number
 }
 
-export type FolderArchivePlan = {
+type FolderArchivePlan = {
   /** Canonical path of the archived folder; every read must land under it. */
   rootRealPath: string
   entries: FolderArchiveEntry[]
@@ -36,7 +36,7 @@ export class FolderArchiveLimitError extends Error {
   }
 }
 
-export type FolderArchiveWalkOptions = {
+type FolderArchiveWalkOptions = {
   excludeDefaultDirs: boolean
   maxTotalBytes?: number
   maxEntries?: number

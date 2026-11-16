@@ -60,7 +60,7 @@ export type SecretRequestStoreEvent =
   | SecretRequestSettledEvent
 
 /** Schedules `run` after `ms`; the result cancels it. */
-export type SecretRequestTimer = (run: () => void, ms: number) => { cancel: () => void }
+type SecretRequestTimer = (run: () => void, ms: number) => { cancel: () => void }
 
 const realTimer: SecretRequestTimer = (run, ms) => {
   const handle = setTimeout(run, ms)

@@ -16,7 +16,7 @@ export type CloudDeletePreflight =
   | ({ ok: false } & EphemeralVmFailure)
 
 /** Can this computer reach the workspace's server right now? A short probe, never a wake. */
-export type CloudServerProbe = () => Promise<'ok' | 'rejected' | 'no_answer'>
+type CloudServerProbe = () => Promise<'ok' | 'rejected' | 'no_answer'>
 
 const ASLEEP_STATUSES = new Set(['suspending', 'suspended', 'archived'])
 const GONE_STATUSES = new Set(['destroying', 'destroyed', 'failed'])

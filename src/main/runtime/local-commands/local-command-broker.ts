@@ -49,7 +49,7 @@ type LocalCommandRecord = {
   settledAt: number | null
 }
 
-export type LocalCommandRequestInput = {
+type LocalCommandRequestInput = {
   command: string
   cwd: string | null
   timeoutSec?: number

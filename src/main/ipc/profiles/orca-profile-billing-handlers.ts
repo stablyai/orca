@@ -46,7 +46,7 @@ const TeamPlansArgs = z
   })
   .strict()
 
-export function billingTeamPlansArgsFromUnknown(args: unknown): {
+function billingTeamPlansArgsFromUnknown(args: unknown): {
   orgIds: string[]
 } {
   const parsed = TeamPlansArgs.safeParse(args)

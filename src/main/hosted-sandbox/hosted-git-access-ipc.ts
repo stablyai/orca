@@ -29,7 +29,7 @@ export function registerCloudWorkspaceRequestHandlers(
  * A sidebar workspace (owned or paired), or for the create wizard (CREATE-GH-STEP) before it has
  * one: the create's server environment (owned runtime record) or a GitHub-only create's sandbox id.
  */
-export type CloudGitAccessTarget =
+type CloudGitAccessTarget =
   | CloudWorkspaceTarget
   | { environmentId: string }
   | { sandboxId: string }
@@ -66,7 +66,7 @@ export function resolveGitAccessSandbox(
 }
 
 /** Registered for every build; without a control plane it answers `not_cloud`. */
-export function registerCloudGitAccessHandler(
+function registerCloudGitAccessHandler(
   userDataPath: string,
   config: HostedSandboxConfig | null
 ): void {

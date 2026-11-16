@@ -12,13 +12,13 @@ import {
   type HostedEnvironmentClient
 } from './hosted-environment-client'
 
-export type HostedEnvironmentBuildWatch = {
+type HostedEnvironmentBuildWatch = {
   stop(): void
   /** Settles after the final event (`end` or `error`) or after stop(). */
   done: Promise<void>
 }
 
-export type HostedEnvironmentBuildWatchOptions = {
+type HostedEnvironmentBuildWatchOptions = {
   client: Pick<HostedEnvironmentClient, 'openBuildEvents' | 'getBuild'>
   envId: string
   buildId: string

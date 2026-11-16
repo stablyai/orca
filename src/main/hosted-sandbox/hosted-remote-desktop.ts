@@ -21,7 +21,7 @@ import {
   type RemoteDesktopMintResult
 } from './remote-desktop-sessions'
 
-export type CloudRemoteDesktopDeps = {
+type CloudRemoteDesktopDeps = {
   userDataPath: string
   client: Pick<HostedSandboxControlPlaneClient, 'startDesktop'> | null
   openForward: (

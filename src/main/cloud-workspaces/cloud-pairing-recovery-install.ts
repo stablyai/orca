@@ -14,7 +14,7 @@ import type { CloudWorkspacesService } from './cloud-workspaces-service'
 import { createCloudPairingRecovery } from './cloud-pairing-recovery'
 import { createCloudRecoveryGrantsStore } from './cloud-recovery-grants-store'
 
-export const CLOUD_ACCESS_LOST_CHANNEL = 'cloudWorkspaces:accessLost'
+const CLOUD_ACCESS_LOST_CHANNEL = 'cloudWorkspaces:accessLost'
 
 export function installCloudPairingRecovery(
   getService: () => Promise<CloudWorkspacesService | null>

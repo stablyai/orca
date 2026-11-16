@@ -4,7 +4,7 @@
 // Shared cloud workspaces use it so `git push` runs as the teammate who asked for the work.
 import type { RpcCallerIdentity } from '../rpc/callers/rpc-caller-identity'
 
-export type DrivingDevice = { deviceId: string; at: number }
+type DrivingDevice = { deviceId: string; at: number }
 
 const MAX_ENTRIES = 4096
 const entries = new Map<string, DrivingDevice>()

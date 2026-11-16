@@ -24,7 +24,7 @@ import { isAgentRpcCaller } from '../../callers/rpc-caller-identity'
 import { resolveSecretRequestCaller } from '../secrets/secret-requests'
 import { verifiedCallerTerminalHandle } from '../orchestration/turn-sender'
 
-export type LocalCommandMethodDeps = {
+type LocalCommandMethodDeps = {
   broker: () => LocalCommandBroker
   /** Only a cloud workspace's orcad relays; a desktop's own runtime refuses. */
   enabled: () => boolean

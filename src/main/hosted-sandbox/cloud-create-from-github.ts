@@ -25,7 +25,7 @@ export const CLOUD_CREATE_IDEMPOTENCY_KEY = /^[A-Za-z0-9_.:-]{8,128}$/
 /** A creation id from the window: the build sheet's log and its Cancel are keyed by it. */
 export const CLOUD_CREATE_PROVISION_ID = /^[A-Za-z0-9_.:-]{1,128}$/
 
-export type CreateFromGitHubInput = {
+type CreateFromGitHubInput = {
   /** `owner/repo`. */
   slug: string
   /** The name typed in the composer; empty for none. */

@@ -88,7 +88,7 @@ function parseCreate(value: unknown): ShareCreateRequest | null {
  * Only a share link on the control plane (path mode) or on the configured share domain is ever handed
  * to the system browser, whatever the server answered.
  */
-export function isShareLinkUrl(
+function isShareLinkUrl(
   value: string,
   controlPlaneUrl: string,
   /** ORCA_CLOUD_SHARE_HOST_SUFFIX (e.g. `.share.example.dev`): the only share subdomains accepted. */

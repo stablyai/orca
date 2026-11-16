@@ -74,7 +74,7 @@ import {
 } from '../agent-config-sync/desktop/cloud-agent-config-sync-ipc'
 
 /** Capability Orca Cloud auth grants per account (stablyai/orca-cloud#689). */
-export const ORCA_CLOUD_SANDBOX_CAPABILITY = 'sandbox'
+const ORCA_CLOUD_SANDBOX_CAPABILITY = 'sandbox'
 
 let installed: { registry: HostedSessionRegistry } | null = null
 let controlPlaneClient: HostedSandboxControlPlaneClient | null = null
@@ -279,7 +279,7 @@ export function installHostedSandbox(
 }
 
 /** "Restart now" from the window's session-cap toast. */
-export function restartHostedWorkspace(workspaceId: string): Promise<HostedSessionRestartResult> {
+function restartHostedWorkspace(workspaceId: string): Promise<HostedSessionRestartResult> {
   return installed
     ? installed.registry.restartWorkspace(workspaceId)
     : Promise.resolve({ status: 'not-running' })

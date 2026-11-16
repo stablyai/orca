@@ -22,7 +22,7 @@ function sandboxIdOf(runtime: EphemeralVmRuntimeRecord): string | null {
   return typeof id === 'string' && id ? id : null
 }
 
-export type CloudSandboxGonePrune = {
+type CloudSandboxGonePrune = {
   /** After a successful list of `account`'s sandboxes: retire that team's records it confirms gone. */
   observeList(account: string, listed: ReadonlySet<string>): Promise<void>
 }

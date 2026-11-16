@@ -23,7 +23,7 @@ function reserved(name: string): boolean {
   )
 }
 
-export type CloudSessionEnv = {
+type CloudSessionEnv = {
   /** Current values, plus ORCA_SESSION_ENV_NAMES listing them. */
   set: Record<string, string>
   /** Names `base` got from an older session env that the current one no longer has. */
@@ -139,9 +139,4 @@ export function cachedCloudSessionEnv(
 ): CloudSessionEnv | null {
   const current = cloudCache()
   return current ? cloudSessionEnvFromText(base, current.text) : null
-}
-
-export function resetCloudSessionEnvCacheForTests(): void {
-  cache?.watcher?.close()
-  cache = null
 }

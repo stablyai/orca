@@ -194,7 +194,7 @@ export function getHostedWorkspaceService(): HostedWorkspaceService | null {
 }
 
 /** Polls a cheap terminal listing until the woken server answers it (or the deadline passes). */
-export async function waitForTerminalsReachable(
+async function waitForTerminalsReachable(
   userDataPath: string,
   environmentId: string,
   deadline: number,
