@@ -20,6 +20,8 @@ import { parseExecutionHostId } from '../../../../../shared/execution-host/execu
 import type { RepoKind } from '../../../../../shared/repository/repo-types'
 import { pickLocalProjectLocationFolder } from './pick-local-project-folder'
 import { CloneForm, ExistingFolderForm, LocationActionButton } from './SetProjectLocationForms'
+import { ExistingCheckoutSuggestionList } from './ExistingCheckoutSuggestionList'
+import { useExistingCheckoutSuggestions } from './use-existing-checkout-suggestions'
 
 type DialogView = 'choose' | 'existing' | 'clone' | 'browse'
 type BrowseField = 'existing' | 'clone'
@@ -113,6 +115,12 @@ function SetProjectLocationDialogBody({
   const { cloneFolder, cloneArgs, setCloneFolderName, checkCloneFolderTaken } =
     useCloneFolderOverride(cloneUrl, cloneDestination)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const existingCheckouts = useExistingCheckoutSuggestions({
+    hostId: option.hostId,
+    projectName,
+    projectKind,
+    remoteUrl: defaultCloneUrl
+  })
   // Clones may finish long after dismissal; do not retarget a composer the user has since moved to another host.
   const abandoned = useRef(false)
   useEffect(() => {
@@ -153,8 +161,8 @@ function SetProjectLocationDialogBody({
     setView('browse')
   }
 
-  const handleExistingSubmit = async (): Promise<void> => {
-    if (!setupPath.trim()) {
+  const submitExistingFolder = async (path: string, kind: RepoKind): Promise<void> => {
+    if (!path) {
       return
     }
     setIsSubmitting(true)
@@ -162,8 +170,8 @@ function SetProjectLocationDialogBody({
       const result = await setupProjectExistingFolder({
         projectId: option.projectId,
         hostId: option.hostId,
-        path: setupPath.trim(),
-        kind: setupKind,
+        path,
+        kind,
         displayName: projectName
       })
       if (result && !abandoned.current) {
@@ -228,6 +236,11 @@ function SetProjectLocationDialogBody({
       </DialogHeader>
       {view === 'choose' ? (
         <div className="space-y-2">
+          <ExistingCheckoutSuggestionList
+            state={existingCheckouts}
+            disabled={isSubmitting}
+            onUse={(path) => void submitExistingFolder(path, projectKind)}
+          />
           <LocationActionButton
             icon={FolderOpen}
             title={t(
@@ -272,7 +285,7 @@ function SetProjectLocationDialogBody({
           onPathChange={setSetupPath}
           onKindChange={setSetupKind}
           onBrowse={() => openHostBrowser('existing')}
-          onSubmit={() => void handleExistingSubmit()}
+          onSubmit={() => void submitExistingFolder(setupPath.trim(), setupKind)}
         />
       ) : null}
       {view === 'clone' ? (

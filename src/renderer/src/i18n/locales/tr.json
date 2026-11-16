@@ -15397,7 +15397,12 @@
             "browseFolderHelp": "Bu host'ta mevcut bir checkout veya klasör kullanın.",
             "cloneFromUrl": "URL'den klonla",
             "cloneFromUrlHelp": "Bu repoyu {{host}} üzerine klonlayın.",
-            "saveLocation": "Konumu ayarla"
+            "saveLocation": "Konumu ayarla",
+            "existingCheckoutsSearching": "Bu ana bilgisayarda mevcut kopyalar aranıyor…",
+            "existingCheckoutsHeading": "Bu ana bilgisayarda bulundu",
+            "existingCheckoutsUse": "Bu klasörü kullan",
+            "existingCheckoutsSameRemote": "Aynı uzak depo",
+            "existingCheckoutsSameName": "Aynı ad"
           },
           "SmartWorkspaceNameField": {
             "e57c53727c": "Proje ekle...",

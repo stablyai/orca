@@ -5,6 +5,7 @@ import {
   ProjectHostSetupCreate,
   ProjectHostSetupDelete,
   ProjectHostSetupExistingFolder,
+  ProjectHostSetupFindExistingCheckouts,
   ProjectHostSetupUpdate,
   ProjectUpdate
 } from '../../../../../shared/rpc-contract/projects/project-runtime-params'
@@ -54,6 +55,12 @@ export const PROJECT_RUNTIME_METHODS = [
         context
       )
     })
+  }),
+  defineMethod({
+    name: 'projectHostSetup.findExistingCheckouts',
+    permission: 'workspace',
+    params: ProjectHostSetupFindExistingCheckouts,
+    handler: (params, { runtime }) => runtime.findExistingProjectCheckouts(params)
   }),
   defineMethod({
     name: 'projectHostSetup.clone',

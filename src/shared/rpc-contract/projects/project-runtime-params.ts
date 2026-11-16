@@ -35,6 +35,14 @@ export const ProjectHostSetupExistingFolder = z.object({
   setupMethod: z.enum(['imported-existing-folder', 'cloned']).optional()
 })
 
+// Bounded so a client cannot turn one lookup into a broad filesystem walk.
+export const ProjectHostSetupFindExistingCheckouts = z.object({
+  projectName: requiredString('Missing project name').pipe(z.string().max(256)),
+  remoteUrl: OptionalString,
+  kind: z.enum(['git', 'folder']),
+  extraRoots: z.array(z.string().min(1).max(4096)).max(4).optional()
+})
+
 export const ProjectHostSetupClone = z.object({
   projectId: requiredString('Missing project ID'),
   projectProviderIdentity: ProjectProviderIdentity.optional(),

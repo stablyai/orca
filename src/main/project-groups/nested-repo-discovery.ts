@@ -52,7 +52,7 @@ async function probeGitMarkers(dirPath: string): Promise<{
   }
 }
 
-async function hasGitMarker(dirPath: string): Promise<boolean> {
+export async function hasGitMarker(dirPath: string): Promise<boolean> {
   return (await probeGitMarkers(dirPath)).hasGitMarker
 }
 
@@ -102,7 +102,7 @@ async function mayNeedGitDiscovery(path: string, signal?: AbortSignal): Promise<
   }
 }
 
-async function readLocalDirectory(dirPath: string): Promise<NestedRepoDirectoryEntry[]> {
+export async function readLocalDirectory(dirPath: string): Promise<NestedRepoDirectoryEntry[]> {
   // Dirents avoid per-child stat and prevent symlink traversal outside the selected folder.
   const entries = await readdir(dirPath, { withFileTypes: true })
   return entries.map((entry) => ({
