@@ -123,6 +123,7 @@ function SplitNode({
       <ResizeHandle
         direction={node.direction}
         wide
+        tabBand={isHorizontal && tabStrip === 'attached'}
         onResizeStart={() => recordFeatureInteraction('terminal-panes')}
         onRatioChange={(nextRatio) =>
           ORCA_LAYOUT_OWNER_IS_MAIN

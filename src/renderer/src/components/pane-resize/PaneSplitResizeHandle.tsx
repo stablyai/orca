@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { attachDividerDropForwarding } from '@/lib/divider-drop-forwarding'
 import { acquireWebviewsDragPassthrough } from '../browser-pane/host-guest/drag/webview-drag-passthrough'
 import { DIVIDER_HIT_PX } from '@/lib/divider-hit-area'
 import { getDraggedSplitRatio, measureSplitRatio, readSplitRatio } from './pane-split-drag-ratio'
@@ -18,6 +19,7 @@ const WIDE_HORIZONTAL_STYLE: WideHandleStyle = {
 export function ResizeHandle({
   direction,
   wide = false,
+  tabBand = false,
   onResizeStart,
   onResizeEnd,
   onRatioChange
@@ -25,6 +27,8 @@ export function ResizeHandle({
   direction: 'horizontal' | 'vertical'
   /** Use the shared in-flow grab size instead of the compact 6px gutter (DevTools docks keep 6px). */
   wide?: boolean
+  /** The gap's top edge sits beside attached tab strips, so it continues their band. */
+  tabBand?: boolean
   onResizeStart: () => void
   onResizeEnd?: () => void
   onRatioChange: (ratio: number) => void
@@ -32,6 +36,7 @@ export function ResizeHandle({
   const isHorizontal = direction === 'horizontal'
   const [dragging, setDragging] = useState(false)
   const activeResizeCleanupRef = useRef<((updateDragging?: boolean) => void) | null>(null)
+  const handleRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(
     () => () => {
@@ -39,6 +44,14 @@ export function ResizeHandle({
     },
     []
   )
+
+  useEffect(() => {
+    const handle = handleRef.current
+    if (!wide || !handle) {
+      return
+    }
+    return attachDividerDropForwarding(handle, () => isHorizontal)
+  }, [wide, isHorizontal])
 
   const onPointerDown = useCallback(
     (event: React.PointerEvent<HTMLDivElement>) => {
@@ -64,6 +77,7 @@ export function ResizeHandle({
       const releaseWebviewDragPassthrough = acquireWebviewsDragPassthrough()
       // Why: measure outside pointermove so pane writes never force a readback.
       let rect = container.getBoundingClientRect()
+      const startRect = rect
       const handleRect = handle.getBoundingClientRect()
       const handleSize = isHorizontal ? handleRect.width : handleRect.height
       const startPos = isHorizontal ? event.clientX : event.clientY
@@ -86,11 +100,13 @@ export function ResizeHandle({
           cleanup()
           return
         }
-        // Why: follow the pointer's displacement, not its absolute position, so an off-center grab never jumps.
         const clamped = getDraggedSplitRatio({
           startRatio,
           startPos,
           pos: isHorizontal ? moveEvent.clientX : moveEvent.clientY,
+          startContainerPos: isHorizontal ? startRect.left : startRect.top,
+          containerPos: isHorizontal ? rect.left : rect.top,
+          startAvailablePx: (isHorizontal ? startRect.width : startRect.height) - handleSize,
           availablePx: (isHorizontal ? rect.width : rect.height) - handleSize
         })
         if (clamped === null) {
@@ -182,9 +198,10 @@ export function ResizeHandle({
 
   return (
     <div
+      ref={handleRef}
       className={`tab-group-split-resize-handle ${
         isHorizontal ? 'is-vertical' : 'is-horizontal'
-      }${wide ? ' is-wide' : ''}${dragging ? ' is-dragging' : ''}`}
+      }${wide ? ' is-wide' : ''}${tabBand ? ' has-tab-band' : ''}${dragging ? ' is-dragging' : ''}`}
       style={wide ? (isHorizontal ? WIDE_VERTICAL_STYLE : WIDE_HORIZONTAL_STYLE) : undefined}
       onPointerDown={onPointerDown}
     />

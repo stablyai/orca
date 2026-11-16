@@ -11,6 +11,7 @@ import {
 } from '../../../shared/file-import/native-file-drop-preparation'
 import { prepareOsFileDropPaths } from '../lib/files/drop/os-file-drop-preparation'
 import { hasOsFileDragTypes } from '../lib/files/drop/os-file-drop-cancellation-guard'
+import { isForwardedTrustedDragEvent } from '../lib/divider-drop-forwarding'
 import {
   holdBrowserAttachmentFiles,
   releaseBrowserAttachmentFiles
@@ -116,7 +117,8 @@ export function useOsFileDropOwner<Destination = undefined>(
         }
         event.preventDefault()
         event.stopPropagation()
-        if (!event.isTrusted) {
+        // Why: a split gap relays the user's real drop to the pane beside it.
+        if (!event.isTrusted && !isForwardedTrustedDragEvent(event)) {
           return
         }
         if (!canAccept(event)) {

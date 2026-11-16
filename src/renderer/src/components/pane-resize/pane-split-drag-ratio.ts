@@ -25,24 +25,36 @@ export function measureSplitRatio(
 }
 
 /**
- * Moves the split by exactly the pointer's displacement, so grabbing anywhere on the hit area never jumps.
+ * Keeps the seam at the same distance from the pointer as when it was grabbed: an off-center grab never
+ * jumps, and the seam stays under the pointer if the container resizes or moves mid-drag.
  * A restored ratio outside the clamp never moves at zero displacement and can only move back inward.
  */
 export function getDraggedSplitRatio({
   startRatio,
   startPos,
   pos,
+  startContainerPos,
+  containerPos,
+  startAvailablePx,
   availablePx
 }: {
   startRatio: number
   startPos: number
   pos: number
+  startContainerPos: number
+  containerPos: number
+  startAvailablePx: number
   availablePx: number
 }): number | null {
   if (availablePx <= 0) {
     return null
   }
-  const ratio = startRatio + (pos - startPos) / availablePx
+  const unchanged = containerPos === startContainerPos && availablePx === startAvailablePx
+  // Why: the unchanged-container branch stays exact so a zero-displacement move re-commits the stored ratio.
+  const ratio = unchanged
+    ? startRatio + (pos - startPos) / availablePx
+    : (pos - startPos + startContainerPos - containerPos + startRatio * startAvailablePx) /
+      availablePx
   const min = Math.min(MIN_SPLIT_RATIO, startRatio)
   const max = Math.max(MAX_SPLIT_RATIO, startRatio)
   return Math.min(max, Math.max(min, ratio))
