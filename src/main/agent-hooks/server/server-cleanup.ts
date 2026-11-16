@@ -20,7 +20,7 @@ import { endedPresenceOf, recordAgentExit } from './agent-exit-evidence'
 
 export type EndedProcessReconciliationOptions = {
   endedPresence?: AgentProcessPresence
-  /** The pane's shell is back: its owner ended, even with no process to probe. */
+  /** The pane's shell is back: a process-less owner ended. */
   confirmedExit?: boolean
   /** Keep resume identity when the pane survives the agent. */
   preserveResumeIdentity?: boolean
@@ -131,7 +131,10 @@ export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
         | undefined
       const endedPresence =
         options?.endedPresence ??
-        (options?.confirmedExit && previous ? endedPresenceOf(previous) : undefined)
+        // A proved process gets its exit from the presence probe, not a possibly newer row.
+        (options?.confirmedExit && previous && !previous.agentPresence?.process
+          ? endedPresenceOf(previous)
+          : undefined)
       if (endedPresence) {
         // Cleanup drops aliases, but readers may still hold either key.
         const paneKeys = new Set([resolvedPaneKey, paneKey])
