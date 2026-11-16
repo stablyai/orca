@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { isWslUncPath } from '../../../shared/wsl-paths'
+import { isWslUncPath } from '../../../shared/file-access/wsl-paths'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { claudeProfileHistoryDirs } from '../../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { getCachedWslDistros, hasCachedWslDistros } from '../../wsl/discovery/distro-catalog'

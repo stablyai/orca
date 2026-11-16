@@ -4,8 +4,8 @@ import type { AutomationOwnerRef } from '../../../shared/automations/ownership/a
 import type {
   ScopedExternalManagerActionRequest,
   ScopedExternalManagerListRequest
-} from '../../../shared/external-automation-scope'
-import type { AutomationsChangedPayload } from '../../../shared/runtime-client-events'
+} from '../../../shared/automations/external/external-automation-scope'
+import type { AutomationsChangedPayload } from '../../../shared/remote-runtime/session-graph/runtime-client-events'
 
 export type ExternalAutomationManagerResult = {
   /** Null once a probe succeeded and found no manager configured for this scope. */

@@ -17,7 +17,7 @@ import {
 import { addSessionText } from '../../parsing/session-scanner-messages'
 import { asRecord } from '../../parsing/session-record-fields'
 import { copilotModelMetricsTotal, numberValue } from '../../parsing/session-scanner-token-values'
-import { extractString } from '../../../../shared/trimmed-string'
+import { extractString } from '../../../../shared/text/trimmed-string'
 import { parseJsonObject } from '../../parsing/session-json-object'
 import { normalizeTitleText } from '../../parsing/session-scanner-text-normalization'
 

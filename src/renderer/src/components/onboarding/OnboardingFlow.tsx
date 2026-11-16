@@ -7,7 +7,7 @@ import {
   isScreenSubmitShortcut
 } from '@/lib/keyboard/screen-submit-shortcut'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import type { OnboardingState } from '../../../../shared/onboarding-state-types'
+import type { OnboardingState } from '../../../../shared/onboarding/onboarding-state-types'
 import { AgentStep } from './AgentStep'
 import { ThemeStep } from './ThemeStep'
 import { NotificationStep } from './NotificationStep'

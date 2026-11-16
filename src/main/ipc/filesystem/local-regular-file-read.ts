@@ -6,7 +6,7 @@ import {
   IMAGE_SIGNATURE_BYTES,
   detectImageFileSignature,
   type ImageFileSignature
-} from '../../../shared/image-file-signature'
+} from '../../../shared/file-content/image-file-signature'
 
 export const NOT_A_REGULAR_FILE_MESSAGE = 'Not a regular file'
 

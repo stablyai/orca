@@ -2,7 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import {
   throwIfSignalAborted,
   waitForPromiseWithSignal
-} from '../../../../shared/abort-signal-reason'
+} from '../../../../shared/concurrency/abort-signal-reason'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 
 const { graph, stat, names, removeChild, unlink, rmdir, clean } = vi.hoisted(() => ({

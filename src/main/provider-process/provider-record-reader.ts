@@ -2,7 +2,7 @@ import type { Readable } from 'node:stream'
 import {
   createIncrementalNdjsonFramer,
   type NdjsonRejectedRecord
-} from '../../shared/main-process-ndjson-framer'
+} from '../../shared/json-stream/main-process-ndjson-framer'
 
 type RecordReaderStream = Pick<Readable, 'on' | 'pause' | 'resume' | 'setEncoding'>
 

@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import { normalizeRuntimePathForComparison } from '../../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../../shared/file-access/cross-platform-path'
 import { resolveWorktreeOperationRoute } from '../../workspace/ownership/worktree-operation-route'
 
 const STORAGE_KEY = 'orca.quick-open-history.v1'

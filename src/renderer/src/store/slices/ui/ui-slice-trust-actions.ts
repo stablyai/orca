@@ -3,7 +3,7 @@ import { getSetupScriptPromptDismissalKey } from '../../../runtime/repo-hooks/se
 import {
   withOrcaHookRepoAlwaysTrusted,
   withOrcaHookScriptConfirmed
-} from '../../../../../shared/orca-hook-trust-entries'
+} from '../../../../../shared/workspace-setup/hooks/orca-hook-trust-entries'
 
 export function createUiTrustActions(set: UISliceSet, _get: UISliceGet): Partial<UISlice> {
   return {

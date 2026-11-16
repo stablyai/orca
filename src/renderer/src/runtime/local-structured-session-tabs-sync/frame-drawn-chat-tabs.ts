@@ -1,6 +1,6 @@
 // Main places/removes listed chats and frames draw their tabs; listing changes only labels in framed workspaces.
 
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { Tab } from '../../../../shared/tab-types'
 import { defaultAgentChatLabel } from '../../../../shared/agent-session/agent-session-chat-label'
 

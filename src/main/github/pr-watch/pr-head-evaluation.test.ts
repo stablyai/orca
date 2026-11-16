@@ -4,9 +4,9 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   closeTestAgentSessionRecordStores,
-  openTestAgentSessionDatabase,
-  withTestAgentSessionDatabase
+  openTestAgentSessionDatabase
 } from '../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { withTestAgentSessionDatabase } from '../../runtime/agent-session/records/agent-session-record-store-persistence.test-fixture'
 import { prWatchStorage, type PRWatchStorage } from './pr-watch-storage'
 import { recordPRChatAction } from './pr-head-evaluation'
 import { PRPendingActionResume } from './pr-pending-action-resume'

@@ -2,7 +2,7 @@ import type * as NodeFsPromises from 'node:fs/promises'
 import type * as NodePath from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../../../persistence/loading-store/store'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 
 // Resolve as Windows does, so the UNC authorization path runs on any host.
 vi.mock('node:path', async (importOriginal) => {

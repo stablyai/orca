@@ -34,7 +34,7 @@ type JournalSourceContent = 'journalCorrupt' | 'journalWrittenByNewerOrca'
 const SOURCE_CONTENT = Symbol('journal source content diagnosis')
 
 /** Only the original-source preparation transport supplies this marker. */
-export function journalSqlSourceContent(error: unknown): JournalSourceContent | undefined {
+function journalSqlSourceContent(error: unknown): JournalSourceContent | undefined {
   if (error instanceof Error && SOURCE_CONTENT in error) {
     const content = error[SOURCE_CONTENT]
     if (content === 'journalCorrupt' || content === 'journalWrittenByNewerOrca') {

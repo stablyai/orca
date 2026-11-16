@@ -1,6 +1,6 @@
 import type { AtRestCommandDemand } from '../../native-chat/agent-session-wire/options/at-rest-command-demand'
-import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
-import { PrioritySemaphore } from '../../../shared/priority-semaphore'
+import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
+import { PrioritySemaphore } from '../../../shared/concurrency/priority-semaphore'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   isLegacyAgentSessionAccountHome,
@@ -8,7 +8,7 @@ import {
   type AgentSessionAccountHome
 } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { AgentSessionSlashCommand } from '../../../shared/agent-session/agent-session-wire'
-import { structuredSlashCommands } from '../../../shared/agent-session/view/structured-agent-session-composer'
+import { structuredSlashCommands } from '../../../shared/agent-session/view/structured-agent-session-slash-menu'
 import { discoverSkills } from '../../skills/discovery/skill-native-discovery'
 import { scanClaudeCommandFolders } from './claude-command-folder-scan'
 import { supportsClaudeStructuredLocation } from '../structured/launch/claude-structured-location-support'

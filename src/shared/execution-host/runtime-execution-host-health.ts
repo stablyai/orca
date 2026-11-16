@@ -1,9 +1,12 @@
-import { evaluateRuntimeCompat, type RuntimeCompatVerdict } from '../protocol-compat'
+import {
+  evaluateRuntimeCompat,
+  type RuntimeCompatVerdict
+} from '../remote-runtime/protocol/protocol-compat'
 import {
   MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
   RUNTIME_PROTOCOL_VERSION
-} from '../protocol-version'
-import type { RuntimeStatus } from '../runtime-types'
+} from '../remote-runtime/protocol/protocol-version'
+import type { RuntimeStatus } from '../remote-runtime/session-graph/runtime-session-contracts'
 import type { ExecutionHostHealth } from './execution-host-health'
 
 export function runtimeCompatibility(

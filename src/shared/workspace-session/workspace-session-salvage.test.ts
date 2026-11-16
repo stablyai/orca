@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { parseWorkspaceSessionSalvaging } from './workspace-session-salvage'
-import { collectSalvageDrops, salvagingArray } from '../zod-salvage'
+import { collectSalvageDrops, salvagingArray } from '../validation/zod-salvage'
 
 const WT = 'repo-1::/home/user/project'
 

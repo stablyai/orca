@@ -1,15 +1,15 @@
 import path from 'node:path'
 import { WorkspacePortPathIndex } from './workspace-port-path-index'
 import { realpath } from 'node:fs/promises'
-import { withTimeout } from '../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
 import { blockedWslDistroForPath } from '../wsl/filesystem/wsl-unc-access-gate'
-import { PrioritySemaphore } from '../../shared/priority-semaphore'
-import { mapWithConcurrency } from '../../shared/map-with-concurrency'
+import { PrioritySemaphore } from '../../shared/concurrency/priority-semaphore'
+import { mapWithConcurrency } from '../../shared/concurrency/map-with-concurrency'
 import type {
   WorkspacePort,
   WorkspacePortOwner,
   WorkspacePortProbe
-} from '../../shared/workspace-ports'
+} from '../../shared/workspace/ports/workspace-ports'
 import type { AdvertisedUrlWatcher } from './advertised-url-watcher'
 import { connectHostForBindHost } from './local-workspace-port-address'
 import type {

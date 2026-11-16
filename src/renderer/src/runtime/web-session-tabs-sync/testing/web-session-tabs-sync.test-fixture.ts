@@ -1,4 +1,5 @@
-import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { TabGroupLayoutNode } from '../../../../../shared/tab-types'
 import { resetWebSessionFocusIntentForTests } from '../navigation/web-session-focus-intent'
 import { resetWebSessionCloseIntentForTests } from '../closing/web-session-close-intent'
@@ -51,7 +52,7 @@ export function makeState(
     activeTabType: 'terminal',
     activeTabTypeByWorktree: {},
     activeWorktreeId: WT,
-    agentStatusByPaneKey: {},
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
     agentStatusEpoch: 0,
     browserCertificateFailuresByPageId: {},
     browserPagesByWorkspace: {},

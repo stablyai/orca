@@ -253,8 +253,8 @@ export class AcpAgentConnection extends AcpSessionRuntime {
   }
 
   /** Requires advertised session listing support. */
-  listSessions(cwd: string): Promise<unknown> {
-    return this.call('session/list', { cwd }, z.unknown())
+  listSessions(params: { cwd?: string; cursor?: string }): Promise<unknown> {
+    return this.call('session/list', params, z.unknown())
   }
 
   /** The stderr tail once an exited process's stderr ends, bounded for a descendant holding it. */

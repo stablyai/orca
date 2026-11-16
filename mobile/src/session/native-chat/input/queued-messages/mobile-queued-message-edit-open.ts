@@ -4,7 +4,7 @@ import {
   queuedEditKeptImages
 } from '../../../../../../src/shared/queued-message-edit'
 import { agentSessionSendBodyFingerprint } from '../../../../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
-import { createNonSecureContextUuid as createUuidV4 } from '../../../../../../src/shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createUuidV4 } from '../../../../../../src/shared/identifiers/non-secure-context-uuid'
 import { startMobileQueuedEditLease } from './mobile-queued-message-edit-lease'
 import { mobileQueuedEditValueKey } from './mobile-queued-message-edit-value'
 import {

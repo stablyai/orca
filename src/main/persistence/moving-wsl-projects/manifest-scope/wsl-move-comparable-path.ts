@@ -5,7 +5,7 @@
 import {
   foldWslUncPathCaseInsensitiveParts,
   toWindowsWslUncPath
-} from '../../../../shared/wsl-paths'
+} from '../../../../shared/file-access/wsl-paths'
 
 /** Null for a path that is not in a WSL distro (a Windows drive path, say). */
 export function comparableWslPath(path: string, distro: string): string | null {

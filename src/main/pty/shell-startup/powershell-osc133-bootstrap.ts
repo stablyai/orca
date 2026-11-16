@@ -1,6 +1,6 @@
 import { getPowerShellOmpShellWrapper } from './omp-shell-wrapper'
-import { MANAGED_DATA_ACCOUNT_POWERSHELL_RESTORE } from '../../../shared/managed-data-account-shell'
-import { getPowerShellAgentWrappers } from '../../../shared/powershell-agent-wrappers'
+import { MANAGED_DATA_ACCOUNT_POWERSHELL_RESTORE } from '../../../shared/shell/launch/agents/managed-data-account-shell'
+import { getPowerShellAgentWrappers } from '../../../shared/shell/launch/agents/powershell-agent-wrappers'
 
 // Inline scripts work under Restricted/AllSigned policies that block dot-sourced files.
 // EncodedCommand preserves quoting for appended cwd/startup commands; AMSI and script logging still decode it.

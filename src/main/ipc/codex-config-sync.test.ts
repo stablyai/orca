@@ -20,7 +20,7 @@ vi.mock('node:os', async (importOriginal) => {
 })
 
 import { registerCodexConfigSyncHandlers } from './codex-config-sync'
-import type { CodexConfigSyncStatus } from '../../shared/codex-config-sync-types'
+import type { CodexConfigSyncStatus } from '../../shared/agent-accounts/codex/codex-config-sync-types'
 import { getCodexSettingsBaselinePath } from '../codex/configuration/settings/config-settings-baseline'
 
 let root: string

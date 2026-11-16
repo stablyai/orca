@@ -41,6 +41,10 @@ vi.mock('../extensions/profile-sessions/browser-extension-session-loader', () =>
   attachBrowserExtensionsToProfileSession: () => {},
   detachBrowserExtensionsFromProfileSession: async () => {}
 }))
+vi.mock('../cookies/session-restore/browser-session-cookie-restore', () => ({
+  trackBrowserSessionCookies: () => {},
+  forgetBrowserSessionCookies: () => {}
+}))
 
 vi.mock('../identity/browser-process-user-agent', () => ({
   getBrowserProcessUserAgentIdentity: () => ({ mode: 'clean', userAgent: 'Mozilla/5.0 Test' })

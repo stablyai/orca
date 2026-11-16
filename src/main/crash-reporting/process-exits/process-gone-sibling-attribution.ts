@@ -1,7 +1,7 @@
 import type {
   CrashReportBreadcrumbData,
   CrashReportDetailValue
-} from '../../../shared/crash-reporting'
+} from '../../../shared/crash-reporting/crash-reporting'
 import {
   recordCoalescedDurableCrashBreadcrumb,
   recordDurableCrashBreadcrumb

@@ -13,7 +13,7 @@ import type {
   LinearProjectSummary
 } from '../../../shared/linear/project-types'
 import type { LinearWorkspaceError } from '../../../shared/linear/workspace-types'
-import { isIntegrationCredentialDecryptionError } from '../../../shared/integration-credential-errors'
+import { isIntegrationCredentialDecryptionError } from '../../../shared/secure-storage/integration-credential-errors'
 import {
   LinearCustomViewTableContent,
   type LinearCustomViewTableContentProps

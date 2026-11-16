@@ -4,11 +4,11 @@ const { resolveCliCommandMock } = vi.hoisted(() => ({
   resolveCliCommandMock: vi.fn((command: string) => command)
 }))
 
-vi.mock('../../shared/node-cli-command-resolution', () => ({
+vi.mock('../../shared/shell/command-resolution/node-cli-command-resolution', () => ({
   resolveCliCommand: resolveCliCommandMock
 }))
 
-import type { SshTarget } from '../../shared/ssh-types'
+import type { SshTarget } from '../../shared/remote-runtime/ssh/ssh-types'
 import { resolveExternalEditorLaunchSpec } from './external-editor-launch'
 import { resolveRemoteSshEditorLaunchSpec } from './remote-ssh-editor-launch'
 

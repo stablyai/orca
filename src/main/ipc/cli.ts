@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
-import type { CliInstallStatus } from '../../shared/cli-install-types'
-import { resolveAppImageCacheKey } from '../../shared/appimage-cache-identity'
+import type { CliInstallStatus } from '../../shared/cli/cli-install-types'
+import { resolveAppImageCacheKey } from '../../shared/desktop-distribution/appimage/appimage-cache-identity'
 import { CliInstaller } from '../cli/cli-installer'
 import { runKeyedSerializedOperation } from '../../shared/concurrency/keyed-serialized-operations'
 import {

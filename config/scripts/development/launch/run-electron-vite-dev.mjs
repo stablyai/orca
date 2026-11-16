@@ -38,11 +38,7 @@ import {
   profileHasState,
   seedDevProfile
 } from '../profile-seeding/dev-profile-seed.mjs'
-import {
-  captureDevWebClientInputs,
-  isDevWebClientFresh,
-  recordDevWebClientInputs
-} from '../web-client/dev-web-client-freshness.mjs'
+import * as devWebClient from '../web-client/dev-web-client-freshness.mjs'
 import { withRolldownThreadLimit } from '../../tool-invocation/rolldown-thread-limit.mjs'
 import { withDevRolldownRuntimeEnv } from './dev-rolldown-runtime-env.mjs'
 import { copyPrivateTree } from '../../artifact-storage/reflink-copy/space-sharing-copy.mjs'
@@ -515,10 +511,10 @@ function prepareDevWebClient() {
     )
     return
   }
-  if (isDevWebClientFresh(repoRoot)) {
+  if (devWebClient.isDevWebClientFresh(repoRoot)) {
     return
   }
-  const inputs = captureDevWebClientInputs(repoRoot)
+  const inputs = devWebClient.captureDevWebClientInputs(repoRoot)
   console.error('[orca-dev] Building web client for pairing in the background...')
   // Pairing reads out/web per request, so a stale bundle must not delay Electron startup.
   // Stage then swap, so an interrupted build never leaves out/web empty.
@@ -535,7 +531,11 @@ function prepareDevWebClient() {
       '--logLevel',
       'warn'
     ],
-    { cwd: repoRoot, stdio: 'inherit', env: withRolldownThreadLimit(process.env) }
+    {
+      cwd: repoRoot,
+      stdio: 'inherit',
+      env: { ...withRolldownThreadLimit(process.env), VITE_CONFIG_NATIVE_IGNORE_WARNING: 'true' }
+    }
   )
   webClientBuild = build
   try {
@@ -560,7 +560,7 @@ function prepareDevWebClient() {
       const outDir = path.dirname(getDevWebClientIndexPath())
       rmSync(outDir, { recursive: true, force: true })
       renameSync(stagingDir, outDir)
-      recordDevWebClientInputs(repoRoot, inputs)
+      devWebClient.recordDevWebClientInputs(repoRoot, inputs)
       console.error('[orca-dev] Web client for pairing is ready')
     } catch (error) {
       console.error(`[orca-dev] Could not install the web client build: ${error.message}`)

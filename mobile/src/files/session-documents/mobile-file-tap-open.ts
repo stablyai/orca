@@ -6,7 +6,7 @@ import { createMobileFilePreviewHref } from '../preview/mobile-file-preview-rout
 import { classifyMobileArtifact } from '../preview/mobile-artifact-kind'
 import { fileTapOpenRun } from './mobile-file-tap-operations'
 import { terminalArtifactPathResolve as fileTapPathResolve } from '../preview/mobile-file-preview-operations'
-import { mapWithConcurrency } from '../../../../src/shared/map-with-concurrency'
+import { mapWithConcurrency } from '../../../../src/shared/concurrency/map-with-concurrency'
 import {
   shouldActivateOpenedMobileSessionTab,
   type OpenedMobileSessionTabActivationState

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
-import type { StructuredSessionBackgroundTasksView } from '../../../../../../shared/structured-session-background-tasks-view'
+import type { StructuredSessionBackgroundTasksView } from '../../../../../../shared/agent-session/view/structured-session-background-tasks-view'
 import { useStructuredSessionChildRowContext } from './use-structured-session-child-row-context'
 import type { StructuredSessionTaskStop } from './use-structured-session-task-stop'
 import { openNativeChatSubagent } from '../../subagents/native-chat-open-subagent'
@@ -17,7 +17,10 @@ export function NativeChatStructuredSessionStatus(props: {
   currentAgentId?: string | null
 }): React.JSX.Element {
   const [expanded, setExpanded] = useState<{ sessionId: string; expanded: boolean } | null>(null)
-  const childRowContext = useStructuredSessionChildRowContext(props.paneKey)
+  const childRowContext = useStructuredSessionChildRowContext(
+    props.paneKey,
+    props.isVisible && props.backgroundTasks.show && Boolean(props.backgroundTasks.children?.length)
+  )
   const { backgroundTasks, stop } = props
 
   return (

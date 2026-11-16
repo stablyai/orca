@@ -1,7 +1,7 @@
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import type { ProjectGroup } from '../../../../../../shared/project-group-types'
+import type { ProjectGroup } from '../../../../../../shared/project/groups/project-group-types'
 import WorktreeContextMenu from './WorktreeContextMenu'
 
 const repo: Repo = {
