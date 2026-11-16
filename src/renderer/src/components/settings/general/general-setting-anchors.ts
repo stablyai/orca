@@ -20,6 +20,7 @@ export const GENERAL_SETTING_ANCHORS = {
   fontSmoothing: 'general-editor-font-smoothing',
   editorWrap: 'general-editor-word-wrap',
   minimap: 'general-editor-minimap',
+  inlineBlame: 'general-editor-inline-blame',
   diffView: 'general-editor-diff-view',
   diffWhitespace: 'general-editor-diff-whitespace',
   collapseUnchanged: 'general-editor-collapse-unchanged',

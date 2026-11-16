@@ -189,6 +189,7 @@ export const UI_STATE_GLOBAL_FIELDS = [
   '_cursorStatusBarDefaultAdded',
   '_expandedWorktreeCardPropertiesDefaulted',
   '_explorerDisplayRootMigrated',
+  '_gitBlameStatusBarDefaultAdded',
   '_grokStatusBarDefaultAdded',
   '_hostWorktreeCardPropertyDefaulted',
   '_inlineAgentsDefaultedForAllUsers',

@@ -603,6 +603,13 @@
         "noContent": "No content to export",
         "timedOut": "Export timed out"
       }
+    },
+    "gitBlame": {
+      "uncommitted": "Uncommitted changes",
+      "openCommitFailed": "Failed to load commit diff",
+      "statusAriaLabel": "Git blame: {{summary}}",
+      "openCommitHint": "Click to open the commit",
+      "statusBarItem": "Git Blame"
     }
   },
   "githubChecks": {
@@ -756,7 +763,13 @@
         "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI.",
         "cursorToggleDescription": "Show Cursor plan usage when signed in through cursor-agent or Cursor IDE.",
         "zcodeToggleDescription": "Show ZCode Coding Plan quota usage.",
-        "museToggleDescription": "Show Muse subscription quota from the Muse CLI."
+        "museToggleDescription": "Show Muse subscription quota from the Muse CLI.",
+        "gitBlameTitle": "Git blame",
+        "gitBlameDescription": "Show who last changed the cursor line in the status bar.",
+        "gitBlameKeywordBlame": "blame",
+        "gitBlameKeywordAuthor": "author",
+        "gitBlameKeywordCommit": "commit",
+        "gitBlameToggleDescription": "Show the author and age of the cursor line. Click it to open the commit."
       },
       "menuBarIcon": {
         "description": "Keep an Orca shortcut and activity indicator in the macOS menu bar.",
@@ -1374,7 +1387,13 @@
       "about": {
         "title": "About",
         "version": "Orca {{version}}"
-      }
+      },
+      "inlineBlameTitle": "Inline git blame",
+      "inlineBlameDescription": "Show who last changed the cursor line, and when, at the end of the line.",
+      "inlineBlameKeywordBlame": "blame",
+      "inlineBlameKeywordGit": "git",
+      "inlineBlameKeywordAuthor": "author",
+      "inlineBlameKeywordAnnotation": "annotation"
     },
     "openInApp": {
       "preset": {
