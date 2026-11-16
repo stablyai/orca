@@ -136,6 +136,7 @@ export abstract class RateLimitServiceState {
   protected antigravityAccounts: AntigravityAccountUsage[] = []
   protected museUsageEnabledResolver: MuseUsageEnabledResolver | null = null
   protected inactiveClaudeAccountsResolver: (() => InactiveClaudeAccount[]) | null = null
+  protected codexWorkspaceAccountsResolver: (() => Record<string, string>) | null = null
   protected inactiveCodexAccountsResolver: (() => InactiveCodexAccountInfo[]) | null = null
   protected networkProxySettingsResolver: (() => NetworkProxySettings) | null = null
   protected inactiveClaudeCache = new Map<string, ProviderRateLimits>()

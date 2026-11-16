@@ -201,6 +201,19 @@ describe('migrateWorktreeIdentity worktree-reference coverage', () => {
     expect(session.clientHostedBrowserPagesByWorktree?.[NEW]?.[0]?.workspaceId).toBe(NEW)
   })
 
+  it('keeps the assigned Codex account when a worktree path changes', () => {
+    const state = persistedState(getDefaultWorkspaceSession())
+    state.settings.codexWorkspaceAccounts = {
+      'repo::/old/path': 'work',
+      'folder:client': 'personal'
+    }
+    migrateWorktreeIdentity(state, OLD, NEW)
+    expect(state.settings.codexWorkspaceAccounts).toEqual({
+      'repo::/new/path': 'work',
+      'folder:client': 'personal'
+    })
+  })
+
   it('migrates host partitions, not just the local blob', () => {
     const hostSession: WorkspaceSessionState = {
       ...getDefaultWorkspaceSession(),

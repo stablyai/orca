@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import { AddCodexFromHomeParams } from '../../shared/rpc-contract/accounts/accounts-params'
 import type { CodexAccountService } from '../codex-accounts/service'
 import type { CodexAccountAddTarget } from '../codex-accounts/account-management/codex-account-service-types'
 import type { CodexAccountSelectionTarget } from '../../shared/agent-accounts/codex/codex-selection-lane'
@@ -38,6 +39,10 @@ export function registerCodexAccountHandlers(
       return
     }
     forgetStaleCodexPanes(args.ptyIds.filter((ptyId): ptyId is string => typeof ptyId === 'string'))
+  })
+  ipcMain.handle('codexAccounts:importHome', (_event, input: unknown) => {
+    const { sourceHome, ...target } = AddCodexFromHomeParams.parse(input)
+    return codexAccounts.addAccountFromHome(sourceHome, target)
   })
   ipcMain.handle('codexAccounts:list', () => codexAccounts.listAccounts())
   ipcMain.handle('codexAccounts:add', (_event, args?: CodexAccountAddTarget) =>

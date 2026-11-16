@@ -1,3 +1,4 @@
+import { workspaceCodexUsage } from '../usage/workspace-codex-usage'
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
 import type { CodexManagedAccount } from '../../../../../shared/agent-accounts/managed-account-types'
@@ -134,7 +135,8 @@ function switcherFixture(
   accounts: SampleAccount[],
   asSubmenu = false,
   staleRestart = false,
-  systemDefaultOnly = false
+  systemDefaultOnly = false,
+  workspaceAccountId?: string
 ) {
   const [active, ...inactive] = accounts
   const codex: ProviderRateLimits = {
@@ -147,6 +149,11 @@ function switcherFixture(
     updatedAt: NOW - 60_000,
     isFetching: false
   }))
+  const shownCodex =
+    workspaceCodexUsage(
+      createEmptyRateLimitState({ codex, inactiveCodexAccounts }),
+      workspaceAccountId
+    ) ?? codex
   return defineFixture({
     width: 520,
     store: {
@@ -186,7 +193,7 @@ function switcherFixture(
             <DropdownMenuTrigger>Usage</DropdownMenuTrigger>
             <DropdownMenuContent>
               <CodexSwitcherMenu
-                codex={codex}
+                codex={shownCodex}
                 compact={false}
                 iconOnly={false}
                 asSubmenu
@@ -195,7 +202,7 @@ function switcherFixture(
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (
-          <CodexSwitcherMenu codex={codex} compact={false} iconOnly={false} />
+          <CodexSwitcherMenu codex={shownCodex} compact={false} iconOnly={false} />
         )}
       </div>
     ),
@@ -230,3 +237,5 @@ export const transientUsageFailures = switcherFixture([
   { ...BASE_ACCOUNTS[2], weekly: null, error: 'Sign-in probe timed out' },
   { ...BASE_ACCOUNTS[3], weekly: null, error: 'Session index rebuilding' }
 ])
+
+export const workspaceAccount = switcherFixture(BASE_ACCOUNTS, false, false, false, '9a41e0d3')

@@ -1,3 +1,4 @@
+import { WorkspaceCodexAccountSubMenu } from './WorkspaceCodexAccountSubMenu'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -206,6 +207,9 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
                 connectionId={repo?.connectionId ?? null}
                 disabled={isDeleting}
               />
+              {menuOpen && (
+                <WorkspaceCodexAccountSubMenu worktree={worktree} disabled={isDeleting} />
+              )}
               <WorktreeCopySubMenu model={model} />
               <WorktreeLineageSubMenu model={model} />
               <WorktreeProjectGroupSubMenu model={model} />

@@ -150,6 +150,7 @@ export async function prepareRuntimePtySpawn(
     resumeProviderSession: args.resumeProviderSession,
     env: ctx.env,
     cwd: ctx.cwd,
+    worktreeId: args.worktreeId,
     shellOverride: ctx.daemonShellOverride,
     expectedWslDistro: ctx.expectedWslDistro,
     codexSelectionTarget: ctx.codexSelectionTarget,

@@ -1,3 +1,4 @@
+import { assignCodexWorkspaceAccount } from '../../../../shared/agent-accounts/codex/codex-workspace-account'
 import { publishedLegacyChatPermissionMode } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { getClaudeAgentViewService } from '../../../claude/agent-view/agent-view-service'
 import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
@@ -80,6 +81,7 @@ export class RuntimeClientSettingsController {
       agentStatusHooksEnabled: settings.agentStatusHooksEnabled !== false,
       // Always present, so a client can tell this host accepts the setting (older hosts omit it).
       codexShareHistoryAcrossAccounts: settings.codexShareHistoryAcrossAccounts !== false,
+      codexWorkspaceAccounts: settings.codexWorkspaceAccounts ?? {},
       claudeSubagentNavigationEnabled: settings.claudeSubagentNavigationEnabled !== false,
       // Mobile honors this Copy option; absence from older hosts means on (#19770).
       terminalCopyTrimsGutter: settings.terminalCopyTrimsGutter !== false,
@@ -149,11 +151,19 @@ export class RuntimeClientSettingsController {
     }
     const beforeSettings = this.store.getSettings()
     const before = beforeSettings.agentStatusHooksEnabled !== false
-    const { agentDefaultArgs, agentDefaultEnv, ...otherUpdates } = updates
+    const { agentDefaultArgs, agentDefaultEnv, codexWorkspaceAccount, ...otherUpdates } = updates
     // Legacy clients can select an agent or a shell, but cannot select None.
     this.store.updateSettings(
       {
         ...otherUpdates,
+        ...(codexWorkspaceAccount
+          ? {
+              codexWorkspaceAccounts: assignCodexWorkspaceAccount(
+                beforeSettings,
+                codexWorkspaceAccount
+              )
+            }
+          : {}),
         // An older client writes Arguments as it reads them, flag included.
         ...(agentDefaultArgs !== undefined || agentDefaultEnv !== undefined
           ? legacyLaunchTextUpdates(

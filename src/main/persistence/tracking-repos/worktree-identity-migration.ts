@@ -231,6 +231,9 @@ export function migrateWorktreeIdentity(
   }
 
   let changed = moveKey(state.worktreeMeta)
+  if (state.settings.codexWorkspaceAccounts) {
+    changed = moveKey(state.settings.codexWorkspaceAccounts) || changed
+  }
   // Retain the prior ID so existing terminal sessions do not become orphans.
   const newMeta = state.worktreeMeta[newWorktreeId]
   if (newMeta) {

@@ -2,6 +2,7 @@ import React from 'react'
 import { CodexResetCredits, CodexResetConfirmation } from './CodexResetCredits'
 import { DropdownMenuItem, DropdownMenuLabel } from '@/components/ui/dropdown-menu'
 import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { useAppStore } from '@/store/index'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   AccountRuntimeToggle,
@@ -33,7 +34,6 @@ export function CodexSwitcherMenu({
 }): React.JSX.Element {
   const t = useTranslate()
   const {
-    activeTarget,
     canRedeemReset,
     handleConfirmReset,
     handleOpenChange,
@@ -57,9 +57,12 @@ export function CodexSwitcherMenu({
     setResetConfirmOpen,
     setSkipFutureResetConfirm,
     skipFutureResetConfirm,
-    switchGroups
+    switchGroups,
+    usageAccountLabel,
+    displaysDefaultAccount
   } = useCodexSwitcherController(codex)
 
+  const defaultCodex = useAppStore((s) => s.rateLimits.codex)
   const isBusy = isSwitching || reauthenticatingAccountId !== null
   const rows = (selectedGroup?.targets ?? []).map((target) => {
     const inactiveUsage = target.id
@@ -116,7 +119,9 @@ export function CodexSwitcherMenu({
   ): React.ReactNode {
     // Why: rows follow this desktop's codexTarget, so a remote owner's usage could land on the wrong row.
     if (active && !hasActiveRuntimeEnvironment) {
-      return <AccountUsageGauge limits={codex} isFetching={codex.status === 'fetching'} />
+      return defaultCodex ? (
+        <AccountUsageGauge limits={defaultCodex} isFetching={defaultCodex.status === 'fetching'} />
+      ) : null
     }
     if (inactiveUsage?.isFetching && !inactiveUsage.rateLimits) {
       return <InlineUsageSkeleton />
@@ -139,10 +144,10 @@ export function CodexSwitcherMenu({
       )}
       variant="account"
       accountLabel={
-        !hasActiveRuntimeEnvironment
-          ? (activeTarget?.label ??
-            t('auto.components.status.bar.StatusBar.c676918adc', 'System default'))
-          : undefined
+        usageAccountLabel ??
+        (!hasActiveRuntimeEnvironment
+          ? t('auto.components.status.bar.StatusBar.c676918adc', 'System default')
+          : undefined)
       }
       panelFooter={
         resetCreditCount !== null ? (
@@ -187,9 +192,13 @@ export function CodexSwitcherMenu({
       />
       {open ? <CodexRestartStatusPrompt /> : null}
       <AccountSwitchSection
-        heading={t('auto.components.status.bar.AccountSwitchList.accounts', 'Accounts')}
+        heading={
+          codex.usageMetadata?.contextAccountId
+            ? t('usage.codex.hostDefaultAccount', 'Host default account')
+            : t('auto.components.status.bar.AccountSwitchList.accounts', 'Accounts')
+        }
         targets={selectedGroup?.targets ?? []}
-        panelShowsActiveAccount={!hasActiveRuntimeEnvironment}
+        panelShowsActiveAccount={!hasActiveRuntimeEnvironment && displaysDefaultAccount}
         onOpenSettings={() => {
           openSettingsTarget({
             pane: 'accounts',

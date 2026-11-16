@@ -1,3 +1,4 @@
+import { useWorkspaceCodexUsage } from './use-workspace-codex-usage'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
@@ -48,7 +49,7 @@ export type OwnerUsageRateLimits = {
   rateLimits: RateLimitState
   /** Null when this device owns the shown usage. */
   remoteOwner: RemoteUsageOwner | null
-  /** Forces the owning host to re-read usage; null when this device owns it. */
+  /** Refreshes the displayed account on its owner; null uses the normal local refresh. */
   refreshRemote: (() => Promise<void>) | null
 }
 
@@ -193,13 +194,18 @@ export function useOwnerUsageRateLimits(local: RateLimitState): OwnerUsageRateLi
       : { kind: 'remote-pending' }
   }, [remoteOwner, owned])
 
-  const rateLimits = useMemo(
+  const ownerRateLimits = useMemo(
     () => resolveOwnerUsageRateLimits(local, ownerState, t),
     [local, ownerState, t]
   )
+  const contextual = useWorkspaceCodexUsage(
+    ownerRateLimits,
+    ownerId !== null,
+    ownerId ? refreshRemote : null
+  )
   return {
-    rateLimits,
+    rateLimits: contextual.rateLimits,
     remoteOwner,
-    refreshRemote: ownerId ? refreshRemote : null
+    refreshRemote: contextual.refresh
   }
 }

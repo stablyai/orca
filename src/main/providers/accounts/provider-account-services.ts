@@ -43,6 +43,9 @@ export function createProviderAccountServices(
   const agentView = getClaudeAgentViewService()
   void agentView.reconcile(store.getSettings())
   const rateLimits = new RateLimitService()
+  rateLimits.setCodexWorkspaceAccountsResolver(
+    () => store.getSettings().codexWorkspaceAccounts ?? {}
+  )
   const codexRuntimeHome = new CodexRuntimeHomeService(store)
   const codexAccounts = new CodexAccountService(
     store,
@@ -191,8 +194,9 @@ export function createProviderAccountServices(
         ...Object.values(normalizeCodexRuntimeSelection(settings).wsl)
       ].filter(Boolean)
     )
+    const workspaceIds = new Set(Object.values(settings.codexWorkspaceAccounts ?? {}))
     return settings.codexManagedAccounts
-      .filter((account) => !activeIds.has(account.id))
+      .filter((account) => !activeIds.has(account.id) || workspaceIds.has(account.id))
       .map((account) => ({
         id: account.id,
         ...(account.managedHomeRuntime === 'wsl'

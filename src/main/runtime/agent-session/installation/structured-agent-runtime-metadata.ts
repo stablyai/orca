@@ -123,6 +123,7 @@ async function resolveCodexAccountHomePath(
   const { launchEnv, purpose, workspacePath, location } = request
   const codexHome = await resolveStructuredCodexAccountHomePath({
     launchEnv,
+    workspaceId: location?.workspaceId,
     resolveLaunchHome:
       purpose === 'launch' ? services.prepareCodexLaunchHome : services.readCodexLaunchHome
   })

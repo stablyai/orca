@@ -108,6 +108,9 @@ function parseRegistry(parsed: unknown): CodexPaneAccountRegistryFile {
       empty.panes[ptyId] = {
         selectionKey: record.selectionKey,
         accountId: record.accountId,
+        ...(typeof record.workspaceId === 'string' && record.workspaceId.length > 0
+          ? { workspaceId: record.workspaceId }
+          : {}),
         ...(homeRoute ? { homeRoute } : {})
       }
     }

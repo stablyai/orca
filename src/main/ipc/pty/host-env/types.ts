@@ -37,6 +37,7 @@ export type BuildPtyHostEnvOptions = {
 }
 
 export type CodexHomeLaunchContext = {
+  workspaceId?: string
   unavailableManagedHomePath?: string
   launchesCodex?: boolean
 }

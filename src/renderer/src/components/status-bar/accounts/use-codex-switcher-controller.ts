@@ -35,6 +35,7 @@ import {
   normalizeCodexStatusRuntimeTarget,
   resolveCodexStatusAccountState
 } from './status-bar-codex-accounts'
+import { getCodexAccountDisplayLabel } from '@/lib/provider-accounts/codex-account-display-label'
 import { signInCodexAccount } from './codex-sign-in-action'
 
 const EMPTY_CODEX_ACCOUNTS: CodexRateLimitAccountsState = emptyCodexAccountsState()
@@ -87,6 +88,13 @@ export function useCodexSwitcherController(codex: ProviderRateLimits) {
     accounts,
     activeRuntimeEnvironmentId
   )
+
+  const displayedAccountId =
+    codex.usageMetadata?.contextAccountId ?? codex.usageMetadata?.readingAccount?.accountId
+  const displaysDefaultAccount =
+    !displayedAccountId ||
+    getCodexStatusActiveId(accountState, toCodexStatusRuntimeTarget(codexTarget)) ===
+      displayedAccountId
 
   useEffect(() => {
     mountedRef.current = true
@@ -183,7 +191,7 @@ export function useCodexSwitcherController(codex: ProviderRateLimits) {
   }
 
   const handleRedeemReset = async (): Promise<void> => {
-    if (isRedeemingReset) {
+    if (isRedeemingReset || !displaysDefaultAccount) {
       return
     }
     setIsRedeemingReset(true)
@@ -263,6 +271,14 @@ export function useCodexSwitcherController(codex: ProviderRateLimits) {
     switchGroups.find((group) => group.key === selectedRuntimeKey) ?? switchGroups[0]
   const activeTarget = selectedGroup?.targets.find((target) => target.active)
   const resetProjection = getCodexResetProjection(codex, hasActiveRuntimeEnvironment, t)
+  const displayedAccount = accountState.accounts.find(
+    (account) => account.id === displayedAccountId
+  )
+  const usageAccountLabel = displayedAccount
+    ? getCodexAccountDisplayLabel(displayedAccount, accountState.accounts)
+    : displayedAccountId
+      ? t('usage.codex.workspaceAccount', 'Workspace account')
+      : activeTarget?.label
 
   return {
     activeTarget,
@@ -282,6 +298,9 @@ export function useCodexSwitcherController(codex: ProviderRateLimits) {
     reauthenticatingAccountId,
     resetConfirmOpen,
     ...resetProjection,
+    canRedeemReset: resetProjection.canRedeemReset && displaysDefaultAccount,
+    usageAccountLabel,
+    displaysDefaultAccount,
     selectedGroup,
     selectedRuntimeKey,
     setResetConfirmOpen,
