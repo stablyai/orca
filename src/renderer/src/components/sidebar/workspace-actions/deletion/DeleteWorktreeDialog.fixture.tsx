@@ -47,15 +47,36 @@ const cleanLocalFiles: WorktreeAtRiskLocalFiles = {
 }
 
 const atRiskLocalFiles: WorktreeAtRiskLocalFiles = {
-  count: 6,
+  count: 5,
   samplePaths: ['.anti-slop-plugin/', '.tmp/', 'tests/e2e/.cross-version-checkouts/'],
   paths: [
     '.anti-slop-plugin/',
     '.tmp/',
     'tests/e2e/.cross-version-checkouts/',
     '.env.local',
+    'scratch/migration-dump.sql'
+  ],
+  complete: true
+}
+
+const manyAtRiskLocalFiles: WorktreeAtRiskLocalFiles = {
+  count: 14,
+  samplePaths: ['.env.local', '.anti-slop-plugin/', '.tmp/'],
+  paths: [
+    '.env.local',
+    '.env.development.local',
+    '.anti-slop-plugin/',
+    '.tmp/',
+    'local/',
     'scratch/migration-dump.sql',
-    'packages/desktop/.orca-local/session-override.json'
+    'scratch/perf-trace.json',
+    'tests/e2e/.cross-version-checkouts/',
+    'tests/fixtures/.local-snapshots/',
+    'packages/desktop/.orca-local/session-override.json',
+    'packages/cli/.local-config.yaml',
+    'scripts/private/bench-results.csv',
+    'docs/drafts/notes.md',
+    'tools/sandbox/state.db'
   ],
   complete: true
 }
@@ -99,7 +120,16 @@ export const ignoredFiles = dialogFixture({ entries: [], localFiles: atRiskLocal
 export const ignoredFilesOpen = dialogFixture({
   entries: [],
   localFiles: atRiskLocalFiles,
-  heightClassName: 'h-[560px]',
+  heightClassName: 'h-[540px]',
+  interact: () => {
+    document.querySelector<HTMLButtonElement>('[aria-label*="Show ignored paths"]')?.click()
+  }
+})
+
+export const ignoredFilesScrolling = dialogFixture({
+  entries: [],
+  localFiles: manyAtRiskLocalFiles,
+  heightClassName: 'h-[580px]',
   interact: () => {
     document.querySelector<HTMLButtonElement>('[aria-label*="Show ignored paths"]')?.click()
   }

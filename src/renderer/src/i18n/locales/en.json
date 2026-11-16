@@ -22021,12 +22021,11 @@
           "lost_one": "{{count}} ignored file will be lost",
           "lost_other": "{{count}} ignored files will be lost",
           "lostIncomplete": "{{count}}+ ignored files will be lost",
-          "popoverTitle": "Ignored local files",
           "showPaths": "Show ignored paths",
-          "popoverDescription": "Only in this worktree — not in the main checkout.",
-          "popoverIncompleteNotice": "Check stopped early; more ignored files in this worktree may also be deleted.",
           "morePaths_one": "and {{count}} more ignored path",
-          "morePaths_other": "and {{count}} more ignored paths"
+          "morePaths_other": "and {{count}} more ignored paths",
+          "listLabel": "Ignored local files that will be lost",
+          "incompleteNotice": "Check stopped early; more ignored files in this worktree may also be deleted."
         }
       },
       "atRiskLocalFiles": {

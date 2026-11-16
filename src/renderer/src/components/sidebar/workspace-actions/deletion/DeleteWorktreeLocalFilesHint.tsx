@@ -1,7 +1,7 @@
 // @protected-copy
 import type { JSX } from 'react'
 import { AlertTriangle, ChevronRight, File, Folder } from 'lucide-react'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { useTranslate } from '@/i18n/use-translate'
 import { hasWorktreeAtRiskLocalFiles } from '../../../../../../shared/worktree/removal/at-risk-local-files'
 import { DeleteWorktreeRelativePath, isDirectoryDisplayPath } from './delete-worktree-relative-path'
@@ -59,84 +59,60 @@ export function DeleteWorktreeLocalFilesHint({
       )
   const inlinePreview = files.samplePaths.join(', ')
   const remainingPathCount = Math.max(0, files.count - listedPaths.length)
-  const popoverTitle = t(
-    'components.workspace.delete.ignoredFiles.popoverTitle',
-    'Ignored local files'
+  const listLabel = t(
+    'components.workspace.delete.ignoredFiles.listLabel',
+    'Ignored local files that will be lost'
   )
 
   return (
-    <div className="mt-0.5 flex h-4 min-w-0 items-center">
-      <Popover>
-        <PopoverTrigger asChild>
-          <button
-            type="button"
-            aria-label={`${countLabel}: ${t('components.workspace.delete.ignoredFiles.showPaths', 'Show ignored paths')}`}
-            className="group flex h-4 w-fit max-w-full cursor-pointer items-center gap-1.5 rounded-sm text-left text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-          >
-            <AlertTriangle className="size-3 shrink-0" />
-            <span className="min-w-0 truncate font-medium group-hover:underline">{countLabel}</span>
-            {inlinePreview ? (
-              <span className="flex min-w-0 shrink-[9999] items-center gap-1 text-muted-foreground">
-                <span aria-hidden="true" className="shrink-0">
-                  ·
-                </span>
-                <span className="min-w-0 truncate font-mono text-2xs">{inlinePreview}</span>
-              </span>
-            ) : null}
-            <ChevronRight className="size-3 shrink-0 transition-transform duration-150 group-data-[state=open]:rotate-90 motion-reduce:transition-none" />
-          </button>
-        </PopoverTrigger>
-        <PopoverContent
-          align="start"
-          side="bottom"
-          aria-label={popoverTitle}
-          className="w-96 max-w-[calc(100vw-2rem)]"
-          wheelScroll
+    <Collapsible className="mt-0.5 min-w-0">
+      <CollapsibleTrigger asChild>
+        <button
+          type="button"
+          aria-label={`${countLabel}: ${t('components.workspace.delete.ignoredFiles.showPaths', 'Show ignored paths')}`}
+          className="group flex h-4 w-full min-w-0 cursor-pointer items-center gap-1.5 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
         >
-          <div className="flex max-h-[var(--radix-popover-content-available-height)] flex-col text-xs">
-            <div className="border-b border-border/60 px-3 py-2">
-              <div className="flex items-baseline justify-between gap-2">
-                <p className="font-medium text-foreground">{popoverTitle}</p>
-                <span className="shrink-0 font-mono text-2xs tabular-nums text-muted-foreground">
-                  {files.complete ? files.count : `${files.count}+`}
-                </span>
-              </div>
-              <p className="mt-0.5 text-muted-foreground">
-                {files.complete
-                  ? t(
-                      'components.workspace.delete.ignoredFiles.popoverDescription',
-                      'Only in this worktree — not in the main checkout.'
-                    )
-                  : t(
-                      'components.workspace.delete.ignoredFiles.popoverIncompleteNotice',
-                      'Check stopped early; more ignored files in this worktree may also be deleted.'
-                    )}
-              </p>
-            </div>
-            <div
-              role="region"
-              aria-label={popoverTitle}
-              className="scrollbar-sleek max-h-56 min-w-0 overflow-y-auto px-3 py-2"
-            >
-              <ul className="min-w-0 space-y-1 font-mono">
-                {listedPaths.map((relativePath) => {
-                  const EntryIcon = isDirectoryDisplayPath(relativePath) ? Folder : File
-                  return (
-                    <li key={relativePath} className="flex min-w-0 items-start gap-2">
-                      <EntryIcon
-                        aria-hidden="true"
-                        className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
-                      />
-                      <span className="min-w-0 flex-1 wrap-anywhere text-foreground">
-                        <DeleteWorktreeRelativePath path={relativePath} />
-                      </span>
-                    </li>
-                  )
-                })}
-              </ul>
-            </div>
+          <AlertTriangle className="size-3 shrink-0 text-destructive" />
+          <span className="min-w-0 truncate font-medium text-destructive group-hover:underline">
+            {countLabel}
+          </span>
+          {inlinePreview ? (
+            <span className="flex min-w-0 shrink-[9999] items-center gap-1 text-muted-foreground group-data-[state=open]:hidden">
+              <span aria-hidden="true" className="shrink-0">
+                ·
+              </span>
+              <span className="min-w-0 truncate font-mono text-2xs">{inlinePreview}</span>
+            </span>
+          ) : null}
+          <ChevronRight className="ml-auto size-3.5 shrink-0 text-muted-foreground transition-all duration-150 group-hover:text-foreground group-data-[state=open]:rotate-90 motion-reduce:transition-none" />
+        </button>
+      </CollapsibleTrigger>
+      <CollapsibleContent animation="height">
+        <div className="pt-1.5">
+          <div
+            role="region"
+            aria-label={listLabel}
+            tabIndex={0}
+            className="scrollbar-sleek max-h-40 min-w-0 overflow-y-auto rounded-sm border border-border/60 bg-background/60 px-2.5 py-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+          >
+            <ul className="min-w-0 space-y-1 font-mono text-xs">
+              {listedPaths.map((relativePath) => {
+                const EntryIcon = isDirectoryDisplayPath(relativePath) ? Folder : File
+                return (
+                  <li key={relativePath} className="flex min-w-0 items-start gap-2">
+                    <EntryIcon
+                      aria-hidden="true"
+                      className="mt-0.5 size-3.5 shrink-0 text-muted-foreground"
+                    />
+                    <span className="min-w-0 flex-1 wrap-anywhere text-foreground">
+                      <DeleteWorktreeRelativePath path={relativePath} />
+                    </span>
+                  </li>
+                )
+              })}
+            </ul>
             {remainingPathCount > 0 ? (
-              <p className="border-t border-border/60 px-3 py-1.5 text-muted-foreground">
+              <p className="mt-1.5 border-t border-border/50 pt-1 text-2xs text-muted-foreground">
                 {t(
                   'components.workspace.delete.ignoredFiles.morePaths',
                   'and {{count}} more ignored paths',
@@ -147,9 +123,17 @@ export function DeleteWorktreeLocalFilesHint({
                 )}
               </p>
             ) : null}
+            {!files.complete ? (
+              <p className="mt-1.5 border-t border-border/50 pt-1 text-2xs text-muted-foreground">
+                {t(
+                  'components.workspace.delete.ignoredFiles.incompleteNotice',
+                  'Check stopped early; more ignored files in this worktree may also be deleted.'
+                )}
+              </p>
+            ) : null}
           </div>
-        </PopoverContent>
-      </Popover>
-    </div>
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
   )
 }

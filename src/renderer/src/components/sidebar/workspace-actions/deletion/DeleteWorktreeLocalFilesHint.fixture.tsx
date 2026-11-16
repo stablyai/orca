@@ -58,12 +58,8 @@ export const atRisk = defineFixture({
 })
 
 export const atRiskWithPathsOpen = defineFixture({
-  width: 420,
-  render: () => (
-    <div className="h-[260px]">
-      <DeleteWorktreeLocalFilesHint state={{ status: 'complete', files: atRiskFiles }} />
-    </div>
-  ),
+  width: ROW_WIDTH,
+  render: () => <DeleteWorktreeLocalFilesHint state={{ status: 'complete', files: atRiskFiles }} />,
   interact: (frame) => {
     frame.querySelector('button')?.click()
   }
