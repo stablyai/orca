@@ -9,6 +9,7 @@ import {
 } from 'react'
 
 import {
+  recordLazyChunkBreadcrumb,
   requestLazyChunkRecoveryReload,
   type LazyChunkRecoveryReloadOutcome
 } from './lazy-chunk-recovery-reload'
@@ -110,16 +111,11 @@ function recordReloadBreadcrumb(
   message: string,
   outcome?: string
 ): void {
-  // Inline best-effort breadcrumbs to keep low-level recovery free of renderer/webview imports for SSR and unit tests.
-  try {
-    const api = (window as Window & { api?: Window['api'] }).api
-    api?.crashReports.recordBreadcrumb({
-      name,
-      data: { reloadKey, message, ...(outcome === undefined ? {} : { outcome }) }
-    })
-  } catch {
-    // Crash evidence is best-effort and must never mask the original failure.
-  }
+  recordLazyChunkBreadcrumb(name, {
+    reloadKey,
+    message,
+    ...(outcome === undefined ? {} : { outcome })
+  })
 }
 
 const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
@@ -199,7 +195,10 @@ export async function loadLazyWithRetry<T extends AnyComponent>(
     } finally {
       reloadRequestInFlight = false
       clearChunkReloadGuard()
-      recordReloadBreadcrumb('lazy_chunk_reload_vetoed', reloadKey, failureMessage, outcome)
+      // A relaunch tears this process down; only a refused reload is a veto worth recording.
+      if (outcome !== 'relaunch-requested') {
+        recordReloadBreadcrumb('lazy_chunk_reload_vetoed', reloadKey, failureMessage, outcome)
+      }
     }
     // This was the document’s final recovery for the chunk even if reload was refused or never navigated.
     throw containedChunkFailure(lastError, reloadKey)

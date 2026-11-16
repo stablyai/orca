@@ -25888,6 +25888,14 @@
       "retry": "Refresh"
     }
   },
+  "installedBundleReplaced": {
+    "detailWithVersions": "Version {{installedVersion}} is now installed, but this window is still running {{runningVersion}}. Until Orca restarts, some panels and files may fail to open.",
+    "detail": "The installed files no longer match the build this window is running. Until Orca restarts, some panels and files may fail to open.",
+    "restart": "Restart Orca",
+    "later": "Later",
+    "title": "Orca was updated on disk",
+    "message": "Orca was updated on this computer while it was running."
+  },
   "crashReport": {
     "freeze": {
       "attach": "Attach saved freeze report and diagnostic logs",

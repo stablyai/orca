@@ -27,6 +27,9 @@ export function createWebAppApi(): Partial<PreloadApi> {
         }),
       getFeatureWallAssetBaseUrl: () => Promise.resolve('/'),
       setWindowMaterialSuppressed: () => Promise.resolve(),
+      // The browser client runs no local bundle that a package manager could replace.
+      readInstalledBundleChange: () =>
+        Promise.resolve({ changed: false, runningVersion: null, installedVersion: null }),
       relaunch: () => Promise.resolve(window.location.reload()),
       restart: () => Promise.resolve(window.location.reload()),
       reload: () => Promise.resolve(window.location.reload()),
