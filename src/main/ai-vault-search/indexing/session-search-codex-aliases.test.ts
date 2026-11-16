@@ -1,5 +1,5 @@
 import type * as TranscriptFs from '../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
-import { copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { appendFile, copyFile, mkdir, readFile, rm, utimes, writeFile } from 'node:fs/promises'
 import { zstdCompressSync } from 'node:zlib'
 import { dirname, join } from 'node:path'
 import { Readable } from 'node:stream'
@@ -220,4 +220,31 @@ it('keeps one indexed copy after a preferred archive appears beside an indexed a
   await sweep()
   expect(matches()).toEqual([{ user_text: 'readablealiasneedle' }])
   expect(index.db.prepare('SELECT path FROM files').all()).toEqual([{ path: `${real}.zst` }])
+})
+
+it('keeps an indexed account copy that grew after the preferred archive', async () => {
+  io.failed = ''
+  await rm(real)
+  const archived = zstdCompressSync(await readFile(managed))
+  await appendFile(
+    managed,
+    `${JSON.stringify({
+      type: 'response_item',
+      payload: {
+        type: 'message',
+        role: 'user',
+        content: [{ type: 'input_text', text: 'appendedaliasneedle' }]
+      }
+    })}\n`
+  )
+  await sweep()
+  await writeFile(`${real}.zst`, archived)
+  await utimes(`${real}.zst`, new Date(2026, 0, 1), new Date(2026, 0, 1))
+  await sweep()
+  await sweep()
+  expect(
+    index.db
+      .prepare("SELECT user_text FROM messages_fts WHERE messages_fts MATCH 'appendedaliasneedle'")
+      .all()
+  ).toEqual([{ user_text: 'appendedaliasneedle' }])
 })

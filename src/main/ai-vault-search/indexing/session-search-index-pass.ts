@@ -17,6 +17,9 @@ import type {
   SessionSearchIndexStore
 } from '../storage/session-search-store-types'
 
+// Drain held alias removals so a first sweep over many duplicates stays bounded.
+const ALIAS_REMOVALS_PER_FLUSH = 256
+
 export type SessionSearchIndexPassOptions = {
   signal?: AbortSignal
   /** Snapshot of indexed rows; a missing key means the path has no row. */
@@ -37,6 +40,7 @@ export async function runSessionSearchIndexPass(
   let read = 0
   let outOfTime = false
   let left = 0
+  let heldRemovals = 0
   for (const choice of candidates) {
     throwIfAiVaultScanCancelled(options.signal)
     if (!acceptsReads()) {
@@ -62,7 +66,16 @@ export async function runSessionSearchIndexPass(
           cursor !== null
         ) {
           deferred = false
-          retireOutrankedAliases(store, options.rows, aliases.slice(position + 1))
+          heldRemovals += retireOutrankedAliases(
+            store,
+            options.rows,
+            candidate,
+            aliases.slice(position + 1)
+          )
+          if (heldRemovals >= ALIAS_REMOVALS_PER_FLUSH) {
+            heldRemovals = 0
+            await store.flush?.()
+          }
           break
         }
         continue
@@ -122,15 +135,19 @@ export async function runSessionSearchIndexPass(
   return { stats, outOfTime, left }
 }
 
-/** A rollout keeps one row: a current preferred copy retires older rows from copies it outranks. */
+/** A rollout keeps one row; a copy newer than the current preferred one may hold lines it lacks. */
 function retireOutrankedAliases(
   store: SessionSearchIndexStore,
   rows: ReadonlyMap<string, SessionSearchFileRow>,
+  preferred: SessionFileCandidate,
   outranked: readonly SessionFileCandidate[]
-): void {
+): number {
+  let removed = 0
   for (const alias of outranked) {
-    if (rows.has(alias.file.path)) {
+    if (rows.has(alias.file.path) && alias.file.mtimeMs <= preferred.file.mtimeMs) {
       store.removeFile(alias.file.path)
+      removed += 1
     }
   }
+  return removed
 }
