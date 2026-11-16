@@ -32,6 +32,7 @@ import {
 import { useMobileNativeChatTransientData } from './transcript/projection/use-mobile-native-chat-transient-data'
 import { useMobileNativeChatRowKeys } from './transcript/projection/mobile-native-chat-row-keys'
 import { useMobileNativeChatPinchGesture } from './transcript/viewport/mobile-native-chat-pinch-zoom'
+import { useNativeChatTextSettings } from './preferences/native-chat-text-settings'
 import { useMobileNativeChatTailFollow } from './transcript/viewport/use-mobile-native-chat-tail-follow'
 import { useMobileNativeChatTurnDisclosure } from './transcript/turn-state/use-mobile-native-chat-turn-disclosure'
 import { mobileNativeChatComposerPlaceholder } from './composer/field/use-mobile-native-chat-input-lease'
@@ -220,7 +221,8 @@ export function MobileNativeChatView({
   const t = useMobileTranslation()
   const insets = useSafeAreaInsets()
   const bottomPad = keyboardInset > 0 ? keyboardInset + insets.bottom : insets.bottom
-  const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture(sendSurfaceId)
+  const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
+  const { font, lineSpacing } = useNativeChatTextSettings()
 
   const data = useMobileNativeChatTransientData(
     { folded, streaming, pending, imagePreviewsByMessageId },
@@ -314,8 +316,8 @@ export function MobileNativeChatView({
     ) : null
 
   const header = mobileNativeChatListHeader(hasMore, olderPages, loadEarlier)
-  // Changing text scale relays out every row, so preserve the page’s reading anchor.
-  const layoutKey = `${fontScale}`
+  // Changing text size, face or spacing relays out every row, so preserve the page’s reading anchor.
+  const layoutKey = `${fontScale}:${font}:${lineSpacing}`
   const footer = mobileNativeChatListFooter(liveStatus, turns.waitingRows, renderItem)
   const emptyState = mobileNativeChatEmptyState(status, agent, error, sessionLive, clearing)
 

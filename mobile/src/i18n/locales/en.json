@@ -73,6 +73,28 @@
       "on": "On",
       "off": "Off"
     },
+    "nativeChatText": {
+      "heading": "TEXT",
+      "footer": "Pinch in a chat to change it; it saves here.",
+      "size": "Text size",
+      "sizeDefault": "Default",
+      "sizePoints": "{{size}} pt",
+      "sizeSpoken": "{{size}} points",
+      "font": "Font",
+      "fontPickerTitle": "Chat font",
+      "fontSystem": "System",
+      "fontSerif": "Serif",
+      "fontMono": "Monospace",
+      "fontMonoSubtitle": "Same as code",
+      "lineSpacing": "Line spacing",
+      "spacingCompact": "Compact",
+      "spacingDefault": "Default",
+      "spacingRelaxed": "Relaxed",
+      "reset": "Reset text settings",
+      "previewQuestion": "Why is the resume test flaky?",
+      "previewTools": "Read 3 files · Ran pnpm test",
+      "previewAnswer": "The test waits on `setTimeout(0)` while the stream is still flushing, so it passes only when the flush wins."
+    },
     "nativeNotificationDeliverySettings": {
       "loadFailed": "Could not load delivery settings. Reopen this screen to retry.",
       "saveFailed": "Could not save delivery settings. Try again.",
