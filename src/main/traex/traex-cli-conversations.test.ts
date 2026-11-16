@@ -25,8 +25,12 @@ it('finds the newest segment of a paginated Trae conversation', async () => {
   await utimes(legacy, new Date(1000), new Date(1000))
   await utimes(latest, new Date(2000), new Date(2000))
 
+  const transcriptImport = TRAEX_CLI_CONVERSATIONS.transcriptImport
+  if (!transcriptImport) {
+    throw new Error('TRAE CLI transcript import is missing')
+  }
   await expect(
-    TRAEX_CLI_CONVERSATIONS.transcriptImport.findTranscript({
+    transcriptImport.findTranscript({
       providerSessionId: id,
       store: join(root, 'sessions'),
       launchEnv: {},

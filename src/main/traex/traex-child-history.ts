@@ -25,6 +25,14 @@ export type TraexChildHistory = {
   live: boolean
 }
 
+/** A child whose rollout was archived or compacted away no longer has readable history. */
+function isMissingTraexRollout(error: unknown): boolean {
+  return (
+    error instanceof TraexRequestError &&
+    /no rollout found|thread not found|missing current rollout/.test(error.message)
+  )
+}
+
 export async function readTraexChildHistories(
   connection: TraexAppServerConnection,
   primaryThreadId: string,
@@ -57,10 +65,7 @@ export async function readTraexChildHistories(
               ).thread
             )
           } catch (error) {
-            if (
-              error instanceof TraexRequestError &&
-              /no rollout found|thread not found/.test(error.message)
-            ) {
+            if (isMissingTraexRollout(error)) {
               continue
             }
             throw error
@@ -68,7 +73,15 @@ export async function readTraexChildHistories(
           if (thread.id !== announcement.id) {
             throw new Error('TRAE CLI read a different child thread')
           }
-          const childTurns = await readTraexTurns(connection, announcement.id, check)
+          let childTurns: TraexTurn[]
+          try {
+            childTurns = await readTraexTurns(connection, announcement.id, check)
+          } catch (error) {
+            if (isMissingTraexRollout(error)) {
+              continue
+            }
+            throw error
+          }
           const label = boundSubagentLabel(
             traexText(thread.agentNickname) ??
               announcement.label ??
