@@ -15718,13 +15718,6 @@
                       "skillNotInstalled": "La skill de Orca CLI aún no está instalada."
                     }
                   }
-                },
-                "tab": {
-                  "intro": {
-                    "actions": {
-                      "68a5dc6604": "No se pudo ocultar el Emulador Móvil."
-                    }
-                  }
                 }
               }
             }
@@ -15749,17 +15742,6 @@
             "5789936d9a": "Vista previa de simuladores de iOS mientras los agentes controlan la pantalla.",
             "8014b4b80b": "Mantener",
             "6e051a40b7": "Ocultar"
-          },
-          "mobile": {
-            "emulator": {
-              "hidden": {
-                "toast": {
-                  "e8f098a870": "Mobile Emulator oculto",
-                  "c46c979c1d": "Vuelve a habilitar Mobile Emulator en cualquier momento en",
-                  "600f9a745a": "Ajustes › Mobile Emulator"
-                }
-              }
-            }
           },
           "useEmulatorScreenKeyboard": {
             "pasteTooLarge": "El texto pegado es demasiado grande para la entrada de teclado del emulador.",
