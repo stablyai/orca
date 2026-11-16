@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../src/shared/sidebar-inputs-switch'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../src/shared/sidebar-list/feed/sidebar-inputs-switch'
 import { buildSidebarFeedRows } from '../../../../src/shared/sidebar-list/feed/sidebar-feed-rows'
 import { repoIconFeedKey } from '../../../../src/shared/sidebar-list/catalog/repo-icon-data-urls-contract'
 import type { ProjectOrderBy } from '../../../../src/shared/ui-chrome-types'
@@ -28,7 +28,7 @@ import {
 import { useHostRepoIconDataUrls } from '../catalog/use-host-repo-icon-data-urls'
 import type { HostSidebarFeed } from '../sidebar-feed/use-host-sidebar-feed'
 import type { HostScreenState } from '../use-host-screen-state'
-import { indexHiddenProjects } from '../../../../src/shared/hidden-projects'
+import { indexHiddenProjects } from '../../../../src/shared/project/catalog/hidden-projects'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../src/shared/execution-host'
 
 export type HostListSectionsInputs = {
@@ -79,12 +79,14 @@ function useLegacyHostListSections({
       buildProjectSectionCatalog(
         state.servedProjectSections,
         state.desktopRepos,
+        state.hostProjectGroups,
         state.view.filters.visibleHostIds,
         state.view.projectOrderBy
       ),
     [
       state.servedProjectSections,
       state.desktopRepos,
+      state.hostProjectGroups,
       state.view.filters.visibleHostIds,
       state.view.projectOrderBy
     ]

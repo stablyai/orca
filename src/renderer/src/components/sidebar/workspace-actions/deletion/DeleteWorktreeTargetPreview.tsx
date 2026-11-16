@@ -5,7 +5,7 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { DeleteWorktreeDirtyChangeHint } from './DeleteWorktreeDirtyChangeHint'
 import { DeleteWorktreeLocalFilesHint } from './DeleteWorktreeLocalFilesHint'
-import type { WorktreeAtRiskLocalFiles } from '../../../../../../shared/worktree/removal/at-risk-local-files'
+import type { DeleteWorktreeLocalFilesState } from './use-delete-worktree-at-risk-local-files'
 import type {
   DeleteWorktreeChangeCheckState,
   DeleteWorktreeDirtyChangePreview
@@ -66,7 +66,7 @@ export function DeleteWorktreeTargetPreview({
   dirtyChangeCountsByWorktreeId: ReadonlyMap<string, number>
   dirtyChangePreviewsByWorktreeId: ReadonlyMap<string, DeleteWorktreeDirtyChangePreview>
   changeCheckStatesByWorktreeId?: ReadonlyMap<string, DeleteWorktreeChangeCheckState>
-  atRiskLocalFilesByIdentity?: ReadonlyMap<string, WorktreeAtRiskLocalFiles>
+  atRiskLocalFilesByIdentity?: ReadonlyMap<string, DeleteWorktreeLocalFilesState>
 }): JSX.Element | null {
   const t = useTranslate()
   const targetIdPrefix = useId()
@@ -117,7 +117,7 @@ export function DeleteWorktreeTargetPreview({
                       )}
                     />
                     <DeleteWorktreeLocalFilesHint
-                      files={atRiskLocalFilesByIdentity?.get(getWorktreeHostIdentity(item))}
+                      state={atRiskLocalFilesByIdentity?.get(getWorktreeHostIdentity(item))}
                     />
                     {itemDeleteError ? (
                       <div className="mt-1 whitespace-pre-wrap break-all text-destructive">
@@ -176,7 +176,7 @@ export function DeleteWorktreeTargetPreview({
         )}
       />
       <DeleteWorktreeLocalFilesHint
-        files={atRiskLocalFilesByIdentity?.get(getWorktreeHostIdentity(worktree))}
+        state={atRiskLocalFilesByIdentity?.get(getWorktreeHostIdentity(worktree))}
       />
     </div>
   )

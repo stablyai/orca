@@ -2,14 +2,14 @@ import type { DictationTerm } from '../speech/dictation/dictation-dictionary'
 import type { RepoIcon } from './appearance/repo-icon'
 import type { GhAccountBinding } from '../github/accounts/account-binding'
 import type { GitHubRepositoryIdentity } from '../github/repositories/repository-identity'
-import type { RepoHookSettings } from '../orca-yaml-hook-types'
+import type { RepoHookSettings } from '../workspace-setup/orca-yaml-hook-types'
 import type { ForkSyncMode } from '../git/remotes/git-fork-sync'
 import type { GitRemoteIdentity } from '../git/remotes/git-remote-identity'
 import type { RepoSourceControlAiOverrides } from '../source-control/ai/settings/source-control-ai-settings-types'
 import type { RepoProjectHostSetupMethod } from '../project/project-types'
 import type { JiraProjectReference } from '../jira/jira-project-reference'
 import type { OrcadRetainedMarker } from '../remote-runtime/orcad-lifecycle/orcad-retained-marker'
-import type { EditorFormatter } from '../editor-formatter'
+import type { EditorFormatter } from '../editor/formatting/editor-formatter'
 import type { AgentWorkspaceTrustDecision } from '../agent-launch/permissions/agent-workspace-trust-decision'
 import type { RepoWorkspaceCleanupPolicy } from '../workspace-cleanup/workspace-cleanup-policy'
 
@@ -111,6 +111,8 @@ export type Repo = {
   orcadRetained?: OrcadRetainedMarker
   /** Dictation terms used only in this repo, kept in Orca (on the repo's host), never in the checkout. */
   dictationTerms?: DictationTerm[]
+  /** Browser profile new tabs in this repo use, on the repo's own host. Absent follows the Browser setting. */
+  browserProfileId?: string
 }
 
 /** Shared IPC shape for repos:getBaseRefDefault across main/preload/renderer; remoteCount avoids a second hint lookup. */

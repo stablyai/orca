@@ -4,7 +4,6 @@ import {
   queuedImageTestBody,
   streamState
 } from '../protocol/structured-agent-session-wire-record.test-fixture'
-import { seedTestJournalQueueCard } from '../../../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 
 import 'node:fs/promises'
 import 'node:path'
@@ -27,7 +26,6 @@ import { call, openStream } from '../protocol/structured-agent-session-rpc.test-
 import { STRUCTURED_MOBILE_CLIENT } from '../protocol/structured-agent-session-rpc-client.test-fixture'
 import { queuedImageHistoryReader } from './structured-agent-session-queued-image-capability'
 import { agentJournalSubmissionKey } from '../../../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { AgentJournalMessageItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import '../../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 
 const OLD = { ...STRUCTURED_MOBILE_CLIENT, clientId: 'old-phone', connectionId: 'old-phone' }
@@ -41,117 +39,6 @@ afterEach(async () => {
   await rig?.dispose()
   rig = undefined
   vi.restoreAllMocks()
-})
-
-it('keeps a saved physical hold independent while its own rejected retry blocks the ordered suffix', async () => {
-  rig = await createQueuedMessageTestRig({ restartable: true, legacyInputs: true })
-  setStructuredAgentSessionHost(rig.host)
-  const body: AgentJournalMessageItem = {
-    kind: 'message',
-    role: 'user',
-    blocks: [{ type: 'text', text: 'Complete immutable original.' }]
-  }
-  const id = hostTestOperationId()
-  const send = { body, options: { model: 'default' } }
-  expect(
-    await call(
-      'agentSession.send',
-      { envelope: rig.envelope(send, 'agentSession.send', id), ...send },
-      OLD
-    )
-  ).toMatchObject({ result: { ok: true } })
-  await eventually(() => expect(rig!.dispatch).toHaveBeenCalledTimes(1))
-  for (const text of ['First complete waiting input.', 'Second complete waiting input.']) {
-    const fields = {
-      body: { ...body, blocks: [{ type: 'text', text }] },
-      delivery: 'queue-if-active',
-      options: { model: 'default' }
-    }
-    expect(
-      await call(
-        'agentSession.send',
-        { envelope: rig.envelope(fields, 'agentSession.send', hostTestOperationId()), ...fields },
-        OLD
-      )
-    ).toMatchObject({ result: { ok: true } })
-  }
-  await rig.stop()
-  await rig.host.flushStreamedEvents(SESSION)
-  const j = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
-  const saved = `recovery:${id}`
-  await seedTestJournalQueueCard(rig.root, j, {
-    messageId: saved,
-    state: 'waiting',
-    holdReason: 'delivery_unconfirmed',
-    returnedReason: null,
-    returnedRejection: null,
-    consumedAs: null,
-    body,
-    recovers: id,
-    position: -1,
-    queuedAt: j.cursor(),
-    options: { model: 'default' }
-  })
-  async function published() {
-    const rpc = await call('agentSession.history', { sessionId: SESSION, direction: 'tail' }, OLD)
-    if (!rpc.ok) {
-      throw new Error('history refused')
-    }
-    return rpc.result
-  }
-  const held = await published()
-  expect(held).toHaveProperty('page.queuedMessages', [
-    { messageId: saved, position: -1, body, state: 'waiting', paused: true },
-    ...(await j.queuedMessages.list())
-      .filter((row) => row.messageId !== saved)
-      .map((row) => ({
-        messageId: row.messageId,
-        position: row.position,
-        body: row.body,
-        state: 'waiting'
-      }))
-  ])
-  const immutable = await j.reads.submission(id)
-  const receipt = await j.reads.receiptFor(id)
-  await rig.quitRestartHostProcess()
-  setStructuredAgentSessionHost(rig.host)
-  rig.failNextStart(new Error('saved choice own retry failed'))
-  const fields = { messageId: saved }
-  const params = {
-    envelope: rig.envelope(fields, 'agentSession.queuedMessageSend', hostTestOperationId()),
-    ...fields
-  }
-  expect(await call('agentSession.queuedMessageSend', params, OLD)).toMatchObject({
-    result: { ok: true }
-  })
-  await eventually(async () => expect((await rig!.handoff(saved))?.dispatchState).toBe('rejected'))
-  const rejected = await published()
-  const state = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
-  const physical = (await state.queuedMessages.get(saved))!
-  expect(physical.state).toBe('returned')
-  expect(physical.recovers).toBe(id)
-  expect(physical.consumedAs).not.toBe(id)
-  expect(rejected).toHaveProperty('page.nextQueuedMessageId', null)
-  expect(rejected).toHaveProperty('page.queuedMessages.0.state', 'returned')
-  expect(await call('agentSession.queuedMessageSend', params, OLD)).toMatchObject({
-    result: { ok: true, replayed: true }
-  })
-  expect(
-    await call(
-      'agentSession.queuedMessagesResume',
-      { envelope: rig.envelope({}, 'agentSession.queuedMessagesResume', hostTestOperationId()) },
-      OLD
-    )
-  ).toMatchObject({ result: { ok: true } })
-  await rig.host.collaboratorsForTests().serialize(SESSION, async () => {})
-  expect(rig.dispatch).toHaveBeenCalledTimes(1)
-  await published()
-  await rig.settleAccepted(id, 'original-positive-proof-independent-of-failed-retry')
-  expect(await state.queuedMessages.get(saved)).toStrictEqual(physical)
-  expect(await state.reads.submissionBody(id)).toStrictEqual(body)
-  expect((await state.reads.submission(id))?.payloadFingerprint).toBe(immutable?.payloadFingerprint)
-  expect(await state.reads.receiptFor(id)).not.toEqual(receipt)
-  await published()
 })
 
 it('keeps a queue edit after the old-reader page whose eligibility read it overlapped', async () => {

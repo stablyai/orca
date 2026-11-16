@@ -1,10 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { eventSchemas } from '../../shared/telemetry/telemetry-event-registry'
-import {
-  pluginInstallKind,
-  pluginTelemetryCatalog,
-  trackPluginInstalled
-} from './plugin-install-telemetry'
+import { pluginTelemetryCatalog, trackPluginInstalled } from './plugin-install-telemetry'
 
 const telemetry = vi.hoisted(() => ({ track: vi.fn() }))
 vi.mock('./client', () => telemetry)
@@ -24,12 +20,6 @@ describe('plugin install telemetry', () => {
     expect(
       pluginTelemetryCatalog('https://gitlab.example.com/stablyai/orca-plugins.git')
     ).toBeNull()
-  })
-
-  it('tells a first install from a reinstall and an update', () => {
-    expect(pluginInstallKind(null, '1.0.0')).toBe('install')
-    expect(pluginInstallKind('1.0.0', '1.0.0')).toBe('reinstall')
-    expect(pluginInstallKind('1.0.0', '1.1.0')).toBe('update')
   })
 
   it('sends nothing for a private catalog install', () => {

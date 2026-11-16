@@ -1,5 +1,5 @@
 import { BrowserWindow } from 'electron'
-import { CODEX_PENDING_LOGIN_URL_CHANGED_CHANNEL } from '../../shared/codex-auth-errors'
+import { CODEX_PENDING_LOGIN_URL_CHANGED_CHANNEL } from '../../shared/agent-accounts/codex/codex-auth-errors'
 
 export function broadcastCodexPendingLoginUrl(url: string | null): void {
   for (const window of BrowserWindow.getAllWindows()) {

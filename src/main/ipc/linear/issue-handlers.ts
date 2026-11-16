@@ -6,7 +6,7 @@ import { addIssueComment, getIssueComments } from '../../linear/issues/linear-is
 import { normalizeWorkspaceId, normalizeWorkspaceSelection } from './ipc-args'
 import { clampLinearIssueListLimit } from '../../../shared/linear/issue-read-limits'
 import { optionalParsedLinearIssueAttributeFilter } from '../../../shared/linear/issue-attribute-filter'
-import type { LinearIssueUpdate } from '../../../shared/issue-mutation-types'
+import type { LinearIssueUpdate } from '../../../shared/work-items/issue-mutation-types'
 import type { LinearWorkspaceSelection } from '../../../shared/linear/workspace-types'
 
 const VALID_FILTERS = new Set<LinearListFilter>(['assigned', 'created', 'all', 'completed'])

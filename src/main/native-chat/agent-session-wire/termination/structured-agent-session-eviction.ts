@@ -2,7 +2,7 @@
 // Attempt every cleanup step despite failures; bookkeeping cannot gate later sends.
 
 import type { DeferredStructuredAgentSessionEventSink } from '../journal-ingress/structured-agent-session-event-sink'
-import { withTimeout } from '../../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
 
 export type StructuredAgentSessionEvictionContext = {

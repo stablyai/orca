@@ -20,7 +20,7 @@ import {
   buildAgentDraftLaunchPlan,
   buildAgentStartupPlan
 } from '../../../../shared/agent-launch/startup/tui-agent-startup'
-import { planStartupWithPromptCandidate } from '../../../../shared/startup-line-prompt-carry'
+import { planStartupWithPromptCandidate } from '../../../../shared/agent-launch/startup/startup-line-prompt-carry'
 import {
   launchHostProvesAgentInFront,
   nameLocalTypedLineShell

@@ -1,7 +1,5 @@
 import { useCallback, useMemo, useRef, useState, type RefObject } from 'react'
 import {
-  closestCenter,
-  pointerWithin,
   type CollisionDetection,
   type DragEndEvent,
   type DragMoveEvent,
@@ -11,7 +9,7 @@ import {
   useSensor,
   useSensors
 } from '@dnd-kit/core'
-import type { TabGroup } from '../../../../shared/tab-types'
+import type { TabGroup } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import { useAppStore } from '../../store'
 import type { TabDragActivationSnapshot } from '../../store/slices/tabs/tabs-slice-contract'
 import { useHoveredTabInsertion, type HoveredTabInsertion } from './tab-insertion'
@@ -26,6 +24,7 @@ import { canDropTabIntoPaneBody, isTabDragData, type TabDragItemData } from './t
 import { useTabDragGestureLifecycle } from './tab-drag-gesture-lifecycle'
 import { useTabDragHoverPreview, type HoveredTabDropTarget } from './tab-drag-hover-preview'
 import { commitTabDragDrop } from './tab-drag-drop-commit'
+import { resolveTabDragCollisions } from './tab-drag-collision'
 
 export type { HoveredTabInsertion }
 export type { HoveredTabDropTarget }
@@ -56,11 +55,6 @@ export function canDropTabForPaneColumnSplit(args: {
     overGroupId: args.targetGroupId,
     worktreeId: args.worktreeId
   })
-}
-
-const collisionDetection: CollisionDetection = (args) => {
-  const pointerCollisions = pointerWithin(args)
-  return pointerCollisions.length > 0 ? pointerCollisions : closestCenter(args)
 }
 
 export function getTabPaneBodyDroppableId(groupId: string): UniqueIdentifier {
@@ -97,6 +91,10 @@ export function useTabDragSplit({
   const preDragActivationSnapshotRef = useRef<TabDragActivationSnapshot | null>(null)
   const tabDragActiveRef = useRef(false)
   const dragGeometryRef = useRef<TabGroupPanelGeometrySnapshot | null>(null)
+  const collisionDetection = useCallback<CollisionDetection>(
+    (args) => resolveTabDragCollisions(args, worktreeId, dragGeometryRef.current),
+    [worktreeId]
+  )
   const clearDragStateRef = useRef<() => void>(() => {})
   const tabInsertion = useHoveredTabInsertion(isTabDragData, getDragPointer)
   const {

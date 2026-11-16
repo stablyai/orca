@@ -1,5 +1,5 @@
 import type { RuntimeWorktreePsSummary } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
-import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
+import { isWindowsAbsolutePathLike } from '../../../../shared/file-access/cross-platform-path'
 import { worktreePathComparisonKey } from '../../../workspaces/catalog/worktree-path-comparison-key'
 import { parseRuntimeWorktreeId } from '../catalog/runtime-worktree-path-identity'
 import {

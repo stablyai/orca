@@ -1,4 +1,4 @@
-import type { RepoHookSettings } from '../../orca-yaml-hook-types'
+import type { RepoHookSettings } from '../../workspace-setup/orca-yaml-hook-types'
 export type ProjectGroupCreatedFrom = 'manual' | 'folder-scan' | 'migration'
 
 export type ProjectGroup = {

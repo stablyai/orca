@@ -1,7 +1,7 @@
 import { wslDistroForCommand } from '../../../../shared/file-access/wsl-paths'
 
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
-import { withTimeout } from '../../../../shared/promise-timeout-fallback'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
+import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 import { isWslDirectGitReadCommand } from '../../../../shared/git/commands/git-command-classification'
 import {
   disableWslGitReadEnvironment,

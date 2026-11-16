@@ -8,16 +8,16 @@ import {
   clampWorkspaceBoardColumnWidth,
   clampWorkspaceBoardOpacity
 } from '../../../shared/workspace/status/workspace-statuses'
-import { normalizeUsagePercentageDisplay } from '../../../shared/usage-percentage-display'
-import { normalizeStatusBarUsageMode } from '../../../shared/status-bar-usage-mode'
-import { normalizeStatusBarUsageFormat } from '../../../shared/status-bar-usage-format'
-import { clampMarkdownTocPanelWidth } from '../../../shared/markdown-toc-panel-width'
-import { clampCombinedDiffFileTreeWidth } from '../../../shared/combined-diff-file-tree-width'
+import { normalizeUsagePercentageDisplay } from '../../../shared/agent-usage/display/usage-percentage-display'
+import { normalizeStatusBarUsageMode } from '../../../shared/status-bar/status-bar-usage-mode'
+import { normalizeStatusBarUsageFormat } from '../../../shared/status-bar/status-bar-usage-format'
+import { clampMarkdownTocPanelWidth } from '../../../shared/editor/markdown/markdown-toc-panel-width'
+import { clampCombinedDiffFileTreeWidth } from '../../../shared/source-control/diff/combined-diff-file-tree-width'
 import {
   normalizeVisibleExecutionHostIds,
   normalizeExecutionHostOrder
 } from '../../../shared/execution-host'
-import { normalizeManualRepoOrder } from '../../../shared/manual-repo-order'
+import { normalizeManualRepoOrder } from '../../../shared/repository/manual-repo-order'
 import { normalizeBrowserPageZoomLevel } from '../../../shared/browser/site-settings/browser-page-zoom'
 import { normalizeFeatureTipIds } from '../../../shared/feature-education/feature-tips'
 import { normalizeContextualTourIds } from '../../../shared/feature-education/contextual-tours/contextual-tours'
@@ -25,6 +25,7 @@ import { normalizeFeatureInteractions } from '../../../shared/feature-education/
 import {
   normalizeGroupBy,
   normalizeProjectOrderBy,
+  normalizeNotificationsMutedByWorktree,
   normalizeRightSidebarExplorerView,
   normalizeRightSidebarTab,
   normalizeShowDotfilesByWorktree,
@@ -74,6 +75,9 @@ export function getPersistedUI(
     ),
     gitGraphFiltersByWorktree: normalizeGitGraphFilters(state.ui?.gitGraphFiltersByWorktree),
     showDotfilesByWorktree: normalizeShowDotfilesByWorktree(state.ui?.showDotfilesByWorktree),
+    notificationsMutedByWorktree: normalizeNotificationsMutedByWorktree(
+      state.ui?.notificationsMutedByWorktree
+    ),
     featureTipsSeenIds: normalizeFeatureTipIds(state.ui?.featureTipsSeenIds),
     contextualToursSeenIds: normalizeContextualTourIds(state.ui?.contextualToursSeenIds),
     featureInteractions: normalizeFeatureInteractions(state.ui?.featureInteractions),

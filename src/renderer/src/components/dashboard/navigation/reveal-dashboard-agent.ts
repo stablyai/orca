@@ -6,7 +6,7 @@ import {
   structuredAgentSessionTargetForTab
 } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { useAppStore } from '@/store/index'
-import type { DashboardRevealAgentArgs } from '../../../../../shared/dashboard-snapshot'
+import type { DashboardRevealAgentArgs } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 
 export function revealDashboardAgent(args: DashboardRevealAgentArgs): boolean {
   const state = useAppStore.getState()

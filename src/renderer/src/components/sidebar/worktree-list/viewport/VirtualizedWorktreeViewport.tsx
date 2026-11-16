@@ -39,6 +39,7 @@ import { renderWorktreeVirtualRow } from '../rows/virtual-row-dispatch'
 import { getProjectGroupColors } from './project-group-colors'
 import { ProjectGroupBackgrounds } from './ProjectGroupBackgrounds'
 import { ProjectGroupThreadGuides } from './ProjectGroupThreadGuides'
+import { selectDrawsNewWorktreeCards } from '@/store/appearance/worktree-card-style'
 
 const EMPTY_HOST_OPTIONS: NonNullable<VirtualizedWorktreeViewportProps['hostOptions']> = []
 
@@ -80,7 +81,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     repoMap,
     projectGrouping: props.projectGrouping
   })
-  const newCardStyle = settings?.experimentalNewWorktreeCardStyle === true
+  const newCardStyle = useAppStore(selectDrawsNewWorktreeCards)
   const {
     handleOpenRepoSettings,
     handleOpenWorktreeVisibility,
@@ -337,11 +338,10 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   )
 
   const draggingIdentity = runtime.worktreeDragState.draggingWorktreeId
-  const hiddenDragRanges = useDraggedSubtreeRanges(projection, draggingIdentity)
   const rowContext = buildWorktreeVirtualRowContext({
     projectGroupColors: groupColors,
     dragUnitsByRow: rowGeometry.ranges.byRow,
-    hiddenDragRanges,
+    hiddenDragRanges: useDraggedSubtreeRanges(projection, draggingIdentity),
     props: rowProps,
     projection,
     activeFamilyRoots,

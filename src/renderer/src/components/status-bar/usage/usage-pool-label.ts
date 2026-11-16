@@ -8,8 +8,8 @@ import type {
   ProviderRateLimits,
   RateLimitBucket,
   RateLimitWindow
-} from '../../../../../shared/rate-limit-types'
-import { clampUsedPercent } from '../../../../../shared/usage-percentage-display'
+} from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { clampUsedPercent } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import { USAGE_WARNING_PERCENT } from './usage-health-tone'
 
 export type GroupedUsagePool = RateLimitBucket & { group: string }

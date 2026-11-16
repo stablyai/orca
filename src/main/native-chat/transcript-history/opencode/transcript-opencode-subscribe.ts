@@ -1,6 +1,6 @@
 import { pruneOpenCodeFingerprintCache } from './transcript-opencode-fingerprint-window'
 
-import { errorMessage } from '../../../../shared/error-message'
+import { errorMessage } from '../../../../shared/errors/error-message'
 import {
   DESKTOP_READ_WINDOW,
   UNFLUSHED_SETTLE_MS,

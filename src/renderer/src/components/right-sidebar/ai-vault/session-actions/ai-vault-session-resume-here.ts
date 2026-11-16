@@ -6,7 +6,7 @@ import {
 } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
 import { insertUnifiedTabAfterAnchor } from '@/lib/workspace/tabs/unified-tab-anchor-insertion'
 
-import { createNonSecureContextUuid } from '../../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import {
   captureNativeChatComposerFocusIntent,
   requestNativeChatComposerFocus
@@ -23,7 +23,7 @@ import type { CliConversationRowAgent } from '../../../../../../shared/agent-ses
 import { structuredLaunchConversationOwner } from '@/lib/agent-session/launch/structured-agent-session-launch-failure'
 import { resumeAiVaultSessionInNewChat } from './ai-vault-session-resume-in-chat-launch'
 import type { ConfirmationDialogContextValue } from '@/components/confirmation-dialog-context'
-import type { Tab } from '../../../../../../shared/tab-types'
+import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { AiVaultSessionRowChatActions } from './ai-vault-session-chat-action'
 
 /** The chat `/resume` was typed in; a picked row's conversation takes its place. */

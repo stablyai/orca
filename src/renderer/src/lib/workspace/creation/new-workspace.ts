@@ -12,7 +12,7 @@ import {
 } from '@/lib/agent-session/launch/startup/agent-startup-delayed-delivery'
 import type { WorkspaceLinkedItem as FolderWorkspaceLinkedTask } from '../../../../../shared/worktree/types'
 import { slugifyForWorkspaceName } from '../../../../../shared/workspace/naming/workspace-name'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 
 export const CLIENT_PLATFORM: NodeJS.Platform = navigator.userAgent.includes('Windows')
   ? 'win32'

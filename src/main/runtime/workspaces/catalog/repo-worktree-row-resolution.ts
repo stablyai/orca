@@ -16,8 +16,8 @@ import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import {
   getConnectedWorktreeLineageIds,
   projectResolvedWorktreeLineage
-} from '../../../../shared/resolved-worktree-lineage'
-import { withTimeout } from '../../../../shared/promise-timeout-fallback'
+} from '../../../../shared/worktree/lineage/resolved-worktree-lineage'
+import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 import type { GitWorktreeInfo, Worktree } from '../../../../shared/worktree/types'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Repo } from '../../../../shared/repository/repo-types'

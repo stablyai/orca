@@ -1,4 +1,4 @@
-import type { CodexAccountSelectionTarget } from '../../../../shared/codex-selection-lane'
+import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
 import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import type { CodexRateLimitHomeResolution } from '../../../codex-accounts/runtime-home/runtime-home-service-types'
 import { isWslDistroRunning } from '../../../wsl/discovery/wsl-background-distro-gate'

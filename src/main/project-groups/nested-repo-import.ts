@@ -10,7 +10,7 @@ import {
   normalizeRuntimePathForComparison,
   relativePathInsideRoot,
   resolveRuntimePath
-} from '../../shared/cross-platform-path'
+} from '../../shared/file-access/cross-platform-path'
 
 type CreateGroupInput = {
   name: string

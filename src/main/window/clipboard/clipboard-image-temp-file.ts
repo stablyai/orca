@@ -3,14 +3,14 @@ import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 
 import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
-import { getAppEnvironment } from '../../../shared/app-environment'
-import { assertClipboardImageByteLengthWithinLimit } from '../../../shared/clipboard-image'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
+import { assertClipboardImageByteLengthWithinLimit } from '../../../shared/clipboard/clipboard-image'
 import {
   agentSessionPastedImageName,
   sanitizeAgentSessionAttachmentName,
   type AgentSessionAttachmentClipboardTarget
 } from '../../../shared/agent-session/agent-session-attachments'
-import { detectImageFileExtension } from '../../../shared/image-file-signature'
+import { detectImageFileExtension } from '../../../shared/file-content/image-file-signature'
 import { nativeChatPasteFolder } from '../../native-chat/paste-files/native-chat-paste-files'
 
 export type SaveClipboardImageAsTempFileArgs = {

@@ -1,6 +1,6 @@
 import type { GhAccountBinding } from '../../../../shared/github/accounts/account-binding'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../shared/github/repositories/repository-identity'
-import type { GitHubPullRequestStateUpdate } from '../../../../shared/issue-mutation-types'
+import type { GitHubPullRequestStateUpdate } from '../../../../shared/work-items/issue-mutation-types'
 import type { GitHubReactionContent } from '../../../../shared/github/comments/comment-types'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { LocalProjectGhExecOptions } from '../../../workspaces/execution-host/project-runtime-git-options'

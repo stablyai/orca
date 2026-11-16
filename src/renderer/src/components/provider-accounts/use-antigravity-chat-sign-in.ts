@@ -16,7 +16,7 @@ import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host
 import type {
   AntigravityChatAuth,
   AntigravityChatSignInState
-} from '../../../../shared/antigravity-account-types'
+} from '../../../../shared/agent-accounts/antigravity/antigravity-account-types'
 
 /** A running flow another client started: the host tells only its starter the id. */
 const otherClients = (flow: AntigravityChatSignInState | null): boolean =>

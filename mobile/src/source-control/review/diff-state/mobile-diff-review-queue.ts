@@ -4,7 +4,7 @@ import type {
   DiffComment,
   DiffReviewScope,
   MobileDiffReviewState
-} from '../../../../../src/shared/diff-comment-types'
+} from '../../../../../src/shared/file-review/diff-comment-types'
 import type {
   MobileGitBranchChangeEntry,
   MobileGitChangedFile

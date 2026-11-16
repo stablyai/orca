@@ -1,5 +1,5 @@
 import { ipcRenderer } from 'electron'
-import type { ClaudeAccountSelectionChange } from '../../../shared/managed-account-types'
+import type { ClaudeAccountSelectionChange } from '../../../shared/agent-accounts/managed-account-types'
 import type { PreloadApi } from '../../api-types'
 
 export const claudeAccountsApi = {
@@ -13,6 +13,8 @@ export const claudeAccountsApi = {
   waitForSignInLink: (): Promise<string | null> =>
     ipcRenderer.invoke('claudeAccounts:waitForSignInLink'),
   remove: (args: { accountId: string }) => ipcRenderer.invoke('claudeAccounts:remove', args),
+  rename: (args: { accountId: string; displayName: string | null }) =>
+    ipcRenderer.invoke('claudeAccounts:rename', args),
   select: (args: {
     accountId: string | null
     runtime?: 'host' | 'wsl'

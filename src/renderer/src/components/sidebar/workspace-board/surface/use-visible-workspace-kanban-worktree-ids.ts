@@ -15,7 +15,7 @@ import {
 import { getStructuredChatWorktreeIds } from '../../worktree-list/listing/visible-worktree-activity-inputs'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
-import { indexHiddenProjects } from '../../../../../../shared/hidden-projects'
+import { indexHiddenProjects } from '../../../../../../shared/project/catalog/hidden-projects'
 
 type UseVisibleWorkspaceKanbanWorktreeIdsParams = {
   allWorktrees: readonly Worktree[]

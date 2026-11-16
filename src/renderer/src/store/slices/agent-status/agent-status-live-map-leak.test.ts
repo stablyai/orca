@@ -1,5 +1,6 @@
 /** Regression for #9872: missed pane teardown must not let heavy live status rows grow unbounded. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { ParsedAgentStatusPayload } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
@@ -128,7 +129,7 @@ describe('agentStatusByPaneKey stays bounded (leak regression #9872)', () => {
 
     const live = store.getState().agentStatusByPaneKey
 
-    expect(live['tab-live:dead-0']).toBeUndefined()
+    expect(live.get('tab-live:dead-0')).toBeUndefined()
   })
 
   it("never evicts a live pane's waiting or blocked row, even under the hard-cap fallback", () => {
@@ -167,8 +168,48 @@ describe('agentStatusByPaneKey stays bounded (leak regression #9872)', () => {
     churnFreshUnprovable(store, MAX_LIVE_AGENT_STATUSES + 1500)
 
     const live = store.getState().agentStatusByPaneKey
-    expect(live['tab-w:leaf-w']?.state).toBe('waiting')
-    expect(live['tab-b:leaf-b']?.state).toBe('blocked')
+    expect(live.get('tab-w:leaf-w')?.state).toBe('waiting')
+    expect(live.get('tab-b:leaf-b')?.state).toBe('blocked')
+  })
+
+  it('keeps an unopened native chat visible when orphan statuses exceed capacity', () => {
+    const store = createTestStore()
+    seedWorktree(store)
+    store.setState({
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'chat-tab',
+            entityId: 'chat-session',
+            worktreeId: 'wt-1',
+            contentType: 'agent-session',
+            agentSessionAgent: 'claude',
+            label: 'Chat',
+            customLabel: null,
+            color: null,
+            groupId: 'group-1',
+            sortOrder: 0,
+            createdAt: 1
+          } satisfies Tab
+        ]
+      }
+    })
+    setAgentAt(store, 'chat-tab:fa0095aa-0b8f-4e0b-a035-f6c949783135', {
+      state: 'done',
+      prompt: 'Finished',
+      agentType: 'claude'
+    })
+
+    churnFreshUnprovable(store, MAX_LIVE_AGENT_STATUSES + 1)
+
+    expect(
+      store.getState().agentStatusByPaneKey.get('chat-tab:fa0095aa-0b8f-4e0b-a035-f6c949783135')
+        ?.state
+    ).toBe('done')
+    expect(store.getState().agentStatusByPaneKey.projection.keys('wt-1')).toContain(
+      'chat-tab:fa0095aa-0b8f-4e0b-a035-f6c949783135'
+    )
+    expect(store.getState().agentStatusByPaneKey.get('gone-0:leaf-0')).toBeUndefined()
   })
 
   it('bounds the map when fresh unprovable rows dominate, without evicting a live pane', () => {
@@ -180,7 +221,7 @@ describe('agentStatusByPaneKey stays bounded (leak regression #9872)', () => {
 
     const live = store.getState().agentStatusByPaneKey
 
-    expect(live['tab-live:leaf-live']?.state).toBe('done')
+    expect(live.get('tab-live:leaf-live')?.state).toBe('done')
   })
 
   it('keeps fresh rows of rootless / empty-snapshot / no-renderer-tab panes (live agents, #2962)', () => {
@@ -219,9 +260,9 @@ describe('agentStatusByPaneKey stays bounded (leak regression #9872)', () => {
     churnDeadLeaves(store, MAX_LIVE_AGENT_STATUSES + 200)
 
     const live = store.getState().agentStatusByPaneKey
-    expect(live['bg-empty:leaf-bg']?.state).toBe('waiting')
-    expect(live['bg-bound:leaf-bound']?.state).toBe('done')
-    expect(live['worker-tab:leaf-worker']?.state).toBe('working')
+    expect(live.get('bg-empty:leaf-bg')?.state).toBe('waiting')
+    expect(live.get('bg-bound:leaf-bound')?.state).toBe('done')
+    expect(live.get('worker-tab:leaf-worker')?.state).toBe('working')
   })
 
   it('evicts an idle unprovable orphan once past the stale window, keeping fresh ones', () => {
@@ -238,8 +279,8 @@ describe('agentStatusByPaneKey stays bounded (leak regression #9872)', () => {
 
     const live = store.getState().agentStatusByPaneKey
 
-    expect(live['gone-stale:leaf']).toBeUndefined()
-    expect(live['gone-fresh-0:leaf']?.state).toBe('working')
+    expect(live.get('gone-stale:leaf')).toBeUndefined()
+    expect(live.get('gone-fresh-0:leaf')?.state).toBe('working')
   })
 
   it('purges recovery and launch records for evicted pane keys', () => {
@@ -271,7 +312,7 @@ describe('agentStatusByPaneKey stays bounded (leak regression #9872)', () => {
     setAgentAt(store, 'tab-live:dead-extra', donePayload(MAX_LIVE_AGENT_STATUSES))
 
     const state = store.getState()
-    expect(state.agentStatusByPaneKey[evictedPaneKey]).toBeUndefined()
+    expect(state.agentStatusByPaneKey.get(evictedPaneKey)).toBeUndefined()
     expect(state.sleepingAgentSessionsByPaneKey[evictedPaneKey]).toBeUndefined()
     expect(state.agentLaunchConfigByPaneKey[evictedPaneKey]).toBeUndefined()
   })

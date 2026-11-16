@@ -1,6 +1,6 @@
 import { structuredAgentLabel } from './structured-agent-session-launch-label'
 import { translate } from '@/i18n/i18n'
-import { joinSentences } from '../../../../../shared/sentence-joining'
+import { joinSentences } from '../../../../../shared/text/sentence-joining'
 import { readStructuredChatTabSavedName } from '@/runtime/native-chat/naming/structured-chat-tab-name'
 import {
   getStructuredLaunchStateBySessionId,
@@ -9,7 +9,7 @@ import {
 import { focusTerminalTabSurface } from '../../../components/terminal-pane/input/focus/focus-terminal-tab-surface'
 import { insertUnifiedTabAfterAnchor } from '../../workspace/tabs/unified-tab-anchor-insertion'
 import { useAppStore } from '@/store/index'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import { sendLayoutCommandToOwner } from '@/runtime/workspace-layout/commands/layout-owner-command'
 import {
   declinedTerminalCanOpen,
@@ -20,7 +20,7 @@ import { notifyHostDeclined } from '@/lib/agent-session/launch/structured-agent-
 import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
 import { nativeChatComposerHasUserContent } from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-cache'
 import { StructuredAgentSessionCreateRefusalError } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
-import type { Tab } from '../../../../../shared/tab-types'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { StructuredAgentLaunchSettlement } from './continuation/structured-agent-launch-settlement'
 import type { ProvisionalLaunchArgs } from '../structured-agent-session-provisional-tab'
 import type { OpenedAgentSessionTab } from './pane/structured-agent-session-tab-open-through-layout-owner'

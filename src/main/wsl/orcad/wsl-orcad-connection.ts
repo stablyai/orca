@@ -10,7 +10,7 @@ import {
   WslOrcadLaunchDeferredError
 } from './wsl-orcad-connection-errors'
 import type { WslHostConnectIntent } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
-import { errorMessage } from '../../../shared/error-message'
+import { errorMessage } from '../../../shared/errors/error-message'
 import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing'
 import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type { OrcadHostTransport } from '../../managed-server/install/orcad-host-transport'

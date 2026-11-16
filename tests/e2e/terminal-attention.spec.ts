@@ -26,7 +26,8 @@ async function createTerminalTab(page: Page): Promise<string> {
 
   await page.getByRole('button', { name: 'New tab' }).click()
   await page
-    .getByRole('menuitem', { name: /New Terminal/i })
+    .getByRole('menu')
+    .getByRole('button', { name: /New Terminal/i })
     .first()
     .click()
 

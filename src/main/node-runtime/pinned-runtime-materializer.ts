@@ -19,7 +19,7 @@ import {
   nodeRuntimeReleaseUrl,
   type NodeRuntimeTarget
 } from '../../shared/node-runtime/node-runtime-pin'
-import { errorMessage } from '../../shared/error-message'
+import { errorMessage } from '../../shared/errors/error-message'
 
 export type PinnedRuntimeMaterializeOptions = {
   fetcher?: MainHttpClient['fetch']

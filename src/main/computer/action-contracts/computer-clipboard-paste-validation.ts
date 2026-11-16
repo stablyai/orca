@@ -4,7 +4,7 @@ import {
   assertClipboardTextWriteWithinLimit,
   assertClipboardTextWriteWithinLimitWithYield,
   isClipboardTextWriteTooLargeError
-} from '../../../shared/clipboard-text'
+} from '../../../shared/clipboard/clipboard-text'
 import { RuntimeClientError } from '../runtime-client-error'
 
 export function validateComputerClipboardPasteText(text: string): void {

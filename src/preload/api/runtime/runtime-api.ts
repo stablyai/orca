@@ -1,4 +1,8 @@
 import type {
+  RendererStatusPublication,
+  RendererStatusAck
+} from '../../../shared/agent-status/renderer-status-publication'
+import type {
   CrewSubscriptionAttemptArgs,
   CrewSubscriptionAttemptCallbacks,
   CrewSubscriptionSetupResult
@@ -34,6 +38,7 @@ export type RuntimeEnvironmentSubscriptionHandle = {
 
 export type RuntimeApi = {
   runtime: {
+    syncAgentStatus: (batch: RendererStatusPublication) => Promise<RendererStatusAck>
     syncWindowGraph: (
       graph: RuntimeRendererSyncWindowGraph
     ) => Promise<RuntimeSyncWindowGraphResult>

@@ -2,7 +2,7 @@
 
 import { useCallback, useSyncExternalStore } from 'react'
 import { AppState } from 'react-native'
-import { MOBILE_RELAY_HOSTS_CHANGED_EVENT_RUNTIME_CAPABILITY } from '../../../../src/shared/mobile-desktop-relay-contract'
+import { MOBILE_RELAY_HOSTS_CHANGED_EVENT_RUNTIME_CAPABILITY } from '../../../../src/shared/remote-runtime/relay/mobile-desktop-relay-contract'
 import { readViewBase } from '../../query/host-read-client'
 import type { MobileRelayHost } from '../../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'

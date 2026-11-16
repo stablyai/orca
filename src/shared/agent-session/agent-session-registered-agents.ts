@@ -3,7 +3,7 @@
 import * as z from 'zod'
 import type { AgentSessionCapabilities } from './agent-session-capabilities'
 import { isStructuredAgentId } from './lifecycle/provider-handles/agent-session-provider-handle-encoding'
-import { openEnum } from '../zod-salvage'
+import { openEnum } from '../validation/zod-salvage'
 
 export const AGENT_SESSION_AGENTS_METHOD = 'agentSession.agents'
 
@@ -30,6 +30,8 @@ const registeredAgentSchema = z.object({
     rewind: capabilityFlag,
     compact: capabilityFlag,
     threadGoal: capabilityFlag,
+    // Optional, like fork: absent stays absent, and anything but true offers no MCP panel.
+    mcpServers: z.literal(true).optional().catch(undefined),
     contextUsage: capabilityFlag,
     imagePrompts: capabilityFlag,
     // An unknown fork level reads as absent: the host never forks for this client.

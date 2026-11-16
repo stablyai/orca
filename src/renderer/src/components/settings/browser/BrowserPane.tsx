@@ -7,6 +7,8 @@ import { getBrowserLinkRoutingDescription } from './routing/browser-link-routing
 import { getBrowserUsePaneSearchEntries } from './use/browser-use-search'
 import { BrowserHomePageSetting } from './BrowserHomePageSetting'
 import { BrowserDefaultZoomSetting } from './BrowserDefaultZoomSetting'
+import { BrowserMemorySaverSetting } from './BrowserMemorySaverSetting'
+import { getBrowserMemorySaverSearchEntry } from './browser-memory-saver-search'
 import { BrowserUseSetup } from './use/BrowserUsePane'
 import { BrowserSearchEngineSetting } from './BrowserSearchEngineSetting'
 import { BrowserLinkRoutingSetting } from './routing/BrowserLinkRoutingSetting'
@@ -131,6 +133,10 @@ export function BrowserPane({
   const showProfileScope = matchesSettingsSearch(searchQuery, [browserSearchEntries[12]])
   const showLinkRoutingBackground = matchesSettingsSearch(searchQuery, [browserSearchEntries[13]])
   const showPasswords = matchesSettingsSearch(searchQuery, [getBrowserPasswordsSearchEntry(t)])
+  // Browser tabs run in this desktop app; the web client has none to free.
+  const showMemorySaver =
+    !isWebClientLocation() &&
+    matchesSettingsSearch(searchQuery, [getBrowserMemorySaverSearchEntry()])
   const showBrowserUse = matchesSettingsSearch(searchQuery, getBrowserUsePaneSearchEntries())
   const isMac = isMacUserAgent()
   const linkRoutingDescription = getBrowserLinkRoutingDescription(
@@ -262,6 +268,7 @@ export function BrowserPane({
       {showHomePage ||
       showSearchEngine ||
       showDefaultZoom ||
+      showMemorySaver ||
       showUserAgent ||
       showSitePermissions ||
       showLinkRouting ||
@@ -293,6 +300,10 @@ export function BrowserPane({
               value={browserDefaultZoomLevel}
               onChange={setBrowserDefaultZoomLevel}
             />
+          ) : null}
+
+          {showMemorySaver ? (
+            <BrowserMemorySaverSetting settings={settings} updateSettings={updateSettings} />
           ) : null}
 
           {showUserAgent ? <BrowserUserAgentSetting hostId={settingsFocusedHostId} /> : null}

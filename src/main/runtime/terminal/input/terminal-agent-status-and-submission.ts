@@ -243,7 +243,7 @@ export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends Orca
     return selectFreshExplicitAgentStatus({
       handle,
       paneKey: this.getPaneKeyForTerminalHandle(handle),
-      hookRows: this.getAgentStatusSnapshotFn?.() ?? [],
+      hookRows: this.publicPaneStatusFn?.(this.getPaneKeyForTerminalHandle(handle) ?? '') ?? [],
       screenMayHoldDialog: () => this.screenMayHoldAgentDialog(ptyId)
     })
   }

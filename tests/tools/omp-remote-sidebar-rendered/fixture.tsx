@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import React, { useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { CompactAgentRow } from '../../../src/renderer/src/components/sidebar/workspace-card/activity/worktree-card-compact-agent-row'
@@ -11,7 +12,7 @@ import './fixture.css'
 const now = Date.now()
 const worktreeId = 'folder:remote-project'
 const state: Parameters<typeof selectLiveAgentStatusEntriesForWorktree>[0] = {
-  agentStatusByPaneKey: {},
+  agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
   tabsByWorktree: {},
   unifiedTabsByWorktree: {},
 
@@ -23,23 +24,30 @@ for (const [tabId, connectionId, prompt] of [
   ['local-tab', undefined, 'Local completed orphan']
 ] as const) {
   const paneKey = makePaneKey(tabId, '11111111-1111-4111-8111-111111111111')
-  state.agentStatusByPaneKey[paneKey] = {
-    paneKey,
-    tabId,
-    worktreeId,
-    connectionId,
-    state: 'done',
-    agentType: 'omp',
-    prompt,
-    updatedAt: now,
-    stateStartedAt: now,
-    stateHistory: []
-  }
+  state.agentStatusByPaneKey = state.agentStatusByPaneKey.replace([
+    [
+      paneKey,
+      {
+        paneKey,
+        tabId,
+        worktreeId,
+        connectionId,
+        state: 'done',
+        agentType: 'omp',
+        prompt,
+        updatedAt: now,
+        stateStartedAt: now,
+        stateHistory: []
+      }
+    ]
+  ])
 }
 function Fixture() {
   const [retracted, setRetracted] = useState(false)
   Object.assign(window, { sidebarProof: { retract: () => setRetracted(true) } })
-  const current = retracted ? { ...state, agentStatusByPaneKey: {} } : state
+  const current = retracted
+    ? { ...state, agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})) }
+    : state
   const rows = buildWorktreeAgentRows({
     tabs: [],
     entries: selectLiveAgentStatusEntriesForWorktree(current, worktreeId),

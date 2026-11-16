@@ -93,6 +93,7 @@ beforeEach(() => {
         remove: reposRemove
       },
       pty: { kill: ptyKill },
+      browser: { unregisterGuest: vi.fn(async () => {}) },
       projectGroups: {
         list: projectGroupsList,
         create: projectGroupsCreate,

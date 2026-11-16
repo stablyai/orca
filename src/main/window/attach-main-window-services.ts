@@ -117,7 +117,12 @@ export async function attachMainWindowServices(
   registerDaemonManagementHandlers()
   // Background git worktree list can trigger protected-folder prompts on macOS; use remembered IDs.
   scheduleHistoryGc(async () => {
-    return getKnownWorktreeIdsForHistoryGc(store)
+    // An unknown daemon inventory keeps every session folder but still runs the rest of the GC.
+    const liveSessionIds = await listLiveDaemonPtyIds().catch(() => null)
+    return {
+      ...getKnownWorktreeIdsForHistoryGc(store),
+      liveSessionIds: liveSessionIds && new Set(liveSessionIds)
+    }
   })
   openCodeHookService.configDirGc.schedule(listLiveDaemonPtyIds)
   openCode2HookService.configDirGc.schedule(listLiveDaemonPtyIds)

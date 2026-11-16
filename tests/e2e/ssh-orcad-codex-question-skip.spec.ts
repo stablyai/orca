@@ -58,7 +58,7 @@ test('skipping a Codex async question in a managed SSH terminal clears its waiti
     const rowState = () =>
       page.evaluate(
         (prompt) =>
-          Object.values(window.__store?.getState().agentStatusByPaneKey ?? {}).find(
+          Array.from(window.__store?.getState().agentStatusByPaneKey?.values() ?? []).find(
             (entry) => entry.prompt === prompt && entry.agentType === 'codex'
           )?.state ?? null,
         prompt

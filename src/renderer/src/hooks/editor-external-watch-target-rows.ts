@@ -1,6 +1,6 @@
 import type { AppState } from '@/store/types'
 import type { ExecutionHostOwnerRow } from '../../../shared/execution-host/worktree-execution-host-resolution'
-import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
+import { isWindowsAbsolutePathLike } from '../../../shared/file-access/cross-platform-path'
 import {
   isLocalExecutionHost,
   parseExecutionHostId,

@@ -20,7 +20,7 @@ import {
   isPathInsideOrEqual,
   isWslUncPathForCallerLinuxPath,
   isWslUncPathForLinuxMountedPath
-} from '../../../../shared/cross-platform-path'
+} from '../../../../shared/file-access/cross-platform-path'
 import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { branchSelectorMatches, runtimePathsEqual } from '../catalog/runtime-worktree-path-identity'
 

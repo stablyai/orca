@@ -1,5 +1,5 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import {
   getCodexSelectionTargetForAccount,
@@ -8,7 +8,7 @@ import {
 import {
   getCodexSelectionLaneKey,
   type CodexAccountSelectionTarget
-} from '../../../../shared/codex-selection-lane'
+} from '../../../../shared/agent-accounts/codex/codex-selection-lane'
 import type {
   CodexPaneAccountRecord,
   CodexPaneHomeRoute

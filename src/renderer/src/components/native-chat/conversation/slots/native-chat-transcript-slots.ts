@@ -24,7 +24,7 @@ import type { NativeChatTurnDiff } from '../../../../../../shared/native-chat/to
 import type { NativeChatOpenedPullRequest } from '../../../../../../shared/native-chat/tools/native-chat-opened-pull-requests'
 import type { NativeChatSubagentHead } from '../../subagents/native-chat-subagent-scope'
 import { compareNativeChatDisplayMessages as compareMessages } from '../../../../../../shared/native-chat/transcript/messages/native-chat-message-order'
-import { isGeneratedImageOperation } from '../../../../../../shared/native-chat/native-chat-generated-image'
+import { isImageOperation } from '../../../../../../shared/native-chat/native-chat-generated-image'
 import {
   nativeChatRowRendersProse,
   nativeChatRowSpeaksOrActs
@@ -267,7 +267,7 @@ export function buildNativeChatTranscript(
       continue
     }
     if (
-      !slot.message.blocks.some(isGeneratedImageOperation) &&
+      !slot.message.blocks.some(isImageOperation) &&
       nativeChatAgentRowWords(slot.message, t).length > 0
     ) {
       lastWordsByTurn.set(slot.turnKey, slot)

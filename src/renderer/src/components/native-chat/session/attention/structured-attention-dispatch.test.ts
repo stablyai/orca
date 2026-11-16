@@ -11,7 +11,7 @@ import { createTestStore } from '@/store/testing/app-store-test-fixture'
 import { makeTabGroup, makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
-import type { NotificationDispatchRequest } from '../../../../../../shared/notification-settings-types'
+import type { NotificationDispatchRequest } from '../../../../../../shared/notifications/notification-settings-types'
 import type { StructuredTab } from '../status/structured-agent-session-tabs'
 import { isStructuredTab } from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
 
@@ -211,5 +211,25 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
       tabDot: 'agent-completion',
       surfaceDot: 'agent-completion'
     })
+  })
+
+  it('keeps unread state but sends no notification for a worktree the user muted', () => {
+    store.setState({ notificationsMutedByWorktree: { [WORKSPACE]: true } })
+    dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
+    expect(indicators()).toEqual({
+      workspaceBold: true,
+      paneDot: 'agent-completion',
+      tabDot: 'agent-completion',
+      surfaceDot: 'agent-completion'
+    })
+    expect(dispatched).toEqual([])
+  })
+
+  it('still notifies for worktrees that are not muted', () => {
+    store.setState({
+      notificationsMutedByWorktree: { 'repo1::/tmp/other': true }
+    })
+    dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
+    expect(dispatched).toHaveLength(1)
   })
 })

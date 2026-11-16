@@ -22,6 +22,10 @@ export type ResolvedBrowserCommandTarget = {
   browserPageId?: string
 }
 
+export type BrowserAnswerAdmission = (
+  target: ResolvedBrowserCommandTarget
+) => ResolvedBrowserCommandTarget
+
 export type ResolvedBrowserPageWebContents = {
   browserPageId: string
   webContents: Electron.WebContents
@@ -67,5 +71,5 @@ export type RuntimeBrowserCommandHost = {
   readBrowserTabBar?(worktreeId: string | undefined): BrowserTabBarEntry[]
   retireRuntimeOwnedBrowserSessionTab?(worktreeId: string, browserPageId: string): boolean | void
   /** Persist/start only when no host window exists; hasStartable reads saved tabs either way. */
-  serveBrowserTabs?: Pick<ServeBrowserTabs, 'opened' | 'start' | 'hasStartable'>
+  serveBrowserTabs?: Pick<ServeBrowserTabs, 'opened' | 'start' | 'hasStartable' | 'savedWorktreeOf'>
 }

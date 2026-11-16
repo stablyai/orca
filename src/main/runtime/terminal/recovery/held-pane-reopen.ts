@@ -1,6 +1,6 @@
 // For paired desktop Reopen, stop held newer services, then start still-held panes; main's frames carry the result.
 
-import type { NewerDaemonReopenResult } from '../../../../shared/newer-daemon-hold'
+import type { NewerDaemonReopenResult } from '../../../../shared/terminal/daemon/newer-daemon-hold'
 import type { PublishedWorkspaceLayout } from '../../../../shared/workspace-layout/published-layout/workspace-layout-published'
 import type { RestoredPane } from './restored-pane-start'
 

@@ -15,7 +15,7 @@ import {
   type StructuredChatTabNames
 } from './structured-chat-tab-name'
 import { isUnifiedTabOwnedByWorktree } from '@/lib/workspace/ownership/unified-tab-host-ownership'
-import type { Tab } from '../../../../../shared/tab-types'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 
 const listeners = new Set<() => void>()

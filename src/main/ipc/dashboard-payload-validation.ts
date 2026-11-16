@@ -2,8 +2,8 @@ import {
   DASHBOARD_MAX_LABEL_LENGTH,
   type DashboardRevealAgentArgs,
   type DashboardSnapshot
-} from '../../shared/dashboard-snapshot'
-import { BoundedMap } from '../../shared/bounded-map'
+} from '../../shared/agent-status/presentation/dashboard-snapshot'
+import { BoundedMap } from '../../shared/collections/bounded-map'
 import { normalizeExecutionHostId } from '../../shared/execution-host'
 import { sanitizeRepoIcon } from '../../shared/repository/appearance/repo-icon'
 import {

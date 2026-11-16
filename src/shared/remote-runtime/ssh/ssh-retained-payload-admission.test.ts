@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getUtf8ByteLength } from '../../utf8-byte-limits'
+import { getUtf8ByteLength } from '../../text/utf8-byte-limits'
 import {
   admitSshConnectionState,
   admitSshDetectedPorts,

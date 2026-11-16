@@ -1,5 +1,5 @@
 import type { ExecutionHostId } from '../../execution-host'
-import type { BuiltInEditorId } from '../../open-in-applications'
+import type { BuiltInEditorId } from '../../editor/launch/open-in-applications'
 
 export type ShellOpenExternalEditorRequest = {
   path: string

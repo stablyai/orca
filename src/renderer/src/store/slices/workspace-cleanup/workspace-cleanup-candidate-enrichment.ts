@@ -9,7 +9,7 @@ import {
   getWorkspaceCleanupCandidateHostId,
   getWorkspaceCleanupCandidateIdentity
 } from '../../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
-import { mapWithConcurrency } from '../../../../../shared/map-with-concurrency'
+import { mapWithConcurrency } from '../../../../../shared/concurrency/map-with-concurrency'
 import { getWorktreeVisitTimestamp } from '@/lib/workspace/activation/worktree-visit-recency'
 import { withCleanupVisitEvidence } from '../../../../../shared/workspace-cleanup/workspace-last-active'
 import {

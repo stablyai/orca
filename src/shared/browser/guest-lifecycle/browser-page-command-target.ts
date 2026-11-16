@@ -1,4 +1,4 @@
-import type { WindowShortcutInput } from '../../window-shortcut-policy'
+import type { WindowShortcutInput } from '../../keybindings/window-shortcut-policy'
 
 /** The page a guest-forwarded chrome chord (reload, history, address bar) is aimed at. */
 export type BrowserPageCommandTarget = {
