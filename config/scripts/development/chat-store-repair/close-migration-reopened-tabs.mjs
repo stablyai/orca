@@ -400,7 +400,8 @@ function processName(pid) {
   const output =
     process.platform === 'win32'
       ? run('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'])
-      : run('ps', ['-p', String(pid), '-o', 'comm='])
+      : // The command line, not comm: Linux shows a node process's main thread name there.
+        run('ps', ['-p', String(pid), '-o', 'args='])
   return output?.trim() || null
 }
 
