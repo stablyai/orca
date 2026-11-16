@@ -66,6 +66,17 @@ describe('terminal search refresh after output', () => {
     expect(terminal.getSelection()).toBe('plain')
   })
 
+  it('drops a pending refresh after a find without decorations', async () => {
+    terminal.write('needle two\r\n')
+    await vi.advanceTimersByTimeAsync(50)
+    search.findNext('needle')
+    terminal.select(0, 1, 5)
+
+    await vi.advanceTimersByTimeAsync(1_000)
+
+    expect(terminal.getSelection()).toBe('plain')
+  })
+
   it('leaves the selection empty after the user clears it', async () => {
     terminal.clearSelection()
 
