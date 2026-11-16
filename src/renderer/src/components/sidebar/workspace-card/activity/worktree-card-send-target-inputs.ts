@@ -33,7 +33,7 @@ export const EMPTY_SEND_TARGET_INPUTS: RunningAgentTargetState = Object.freeze({
   terminalLayoutsByTabId: {},
   ptyIdsByTabId: {},
   runtimePaneTitlesByTabId: {},
-  sendApprovalGuardEnvironmentIds: new Set()
+  sendApprovalGuardEnvironmentIds: new Set<string>()
 })
 
 // Inactive cards ignore picker-mode and freshness-epoch changes.

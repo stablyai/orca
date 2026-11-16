@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type {
   TerminalPaneLayoutNode,
@@ -48,7 +49,7 @@ function state(
     createdAt: 0
   }
   return {
-    agentStatusByPaneKey: new Map([[PANE_KEY, statusEntry]]),
+    agentStatusByPaneKey: acceptedAgentStatuses([[PANE_KEY, statusEntry]]),
     tabsByWorktree: { wt: [tab] },
     unifiedTabsByWorktree: {},
     terminalLayoutsByTabId: {
