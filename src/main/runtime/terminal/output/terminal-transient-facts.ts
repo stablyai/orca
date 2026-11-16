@@ -1,5 +1,6 @@
 import { OrcaRuntimeWithScheduleWaitBlockedCheck } from '../wait/terminal-wait-blocked-checks'
 import type { PtyTransientFact } from '../../../providers/pty/events'
+import { isJobStopStatus } from '../../../../shared/terminal/output/terminal-osc133-command-finished'
 import type {
   TerminalSideEffectBatch,
   TerminalSideEffectFact
@@ -32,7 +33,7 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
         this.recordTerminalSideEffectFact(ptyId, { kind: 'bell' })
         return
       case 'command-finished':
-        this.retirePtyAgentLaunchAuthority(ptyId, true)
+        this.retirePtyAgentLaunchAuthority(ptyId, !isJobStopStatus(fact.exitCode))
         this.recordTerminalSideEffectFact(ptyId, {
           kind: 'command-finished',
           exitCode: fact.exitCode
