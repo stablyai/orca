@@ -4,7 +4,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { LayoutEditorView } from '../../../../shared/workspace-layout/editor-tabs/layout-editor-view'
 import type { WorkspaceLayoutModel } from '../../../../shared/workspace-layout/workspace-layout-model'

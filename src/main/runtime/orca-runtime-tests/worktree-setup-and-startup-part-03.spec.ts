@@ -1,4 +1,4 @@
-import '../../../shared/constants'
+import '../../../shared/orca-profiles/constants'
 import { describe, expect, it, vi } from 'vitest'
 import './runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../orca-runtime'

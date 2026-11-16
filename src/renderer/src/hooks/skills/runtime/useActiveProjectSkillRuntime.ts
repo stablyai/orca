@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useActiveSkillDiscoveryRuntimeTarget } from '../discovery/use-active-skill-discovery-runtime-target'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import {
   getGlobalWindowsExecutionRuntimeContext,
   getLocalProjectExecutionRuntimeContext

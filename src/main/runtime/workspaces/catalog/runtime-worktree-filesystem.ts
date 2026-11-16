@@ -9,7 +9,7 @@ import {
   toLocalWorktreeRuntimePath
 } from '../../../workspaces/removal/local-worktree-filesystem'
 import { isWorktreePathMissing } from '../../../workspaces/removal/worktree-removal-safety'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { getRepoOwnedWorktreeMeta } from '../../../workspaces/catalog/worktree-metadata-ownership'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import {

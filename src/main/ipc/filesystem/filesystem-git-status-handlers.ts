@@ -36,7 +36,7 @@ import { applyGitStatusUpstreamRefWatchRequest } from '../worktrees/git/git-stat
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
 import { readWorktreeGitUnlessWslStopped } from './wsl-gated-worktree-git-read'
 import { requireReachableGitRoute } from '../../providers/execution-host-provider-dispatch'
-import { getConnectionExecutionHostId } from '../../../shared/execution-host'
+import { getConnectionExecutionHostId } from '../../../shared/execution-host/execution-host'
 import {
   assertWslUncPathRunning,
   noteWslDistroWokenForPath,

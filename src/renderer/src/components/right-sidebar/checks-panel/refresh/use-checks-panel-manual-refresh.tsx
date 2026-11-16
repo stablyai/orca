@@ -1,4 +1,4 @@
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { useCallback } from 'react'
 import { useAppStore } from '@/store/index'
 import { buildGitHubPRRefreshStateClearToken } from '@/store/github/refresh/pr-refresh-state'

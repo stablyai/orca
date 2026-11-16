@@ -6,9 +6,13 @@ import { isAbsolute, join } from 'node:path'
 import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repository/repo-types'
 import type { RepositoryMetadataOwner } from '../../workspaces/catalog/imported-folder-project-link'
-import { DEFAULT_REPO_BADGE_COLOR, getDefaultWorkspaceDir } from '../../../shared/constants'
+import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/repository/appearance/repo-badge-color'
+import { getDefaultWorkspaceDir } from '../../../shared/orca-profiles/constants'
 import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../shared/execution-host/execution-host'
 import { getEffectiveHostSetting } from '../../../shared/execution-host/host-setting-overrides'
 import { probeGitAvailability } from '../../git/command-runner/host-routing/git-availability'
 import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'

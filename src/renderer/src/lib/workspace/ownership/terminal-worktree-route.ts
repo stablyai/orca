@@ -1,6 +1,6 @@
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import { isEphemeralSetupTerminalWorktreeId } from '../../../../../shared/workspace-setup/ephemeral-setup-terminal-worktree-id'
-import { parseExecutionHostId } from '../../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import type { AppState } from '@/store/types'
 import { resolveOwnerOrLocal } from './worktree-runtime-owner'

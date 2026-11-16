@@ -4,12 +4,12 @@ import { activateStructuredAgentSessionTab } from '@/lib/agent-session/structure
 import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import { jumpToWorktreeFromSidebar } from '@/lib/workspace/activation/worktree-jump-navigation'
 import { useAppStore } from '@/store/index'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/workspace/identity/floating-workspace-id'
 import {
   getSettingsFocusedExecutionHostId,
   getWorktreeExecutionHostId,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
 import type { AppState } from '@/store/types'

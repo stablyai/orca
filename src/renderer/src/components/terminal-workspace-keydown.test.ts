@@ -9,7 +9,7 @@ import '@/components/floating-terminal/workspace/floating-workspace-tab-creation
 import '@/lib/notifications/terminal-shortcut-capture-notification'
 import '@/lib/workspace/tabs/workspace-tab-commands'
 
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/workspace/identity/floating-workspace-id'
 import {
   ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT,
   type EditorRequestCmdSaveDetail
