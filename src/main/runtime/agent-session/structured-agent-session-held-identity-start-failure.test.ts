@@ -32,8 +32,25 @@ import { ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHos
 // The start retry backoff's promise delay must use the fake clock this suite jumps.
 vi.mock('node:timers/promises', async (importOriginal) => ({
   ...(await importOriginal<typeof TimersPromises>()),
-  // ast-grep-ignore: test-no-real-time-wait -- Backed by the fake setTimeout installed per test.
-  setTimeout: (ms?: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+  // Honors the abort signal: stop aborts journal maintenance's rest, which only runs under load.
+  setTimeout: <T>(ms?: number, value?: T, options?: { signal?: AbortSignal }) =>
+    new Promise<T | undefined>((resolve, reject) => {
+      const signal = options?.signal
+      if (signal?.aborted) {
+        reject(signal.reason)
+        return
+      }
+      // ast-grep-ignore: test-no-real-time-wait -- Backed by the fake setTimeout installed per test.
+      const timer = setTimeout(() => resolve(value), ms)
+      signal?.addEventListener(
+        'abort',
+        () => {
+          clearTimeout(timer)
+          reject(signal.reason)
+        },
+        { once: true }
+      )
+    })
 }))
 
 let directory: string | undefined
