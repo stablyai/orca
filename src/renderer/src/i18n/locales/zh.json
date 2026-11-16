@@ -23411,6 +23411,7 @@
         "selectGroup": "选择 {{group}} 中的所有会话",
         "reasonWsl": "WSL 终端",
         "reasonOwnFolder": "使用你自己的 Claude 文件夹",
+        "reasonPinnedWorktree": "工作区使用自己的账号",
         "reasonUnknownAccount": "账户未知",
         "reasonNoSession": "无法恢复",
         "notMovedOne": "另有 1 个会话未移动",
@@ -23459,6 +23460,11 @@
       "cancel": "取消",
       "save": "保存",
       "unsupportedHost": "请更新 {{host}} 上的 Orca 以在那里更改此设置"
+    },
+    "worktreeAccount": {
+      "claudeSubmenu": "Claude 账号",
+      "codexSubmenu": "Codex 账号",
+      "followSelection": "跟随所选账号"
     }
   },
   "osDocumentOpen": {

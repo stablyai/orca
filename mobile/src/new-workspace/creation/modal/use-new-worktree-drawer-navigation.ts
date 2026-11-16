@@ -7,6 +7,7 @@ export type NewWorktreeDrawerView =
   | 'project'
   | 'runTarget'
   | 'agent'
+  | 'account'
   | 'trust'
 
 // One frame: every sheet shares BottomDrawerModalHost's one native Modal, so there is no second iOS presentation to wait out.

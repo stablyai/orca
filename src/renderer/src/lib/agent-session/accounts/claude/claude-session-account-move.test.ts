@@ -192,6 +192,20 @@ describe('findMovableClaudeSessions', () => {
     ])
   })
 
+  it('leaves sessions in a worktree pinned to its account running through a switch', async () => {
+    seedPanes([{ n: 1, agentType: 'claude' }])
+    useAppStore.setState((state) => ({
+      settings: { ...state.settings!, claudeAccountPinsByWorktree: { wt1: 'acct-a' } }
+    }))
+
+    const found = await scan()
+
+    expect(found.onAccount).toEqual([])
+    expect(found.cantMove).toEqual([
+      expect.objectContaining({ ptyId: ptyId(1), reason: 'pinned-worktree' })
+    ])
+  })
+
   it('leaves a node or python program the user started in a pane Claude has left', async () => {
     seedPanes([
       { n: 1, agentType: 'claude' },

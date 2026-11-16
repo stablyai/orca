@@ -1,4 +1,5 @@
 import { translate } from '../../i18n/mobile-i18n'
+import type { WorktreeAccountPins } from '../../../../src/shared/worktree-account-pin-settings'
 import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
@@ -53,6 +54,7 @@ export type CreateWorktreeWithNameRetryArgs = {
   maxAttempts?: number
   /** The workspace the new worktree is attached to, on every attempt. */
   parent?: WorktreeCreateParent
+  accountPins?: WorktreeAccountPins
   mintMutationId?: () => string
   mintLaunchOperationId?: () => string
 }
@@ -74,7 +76,12 @@ export async function createWorktreeWithNameRetry(
     const candidateName = args.nameWasGenerated
       ? getGeneratedWorktreeCreateRetryCandidate(baseName, attempt)
       : getClientWorktreeCreateCandidate(baseName, attempt)
-    const candidateParams = { ...buildParams(candidateName, attempt), ...args.parent }
+    const candidateParams = {
+      ...buildParams(candidateName, attempt),
+      ...args.parent,
+      // Worker accounts (#9496): the host pins the new worktree before its agent starts.
+      ...(args.accountPins ? { accountPins: args.accountPins } : {})
+    }
     if (attempt === 0 && candidateParams.branchIntent) {
       if ((await args.branchIntentSupported) !== true) {
         return {

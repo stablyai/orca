@@ -22076,6 +22076,7 @@
         "selectGroup": "{{group}} grubundaki tüm oturumları seç",
         "reasonWsl": "WSL terminali",
         "reasonOwnFolder": "Kendi Claude klasörünüzü kullanıyor",
+        "reasonPinnedWorktree": "Çalışma alanı kendi hesabını kullanıyor",
         "reasonUnknownAccount": "Hesap bilinmiyor",
         "reasonNoSession": "Sürdürülemiyor",
         "notMovedOne": "Diğer 1 oturum taşınmadı.",
@@ -22131,7 +22132,12 @@
         "failed": "Oturum açılamadı. Yeniden deneyin."
       }
     },
-    "remoteScopeAccountsAddHere": "{{value0}} tarafından yönetilen hesaplar gösteriliyor. Yeni hesaplar için oturum orada açılır; işlemi bu cihazın tarayıcısında tamamlarsınız."
+    "remoteScopeAccountsAddHere": "{{value0}} tarafından yönetilen hesaplar gösteriliyor. Yeni hesaplar için oturum orada açılır; işlemi bu cihazın tarayıcısında tamamlarsınız.",
+    "worktreeAccount": {
+      "claudeSubmenu": "Claude hesabı",
+      "codexSubmenu": "Codex hesabı",
+      "followSelection": "Seçili hesabı izle"
+    }
   },
   "fileSearch": {
     "failed": "Arama başarısız oldu. Tekrar deneyin.",

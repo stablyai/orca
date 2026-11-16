@@ -52,6 +52,11 @@ that the CLI is installed; a missing one fails as an `agent_readiness` timeout.
   `ORCA worktree create --name <name> --no-parent --agent <agent> --prompt "<brief>" --json`
   and end your turn.
 - Add `--model` only if the user named one.
+- Add `--account <email>` only when the user assigns work to their accounts. It
+  pins a new worktree (new-child or new-top-level) to that Claude or Codex
+  account, so the worker runs on it whatever the selected account. A worker
+  paused at its account's usage limit resumes there on its own: never restart
+  its task on another account.
 - If `worker-start` fails, do not rerun it; read `failedStage` and load
   `references/recovery-and-cleanup.md`.
 - To talk to a worker, use

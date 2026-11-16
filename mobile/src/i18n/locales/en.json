@@ -1531,6 +1531,11 @@
     "smartRailRow": {
       "title": "Smart rail",
       "subtitle": "Shows keys for what your agent is doing"
+    },
+    "newWorktreeAccount": {
+      "claude": "Claude Account",
+      "codex": "Codex Account",
+      "followSelection": "Follow selected account"
     }
   },
   "pullRequest": {

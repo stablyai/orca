@@ -1135,6 +1135,11 @@
         "planMode": "Plan",
         "exitPlanMode": "Plan modundan çık"
       }
+    },
+    "newWorktreeAccount": {
+      "claude": "Claude hesabı",
+      "codex": "Codex hesabı",
+      "followSelection": "Seçili hesabı izle"
     }
   },
   "connection": {

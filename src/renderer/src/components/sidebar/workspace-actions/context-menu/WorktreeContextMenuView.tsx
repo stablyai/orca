@@ -15,6 +15,7 @@ import { WorkspaceVmLifecycleMenuItems } from '../sleep/WorkspaceVmLifecycleMenu
 import { isEventTargetInsideCurrentTarget } from '../../workspace-card/controller/worktree-card-dom-events'
 import { useTranslate } from '@/i18n/use-translate'
 import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model'
+import { WorktreeAgentAccountSubMenu } from './WorktreeAgentAccountSubMenu'
 import { WorktreeStatusMenuItems } from '../../workspace-status/presentation/WorktreeStatusMenuItems'
 import { WorktreeWslHostStartMenuItem } from '../../workspace-card/host/WorktreeWslHostStartMenuItem'
 import { WorktreeContextMenuOverlays } from './WorktreeContextMenuOverlays'
@@ -209,6 +210,21 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
               <WorktreeCopySubMenu model={model} />
               <WorktreeLineageSubMenu model={model} />
               <WorktreeProjectGroupSubMenu model={model} />
+              {/* Why: pins route host accounts; SSH machines keep their own Claude logins. */}
+              {repo?.connectionId ? null : (
+                <>
+                  <WorktreeAgentAccountSubMenu
+                    agent="claude"
+                    worktreeId={worktree.id}
+                    disabled={isDeleting}
+                  />
+                  <WorktreeAgentAccountSubMenu
+                    agent="codex"
+                    worktreeId={worktree.id}
+                    disabled={isDeleting}
+                  />
+                </>
+              )}
             </>
           )}
           {isMultiContext && hasAnyContextLineage ? (

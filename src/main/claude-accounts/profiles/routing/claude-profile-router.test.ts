@@ -1,3 +1,4 @@
+import { resolveStructuredClaudeAccountHomePath } from '../../../runtime/agent-session/environment/structured-agent-account-home'
 import { spawnSync } from 'node:child_process'
 import {
   chmodSync,
@@ -217,6 +218,52 @@ describe('ClaudeProfileRouter', () => {
     await expect(signedOutLaunch).resolves.toMatchObject({ configDir: f.home('a') })
   })
 
+  it('launches a pinned worktree on its account whatever the selection', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    const f = fixture()
+    for (const id of ['a', 'b']) {
+      const profile = describeClaudeProfile(f.dataRoot, id, {
+        executionHostId: 'local',
+        runtime: 'host'
+      })
+      prepareClaudeProfileDirectory(f.dataRoot, profile, f.userHome)()
+    }
+    signIn(f.userHome, 'c@example.test')
+    f.settings.claudeAccountPinsByWorktree = { 'repo::wt-1': 'b' }
+    const pinnedLaunch = f.router.prepareLaunch('repo::wt-1')
+    await advanceRefreshDeadline(pinnedLaunch, 500)
+    await expect(pinnedLaunch).resolves.toMatchObject({
+      configDir: f.home('b'),
+      provenance: 'profile:b'
+    })
+    const unpinnedLaunch = f.router.prepareLaunch('repo::wt-2')
+    await advanceRefreshDeadline(unpinnedLaunch, 500)
+    await expect(unpinnedLaunch).resolves.toMatchObject({ configDir: f.home('a') })
+  })
+
+  it('records a pinned worktree chat under its account, not the selection', async () => {
+    const f = fixture()
+    for (const id of ['a', 'b']) {
+      mkdirSync(f.home(id), { recursive: true })
+      signIn(f.home(id), `${id}@example.test`)
+    }
+    f.settings.claudeAccountPinsByWorktree = { 'repo::wt-1': 'b' }
+    installClaudeProfileRouter(f.router)
+    try {
+      const read = (worktreeId: string) =>
+        resolveStructuredClaudeAccountHomePath({
+          launchEnv: {},
+          wslDistro: null,
+          worktreeId,
+          getClaudeConfigDirectory: () => null
+        })
+      await expect(read('repo::wt-1')).resolves.toBe(f.home('b'))
+      await expect(read('repo::wt-2')).resolves.toBe(f.home('a'))
+    } finally {
+      installClaudeProfileRouter(undefined)
+    }
+  })
+
   it('publishes the selected folder, System default as empty, and no file without accounts', async () => {
     const f = fixture()
     mkdirSync(f.home('a'), { recursive: true })
@@ -282,6 +329,25 @@ describe('ClaudeProfileRouter', () => {
         f.router.publish()
         expect(claude(pane)).toBe(inherited.CLAUDE_CONFIG_DIR ?? 'unset')
       }
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'keeps a pinned worktree terminal on its account when the selection moves',
+    () => {
+      const f = fixture()
+      mkdirSync(f.home('a'), { recursive: true })
+      mkdirSync(f.home('b'), { recursive: true })
+      const claude = claudeShellProbe(f.root)
+      f.settings.claudeAccountPinsByWorktree = { 'repo::wt-1': 'a' }
+      f.router.publish()
+      const pinned = f.router.terminalEnv(undefined, 'repo::wt-1')
+      const unpinned = f.router.terminalEnv(undefined, 'repo::wt-2')
+      expect(claude(pinned)).toBe(f.home('a'))
+      f.settings.activeClaudeManagedAccountId = 'b'
+      f.router.publish()
+      expect(claude(pinned)).toBe(f.home('a'))
+      expect(claude(unpinned)).toBe(f.home('b'))
     }
   )
 

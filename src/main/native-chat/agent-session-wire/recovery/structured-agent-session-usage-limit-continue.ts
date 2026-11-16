@@ -129,9 +129,9 @@ export class StructuredAgentSessionUsageLimitContinue {
     return (
       !this.disposed &&
       cut.chain < USAGE_LIMIT_CONTINUE_CHAIN_LIMIT &&
-      this.deps.host.usageLimitAutoContinue?.isEnabled() === true &&
-      this.holds.schedulable(id, cut, this.deps.now()) &&
       record !== null &&
+      this.deps.host.usageLimitAutoContinue?.isEnabled(record) === true &&
+      this.holds.schedulable(id, cut, this.deps.now()) &&
       record.location.executionHostId === this.deps.host.store.hostId &&
       !this.deps.host.usageLimitAutoContinue?.isWorkspaceAsleep(record.location.workspaceId) &&
       this.deps.host.store.isSessionTabVisible(id) &&

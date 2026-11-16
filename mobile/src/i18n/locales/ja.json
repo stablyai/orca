@@ -1131,6 +1131,11 @@
         "planMode": "プラン",
         "exitPlanMode": "プランモードを終了"
       }
+    },
+    "newWorktreeAccount": {
+      "claude": "Claude アカウント",
+      "codex": "Codex アカウント",
+      "followSelection": "選択中のアカウントに従う"
     }
   },
   "connection": {

@@ -1131,6 +1131,11 @@
         "planMode": "計畫",
         "exitPlanMode": "結束計畫模式"
       }
+    },
+    "newWorktreeAccount": {
+      "claude": "Claude 帳號",
+      "codex": "Codex 帳號",
+      "followSelection": "跟隨所選帳號"
     }
   },
   "connection": {

@@ -21545,6 +21545,7 @@
         "selectGroup": "Seleccionar todas las sesiones de {{group}}",
         "reasonWsl": "Terminal de WSL",
         "reasonOwnFolder": "Usa tu propia carpeta de Claude",
+        "reasonPinnedWorktree": "El espacio usa su propia cuenta",
         "reasonUnknownAccount": "Cuenta desconocida",
         "reasonNoSession": "No se puede reanudar",
         "notMovedOne": "Otra sesión no se movió.",
@@ -21591,7 +21592,12 @@
         "failed": "No se pudo iniciar sesión. Vuelve a intentarlo."
       }
     },
-    "remoteScopeAccountsAddHere": "Mostrando cuentas administradas por {{value0}}. Las cuentas nuevas inician sesión allí; terminas en el navegador de este dispositivo."
+    "remoteScopeAccountsAddHere": "Mostrando cuentas administradas por {{value0}}. Las cuentas nuevas inician sesión allí; terminas en el navegador de este dispositivo.",
+    "worktreeAccount": {
+      "claudeSubmenu": "Cuenta de Claude",
+      "codexSubmenu": "Cuenta de Codex",
+      "followSelection": "Seguir la cuenta seleccionada"
+    }
   },
   "osDocumentOpen": {
     "failed": "No se pudo abrir el archivo."

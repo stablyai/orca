@@ -23,7 +23,11 @@ import {
   resolveCodexPaneSelectionLane
 } from '../codex-pane-selection-lane'
 import type { AppState } from '@/store/types'
-import type { CodexAccountSelectionTarget } from '../../../../../../shared/agent-accounts/codex/codex-selection-lane'
+import {
+  getCodexSelectionLaneKey,
+  type CodexAccountSelectionTarget
+} from '../../../../../../shared/agent-accounts/codex/codex-selection-lane'
+import { workspacePinnedAccount } from '../../../../../../shared/worktree-account-pin-settings'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 
@@ -101,7 +105,14 @@ async function scanCodexPanes(
         ptyId,
         recordedLaneKey: recordedLanes[ptyId]
       })
-      if (!args.isLaneInScope(lane.laneKey)) {
+      // Why: a pinned worktree keeps launching on its own account, so no switch makes it stale.
+      const pinned =
+        lane.laneKey === getCodexSelectionLaneKey(null) &&
+        workspacePinnedAccount(state.settings ?? {}, 'codex', {
+          workspaceId: tab.worktreeId,
+          wslDistro: null
+        }) !== undefined
+      if (pinned || !args.isLaneInScope(lane.laneKey)) {
         // Spawn lane is immutable; an out-of-lane answer is final and must not consume another retry.
         return {
           ptyId,

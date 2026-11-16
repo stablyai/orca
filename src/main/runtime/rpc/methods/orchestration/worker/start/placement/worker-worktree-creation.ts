@@ -1,4 +1,5 @@
 import type { RuntimeTerminalCreate } from '../../../../../../../../shared/terminal/runtime/runtime-terminal-create-contract'
+import { resolveAccountPins } from '../../../../../../../../shared/worktree-account-pin-settings'
 /** Create PTY worktrees agent-first; structured workers create sessions afterwards without startup agents. Setup/default tabs/lineage stay identical. */
 
 import type { AgentLaunchPreferences } from '../../../../../../../../shared/agent-session/agent-session-host-authority'
@@ -94,6 +95,14 @@ export async function resolveWorkerWorktreeName(
   return { name: generated, nameWasGenerated: true }
 }
 
+function accountPinsFor(runtime: OrcaRuntimeService, agent: TuiAgent, account?: string) {
+  if (!account) {
+    return {}
+  }
+  const { pins } = resolveAccountPins(runtime.requireStore().getSettings(), agent, account)
+  return pins ? { accountPins: pins } : {}
+}
+
 export async function createWorkerWorktree(args: {
   runtime: OrcaRuntimeService
   db: OrchestrationDb
@@ -105,6 +114,7 @@ export async function createWorkerWorktree(args: {
     baseBranch?: string
     displayName?: string
     comment?: string
+    account?: string
     setup?: 'run' | 'skip' | 'inherit'
     from: string
   }
@@ -138,6 +148,8 @@ export async function createWorkerWorktree(args: {
     displayName: params.displayName,
     ...(params.displayName !== undefined ? { displayNameKind: 'user' as const } : {}),
     comment: params.comment,
+    // Validated before dispatch, so a match is certain here.
+    ...accountPinsFor(runtime, args.agent, params.account),
     // setupDecision runs setup without the legacy runHooks activation side effect.
     runHooks: false,
     setupDecision,

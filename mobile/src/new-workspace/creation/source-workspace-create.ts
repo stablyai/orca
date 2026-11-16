@@ -1,4 +1,5 @@
 import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent'
+import type { WorktreeAccountPins } from '../../../../src/shared/worktree-account-pin-settings'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import {
   resolveComposerMrBase,
@@ -41,6 +42,7 @@ export type CreateWorkspaceFromComposerArgs = {
   agentLaunchSupported: WorktreeCreateAgentLaunch['supported']
   branchIntentSupported?: boolean | Promise<boolean>
   parent?: WorktreeCreateParent
+  accountPins?: WorktreeAccountPins
 }
 
 export async function createWorkspaceFromComposerSource(
@@ -73,6 +75,7 @@ async function createWorkItemWorkspace(args: {
   note: string | undefined
   worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
   parent?: WorktreeCreateParent
+  accountPins?: WorktreeAccountPins
 }): Promise<WorktreeCreateResult> {
   const { client, selection, targetRepoId, setupDecision, agent, workspaceName, note } = args
   const item = selection.item
@@ -115,6 +118,7 @@ async function createWorkItemWorkspace(args: {
   // Keep linked work items on terminals: structured sessions cannot hold their unsent URL draft and would submit it as a turn.
   return createWorktreeWithNameRetry({
     parent: args.parent,
+    accountPins: args.accountPins,
     client,
     baseName,
     worktreeCreateIdempotency: args.worktreeCreateIdempotency,
@@ -135,6 +139,7 @@ async function createBranchWorkspace(args: {
   agentLaunchSupported: WorktreeCreateAgentLaunch['supported']
   branchIntentSupported?: boolean | Promise<boolean>
   parent?: WorktreeCreateParent
+  accountPins?: WorktreeAccountPins
 }): Promise<WorktreeCreateResult> {
   const {
     client,
@@ -166,6 +171,7 @@ async function createBranchWorkspace(args: {
     })
     return createWorktreeWithNameRetry({
       parent: args.parent,
+      accountPins: args.accountPins,
       client,
       baseName,
       worktreeCreateIdempotency: args.worktreeCreateIdempotency,
@@ -193,6 +199,7 @@ async function createBranchWorkspace(args: {
   })
   return createWorktreeWithNameRetry({
     parent: args.parent,
+    accountPins: args.accountPins,
     client,
     baseName,
     worktreeCreateIdempotency: args.worktreeCreateIdempotency,
@@ -232,6 +239,7 @@ async function createNewBranchWorkspace(args: {
   worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
   agentLaunchSupported: WorktreeCreateAgentLaunch['supported']
   parent?: WorktreeCreateParent
+  accountPins?: WorktreeAccountPins
 }): Promise<WorktreeCreateResult> {
   const {
     client,
@@ -250,6 +258,7 @@ async function createNewBranchWorkspace(args: {
   // Preserve typed git branch names, including slashes; sanitize only the folder, and retry suffixes against the branch name.
   return createWorktreeWithNameRetry({
     parent: args.parent,
+    accountPins: args.accountPins,
     client,
     baseName: selection.branchName,
     worktreeCreateIdempotency: args.worktreeCreateIdempotency,

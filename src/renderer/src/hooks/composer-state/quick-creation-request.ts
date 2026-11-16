@@ -58,6 +58,7 @@ export type QuickCreationRequestInput = {
   quickTelemetry: AgentStartedTelemetry | null
   suppressTerminalFocusOnCompletion: boolean
   setupOnly: boolean
+  accountPins?: WorktreeCreationRequest['accountPins']
 }
 
 export type QuickSubmitOptions = {
@@ -66,6 +67,7 @@ export type QuickSubmitOptions = {
   launchChoice?: AgentLaunchChoice
   launchInputs?: WorktreeCreationRequest['launchInputs']
   legacyLaunchInputs?: WorktreeCreationRequest['legacyLaunchInputs']
+  accountPins?: WorktreeCreationRequest['accountPins']
 }
 
 export function buildQuickCreationRequest(
@@ -133,6 +135,7 @@ export function buildQuickCreationRequest(
     promptDelivery: input.promptDelivery,
     quickTelemetry: input.quickTelemetry,
     ...(input.suppressTerminalFocusOnCompletion ? { suppressTerminalFocusOnCompletion: true } : {}),
-    ...(input.agent === null ? { setupOnly: input.setupOnly } : {})
+    ...(input.agent === null ? { setupOnly: input.setupOnly } : {}),
+    ...(input.accountPins ? { accountPins: input.accountPins } : {})
   }
 }

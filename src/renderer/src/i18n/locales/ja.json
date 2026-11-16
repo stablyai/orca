@@ -22996,6 +22996,7 @@
         "selectGroup": "{{group}} のセッションをすべて選択",
         "reasonWsl": "WSL ターミナル",
         "reasonOwnFolder": "独自の Claude フォルダーを使用",
+        "reasonPinnedWorktree": "ワークスペースは専用アカウントを使用",
         "reasonUnknownAccount": "アカウント不明",
         "reasonNoSession": "再開できません",
         "notMovedOne": "他の 1 件のセッションは移動されませんでした。",
@@ -23036,7 +23037,12 @@
         "failed": "サインインに失敗しました。もう一度お試しください。"
       }
     },
-    "remoteScopeAccountsAddHere": "{{value0}} によって管理されているアカウントを表示しています。新規アカウントはそこにサインインします。このデバイスのブラウザで完了します。"
+    "remoteScopeAccountsAddHere": "{{value0}} によって管理されているアカウントを表示しています。新規アカウントはそこにサインインします。このデバイスのブラウザで完了します。",
+    "worktreeAccount": {
+      "claudeSubmenu": "Claude アカウント",
+      "codexSubmenu": "Codex アカウント",
+      "followSelection": "選択中のアカウントに従う"
+    }
   },
   "osDocumentOpen": {
     "failed": "ファイルを開けませんでした。"

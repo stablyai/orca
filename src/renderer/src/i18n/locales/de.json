@@ -21936,6 +21936,7 @@
         "selectGroup": "Alle Sitzungen in {{group}} auswählen",
         "reasonWsl": "WSL-Terminal",
         "reasonOwnFolder": "Verwendet den eigenen Claude-Ordner",
+        "reasonPinnedWorktree": "Arbeitsbereich behält sein eigenes Konto",
         "reasonUnknownAccount": "Konto unbekannt",
         "reasonNoSession": "Fortsetzen nicht möglich",
         "notMovedOne": "1 weitere Sitzung wurde nicht umgestellt.",
@@ -21991,7 +21992,12 @@
         "failed": "Anmeldung fehlgeschlagen. Erneut versuchen."
       }
     },
-    "remoteScopeAccountsAddHere": "Angezeigt werden Konten, die von {{value0}} verwaltet werden. Neue Konten werden dort angemeldet; der Abschluss erfolgt im Browser dieses Geräts."
+    "remoteScopeAccountsAddHere": "Angezeigt werden Konten, die von {{value0}} verwaltet werden. Neue Konten werden dort angemeldet; der Abschluss erfolgt im Browser dieses Geräts.",
+    "worktreeAccount": {
+      "claudeSubmenu": "Claude-Konto",
+      "codexSubmenu": "Codex-Konto",
+      "followSelection": "Ausgewähltem Konto folgen"
+    }
   },
   "fileSearch": {
     "failed": "Suche fehlgeschlagen. Erneut versuchen.",

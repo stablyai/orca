@@ -21613,6 +21613,7 @@
         "selectGroup": "選取 {{group}} 中的所有工作階段",
         "reasonWsl": "WSL 終端機",
         "reasonOwnFolder": "使用自己的 Claude 資料夾",
+        "reasonPinnedWorktree": "工作區使用自己的帳號",
         "reasonUnknownAccount": "帳戶不明",
         "reasonNoSession": "無法繼續",
         "notMovedOne": "另有 1 個工作階段未移轉。",
@@ -21665,7 +21666,12 @@
         "failed": "登入失敗。請再試一次。"
       }
     },
-    "remoteScopeAccountsAddHere": "目前顯示由 {{value0}} 管理的帳戶。新帳戶會在該處登入；請在此裝置的瀏覽器中完成登入。"
+    "remoteScopeAccountsAddHere": "目前顯示由 {{value0}} 管理的帳戶。新帳戶會在該處登入；請在此裝置的瀏覽器中完成登入。",
+    "worktreeAccount": {
+      "claudeSubmenu": "Claude 帳號",
+      "codexSubmenu": "Codex 帳號",
+      "followSelection": "跟隨所選帳號"
+    }
   },
   "fileSearch": {
     "failed": "搜尋失敗。再試一次。",

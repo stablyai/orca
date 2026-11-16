@@ -1213,6 +1213,11 @@
         "planMode": "План",
         "exitPlanMode": "Выйти из режима планирования"
       }
+    },
+    "newWorktreeAccount": {
+      "claude": "Аккаунт Claude",
+      "codex": "Аккаунт Codex",
+      "followSelection": "Следовать выбранному аккаунту"
     }
   },
   "connection": {

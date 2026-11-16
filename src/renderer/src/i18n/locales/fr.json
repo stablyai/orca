@@ -22213,6 +22213,7 @@
         "selectGroup": "Sélectionner toutes les sessions de {{group}}",
         "reasonWsl": "Terminal WSL",
         "reasonOwnFolder": "Utilise votre propre dossier Claude",
+        "reasonPinnedWorktree": "L’espace de travail garde son propre compte",
         "reasonUnknownAccount": "Compte inconnu",
         "reasonNoSession": "Reprise impossible",
         "notMovedOne": "1 autre session n'a pas été déplacée.",
@@ -22259,7 +22260,12 @@
         "failed": "Échec de la connexion. Réessayez."
       }
     },
-    "remoteScopeAccountsAddHere": "Affichage des comptes gérés par {{value0}}. Les nouveaux comptes s'y connectent ; vous terminez dans le navigateur de cet appareil."
+    "remoteScopeAccountsAddHere": "Affichage des comptes gérés par {{value0}}. Les nouveaux comptes s'y connectent ; vous terminez dans le navigateur de cet appareil.",
+    "worktreeAccount": {
+      "claudeSubmenu": "Compte Claude",
+      "codexSubmenu": "Compte Codex",
+      "followSelection": "Suivre le compte sélectionné"
+    }
   },
   "osDocumentOpen": {
     "failed": "Échec de l'ouverture du fichier."

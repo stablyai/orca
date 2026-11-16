@@ -23994,6 +23994,7 @@
         "selectGroup": "Select all sessions in {{group}}",
         "reasonWsl": "WSL terminal",
         "reasonOwnFolder": "Uses your own Claude folder",
+        "reasonPinnedWorktree": "Workspace keeps its own account",
         "reasonUnknownAccount": "Account unknown",
         "reasonNoSession": "Can't resume",
         "reasonSharedSession": "Also open in another pane",
@@ -24059,6 +24060,11 @@
       "cancel": "Cancel",
       "save": "Save",
       "unsupportedHost": "Update Orca on {{host}} to change this setting there."
+    },
+    "worktreeAccount": {
+      "claudeSubmenu": "Claude Account",
+      "codexSubmenu": "Codex Account",
+      "followSelection": "Follow selected account"
     }
   },
   "fileSearch": {

@@ -11,6 +11,7 @@ import type {
   Worktree
 } from '../../../../shared/worktree/types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type { WorktreeAccountPins } from '../../../../shared/worktree-account-pin-settings'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../shared/workspace/creation/workspace-source'
 import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation/launch-types'
 import type {
@@ -73,6 +74,8 @@ export type RuntimeManagedWorktreeCreateArgs = {
   creationId?: string
   /** Main-internal launch registration before catalog notification or activation. */
   onWorkspaceCreated?: (worktreeId: string) => void
+  /** Accounts chosen at creation (#9496): pinned before the startup agent launches. */
+  accountPins?: WorktreeAccountPins
   startupAgent?: TuiAgent
   terminalImageViewerSupported?: boolean
   startupSessionOptions?: Readonly<Record<string, SessionOptionValue>>

@@ -298,6 +298,9 @@ export function normalizeHookPayload(
         ? readString(hookPayloadRecord, 'teammate_name')
         : undefined,
     toolAgentType: readString(hookPayloadRecord, 'agent_type'),
+    ...(source === 'claude' && eventName === 'StopFailure'
+      ? { claudeStopFailure: readString(hookPayloadRecord, 'error') }
+      : {}),
     ...(source === 'claude'
       ? {
           claudeRunningNonAgentTask: claudeRowHasUnlistedLiveWork(state, paneKey)

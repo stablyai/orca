@@ -84,9 +84,13 @@ export type RuntimeConstructionDependencies = {
   ) => Promise<AiVaultPrepareSessionResumeResult>
   prepareCodexStructuredLaunch?: (input: {
     launchEnv: NodeJS.ProcessEnv
+    /** A worktree pinned to a Codex account resolves that account's home (#9496). */
+    worktreeId?: string
   }) => string | null | Promise<string | null>
   resolveCodexStructuredLaunchHome?: (input: {
     launchEnv: NodeJS.ProcessEnv
+    /** A worktree pinned to a Codex account resolves that account's home (#9496). */
+    worktreeId?: string
   }) => string | null | Promise<string | null>
   prepareCodexCatalogProbeHome?: (homePath: string) => void
   buildAgentHookPtyEnv?: () => Record<string, string>

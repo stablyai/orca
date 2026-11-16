@@ -189,7 +189,8 @@ export type StructuredAgentSessionHostDeps = {
   now?: () => number
   idleSweep?: Pick<StructuredAgentSessionIdleSweepDeps, 'intervalMs' | 'idleMs'>
   usageLimitAutoContinue?: {
-    isEnabled: () => boolean
+    /** With a chat, also true where its workspace runs that agent on its own account (#9496). */
+    isEnabled: (record?: AgentSessionRecord) => boolean
     subscribe: (changed: () => void) => () => void
     isWorkspaceAsleep: (workspaceId: string) => boolean
     /** The hold scope of a launch at `home` and its polled usage; undefined when it can't hold. */

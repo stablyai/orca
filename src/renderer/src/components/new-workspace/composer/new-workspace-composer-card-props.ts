@@ -112,6 +112,8 @@ export type NewWorkspaceComposerCardProps = {
   forkPushWarning: string | null
   detectedAgentIds: Set<TuiAgent> | null
   onOpenAgentSettings: (invoker: HTMLButtonElement) => void
+  /** Under the agent: the account its worktree is pinned to (#9496). */
+  agentAccountField?: React.ReactNode
   advancedOpen: boolean
   setupChoiceRevealRequest: number
   onSetupChoiceRevealed: () => void

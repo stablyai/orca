@@ -18,6 +18,7 @@ import {
 } from '../catalog/runtime-folder-workspace'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
+import { pinCreatedWorktreeAccounts } from '../../../workspaces/creation/created-worktree-account-pins'
 import type {
   WorktreeStartupDraftPaste,
   WorktreeStartupFollowup
@@ -139,6 +140,8 @@ export async function createRuntimeFolderWorktree(args: {
     ...(request.manualOrder !== undefined ? { manualOrder: request.manualOrder } : {}),
     ...(request.workspaceStatus !== undefined ? { workspaceStatus: request.workspaceStatus } : {})
   })
+  // Before the startup terminal spawns, so the agent starts on the account chosen at creation.
+  pinCreatedWorktreeAccounts(deps.store, worktreeId, request.accountPins)
   args.onWorkspaceCreated?.(worktreeId)
   const worktree = mergeRuntimeFolderWorkspace(repo, worktreeId, meta)
   deps.invalidateResolvedWorktrees()

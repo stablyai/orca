@@ -21540,6 +21540,7 @@
         "selectGroup": "{{group}}의 세션 모두 선택",
         "reasonWsl": "WSL 터미널",
         "reasonOwnFolder": "자체 Claude 폴더 사용",
+        "reasonPinnedWorktree": "작업 공간이 자체 계정을 유지함",
         "reasonUnknownAccount": "계정 알 수 없음",
         "reasonNoSession": "재개할 수 없음",
         "notMovedOne": "다른 세션 1개는 옮겨지지 않았습니다.",
@@ -21580,7 +21581,12 @@
         "failed": "로그인하지 못했습니다. 다시 시도하세요."
       }
     },
-    "remoteScopeAccountsAddHere": "{{value0}}에서 관리하는 계정을 표시합니다. 거기에 새 계정이 로그인됩니다. 이 기기의 브라우저에서 완료합니다."
+    "remoteScopeAccountsAddHere": "{{value0}}에서 관리하는 계정을 표시합니다. 거기에 새 계정이 로그인됩니다. 이 기기의 브라우저에서 완료합니다.",
+    "worktreeAccount": {
+      "claudeSubmenu": "Claude 계정",
+      "codexSubmenu": "Codex 계정",
+      "followSelection": "선택한 계정 따르기"
+    }
   },
   "osDocumentOpen": {
     "failed": "파일을 열지 못했습니다."

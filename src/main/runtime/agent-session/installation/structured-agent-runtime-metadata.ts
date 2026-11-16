@@ -124,7 +124,8 @@ async function resolveCodexAccountHomePath(
   const codexHome = await resolveStructuredCodexAccountHomePath({
     launchEnv,
     resolveLaunchHome:
-      purpose === 'launch' ? services.prepareCodexLaunchHome : services.readCodexLaunchHome
+      purpose === 'launch' ? services.prepareCodexLaunchHome : services.readCodexLaunchHome,
+    ...(location?.wslDistro === null ? { worktreeId: location.workspaceId } : {})
   })
   if (purpose === 'launch' && workspacePath) {
     await applyStructuredCodexWorkspaceTrust({
@@ -173,6 +174,7 @@ export const STRUCTURED_AGENT_RUNTIME_CATALOG: readonly StructuredAgentRuntimeCa
           await resolveStructuredClaudeAccountHomePath({
             launchEnv,
             wslDistro: location?.wslDistro ?? null,
+            ...(location ? { worktreeId: location.workspaceId } : {}),
             ...(purpose !== 'read' ? { purpose: 'identity' } : {}),
             getClaudeConfigDirectory: services.getClaudeConfigDirectory
           })

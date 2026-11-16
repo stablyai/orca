@@ -9,6 +9,7 @@ import {
   resolveWorkerLaunchPreferences
 } from './worker-launch-preferences'
 import type { WorkerStartInput } from '../worker-start-input'
+import { resolveAccountPins } from '../../../../../../../../shared/worktree-account-pin-settings'
 
 type WorkerStartLaunch = ReturnType<typeof resolveWorkerLaunchPreferences>
 
@@ -35,6 +36,13 @@ export function validateFederatedWorkerStartPlacement(
     throw new OrchestrationError(
       'invalid_argument',
       'Creation and setup options apply only to remote new-child or new-top-level worktrees.'
+    )
+  }
+  if (params.account) {
+    // Pins name this machine's accounts; a remote host has its own.
+    throw new OrchestrationError(
+      'invalid_argument',
+      '--account applies only to worktrees created on this machine.'
     )
   }
   if (params.terminal && params.agent) {
@@ -65,13 +73,16 @@ export function prepareLocalWorkerStart(args: {
       '--terminal cannot combine with new-worktree creation.'
     )
   }
-  if (!createsWorktree && (params.name || params.repo || params.baseBranch || params.setup)) {
+  if (
+    !createsWorktree &&
+    (params.name || params.repo || params.baseBranch || params.setup || params.account)
+  ) {
     throw new OrchestrationError(
       'invalid_argument',
       'Creation and setup options apply only to new-child or new-top-level worktrees.'
     )
   }
-  return resolveWorkerStartAgent({
+  const started = resolveWorkerStartAgent({
     runtime,
     openCodeModelLaunchSupported: args.openCodeModelLaunchSupported,
     createsWorktree,
@@ -81,6 +92,14 @@ export function prepareLocalWorkerStart(args: {
     effort: params.effort,
     missingAgentMessage: 'A configured --agent is required when worker-start creates a terminal.'
   })
+  // Refused before the dispatch is recorded; the worktree creation resolves the same pins.
+  const { error } = params.account
+    ? resolveAccountPins(runtime.requireStore().getSettings(), started.agent ?? '', params.account)
+    : {}
+  if (error) {
+    throw new OrchestrationError('invalid_argument', error)
+  }
+  return started
 }
 
 export function prepareFederationAttachmentWorkerStart(args: {

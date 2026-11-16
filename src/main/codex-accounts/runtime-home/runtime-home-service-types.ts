@@ -3,6 +3,7 @@ import type { UsageReadingAccount } from '../../../shared/agent-usage/rate-limit
 
 export type CodexHomeLaunchOptions = {
   unavailableManagedHomePath?: string
+  worktreeId?: string
   deferConfigSync?: (syncConfig: () => boolean) => void
 }
 

@@ -22,6 +22,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import NewWorkspaceComposerCard from '@/components/NewWorkspaceComposerCard'
+import { useNewWorkspaceAgentAccount } from '@/components/new-workspace/composer/NewWorkspaceAgentAccountField'
 import AgentSettingsDialog, {
   restoreAgentSettingsInvoker
 } from '@/components/agent/AgentSettingsDialog'
@@ -213,6 +214,13 @@ function QuickTabBody({
   const quickAgentSurface = quickAgentPick.agent === quickAgent ? quickAgentPick.surface : undefined
   const launchSelection = observation.selectionFor(quickAgent, quickAgentSurface)
   const createDisabled = formDisabled || !launchSelection.ready
+  // Worker accounts (#9496): the account the new worktree's agent starts on.
+  const agentAccount = useNewWorkspaceAgentAccount(
+    quickAgent,
+    observation.model.state === 'settled' &&
+      observation.model.pickerContext?.executionHostId === 'local',
+    createDisabled
+  )
 
   const handleQuickAgentChange = useCallback(
     (
@@ -234,6 +242,7 @@ function QuickTabBody({
     await submitQuick(quickAgent, {
       // Blank Terminal is the setup-only create: no agent, and no extra shell beside setup.
       setupOnly: quickAgent === null,
+      ...(agentAccount.accountPins ? { accountPins: agentAccount.accountPins } : {}),
       launchChoice: launchSelection.choice,
       onLegacyPreparationFailure: (error) => {
         if (isSubmissionCancelled()) {
@@ -281,7 +290,8 @@ function QuickTabBody({
     quickAgentPick,
     isSubmissionCancelled,
     modalData,
-    cardProps
+    cardProps,
+    agentAccount.accountPins
   ])
   const {
     addProjectOpen,
@@ -384,6 +394,7 @@ function QuickTabBody({
             : undefined
         }
         primaryActionLabel={primaryActionLabel}
+        agentAccountField={agentAccount.field}
         onOpenAgentSettings={(invoker) => {
           agentSettingsInvoker.current = invoker
           setAgentSettingsOpen(true)

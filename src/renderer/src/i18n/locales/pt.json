@@ -22907,6 +22907,7 @@
         "selectGroup": "Selecionar todas as sessões em {{group}}",
         "reasonWsl": "Terminal WSL",
         "reasonOwnFolder": "Usa sua própria pasta do Claude",
+        "reasonPinnedWorktree": "O espaço de trabalho mantém sua própria conta",
         "reasonUnknownAccount": "Conta desconhecida",
         "reasonNoSession": "Não é possível retomar",
         "notMovedOne": "1 outra sessão não foi movida.",
@@ -22967,7 +22968,12 @@
         "failed": "Falha no login. Tente novamente."
       }
     },
-    "remoteScopeAccountsAddHere": "Mostrando contas gerenciadas por {{value0}}. Novas contas são conectadas lá; você conclui no navegador deste dispositivo."
+    "remoteScopeAccountsAddHere": "Mostrando contas gerenciadas por {{value0}}. Novas contas são conectadas lá; você conclui no navegador deste dispositivo.",
+    "worktreeAccount": {
+      "claudeSubmenu": "Conta do Claude",
+      "codexSubmenu": "Conta do Codex",
+      "followSelection": "Seguir a conta selecionada"
+    }
   },
   "fileSearch": {
     "failed": "A busca falhou. Tente novamente.",

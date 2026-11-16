@@ -28,6 +28,7 @@ export async function assemblePtyIpcSpawnCodexEnv(ctx: PtyIpcSpawnState): Promis
     emptySessionIdSkipsHostEnv: false,
     wslPassiveRestore: args.wslPassiveRestore === true,
     requestedAgentTeamsPath: ctx.requestedAgentTeamsPath,
+    ...(args.worktreeId ? { worktreeId: args.worktreeId } : {}),
     provider: ctx.provider,
     deps: ctx.deps,
     mark: (phase) => ctx.spawnTiming.mark(phase)

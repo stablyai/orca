@@ -55,6 +55,14 @@ export const WorktreeCreate = z
     linkedItems: WorkspaceAttachmentsSchema.optional(),
     linkedTaskSourceContext: TaskSourceContextSchema.nullable().optional(),
     comment: OptionalString,
+    // Accounts chosen in the create dialog (#9496); unknown ids are skipped when pinning.
+    accountPins: z
+      .object({
+        claude: z.string().min(1).max(128).optional(),
+        codex: z.string().min(1).max(128).optional()
+      })
+      .strict()
+      .optional(),
     displayName: OptionalString,
     displayNameKind: z.enum(['generated', 'user']).optional(),
     telemetrySource: z

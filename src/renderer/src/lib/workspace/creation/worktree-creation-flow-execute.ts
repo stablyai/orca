@@ -117,7 +117,8 @@ export async function executeWorktreeCreation(
           ...(preparedRequest.parentWorktreeId
             ? { parentWorktreeId: preparedRequest.parentWorktreeId }
             : {}),
-          ...(preparedRequest.note ? { note: preparedRequest.note } : {})
+          ...(preparedRequest.note ? { note: preparedRequest.note } : {}),
+          ...(preparedRequest.accountPins ? { accountPins: preparedRequest.accountPins } : {})
         }
       )
   } catch (error) {
