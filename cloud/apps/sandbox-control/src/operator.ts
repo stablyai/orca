@@ -18,7 +18,7 @@ import { readBearer } from './auth'
 import type { GitHubAppMinter } from './github-app'
 import { bindInstallation, revokeInstallation, timingSafeEqual } from './github-connect'
 import { countAllActive, getControlState, killSwitchOn, setKillSwitch } from './guardrails'
-import { applySandboxPolicy, egressSwapModeFor, guardrails, scrubRecordPolicy, type LifecycleDeps } from './lifecycle'
+import { applySandboxPolicy, compileSandboxPolicy, egressSwapModeFor, guardrails, scrubRecordPolicy, type LifecycleDeps } from './lifecycle'
 import { drainAll, housekeeping } from './retention'
 import { memberChangeTime, recordMemberChange } from './member-changes'
 import { memberEventActor, memberEventTarget, removeMember } from './member-removal'
@@ -93,7 +93,7 @@ export async function handleOperator(
   }
   // Dev only (probe 2, egress-docs): redacted facts about what Vercel holds for one sandbox, read with the
   // Worker's own token. Never a value or a body; anywhere but dev, these routes don't exist.
-  const policyAudit = /^\/v1\/internal\/sandboxes\/([A-Za-z0-9_]+)\/(provider-policy-audit|provider-policy-scrub-test|resume-raw|echo-probe)$/.exec(path)
+  const policyAudit = /^\/v1\/internal\/sandboxes\/([A-Za-z0-9_]+)\/(provider-policy-audit|provider-policy-scrub-test|resume-raw|echo-probe|session-token-free)$/.exec(path)
   if (policyAudit && life.config.environment === 'dev') {
     const row = await getSandbox(life.db, policyAudit[1]!)
     if (!row) {
@@ -106,8 +106,19 @@ export async function handleOperator(
     }
     // resume-raw and echo-probe act on a workspace, so only on throwaway probe accounts (dev:egress-…), never a
     // real dev user's workspace.
-    if ((policyAudit[2] === 'resume-raw' || policyAudit[2] === 'echo-probe') && !row.account_id.startsWith('dev:egress-')) {
+    if ((policyAudit[2] === 'resume-raw' || policyAudit[2] === 'echo-probe' || policyAudit[2] === 'session-token-free') && !row.account_id.startsWith('dev:egress-')) {
       return Response.json({ error: 'not_a_probe_account' }, { status: 403 })
+    }
+    if (policyAudit[2] === 'session-token-free' && request.method === 'POST') {
+      // Probe 2 only: put the token-free compile on the LIVE session, to see whether its header-matched `respond`
+      // rules answer (separates "respond not enforced" from "resume restored something else").
+      if (!row.session_id) {
+        return Response.json({ error: 'not_running' }, { status: 409 })
+      }
+      const { policy } = await compileSandboxPolicy(life, row, { tokenFree: true })
+      await life.provider.updateNetworkPolicy(row.session_id, policy)
+      console.log(JSON.stringify({ event: 'provider_session_token_free', sandboxId: row.id }))
+      return Response.json({ sandboxId: row.id, applied: true })
     }
     if (policyAudit[2] === 'resume-raw' && request.method === 'POST') {
       // Probe 2 only: resume the provider session from its stored record with NO policy write of ours, so a probe
@@ -132,12 +143,14 @@ export async function handleOperator(
       const result = await life.provider.runCommand(state.session.id, {
         command: 'bash',
         // Straight into grep -c: the echoed request (whatever the firewall swapped in) never touches the VM's disk.
-        args: ['-c', 'curl -s --max-time 20 -H "$1: $2" "$3" | grep -c -- "$4" || true', 'echo-probe', body.data.header, body.data.placeholder, url, marker],
+        // In memory only (a shell variable, never a file): the HTTP status, then whether the echo held the marker.
+        args: ['-c', 'out="$(curl -s --max-time 20 -w "\n%{http_code}" -H "$1: $2" "$3")"; printf "%s\n" "${out##*$\'\n\'}"; printf "%s" "$out" | grep -c -- "$4" || true', 'echo-probe', body.data.header, body.data.placeholder, url, marker],
         timeoutMs: 30_000
       })
-      const markerFound = Number(result.stdout.trim().split('\n').at(-1) ?? '0') > 0
+      const [status, count] = result.stdout.trim().split('\n')
+      const markerFound = Number(count ?? '0') > 0
       console.log(JSON.stringify({ event: 'provider_echo_probe', sandboxId: row.id, markerFound }))
-      return Response.json({ sandboxId: row.id, markerFound })
+      return Response.json({ sandboxId: row.id, status: Number(status) || null, markerFound })
     }
     if (policyAudit[2] === 'provider-policy-audit' && request.method === 'GET') {
       const marker = new URL(request.url).searchParams.get('marker') ?? ''
@@ -302,7 +315,15 @@ type RuleFacts = { count: number; headerNames: string[] }
 export function policyFacts(
   body: string,
   marker: string
-): { hasNetworkPolicy: boolean; injectionRules: RuleFacts; forwardRules: RuleFacts; responseRules: RuleFacts; markerFound: boolean } {
+): {
+  hasNetworkPolicy: boolean
+  injectionRules: RuleFacts
+  forwardRules: RuleFacts
+  responseRules: RuleFacts
+  /** Per domain: how many rules of each kind (dev probe 2; domains are hostnames, never values). */
+  domains: Record<string, { injection: number; forward: number; response: number }>
+  markerFound: boolean
+} {
   let parsed: unknown = null
   try {
     parsed = JSON.parse(body)
@@ -310,6 +331,7 @@ export function policyFacts(
     // Facts from the substring test only.
   }
   let hasNetworkPolicy = false
+  const domains: Record<string, { injection: number; forward: number; response: number }> = {}
   const kinds = { injection: { count: 0, names: new Set<string>() }, forward: { count: 0, names: new Set<string>() }, response: { count: 0, names: new Set<string>() } }
   const collectNames = (rule: unknown, into: Set<string>): void => {
     const names = (rule as { headerNames?: unknown } | null)?.headerNames
@@ -334,7 +356,14 @@ export function policyFacts(
         const kind = RULE_KINDS[name.toLowerCase()]
         if (kind && Array.isArray(child)) {
           kinds[kind].count += child.length
-          child.forEach((rule) => collectNames(rule, kinds[kind].names))
+          child.forEach((rule) => {
+            collectNames(rule, kinds[kind].names)
+            const domain = (rule as { domain?: unknown } | null)?.domain
+            if (typeof domain === 'string' && /^[a-z0-9.*-]{1,253}$/i.test(domain)) {
+              const entry = (domains[domain.toLowerCase()] ??= { injection: 0, forward: 0, response: 0 })
+              entry[kind]++
+            }
+          })
         }
         walk(child)
       }
@@ -342,7 +371,7 @@ export function policyFacts(
   }
   walk(parsed)
   const facts = (kind: keyof typeof kinds): RuleFacts => ({ count: kinds[kind].count, headerNames: [...kinds[kind].names].sort() })
-  return { hasNetworkPolicy, injectionRules: facts('injection'), forwardRules: facts('forward'), responseRules: facts('response'), markerFound: body.includes(marker) }
+  return { hasNetworkPolicy, injectionRules: facts('injection'), forwardRules: facts('forward'), responseRules: facts('response'), domains, markerFound: body.includes(marker) }
 }
 
 const EchoProbeBody = z.object({

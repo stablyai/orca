@@ -60,6 +60,7 @@ describe('policyFacts', () => {
       injectionRules: { count: 1, headerNames: ['authorization', 'x-api-key'] },
       forwardRules: { count: 1, headerNames: [] },
       responseRules: { count: 1, headerNames: [] },
+      domains: { 'a.com': { injection: 1, forward: 0, response: 1 }, 'b.com': { injection: 0, forward: 1, response: 0 } },
       markerFound: false
     })
     // A scrubbed policy reads as no injection rules, response rules only.
@@ -79,16 +80,25 @@ describe('resume-raw and echo-probe (dev only, probe accounts only)', () => {
     h.vercel.commandHandler = (params) => {
       if (params.command === 'bash' && params.args?.[1]?.includes('grep -c')) {
         scripts.push(params.args[1]!)
-        return { exitCode: 0, stdout: '1\n', stderr: '' }
+        return { exitCode: 0, stdout: '403\n1\n', stderr: '' }
       }
       return undefined
     }
     const placeholder = `orca-ph-anthropic-api-key-${id}`
     const ok = await h.call('POST', `/v1/internal/sandboxes/${id}/echo-probe?marker=${MARKER}`, { bearer: OP, body: { host: 'httpbin.org', header: 'x-api-key', placeholder } })
-    expect(ok.body).toEqual({ sandboxId: id, markerFound: true })
+    expect(ok.body).toEqual({ sandboxId: id, status: 403, markerFound: true })
     expect(scripts[0]).not.toMatch(/-o |> ?\/|tmp/)
     expect((await h.call('POST', `/v1/internal/sandboxes/${id}/echo-probe?marker=${MARKER}`, { bearer: OP, body: { host: 'httpbin.org', header: 'x-api-key', placeholder: 'sk-ant-real' } })).status).toBe(400)
     expect((await h.call('POST', `/v1/internal/sandboxes/${id}/echo-probe?marker=${MARKER}`, { bearer: OP, body: { host: 'evil.example', header: 'x-api-key', placeholder } })).status).toBe(400)
+  })
+
+  it('session-token-free puts the token-free compile on the live session (probe accounts only)', async () => {
+    const { h, id, box } = await setup({ SANDBOX_ENV: 'dev' })
+    expect((await h.call('POST', `/v1/internal/sandboxes/${id}/session-token-free`, { bearer: OP })).status).toBe(403)
+    await probeAccount(h, id)
+    expect(JSON.stringify(box().policy)).toContain(MARKER)
+    expect((await h.call('POST', `/v1/internal/sandboxes/${id}/session-token-free`, { bearer: OP })).body).toEqual({ sandboxId: id, applied: true })
+    expect(JSON.stringify(box().policy)).not.toContain(MARKER)
   })
 
   it('refuses a real dev user’s workspace', async () => {
