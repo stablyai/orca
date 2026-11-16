@@ -1,0 +1,24 @@
+{
+  "claude_version": "2.1.287 (Claude Code)",
+  "argv": ["claude", "--settings", "<settings.json>", "--dangerously-skip-permissions", "<prompt>"],
+  "platform": "darwin",
+  "cols": 120,
+  "rows": 40,
+  "recorded_at": "2026-10-02",
+  "clock": "t is seconds since the scenario's first hook",
+  "scenarios": {
+    "one-subagent": "One Agent call; the main agent ends its turn and is woken when the sub-agent ends.",
+    "two-subagents-together": "Two sub-agents end within 600 ms; a main-agent Stop with an empty inventory precedes the second notification.",
+    "subagent-ends-mid-turn": "The sub-agent ends while the main agent is still in its launching turn; the notification follows the next tool call.",
+    "subagent-task-stopped": "The main agent stops its sub-agent with TaskStop: a `killed` notification, no SubagentStop.",
+    "subagent-resumed": "A finished sub-agent is resumed with SendMessage; the same id stops and notifies a second time.",
+    "subagent-with-own-shell": "A sub-agent launches a background shell and stops; the shell's end resumes the sub-agent, never the main agent.",
+    "subagent-then-typed-prompt": "A prompt is typed while a notification is still queued behind a foreground tool.",
+    "subagent-idle-ctrl-c": "Ctrl+C at the idle prompt kills the background sub-agent with no hook and no notification; a typed prompt follows.",
+    "two-shells-together": "Two background shells end together; a main-agent Stop with an empty inventory precedes the second notification.",
+    "shell-ends-mid-turn": "A background shell ends and is notified before the launching turn's Stop.",
+    "shell-task-stopped": "The main agent stops its shell with TaskStop: no notification at all.",
+    "monitor-events": "A Monitor task sends `<event>` prompts under its task id while running, then a final one with a `<status>`."
+  },
+  "note": "Claude Code driven over a real PTY with every hook logged. Payloads are reduced to the fields the capture hook kept (event name, agent ids, tool name/input/response, prompt, task and cron inventories, stop_hook_active, source, notification_type); a launch response longer than the capture limit is reduced to isAsync/status/agentId. Scrubbed: session ids zeroed, home and scratch paths replaced."
+}

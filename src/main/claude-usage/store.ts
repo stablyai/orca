@@ -1,5 +1,4 @@
-import { claudeTokenSessions } from '../usage/agent-token-usage'
-import { app } from 'electron'
+import { claudeTokenSessions } from '../usage/reporting/token-usage/agent-token-usage'
 import { join } from 'node:path'
 import type {
   ClaudeUsageBreakdownKind,
@@ -10,26 +9,28 @@ import type {
   ClaudeUsageSessionRow,
   ClaudeUsageSnapshot,
   ClaudeUsageSummary
-} from '../../shared/claude-usage-types'
-import type { AutomationRunUsage } from '../../shared/automations-types'
-import type { Store } from '../persistence'
+} from '../../shared/agent-usage/analytics/claude-usage-types'
+import type { AutomationRunUsage } from '../../shared/automations/history/automation-run'
+import type { UsageStoreHost } from '../usage/usage-store-host'
 import type { ClaudeUsagePersistedState } from './types'
-import { scanClaudeUsageFilesViaWorker } from '../usage/usage-scan-worker-spawn'
-import { UsageProviderStoreLifecycle } from '../usage/usage-provider-store-lifecycle'
+import {
+  scanClaudeUsageFilesViaWorker,
+  splitUsageCacheFileViaWorker
+} from '../usage/scan-worker/usage-scan-worker-spawn'
+import { UsageProviderStoreLifecycle } from '../usage/provider-lifecycle/usage-provider-store-lifecycle'
 import { buildBreakdown, buildDaily, buildSummary } from './claude-usage-report-aggregation'
 import { buildRecentSessions } from './claude-usage-session-rows'
 import type { AutomationUsageLookupInput } from './claude-usage-automation-attribution'
 import { resolveAutomationRunUsage } from './claude-usage-automation-attribution'
+import {
+  parseClaudeUsageReport,
+  readClaudeUsageReportFile,
+  serializeClaudeUsageReport
+} from './persisted-usage-report'
 
-// Why: v5 widens Claude ownership keys (message-id / uuid fallbacks). Older
-// caches either lack ownership or used narrower keys and can under/over-count
-// after fork reclaim (#8006). v6 adds the 1-hour cache-write split, which older
-// caches never recorded, so their cost estimates stay stuck at the 5m rate (#15993).
-const SCHEMA_VERSION = 6
-
-// Why: capture the path after configureDevUserDataPath() but before app.setName()
-// mutates Electron's derived userData location, matching the persistence/store pattern.
-let _claudeUsageFile: string | null = null
+// Pre-v6 totals lack stable fork ownership or the 1-hour cache-write split and must be rescanned.
+// v7 stores protected column checkpoints on the worker and a separately protected report.
+const SCHEMA_VERSION = 7
 
 function getDefaultState(): ClaudeUsagePersistedState {
   return {
@@ -48,7 +49,7 @@ function getDefaultState(): ClaudeUsagePersistedState {
 }
 
 function normalizePersistedState(state: ClaudeUsagePersistedState): ClaudeUsagePersistedState {
-  if (state.schemaVersion === SCHEMA_VERSION) {
+  if (state.schemaVersion === 6 || state.schemaVersion === SCHEMA_VERSION) {
     return state
   }
   // Scanner changes invalidate totals, but preserving enabled keeps existing tracking on.
@@ -62,36 +63,33 @@ function normalizePersistedState(state: ClaudeUsagePersistedState): ClaudeUsageP
   }
 }
 
-export function initClaudeUsagePath(): void {
-  _claudeUsageFile = join(app.getPath('userData'), 'orca-claude-usage.json')
-}
-
-function getClaudeUsageFile(): string {
-  if (!_claudeUsageFile) {
-    _claudeUsageFile = join(app.getPath('userData'), 'orca-claude-usage.json')
-  }
-  return _claudeUsageFile
-}
-
 export class ClaudeUsageStore extends UsageProviderStoreLifecycle<
   'processedFiles',
   ClaudeUsagePersistedState,
   'hasAnyClaudeData'
 > {
-  constructor(store: Pick<Store, 'getRepos' | 'getAllWorktreeMeta'>) {
-    super(store, {
+  constructor(host: UsageStoreHost) {
+    super(host, {
       tokenUsage: {
         provider: 'claude',
         selectSessions: (state) => claudeTokenSessions(state.sessions)
       },
       logTag: '[claude-usage]',
-      resolveCacheFile: getClaudeUsageFile,
+      resolveCacheFile: () => join(host.userDataPath, 'orca-claude-usage.json'),
       createDefaultState: getDefaultState,
       normalizeState: normalizePersistedState,
+      parseReport: parseClaudeUsageReport,
+      readFallbackCache: readClaudeUsageReportFile,
+      serializeReport: serializeClaudeUsageReport,
+      providerId: 'claude',
       sourceKey: 'processedFiles',
       dataPresenceKey: 'hasAnyClaudeData',
-      jsonIndent: 2,
-      scan: scanClaudeUsageFilesViaWorker
+      scan: async (worktrees, sourceCache) => {
+        const profileDirs = await host.claudeProfileDirs()
+        host.signal.throwIfAborted()
+        return scanClaudeUsageFilesViaWorker(worktrees, sourceCache, profileDirs)
+      },
+      splitCacheFile: splitUsageCacheFileViaWorker
     })
   }
 
@@ -142,6 +140,7 @@ export class ClaudeUsageStore extends UsageProviderStoreLifecycle<
   }
 
   async getAutomationRunUsage(input: AutomationUsageLookupInput): Promise<AutomationRunUsage> {
+    await this.whenLoaded()
     return resolveAutomationRunUsage(input, {
       getState: () => this.state,
       refresh: (force) => this.refresh(force),

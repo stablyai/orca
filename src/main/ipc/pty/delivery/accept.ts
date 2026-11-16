@@ -1,28 +1,58 @@
-import type { LegacySshProjectionSemantics } from '../../ssh-pty-legacy-projection'
 import {
   recordHiddenRendererPtyDataDrop,
   shouldDropHiddenRendererPtyData
-} from '../../pty-hidden-delivery-gate'
+} from './pty-hidden-delivery-gate'
 import {
   rendererVisibilityKnownPtys,
   visibleRendererPtys,
   activeRendererPtys
 } from './visibility-state'
 import { PTY_BATCH_INTERVAL_MS } from './constants'
-import {
-  appendPendingPtyData,
-  getDroppedMode2031RendererData,
-  getDroppedSynchronizedOutputRendererData
-} from './pending'
+import { appendPendingPtyData, makeDroppedOutputPayload, toDroppedOutputSentinel } from './pending'
 import { sendModelRestoreNeededMarker, sendPtyDataToRenderer } from './payload'
 import { shouldSendInteractiveOutputNow } from './interactive'
 import { requestDeliveryResyncForGatedPty } from './accounting'
 import { warnIfDroppingHiddenBytesForVisiblePty } from './debug-snapshot'
 import { clearFlushTimerIfIdle } from './flush'
+import { advancePtyEscapeBoundary, escapeBoundaryFields } from './pty-escape-boundary'
 import type { PtyIpcSession } from '../session'
+import type { PendingPtyData } from './pty-pending-data-drain-contract'
 
 export function rendererPtyIsKnownHidden(id: string): boolean {
   return rendererVisibilityKnownPtys.has(id) && !visibleRendererPtys.has(id)
+}
+
+/**
+ * Bytes queued before a gap must not be batched with bytes after it: the batch would claim the
+ * pre-gap start boundary for a post-gap tail. Like the pending cap, keep only the queries and mode
+ * state it carried; the renderer restores the gap from a snapshot.
+ */
+export function discardPendingPtyDataAcrossGap(session: PtyIpcSession, id: string): void {
+  const pending = session.pendingData.get(id)
+  if (!pending) {
+    return
+  }
+  let sentinel = asDropSentinel(session, pending)
+  // Bytes after the gap cannot continue a partial mode-2031 reply from before it, even one an
+  // earlier drop's sentinel still carries.
+  if (sentinel.droppedMode2031ScanState?.tail) {
+    sentinel = {
+      ...sentinel,
+      droppedMode2031ScanState: { ...sentinel.droppedMode2031ScanState, tail: '' }
+    }
+  }
+  if (sentinel !== pending) {
+    session.setPendingPtyData(id, sentinel)
+    session.updateProducerFlowControl(id)
+  }
+}
+
+function asDropSentinel(session: PtyIpcSession, pending: PendingPtyData): PendingPtyData {
+  if (pending.droppedOutput === true) {
+    return pending
+  }
+  session.pendingDroppedChars += pending.data.length
+  return toDroppedOutputSentinel(pending)
 }
 
 export function acceptPtyDataForRenderer(
@@ -33,17 +63,16 @@ export function acceptPtyDataForRenderer(
     sequenceChars?: number
     transformed?: boolean
   },
-  outputSeq: number | undefined,
-  projection?: LegacySshProjectionSemantics
+  outputSeq: number | undefined
 ): void {
   const rawLength = payload.sequenceChars ?? payload.data.length
   const preservesSeq = !payload.transformed && rawLength === payload.data.length
   const startSeq = typeof outputSeq === 'number' ? Math.max(0, outputSeq - rawLength) : undefined
-  const projectionId = projection?.identity.projectionSemanticsId
+  // Advance before any early return: bytes accepted without a renderer still move the stream's parser.
+  // Zero-sequence payloads are query copies salvaged from a provider gap, not stream bytes.
+  const isQueryCopy = payload.sequenceChars === 0
+  const startEscapeBoundary = isQueryCopy ? '' : advancePtyEscapeBoundary(payload.id, payload.data)
   if (!session.mainWindow || session.mainWindow.isDestroyed()) {
-    if (projectionId) {
-      session.sshOutputIntake?.transferProjections([projectionId], 'renderer-destroyed')
-    }
     if (session.flushTimer) {
       clearTimeout(session.flushTimer)
       session.flushTimer = null
@@ -58,57 +87,55 @@ export function acceptPtyDataForRenderer(
     return
   }
   if (session.rendererExitingPtyIds.has(payload.id)) {
-    if (projectionId) {
-      session.sshOutputIntake?.transferProjections([projectionId], 'pty-exiting')
-    }
     return
   }
   if (shouldDropHiddenRendererPtyData(payload.id, session.getSettings?.())) {
-    if (projectionId) {
-      session.sshOutputIntake?.transferProjections([projectionId], 'hidden-drop')
-    }
-    const droppedChars = projection ? rawLength : payload.data.length
+    discardPendingPtyDataAcrossGap(session, payload.id)
+    const droppedChars = payload.data.length
     const drop = recordHiddenRendererPtyDataDrop(payload.id, droppedChars)
     warnIfDroppingHiddenBytesForVisiblePty(session, payload.id, droppedChars)
     if (drop.shouldEmitRestoreMarker) {
-      sendModelRestoreNeededMarker(session, payload.id, 'hidden-drop', outputSeq)
+      sendModelRestoreNeededMarker(
+        session,
+        payload.id,
+        'hidden-drop',
+        outputSeq,
+        drop.hiddenDropEpisode
+      )
     }
     return
   }
   if (payload.data.length === 0 && !payload.transformed) {
-    if (projectionId) {
-      session.sshOutputIntake?.transferProjections([projectionId], 'empty-projection')
-    }
     return
   }
   const containsBackgroundOutput = rendererPtyIsKnownHidden(payload.id)
   const overflowMarkedBeforeAppend = session.pendingOverflowMarkedPtys.has(payload.id)
-  if (projection?.desktopSpan) {
-    session.sourceCreditPendingPtys.add(payload.id)
-  }
+  const queued = session.pendingData.get(payload.id)
   const pending = appendPendingPtyData(
     session,
     payload.id,
-    session.pendingData.get(payload.id),
+    // Query copies ride the drop sentinel: the renderer answers them without treating them as stream bytes.
+    isQueryCopy
+      ? queued
+        ? asDropSentinel(session, queued)
+        : { data: '', droppedOutput: true }
+      : queued,
     payload.data,
     startSeq,
     preservesSeq,
     containsBackgroundOutput,
     rawLength,
     payload.transformed === true,
-    projectionId
+    startEscapeBoundary
   )
   const shouldEmitPendingCapRestoreMarker =
     pending.droppedOutput === true &&
     !overflowMarkedBeforeAppend &&
     session.pendingOverflowMarkedPtys.has(payload.id)
-  // Why the 2026 release goes BEFORE the 2031 data: that payload ends with a
-  // deliberately-retained INCOMPLETE private-mode sequence (extractPrivateModeScanTail),
-  // and an ESC after it would abort the dangling CSI and lose the carried mode.
   const nextData =
-    pending.data +
-    getDroppedSynchronizedOutputRendererData(pending) +
-    getDroppedMode2031RendererData(pending)
+    pending.droppedOutput === true
+      ? makeDroppedOutputPayload(payload.id, pending).data
+      : pending.data
   const isInteractiveOutput = shouldSendInteractiveOutputNow(
     payload.id,
     nextData,
@@ -134,20 +161,21 @@ export function acceptPtyDataForRenderer(
       sendPtyDataToRenderer(
         session,
         payload.id,
-        {
-          id: payload.id,
-          data: nextData,
-          ...(typeof pending.startSeq === 'number'
-            ? {
-                seq: pending.startSeq + (pending.rawLength ?? nextData.length),
-                rawLength: pending.rawLength ?? nextData.length
-              }
-            : {}),
-          ...(pending.transformed ? { transformed: true } : {}),
-          ...(pending.containsBackgroundOutput === true ? { background: true } : {}),
-          ...(pending.droppedOutput === true ? { droppedOutput: true } : {})
-        },
-        pending.projectionAdmissionIds
+        pending.droppedOutput === true
+          ? makeDroppedOutputPayload(payload.id, pending)
+          : {
+              id: payload.id,
+              data: nextData,
+              ...(typeof pending.startSeq === 'number'
+                ? {
+                    seq: pending.startSeq + (pending.rawLength ?? nextData.length),
+                    rawLength: pending.rawLength ?? nextData.length
+                  }
+                : {}),
+              ...(pending.transformed ? { transformed: true } : {}),
+              ...(pending.containsBackgroundOutput === true ? { background: true } : {}),
+              ...escapeBoundaryFields(pending.startEscapeBoundary)
+            }
       )
     } finally {
       session.updateProducerFlowControl(payload.id)

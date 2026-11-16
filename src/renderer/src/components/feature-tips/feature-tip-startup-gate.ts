@@ -2,13 +2,15 @@ import {
   getCompletedFeatureTipIds,
   getOrderedUnseenFeatureTips,
   type FeatureTip,
-  type FeatureTipId
-} from '../../../../shared/feature-tips'
-import { resolveAiVaultSearchSettings } from '../../../../shared/ai-vault-search-settings'
-import type { CliInstallStatus } from '../../../../shared/cli-install-types'
-import type { FeatureInteractionState } from '../../../../shared/feature-interactions'
+  type FeatureTipId,
+  type FeatureTipSeenId
+} from '../../../../shared/feature-education/feature-tips'
+import { resolveAiVaultSearchSettings } from '../../../../shared/ai-vault/search/ai-vault-search-settings'
+import type { CliInstallStatus } from '../../../../shared/cli/cli-install-types'
+import type { FeatureInteractionState } from '../../../../shared/feature-education/interactions/feature-interactions'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { OnboardingState } from '../../../../shared/onboarding-state-types'
+import type { ChatUiLaunchTipVariant } from '../../../../shared/native-chat/chat-ui-launch-tip-audience'
+import type { OnboardingState } from '../../../../shared/onboarding/onboarding-state-types'
 import { shouldShowOnboarding } from '../onboarding/should-show-onboarding'
 
 export type FeatureTipsAppOpenDecision =
@@ -25,6 +27,7 @@ export function isCliFeatureTipCompleted(status: CliInstallStatus): boolean {
 export type FeatureTipSettings = {
   voice?: GlobalSettings['voice']
   aiVaultSearch?: GlobalSettings['aiVaultSearch']
+  telemetry?: GlobalSettings['telemetry']
 }
 
 export function isSessionSearchFeatureTipCompleted(
@@ -37,18 +40,25 @@ export function isSessionSearchFeatureTipCompleted(
 
 /** Unseen tips whose feature the user has not already set up, in display order. */
 export function getPendingFeatureTips(args: {
-  seenTipIds: readonly FeatureTipId[]
+  seenTipIds: readonly FeatureTipSeenId[]
   cliInstalled: boolean
   featureInteractions: FeatureInteractionState
+  chatUiLaunchTipVariant: ChatUiLaunchTipVariant
   settings: FeatureTipSettings | null | undefined
   webClient: boolean
 }): FeatureTip[] {
   return getOrderedUnseenFeatureTips({
     seenTipIds: new Set(args.seenTipIds),
+    telemetry: args.settings?.telemetry,
     completedTipIds: getCompletedFeatureTipIds({
       cliInstalled: args.cliInstalled,
       voiceDictationEnabled: args.settings?.voice?.enabled === true,
       sessionSearchTipCompleted: isSessionSearchFeatureTipCompleted(args.settings, args.webClient),
+      chatUiLaunchTipCompleted:
+        args.webClient ||
+        args.chatUiLaunchTipVariant === 'none' ||
+        // Why: recorded on Chat UI at the launch snapshot, so either still on it or switched back on purpose.
+        args.chatUiLaunchTipVariant === 'chat-ui-on',
       featureInteractions: args.featureInteractions
     })
   })
@@ -57,8 +67,10 @@ export function getPendingFeatureTips(args: {
 export function getFeatureTipsAppOpenDecision(args: {
   activeModal: string
   cliInstalled: boolean | null
-  featureTipsSeenIds: readonly FeatureTipId[]
+  featureTipsSeenIds: readonly FeatureTipSeenId[]
   featureInteractions: FeatureInteractionState
+  /** Null until main answers. */
+  chatUiLaunchTipVariant: ChatUiLaunchTipVariant | null
   onboarding: OnboardingState | null
   persistedUIReady: boolean
   promptedThisSession: boolean
@@ -78,6 +90,7 @@ export function getFeatureTipsAppOpenDecision(args: {
     args.onboarding === null ||
     args.activeModal !== 'none' ||
     args.cliInstalled === null ||
+    args.chatUiLaunchTipVariant === null ||
     shouldShowOnboarding(args.onboarding)
   ) {
     return { kind: 'skip' }
@@ -87,6 +100,7 @@ export function getFeatureTipsAppOpenDecision(args: {
     seenTipIds: args.featureTipsSeenIds,
     cliInstalled: args.cliInstalled,
     featureInteractions: args.featureInteractions,
+    chatUiLaunchTipVariant: args.chatUiLaunchTipVariant,
     settings: args.settings,
     webClient: args.webClient
   })[0]

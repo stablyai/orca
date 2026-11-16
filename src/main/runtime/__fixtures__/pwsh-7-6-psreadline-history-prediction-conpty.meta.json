@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-10-16T03:05:00.000Z",
+  "platform": "win32",
+  "command": ["pwsh.exe", "-NoLogo", "-NoProfile", "-NoExit", "-File", "setup.ps1"],
+  "cols": 120,
+  "rows": 30,
+  "note": "pwsh 7.6.7 under node-pty ConPTY on Windows. setup.ps1 points PSReadLine at a one-line history file ('Write-Output FOREIGN_LANE_COMMAND; Get-FileHash C:/elsewhere/other.py') with -PredictionSource History -PredictionViewStyle InlineView. Sent 'Write-Output ' at 6s, 'OWN_MARKER' at 7.5s, Enter at 9s. Username scrubbed same-length.",
+  "exitCode": 0
+}

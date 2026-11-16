@@ -1,33 +1,29 @@
+import { createFolderWorkspaceCreateAction } from './folder-workspace-creation'
+import { createFolderWorkspaceDeleteAction } from './folder-workspace-removal'
+import { assertWorkspaceAttachmentWriteCapability } from '../../runtime/workspace-links/runtime-workspace-attachment-capabilities'
+import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
-import { WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
-import {
-  assertRuntimeEnvironmentCapability,
-  callRuntimeRpc,
-  getActiveRuntimeTarget
-} from '../../runtime/runtime-rpc-client'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import { formatFolderWorkspaceCreateError } from '../../lib/folder-workspace-path-status'
-import {
-  findFolderWorkspaceOwner,
-  getExecutionHostIdForFolderWorkspace,
-  getRuntimeEnvironmentIdForFolderWorkspace
-} from '@/lib/folder-workspace-runtime-owner'
-import { FolderWorkspaceUpdateCoordinator } from '../slices/folder-workspace-update-coordinator'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
+import { WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
+import { assertRuntimeEnvironmentCapability } from '../../runtime/rpc/compatibility/runtime-capability-proof'
+import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
+import { getRuntimeTargetHostId } from '../../runtime/rpc/targets/runtime-client-target'
+import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
+import { findFolderWorkspaceOwner } from '@/lib/workspace/ownership/folder-workspace-runtime-owner'
+import { FolderWorkspaceUpdateCoordinator } from './folder-workspace-update-coordinator'
 import type { FolderWorkspaceUpdates, RepoSlice } from '../repos/repo-state'
-import { getRuntimeTargetHostId } from '../runtime-target-host'
 import {
+  folderWorkspaceOwnerTarget,
   folderWorkspaceUpdateInvalidatesPathStatus,
-  getFolderWorkspacePathStatusRouteSettings,
   mergeFolderWorkspaceUpdateResponse
 } from './folder-workspace-routing'
 import {
-  folderWorkspaceWithFetchedOwner,
-  getFolderWorkspaceHostId,
   getFolderWorkspaceUpdateIdentity,
   reconcileFailedFolderWorkspaceUpdate
 } from './folder-workspace-catalog'
+import '../../../../shared/folder-workspaces/folder-workspace-execution-host'
+import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspaces/folder-workspace-host-id'
 
 export type FolderWorkspaceUpdateField = keyof FolderWorkspaceUpdates
 
@@ -58,50 +54,7 @@ export function createFolderWorkspaceMutationActions(
   get: Parameters<StateCreator<AppState>>[1]
 ): Pick<RepoSlice, 'createFolderWorkspace' | 'updateFolderWorkspace' | 'deleteFolderWorkspace'> {
   return {
-    createFolderWorkspace: async (args, options) => {
-      try {
-        // Why: a new folder has no owner yet, so creation follows the caller-selected path-status host.
-        const target = getActiveRuntimeTarget(
-          getFolderWorkspacePathStatusRouteSettings(options, get().settings)
-        )
-        if (
-          target.kind === 'environment' &&
-          (args.linkedTask?.provider === 'jira' ||
-            args.linkedTaskSourceContext?.provider === 'jira')
-        ) {
-          await assertRuntimeEnvironmentCapability(
-            target.environmentId,
-            WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
-            'Update the remote runtime to link Jira'
-          )
-        }
-        const workspace =
-          target.kind === 'local'
-            ? await window.api.folderWorkspaces.create(args)
-            : (
-                await callRuntimeRpc<{ folderWorkspace: FolderWorkspace }>(
-                  target,
-                  'folderWorkspace.create',
-                  args,
-                  { timeoutMs: 15_000 }
-                )
-              ).folderWorkspace
-        const ownedWorkspace = folderWorkspaceWithFetchedOwner(
-          workspace,
-          target,
-          get().projectGroups
-        )
-        set((s) => ({
-          folderWorkspaces: [ownedWorkspace, ...s.folderWorkspaces],
-          folderWorkspacePathStatuses: {}
-        }))
-        return ownedWorkspace
-      } catch (err) {
-        console.error('Failed to create folder workspace:', err)
-        const { title, description } = formatFolderWorkspaceCreateError(err)
-        throw new Error(`${title}. ${description}`)
-      }
-    },
+    createFolderWorkspace: createFolderWorkspaceCreateAction(set, get),
 
     updateFolderWorkspace: async (folderWorkspaceId, updates, options) => {
       const folderWorkspaceUpdates = getFolderWorkspaceUpdateCoordinator(get)
@@ -111,18 +64,39 @@ export function createFolderWorkspaceMutationActions(
         (state.activeWorktreeId === folderWorkspaceKey(folderWorkspaceId)
           ? (state.activeWorkspaceExecutionHostId ?? undefined)
           : undefined)
-      if (!findFolderWorkspaceOwner(state, folderWorkspaceId, executionHostId)) {
+      const existingWorkspace = findFolderWorkspaceOwner(state, folderWorkspaceId, executionHostId)
+      if (!existingWorkspace) {
         return false
       }
-      const runtimeEnvironmentId = getRuntimeEnvironmentIdForFolderWorkspace(
-        state,
-        folderWorkspaceId,
-        executionHostId
-      )
       // Why: owner-scoped mutations must not follow whichever runtime happens to be focused.
-      const target = getActiveRuntimeTarget({ activeRuntimeEnvironmentId: runtimeEnvironmentId })
+      const target = folderWorkspaceOwnerTarget(state, folderWorkspaceId, executionHostId)
+      if (!target) {
+        return false
+      }
       const ownerHostId = executionHostId ?? getRuntimeTargetHostId(target)
+      const sourceWorkspace = state.folderWorkspaces.find(
+        (workspace) =>
+          workspace.id === folderWorkspaceId &&
+          getFolderWorkspaceHostId(workspace, state.projectGroups) === ownerHostId
+      )
+      if (
+        updates.linkedItems !== undefined &&
+        updates.linkedItemsBase === undefined &&
+        sourceWorkspace
+      ) {
+        updates = {
+          ...updates,
+          linkedItemsBase: getWorkspaceAttachments({
+            linkedItems: sourceWorkspace.linkedItems,
+            linkedWorkItem: sourceWorkspace.linkedTask,
+            linkedTaskSourceContext: sourceWorkspace.linkedTaskSourceContext
+          })
+        }
+      }
       const updateIdentity = getFolderWorkspaceUpdateIdentity(ownerHostId, folderWorkspaceId)
+      if (target.kind === 'environment' && updates.linkedItems !== undefined) {
+        await assertWorkspaceAttachmentWriteCapability(target, updates)
+      }
       // Why: same gate as folderWorkspace.create — an older paired runtime would drop the Jira link silently.
       if (
         target.kind === 'environment' &&
@@ -164,8 +138,11 @@ export function createFolderWorkspaceMutationActions(
           })
           return false
         }
-        if (updates.diffComments !== undefined && updated.diffComments === undefined) {
-          // Why: older paired runtimes strip this optional field; reconcile instead of showing an unsaved note.
+        if (
+          (updates.diffComments !== undefined && updated.diffComments === undefined) ||
+          (updates.linkedItems !== undefined && updated.linkedItems === undefined)
+        ) {
+          // Older hosts can strip optional fields; reconcile instead of reporting an unsaved edit.
           await reconcileFailedFolderWorkspaceUpdate({
             target,
             folderWorkspaceId,
@@ -214,59 +191,6 @@ export function createFolderWorkspaceMutationActions(
       }
     },
 
-    deleteFolderWorkspace: async (folderWorkspaceId, options) => {
-      const state = get()
-      const executionHostId = options?.executionHostId
-      if (!findFolderWorkspaceOwner(state, folderWorkspaceId, executionHostId)) {
-        return false
-      }
-      const ownerHostId = getExecutionHostIdForFolderWorkspace(
-        state,
-        folderWorkspaceId,
-        executionHostId
-      )
-      const runtimeEnvironmentId = getRuntimeEnvironmentIdForFolderWorkspace(
-        state,
-        folderWorkspaceId,
-        executionHostId
-      )
-      try {
-        // Why: deletion targets the folder's owner; focus may be on a different host.
-        const target = getActiveRuntimeTarget({ activeRuntimeEnvironmentId: runtimeEnvironmentId })
-        const deleted =
-          target.kind === 'local'
-            ? await window.api.folderWorkspaces.delete({ folderWorkspaceId })
-            : (
-                await callRuntimeRpc<{ deleted: boolean }>(
-                  target,
-                  'folderWorkspace.delete',
-                  { folderWorkspaceId },
-                  { timeoutMs: 15_000 }
-                )
-              ).deleted
-        if (!deleted) {
-          return false
-        }
-        const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
-        set((s) => ({
-          folderWorkspaces: s.folderWorkspaces.filter(
-            (workspace) =>
-              workspace.id !== folderWorkspaceId ||
-              getFolderWorkspaceHostId(workspace, s.projectGroups) !== ownerHostId
-          ),
-          folderWorkspacePathStatuses: {}
-        }))
-        if (!get().folderWorkspaces.some((workspace) => workspace.id === folderWorkspaceId)) {
-          // Folder workspaces use the same browser registry key as worktrees;
-          // tear down Chromium guests before purging the remaining renderer state.
-          await get().shutdownWorktreeBrowsers(workspaceKey)
-          get().purgeWorktreeTerminalState([workspaceKey])
-        }
-        return true
-      } catch (err) {
-        console.error('Failed to delete folder workspace:', err)
-        return false
-      }
-    }
+    deleteFolderWorkspace: createFolderWorkspaceDeleteAction(set, get)
   }
 }

@@ -1,23 +1,28 @@
+import {
+  textGenerationFailure,
+  textGenerationFailureCodeFields
+} from '../../../shared/text-generation/text-generation-failure-copy'
 import { ipcMain } from 'electron'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { ResolvedSourceControlAiGenerationParams } from '../../../shared/source-control-ai'
+import type { ResolvedSourceControlAiGenerationParams } from '../../../shared/source-control/ai/source-control-ai-operation-resolution'
 import {
   cancelGenerateCommitMessageLocal,
   generateCommitMessageFromContext,
-  resolveCommitMessageSettings,
-  type GenerateCommitMessageResult
+  resolveCommitMessageSettings
 } from '../../text-generation/commit-message-text-generation'
-import { getCommitMessageModelDiscoveryHostKey } from '../../../shared/commit-message-host-key'
-import { getStagedCommitContext } from '../../git/status'
-import {
-  getSshGitProvider,
-  SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
-} from '../../providers/ssh-git-dispatch'
-import { resolveRegisteredWorktreePath } from '../registered-worktree-roots-cache'
+import type { GenerateCommitMessageResult } from '../../text-generation/source-control-text-generation-types'
+import { getCommitMessageModelDiscoveryHostKey } from '../../../shared/source-control/ai/generation/commit-message-host-key'
+import { getStagedCommitContext } from '../../git/source-control/mutations/staged-commit-context'
+import { SSH_HOST_NOT_SERVED_MESSAGE } from '../../providers/ssh-host-not-served-error'
+import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-worktree-roots-cache'
 import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'
-import { withLinkedIssueDraftContext } from '../../../shared/source-control-ai-action-variables'
-import { resolveSourceControlAiLinkedIssue } from '../source-control-ai-linked-issue'
-import { prepareLocalCommitMessageAgentEnv } from '../../text-generation/commit-message-agent-environment'
+import { withLinkedIssueDraftContext } from '../../../shared/source-control/ai/recipes/source-control-ai-action-variables'
+import { resolveSourceControlAiLinkedIssue } from '../source-control/source-control-ai-linked-issue'
+import { prepareLocalCommitMessageAgentEnv } from '../../text-generation/execution/commit-message-agent-environment'
+import {
+  CANCELED_GENERATION_RESULT,
+  runCancelableLocalGeneration
+} from '../../text-generation/execution/source-control-generation-lanes'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
 import {
   getLocalAgentRuntimeTarget,
@@ -62,40 +67,14 @@ export function registerFilesystemGitCommitGenerationHandlers(
             await getRepoForSourceControlAi(store, args)
           )
       if (!resolvedSettings.ok) {
-        return { success: false, error: resolvedSettings.error }
+        return {
+          success: false,
+          error: resolvedSettings.error,
+          ...textGenerationFailureCodeFields(resolvedSettings)
+        }
       }
       if (args.connectionId) {
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          return {
-            success: false,
-            error: SSH_GIT_PROVIDER_UNAVAILABLE_MESSAGE
-          }
-        }
-        let context
-        try {
-          context = await provider.getStagedCommitContext(args.worktreePath)
-        } catch (error) {
-          console.error('[filesystem] Failed to read remote staged commit context:', error)
-          return {
-            success: false,
-            error: 'Failed to read staged changes.'
-          }
-        }
-        if (!context) {
-          return { success: false, error: 'No staged changes to summarize.' }
-        }
-        context = withLinkedIssueDraftContext(
-          context,
-          resolveSourceControlAiLinkedIssue(store, args)
-        )
-        return generateCommitMessageFromContext(context, resolvedSettings.params, {
-          kind: 'remote',
-          cwd: args.worktreePath,
-          execute: (plan, cwd, timeoutMs, operation) =>
-            provider.executeCommitMessagePlan(plan, cwd, timeoutMs, operation),
-          missingBinaryLocation: 'remote PATH'
-        })
+        return { success: false, error: SSH_HOST_NOT_SERVED_MESSAGE }
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       const gitOptions = getLocalGitOptionsForRegisteredWorktree(
@@ -103,38 +82,47 @@ export function registerFilesystemGitCommitGenerationHandlers(
         args.worktreePath,
         worktreePath
       )
-      let context
-      try {
-        context = await getStagedCommitContext(worktreePath, {
-          ...gitOptions,
-          admissionTier: 'interactive'
-        })
-      } catch (error) {
-        console.error('[filesystem] Failed to read staged commit context:', error)
-        return {
-          success: false,
-          error: 'Failed to read staged changes.'
+      return runCancelableLocalGeneration<GenerateCommitMessageResult>(
+        'commit-message',
+        worktreePath,
+        async (isCanceled) => {
+          let context
+          try {
+            context = await getStagedCommitContext(worktreePath, {
+              ...gitOptions,
+              admissionTier: 'interactive'
+            })
+          } catch (error) {
+            console.error('[filesystem] Failed to read staged commit context:', error)
+            return {
+              success: false,
+              ...textGenerationFailure('stagedChangesReadFailed')
+            }
+          }
+          if (!context) {
+            return { success: false, ...textGenerationFailure('noStagedChanges') }
+          }
+          context = withLinkedIssueDraftContext(
+            context,
+            resolveSourceControlAiLinkedIssue(store, args, worktreePath)
+          )
+          const localEnv = await prepareLocalCommitMessageAgentEnv(
+            resolvedSettings.params.agentId,
+            commitMessageAgentEnv,
+            getLocalAgentRuntimeTarget(gitOptions)
+          )
+          if (!localEnv.ok) {
+            return { success: false, error: localEnv.error }
+          }
+          if (isCanceled()) {
+            return CANCELED_GENERATION_RESULT
+          }
+          return generateCommitMessageFromContext(
+            context,
+            resolvedSettings.params,
+            getLocalTextGenerationTarget(worktreePath, gitOptions, localEnv.env)
+          )
         }
-      }
-      if (!context) {
-        return { success: false, error: 'No staged changes to summarize.' }
-      }
-      context = withLinkedIssueDraftContext(
-        context,
-        resolveSourceControlAiLinkedIssue(store, args, worktreePath)
-      )
-      const localEnv = await prepareLocalCommitMessageAgentEnv(
-        resolvedSettings.params.agentId,
-        commitMessageAgentEnv,
-        getLocalAgentRuntimeTarget(gitOptions)
-      )
-      if (!localEnv.ok) {
-        return { success: false, error: localEnv.error }
-      }
-      return generateCommitMessageFromContext(
-        context,
-        resolvedSettings.params,
-        getLocalTextGenerationTarget(worktreePath, gitOptions, localEnv.env)
       )
     }
   )
@@ -143,11 +131,6 @@ export function registerFilesystemGitCommitGenerationHandlers(
     'git:cancelGenerateCommitMessage',
     async (_event, args: { worktreePath: string; connectionId?: string }): Promise<void> => {
       if (args.connectionId) {
-        const provider = getSshGitProvider(args.connectionId)
-        if (!provider) {
-          return
-        }
-        await provider.cancelGenerateCommitMessage(args.worktreePath, 'commit-message')
         return
       }
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)

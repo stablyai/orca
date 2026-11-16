@@ -17,6 +17,7 @@ export function createWebWorkspacePortsApi(): Partial<PreloadApi> {
           ok: false,
           reason: 'Workspace port management is unavailable for browser-local workspaces.'
         }),
+      probePage: () => Promise.resolve({ kind: 'not-page' }),
       onAdvertisedUrlChanged: () => noopUnsubscribe
     }
   }

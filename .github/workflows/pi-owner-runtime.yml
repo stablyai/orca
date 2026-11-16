@@ -1,8 +1,10 @@
 name: Pi owner runtime verification
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
     paths:
       - 'src/main/pi/**'
+      - '!src/main/pi/**/*.test.ts'
       - 'tests/tools/pi-owner-runtime-smoke.mjs'
       - 'tests/tools/omp-completion-runtime-smoke.mjs'
       - '.github/workflows/pi-owner-runtime.yml'
@@ -14,6 +16,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   runtime:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     strategy:
       fail-fast: false
       matrix:

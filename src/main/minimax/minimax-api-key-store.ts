@@ -12,3 +12,4 @@ export const getMiniMaxApiKeyProtection = store.protection
 export const saveMiniMaxApiKey = store.save
 export const readMiniMaxApiKey = store.read
 export const clearMiniMaxApiKey = store.clear
+export const miniMaxApiKeyEnvelopeFile = store.envelopeFile

@@ -8,14 +8,12 @@ import { WebSocketServer, type ClientOptions } from 'ws'
 import {
   LOCAL_HTTPS_TEST_CERTIFICATE,
   LOCAL_HTTPS_TEST_PRIVATE_KEY
-} from '../browser/browser-local-https-test-certificate'
-import { createBrowserRouteTcpEgressSocksRecorder } from '../browser/browser-route-tcp-egress-socks-recorder'
+} from '../browser/electron-fixtures/browser-local-https-test-certificate'
+import { createSocksProxy } from './proxy-socks.test-fixture'
+import { setDefaultProxySessionResolver } from './electron-default-proxy-session'
+import { PROXY_ENVIRONMENT_KEYS } from '../../shared/network-proxy'
 import { createProxyWebSocket } from './proxy-websocket'
-import {
-  applyProxySettingsToSession,
-  resetProxyApplicationForTests,
-  setDefaultProxySessionResolver
-} from './proxy-settings'
+import { applyProxySettingsToSession, resetProxyApplicationForTests } from './proxy-settings'
 
 const cleanups: (() => void | Promise<void>)[] = []
 afterEach(async () => {
@@ -24,6 +22,7 @@ afterEach(async () => {
   }
   setDefaultProxySessionResolver(null)
   resetProxyApplicationForTests()
+  vi.unstubAllEnvs()
 })
 
 async function relayServer(tls = false) {
@@ -196,30 +195,9 @@ describe('app proxy WebSockets', () => {
 
   it.each(['SOCKS5', 'PROXY'])('preserves TLS verification through %s', async (route) => {
     const relay = await relayServer(true)
-    const hosts = new Set<string>()
-    const sockets = new Set<Socket>()
-    const socks = createBrowserRouteTcpEgressSocksRecorder(
-      new Set([relay.port]),
-      new Set(),
-      hosts,
-      sockets
-    )
-    await new Promise<void>((resolve) => socks.listen(0, '127.0.0.1', resolve))
-    const address = socks.address()
-    if (!address || typeof address === 'string') {
-      throw new Error('Expected TCP address')
-    }
-    cleanups.push(
-      () =>
-        new Promise<void>((resolve) => {
-          for (const socket of sockets) {
-            socket.destroy()
-          }
-          socks.close(() => resolve())
-        })
-    )
-    const proxy =
-      route === 'SOCKS5' ? `127.0.0.1:${address.port}` : (await connectProxy(relay.port)).address
+    const socks = await createSocksProxy(new Set([relay.port]))
+    cleanups.push(socks.close)
+    const proxy = route === 'SOCKS5' ? socks.address : (await connectProxy(relay.port)).address
     proxySession(`${route} ${proxy}`)
     const url = `wss://localhost:${relay.port}`
     await expect(once(openSocket(url), 'open')).rejects.toThrow()
@@ -227,7 +205,7 @@ describe('app proxy WebSockets', () => {
     await once(openSocket(url, { ca: LOCAL_HTTPS_TEST_CERTIFICATE }), 'open')
     expect(relay.connections()).toBe(1)
     if (route === 'SOCKS5') {
-      expect(hosts).toEqual(new Set(['localhost']))
+      expect(socks.hosts).toEqual(new Set(['localhost']))
     }
   })
 
@@ -268,7 +246,19 @@ describe('app proxy WebSockets', () => {
     await vi.waitFor(() => expect(second.readyState).toBe(second.CLOSED))
   })
 
-  it('honors a DIRECT bypass and preserves the headless default', async () => {
+  it('honors an app DIRECT bypass and headless NO_PROXY', async () => {
+    for (const key of [
+      ...PROXY_ENVIRONMENT_KEYS,
+      'npm_config_http_proxy',
+      'npm_config_https_proxy',
+      'npm_config_proxy',
+      'npm_config_no_proxy'
+    ]) {
+      vi.stubEnv(key, '')
+      vi.stubEnv(key.toUpperCase(), '')
+    }
+    vi.stubEnv('HTTP_PROXY', 'http://127.0.0.1:1')
+    vi.stubEnv('NO_PROXY', '127.0.0.1')
     const relay = await relayServer()
     proxySession('DIRECT')
     await once(openSocket(relay.url), 'open')
@@ -299,6 +289,34 @@ describe('app proxy WebSockets', () => {
     await once(openSocket(`ws://relay.invalid:${relay.port}`), 'open')
     expect(other.requests[0]?.authorization).toBeUndefined()
     expect(relay.connections()).toBe(2)
+  })
+
+  it('uses HTTPS_PROXY for headless WSS upgrades and fails closed when it is unavailable', async () => {
+    for (const key of [
+      ...PROXY_ENVIRONMENT_KEYS,
+      'npm_config_http_proxy',
+      'npm_config_https_proxy',
+      'npm_config_proxy',
+      'npm_config_no_proxy'
+    ]) {
+      vi.stubEnv(key, '')
+      vi.stubEnv(key.toUpperCase(), '')
+    }
+    const relay = await relayServer(true)
+    const proxy = await connectProxy(relay.port)
+    vi.stubEnv('HTTPS_PROXY', `http://${proxy.address}`)
+    await once(
+      openSocket(`wss://localhost:${relay.port}`, { ca: LOCAL_HTTPS_TEST_CERTIFICATE }),
+      'open'
+    )
+    expect(proxy.requests).toEqual([
+      { target: `localhost:${relay.port}`, authorization: undefined }
+    ])
+    vi.stubEnv('HTTPS_PROXY', 'http://127.0.0.1:1')
+    await expect(
+      once(openSocket(relay.url, { ca: LOCAL_HTTPS_TEST_CERTIFICATE }), 'open')
+    ).rejects.toThrow(/ECONNREFUSED/)
+    expect(relay.connections()).toBe(1)
   })
 
   it('does not silently bypass an unavailable proxy', async () => {

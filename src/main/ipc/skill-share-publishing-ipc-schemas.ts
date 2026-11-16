@@ -1,9 +1,11 @@
 import { z } from 'zod'
-import { SkillDiscoveryTargetSchema } from '../../shared/skills'
+import { SkillDiscoveryTargetSchema } from '../../shared/skills/discovery/skills'
 
 export const skillSharePrepareIpcSchema = z
   .object({
     skillIds: z.array(z.string().min(1).max(4096)).min(1).max(512),
+    /** The chosen skills' folders: only their roots may start a stopped WSL distro. */
+    skillDirectories: z.array(z.string().min(1).max(4096)).max(512).optional(),
     bundleName: z.string().regex(/^(?!.*(?:--|\.\.))[a-z0-9](?:[a-z0-9.-]{0,62}[a-z0-9])?$/),
     target: SkillDiscoveryTargetSchema.optional(),
     packageId: z.string().min(1).max(128).optional()

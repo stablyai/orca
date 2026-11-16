@@ -2,18 +2,18 @@ import { randomUUID } from 'node:crypto'
 import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, rmSync } from 'node:fs'
 import { join, resolve, sep } from 'node:path'
 import { z } from 'zod'
-import { getAppEnvironment } from '../../shared/app-environment'
-import { writeSecureFile } from '../../shared/secure-file'
+import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
+import { writeSecureFile } from '../../shared/secure-storage/secure-file'
 import type {
   ManagedDataAccountProvider,
   ManagedDataAccountsState
-} from '../../shared/managed-account-types'
+} from '../../shared/agent-accounts/managed-account-types'
 import { captureDataAccountCredentials } from './credential-capture'
 import { ManagedDataAccountProfileRemoval } from './profile-removal'
 import {
   captureManagedDataAccountOriginalEnvironment,
   restoreManagedDataAccountEnvironment
-} from '../../shared/managed-data-account-environment'
+} from '../../shared/agent-launch/environment/managed-data-account-environment'
 
 const MAX_INLINE_AUTH_BASELINES = 64
 const MAX_INLINE_AUTH_BYTES = 64 * 1024
@@ -110,7 +110,7 @@ export class ManagedDataAccountService {
           ) {
             registered = false
           }
-          // Unreadable metadata cannot prove that this profile is unregistered.
+          // Unreadable registry metadata cannot prove the profile is unregistered.
         }
         if (!registered) {
           rmSync(directory, { recursive: true, force: true })
@@ -152,14 +152,16 @@ export class ManagedDataAccountService {
     if (!state.activeAccountId) {
       return {}
     }
-    return this.profileEnvironment(provider, state.activeAccountId)
+    return this.environmentForAccount(provider, state.activeAccountId)
   }
 
   transcriptEnvironments(provider: ManagedDataAccountProvider): Record<string, string>[] {
     const state = this.list(provider)
     const selected = state.accounts.filter((account) => account.id === state.activeAccountId)
     const others = state.accounts.filter((account) => account.id !== state.activeAccountId)
-    return [...selected, ...others].map((account) => this.profileEnvironment(provider, account.id))
+    return [...selected, ...others].map((account) =>
+      this.environmentForAccount(provider, account.id)
+    )
   }
 
   captureOriginalEnvironment(
@@ -196,7 +198,7 @@ export class ManagedDataAccountService {
   }
 
   restoreOriginalEnvironment(environment: Record<string, string | undefined>): void {
-    // A copied reference needs the exact overlay captured by this host service.
+    // Restoring copied references requires the original overlay captured by this service.
     const selection = JSON.stringify([
       environment.ORCA_DATA_ACCOUNT_DATA_HOME,
       environment.ORCA_DATA_ACCOUNT_STATE_HOME
@@ -217,7 +219,7 @@ export class ManagedDataAccountService {
     this.inlineAuthBaselines.clear()
   }
 
-  private profileEnvironment(
+  environmentForAccount(
     provider: ManagedDataAccountProvider,
     accountId: string
   ): Record<string, string> {

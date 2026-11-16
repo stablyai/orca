@@ -1,31 +1,59 @@
-import { net, session } from 'electron'
+import { net, session, type Session } from 'electron'
 import type { MainHttpClient } from '../network/http-client'
-import { awaitProxySessionApplication } from '../network/proxy-settings'
 import { getProxySessionTlsSettings } from '../network/proxy-tls-settings'
 import { fetchWithProxyTls } from '../network/proxy-tls-fetch'
+import { hasElectronProxyCredentialsForSession } from '../network/electron-proxy-credentials'
+import { getProxySessionApplicationReadiness } from '../network/proxy-settings'
+import { waitForPromiseWithSignal } from '../../shared/concurrency/abort-signal-reason'
+import { fetchWithProxyLogin } from './electron-proxy-login-fetch'
 
-/**
- * The desktop HTTP client: Chromium's network stack, which follows session and proxy
- * state and sends a Chrome user agent.
- *
- * `session.defaultSession` throws before the app is ready, so it is read per call
- * rather than captured at install time.
- */
-export const electronHttpClient: MainHttpClient = {
-  fetch: async (url, init) => {
-    const proxySession = session.defaultSession
-    if (!(await awaitProxySessionApplication(proxySession))) {
-      throw new Error('Proxy settings are not ready')
-    }
-    const tls = getProxySessionTlsSettings(proxySession)
-    if (!tls || (!tls.certificate && !tls.ignoreErrors)) {
-      return net.fetch(url, init)
-    }
+function isHttpUrl(url: string): boolean {
+  try {
+    return ['http:', 'https:'].includes(new URL(url).protocol)
+  } catch {
+    return false
+  }
+}
+
+async function hasConfiguredProxyCredentials(
+  proxySession: Session,
+  signal: AbortSignal | undefined
+): Promise<boolean> {
+  // Credentials are installed while a proxy policy applies; a cold request must wait for it.
+  const readiness = getProxySessionApplicationReadiness(proxySession)
+  if (readiness !== true && !(await waitForPromiseWithSignal(Promise.resolve(readiness), signal))) {
+    return false
+  }
+  return hasElectronProxyCredentialsForSession(proxySession)
+}
+
+async function fetchFromDefaultSession(url: string, init?: RequestInit): Promise<Response> {
+  if (!isHttpUrl(url)) {
+    return net.fetch(url, init)
+  }
+  const proxySession = session.defaultSession
+  const hasCredentials = await hasConfiguredProxyCredentials(
+    proxySession,
+    init?.signal ?? undefined
+  )
+  const tls = getProxySessionTlsSettings(proxySession)
+  if (tls && (tls.certificate || tls.ignoreErrors)) {
     const headers = new Headers(init?.headers)
     if (!headers.has('user-agent')) {
       headers.set('user-agent', proxySession.getUserAgent())
     }
     return fetchWithProxyTls(proxySession, tls, url, { ...init, headers })
-  },
-  proxySession: () => session.defaultSession
+  }
+  if (hasCredentials) {
+    return fetchWithProxyLogin(new Request(url, init), proxySession)
+  }
+  // Not ready falls through too: the default-session request guard cancels it.
+  return net.fetch(url, init)
+}
+
+/** Chromium honors session/proxy state; read defaultSession per call because it throws before app readiness. */
+export const electronHttpClient: MainHttpClient = {
+  fetch: fetchFromDefaultSession,
+  proxySession: () => session.defaultSession,
+  partitionSession: (partition) => session.fromPartition(partition)
 }

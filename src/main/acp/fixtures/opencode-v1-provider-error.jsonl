@@ -1,0 +1,2 @@
+{"direction":"out","process":"p1","message":{"jsonrpc":"2.0","id":4,"method":"session/prompt","params":{"sessionId":"session-1","prompt":[{"type":"text","text":"Reply OK."}]}}}
+{"direction":"in","process":"p1","message":{"jsonrpc":"2.0","id":4,"error":{"code":-32603,"message":"Internal error: CAPTURE_PROVIDER_400","data":{"service":"session","errorName":"APIError"}}}}

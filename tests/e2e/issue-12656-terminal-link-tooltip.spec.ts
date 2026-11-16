@@ -23,6 +23,7 @@ type TooltipState = {
   cursor: string
   paneBottom: number
   terminalBottom: number
+  paddingY: number
   tooltipTop: number
   tooltipBottom: number
   tooltipHeight: number
@@ -93,6 +94,9 @@ async function readTooltipState(page: Page, tabId: string): Promise<TooltipState
     const paneRect = pane.container.getBoundingClientRect()
     const terminalRect = pane.terminal.element?.parentElement?.getBoundingClientRect()
     const tooltipRect = pane.linkTooltip.getBoundingClientRect()
+    // Mirrors the 4px fallback terminal.css uses when no padding setting is applied.
+    const paddingVar = getComputedStyle(pane.container).getPropertyValue('--pane-padding-y').trim()
+    const paddingY = paddingVar ? Number.parseFloat(paddingVar) : 4
 
     return {
       display: pane.linkTooltip.style.display,
@@ -100,11 +104,17 @@ async function readTooltipState(page: Page, tabId: string): Promise<TooltipState
       cursor: getComputedStyle(screen).cursor,
       paneBottom: paneRect.bottom,
       terminalBottom: terminalRect?.bottom ?? 0,
+      paddingY,
       tooltipTop: tooltipRect.top,
       tooltipBottom: tooltipRect.bottom,
       tooltipHeight: tooltipRect.height
     }
   }, tabId)
+}
+
+// The terminal keeps exactly its bottom padding inset (#36789); a hover that shrank it would grow this.
+function terminalBottomInsetDrift(state: TooltipState): number {
+  return Math.abs(state.paneBottom - state.paddingY - state.terminalBottom)
 }
 
 async function captureProof(page: Page, testInfo: TestInfo, name: string): Promise<void> {
@@ -130,21 +140,22 @@ test.describe('Issue #12656 terminal link tooltip', () => {
     )
     await waitForTerminalOutput(orcaPage, url)
 
-    let probe: LinkProbe | null = null
+    const located: { probe: LinkProbe | null } = { probe: null }
     await expect
       .poll(
         async () => {
-          probe = await locateUrl(orcaPage, url)
-          return probe
+          located.probe = await locateUrl(orcaPage, url)
+          return located.probe
         },
         { timeout: 5_000, message: 'URL did not become visible in the terminal viewport' }
       )
       .not.toBeNull()
-    if (!probe) {
+    if (!located.probe) {
       throw new Error('URL probe disappeared before hover')
     }
+    let probe: LinkProbe = located.probe
     const idle = await readTooltipState(orcaPage, probe.tabId)
-    expect(Math.abs(idle.paneBottom - idle.terminalBottom)).toBeLessThanOrEqual(1)
+    expect(terminalBottomInsetDrift(idle)).toBeLessThanOrEqual(1)
     await expect
       .poll(async () => {
         const currentProbe = await locateUrl(orcaPage, url)
@@ -160,7 +171,7 @@ test.describe('Issue #12656 terminal link tooltip', () => {
     const hovered = await readTooltipState(orcaPage, probe.tabId)
     expect(hovered.text).toContain(url)
     expect(hovered.tooltipHeight).toBeGreaterThan(0)
-    expect(Math.abs(hovered.paneBottom - hovered.terminalBottom)).toBeLessThanOrEqual(1)
+    expect(terminalBottomInsetDrift(hovered)).toBeLessThanOrEqual(1)
     expect(Math.abs(hovered.paneBottom - hovered.tooltipBottom)).toBeLessThanOrEqual(1)
     expect(hovered.tooltipTop).toBeLessThan(hovered.terminalBottom)
     await captureProof(orcaPage, testInfo, 'issue-12656-fixed-hover.png')
@@ -170,7 +181,7 @@ test.describe('Issue #12656 terminal link tooltip', () => {
       .poll(() => readTooltipState(orcaPage, probe.tabId))
       .toMatchObject({ display: 'none', cursor: 'text' })
     const cleared = await readTooltipState(orcaPage, probe.tabId)
-    expect(Math.abs(cleared.paneBottom - cleared.terminalBottom)).toBeLessThanOrEqual(1)
+    expect(terminalBottomInsetDrift(cleared)).toBeLessThanOrEqual(1)
     await captureProof(orcaPage, testInfo, 'issue-12656-fixed-after-blur.png')
 
     await expect.poll(() => getTerminalContent(orcaPage)).toContain(url)

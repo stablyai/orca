@@ -1,0 +1,74 @@
+import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { resetSshConnectionMocks } from './testing/ssh-connection-test-harness'
+import { createCallbacks, createTarget } from './testing/ssh-connection-test-fixtures'
+import { SshConnectionManager } from './ssh-connection-manager'
+
+vi.mock('../authentication/ssh2-module-load', async () =>
+  (await import('./testing/ssh-connection-test-client')).createSsh2LoaderModule()
+)
+vi.mock('../system-transport/system-ssh-binary', async () =>
+  (await import('./testing/ssh-connection-test-harness')).createSystemSshBinaryModule()
+)
+vi.mock('../system-transport/system-ssh-args', async (importOriginal) =>
+  (await import('./testing/ssh-connection-test-harness')).withSystemSshArgsMocks(
+    await importOriginal()
+  )
+)
+vi.mock('../system-transport/system-ssh-command', async (importOriginal) =>
+  (await import('./testing/ssh-connection-test-harness')).withSystemSshCommandMocks(
+    await importOriginal()
+  )
+)
+vi.mock(
+  '../system-transport/file-transfer/system-ssh-file-binary-transfer',
+  async (importOriginal) =>
+    (await import('./testing/ssh-connection-test-harness')).withSystemSshFileBinaryTransferMocks(
+      await importOriginal()
+    )
+)
+vi.mock('../system-transport/file-transfer/system-ssh-file-transfer', async (importOriginal) =>
+  (await import('./testing/ssh-connection-test-harness')).withSystemSshFileTransferMocks(
+    await importOriginal()
+  )
+)
+vi.mock('../system-transport/ssh-control-socket', async () =>
+  (await import('./testing/ssh-connection-test-harness')).createControlSocketModule()
+)
+vi.mock('../config/ssh-config-parser', async () =>
+  (await import('./testing/ssh-connection-test-harness')).createSshConfigParserModule()
+)
+vi.mock('../config/ssh-g-config-resolution', async (importOriginal) =>
+  (await import('./testing/ssh-connection-test-harness')).withSshGConfigResolutionMocks(
+    await importOriginal()
+  )
+)
+
+describe('SshConnectionManager', () => {
+  beforeEach(() => {
+    resetSshConnectionMocks()
+  })
+
+  it('does not erase a replacement registered while an admitted disconnect settles', async () => {
+    const mgr = new SshConnectionManager(createCallbacks())
+    const target = createTarget({ id: 'target' })
+    const old = await mgr.connect(target)
+    const state = old.getState()
+    vi.spyOn(old, 'getState').mockReturnValue({ ...state, status: 'disconnected' })
+    let finish!: () => void
+    vi.spyOn(old, 'disconnect')
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            finish = resolve
+          })
+      )
+      .mockResolvedValue(undefined)
+    const drain = mgr.disconnectAll()
+    const replacement = await mgr.connect(target)
+    expect(replacement).not.toBe(old)
+    finish()
+    await drain
+    expect(mgr.getConnection('target')).toBe(replacement)
+    await mgr.disconnectAll()
+  })
+})

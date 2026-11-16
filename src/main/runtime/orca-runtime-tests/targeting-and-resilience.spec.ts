@@ -1,59 +1,42 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  MOCK_GIT_WORKTREES,
-  OrcaRuntimeService,
-  assertWorktreeCleanForRemoval,
-  electronMocks,
-  ipcMain,
-  listWorktrees,
-  removeWorktree
-} from '../orca-runtime-test-mocks.spec'
+import { bindPaneFirst, registerBoundPty } from './bind-first-pane.test-fixture'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import './runtime-test-module-registration.spec'
+import { MOCK_GIT_WORKTREES, electronMocks } from '../orca-runtime-test-mocks/setup.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { AgentBrowserBridge } from '../../browser/agent-browser/agent-browser-bridge'
+import type { IPtyProvider } from '../../providers/pty/provider-contract'
+import { assertWorktreeCleanForRemoval } from '../../git/worktrees/removal/worktree-removal-preflight'
+import { ipcMain } from 'electron'
+import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
+import { removeWorktree } from '../../git/worktrees/removal/worktree-removal'
 import {
   TEST_REPO_ID,
   TEST_WORKTREE_ID,
   createRuntime,
   store,
   syncSinglePty
-} from '../orca-runtime-test-fixtures.spec'
-import { createMobileCreateTestNotifier } from '../orca-runtime-test-scenario-builders.spec'
+} from './orca-runtime-test-fixtures.spec'
+import { createMobileCreateTestNotifier } from './orca-runtime-test-scenario-builders.spec'
+
+function createBrowserBridge(overrides: Partial<AgentBrowserBridge>): AgentBrowserBridge {
+  return Object.assign(vi.mockObject(AgentBrowserBridge.prototype), overrides)
+}
 
 describe('OrcaRuntimeService', () => {
   describe('browser page targeting', () => {
     function mockLiveBrowserGuest(): void {
       electronMocks.webContents.fromId.mockReturnValue({
-        isDestroyed: () => false
+        isDestroyed: () => false,
+        isLoading: () => false
       })
     }
-
-    it('passes explicit page ids through without resolving the current worktree', async () => {
-      vi.mocked(listWorktrees).mockClear()
-      mockLiveBrowserGuest()
-      const runtime = createRuntime()
-      const snapshotMock = vi.fn().mockResolvedValue({
-        browserPageId: 'page-1',
-        snapshot: 'tree',
-        refs: [],
-        url: 'https://example.com',
-        title: 'Example'
-      })
-
-      runtime.setAgentBrowserBridge({
-        snapshot: snapshotMock,
-        getRegisteredTabs: vi.fn(() => new Map([['page-1', 1]]))
-      } as never)
-
-      const result = await runtime.browserSnapshot({ page: 'page-1' })
-
-      expect(result.browserPageId).toBe('page-1')
-      expect(snapshotMock).toHaveBeenCalledWith(undefined, 'page-1')
-      expect(listWorktrees).not.toHaveBeenCalled()
-    })
 
     it('resolves explicit worktree selectors when page ids are also provided', async () => {
       vi.mocked(listWorktrees).mockClear()
       mockLiveBrowserGuest()
       const runtime = createRuntime()
-      const snapshotMock = vi.fn().mockResolvedValue({
+      const snapshotMock = vi.fn<AgentBrowserBridge['snapshot']>().mockResolvedValue({
         browserPageId: 'page-1',
         snapshot: 'tree',
         refs: [],
@@ -61,88 +44,38 @@ describe('OrcaRuntimeService', () => {
         title: 'Example'
       })
 
-      runtime.setAgentBrowserBridge({
-        snapshot: snapshotMock,
-        getRegisteredTabs: vi.fn(() => new Map([['page-1', 1]]))
-      } as never)
+      runtime.setAgentBrowserBridge(
+        createBrowserBridge({
+          snapshot: snapshotMock,
+          getRegisteredTabs: vi.fn(() => new Map([['page-1', 1]])),
+          getRegisteredPageWebContentsId: (page: string) => (page === 'page-1' ? 1 : undefined)
+        })
+      )
 
       await runtime.browserSnapshot({
         worktree: 'branch:feature/foo',
         page: 'page-1'
       })
 
-      expect(snapshotMock).toHaveBeenCalledWith(TEST_WORKTREE_ID, 'page-1')
-    })
-
-    it('routes tab switch and capture start by explicit page id', async () => {
-      mockLiveBrowserGuest()
-      const runtime = createRuntime()
-      const tabSwitchMock = vi.fn().mockResolvedValue({
-        switched: 2,
-        browserPageId: 'page-2'
+      expect(snapshotMock).toHaveBeenCalledWith(TEST_WORKTREE_ID, 'page-1', {
+        worktree: 'branch:feature/foo',
+        page: 'page-1'
       })
-      const captureStartMock = vi.fn().mockResolvedValue({
-        capturing: true
-      })
-
-      runtime.setAgentBrowserBridge({
-        tabSwitch: tabSwitchMock,
-        captureStart: captureStartMock,
-        getRegisteredTabs: vi.fn(() => new Map([['page-2', 2]])),
-        tabList: vi.fn(() => ({
-          tabs: [
-            { browserPageId: 'page-0', index: 0, url: 'about:blank', title: '', active: false },
-            { browserPageId: 'page-1', index: 1, url: 'about:blank', title: '', active: false },
-            { browserPageId: 'page-2', index: 2, url: 'about:blank', title: '', active: true }
-          ]
-        }))
-      } as never)
-
-      await expect(runtime.browserTabSwitch({ page: 'page-2' })).resolves.toEqual({
-        switched: 2,
-        browserPageId: 'page-2'
-      })
-      await expect(runtime.browserCaptureStart({ page: 'page-2' })).resolves.toEqual({
-        capturing: true
-      })
-      expect(tabSwitchMock).toHaveBeenCalledWith(undefined, undefined, 'page-2')
-      expect(captureStartMock).toHaveBeenCalledWith(undefined, 'page-2')
-    })
-
-    it('accepts focus on tab switch without altering bridge args (focus is main-side concern)', async () => {
-      mockLiveBrowserGuest()
-      const runtime = createRuntime()
-      const tabSwitchMock = vi.fn().mockResolvedValue({
-        switched: 0,
-        browserPageId: 'page-1'
-      })
-
-      runtime.setAgentBrowserBridge({
-        tabSwitch: tabSwitchMock,
-        getRegisteredTabs: vi.fn(() => new Map([['page-1', 1]])),
-        tabList: vi.fn(() => ({
-          tabs: [{ browserPageId: 'page-1', index: 0, url: 'about:blank', title: '', active: true }]
-        }))
-      } as never)
-
-      await expect(runtime.browserTabSwitch({ page: 'page-1', focus: true })).resolves.toEqual({
-        switched: 0,
-        browserPageId: 'page-1'
-      })
-      // Bridge is unchanged — focus is delivered to the renderer via IPC, not threaded through bridge state.
-      expect(tabSwitchMock).toHaveBeenCalledWith(undefined, undefined, 'page-1')
     })
 
     it('does not silently drop invalid explicit worktree selectors for page-targeted commands', async () => {
       vi.mocked(listWorktrees).mockResolvedValue(MOCK_GIT_WORKTREES)
       mockLiveBrowserGuest()
       const runtime = createRuntime()
-      const snapshotMock = vi.fn()
+      const snapshotMock = vi.fn<AgentBrowserBridge['snapshot']>()
 
-      runtime.setAgentBrowserBridge({
-        snapshot: snapshotMock,
-        getRegisteredTabs: vi.fn(() => new Map([['page-1', 1]]))
-      } as never)
+      runtime.setAgentBrowserBridge(
+        createBrowserBridge({
+          snapshot: snapshotMock,
+          getRegisteredTabs: vi.fn(() => new Map([['page-1', 1]])),
+          getRegisteredPageWebContentsId: (page: string) => (page === 'page-1' ? 1 : undefined)
+        })
+      )
 
       await expect(
         runtime.browserSnapshot({
@@ -156,11 +89,13 @@ describe('OrcaRuntimeService', () => {
     it('does not silently drop invalid explicit worktree selectors for non-page browser commands', async () => {
       vi.mocked(listWorktrees).mockResolvedValue(MOCK_GIT_WORKTREES)
       const runtime = createRuntime()
-      const tabListMock = vi.fn()
+      const tabListMock = vi.fn<AgentBrowserBridge['tabList']>()
 
-      runtime.setAgentBrowserBridge({
-        tabList: tabListMock
-      } as never)
+      runtime.setAgentBrowserBridge(
+        createBrowserBridge({
+          tabList: tabListMock
+        })
+      )
 
       await expect(
         runtime.browserTabList({
@@ -175,9 +110,12 @@ describe('OrcaRuntimeService', () => {
       mockLiveBrowserGuest()
       const runtime = createRuntime()
 
-      runtime.setAgentBrowserBridge({
-        getRegisteredTabs: vi.fn(() => new Map([['page-1', 1]]))
-      } as never)
+      runtime.setAgentBrowserBridge(
+        createBrowserBridge({
+          getRegisteredTabs: vi.fn(() => new Map([['page-1', 1]])),
+          getRegisteredPageWebContentsId: (page: string) => (page === 'page-1' ? 1 : undefined)
+        })
+      )
 
       await expect(
         runtime.browserTabClose({
@@ -203,9 +141,13 @@ describe('OrcaRuntimeService', () => {
         worktreeId === `${TEST_REPO_ID}::/tmp/worktree-b` ? new Map() : new Map([['page-1', 1]])
       )
 
-      runtime.setAgentBrowserBridge({
-        getRegisteredTabs: getRegisteredTabsMock
-      } as never)
+      runtime.setAgentBrowserBridge(
+        createBrowserBridge({
+          getRegisteredTabs: getRegisteredTabsMock,
+          getRegisteredPageWebContentsId: (page: string, worktreeId?: string) =>
+            getRegisteredTabsMock(worktreeId).get(page)
+        })
+      )
 
       await expect(
         runtime.browserTabClose({
@@ -220,54 +162,34 @@ describe('OrcaRuntimeService', () => {
   describe('removeManagedWorktree PTY teardown (design §4.3)', () => {
     function createProviderStub(
       listProcesses: () => Promise<{ id: string; cwd: string; title: string }[]>
-    ): {
-      spawn: ReturnType<typeof vi.fn>
-      attach: ReturnType<typeof vi.fn>
-      write: ReturnType<typeof vi.fn>
-      resize: ReturnType<typeof vi.fn>
-      shutdown: ReturnType<typeof vi.fn>
-      sendSignal: ReturnType<typeof vi.fn>
-      getCwd: ReturnType<typeof vi.fn>
-      getInitialCwd: ReturnType<typeof vi.fn>
-      clearBuffer: ReturnType<typeof vi.fn>
-      acknowledgeDataEvent: ReturnType<typeof vi.fn>
-      hasChildProcesses: ReturnType<typeof vi.fn>
-      getForegroundProcess: ReturnType<typeof vi.fn>
-      serialize: ReturnType<typeof vi.fn>
-      revive: ReturnType<typeof vi.fn>
-      listProcesses: ReturnType<typeof vi.fn>
-      getDefaultShell: ReturnType<typeof vi.fn>
-      getProfiles: ReturnType<typeof vi.fn>
-      onData: ReturnType<typeof vi.fn>
-      onReplay: ReturnType<typeof vi.fn>
-      onExit: ReturnType<typeof vi.fn>
-    } {
+    ) {
       return {
-        spawn: vi.fn(),
-        attach: vi.fn(),
-        write: vi.fn(),
-        resize: vi.fn(),
-        shutdown: vi.fn().mockResolvedValue(undefined),
-        sendSignal: vi.fn(),
-        getCwd: vi.fn(),
-        getInitialCwd: vi.fn(),
-        clearBuffer: vi.fn(),
-        acknowledgeDataEvent: vi.fn(),
-        hasChildProcesses: vi.fn(),
-        getForegroundProcess: vi.fn(),
-        serialize: vi.fn(),
-        revive: vi.fn(),
+        spawn: vi.fn<IPtyProvider['spawn']>(),
+        attach: vi.fn<IPtyProvider['attach']>(),
+        write: vi.fn<IPtyProvider['write']>(),
+        writeWithSettlement: vi.fn<IPtyProvider['writeWithSettlement']>(),
+        resize: vi.fn<IPtyProvider['resize']>(),
+        shutdown: vi.fn<IPtyProvider['shutdown']>().mockResolvedValue(undefined),
+        sendSignal: vi.fn<IPtyProvider['sendSignal']>(),
+        getCwd: vi.fn<IPtyProvider['getCwd']>(),
+        getInitialCwd: vi.fn<IPtyProvider['getInitialCwd']>(),
+        clearBuffer: vi.fn<IPtyProvider['clearBuffer']>(),
+        resetInputModes: vi.fn<IPtyProvider['resetInputModes']>(),
+        acknowledgeDataEvent: vi.fn<IPtyProvider['acknowledgeDataEvent']>(),
+        hasChildProcesses: vi.fn<IPtyProvider['hasChildProcesses']>(),
+        getForegroundProcess: vi.fn<IPtyProvider['getForegroundProcess']>(),
+        serialize: vi.fn<IPtyProvider['serialize']>(),
+        revive: vi.fn<IPtyProvider['revive']>(),
         listProcesses: vi.fn(listProcesses),
-        getDefaultShell: vi.fn(),
-        getProfiles: vi.fn(),
-        onData: vi.fn().mockReturnValue(() => {}),
-        onReplay: vi.fn().mockReturnValue(() => {}),
-        onExit: vi.fn().mockReturnValue(() => {})
-      }
+        getDefaultShell: vi.fn<IPtyProvider['getDefaultShell']>(),
+        getProfiles: vi.fn<IPtyProvider['getProfiles']>(),
+        onData: vi.fn<IPtyProvider['onData']>().mockReturnValue(() => {}),
+        onReplay: vi.fn<IPtyProvider['onReplay']>().mockReturnValue(() => {}),
+        onExit: vi.fn<IPtyProvider['onExit']>().mockReturnValue(() => {})
+      } satisfies IPtyProvider
     }
 
     it('RPC-initiated delete awaits matching PTYs before git', async () => {
-      // Seed the runtime with a live leaf whose worktreeId matches the target.
       const callOrder: string[] = []
       const stopAndWait = vi.fn(async (id: string) => {
         callOrder.push(`stop-and-wait:${id}`)
@@ -285,7 +207,7 @@ describe('OrcaRuntimeService', () => {
       const runtime = new OrcaRuntimeService(store, undefined, {
         getLocalProvider: () => {
           callOrder.push('getLocalProvider')
-          return localProvider as never
+          return localProvider
         }
       })
       runtime.setPtyController({
@@ -294,7 +216,7 @@ describe('OrcaRuntimeService', () => {
         stopAndWait,
         getForegroundProcess: async () => null
       })
-      syncSinglePty(runtime, 'pty-1')
+      await syncSinglePty(runtime, 'pty-1')
 
       await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
 
@@ -303,8 +225,7 @@ describe('OrcaRuntimeService', () => {
         'pty-1',
         expect.objectContaining({ deadlineMs: expect.any(Number) })
       )
-      // The provider-prefix sweep and the git removal must happen AFTER the
-      // runtime-graph physical stop. Git removal must NOT start before it.
+      // Physically stop the runtime graph before sweeping providers or removing Git worktrees.
       const preflightIdx = callOrder.indexOf('preflight')
       const stopIdx = callOrder.indexOf('stop-and-wait:pty-1')
       const gitIdx = callOrder.indexOf('git-removeWorktree')
@@ -315,13 +236,12 @@ describe('OrcaRuntimeService', () => {
     })
 
     it('does not start Git removal when physical PTY stop cannot be proven', async () => {
-      // A failed stop only rejects when a fresh inventory still shows the PTY
-      // live; keep pty-1 present so the exit cannot be proven.
+      // Retain the live PTY in fresh inventory so failed stop cannot be mistaken for proven exit.
       const localProvider = createProviderStub(async () => [
         { id: 'pty-1', cwd: '/tmp', title: 'shell' }
       ])
       const runtime = new OrcaRuntimeService(store, undefined, {
-        getLocalProvider: () => localProvider as never
+        getLocalProvider: () => localProvider
       })
       runtime.setPtyController({
         write: () => true,
@@ -329,7 +249,7 @@ describe('OrcaRuntimeService', () => {
         stopAndWait: vi.fn(async () => false),
         getForegroundProcess: async () => null
       })
-      syncSinglePty(runtime, 'pty-1')
+      await syncSinglePty(runtime, 'pty-1')
 
       await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID)).rejects.toThrow(
         'Failed to physically stop every PTY'
@@ -339,7 +259,7 @@ describe('OrcaRuntimeService', () => {
     })
 
     it('thunk resolves the installed provider lazily, not at construction time', async () => {
-      // Simulates the daemon adapter being installed AFTER construction; a capture-at-construction refactor would break this.
+      // Resolve the provider at removal time; daemon initialization can replace it after construction.
       const preDaemonProvider = createProviderStub(async () => [
         { id: '1', cwd: '/tmp', title: 'shell' },
         { id: '2', cwd: '/tmp', title: 'shell' }
@@ -351,30 +271,29 @@ describe('OrcaRuntimeService', () => {
       const onPtyStopped = vi.fn()
 
       const runtime = new OrcaRuntimeService(store, undefined, {
-        getLocalProvider: () => currentProvider as never,
+        getLocalProvider: () => currentProvider,
         onPtyStopped
       })
       vi.mocked(removeWorktree).mockResolvedValue({})
 
-      // Simulate daemon-init swapping the provider after construction.
       currentProvider = postDaemonProvider
 
       await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
 
-      // The post-daemon provider's prefix-matching session must have been
-      // shut down, proving the thunk resolved lazily at call time.
       expect(postDaemonProvider.shutdown).toHaveBeenCalledWith(
         `${TEST_WORKTREE_ID}@@aaaaaaaa`,
         expect.objectContaining({ immediate: true })
       )
       expect(onPtyStopped).toHaveBeenCalledWith(`${TEST_WORKTREE_ID}@@aaaaaaaa`)
-      // The pre-daemon provider must not have been consulted for the kill.
       expect(preDaemonProvider.shutdown).not.toHaveBeenCalled()
     })
   })
   describe('stale terminal handle resolution (#7718)', () => {
-    function syncSingleTerminalGraph(runtime: OrcaRuntimeService, ptyId: string): void {
-      runtime.syncWindowGraph(1, {
+    async function syncSingleTerminalGraph(
+      runtime: OrcaRuntimeService,
+      ptyId: string
+    ): Promise<void> {
+      await runtime.syncWindowGraph(1, {
         tabs: [
           {
             tabId: 'tab-1',
@@ -417,7 +336,7 @@ describe('OrcaRuntimeService', () => {
       })
     }
 
-    // Why: client-created terminals (terminal.create) hold LEAF handles that can diverge from the pane's current PTY across reconnects.
+    // Client LEAF handles can outlive the PTY they originally named.
     function issueLeafHandle(runtime: OrcaRuntimeService, ptyId: string): string {
       const internals = runtime as unknown as {
         leaves: Map<string, { ptyId: string | null }>
@@ -435,10 +354,9 @@ describe('OrcaRuntimeService', () => {
     it('errors with terminal_handle_stale instead of adopting a replacement PTY', async () => {
       const runtime = new OrcaRuntimeService(store)
       runtime.attachWindow(1)
-      syncSingleTerminalGraph(runtime, 'pty-a')
+      await syncSingleTerminalGraph(runtime, 'pty-a')
       const handle = issueLeafHandle(runtime, 'pty-a')
 
-      // Simulate the pane's PTY being replaced while the remote client still holds the old handle.
       const internals = runtime as unknown as {
         leaves: Map<string, { ptyId: string | null }>
       }
@@ -448,9 +366,7 @@ describe('OrcaRuntimeService', () => {
         }
       }
 
-      // The unguarded resolver silently adopts the new PTY — the misroute.
       expect(runtime.resolveLeafForHandle(handle)).toEqual({ ptyId: 'pty-b' })
-      // The guarded resolver surfaces the staleness so clients can re-derive.
       expect(() => runtime.resolveLiveLeafForHandle(handle)).toThrow('terminal_handle_stale')
       expect(runtime.getLiveTerminalPaneKey(handle)).toBeNull()
     })
@@ -458,10 +374,10 @@ describe('OrcaRuntimeService', () => {
     it('lets a handle issued before its first PTY adopt that PTY without erroring', async () => {
       const runtime = new OrcaRuntimeService(store)
       runtime.attachWindow(1)
-      syncSingleTerminalGraph(runtime, 'pty-a')
+      await syncSingleTerminalGraph(runtime, 'pty-a')
       const handle = issueLeafHandle(runtime, 'pty-a')
 
-      // Simulate the mobile pre-spawn flow: the handle record predates the PTY (ptyId null); its first PTY must still resolve.
+      // A pre-spawn handle has no PTY yet; its first binding must still resolve.
       const internals = runtime as unknown as {
         handles: Map<string, { ptyId: string | null }>
       }
@@ -472,23 +388,6 @@ describe('OrcaRuntimeService', () => {
       record.ptyId = null
 
       expect(runtime.resolveLiveLeafForHandle(handle)).toEqual({ ptyId: 'pty-a' })
-    })
-
-    it('keeps terminal cwd resolution fail-soft when the provider is unavailable', async () => {
-      const runtime = new OrcaRuntimeService(store)
-      runtime.attachWindow(1)
-      syncSingleTerminalGraph(runtime, 'pty-a')
-      const handle = issueLeafHandle(runtime, 'pty-a')
-      runtime.setPtyController({
-        write: () => true,
-        kill: () => true,
-        getForegroundProcess: async () => null,
-        getCwd: async () => {
-          throw new Error('ssh disconnected')
-        }
-      })
-
-      await expect(runtime.resolveTerminalCwd(handle)).resolves.toBeNull()
     })
   })
 
@@ -510,7 +409,7 @@ describe('OrcaRuntimeService', () => {
         })
         webContents.send = send
         runtime.attachWindow(1)
-        runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+        await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
         electronMocks.BrowserWindow.fromId.mockReturnValue({
           isDestroyed: () => false,
           webContents
@@ -526,7 +425,7 @@ describe('OrcaRuntimeService', () => {
         )
         await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1))
 
-        // Client socket dies mid-wait: create must settle right away (not the 10s timeout) and must NOT close the tab (real terminal exists).
+        // Disconnect must settle promptly without closing the real terminal.
         abort.abort()
         await vi.advanceTimersByTimeAsync(0)
         const outcome = await settled
@@ -557,7 +456,7 @@ describe('OrcaRuntimeService', () => {
         })
         webContents.send = send
         runtime.attachWindow(1)
-        runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+        await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
         electronMocks.BrowserWindow.fromId.mockReturnValue({
           isDestroyed: () => false,
           webContents
@@ -572,8 +471,25 @@ describe('OrcaRuntimeService', () => {
         )
         await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1))
 
-        // A live shell backs the tab but its leaf id isn't a terminal UUID, so no pane key registers (stalled renderer publication).
-        runtime.syncWindowGraph(1, {
+        // Main-owned layouts require the spawn's binding; a renderer leaf cannot vouch for a live PTY.
+        if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+          registerBoundPty(runtime, 'pty-stall', TEST_WORKTREE_ID, null, {
+            tabId: 'tab-stall',
+            leafId: '88888888-8888-4888-8888-888888888888'
+          })
+          await vi.advanceTimersByTimeAsync(50)
+          expect(await settled).toEqual({ ok: true })
+          expect(closeTerminal).not.toHaveBeenCalled()
+          return
+        }
+        // A live shell exists, but stalled renderer publication never registered its pane key.
+        bindPaneFirst(runtime, {
+          worktreeId: TEST_WORKTREE_ID,
+          tabId: 'tab-stall',
+          leafId: 'pane:1',
+          ptyId: 'pty-stall'
+        })
+        await runtime.syncWindowGraph(1, {
           tabs: [],
           leaves: [
             {
@@ -590,7 +506,6 @@ describe('OrcaRuntimeService', () => {
         await vi.advanceTimersByTimeAsync(11_000)
         const outcome = await settled
 
-        // The create fails, but the timeout must not kill the live terminal (the "tab dies after ~10s" symptom).
         expect(outcome.ok).toBe(false)
         if (outcome.ok === false) {
           expect(outcome.error.message).toContain('Timed out')

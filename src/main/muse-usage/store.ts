@@ -1,4 +1,3 @@
-import { app } from 'electron'
 import { join } from 'node:path'
 import type {
   MuseUsageBreakdownKind,
@@ -9,10 +8,14 @@ import type {
   MuseUsageSessionRow,
   MuseUsageSnapshot,
   MuseUsageSummary
-} from '../../shared/muse-usage-types'
-import type { Store } from '../persistence'
-import { UsageProviderStoreLifecycle } from '../usage/usage-provider-store-lifecycle'
-import { filterUsageDaily, filterUsageSessions } from '../usage/usage-scope-filters'
+} from '../../shared/agent-usage/analytics/muse-usage-types'
+import type { UsageStoreHost } from '../usage/usage-store-host'
+import { UsageProviderStoreLifecycle } from '../usage/provider-lifecycle/usage-provider-store-lifecycle'
+import { splitUsageCacheFileViaWorker } from '../usage/scan-worker/usage-scan-worker-spawn'
+import {
+  filterUsageDaily,
+  filterUsageSessions
+} from '../usage/reporting/range-query/usage-scope-filters'
 import { museUsageProvider } from './muse-usage-provider'
 import { getDefaultMuseUsageState, normalizeMuseUsageState } from './persisted-state-normalization'
 import {
@@ -23,31 +26,21 @@ import {
 } from './snapshot-rollups'
 import type { MuseUsageDailyAggregate, MuseUsagePersistedState, MuseUsageSession } from './types'
 
-let museUsageFile: string | null = null
-
-export function initMuseUsagePath(): void {
-  museUsageFile = join(app.getPath('userData'), 'orca-muse-usage.json')
-}
-
-function getMuseUsageFile(): string {
-  museUsageFile ??= join(app.getPath('userData'), 'orca-muse-usage.json')
-  return museUsageFile
-}
-
 export class MuseUsageStore extends UsageProviderStoreLifecycle<
   'processedFiles',
   MuseUsagePersistedState,
   'hasAnyMuseData'
 > {
-  constructor(store: Pick<Store, 'getRepos' | 'getAllWorktreeMeta'>) {
-    super(store, {
+  constructor(host: UsageStoreHost) {
+    super(host, {
       logTag: '[muse-usage]',
-      resolveCacheFile: getMuseUsageFile,
+      resolveCacheFile: () => join(host.userDataPath, 'orca-muse-usage.json'),
       createDefaultState: getDefaultMuseUsageState,
       normalizeState: normalizeMuseUsageState,
       sourceKey: 'processedFiles',
       dataPresenceKey: 'hasAnyMuseData',
-      scan: museUsageProvider.scan
+      scan: museUsageProvider.scan,
+      splitCacheFile: splitUsageCacheFileViaWorker
     })
   }
 

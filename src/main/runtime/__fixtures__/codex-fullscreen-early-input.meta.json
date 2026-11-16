@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-10-06T04:15:29.384Z",
+  "platform": "darwin",
+  "command": ["codex", "--no-daemon"],
+  "cols": 120,
+  "rows": 40,
+  "note": "Codex CLI 0.160.1; typing before live footer",
+  "exitCode": 0
+}

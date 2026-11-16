@@ -11,12 +11,12 @@
  */
 import { appendFileSync, readdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { runProcess } from '../../src/shared/child-process/run-process.ts'
+import { runProcess } from '@orca/process-host'
 import { diffGoldenSets, formatChangeMarkdown, formatChangeText } from './rpc-diff-report.ts'
 import {
   decodeGoldenFile,
   type DecodedGolden
-} from '../src/test-support/rpc-recording/golden-difference.ts'
+} from '../src/test-support/rpc-recording/goldens/golden-difference.ts'
 
 const GOLDENS = 'mobile/rpc-foundation/goldens'
 // The corpus is ~16 MB; the default 8 MB capture would clip the batch read.

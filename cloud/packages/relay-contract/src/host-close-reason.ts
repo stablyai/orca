@@ -1,8 +1,5 @@
-// Mirror of src/shared/relay-host-close-reason.ts in the Orca app repo half.
-// A host control socket may close with one of these as its WebSocket close
-// reason; the cell records it so a later phone rejection can name the cause.
-// Anything else (including the empty reason of an abrupt 1006) means "unknown",
-// which is what every peer that predates this file sends.
+// Mirror src/shared/relay-host-close-reason.ts; record host socket reasons for later phone refusals.
+// Unknown/empty reasons, including abrupt 1006 and older peers, mean unknown.
 export const RELAY_HOST_CLOSE_REASON = {
   SIGNED_OUT: 'signed-out'
 } as const

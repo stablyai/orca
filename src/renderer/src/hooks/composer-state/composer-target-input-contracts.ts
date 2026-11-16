@@ -7,6 +7,7 @@ export type ComposerRuntimeTargetSelectionInput = Pick<
   | 'eligibleRepos'
   | 'hostOptions'
   | 'initialEphemeralVmRecipeId'
+  | 'pendingInitialWorkspaceTarget'
   | 'projectGroups'
   | 'projectHostSetups'
   | 'projects'
@@ -14,6 +15,7 @@ export type ComposerRuntimeTargetSelectionInput = Pick<
   | 'repos'
   | 'selectedProjectGroup'
   | 'selectedProjectHostSetupOverrideId'
+  | 'selectedProjectHostSetupOverrideHostId'
   | 'settings'
   | 'sshConnectionStates'
   | 'workspaceHostScope'
@@ -22,6 +24,8 @@ export type ComposerRuntimeTargetSelectionInput = Pick<
 
 export type DerivedComposerStateInput = Pick<
   ComposerModel,
+  | 'selectedProjectGroup'
+  | 'isProjectGroupTarget'
   | 'agentPrompt'
   | 'checkedHooksContextKey'
   | 'enableIssueAutomation'

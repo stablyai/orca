@@ -1,0 +1,61 @@
+import type { EditorGet, EditorSet } from '../types/editor-set-get'
+import type { EditorSlice } from '../types/editor-slice'
+import type { RestoredEditorOwnerResult } from '../types/restored-editor-owner'
+import { buildRestoredEditorOwnerTransition } from './restored-editor-owner-transition'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
+import { reparentRestoredEditorThroughLayoutOwner } from '../tabs/restored-editor-move-through-layout-owner'
+import { updateEditorBuffer } from '../buffers/editor-buffer-record'
+
+export function createRestoredEditorOwner(
+  set: EditorSet,
+  get: EditorGet
+): Pick<EditorSlice, 'setRestoredEditorOwnerMigrationPending' | 'reparentRestoredEditorFileOwner'> {
+  return {
+    setRestoredEditorOwnerMigrationPending: (fileId, pending) => {
+      let changed = false
+      set((s) => {
+        const next = updateEditorBuffer(s, fileId, { pendingOwnerMigration: pending || undefined })
+        changed = next !== s
+        return next
+      })
+      return changed
+    },
+
+    reparentRestoredEditorFileOwner: (args) => {
+      let result: RestoredEditorOwnerResult = { ok: false, reason: 'stale' }
+      const projectReparent = buildRestoredEditorOwnerTransition(args, (next) => {
+        result = next
+      })
+      const initialSource = get().openFiles.find((file) => file.id === args.fileId)
+      const activatesTargetWorkspace = Boolean(
+        initialSource &&
+        get().activeWorktreeId === initialSource.worktreeId &&
+        get().activeFileId === initialSource.id
+      )
+      const moveHere = (): void => {
+        if (activatesTargetWorkspace) {
+          get().setActiveWorktree(args.targetWorktreeId, args.targetExecutionHostId, {
+            stateTransition: projectReparent
+          })
+        } else {
+          set((state) => projectReparent(state).patch)
+        }
+      }
+      // Switch point: main moves the tabs and its frame rekeys the content.
+      const sent = ORCA_LAYOUT_OWNER_IS_MAIN
+        ? reparentRestoredEditorThroughLayoutOwner(
+            set,
+            get,
+            args,
+            activatesTargetWorkspace,
+            moveHere
+          )
+        : null
+      if (sent) {
+        return sent
+      }
+      moveHere()
+      return result
+    }
+  }
+}

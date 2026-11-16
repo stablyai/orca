@@ -1,4 +1,4 @@
-import type { ProjectHostSetup } from '../../../../../../shared/project-types'
+import type { ProjectHostSetup } from '../../../../../../shared/project/project-types'
 import type { DetectedWorktreeListResult } from '../../../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { sanitizeHostedReviewLinksForBranchClears } from '../metadata/hosted-review-link-mutation'
@@ -12,10 +12,11 @@ export function mergeDetectedWorktreesForHost(
   setup?: ProjectHostSetup,
   options?: WorktreeHostMatchOptions
 ): DetectedWorktreeListResult {
+  // Why stamp first: a twin's review-clear tombstone matches rows by their owner stamp.
   const refreshedForHost = sanitizeHostedReviewLinksForBranchClears(
-    refreshed.worktrees,
+    refreshed.worktrees.map((worktree) => withRepoHostOwnership(worktree, hostId, setup)),
     current?.worktrees
-  ).map((worktree) => withRepoHostOwnership(worktree, hostId, setup))
+  )
   const worktrees = mergeWorktreesForHost(current?.worktrees, refreshedForHost, hostId, options)
   if (
     current &&
@@ -24,6 +25,8 @@ export function mergeDetectedWorktreesForHost(
     current.source === refreshed.source &&
     current.unavailableReason === refreshed.unavailableReason &&
     current.failureKind === refreshed.failureKind &&
+    current.wslDistroStopped?.distro === refreshed.wslDistroStopped?.distro &&
+    current.wslDistroStopped?.state === refreshed.wslDistroStopped?.state &&
     current.worktrees === worktrees
   ) {
     return current

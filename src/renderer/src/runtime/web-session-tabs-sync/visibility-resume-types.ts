@@ -1,8 +1,15 @@
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsRemovedResult
-} from '../../../../shared/runtime-types'
+} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { TrackedWebSessionTabsWorktree } from './state'
+
+export type SessionTabsSnapshotHandler<R> = (
+  environmentId: string,
+  snapshot: RuntimeMobileSessionTabsResult,
+  receivedFrame: number,
+  runtimeId?: string
+) => R
 
 export type VisibilityResumeEnvironment = {
   trackedWorktrees: readonly TrackedWebSessionTabsWorktree[]

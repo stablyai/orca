@@ -6,6 +6,8 @@ import type { AgentPaneThread } from './activity-thread-types'
 type ActivityThreadActionBindings = {
   markThreadRead: (thread: AgentPaneThread) => void
   markThreadUnread: (thread: AgentPaneThread) => void
+  markThreadsRead: (threads: readonly AgentPaneThread[]) => void
+  markThreadsUnread: (threads: readonly AgentPaneThread[]) => void
   selectThread: (thread: AgentPaneThread) => void
   jumpToWorkspace: (thread: AgentPaneThread) => void
   markAllThreadsRead: () => void
@@ -14,14 +16,7 @@ type ActivityThreadActionBindings = {
   handleClearCompleted: () => void
 }
 
-/**
- * Bulk-action wiring shared by the sidebar Agents list and the full Activity
- * page, so their semantics can never drift apart:
- * - Mark all read acts on the badge-coherent set (`markAllReadThreads`), so the
- *   Agents-tab badge always reaches zero even when search/scope hides rows.
- * - Clear completed is destructive and acts only on `visibleThreads` — never on
- *   rows the user cannot currently see.
- */
+/** Share bulk semantics: Mark all read clears the badge-coherent set even when filtered; destructive Clear completed touches only visible rows. */
 export function useActivityThreadActionBindings({
   visibleThreads,
   markAllReadThreads,
@@ -31,12 +26,11 @@ export function useActivityThreadActionBindings({
 }: {
   visibleThreads: AgentPaneThread[]
   markAllReadThreads: AgentPaneThread[]
-  acknowledgeAgents: (paneKeys: string[]) => void
+  acknowledgeAgents: (paneKeys: string[], reads?: undefined, intent?: 'explicit') => void
   unacknowledgeAgents: (paneKeys: string[]) => void
   setSelectedPaneKey: (paneKey: string | null) => void
 }): ActivityThreadActionBindings {
-  // Why refs: rows are React.memo'd on these handlers; recreating them whenever a
-  // thread array identity changes (every status ping) would re-render every mounted row.
+  // Keep row handlers stable across status pings; refs supply current thread sets without invalidating every memoized row.
   const visibleThreadsRef = useRef(visibleThreads)
   const markAllReadThreadsRef = useRef(markAllReadThreads)
   useEffect(() => {

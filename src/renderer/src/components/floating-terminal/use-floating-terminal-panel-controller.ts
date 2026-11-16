@@ -1,23 +1,22 @@
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
-import { createFloatingTerminalPanelDragActions } from './floating-terminal-panel-drag-actions'
-import type { FloatingTerminalPanelProps } from './floating-terminal-panel-types'
-import { useFloatingTerminalCloseActions } from './use-floating-terminal-close-actions'
-import { useFloatingTerminalCreateActions } from './use-floating-terminal-create-actions'
-import { useFloatingTerminalEditorCloseQueue } from './use-floating-terminal-editor-close-queue'
-import { useFloatingTerminalFocusLifecycle } from './use-floating-terminal-focus-lifecycle'
-import { useFloatingTerminalGlobalShortcutListeners } from './use-floating-terminal-global-shortcut-listeners'
-import { useFloatingTerminalGuestBridge } from './use-floating-terminal-guest-bridge'
-import { useFloatingTerminalInitialFocusEffects } from './use-floating-terminal-initial-focus-effects'
-import { useFloatingTerminalOrchestrationDismissal } from './use-floating-terminal-orchestration-dismissal'
-import { useFloatingTerminalOrchestrationVisibility } from './use-floating-terminal-orchestration-visibility'
-import { useFloatingTerminalPanelFocusReclaim } from './use-floating-terminal-panel-focus-reclaim'
-import { useFloatingTerminalPanelGeometry } from './use-floating-terminal-panel-geometry'
-import { useFloatingTerminalPanelItems } from './use-floating-terminal-panel-items'
-import { useFloatingTerminalPanelLocalState } from './use-floating-terminal-panel-local-state'
-import { useFloatingTerminalPanelMaximize } from './use-floating-terminal-panel-maximize'
-import { useFloatingTerminalPanelShortcuts } from './use-floating-terminal-panel-shortcuts'
-import { useFloatingTerminalPanelStoreState } from './use-floating-terminal-panel-store-state'
-import { useFloatingTerminalShortcutDetails } from './use-floating-terminal-shortcut-details'
+import { createFloatingTerminalPanelDragActions } from './geometry/floating-terminal-panel-drag-actions'
+import type { FloatingTerminalPanelProps } from './state/floating-terminal-panel-types'
+import { useFloatingTerminalCloseActions } from './workspace/use-floating-terminal-close-actions'
+import { useFloatingTerminalCreateActions } from './workspace/use-floating-terminal-create-actions'
+import { useFloatingTerminalFocusLifecycle } from './focus/use-floating-terminal-focus-lifecycle'
+import { useFloatingTerminalGlobalShortcutListeners } from './shortcuts/use-floating-terminal-global-shortcut-listeners'
+import { useFloatingTerminalGuestBridge } from './workspace/use-floating-terminal-guest-bridge'
+import { useFloatingTerminalInitialFocusEffects } from './focus/use-floating-terminal-initial-focus-effects'
+import { useFloatingTerminalOrchestrationDismissal } from './orchestration/use-floating-terminal-orchestration-dismissal'
+import { useFloatingTerminalOrchestrationVisibility } from './orchestration/use-floating-terminal-orchestration-visibility'
+import { useFloatingTerminalPanelFocusReclaim } from './focus/use-floating-terminal-panel-focus-reclaim'
+import { useFloatingTerminalPanelGeometry } from './geometry/use-floating-terminal-panel-geometry'
+import { useFloatingWorkspaceChromeModel } from './workspace/use-floating-workspace-chrome-model'
+import { useFloatingTerminalPanelLocalState } from './state/use-floating-terminal-panel-local-state'
+import { useFloatingTerminalPanelMaximize } from './geometry/use-floating-terminal-panel-maximize'
+import { useFloatingTerminalPanelShortcuts } from './shortcuts/use-floating-terminal-panel-shortcuts'
+import { useFloatingTerminalPanelStoreState } from './state/use-floating-terminal-panel-store-state'
+import { useFloatingTerminalShortcutDetails } from './shortcuts/use-floating-terminal-shortcut-details'
 
 export function useFloatingTerminalPanelController({
   open,
@@ -27,7 +26,7 @@ export function useFloatingTerminalPanelController({
   const storeState = useFloatingTerminalPanelStoreState()
   const shortcutDetails = useFloatingTerminalShortcutDetails()
   const localState = useFloatingTerminalPanelLocalState()
-  const items = useFloatingTerminalPanelItems({ ...storeState, open })
+  const items = useFloatingWorkspaceChromeModel()
 
   useContextualTour('floating-workspace', open, 'floating_workspace_visible', {
     recordFeatureInteraction: tourInteractionSnapshot?.recordFeatureInteractionForTour ?? false,
@@ -35,7 +34,6 @@ export function useFloatingTerminalPanelController({
     wasFeaturePreviouslyInteracted: tourInteractionSnapshot?.wasPreviouslyInteracted
   })
 
-  const editorCloseQueue = useFloatingTerminalEditorCloseQueue({ ...storeState, ...localState })
   const geometry = useFloatingTerminalPanelGeometry({ ...storeState, ...localState })
   useFloatingTerminalInitialFocusEffects({ ...items, ...localState, open })
   const orchestrationVisibility = useFloatingTerminalOrchestrationVisibility({
@@ -48,10 +46,7 @@ export function useFloatingTerminalPanelController({
     ...items
   })
   const closeActions = useFloatingTerminalCloseActions({
-    ...storeState,
-    ...localState,
-    ...items,
-    ...editorCloseQueue
+    ...items
   })
   const focusReclaim = useFloatingTerminalPanelFocusReclaim({
     ...storeState,
@@ -86,7 +81,6 @@ export function useFloatingTerminalPanelController({
     ...shortcutDetails,
     ...localState,
     ...items,
-    ...editorCloseQueue,
     ...geometry,
     ...orchestrationVisibility,
     ...createActions,

@@ -1,10 +1,10 @@
-import type { WorktreeSlice } from '../../worktree-helpers'
+import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import {
   getHostedReviewPushTargetLookup,
   hostedReviewPushTargetLookupsInFlight
 } from './hosted-review-push-target'
-import { trySettingsForWorktreeOwner } from '../listing/worktree-owner-settings'
+import { runtimeTargetForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
 
 export function createEnsureHostedReviewPushTarget(
   _set: WorktreeSliceSet,
@@ -22,11 +22,11 @@ export function createEnsureHostedReviewPushTarget(
     hostedReviewPushTargetLookupsInFlight.add(lookup.key)
     try {
       // Why: an ambiguous owner is a skip, not a crash — this runs as fire-and-forget background restoration.
-      const ownerSettings = trySettingsForWorktreeOwner(get(), worktreeId)
-      if (!ownerSettings) {
+      const ownerTarget = runtimeTargetForWorkspaceOwner(get(), { workspaceId: worktreeId })
+      if (!ownerTarget) {
         return
       }
-      const resolvedPushTarget = await lookup.resolve(ownerSettings)
+      const resolvedPushTarget = await lookup.resolve(ownerTarget)
       if (!resolvedPushTarget) {
         return
       }

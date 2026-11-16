@@ -6,17 +6,11 @@ import type { DispatchContextStoreMethods } from './dispatch-context/dispatch-co
 import type { DispatchLookupMethods } from './dispatch-context/dispatch-lookup'
 import type { DispatchDepthMethods } from './dispatch-depth'
 import type { WorkerReportSettlementMethods } from './dispatch-context/worker-report-settlement'
-import type { FederatedDispatchStoreMethods } from './federation/federated-dispatch-store'
-import type { FederatedDispatchObservationFenceMethods } from './federation/federated-dispatch-observation-fence'
 import type { FederationRelayAckMethods } from './federation/federation-relay-ack'
-import type { FederationRelayEnqueueMethods } from './federation/federation-relay-enqueue'
-import type { FederationRelayImportMethods } from './federation/federation-relay-import'
-import type { FederationRelayItemMethods } from './federation/federation-relay-item'
-import type { RemoteDispatchAttachmentAuthorityMethods } from './federation/remote-dispatch-attachment-authority'
-import type { RemoteDispatchAttachmentCreateMethods } from './federation/remote-dispatch-attachment-create'
-import type { RemoteDispatchAttachmentReleaseMethods } from './federation/remote-dispatch-attachment-release'
-import type { RemoteDispatchAttachmentStopMethods } from './federation/remote-dispatch-attachment-stop'
-import type { RemoteQuestionStoreMethods } from './federation/remote-question-store'
+import type { LegacyRemoteDbMethods } from '../legacy-remote/legacy-remote-db-methods'
+import type { LegacyRemoteHomeDbMethods } from '../legacy-remote-home/legacy-remote-home-db-methods'
+import type { PeerMailStoreMethods } from './federation/peer-mail-store'
+import type { PeerRunStoreMethods } from './peer-runs/peer-run-store'
 import type { LegacyAskOperationMethods } from './legacy/legacy-ask-operation'
 import type { LegacyCompatibilityCandidatesMethods } from './legacy/legacy-compatibility-candidates'
 import type { LegacyCompatibilityPrincipalsMethods } from './legacy/legacy-compatibility-principals'
@@ -51,7 +45,6 @@ import type { SchemaMigrateMethods } from './schema/migrate'
 import type { SchemaColumnProbesMethods } from './schema/schema-column-probes'
 import type { TaskStoreMethods } from './tasks/task-store'
 import type { TaskStatusTransitionMethods } from './tasks/task-status-transition'
-import type { FederatedWorkerStartReconcileMethods } from './worker-dispatch/federated-worker-start-reconcile'
 import type { WorkerDispatchAbandonMethods } from './worker-dispatch/worker-dispatch-abandon'
 import type { WorkerDispatchAuthorityMethods } from './worker-dispatch/worker-dispatch-authority'
 import type { WorkerDispatchOutcomeMethods } from './worker-dispatch/worker-dispatch-outcome'
@@ -60,9 +53,10 @@ import type { WorkerDispatchStartMethods } from './worker-dispatch/worker-dispat
 import type { WorkerDispatchStopMethods } from './worker-dispatch/worker-dispatch-stop'
 import type { WorkerTerminalRecoveryMethods } from './worker-dispatch/worker-terminal-recovery'
 import type { WorkerTerminalArchiveMethods } from './worker-terminal/worker-terminal-archive'
+import type { WorkerTerminalAutoReleaseMethods } from './worker-terminal/worker-terminal-auto-release'
 import type { WorkerTerminalListingMethods } from './worker-terminal/worker-terminal-listing'
 import type { WorkerTerminalReleaseMethods } from './worker-terminal/worker-terminal-release'
-import type { StructuredPointerOperationStoreMethods } from './messages/structured-pointer-operation-store'
+import type { StructuredMailSendStoreMethods } from './messages/structured-mail-send-store'
 import type { WorkerTerminalResourceStoreMethods } from './worker-terminal/worker-terminal-resource-store'
 import type { WorkerTerminalTransferMethods } from './worker-terminal/worker-terminal-transfer'
 
@@ -104,26 +98,20 @@ export type OrchestrationDbMethods = AttemptObservationStoreMethods &
   WorkerDispatchStageMethods &
   WorkerDispatchAuthorityMethods &
   WorkerDispatchOutcomeMethods &
-  FederatedWorkerStartReconcileMethods &
   WorkerTerminalRecoveryMethods &
   WorkerDispatchStopMethods &
   WorkerDispatchAbandonMethods &
-  FederatedDispatchStoreMethods &
-  FederatedDispatchObservationFenceMethods &
-  RemoteDispatchAttachmentCreateMethods &
-  RemoteDispatchAttachmentAuthorityMethods &
-  RemoteDispatchAttachmentReleaseMethods &
-  RemoteDispatchAttachmentStopMethods &
-  FederationRelayEnqueueMethods &
+  LegacyRemoteHomeDbMethods &
+  LegacyRemoteDbMethods &
   FederationRelayAckMethods &
-  FederationRelayImportMethods &
-  RemoteQuestionStoreMethods &
-  FederationRelayItemMethods &
-  StructuredPointerOperationStoreMethods &
+  PeerMailStoreMethods &
+  PeerRunStoreMethods &
+  StructuredMailSendStoreMethods &
   WorkerTerminalResourceStoreMethods &
   WorkerTerminalTransferMethods &
   WorkerTerminalReleaseMethods &
   WorkerTerminalArchiveMethods &
+  WorkerTerminalAutoReleaseMethods &
   WorkerTerminalListingMethods &
   DispatchContextStoreMethods &
   DispatchLookupMethods &

@@ -1,39 +1,37 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useState } from 'react'
 import type React from 'react'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
-import type { HostSectionRow } from '../../host-section-rows'
-import type { PinnedWorktreeDisplayPolicy } from '../grouping/row-types'
-import { getRenderedWorktreesInSidebarOrder } from '../../worktree-sidebar-row-preference'
-import { setVisibleWorktreeIds, setVisibleWorktreeShortcutTargets } from '../../visible-worktrees'
+import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
+import type { PinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
+import { getRenderedWorkspaceRowsInSidebarOrder } from './worktree-sidebar-row-preference'
+import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host'
 import {
-  areWorktreeSelectionsEqual,
-  getWorktreeSelectionIntent,
-  pruneWorktreeSelection,
-  updateWorktreeSelection
-} from '../../worktree-multi-selection'
+  setVisibleWorktreeIds,
+  setVisibleWorktreeShortcutTargets
+} from '../listing/visible-worktrees'
+import { useListMultiSelection } from '@/hooks/use-list-multi-selection'
 import { useReusedArrayIdentity } from '../listing/use-reused-array-identity'
+import { useAppStore } from '@/store'
+import { focusActiveWorkspaceSurfaceFromSidebar } from './focus-workspace-surface'
 
-// Multi-select over the rows the sidebar actually rendered, so gestures, context menus, and
-// the Cmd+1–9 shortcut cache all agree on one order.
+const getSidebarContainer = (): Element | null =>
+  document.querySelector('[data-worktree-sidebar-container]')
+
 export function useSidebarWorktreeSelection(args: {
   sectionRows: HostSectionRow[]
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
 }) {
   const { sectionRows, pinnedDisplayPolicy } = args
-  // Why: derive order from the built rows, not the flat worktrees array, so Cmd+1–9 match visual positions when grouping reorders cards.
-  const renderedWorktrees = useMemo(
-    () => getRenderedWorktreesInSidebarOrder(sectionRows, pinnedDisplayPolicy),
+  // Built rows include grouping/pinning reorder; use their order for selection and Cmd+1–9 parity.
+  const renderedRows = useMemo(
+    () => getRenderedWorkspaceRowsInSidebarOrder(sectionRows, pinnedDisplayPolicy),
     [pinnedDisplayPolicy, sectionRows]
   )
-  // Why: order-preserving sectionRows rebuilds must not give this array a new
-  // identity — updateSelectionForGesture depends on it, and a fresh identity
-  // there defeats React.memo bail-out for every WorktreeCard on epoch bumps.
-  const renderedWorktreeIdentities = useReusedArrayIdentity(
-    useMemo(
-      () => Array.from(new Set(renderedWorktrees.map(getWorktreeHostIdentity))),
-      [renderedWorktrees]
-    )
+  const renderedWorktrees = useMemo(() => renderedRows.map((row) => row.worktree), [renderedRows])
+  const repoByWorktree = useMemo(
+    () => new Map(renderedRows.map((row) => [row.worktree, row.repo])),
+    [renderedRows]
   )
   const renderedWorktreeIds = useReusedArrayIdentity(
     useMemo(
@@ -41,92 +39,62 @@ export function useSidebarWorktreeSelection(args: {
       [renderedWorktrees]
     )
   )
-  const [selectedWorktreeIds, setSelectedWorktreeIds] = useState<Set<string>>(new Set())
-  const [selectionAnchorId, setSelectionAnchorId] = useState<string | null>(null)
-
-  const prunedSelection = pruneWorktreeSelection(
-    selectedWorktreeIds,
-    selectionAnchorId,
-    renderedWorktreeIdentities
-  )
-  // Why: filters/grouping can hide selected cards; prune during render so nothing sees stale ids for unrendered worktrees.
-  if (!areWorktreeSelectionsEqual(selectedWorktreeIds, prunedSelection.selectedIds)) {
-    setSelectedWorktreeIds(prunedSelection.selectedIds)
+  const selection = useListMultiSelection({
+    items: renderedWorktrees,
+    getKey: getWorktreeHostIdentity,
+    getScope: getSidebarContainer
+  })
+  const { updateSelectionForGesture: updateSelection } = selection
+  const [focusedKey, setFocusedKey] = useState<string | null>(null)
+  const focusedWorktree =
+    focusedKey !== null && selection.selectedKeys.has(focusedKey)
+      ? (selection.getItemForKey(focusedKey) ?? null)
+      : null
+  const focusedWorkspaceExecutionHostId = focusedWorktree
+    ? getWorktreeExecutionHostId(focusedWorktree, repoByWorktree.get(focusedWorktree))
+    : null
+  if (focusedKey !== null && focusedWorktree === null) {
+    setFocusedKey(null)
   }
-  if (selectionAnchorId !== prunedSelection.anchorId) {
-    setSelectionAnchorId(prunedSelection.anchorId)
-  }
-
-  // Why identity reuse: the empty/unchanged-selection case must keep one array
-  // identity — selectForContextMenu and both drag-start handlers depend on
-  // this array, and card memo bail-out depends on those staying stable.
-  const selectedWorktrees = useReusedArrayIdentity(
-    useMemo(() => {
-      if (selectedWorktreeIds.size === 0) {
-        return []
-      }
-      const selected = new Map<string, Worktree>()
-      for (const worktree of renderedWorktrees) {
-        const identity = getWorktreeHostIdentity(worktree)
-        if (selectedWorktreeIds.has(identity) && !selected.has(identity)) {
-          selected.set(identity, worktree)
-        }
-      }
-      return Array.from(selected.values())
-    }, [renderedWorktrees, selectedWorktreeIds])
+  const selectWorktree = useCallback(
+    (worktree: Worktree) => {
+      setFocusedKey(getWorktreeHostIdentity(worktree))
+      updateSelection({ metaKey: false, ctrlKey: false, shiftKey: false }, worktree)
+    },
+    [updateSelection]
   )
-
-  useEffect(() => {
-    if (selectedWorktreeIds.size === 0) {
-      return
-    }
-
-    const clearSelectionOutsideSidebar = (event: PointerEvent): void => {
-      const target = event.target
-      const sidebarContainer = document.querySelector('[data-worktree-sidebar-container]')
-      if (target instanceof Node && sidebarContainer?.contains(target)) {
-        return
-      }
-      setSelectedWorktreeIds(new Set())
-      setSelectionAnchorId(null)
-    }
-
-    document.addEventListener('pointerdown', clearSelectionOutsideSidebar, { capture: true })
-    return () => {
-      document.removeEventListener('pointerdown', clearSelectionOutsideSidebar, { capture: true })
-    }
-  }, [selectedWorktreeIds.size])
-
   const updateSelectionForGesture = useCallback(
     (event: React.MouseEvent<HTMLElement>, worktree: Worktree): boolean => {
-      const worktreeIdentity = getWorktreeHostIdentity(worktree)
-      const intent = getWorktreeSelectionIntent(event, navigator.userAgent.includes('Mac'))
-      const result = updateWorktreeSelection({
-        visibleIds: renderedWorktreeIdentities,
-        previousSelectedIds: selectedWorktreeIds,
-        previousAnchorId: selectionAnchorId,
-        targetId: worktreeIdentity,
-        intent
-      })
-      setSelectedWorktreeIds(result.selectedIds)
-      setSelectionAnchorId(result.anchorId)
-      // Plain click navigates; modifier gestures are selection-only so a batch can build without switching away.
-      return intent !== 'replace'
+      setFocusedKey(getWorktreeHostIdentity(worktree))
+      const selectionOnly = updateSelection(event, worktree)
+      const list = event.currentTarget?.closest<HTMLElement>('[data-worktree-sidebar]')
+      // Why: a plain click opens the workspace, whose terminal or chat takes the keys; only multi-select keeps them in the list.
+      if (selectionOnly) {
+        list?.focus({ preventScroll: true })
+        list?.setAttribute('data-keyboard-navigation', '')
+      } else if (list) {
+        const { activeWorktreeId, activeWorkspaceExecutionHostId } = useAppStore.getState()
+        // Re-clicking the open workspace activates nothing, so hand its surface the keys here.
+        if (
+          activeWorktreeId === worktree.id &&
+          activeWorkspaceExecutionHostId ===
+            getWorktreeExecutionHostId(worktree, repoByWorktree.get(worktree))
+        ) {
+          focusActiveWorkspaceSurfaceFromSidebar(list)
+        }
+      }
+      return selectionOnly
     },
-    [renderedWorktreeIdentities, selectedWorktreeIds, selectionAnchorId]
+    [repoByWorktree, updateSelection]
   )
-
+  const { selectForContextMenu: selectItemForContextMenu } = selection
+  // Why keep the event arg: kanban and list cards share the onContextMenuSelect prop shape.
   const selectForContextMenu = useCallback(
     (_event: React.MouseEvent<HTMLElement>, worktree: Worktree): readonly Worktree[] => {
-      const worktreeIdentity = getWorktreeHostIdentity(worktree)
-      if (selectedWorktreeIds.has(worktreeIdentity) && selectedWorktreeIds.size > 1) {
-        return selectedWorktrees
-      }
-      setSelectedWorktreeIds(new Set([worktreeIdentity]))
-      setSelectionAnchorId(worktreeIdentity)
-      return [worktree]
+      setFocusedKey(getWorktreeHostIdentity(worktree))
+      return selectItemForContextMenu(worktree)
     },
-    [selectedWorktreeIds, selectedWorktrees]
+    [selectItemForContextMenu]
   )
 
   // Why layout effect: the Cmd/Ctrl+1–9 handler can fire right after commit; publishing after paint would leave the shortcut cache stale.
@@ -157,9 +125,12 @@ export function useSidebarWorktreeSelection(args: {
 
   return {
     renderedWorktreeIds,
-    renderedWorktreeIdentities,
-    selectedWorktreeIds,
-    selectedWorktrees,
+    renderedWorktreeIdentities: selection.visibleKeys,
+    selectedWorktreeIds: selection.selectedKeys,
+    selectedWorktrees: selection.selectedItems,
+    focusedWorktree,
+    focusedWorkspaceExecutionHostId,
+    selectWorktree,
     updateSelectionForGesture,
     selectForContextMenu
   }

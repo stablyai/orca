@@ -1,13 +1,13 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { getSshFilesystemProvider } from '../../../providers/ssh-filesystem-dispatch'
-import { joinWorktreeRelativePath } from '../../../runtime/runtime-relative-paths'
-import { ghExecFileAsync, ghRepoExecOptions, githubRepoContext } from '../../gh-utils'
+import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import { ghRepoExecOptions, githubRepoContext } from '../../repositories/github-repository-identity'
 import {
   getHostedReviewLocalGitOptions,
   type HostedReviewExecutionOptions
 } from '../../../source-control/hosted-review-git-options'
-import { githubHostExecOptions, type GitHubApiRepository } from '../../github-api-repository'
+import { githubHostExecOptions } from '../../repositories/github-repository-host'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
 export async function findOpenPRByHeadBase(args: {
   repoPath: string
   repo: GitHubApiRepository
@@ -37,7 +37,6 @@ export async function findOpenPRByHeadBase(args: {
     ],
     {
       ...ghRepoExecOptions(context),
-      ...(args.connectionId ? {} : localGitOptions),
       ...githubHostExecOptions(args.repo)
     }
   )
@@ -60,21 +59,11 @@ export async function readPullRequestTemplate(
     'docs/pull_request_template.md',
     'docs/PULL_REQUEST_TEMPLATE.md'
   ]
-  const remoteProvider = connectionId ? getSshFilesystemProvider(connectionId) : undefined
-  if (connectionId && !remoteProvider) {
+  if (connectionId) {
     return ''
   }
   for (const relativeCandidate of relativeCandidates) {
     try {
-      if (remoteProvider) {
-        const result = await remoteProvider.readFile(
-          joinWorktreeRelativePath(repoPath, relativeCandidate)
-        )
-        if (result.isBinary) {
-          continue
-        }
-        return result.content
-      }
       return await readFile(join(repoPath, relativeCandidate), 'utf8')
     } catch {
       // Try the next conventional PR template path.

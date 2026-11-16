@@ -1,7 +1,7 @@
 import {
   BrowserClientPageRendererIdentity,
   type BrowserClientPageRendererIdentity as RendererPageIdentity
-} from '../../../../shared/browser-client-page-renderer-protocol'
+} from '../../../../shared/browser/client-hosting/browser-client-page-renderer-protocol'
 import { readBrowserClientPageAttachedGuestId } from './browser-client-page-retained-elements'
 import { browserClientPageRetainedKey } from './browser-client-page-retained-key'
 import type { BrowserClientRetainedRendererPage } from './browser-client-page-retained-state'

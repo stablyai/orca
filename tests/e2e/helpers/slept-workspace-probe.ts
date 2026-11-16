@@ -1,12 +1,9 @@
-/**
- * Shared probes for GH #10205: a deliberately slept workspace must stay cold.
- * Drives the shipping sleep path (sidebar context menu) and reads both the
- * renderer's live PTY model and host truth.
- */
+// Require deliberately slept workspaces to stay cold in both renderer PTYs and host state (#10205).
 import type { Locator, Page } from '@stablyai/playwright-test'
 import { expect } from '@stablyai/playwright-test'
 import { ensureTerminalVisible } from './store'
 import { waitForActivePanePtyId, waitForActiveTerminalManager } from './terminal'
+import { dismissSetupScriptPrompts } from './sidebar-setup-prompt'
 
 export type WorkspaceSample = {
   livePtyCount: number
@@ -72,8 +69,7 @@ export async function readConnectDiagnostics(page: Page, worktreeId: string): Pr
     const target = globalThis as unknown as Record<string, unknown>
     const diag = (target.__ptyConnectDiag as string[] | undefined) ?? []
     const tabIds = new Set((state?.tabsByWorktree[id] ?? []).map((tab) => tab.id))
-    // Pane ids restart at 1 per worktree, so a verdict line is attributed to the
-    // tab named by the most recent connect line for that same pane id.
+    // Pane ids restart per worktree; attribute verdicts using the latest connect line for that pane.
     const tabByPaneId = new Map<string, string>()
     const owned: string[] = []
     for (const line of diag) {
@@ -111,6 +107,7 @@ export async function sleepWorkspaceViaSidebar(page: Page, worktreeId: string): 
   const row = rowLocator(page, worktreeId)
   await expect(row).toBeVisible()
   await row.scrollIntoViewIfNeeded()
+  await dismissSetupScriptPrompts(page)
   const scope = row.locator('[data-worktree-context-menu-scope="worktree"]').first()
   const target = (await scope.count()) > 0 ? scope : row
   await target.click({ button: 'right' })
@@ -123,6 +120,7 @@ export async function activateWorkspaceByClick(page: Page, worktreeId: string): 
   const row = rowLocator(page, worktreeId)
   await expect(row).toBeVisible()
   await row.scrollIntoViewIfNeeded()
+  await dismissSetupScriptPrompts(page)
   await row.click()
   await expect
     .poll(() => page.evaluate(() => window.__store?.getState().activeWorktreeId ?? null), {

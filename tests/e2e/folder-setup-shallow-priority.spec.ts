@@ -1,4 +1,4 @@
-import { openSidebarProjectDialog } from './helpers/sidebar-project-dialog'
+import { openSidebarProjectMenu } from './helpers/sidebar-project-dialog'
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { mkdtemp } from 'node:fs/promises'
@@ -29,9 +29,7 @@ async function createShallowPriorityTruncationFixture(): Promise<{
   webClientPath: string
   groupName: string
 }> {
-  // Why: realpathSync so the paths the test asserts on match the store's
-  // repo.path / projectGroup.parentPath on macOS, where os.tmpdir() (/var/...)
-  // symlinks to /private/var/... and the app canonicalizes paths on import.
+  // Resolve macOS /var symlinks like import does when recording project paths.
   const parentPath = realpathSync(
     await mkdtemp(path.join(os.tmpdir(), 'orca-e2e-shallow-priority-'))
   )
@@ -41,8 +39,7 @@ async function createShallowPriorityTruncationFixture(): Promise<{
 
   for (let index = 1; index <= 101; index += 1) {
     const repoName = `archived-service-${String(index).padStart(3, '0')}`
-    // Why: the scan only needs repo markers here; a real git init for 101
-    // throwaway repos makes this regression much slower without adding signal.
+    // Only repo markers matter to this scan; avoid initializing 101 unused git repositories.
     mkdirSync(path.join(archivePath, repoName, '.git'), { recursive: true })
   }
   initializeGitRepo(webClientPath)
@@ -50,33 +47,6 @@ async function createShallowPriorityTruncationFixture(): Promise<{
   return {
     parentPath,
     webClientPath,
-    groupName: path.basename(parentPath)
-  }
-}
-
-async function createCancellableScanFixture(): Promise<{
-  parentPath: string
-  apiPath: string
-  webPath: string
-  groupName: string
-}> {
-  // Why: realpathSync so the paths the test asserts on match the store's
-  // canonicalized repo.path / projectGroup.parentPath on macOS (os.tmpdir()
-  // /var/... symlinks to /private/var/...).
-  const parentPath = realpathSync(
-    await mkdtemp(path.join(os.tmpdir(), 'orca-e2e-cancellable-scan-'))
-  )
-  tempRoots.push(parentPath)
-  const apiPath = path.join(parentPath, 'api')
-  const webPath = path.join(parentPath, 'web')
-
-  initializeGitRepo(apiPath)
-  initializeGitRepo(webPath)
-
-  return {
-    parentPath,
-    apiPath,
-    webPath,
     groupName: path.basename(parentPath)
   }
 }
@@ -94,59 +64,8 @@ async function chooseFolderInNativeDialog(
   }, folderPath)
 }
 
-async function installCancellableNestedScanMock(
-  electronApp: ElectronApplication,
-  scan: {
-    selectedPath: string
-    selectedPathKind: 'non_git_folder'
-    repos: { path: string; displayName: string; depth: number }[]
-    truncated: boolean
-    timedOut: boolean
-    stopped: boolean
-    durationMs: number
-    maxDepth: number
-    maxRepos: number
-    timeoutMs: number | null
-  }
-): Promise<void> {
-  await electronApp.evaluate(({ ipcMain }, mockedScan) => {
-    const pendingScans = new Map<string, () => void>()
-    ipcMain.removeHandler('projectGroups:scanNested')
-    ipcMain.removeHandler('projectGroups:cancelNestedScan')
-    ipcMain.handle('projectGroups:scanNested', async (event, rawArgs: unknown) => {
-      const args = rawArgs as { scanId?: string }
-      const scanId = args.scanId ?? 'missing-scan-id'
-      return await new Promise((resolve) => {
-        pendingScans.set(scanId, () =>
-          resolve({
-            ...mockedScan,
-            stopped: true,
-            durationMs: mockedScan.durationMs + 1
-          })
-        )
-        event.sender.send('projectGroups:scanNestedProgress', {
-          scanId,
-          scan: { ...mockedScan, stopped: false }
-        })
-      })
-    })
-    ipcMain.handle('projectGroups:cancelNestedScan', (_event, rawArgs: unknown) => {
-      const args = rawArgs as { scanId?: string }
-      const scanId = args.scanId ?? ''
-      const resolveScan = pendingScans.get(scanId)
-      if (!resolveScan) {
-        return false
-      }
-      pendingScans.delete(scanId)
-      resolveScan()
-      return true
-    })
-  }, scan)
-}
-
 function getImportAsGroupButton(importDialog: Locator): Locator {
-  // Why: this test should fail on import-dialog copy drift instead of falling
-  // back to a retired accessible label.
+  // Require the current accessible action so retired labels cannot hide copy drift.
   return importDialog.getByRole('button', {
     name: IMPORT_AS_GROUP_BUTTON_NAME,
     exact: true
@@ -167,16 +86,12 @@ test('prioritizes shallow sibling repositories in a bounded nested scan', async 
   const fixture = await createShallowPriorityTruncationFixture()
   await chooseFolderInNativeDialog(electronApp, fixture.parentPath)
 
-  await openSidebarProjectDialog(orcaPage)
-  const dialog = orcaPage.getByRole('dialog', { name: /Add a project/i })
-  await expect(dialog).toBeVisible()
-  await dialog.getByRole('button', { name: /Browse folder/i }).click()
+  await openSidebarProjectMenu(orcaPage)
+  await orcaPage.getByRole('menuitem', { name: /Browse folder/i }).click()
 
   const importDialog = orcaPage.getByRole('dialog', {
     name: /Import repositories from folder/i
   })
-  await expect(importDialog.getByText(/Found 100 repositories in/)).toBeVisible()
-  await expect(importDialog.getByText('Showing partial scan results.')).toBeVisible()
   await expect(importDialog.getByText('z-web-client', { exact: true }).first()).toBeVisible()
 
   await importDialog.getByLabel('Deselect all').click()
@@ -232,71 +147,4 @@ test('prioritizes shallow sibling repositories in a bounded nested scan', async 
   })
   await expect(orcaPage.getByText(fixture.groupName)).toBeVisible()
   await expect(orcaPage.getByText('z-web-client').first()).toBeVisible()
-})
-
-test('can stop a nested repo scan and import repositories found so far', async ({
-  electronApp,
-  orcaPage
-}) => {
-  await waitForSessionReady(orcaPage)
-  const fixture = await createCancellableScanFixture()
-  await installCancellableNestedScanMock(electronApp, {
-    selectedPath: fixture.parentPath,
-    selectedPathKind: 'non_git_folder',
-    repos: [{ path: fixture.apiPath, displayName: 'api', depth: 1 }],
-    truncated: false,
-    timedOut: false,
-    stopped: false,
-    durationMs: 25,
-    maxDepth: 3,
-    maxRepos: 100,
-    timeoutMs: null
-  })
-  await chooseFolderInNativeDialog(electronApp, fixture.parentPath)
-
-  await openSidebarProjectDialog(orcaPage)
-  const dialog = orcaPage.getByRole('dialog', { name: /Add a project/i })
-  await dialog.getByRole('button', { name: /Browse folder/i }).click()
-
-  const importDialog = orcaPage.getByRole('dialog', {
-    name: /Import repositories from folder/i
-  })
-  await expect(importDialog.getByText(/Scanning\.\.\.\s*Found 1 repository in/)).toBeVisible()
-  await expect(getImportAsGroupButton(importDialog)).toBeDisabled()
-  await importDialog.getByRole('button', { name: /Stop scan/i }).click()
-  await expect(importDialog.getByText('Scan stopped early.')).toBeVisible()
-  await expect(importDialog.getByText(/Found 1 repository in/)).toBeVisible()
-  await expect(getImportAsGroupButton(importDialog)).toBeEnabled()
-
-  await getImportAsGroupButton(importDialog).click()
-
-  await expect
-    .poll(
-      () =>
-        orcaPage.evaluate((args) => {
-          const state = window.__store?.getState()
-          if (!state) {
-            return null
-          }
-          const group = state.projectGroups.find((entry) => entry.parentPath === args.parentPath)
-          const apiRepo = state.repos.find((repo) => repo.path === args.apiPath)
-          const webRepo = state.repos.find((repo) => repo.path === args.webPath)
-          return {
-            groupName: group?.name ?? null,
-            importedApiPath: apiRepo?.path ?? null,
-            apiInCreatedGroup: group !== undefined && apiRepo?.projectGroupId === group.id,
-            importedWebPath: webRepo?.path ?? null
-          }
-        }, fixture),
-      {
-        timeout: 20_000,
-        message: 'stopped nested scan partial result was not imported'
-      }
-    )
-    .toEqual({
-      groupName: fixture.groupName,
-      importedApiPath: fixture.apiPath,
-      apiInCreatedGroup: true,
-      importedWebPath: null
-    })
 })

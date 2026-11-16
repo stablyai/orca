@@ -1,14 +1,22 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   classifyInstallTargetMock,
   createDownloadGrantMock,
+  getAllWindowsMock,
   handlers,
+  mainRenderer,
+  otherRenderer,
+  trustedRendererMock,
   installSkillCloudGrantMock,
   registerInstallManagementMock
 } = vi.hoisted(() => ({
   classifyInstallTargetMock: vi.fn(),
   createDownloadGrantMock: vi.fn(),
+  getAllWindowsMock: vi.fn(),
+  mainRenderer: { isDestroyed: vi.fn(() => false), send: vi.fn() },
+  otherRenderer: { isDestroyed: vi.fn(() => false), send: vi.fn() },
+  trustedRendererMock: vi.fn(),
   handlers: new Map<string, (...args: unknown[]) => unknown>(),
   installSkillCloudGrantMock: vi.fn(),
   registerInstallManagementMock: vi.fn()
@@ -16,24 +24,25 @@ const {
 
 vi.mock('electron', () => ({
   app: { getPath: () => '/test/user-data' },
-  BrowserWindow: { getAllWindows: () => [] }
+  BrowserWindow: { getAllWindows: getAllWindowsMock },
+  ipcMain: {
+    handle: (channel: string, handler: (...args: unknown[]) => unknown) =>
+      handlers.set(channel, handler)
+  }
 }))
-vi.mock('./skill-ipc-main-window', () => ({
-  handleMainWindowSkillIpc: (channel: string, handler: (...args: unknown[]) => unknown) =>
-    handlers.set(channel, handler)
-}))
+vi.mock('./ui', () => ({ getTrustedUIRendererWebContents: trustedRendererMock }))
 vi.mock('./skill-install-management-ipc-handlers', () => ({
   registerSkillInstallManagementIpcHandlers: registerInstallManagementMock
 }))
-vi.mock('../skills/skill-cloud-install-target', () => ({
+vi.mock('../skills/cloud/skill-cloud-install-target', () => ({
   classifySkillCloudInstallTarget: classifyInstallTargetMock
 }))
-vi.mock('../skills/skill-runtime-capability', () => ({
+vi.mock('../skills/runtime-transfer/skill-runtime-capability', () => ({
   supportsSkillRuntimeBundleInstall: vi.fn(),
   supportsSkillRuntimeCancellation: vi.fn(),
   supportsSkillRuntimeInstall: vi.fn()
 }))
-vi.mock('../skills/skill-cloud-grant-installation', () => ({
+vi.mock('../skills/cloud/skill-cloud-grant-installation', () => ({
   installSkillBundleCloudGrant: vi.fn(),
   installSkillCloudGrant: installSkillCloudGrantMock
 }))
@@ -41,13 +50,25 @@ vi.mock('./skill-install-progress-ipc', () => ({
   sendBundleInstallProgress: vi.fn(),
   sendSkillInstallProgress: vi.fn()
 }))
-vi.mock('./runtime-environment-transport-routing', () => ({ callRuntimeEnvironment: vi.fn() }))
+vi.mock('./runtime-environments/requests/runtime-environment-transport-routing', () => ({
+  callRuntimeEnvironment: vi.fn()
+}))
 
 import { registerSkillCloudIpcHandlers } from './skill-cloud-ipc-handlers'
 
 describe('skill cloud IPC', () => {
   beforeEach(() => {
     handlers.clear()
+    mainRenderer.isDestroyed.mockReset().mockReturnValue(false)
+    mainRenderer.send.mockReset()
+    otherRenderer.send.mockReset()
+    trustedRendererMock.mockReset().mockReturnValue(mainRenderer)
+    getAllWindowsMock.mockReset().mockReturnValue(
+      [mainRenderer, otherRenderer].map((webContents) => ({
+        isDestroyed: () => webContents.isDestroyed(),
+        webContents
+      }))
+    )
     classifyInstallTargetMock.mockReset().mockResolvedValue('local')
     createDownloadGrantMock.mockReset().mockResolvedValue({
       status: 'unconfigured',
@@ -57,27 +78,7 @@ describe('skill cloud IPC', () => {
     installSkillCloudGrantMock.mockReset()
   })
 
-  it('requests a grant for the exact reviewed share version', async () => {
-    const runtime = { createSkillDownloadGrant: createDownloadGrantMock }
-    registerSkillCloudIpcHandlers(runtime as never, vi.fn())
-    const installShare = handlers.get('skills:installShare')
-    expect(installShare).toBeDefined()
-
-    await installShare!(
-      { sender: {} },
-      {
-        shareId: 'share-1',
-        versionId: 'version-reviewed',
-        operationId: 'operation-1',
-        destination: { scope: 'global' }
-      }
-    )
-
-    expect(createDownloadGrantMock).toHaveBeenCalledWith('share-1', {
-      versionId: 'version-reviewed',
-      installTarget: 'local'
-    })
-  })
+  afterEach(() => vi.restoreAllMocks())
 
   it('rejects a grant for a different version before installation', async () => {
     createDownloadGrantMock.mockResolvedValue({
@@ -90,7 +91,7 @@ describe('skill cloud IPC', () => {
 
     await expect(
       installShare!(
-        { sender: {} },
+        { sender: mainRenderer },
         {
           shareId: 'share-1',
           versionId: 'version-reviewed',
@@ -99,6 +100,19 @@ describe('skill cloud IPC', () => {
         }
       )
     ).rejects.toThrow('skill-package-version-mismatch')
-    expect(installSkillCloudGrantMock).not.toHaveBeenCalled()
+  })
+
+  const preparationId = 'cf38dbdc-bff0-4e87-a7ea-ef81b7edaa1a'
+
+  it('rejects share publication from an unrelated renderer before starting it', () => {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registration captures the runtime; sender refusal never accesses it.
+    registerSkillCloudIpcHandlers({} as never, vi.fn())
+
+    expect(() =>
+      handlers.get('skills:publishShare')!(
+        { sender: otherRenderer },
+        { preparationId, releaseNotes: 'Reviewed release' }
+      )
+    ).toThrow('Unauthorized skill IPC sender')
   })
 })

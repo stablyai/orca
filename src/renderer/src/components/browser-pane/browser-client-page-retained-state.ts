@@ -1,4 +1,4 @@
-import type { BrowserClientPageRendererIdentity } from '../../../../shared/browser-client-page-renderer-protocol'
+import type { BrowserClientPageRendererIdentity } from '../../../../shared/browser/client-hosting/browser-client-page-renderer-protocol'
 
 export type BrowserClientRetainedRendererPage = {
   key: string
@@ -15,8 +15,10 @@ export type BrowserClientRetainedRendererPage = {
   rejectMount: (error: Error) => void
   attachTimer: ReturnType<typeof setTimeout>
   onAttached: EventListener
-  onReady: EventListener
+  releasePreparation: () => void
   onDestroyed: EventListener
   onRendererGone: EventListener
+  onLoadCommit: (event: Electron.LoadCommitEvent) => void
   releaseDragPassthroughSurface: () => void
+  releasePaintRetention: () => void
 }

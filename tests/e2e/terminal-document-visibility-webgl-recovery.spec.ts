@@ -273,8 +273,7 @@ async function dispatchDocumentVisibilityCycle(page: Page): Promise<void> {
       setVisibilityState('visible')
       document.dispatchEvent(new Event('visibilitychange'))
     } finally {
-      // Why: the e2e harness may not naturally report hidden visibility, so
-      // restore the document to the visible state expected by later cleanup.
+      // Restore visible document state for cleanup because the hidden harness may never report it naturally.
       setVisibilityState('visible')
     }
   })
@@ -306,9 +305,7 @@ test.describe('terminal document visibility WebGL recovery', () => {
     }
 
     try {
-      // Why: this is the app-level background/foreground path where the
-      // TerminalPane stays mounted and visible, so React pane visibility does
-      // not run its normal resume recovery.
+      // Exercise app background/foreground while the pane stays mounted, bypassing React’s usual visibility-resume path.
       await resetAtlasResetCount(orcaPage)
       const browserWindowVisibilityWorked = await tryBrowserWindowVisibilityCycle(
         electronApp,

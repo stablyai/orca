@@ -8,31 +8,31 @@ import { trackProxySessionConnection } from './proxy-session-connections'
 
 export function createProxyWebSocket(url: string, options: ClientOptions): WebSocket {
   const session = defaultProxySession()
-  if (!session) {
-    return new WebSocket(url, options)
-  }
-  const tls = getProxySessionTlsSettings(session)
+  const tls = session ? getProxySessionTlsSettings(session) : null
   let untrack: (() => void) | undefined
-  const agent = new ProxyAgent({
-    ...tls?.options,
-    getProxyForUrl: async (target, request) => {
-      if (!(await awaitProxySessionApplication(session))) {
-        throw new Error('Proxy settings are not ready')
-      }
-      if (getProxySessionTlsSettings(session) !== tls) {
-        throw new Error('TLS settings changed; reconnect using the new settings')
-      }
-      if (request.destroyed) {
-        throw new Error('WebSocket connection cancelled')
-      }
-      untrack ??= trackProxySessionConnection(session, () => socket.terminate())
-      const proxy = await resolveSessionProxy(session, target)
-      if (request.destroyed) {
-        throw new Error('WebSocket connection cancelled')
-      }
-      return proxy
+  const agent = new ProxyAgent(tls?.options)
+  const resolveEnvironmentProxy = agent.getProxyForUrl
+  agent.getProxyForUrl = async (target, request) => {
+    if (!session) {
+      // Relay upgrades use the same HTTP(S)_PROXY and NO_PROXY policy as HTTP requests.
+      return resolveEnvironmentProxy(target.replace(/^ws/, 'http'), request)
     }
-  })
+    if (!(await awaitProxySessionApplication(session))) {
+      throw new Error('Proxy settings are not ready')
+    }
+    if (getProxySessionTlsSettings(session) !== tls) {
+      throw new Error('TLS settings changed; reconnect using the new settings')
+    }
+    if (request.destroyed) {
+      throw new Error('WebSocket connection cancelled')
+    }
+    untrack ??= trackProxySessionConnection(session, () => socket.terminate())
+    const proxy = await resolveSessionProxy(session, target)
+    if (request.destroyed) {
+      throw new Error('WebSocket connection cancelled')
+    }
+    return proxy
+  }
   const socket = new WebSocket(url, { ...options, ...tls?.options, agent })
   socket.once('close', () => {
     untrack?.()

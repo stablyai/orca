@@ -37,8 +37,7 @@ export function useMobileDefaultSessionViewPreference(): MobileDefaultSessionVie
     const revision = mutationRevisionRef.current + 1
     mutationRevisionRef.current = revision
     setDefaultViewState(view)
-    // Why: persistence owns a shared queue, so invoking it at event time preserves
-    // mutation order even when this route unmounts and a new instance takes over.
+    // Enqueue persistence at event time so writes stay ordered across route unmount/remount.
     void saveDefaultSessionView(view).catch(async () => {
       const persisted = await loadDefaultSessionView()
       if (mountedRef.current && mutationRevisionRef.current === revision) {

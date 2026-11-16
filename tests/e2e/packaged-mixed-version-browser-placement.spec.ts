@@ -1,30 +1,22 @@
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import os from 'node:os'
-import path from 'node:path'
-import {
-  _electron as electron,
-  type ElectronApplication,
-  type Page,
-  type TestInfo
-} from '@stablyai/playwright-test'
+import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 
-import { expect, forwardElectronProcessLogs, test } from './helpers/orca-app'
-import { getE2ECompletedOnboardingProfile } from './helpers/e2e-completed-onboarding-profile'
-import { cleanupE2EDaemons, closeElectronAppForE2E } from './helpers/electron-process-shutdown'
-import {
-  assertElectronResolvedIsolatedHome,
-  createElectronHomeIsolation
-} from './helpers/electron-home-isolation'
+import { expect, test } from './helpers/orca-app'
 import { launchHeadlessPairedRuntimeHost } from './helpers/headless-paired-runtime-host'
 import {
   launchPairedElectronClient,
-  type PairedElectronClient,
-  type RuntimeDesktopPairingOffer
+  type PairedElectronClient
 } from './helpers/paired-electron-client'
+import {
+  collectCleanupFailures,
+  launchPackagedPairedClient,
+  packagedExecutable,
+  packagedExecutableMissing,
+  PACKAGED_EXECUTABLE_ENV,
+  type PackagedPairedClient
+} from './helpers/packaged-old-orca'
 
-const PACKAGED_EXECUTABLE_ENV = 'ORCA_CROSS_VERSION_PACKAGED_EXECUTABLE'
 const CLIENT_HOST_CAPABILITY = 'browser.clientHost.v1'
 const TUNNEL_CAPABILITY = 'network.browserTunnel.v1'
 
@@ -33,32 +25,11 @@ type BrowserFixture = {
   url: string
 }
 
-type PackagedPairedClient = {
-  app: ElectronApplication
-  environmentId: string
-  page: Page
-  status: { capabilities: string[] }
-  version: string
-  dispose(): Promise<void>
-}
-
 type BrowserCreateResult = {
   browserPageId: string
 }
 
 type PackagedPlacementCleanup = () => Promise<void> | void
-
-async function collectCleanupFailures(cleanups: PackagedPlacementCleanup[]): Promise<unknown[]> {
-  const failures: unknown[] = []
-  for (const cleanup of cleanups) {
-    try {
-      await cleanup()
-    } catch (error) {
-      failures.push(error)
-    }
-  }
-  return failures
-}
 
 async function withPackagedPlacementCleanup(
   run: (registerCleanup: (cleanup: PackagedPlacementCleanup) => void) => Promise<void>
@@ -121,108 +92,6 @@ async function readOwnedPageUrls(app: ElectronApplication, url: string): Promise
         .filter((candidate) => candidate.startsWith(prefix)),
     url
   )
-}
-
-async function removeProfile(userDataDir: string): Promise<void> {
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    try {
-      rmSync(userDataDir, { recursive: true, force: true })
-      return
-    } catch (error) {
-      if (attempt === 4) {
-        throw error
-      }
-      await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)))
-    }
-  }
-}
-
-async function launchPackagedPairedClient(args: {
-  executablePath: string
-  offer: RuntimeDesktopPairingOffer
-  testInfo: TestInfo
-}): Promise<PackagedPairedClient> {
-  const userDataDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-packaged-client-'))
-  let app: ElectronApplication | undefined
-  try {
-    writeFileSync(
-      path.join(userDataDir, 'orca-data.json'),
-      `${JSON.stringify(getE2ECompletedOnboardingProfile(), null, 2)}\n`
-    )
-    const { ELECTRON_RUN_AS_NODE: _unused, ...cleanEnv } = process.env
-    void _unused
-    const homeIsolation = createElectronHomeIsolation({
-      inheritedEnv: cleanEnv,
-      launchEnv: {},
-      extraEnv: {},
-      userDataDir
-    })
-    app = await electron.launch({
-      executablePath: args.executablePath,
-      args: [],
-      env: {
-        ...homeIsolation.env,
-        NODE_ENV: 'production',
-        ORCA_BYPASS_SINGLE_INSTANCE_LOCK: '1',
-        ORCA_E2E_HEADLESS: '1'
-      }
-    })
-    forwardElectronProcessLogs(app, args.testInfo)
-    assertElectronResolvedIsolatedHome(
-      await app.evaluate(({ app: electronApp }) => electronApp.getPath('home')),
-      homeIsolation
-    )
-    const page = await app.firstWindow({ timeout: 120_000 })
-    await page.waitForLoadState('domcontentloaded')
-    const [status, version, environmentId] = await Promise.all([
-      page.evaluate(() => window.api.runtime.getStatus()),
-      app.evaluate(({ app: electronApp }) => electronApp.getVersion()),
-      page.evaluate(async ({ pairingUrl }) => {
-        const result = await window.api.runtimeEnvironments.addFromPairingCode({
-          name: 'STA-4150 packaged old client',
-          pairingCode: pairingUrl
-        })
-        const response = await window.api.runtimeEnvironments.getStatus({
-          selector: result.environment.id,
-          timeoutMs: 30_000
-        })
-        if (!response.ok) {
-          throw new Error(`${response.error.code}: ${response.error.message}`)
-        }
-        return result.environment.id
-      }, args.offer)
-    ])
-    return {
-      app,
-      environmentId,
-      page,
-      status,
-      version,
-      dispose: async () => {
-        const failures = await collectCleanupFailures([
-          () => closeElectronAppForE2E(app!),
-          () => cleanupE2EDaemons(userDataDir),
-          () => removeProfile(userDataDir)
-        ])
-        if (failures.length > 0) {
-          throw new AggregateError(failures, 'Failed to clean up packaged paired client')
-        }
-      }
-    }
-  } catch (error) {
-    const cleanupErrors = await collectCleanupFailures([
-      ...(app ? [() => closeElectronAppForE2E(app)] : []),
-      () => cleanupE2EDaemons(userDataDir),
-      () => removeProfile(userDataDir)
-    ])
-    if (cleanupErrors.length > 0) {
-      throw new AggregateError(
-        [error, ...cleanupErrors],
-        'Packaged client startup and cleanup failed'
-      )
-    }
-    throw error
-  }
 }
 
 async function createBrowserThroughPackagedClient(args: {
@@ -383,11 +252,9 @@ async function createBrowserThroughCurrentClient(args: {
   return mirrored
 }
 
-const packagedExecutable = process.env[PACKAGED_EXECUTABLE_ENV]
-
 test.describe('packaged mixed-version browser placement', () => {
   test.skip(
-    !packagedExecutable || !existsSync(packagedExecutable),
+    packagedExecutableMissing,
     `${PACKAGED_EXECUTABLE_ENV} must point at an older packaged Orca executable`
   )
 
@@ -404,7 +271,8 @@ test.describe('packaged mixed-version browser placement', () => {
       const client = await launchPackagedPairedClient({
         executablePath: packagedExecutable!,
         offer: host.offer,
-        testInfo
+        testInfo,
+        name: 'STA-4150 packaged old client'
       })
       registerCleanup(() => client.dispose())
       expect(client.status.capabilities).not.toContain(CLIENT_HOST_CAPABILITY)

@@ -1,0 +1,159 @@
+// FIFO admission tracks this producer’s writes; the writer decides against other writers’ facts.
+
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalTurnLifecycle
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
+import type { ProviderTimelineTurnRef } from './provider-timeline-rows'
+
+/** Bound duplicate-close memory; older rows defer to the journal. */
+const MAX_CLOSED_ITEMS = 512
+/** Bound unanswered opener metadata even if the provider never opens a turn. */
+const MAX_PENDING_INPUTS = 64
+const MAX_PENDING_INPUT_BYTES = 64 * 1024
+
+function bytes(value: string): number {
+  return Buffer.byteLength(value, 'utf8')
+}
+
+export type ProviderTimelineOpenTurn = ProviderTimelineTurnRef & {
+  running: AgentJournalTurnLifecycle
+}
+
+export type ProviderTimelinePendingInput = {
+  userItemId: string
+  requestedAt: number
+  /** Absent means the next turn to open. */
+  turnItemId?: string
+}
+
+export type ProviderTimelineOpenItem = {
+  kind: 'item' | 'request'
+  /** The provider's request ID; the writer chooses its row. */
+  request?: string
+  turnItemId: string | null
+  /** Requests whose live exchange settles them, not their turn's end. */
+  outlivesTurn?: true
+}
+
+export class ProviderTimelineState {
+  ended = false
+  open: ProviderTimelineOpenTurn | null = null
+  /** Retain ended turns for trailing context facts. */
+  latest: ProviderTimelineTurnRef | null = null
+  /** External settlement leaves running tools for the provider’s own turn end. */
+  stopped: ProviderTimelineTurnRef | null = null
+  inputs: ProviderTimelinePendingInput[] = []
+  /** Items use row IDs; requests use request:key across incarnations. */
+  items = new Map<string, ProviderTimelineOpenItem>()
+  /** Closed history never requires traversing the live population. */
+  readonly closedItems = new Map<string, string | null>()
+  /** Advance only on admission. */
+  serial = 0
+
+  get scope(): AgentJournalTurnScope {
+    return this.open ? { kind: 'turn', turnItemId: this.open.itemId } : AGENT_JOURNAL_THREAD_SCOPE
+  }
+
+  serials(): { next(): number; commit(): void } {
+    let taken = this.serial
+    return {
+      next: () => (taken += 1),
+      commit: () => {
+        this.serial = taken
+      }
+    }
+  }
+
+  /** Evict oldest pending sends at the bound; later turns then use provider-owned openers. */
+  wait(pending: ProviderTimelinePendingInput): void {
+    this.inputs.push(pending)
+    const size = (input: ProviderTimelinePendingInput) =>
+      bytes(input.userItemId) + bytes(input.turnItemId ?? '') + 16
+    let held = this.inputs.reduce((total, input) => total + size(input), 0)
+    while (this.inputs.length > MAX_PENDING_INPUTS || held > MAX_PENDING_INPUT_BYTES) {
+      const forgotten = this.inputs.shift()
+      if (!forgotten) {
+        return
+      }
+      held -= size(forgotten)
+    }
+  }
+
+  opener(turnItemId: string): ProviderTimelinePendingInput | undefined {
+    return (
+      this.inputs.find((input) => input.turnItemId === turnItemId) ??
+      this.inputs.find((input) => input.turnItemId === undefined)
+    )
+  }
+
+  close(key: string, turnItemId: string | null): void {
+    this.items.delete(key)
+    this.closedItems.delete(key)
+    this.closedItems.set(key, turnItemId)
+    if (this.closedItems.size > MAX_CLOSED_ITEMS) {
+      const oldest = this.closedItems.keys().next()
+      if (!oldest.done) {
+        this.closedItems.delete(oldest.value)
+      }
+    }
+  }
+
+  endTurn(turn: ProviderTimelineTurnRef): void {
+    if (this.open?.itemId === turn.itemId) {
+      this.open = null
+      this.latest = turn
+    }
+    if (this.stopped?.itemId === turn.itemId) {
+      this.stopped = null
+    }
+    // Kept requests leave by their own answer or withdrawal, so the kept set stays live-sized.
+    this.forget(turn, (entry) => !entry.outlivesTurn)
+    for (const [key, turnItemId] of this.closedItems) {
+      if (turnItemId === turn.itemId) {
+        this.closedItems.delete(key)
+      }
+    }
+  }
+
+  /** Cancel prompts after external settlement; keep running work until the provider ends the turn. */
+  stopTurn(turn: ProviderTimelineTurnRef): void {
+    if (this.open?.itemId === turn.itemId) {
+      this.open = null
+      this.latest = turn
+      this.stopped = turn
+    }
+    this.forget(turn, (entry) => entry.kind === 'request' && !entry.outlivesTurn)
+  }
+
+  /** Requests a turn's end must leave pending. */
+  liveRequests(turnItemId: string): string[] {
+    const requests: string[] = []
+    for (const entry of this.items.values()) {
+      if (entry.outlivesTurn && entry.request !== undefined && entry.turnItemId === turnItemId) {
+        requests.push(entry.request)
+      }
+    }
+    return requests
+  }
+
+  endSession(): void {
+    this.ended = true
+    this.open = null
+    this.stopped = null
+    this.items.clear()
+    this.closedItems.clear()
+  }
+
+  private forget(
+    turn: ProviderTimelineTurnRef,
+    which: (entry: ProviderTimelineOpenItem) => boolean
+  ): void {
+    for (const [key, entry] of this.items) {
+      if (entry.turnItemId === turn.itemId && which(entry)) {
+        this.items.delete(key)
+      }
+    }
+  }
+}

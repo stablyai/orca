@@ -1,100 +1,109 @@
-import type {
-  AgentSessionFastModeSupport,
-  AgentSessionModelOption
-} from '../../../shared/agent-session-wire'
+import { AgentModelCatalogInputs } from './agent-model-catalog-inputs'
+import { createAgentModelEffortDiscovery } from './agent-model-catalog-effort-discovery'
+import { createAgentModelCatalogFences } from './agent-model-catalog-fences'
+import {
+  evictAgentModelCatalogEntries,
+  createAgentModelCatalogEntryFactory,
+  createAgentModelCatalogSuccessWriter,
+  retireAgentModelCatalogObservations,
+  agentModelCatalogLaunchAgents,
+  agentModelCatalogEntryIsStale
+} from './agent-model-catalog-entry-lifetime'
+import { independentAgentModelCatalog } from '../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
+export type { AgentModelCatalogProbe } from './agent-model-catalog-discovery'
 import type { AgentModelCatalogPersistence } from './agent-model-catalog-persistence'
+import {
+  agentModelCatalogListingKey,
+  entryWithConfiguredDefault,
+  type AgentModelCatalogConfiguredChoice,
+  type AgentModelCatalogEntry,
+  type AgentModelCatalogSource,
+  type AgentModelCatalogSuccess
+} from './agent-model-catalog-entry'
 
-// The execution host's one model catalog per (agent, launch fingerprint):
-// served immediately at any age, refreshed in the background when old, and
-// written through by every successful listing a live session already performs.
-// Success-only: a failure, timeout or empty list is never stored as a catalog
-// and never persisted — it is held separately under a short TTL so a burst of
-// picker opens does not hammer a dead binary, then dies on its own.
+export type {
+  AgentModelCatalogEntry,
+  AgentModelCatalogListing,
+  AgentModelCatalogLiveListing,
+  AgentModelCatalogSource,
+  AgentModelCatalogSuccess
+} from './agent-model-catalog-entry'
+export { withLiveCatalogListing } from './agent-model-catalog-entry'
+import {
+  AGENT_MODEL_CATALOG_FAILURE_TTL_MS,
+  AgentModelCatalogFailures,
+  type AgentModelCatalogFailure
+} from './agent-model-catalog-failures'
+import {
+  AGENT_MODEL_CATALOG_PICKER_WAIT_MS,
+  AgentModelCatalogListingWaiters
+} from './agent-model-catalog-listing-waiters'
 
-export const AGENT_MODEL_CATALOG_FRESH_MS = 10 * 60_000
-export const AGENT_MODEL_CATALOG_FAILURE_TTL_MS = 30_000
-/** A validation read younger than this trusts the entry even when the picked
- *  model is missing; older, it waits for one bounded refresh before refusing. */
-export const AGENT_MODEL_CATALOG_VALIDATION_MIN_AGE_MS = 60_000
+export { AGENT_MODEL_CATALOG_FAILURE_TTL_MS, AGENT_MODEL_CATALOG_PICKER_WAIT_MS }
+export type { AgentModelCatalogFailure }
+
 export const AGENT_MODEL_CATALOG_MAX_ENTRIES = 256
 
-export type AgentModelCatalogEntry = {
-  agent: 'claude' | 'codex'
-  fingerprint: string
-  models: AgentSessionModelOption[]
-  fastModeSupport?: AgentSessionFastModeSupport
-  /** Provider-advertised Fast tier per model id; derived from the same listing. */
-  fastModeTierByModel: Record<string, string>
-  origin: 'live-session' | 'probe'
-  fetchedAt: number
-}
-
-export type AgentModelCatalogSuccess = {
-  models: AgentSessionModelOption[]
-  fastModeSupport?: AgentSessionFastModeSupport
-  fastModeTierByModel: ReadonlyMap<string, string>
-  origin: 'live-session' | 'probe'
-}
-
-export type AgentModelCatalogProbe = (accountHomePath: string) => Promise<AgentModelCatalogSuccess>
-
-type CatalogFailure = { detail: string; failedAt: number }
-
-/** A live session's handle into the store, pinned at spawn to the account home
- *  THAT child launched under — an account switched afterwards must never
- *  receive or poison this session's listing. */
-export type AgentModelCatalogSessionAccess = {
-  store: AgentModelCatalogStore
-  fingerprint: string
-  accountHomePath: string
-}
-
-function tierRecord(tiers: ReadonlyMap<string, string>): Record<string, string> {
-  return Object.fromEntries(tiers.entries())
-}
-
-/** A listing that names no default effort for a model keeps the one a live child reported for it,
- *  while that model still offers it: Claude's listing never names one, only a running child does. */
-function withKnownDefaultEfforts(
-  models: readonly AgentSessionModelOption[],
-  previous: AgentModelCatalogEntry | undefined
-): AgentSessionModelOption[] {
-  return models.map((model) => {
-    const known = previous?.models.find((entry) => entry.id === model.id)?.defaultEffort
-    return model.defaultEffort === undefined &&
-      known !== undefined &&
-      model.efforts.some((choice) => choice.value === known)
-      ? { ...model, defaultEffort: known }
-      : { ...model }
-  })
-}
-
-function listingKey(entry: AgentModelCatalogEntry): string {
-  return JSON.stringify([
-    entry.origin,
-    entry.models,
-    entry.fastModeSupport ?? null,
-    entry.fastModeTierByModel
-  ])
-}
+import {
+  refreshAgentModelCatalogListing,
+  retireAgentModelCatalogListing,
+  type AgentModelCatalogListModels,
+  type AgentModelCatalogListingBudget,
+  type InFlightListing
+} from './agent-model-catalog-lister'
+export type { AgentModelCatalogSessionAccess } from './agent-model-catalog-lister'
 
 export class AgentModelCatalogStore {
   private readonly entries = new Map<string, AgentModelCatalogEntry>()
-  private readonly failures = new Map<string, CatalogFailure>()
-  private readonly refreshes = new Map<string, Promise<AgentModelCatalogEntry | null>>()
+  private readonly failures: AgentModelCatalogFailures
+  private readonly refreshes = new Map<string, InFlightListing>()
+  private readonly listingWaiters = new AgentModelCatalogListingWaiters(
+    (fingerprint) => this.get(fingerprint),
+    (fingerprint) => this.refreshes.has(fingerprint)
+  )
+  // Changed launch commands/env invalidate catalogs until rediscovery.
+  private readonly inputs: AgentModelCatalogInputs
+  private readonly dueEntries = new Set<string>()
+  private readonly partialAttempts = new Map<string, { agent: string; at: number }>()
+  private readonly retirementRevisions = new Map<string, number>()
+  // Aborts when an agent's scopes are next retired.
+  readonly retirements = createAgentModelCatalogFences<string>()
+  private readonly retiredObservations = new Set<string>()
   private persistence: AgentModelCatalogPersistence | null = null
+  readonly efforts: ReturnType<typeof createAgentModelEffortDiscovery>
   private readonly now: () => number
 
   constructor(options?: { now?: () => number }) {
     this.now = options?.now ?? Date.now
+    this.failures = new AgentModelCatalogFailures(this.now)
+    this.inputs = new AgentModelCatalogInputs({
+      entries: this.entries,
+      refreshes: this.refreshes,
+      dueEntries: this.dueEntries,
+      failures: this.failures,
+      partialAttempts: this.partialAttempts,
+      listingWaiters: this.listingWaiters,
+      agents: () => agentModelCatalogLaunchAgents(this.retirementRevisions, this.entries),
+      retireAgent: (agent) => this.expireFailures(agent),
+      cap: AGENT_MODEL_CATALOG_MAX_ENTRIES
+    })
+    this.efforts = createAgentModelEffortDiscovery({
+      entries: this.entries,
+      refreshes: this.refreshes,
+      attempts: this.partialAttempts,
+      failed: (key) => this.hasActiveFailure(key),
+      now: this.now,
+      cap: AGENT_MODEL_CATALOG_MAX_ENTRIES
+    })
   }
 
-  /** Hydrates last-good entries from disk. Anything this run already listed wins. */
+  /** In-process listings take precedence over hydrated entries. */
   async attachPersistence(persistence: AgentModelCatalogPersistence): Promise<void> {
     this.persistence = persistence
     for (const entry of await persistence.load()) {
       if (!this.entries.has(entry.fingerprint)) {
         this.entries.set(entry.fingerprint, entry)
+        this.dueEntries.add(entry.fingerprint)
       }
     }
     this.evictOverCap()
@@ -109,119 +118,231 @@ export class AgentModelCatalogStore {
     if (!entry) {
       return null
     }
-    // Refresh recency for the LRU cap.
     this.entries.delete(fingerprint)
     this.entries.set(fingerprint, entry)
     return entry
   }
 
-  isStale(entry: AgentModelCatalogEntry): boolean {
-    return this.now() - entry.fetchedAt >= AGENT_MODEL_CATALOG_FRESH_MS
+  /** A known superseded invocation cannot be certified by resolving its old base key again. */
+  observation(fingerprint: string): AgentModelCatalogEntry | null {
+    return this.retiredObservations.has(fingerprint) ? null : this.get(fingerprint)
   }
 
-  /** Young enough for a validation read to trust even without the picked model. */
-  withinValidationMinAge(entry: AgentModelCatalogEntry): boolean {
-    return this.now() - entry.fetchedAt < AGENT_MODEL_CATALOG_VALIDATION_MIN_AGE_MS
+  /** Whether any account's catalog of `agent` is saved here. */
+  hasEntryForAgent(agent: string): boolean {
+    return [...this.entries.values()].some((entry) => entry.agent === agent)
+  }
+
+  /** Live saves must not delay account-level discovery. */
+  isStale(entry: AgentModelCatalogEntry): boolean {
+    return agentModelCatalogEntryIsStale(entry, this.dueEntries.has(entry.fingerprint))
   }
 
   failureDetail(fingerprint: string): string | null {
-    return this.hasActiveFailure(fingerprint)
-      ? (this.failures.get(fingerprint)?.detail ?? null)
-      : null
+    return this.failures.detail(fingerprint)
   }
 
   hasActiveFailure(fingerprint: string): boolean {
-    const failure = this.failures.get(fingerprint)
-    if (!failure) {
-      return false
+    return this.failures.isActive(fingerprint)
+  }
+
+  failure(fingerprint: string): AgentModelCatalogFailure | null {
+    return this.failures.get(fingerprint)
+  }
+
+  retirementRevision(agent: string): number {
+    const revision = this.retirementRevisions.get(agent) ?? 0
+    this.retirementRevisions.set(agent, revision)
+    return revision
+  }
+
+  private retireListings(agent: string): void {
+    this.retirementRevisions.set(agent, this.retirementRevision(agent) + 1)
+    this.retirements.retire(agent)
+    for (const [fingerprint, flight] of this.refreshes) {
+      if (flight.agent === agent) {
+        retireAgentModelCatalogListing(this.refreshes, this.listingWaiters, fingerprint, flight)
+      }
     }
-    if (this.now() - failure.failedAt >= AGENT_MODEL_CATALOG_FAILURE_TTL_MS) {
-      this.failures.delete(fingerprint)
-      return false
+  }
+
+  expireLaunchScopes(affected: (agent: string) => boolean = () => true): void {
+    for (const agent of agentModelCatalogLaunchAgents(this.retirementRevisions, this.entries)) {
+      if (affected(agent)) {
+        this.expireAgent(agent)
+      }
     }
-    return true
+  }
+
+  expireFailures(agent: string): void {
+    this.retireListings(agent)
+    this.failures.expireAgent(agent)
+  }
+
+  observeInputs(fingerprint: string, stamp: string): void {
+    this.inputs.observeInputs(fingerprint, stamp)
+  }
+
+  refreshInputs(userInitiated: boolean): void {
+    this.inputs.refreshInputs(userInitiated)
+  }
+
+  expireScopes(agent?: string): void {
+    this.inputs.expireScopes(agent)
+  }
+
+  expireFailure(fingerprint: string): void {
+    this.failures.expire(fingerprint)
+  }
+
+  expireAgent(agent: string): void {
+    this.retireListings(agent)
+    retireAgentModelCatalogObservations(
+      this.entries,
+      this.dueEntries,
+      this.retiredObservations,
+      this.partialAttempts,
+      agent
+    )
+    this.failures.expireAgent(agent)
   }
 
   recordSuccess(
     fingerprint: string,
-    agent: 'claude' | 'codex',
-    success: AgentModelCatalogSuccess
+    agent: string,
+    success: AgentModelCatalogSuccess,
+    source: AgentModelCatalogSource
   ): AgentModelCatalogEntry | null {
-    if (success.models.length === 0) {
-      // An empty list identifies no model; it is doubt, not a catalog.
-      return null
-    }
-    const previous = this.entries.get(fingerprint)
-    const entry: AgentModelCatalogEntry = {
-      agent,
-      fingerprint,
-      models: withKnownDefaultEfforts(success.models, previous),
-      ...(success.fastModeSupport ? { fastModeSupport: success.fastModeSupport } : {}),
-      fastModeTierByModel: tierRecord(success.fastModeTierByModel),
-      origin: success.origin,
-      fetchedAt: this.now()
-    }
-    this.entries.delete(fingerprint)
-    this.entries.set(fingerprint, entry)
-    this.failures.delete(fingerprint)
-    this.evictOverCap()
-    // Live sessions re-list every turn; an unchanged listing only refreshes the in-memory age.
-    if (!previous || listingKey(previous) !== listingKey(entry)) {
-      this.persistence?.save([...this.entries.values()])
-    }
+    const entry = this.writeSuccess(fingerprint, agent, success, source)
+    this.listingWaiters.notify(fingerprint)
     return entry
   }
 
-  recordFailure(fingerprint: string, detail: string): void {
-    this.failures.set(fingerprint, { detail, failedAt: this.now() })
+  private readonly entryFromSuccess = createAgentModelCatalogEntryFactory(
+    this.entries,
+    this.retiredObservations,
+    () => this.now()
+  )
+
+  /** Learn defaults only for existing catalogs; null clears facts the next chat no longer resolves. */
+  recordConfiguredDefault(
+    fingerprint: string,
+    choice: AgentModelCatalogConfiguredChoice | null,
+    source?: AgentModelCatalogEntry['live']
+  ): void {
+    const previous = this.entries.get(fingerprint)
+    const entry = previous && entryWithConfiguredDefault(previous, choice, this.now(), source)
+    if (!previous || !entry) {
+      return
+    }
+    this.entries.set(fingerprint, entry)
+    if (agentModelCatalogListingKey(previous) !== agentModelCatalogListingKey(entry)) {
+      this.persistence?.save(() => [...this.entries.values()])
+    }
+    this.listingWaiters.notify(fingerprint)
   }
 
-  /** Joins an in-flight refresh for the key rather than starting a second.
-   *  Resolves with the entry on success and null on failure — never rejects. */
+  private readonly writeSuccess = createAgentModelCatalogSuccessWriter(() => ({
+    entries: this.entries,
+    retiredObservations: this.retiredObservations,
+    dueEntries: this.dueEntries,
+    failures: this.failures,
+    efforts: this.efforts,
+    entryFromSuccess: this.entryFromSuccess,
+    persistence: this.persistence,
+    evict: () => this.evictOverCap()
+  }))
+
   refresh(
     fingerprint: string,
-    agent: 'claude' | 'codex',
-    listModels: () => Promise<AgentModelCatalogSuccess>
+    agent: string,
+    listModels: AgentModelCatalogListModels,
+    budget?: AgentModelCatalogListingBudget,
+    selectedModel?: string
   ): Promise<AgentModelCatalogEntry | null> {
-    const inFlight = this.refreshes.get(fingerprint)
-    if (inFlight) {
-      return inFlight
-    }
-    const run = listModels().then(
-      (success) => {
-        this.refreshes.delete(fingerprint)
-        return this.recordSuccess(fingerprint, agent, success)
+    this.isListing(fingerprint)
+    return refreshAgentModelCatalogListing({
+      fingerprint,
+      agent,
+      listModels,
+      selectedModel,
+      maxTargets: AGENT_MODEL_CATALOG_MAX_ENTRIES,
+      targetDue: (model) => this.efforts.due(fingerprint, model),
+      targetAttempted: (model) => this.efforts.attempted(fingerprint, agent, model),
+      budget,
+      refreshes: this.refreshes,
+      failures: this.failures,
+      listingWaiters: this.listingWaiters,
+      failed: () => {
+        if (this.entries.has(fingerprint)) {
+          this.dueEntries.add(fingerprint)
+        }
+        this.partialAttempts.delete(fingerprint)
       },
-      (error: unknown) => {
-        this.refreshes.delete(fingerprint)
-        this.recordFailure(fingerprint, error instanceof Error ? error.message : String(error))
-        return null
-      }
-    )
-    this.refreshes.set(fingerprint, run)
-    return run
+      writeSuccess: (...args) => this.writeSuccess(...args)
+    })
   }
 
-  /** True when a read should kick a background refresh: nothing known or the
-   *  entry aged out, and no failure is still inside its TTL. */
+  flushProgress = (key: string): void => this.refreshes.get(key)?.flush()
+
+  isListing(fingerprint: string): boolean {
+    const flight = this.refreshes.get(fingerprint)
+    if (flight && !flight.current()) {
+      retireAgentModelCatalogListing(this.refreshes, this.listingWaiters, fingerprint, flight)
+    }
+    return this.refreshes.has(fingerprint)
+  }
+
+  clearPartialAttempts(): void {
+    this.partialAttempts.clear()
+  }
+
+  verified(entry: AgentModelCatalogEntry): boolean {
+    return (
+      !this.isStale(entry) &&
+      (!independentAgentModelCatalog(entry.agent) || entry.discovered?.complete === true) &&
+      !this.hasActiveFailure(entry.fingerprint) &&
+      !this.failure(entry.fingerprint)?.unavailable
+    )
+  }
+
+  pendingListing(
+    ...wait: Parameters<AgentModelCatalogListingWaiters['wait']>
+  ): ReturnType<AgentModelCatalogListingWaiters['wait']> {
+    // Waiting on a queued listing keeps it queued.
+    this.refreshes.get(wait[0])?.hold(wait[3])
+    return this.listingWaiters.wait(...wait)
+  }
+
   shouldRefresh(fingerprint: string): boolean {
-    if (this.refreshes.has(fingerprint) || this.hasActiveFailure(fingerprint)) {
+    if (this.isListing(fingerprint) || this.hasActiveFailure(fingerprint)) {
       return false
     }
     const entry = this.entries.get(fingerprint)
-    return !entry || this.isStale(entry)
+    return !this.partialAttempts.has(fingerprint) && (!entry || this.isStale(entry))
+  }
+
+  /** Only probes can refresh expired unavailability, even beside a fresh live catalog. */
+  heldReasonDue(fingerprint: string): boolean {
+    return this.failures.unavailableDue(fingerprint)
+  }
+
+  probeDue(fingerprint: string): boolean {
+    return (
+      this.shouldRefresh(fingerprint) ||
+      (!this.isListing(fingerprint) && this.heldReasonDue(fingerprint))
+    )
   }
 
   private evictOverCap(): void {
-    for (const key of this.entries.keys()) {
-      if (this.entries.size <= AGENT_MODEL_CATALOG_MAX_ENTRIES) {
-        return
-      }
-      this.entries.delete(key)
-    }
+    evictAgentModelCatalogEntries(
+      this.entries,
+      this.dueEntries,
+      this.partialAttempts,
+      AGENT_MODEL_CATALOG_MAX_ENTRIES,
+      this.retiredObservations
+    )
   }
 }
 
-/** The host process's one store. Persistence is attached where the app knows
- *  its state directory; unit tests build their own store instead. */
 export const agentModelCatalogStore = new AgentModelCatalogStore()

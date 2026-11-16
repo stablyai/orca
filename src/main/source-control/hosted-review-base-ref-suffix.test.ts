@@ -1,16 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { gitExecFileAsyncMock, getSshGitProviderMock } = vi.hoisted(() => ({
-  gitExecFileAsyncMock: vi.fn(),
-  getSshGitProviderMock: vi.fn()
+const { gitExecFileAsyncMock } = vi.hoisted(() => ({
+  gitExecFileAsyncMock: vi.fn()
 }))
 
-vi.mock('../github/gh-utils', () => ({
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   gitExecFileAsync: gitExecFileAsyncMock
-}))
-
-vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: getSshGitProviderMock
 }))
 
 import { baseRefExistsOnRemote } from './hosted-review-creation-git-state'
@@ -18,13 +14,10 @@ import { baseRefExistsOnRemote } from './hosted-review-creation-git-state'
 describe('baseRefExistsOnRemote suffix fallback', () => {
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
-    getSshGitProviderMock.mockReset()
   })
 
   it('does not answer a bare base with a nested branch of the same final segment', async () => {
-    // The replaced `refs/remotes/*/main` could not cross a slash. A repo with
-    // `origin/feature/main` but no `origin/main` must still read as absent, or
-    // the review is submitted against a base the provider will reject.
+    // Suffix matches must have one remote segment; origin/feature/main cannot prove origin/main exists.
     gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
       if (args[0] === 'remote') {
         return { stdout: 'origin\n', stderr: '' }

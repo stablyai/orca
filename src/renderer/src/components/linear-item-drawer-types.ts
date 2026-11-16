@@ -1,5 +1,5 @@
 import type { LinearIssue } from '../../../shared/linear/issue-types'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 
 export type LinearItemDrawerProps = {
   issue: LinearIssue | null
@@ -20,7 +20,6 @@ export type LinearEditState = {
 export type LinearIssueEditSectionProps = {
   issue: LinearIssue
   editState: LinearEditState
-  onEditStateChange: (patch: Partial<LinearEditState>) => void
   layout?: 'chips' | 'properties'
   sourceContext?: TaskSourceContext | null
 }

@@ -3,15 +3,15 @@ import type {
   ArtifactCloudOperation,
   ArtifactPublishResult,
   ArtifactWriteRequest
-} from '../../../../shared/artifacts'
+} from '../../../../shared/artifacts/artifacts'
 import {
   ARTIFACT_MAX_CONTENT_BYTES,
   ARTIFACT_MAX_REQUEST_BYTES,
   artifactContentByteLength,
   artifactWriteRequestByteLength
-} from '../../../../shared/artifacts'
+} from '../../../../shared/artifacts/artifacts'
 import { translate } from '@/i18n/i18n'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { useAppStore } from '@/store'
 
 const LOCAL_RUNTIME = { kind: 'local' } as const
@@ -20,6 +20,7 @@ export type ArtifactPublishPreparationErrorCode =
   | 'empty'
   | 'too-large'
   | 'unreadable'
+  | 'visual-unreadable'
   | 'unsupported'
   | 'binary'
 
@@ -48,11 +49,12 @@ export async function publishArtifactFromSurface(
   createRequest: () => Promise<ArtifactWriteRequest>
 ): Promise<ArtifactPublishResult | null> {
   try {
+    // Why first and once: the click captures what is shared; a sign-in or retry must not re-read it.
+    const request = validateArtifactPublishRequest(await createRequest())
     if (!(await ensureArtifactAccountConnected())) {
       return null
     }
     for (let attempt = 0; attempt < 2; attempt += 1) {
-      const request = validateArtifactPublishRequest(await createRequest())
       const result = await callRuntimeRpc<ArtifactCloudOperation<ArtifactPublishResult>>(
         LOCAL_RUNTIME,
         'artifacts.publish',
@@ -134,6 +136,11 @@ function artifactPreparationErrorDescription(code: ArtifactPublishPreparationErr
       return translate(
         'auto.components.artifacts.artifact-publish-flow.e2ed5acd8c',
         "Orca couldn't read this file. Open it from a workspace and try again."
+      )
+    case 'visual-unreadable':
+      return translate(
+        'auto.components.artifacts.artifact-publish-flow.visualUnreadable',
+        "Couldn't read this visual to share it."
       )
     case 'unsupported':
       return translate(

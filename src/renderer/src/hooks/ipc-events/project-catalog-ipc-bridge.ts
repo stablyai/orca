@@ -1,6 +1,9 @@
+import { applyLocalWorktreeMetadataSet } from './worktree-metadata-set-events'
 import { applyWorktreeHeadIdentities } from '../worktree-head-identity-apply'
 import type { WorktreeChangeRefreshQueue } from '../worktree-change-refresh-queue'
 import { useAppStore } from '../../store'
+import { adoptFromEndpoint } from '../../store/host-catalog/endpoint-catalog-adoption'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 export function registerProjectCatalogIpcBridge(
   unsubs: (() => void)[],
@@ -22,9 +25,11 @@ export function registerProjectCatalogIpcBridge(
         })()
         return
       }
-      void state.fetchProjectGroups()
-      void state.fetchFolderWorkspaces()
-      void state.fetchRepos().then(remountTerminalTabsAwaitingHostHydration)
+      // Why: this event is this app's own catalog changing, whichever host is the default.
+      const localOwner = { runtimeEnvironmentId: null }
+      void state.fetchProjectGroups(localOwner)
+      void state.fetchFolderWorkspaces(localOwner)
+      void state.fetchRepos(localOwner).then(remountTerminalTabsAwaitingHostHydration)
     })
   )
 
@@ -34,29 +39,28 @@ export function registerProjectCatalogIpcBridge(
         repoId: string
         renamed?: { oldWorktreeId: string; newWorktreeId: string }
       }) => {
-        // Why: preserve this event's local origin across queue delays and runtime
-        // focus changes; otherwise an unbound repo can refresh from the wrong host.
-        // A folder rename changes the worktree id; handleWorktreesChanged re-keys
-        // state and shields it from the deletion diff.
-        worktreeChangeRefreshQueue.enqueue({
-          ...data,
-          forceLocalOwner: true
-        })
+        // Preserve local event origin through queue/focus changes; rekey folder renames before deletion diff so moved state survives.
+        worktreeChangeRefreshQueue.enqueue(
+          adoptFromEndpoint({ kind: 'local' }, { kind: 'worktreeEvent', row: data })
+        )
       }
     )
   )
+
+  if (window.api.worktrees.onMetadataSet) {
+    unsubs.push(window.api.worktrees.onMetadataSet(applyLocalWorktreeMetadataSet))
+  }
 
   if (window.api.worktrees.onHeadIdentitiesChanged) {
     unsubs.push(
       window.api.worktrees.onHeadIdentitiesChanged((data) => {
         if (isRuntimeEnvironmentActive()) {
-          // Why: local worktree events carry local repo ids; the local-pinned list
-          // refresh (onChanged) covers local rows while a runtime is active.
+          // Local CLI events name local repos; use the pinned local refresh while a runtime is active.
           return
         }
         const state = useAppStore.getState()
         applyWorktreeHeadIdentities(data, {
-          getWorktreesForRepo: (repoId) => state.worktreesByRepo[repoId],
+          getWorktreesForRepo: (repoId) => selectWorktreesByRepo(state)[repoId],
           updateWorktreeGitIdentity: state.updateWorktreeGitIdentity
         })
       })
@@ -87,7 +91,12 @@ export function registerProjectCatalogIpcBridge(
       if (!data.creationId) {
         return
       }
-      useAppStore.getState().updatePendingWorktreeCreation(data.creationId, { phase: data.phase })
+      // Why: every event without a live meter (a phase change, or null when git finished) clears it.
+      useAppStore.getState().updatePendingWorktreeCreation(data.creationId, {
+        phase: data.phase,
+        checkoutProgress: data.checkout ?? undefined,
+        ...(data.worktreeId ? { worktreeId: data.worktreeId } : {})
+      })
     }) ?? (() => {})
   )
 

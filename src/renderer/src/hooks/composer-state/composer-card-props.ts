@@ -1,20 +1,37 @@
-import { getAttachmentLabel } from '@/lib/new-workspace'
-import {
-  getFullComposerCreateDisabled,
-  getQuickComposerCreateDisabled
-} from '@/lib/new-workspace-create-gates'
+import { composerSetupCardProps } from './composer-setup-card-props'
+import { resolveComposerAttachmentTarget } from './composer-attachment-target'
+import { getAttachmentLabel } from '@/lib/workspace/creation/new-workspace'
+import { getQuickComposerCreateDisabled } from '@/lib/workspace/creation/new-workspace-create-gates'
 import type { ComposerModel } from './composer-model'
+import { resolveComposerAgentRows } from './composer-agent-rows-target'
 import type { ComposerCardActionProps, ComposerCardSourceProps } from './composer-card-contract'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
+import '@/lib/workspace/ownership/worktree-runtime-owner-index'
+import { worktreeOwnerHostIds } from '@/lib/workspace/ownership/workspace-catalog-owner-index'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import { useAppStore } from '@/store'
+import { composerPickerRepos } from './composer-picker-repos'
 
 export function buildComposerCardProps(state: ComposerModel) {
+  const attachmentTarget = resolveComposerAttachmentTarget(state)
+  const targetHostId = attachmentTarget.hostId
+  const existingBranchWorkspace =
+    state.reuseSelectedBranch && state.reuseEligibleBranch && targetHostId
+      ? selectWorktreesByRepo(useAppStore.getState())[state.repoId]?.find(
+          (worktree) =>
+            worktreeOwnerHostIds(worktree).includes(targetHostId) &&
+            worktree.branch.replace(/^refs\/heads\//, '') === state.reuseEligibleBranch
+        )
+      : undefined
   const {
     advancedOpen,
+    setupChoiceRevealRequest,
+    clearSetupChoiceReveal,
     agentPrompt,
     attachmentPaths,
     baseBranch,
     branchNameOverride,
     parentWorktreeId,
-    createGateMode,
     createError,
     createMultiple,
     creating,
@@ -50,7 +67,6 @@ export function buildComposerCardProps(state: ComposerModel) {
     handleRepoChange,
     handleReuseSelectedBranchChange,
     handleSelectLinkedItem,
-    handleSetupAgentStartupPolicyChange,
     handleSmartBranchSelect,
     handleSmartGitHubItemSelect,
     handleSmartGitLabItemSelect,
@@ -74,24 +90,21 @@ export function buildComposerCardProps(state: ComposerModel) {
     projectHostSetupOptions,
     projectOptions,
     repoId,
-    requiresExplicitSetupChoice,
-    resolvedSetupDecision,
     reuseEligibleBranch,
     reuseSelectedBranch,
     selectedEphemeralVmRecipeId,
     selectedProjectHostSetupId,
     selectedProjectId,
     selectedRepo,
-    selectedRepoExecutionHostId,
     selectedRepoConnectInProgress,
     selectedRepoConnectionId,
     selectedRepoGitHubSourceContext,
     selectedRepoIsGit,
     selectedRepoProjectId,
     selectedRepoRequiresConnection,
-    shouldWaitForIssueAutomationCheck,
     sourceIntentBlocksCreate,
     sparseError,
+    selectedTargetNeedsVisibleHost,
     selectedRepoSshStatus,
     setAdvancedOpen,
     setAgentPrompt,
@@ -101,14 +114,9 @@ export function buildComposerCardProps(state: ComposerModel) {
     setNote,
     setParentWorktreeId,
     setSelectedEphemeralVmRecipeId,
-    setSetupDecision,
     setSmartNameMode,
     setTuiAgent,
-    setupAgentStartupPolicy,
-    setupConfig,
-    setupDecision,
     shouldApplyLinkedOnlyTemplate,
-    shouldWaitForSetupCheck,
     workspaceSeedName,
     smartNameJiraSourceContext,
     smartNameMode,
@@ -116,29 +124,26 @@ export function buildComposerCardProps(state: ComposerModel) {
     sparsePresets,
     sparseSelectedPresetId,
     startFromResetHint,
-    submit,
     tuiAgent
   } = state
 
-  const createGateInput = {
+  const repoCreateDisabled = getQuickComposerCreateDisabled({
     repoId,
     workspaceSeedName,
     creating,
-    shouldWaitForSetupCheck,
-    shouldWaitForIssueAutomationCheck,
     sourceIntentBlocksCreate,
-    requiresExplicitSetupChoice,
-    hasSetupDecision: Boolean(setupDecision),
     selectedRepoRequiresConnection,
+    selectedTargetNeedsVisibleHost,
     sparseError
-  }
-  const repoCreateDisabled =
-    createGateMode === 'quick'
-      ? getQuickComposerCreateDisabled(createGateInput)
-      : getFullComposerCreateDisabled(createGateInput)
+  })
   const createDisabled = isProjectGroupTarget ? folderCreateDisabled : repoCreateDisabled
   const cardProps: ComposerCardSourceProps & ComposerCardActionProps = {
-    eligibleRepos: isProjectGroupTarget ? folderSourceRepos : eligibleRepos,
+    eligibleRepos: isProjectGroupTarget
+      ? folderSourceRepos
+      : composerPickerRepos(eligibleRepos, repoId),
+    selectedRepo: isProjectGroupTarget
+      ? (folderSourceRepos.find((repo) => repo.id === repoId) ?? null)
+      : (selectedRepo ?? null),
     repoId,
     projectOptions,
     selectedProjectId,
@@ -164,7 +169,7 @@ export function buildComposerCardProps(state: ComposerModel) {
     onBranchNameOverrideChange: isProjectGroupTarget ? () => {} : handleBranchNameOverrideChange,
     parentWorktreeId: isProjectGroupTarget ? null : parentWorktreeId,
     onParentWorktreeIdChange: isProjectGroupTarget ? () => {} : setParentWorktreeId,
-    selectedRepoExecutionHostId: isProjectGroupTarget ? null : selectedRepoExecutionHostId,
+    selectedRepoExecutionHostId: attachmentTarget.hostId,
     selectedRepoProjectId: isProjectGroupTarget ? null : selectedRepoProjectId,
     onSmartGitHubItemSelect: handleSmartGitHubItemSelect,
     onSmartGitLabItemSelect: handleSmartGitLabItemSelect,
@@ -178,13 +183,28 @@ export function buildComposerCardProps(state: ComposerModel) {
     smartNameMode,
     smartNameSelection,
     onClearSmartNameSelection: handleClearSmartNameSelection,
+    reuseEligibleBranch: isProjectGroupTarget ? null : reuseEligibleBranch,
     canReuseSelectedBranch:
       !isProjectGroupTarget &&
       reuseEligibleBranch !== null &&
       smartNameSelection?.kind === 'branch',
     reuseSelectedBranch,
     onReuseSelectedBranchChange: handleReuseSelectedBranchChange,
-    // Why: "create multiple" applies only to worktree (git) targets; folder-workspace keeps create-and-close.
+    onOpenSelectedBranchWorkspace:
+      existingBranchWorkspace && !isProjectGroupTarget
+        ? () => {
+            if (
+              activateAndRevealWorktree(existingBranchWorkspace.id, {
+                executionHostId: attachmentTarget.hostId ?? undefined,
+                navigationIntent: 'user-open'
+              }) !== false
+            ) {
+              state.closeModal()
+              state.onCreated?.()
+            }
+          }
+        : undefined,
+    // Create multiple applies to Git worktrees; folder creation still closes afterward.
     showCreateMultiple: !isProjectGroupTarget,
     createMultiple,
     onCreateMultipleChange: setCreateMultiple,
@@ -193,6 +213,8 @@ export function buildComposerCardProps(state: ComposerModel) {
     linkedOnlyTemplatePreview: shouldApplyLinkedOnlyTemplate ? linkedOnlyTemplatePrompt : null,
     attachmentPaths,
     getAttachmentLabel,
+    // Quick create has no attachment display or launch-prompt destination.
+    onNativeFileDrop: undefined,
     onAddAttachment: () => void handleAddAttachment(),
     onRemoveAttachment: (pathValue) =>
       setAttachmentPaths((current) => current.filter((currentPath) => currentPath !== pathValue)),
@@ -210,20 +232,22 @@ export function buildComposerCardProps(state: ComposerModel) {
     tuiAgent,
     onTuiAgentChange: setTuiAgent,
     detectedAgentIds: isProjectGroupTarget ? folderDetectedAgentIds : detectedAgentIds,
+    agentRows: resolveComposerAgentRows(state),
     onOpenAgentSettings: handleOpenAgentSettings,
     advancedOpen,
+    setupChoiceRevealRequest,
+    onSetupChoiceRevealed: clearSetupChoiceReveal,
     onToggleAdvanced: () => setAdvancedOpen((current) => !current),
     createDisabled,
     projectError: isProjectGroupTarget ? pathStatusProjectError : projectError,
     creating,
-    onCreate: () => void submit(),
     baseBranch: isProjectGroupTarget ? undefined : baseBranch,
     onBaseBranchChange: isProjectGroupTarget ? () => {} : handleBaseBranchChange,
     onBaseBranchPrSelect: isProjectGroupTarget ? () => {} : handleBaseBranchPrSelect,
     onBaseBranchMrSelect: isProjectGroupTarget ? () => {} : handleBaseBranchMrSelect,
     baseBranchLinkedPrNumber:
       linkedWorkItem?.type === 'pr' && baseBranch ? linkedWorkItem.number : null,
-    selectedRepoPath: isProjectGroupTarget ? null : (selectedRepo?.path ?? null),
+    selectedRepoPath: attachmentTarget.path,
     selectedRepoIsRemote: isProjectGroupTarget
       ? folderTargetIsRemote
       : Boolean(selectedRepo?.connectionId),
@@ -244,16 +268,7 @@ export function buildComposerCardProps(state: ComposerModel) {
     forkPushWarning: isProjectGroupTarget ? null : forkPushWarning,
     note,
     onNoteChange: setNote,
-    setupConfig: isProjectGroupTarget ? null : setupConfig,
-    requiresExplicitSetupChoice: isProjectGroupTarget ? false : requiresExplicitSetupChoice,
-    setupDecision: isProjectGroupTarget ? null : setupDecision,
-    onSetupDecisionChange: isProjectGroupTarget ? () => {} : setSetupDecision,
-    setupAgentStartupPolicy: isProjectGroupTarget ? 'start-immediately' : setupAgentStartupPolicy,
-    onSetupAgentStartupPolicyChange: isProjectGroupTarget
-      ? () => {}
-      : handleSetupAgentStartupPolicyChange,
-    shouldWaitForSetupCheck: isProjectGroupTarget ? false : shouldWaitForSetupCheck,
-    resolvedSetupDecision: isProjectGroupTarget ? null : resolvedSetupDecision,
+    ...composerSetupCardProps(state),
     createError,
     canUseSparseCheckout: isProjectGroupTarget
       ? false
@@ -262,7 +277,7 @@ export function buildComposerCardProps(state: ComposerModel) {
     sparseSelectedPresetId: isProjectGroupTarget ? null : sparseSelectedPresetId,
     onSparseSelectPreset: isProjectGroupTarget ? () => {} : handleSparseSelectPreset,
     branchesEnabled: !isProjectGroupTarget,
-    setupControlsEnabled: !isProjectGroupTarget,
+    setupControlsEnabled: !isProjectGroupTarget || state.groupSetup.support === 'supported',
     sparseControlsEnabled: !isProjectGroupTarget
   }
 

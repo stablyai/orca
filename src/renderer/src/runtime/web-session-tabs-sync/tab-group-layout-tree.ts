@@ -1,8 +1,8 @@
 import type {
   RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionTabsResult
-} from '../../../../shared/runtime-types'
-import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
+} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { TabGroupLayoutNode } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import { WEB_SESSION_GROUP_PREFIX, type WebSessionTabsSyncState } from './state'
 import { sanitizeRecentTabIds } from './state-equality-core'
 
@@ -109,9 +109,7 @@ export function appendTabGroupLayout(
   if (!second) {
     return first
   }
-  // Why: a group already placed by `first` must not gain a second leaf — two
-  // leaves for one group render the same tab strip in two columns, and each
-  // later snapshot appends another copy.
+  // Never append another leaf for an already placed group; each duplicate renders another tab-strip column.
   const appended = dropTabGroupLayoutGroups(second, collectLayoutGroupIds(first))
   if (!appended) {
     return first

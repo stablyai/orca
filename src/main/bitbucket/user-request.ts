@@ -9,21 +9,15 @@ export type RawBitbucketUser = {
   account_id?: string | null
 }
 
-/**
- * Why (STA-3944): a timeout, DNS failure, 5xx, or unparseable body says nothing
- * about the credential. Collapsing those to the same miss as a 401 told users
- * their token was invalid when the network was simply unreachable.
- */
+/** Network, server and decode failures do not prove the credentials are invalid. */
 export type BitbucketUserResult =
-  | { ok: true; user: RawBitbucketUser }
+  | { ok: true; user: RawBitbucketUser | null }
   | { ok: false; reason: 'rejected' | 'unreachable' }
 
 export function accountNameFromUser(user: RawBitbucketUser | null): string | null {
   return user?.username ?? user?.display_name ?? user?.account_id ?? null
 }
 
-// Shared by live env-var status checks and by connect-time verification, so a
-// credential is proven against `/user` before it is ever persisted.
 export async function fetchBitbucketUserResult(
   config: BitbucketAuthConfig,
   timeoutMs: number = USER_REQUEST_TIMEOUT_MS
@@ -41,12 +35,16 @@ export async function fetchBitbucketUserResult(
   } catch {
     return { ok: false, reason: 'unreachable' }
   }
+  // Bitbucket answers 401 to bad credentials; its 403 means it accepted them without account access
+  // (every access token, and API tokens without read:user:bitbucket).
+  if (response.status === 403) {
+    return (await isBitbucketErrorBody(response))
+      ? { ok: true, user: null }
+      : { ok: false, reason: 'unreachable' }
+  }
   if (!response.ok) {
     await cancelUnreadResponseBody(response)
-    // Only the credential-bearing statuses are the credential's fault; 5xx and
-    // the rest are the server or the path in between.
-    const rejected = response.status === 401 || response.status === 403
-    return { ok: false, reason: rejected ? 'rejected' : 'unreachable' }
+    return { ok: false, reason: response.status === 401 ? 'rejected' : 'unreachable' }
   }
   try {
     return { ok: true, user: (await response.json()) as RawBitbucketUser }
@@ -55,11 +53,12 @@ export async function fetchBitbucketUserResult(
   }
 }
 
-/** Convenience for callers that only need the account, not the failure reason. */
-export async function fetchBitbucketUser(
-  config: BitbucketAuthConfig,
-  timeoutMs: number = USER_REQUEST_TIMEOUT_MS
-): Promise<RawBitbucketUser | null> {
-  const result = await fetchBitbucketUserResult(config, timeoutMs)
-  return result.ok ? result.user : null
+// A proxy or non-Bitbucket base URL can answer 403 without checking the credential.
+async function isBitbucketErrorBody(response: Response): Promise<boolean> {
+  try {
+    const body: unknown = await response.json()
+    return typeof body === 'object' && body !== null && 'type' in body && body.type === 'error'
+  } catch {
+    return false
+  }
 }

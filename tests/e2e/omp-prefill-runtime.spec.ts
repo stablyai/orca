@@ -1,7 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises'
-import { buildShellCommandFromArgv } from '../../src/shared/tui-agent-startup-shell'
+import { buildShellCommandFromArgv } from '../../src/shared/agent-launch/startup/tui-agent-startup-shell'
 import { test, expect } from './helpers/orca-app'
-import { getPiAgentStatusExtensionSource } from '../../src/main/pi/agent-status-extension-source'
+import { getPiAgentStatusExtensionSource } from '../../src/main/pi/managed-extensions/agent-status/agent-status-extension-source'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {
   execInTerminal,

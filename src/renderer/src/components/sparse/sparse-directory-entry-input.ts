@@ -2,20 +2,23 @@ import {
   hasSparseDirectoryParentSegment,
   isAbsoluteSparseDirectoryPath,
   normalizeSparseDirectoryLines
-} from '@/lib/sparse-paths'
+} from '@/lib/directory-input/sparse-paths'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 export type SparseDirectoryEntryInputResult = {
   entries: string[]
   error: string | null
 }
 
-/** Turn free-form typing or a multi-line paste into repo-relative entries,
- *  rejecting the same shapes the saved-preset parser rejects. */
-export function parseSparseDirectoryEntryInput(raw: string): SparseDirectoryEntryInputResult {
+/** Parse typed/pasted repo-relative paths using saved-preset validation constraints. */
+export function parseSparseDirectoryEntryInput(
+  raw: string,
+  t: Translate = translate
+): SparseDirectoryEntryInputResult {
   const invalid = {
     entries: [],
-    error: translate(
+    error: t(
       'auto.lib.sparse.preset.draft.5915a0a1f6',
       'Use repo-relative directories, not root, absolute paths, or parent segments.'
     )
@@ -30,7 +33,6 @@ export function parseSparseDirectoryEntryInput(raw: string): SparseDirectoryEntr
   return { entries, error: null }
 }
 
-/** Append entries that are not already selected, preserving existing order. */
 export function addSparseDirectoryEntries(selected: string[], entries: string[]): string[] {
   const next = [...selected]
   for (const entry of entries) {

@@ -1,5 +1,9 @@
-import { clearPaneCacheState } from '../../../shared/agent-hook-listener/listener-state'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import {
+  clearPaneCacheState,
+  clearPaneProcessCacheState,
+  clearPaneStatusCacheState
+} from '../../../shared/agent-hook-listener/listener-state'
+import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { AgentHookServerAuthorityAliases } from './server-authority-aliases'
 import type {
   EnrichedAgentHookEventPayload,
@@ -8,8 +12,13 @@ import type {
 } from './server-types'
 
 export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuthorityAliases {
-  // Why: retirement fences a pane and every alias of it, then deletes those aliases.
-  retirePaneAuthority(paneKey: string, retirementId?: string): void {
+  protected revokeProcessAuthority(
+    paneKey: string,
+    retirementId?: string
+  ): {
+    paneKeys: Set<string>
+    authorityChanged: boolean
+  } {
     const ownerPaneKey = this.resolvePaneKeyAlias(paneKey)
     const previousFence = this.retiredPaneFencesByKey.get(ownerPaneKey)
     const paneKeys = new Set([paneKey, ownerPaneKey])
@@ -41,6 +50,47 @@ export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuth
       this.isClosedAgentStatusTabForPaneKey(ownerPaneKey) ? undefined : retirementId
     )
     const authorityChanged = this.revokeHydratedAuthorityForPaneKeys(paneKeys)
+    for (const key of paneKeys) {
+      this.markPaneClosedForAgentStatus(key)
+      this.restartedStatusLaunchTokenHashByPaneKey.delete(key)
+      this.currentAuthorityObservations.delete(key)
+      this.observations.forget(key)
+    }
+    if (aliasChanged) {
+      this.notifyPaneKeyAliasPersistenceListener()
+    }
+    return { paneKeys, authorityChanged }
+  }
+
+  protected clearPaneProcessState(paneKey: string): void {
+    this.clearAssistantMessageRetry(paneKey)
+    this.clearTranscriptPoll(paneKey)
+    clearPaneProcessCacheState(this.state, paneKey)
+    this.activeHookTurnCompletedAtByPaneKey.delete(paneKey)
+    this.runtimeObservedStatusPaneKeys.delete(paneKey)
+    this.currentAuthorityObservations.delete(paneKey)
+    this.promptSentDedupeByPaneKey.delete(paneKey)
+    this.restartedStatusLaunchTokenHashByPaneKey.delete(paneKey)
+    this.evidenceObservedAtByPaneKey.delete(paneKey)
+    this.programStatusFacets.delete(paneKey)
+    this.hookSilenceRechecks.cancel(paneKey)
+    this.programStatusFacetRepublishes.cancel(paneKey)
+  }
+
+  protected clearRevokedPaneState(paneKey: string): void {
+    const hadStatus = this.state.lastStatusByPaneKey.has(paneKey)
+    this.clearTmuxInnerSubjects(paneKey)
+    this.clearPaneProcessState(paneKey)
+    clearPaneStatusCacheState(this.state, paneKey)
+    if (hadStatus) {
+      this.scheduleStatusPersist()
+      this.notifyStatusChangeListeners()
+      this.emitPaneStatusCleared({ paneKey })
+    }
+  }
+
+  retirePaneAuthority(paneKey: string, retirementId?: string): void {
+    const { paneKeys, authorityChanged } = this.revokeProcessAuthority(paneKey, retirementId)
     const retiredRows = [...paneKeys].flatMap((key) => {
       const row = this.state.lastStatusByPaneKey.get(key) as
         | EnrichedAgentHookEventPayload
@@ -50,19 +100,8 @@ export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuth
     const hadStatus = retiredRows.length > 0
     for (const key of paneKeys) {
       this.clearTmuxInnerSubjects(key)
-      this.markPaneClosedForAgentStatus(key)
-      this.restartedStatusLaunchTokenHashByPaneKey.delete(key)
-      this.clearAssistantMessageRetry(key)
-      this.clearTranscriptPoll(key)
-      clearPaneCacheState(this.state, key)
-      this.activeHookTurnCompletedAtByPaneKey.delete(key)
-      this.runtimeObservedStatusPaneKeys.delete(key)
-      this.currentAuthorityObservations.delete(key)
-      this.promptSentDedupeByPaneKey.delete(key)
-      this.observations.forget(key)
-    }
-    if (aliasChanged) {
-      this.notifyPaneKeyAliasPersistenceListener()
+      this.clearPaneProcessState(key)
+      clearPaneStatusCacheState(this.state, key)
     }
     for (const row of retiredRows) {
       this.commitStatusRowMutation(row, undefined)
@@ -73,12 +112,7 @@ export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuth
     }
   }
 
-  // Why: retirement fences a pane and every alias of it, then deletes those aliases.
-  // Lifting only the key we are handed strands the rest — a detached pane's process
-  // keeps posting the key it launched under, so it would stay suppressed forever with
-  // the fence apparently lifted. Replay the recorded fence instead: same key set, same
-  // aliases. Keys and aliases belonging to a closed tab are skipped, so the stronger
-  // claim survives and a live process is never routed back into a closed tab.
+  // Restore the full alias fence; detached processes still post old keys, but closed tabs stay fenced.
   protected restoreRetiredPaneFence(fence: RetiredPaneFence): void {
     let aliasChanged = false
     for (const { physicalPaneKey, entry } of fence.aliases) {
@@ -87,7 +121,7 @@ export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuth
         this.retiredPaneFencesByKey.get(entry.stablePaneKey) !== fence ||
         this.isClosedAgentStatusTabForPaneKey(physicalPaneKey) ||
         this.isClosedAgentStatusTabForPaneKey(entry.stablePaneKey) ||
-        // Why: the pane was rebound in the meantime; the newer alias is the truth.
+        // A newer binding supersedes the retired alias.
         this.legacyPaneKeyAliases.has(physicalPaneKey)
       ) {
         continue
@@ -111,11 +145,7 @@ export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuth
     if (this.isClosedAgentStatusTabForPaneKey(ownerPaneKey)) {
       return false
     }
-    // Why: retirement is a claim that a pane is gone. Re-attaching a live PTY to that
-    // exact pane disproves the claim at the moment it stops being true, so the fence
-    // lifts here instead of waiting for the agent to speak again — an agent re-attached
-    // mid-turn or left idle would otherwise stay suppressed for the rest of its life
-    // (STA-4114). A closed *tab* is a separate, stronger claim and is left standing.
+    // Reattachment disproves pane retirement immediately; idle agents may never post another hook (STA-4114).
     const fence =
       this.retiredPaneFencesByKey.get(paneKey) ?? this.retiredPaneFencesByKey.get(ownerPaneKey)
     let restored = false
@@ -191,7 +221,7 @@ export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuth
         )
       }
       if (shouldClearStablePaneKey) {
-        // Why: hydrated rows live under the stable key; if this PTY dies before ptyPaneKey rebuilds, alias cleanup is the only evictor.
+        // Hydrated PTYs may lack ptyPaneKey; alias cleanup must evict their stable rows.
         clearPaneCacheState(this.state, entry.stablePaneKey)
         this.activeHookTurnCompletedAtByPaneKey.delete(entry.stablePaneKey)
         this.runtimeObservedStatusPaneKeys.delete(entry.stablePaneKey)
@@ -250,7 +280,7 @@ export abstract class AgentHookServerAuthorityFences extends AgentHookServerAuth
     if (!stablePaneKey) {
       return body
     }
-    // Why: detached shells keep posting the immutable physical pane key; normalize pane and tab identity to the current owner.
+    // Detached shells still post the physical key; route both pane and tab to the current owner.
     return { ...record, paneKey: stablePaneKey, tabId: parsePaneKey(stablePaneKey)?.tabId }
   }
 }

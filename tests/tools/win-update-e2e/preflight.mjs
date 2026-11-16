@@ -1,10 +1,4 @@
-// Preflight safety checks and the baseline window snapshot.
-//
-// The harness installs, updates, and uninstalls a real app and kills processes
-// it created. To avoid ever touching a user's live Orca, it REFUSES to run when
-// a pre-existing Orca app process (not a daemon) is already running that it did
-// not start. Existing installs and detached daemons are warned about, not
-// treated as fatal (the update path is what exercises them).
+// Refuse unrelated live Orca app processes before installer/process work; target-scoped isolated mode leaves real installs/apps elsewhere untouched.
 
 import path from 'node:path'
 import { assertWin32, isElevated } from './platform-guard.mjs'
@@ -13,13 +7,7 @@ import { captureBaseline } from './window-watch.mjs'
 import { locateInstalledExe } from './installer-steps.mjs'
 import { findDaemonProcesses } from './daemon-processes.mjs'
 
-/**
- * Find running Orca APP processes (main window process), excluding daemons.
- * The daemon runs as Orca.exe too but always carries the daemon-entry.js marker
- * on its command line, so excluding that marker isolates the actual app. The
- * ExecutablePath lets isolated mode decide whether a running app is under the
- * test dir (fatal) or is the developer's real Orca elsewhere (informational).
- */
+// Find app processes by excluding daemon-entry.js from Orca.exe command lines; exe path scopes isolated-target refusals.
 export function findAppProcesses() {
   const command = [
     `$procs = @(Get-CimInstance Win32_Process -Filter "Name = 'Orca.exe'" -ErrorAction SilentlyContinue |`,
@@ -28,8 +16,7 @@ export function findAppProcesses() {
     `  [pscustomobject]@{ pid = $_.ProcessId; path = $_.ExecutablePath; commandLine = $_.CommandLine } })`,
     `ConvertTo-Json -InputObject @{ processes = $out } -Depth 4 -Compress`
   ].join('\n')
-  // Fail closed: this guard protects the user's real processes, so a failed
-  // query must abort the run rather than look like "no Orca is running".
+  // Fail closed on process-query failure rather than assume no user Orca is running.
   const { stdout, stderr, code, error } = runCommandSync(command)
   if (error) {
     throw new Error(`Failed to query Orca app processes: ${error.message}`)
@@ -66,18 +53,8 @@ function isPathUnder(childPath, parentDir) {
   return child === parent || child.startsWith(`${parent}\\`)
 }
 
-/**
- * Run preflight. Returns { baseline, warnings, existingInstall }. Throws if a
- * pre-existing Orca app is running (never kill a user's process) or if an Orca
- * install already exists and allowExistingInstall was not passed (the run would
- * overwrite a developer's real build). baselinePath receives the snapshot of
- * currently-visible top-level windows.
- *
- * In isolated mode (`installDir` set) both refusals become target-scoped: only a
- * running app whose exe is UNDER installDir is fatal, and only an install already
- * in installDir triggers the existing-install refusal. A real Orca running or
- * installed elsewhere is untouched by isolated mode and is merely noted.
- */
+// Return baseline/warnings/existingInstall and write visible-window snapshot.
+// Require no running target app and explicit consent to overwrite existing target install; isolated mode scopes both checks to installDir.
 export function preflight({ baselinePath, allowExistingInstall = false, installDir = null }) {
   assertWin32('preflight')
   const warnings = []

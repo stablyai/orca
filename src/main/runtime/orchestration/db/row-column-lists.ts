@@ -1,11 +1,17 @@
 import type { AttemptObservationStorageRow } from './attempt-observation-store'
-import type { DispatchContextRow, RunRow, TaskRow } from '../types'
+import type {
+  DeliveryRow,
+  DispatchContextRow,
+  FederatedDispatchRow,
+  LegacyAdoptionRow,
+  MessageRow,
+  MutationReceiptRow,
+  RemoteDispatchAttachmentRow,
+  RunRow,
+  TaskRow
+} from './orchestration-records'
 
-// Why: `SyncDatabase` refuses to cache any `SELECT *` (node:sqlite can build the first row after a
-// schema change from stale column names), so a wildcard read recompiles its SQL on every call.
-// Spelling the projection out makes the hot-path statements cacheable by that existing LRU.
-// Drift is caught twice: `satisfies` + the exhaustiveness assertions below pin list↔type at tsc,
-// and `row-column-lists.test.ts` pins list↔schema against a freshly migrated database.
+// Explicit projections enable SyncDatabase caching; type exhaustiveness and schema tests prevent column drift.
 
 export const RUN_COLUMNS = [
   'id',
@@ -66,7 +72,9 @@ export const DISPATCH_CONTEXT_COLUMNS = [
   'dispatched_at',
   'completed_at',
   'created_at',
-  'last_heartbeat_at'
+  'last_heartbeat_at',
+  'follow_up_of_dispatch_id',
+  'follow_up_mail_at'
 ] as const satisfies readonly (keyof DispatchContextRow)[]
 
 export const ATTEMPT_OBSERVATION_FACT_COLUMNS = [
@@ -84,8 +92,32 @@ export const ATTEMPT_OBSERVATION_FACT_COLUMNS = [
   'created_at'
 ] as const satisfies readonly (keyof AttemptObservationStorageRow)[]
 
-// Compile check: a row field added without its column here would silently vanish from the
-// projection that used to be `SELECT *`, so the missing key must fail the build.
+export const REMOTE_DISPATCH_ATTACHMENT_COLUMNS = [
+  'home_run_id',
+  'dispatch_id',
+  'task_id',
+  'home_peer_fingerprint',
+  'protocol_version',
+  'runtime_epoch',
+  'capability_hash',
+  'pane_key',
+  'process_incarnation',
+  'state',
+  'stage',
+  'worktree_id',
+  'terminal_handle',
+  'setup_state',
+  'effects',
+  'residual_resources',
+  'to_worker_imported_sequence',
+  'depth',
+  'consumer_generation',
+  'last_error',
+  'created_at',
+  'updated_at'
+] as const satisfies readonly (keyof RemoteDispatchAttachmentRow)[]
+
+// Fail compilation if a row field is missing from its projection.
 type UnprojectedRunColumn = Exclude<keyof RunRow, (typeof RUN_COLUMNS)[number]>
 type UnprojectedTaskColumn = Exclude<keyof TaskRow, (typeof TASK_COLUMNS)[number]>
 type UnprojectedDispatchContextColumn = Exclude<
@@ -96,12 +128,17 @@ type UnprojectedAttemptObservationColumn = Exclude<
   keyof AttemptObservationStorageRow,
   (typeof ATTEMPT_OBSERVATION_FACT_COLUMNS)[number]
 >
+type UnprojectedRemoteDispatchAttachmentColumn = Exclude<
+  keyof RemoteDispatchAttachmentRow,
+  (typeof REMOTE_DISPATCH_ATTACHMENT_COLUMNS)[number]
+>
 const assertEveryRowColumnProjected: [
   UnprojectedRunColumn extends never ? true : never,
   UnprojectedTaskColumn extends never ? true : never,
   UnprojectedDispatchContextColumn extends never ? true : never,
-  UnprojectedAttemptObservationColumn extends never ? true : never
-] = [true, true, true, true]
+  UnprojectedAttemptObservationColumn extends never ? true : never,
+  UnprojectedRemoteDispatchAttachmentColumn extends never ? true : never
+] = [true, true, true, true, true]
 void assertEveryRowColumnProjected
 
 /** Projection list for a `SELECT`; `alias` qualifies each name for a joined table (`t.id, …`). */
@@ -112,3 +149,82 @@ export function selectColumns(columns: readonly string[], alias?: string): strin
 export const RUN_COLUMN_LIST = selectColumns(RUN_COLUMNS)
 export const DISPATCH_CONTEXT_COLUMN_LIST = selectColumns(DISPATCH_CONTEXT_COLUMNS)
 export const ATTEMPT_OBSERVATION_FACT_COLUMN_LIST = selectColumns(ATTEMPT_OBSERVATION_FACT_COLUMNS)
+export const REMOTE_DISPATCH_ATTACHMENT_COLUMN_LIST = selectColumns(
+  REMOTE_DISPATCH_ATTACHMENT_COLUMNS
+)
+
+/** A projection naming every `Row` column; leaving one out fails compilation. */
+function everyColumnOf<Row>() {
+  return <const Columns extends readonly (keyof Row & string)[]>(
+    columns: Columns & (Exclude<keyof Row, Columns[number]> extends never ? unknown : never)
+  ): string => selectColumns(columns)
+}
+
+export const MESSAGE_COLUMN_LIST = everyColumnOf<MessageRow>()([
+  'id',
+  'run_id',
+  'delivery_contract',
+  'from_handle',
+  'to_handle',
+  'subject',
+  'body',
+  'type',
+  'priority',
+  'thread_id',
+  'payload',
+  'read',
+  'sequence',
+  'created_at',
+  'delivered_at',
+  'sender_pane_key',
+  'answer_sender_snapshot',
+  'pointer_enter_pending',
+  'pointer_pty_id',
+  'pointer_process_incarnation'
+])
+
+export const DELIVERY_COLUMN_LIST = everyColumnOf<DeliveryRow>()([
+  'id',
+  'run_id',
+  'mailbox_handle',
+  'consumer_generation',
+  'message_ids',
+  'status',
+  'created_at',
+  'acknowledged_at'
+])
+
+export const MUTATION_RECEIPT_COLUMN_LIST = everyColumnOf<MutationReceiptRow>()([
+  'caller_fingerprint',
+  'request_id',
+  'method',
+  'payload_hash',
+  'state',
+  'receipt',
+  'created_at',
+  'updated_at'
+])
+
+export const LEGACY_ADOPTION_COLUMN_LIST = everyColumnOf<LegacyAdoptionRow>()([
+  'source_run_id',
+  'adopted_run_id',
+  'scheduler_state_lost',
+  'adopted_at'
+])
+
+export const FEDERATED_DISPATCH_COLUMN_LIST = everyColumnOf<FederatedDispatchRow>()([
+  'dispatch_id',
+  'environment_id',
+  'environment_name',
+  'peer_fingerprint',
+  'remote_runtime_epoch',
+  'protocol_version',
+  'remote_worktree_id',
+  'remote_terminal_handle',
+  'to_home_imported_sequence',
+  'to_home_acknowledged_sequence',
+  'home_auto_release_at',
+  'home_auto_release_state',
+  'created_at',
+  'updated_at'
+])

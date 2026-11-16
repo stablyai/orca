@@ -1,6 +1,6 @@
-import { DaemonPtyAdapter } from '../../../src/main/daemon/daemon-pty-adapter'
-import { createLegacyDaemonAdapters } from '../../../src/main/daemon/daemon-init'
-import { DaemonPtyRouter } from '../../../src/main/daemon/daemon-pty-router'
+import { DaemonPtyAdapter } from '../../../src/main/daemon/providers/adapter/daemon-pty-adapter'
+import { createLegacyDaemonAdapters } from '../../../src/main/daemon/providers/routing/daemon-legacy-adapters'
+import { DaemonPtyRouter } from '../../../src/main/daemon/providers/routing/daemon-pty-router'
 
 export type DesktopDiscoveryGeneration = {
   protocolVersion: number
@@ -26,8 +26,7 @@ export async function createDesktopDiscoveredDaemonRouter(options: {
     protocolVersion: currentGeneration.protocolVersion,
     historyPath: options.historyDir
   })
-  // Why: exercise the desktop startup scanner itself, including versioned
-  // named-pipe probing and legacy-adapter construction, not a fixture copy.
+  // Exercise the production startup scanner’s versioned-pipe discovery and legacy-adapter construction.
   const legacy = await createLegacyDaemonAdapters(options.daemonDir, options.historyDir)
   const discoveredProtocols = legacy.map((adapter) => adapter.protocolVersion)
   const expectedProtocols = options.generations

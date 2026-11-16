@@ -1,28 +1,12 @@
 import type { Session } from 'electron'
 
-/**
- * Outbound HTTP for main-process integrations.
- *
- * Why a port: the desktop uses Electron's Chromium-backed network stack — it follows
- * session/proxy state, avoids undici's stale keep-alive sockets after a VPN path change,
- * and sends a Chrome user agent that some APIs (Jira's XSRF check) depend on. None of
- * that exists on a host with no Chromium.
- *
- * The Node default is the platform global. That is a real behavioural difference, not a
- * transparent swap, which is why this is a named port rather than a silent fallback:
- * a Node host reads proxy configuration from the environment instead of from Chromium,
- * and sends Node's user agent.
- *
- * Body safety (orca#8695): the global uses undici, where an unread response body can
- * crash the process. This port hands the Response straight to its caller and never
- * inspects it, so the consume/cancel obligation stays exactly where it already was —
- * with the caller, unchanged from when they called Electron's net directly.
- */
+/** Desktop uses Chromium session/proxy state and user agent; headless hosts use Node/environment defaults.
+ * Callers must consume or cancel response bodies: unread undici bodies can crash the process. */
 
 export type MainHttpClient = {
   fetch(url: string, init?: RequestInit): Promise<Response>
-  /** The Chromium session whose proxy state applies, or null on a host without one. */
   proxySession(): Session | null
+  partitionSession?(partition: string): Session
 }
 
 const nodeHttpClient: MainHttpClient = {
@@ -38,4 +22,14 @@ export function setMainHttpClient(client: MainHttpClient | null): void {
 
 export function getMainHttpClient(): MainHttpClient {
   return current
+}
+
+export function requirePartitionSession(partition: string, providerLabel: string): Session {
+  const client = getMainHttpClient()
+  if (!client.partitionSession) {
+    throw new Error(
+      `${providerLabel} usage from a session cookie needs the Orca desktop app and is not available on this server`
+    )
+  }
+  return client.partitionSession(partition)
 }

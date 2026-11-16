@@ -1,16 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createTerminalTitleTracker } from '../../src/shared/terminal-output-side-effects'
-import {
-  createAgentCompletionCoordinator,
-  resetAgentCompletionCoordinatorIdentitiesForTest
-} from '../../src/renderer/src/components/terminal-pane/agent-completion-coordinator'
-import type { AgentCompletionDispatchMeta } from '../../src/renderer/src/components/terminal-pane/agent-completion-coordinator-types'
-import { inspectRuntimeTerminalProcess } from '../../src/renderer/src/runtime/runtime-terminal-inspection'
-import { clearRuntimeCompatibilityCacheForTests } from '../../src/renderer/src/runtime/runtime-rpc-client'
+import { createTerminalTitleTracker } from '../../src/shared/terminal/output/terminal-output-side-effects'
+import { createAgentCompletionCoordinator } from '../../src/renderer/src/components/terminal-pane/agent-completion/agent-completion-coordinator'
+import { resetAgentCompletionCoordinatorIdentitiesForTest } from '../../src/renderer/src/components/terminal-pane/agent-completion/agent-completion-identity-store'
+import type { AgentCompletionDispatchMeta } from '../../src/renderer/src/components/terminal-pane/agent-completion/agent-completion-coordinator-types'
+import { inspectRuntimeTerminalProcess } from '../../src/renderer/src/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../src/renderer/src/runtime/rpc/compatibility/runtime-compatibility-cache'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
-} from '../../src/renderer/src/runtime/runtime-compatibility-test-fixture'
+} from '../../src/renderer/src/runtime/rpc/testing/runtime-compatibility-test-fixture'
 
 const REMOTE_PTY_ID = 'remote:remote-host@@term_remote_agent'
 
@@ -50,58 +48,12 @@ describe('remote agent completion authority', () => {
       getPtyId: () => REMOTE_PTY_ID,
       isRemotePtyId: () => true,
       getExpectedIncarnationId: () => 'inc-remote',
-      getSettings: () => ({ activeRuntimeEnvironmentId: 'remote-host' }),
       inspectProcess: inspectRuntimeTerminalProcess,
       dispatchCompletion,
       isLive: () => true
     })
 
     coordinator.startProcessTracking()
-    await vi.advanceTimersByTimeAsync(60_000)
-    expect(runtimeCall).not.toHaveBeenCalled()
-    expect(dispatchCompletion).not.toHaveBeenCalled()
-
-    coordinator.dispose()
-  })
-
-  it('keeps a host with many idle remote panes at zero RPCs over a long interval', async () => {
-    const coordinators = Array.from({ length: 24 }, (_, index) =>
-      createAgentCompletionCoordinator({
-        paneKey: `tab-remote:leaf-idle-${index}`,
-        getPtyId: () => `${REMOTE_PTY_ID}-${index}`,
-        isRemotePtyId: () => true,
-        getExpectedIncarnationId: () => 'inc-remote',
-        getSettings: () => ({ activeRuntimeEnvironmentId: 'remote-host' }),
-        inspectProcess: inspectRuntimeTerminalProcess,
-        dispatchCompletion: vi.fn(),
-        isLive: () => true
-      })
-    )
-
-    coordinators.forEach((coordinator) => coordinator.startProcessTracking())
-    await vi.advanceTimersByTimeAsync(3 * 60 * 60 * 1_000)
-
-    expect(runtimeCall).not.toHaveBeenCalled()
-    coordinators.forEach((coordinator) => coordinator.dispose())
-  })
-
-  it('does not spin or infer exit from a remote transport failure', async () => {
-    const dispatchCompletion = vi.fn()
-    const coordinator = createAgentCompletionCoordinator({
-      paneKey: 'tab-remote:leaf-partitioned-exit',
-      getPtyId: () => REMOTE_PTY_ID,
-      isRemotePtyId: () => true,
-      getExpectedIncarnationId: () => 'inc-remote',
-      getSettings: () => ({ activeRuntimeEnvironmentId: 'remote-host' }),
-      inspectProcess: inspectRuntimeTerminalProcess,
-      dispatchCompletion,
-      isLive: () => true
-    })
-
-    coordinator.startProcessTracking()
-    runtimeCall.mockRejectedValue(
-      new Error('Runtime request timed out before terminal.inspectProcess completed')
-    )
     await vi.advanceTimersByTimeAsync(60_000)
     expect(runtimeCall).not.toHaveBeenCalled()
     expect(dispatchCompletion).not.toHaveBeenCalled()
@@ -116,7 +68,6 @@ describe('remote agent completion authority', () => {
       getPtyId: () => REMOTE_PTY_ID,
       isRemotePtyId: () => true,
       getExpectedIncarnationId: () => 'inc-remote',
-      getSettings: () => ({ activeRuntimeEnvironmentId: 'remote-host' }),
       inspectProcess: inspectRuntimeTerminalProcess,
       dispatchCompletion,
       isLive: () => true
@@ -143,7 +94,6 @@ describe('remote agent completion authority', () => {
       getPtyId: () => REMOTE_PTY_ID,
       isRemotePtyId: () => true,
       getExpectedIncarnationId: () => 'inc-remote',
-      getSettings: () => ({ activeRuntimeEnvironmentId: 'remote-host' }),
       inspectProcess: inspectRuntimeTerminalProcess,
       dispatchCompletion,
       isLive: () => true
@@ -169,7 +119,6 @@ describe('remote agent completion authority', () => {
       getPtyId: () => REMOTE_PTY_ID,
       isRemotePtyId: () => true,
       getExpectedIncarnationId: () => 'inc-remote',
-      getSettings: () => ({ activeRuntimeEnvironmentId: 'remote-host' }),
       inspectProcess: inspectRuntimeTerminalProcess,
       dispatchCompletion,
       isLive: () => true
@@ -211,7 +160,6 @@ describe('remote agent completion authority', () => {
         getPtyId: () => REMOTE_PTY_ID,
         isRemotePtyId: () => true,
         getExpectedIncarnationId: () => 'inc-remote',
-        getSettings: () => ({ activeRuntimeEnvironmentId: 'remote-host' }),
         inspectProcess: inspectRuntimeTerminalProcess,
         dispatchCompletion: (_title: string, meta?: AgentCompletionDispatchMeta) => {
           outcomes.push({

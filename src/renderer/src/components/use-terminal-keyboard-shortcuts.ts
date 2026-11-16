@@ -1,13 +1,14 @@
 import { useEffect } from 'react'
 import { handleTerminalWorkspaceKeyDown } from './terminal-workspace-keydown'
 import type { TerminalActivationController } from './use-terminal-activation-actions'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 
 export function useTerminalKeyboardShortcuts(controller: TerminalActivationController): void {
   const {
     activeWorktreeId,
     handleCloseAllFiles,
-    handleNewAgentTab,
     handleNewBrowserTab,
+    handleNewBrowserTabSplitRight,
     handleNewFile,
     handleNewSimulatorTab,
     handleNewTab,
@@ -16,9 +17,6 @@ export function useTerminalKeyboardShortcuts(controller: TerminalActivationContr
     terminalShortcutPolicy
   } = controller
   useEffect(() => {
-    if (!activeWorktreeId) {
-      return
-    }
     const isMac = navigator.userAgent.includes('Mac')
     const shortcutPlatform: NodeJS.Platform = isMac
       ? 'darwin'
@@ -28,16 +26,16 @@ export function useTerminalKeyboardShortcuts(controller: TerminalActivationContr
     const onKeyDown = (event: KeyboardEvent): void => {
       handleTerminalWorkspaceKeyDown(event, controller, shortcutPlatform)
     }
-    window.addEventListener('keydown', onKeyDown, { capture: true })
-    return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
+    addAppKeyListener('keydown', onKeyDown)
+    return () => removeAppKeyListener('keydown', onKeyDown)
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- preserve the original listener refresh contract across extraction.
   }, [
     activeWorktreeId,
     handleNewBrowserTab,
+    handleNewBrowserTabSplitRight,
     handleNewSimulatorTab,
     handleNewFile,
     handleNewTab,
-    handleNewAgentTab,
     handleCloseAllFiles,
     keybindings,
     mobileEmulatorEnabled,

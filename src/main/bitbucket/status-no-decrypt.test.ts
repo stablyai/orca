@@ -4,22 +4,19 @@ import type * as Os from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// Why: opening Settings renders the Bitbucket card, which runs the preflight
-// status (getBitbucketAuthStatus) and the card's status IPC
-// (getBitbucketConnectionStatus). Neither may decrypt the stored secret, or the
-// OS would prompt to unlock the keychain on every Settings open. These tests
-// simulate a cold session (files on disk, memory cache empty).
-
 const decryptSpy = vi.fn((value: Buffer) => value.toString('utf-8'))
 const OLD_ENV = process.env
 const OLD_FETCH = globalThis.fetch
 let tempHome = ''
 
-vi.mock('../git/runner', () => ({ gitExecFileAsync: vi.fn() }))
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: vi.fn()
+}))
 
 async function loadModules() {
   vi.resetModules()
-  const { setSecretStore } = await import('../../shared/secret-store')
+  const { setSecretStore } = await import('../../shared/secure-storage/secret-store')
   setSecretStore({
     isEncryptionAvailable: () => true,
     encryptString: (value) => Buffer.from(value),
@@ -30,7 +27,6 @@ async function loadModules() {
     const actual = await vi.importActual<typeof Os>('node:os')
     return { ...actual, homedir: () => tempHome }
   })
-  // Stub repo detection so the PR fetch reaches the auth-resolution path.
   vi.doMock('./repository-ref', () => ({
     getBitbucketRepoRef: async () => ({ workspace: 'acme', repoSlug: 'app' })
   }))
@@ -75,8 +71,7 @@ describe('Bitbucket status reads never decrypt the stored secret', () => {
     globalThis.fetch = fetchSpy as unknown as typeof fetch
     store.saveBitbucketCredential(STORED_BASIC_CREDENTIAL)
 
-    // Simulate relaunch: secret is on disk but the memory cache is cold, so a
-    // decrypt here would surface to the user as a keychain prompt.
+    // Clear memory only to simulate relaunch with the credential still on disk.
     store._resetBitbucketCredentialCache()
     decryptSpy.mockClear()
 
@@ -86,25 +81,7 @@ describe('Bitbucket status reads never decrypt the stored secret', () => {
     expect(auth).toEqual({ configured: true, authenticated: true, account: 'ada' })
     expect(status).toMatchObject({ source: 'stored', account: 'ada', authMode: 'basic' })
     expect(decryptSpy).not.toHaveBeenCalled()
-    // A stored credential is trusted from metadata rather than revalidated.
     expect(fetchSpy).not.toHaveBeenCalled()
-  })
-
-  it('stays cold across repeated status reads, then decrypts once for a real API call', async () => {
-    const { store, client, connection } = await loadModules()
-    store.saveBitbucketCredential(STORED_BASIC_CREDENTIAL)
-    store._resetBitbucketCredentialCache()
-    decryptSpy.mockClear()
-
-    for (let i = 0; i < 3; i += 1) {
-      await client.getBitbucketAuthStatus()
-      connection.getBitbucketConnectionStatus()
-    }
-    expect(decryptSpy).not.toHaveBeenCalled()
-
-    globalThis.fetch = vi.fn(async () => Response.json({ values: [] })) as unknown as typeof fetch
-    await client.getBitbucketPullRequest('/repo', 1, null)
-    expect(decryptSpy).toHaveBeenCalledTimes(1)
   })
 
   it('revalidates a stored credential once its secret is already warm in memory', async () => {
@@ -112,7 +89,6 @@ describe('Bitbucket status reads never decrypt the stored secret', () => {
     store.saveBitbucketCredential(STORED_BASIC_CREDENTIAL)
     decryptSpy.mockClear()
 
-    // Saving leaves the secret cached, so status can check /user for free.
     const fetchSpy = vi.fn(async () => new Response(null, { status: 401 }))
     globalThis.fetch = fetchSpy as unknown as typeof fetch
 

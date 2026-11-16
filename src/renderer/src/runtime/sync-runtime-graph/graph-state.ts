@@ -1,31 +1,27 @@
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import type { MobileProjectSectionCatalog } from '../../../../shared/mobile-project-sections-contract'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
 import type { AppState } from '@/store/types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
+import type { MobileSessionPublicationSources } from './mobile-session-dirty-workspaces'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeMobileSessionSnapshotTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type {
-  RuntimeMobileSessionSnapshotTab,
-  RuntimeMobileSessionTabsSnapshot,
-  RuntimeMobileTerminalTheme
-} from '../../../../shared/runtime-types'
-import type {
-  AgentStatusProjectionCache,
   BrowserPagesProjectionCache,
   BrowserWorkspacesProjectionCache,
   EditorDraftHashCache,
   MobileSessionWorktreeInputs,
   OpenFileIndexes,
   OpenFilesProjectionCache,
-  RegisteredTerminalTab,
   TabsProjectionCache
 } from './types'
 
 export const NO_TRANSPORT_GRACE_MS = 10_000
-export const AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS = 30_000
 export const RUNTIME_GRAPH_SYNC_COALESCE_MS = 16
 
 export const EMPTY_ACTIVE_BROWSER_TAB_ID_BY_WORKTREE: AppState['activeBrowserTabIdByWorktree'] = {}
 export const EMPTY_BROWSER_TABS_BY_WORKTREE: AppState['browserTabsByWorktree'] = {}
 export const EMPTY_BROWSER_PAGES_BY_WORKSPACE: AppState['browserPagesByWorkspace'] = {}
 export const EMPTY_LAYOUT_BY_WORKTREE: AppState['layoutByWorktree'] = {}
-export const EMPTY_AGENT_STATUS_BY_PANE_KEY: AppState['agentStatusByPaneKey'] = {}
 export const EMPTY_NARROWED_BY_KEY: ReadonlyMap<string, never> = new Map<string, never>()
 export const EMPTY_WORKTREE_TERMINAL_TABS: AppState['tabsByWorktree'][string] = []
 export const EMPTY_WORKTREE_BROWSER_WORKSPACES: AppState['browserTabsByWorktree'][string] = []
@@ -35,74 +31,69 @@ export const EMPTY_WORKTREE_OPEN_FILE_IDS: readonly string[] = []
 
 export const mobilePublicationEpoch = `renderer:${createBrowserUuid()}`
 
-export type RegisteredTerminalTabKey = string
+function noPublishedProjectSectionCatalog(): MobileProjectSectionCatalog | null {
+  return null
+}
+
+function noMobileSessionPublicationSources(): MobileSessionPublicationSources | null {
+  return null
+}
+
+const NO_PUBLISHED_ACTIVE_GROUPS: Readonly<Record<string, string>> = {}
 
 export const graphState = {
-  registeredTabs: new Map<RegisteredTerminalTabKey, RegisteredTerminalTab>(),
-  tabRegisteredAt: new Map<RegisteredTerminalTabKey, number>(),
   syncScheduled: false,
   syncInFlight: false,
   syncPendingAfterFlight: false,
   syncEnabled: false,
   syncTimer: null as ReturnType<typeof setTimeout> | null,
   getStoreState: null as (() => AppState) | null,
-  mobileSessionSnapshotVersion: 0,
   mobileSessionSnapshotCacheByWorktree: new Map<
     string,
     {
+      /** Workspace-keyed source references the inputs were built from. */
+      sources: readonly unknown[]
       inputs: MobileSessionWorktreeInputs
-      content: unknown
+      content: MobileSessionContent
       snapshot: RuntimeMobileSessionTabsSnapshot
     }
   >(),
+  mobileSessionPublicationSources: noMobileSessionPublicationSources(),
   publishedMobileSessionSnapshotByWorktree: new Map<string, RuntimeMobileSessionTabsSnapshot>(),
   cachedTabsProjection: null as TabsProjectionCache | null,
-  cachedAgentStatusProjection: null as AgentStatusProjectionCache | null,
   cachedOpenFilesProjection: null as OpenFilesProjectionCache | null,
   cachedBrowserWorkspacesProjection: null as BrowserWorkspacesProjectionCache | null,
   cachedBrowserPagesProjection: null as BrowserPagesProjectionCache | null,
   cachedOpenFileIndexesSource: null as AppState['openFiles'] | null,
   cachedOpenFileIndexes: null as OpenFileIndexes | null,
   cachedEditorDraftHashes: null as EditorDraftHashCache | null,
-  cachedMobileTerminalThemeSettings: null as AppState['settings'] | null,
-  cachedMobileTerminalThemeSystemPrefersDark: null as boolean | null,
-  cachedMobileTerminalTheme: undefined as RuntimeMobileTerminalTheme | undefined,
-  hasCachedMobileTerminalTheme: false
-}
-
-export function registeredTerminalTabKey(
-  worktreeId: string,
-  tabId: string
-): RegisteredTerminalTabKey {
-  return `${worktreeId}\0${tabId}`
-}
-
-export function findRegisteredTerminalTab(
-  tabId: string,
-  worktreeId?: string
-): { key: RegisteredTerminalTabKey; tab: RegisteredTerminalTab } | null {
-  if (worktreeId !== undefined) {
-    const key = registeredTerminalTabKey(worktreeId, tabId)
-    const tab = graphState.registeredTabs.get(key)
-    return tab ? { key, tab } : null
-  }
-
-  let match: { key: RegisteredTerminalTabKey; tab: RegisteredTerminalTab } | null = null
-  for (const [key, tab] of graphState.registeredTabs) {
-    if (tab.tabId !== tabId) {
-      continue
-    }
-    // A tab id without its worktree is ambiguous; callers must fail closed.
-    if (match) {
-      return null
-    }
-    match = { key, tab }
-  }
-  return match
+  mobileSessionSnapshotVersion: 0,
+  /** Last group grid sizes main accepted, so a refit republishes only when one changed. */
+  publishedTerminalGroupGridSizesKey: '',
+  /** Last sidebar Project catalog main accepted, so the graph carries it only when it changed. */
+  publishedProjectSectionCatalog: noPublishedProjectSectionCatalog(),
+  /** Each workspace's active group as main last accepted it (layout-owner builds). */
+  publishedActiveGroups: NO_PUBLISHED_ACTIVE_GROUPS
 }
 
 /** IDs occurring more than once cannot address the legacy tab-keyed runtime maps safely. */
 export function collectAmbiguousTerminalTabIds(
+  tabsByWorktree: AppState['tabsByWorktree']
+): ReadonlySet<string> {
+  let ambiguous = ambiguousTerminalTabIdsBySource.get(tabsByWorktree)
+  if (!ambiguous) {
+    ambiguous = scanAmbiguousTerminalTabIds(tabsByWorktree)
+    ambiguousTerminalTabIdsBySource.set(tabsByWorktree, ambiguous)
+  }
+  return ambiguous
+}
+
+const ambiguousTerminalTabIdsBySource = new WeakMap<
+  AppState['tabsByWorktree'],
+  ReadonlySet<string>
+>()
+
+function scanAmbiguousTerminalTabIds(
   tabsByWorktree: AppState['tabsByWorktree']
 ): ReadonlySet<string> {
   const seen = new Set<string>()
@@ -117,6 +108,36 @@ export function collectAmbiguousTerminalTabIds(
     }
   }
   return ambiguous
+}
+
+const terminalTabsByWorktreeBySource = new WeakMap<
+  AppState['tabsByWorktree'],
+  ReadonlyMap<string, ReadonlyMap<string, TerminalTab>>
+>()
+
+/** Tabs by id per workspace; a duplicated id in one workspace cannot prove mounted PTY ownership. */
+export function indexTerminalTabsByWorktree(
+  tabsByWorktree: AppState['tabsByWorktree']
+): ReadonlyMap<string, ReadonlyMap<string, TerminalTab>> {
+  const cached = terminalTabsByWorktreeBySource.get(tabsByWorktree)
+  if (cached) {
+    return cached
+  }
+  const terminalTabsByWorktree = new Map<string, Map<string, TerminalTab>>()
+  for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
+    const tabsById = new Map<string, TerminalTab>()
+    for (const tab of tabs) {
+      // Duplicate persisted tab IDs cannot prove mounted PTY ownership.
+      if (tabsById.has(tab.id)) {
+        tabsById.delete(tab.id)
+        continue
+      }
+      tabsById.set(tab.id, tab)
+    }
+    terminalTabsByWorktree.set(worktreeId, tabsById)
+  }
+  terminalTabsByWorktreeBySource.set(tabsByWorktree, terminalTabsByWorktree)
+  return terminalTabsByWorktree
 }
 
 // Structural equality under JSON-serialization semantics (undefined-valued keys are absent).
@@ -154,5 +175,6 @@ export type MobileSessionContent = {
   activeTabType: RuntimeMobileSessionSnapshotTab['type'] | null
   tabGroups?: NonNullable<RuntimeMobileSessionTabsSnapshot['tabGroups']>
   tabGroupLayout?: RuntimeMobileSessionTabsSnapshot['tabGroupLayout']
+  browserPageInventory?: RuntimeMobileSessionTabsSnapshot['browserPageInventory']
   tabs: RuntimeMobileSessionSnapshotTab[]
 }

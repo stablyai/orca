@@ -1,11 +1,11 @@
 import type { applyBrowserRecordUpdates } from './apply-browser-records'
 import { withWorktreeEntry } from './state-equality-core'
+import { withWorktreeTabEntry } from './presentation-record-drafts'
 import { sameGroups, sameUnifiedTabs } from './state-equality-files'
 import { sameBrowserTabs as sameBrowserWorkspaces, sameTerminalTabs } from './state-equality-tabs'
 
 type WorktreeRecordContext = ReturnType<typeof applyBrowserRecordUpdates>
 
-/** Commit worktree-scoped tab collections and retain client-owned placement metadata. */
 export function applyWorktreeRecordUpdates(context: WorktreeRecordContext) {
   const {
     state,
@@ -22,7 +22,7 @@ export function applyWorktreeRecordUpdates(context: WorktreeRecordContext) {
     nextTabBarOrder
   } = context
 
-  const nextTabsByWorktree = withWorktreeEntry(
+  const nextTabsByWorktree = withWorktreeTabEntry(
     state,
     'tabsByWorktree',
     worktreeId,
@@ -60,7 +60,7 @@ export function applyWorktreeRecordUpdates(context: WorktreeRecordContext) {
     })
     return changed ? placed : nextUnifiedTabs
   })()
-  const nextUnifiedTabsByWorktree = withWorktreeEntry(
+  const nextUnifiedTabsByWorktree = withWorktreeTabEntry(
     state,
     'unifiedTabsByWorktree',
     worktreeId,

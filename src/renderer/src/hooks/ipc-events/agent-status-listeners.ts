@@ -1,15 +1,50 @@
 import { CLOSE_TERMINAL_PANE_EVENT } from '@/constants/terminal'
-import type {
-  AgentStatusClearIpcPayload,
-  AgentStatusIpcPayload
-} from '../../../../shared/agent-status-types'
 import {
   resolveLegacyWorkerTerminalRecoveryAction,
   rollbackLegacyWorkerTerminalSurfaceInStore
 } from '../legacy-worker-terminal-recovery-event'
-import { useAppStore } from '../../store'
-import { resolvePaneKey } from './agent-status-routing'
+import { useAppStore } from '../../store/index'
+import {
+  forgetRefusedPaneResume,
+  namesRefusedResume
+} from '@/lib/agent-session/resume/forget-refused-pane-resume'
+import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-status/agent-pane-authority'
+import { resolvePaneKey } from '../../lib/agent-status/ownership/agent-status-pane-ownership'
+import type {
+  AgentStatusClearIpcPayload,
+  AgentStatusIpcPayload,
+  RefusedPaneResume
+} from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { PendingAgentStatusEvent } from './agent-status-bridge-types'
+
+/** An already delivered event for the pane naming a refused conversation would restore it. */
+function dropEventsRestoringRefused(
+  paneKey: string,
+  refused: RefusedPaneResume,
+  queues: {
+    pendingAgentStatusEvents: PendingAgentStatusEvent[]
+    liveAgentStatusBurstQueue: AgentStatusIpcPayload[]
+  }
+): void {
+  const restores = (event: AgentStatusIpcPayload): boolean =>
+    !!refused.expectedStatus &&
+    event.receivedAt <= refused.expectedStatus.receivedAt &&
+    event.stateStartedAt === refused.expectedStatus.stateStartedAt &&
+    resolveAgentPaneAuthorityKey(event.paneKey) === paneKey &&
+    namesRefusedResume(refused, { ...event, agent: event.agentType })
+  const pending = queues.pendingAgentStatusEvents
+  for (let index = pending.length - 1; index >= 0; index -= 1) {
+    if (restores(pending[index].data)) {
+      pending.splice(index, 1)
+    }
+  }
+  const burst = queues.liveAgentStatusBurstQueue
+  for (let index = burst.length - 1; index >= 0; index -= 1) {
+    if (restores(burst[index])) {
+      burst.splice(index, 1)
+    }
+  }
+}
 
 export function registerAgentStatusListeners(args: {
   unsubs: (() => void)[]
@@ -30,6 +65,10 @@ export function registerAgentStatusListeners(args: {
   unsubs.push(
     window.api.agentStatus.onSet((data) => {
       enqueueLiveAgentStatus(data)
+      // A successful stop can resolve before the ordinary burst timer; publish its handoff first.
+      if (data.paneSleep) {
+        drainQueuedLiveAgentStatusesForPane(data.paneKey)
+      }
     })
   )
   const unsubscribeAgentStatusClear = window.api.agentStatus.onClear?.(
@@ -51,6 +90,7 @@ export function registerAgentStatusListeners(args: {
         for (let index = pendingAgentStatusEvents.length - 1; index >= 0; index -= 1) {
           const pending = pendingAgentStatusEvents[index].data
           if (
+            !pending.paneSleep &&
             pending.connectionId === data.connectionId &&
             pending.receivedAt <= effectiveWatermark
           ) {
@@ -60,6 +100,7 @@ export function registerAgentStatusListeners(args: {
         for (let index = liveAgentStatusBurstQueue.length - 1; index >= 0; index -= 1) {
           const queued = liveAgentStatusBurstQueue[index]
           if (
+            !queued.paneSleep &&
             queued.connectionId === data.connectionId &&
             queued.receivedAt <= effectiveWatermark
           ) {
@@ -70,6 +111,14 @@ export function registerAgentStatusListeners(args: {
         return
       }
       if (!('paneKey' in data) || typeof data.paneKey !== 'string') {
+        return
+      }
+      if (data.refusedResume) {
+        dropEventsRestoringRefused(data.paneKey, data.refusedResume, {
+          pendingAgentStatusEvents,
+          liveAgentStatusBurstQueue
+        })
+        forgetRefusedPaneResume(useAppStore.getState(), data.paneKey, data.refusedResume)
         return
       }
       // Why: preserve set→clear FIFO so a queued completion still survives pane teardown.
@@ -84,7 +133,9 @@ export function registerAgentStatusListeners(args: {
       const store = useAppStore.getState()
       if (
         data.statusUnavailable !== true &&
-        store.agentStatusByPaneKey[data.paneKey]?.state === 'done'
+        data.programStatusRemoved !== true &&
+        !store.agentStatusByPaneKey.get(data.paneKey)?.paneSleep &&
+        store.agentStatusByPaneKey.get(data.paneKey)?.state === 'done'
       ) {
         return
       }

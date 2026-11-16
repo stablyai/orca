@@ -6,10 +6,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   LOCAL_HTTPS_TEST_CERTIFICATE,
   LOCAL_HTTPS_TEST_PRIVATE_KEY
-} from '../browser/browser-local-https-test-certificate'
+} from '../browser/electron-fixtures/browser-local-https-test-certificate'
 import { electronHttpClient } from '../host/electron-http-client'
 import { applyProxySettingsToSession, resetProxyApplicationForTests } from './proxy-settings'
-import { createBrowserRouteTcpEgressSocksRecorder } from '../browser/browser-route-tcp-egress-socks-recorder'
+import { createSocksProxy } from './proxy-socks.test-fixture'
 
 const { session, chromiumFetch } = vi.hoisted(() => ({
   session: {
@@ -86,6 +86,11 @@ async function endpoint(redirectTarget = '/secret-target') {
 }
 
 async function tunnel(port: number, route: string) {
+  if (route === 'SOCKS5') {
+    const proxy = await createSocksProxy(new Set([port]))
+    cleanups.push(proxy.close)
+    return { ...proxy, requests: [] }
+  }
   const sockets = new Set<Socket>()
   const hosts = new Set<string>()
   const requests: (string | undefined)[] = []
@@ -105,10 +110,7 @@ async function tunnel(port: number, route: string) {
     client.on('error', () => target.destroy())
     client.once('close', () => target.destroy())
   })
-  const proxy =
-    route === 'SOCKS5'
-      ? createBrowserRouteTcpEgressSocksRecorder(new Set([port]), new Set(), hosts, sockets)
-      : http
+  const proxy = http
   proxy.on('connection', (socket) => sockets.add(socket))
   await new Promise<void>((resolve) => proxy.listen(0, '127.0.0.1', resolve))
   const address = proxy.address()

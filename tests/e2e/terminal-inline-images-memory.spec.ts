@@ -160,8 +160,7 @@ test('twelve image terminals release decoder and image storage across reset and 
       samples.push({ stage: `cycle-${cycle}-closed`, heap: closed })
       // GC heap/backing storage catch retained owners without requiring allocator RSS to fall.
       expect(closed.usedSize).toBeLessThanOrEqual(baseline.usedSize + 64_000_000)
-      // Assert presence rather than guarding on it: a CDP field that stops being
-      // reported would otherwise delete this leak check and still pass.
+      // Require the CDP field: silently missing metrics must not remove the leak check.
       expect(baseline.backingStorageSize).toBeDefined()
       expect(closed.backingStorageSize).toBeDefined()
       expect(closed.backingStorageSize!).toBeLessThanOrEqual(

@@ -1,18 +1,20 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
-import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
+import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { Plus, LoaderCircle, RefreshCw, Search, X } from 'lucide-react'
 import LinearIssueAttributeFilterDropdowns from '@/components/linear-issue-attribute-filter-dropdowns'
 import { Input } from '@/components/ui/input'
-import { shouldSuppressEnterSubmit } from '@/lib/new-workspace-enter-guard'
+import { shouldSuppressEnterSubmit } from '@/lib/workspace/creation/new-workspace-enter-guard'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 export function TaskPageLinearFilters({
   model
 }: {
   model: TaskPageComposerActionsModel
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const {
     settings,
     setTaskResumeState,
@@ -67,7 +69,7 @@ export function TaskPageLinearFilters({
         <div
           className="flex items-center gap-1 text-xs"
           role="group"
-          aria-label={translate('auto.components.TaskPage.0cbf7e5cf3', 'Linear task mode')}
+          aria-label={t('auto.components.TaskPage.0cbf7e5cf3', 'Linear task mode')}
         >
           {linearModeOptions.map((mode) => {
             const active = linearMode === mode.id
@@ -91,7 +93,7 @@ export function TaskPageLinearFilters({
                     </button>
                   </TooltipTrigger>
                   <TooltipContent side="bottom" sideOffset={6}>
-                    {translate(
+                    {t(
                       'auto.components.TaskPage.linearModeHasWorktreeTooltip',
                       'Linear tickets linked to an Orca workspace'
                     )}
@@ -154,8 +156,8 @@ export function TaskPageLinearFilters({
                 disabled={availableTeams.length === 0}
                 aria-label={
                   linearMode === 'projects' && !selectedLinearProject
-                    ? translate('auto.components.TaskPage.1361275ec3', 'New Linear project')
-                    : translate('auto.components.TaskPage.3feb524d42', 'New Linear issue')
+                    ? t('auto.components.TaskPage.1361275ec3', 'New Linear project')
+                    : t('auto.components.TaskPage.3feb524d42', 'New Linear issue')
                 }
                 className="size-8 border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
               >
@@ -164,8 +166,8 @@ export function TaskPageLinearFilters({
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
               {linearMode === 'projects' && !selectedLinearProject
-                ? translate('auto.components.TaskPage.1361275ec3', 'New Linear project')
-                : translate('auto.components.TaskPage.3feb524d42', 'New Linear issue')}
+                ? t('auto.components.TaskPage.1361275ec3', 'New Linear project')
+                : t('auto.components.TaskPage.3feb524d42', 'New Linear issue')}
             </TooltipContent>
           </Tooltip>
           <Tooltip>
@@ -181,7 +183,7 @@ export function TaskPageLinearFilters({
                       ? linearProjectsLoading || linearProjectDetailLoading
                       : linearCustomViewsLoading || linearCustomViewContentsLoading
                 }
-                aria-label={translate('auto.components.TaskPage.8964184a8b', 'Refresh Linear')}
+                aria-label={t('auto.components.TaskPage.8964184a8b', 'Refresh Linear')}
                 className="size-8 border-border/50 bg-transparent hover:bg-muted/50 backdrop-blur-md supports-[backdrop-filter]:bg-transparent"
               >
                 {(linearMode === 'issues' || linearMode === 'in-orca') && linearLoading ? (
@@ -198,7 +200,7 @@ export function TaskPageLinearFilters({
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              {translate('auto.components.TaskPage.8964184a8b', 'Refresh Linear')}
+              {t('auto.components.TaskPage.8964184a8b', 'Refresh Linear')}
             </TooltipContent>
           </Tooltip>
         </div>
@@ -215,7 +217,7 @@ export function TaskPageLinearFilters({
               selectedTeamIds={[...linearTeamSelection]}
               availableTeams={linearTeamOptions}
               teamsSettled={availableTeams.length > 0}
-              settings={linearTaskSourceContext ?? settings}
+              settings={linearTaskSourceContext ?? defaultScopeSource(settings)}
             />
           ) : null}
           <div className="relative min-w-0 flex-1 basis-64">
@@ -251,18 +253,18 @@ export function TaskPageLinearFilters({
               }}
               placeholder={
                 linearMode === 'in-orca'
-                  ? translate(
+                  ? t(
                       'auto.components.TaskPage.linearHasWorktreeSearchPlaceholder',
                       'Filter issues linked to an Orca workspace...'
                     )
-                  : translate('auto.components.TaskPage.eec0c5c079', 'Search Linear issues...')
+                  : t('auto.components.TaskPage.eec0c5c079', 'Search Linear issues...')
               }
               className="h-8 rounded-md border-border/50 bg-background pl-8 pr-8 text-xs"
             />
             {linearSearchInput ? (
               <button
                 type="button"
-                aria-label={translate('auto.components.TaskPage.b797bdd7c3', 'Clear search')}
+                aria-label={t('auto.components.TaskPage.b797bdd7c3', 'Clear search')}
                 onClick={() => {
                   setLinearSearchInput('')
                   setAppliedLinearSearch('')
@@ -288,16 +290,13 @@ export function TaskPageLinearFilters({
             <Input
               value={linearProjectSearchInput}
               onChange={(e) => setLinearProjectSearchInput(e.target.value)}
-              placeholder={translate(
-                'auto.components.TaskPage.0b65d3fb2c',
-                'Search Linear projects...'
-              )}
+              placeholder={t('auto.components.TaskPage.0b65d3fb2c', 'Search Linear projects...')}
               className="h-8 rounded-md border-border/50 bg-background pl-8 pr-8 text-xs"
             />
             {linearProjectSearchInput ? (
               <button
                 type="button"
-                aria-label={translate('auto.components.TaskPage.b797bdd7c3', 'Clear search')}
+                aria-label={t('auto.components.TaskPage.b797bdd7c3', 'Clear search')}
                 onClick={() => {
                   setLinearProjectSearchInput('')
                   setAppliedLinearProjectSearch('')

@@ -1,9 +1,6 @@
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 
-/**
- * Reveals a paired client's window so its renderer unparks runtime subscriptions. Leave the client
- * hidden only when the hidden state is what the spec covers.
- */
+// Reveal only on isolated displays when visibility is required to unpark subscriptions; background mode forbids it.
 export type PairedClientWindowRevealReport = {
   isVisible: boolean
   wasVisible: boolean
@@ -69,8 +66,7 @@ export async function revealPairedClientWindow(
     const windows = BrowserWindow.getAllWindows()
     const window = windows[0]
     const wasVisible = window?.isVisible() ?? false
-    // Why showInactive: the renderer only needs `visibilityState === 'visible'`;
-    // show() would also raise the window over whatever the developer is doing.
+    // Need visibility without OS activation; this guarded helper still requires an isolated display.
     if (window && !wasVisible) {
       window.showInactive()
     }
@@ -81,8 +77,7 @@ export async function revealPairedClientWindow(
     }
   })
   assertPairedClientWindowRevealed(report)
-  // Why: the renderer unparks on `visibilitychange`; clicking before it lands races a parked
-  // host list.
+  // Wait for visibilitychange to unpark subscriptions before clicking the host list.
   await client.page.waitForFunction(() => document.visibilityState === 'visible', null, {
     timeout: 30_000
   })

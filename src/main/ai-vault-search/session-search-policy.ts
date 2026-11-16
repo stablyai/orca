@@ -2,12 +2,10 @@ import {
   DEFAULT_AI_VAULT_SEARCH_SETTINGS,
   resolveAiVaultSearchSettings,
   type AiVaultSearchSettings
-} from '../../shared/ai-vault-search-settings'
+} from '../../shared/ai-vault/search/ai-vault-search-settings'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 
-// Why a source and not a captured value: the scanner child is spawned lazily and
-// respawned after a fault, so its init frame has to read consent at spawn time.
-// Before a composition root installs one, every read is the safe default (off).
+// Read settings at each lazy spawn or respawn so children receive current consent.
 let readSettings: (() => AiVaultSearchSettings) | null = null
 
 export function installSessionSearchPolicySource(

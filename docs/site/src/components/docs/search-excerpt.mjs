@@ -27,8 +27,8 @@ export function stripSearchExcerptMarkdown(value) {
   })
   const linkedText = protectedCode.includes(']')
     ? protectedCode
-        .replace(/!\[([^\]]*)\]\((?:\\.|[^)])*\)/g, '$1')
-        .replace(/\[([^\]]+)\]\((?:\\.|[^)])*\)/g, '$1')
+        .replace(/!\[([^\]]*)\]\((?:\\[\s\S]|[^)\\])*\\?\)/g, '$1')
+        .replace(/\[([^\]]+)\]\((?:\\[\s\S]|[^)\\])*\\?\)/g, '$1')
         .replace(/\[([^\]]+)\]\s*\[[^\]]*\]/g, '$1')
         .replace(/\[\[([^|\]]+)\|([^\]]+)\]\]/g, '$2')
         .replace(/\[\[([^\]]+)\]\]/g, '$1')

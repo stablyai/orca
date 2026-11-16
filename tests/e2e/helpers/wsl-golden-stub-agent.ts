@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import type { Page } from '@stablyai/playwright-test'
-import { buildWslExecArgs } from '../../../src/shared/wsl-login-shell-command'
+import { buildWslExecArgs } from '../../../src/shared/shell/wsl/wsl-login-shell-command'
 
 /** A WSL-only path makes the stub marker proof that the pane ran in the distro. */
 const WSL_STUB_PATH = '/usr/local/bin/golden-stub-agent'
@@ -152,8 +152,12 @@ export async function useWslRuntimeForActiveProject(page: Page, distro: string):
     if (!activeProject) {
       throw new Error('No active project')
     }
-    await state.updateProject(activeProject.id, {
-      localWindowsRuntimePreference: { kind: 'wsl', distro: wslDistro }
-    })
+    await state.updateProject(
+      activeProject.id,
+      {
+        localWindowsRuntimePreference: { kind: 'wsl', distro: wslDistro }
+      },
+      'local'
+    )
   }, distro)
 }

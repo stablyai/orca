@@ -3,13 +3,13 @@ import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
-import type { SkillBundleInstallResult } from '../../src/shared/skill-bundle-install-contract'
-import type { SkillCloudPublishResult } from '../../src/shared/skill-cloud-contract'
-import type { SkillInstallDestination } from '../../src/shared/skill-install-contract'
+import type { SkillBundleInstallResult } from '../../src/shared/skills/installation/skill-bundle-install-contract'
+import type { SkillCloudPublishResult } from '../../src/shared/skills/sharing/skill-cloud-contract'
+import type { SkillInstallDestination } from '../../src/shared/skills/installation/skill-install-contract'
 import type {
   SkillBundleShareInstallOperation,
   SkillSharePreview
-} from '../../src/shared/skill-sharing-contract'
+} from '../../src/shared/skills/sharing/skill-sharing-contract'
 import { expect, test } from './helpers/orca-app'
 import {
   launchHeadlessPairedRuntimeHost,
@@ -58,7 +58,7 @@ test('publishes, updates, revokes, and deletes without losing local state', asyn
   const source = join(sourceRoot, '.agents', 'skills', SKILL_NAME)
   const home = await electronApp.evaluate(({ app }) => app.getPath('home'))
   const globalSkill = join(home, '.agents', 'skills', SKILL_NAME)
-  let packageId: string | null = null
+  let packageId: string | undefined
   let physicalEnvironmentId: string | null = null
   let pairedHost: HeadlessPairedRuntimeHost | null = null
   let sshTargetId: string | null = null
@@ -205,12 +205,12 @@ test('publishes, updates, revokes, and deletes without losing local state', asyn
     expect(removed).toMatchObject({ status: 'ok', value: { status: 'removed' } })
     expect(existsSync(globalSkill)).toBe(false)
     expect(
-      await orcaPage.evaluate((id) => window.api.skills.getPackage(id), packageId)
+      await orcaPage.evaluate((id) => window.api.skills.getPackage(id), first.preview.packageId)
     ).toMatchObject({ status: 'ok' })
     expect(
-      await orcaPage.evaluate((id) => window.api.skills.deletePackage(id), packageId)
+      await orcaPage.evaluate((id) => window.api.skills.deletePackage(id), first.preview.packageId)
     ).toMatchObject({ status: 'ok' })
-    packageId = null
+    packageId = undefined
   } finally {
     for (const target of externalTargets(physicalEnvironmentId, sshTargetId)) {
       await orcaPage
@@ -420,10 +420,10 @@ function expectPhysicalInstall(
     expect(skill?.canonicalPath).toContain(`.agents\\skills\\${SKILL_NAME}`)
   } else if (target === 'wsl') {
     expect(skill?.canonicalPath).toMatch(/^\/home\/[^/]+\/\.agents\/skills\//)
-    expect(skill?.canonicalPath.endsWith(`/${SKILL_NAME}`)).toBe(true)
+    expect(skill?.canonicalPath?.endsWith(`/${SKILL_NAME}`)).toBe(true)
   } else {
     expect(skill?.canonicalPath).toMatch(/^\//)
-    expect(skill?.canonicalPath.endsWith(`/.agents/skills/${SKILL_NAME}`)).toBe(true)
+    expect(skill?.canonicalPath?.endsWith(`/.agents/skills/${SKILL_NAME}`)).toBe(true)
   }
 }
 
@@ -439,6 +439,10 @@ async function expectManagedRemoteVersion(
   if (installs.status !== 'ok') {
     throw new Error(`physical host managed-install listing failed: ${installs.status}`)
   }
+  const sshConnectionId =
+    target.destination.scope === 'global' && target.destination.executionTarget?.kind === 'ssh'
+      ? target.destination.executionTarget.connectionId
+      : undefined
   const install = installs.value.find((candidate) => {
     if (target.kind === 'windows' || target.kind === 'paired-posix') {
       return candidate.destination.scope === 'global' && !candidate.destination.executionTarget
@@ -453,8 +457,7 @@ async function expectManagedRemoteVersion(
     return (
       candidate.destination.scope === 'global' &&
       candidate.destination.executionTarget?.kind === 'ssh' &&
-      candidate.destination.executionTarget.connectionId ===
-        target.destination.executionTarget?.connectionId
+      candidate.destination.executionTarget.connectionId === sshConnectionId
     )
   })
   expect(install).toMatchObject({

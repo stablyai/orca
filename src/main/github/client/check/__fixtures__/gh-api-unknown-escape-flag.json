@@ -1,0 +1,13 @@
+{
+  "cliRelease": "https://github.com/cli/cli/releases/download/v2.40.1/gh_2.40.1_macOS_arm64.zip",
+  "argv": [
+    "api",
+    "--hostname",
+    "github.com",
+    "repos/fixture-owner/fixture-repo/actions/jobs/1/logs",
+    "--allow-escape-sequences"
+  ],
+  "code": 1,
+  "stdout": "",
+  "stderr": "unknown flag: --allow-escape-sequences\n\nUsage:  gh api <endpoint> [flags]\n\nFlags:\n      --cache duration        Cache the response, e.g. \"3600s\", \"60m\", \"1h\"\n  -F, --field key=value       Add a typed parameter in key=value format\n  -H, --header key:value      Add a HTTP request header in key:value format\n      --hostname string       The GitHub hostname for the request (default \"github.com\")\n  -i, --include               Include HTTP response status line and headers in the output\n      --input file            The file to use as body for the HTTP request (use \"-\" to read from standard input)\n  -q, --jq string             Query to select values from the response using jq syntax\n  -X, --method string         The HTTP method for the request (default \"GET\")\n      --paginate              Make additional HTTP requests to fetch all pages of results\n  -p, --preview names         GitHub API preview names to request (without the \"-preview\" suffix)\n  -f, --raw-field key=value   Add a string parameter in key=value format\n      --silent                Do not print the response body\n  -t, --template string       Format JSON output using a Go template; see \"gh help formatting\"\n      --verbose               Include full HTTP request and response in the output\n  \n"
+}

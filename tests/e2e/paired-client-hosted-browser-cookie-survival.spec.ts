@@ -21,11 +21,7 @@ type CookieFixture = {
   origin: string
 }
 
-/**
- * Serves a login page that plants a persistent cookie and echo pages that render the
- * `Cookie` request header, so a rendered marker proves the jar reached the wire rather
- * than merely existing somewhere on the client.
- */
+// Render the Cookie request header so survival proves the persistent jar reached the wire.
 async function startCookieFixture(): Promise<CookieFixture> {
   const observed: { cookie: string | null; path: string }[] = []
   const server = createServer((request, response) => {
@@ -269,11 +265,7 @@ async function refreshAuthorityRuntimeId(client: PairedElectronClient): Promise<
     .catch(() => null)
 }
 
-/**
- * Waits until the client is talking to a genuinely new runtime process. A changed
- * `runtimeId` is the point of the test: it is the per-process value the partition scheme
- * deliberately stopped hashing, so the cookie must survive precisely while it changes.
- */
+// Require a new runtimeId after restart: route partition identity must retain cookies across precisely that process-id change.
 async function waitForRelaunchedRuntime(
   client: PairedElectronClient,
   previousRuntimeId: string

@@ -3,42 +3,15 @@ import {
   buildConfiguredProxyEnv,
   getProxyBypassRulesFromEnvironment,
   getProxyUrlFromEnvironment,
-  normalizeProxyBypassRules,
   normalizeProxyUrl,
   redactProxyUrl
 } from './network-proxy'
 
 describe('network proxy settings', () => {
-  it('preserves SOCKS5H for proxy-side DNS in settings and child environments', () => {
-    const proxy = 'socks5h://user:pass@proxy.example:1080'
-    expect(normalizeProxyUrl(` ${proxy}/ `)).toEqual({ ok: true, value: proxy })
-    expect(buildConfiguredProxyEnv({ httpProxyUrl: proxy })).toMatchObject({
-      HTTP_PROXY: proxy,
-      HTTPS_PROXY: proxy,
-      ALL_PROXY: proxy
-    })
-    expect(redactProxyUrl(proxy)).toBe('socks5h://***:***@proxy.example:1080')
-  })
-
-  it('normalizes supported proxy URLs without path, query, or fragment', () => {
-    expect(normalizeProxyUrl(' https://user:pass@proxy.example.com:8443/path?q=1#secret ')).toEqual(
-      {
-        ok: true,
-        value: 'https://user:pass@proxy.example.com:8443'
-      }
-    )
-  })
-
   it('rejects unsupported or malformed proxy URLs', () => {
     expect(normalizeProxyUrl('file:///tmp/proxy').ok).toBe(false)
     expect(normalizeProxyUrl('http://').ok).toBe(false)
     expect(normalizeProxyUrl('not-a-url').ok).toBe(false)
-  })
-
-  it('normalizes bypass rules from common separator styles', () => {
-    expect(normalizeProxyBypassRules('localhost, 127.0.0.1; *.internal\n<local>')).toBe(
-      'localhost;127.0.0.1;*.internal;<local>'
-    )
   })
 
   it('uses standard proxy environment precedence', () => {

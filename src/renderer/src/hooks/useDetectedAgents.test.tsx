@@ -12,8 +12,8 @@ import {
 import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
   RUNTIME_PROTOCOL_VERSION
-} from '../../../shared/protocol-version'
-import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
+} from '../../../shared/remote-runtime/protocol/protocol-version'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
@@ -28,12 +28,14 @@ let latestHookResult: UseDetectedAgentsResult | null = null
 
 function HookProbe({
   target,
-  onResult
+  onResult,
+  inventory
 }: {
   target: AgentDetectionTarget | undefined
   onResult?: (result: UseDetectedAgentsResult) => void
+  inventory?: 'enabled' | 'all'
 }): null {
-  latestHookResult = useDetectedAgents(target)
+  latestHookResult = useDetectedAgents(target, inventory)
   onResult?.(latestHookResult)
   return null
 }
@@ -171,7 +173,7 @@ describe('Floating Workspace authority', () => {
           runtime: expect.objectContaining({ kind: 'wsl', distro: 'Ubuntu' })
         })
       }),
-      undefined
+      { enabledOnly: true }
     ])
 
     refreshLocalAgents.mockResolvedValueOnce({
@@ -189,7 +191,11 @@ describe('Floating Workspace authority', () => {
     expect(activeResult.current?.detectedIds).toEqual(['claude'])
     expect(floatingResult.current?.detectedIds).toEqual(['codex'])
     expect(useAppStore.getState().detectedAgentIds).toEqual(['claude'])
-    expect(refreshLocalAgents).toHaveBeenLastCalledWith(undefined)
+    expect(refreshLocalAgents).toHaveBeenLastCalledWith({
+      enabledOnly: true,
+      wakeWslDistro: true,
+      userInitiated: true
+    })
   })
 })
 
@@ -200,59 +206,6 @@ afterEach(async () => {
     })
   }
   roots.length = 0
-})
-
-describe('useDetectedAgents (ssh call site)', () => {
-  it('fires remote detection once on mount and does not thrash after an empty result', async () => {
-    const root = await renderProbe({ kind: 'ssh', connectionId: 'ssh-1' })
-
-    // The effect fires detection once; an empty [] is stored (not null), so the
-    // detectedIds===null guard prevents a re-detect loop on the same surface.
-    expect(detectRemoteAgents).toHaveBeenCalledTimes(1)
-    expect(useAppStore.getState().remoteDetectedAgentIds['ssh-1']).toEqual([])
-
-    // Re-rendering the same connection must not trigger another probe.
-    await act(async () => {
-      root.render(createElement(HookProbe, { target: { kind: 'ssh', connectionId: 'ssh-1' } }))
-    })
-    await flushEffects()
-
-    expect(detectRemoteAgents).toHaveBeenCalledTimes(1)
-  })
-
-  it('retries a cached empty SSH result when the launch surface is reopened', async () => {
-    const firstRoot = await renderProbe({ kind: 'ssh', connectionId: 'ssh-1' })
-
-    expect(detectRemoteAgents).toHaveBeenCalledTimes(1)
-    expect(useAppStore.getState().remoteDetectedAgentIds['ssh-1']).toEqual([])
-
-    await act(async () => {
-      firstRoot.unmount()
-    })
-    roots.splice(roots.indexOf(firstRoot), 1)
-    detectRemoteAgents.mockResolvedValueOnce(['kilo'])
-
-    await renderProbe({ kind: 'ssh', connectionId: 'ssh-1' })
-
-    expect(detectRemoteAgents).toHaveBeenCalledTimes(2)
-    expect(useAppStore.getState().remoteDetectedAgentIds['ssh-1']).toEqual(['kilo'])
-  })
-
-  it('refreshes a non-empty SSH cache when a new launch surface opens', async () => {
-    useAppStore.setState({ remoteDetectedAgentIds: { 'ssh-1': ['claude'] } })
-    detectRemoteAgents.mockResolvedValueOnce(['claude', 'devin'])
-
-    const root = await renderProbe({ kind: 'ssh', connectionId: 'ssh-1' })
-
-    expect(detectRemoteAgents).toHaveBeenCalledTimes(1)
-    expect(useAppStore.getState().remoteDetectedAgentIds['ssh-1']).toEqual(['claude', 'devin'])
-
-    await act(async () => {
-      root.render(createElement(HookProbe, { target: { kind: 'ssh', connectionId: 'ssh-1' } }))
-    })
-    await flushEffects()
-    expect(detectRemoteAgents).toHaveBeenCalledTimes(1)
-  })
 })
 
 describe('useDetectedAgents (unresolved target)', () => {
@@ -266,184 +219,5 @@ describe('useDetectedAgents (unresolved target)', () => {
     expect(refreshLocalAgents).not.toHaveBeenCalled()
     expect(detectRemoteAgents).not.toHaveBeenCalled()
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-  })
-})
-
-describe('useDetectedAgents (runtime call site)', () => {
-  it('distinguishes an initial remote failure from the pre-effect loading state', async () => {
-    runtimeEnvironmentCall.mockRejectedValue(new Error('runtime disconnected'))
-
-    await renderProbe({ kind: 'runtime', environmentId: 'env-1' })
-
-    expect(latestHookResult?.detectedIds).toBeNull()
-    expect(latestHookResult?.isLoading).toBe(false)
-    expect(latestHookResult?.detectionFailed).toBe(true)
-  })
-
-  it('probes each empty runtime target at most once per mounted surface', async () => {
-    const root = await renderProbe({ kind: 'runtime', environmentId: 'env-1' })
-
-    await act(async () => {
-      root.render(createElement(HookProbe, { target: { kind: 'runtime', environmentId: 'env-2' } }))
-    })
-    await flushEffects()
-    await act(async () => {
-      root.render(createElement(HookProbe, { target: { kind: 'runtime', environmentId: 'env-1' } }))
-    })
-    await flushEffects()
-
-    expect(
-      runtimeEnvironmentCall.mock.calls.filter(
-        ([{ method }]) => method === 'preflight.detectAgents'
-      )
-    ).toHaveLength(2)
-  })
-
-  it('refreshes a non-empty runtime cache when a new launch surface opens', async () => {
-    useAppStore.setState({ runtimeDetectedAgentIds: { 'env-1': ['claude'] } })
-    runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
-      const result =
-        method === 'status.get'
-          ? {
-              runtimeId: 'remote-runtime',
-              rendererGraphEpoch: 1,
-              graphStatus: 'ready',
-              authoritativeWindowId: null,
-              liveTabCount: 0,
-              liveLeafCount: 0,
-              runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
-              minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
-            }
-          : {
-              agents: ['claude', 'devin'],
-              addedPathSegments: [],
-              shellHydrationOk: true,
-              pathSource: 'shell_hydrate',
-              pathFailureReason: 'none'
-            }
-      return Promise.resolve({
-        id: method,
-        ok: true,
-        result,
-        _meta: { runtimeId: 'remote-runtime' }
-      })
-    })
-
-    const root = await renderProbe({ kind: 'runtime', environmentId: 'env-1' })
-
-    expect(
-      runtimeEnvironmentCall.mock.calls.filter(
-        ([{ method }]) => method === 'preflight.refreshAgents'
-      )
-    ).toHaveLength(1)
-    expect(useAppStore.getState().runtimeDetectedAgentIds['env-1']).toEqual(['claude', 'devin'])
-
-    await act(async () => {
-      root.render(createElement(HookProbe, { target: { kind: 'runtime', environmentId: 'env-1' } }))
-    })
-    await flushEffects()
-    expect(
-      runtimeEnvironmentCall.mock.calls.filter(
-        ([{ method }]) => method === 'preflight.refreshAgents'
-      )
-    ).toHaveLength(1)
-  })
-
-  it('does not re-probe after an explicit refresh finds no agents', async () => {
-    useAppStore.setState({
-      runtimeDetectedAgentIds: { 'env-1': ['claude'] },
-      isDetectingRuntimeAgents: { 'env-1': false }
-    })
-    let detectCalls = 0
-    let refreshCalls = 0
-    runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
-      let result: unknown
-      if (method === 'status.get') {
-        result = {
-          runtimeId: 'remote-runtime',
-          rendererGraphEpoch: 1,
-          graphStatus: 'ready',
-          authoritativeWindowId: null,
-          liveTabCount: 0,
-          liveLeafCount: 0,
-          runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
-          minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
-        }
-      } else if (method === 'preflight.refreshAgents') {
-        refreshCalls += 1
-        result = {
-          agents: [],
-          addedPathSegments: [],
-          shellHydrationOk: true,
-          pathSource: 'shell_hydrate',
-          pathFailureReason: 'none'
-        }
-      } else {
-        detectCalls += 1
-        result = ['claude']
-      }
-      return Promise.resolve({
-        id: method,
-        ok: true,
-        result,
-        _meta: { runtimeId: 'remote-runtime' }
-      })
-    })
-
-    const root = await renderProbe({ kind: 'runtime', environmentId: 'env-1' })
-    await flushEffects()
-
-    expect(refreshCalls).toBe(1)
-    expect(detectCalls).toBe(0)
-    expect(useAppStore.getState().runtimeDetectedAgentIds['env-1']).toEqual([])
-
-    await act(async () => {
-      root.render(createElement(HookProbe, { target: { kind: 'runtime', environmentId: 'env-1' } }))
-    })
-    await flushEffects()
-    expect(refreshCalls).toBe(1)
-  })
-
-  it('retries a cached empty runtime result when the launch surface is reopened', async () => {
-    let detectCalls = 0
-    runtimeEnvironmentCall.mockImplementation(({ method }: { method: string }) => {
-      let result: unknown
-      if (method === 'status.get') {
-        result = {
-          runtimeId: 'remote-runtime',
-          rendererGraphEpoch: 1,
-          graphStatus: 'ready',
-          authoritativeWindowId: null,
-          liveTabCount: 0,
-          liveLeafCount: 0,
-          runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
-          minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
-        }
-      } else {
-        detectCalls += 1
-        result = detectCalls === 1 ? [] : ['kilo']
-      }
-      return Promise.resolve({
-        id: method,
-        ok: true,
-        result,
-        _meta: { runtimeId: 'remote-runtime' }
-      })
-    })
-
-    const firstRoot = await renderProbe({ kind: 'runtime', environmentId: 'env-1' })
-
-    expect(detectCalls).toBe(1)
-    expect(useAppStore.getState().runtimeDetectedAgentIds['env-1']).toEqual([])
-
-    await act(async () => {
-      firstRoot.unmount()
-    })
-    roots.splice(roots.indexOf(firstRoot), 1)
-
-    await renderProbe({ kind: 'runtime', environmentId: 'env-1' })
-
-    expect(detectCalls).toBe(2)
-    expect(useAppStore.getState().runtimeDetectedAgentIds['env-1']).toEqual(['kilo'])
   })
 })

@@ -1,0 +1,110 @@
+import { afterEach, describe, expect, it } from 'vitest'
+import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { agentJournalTurnBody } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
+import {
+  closeProviderTimelineRigs,
+  messageText,
+  openProviderTimelineRig,
+  openUnboundProviderTimelineAssembler,
+  pendingApproval,
+  providerItemId,
+  providerTurnItemId,
+  runningTool
+} from './provider-timeline-assembler-test-support'
+
+afterEach(closeProviderTimelineRigs)
+
+describe("a stream writes only while its row's turn runs", () => {
+  it('stops at the end of its turn, though its next delta was admitted before the end was written', async () => {
+    const rig = await openProviderTimelineRig()
+    const { assembler, bind, drained } = openUnboundProviderTimelineAssembler(rig.journal)
+    assembler.apply({ type: 'turn.open', turn: 't1', at: 1_000 })
+    assembler.apply({ type: 'text.delta', item: { id: 'm' }, channel: 'assistant', text: 'Hel' })
+    assembler.flush()
+    assembler.apply({ type: 'turn.end', turn: 't1', at: 2_000, state: 'completed' })
+    // Deferred writes must recheck turn state after bind.
+    expect(
+      assembler.apply({ type: 'text.delta', item: { id: 'm' }, channel: 'assistant', text: 'lo' })
+        .dropped
+    ).toBeUndefined()
+    assembler.flush()
+    await bind()
+    await drained()
+    expect(await rig.turn('t1')).toMatchObject({ state: 'completed' })
+    expect((await rig.row(providerItemId('item', 'm')))?.turnScope).toEqual({
+      kind: 'turn',
+      turnItemId: providerTurnItemId('t1')
+    })
+    expect(messageText((await rig.row(providerItemId('item', 'm')))?.body)).toBe('Hel')
+  })
+
+  it('writes nothing more once another writer of the journal settled its turn', async () => {
+    const rig = await openProviderTimelineRig()
+    rig.assembler.apply({ type: 'turn.open', turn: 't1', at: 1_000 })
+    rig.assembler.apply({
+      type: 'text.delta',
+      item: { id: 'm' },
+      channel: 'assistant',
+      text: 'Hel'
+    })
+    const running = await rig.turn('t1')
+    const identity = parseAgentJournalItemKey(providerTurnItemId('t1'))
+    if (!running || !identity) {
+      throw new Error('the turn row is written')
+    }
+    // Another writer's Stop reaches the assembler only as its commit's settled-turn notice.
+    await rig.journal.appendItem(
+      identity,
+      agentJournalTurnBody({ ...running, state: 'interrupted', completedAt: 2_000 }),
+      { fence: 1, turnScope: { kind: 'thread' } }
+    )
+    rig.assembler.apply({ type: 'text.delta', item: { id: 'm' }, channel: 'assistant', text: 'lo' })
+    rig.assembler.flush()
+    expect(messageText((await rig.row(providerItemId('item', 'm')))?.body)).toBe('Hel')
+
+    expect(rig.assembler.openTurnId).toBeNull()
+  })
+
+  it("closes on another writer's Stop with only activity after it, leaving calls for the provider's end", async () => {
+    const rig = await openProviderTimelineRig()
+    rig.assembler.apply({ type: 'turn.open', turn: 't1', at: 1_000 })
+    rig.assembler.apply({ type: 'item.open', item: 'tool', body: runningTool('read') })
+    rig.assembler.apply({ type: 'request.open', request: 'p1', body: pendingApproval })
+    const running = await rig.turn('t1')
+    const identity = parseAgentJournalItemKey(providerTurnItemId('t1'))
+    if (!running || !identity) {
+      throw new Error('the turn row is written')
+    }
+    await rig.journal.appendItem(
+      identity,
+      agentJournalTurnBody({ ...running, state: 'interrupted', completedAt: 2_000 }),
+      { fence: 1, turnScope: { kind: 'thread' } }
+    )
+    expect(rig.assembler.openTurnId).toBeNull()
+    expect(rig.assembler.apply({ type: 'activity', text: 'Thinking' }).dropped).toBe('no-turn')
+    expect((await rig.row(providerItemId('request', 'p1')))?.body).toMatchObject({
+      resolution: { state: 'cancelled' }
+    })
+    expect((await rig.row(providerItemId('item', 'tool')))?.body).toMatchObject({
+      state: 'running'
+    })
+  })
+
+  it('still takes the provider final full snapshot of a message whose turn settled', async () => {
+    const rig = await openProviderTimelineRig()
+    rig.assembler.apply({ type: 'turn.open', turn: 't1', at: 1_000 })
+    rig.assembler.apply({
+      type: 'text.delta',
+      item: { id: 'm' },
+      channel: 'assistant',
+      text: 'Hel'
+    })
+    rig.assembler.apply({ type: 'turn.end', at: 2_000, state: 'completed' })
+    rig.assembler.apply({
+      type: 'item.close',
+      item: 'm',
+      body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Hello.' }] }
+    })
+    expect(messageText((await rig.row(providerItemId('item', 'm')))?.body)).toBe('Hello.')
+  })
+})

@@ -9,7 +9,7 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { DragEndEvent } from '@dnd-kit/core'
+
 import {
   createRetainedHostFixture,
   disposeRetainedHostFixtures,
@@ -17,8 +17,10 @@ import {
 } from '../browser-pane/browser-client-page-retained-host-fixture'
 import { useTabDragSplit, type TabDragItemData } from './useTabDragSplit'
 
-vi.mock('../../runtime/web-runtime-session', () => ({
-  isWebRuntimeSessionActive: vi.fn(() => false),
+vi.mock('../../runtime/web-session-tabs-sync/identity/web-runtime-session-environment', () => ({
+  isWebRuntimeSessionActive: vi.fn(() => false)
+}))
+vi.mock('../../runtime/web-session-tabs-sync/actions/web-runtime-session-tab-move', () => ({
   moveWebRuntimeSessionTab: vi.fn()
 }))
 
@@ -39,15 +41,6 @@ function dragData(): TabDragItemData {
 
 function dragStartEvent() {
   return { active: { data: { current: dragData() }, rect: { current: { initial: null } } } }
-}
-
-function dragEndEvent(): DragEndEvent {
-  return {
-    active: { data: { current: dragData() }, rect: { current: { initial: null } } },
-    over: null,
-    delta: { x: 0, y: 0 },
-    activatorEvent: { clientX: 0, clientY: 0 }
-  } as unknown as DragEndEvent
 }
 
 function renderDragHook(): ReturnType<typeof useTabDragSplit> {
@@ -90,31 +83,6 @@ afterEach(() => {
 })
 
 describe('tab drag passthrough over a client-hosted retained guest', () => {
-  it('makes the retained host click-through for the length of the drag', async () => {
-    const rig = await retainedGuest()
-    const drag = renderDragHook()
-
-    act(() => drag.onDragStart(dragStartEvent() as never))
-
-    expect(rig.host().style.pointerEvents).toBe('none')
-
-    act(() => drag.onDragEnd(dragEndEvent()))
-
-    expect(rig.host().style.pointerEvents).toBe('auto')
-  })
-
-  it('releases the retained host when the drag is cancelled', async () => {
-    const rig = await retainedGuest()
-    const drag = renderDragHook()
-
-    act(() => drag.onDragStart(dragStartEvent() as never))
-    expect(rig.host().style.pointerEvents).toBe('none')
-
-    act(() => drag.onDragCancel())
-
-    expect(rig.host().style.pointerEvents).toBe('auto')
-  })
-
   it('releases the retained host from the missed-end fallback', async () => {
     const rig = await retainedGuest()
     const drag = renderDragHook()

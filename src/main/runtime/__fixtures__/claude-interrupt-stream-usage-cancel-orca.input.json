@@ -1,0 +1,120 @@
+[
+  {
+    "atMs": 521,
+    "kind": "title",
+    "title": "✳ Claude Code"
+  },
+  {
+    "atMs": 1611,
+    "kind": "input",
+    "label": "type-prompt",
+    "text": "Use no tools. Output a markdown table of exactly 500 rows. Columns: ID, Name, Category, Value, Status, Date. Names must be row-001 through row-500. Start the table immediately. Do not summarize or give code."
+  },
+  {
+    "atMs": 2064,
+    "kind": "input",
+    "label": "submit-prompt",
+    "text": "\r"
+  },
+  {
+    "atMs": 2084,
+    "kind": "title",
+    "title": "◐ Claude Code"
+  },
+  {
+    "atMs": 3051,
+    "kind": "title",
+    "title": "◑ Claude Code"
+  },
+  {
+    "atMs": 4004,
+    "kind": "title",
+    "title": "◑ 500-row markdown table"
+  },
+  {
+    "atMs": 4011,
+    "kind": "title",
+    "title": "◐ 500-row markdown table"
+  },
+  {
+    "atMs": 4971,
+    "kind": "title",
+    "title": "◑ 500-row markdown table"
+  },
+  {
+    "atMs": 5447,
+    "kind": "input",
+    "label": "open-usage",
+    "text": "/usage"
+  },
+  {
+    "atMs": 5899,
+    "kind": "input",
+    "label": "submit-usage",
+    "text": "\r"
+  },
+  {
+    "atMs": 5931,
+    "kind": "title",
+    "title": "◐ 500-row markdown table"
+  },
+  {
+    "atMs": 6893,
+    "kind": "title",
+    "title": "◑ 500-row markdown table"
+  },
+  {
+    "atMs": 7252,
+    "kind": "input",
+    "label": "dismiss-usage",
+    "text": "\u001b"
+  },
+  {
+    "atMs": 7854,
+    "kind": "title",
+    "title": "◐ 500-row markdown table"
+  },
+  {
+    "atMs": 8405,
+    "kind": "input",
+    "label": "cancel-turn",
+    "text": "\u001b"
+  },
+  {
+    "atMs": 8467,
+    "kind": "title",
+    "title": "✳ 500-row markdown table"
+  },
+  {
+    "atMs": 10556,
+    "kind": "input",
+    "label": "type-prompt",
+    "text": "Reply with exactly RETRY-OK. Use no tools."
+  },
+  {
+    "atMs": 11008,
+    "kind": "input",
+    "label": "submit-prompt",
+    "text": "\r"
+  },
+  {
+    "atMs": 11018,
+    "kind": "title",
+    "title": "◐ 500-row markdown table"
+  },
+  {
+    "atMs": 11980,
+    "kind": "title",
+    "title": "◑ 500-row markdown table"
+  },
+  {
+    "atMs": 12941,
+    "kind": "title",
+    "title": "◐ 500-row markdown table"
+  },
+  {
+    "atMs": 12954,
+    "kind": "title",
+    "title": "✳ 500-row markdown table"
+  }
+]

@@ -56,7 +56,7 @@ test.describe('Workspace emoji picker', () => {
       })
     })
 
-    const detailsDialog = orcaPage.getByRole('dialog', { name: 'Edit Worktree Details' })
+    const detailsDialog = orcaPage.getByRole('dialog', { name: 'Workspace details' })
     const displayNameInput = detailsDialog.getByPlaceholder('Custom display name...')
     await expect(displayNameInput).toBeFocused()
     await displayNameInput.fill('Details proof')
@@ -72,7 +72,7 @@ test.describe('Workspace emoji picker', () => {
     await orcaPage.evaluate(() => window.__store!.getState().openModal('worktree-palette'))
     const palette = orcaPage.getByRole('dialog', { name: 'Jump to...' })
     const paletteInput = palette.getByPlaceholder(
-      'Search chats, terminals, worktrees, settings, and actions...'
+      'Search chats, terminals, workspaces, tasks, settings, and actions...'
     )
     await expect(paletteInput).toBeFocused()
     await captureProof(orcaPage, testInfo, 'cmd-j-before.png')
