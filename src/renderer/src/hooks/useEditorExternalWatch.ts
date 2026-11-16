@@ -2,7 +2,7 @@ import { useSourceControlWatchConsumers } from './source-control-watch-consumers
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { subscribeEditorRuntimeFileWatch } from './editor-runtime-file-watch'
-import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
 import type { FsChangedPayload } from '../../../shared/file-watch/filesystem-change-event'
 import {
   getEditorExternalWatchTargetKey,

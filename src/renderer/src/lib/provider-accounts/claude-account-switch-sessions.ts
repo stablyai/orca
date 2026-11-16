@@ -1,7 +1,7 @@
 import { useAppStore } from '@/store/index'
-import type { CodexAccountSelectionTarget } from '../../../../shared/codex-selection-lane'
-import type { ClaudeAccountSwitchRunningSessions } from '../../../../shared/claude-account-switch-settings'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
+import type { ClaudeAccountSwitchRunningSessions } from '../../../../shared/agent-accounts/claude/claude-account-switch-settings'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { getClaudeAccountLabel } from './claude-account-label'
 import {
   announceRestart,
@@ -76,7 +76,9 @@ function queueClaudeRestarts(
       Object.entries(layout?.ptyIdsByLeafId ?? {}).flatMap(([leafId, ptyId]) => {
         const paneKey = makePaneKey(tabId, leafId)
         const session = lookups.get(paneKey)
-        const hooked = normalizeAgentProviderSession(agentStatusByPaneKey[paneKey]?.providerSession)
+        const hooked = normalizeAgentProviderSession(
+          agentStatusByPaneKey.get(paneKey)?.providerSession
+        )
         return ptyId && session && !hooked ? [[ptyId, session] as const] : []
       })
     )

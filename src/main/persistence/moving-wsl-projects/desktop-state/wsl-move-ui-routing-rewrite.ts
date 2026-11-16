@@ -7,7 +7,7 @@
  */
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
-import { getRepoHostIdentityForParts } from '../../../../shared/repo-host-identity'
+import { getRepoHostIdentityForParts } from '../../../../shared/repository/repo-host-identity'
 import type {
   ManualRepoOrderEntry,
   VisibleWorkspaceHostIds,
@@ -28,6 +28,7 @@ export type WslMoveUiRoutingState = Pick<
   PersistedUIState,
   | 'lastActiveWorktreeId'
   | 'showDotfilesByWorktree'
+  | 'notificationsMutedByWorktree'
   | 'gitGraphFiltersByWorktree'
   | 'explorerDisplayRootByWorktree'
   | 'workspaceCleanup'
@@ -61,6 +62,15 @@ export function rewriteWslMoveUiRouting(
   )
   if (dotfiles) {
     updates.showDotfilesByWorktree = dotfiles
+  }
+  const notificationMutes = withHostKeys(
+    ui.notificationsMutedByWorktree,
+    hostWorktreeKey,
+    (value) => value,
+    scope.inScope
+  )
+  if (notificationMutes) {
+    updates.notificationsMutedByWorktree = notificationMutes
   }
   const graphFilters = withHostKeys(
     ui.gitGraphFiltersByWorktree,

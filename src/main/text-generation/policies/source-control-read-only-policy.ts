@@ -4,13 +4,14 @@ import path from 'node:path'
 import { prepareKimiTextTaskPolicy } from './source-control-kimi-policy'
 import { parse as parseJson, type ParseError } from 'jsonc-parser'
 import { z } from 'zod'
-import { findOptionOccurrence } from '../../../shared/command-option-occurrence'
+import { findOptionOccurrence } from '../../../shared/cli/command-option-occurrence'
 import {
   compactRecipeOptions,
   KIMI_VALUE_OPTIONS
 } from '../../../shared/source-control/ai/generation/commit-message-generation-options'
 import type { CommitMessagePlan } from '../../../shared/source-control/ai/generation/commit-message-plan'
-import { parseWslUncPath, wslDistroForCommand } from '../../../shared/wsl-paths'
+import { isNamingOnlyTextAgent } from '../../../shared/source-control/ai/generation/commit-message-agent-spec'
+import { parseWslUncPath, wslDistroForCommand } from '../../../shared/file-access/wsl-paths'
 import { CODEX_DISABLE_PLUGINS_ARGS } from '../../codex-cli/codex-read-only-app-server-args'
 import { runWslProcess } from '../../wsl/execution/wsl-runner'
 import { TEXT_TASK_DIRECTORY } from '../prompts/source-control-prompt-files'
@@ -216,7 +217,7 @@ export function prepareSourceControlReadOnlyPlan(input: {
   async function prepare(): Promise<CommitMessagePlan> {
     const { plan, target, signal } = input
     const naming = input.operation === 'conversation-name'
-    if (input.agentId === 'amp' || input.agentId === 'muse') {
+    if (isNamingOnlyTextAgent(input.agentId)) {
       if (naming) {
         return plan
       }

@@ -125,7 +125,9 @@ it('a send accepted after its own turn ended owes no reply, so the moved chat is
       reason: 'lost'
     }))
     const id = await f.accept('write the report')
-    await vi.waitFor(() => expect(journal(f)?.submission(id)?.dispatchState).toBe('unknown'))
+    await vi.waitFor(async () =>
+      expect((await journal(f)?.reads.submission(id))?.dispatchState).toBe('unknown')
+    )
     await f.turn(id, 'running')
     await completeTurnOpenedBy(f, id)
     f.rig.clock.now += 1_000
@@ -134,7 +136,7 @@ it('a send accepted after its own turn ended owes no reply, so the moved chat is
       clientMessageId: id,
       providerIdentity: { provider: 'claude', sessionId: `provider-${PARENT}`, uuid: `echo-${id}` }
     })
-    expect(journal(f)?.submission(id)?.dispatchState).toBe('accepted')
+    expect((await journal(f)?.reads.submission(id))?.dispatchState).toBe('accepted')
     await selectB(f, 'restart-all')
     expect(dispatchedTexts(f)).toEqual(['write the report'])
   } finally {
@@ -148,7 +150,7 @@ it('a send answered inside the turn opened by the send before it owes no reply o
     await f.found()
     const first = await f.send('write the report')
     const second = await f.send('and add a summary')
-    expect(journal(f)?.item(agentJournalSubmissionKey(second))?.turnScope).toEqual({
+    expect((await journal(f)?.reads.item(agentJournalSubmissionKey(second)))?.turnScope).toEqual({
       kind: 'thread'
     })
     await f.turn(first, 'running')
@@ -178,7 +180,7 @@ it('restart-all moves a chat once a send the agent held past every old wait sett
     f.rig.adapter.dispatch.mockImplementationOnce(async () => ({ state: 'admitted' }))
     const id = await f.accept('write the report')
     await vi.waitFor(() => expect(f.rig.adapter.dispatch).toHaveBeenCalledTimes(1))
-    expect(journal(f)?.submission(id)?.dispatchState).toBe('pending')
+    expect((await journal(f)?.reads.submission(id))?.dispatchState).toBe('pending')
     const warn = vi.spyOn(f.rig.host.deps.logger, 'warn')
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldAdvanceTime: true })
     const moved = selectB(f, 'restart-all')
@@ -217,17 +219,25 @@ it('an account-switch continuation leaves a restart-held queued send held', asyn
       location.executionHostId === 'local' && !location.wslDistro
     setStructuredAgentSessionHost(f.rig.host)
     await f.rig.host.history({ sessionId: PARENT, direction: 'tail' })
-    expect(structuredQueuePauses(journal(f)!).map((pause) => pause.reason)).toEqual(['restarted'])
+    expect((await structuredQueuePauses(journal(f)!)).map((pause) => pause.reason)).toEqual([
+      'restarted'
+    ])
     const mail = await sendWith(f, 'coordinator mail', { from: MAIL_FROM })
-    await vi.waitFor(() => expect(journal(f)?.submission(mail)?.dispatchState).toBe('accepted'), {
-      timeout: 10_000
-    })
+    await vi.waitFor(
+      async () =>
+        expect((await journal(f)?.reads.submission(mail))?.dispatchState).toBe('accepted'),
+      {
+        timeout: 10_000
+      }
+    )
     await f.turn(mail, 'running')
     f.rig.host.publishChildWorkEvidence(PARENT, reportedChildWork([devServer], f.rig.clock.now))
     await f.turn(mail, 'completed')
     await selectB(f, 'restart-all')
     expect(dispatchedTexts(f)).toEqual(['refactor the parser', 'coordinator mail', MOVED_MESSAGE])
-    expect(structuredQueuePauses(journal(f)!).map((pause) => pause.reason)).toEqual(['restarted'])
+    expect((await structuredQueuePauses(journal(f)!)).map((pause) => pause.reason)).toEqual([
+      'restarted'
+    ])
   } finally {
     await f.dispose()
   }

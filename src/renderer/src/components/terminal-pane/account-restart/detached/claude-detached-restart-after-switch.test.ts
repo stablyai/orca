@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { provideLayoutFrameTerminalPanes } from '@/runtime/workspace-layout/frames/layout-frame-terminal-panes'
 import {
   confirmRuntimeTerminalForegroundProcess,
@@ -14,7 +15,7 @@ import {
 import { buildPaneAccountRestartStartup } from '@/lib/agent-session/accounts/agent-account-restart-startup'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { getDefaultSettings } from '../../../../../../shared/constants'
-import { AGENT_SESSION_ACCOUNT_SWITCH_TERMINAL_CONTINUATION_MESSAGE as FOLLOW_UP } from '../../../../../../shared/agent-session/lifecycle/agent-session-restart-continuation'
+import { AGENT_SESSION_ACCOUNT_SWITCH_TERMINAL_CONTINUATION_MESSAGE as FOLLOW_UP } from '../../../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-continuation'
 import { ptyDataHandlers } from '../../pty-transport/shutdown/pty-shutdown-data-suspension'
 import { lookUpDiscoveredClaudeRestart } from '../discovered-claude-restart'
 import {
@@ -116,23 +117,25 @@ function seedRestartAllPaneOnFirstAccount(): void {
         ptyIdsByLeafId: { [LEAF_ID]: OLD_PTY }
       }
     },
-    agentStatusByPaneKey: {
-      [PANE_KEY]: {
-        paneKey: PANE_KEY,
-        tabId: 'tab-1',
-        state: 'done',
-        prompt: '',
-        updatedAt: 1,
-        stateStartedAt: 1,
-        stateHistory: [],
-        agentType: 'claude',
-        providerSession: {
-          key: 'session_id',
-          id: SESSION_ID,
-          transcriptPath: `${FOLDERS['acct-a']}/projects/-r/${SESSION_ID}.jsonl`
+    agentStatusByPaneKey: acceptedAgentStatuses(
+      Object.entries({
+        [PANE_KEY]: {
+          paneKey: PANE_KEY,
+          tabId: 'tab-1',
+          state: 'done',
+          prompt: '',
+          updatedAt: 1,
+          stateStartedAt: 1,
+          stateHistory: [],
+          agentType: 'claude',
+          providerSession: {
+            key: 'session_id',
+            id: SESSION_ID,
+            transcriptPath: `${FOLDERS['acct-a']}/projects/-r/${SESSION_ID}.jsonl`
+          }
         }
-      }
-    },
+      })
+    ),
     paneForegroundAgentByPaneKey: {},
     agentLaunchConfigByPaneKey: {},
     sleepingAgentSessionsByPaneKey: {},
@@ -251,9 +254,9 @@ function seedHooklessPane(policy: 'ask' | 'restart' | 'restart-all' = 'restart-a
   seedRestartAllPaneOnFirstAccount()
   useAppStore.setState((current) => ({
     settings: { ...current.settings!, claudeAccountSwitchRunningSessions: policy },
-    agentStatusByPaneKey: {
-      [PANE_KEY]: { ...current.agentStatusByPaneKey[PANE_KEY], providerSession: undefined }
-    }
+    agentStatusByPaneKey: acceptedAgentStatuses([
+      [PANE_KEY, { ...current.agentStatusByPaneKey.get(PANE_KEY)!, providerSession: undefined }]
+    ])
   }))
 }
 
@@ -265,13 +268,9 @@ function rebindPaneTo(ptyId: string, providerSession?: AgentProviderSessionMetad
     terminalLayoutsByTabId: {
       'tab-1': { ...current.terminalLayoutsByTabId['tab-1'], ptyIdsByLeafId: { [LEAF_ID]: ptyId } }
     },
-    agentStatusByPaneKey: {
-      [PANE_KEY]: {
-        ...current.agentStatusByPaneKey[PANE_KEY],
-        state: 'done',
-        providerSession
-      }
-    },
+    agentStatusByPaneKey: acceptedAgentStatuses([
+      [PANE_KEY, { ...current.agentStatusByPaneKey.get(PANE_KEY)!, state: 'done', providerSession }]
+    ]),
     pendingPaneAccountRestarts: {}
   }))
 }
@@ -497,7 +496,7 @@ const OTHER_SESSION_ID = '00000000-0000-4000-8000-0000000000b2'
 const SECOND_LEAF = '22222222-2222-4222-8222-222222222222'
 const SECOND_PTY = 'wt1@@second'
 const pending = () => useAppStore.getState().pendingPaneAccountRestarts
-const dropStatus = () => useAppStore.setState({ agentStatusByPaneKey: {} })
+const dropStatus = () => useAppStore.setState({ agentStatusByPaneKey: acceptedAgentStatuses() })
 
 const setPolicy = (policy: 'ask' | 'restart' | 'restart-all' | 'keep') =>
   useAppStore.setState((current) => ({
@@ -506,10 +505,10 @@ const setPolicy = (policy: 'ask' | 'restart' | 'restart-all' | 'keep') =>
 
 const setTurn = (state: 'working' | 'done') =>
   useAppStore.setState((current) => ({
-    agentStatusByPaneKey: {
+    agentStatusByPaneKey: acceptedAgentStatuses([
       ...current.agentStatusByPaneKey,
-      [PANE_KEY]: { ...current.agentStatusByPaneKey[PANE_KEY], state }
-    }
+      [PANE_KEY, { ...current.agentStatusByPaneKey.get(PANE_KEY)!, state }]
+    ])
   }))
 
 function sleepOn(id: string): void {
@@ -859,7 +858,9 @@ it('restarts a hook-named pane on its own session after it is rebound onto the l
     tabsByWorktree: { wt1: [current.tabsByWorktree.wt1[0]] },
     ptyIdsByTabId: { 'tab-1': current.ptyIdsByTabId['tab-1'] },
     terminalLayoutsByTabId: { 'tab-1': current.terminalLayoutsByTabId['tab-1'] },
-    agentStatusByPaneKey: { [PANE_KEY]: current.agentStatusByPaneKey[PANE_KEY] }
+    agentStatusByPaneKey: acceptedAgentStatuses([
+      [PANE_KEY, current.agentStatusByPaneKey.get(PANE_KEY)!]
+    ])
   }))
   framePtyId = SECOND_PTY
   useAppStore.getState().updateTabPtyId('tab-1', SECOND_PTY, OLD_PTY)
@@ -878,13 +879,10 @@ it('restarts on the session a hook names once one does, even when the restart-ti
   lookedUpAtA()
   spawn.mockResolvedValue({ id: NEW_PTY })
   await switchAccount('acct-a', 'acct-b')
-  useAppStore.setState((current) => ({
-    agentStatusByPaneKey: {
-      [PANE_KEY]: {
-        ...current.agentStatusByPaneKey[PANE_KEY],
-        providerSession: recordIn(FOLDERS['acct-a'])
-      }
-    }
+  useAppStore.setState(({ agentStatusByPaneKey: statuses }) => ({
+    agentStatusByPaneKey: acceptedAgentStatuses([
+      [PANE_KEY, { ...statuses.get(PANE_KEY)!, providerSession: recordIn(FOLDERS['acct-a']) }]
+    ])
   }))
   discoverClaudeSession.mockResolvedValue(null)
 

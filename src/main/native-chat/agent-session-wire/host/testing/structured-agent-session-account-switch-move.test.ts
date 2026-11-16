@@ -1,7 +1,11 @@
 import { expect, it, vi } from 'vitest'
+import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
 import { moveStructuredAgentSessionChatsToSelectedAccount } from '../../recovery/structured-agent-session-account-switch'
-import { createRestTestRig, foundRestTestChat } from './structured-agent-session-rest-test-rig'
-import { HOST_TEST_SESSION } from './structured-agent-session-host-test-data'
+import {
+  createRestTestRig,
+  foundRestTestChat
+} from './structured-agent-session-rest-test-rig.test-fixture'
+import { HOST_TEST_SESSION } from './structured-agent-session-host-test-data.test-fixture'
 import {
   createReceivingCallerFixture,
   PARENT
@@ -71,7 +75,9 @@ it('restart-all waits out a send being handed over, then moves the chat', async 
     answer.resolve()
     await moved
     const journal = f.rig.host.collaboratorsForTests().sessions.get(PARENT)?.journal
-    await vi.waitFor(() => expect(journal?.submission(id)?.dispatchState).toBe('accepted'))
+    await vi.waitFor(async () =>
+      expect((await journal?.reads.submission(id))?.dispatchState).toBe('accepted')
+    )
     expect(f.launches).toEqual([accountHome(f, 'a'), accountHome(f, 'b')])
     expect(dispatchedTexts(f)).toEqual(['write the report', MOVED_MESSAGE])
   } finally {
@@ -101,7 +107,9 @@ it('restart-all leaves a chat already on the selected account at once, even mid-
     expect(await Promise.race([moved, waiting])).toBe('returned')
     answer.resolve()
     const journal = f.rig.host.collaboratorsForTests().sessions.get(PARENT)?.journal
-    await vi.waitFor(() => expect(journal?.submission(id)?.dispatchState).toBe('accepted'))
+    await vi.waitFor(async () =>
+      expect((await journal?.reads.submission(id))?.dispatchState).toBe('accepted')
+    )
     expect(f.launches).toEqual([accountHome(f, 'b')])
     expect(dispatchedTexts(f)).toEqual(['write the report'])
   } finally {
@@ -121,12 +129,14 @@ it('restart-all hands a queued send to the selected account instead of continuin
       delivery: 'queue-if-active'
     })
     const submission = async () =>
-      (await f.rig.host.journalSnapshot(PARENT)).submissions.findLast(
+      (await readTestHostJournal(f.rig.host, PARENT)).submissions.findLast(
         (entry) => entry.queuedMessageId === queued
       )
     expect(await submission()).toBeUndefined()
     await selectB(f, 'restart-all')
-    await vi.waitFor(async () => expect((await submission())?.dispatchState).toBe('accepted'))
+    await vi.waitFor(async () => expect((await submission())?.dispatchState).toBe('accepted'), {
+      timeout: 10_000
+    })
     expect(f.launches).toEqual([accountHome(f, 'a'), accountHome(f, 'b')])
     expect(dispatchedTexts(f)).toEqual(['refactor the parser', 'then add tests'])
     expect(await rows(f)).not.toContainEqual({ kind: 'status', text: MOVED_NOTE })

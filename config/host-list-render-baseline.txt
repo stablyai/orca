@@ -9,7 +9,7 @@
 1 src/renderer/src/components/settings/quick-commands/QuickCommandsToolbar.tsx
 1 src/renderer/src/components/settings/repository/hosts/RepositoryHostSetupsSection.tsx
 1 src/renderer/src/components/sidebar/host-admission/ssh/AddRemoteHostSshConfigPicker.tsx
-4 src/renderer/src/components/status-bar/SshStatusSegment.tsx
-1 src/renderer/src/components/status-bar/resource-usage-popover-body.tsx
+4 src/renderer/src/components/status-bar/host-connections/SshStatusSegment.tsx
+1 src/renderer/src/components/status-bar/resources/popover/resource-usage-popover-body.tsx
 1 src/renderer/src/components/tab-bar/TabBarQuickCommandAddActions.tsx
 2 src/renderer/src/components/terminal-pane/quick-commands/TerminalQuickCommandsSubmenu.tsx

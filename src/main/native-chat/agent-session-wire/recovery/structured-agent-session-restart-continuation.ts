@@ -21,14 +21,14 @@ import {
   type AgentSessionSendResult
 } from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
-import { RESTART_CONTINUATION_ROW_PREFIX } from '../../../../shared/agent-session/lifecycle/agent-session-stop-row-identity'
+import { RESTART_CONTINUATION_ROW_PREFIX } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-stop-row-identity'
 import {
   restartContinuationNote,
   type AgentSessionContinuationSource
-} from '../../../../shared/agent-session/lifecycle/agent-session-restart-continuation'
+} from '../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-continuation'
 import { AgentSessionPreDispatchError } from '../operations/structured-agent-session-operation-settlement'
 import { restartContinuationEnvelope } from './structured-agent-session-restart-continuation-envelope'
-import type { AgentSessionResumeMarker } from '../../../../shared/agent-session/lifecycle/agent-session-resume-marker'
+import type { AgentSessionResumeMarker } from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
 import { liftStructuredQueueRestartHold } from '../delivery/structured-agent-session-queued-pause'
 
@@ -48,7 +48,7 @@ export type StructuredAgentSessionContinuationHost = {
   send: (input: {
     envelope: AgentSessionMutationEnvelope
     body: AgentJournalMessageItem
-    beforeRun?: () => void
+    beforeRun?: () => void | Promise<void>
   }) => Promise<AgentSessionMutationResult<AgentSessionSendResult>>
   awaitSendSettlement: (
     sessionId: string,
@@ -61,21 +61,21 @@ export type StructuredAgentSessionContinuationHost = {
   logger: StructuredAgentSessionLogger
   now: () => number
   /** Recheck under acceptance serialization so the first post-restart message wins. */
-  stillResumable: (marker: AgentSessionResumeMarker) => boolean
+  stillResumable: (marker: AgentSessionResumeMarker) => Promise<boolean>
 }
 
 /** Bind serialized acceptance checks, settlement waits and attribution notes to the host. */
 export function continuationDeps(
   host: Omit<StructuredAgentSessionContinuationHost, 'stillResumable'>,
-  stillWanted: () => boolean
+  stillWanted: () => Promise<boolean>
 ): StructuredAgentSessionContinuationDeps {
   return {
     currentFence: host.conversationFence,
     send: (input) =>
       host.send({
         ...input,
-        beforeRun: () => {
-          if (!stillWanted()) {
+        beforeRun: async () => {
+          if (!(await stillWanted())) {
             throw new RestartContinuationSupersededError()
           }
         }

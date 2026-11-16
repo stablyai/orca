@@ -39,7 +39,7 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { useSshAddTargetIntent } from './targets/use-ssh-add-target-intent'
 import { syncSshConfigTargetsPassively } from '../../../runtime/hosts/ssh/ssh-config-passive-sync'
-import type { SshTarget } from '../../../../../shared/ssh-types'
+import type { SshTarget } from '../../../../../shared/remote-runtime/ssh/ssh-types'
 
 type SshPaneProps = { addTargetIntentSignal?: number }
 

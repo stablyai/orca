@@ -1,10 +1,10 @@
-import type { RuntimeMobileSessionTabGroup } from '../../../../shared/runtime-types'
-import type { TabGroup } from '../../../../shared/tab-types'
+import type { RuntimeMobileSessionTabGroup } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { TabGroup } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { MirroredAgentTab, MirroredBrowserTab, MirroredEditorTab } from './state'
-import type { RuntimeMobileSessionTerminalClientTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileSessionTerminalClientTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import { toWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
-import { clearHostSessionTabIdMappings, setHostSessionTabIdMapping } from './tracking-mappings'
+import { replaceHostSessionTabIdMappings } from './tracking-mappings'
 import { isWebSessionBrowserPlacementGroupReserved } from '../browser/placement/web-session-browser-placement'
 import { resolveWebSessionReorderedOrder } from './navigation/web-session-reorder-intent'
 import { mapHostRecentTabIds } from './tab-group-layout-tree'
@@ -55,13 +55,10 @@ export function updateHostSessionTabIdMappings(args: {
   agentTabs: readonly MirroredAgentTab[]
   hostGroupIdByTabId: ReadonlyMap<string, string>
 }): void {
-  clearHostSessionTabIdMappings(args.environmentId, args.worktreeId)
-  const map = (tabId: string, hostTabId: string): void =>
-    setHostSessionTabIdMapping(
-      { ...args, tabId },
-      hostTabId,
-      args.hostGroupIdByTabId.get(hostTabId)
-    )
+  const mappings: { tabId: string; hostTabId: string; hostGroupId?: string }[] = []
+  const map = (tabId: string, hostTabId: string): void => {
+    mappings.push({ tabId, hostTabId, hostGroupId: args.hostGroupIdByTabId.get(hostTabId) })
+  }
 
   const mirroredTerminalIds = new Set(args.terminalTabs.map((tab) => tab.id))
   for (const surface of args.terminalSurfaces) {
@@ -73,6 +70,7 @@ export function updateHostSessionTabIdMappings(args: {
   for (const entry of [...args.browserTabs, ...args.editorTabs, ...args.agentTabs]) {
     map(entry.unifiedTab.id, entry.hostTabId)
   }
+  replaceHostSessionTabIdMappings(args.environmentId, args.worktreeId, mappings)
 }
 
 export function retainClientPlacedMirroredTabs(args: {

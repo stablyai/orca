@@ -11,7 +11,7 @@ import type {
   GitStatusResult,
   GitUpstreamStatus
 } from '../../../../../../shared/git/status/git-status-types'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { GitPushTarget } from '../../../../../../shared/worktree/types'
 import {

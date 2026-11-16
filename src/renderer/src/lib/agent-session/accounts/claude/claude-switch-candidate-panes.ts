@@ -6,14 +6,14 @@ import {
   isTerminalLeafId,
   makePaneKey
 } from '../../../../../../shared/workspace-layout/stable-pane-id'
-import type { CodexAccountSelectionTarget } from '../../../../../../shared/codex-selection-lane'
+import type { CodexAccountSelectionTarget } from '../../../../../../shared/agent-accounts/codex/codex-selection-lane'
 import {
   getCodexAccountSwitchLaneMatcher,
   isForeignMachineCodexPtyId,
   resolveCodexPaneSelectionLane
 } from '../codex-pane-selection-lane'
 import type { AppState } from '@/store/types'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { ClaudePaneLookups } from './claude-queued-restart-records'
@@ -36,7 +36,7 @@ function* candidateLeaves(
   const boundPtyIds = state.ptyIdsByTabId[tab.id] ?? []
   const leaves = state.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId ?? {}
   for (const [leafId, ptyId] of Object.entries(leaves)) {
-    const entry = state.agentStatusByPaneKey[makePaneKey(tab.id, leafId)]
+    const entry = state.agentStatusByPaneKey.get(makePaneKey(tab.id, leafId))
     if (
       ptyId &&
       isTerminalLeafId(leafId) &&

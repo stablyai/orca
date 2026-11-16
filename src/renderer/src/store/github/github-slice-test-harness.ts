@@ -11,6 +11,7 @@ import {
 } from '../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../runtime/rpc/compatibility/runtime-compatibility-cache'
 import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
+import type { GitHubRepositoryIdentity } from '../../../../shared/github/repositories/repository-identity'
 import type {
   GitHubPRRefreshCandidate,
   GitHubPRRefreshReason
@@ -40,14 +41,23 @@ export const runtimeEnvironmentSubscribe: Mock<
 export const mockApi = {
   gh: {
     prForBranch: stubMock().mockResolvedValue(null),
-    refreshPRNow:
-      stubMock<[{ candidate: GitHubPRRefreshCandidate; reason?: GitHubPRRefreshReason }]>(),
+    refreshPRNow: stubMock<
+      [
+        {
+          candidate: GitHubPRRefreshCandidate
+          reason?: GitHubPRRefreshReason
+          userRefresh?: boolean
+        }
+      ]
+    >(),
     enqueuePRRefresh:
       stubMock<
         [{ candidate: GitHubPRRefreshCandidate; reason: GitHubPRRefreshReason; priority?: number }]
       >().mockResolvedValue(undefined),
     issue:
-      stubMock<[{ repoPath: string; repoId: string; number: number }]>().mockResolvedValue(null),
+      stubMock<
+        [{ repoPath: string; repoId: string; number: number; ownerRepo?: GitHubRepositoryIdentity }]
+      >().mockResolvedValue(null),
     prChecks: stubMock().mockResolvedValue([]),
     prCheckDetails: stubMock().mockResolvedValue(null),
     prComments: stubMock().mockResolvedValue([]),

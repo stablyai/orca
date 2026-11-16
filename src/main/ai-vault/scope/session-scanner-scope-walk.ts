@@ -8,7 +8,7 @@ import type {
   AiVaultSession
 } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import { yieldToEventLoop } from '../../../shared/event-loop-yield'
+import { yieldToEventLoop } from '../../../shared/concurrency/event-loop-yield'
 import { throwIfAiVaultScanCancelled } from '../scan-lifecycle/ai-vault-scan-cancellation'
 import {
   lookupSessionScopeCwds,

@@ -1,36 +1,35 @@
 import type { AgentLaunchChoices } from './agent-launch/choices/agent-launch-choices'
-import type { TelemetrySettings } from './telemetry-settings-types'
+import type { TelemetrySettings } from './telemetry/telemetry-settings-types'
 import type { BrowserProfileScope } from './browser/profiles/browser-profile-scope'
 import type { GlobalSettingsBase } from './global-settings-base'
 import type { ExecutionHostId } from './execution-host'
-import type { OrcaWorkspaceLayout } from './orca-workspace-layout'
+import type { OrcaWorkspaceLayout } from './worktree/paths/orca-workspace-layout'
 import type { GitHubProjectSettings } from './github/projects/project-types'
-import type { VoiceSettings } from './speech-types'
+import type { VoiceSettings } from './speech/speech-types'
 import type { AiVaultSearchSettings } from './ai-vault/search/ai-vault-search-settings'
-import type { GitLabProjectSettings } from './gitlab-types'
+import type { GitLabProjectSettings } from './gitlab/gitlab-types'
 import type { TaskProvider } from './work-items/task-providers'
-import type { AppIconId } from './app-icon'
+import type { AppIconId } from './app-lifecycle/identity/app-icon'
 import type { SourceControlAiSettings } from './source-control/ai/settings/source-control-ai-settings-types'
-import type { ClaudeAgentTeamsMode } from './claude-agent-teams-tmux-compat'
+import type { ClaudeAgentTeamsMode } from './agent-launch/startup/claude-agent-teams-tmux-compat'
 import type { TerminalCustomTheme } from './terminal-themes/terminal-custom-themes'
-import type { UiLanguage } from './ui-language'
 import type { GlobalWindowsRuntimeDefault } from './execution-host/project-runtime-preference'
 import type { PersistedNativeChatSessionOptions } from './native-chat/input/native-chat-session-options'
 import type { AgentChatPermissionMode } from './agent-launch/permissions/agent-chat-permission-mode'
-import type { ComputerAwakeMode } from './computer-awake-mode'
+import type { ComputerAwakeMode } from './app-lifecycle/computer-awake-mode'
 import type { CommitMessageAiSettings } from './source-control/ai/generation/commit-message-ai-types'
-import type { HostSettingOverrides } from './host-setting-overrides'
+import type { HostSettingOverrides } from './execution-host/host-setting-overrides'
 import type {
   ClaudeManagedAccount,
   ClaudeManagedAccountRuntimeSelection,
   CodexManagedAccount,
   CodexManagedAccountRuntimeSelection
-} from './managed-account-types'
-import type { NotificationSettings } from './notification-settings-types'
-import type { CtrlTabOrderMode } from './tab-types'
+} from './agent-accounts/managed-account-types'
+import type { NotificationSettings } from './notifications/notification-settings-types'
+import type { CtrlTabOrderMode } from './workspace-layout/tab-groups/tab-types'
 import type { TerminalQuickCommand } from './terminal/quick-commands/terminal-quick-command-types'
 import type { TuiAgent } from './agent-launch/catalog/tui-agent'
-import type { ZcodePlanSite } from './zcode-plan-sites'
+import type { ZcodePlanSite } from './agent-accounts/usage-credentials/zcode-plan-sites'
 import type {
   AgentDashboardMode,
   BranchPrefixStrategy,
@@ -42,9 +41,9 @@ import type {
   SourceControlViewMode,
   TaskViewPresetId
 } from './ui-chrome-types'
-import type { WorktreeVisibilityDefaults } from './repo-types'
+import type { WorktreeVisibilityDefaults } from './repository/repo-types'
 
-export type { WorktreeVisibilityDefaults } from './repo-types'
+export type { WorktreeVisibilityDefaults } from './repository/repo-types'
 
 /** MiniMax account region used to select the quota endpoint. */
 export type MiniMaxEndpoint = 'overseas' | 'cn'
@@ -75,8 +74,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   leftSidebarAppearanceMode: LeftSidebarAppearanceMode
   leftSidebarTintColor?: string
   leftSidebarTintOpacity?: number
-  uiLanguage: UiLanguage
-  uiLanguagePortugueseMigrationApplied?: boolean
   appIcon: AppIconId
   appFontFamily: string
   editorAutoSave: boolean
@@ -325,8 +322,6 @@ export type GlobalSettings = GlobalSettingsBase & {
   terminalSshViewParking?: boolean
   /** Kill switch for the hidden-worktree retention budget (C1): force-parks the least-recently-hidden un-parkable worktrees beyond a count budget or TTL. */
   terminalHiddenWorktreeRetentionBudget?: boolean
-  /** Kill switch for the browser-guest worktree retention budget: destroys the least-recently-activated hidden worktrees' webview guests beyond an LRU count budget. */
-  browserGuestWorktreeRetentionBudget?: boolean
   /** Kill switch for main-process PTY side-effect authority; on (default) = title/bell/agent facts via pty:sideEffect channel, not renderer byte parsing. */
   terminalMainSideEffectAuthority?: boolean
   /** Kill switch for main's hidden-delivery gate (Phase 4): drops PTY bytes to hidden views after model ingestion; requires terminalMainSideEffectAuthority. */
@@ -502,5 +497,3 @@ export type GlobalSettings = GlobalSettingsBase & {
   /** Transcript full-text search consent + retention. Absent means off; nothing indexes until the user opts in. */
   aiVaultSearch?: AiVaultSearchSettings
 }
-
-export type { OrcaWorkspaceLayout } from './orca-workspace-layout'

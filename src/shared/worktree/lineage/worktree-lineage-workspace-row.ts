@@ -1,4 +1,4 @@
-import { worktreeWorkspaceKey } from '../../workspace-scope'
+import { worktreeWorkspaceKey } from '../../workspace/identity/workspace-scope'
 import type { WorkspaceLineage, WorktreeLineage } from '../lineage-types'
 
 /** The workspace-keyed row that mirrors a worktree→worktree link, so both maps name one parent. */

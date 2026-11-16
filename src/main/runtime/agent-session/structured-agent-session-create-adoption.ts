@@ -13,11 +13,11 @@ import type {
   StructuredAgentCliSourceEvidence,
   StructuredAgentCliSourceLocator
 } from '../../native-chat/conversation-adoption/structured-agent-cli-source'
-import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type {
   AgentSessionProviderHandle,
   StructuredAgentId
-} from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+} from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import {
   type AgentSessionExecutionLocation,
   agentSessionExecutionLocationsEqual

@@ -41,9 +41,17 @@ export type MetricEvent =
   // Pre-auth socket refused by the per-source limiter: label 'phone' | 'data' | 'health'. Unpushed-host phones: 'not_on_edge'.
   | 'preauth_limited'
   | 'not_on_edge'
+  // A request carried an ingress header that failed to verify (wrong secret, skew, malformed).
+  | 'ingress_refused'
+  // A request from a token-mode front door's egress ranges that failed the trust rule: answered 403.
+  | 'ingress_rejected'
+  // An ingress mode is configured but malformed, so it is off: label names the problem (per isolate).
+  | 'ingress_config_invalid'
 
 // blobs: [event, label, version, reason, place]; doubles: [value, ...extra]. place is the
-// client's ingress '<continent>/<colo>' (e.g. 'AS/HKG'), '' where no client is involved. One index per event for sampling.
+// client's ingress '<continent>/<colo>' (e.g. 'AS/HKG'), '' where no client is involved. A verified
+// ingress hop appends the client's country (as the ingress reports it, else the hop's) and the hop's
+// name: 'AS/HKG/CN/cn' (continent/colo are then the hop's). One index per event for sampling.
 // Heartbeat events (alarm_lag_ms, pong_rtt_ms) fire per host every ping interval; only 1 in
 // HEARTBEAT_FACTOR is written, and Analytics Engine's _sample_interval does not know that. Those
 // two events carry the factor as their last double (double2, as they pass no extra), so a count
@@ -65,7 +73,9 @@ export function metric(env: Env, event: MetricEvent, value = 1, label = '', extr
 }
 
 // From the Worker's request (cf is absent in local dev).
-export function requestPlace(request: Request): string {
-  const cf = (request as Request & { cf?: { colo?: string; continent?: string } }).cf
-  return cf ? `${cf.continent ?? '?'}/${cf.colo ?? '?'}` : 'local'
+export function requestPlace(request: Request, ingress?: { name: string; country?: string } | null): string {
+  const cf = (request as Request & { cf?: { colo?: string; continent?: string; country?: string } }).cf
+  if (!cf) { return ingress ? `local/${ingress.name}` : 'local' }
+  const place = `${cf.continent ?? '?'}/${cf.colo ?? '?'}`
+  return ingress ? `${place}/${ingress.country ?? cf.country ?? '?'}/${ingress.name}` : place
 }

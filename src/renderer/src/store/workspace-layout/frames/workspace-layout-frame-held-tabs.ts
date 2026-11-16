@@ -1,7 +1,7 @@
 import { annotateBrowserPageHandles } from '@/store/slices/browser/hosts/browser-initialization-presentation-ownership'
 // Build slices without set: pending window commands keep tabs as drawn (including removal/placement); other tabs and order follow main, retaining hidden chat launch slots.
 
-import type { Tab, TabGroup } from '../../../../../shared/tab-types'
+import type { Tab, TabGroup } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { structuredAgentSessionTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { isEditorTabContentType } from '../../slices/editor/tabs/editor-tab-content-type'
 import { heldTabsInMainGroups } from './workspace-layout-frame-held-tab-groups'

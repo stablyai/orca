@@ -11,8 +11,8 @@ import { NODE_PAIRED_E2EE_PRIMITIVES } from './e2ee/node/paired-e2ee-node-primit
 import { remoteRuntimeE2EEV2HostLatchStore } from './e2ee/node/remote-runtime-e2ee-v2-host-latch'
 import { RemoteRuntimeClientError } from './remote-runtime-client-error'
 import { E2EE_V2_TOKEN_CAPABILITIES_RUNTIME_CAPABILITY } from './pairing/device-key-capability'
-import type { RuntimeRpcResponse } from '../runtime-rpc-envelope'
-import type { RuntimeStatus } from '../runtime-session-contracts'
+import type { RuntimeRpcResponse } from './rpc/runtime-rpc-envelope'
+import type { RuntimeStatus } from './session-graph/runtime-session-contracts'
 import { serializeRemoteRuntimePayload } from './remote-runtime-memory-limits'
 import { parseRemoteRuntimeJsonText } from './requests/remote-runtime-request-frames'
 

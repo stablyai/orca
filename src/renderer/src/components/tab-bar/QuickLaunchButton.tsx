@@ -12,7 +12,7 @@ import React, { useCallback } from 'react'
 import { toast } from 'sonner'
 import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
 
-import { createNonSecureContextUuid } from '../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
 import { captureNativeChatComposerFocusIntent } from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
 import {
   agentLaunchPromptOwnership,
@@ -32,7 +32,7 @@ import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useAgentMenuShortcutLabels } from './agent-menu-shortcut-labels'
 import type { AgentPickerInventorySource } from '../agent/use-agent-launch-picker-inventory'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type { LaunchSource } from '../../../../shared/telemetry-events'
+import type { LaunchSource } from '../../../../shared/telemetry/schemas/telemetry-property-schemas'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'

@@ -1,5 +1,5 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 
 import { isRepoWorktreeId } from './profile-project-worktree-identity'
 import {
@@ -36,6 +36,7 @@ export function collectTransferWorktreeIds(state: PersistedState, repoId: string
   }
   Object.keys(state.ui?.explorerDisplayRootByWorktree ?? {}).forEach(add)
   Object.keys(state.ui?.showDotfilesByWorktree ?? {}).forEach(add)
+  Object.keys(state.ui?.notificationsMutedByWorktree ?? {}).forEach(add)
   return ids
 }
 

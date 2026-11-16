@@ -1,5 +1,11 @@
-import type { BrowserPage, BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
-import type { Tab, WorkspaceVisibleTabType } from '../../../../../shared/tab-types'
+import type {
+  BrowserPage,
+  BrowserWorkspace
+} from '../../../../../shared/browser/workspaces/browser-workspace-types'
+import type {
+  Tab,
+  WorkspaceVisibleTabType
+} from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import {

@@ -1,9 +1,12 @@
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
-import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
-import { mapSettledWithConcurrency } from '../../shared/map-with-concurrency'
+import {
+  throwIfSignalAborted,
+  waitForPromiseWithSignal
+} from '../../shared/concurrency/abort-signal-reason'
+import { mapSettledWithConcurrency } from '../../shared/concurrency/map-with-concurrency'
 import { parsePtySessionId } from '../../shared/terminal/pty/lifecycle/pty-session-id-format'
-import { isFolderRepo } from '../../shared/repo-kind'
-import type { Repo } from '../../shared/repo-types'
+import { isFolderRepo } from '../../shared/repository/repo-kind'
+import type { Repo } from '../../shared/repository/repo-types'
 import { splitWorktreeId, worktreeIdentityKey } from '../../shared/worktree/id'
 import { getDaemonProvider } from '../daemon/providers/lifecycle/daemon-provider-state'
 import {
@@ -18,7 +21,7 @@ import { getLocalProjectWorktreeGitOptions } from '../workspaces/execution-host/
 import { listLocalRepoWorktreesStrict } from '../workspaces/catalog/repo-worktrees'
 import { listRegisteredPtys, registerPty } from './pty-registry'
 import { getVerifiedLocalFolderWorkspaceKeys } from './verified-local-folder-workspaces'
-import { errorMessage } from '../../shared/error-message'
+import { errorMessage } from '../../shared/errors/error-message'
 
 type HydrationStore = Store
 

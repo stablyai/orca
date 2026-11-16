@@ -1,4 +1,4 @@
-import { agentJournalToolCallLifecycle } from '../../agent-journal-tool-call-lifecycle'
+import { agentJournalToolCallLifecycle } from '../../agent-session/journal/agent-journal-tool-call-lifecycle'
 import {
   isToolCallBlock,
   type NativeChatToolCallBlock,

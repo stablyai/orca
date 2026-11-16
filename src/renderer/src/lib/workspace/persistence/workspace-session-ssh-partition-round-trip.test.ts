@@ -7,7 +7,7 @@ import type { TerminalTab } from '../../../../../shared/workspace-layout/termina
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
 import { fetchWorkspaceSessionWithRuntimeHostOwners } from './workspace-session-host-hydration'
-import '../../../../../shared/workspace-scope'
+import '../../../../../shared/workspace/identity/workspace-scope'
 import '@/store/testing/app-store-test-fixture'
 import { makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
 import { buildWorkspaceSessionHostSnapshots } from './workspace-session-host-persistence'

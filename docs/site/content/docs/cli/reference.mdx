@@ -308,6 +308,7 @@ Use `orca computer` for native desktop apps outside the built-in browser:
 ```bash
 orca computer permissions --json
 orca computer list-apps --json
+orca computer launch-app Safari --json
 orca computer get-app-state --app com.apple.Safari --json
 orca computer click --app com.apple.Safari --element-index 12 --json
 orca computer paste-text --app com.apple.Safari --text "hello" --json
@@ -472,6 +473,13 @@ Agent status hooks:
 orca agent hooks status --json
 orca agent hooks on --json
 orca agent hooks off --json
+```
+
+Before deleting the app, remove what Orca added outside its own folders (agent hooks, the `orca` command, the background service and `~/.orca/agent-hooks`). Projects, worktrees, chat history and settings stay:
+
+```bash
+orca uninstall
+orca uninstall --yes --json
 ```
 
 ## Agent habits

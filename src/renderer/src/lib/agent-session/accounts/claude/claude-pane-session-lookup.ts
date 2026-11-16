@@ -2,10 +2,10 @@ import { useAppStore } from '@/store/index'
 import {
   getCodexSelectionLaneKey,
   normalizeCodexAccountSelectionTarget
-} from '../../../../../../shared/codex-selection-lane'
-import type { CodexAccountSelectionTarget } from '../../../../../../shared/codex-selection-lane'
+} from '../../../../../../shared/agent-accounts/codex/codex-selection-lane'
+import type { CodexAccountSelectionTarget } from '../../../../../../shared/agent-accounts/codex/codex-selection-lane'
 import type { AgentProviderSessionMetadata } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { isSessionHeldByAnotherPane } from '@/lib/agent-session/identity/claude-session-pane-holders'
 import { warnSessionsLeftBehind } from '@/lib/provider-accounts/claude-account-switch-notices'

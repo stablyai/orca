@@ -1,5 +1,5 @@
 import { normalizeGitGraphFilters } from '../../../../shared/git/history/git-graph-filters'
-import { resolveStatusBarCompactChangeNoticeDismissed } from '../../../../shared/status-bar-compact-change-notice'
+import { resolveStatusBarCompactChangeNoticeDismissed } from '../../../../shared/status-bar/status-bar-compact-change-notice'
 import { migrateExplorerDisplayRoots } from '../../../../shared/file-listing/file-explorer-display-root'
 import '../../../../shared/constants'
 import {
@@ -8,10 +8,11 @@ import {
   isDefaultedCompactWorktreeCardProperties,
   normalizeWorktreeCardProperties
 } from '../../../../shared/worktree/row-display/card-properties'
-import { isExistingPersistedProfile } from '../../../../shared/project-order-manual-default-notice'
-import { resolveUsagePercentageDisplayChangeNoticeDismissed } from '../../../../shared/usage-percentage-display-change-notice'
-import { normalizePersistedWorkspaceStatuses } from '../../../../shared/workspace-statuses'
+import { isExistingPersistedProfile } from '../../../../shared/sidebar-list/sections/project-order-manual-default-notice'
+import { resolveUsagePercentageDisplayChangeNoticeDismissed } from '../../../../shared/status-bar/usage-percentage-display-change-notice'
+import { normalizePersistedWorkspaceStatuses } from '../../../../shared/workspace/status/workspace-statuses'
 import {
+  normalizeNotificationsMutedByWorktree,
   normalizeRightSidebarExplorerView,
   normalizeRightSidebarTab,
   normalizeShowDotfilesByWorktree,
@@ -23,7 +24,7 @@ import {
   resolveSetupGuideSidebarDismissedOnLoad
 } from '../../applying-settings/onboarding-normalization'
 import type { PersistedState } from '../../../../shared/persisted-state-types'
-import type { OnboardingState } from '../../../../shared/onboarding-state-types'
+import type { OnboardingState } from '../../../../shared/onboarding/onboarding-state-types'
 
 export function normalizeLoadedUiState(
   parsed: PersistedState,
@@ -226,6 +227,9 @@ export function normalizeLoadedUiState(
     explorerDisplayRootByWorktree,
     gitGraphFiltersByWorktree: normalizeGitGraphFilters(parsed.ui?.gitGraphFiltersByWorktree),
     showDotfilesByWorktree: normalizeShowDotfilesByWorktree(parsed.ui?.showDotfilesByWorktree),
+    notificationsMutedByWorktree: normalizeNotificationsMutedByWorktree(
+      parsed.ui?.notificationsMutedByWorktree
+    ),
     workspaceStatuses,
     _workspaceStatusesDefaultOrderMigrated: true,
     _workspaceStatusesReorderedDefaultRepaired: true,

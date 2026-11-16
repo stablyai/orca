@@ -12,7 +12,8 @@ import { RELAY_PROTOCOL_LIMITS } from '../../../packages/relay-contract/src/prot
 import { CONTROL_CONTINUITY_LIMITS } from '../../../packages/relay-contract/src/control-continuity'
 import { metric } from './metrics'
 import { RelayCredentialStore } from '../../relay/src/credentials/credential-store'
-import type { AssignBody, DeviceRow } from './admin'
+import type { AssignBody, DeviceRow, VerifyBody, VerifyResult } from './admin'
+import { verifiesHere, verifyCredential } from './verify'
 import { ADMIN_JTI_KEY, admitJti, type AdminReplayGuard, type ReplayRefusal, type SeenJtis } from './admin-jti'
 import type { AssignResult, StoredAssignment } from './object-store'
 import type { EdgeClaims } from './env'
@@ -98,6 +99,17 @@ export class HostRelay extends HostRelayPhones {
   // both ignore it, so a just-drained desktop does not make the export that follows answer busy.
   private liveControls(): WebSocket[] {
     return this.ctx.getWebSockets('control').filter((ws) => this.attachment(ws) !== null)
+  }
+
+  // The director's phone credential check (/v1/resolve, the invite move): read-only (verify.ts). An
+  // object that never held a host (pushed() reads sqlite_master, so no schema is created) or does
+  // not hold this one answers before the jti is recorded and writes nothing; otherwise the jti is
+  // its only write.
+  async adminVerify(body: VerifyBody, replay?: AdminReplayGuard | null): Promise<VerifyResult | ReplayRefusal> {
+    if (!this.pushed() || !verifiesHere(this.store, this.config.cellId, body.relayHostId)) { return { outcome: 'not_here' } }
+    const refused = await this.claimAdminJti(replay)
+    if (refused) { return refused }
+    return await verifyCredential(this.store, this.config.cellId, body)
   }
 
   // Health probe (GET /__health/object, health.ts), only ever called on the canary object: one

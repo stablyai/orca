@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { inspectRuntimeTerminalProcess } from '@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection'
 import { buildPaneAccountRestartStartup } from '@/lib/agent-session/accounts/agent-account-restart-startup'
 import {
@@ -15,7 +16,7 @@ import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
 import type * as paneSelectionLane from '@/lib/agent-session/accounts/codex-pane-selection-lane'
 import type * as sonner from 'sonner'
 import { getDefaultSettings } from '../../../../../shared/constants'
-import type { ClaudeAccountSwitchRunningSessions } from '../../../../../shared/claude-account-switch-settings'
+import type { ClaudeAccountSwitchRunningSessions } from '../../../../../shared/agent-accounts/claude/claude-account-switch-settings'
 import { recordQueuedClaudeRestarts } from '@/lib/agent-session/accounts/claude/claude-queued-restart-records'
 import { useReadyPaneAccountRestarts } from './use-ready-pane-account-restarts'
 import { useTerminalPaneLayoutBindings } from '../layout/ownership/use-terminal-pane-layout-bindings'
@@ -43,19 +44,21 @@ function seedWorkingClaudePane(setting: ClaudeAccountSwitchRunningSessions): voi
   useAppStore.setState({
     settings: { ...getDefaultSettings('/home/dev'), claudeAccountSwitchRunningSessions: setting },
     terminalLayoutsByTabId: { 'tab-1': LAYOUT },
-    agentStatusByPaneKey: {
-      [paneKey]: {
-        paneKey,
-        tabId: 'tab-1',
-        agentType: 'claude',
-        state: 'working',
-        prompt: '',
-        updatedAt: 1,
-        stateStartedAt: 1,
-        stateHistory: [],
-        providerSession: { key: 'session_id', id: 'session-a' }
-      }
-    }
+    agentStatusByPaneKey: acceptedAgentStatuses(
+      Object.entries({
+        [paneKey]: {
+          paneKey,
+          tabId: 'tab-1',
+          agentType: 'claude',
+          state: 'working',
+          prompt: '',
+          updatedAt: 1,
+          stateStartedAt: 1,
+          stateHistory: [],
+          providerSession: { key: 'session_id', id: 'session-a' }
+        }
+      })
+    )
   })
 }
 
@@ -277,13 +280,16 @@ describe('on-screen restart of a Claude pane no hook named', () => {
         ]
       },
       ptyIdsByTabId: { 'tab-1': [OLD_PTY] },
-      agentStatusByPaneKey: {
-        [PANE_KEY]: {
-          ...state.agentStatusByPaneKey[PANE_KEY],
-          state: 'done',
-          providerSession: undefined
-        }
-      }
+      agentStatusByPaneKey: acceptedAgentStatuses([
+        [
+          PANE_KEY,
+          {
+            ...state.agentStatusByPaneKey.get(PANE_KEY)!,
+            state: 'done',
+            providerSession: undefined
+          }
+        ]
+      ])
     }))
   })
 
@@ -337,13 +343,16 @@ describe('on-screen restart of a Claude pane no hook named', () => {
         .setAgentStatus(PANE_KEY, { state: 'working', prompt: 'next', agentType: 'claude' })
       answerClaudeAccountSwitchPrompt('restart')
       useAppStore.setState((state) => ({
-        agentStatusByPaneKey: {
-          [PANE_KEY]: {
-            ...state.agentStatusByPaneKey[PANE_KEY],
-            state: 'done',
-            providerSession: { key: 'session_id', id: SESSION }
-          }
-        }
+        agentStatusByPaneKey: acceptedAgentStatuses([
+          [
+            PANE_KEY,
+            {
+              ...state.agentStatusByPaneKey.get(PANE_KEY)!,
+              state: 'done',
+              providerSession: { key: 'session_id', id: SESSION }
+            }
+          ]
+        ])
       }))
       await flush()
     })

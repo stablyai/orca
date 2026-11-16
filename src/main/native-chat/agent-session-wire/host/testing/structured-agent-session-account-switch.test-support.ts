@@ -1,14 +1,18 @@
 import { join } from 'node:path'
 import { expect } from 'vitest'
-import type { ClaudeAccountSwitchRunningSessions } from '../../../../../shared/claude-account-switch-settings'
+import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
+import type { ClaudeAccountSwitchRunningSessions } from '../../../../../shared/agent-accounts/claude/claude-account-switch-settings'
 import type { AgentChildWorkView } from '../../../../../shared/agent-status/child-work/agent-status-child-work-view'
 import type { AgentJournalMessageItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import { agentSessionMessagePayload } from '../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { moveChatsAfterClaudeAccountSelection } from '../../../../claude-accounts/selection/claude-account-switch-chat-moves'
 import { reportedChildWork } from '../../observations/testing/structured-agent-session-reported-child-work.test-support'
-import { REST_TEST_CALLER } from './structured-agent-session-rest-test-rig'
-import { hostTestMessage, hostTestOperationId } from './structured-agent-session-host-test-data'
+import { REST_TEST_CALLER } from './structured-agent-session-rest-test-rig.test-fixture'
+import {
+  hostTestMessage,
+  hostTestOperationId
+} from './structured-agent-session-host-test-data.test-fixture'
 import {
   type createReceivingCallerFixture,
   PARENT
@@ -48,7 +52,7 @@ export function dispatchedTexts(f: Fixture): string[] {
 }
 
 export async function rows(f: Fixture) {
-  return (await f.rig.host.journalSnapshot(PARENT)).items.map((item) => item.body)
+  return (await readTestHostJournal(f.rig.host, PARENT)).items.map((item) => item.body)
 }
 
 export function selectB(f: Fixture, policy: ClaudeAccountSwitchRunningSessions): Promise<void> {

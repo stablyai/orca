@@ -1,9 +1,9 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { expect, it, vi } from 'vitest'
-import { agentSessionAccountHomesEqual } from '../../../../../shared/agent-session/lifecycle/agent-session-account-home'
-import type { ClaudeManagedAccount } from '../../../../../shared/managed-account-types'
-import { createEmptyRateLimitState } from '../../../../../shared/rate-limit-state-factory'
+import { agentSessionAccountHomesEqual } from '../../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import type { ClaudeManagedAccount } from '../../../../../shared/agent-accounts/managed-account-types'
+import { createEmptyRateLimitState } from '../../../../../shared/agent-usage/rate-limits/rate-limit-state-factory'
 import { claudeStateFile } from '../../../../claude-accounts/sign-in/claude-account-folder'
 import {
   CLAUDE_ACCOUNT_FOLDER_IN_USE_MESSAGE,

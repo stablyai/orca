@@ -53,7 +53,9 @@ export function warnDiscoveredClaudeNotMoved(): void {
 }
 
 function hookNamesSession(pane: { tabId: string; leafId: string }): boolean {
-  const entry = useAppStore.getState().agentStatusByPaneKey[makePaneKey(pane.tabId, pane.leafId)]
+  const entry = useAppStore
+    .getState()
+    .agentStatusByPaneKey.get(makePaneKey(pane.tabId, pane.leafId))
   return !!normalizeAgentProviderSession(entry?.providerSession)
 }
 

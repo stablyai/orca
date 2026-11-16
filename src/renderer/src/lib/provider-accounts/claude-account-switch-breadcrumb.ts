@@ -8,7 +8,7 @@ import {
 } from '../agent-session/accounts/claude/claude-session-account-move'
 import type { ClaudeSwitchCandidatePane } from '../agent-session/accounts/claude/claude-switch-candidate-panes'
 import type { ClaudePaneLookups } from '../agent-session/accounts/claude/claude-queued-restart-records'
-import type { ClaudeAccountSwitchRunningSessions } from '../../../../shared/claude-account-switch-settings'
+import type { ClaudeAccountSwitchRunningSessions } from '../../../../shared/agent-accounts/claude/claude-account-switch-settings'
 
 export type ClaudeAccountSwitchRecord = {
   policy: ClaudeAccountSwitchRunningSessions

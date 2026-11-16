@@ -6,6 +6,7 @@ import { buildTerminalTabRetirementPlans } from '../terminals/retirement/termina
 import { cancelStructuredLaunchesForWorktrees } from '../slices/worktrees/teardown/purged-structured-launch-retirement'
 import { collectHostTwinPurgeScopes } from '../slices/worktrees/teardown/host-twin-purge-scopes'
 import { omitRecordKeys } from '../slices/worktrees/teardown/record-key-omission'
+import { removeWorkspaceUnreadState } from '../slices/workspace-attention/workspace-unread-removal'
 import {
   collectRemovedHostTwinState,
   isRuntimeHost,
@@ -119,6 +120,17 @@ export function closeRemovedHostTwinState(
     }
     // Why: a parked or restored pane has no exit callback left to clear these; shared PTYs are not in the plans' lists.
     set((state) => ({
+      ...removeWorkspaceUnreadState(
+        state,
+        [
+          ...new Set([
+            ...hostTwinIds.keys(),
+            ...preCall.byHost
+              .filter((entry) => entry.hostId === hostId)
+              .flatMap((entry) => [...entry.twinHostIds.keys()])
+          ])
+        ].map((id) => ({ id, hostId }))
+      ),
       suppressedPtyExitIds: omitRecordKeys(state.suppressedPtyExitIds, retiredPtyIds),
       pendingPaneAccountRestarts: omitRecordKeys(state.pendingPaneAccountRestarts, retiredPtyIds),
       codexRestartNoticeByPtyId: omitRecordKeys(state.codexRestartNoticeByPtyId, retiredPtyIds)

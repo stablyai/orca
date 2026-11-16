@@ -8,7 +8,7 @@ import {
   openProfileStateDatabase,
   openProfileStateDatabaseReadOnly
 } from '../../main/persistence/profile-state/database/profile-state-database'
-import { profileStateDatabaseFile } from '../../shared/profile-state-storage-paths'
+import { profileStateDatabaseFile } from '../../shared/orca-profiles/profile-state-storage-paths'
 import {
   exportProfileStateJson,
   importProfileStateJson
@@ -58,7 +58,7 @@ vi.mock('../runtime/client', () => {
   return { RuntimeClient }
 })
 
-vi.mock('../runtime/metadata', async (importOriginal) => ({
+vi.mock('../runtime/profile/metadata', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getDefaultUserDataPath: getDefaultUserDataPathMock
 }))

@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../src/shared/sidebar-inputs-switch'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../src/shared/sidebar-list/feed/sidebar-inputs-switch'
 import type { useRouter } from 'expo-router'
 import { floatingWorkspaceSessionPath } from '../../session/floating-workspace'
 import { holdSessionLeave } from '../../session/session-leave-guard'
@@ -12,17 +12,17 @@ import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import {
   rpcClientForExecutionHost,
   workspaceRouteExecutionHost
-} from '../../worktree/execution-host-scoped-rpc-client'
+} from '../../worktree/execution-hosts/execution-host-scoped-rpc-client'
 import { serverUpdateNeededNotice } from '../../host-route-notice'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import { leaveHostRoute } from '../../host-route-exit'
 import {
   getWorktreeRowIdentity,
   isSameWorktreeRow
-} from '../../worktree/worktree-host-row-identity'
-import { noteLastVisitedWorktree } from '../../worktree/last-visited-worktree-by-host'
-import { isWorktreePinned } from '../../worktree/workspace-list-sections'
-import type { Worktree } from '../../worktree/workspace-list-types'
+} from '../../worktree/row-presentation/worktree-host-row-identity'
+import { noteLastVisitedWorktree } from '../../worktree/navigation/last-visited-worktree-by-host'
+import { isWorktreePinned } from '../../worktree/workspace-list/workspace-list-sections'
+import type { Worktree } from '../../worktree/workspace-list/workspace-list-types'
 import { worktreeActivate, worktreePinWrite, worktreeSleep } from '../host-screen-operations'
 import type { HostScreenState } from '../use-host-screen-state'
 import { useHostWorktreeDelete } from './use-host-worktree-delete'

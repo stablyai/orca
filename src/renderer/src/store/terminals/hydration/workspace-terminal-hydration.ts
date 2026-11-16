@@ -5,8 +5,8 @@ import {
   folderWorkspaceKey,
   isWorkspaceKey,
   worktreeWorkspaceKey
-} from '../../../../../shared/workspace-scope'
-import { buildByIdIndex } from '../../../../../shared/first-row-by-id-index'
+} from '../../../../../shared/workspace/identity/workspace-scope'
+import { buildByIdIndex } from '../../../../../shared/collections/first-row-by-id-index'
 import { addAdditionalValidWorkspaceKeys } from '@/lib/workspace/persistence/workspace-session-hydration-keys'
 import {
   buildValidWorktreeIdsForSessionHydration,
@@ -22,6 +22,7 @@ import {
   type WorkspaceHydrationPatch
 } from './workspace-terminal-hydration-patch'
 import { buildWorkspaceTerminalRowPlan } from './workspace-terminal-row-plan'
+import { pickFallbackActiveWorktree } from './workspace-terminal-fallback-worktree'
 import { buildWorkspaceTerminalReconnectPlan } from './workspace-terminal-reconnect-plan'
 import { buildWorkspaceTerminalLayoutPlan } from './workspace-terminal-layout-plan'
 import { addHydratedSshWorktreePlaceholders } from './workspace-terminal-ssh-placeholders'
@@ -76,11 +77,11 @@ export function createWorkspaceTerminalHydrationActions(
           !session.activeWorktreeId &&
           session.activeRepoId &&
           knownRepoIds.has(session.activeRepoId)
-            ? (runtimeSessionPlaceholders.worktreesByRepo[session.activeRepoId]?.find(
-                (worktree) => worktree.isMainWorktree
-              )?.id ??
-              runtimeSessionPlaceholders.worktreesByRepo[session.activeRepoId]?.[0]?.id ??
-              null)
+            ? (pickFallbackActiveWorktree({
+                candidates: runtimeSessionPlaceholders.worktreesByRepo[session.activeRepoId] ?? [],
+                session,
+                tabsByWorktree
+              })?.id ?? null)
             : null
         const activeWorktreeId = (() => {
           if (session.activeWorktreeId && validWorktreeIds.has(session.activeWorktreeId)) {

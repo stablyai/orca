@@ -1,6 +1,6 @@
 import { defineMethod } from '../../core'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
-import { isRepoHidden } from '../../../../../shared/hidden-projects'
+import { isRepoHidden } from '../../../../../shared/project/catalog/hidden-projects'
 import { resolveReplySnapshot } from '../../workspace-client-views/content-snapshot-id'
 import { PROJECT_GROUP_METHODS } from './project-group-rpc-methods'
 import { PROJECT_RUNTIME_METHODS } from './project-runtime-rpc-methods'
@@ -15,7 +15,7 @@ import {
   RepoShow
 } from '../../../../../shared/rpc-contract/github/github-repo-target-params'
 import { hostQualifiedRepoSelector } from '../../../workspaces/catalog/runtime-repo-selector'
-import { repoHooksCheckIsBackground } from '../../../../../shared/repo-hooks-check-wake'
+import { repoHooksCheckIsBackground } from '../../../../../shared/workspace-setup/hooks/repo-hooks-check-wake'
 import {
   projectRepoResultVisibilityForClient,
   projectRepoVisibilityForClient

@@ -5,7 +5,7 @@ import {
   mulberry32,
   splitIntoRandomChunks,
   type AgentTuiStreamDims
-} from '../../../../shared/agent-tui-ansi-fuzz-stream'
+} from '../../../../shared/terminal/testing/agent-tui-ansi-fuzz-stream'
 import {
   SNAPSHOT_REPLAY_PREAMBLE_ALT,
   SNAPSHOT_REPLAY_PREAMBLE_NORMAL,

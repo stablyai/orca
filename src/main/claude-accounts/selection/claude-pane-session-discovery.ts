@@ -7,11 +7,11 @@ import {
 import { tuiAgentArgsBypassPermissions } from '../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import { quoteStartupArg } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { tokenizeCommandLine } from '../../../shared/agent-status/process/agent-command-line-entrypoint'
-import { findOptionOccurrence } from '../../../shared/command-option-occurrence'
+import { findOptionOccurrence } from '../../../shared/cli/command-option-occurrence'
 import {
   buildProcessTableIndex,
   collectDescendantsFromIndex
-} from '../../../shared/process-table-index'
+} from '../../../shared/process-observation/tables/process-table-index'
 import { listRegisteredPtys } from '../../memory/pty-registry'
 import { findClaudeSessionFile } from '../../native-chat/transcript-discovery/session-file-resolver-claude-probe'
 import { startedBefore } from '../../providers/foreground/windows/shell-alone-in-job'

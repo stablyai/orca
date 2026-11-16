@@ -1,6 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import {
   confirmRuntimeTerminalForegroundProcess,
   inspectRuntimeTerminalProcess
@@ -16,7 +17,7 @@ import {
 import { carriesLookedUpClaudeSession } from '../agent-session/accounts/claude/claude-queued-restart-records'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { ClaudeAccountSwitchRunningSessions } from '../../../../shared/claude-account-switch-settings'
+import type { ClaudeAccountSwitchRunningSessions } from '../../../../shared/agent-accounts/claude/claude-account-switch-settings'
 import type { ClaudeHostFolders } from '../agent-session/accounts/claude/claude-pane-account-folder'
 import type * as paneSelectionLane from '../agent-session/accounts/codex-pane-selection-lane'
 import type * as sonner from 'sonner'
@@ -137,7 +138,7 @@ function seed(
         }
       ])
     ),
-    agentStatusByPaneKey: Object.fromEntries(
+    agentStatusByPaneKey: acceptedAgentStatuses(
       ns.map((n) => [makePaneKey(tabId(n), leafId(n)), status(n, panes[n])])
     ),
     paneForegroundAgentByPaneKey: {},
@@ -369,7 +370,7 @@ function discoverAt(configDir: string, during: () => void = () => {}): ReturnTyp
 }
 
 const paneSession = () =>
-  useAppStore.getState().agentStatusByPaneKey[makePaneKey(tabId(1), leafId(1))]?.providerSession
+  useAppStore.getState().agentStatusByPaneKey.get(makePaneKey(tabId(1), leafId(1)))?.providerSession
 
 it('queues a pane no hook named whose record sits on the account left', async () => {
   seed('restart', { 1: null })
@@ -427,12 +428,15 @@ it('keeps the session a hook reported while the lookup ran', async () => {
   const paneKey = makePaneKey(tabId(1), leafId(1))
   discoverAt(FOLDERS['acct-a'], () =>
     useAppStore.setState((state) => ({
-      agentStatusByPaneKey: {
-        [paneKey]: {
-          ...state.agentStatusByPaneKey[paneKey],
-          providerSession: recorded(1, FOLDERS['acct-b'])
-        }
-      }
+      agentStatusByPaneKey: acceptedAgentStatuses([
+        [
+          paneKey,
+          {
+            ...state.agentStatusByPaneKey.get(paneKey)!,
+            providerSession: recorded(1, FOLDERS['acct-b'])
+          }
+        ]
+      ])
     }))
   )
 
@@ -466,8 +470,8 @@ function stubLookups(lookUp: (id: string) => AgentProviderSessionMetadata | null
 function dropStatus(...ns: number[]): void {
   const dropped = new Set<string>(ns.map((n) => makePaneKey(tabId(n), leafId(n))))
   useAppStore.setState((state) => ({
-    agentStatusByPaneKey: Object.fromEntries(
-      Object.entries(state.agentStatusByPaneKey).filter(([key]) => !dropped.has(key))
+    agentStatusByPaneKey: acceptedAgentStatuses(
+      [...state.agentStatusByPaneKey].filter(([key]) => !dropped.has(key))
     )
   }))
 }
@@ -506,12 +510,14 @@ it.each(['looks', 'hook names'])(
     stubLookups(() => recorded(1, FOLDERS['acct-a']))
     if (holder === 'hook names') {
       useAppStore.setState({
-        agentStatusByPaneKey: {
-          [makePaneKey(tabId(2), leafId(2))]: {
-            ...status(2, null),
-            providerSession: recorded(1, FOLDERS['acct-a'])
-          }
-        }
+        agentStatusByPaneKey: acceptedAgentStatuses(
+          Object.entries({
+            [makePaneKey(tabId(2), leafId(2))]: {
+              ...status(2, null),
+              providerSession: recorded(1, FOLDERS['acct-a'])
+            }
+          })
+        )
       })
     }
 
@@ -527,13 +533,13 @@ it.each(['keep', 'ask', 'restart'] as const)(
   async (policy) => {
     seed(policy, { 1: FOLDERS['acct-a'], 2: FOLDERS['acct-a'] })
     useAppStore.setState((state) => ({
-      agentStatusByPaneKey: {
+      agentStatusByPaneKey: acceptedAgentStatuses([
         ...state.agentStatusByPaneKey,
-        [makePaneKey(tabId(2), leafId(2))]: {
-          ...status(2, null),
-          providerSession: recorded(1, FOLDERS['acct-a'])
-        }
-      },
+        [
+          makePaneKey(tabId(2), leafId(2)),
+          { ...status(2, null), providerSession: recorded(1, FOLDERS['acct-a']) }
+        ]
+      ]),
       pendingPaneAccountRestarts: { [ptyId(1)]: 'claude' }
     }))
 

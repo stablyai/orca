@@ -1,10 +1,11 @@
 import type {
   ComputerActionResult,
+  ComputerLaunchAppResult,
   ComputerListAppsResult,
   ComputerListWindowsResult,
   ComputerProviderCapabilities,
   ComputerSnapshotResult
-} from '../../shared/computer-use-runtime-types'
+} from '../../shared/computer/computer-use-runtime-types'
 import type { CommandHandler } from '../dispatch/dispatch'
 import {
   getOptionalNonNegativeIntegerFlag,
@@ -14,10 +15,11 @@ import {
 } from '../arguments/flags'
 import { queryComputerTreeText } from './computer-tree-query'
 import { runComputerWait } from './computer-wait-command'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import {
   formatComputerAction,
   formatGetAppState,
+  formatLaunchApp,
   formatListApps,
   formatListWindows
 } from './computer-format'
@@ -36,7 +38,7 @@ import {
   getComputerTextActionFlags,
   getComputerTypeTextActionFlags
 } from './computer-action-flags'
-import { computerTypeTextTargetUnsupportedMessage } from '../../shared/computer-use-type-text-target'
+import { computerTypeTextTargetUnsupportedMessage } from '../../shared/computer/computer-use-type-text-target'
 
 export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
   'computer capabilities': async ({ client, json }) => {
@@ -78,6 +80,13 @@ export const COMPUTER_HANDLERS: Record<string, CommandHandler> = {
         .filter((line) => line !== null)
         .join('\n')
     })
+  },
+  'computer launch-app': async ({ flags, client, json }) => {
+    const result = await client.call<ComputerLaunchAppResult>('computer.launchApp', {
+      app: getRequiredStringFlag(flags, 'app'),
+      ...(flags.get('activate') === true ? { activate: true } : {})
+    })
+    printResult(result, json, formatLaunchApp)
   },
   'computer list-windows': async ({ flags, client, json }) => {
     const result = await client.call<ComputerListWindowsResult>('computer.listWindows', {
@@ -269,7 +278,7 @@ function getComputerPermissionSetupId(
 function formatComputerCapabilities(value: ComputerProviderCapabilities): string {
   return [
     `${value.provider} (${value.platform}, protocol ${value.protocolVersion})`,
-    `  Apps: list=${value.supports.apps.list} bundleIds=${value.supports.apps.bundleIds} pids=${value.supports.apps.pids}`,
+    `  Apps: list=${value.supports.apps.list} bundleIds=${value.supports.apps.bundleIds} pids=${value.supports.apps.pids} launch=${value.supports.apps.launch === true}`,
     `  Windows: list=${value.supports.windows.list} targetById=${value.supports.windows.targetById} targetByIndex=${value.supports.windows.targetByIndex}`,
     `  Observation: screenshot=${value.supports.observation.screenshot} elementFrames=${value.supports.observation.elementFrames} annotatedScreenshot=${value.supports.observation.annotatedScreenshot}`,
     `  Actions: ${Object.entries(value.supports.actions)

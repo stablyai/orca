@@ -2,7 +2,7 @@ import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../agent-session/lifecycle/agent-session-resume'
-import { readClaudeModel } from '../../agent-session/lifecycle/provider-session-live-settings'
+import { readClaudeModel } from '../../agent-session/lifecycle/resume/provider-session-live-settings'
 import type { TuiAgent } from '../catalog/tui-agent'
 import { YOLO_TUI_AGENT_ARGS } from '../permissions/tui-agent-permissions'
 

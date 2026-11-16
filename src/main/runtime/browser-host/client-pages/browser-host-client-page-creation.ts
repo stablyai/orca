@@ -19,7 +19,7 @@ import {
 } from '../../../../shared/browser/client-hosting/browser-client-page-creation-timeouts'
 import { assertBrowserHostPageCommandAdmission } from '../commands/browser-host-page-command-admission'
 import type { BrowserHostLease, BrowserHostLeaseState } from '../leases/browser-host-lease-records'
-import type { RuntimeBrowserClientPlacement } from '../../../../shared/runtime-browser-placement'
+import type { RuntimeBrowserClientPlacement } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
 
 export type BrowserClientPageExecutionHostGrant = {
   placement: RuntimeBrowserClientPlacement

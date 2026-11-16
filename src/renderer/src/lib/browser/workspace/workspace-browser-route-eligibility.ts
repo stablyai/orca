@@ -1,6 +1,6 @@
 import { parseExecutionHostId } from '../../../../../shared/execution-host'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
-import '../../../../../shared/protocol-version'
+import '../../../../../shared/remote-runtime/protocol/protocol-version'
 import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../../../shared/browser/runtime/browser-runtime-capabilities'
 import {
   getWorkspaceClientCreationActionPolicy,
@@ -11,6 +11,7 @@ import { resolveWorktreeOperationRoute } from '../../workspace/ownership/worktre
 import { getExecutionHostIdForWorktree } from '../../workspace/ownership/worktree-runtime-owner'
 import { resolveSshWorkspaceBrowserRouteEligibility } from './ssh-workspace-browser-route-eligibility'
 import type { AppState } from '@/store/types'
+import type { HttpLinkSourceOwner } from '../navigation/http-link-routing'
 
 export function isExpectedRuntimeBrowserRoute(
   state: AppState,
@@ -43,13 +44,15 @@ export function isExpectedRuntimeBrowserRoute(
 }
 
 // Why: a managed server reached over SSH has no browser of its own, so its links open on this
-// desktop, whose page the SSH-routed browser gate sends through that host (as new tabs do).
+// desktop: routed through that host when it is eligible for SSH routing, or browsing from this
+// device when allowSshDeviceBrowser is set (as new tabs do).
 export function isSshDeploymentClientBrowserRoute(
   state: AppState,
   availability: ClientCreationActionAvailability,
   route: ReturnType<typeof resolveWorktreeOperationRoute>,
   workspaceId: string,
-  expectedRuntimeEnvironmentId: string
+  expectedRuntimeEnvironmentId: string,
+  allowSshDeviceBrowser = false
 ): boolean {
   if (
     availability.state !== 'enabled' ||
@@ -71,14 +74,15 @@ export function isSshDeploymentClientBrowserRoute(
     route.runtimeEnvironmentId?.trim() === expectedEnvironmentId &&
     host?.kind === 'runtime' &&
     host.environmentId === expectedEnvironmentId &&
-    eligibility?.eligible === true
+    (eligibility?.eligible === true || (allowSshDeviceBrowser && eligibility !== null))
   )
 }
 
 export function canOpenWorkspaceBrowserTabOnRuntime(
   state: AppState,
   workspaceId: string,
-  expectedRuntimeEnvironmentId: string
+  expectedRuntimeEnvironmentId: string,
+  allowSshDeviceBrowser = false
 ): boolean {
   const availability = getWorkspaceClientCreationActionPolicy(state, workspaceId)['managed-browser']
   const route = resolveWorktreeOperationRoute(state, workspaceId)
@@ -95,7 +99,8 @@ export function canOpenWorkspaceBrowserTabOnRuntime(
       availability,
       route,
       workspaceId,
-      expectedRuntimeEnvironmentId
+      expectedRuntimeEnvironmentId,
+      allowSshDeviceBrowser
     )
   )
 }
@@ -128,12 +133,32 @@ export function isExpectedSshBrowserRoute(
   )
 }
 
-export function canOpenWorkspaceBrowserTabOnSsh(
+/** Whether a runtime- or SSH-owned link can open in a workspace browser tab. Links that open in
+ *  Orca may also use a desktop tab that browses from this device when the SSH host is set to
+ *  "This device". */
+export function canOpenRemoteLinkInWorkspaceBrowser(
   state: AppState,
   workspaceId: string,
-  expectedSshConnectionId: string
+  owner: HttpLinkSourceOwner
 ): boolean {
-  const availability = getWorkspaceClientCreationActionPolicy(state, workspaceId)['managed-browser']
-  const route = resolveWorktreeOperationRoute(state, workspaceId)
-  return isExpectedSshBrowserRoute(state, availability, route, workspaceId, expectedSshConnectionId)
+  const allowSshDeviceBrowser = state.settings?.openLinksInApp === true
+  if (owner.kind === 'runtime') {
+    return canOpenWorkspaceBrowserTabOnRuntime(
+      state,
+      workspaceId,
+      owner.runtimeEnvironmentId,
+      allowSshDeviceBrowser
+    )
+  }
+  if (owner.kind !== 'ssh') {
+    return false
+  }
+  return isExpectedSshBrowserRoute(
+    state,
+    getWorkspaceClientCreationActionPolicy(state, workspaceId)['managed-browser'],
+    resolveWorktreeOperationRoute(state, workspaceId),
+    workspaceId,
+    owner.connectionId,
+    allowSshDeviceBrowser
+  )
 }

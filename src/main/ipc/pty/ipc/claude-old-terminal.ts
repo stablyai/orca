@@ -1,7 +1,7 @@
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import { parseAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import { discoverLocalPtyClaudeSession } from '../../../claude-accounts/selection/claude-pane-session-discovery'
 import {
   getClaudeProfileRouter,

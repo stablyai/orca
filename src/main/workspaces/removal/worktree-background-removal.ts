@@ -21,6 +21,7 @@ import { readWorktreeRemovalRecords, type WorktreeRemovalRecord } from './worktr
 import { failureLeftByGit } from './worktree-removal-failure'
 import { differentCheckoutAtPathError, isCheckoutRegistered } from './worktree-removal-leftover'
 import {
+  closeWorktreeRemovalRecords,
   failedWorktreeRemovals,
   finishedWorktreeRemovals,
   pendingWorktreeRemovals,
@@ -29,6 +30,10 @@ import {
   recordWorktreeRemoval,
   setWorktreeRemovalRecordsDirectory
 } from './worktree-removal-table'
+import {
+  worktreeRemovalLifetime,
+  _resetWorktreeRemovalLifetimeForTests
+} from './worktree-removal-lifetime'
 
 export type BackgroundWorktreeRemovalJob = {
   /** Abort only the checkout delete on orderly quit. */
@@ -42,7 +47,6 @@ export type BackgroundWorktreeRemovalJob = {
 }
 
 const jobsByWorktreeId = new Map<string, Promise<void>>()
-const stopControllers = new Set<AbortController>()
 // Loaded removals' terminal/watcher fences, held until the resumed job takes its own gate.
 const startupFencesByWorktreeId = new Map<string, WatcherRemovalGate>()
 
@@ -144,27 +148,35 @@ export function retryFailedWorktreeRemoval(
     return waitForPendingWorktreeRemoval(worktreeId, hostId, deleteBranch)
   }
   assertAcceptedBranchChoice(failed, deleteBranch)
-  const { failure: _failure, ...original } = failed
-  const record = { ...original, force: force ?? original.force }
-  const settlement = addPendingRemoval(record)
-  const job = jobFor(record)
-  const leftoverOnly: BackgroundWorktreeRemovalJob = {
-    ...job,
-    run: async (stopSignal) => {
-      // A newly registered checkout at this path needs a fresh delete, not the leftover's recorded choices.
-      if (await isCheckoutRegistered(record)) {
-        throw differentCheckoutAtPathError(record.worktreePath)
+  const release = worktreeRemovalLifetime.acquirePreparation()
+  try {
+    const { failure: _failure, ...original } = failed
+    const record = { ...original, force: force ?? original.force }
+    const settlement = addPendingRemoval(record)
+    const job = jobFor(record)
+    const leftoverOnly: BackgroundWorktreeRemovalJob = {
+      ...job,
+      run: async (stopSignal) => {
+        // A newly registered checkout at this path needs a fresh delete, not the leftover's recorded choices.
+        if (await isCheckoutRegistered(record, { signal: stopSignal })) {
+          throw differentCheckoutAtPathError(record.worktreePath)
+        }
+        return job.run(stopSignal)
       }
-      return job.run(stopSignal)
     }
+    runBackgroundWorktreeRemoval(record, leftoverOnly, recordWorktreeRemoval(record))
+    return settlement.result
+  } finally {
+    release()
   }
-  runBackgroundWorktreeRemoval(record, leftoverOnly, recordWorktreeRemoval(record))
-  return settlement.result
 }
 
 export function resumeInterruptedWorktreeRemovals(
   jobFor: (record: WorktreeRemovalRecord) => BackgroundWorktreeRemovalJob
 ): void {
+  if (worktreeRemovalLifetime.closing) {
+    return
+  }
   for (const record of pendingWorktreeRemovals.values()) {
     if (!jobsByWorktreeId.has(record.worktreeId)) {
       runBackgroundWorktreeRemoval(record, jobFor(record), Promise.resolve())
@@ -174,9 +186,7 @@ export function resumeInterruptedWorktreeRemovals(
 
 /** Abort checkout deletes on quit without waiting for Git to exit. */
 export function stopBackgroundWorktreeRemovals(): void {
-  for (const controller of stopControllers) {
-    controller.abort()
-  }
+  worktreeRemovalLifetime.abortCleanup()
 }
 
 function runBackgroundWorktreeRemoval(
@@ -184,16 +194,14 @@ function runBackgroundWorktreeRemoval(
   job: BackgroundWorktreeRemovalJob,
   recorded: Promise<void>
 ): void {
-  const controller = new AbortController()
-  stopControllers.add(controller)
+  const signal = worktreeRemovalLifetime.signal
   const settled: Promise<void> = settleBackgroundWorktreeRemoval(
     record,
     settlementsByWorktreeId.get(record.worktreeId),
     job,
     recorded,
-    controller.signal
+    signal
   ).finally(() => {
-    stopControllers.delete(controller)
     if (jobsByWorktreeId.get(record.worktreeId) === settled) {
       jobsByWorktreeId.delete(record.worktreeId)
     }
@@ -291,12 +299,21 @@ export async function _settlePendingWorktreeRemovalsForTests(): Promise<void> {
   }
 }
 
+export async function drainBackgroundWorktreeRemovals(): Promise<void> {
+  const results = await Promise.allSettled(jobsByWorktreeId.values())
+  await closeWorktreeRemovalRecords()
+  const errors = results.flatMap((result) => (result.status === 'rejected' ? [result.reason] : []))
+  if (errors.length > 0) {
+    throw new AggregateError(errors, 'Could not finish stopping workspace deletion.')
+  }
+}
+
 export function _resetPendingWorktreeRemovalsForTests(): void {
+  _resetWorktreeRemovalLifetimeForTests()
   pendingWorktreeRemovals.clear()
   failedWorktreeRemovals.clear()
   jobsByWorktreeId.clear()
   settlementsByWorktreeId.clear()
-  stopControllers.clear()
   for (const fence of startupFencesByWorktreeId.values()) {
     fence.release()
   }

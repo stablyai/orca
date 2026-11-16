@@ -1,9 +1,12 @@
 import { expect, it, vi } from 'vitest'
 import { AgentSessionRecoveryCapsule } from '../../../../runtime/agent-session/records/agent-session-recovery-capsule'
-import { interruptedRestart } from './structured-agent-session-restart-interruption-test-harness'
+import { interruptedRestart } from './structured-agent-session-restart-interruption.test-fixture'
 
-import { CALLER, envelope } from './structured-agent-session-host-test-harness'
-import { HOST_TEST_NOW as NOW, hostTestMessage } from './structured-agent-session-host-test-data'
+import { CALLER, envelope } from './structured-agent-session-host.test-fixture'
+import {
+  HOST_TEST_NOW as NOW,
+  hostTestMessage
+} from './structured-agent-session-host-test-data.test-fixture'
 
 it('deletes the offer once the user sends their own message in that chat', async () => {
   const { host, root, dispatch } = await interruptedRestart()

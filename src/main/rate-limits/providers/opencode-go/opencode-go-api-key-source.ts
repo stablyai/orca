@@ -5,7 +5,7 @@ import {
   listOpenCodeDatabases
 } from '../../../opencode-usage/opencode-database-discovery'
 import { tableExists } from '../../../opencode-usage/schema-helpers'
-import { isWslUncPath } from '../../../../shared/wsl-paths'
+import { isWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { resolveOpenCodeDataDirectory } from '../../../opencode/accounts/opencode-data-directory'
 import Database from '../../../sqlite/sync-database'
 import { getManagedDataAccountService } from '../../../managed-data-accounts/service'

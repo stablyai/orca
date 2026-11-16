@@ -16,8 +16,8 @@ import type { TerminalProcessInspection as RuntimeTerminalProcessInspection } fr
 import {
   getCodexSelectionLaneKey,
   normalizeCodexAccountSelectionTarget
-} from '../../../../../../shared/codex-selection-lane'
-import type { CodexAccountSelectionTarget } from '../../../../../../shared/codex-selection-lane'
+} from '../../../../../../shared/agent-accounts/codex/codex-selection-lane'
+import type { CodexAccountSelectionTarget } from '../../../../../../shared/agent-accounts/codex/codex-selection-lane'
 import { resolvePaneAgentSessionId } from '@/lib/agent-session/identity/pane-agent-session-id'
 import { resolveAgentAccountRestartResumeStartup } from '../agent-account-restart-startup'
 import { isSessionHeldByAnotherPane } from '../../identity/claude-session-pane-holders'
@@ -25,11 +25,11 @@ import { isClaudePaneOnAccount, resolveClaudePaneFolder } from './claude-pane-ac
 import type { ClaudeHostFolders } from './claude-pane-account-folder'
 import { isLocalCodexSelectionLaneKey } from '../codex-pane-selection-lane'
 import type { AppState } from '@/store/types'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type {
   ClaudeManagedAccount,
   ClaudeRateLimitAccountsState
-} from '../../../../../../shared/managed-account-types'
+} from '../../../../../../shared/agent-accounts/managed-account-types'
 import type { ClaudePaneLookups } from './claude-queued-restart-records'
 import {
   claudeSwitchCandidatePanes,
@@ -70,7 +70,7 @@ async function isClaudeInForeground(
 
 /** Whether the pane's Claude is mid-turn; a restart during a permission prompt or question drops it. */
 export function isClaudePaneMidTurn(state: AppState, paneKey: string): boolean {
-  const entry = state.agentStatusByPaneKey[paneKey]
+  const entry = state.agentStatusByPaneKey.get(paneKey)
   return entry?.agentType === 'claude' && entry.state !== 'done'
 }
 

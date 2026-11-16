@@ -1,16 +1,16 @@
 // Under 'restart-all' a selection in force moves running chats, owed work included, only while the agent holds no send.
 
-import { MAX_TIMER_DELAY_MS } from '../../../../shared/timer-delay'
+import { MAX_TIMER_DELAY_MS } from '../../../../shared/concurrency/timer-delay'
 import {
   agentSessionAccountHomesEqual,
   type AgentSessionAccountHome
-} from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
+} from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { AgentChildWorkView } from '../../../../shared/agent-status/child-work/agent-status-child-work-view'
 import { structuredAgentSessionHandingOver } from '../delivery/structured-agent-session-handing-over'
-import { selectStructuredAgentSessionInput } from '../delivery/structured-agent-session-input-selection'
+import { selectedStructuredSubmission } from '../delivery/structured-agent-session-input-selection'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
@@ -42,7 +42,7 @@ type AccountSwitchDelivery = {
   deps: Pick<StructuredAgentSessionHostDeps, 'store' | 'launchAccountHome' | 'logger'>
   sessions: ReadonlyMap<string, StructuredAgentSessionHostSession>
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
-  clientDelivery: { readStopping: (sessionId: string) => boolean }
+  clientDelivery: { readStopping: (sessionId: string) => Promise<boolean> }
   stopOutgrownAgent: (sessionId: string) => Promise<void>
   stopPermissionTransitionChild: (sessionId: string) => Promise<void>
 }
@@ -53,7 +53,7 @@ type ChildWorkReads = (sessionId: string) => StructuredAgentSessionChildWorkRead
 
 const KEPT = { kind: 'kept' } as const
 
-export async function structuredAgentSessionLaunchAccountIdentity(
+export async function launchAccountIdentity(
   deps: Pick<StructuredAgentSessionHostDeps, 'store' | 'launchAccountHome'>,
   sessionId: string
 ): Promise<AgentSessionAccountHome | null> {
@@ -71,17 +71,16 @@ async function onSelectedAccount(
   if (!child || child.phase === 'starting' || child.close || !child.accountHome) {
     return false
   }
-  const home = await structuredAgentSessionLaunchAccountIdentity(deps, sessionId).catch(() => null)
+  const home = await launchAccountIdentity(deps, sessionId).catch(() => null)
   return home !== null && agentSessionAccountHomesEqual(home, child.accountHome)
 }
 
 /** A queued send pending at the agent's fence was already taken from the queue for that agent. */
-function sendInFlight(
+async function sendInFlight(
   session: StructuredAgentSessionHostSession
-): Extract<StructuredAgentSessionAccountSwitchStep, { kind: 'sending' }> | null {
+): Promise<Extract<StructuredAgentSessionAccountSwitchStep, { kind: 'sending' }> | null> {
   const handovers = [...structuredAgentSessionHandingOver(session.journal).values()]
-  const pending = session.journal
-    .pendingSubmissions()
+  const pending = (await session.journal.reads.pendingSubmissions())
     .filter(
       (submission) =>
         !isQueuedAgentJournalSubmission(submission) || submission.fence === session.child?.fence
@@ -96,31 +95,33 @@ function sendInFlight(
 }
 
 /** An accepted send is answered once the turn it was steered into ends, or any turn begun after it. */
-function replyOwed({ journal, child }: StructuredAgentSessionHostSession): boolean {
-  const accepted = journal
-    .submissions()
-    .filter(
-      (submission) => submission.dispatchState === 'accepted' && submission.fence === child?.fence
-    )
+async function replyOwed({ journal, child }: StructuredAgentSessionHostSession): Promise<boolean> {
+  const accepted = (await journal.reads.input({ kind: 'accepted-submissions' })).submissions.filter(
+    (submission) => submission.dispatchState === 'accepted' && submission.fence === child?.fence
+  )
   if (accepted.length === 0) {
     return false
   }
   const endedTurns = new Set<string>()
   let newestEndedTurnBegan = -Infinity
-  journal.visitItems((itemId, sequence, body) => {
+  await journal.reads.visitItems({ kinds: ['turn', 'status'] }, (itemId, sequence, body) => {
     const turn = readAgentJournalTurn(body)
     if (turn && turn.state !== 'running' && turn.state !== 'unverifiable') {
       endedTurns.add(itemId)
       newestEndedTurnBegan = Math.max(newestEndedTurnBegan, sequence)
     }
   })
-  return accepted.some((submission) => {
-    const row = journal.item(agentJournalSubmissionKey(submission.clientMessageId))
-    if (row?.turnScope?.kind === 'turn') {
-      return !endedTurns.has(journal.canonicalItemId(row.turnScope.turnItemId))
+  for (const submission of accepted) {
+    const row = await journal.reads.item(agentJournalSubmissionKey(submission.clientMessageId))
+    const owed =
+      row?.turnScope?.kind === 'turn'
+        ? !endedTurns.has(await journal.reads.canonicalItemId(row.turnScope.turnItemId))
+        : !row || row.sequence > newestEndedTurnBegan
+    if (owed) {
+      return true
     }
-    return !row || row.sequence > newestEndedTurnBegan
-  })
+  }
+  return false
 }
 
 /** Queued sends start the next agent themselves, so only work cut with nothing queued is continued. */
@@ -130,21 +131,21 @@ export function retireForAccountSwitch(
 ): StructuredAgentSessionAccountSwitchRetire {
   return (sessionId, wanted) =>
     input.serialize(sessionId, async () => {
-      const declined = input.clientDelivery.readStopping(sessionId) || !wanted()
+      const declined = (await input.clientDelivery.readStopping(sessionId)) || !wanted()
       const session = declined ? undefined : input.sessions.get(sessionId)
       if (!session?.child || (await onSelectedAccount(input.deps, session, sessionId))) {
         return KEPT
       }
-      const sending = sendInFlight(session)
+      const sending = await sendInFlight(session)
       if (sending) {
         return sending
       }
       const work = childWork(sessionId)
-      const owed = structuredAgentSessionChildOwesWork(session.journal, work) || replyOwed(session)
+      const owed = (await structuredAgentSessionChildOwesWork(work)) || (await replyOwed(session))
       const stopped = await retireOutgrownStructuredAgentSessionChild(sessionId, session, {
         work,
         evenOwingWork: true,
-        launchAccountHome: () => structuredAgentSessionLaunchAccountIdentity(input.deps, sessionId),
+        launchAccountHome: () => launchAccountIdentity(input.deps, sessionId),
         stopAgent: (id) => {
           input.deps.store.requireWritableRecord(id)
           return owed ? input.stopPermissionTransitionChild(id) : input.stopOutgrownAgent(id)
@@ -154,32 +155,39 @@ export function retireForAccountSwitch(
       if (!stopped) {
         return KEPT
       }
-      const queued = selectStructuredAgentSessionInput(session.journal).kind !== 'none'
+      const queued =
+        (await selectedStructuredSubmission(session.journal)) !== undefined ||
+        (await session.journal.queuedMessages.nextInputCard()) !== null
       const continueAfter = owed && !queued ? session.journal.cursor().sequence : null
       return { kind: 'stopped', continueAfter }
     })
 }
 
-export async function continueStructuredAgentSessionAfterAccountSwitch(
-  host: Omit<StructuredAgentSessionContinuationHost, 'stillResumable'>,
-  sessionId: string,
-  continueAfter: number
-): Promise<void> {
-  const stillWanted = () =>
-    host.sessions.get(sessionId)?.journal.inputOrder.acceptedAfter(continueAfter) === false
-  try {
-    const started = await startStructuredAgentSessionContinuation(
-      { ...continuationDeps(host, stillWanted), liftRestartHold: async () => {} },
-      sessionId,
-      { activity: { state: 'working', prompts: [], tasks: [] }, accountSwitch: true },
-      structuredAgentSessionResumeOperationId(host.now())
-    )
-    if ('verdict' in started) {
-      await started.verdict()
+export function continueStructuredAgentSessionAfterAccountSwitch(
+  host: Omit<StructuredAgentSessionContinuationHost, 'stillResumable'>
+): (sessionId: string, continueAfter: number) => Promise<void> {
+  return async (sessionId, continueAfter) => {
+    const stillWanted = async () => {
+      const journal = host.sessions.get(sessionId)?.journal
+      return (
+        journal !== undefined &&
+        !(await journal.reads.input({ kind: 'accepted-after', sequence: continueAfter })).answer
+      )
     }
-  } catch (error) {
-    if (!(error instanceof RestartContinuationSupersededError)) {
-      throw error
+    try {
+      const started = await startStructuredAgentSessionContinuation(
+        { ...continuationDeps(host, stillWanted), liftRestartHold: async () => {} },
+        sessionId,
+        { activity: { state: 'working', prompts: [], tasks: [] }, accountSwitch: true },
+        structuredAgentSessionResumeOperationId(host.now())
+      )
+      if ('verdict' in started) {
+        await started.verdict()
+      }
+    } catch (error) {
+      if (!(error instanceof RestartContinuationSupersededError)) {
+        throw error
+      }
     }
   }
 }

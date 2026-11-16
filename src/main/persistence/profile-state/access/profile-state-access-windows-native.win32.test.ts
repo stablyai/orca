@@ -10,7 +10,7 @@ import {
 } from './profile-state-access'
 import { profileStateAccessMachineIdentity } from './profile-state-access-identity'
 import { profileStateAccessPaths } from './profile-state-access-owner'
-import { removeTreeSync } from '../../../../shared/windows-transient-lock-removal'
+import { removeTreeSync } from '../../../../shared/file-write/windows-transient-lock-removal'
 
 it.runIf(process.platform === 'win32')(
   'reclaims a previous Windows PID incarnation and retains the live owner using native identities',

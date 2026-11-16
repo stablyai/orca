@@ -8,7 +8,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
-import type { BrowserChromeOverflowMenuProps } from '../assemble-chrome/browser-chrome-toolbar'
+import type { BrowserChromeOverflowMenuProps } from '../assemble-chrome/toolbar/browser-chrome-toolbar'
 
 /** Preview grants have no browsing session or device emulation; expose document actions instead. */
 export function DocPreviewOverflowMenu({

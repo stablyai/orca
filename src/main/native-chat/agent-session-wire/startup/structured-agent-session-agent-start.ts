@@ -25,7 +25,11 @@ import {
   registerStructuredAgentSessionStart,
   structuredAgentSessionStartStillQueued
 } from './structured-agent-session-start-attempts'
-import { retryableAgentSessionAcquisition } from './structured-agent-session-start-failure'
+import {
+  provenAgentSessionStartFailure,
+  retryableAgentSessionAcquisition
+} from './structured-agent-session-start-failure'
+import { agentCliInstallationProblemOf } from '../../agent-launch/agent-cli-installation-error'
 import { failedCreateRefusal } from '../acquisition/structured-agent-session-failed-create-refusal'
 import { startFailureDiagnosticOf } from './structured-agent-session-failure-text'
 import {
@@ -63,12 +67,12 @@ export type StructuredAgentSessionStartClaim = {
 }
 
 /** Claim under the ordered decision; wait outside its lane. */
-export function claimStructuredAgentSessionAgent(
+export async function claimStructuredAgentSessionAgent(
   context: StructuredAgentSessionAttachContext,
   sessionId: string,
   startedFor?: string,
   telemetryCallerKey?: string
-): StructuredAgentSessionStartClaim {
+): Promise<StructuredAgentSessionStartClaim> {
   try {
     context.deps.store.requireWritableRecord(sessionId)
   } catch (error) {
@@ -78,10 +82,10 @@ export function claimStructuredAgentSessionAgent(
     throw error
   }
   const session = context.sessions.get(sessionId)
-  const child = session?.child
-  if (!structuredAgentSessionStartStillQueued(session, startedFor)) {
+  if (!(await structuredAgentSessionStartStillQueued(session, startedFor))) {
     return { outcome: Promise.resolve({ ...failedStructuredAgentSessionStart(), aborted: true }) }
   }
+  const child = context.sessions.get(sessionId)?.child
   const flight = context.runtimeState.startFlights.get(sessionId)
   if (flight) {
     return { outcome: flight.outcome }
@@ -120,12 +124,17 @@ export function startStructuredAgentSessionAgentForOperation(
     .then((claim) => claim.outcome)
 }
 
-export function claimOperationStart(
+export async function claimOperationStart(
   context: StructuredAgentSessionAttachContext,
   sessionId: string,
   telemetryCallerKey?: string
-): StructuredAgentSessionStartClaim {
-  const claim = claimStructuredAgentSessionAgent(context, sessionId, undefined, telemetryCallerKey)
+): Promise<StructuredAgentSessionStartClaim> {
+  const claim = await claimStructuredAgentSessionAgent(
+    context,
+    sessionId,
+    undefined,
+    telemetryCallerKey
+  )
   return {
     outcome: claim.outcome.catch((error: unknown) => {
       context.deps.logger.warn('starting the agent for an operation failed', {
@@ -225,6 +234,18 @@ function withDiagnostic(
 ): StructuredAgentSessionResumeOutcome {
   const diagnostic = startFailureDiagnosticOf(error)
   const argumentProblem = argumentProblemOf(error)
+  const failure =
+    !aborted &&
+    !expired &&
+    !argumentProblem &&
+    !agentCliInstallationProblemOf(error) &&
+    refusal.code === 'agent_session_operation_invalid' &&
+    (refusal.details?.reason === undefined ||
+      refusal.details.reason === 'attachFailed' ||
+      refusal.details.reason === 'providerStartFailed') &&
+    Object.keys(refusal.details ?? {}).every((key) => key === 'reason' || key === 'ownerVerdict')
+      ? provenAgentSessionStartFailure(error)
+      : undefined
   return {
     ok: false,
     refusal,
@@ -232,6 +253,7 @@ function withDiagnostic(
     ...(aborted ? { aborted: true as const } : {}),
     ...(expired ? { expired: true as const } : {}),
     ...(argumentProblem ? { argumentProblem } : {}),
+    ...(failure ? { failure: failure.fact } : {}),
     retry: retryableAgentSessionAcquisition(error)
   }
 }

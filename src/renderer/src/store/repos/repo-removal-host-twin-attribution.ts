@@ -6,7 +6,7 @@ import {
 } from '../../../../shared/execution-host'
 import { getPtyExecutionHost } from '../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
 import { collectPtyIdsForTab } from '../terminals/retirement/terminal-tab-retirement'
-import { toVisibleTabType } from '../../../../shared/tab-types'
+import { toVisibleTabType } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import { isExecutionHostAliasForWorktree } from '@/lib/workspace/ownership/worktree-execution-host-alias'
 import {
   getOpenFileExecutionHostId,

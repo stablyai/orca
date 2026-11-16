@@ -1,5 +1,5 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import { computeNextGitLabRecents } from '../../../shared/gitlab-projects'
+import { computeNextGitLabRecents } from '../../../shared/gitlab/gitlab-projects'
 
 export type GitLabProjectRecentsStore = {
   getSettings(): Pick<GlobalSettings, 'gitlabProjects'>

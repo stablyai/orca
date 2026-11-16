@@ -1,5 +1,9 @@
 import type { AppState } from '../../types'
-import { toVisibleTabType, type Tab, type TabGroup } from '../../../../../shared/tab-types'
+import {
+  toVisibleTabType,
+  type Tab,
+  type TabGroup
+} from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { sanitizeRecentTabIds } from './tab-selection-history'
 import type { RecordDraft } from '../../keyed-record-transitions'
 

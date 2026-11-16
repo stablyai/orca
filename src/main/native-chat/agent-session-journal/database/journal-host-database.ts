@@ -10,6 +10,7 @@ import {
 } from './journal-database'
 import { journalOpenRefusalError } from '../replay/journal-open-failure'
 import { JournalCheckpointOwner } from './journal-checkpoint-owner'
+import { readJournalSessionEpoch } from '../durable-rows/journal-row-table'
 import { AgentSessionJournalError } from '../writing/journal-write-guards'
 
 const JOURNAL_DATABASE_FILE = 'agent-session-journal.db'
@@ -17,6 +18,12 @@ const JOURNAL_DATABASE_FILE = 'agent-session-journal.db'
 export function journalDatabasePath(stateDirectory: string): string {
   return join(stateDirectory, JOURNAL_DATABASE_FILE)
 }
+
+/** What journal collaborators need from a connection owner; the SQL writer supplies its own. */
+export type JournalTransactionalDatabase = Pick<
+  JournalHostDatabase,
+  'db' | 'readOnly' | 'stateDirectory' | 'transaction'
+>
 
 export class JournalHostDatabase {
   private connection: Database.Database | null
@@ -59,6 +66,10 @@ export class JournalHostDatabase {
       this.rollBackStrandedTransaction(connection)
     }
     return connection
+  }
+
+  async sessionEpoch(sessionId: string): Promise<string | null> {
+    return readJournalSessionEpoch(this.db, sessionId)
   }
 
   transaction<T>(run: (db: Database.Database) => T, committed?: (result: T) => void): T {

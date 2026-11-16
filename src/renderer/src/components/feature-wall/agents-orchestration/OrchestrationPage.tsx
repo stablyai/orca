@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { JSX } from 'react'
 import { ChevronDown, Workflow } from 'lucide-react'
-import { ClaudeIcon, OpenAIIcon } from '../../status-bar/icons'
+import { ClaudeIcon, OpenAIIcon } from '../../status-bar/accounts/provider-icons'
 import {
   BUBBLE_FLIGHT_MS,
   BUBBLE_GAP_MS,

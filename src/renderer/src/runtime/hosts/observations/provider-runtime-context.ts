@@ -8,8 +8,12 @@ export function getProviderRuntimeContextKey(
 
 /** Context key for an explicit owner; `null` is this app. */
 export function getEnvironmentRuntimeContextKey(environmentId: string | null): string {
-  const baseKey = environmentId ? `runtime:${environmentId}` : 'local'
-  return `${baseKey}#${providerRuntimeSessionGeneration}`
+  return `${getEnvironmentRuntimeIdentityKey(environmentId)}#${providerRuntimeSessionGeneration}`
+}
+
+/** The owner without the session generation, for preferences that must outlive a reconnect. */
+export function getEnvironmentRuntimeIdentityKey(environmentId: string | null): string {
+  return environmentId ? `runtime:${environmentId}` : 'local'
 }
 
 /** Whether a context key from {@link getEnvironmentRuntimeContextKey} names a paired server. */

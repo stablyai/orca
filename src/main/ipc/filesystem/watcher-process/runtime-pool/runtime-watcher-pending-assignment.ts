@@ -1,6 +1,6 @@
 import { WatcherProcessFailure } from '../parcel-watcher-process-failure'
 import type { WatcherProcessHooks } from '../parcel-watcher-process-subscription'
-import { PromiseSettlementWaiters } from '../../../../../shared/promise-settlement-waiters'
+import { PromiseSettlementWaiters } from '../../../../../shared/concurrency/promise-settlement-waiters'
 
 const DEFAULT_QUARANTINE_WAIT_TIMEOUT_MS = 60_000
 

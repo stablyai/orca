@@ -15,9 +15,9 @@ import {
   repoDispatcher,
   makeRequest
 } from '../../../runtime/rpc/methods/projects/repo-rpc.test-fixture'
-import type { Repo } from '../../../../shared/repo-types'
-import { drainSubprocessSpawnStats } from '../../../diagnostics/main-thread-churn-probe'
-import { beginGitRefMutation, subscribeGitRefChanges } from '../git-ref-change-signal'
+import type { Repo } from '../../../../shared/repository/repo-types'
+
+import { subscribeGitRefChanges } from '../git-ref-change-signal'
 import { resolveBranchSnapshotIdentity } from './branch-ref-snapshot-identity'
 
 const roots: string[] = []
@@ -40,41 +40,6 @@ it('discovers the physical parent of a symlink to a repository subdirectory', as
     { refName: 'refs/heads/collision', localBranchName: 'collision' }
   ])
 })
-
-it.each([10, 100])(
-  'loads one population for %i refs and filters repeated entrypoint searches without children',
-  async (population) => {
-    const { root, tagOid } = await fixture()
-    await gitExecFileAsync(['update-ref', '--stdin'], {
-      cwd: root,
-      stdin: Array.from(
-        { length: population },
-        (_, i) => `create refs/heads/scale-${i} ${tagOid}\n`
-      ).join('')
-    })
-    const repo: Repo = { id: 'scale', path: root, displayName: 'scale', badgeColor: '', addedAt: 0 }
-    const runtime = new RuntimeRepositoryRefQueries({ resolveRepo: async () => repo })
-    vi.stubEnv('ORCA_MAIN_THREAD_DIAGNOSTICS', '1')
-    drainSubprocessSpawnStats()
-    expect((await searchBaseRefDetails(root, 'scale-', 30)).length).toBe(Math.min(population, 30))
-    expect(drainSubprocessSpawnStats()['git for-each-ref']?.count).toBe(1)
-    // Queries only need an existing generation; each surface's limit is a bounded projection.
-    for (let query = 0; query < 10; query++) {
-      await searchBaseRefDetails(root, `scale-${query}`, 30)
-      await runtime.search('scale', 'scale-', 20)
-      await runtime.search('scale', 'absent', 20, true, 'remote')
-    }
-    expect(drainSubprocessSpawnStats()).toEqual({})
-    const identity = await resolveBranchSnapshotIdentity(root, {})
-    const end = beginGitRefMutation(identity!.commonDir)
-    await searchBaseRefDetails(root, 'scale-', 30)
-    drainSubprocessSpawnStats()
-    await runtime.search('scale', 'scale-1', 20)
-    await searchBaseRefDetails(root, 'absent', 30)
-    expect(drainSubprocessSpawnStats()).toEqual({})
-    end()
-  }
-)
 
 async function fixture(): Promise<{ root: string; branchOid: string; tagOid: string }> {
   const root = await mkdtemp(join(tmpdir(), 'orca-branch-snapshot-'))

@@ -15,7 +15,7 @@ import { repoMatchesHostIdentity } from '@/store/repos/repo-host-identity'
 import { isSessionHeldByAnotherPane } from '@/lib/agent-session/identity/claude-session-pane-holders'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { normalizeAgentProviderSession } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { AGENT_SESSION_ACCOUNT_SWITCH_TERMINAL_CONTINUATION_MESSAGE } from '../../../../../shared/agent-session/lifecycle/agent-session-restart-continuation'
+import { AGENT_SESSION_ACCOUNT_SWITCH_TERMINAL_CONTINUATION_MESSAGE } from '../../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-continuation'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
@@ -27,7 +27,7 @@ import {
   tokenizeStartupCommand,
   type AgentStartupShell
 } from '../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
-import { findOptionOccurrence } from '../../../../../shared/command-option-occurrence'
+import { findOptionOccurrence } from '../../../../../shared/cli/command-option-occurrence'
 import type { AppState } from '@/store/types'
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
 import type { ProjectExecutionRuntimeResolution } from '../../../../../shared/execution-host/project-execution-runtime'
@@ -86,7 +86,7 @@ export function resolveAgentAccountRestartResumeStartup(
 ): AgentAccountRestartStartup | null {
   const state = useAppStore.getState()
   const paneKey = makePaneKey(args.tabId, args.leafId)
-  const entry = state.agentStatusByPaneKey[paneKey]
+  const entry = state.agentStatusByPaneKey.get(paneKey)
   const sleeping = state.sleepingAgentSessionsByPaneKey[paneKey]
   const agentType =
     entry?.agentType ?? sleeping?.agent ?? (agent === 'claude' && discovered ? agent : undefined)

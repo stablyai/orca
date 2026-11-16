@@ -1,4 +1,7 @@
-import { type WorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
+import {
+  type WorkspaceKey,
+  parseWorkspaceKey
+} from '../../../shared/workspace/identity/workspace-scope'
 import { rebuildRepoBackedProjectState } from './profile-project-state-file'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
@@ -33,7 +36,11 @@ export function removeSourceRepo(state: PersistedState, repoId: string): Persist
         state.ui.explorerDisplayRootByWorktree,
         repoId
       ),
-      showDotfilesByWorktree: removeRepoWorktreeRecord(state.ui.showDotfilesByWorktree, repoId)
+      showDotfilesByWorktree: removeRepoWorktreeRecord(state.ui.showDotfilesByWorktree, repoId),
+      notificationsMutedByWorktree: removeRepoWorktreeRecord(
+        state.ui.notificationsMutedByWorktree,
+        repoId
+      )
     }
   }
   delete next.sparsePresetsByRepo[repoId]

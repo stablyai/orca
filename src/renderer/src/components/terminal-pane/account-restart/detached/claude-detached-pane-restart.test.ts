@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import { provideLayoutFrameTerminalPanes } from '@/runtime/workspace-layout/frames/layout-frame-terminal-panes'
@@ -5,7 +6,7 @@ import { registerRuntimeTerminalTab } from '@/runtime/hosted-terminals/mounted-s
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { getDefaultSettings } from '../../../../../../shared/constants'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import type { ClaudeAccountSwitchRunningSessions } from '../../../../../../shared/claude-account-switch-settings'
+import type { ClaudeAccountSwitchRunningSessions } from '../../../../../../shared/agent-accounts/claude/claude-account-switch-settings'
 import { createIpcPtySessionHandlers } from '../../pty-transport/ipc/ipc-pty-session-handlers'
 import { createPtyOutputProcessor } from '../../pty-transport/output/pty-output-processor'
 
@@ -48,20 +49,22 @@ function seedClaudePane(
         ptyIdsByLeafId: { [LEAF_ID]: OLD_PTY }
       }
     },
-    agentStatusByPaneKey: {
-      [paneKey]: {
-        paneKey,
-        tabId: 'tab-1',
-        state: 'done',
-        prompt: '',
-        updatedAt: 1,
-        stateStartedAt: 1,
-        stateHistory: [],
-        agentType: 'claude',
-        providerSession: { key: 'session_id', id: SESSION_ID },
-        ...overrides
-      }
-    }
+    agentStatusByPaneKey: acceptedAgentStatuses(
+      Object.entries({
+        [paneKey]: {
+          paneKey,
+          tabId: 'tab-1',
+          state: 'done',
+          prompt: '',
+          updatedAt: 1,
+          stateStartedAt: 1,
+          stateHistory: [],
+          agentType: 'claude',
+          providerSession: { key: 'session_id', id: SESSION_ID },
+          ...overrides
+        }
+      })
+    )
   })
 }
 
@@ -79,8 +82,10 @@ function queueFromSwitch(): void {
 
 function setPaneState(state: AgentStatusEntry['state']): void {
   const paneKey = makePaneKey('tab-1', LEAF_ID)
-  const entry = useAppStore.getState().agentStatusByPaneKey[paneKey]
-  useAppStore.setState({ agentStatusByPaneKey: { [paneKey]: { ...entry, state } } })
+  const entry = useAppStore.getState().agentStatusByPaneKey.get(paneKey)!
+  useAppStore.setState({
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({ [paneKey]: { ...entry, state } }))
+  })
 }
 
 async function settle(): Promise<void> {

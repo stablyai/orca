@@ -2,10 +2,13 @@ import { join } from 'node:path'
 import { expect, vi } from 'vitest'
 import { Store } from '../../../../persistence/loading-store/store'
 import { ProfileStateSqliteAuthority } from '../../../../persistence/profile-state/profile-state-sqlite-authority'
-import { getAppEnvironment, setAppEnvironment } from '../../../../../shared/app-environment'
-import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
-import { claudeProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import {
+  getAppEnvironment,
+  setAppEnvironment
+} from '../../../../../shared/app-lifecycle/app-environment'
+import { testOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address-test-fixture'
+import { claudeProviderHandle } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
+import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import { agentJournalSubmissionKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalMessageItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { OrchestrationSessionCaller } from '../../../../runtime/orchestration/addressing/orchestration-caller-identity'
@@ -23,14 +26,17 @@ import {
   structuredWorkerProcessIncarnation
 } from '../../../../runtime/orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { structuredWorkerOwesWork } from '../../../../runtime/orchestration/terminal-authority/structured-sessions/structured-worker-custody'
-import { createRestTestRig, REST_TEST_CALLER } from './structured-agent-session-rest-test-rig'
+import {
+  createRestTestRig,
+  REST_TEST_CALLER
+} from './structured-agent-session-rest-test-rig.test-fixture'
 import {
   hostTestAttachParams,
   hostTestMessage,
   hostTestOperationId
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import { setStructuredAgentSessionHost } from '../structured-agent-session-registry'
-import { createClaudeAccountRouting } from './structured-agent-session-claude-account-routing.test-support'
+import { createClaudeAccountRouting } from './structured-agent-session-claude-account-routing.test-fixture'
 import type { StructuredAgentSessionEventSink } from '../../journal-ingress/structured-agent-session-event-sink'
 
 export const PARENT = testOrcaSessionId('cfe50e96-3a95-4353-9cdc-7a652779c6e8')
@@ -171,11 +177,10 @@ export async function createReceivingCallerFixture() {
   }
   const send = async (text: string, body: AgentJournalMessageItem = hostTestMessage(text)) => {
     const id = await accept(text, body)
-    await vi.waitFor(() =>
-      expect(
-        rig.host.collaboratorsForTests().sessions.get(PARENT)?.journal.submission(id)?.dispatchState
-      ).toBe('accepted')
-    )
+    const state = async () =>
+      (await rig.host.collaboratorsForTests().sessions.get(PARENT)?.journal.reads.submission(id))
+        ?.dispatchState
+    await vi.waitFor(async () => expect(await state()).toBe('accepted'), { timeout: 10_000 })
     return id
   }
   const turn = async (id: string, state: 'running' | 'completed', userId = id) => {
