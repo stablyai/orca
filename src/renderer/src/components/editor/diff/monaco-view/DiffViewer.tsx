@@ -321,7 +321,8 @@ export default function DiffViewer({
               modifiedContent={modifiedContent}
               sideBySide={sideBySide}
               settings={settings}
-              isEditable={Boolean(editable) && editReady}
+              isEditable={Boolean(editable)}
+              editReady={editReady}
               editStateKey={modelKey}
               collapseUnchanged={diffCollapseUnchangedRegions === true}
               autoFocusHost

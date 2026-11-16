@@ -723,3 +723,61 @@ diff --git a/dist/utils/editSessionHunks.js b/dist/utils/editSessionHunks.js
  	let previousBlocks;
  	const resolveSlide = (block, maxSlide) => {
  		previousBlocks ??= collectPureChangeBlocks(diff.hunks);
+diff --git a/dist/editor/editor.js b/dist/editor/editor.js
+--- a/dist/editor/editor.js
++++ b/dist/editor/editor.js
+@@ -566,11 +566,15 @@
+ 			this.#publishChange = void 0;
+ 		}
+ 	}
+-	#checkpointEditSessionState() {
++	#checkpointEditSessionState(captureView = true) {
+ 		const fileInstance = this.#fileInstance;
+ 		const editSession = this.#editSession;
+ 		if (fileInstance == null || editSession == null) return false;
+-		const editorState = this.#isRendering ? this.getViewState() : editSession.editor ?? {};
++		// Render sync preserves the viewport; interaction and teardown still capture live scroll.
++		const editorState = !this.#isRendering ? editSession.editor ?? {} : captureView ? this.getViewState() : {
++			selections: this.#selections,
++			view: editSession.editor?.view
++		};
+ 		const { view } = editorState;
+ 		const hasNonDefaultView = view != null && (view.scrollLeft !== 0 || (view.scrollTop ?? 0) !== 0);
+ 		const hasEditorState = editorState.selections != null || hasNonDefaultView;
+@@ -764,7 +768,7 @@
+ 		if (lineAnnotations !== void 0 && lineAnnotations.length > 0 || this.#isDiff) for (const child of this.#contentElement.children) {
+ 			const el = child;
+ 			const { lineAnnotation, lineType, separator } = el.dataset;
+-			if (lineAnnotation !== void 0 || separator !== void 0 || lineType === "change-deletion") el.setAttribute("contenteditable", "false");
++			if ((lineAnnotation !== void 0 || separator !== void 0 || lineType === "change-deletion") && el.getAttribute("contenteditable") !== "false") el.setAttribute("contenteditable", "false");
+ 		}
+ 		this.#resetCache();
+ 		this.#tokenizer?.syncTheme(this.#fileInstance?.__getEffectiveCodeOptions() ?? {});
+@@ -795,7 +799,7 @@
+ 				console.log("[diffs/editor] render file:", fileOrDiff.name, "RenderRange:", startingLine + "-" + (startingLine + totalLines), "of", editSession.document?.lineCount, "lines");
+ 			}
+ 			if (externalDocument) fileInstance.__acknowledgeDocumentUpdate();
+-			this.#checkpointEditSessionState();
++			this.#checkpointEditSessionState(false);
+ 		} catch (error) {
+ 			this.#restoreEditorStateOnSync = restoreEditorStateOnSync;
+ 			editSession.editor = retainedEditorState;
+diff --git a/dist/components/FileDiff.js b/dist/components/FileDiff.js
+--- a/dist/components/FileDiff.js
++++ b/dist/components/FileDiff.js
+@@ -673,7 +673,14 @@
+ 			fileDiff: sessionDiff,
+ 			lineAnnotations: annotations.current
+ 		};
+-		this.hunksRenderer.beginEditSession(sessionDiff, usesInputDocument && !restoreRetainedSession ? inputDiff : void 0);
++		// Retaining undo history must not invalidate identical primed markup on reopen.
++		const sameFields = (left, right, omit = []) => [...new Set([...Object.keys(left), ...Object.keys(right)])].every(key => omit.includes(key) || left[key] === right[key]);
++		const sameHunks = !restoreRetainedSession || sessionDiff.hunks.length === inputDiff.hunks.length && sessionDiff.hunks.every((hunk, index) => {
++			const original = inputDiff.hunks[index];
++			return sameFields(hunk, original, ["hunkSpecs", "hunkContent"]) && hunk.hunkContent.length === original.hunkContent.length && hunk.hunkContent.every((content, block) => sameFields(content, original.hunkContent[block]));
++		});
++		const cacheCompatible = usesInputDocument && sessionDiff.type === inputDiff.type && sameHunks;
++		this.hunksRenderer.beginEditSession(sessionDiff, cacheCompatible ? inputDiff : void 0);
+ 	}
+ 	setHydratedState(files) {
+ 		this.deletionFile = files.oldFile;

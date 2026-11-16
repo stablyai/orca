@@ -277,7 +277,8 @@ export function DiffSectionItem({
             modifiedContent={section.modifiedContent}
             sideBySide={sideBySide}
             settings={settings}
-            isEditable={isEditable && editReady}
+            isEditable={isEditable}
+            editReady={editReady}
             editStateKey={editStateKey}
             collapseUnchanged
             worktreeId={worktreeId ?? ''}

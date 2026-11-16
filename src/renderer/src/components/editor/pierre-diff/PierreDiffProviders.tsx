@@ -80,12 +80,31 @@ export function PierreDiffProviders({
     }
   }, [scrollContainerRef, virtualizer])
 
+  const sections = overview?.sections
+  const combinedVirtualizer = overview?.virtualizer
+  const sideBySide = overview?.sideBySide && !narrow
+  const totalSize = combinedVirtualizer?.getTotalSize()
+  const measurements = combinedVirtualizer?.measurementsCache
+  const combinedOverview = useMemo(
+    () =>
+      sections && combinedVirtualizer
+        ? {
+            sections,
+            virtualizer: combinedVirtualizer,
+            sideBySide: Boolean(sideBySide),
+            measurements,
+            totalSize
+          }
+        : undefined,
+    [sections, combinedVirtualizer, sideBySide, measurements, totalSize]
+  )
+
   return (
     <PierreDiffOverviewContext.Provider value={overviewContext}>
       <PierreDiffOverviewRuler
         scrollContainerRef={scrollContainerRef}
         sources={sources}
-        combined={overview && { ...overview, sideBySide: overview.sideBySide && !narrow }}
+        combined={combinedOverview}
       />
       <WorkerPoolContext.Provider value={pool}>
         <VirtualizerContext.Provider value={virtualizer}>

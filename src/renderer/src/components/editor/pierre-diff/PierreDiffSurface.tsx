@@ -58,6 +58,7 @@ export type PierreDiffSurfaceProps = {
   sideBySide: boolean
   settings?: PierreDiffSettings | null
   isEditable: boolean
+  editReady?: boolean
   editStateKey?: string
   /** Collapse unchanged context according to the surface preference. */
   collapseUnchanged: boolean
@@ -100,6 +101,7 @@ export function PierreDiffSurface({
   sideBySide,
   settings,
   isEditable,
+  editReady = true,
   editStateKey,
   collapseUnchanged,
   autoFocusHost = false,
@@ -150,11 +152,8 @@ export function PierreDiffSurface({
   // a late parse completing must not yank that caret. Group identity is read
   // from a ref so switching groups does not retrigger focus.
   useLayoutEffect(() => {
-    // Why read-only only: the regression this fixes is Cmd+F/F7 being dead on a diff opened from
-    // the sidebar, which needs the light-DOM host focused. An editable surface must NOT get that
-    // -- Pierre's contenteditable lives in a shadow root, and focusing the host blurs it, so every
-    // keystroke is dropped. Editable diffs already worked before this effect existed.
-    if (!autoFocusHost || isEditable) {
+    // Focus the keyboard host until an editor can own focus inside the shadow root.
+    if (!autoFocusHost || (isEditable && editReady)) {
       return
     }
     const host = containerRef.current
@@ -170,7 +169,7 @@ export function PierreDiffSurface({
       return
     }
     host.focus({ preventScroll: true })
-  }, [autoFocusHost, isEditable])
+  }, [autoFocusHost, isEditable, editReady])
   const { onPostRender: overviewPostRender, onEditChange: overviewEditChange } =
     usePierreDiffOverview(
       overviewKey ?? filePath,
@@ -325,11 +324,7 @@ export function PierreDiffSurface({
       onComplete: () => {
         editorRef.current = null
       },
-      onChange: (event) => {
-        if (isEditable) {
-          onEditChangeRef.current?.(event.file)
-        }
-      }
+      onChange: isEditable ? (event) => onEditChangeRef.current?.(event.file) : undefined
     }),
     [autoFocusHost, isEditable, createTokenizer]
   )
@@ -431,7 +426,7 @@ export function PierreDiffSurface({
           options={options}
           style={style}
           metrics={metrics}
-          edit={isEditable}
+          edit={isEditable && editReady}
           editorOptions={editorOptions}
           lineAnnotations={lineAnnotations}
           renderAnnotation={renderAnnotation}

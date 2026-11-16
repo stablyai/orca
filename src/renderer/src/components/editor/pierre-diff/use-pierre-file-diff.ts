@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FileDiffMetadata } from '@pierre/diffs'
 import type { PierreDiffInput } from './pierre-diff-metadata'
 import { requestPierreFileDiff } from './pierre-diff-parse-client'
@@ -16,17 +16,8 @@ export function usePierreFileDiff(input: PierreDiffInput | null, editable = fals
   const renderedScopeRef = useRef<string | null>(null)
   const pendingRequest = useRef<AbortController | null>(null)
   const markEdited = useCallback(() => pendingRequest.current?.abort(), [])
-  // Why a ref: flipping editability must not re-parse the file, but the next request still has to
-  // read the current value (an editable surface blocks on the highlight). Written in a layout
-  // effect, not during render -- React can discard a render, and the request reads this from a
-  // timeout scheduled by a passive effect, which always runs after layout effects.
-  const editableRef = useRef(editable)
-  useLayoutEffect(() => {
-    editableRef.current = editable
-  }, [editable])
-  // Start true when the surface mounted editable so the blocking request path can paint once.
-  // Staging/unstaging sets this false while !editable, so the flip commit already gates `edit`.
-  const [primeReady, setPrimeReady] = useState(editable)
+  const scope = input ? JSON.stringify([input.cacheKey, input.path]) : null
+  const [primedScope, setPrimedScope] = useState<string | null>(null)
 
   useEffect(() => {
     if (!input) {
@@ -40,19 +31,12 @@ export function usePierreFileDiff(input: PierreDiffInput | null, editable = fals
         // Why: an already-rejected highlight enqueues onHighlightError before this then
         // commits the snapshot, so the error must be captured for both orderings.
         let highlightError: string | null = null
-        void requestPierreFileDiff(
-          input,
-          controller.signal,
-          editableRef.current,
-          (error: unknown) => {
-            highlightError = error instanceof Error ? error.message : String(error)
-            setSnapshot((previous) =>
-              previous && previous.input === input
-                ? { ...previous, error: highlightError }
-                : previous
-            )
-          }
-        ).then(
+        void requestPierreFileDiff(input, controller.signal, false, (error: unknown) => {
+          highlightError = error instanceof Error ? error.message : String(error)
+          setSnapshot((previous) =>
+            previous && previous.input === input ? { ...previous, error: highlightError } : previous
+          )
+        }).then(
           (diff) => {
             if (!controller.signal.aborted) {
               renderedScopeRef.current = JSON.stringify([input.cacheKey, input.path])
@@ -86,23 +70,17 @@ export function usePierreFileDiff(input: PierreDiffInput | null, editable = fals
     }
   }, [input, attempt])
 
-  // Why: staging or unstaging flips a row's editability without changing its content. Priming
-  // here is not enough by itself -- Pierre's applyEdit runs in a child layout effect of the same
-  // commit, so `edit` must already be false on the flip render or it highlights the whole file
-  // synchronously. `primeReady` stays false while !editable, then this fills the AST and flips it.
+  // Paint the parsed viewport first; attach only after the worker primes the editable AST.
   useEffect(() => {
-    if (!editable) {
-      setPrimeReady(false)
-      return
-    }
-    if (!fileDiff) {
+    if (!editable || !fileDiff) {
+      setPrimedScope(null)
       return
     }
     const controller = new AbortController()
     preparePierreDiffHighlight(fileDiff, controller.signal).then(
       () => {
         if (!controller.signal.aborted) {
-          setPrimeReady(true)
+          setPrimedScope(scope)
           // Why: retry re-primes immediately but same-file parse is coalesced 120ms,
           // so leaving this set keeps the banner up after recovery already succeeded.
           setSnapshot((previous) =>
@@ -121,7 +99,9 @@ export function usePierreFileDiff(input: PierreDiffInput | null, editable = fals
         }
         setSnapshot((previous) =>
           previous && previous.diff === fileDiff
-            ? { ...previous, error: error instanceof Error ? error.message : String(error) }
+            ? fileDiff.lang?.startsWith('orca-plugin-syntax-')
+              ? { ...previous, diff: { ...fileDiff, lang: 'text' }, error: null }
+              : { ...previous, error: error instanceof Error ? error.message : String(error) }
             : previous
         )
       }
@@ -129,13 +109,13 @@ export function usePierreFileDiff(input: PierreDiffInput | null, editable = fals
     return () => controller.abort()
     // Why attempt: retry is the only recovery after a prime rejection, and parse can
     // return the same FileDiffMetadata object, which would otherwise skip this effect.
-  }, [attempt, editable, fileDiff])
+  }, [attempt, editable, fileDiff, scope])
 
   return {
     fileDiff,
     error: snapshot?.input === input ? snapshot.error : null,
     retry,
     markEdited,
-    editReady: !editable || primeReady
+    editReady: !editable || (scope !== null && primedScope === scope)
   }
 }
