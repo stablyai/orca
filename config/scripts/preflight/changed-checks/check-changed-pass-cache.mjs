@@ -8,6 +8,7 @@ import { isDocsOnlyPath } from '../../workflow/source-routing/pr-code-change-sco
 export const PASS_CACHE_PATH = '.cache/check-changed.json'
 export const UNIT_TESTS_TASK = 'unit tests'
 const CACHE_VERSION = 2
+const CODE_MODULE = /\.[cm]?[jt]sx?$/
 
 // Inputs outside the diff that still decide what the checks report.
 const HASHED_CONFIG_FILES = [
@@ -80,10 +81,11 @@ export function hashChangedFiles(root, files) {
 export function readRunRecord(root, setup) {
   try {
     const record = JSON.parse(readFileSync(path.join(root, PASS_CACHE_PATH), 'utf8'))
-    const tasks = Object.values(record.tasks ?? {})
+    // Object.values throws on a missing map, which the catch turns into a full run.
+    const tasks = Object.values(record.tasks)
     return record.version === CACHE_VERSION &&
       record.setup === setup &&
-      Object.values(record.files ?? {}).every((hash) => typeof hash === 'string') &&
+      Object.values(record.files).every((hash) => typeof hash === 'string') &&
       tasks.length === Object.keys(record.tasks).length &&
       tasks.every(isTaskRecord)
       ? record
@@ -139,9 +141,10 @@ function narrowUnitTests(root, edited, unitRecord, listDirectory) {
   if (!Array.isArray(unitRecord?.failedTests) || !edited.every(exists)) {
     return null
   }
-  // `related` follows imports only: deleted files, setup, config, fixtures and snapshots need all.
+  // `related` follows code imports only; tests may read data files, setup or config from disk.
   const { related } = splitUnitTestInputs(edited, listDirectory)
-  if (edited.some((file) => !related.includes(file) && !isDocsOnlyPath(file))) {
+  const followable = (file) => related.includes(file) && CODE_MODULE.test(file)
+  if (!edited.every((file) => followable(file) || isDocsOnlyPath(file))) {
     return null
   }
   return { related, colocated: unitRecord.failedTests.filter(exists) }

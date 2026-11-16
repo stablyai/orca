@@ -106,10 +106,10 @@ it('reruns failed checks and narrows tests to edited files plus last failures', 
   expect(onlyDocs.passed('unit tests')).toBe(true)
   expect(onlyDocs.passed('typecheck')).toBe(false)
 
-  // Edits `related` can't follow (snapshots, setup, deletions) bring back every test.
-  writeFileSync(join(root, 'src/a.test.ts.snap'), 'exports[`a`] = 1\n')
+  // Edits `related` can't follow (fixtures read from disk, deletions) bring back every test.
+  writeFileSync(join(root, 'src/fixture.txt'), 'prompt\n')
   expect(planRepairRun(root, lastPassed, snapshot(), () => []).passed('unit tests')).toBe(false)
-  rmSync(join(root, 'src/a.test.ts.snap'))
+  rmSync(join(root, 'src/fixture.txt'))
   rmSync(join(root, 'src/b.ts'))
   expect(planRepairRun(root, lastPassed, snapshot(), () => []).unitTests).toBeNull()
 })

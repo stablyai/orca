@@ -141,8 +141,8 @@ function buildTasks(root, plan, { files, mergeBase, maxWorkers, bun, reportDir }
   const colocated = plan.unitTests.colocated.filter((file) => existsSync(path.join(root, file)))
   if (related.length > 0 || colocated.length > 0) {
     // The report names the failed test files, which a repeat run reruns instead of all.
-    const vitest = (selection) => {
-      const report = path.join(reportDir, `vitest-${selection[0]}.json`)
+    const vitest = (role, selection) => {
+      const report = path.join(reportDir, `vitest-${role}.json`)
       return {
         ...step(node, [
           'config/scripts/test-runtime/execution-policy/run-vitest.mjs',
@@ -168,13 +168,14 @@ function buildTasks(root, plan, { files, mergeBase, maxWorkers, bun, reportDir }
         ...(related.length > 0
           ? [
               vitest(
+                'related',
                 fitsCommandLine(related)
                   ? ['related', '--run', ...related]
                   : ['run', `--changed=${mergeBase}`]
               )
             ]
           : []),
-        ...(colocated.length > 0 ? [vitest(['run', ...colocated])] : [])
+        ...(colocated.length > 0 ? [vitest('colocated', ['run', ...colocated])] : [])
       ]
     })
   }
