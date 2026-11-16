@@ -76,9 +76,7 @@
         "main:mobile/src/session/use-pr-bot-author-overrides.ts:usePRBotAuthorOverrides:settings.get:35:transport-error"
       ],
       "scenarios": [
-        "settings-bot-overrides-fulfilled",
-        "settings-bot-overrides-refused",
-        "settings-bot-overrides-transport-error"
+        "settings-bot-overrides-refresh-refused"
       ]
     },
     {
