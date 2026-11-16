@@ -49,16 +49,18 @@ function fetchRecord(worktreeId: string, hostId: string | null | undefined): Pro
   return run
 }
 
-/** Loads the record unless a fresh one is known; for row hover, before any menu opens. */
+/** Loads the record unless a fresh one is known; for row hover, before any menu opens. Resolves
+ *  when that load (or the one already running) is done. */
 export function prefetchCloudWorkspaceRecord(
   worktreeId: string,
   hostId: string | null | undefined,
   now = Date.now()
-): void {
+): Promise<void> {
   const known = records.get(key(worktreeId, hostId))
   if (!known || now - known.at >= RECORD_FRESH_MS) {
-    void fetchRecord(worktreeId, hostId)
+    return fetchRecord(worktreeId, hostId)
   }
+  return Promise.resolve()
 }
 
 /**
@@ -77,7 +79,7 @@ export function useCloudWorkspaceRecord(
     () => records.get(key(worktreeId, hostId))
   )
   useEffect(() => {
-    prefetchCloudWorkspaceRecord(worktreeId, hostId)
+    void prefetchCloudWorkspaceRecord(worktreeId, hostId)
   }, [worktreeId, hostId])
   const reload = useCallback(() => void fetchRecord(worktreeId, hostId), [worktreeId, hostId])
   return { workspace: entry?.workspace ?? null, loaded: entry !== undefined, reload }

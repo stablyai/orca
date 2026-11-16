@@ -110,7 +110,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
       onPointerEnter={
         isCloud
           ? () =>
-              prefetchCloudWorkspaceRecord(
+              void prefetchCloudWorkspaceRecord(
                 worktree.id,
                 getWorktreeExecutionHostId(worktree, repo ?? undefined)
               )

@@ -10,6 +10,8 @@ import {
   useCloudWorkspaceRecord
 } from './use-cloud-workspace-record'
 
+const T0 = 1_700_000_000_000
+
 const bridge = {
   localWorkspaces: vi.fn(async () => [{ worktreeId: 'w', sandboxId: 'sbx' }]),
   environmentBindings: vi.fn(async () => ({})),
@@ -17,24 +19,19 @@ const bridge = {
 }
 
 beforeEach(() => {
+  vi.useFakeTimers({ now: T0, toFake: ['Date'] })
   resetCloudWorkspaceRecordsForTests()
   vi.clearAllMocks()
   Object.assign(window, { api: { cloudWorkspaces: bridge } })
 })
 afterEach(() => {
+  vi.useRealTimers()
   Object.assign(window, { api: undefined })
 })
 
-async function settle(): Promise<void> {
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 0))
-  })
-}
-
 describe('useCloudWorkspaceRecord', () => {
   it('a menu opened after row hover has the record on its first render', async () => {
-    prefetchCloudWorkspaceRecord('w', null)
-    await settle()
+    await prefetchCloudWorkspaceRecord('w', null)
     const { result } = renderHook(() => useCloudWorkspaceRecord('w', null))
     expect(result.current.loaded).toBe(true)
     expect(result.current.workspace?.id).toBe('sbx')
@@ -43,21 +40,20 @@ describe('useCloudWorkspaceRecord', () => {
   it('says not loaded until the first answer, then updates in place', async () => {
     const { result } = renderHook(() => useCloudWorkspaceRecord('w', null))
     expect(result.current.loaded).toBe(false)
-    await settle()
+    await act(() => prefetchCloudWorkspaceRecord('w', null))
     expect(result.current.loaded).toBe(true)
     expect(result.current.workspace?.id).toBe('sbx')
   })
 
   it('hovering again while fresh asks nothing; a stale record is refreshed', async () => {
-    prefetchCloudWorkspaceRecord('w', null, 1_000)
-    prefetchCloudWorkspaceRecord('w', null, 1_000)
-    await settle()
+    await Promise.all([
+      prefetchCloudWorkspaceRecord('w', null, T0),
+      prefetchCloudWorkspaceRecord('w', null, T0)
+    ])
     expect(bridge.get).toHaveBeenCalledOnce()
-    prefetchCloudWorkspaceRecord('w', null, Date.now() + 1)
-    await settle()
+    await prefetchCloudWorkspaceRecord('w', null, T0 + 1)
     expect(bridge.get).toHaveBeenCalledOnce()
-    prefetchCloudWorkspaceRecord('w', null, Date.now() + RECORD_FRESH_MS)
-    await settle()
+    await prefetchCloudWorkspaceRecord('w', null, T0 + RECORD_FRESH_MS)
     expect(bridge.get).toHaveBeenCalledTimes(2)
   })
 })
