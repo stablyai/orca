@@ -98,6 +98,18 @@ export function pluginHostEffect(
   })
 }
 
+/** Brings Orca's window in front of other apps, unless the plugin lost approval, or its worker
+ *  cancelled the call, while the call ran. */
+export function pluginHostRaiseWindow(
+  ctx: PluginHostMethodContext,
+  window: PluginHostRendererActions
+): void {
+  ctx.scope.assertActive()
+  if (!ctx.scope.signal?.aborted) {
+    window.raiseWindow()
+  }
+}
+
 /**
  * The selector a listed workspace id names. Ids carry their host (`identity:`, unique across
  * twins on two hosts) or are folder keys; a bare id from elsewhere is taken as an exact id.

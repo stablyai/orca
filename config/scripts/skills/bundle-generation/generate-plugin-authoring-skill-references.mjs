@@ -219,6 +219,9 @@ function renderHostApi(sources, { frame, worker }) {
       ),
       spec.surfaces.join(', '),
       `since ${hostVersion(sources, spec.since)}`,
+      ...Object.entries(spec.paramsSince ?? {}).map(
+        ([param, minor]) => `${code(param)} since ${hostVersion(sources, minor)}`
+      ),
       ...(spec.deprecatedSince === undefined
         ? []
         : [`deprecated ${hostVersion(sources, spec.deprecatedSince)}`]),

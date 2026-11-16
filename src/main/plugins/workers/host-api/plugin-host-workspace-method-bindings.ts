@@ -7,6 +7,7 @@ import { claimPluginReplacedActionRun } from '../../commands/plugin-command-repl
 import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import {
   pluginHostEffect as effect,
+  pluginHostRaiseWindow as raise,
   pluginHostRenderer as renderer,
   pluginHostRpc as rpc,
   pluginWorkspaceSelector as workspaceSelector
@@ -63,7 +64,9 @@ export const PLUGIN_WORKSPACE_ACTION_HANDLERS = {
     } else {
       await effect(ctx, 'worktree.activate', { worktree: workspaceSelector(workspaceId) })
     }
-    window?.raiseWindow()
+    if (window) {
+      raise(ctx, window)
+    }
     return { opened: true as const }
   }),
   'workspace.rename': bind(api['workspace.rename'], async ({ workspaceId, name }, ctx) => {

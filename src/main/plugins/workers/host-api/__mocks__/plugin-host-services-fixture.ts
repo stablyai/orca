@@ -2,6 +2,7 @@ import { vi } from 'vitest'
 import type { PluginCapabilityKind } from '../../../../../shared/plugins/capabilities/plugin-capabilities'
 import { executePluginHostCall } from '../plugin-host-methods'
 import type { PluginHostServices } from '../plugin-host-method-bindings'
+import type { PluginHostCallScope } from '../plugin-host-call-scope'
 import type { PluginAuditLog } from '../../../logging/plugin-audit-log'
 
 /** Host services with inert stores and the given runtime RPC; `overrides` replaces any of them. */
@@ -35,6 +36,7 @@ export function callPluginHost(input: {
   granted: PluginCapabilityKind[]
   services: PluginHostServices
   audit?: Pick<PluginAuditLog, 'record'>
+  scope?: PluginHostCallScope
 }) {
   return executePluginHostCall({
     pluginId: 'samples.demo',
@@ -43,6 +45,7 @@ export function callPluginHost(input: {
     surface: 'worker',
     grantedCapabilities: input.granted,
     services: input.services,
-    audit: input.audit ?? { record: vi.fn().mockResolvedValue(undefined) }
+    audit: input.audit ?? { record: vi.fn().mockResolvedValue(undefined) },
+    ...(input.scope ? { scope: input.scope } : {})
   })
 }

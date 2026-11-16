@@ -69,6 +69,26 @@ describe('raiseWindow', () => {
     expect(runtimeRpc).not.toHaveBeenCalled()
   })
 
+  it('does not raise the window for a call its worker cancelled while it ran', async () => {
+    const renderer = desktopWindow()
+    const cancelled = new AbortController()
+    const runtimeRpc = vi.fn().mockImplementation(async () => {
+      cancelled.abort()
+      return { focus: { navigated: true } }
+    })
+
+    await callPluginHost({
+      method: 'terminal.focus',
+      params: { terminalId: 'term_1', raiseWindow: true },
+      granted: ['workspace:write'],
+      services: pluginHostTestServices(runtimeRpc, { renderer }),
+      scope: { assertActive: () => {}, signal: cancelled.signal }
+    })
+
+    expect(runtimeRpc).toHaveBeenCalledTimes(1)
+    expect(renderer.raiseWindow).not.toHaveBeenCalled()
+  })
+
   it('leaves the window where it is when a call does not ask for it', async () => {
     const renderer = desktopWindow()
     const services = pluginHostTestServices(
@@ -76,19 +96,21 @@ describe('raiseWindow', () => {
       { renderer }
     )
 
-    await callPluginHost({
+    const focus = await callPluginHost({
       method: 'terminal.focus',
       params: { terminalId: 'term_1' },
       granted: ['workspace:write'],
       services
     })
-    await callPluginHost({
+    const open = await callPluginHost({
       method: 'workspace.open',
       params: { workspaceId: 'identity:wt2:local:abc' },
       granted: ['workspace:write'],
       services
     })
 
+    expect(focus).toEqual({ ok: true, value: { focused: true } })
+    expect(open).toEqual({ ok: true, value: { opened: true } })
     expect(renderer.raiseWindow).not.toHaveBeenCalled()
   })
 })

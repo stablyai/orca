@@ -9,6 +9,7 @@ import { bind, type BoundPluginHostMethod } from './plugin-host-method-bind'
 import { pluginTerminalTitle } from './plugin-workspace-projection'
 import {
   pluginHostEffect as effect,
+  pluginHostRaiseWindow as raise,
   pluginHostRenderer as renderer,
   pluginHostRpc as rpc,
   pluginWorkspaceSelector as workspaceSelector
@@ -83,7 +84,7 @@ export const PLUGIN_TERMINAL_ACTION_HANDLERS = {
     const focused = terminalFocusAnswer.parse(answer).focus.navigated !== false
     // Why only when focused: a window that did not move to the terminal must not come forward.
     if (focused && raiseWindow) {
-      window.raiseWindow()
+      raise(ctx, window)
     }
     return { focused }
   }),
