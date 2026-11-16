@@ -112,7 +112,8 @@ export function isLargeWorkerMessage(shape: WorkerMessageShape): boolean {
     shape.bytes >= LARGE_BYTES ||
     shape.items >= LARGE_ITEMS ||
     shape.depth >= LARGE_DEPTH ||
-    (shape.truncated && (shape.bytes >= TRUNCATED_LARGE_BYTES || shape.items >= TRUNCATED_LARGE_ITEMS))
+    (shape.truncated &&
+      (shape.bytes >= TRUNCATED_LARGE_BYTES || shape.items >= TRUNCATED_LARGE_ITEMS))
   )
 }
 

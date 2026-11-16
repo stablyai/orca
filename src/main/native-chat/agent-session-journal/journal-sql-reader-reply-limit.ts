@@ -43,9 +43,7 @@ export function limitJournalReaderReply<T extends { type: string }>(
   return {
     type: 'failed',
     id: reply.id,
-    error: journalSqlFailure(
-      new Error(`journal read reply (${reply.type}) exceeds ${limit} bytes`)
-    )
+    error: journalSqlFailure(new Error(`journal read reply (${reply.type}) exceeds ${limit} bytes`))
   }
 }
 

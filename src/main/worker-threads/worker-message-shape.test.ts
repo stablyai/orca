@@ -5,7 +5,10 @@ describe('describeWorkerMessage', () => {
   it('names a reply and counts its rows and text', () => {
     const shape = describeWorkerMessage({
       type: 'records',
-      rows: [{ id: 'a', text: 'hello' }, { id: 'b', text: 'world!' }]
+      rows: [
+        { id: 'a', text: 'hello' },
+        { id: 'b', text: 'world!' }
+      ]
     })
     expect(shape).toEqual({ kind: 'records', items: 2, bytes: 40, depth: 4, truncated: false })
   })
@@ -39,7 +42,10 @@ describe('describeWorkerMessage', () => {
     expect(deepShape.truncated).toBe(true)
     expect(deepShape.depth).toBe(2048)
 
-    const huge = describeWorkerMessage({ type: 'page', rows: new Array(5_000_000).fill(1) })
+    const huge = describeWorkerMessage({
+      type: 'page',
+      rows: Array.from({ length: 5_000_000 }, () => 1)
+    })
     expect(huge).toMatchObject({ kind: 'page', items: 5_000_000, truncated: true })
   })
 })

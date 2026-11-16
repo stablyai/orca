@@ -58,7 +58,7 @@ function sharedLedger(): SharedArrayBuffer | undefined {
 }
 
 function ownerIndex(slot: number): number {
-  return (slot * SLOT_BYTES) / 4
+  return (slot * SLOT_BYTES + OWNER) / 4
 }
 
 /** Main thread, before spawning: workers created afterwards inherit the ledger. */

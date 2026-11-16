@@ -4,7 +4,11 @@ import { limitJournalReaderReply } from './journal-sql-reader-reply-limit'
 describe('limitJournalReaderReply', () => {
   const MB = 2 ** 20
   const rows = (count: number, text = 'x'.repeat(1024)): object[] =>
-    Array.from({ length: count }, (_, index) => ({ itemId: `item-${index}`, kind: 'tool-call', text }))
+    Array.from({ length: count }, (_, index) => ({
+      itemId: `item-${index}`,
+      kind: 'tool-call',
+      text
+    }))
 
   it('turns a decoded whole-chat read into its request failure and passes a bounded page', () => {
     const wholeChat = { type: 'point', id: 7, result: { items: rows(20_000) } }
@@ -20,13 +24,17 @@ describe('limitJournalReaderReply', () => {
 
   it('measures rows past the bounded walk instead of trusting the small ones it saw', () => {
     const items = [...rows(2_048, 'x'.repeat(16)), ...rows(400, 'x'.repeat(64 * 1024))]
-    expect(limitJournalReaderReply({ type: 'point', id: 9, result: { items } }, 8 * MB)).toMatchObject(
-      { type: 'failed', id: 9 }
-    )
+    expect(
+      limitJournalReaderReply({ type: 'point', id: 9, result: { items } }, 8 * MB)
+    ).toMatchObject({ type: 'failed', id: 9 })
   })
 
   it('never refuses the record set, which every chat needs to open', () => {
-    const recordSet = { type: 'database', id: 10, result: { kind: 'records', records: rows(20_000) } }
+    const recordSet = {
+      type: 'database',
+      id: 10,
+      result: { kind: 'records', records: rows(20_000) }
+    }
     expect(limitJournalReaderReply(recordSet, 8 * MB)).toBe(recordSet)
   })
 })

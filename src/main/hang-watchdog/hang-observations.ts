@@ -1,8 +1,6 @@
 import {
   MACHINE_FIELDS,
-  MAX_HANG_WORKER_SENDS,
   SNAPSHOT_FIELDS,
-  type HangWorkerSend,
   type HangPowerReceipt,
   type CompletedHangContext,
   type HangObservation,
@@ -14,6 +12,7 @@ import {
   parseMainJsCapture,
   parseNativeHangCapture
 } from './hang-capture-codec'
+import { parseHangWorkerSends } from './hang-worker-sends'
 export { MACHINE_FIELDS, SNAPSHOT_FIELDS } from './hang-observation-schema'
 export type {
   HangSnapshot,
@@ -119,7 +118,7 @@ function parseObservation(value: unknown): HangObservation | null {
     }
   }
   const gap = object(data.watchdogGap)
-  const workerSends = parseWorkerSends(data.workerSends)
+  const workerSends = parseHangWorkerSends(data.workerSends)
   return {
     id: data.id,
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixed observation-kind allowlist above validates this string union.
@@ -154,34 +153,6 @@ function parseObservation(value: unknown): HangObservation | null {
   }
 }
 
-function parseWorkerSends(value: unknown): HangWorkerSend[] | null {
-  if (!Array.isArray(value) || value.length > MAX_HANG_WORKER_SENDS) {
-    return null
-  }
-  const sends: HangWorkerSend[] = []
-  for (const item of value) {
-    const send = object(item)
-    if (
-      send &&
-      typeof send.role === 'string' &&
-      send.role.length <= 40 &&
-      typeof send.kind === 'string' &&
-      send.kind.length <= 40 &&
-      [send.items, send.bytes, send.depth, send.agoMs, send.heapUsedMB].every(finite)
-    ) {
-      sends.push({
-        role: send.role,
-        kind: send.kind,
-        items: Number(send.items),
-        bytes: Number(send.bytes),
-        depth: Number(send.depth),
-        agoMs: Number(send.agoMs),
-        heapUsedMB: Number(send.heapUsedMB)
-      })
-    }
-  }
-  return sends
-}
 export function emptyHangObservations(): HangObservationCollection {
   return { version: 1, observations: [], omitted: 0 }
 }
