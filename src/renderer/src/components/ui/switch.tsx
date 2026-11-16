@@ -34,7 +34,9 @@ function Switch({
       className={cn(
         trackClassName,
         size === 'compact' && compactTrackClassName,
-        'cursor-pointer outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50',
+        'cursor-pointer outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed',
+        // A pending switch is unavailable but stays at full strength; its spinner says why.
+        !pending && 'aria-disabled:opacity-50',
         pending === 'turning-on' && 'data-[state=checked]:bg-foreground/45',
         className
       )}

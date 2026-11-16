@@ -114,7 +114,8 @@ export function WorkspaceCleanupRuleRows({
     const failed = operation?.failedKey === key && !rules[key].enabled
     const errorId = `${idPrefix}-${key}-check-failed`
     const shownOn = phase === 'checking' || phase === 'enabling' ? true : rules[key].enabled
-    const blocked = Boolean(operation?.busy) && phase === null
+    // Every switch ignores a toggle while a change is in flight, the pending one included.
+    const held = Boolean(operation?.busy) || phase !== null
     return (
       <SearchableSetting {...search[key]} forceVisible={forceVisible}>
         <SettingsRow
@@ -161,7 +162,7 @@ export function WorkspaceCleanupRuleRows({
               // Shown On while its turn-on is checked or saved; screen readers hear the saved value.
               checked={shownOn}
               aria-checked={rules[key].enabled}
-              aria-disabled={blocked ? true : undefined}
+              aria-disabled={held ? true : undefined}
               aria-describedby={failed ? errorId : undefined}
               disabled={disabled}
               pending={
@@ -172,7 +173,7 @@ export function WorkspaceCleanupRuleRows({
                     : 'saving'
               }
               onCheckedChange={() => {
-                if (!operation?.busy) {
+                if (!held) {
                   onToggle(key)
                 }
               }}

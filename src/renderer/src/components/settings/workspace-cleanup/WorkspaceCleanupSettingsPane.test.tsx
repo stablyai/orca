@@ -15,6 +15,10 @@ import { useAppStore } from '@/store'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { emitWorkspaceCleanupRunFinishedWindowEvent } from '@/components/workspace-cleanup/events/workspace-cleanup-run-finished-window-event'
 import { TooltipProvider } from '../../ui/tooltip'
+import { getSettingsScrollTarget } from '../navigation/settings-navigation-foundations'
+import { getSettingsTitleTargetId } from '../section-layout/settings-target-highlight'
+import { matchesSettingsSearch } from '../search/settings-search'
+import { getWorkspaceCleanupSettingsSearchEntries } from './workspace-cleanup-settings-search'
 import type * as RuntimeRpcCall from '@/runtime/rpc/calls/runtime-rpc-call'
 import { WorkspaceCleanupSettingsPane } from './WorkspaceCleanupSettingsPane'
 
@@ -68,6 +72,7 @@ let previewGate: Promise<void> | null = null
 let saveGate: Promise<void> | null = null
 let runNowGate: Promise<void> | null = null
 let reportRuns: WorkspaceCleanupRun[] = []
+let reportRunning = false
 
 const LOCAL_TARGET: RuntimeClientTarget = { kind: 'local' }
 
@@ -140,6 +145,7 @@ beforeEach(() => {
   saveGate = null
   runNowGate = null
   reportRuns = []
+  reportRunning = false
   environmentCall.settingsGetFails = false
   useAppStore.setState(useAppStore.getInitialState(), true)
   Object.assign(window, {
@@ -170,7 +176,7 @@ beforeEach(() => {
             ok: true,
             result:
               method === 'workspaceCleanup.report'
-                ? { runs: reportRuns, running: false, nextRunAt: null }
+                ? { runs: reportRuns, running: reportRunning, nextRunAt: null }
                 : { evaluatedAt: 0, rows: candidate ? [row] : [] }
           }
         }
@@ -270,12 +276,17 @@ describe('turning a rule on', () => {
     expect(mergedCheckingLine()).not.toBeNull()
     expect(merged().getAttribute('aria-busy')).toBe('true')
     expect(merged().getAttribute('aria-checked')).toBe('false')
+    expect(merged().getAttribute('aria-disabled')).toBe('true')
+    expect(merged().hasAttribute('disabled')).toBe(false)
     const unchanged = screen.getByRole('switch', { name: 'Delete unchanged workspaces' })
     expect(unchanged.getAttribute('aria-disabled')).toBe('true')
     expect(unchanged.hasAttribute('disabled')).toBe(false)
     await act(async () => {
       fireEvent.click(unchanged)
+      fireEvent.keyDown(merged(), { key: ' ' })
+      fireEvent.click(merged())
     })
+    expect(mergedCheckingLine()).not.toBeNull()
 
     await act(async () => {
       releasePreview()
@@ -386,6 +397,35 @@ describe('automatic cleanup search', () => {
     expect(screen.queryAllByRole('switch')).toHaveLength(0)
     expect(screen.queryByRole('button', { name: /Advanced/ })).toBeNull()
   })
+
+  it.each([
+    ['off', false, false],
+    ['on', true, false],
+    ['running', true, true]
+  ])(
+    'keeps the Run rules now result pointing at the heading after the query clears, rules %s',
+    async (_state, enabled, running) => {
+      reportRunning = running
+      mount(enabled)
+      if (running) {
+        await screen.findByRole('button', { name: 'Running…' })
+      }
+      search('run rules now')
+      const results = getWorkspaceCleanupSettingsSearchEntries()
+        .filter((entry) => matchesSettingsSearch('run rules now', entry))
+        .map((entry) => entry.title)
+      expect(results).toEqual(['Automatic cleanup'])
+      const targetId = getSettingsTitleTargetId('Automatic cleanup')
+      expect(getSettingsScrollTarget(targetId)).not.toBeNull()
+
+      // Choosing a result clears the query before the page scrolls to the target.
+      search('')
+      const target = getSettingsScrollTarget(targetId)
+      expect(target?.querySelector('[data-settings-group-heading]')?.textContent).toContain(
+        'Automatic cleanup'
+      )
+    }
+  )
 })
 
 describe('automatic cleanup announcements', () => {

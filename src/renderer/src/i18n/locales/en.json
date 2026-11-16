@@ -22631,7 +22631,10 @@
           "transcripts": "transcripts",
           "diskSpace": "disk space",
           "manual": "manual",
-          "automaticDescription": "Whether automatic cleanup is on, when it runs next, and running the rules now."
+          "automaticDescription": "Whether automatic cleanup is on, when it runs next, and running the rules now.",
+          "runRulesNow": "run rules now",
+          "cleanUpNow": "clean up now",
+          "schedule": "schedule"
         },
         "status": {
           "lastRunFailed": "Last run {{when}} couldn't finish: {{error}}",

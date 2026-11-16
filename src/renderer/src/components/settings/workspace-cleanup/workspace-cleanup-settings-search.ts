@@ -27,20 +27,32 @@ export const getWorkspaceCleanupSettingsSearchParts = createLocalizedCatalog(
           ...translateSearchKeyword('components.settings.workspaceCleanup.search.manual', 'manual')
         ]
       },
+      // The Automatic cleanup heading, shown whether rules are off, on or running.
       status: {
-        title: translate('components.settings.workspaceCleanup.automatic.runNow', 'Run rules now'),
+        title: translate(
+          'components.settings.workspaceCleanup.automatic.title',
+          'Automatic cleanup'
+        ),
         description: translate(
           'components.settings.workspaceCleanup.search.automaticDescription',
           'Whether automatic cleanup is on, when it runs next, and running the rules now.'
         ),
         keywords: [
           ...translateSearchKeyword(
+            'components.settings.workspaceCleanup.search.runRulesNow',
+            'run rules now'
+          ),
+          ...translateSearchKeyword(
+            'components.settings.workspaceCleanup.search.cleanUpNow',
+            'clean up now'
+          ),
+          ...translateSearchKeyword(
             'components.settings.workspaceCleanup.search.automatic',
             'automatic'
           ),
           ...translateSearchKeyword(
-            'components.settings.workspaceCleanup.search.cleanUp',
-            'clean up'
+            'components.settings.workspaceCleanup.search.schedule',
+            'schedule'
           )
         ]
       },
