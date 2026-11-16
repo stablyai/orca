@@ -73,6 +73,7 @@ it('keeps the same conversation tab when its workspace opens during a mounted re
     return { dispose: () => releaseRestart?.() } as ReturnType<typeof connectPanePty>
   })
   const { result } = renderHook(() =>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the restart path only reads the pane, transport, and callbacks provided above.
     usePaneProcessRestart({
       tabId: 'tab',
       worktreeId: 'worktree',
@@ -111,7 +112,6 @@ it('keeps the same conversation tab when its workspace opens during a mounted re
       setCacheTimerStartedAt: () => {},
       setTerminalError: () => {},
       setTerminalErrorsByPaneId: () => {}
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the restart path only reads the pane, transport, and callbacks provided above.
     } as unknown as Parameters<typeof usePaneProcessRestart>[0])
   )
 
