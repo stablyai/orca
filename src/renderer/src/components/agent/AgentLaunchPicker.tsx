@@ -172,18 +172,19 @@ export const AgentLaunchPicker = memo(
         draftForEntry?.(entry) ??
         agentPickerDraft(entry))
       : undefined
-    // Why keyed on the draft's content: forms re-derive an equal draft on every render, and the
-    // summary rebuilds the agent's model catalog.
-    const summaryDraft =
-      entry && draft && !setupDisabled && triggerLabel === undefined ? JSON.stringify(draft) : null
+    // Why keyed on the draft's content and UI language: forms re-derive an equal draft on every
+    // render, the summary rebuilds the agent's model catalog, and its labels are translated.
+    const summaryKey =
+      entry && draft && !setupDisabled && triggerLabel === undefined
+        ? JSON.stringify([languageRevision, draft])
+        : null
     const summary = useMemo(() => {
-      if (!entry || !summaryDraft) {
+      if (!entry || !summaryKey) {
         return ''
       }
-      const parsed: AgentPickerDraft = JSON.parse(summaryDraft)
+      const [, parsed]: [unknown, AgentPickerDraft] = JSON.parse(summaryKey)
       return agentLaunchSetupSummary(entry, parsed).join(' · ')
-      // oxlint-disable-next-line react-hooks/exhaustive-deps -- level and speed labels follow the UI language.
-    }, [entry, summaryDraft, languageRevision])
+    }, [entry, summaryKey])
     // Only a dropdown with Open in names where the agent runs, as Open in does.
     const surface =
       entry && !setupDisabled && !entry.textGeneration
