@@ -73,6 +73,7 @@ function NativeChatStructuredGoalStrip(props: {
       }
       pending={threadGoal.pending}
       hostChanges={threadGoal.hostChanges}
+      agentResumes={threadGoal.agentResumes}
       sendUnavailable={transport.sendOut === true || props.isWorking}
       startsHeld={startsHeld}
       isVisible={props.isVisible}
@@ -85,7 +86,7 @@ function NativeChatStructuredGoalStrip(props: {
         if (startsHeld && startsTurn) {
           return
         }
-        if (change.kind === 'clear' && !threadGoal.hostChanges) {
+        if (!threadGoal.hostChanges) {
           transport.onSubmitted?.()
         }
         void threadGoal.change(change)

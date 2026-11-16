@@ -3,7 +3,7 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   normalizeLeftSidebarTintColor,
   normalizeLeftSidebarTintOpacity
-} from '../../../../shared/left-sidebar-appearance'
+} from '../../../../shared/sidebar-list/appearance/left-sidebar-appearance'
 import { pluginAppThemeCssFallback } from '../../../../shared/plugins/artifacts/plugin-theme-css-fallbacks'
 import { hostPillOutlineMixOver, type ColorProbe } from './plugin-theme-tokens'
 import { mix, type Rgba } from '../../../../shared/color/rgba-contrast'

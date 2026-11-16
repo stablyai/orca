@@ -262,7 +262,7 @@ export function renderTabBarSurface(
                 onSelectMenuOption={handleSelectCreateMenuOption}
                 onDidOpenEntry={() => setNewTabMenuOpen(false)}
               />
-              {showStaticCreateMenuItems ? <DropdownMenuSeparator /> : null}
+              {showStaticCreateMenuItems ? <DropdownMenuSeparator className="my-0 mb-1.5" /> : null}
             </>
           ) : null}
           {showStaticCreateMenuItems ? (

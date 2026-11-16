@@ -9,7 +9,7 @@ import type { RepoSourceControlAiOverrides } from '../source-control/ai/settings
 import type { RepoProjectHostSetupMethod } from '../project/project-types'
 import type { JiraProjectReference } from '../jira/jira-project-reference'
 import type { OrcadRetainedMarker } from '../remote-runtime/orcad-lifecycle/orcad-retained-marker'
-import type { EditorFormatter } from '../editor-formatter'
+import type { EditorFormatter } from '../editor/formatting/editor-formatter'
 import type { AgentWorkspaceTrustDecision } from '../agent-launch/permissions/agent-workspace-trust-decision'
 import type { RepoWorkspaceCleanupPolicy } from '../workspace-cleanup/workspace-cleanup-policy'
 

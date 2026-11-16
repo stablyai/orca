@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import type {
   DeveloperPermissionId,
   DeveloperPermissionStatus
-} from '../../../../../shared/developer-permissions-types'
+} from '../../../../../shared/app-lifecycle/permissions/developer-permissions-types'
 import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
 

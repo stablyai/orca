@@ -24,7 +24,7 @@ import { join } from 'node:path'
 import type {
   NotificationDispatchRequest,
   StructuredNotificationRead
-} from '../../src/shared/notification-settings-types'
+} from '../../src/shared/notifications/notification-settings-types'
 import type { AgentJournalRenderItem } from '../../src/shared/agent-session/journal/agent-session-journal-types'
 import {
   agentSessionPromptAttentionKey,
@@ -44,7 +44,7 @@ import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { captureAgentSubjectReads } from '@/attention/agent-subject-read-actions'
 import { useAppStore } from '@/store'
 import { StructuredAgentSessionAttentionBridge } from '@/components/native-chat/session/attention/StructuredAgentSessionAttentionBridge'
-import { notificationDeliveryId } from '../../src/shared/notification-delivery-id'
+import { notificationDeliveryId } from '../../src/shared/notifications/notification-delivery-id'
 import type { AgentSessionExecutionLocation } from '../../src/shared/agent-session/lifecycle/agent-session-record'
 
 describe('Delayed remote prompt delivery', () => {

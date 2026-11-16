@@ -5,7 +5,10 @@ import {
   nextEditorFontZoomLevel
 } from '../../../../shared/editor/editor-font-zoom'
 import { resolveEditorBaseFontSize } from '../../../../shared/editor/editor-typography'
-import { zoomLevelToPercent, stepUIZoomLevel } from '../../../../shared/ui-zoom-level'
+import {
+  zoomLevelToPercent,
+  stepUIZoomLevel
+} from '../../../../shared/app-lifecycle/windows/ui-zoom-level'
 import { dispatchZoomLevelChanged } from '@/app-shell/chrome/zoom-events'
 
 import { useAppStore } from '../../store/index'
