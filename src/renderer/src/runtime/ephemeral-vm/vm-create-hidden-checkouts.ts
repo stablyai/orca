@@ -2,14 +2,12 @@ import type { SidebarFeedDomains } from '../../../../shared/sidebar-list/feed/si
 import {
   indexPendingVmCheckouts,
   isPendingVmCheckout,
+  PENDING_VM_CHECKOUT_HIDDEN_AFTER_CLEANUP_MS,
   type PendingVmCheckout,
   type PendingVmCheckoutIndex
 } from '../../../../shared/remote-runtime/ephemeral-vm-store/pending-vm-checkouts'
 
 type CheckoutRow = { repoId: string; path: string; isMainWorktree?: boolean }
-
-// Upper bound for a cleaned-up VM's rows to leave the lists (its host is retired asynchronously).
-const HIDDEN_AFTER_CLEANUP_MS = 60_000
 
 // Keyed per hide, not per creation: a retry re-provisions under the same creation id while the
 // previous attempt's cleaned-up VM may still be listed.
@@ -113,7 +111,7 @@ export function settleVmCreateCheckoutAfterCleanup(creationId: string, cleanedUp
   }
   activeHideByCreation.delete(creationId)
   cleanedHides.add(hideId)
-  setTimeout(() => removeHide(hideId), HIDDEN_AFTER_CLEANUP_MS)
+  setTimeout(() => removeHide(hideId), PENDING_VM_CHECKOUT_HIDDEN_AFTER_CLEANUP_MS)
 }
 
 export function subscribeHiddenVmCheckouts(listener: () => void): () => void {

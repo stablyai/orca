@@ -1,22 +1,12 @@
-import {
-  toRuntimeExecutionHostId,
-  toSshExecutionHostId,
-  type ExecutionHostId
-} from '../../../../shared/execution-host/execution-host'
 import type {
   ProjectHostSetupExistingFolderArgs,
   ProjectHostSetupResult
 } from '../../../../shared/project/project-types'
-import {
-  getEphemeralVmRecipeResultCheckoutMode,
-  getEphemeralVmRecipeResultProjectRoot
-} from '../../../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipes'
-import type { EphemeralVmRecipeResultWarning } from '../../../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-diagnostics'
 import '../../../../shared/remote-runtime/protocol/protocol-version'
 import {
-  PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
-  WORKTREE_PROVISIONED_ROOT_RUNTIME_CAPABILITY
-} from '../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
+  prepareRecipeWorkspaceTarget,
+  type RecipeWorkspaceTargetResult
+} from '../../../../shared/remote-runtime/ephemeral-vm-recipes/recipe-workspace-target'
 import { translate } from '@/i18n/i18n'
 import { ephemeralVmErrorText } from '@/runtime/ephemeral-vm/ephemeral-vm-error-copy'
 import { assertRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
@@ -34,158 +24,45 @@ export type PrepareEphemeralVmWorkspaceTargetArgs = {
   ) => Promise<ProjectHostSetupResult | null>
 }
 
-export type PrepareEphemeralVmWorkspaceTargetResult =
-  | {
-      ok: true
-      setup: ProjectHostSetupResult
-      runtimeId: string
-      checkoutMode: 'orca-worktree' | 'provisioned-root'
-      environmentId?: string
-      expectedRefHead?: string
-      stderr: string
-      warnings: EphemeralVmRecipeResultWarning[]
-    }
-  | {
-      ok: false
-      error: string
-      stderr: string
-    }
+export type PrepareEphemeralVmWorkspaceTargetResult = RecipeWorkspaceTargetResult
 
 export async function prepareEphemeralVmWorkspaceTarget(
   args: PrepareEphemeralVmWorkspaceTargetArgs
 ): Promise<PrepareEphemeralVmWorkspaceTargetResult> {
-  const provisioned = await window.api.ephemeralVm.provision({
-    repoId: args.repoId,
-    recipeId: args.recipeId,
-    projectId: args.projectId,
-    workspaceName: args.workspaceName,
-    ...(args.branch ? { branch: args.branch } : {}),
-    ...(args.ref ? { ref: args.ref } : {}),
-    ...(args.provisionId ? { provisionId: args.provisionId } : {})
-  })
-  if (!provisioned.ok) {
-    return { ok: false, error: ephemeralVmErrorText(provisioned), stderr: provisioned.stderr }
-  }
-
-  const checkoutMode = getEphemeralVmRecipeResultCheckoutMode(provisioned.runtime.recipeResult)
-  if (checkoutMode === 'provisioned-root' && provisioned.connectionType !== 'ssh') {
-    await cleanupProvisionedRuntime(provisioned.runtime.id)
-    return {
-      ok: false,
-      error: translate(
-        'auto.lib.ephemeralVmWorkspaceTarget.provisionedRootRequiresSsh',
-        'Provisioned-root recipes currently require a direct SSH connection.'
-      ),
-      stderr: provisioned.stderr
-    }
-  }
-
-  const { hostId, environmentId } = recipeWorkspaceHost(provisioned)
-
-  if (environmentId) {
-    try {
-      await assertRuntimeEnvironmentCapability(
-        environmentId,
-        PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
-        'The recipe-created Orca server does not support project setup.'
-      )
-      if (checkoutMode === 'provisioned-root') {
-        await assertRuntimeEnvironmentCapability(
-          environmentId,
-          WORKTREE_PROVISIONED_ROOT_RUNTIME_CAPABILITY,
+  return prepareRecipeWorkspaceTarget(
+    { projectId: args.projectId },
+    {
+      provision: () =>
+        window.api.ephemeralVm.provision({
+          repoId: args.repoId,
+          recipeId: args.recipeId,
+          projectId: args.projectId,
+          workspaceName: args.workspaceName,
+          ...(args.branch ? { branch: args.branch } : {}),
+          ...(args.ref ? { ref: args.ref } : {}),
+          ...(args.provisionId ? { provisionId: args.provisionId } : {})
+        }),
+      describeProvisionFailure: ephemeralVmErrorText,
+      assertEnvironmentCapability: assertRuntimeEnvironmentCapability,
+      setupExistingFolder: args.setupExistingFolder,
+      cleanupRuntime: (runtimeId) => window.api.ephemeralVm.cleanup({ runtimeId }),
+      copy: {
+        provisionedRootRequiresSsh: () =>
+          translate(
+            'auto.lib.ephemeralVmWorkspaceTarget.provisionedRootRequiresSsh',
+            'Provisioned-root recipes currently require a direct SSH connection.'
+          ),
+        provisionedRootNeedsUpdate: () =>
           translate(
             'auto.lib.ephemeralVm.provisionedRootNeedsUpdate',
             'The Orca server on this VM cannot adopt a provisioned root. Update Orca on the VM.'
+          ),
+        projectRootRegistrationFailed: () =>
+          translate(
+            'auto.lib.ephemeralVmWorkspaceTarget.projectRootRegistrationFailed',
+            'Failed to register the recipe-created project root on the runtime.'
           )
-        )
-      }
-    } catch (error) {
-      await cleanupProvisionedRuntime(provisioned.runtime.id)
-      return {
-        ok: false,
-        error: error instanceof Error ? error.message : String(error),
-        stderr: provisioned.stderr
       }
     }
-  }
-  let setup: ProjectHostSetupResult | null
-  try {
-    setup = await args.setupExistingFolder({
-      projectId: args.projectId,
-      hostId,
-      path: getEphemeralVmRecipeResultProjectRoot(provisioned.runtime.recipeResult),
-      setupMethod: 'imported-existing-folder'
-    })
-  } catch (error) {
-    await cleanupProvisionedRuntime(provisioned.runtime.id)
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : String(error),
-      stderr: provisioned.stderr
-    }
-  }
-  if (!setup) {
-    await cleanupProvisionedRuntime(provisioned.runtime.id)
-    return {
-      ok: false,
-      error: translate(
-        'auto.lib.ephemeralVmWorkspaceTarget.projectRootRegistrationFailed',
-        'Failed to register the recipe-created project root on the runtime.'
-      ),
-      stderr: provisioned.stderr
-    }
-  }
-  setup = {
-    ...setup,
-    setup: {
-      ...setup.setup,
-      // The sandbox calls its checkout local; desktop follow-up operations must still route through this runtime.
-      hostId
-    }
-  }
-
-  const success = {
-    ok: true,
-    setup,
-    runtimeId: provisioned.runtime.id,
-    checkoutMode,
-    ...(checkoutMode === 'provisioned-root' &&
-    provisioned.connectionType === 'ssh' &&
-    provisioned.expectedRefHead
-      ? { expectedRefHead: provisioned.expectedRefHead }
-      : {}),
-    stderr: provisioned.stderr,
-    warnings: provisioned.warnings
-  } satisfies PrepareEphemeralVmWorkspaceTargetResult
-
-  return environmentId ? { ...success, environmentId } : success
-}
-
-type ProvisionedVm = Extract<
-  Awaited<ReturnType<typeof window.api.ephemeralVm.provision>>,
-  { ok: true }
->
-
-/** A VM whose SSH host runs a managed server keeps its workspace on that server. */
-function recipeWorkspaceHost(provisioned: ProvisionedVm): {
-  hostId: ExecutionHostId
-  environmentId?: string
-} {
-  if (provisioned.connectionType === 'orca-server') {
-    const environmentId = provisioned.environment.id
-    return { hostId: toRuntimeExecutionHostId(environmentId), environmentId }
-  }
-  if (provisioned.environmentId) {
-    const { environmentId } = provisioned
-    return { hostId: toRuntimeExecutionHostId(environmentId), environmentId }
-  }
-  return { hostId: toSshExecutionHostId(provisioned.sshTargetId) }
-}
-
-async function cleanupProvisionedRuntime(runtimeId: string): Promise<void> {
-  try {
-    await window.api.ephemeralVm.cleanup({ runtimeId })
-  } catch {
-    // Best effort: the caller still needs the original setup/provisioning error.
-  }
+  )
 }

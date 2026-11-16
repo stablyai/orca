@@ -7,6 +7,8 @@ export type PendingVmCheckout = { repoId: string; path: string }
 export const PENDING_VM_CHECKOUTS_CHANGED_CHANNEL = 'ephemeralVm:pendingCheckoutsChanged'
 /** Bounds what one window may publish; a window runs only a handful of creates at once. */
 export const PENDING_VM_CHECKOUTS_LIMIT = 64
+// Upper bound for a cleaned-up VM's rows to leave the lists (its host is retired asynchronously).
+export const PENDING_VM_CHECKOUT_HIDDEN_AFTER_CLEANUP_MS = 60_000
 
 /** What lists filter by; `repoIds` lets most rows skip building a path key. */
 export type PendingVmCheckoutIndex = {

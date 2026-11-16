@@ -4,6 +4,7 @@ import {
   configureDesktopCloudServices
 } from '../../runtime/construction/desktop-workspace-services'
 import { wireRecipeWorkspaceRemoval } from '../../ephemeral-vm/recipe-workspace-removal-wiring'
+import { wireRecipeWorkspaceCreation } from '../../ephemeral-vm/recipe-workspace-create-wiring'
 import { wireGitHubIssueLinkTitleFill } from '../../github/workspace-links/github-issue-link-title-wiring'
 import {
   applySessionSearchSettingsChange,
@@ -133,6 +134,10 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     recordDurableCrashBreadcrumb('agent_state_rules_active', rules)
   )
   wireRecipeWorkspaceRemoval(runtime, store, () => app.getPath('userData'))
+  // Recipes run on the desktop that owns their VMs and SSH connections, never on headless serve.
+  if (!state.isServeMode) {
+    wireRecipeWorkspaceCreation(runtime, store, () => app.getPath('userData'))
+  }
   // Each host titles its own workspaces' untitled GitHub issue links once, when they are linked.
   const disposeIssueLinkTitleFill = wireGitHubIssueLinkTitleFill(store, runtime)
   app.once('will-quit', disposeIssueLinkTitleFill)

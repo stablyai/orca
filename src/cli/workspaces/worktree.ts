@@ -30,8 +30,9 @@ import {
   resolveWorktreeCreateCwdContext,
   resolveCurrentWorktreeSelector
 } from '../workspace-selection/workspace-selector'
-import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
-import { parseCliAgent, readCliAgentLaunch } from '../agents/agent-launch-request'
+import { readCliAgentLaunch } from '../agents/agent-launch-request'
+import { getOptionalStartupAgent } from './worktree-create-startup-agent'
+import { createWorktreeOnRecipe } from './worktree-create-on-recipe'
 import { createWorktreeWithAgent } from './worktree-create-agent-launch'
 import { printLineageSummary, printSetParentLine } from './worktree-lineage-summary'
 import { resolveCreateParentFields, resolveSetParentFields } from './worktree-parent-fields'
@@ -63,20 +64,6 @@ import {
   getCreateReferenceInputs,
   resolveReferenceInputs
 } from '../references/reference-input'
-
-function getOptionalStartupAgent(flags: Map<string, string | boolean>): TuiAgent | undefined {
-  const agent = getPresentStringFlag(flags, 'agent')
-  if (agent === undefined) {
-    const needsAgent = ['prompt', 'model', 'effort', 'surface', 'retry-launch'].find((name) =>
-      flags.has(name)
-    )
-    if (needsAgent) {
-      throw new RuntimeClientError('invalid_argument', `--${needsAgent} requires --agent`)
-    }
-    return undefined
-  }
-  return parseCliAgent(agent)
-}
 
 export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
   'worktree ps': async ({ flags, client, json }) => {
@@ -119,6 +106,10 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
     printResult(await annotateShown(client, result), json, formatWorktreeShow)
   },
   'worktree create': async (context) => {
+    if (context.flags.has('on')) {
+      await createWorktreeOnRecipe(context)
+      return
+    }
     const { flags, client, cwd, json, rawArgs } = context
     const referenceInputs = getCreateReferenceInputs(flags)
     assertWorktreeParentFlagsCompatible(flags)

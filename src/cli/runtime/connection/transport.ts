@@ -8,6 +8,7 @@ import type {
   ExpectedRuntimeSource,
   RuntimeOrchestrationEnvelope,
   RuntimeRequestSelection,
+  RuntimeRpcProgress,
   RuntimeRpcResponse
 } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import {
@@ -38,9 +39,10 @@ export async function sendRequest<TResult>(
   options: {
     classifySocketError?: (error: Error) => RuntimeClientError | null
     requestSelection?: RuntimeRequestSelection
+    onProgress?: (progress: RuntimeRpcProgress) => void
   } = {}
 ): Promise<RuntimeRpcResponse<TResult>> {
-  const { classifySocketError = runtimeAccessDeniedError, requestSelection } = options
+  const { classifySocketError = runtimeAccessDeniedError, requestSelection, onProgress } = options
   if (!isSafeTimerDelayMs(timeoutMs)) {
     throw new RuntimeClientError(
       'invalid_argument',
@@ -170,6 +172,11 @@ export async function sendRequest<TResult>(
         // Keepalives refresh the idle timeout without a full envelope validation.
         if (isKeepaliveFrame(raw)) {
           timeout.refresh()
+          // Parse only for a caller that listens; every other long poll skips the work.
+          const frame = onProgress ? RuntimeRpcEnvelopeSchema.safeParse(raw) : null
+          if (frame?.success && 'progress' in frame.data && frame.data.progress) {
+            onProgress?.(frame.data.progress)
+          }
           continue
         }
 

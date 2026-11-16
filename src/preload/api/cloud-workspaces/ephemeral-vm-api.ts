@@ -1,13 +1,10 @@
 import type { OrcaHooks } from '../../../shared/workspace-setup/orca-yaml-hook-types'
-import type { PublicKnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { EphemeralVmRecipeDoctorResult } from '../../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipes'
-import type { EphemeralVmRecipeResultWarning } from '../../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-diagnostics'
 import type {
-  EphemeralVmProvisionedRuntimeRecord,
   EphemeralVmRuntimeRecord,
   EphemeralVmWorkspaceLifecycleResult
 } from '../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
-import type { EphemeralVmFailure } from '../../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-failure-copy'
+import type { RecipeEnvironmentProvisionResult } from '../../../shared/remote-runtime/ephemeral-vm-recipes/recipe-environment-provision-result'
 import type { PendingVmCheckout } from '../../../shared/remote-runtime/ephemeral-vm-store/pending-vm-checkouts'
 
 export type EphemeralVmApi = {
@@ -41,28 +38,7 @@ export type EphemeralVmApi = {
     branch?: string
     ref?: string
     provisionId?: string
-  }) => Promise<
-    | {
-        ok: true
-        connectionType: 'orca-server'
-        runtime: EphemeralVmProvisionedRuntimeRecord
-        environment: PublicKnownRuntimeEnvironment
-        stderr: string
-        warnings: EphemeralVmRecipeResultWarning[]
-      }
-    | {
-        ok: true
-        connectionType: 'ssh'
-        runtime: EphemeralVmProvisionedRuntimeRecord
-        sshTargetId: string
-        /** The managed Orca server the host runs; its workspace lives there. */
-        environmentId?: string
-        expectedRefHead?: string
-        stderr: string
-        warnings: EphemeralVmRecipeResultWarning[]
-      }
-    | ({ ok: false; stderr: string; stdout: string } & EphemeralVmFailure)
-  >
+  }) => Promise<RecipeEnvironmentProvisionResult>
   cancelProvision: (args: { provisionId: string }) => Promise<{ cancelled: boolean }>
   onProvisionEvent: (
     callback: (event: { provisionId: string; stream: 'stdout' | 'stderr'; chunk: string }) => void

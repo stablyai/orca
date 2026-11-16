@@ -18,6 +18,20 @@ export type EnvironmentDoctorResult = {
   checks: EnvironmentDoctorCheck[]
 }
 
+/** A check as another host's Orca reported it; unknown categories and statuses pass through. */
+export function isEnvironmentDoctorCheck(value: unknown): value is EnvironmentDoctorCheck {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'id' in value &&
+    typeof value.id === 'string' &&
+    'status' in value &&
+    typeof value.status === 'string' &&
+    'message' in value &&
+    typeof value.message === 'string'
+  )
+}
+
 /** One line per check plus indented remediation; shared by the CLI and the agent prompt. */
 export function formatEnvironmentDoctorChecks(checks: readonly EnvironmentDoctorCheck[]): string[] {
   return checks.flatMap((check) => [

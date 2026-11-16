@@ -6,13 +6,14 @@ export const WORKTREE_CREATE_COMMAND_SPEC: CommandSpec = {
   repeatableFlags: ['reference'],
   summary: 'Create a new Orca-managed worktree',
   usage:
-    'orca worktree create --name <name> [--repo <selector>|--project <id-or-name> [--host <host>]|--project-host-setup <id>] [--agent <id>] [--prompt <text>] [--model <id>] [--effort <level>] [--surface chat|terminal] [--setup run|skip|inherit] [--base-branch <ref>] [--branch <name>] [--reference <url-or-jira-key>...] [--reference-site <id>] [--issue <number>] [--pr <number>] [--linear-issue <identifier-or-url>] [--gitlab-issue <number-or-url>] [--gitlab-mr <number-or-url>] [--comment <text>] [--parent-worktree <selector> [--parent-environment <environment>]] [--no-parent] [--run-hooks] [--activate] [--retry-launch <operationId>] [--json]',
+    'orca worktree create --name <name> [--repo <selector>|--project <id-or-name> [--host <host>]|--project-host-setup <id>] [--on recipe:<recipe-id>] [--agent <id>] [--prompt <text>] [--model <id>] [--effort <level>] [--surface chat|terminal] [--setup run|skip|inherit] [--base-branch <ref>] [--branch <name>] [--reference <url-or-jira-key>...] [--reference-site <id>] [--issue <number>] [--pr <number>] [--linear-issue <identifier-or-url>] [--gitlab-issue <number-or-url>] [--gitlab-mr <number-or-url>] [--comment <text>] [--parent-worktree <selector> [--parent-environment <environment>]] [--no-parent] [--run-hooks] [--activate] [--retry-launch <operationId>] [--json]',
   allowedFlags: [
     ...GLOBAL_FLAGS,
     'repo',
     'project',
     'host',
     'project-host-setup',
+    'on',
     'name',
     'agent',
     'prompt',
@@ -57,7 +58,10 @@ export const WORKTREE_CREATE_COMMAND_SPEC: CommandSpec = {
     'Repo-defined setup hooks follow the repository setup policy; pass --setup run to force them.',
     'Pass --activate when the CLI caller intentionally wants to reveal the new worktree in the app.',
     'Passing --run-hooks is kept as a legacy alias for --setup run and reveals the worktree; agents should pass --setup run instead unless the user asked to switch to it.',
-    'Use --pr for GitHub pull requests; --gitlab-issue and --gitlab-mr write separate GitLab links. GitLab URLs must match the stored source project or remote; they cannot select a foreign project.'
+    'Use --pr for GitHub pull requests; --gitlab-issue and --gitlab-mr write separate GitLab links. GitLab URLs must match the stored source project or remote; they cannot select a foreign project.',
+    "Pass --on recipe:<recipe-id> to create the workspace on a new per-workspace environment from one of the repo's orca.yaml environmentRecipes, as the new-workspace dialog's Run on > Per-Workspace Environment does. The Orca desktop app on this computer runs the recipe, sets the project up on the host it created, runs the environment checks, then creates (or, for provisioned-root recipes, adopts) the workspace there and links it to the VM so sleep, wake and delete manage it. It needs Settings > Experimental > Cloud VM turned on.",
+    "Progress steps and the recipe's output go to stderr; --json prints only the result, whose host field has the new host (runtime:<environment-id>), the environment id and the VM record id. Ctrl+C stops the create and the Orca app destroys what it started. The recipe's timeoutSeconds bound its steps. If a later step fails, Orca destroys the new environment, and the error (code recipe_workspace_create_failed) names the failed step and whether the destroy finished.",
+    '--on recipe:<recipe-id> runs on the computer whose Orca app owns the recipe: it refuses --environment, --pairing-code and any --host other than local. With --agent the agent starts on the new host once the workspace exists. --activate, --run-hooks, --retry-launch, --parent-worktree, --parent-environment, --project-host-setup and link flags are not supported with it yet, and the workspace is recorded without a parent. Provisioned-root recipes run setup in their create step, so they refuse --setup run.'
   ],
   examples: [
     'orca worktree create --name agent-task --agent codex --prompt "hi" --json',
@@ -69,6 +73,7 @@ export const WORKTREE_CREATE_COMMAND_SPEC: CommandSpec = {
     'orca worktree create --repo id:<repoId> --name folder-child --parent-worktree folder:<folderId> --json',
     'orca worktree create --repo id:<repoId> --name related-task --parent-worktree active --json',
     'orca worktree create --environment <environment-id> --repo id:<repoId> --name child --parent-environment local --parent-worktree folder:<folderId> --json',
-    'orca worktree create --repo id:<repoId> --name independent-task --no-parent --json'
+    'orca worktree create --repo id:<repoId> --name independent-task --no-parent --json',
+    'orca worktree create --repo id:<repoId> --name sandboxed-task --on recipe:cloud-sandbox --agent codex --prompt "hi" --json'
   ]
 }

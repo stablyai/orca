@@ -42,11 +42,23 @@ const Failure = z
   })
   .strip()
 
-const Keepalive = z
+// A named step or a line of output a long poll reports while it runs; bounded per frame.
+const Progress = z
   .object({
-    _keepalive: z.literal(true)
+    phase: z.string().min(1).max(200).optional(),
+    output: z.string().max(16_384).optional()
   })
   .strip()
+
+const Keepalive = z
+  .object({
+    _keepalive: z.literal(true),
+    // Clients that predate progress strip it, so a long poll may always attach it.
+    progress: Progress.optional()
+  })
+  .strip()
+
+export type RuntimeRpcProgress = z.infer<typeof Progress>
 
 export const RuntimeRpcEnvelopeSchema = z.union([Success, Failure, Keepalive])
 
