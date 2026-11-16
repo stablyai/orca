@@ -3,6 +3,8 @@ import { isAbsolute } from 'node:path'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import { findInErrorChain } from './provider-error-chain'
 
+export { isDefinitiveAbsence }
+
 /** What a spawn's ENOENT proves absent: the provider's executable or the folder it ran in. */
 export type ProviderSpawnAbsence = 'executable' | 'launchFolder'
 

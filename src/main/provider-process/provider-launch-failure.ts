@@ -1,8 +1,11 @@
 import { getSystemErrorName } from 'node:util'
 import { stat } from 'node:fs/promises'
 import { isAbsolute } from 'node:path'
-import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
-import { withProviderSpawnAbsence, type ProviderSpawnAbsence } from './provider-executable-missing'
+import {
+  isDefinitiveAbsence,
+  withProviderSpawnAbsence,
+  type ProviderSpawnAbsence
+} from './provider-executable-missing'
 import type { ProviderSpawnSpec } from './provider-process-supervisor'
 
 export async function reportProviderLaunchFailure(
