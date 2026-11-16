@@ -2,6 +2,12 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { getDefaultWorkspaceSession } from '../../../../../shared/constants'
+import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import {
+  applyWorktreeSleepResumeRecords,
+  captureWorktreeSleepResumeRecords
+} from '../../../../runtime/terminal/stop/worktree-sleep-resume-records'
 import { nativeChatTranscriptPathOnExecutionHost } from '../../../../native-chat/transcript-filesystem/ssh-transcript-path'
 import { nativeChatTranscriptDistro } from '../../../../native-chat/transcript-discovery/native-chat-open-wake'
 import { WSL_HOOK_RELAY_CONNECTION_PREFIX } from '../../../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
@@ -10,6 +16,9 @@ import { buildBody, PANE, postHookEvent } from '../server.test-fixtures'
 
 vi.mock('../../../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../../../telemetry/cohort-classifier', () => ({ getCohortAtEmit: () => ({}) }))
+vi.mock('../../../../../shared/agent-status/process/agent-process-presence-probe', () => ({
+  probeAgentProcessPresence: vi.fn(async () => 'live')
+}))
 
 let home: string
 let server: AgentHookServer
@@ -103,6 +112,106 @@ it('accepts a genuine providerless completion after stop intent and preserves it
   server.retireSleepingPaneOnSpawn(PANE)
   expect(read()).toBeUndefined()
 })
+
+it.each(['idle Codex', 'Claude hook', 'failed resume', 'ordinary exit'] as const)(
+  'keeps the correct saved session at the next sleep after %s',
+  async (wake) => {
+    const agent = wake === 'Claude hook' ? 'claude' : 'codex'
+    const hook = async (event: string, pid: number) => {
+      const response = await postHookEvent(
+        server,
+        buildBody(
+          {
+            hook_event_name: event,
+            session_id: 'sleep-session',
+            source: 'resume',
+            prompt: 'Finished work'
+          },
+          {
+            agentProcess: JSON.stringify({
+              pid,
+              platform: process.platform,
+              startTime: `birth-${pid}`
+            })
+          }
+        ),
+        `/hook/${agent}`
+      )
+      expect(response.status).toBe(204)
+    }
+    await hook('UserPromptSubmit', 4001)
+    await hook('Stop', 4001)
+    const saved: SleepingAgentSessionRecord = {
+      paneKey: PANE,
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      agent,
+      providerSession: { key: 'session_id', id: 'sleep-session' },
+      prompt: 'Finished work',
+      state: 'done',
+      capturedAt: 1,
+      updatedAt: 1,
+      origin: 'worktree-sleep',
+      restoreOnTabOpenOnly: true,
+      connectionId: null
+    }
+    const session = {
+      ...getDefaultWorkspaceSession(),
+      sleepingAgentSessionsByPaneKey: { [PANE]: saved }
+    }
+    if (wake === 'ordinary exit') {
+      server.reconcileEndedProcessForPaneKeys([PANE], {
+        preserveResumeIdentity: true,
+        endedPresence: { agent: 'codex', ended: true }
+      })
+    } else {
+      stopping = true
+      expect(server.settleTerminalPaneSleep(PANE, 'pty', 'birth')).toBe(true)
+    }
+    expect(await server.checkAgentPresenceSince(PANE, 0)).toBe('exited')
+
+    stopping = false
+    server.retireSleepingPaneOnSpawn(PANE)
+    if (wake === 'idle Codex' || wake === 'Claude hook') {
+      server.recordLaunchResumeIdentity({
+        paneKey: PANE,
+        worktreeId: 'wt-1',
+        agentType: agent,
+        providerSession: { key: 'session_id', id: 'sleep-session' },
+        launchedAt: Date.now()
+      })
+      expect(read()).toMatchObject({ providerSessionOnly: true })
+    }
+    if (wake === 'Claude hook') {
+      await hook('SessionStart', 4002)
+      expect(await server.checkAgentPresenceSince(PANE, 0)).toBe('live')
+    }
+    const capture = await captureWorktreeSleepResumeRecords({
+      worktreeId: 'wt-1',
+      paneKeysByPtyId: new Map([['woken-pty', [PANE]]]),
+      launchByPtyId: new Map(),
+      readRowsForPane: (paneKey) => server.getStatusSnapshotForPane(paneKey),
+      checkAgentPresence: (paneKey, since) => server.checkAgentPresenceSince(paneKey, since ?? 0),
+      capturedAt: 2
+    })
+    const next = applyWorktreeSleepResumeRecords(session, capture, ['woken-pty']) ?? session
+    if (wake === 'ordinary exit') {
+      expect(next.sleepingAgentSessionsByPaneKey?.[PANE]).toBeUndefined()
+    } else {
+      expect(next.sleepingAgentSessionsByPaneKey?.[PANE]).toMatchObject({
+        agent,
+        providerSession: { key: 'session_id', id: 'sleep-session' },
+        state: 'done',
+        origin: 'worktree-sleep',
+        restoreOnTabOpenOnly: true
+      })
+      if (wake === 'failed resume') {
+        expect(read()).toBeUndefined()
+        expect(next.sleepingAgentSessionsByPaneKey?.[PANE]).toEqual(saved)
+      }
+    }
+  }
+)
 
 it('does not restore a sleeping status whose exact placed pane is absent', async () => {
   server.ingestTerminalStatus({
