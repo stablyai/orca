@@ -9,9 +9,9 @@ import { NativeChatComposerTabStrip } from '../../composer/controls/NativeChatCo
 import type { AgentJournalThreadGoal } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import {
   agentSessionThreadGoalElapsedSeconds,
-  agentSessionThreadGoalStatusChange
-} from '../../../../../../shared/agent-session/agent-session-thread-goal'
-import type { AgentSessionThreadGoalChange } from '../../../../../../shared/agent-session/agent-session-thread-goal-wire'
+  agentSessionThreadGoalOfferedStatusChange
+} from '../../../../../../shared/agent-session/thread-goals/agent-session-thread-goal'
+import type { AgentSessionThreadGoalChange } from '../../../../../../shared/agent-session/thread-goals/agent-session-thread-goal-wire'
 import { formatAgentSessionThreadGoalElapsed } from '../../../../../../shared/agent-session/view/agent-session-thread-goal-presentation'
 import { nativeChatThreadGoalStatusLabel } from './native-chat-thread-goal-presentation'
 
@@ -48,6 +48,8 @@ export function NativeChatThreadGoalBanner(props: {
   pending: boolean
   /** False where only the agent's own `/goal` changes the goal, which has no pause. */
   hostChanges: boolean
+  /** The agent's own `/goal` resumes a paused goal. */
+  agentResumes?: boolean
   /** The composer cannot admit another message or the session is working. */
   sendUnavailable: boolean
   /** The host may take no turn now: Resume, and a clear that enters a turn, are held. */
@@ -63,7 +65,13 @@ export function NativeChatThreadGoalBanner(props: {
   const { runningTurn } = props
   const now = useNow(1_000, props.isVisible && goal.status === 'active' && runningTurn !== null)
   const label = nativeChatThreadGoalStatusLabel(goal.status, runningTurn !== null, t)
-  const statusChange = props.hostChanges ? agentSessionThreadGoalStatusChange(goal.status) : null
+  const statusChange = agentSessionThreadGoalOfferedStatusChange(goal.status, {
+    hostChanges: props.hostChanges,
+    agentResumes: props.agentResumes === true
+  })
+  // An agent-owned change is a message that must enter a fresh turn, like a composer send.
+  const agentCommandUnavailable =
+    !props.hostChanges && (props.sendUnavailable || props.startsHeld === true)
   if (label === null) {
     return null
   }
@@ -84,8 +92,7 @@ export function NativeChatThreadGoalBanner(props: {
       <div className="flex shrink-0 items-center">
         <GoalAction
           label={t('components.native-chat.goal.clear', 'Clear goal')}
-          // Claude's `/goal clear` must enter a fresh turn, like a composer send.
-          disabled={!props.hostChanges && (props.sendUnavailable || props.startsHeld === true)}
+          disabled={agentCommandUnavailable}
           onClick={() => onChange({ kind: 'clear' })}
         >
           <Trash2 className="size-3.5" />
@@ -101,7 +108,7 @@ export function NativeChatThreadGoalBanner(props: {
         ) : statusChange === 'active' ? (
           <GoalAction
             label={t('components.native-chat.goal.resume', 'Resume goal')}
-            disabled={props.startsHeld === true}
+            disabled={props.startsHeld === true || agentCommandUnavailable}
             onClick={() => onChange({ kind: 'status', status: 'active' })}
           >
             <Play className="size-3.5" />

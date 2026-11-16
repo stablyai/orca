@@ -1,4 +1,5 @@
 import { app, session } from 'electron'
+import { configureMacMenuDeadKeyGuard } from '../menu/macos-menu-dead-key'
 import { applyBackgroundActivationPolicy } from '../window/activation/foreground-activation-policy'
 import { applyElectronProxySettings } from '../network/proxy-settings'
 import { installElectronProxyRequestGuard } from '../network/electron-proxy-request-guard'
@@ -36,20 +37,19 @@ import {
   shouldSuppressDevEducation,
   suppressDevEducationForStore
 } from './profile-startup/dev-education-suppression'
-import {
-  awaitBrowserSessionProxies,
-  setBrowserNetworkProxySettingsResolver
-} from '../browser/sessions/proxy/browser-session-proxy'
+import { setBrowserNetworkProxySettingsResolver } from '../browser/sessions/proxy/browser-session-proxy'
 import { installDocPreviewProtocolHandler } from '../browser/document-preview/doc-preview-protocol'
 import { installMediaPreviewProtocolHandler } from '../media/media-preview-protocol'
 import { installJiraImageProtocolHandler } from '../jira/attachments/image-protocol'
 import { registerDocPreviewGrantHandlers } from '../ipc/doc-preview-grant-ipc'
-import { initializeBrowserSessionsForApp } from '../browser/sessions/browser-session-startup'
+import {
+  initializeBrowserSessionsForApp,
+  whenBrowserSessionsReadyForRestoredTabs
+} from '../browser/sessions/browser-session-startup'
 import {
   initializeBrowserExtensionSupport,
   switchBrowserExtensionSupport
 } from '../browser/extensions/browser-extension-startup'
-import { browserSessionRegistry } from '../browser/sessions/profiles/browser-session-registry'
 import { logStartupMilestone } from './diagnostics/startup-diagnostics'
 import { writeHttp1CompatibilityMarker } from './network-compatibility/http1-compatibility-marker'
 import { mainProcessState as state } from './main-process-state'
@@ -68,6 +68,7 @@ import { preloadSsh2 } from '../ssh/authentication/ssh2-module-load'
 
 export async function initializeReadyFoundation(): Promise<void> {
   logStartupMilestone('app-ready')
+  configureMacMenuDeadKeyGuard()
   // Background automation and a windowless serve must not claim the macOS Dock/menu bar.
   applyBackgroundActivationPolicy({
     serveWithoutDesktopWindow: state.isServeMode,
@@ -317,10 +318,5 @@ export async function initializeReadyFoundation(): Promise<void> {
   })
   browserSiteDisplayController.followZoomSettings(store)
   browserManager.setSiteDisplayController(browserSiteDisplayController)
-  try {
-    // Await proxy writes so first guest navigation cannot race them.
-    await awaitBrowserSessionProxies(browserSessionRegistry.listProfiles())
-  } catch {
-    console.warn('[proxy] Failed to apply network proxy settings to browser sessions')
-  }
+  await whenBrowserSessionsReadyForRestoredTabs()
 }

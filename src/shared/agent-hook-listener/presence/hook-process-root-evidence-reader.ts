@@ -13,7 +13,7 @@ import {
   readTerminalRows,
   readTmuxPaneBridge,
   type ProcessReadGate
-} from '../../tmux-host-attachment-probe'
+} from './tmux-host-attachment-probe'
 
 // Every pane's acquisition shares this executor's process table: a burst of first hooks queues
 // behind four subprocess or proc reads instead of spawning one ps per pane at once.

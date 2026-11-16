@@ -4,11 +4,10 @@ import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import { errorMessage } from '../../../../../shared/errors/error-message'
 import {
-  WORKSPACE_CLEANUP_RULE_KEYS,
   hasEnabledWorkspaceCleanupRule,
   type WorkspaceCleanupRules
 } from '../../../../../shared/workspace-cleanup/workspace-cleanup-policy'
@@ -25,15 +24,13 @@ import type { SettingsHostScope } from '../host-scope/settings-host-scope'
 import { useWorkspaceCleanupHostRules } from './use-workspace-cleanup-host-rules'
 import { useWorkspaceCleanupHostActivity } from './use-workspace-cleanup-host-activity'
 import { WorkspaceCleanupSettingsStatus } from './workspace-cleanup-settings-status'
+import { WorkspaceCleanupRuleRows } from './workspace-cleanup-rule-rows'
 import {
-  WorkspaceCleanupRuleRows,
-  type WorkspaceCleanupRuleMatches
-} from './workspace-cleanup-rule-rows'
-import {
-  WORKSPACE_CLEANUP_RULE_REASON,
   setWorkspaceCleanupRuleEnabled,
   type WorkspaceCleanupRuleKey
 } from './workspace-cleanup-rule-keys'
+import { newRemovals, summarizeMatches } from './workspace-cleanup-preview-matches'
+import { WorkspaceCleanupChatHistorySetting } from './workspace-cleanup-chat-history-setting'
 import {
   WorkspaceCleanupRuleChangeDialog,
   type WorkspaceCleanupRuleChangeRequest
@@ -42,45 +39,6 @@ import { WorkspaceCleanupActivityList } from './workspace-cleanup-activity-list'
 import { getWorkspaceCleanupSettingsSearchParts } from './workspace-cleanup-settings-search'
 import { workspaceCleanupRowKey } from './workspace-cleanup-workspace-line'
 import { useMountedRef } from '@/hooks/useMountedRef'
-
-function removalsFor(
-  preview: WorkspaceCleanupPreview,
-  key: WorkspaceCleanupRuleKey
-): WorkspaceCleanupPreviewRow[] {
-  const reason = WORKSPACE_CLEANUP_RULE_REASON[key]
-  return preview.rows.filter(
-    (row) => row.evaluation.action !== 'keep' && row.evaluation.reason === reason
-  )
-}
-
-/** Workspaces `next` would remove now that `current` would not. */
-function newRemovals(
-  next: WorkspaceCleanupPreview,
-  current: WorkspaceCleanupPreview | null
-): WorkspaceCleanupPreviewRow[] {
-  const removedNow = new Set(
-    (current?.rows ?? [])
-      .filter((row) => row.evaluation.action !== 'keep')
-      .map(workspaceCleanupRowKey)
-  )
-  return next.rows.filter(
-    (row) => row.evaluation.action !== 'keep' && !removedNow.has(workspaceCleanupRowKey(row))
-  )
-}
-
-function summarizeMatches(
-  preview: WorkspaceCleanupPreview | null
-): Partial<Record<WorkspaceCleanupRuleKey, WorkspaceCleanupRuleMatches>> | undefined {
-  if (!preview) {
-    return undefined
-  }
-  const matches: Partial<Record<WorkspaceCleanupRuleKey, WorkspaceCleanupRuleMatches>> = {}
-  for (const key of WORKSPACE_CLEANUP_RULE_KEYS) {
-    const rows = removalsFor(preview, key)
-    matches[key] = { rows, sizeBytes: rows.reduce((sum, row) => sum + (row.sizeBytes ?? 0), 0) }
-  }
-  return matches
-}
 
 type RulesChange = (rules: WorkspaceCleanupRules) => WorkspaceCleanupRules
 
@@ -105,7 +63,7 @@ export function WorkspaceCleanupSettingsPane({
     updateSettings
   )
   const rules = hostRules.state === 'ready' ? hostRules.rules : null
-  const { hostReport, preview, cleaningUp, cleanUpNow, previewRules, adoptPreview } =
+  const { hostReport, preview, cleaningUp, cleanUpNow, previewRules, adoptPreview, refreshReport } =
     useWorkspaceCleanupHostActivity(owner, rules)
   const matches = useMemo(() => summarizeMatches(preview), [preview])
   const [pendingRule, setPendingRule] = useState<WorkspaceCleanupRuleKey | null>(null)
@@ -366,6 +324,12 @@ export function WorkspaceCleanupSettingsPane({
           )}
         </div>
       ) : null}
+      <WorkspaceCleanupChatHistorySetting
+        hostScope={hostScope}
+        settings={settings}
+        updateSettings={updateSettings}
+        onChanged={refreshReport}
+      />
       {showProtection ? (
         <SettingsGroup
           title={t('components.settings.workspaceCleanup.protection.title', 'Protection')}

@@ -3,7 +3,7 @@ import { useAppStore } from '@/store/index'
 import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import type { AddRepoExistingWorkspaceSource } from '../../../../../../shared/telemetry/schemas/telemetry-property-schemas'
 import { AddRepoWslHostOffer } from './AddRepoWslHostOffer'
 import { AddRepoExistingWslHostOffer } from './AddRepoExistingWslHostOffer'

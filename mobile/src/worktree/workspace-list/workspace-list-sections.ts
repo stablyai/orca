@@ -32,20 +32,20 @@ import type { WorktreeHostContextOf } from '../row-presentation/worktree-host-co
 import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
-} from '../../../../src/shared/execution-host'
+} from '../../../../src/shared/execution-host/execution-host'
 import {
   buildProjectGroupingIndex,
   buildProjectSections,
   getProjectGroupingForRepo,
   type ProjectSectionModel
 } from '../../../../src/shared/sidebar-list/sections/project-section-grouping'
-import type { ProjectOrderBy } from '../../../../src/shared/ui-chrome-types'
+import type { ProjectOrderBy } from '../../../../src/shared/ui-chrome/ui-chrome-types'
 import { translate } from '../../i18n/mobile-i18n'
 import {
   indexHiddenProjects,
   isRepoHidden,
   withoutHiddenFilterRepoIds
-} from '../../../../src/shared/hidden-projects'
+} from '../../../../src/shared/project/catalog/hidden-projects'
 import { filterWorktrees } from './workspace-row-filtering'
 import type { ProjectGroup } from '../../../../src/shared/project/groups/project-group-types'
 import {

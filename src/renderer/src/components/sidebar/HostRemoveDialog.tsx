@@ -16,7 +16,10 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store/index'
 import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { useTranslate } from '@/i18n/use-translate'
-import { toSshExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import { RemovalUnsavedFilesNotice } from './workspace-actions/deletion/RemovalUnsavedFilesNotice'
 import { confirmUnsavedDiscard } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
 import { projectRemovalTargets } from './workspace-actions/deletion/removal-unsaved-files'

@@ -1,3 +1,4 @@
+import { useNativeChatProseText } from '../../preferences/native-chat-text-settings'
 import { mobileNativeChatMemberId } from '../viewport/mobile-native-chat-reading-place'
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
@@ -15,7 +16,7 @@ import { MobileNativeChatMarkdown } from './MobileNativeChatMarkdown'
 import { colors } from '../../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { MobileNativeChatLongPressContent } from './MobileNativeChatLongPressContent'
-import { CHAT_PROSE_SCALE, styles } from '../messages/mobile-native-chat-message-styles'
+import { styles } from '../messages/mobile-native-chat-message-styles'
 
 /** A grouped thought keeps its own source recovery when its original transcript row is hidden. */
 export function MobileNativeChatGroupedThought({
@@ -110,6 +111,7 @@ export function MobileNativeChatReasoningBody({
   onLongPress?: () => void
 }): React.JSX.Element {
   useMobileColorScheme()
+  const prose = useNativeChatProseText(fontScale)
   return (
     <MobileNativeChatOwnedScrollView
       positionKey={positionKey}
@@ -121,7 +123,7 @@ export function MobileNativeChatReasoningBody({
           content={markdown}
           streaming={streaming}
           rangeSelectable
-          textScale={CHAT_PROSE_SCALE * fontScale}
+          {...prose}
           onLongPress={onLongPress}
         />
       </MobileNativeChatLongPressContent>

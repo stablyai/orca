@@ -10,7 +10,7 @@ import { posix, win32 } from 'node:path'
 import type { ProjectRuntimeResolutionStore } from '../../execution-host/local-project-runtime-resolution'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import { isFolderRepo } from '../../../../shared/repository/repo-kind'
-import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
+import { isWindowsAbsolutePathLike } from '../../../../shared/file-access/cross-platform-path'
 import type {
   PreparedCheckoutMissReason,
   PreparedCheckoutOrigin,
@@ -53,7 +53,7 @@ import {
 import { toHostFilesystemPath } from '../../../filesystem/host-tree-removal'
 import type { WorktreeCreateTimingRecorder } from '../worktree-create-timing'
 
-import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
+import { getRepoRoutingConnectionId } from '../../../../shared/execution-host/execution-host'
 
 export function hasPendingWorktreeCreatePreparations(): boolean {
   return hasPendingPreparations()

@@ -1,3 +1,4 @@
+import { rendererStatusReplica } from '../session-graph/renderer-status-replica'
 import type {
   ClientHostedPageObservation,
   MobileSessionTabSubscription
@@ -41,6 +42,14 @@ export abstract class RuntimeMobileSessionTabSubscriptions extends RuntimeWorksp
     sequence: number,
     delivery?: 'reconciliation'
   ): void {
+    // A new graph epoch cannot send a status-less phone frame before its seed snapshot.
+    if (
+      subscription.clientKind === 'mobile' &&
+      this.graphStatus !== 'unavailable' &&
+      rendererStatusReplica(this).awaitingSnapshot(frame.worktree, this.rendererGeneration)
+    ) {
+      return
+    }
     subscription.listener(frame, sequence, delivery)
     if (
       subscription.observation === 'caller' ||

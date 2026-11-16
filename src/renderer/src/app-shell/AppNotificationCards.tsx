@@ -1,5 +1,5 @@
 import { Suspense, type JSX } from 'react'
-import type { TopLevelView } from '../../../shared/ui-chrome-types'
+import type { TopLevelView } from '../../../shared/ui-chrome/ui-chrome-types'
 import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { CodexSharedSettingsNoticeCard } from '../components/CodexSharedSettingsNoticeCard'
 import { NotificationCardStack } from '../components/NotificationCardStack'

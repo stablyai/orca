@@ -8,7 +8,7 @@ import type {
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
 import type { StartupCommandDelivery } from '../../../../shared/agent-launch/startup/codex-startup-delivery'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { TerminalStartupCwdMissingDirFallback } from '../../../../shared/shell/launch/terminal-startup-cwd'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { Store } from '../../../persistence/loading-store/store'

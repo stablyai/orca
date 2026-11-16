@@ -4,7 +4,7 @@ import type { ReadClipboardTextOptions } from '../../../shared/clipboard/clipboa
 import type {
   RichMarkdownContextMenuCommandPayload,
   RichMarkdownContextMenuTableTarget
-} from '../../../shared/rich-markdown-context-menu'
+} from '../../../shared/editor/markdown/rich-markdown-context-menu'
 
 export type UiWindowApi = {
   readClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>

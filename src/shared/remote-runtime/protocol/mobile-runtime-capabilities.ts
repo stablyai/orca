@@ -1,5 +1,5 @@
 import { NOTIFICATIONS_DESKTOP_PRESENCE_RUNTIME_CAPABILITY } from '../../app-lifecycle/presence/desktop-client-presence'
-import { MOBILE_RELAY_RUNTIME_CAPABILITIES } from '../../mobile-desktop-relay-contract'
+import { MOBILE_RELAY_RUNTIME_CAPABILITIES } from '../relay/mobile-desktop-relay-contract'
 
 // Hosts without this capability have no notifications.registerPush RPC.
 export const NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY = 'notifications.remote-push.v1' as const

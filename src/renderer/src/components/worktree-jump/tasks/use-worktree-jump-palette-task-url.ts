@@ -7,7 +7,7 @@ import {
 } from '@/store/slices/linear/linear-issue-read-lifecycle'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store/index'
-import { getNewWorkspaceDialogEligibleRepos } from '../../../../../shared/new-workspace-dialog-repo'
+import { getNewWorkspaceDialogEligibleRepos } from '../../../../../shared/new-workspace/new-workspace-dialog-repo'
 import { resolveComposerActiveRepoId } from '@/lib/workspace/creation/new-workspace-composer-repo'
 import { resolveWorkspaceCreationTarget } from '@/lib/workspace/creation/project-host-workspace-target'
 import { lookupCmdJGitHubUrlWorkItem } from '@/lib/workspace/search/palette/cmd-j-github-url-lookup'

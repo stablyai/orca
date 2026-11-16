@@ -2,7 +2,7 @@ import { GIT_REVERT_CONFLICT_CLIENT_CAPABILITY } from '../../shared/git/commands
 import { GIT_GRAPH_TAB_CAPABILITY } from '../../shared/source-control/runtime/git-graph-capabilities'
 import type { RuntimeCapability } from '../../shared/remote-runtime/protocol/protocol-version'
 import { REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY } from '../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
-import { STRUCTURED_AGENT_SESSION_RENDERER_CLIENT_CAPABILITIES } from '../../shared/agent-session/structured-agent-session-renderer-client-capabilities'
+import { STRUCTURED_AGENT_SESSION_RENDERER_CLIENT_CAPABILITIES } from '../../shared/agent-session/capabilities/structured-agent-session-renderer-client-capabilities'
 import {
   AGENT_LAUNCH_PROMPT_UNCONFIRMED_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_RUNTIME_CAPABILITY,

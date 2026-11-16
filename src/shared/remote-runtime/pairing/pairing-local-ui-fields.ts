@@ -1,4 +1,4 @@
-import type { PersistedUIState } from '../../persisted-ui-state-types'
+import type { PersistedUIState } from '../../orca-profiles/persisted-ui-state-types'
 
 // Pairing-local views use each client’s host catalog/viewport; forwarding them would overwrite another client’s choices.
 // Strip on ui.set and pin local values on ui.get.

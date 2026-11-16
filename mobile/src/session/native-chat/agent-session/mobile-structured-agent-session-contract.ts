@@ -11,7 +11,7 @@ import type { MobileChatPermission } from '../input/prompts/mobile-native-chat-p
 import type { MobileChatQuestion } from '../input/prompts/mobile-native-chat-question'
 import type { MobileNativeChatSession } from '../conversation/use-mobile-native-chat-session'
 import type { NativeChatLiveTurnIndicator } from '../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
-import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat/native-chat-resolution-receipt'
+import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat/input/questions/native-chat-resolution-receipt'
 import type { useMobileStructuredAgentOptions } from '../input/session-options/use-mobile-structured-agent-options'
 import type { useMobileStructuredAgentTurnTiming } from '../transcript/ingestion/use-mobile-structured-agent-turn-timing'
 import type { StructuredMobileSendAttachment } from '../composer/delivery/use-mobile-structured-send-with-outcome'
@@ -31,6 +31,8 @@ import type { MobileStructuredThreadGoal } from '../input/tasks/use-mobile-struc
 import type { MobileStructuredSends } from '../composer/delivery/use-mobile-structured-sends'
 import type { AgentSessionRewindSurface } from '../../../../../src/shared/agent-session/lifecycle/rewind/agent-session-rewind-request'
 import type { MobileNativeChatUsageLimit } from '../status/use-mobile-native-chat-usage-limit'
+import type { MobileStructuredMcpPanel } from '../mcp/use-mobile-structured-mcp-panel'
+import type { MobileStructuredAsyncQuestionSkip } from './use-mobile-structured-async-questions'
 
 export type StructuredMobileSession = Omit<
   ReturnType<typeof useMobileStructuredAgentOptions>,
@@ -42,6 +44,7 @@ export type StructuredMobileSession = Omit<
     submissions: readonly AgentJournalSubmission[]
     session: MobileNativeChatSession
     asyncQuestionSourceScope: string
+    asyncQuestionSkip: MobileStructuredAsyncQuestionSkip | null
     isWorking: boolean
     /** Desktop's Stop rule: a running turn, or conversation Stop while working or sending. */
     canStop: boolean
@@ -73,6 +76,8 @@ export type StructuredMobileSession = Omit<
     interruptedContinue: MobileStructuredInterruptedContinue
     /** Null unless the host reports goals for this chat. */
     threadGoal: MobileStructuredThreadGoal | null
+    /** Null unless the host manages this agent's MCP servers. */
+    mcpPanel: MobileStructuredMcpPanel | null
     /** "Rewind to here" for the chat's own turn openers; absent where the chat cannot rewind. */
     rewind: AgentSessionRewindSurface | undefined
     visualSource: MobileNativeChatVisualSource | null

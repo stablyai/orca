@@ -1,4 +1,4 @@
-import type { NotificationAttentionAcknowledgement } from '../../notification-settings-types'
+import type { NotificationAttentionAcknowledgement } from '../../notifications/notification-settings-types'
 import type { CreateWorktreeResult } from '../../worktree/create-types'
 import type {
   WorktreeDefaultTabsLaunch,

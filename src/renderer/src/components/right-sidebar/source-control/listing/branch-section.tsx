@@ -5,7 +5,7 @@ import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary
 } from '../../../../../../shared/git/diff/git-diff-compare-types'
-import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome-types'
+import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome/ui-chrome-types'
 import type { SourceControlTreeNode } from '../../../../../../shared/source-control/listing/source-control-tree'
 import type { SourceControlRowOpenEvent } from './split-open'
 import { BranchEntryRow } from './branch-entry-row'

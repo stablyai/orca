@@ -6,7 +6,7 @@ import {
 } from '../../../linear/issues/linear-issue-mutations'
 import { getIssue as getLinearIssue } from '../../../linear/issues/linear-issue-lookups'
 import { listIssues as listLinearIssues } from '../../../linear/issues/linear-issue-listing'
-import type { LinearIssueUpdate } from '../../../../shared/issue-mutation-types'
+import type { LinearIssueUpdate } from '../../../../shared/work-items/issue-mutation-types'
 import type { LinearWorkspaceSelection } from '../../../../shared/linear/workspace-types'
 import type { LinearListFilter } from '../../../linear/issues/linear-issue-listing'
 import type { LinearIssueListOptions } from '../../../linear/issues/linear-issue-query-documents'

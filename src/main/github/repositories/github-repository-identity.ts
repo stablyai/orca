@@ -14,7 +14,7 @@ import { classifyGitHubOwnerRepoFromRemoteUrl } from './github-ssh-host-alias-re
 import { isStableMissingGitRemoteError } from '../../git/remotes/stable-missing-git-remote-error'
 import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
 import { requireReachableGitRoute } from '../../providers/execution-host-provider-dispatch'
-import { getConnectionExecutionHostId } from '../../../shared/execution-host'
+import { getConnectionExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { resolveGitHubProjectAccount } from '../accounts/github-project-account'
 
 export type GitHubRepoContext = {

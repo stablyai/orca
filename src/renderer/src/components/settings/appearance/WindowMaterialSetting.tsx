@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { RotateCw } from 'lucide-react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import {
   hostWindowMaterial,
   resolveWindowMaterial,

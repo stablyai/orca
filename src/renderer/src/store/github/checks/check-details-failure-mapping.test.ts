@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createGlobalSettingsFixture } from '../../../../../shared/global-settings-test-fixture'
+import { createGlobalSettingsFixture } from '../../../../../shared/settings/global-settings-test-fixture'
 import { recordRuntimeSubscription } from '@/runtime/rpc/testing/runtime-environment-bridge-fixture'
 import {
   createTestStore,

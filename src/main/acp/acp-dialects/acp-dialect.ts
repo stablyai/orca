@@ -1,8 +1,11 @@
-import type { AgentSessionAccountKind } from '../../../shared/agent-session/agent-session-availability'
-import type { AgentSessionContextUsage } from '../../../shared/agent-session/agent-session-context-usage'
+import type { AgentSessionAccountKind } from '../../../shared/agent-session/failures/agent-session-availability'
+import type { AgentSessionContextUsage } from '../../../shared/agent-session/conversation-context/agent-session-context-usage'
 import type { AgentSessionUsageLimit } from '../../../shared/agent-session/failures/agent-session-usage-limit'
-import type { AgentJournalToolCallItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionPromptResponse } from '../../../shared/agent-session/agent-session-question-answer'
+import type {
+  AgentJournalThreadGoal,
+  AgentJournalToolCallItem
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionPromptResponse } from '../../../shared/agent-session/requests/prompts/agent-session-question-answer'
 import type {
   NativeChatBackgroundTaskBlock,
   NativeChatSubagentState
@@ -35,6 +38,8 @@ export type AcpAdvertisedEfforts = {
 export type AcpRequestPresentation = {
   body: ProviderTimelineRequestBody
   reply(response: AgentSessionPromptResponse | null): unknown
+  /** A URL request the agent may later report finished with `elicitation/complete`. */
+  elicitationId?: string
 }
 
 export type AcpRequestSettlement = { reply: unknown; plan?: string }
@@ -75,6 +80,16 @@ export type AcpChildSessionReport = {
   update?: SessionNotification
 }
 
+/** The agent's own goal as it reported it; null means cleared. */
+export type AcpThreadGoalReport = {
+  goal:
+    | ({ id: string } & Pick<
+        AgentJournalThreadGoal,
+        'objective' | 'status' | 'tokenBudget' | 'tokensUsed' | 'timeUsedSeconds'
+      >)
+    | null
+}
+
 export type AcpDialectNotification =
   | { disposition: 'ignore' }
   | {
@@ -90,6 +105,7 @@ export type AcpDialectNotification =
       backgroundTasks?: AcpBackgroundTaskUpdate[]
       subagents?: AcpSubagentUpdate[]
       child?: AcpChildSessionReport
+      threadGoal?: AcpThreadGoalReport
     }
 
 /** Hook denial completes the turn rather than recording a user Stop. */
@@ -168,6 +184,8 @@ export type AcpDialect = {
   sessionlessRequests?: readonly string[]
   /** Claimed permission requests are never auto-approved. */
   request?(method: string, params: unknown): AcpRequestPresentation | undefined
+  /** The agent's own notification that a URL request it raised finished, carrying `elicitationId`. */
+  elicitationComplete?(method: string): boolean
   settleRequest?(method: string, params: unknown): AcpRequestSettlement | undefined
   promptErrorDetail?(error: AcpAgentError): string | undefined
   promptFailure?(

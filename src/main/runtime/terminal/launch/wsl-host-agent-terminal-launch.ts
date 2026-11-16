@@ -10,7 +10,7 @@ import {
   getTuiAgentLaunchCommand,
   TUI_AGENT_CONFIG
 } from '../../../../shared/agent-launch/catalog/tui-agent-config'
-import { getOrcaCliCommandNameForPlatform } from '../../../../shared/orca-cli-command-name'
+import { getOrcaCliCommandNameForPlatform } from '../../../../shared/cli/orca-cli-command-name'
 import { hasExplicitTuiLaunchCommand } from '../../../../shared/agent-launch/startup/tui-agent-launch-command-override'
 import {
   quoteStartupArg,

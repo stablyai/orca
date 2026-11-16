@@ -8,7 +8,7 @@ import { isAiVaultTitleAgent } from '../../../shared/ai-vault/contracts/ai-vault
 import { generatedSessionTitle } from '../../ai-vault/parsing/session-scanner-accumulator'
 import { resolveLocalAiVaultSessionTitles } from '../../ai-vault/session-titles/session-title-resolver'
 import type { NativeCodexResumePreparation } from '../../codex/history/resume/codex-ai-vault-session-resume'
-import type { StructuredAgentSessionResumeSource } from '../../../shared/agent-session/structured-agent-session-create'
+import type { StructuredAgentSessionResumeSource } from '../../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
 import type {
   StructuredAgentCliSourceEvidence,
   StructuredAgentCliSourceLocator

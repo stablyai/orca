@@ -1,4 +1,4 @@
-import { isENOENT } from '../../ipc/filesystem/access/filesystem-path-containment'
+import { isENOENT } from '../../filesystem/local-file-io/filesystem-path-containment'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
 
 import {

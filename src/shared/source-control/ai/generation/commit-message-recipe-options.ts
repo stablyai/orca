@@ -1,4 +1,4 @@
-import { findOptionOccurrence } from '../../../command-option-occurrence'
+import { findOptionOccurrence } from '../../../cli/command-option-occurrence'
 import { compactRecipeOptions, findRecipeOption } from './commit-message-generation-options'
 
 export function taskPolicyRecipeArgs(agent: string, args: string[]): string[] {

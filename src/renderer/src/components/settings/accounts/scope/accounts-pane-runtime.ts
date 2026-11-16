@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState,
@@ -105,4 +105,9 @@ export function formatAccountTimestamp(
     hour: 'numeric',
     minute: '2-digit'
   })
+}
+
+/** One secondary line from whichever account details are known. */
+export function joinAccountDetails(parts: readonly (string | null | undefined)[]): string {
+  return parts.filter(Boolean).join(' · ')
 }
