@@ -94,9 +94,9 @@ export function AutomationAgentLaunchPicker({
             : draft.extraAgentArgs
       }
     : legacyArgumentsDraft(draft)
-  // Launch setup hosts edit Arguments, saved extra ones included, in the field under the picker;
-  // only extra arguments it cannot parse keep their own field there.
-  const showLegacyArguments = surface === 'terminal' && (!modern || !supplemental)
+  const showLegacyArguments =
+    surface === 'terminal' &&
+    (!modern || Boolean(draft.extraAgentArgs || draft.launchArgumentsInput))
   const model: NewTabAgentMenuModel = useMemo(
     () => ({
       ...(observation.model.state === 'settled'
@@ -164,7 +164,7 @@ export function AutomationAgentLaunchPicker({
           visibleAgents.find((agent) => agent.id === draft.agentId)?.label ?? draft.agentId
         }
         setupDisabled={!modern}
-        launchDefaults={modern && !showLegacyArguments}
+        launchDefaults={modern}
         draftForEntry={draftForEntry}
         onOpenChange={setMenuOpen}
         onCatalogOpen={setCatalogAgent}

@@ -106,7 +106,7 @@ export const AgentLaunchPicker = memo(
     ) => void
   }) {
     const t = useTranslate()
-    useUiLanguageRevision()
+    const languageRevision = useUiLanguageRevision()
     const ownDraftScope = useAgentPickerDraftScope()
     const trigger = useRef<HTMLButtonElement>(null)
     const searchInput = useRef<HTMLInputElement>(null)
@@ -182,7 +182,8 @@ export const AgentLaunchPicker = memo(
       }
       const parsed: AgentPickerDraft = JSON.parse(summaryDraft)
       return agentLaunchSetupSummary(entry, parsed).join(' · ')
-    }, [entry, summaryDraft])
+      // oxlint-disable-next-line react-hooks/exhaustive-deps -- level and speed labels follow the UI language.
+    }, [entry, summaryDraft, languageRevision])
     // Only a dropdown with Open in names where the agent runs, as Open in does.
     const surface =
       entry && !setupDisabled && !entry.textGeneration
