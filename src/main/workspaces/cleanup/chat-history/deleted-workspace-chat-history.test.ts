@@ -42,6 +42,7 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
     const appWorkspaces = join(workspaces, 'app')
     mkdirSync(join(appWorkspaces, 'live'), { recursive: true })
     mkdirSync(join(root, 'repos', 'app'), { recursive: true })
+    mkdirSync(join(root, 'repos', 'sibling'), { recursive: true })
     const gone = join(appWorkspaces, 'gone')
     const store = {
       getSettings: () => ({
@@ -78,8 +79,13 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
       // Archived: the row stays while its folder is gone, including one nested in a gone folder.
       getAllWorktreeMeta: () => ({
         [`app::${join(appWorkspaces, 'archived')}`]: {},
-        [`app::${join(appWorkspaces, 'team', 'feature')}`]: {}
-      })
+        [`app::${join(appWorkspaces, 'team', 'feature')}`]: {},
+        // Renamed: chats recorded under the old folder still belong to it.
+        [`app::${join(appWorkspaces, 'live')}`]: {
+          priorWorktreeIds: [`app::${join(appWorkspaces, 'old-name')}`]
+        }
+      }),
+      getFolderWorkspaces: () => [{ folderPath: join(appWorkspaces, 'folder-workspace') }]
     } as unknown as RuntimeStore
     const deleted: ChatHistoryTarget[] = []
 
@@ -95,10 +101,13 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
         session('outside.jsonl', join(root, 'elsewhere', 'gone')),
         session('codex.jsonl', gone, { agent: 'codex' }),
         session('server.jsonl', gone, { executionHostId: 'runtime:env-1' }),
-        session('unmounted.jsonl', join(root, 'unmounted', 'feature')),
+        session('unmounted.jsonl', join(root, 'unmounted', 'other', 'feature')),
+        session('renamed.jsonl', join(appWorkspaces, 'old-name')),
+        session('folder-workspace.jsonl', join(appWorkspaces, 'folder-workspace')),
         session('nested-archived.jsonl', join(appWorkspaces, 'team', 'feature')),
-        session('not-a-workspace.jsonl', join(root, 'repos', 'old-tool'))
+        session('not-a-workspace.jsonl', join(root, 'repos', 'sibling', 'old-tool'))
       ],
+      isEnabled: () => true,
       deleteSessions: async (targets) => {
         deleted.push(...targets)
         return { deleted: targets.length, failed: 0, freedBytes: 21 * targets.length }

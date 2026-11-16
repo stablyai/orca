@@ -14,11 +14,11 @@ import { deleteHostAiVaultSessionsPermanently } from '../../../ai-vault/deletion
 import {
   FolderSpellings,
   holdsListedPath,
+  isMissing,
+  isMountedDirectory,
   listedWorkspaceSpellings,
-  readPathState,
   workspaceFolderOf,
-  workspaceParentDirectories,
-  type PathState
+  workspaceParentDirectories
 } from './deleted-workspace-folders'
 
 export type ChatHistorySweepResult = { deleted: number; failed: number; freedBytes: number }
@@ -32,6 +32,8 @@ export type ChatHistorySweepDeps = {
   /** Sessions whose cwd is inside one of `scopePaths`, at most AI_VAULT_SCOPE_PATHS_MAX_COUNT of them. */
   listSessions: (scopePaths: string[], signal?: AbortSignal) => Promise<AiVaultSession[]>
   deleteSessions: (targets: ChatHistoryTarget[]) => Promise<ChatHistorySweepResult>
+  /** Read before each deletion: the user may turn the setting off while a long scan runs. */
+  isEnabled: () => boolean
 }
 
 function isSweepableSession(session: AiVaultSession, now: number): boolean {
@@ -65,24 +67,24 @@ export async function sweepDeletedWorkspaceChatHistory(
   deps: ChatHistorySweepDeps
 ): Promise<ChatHistorySweepResult> {
   const result: ChatHistorySweepResult = { deleted: 0, failed: 0, freedBytes: 0 }
-  const parents = workspaceParentDirectories(deps.store)
+  const parents = await workspaceParentDirectories(deps.store)
   if (parents.length === 0) {
     return result
   }
   const spellings = new FolderSpellings()
   const listed = await listedWorkspaceSpellings(deps.store, spellings)
   const sessions = await listInScope(deps, parents)
-  const states = new Map<string, Promise<PathState>>()
-  const stateOf = (path: string): Promise<PathState> => {
-    let state = states.get(path)
-    if (!state) {
-      state = readPathState(path)
-      states.set(path, state)
+  const checks = new Map<string, Promise<boolean>>()
+  const once = (key: string, check: () => Promise<boolean>): Promise<boolean> => {
+    let result = checks.get(key)
+    if (!result) {
+      result = check()
+      checks.set(key, result)
     }
-    return state
+    return result
   }
 
-  const byFolder = new Map<string, ChatHistoryTarget[]>()
+  const byFolder = new Map<string, { parent: string; targets: ChatHistoryTarget[] }>()
   for (const session of sessions) {
     if (deps.signal?.aborted) {
       return result
@@ -90,24 +92,30 @@ export async function sweepDeletedWorkspaceChatHistory(
     if (!isSweepableSession(session, deps.now)) {
       continue
     }
-    const place = workspaceFolderOf([session.cwd, ...(session.cwdAliases ?? [])], parents)
+    // The recorded cwd only: cached scope aliases can describe an earlier symlink target.
+    const place = workspaceFolderOf(session.cwd, parents)
     if (
       !place ||
       holdsListedPath(await spellings.of(place.folder), listed) ||
       // A missing parent is an unmounted volume or a moved folder, not a deleted workspace.
-      (await stateOf(place.parent)) !== 'directory' ||
-      (await stateOf(place.folder)) !== 'missing'
+      !(await once(`parent:${place.parent}`, () => isMountedDirectory(place.parent))) ||
+      !(await once(`folder:${place.folder}`, () => isMissing(place.folder)))
     ) {
       continue
     }
-    const targets = byFolder.get(place.folder) ?? []
-    targets.push({ agent: session.agent, filePath: session.filePath })
-    byFolder.set(place.folder, targets)
+    const group = byFolder.get(place.folder) ?? { parent: place.parent, targets: [] }
+    group.targets.push({ agent: session.agent, filePath: session.filePath })
+    byFolder.set(place.folder, group)
   }
 
-  for (const [folder, targets] of byFolder) {
-    // The folder may have been recreated while earlier folders were deleted; look again first.
-    if (deps.signal?.aborted || (await readPathState(folder)) !== 'missing') {
+  for (const [folder, { parent, targets }] of byFolder) {
+    // Earlier deletions took time: the volume may be gone, the folder recreated, the setting off.
+    if (
+      deps.signal?.aborted ||
+      !deps.isEnabled() ||
+      !(await isMountedDirectory(parent)) ||
+      !(await isMissing(folder))
+    ) {
       continue
     }
     const deleted = await deps.deleteSessions(targets)
@@ -135,6 +143,7 @@ export function deleteChatHistoryOfDeletedWorkspaces(
           { signal: scanSignal }
         )
       ).sessions,
-    deleteSessions: deleteHostAiVaultSessionsPermanently
+    deleteSessions: deleteHostAiVaultSessionsPermanently,
+    isEnabled: () => store.getSettings().deleteChatHistoryWithWorkspace === true
   })
 }
