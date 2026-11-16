@@ -40,5 +40,9 @@ export function classifyAgentLaunchReplayRefusal(
     // A replay's taken reservation may be this launch's own; only a first-send refusal proves no start.
     return replayed ? 'unknown' : 'failed'
   }
+  if (error.code === 'invalid_argument') {
+    // Schema refusal precedes the ledger read, so it says nothing of what the first send did.
+    return replayed ? 'unknown' : 'failed'
+  }
   return 'failed'
 }

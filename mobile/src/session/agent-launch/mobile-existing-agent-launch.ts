@@ -9,10 +9,7 @@ import type {
   AgentLaunchPrompt,
   AgentLaunchResult
 } from '../../../../src/shared/agent-launch/contracts/agent-launch-intent'
-import { isStructuredAgentId } from '../../../../src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { AGENT_LAUNCH_TAB_CLOSED_CODE } from '../../../../src/shared/agent-launch/contracts/agent-launch-tab-closed'
-import { makePaneKey } from '../../../../src/shared/workspace-layout/stable-pane-id'
-import { createStructuredAgentSessionId } from '../../../../src/shared/agent-session/structured-agent-session-create'
 import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { agentLaunchReplayRun } from '../../new-workspace/creation/mobile-workspace-create-operations'
@@ -23,8 +20,11 @@ import {
 } from '../../../../src/shared/agent-launch/contracts/agent-launch-replay-refusal'
 import { sendReplayingAmbiguousDelivery } from '../../new-workspace/creation/replay-on-ambiguous-delivery'
 import { structuredSessionOperationId } from '../native-chat/agent-session/structured-session-operation-id'
-import { randomV4Uuid } from '../../platform/random-v4-uuid'
 import { rememberMobileCreatedStructuredSession } from '../native-chat/agent-session/mobile-created-structured-sessions'
+import {
+  reservedAgentLaunchFields,
+  type MobileAgentLaunchReservation
+} from './mobile-agent-launch-reservation'
 
 // Why: the host waits up to 60s for a terminal agent to become ready before pasting the prompt,
 // so a prompted launch must outlive that wait or the phone reports a launch that is still running.
@@ -42,22 +42,6 @@ export const AGENT_LAUNCH_UNCONFIRMED_MESSAGE =
 export const AGENT_LAUNCH_RESERVATION_TAKEN_MESSAGE = "Couldn't start the agent. Try again."
 export const AGENT_LAUNCH_TAB_CLOSED_MESSAGE =
   "The agent's tab was closed, so the agent was stopped."
-
-// Reserve ids once so snapshots can select the new tab before prompt delivery replies; replays must reuse both ids covered by the host fingerprint.
-export type MobileAgentLaunchReservation = {
-  pane: { tabId: string; leafId: string }
-  sessionId: string | null
-}
-
-export function reserveMobileAgentLaunch(
-  agent: TuiAgent,
-  randomUuid: () => string = randomV4Uuid
-): MobileAgentLaunchReservation {
-  return {
-    pane: { tabId: randomUuid(), leafId: randomUuid() },
-    sessionId: isStructuredAgentId(agent) ? createStructuredAgentSessionId(agent, randomUuid) : null
-  }
-}
 
 export type MobileExistingAgentLaunch =
   | { kind: 'launched'; result: AgentLaunchResult; promptDelivered: boolean | null }
@@ -109,12 +93,7 @@ export async function launchAgentInExistingWorkspace(args: {
       : {}),
     ...(args.launchSource ? { launchSource: args.launchSource } : {}),
     ...(args.placement ? { placement: args.placement } : {}),
-    ...(args.reservation
-      ? {
-          paneKey: makePaneKey(args.reservation.pane.tabId, args.reservation.pane.leafId),
-          ...(args.reservation.sessionId ? { sessionId: args.reservation.sessionId } : {})
-        }
-      : {})
+    ...(args.reservation ? reservedAgentLaunchFields(args.reservation) : {})
   })
   if (args.reservation?.sessionId) {
     rememberMobileCreatedStructuredSession(args.reservation.sessionId, `id:${args.worktreeId}`)
