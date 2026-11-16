@@ -109,7 +109,7 @@ export function useMobileAsyncQuestionHides(
         }
         dismissals.hideAsync(storeKey, ids)
         if (save && newestRow !== undefined) {
-          void save(newestRow).catch(() => dismissals.forgetAsync(storeKey))
+          void save(newestRow).catch(() => dismissals.forgetAsync(storeKey, ids))
         }
       }
   }

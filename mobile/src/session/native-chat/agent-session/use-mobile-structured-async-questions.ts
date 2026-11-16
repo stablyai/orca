@@ -1,12 +1,15 @@
 import { useCallback, useMemo, useSyncExternalStore } from 'react'
 import { asyncQuestionSourceScope } from '../../../../../src/shared/native-chat/input/native-chat-ask'
+import { AGENT_SESSION_SKIP_ASYNC_QUESTIONS_RUNTIME_CAPABILITY } from '../../../../../src/shared/agent-session/agent-session-runtime-capabilities'
+import { useRouteRelaysCapability } from '../../../worktree/execution-hosts/workspace-server-context'
 import { mobileStructuredSessionStatusFeed } from './mobile-structured-session-status-feed'
 import { callAgentSession } from './mobile-structured-agent-session-rpc'
 import type { MobileStructuredAgentSessionArgs } from './mobile-structured-agent-session-contract'
 
 export type MobileStructuredAsyncQuestionSkip = {
   skippedThrough: string | undefined
-  save: (itemId: string) => Promise<unknown>
+  /** Absent where a paired desktop relays the route without passing Skip on. */
+  save?: (itemId: string) => Promise<unknown>
 }
 
 const noSubscription = (): (() => void) => () => {}
@@ -52,9 +55,10 @@ export function useMobileStructuredAsyncQuestions(
         : Promise.reject(new Error('agent_session_unavailable')),
     [client, sessionId]
   )
+  const relayed = useRouteRelaysCapability(AGENT_SESSION_SKIP_ASYNC_QUESTIONS_RUNTIME_CAPABILITY)
   const asyncQuestionSkip = useMemo(
-    () => (feed ? { skippedThrough, save } : null),
-    [feed, skippedThrough, save]
+    () => (feed ? { skippedThrough, ...(relayed ? { save } : {}) } : null),
+    [feed, skippedThrough, relayed, save]
   )
   return {
     asyncQuestionSourceScope: asyncQuestionSourceScope({

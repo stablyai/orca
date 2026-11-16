@@ -56,11 +56,12 @@ export function useNativeChatAsyncQuestions({
     if (active.current !== owner) {
       return
     }
-    dismissals.hideAsync(scopeKey, prompt?.occurrenceIds ?? [])
+    const ids = prompt?.occurrenceIds ?? []
+    dismissals.hideAsync(scopeKey, ids)
     const newest = newestShownAsyncQuestionRow(contributors, sourceScope, prompt)
-    // A Skip the host did not save shows the card again, as the status still waits on it.
+    // A Skip the host did not save shows its card again, as the status still waits on it.
     if (save && newest) {
-      void save(newest).catch(() => dismissals.forgetAsync(scopeKey))
+      void save(newest).catch(() => dismissals.forgetAsync(scopeKey, ids))
     }
   }, [owner, scopeKey, prompt, contributors, sourceScope, save])
   return {
