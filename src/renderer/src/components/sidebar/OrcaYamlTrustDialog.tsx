@@ -51,6 +51,7 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
   const scriptContent = typeof modalData.scriptContent === 'string' ? modalData.scriptContent : ''
   const contentHash = typeof modalData.contentHash === 'string' ? modalData.contentHash : ''
   const versionOnly = modalData.versionOnly === true
+  const repoWideTrust = modalData.repoWideTrust === true
   const automation = modalData.automation === true
   const previouslyApproved = versionOnly && modalData.previouslyApproved === true
   const reviewCopy =
@@ -124,7 +125,7 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
           </div>
         )}
 
-        {modalData.repoWideTrust === true && (
+        {repoWideTrust && (
           <p className="text-xs text-muted-foreground">
             <Trans
               i18n={i18n}
@@ -142,15 +143,22 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
             {t('auto.components.sidebar.OrcaYamlTrustDialog.43b7bec4cd', "Don't run")}
           </Button>
           {(!automation || versionOnly) && (
-            <Button variant="secondary" onClick={() => resolveAndClose('run')}>
+            <Button
+              variant={repoWideTrust ? 'secondary' : 'default'}
+              autoFocus={!repoWideTrust}
+              onClick={() => resolveAndClose('run')}
+            >
               {versionOnly
                 ? t('auto.components.sidebar.OrcaYamlTrustDialog.f3e2b868fb', 'Run hooks')
                 : t('worktree.setupTrust.runOnce', 'Run once')}
             </Button>
           )}
-          <Button autoFocus onClick={() => resolveAndClose('trust')}>
-            {t('worktree.setupTrust.alwaysTrust', 'Always trust')}
-          </Button>
+          {/* Why: repo-wide trust is ignored for a repo id on several hosts. */}
+          {repoWideTrust && (
+            <Button autoFocus onClick={() => resolveAndClose('trust')}>
+              {t('worktree.setupTrust.alwaysTrust', 'Always trust')}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

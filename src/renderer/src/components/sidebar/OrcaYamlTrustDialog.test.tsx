@@ -92,17 +92,22 @@ async function approveWithAlwaysTrust(): Promise<void> {
   clickButton('Always trust')
 }
 
-describe('OrcaYamlTrustDialog Always trust', () => {
-  it('keeps the approved script hash so a repo on two hosts stops prompting', async () => {
+describe('OrcaYamlTrustDialog repo on two hosts', () => {
+  it('keeps the approved script hash and offers no repo-wide trust', async () => {
     useAppStore.setState({ repos: [makeRepo('local'), makeRepo('runtime:vm-1')] })
     serveSetupScript('pnpm install')
 
     const first = confirmSetup()
-    await approveWithAlwaysTrust()
+    await waitForPrompt()
+    expect(
+      Array.from(document.body.querySelectorAll('button')).some(
+        (button) => button.textContent === 'Always trust'
+      )
+    ).toBe(false)
+    clickButton('Run hooks')
     await expect(first).resolves.toBe('run')
 
     expect(useAppStore.getState().trustedOrcaHooks['repo-1']).toEqual({
-      all: { approvedAt: expect.any(Number) },
       setup: {
         contentHash: '005d0b7e5c261dcc5e2f8568e69a0b30e889a3275b55b18ec20a7deef0081e90',
         approvedAt: expect.any(Number)
