@@ -9,7 +9,6 @@ import {
 } from '@stablyai/playwright-test'
 import { execSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { createServer } from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 import { runProcess } from '@orca/process-host'
@@ -25,6 +24,7 @@ import {
   type ElectronHomeIsolation
 } from './electron-home-isolation'
 import type { LaunchOptions } from './orca-restart-launch-options'
+import { pickPinnedPort } from './pinned-port'
 
 type LaunchedOrca = {
   app: ElectronApplication
@@ -46,22 +46,6 @@ async function delay(ms: number): Promise<void> {
   return new Promise((resolve) => {
     const timeout = setTimeout<[]>(resolve, ms)
     timeout.unref?.()
-  })
-}
-
-async function reserveRestartRuntimeWsPort(): Promise<number> {
-  const server = createServer()
-  return new Promise<number>((resolve, reject) => {
-    server.once('error', reject)
-    server.listen(0, '127.0.0.1', () => {
-      const address = server.address()
-      if (!address || typeof address === 'string') {
-        server.close()
-        reject(new Error('Restart fixture could not reserve a runtime WebSocket port'))
-        return
-      }
-      server.close((error) => (error ? reject(error) : resolve(address.port)))
-    })
   })
 }
 
@@ -143,7 +127,7 @@ export function createRestartSession(
   }
 
   const launch = async (options?: LaunchOptions): Promise<LaunchedOrca> => {
-    runtimeWsPort ??= await reserveRestartRuntimeWsPort()
+    runtimeWsPort ??= await pickPinnedPort()
     const app = await electron.launch({
       args: [...getOrcaElectronLaunchArgs(mainPath, headful), ...(options?.extraArgs ?? [])],
       env: {
@@ -183,7 +167,7 @@ export function createRestartSession(
 
   // Startup refusals exit before a renderer exists; capture their output from process creation.
   const launchUntilExit = async (executablePath: string): Promise<ProcessResult> => {
-    runtimeWsPort ??= await reserveRestartRuntimeWsPort()
+    runtimeWsPort ??= await pickPinnedPort()
     return runProcess({
       program: executablePath,
       args: getOrcaElectronLaunchArgs(mainPath, false),

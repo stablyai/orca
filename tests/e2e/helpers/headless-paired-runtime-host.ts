@@ -1,7 +1,5 @@
 import { cpSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import type { RmOptions } from 'node:fs'
-import { createServer } from 'node:net'
-import type { AddressInfo } from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 import { _electron as electron, type ElectronApplication } from '@stablyai/playwright-test'
@@ -20,6 +18,7 @@ import {
 import type { RuntimeDesktopPairingOffer } from './paired-electron-client'
 import { readPairingOffer, readServeReadiness } from './headless-paired-runtime-serve-readiness'
 import { retryTransientMainEvaluate } from './electron-main-evaluate-retry'
+import { pickPinnedPort } from './pinned-port'
 
 export type HeadlessPairedRuntimeHost = {
   /** Current serve process. Replaced by `restartServeProcess`, so always read it fresh. */
@@ -67,23 +66,6 @@ async function cleanupHeadlessHostResources(cleanups: HeadlessHostCleanup[]): Pr
   }
 }
 
-// Reserve a stable port for relaunch; --serve-port 0 would strand clients on the previous endpoint.
-async function reserveFreeLoopbackPort(): Promise<number> {
-  const probe = createServer()
-  try {
-    await new Promise<void>((resolve, reject) => {
-      probe.once('error', reject)
-      probe.listen(0, '127.0.0.1', () => {
-        probe.off('error', reject)
-        resolve()
-      })
-    })
-    return (probe.address() as AddressInfo).port
-  } finally {
-    await new Promise<void>((resolve) => probe.close(() => resolve()))
-  }
-}
-
 export async function launchHeadlessPairedRuntimeHost(
   options: {
     agentBrowserSocketParent?: string
@@ -102,7 +84,8 @@ export async function launchHeadlessPairedRuntimeHost(
   const userDataDir = mkdtempSync(
     path.join(options.userDataParent ?? os.tmpdir(), 'orca-e2e-headless-paired-')
   )
-  const servePort = options.pinnedServePort === true ? await reserveFreeLoopbackPort() : 0
+  // A stable port for relaunch; --serve-port 0 would strand clients on the previous endpoint.
+  const servePort = options.pinnedServePort === true ? await pickPinnedPort() : 0
   let agentBrowserSocketDir: string | null = null
   let app: ElectronApplication | undefined
   try {
