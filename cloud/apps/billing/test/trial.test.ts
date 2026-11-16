@@ -23,7 +23,7 @@ function startCheck(accountId: string, runningSandboxes = 0) {
 describe('trial grant', () => {
   it('offers a new team 2 sandbox hours, then grants them once with no card', async () => {
     const h = await createHarness()
-    const owner = await as(h, { sub: 'u1', org: 'o1', orgRole: 'owner', email: 'alex@example.com' })
+    const owner = await as(h, { sub: 'u1', org: 'o1', orgRole: 'owner', email: 'neil@acme.dev' })
     const before = await h.call('GET', '/v1/billing/entitlements', { headers: owner })
     expect(before.body.reason).toBe('no_subscription')
     expect(before.body.offers.trial).toEqual({ includedSeconds: 7200 })
@@ -55,7 +55,7 @@ describe('trial grant', () => {
 
   it('needs a team: a personal account is offered it but cannot claim it', async () => {
     const h = await createHarness()
-    const solo = await as(h, { sub: 'u1', email: 'alex@example.com' })
+    const solo = await as(h, { sub: 'u1', email: 'neil@acme.dev' })
     const view = await h.call('GET', '/v1/billing/entitlements', { headers: solo })
     expect(view.body.reason).toBe('no_subscription')
     expect(view.body.offers.trial).toEqual({ includedSeconds: 7200 })
@@ -77,8 +77,8 @@ describe('trial abuse limits', () => {
 
   it('keys verified email after normalization (+tags, Gmail dots)', async () => {
     const h = await createHarness()
-    await h.call('POST', '/v1/billing/trial', { headers: await as(h, { sub: 'u1', org: 'o1', email: 'alex.doe@gmail.com' }) })
-    const alias = await as(h, { sub: 'u9', org: 'o9', email: 'AlexDoe+cloud@googlemail.com' })
+    await h.call('POST', '/v1/billing/trial', { headers: await as(h, { sub: 'u1', org: 'o1', email: 'neil.parker@gmail.com' }) })
+    const alias = await as(h, { sub: 'u9', org: 'o9', email: 'NeilParker+cloud@googlemail.com' })
     expect((await h.call('POST', '/v1/billing/trial', { headers: alias })).body).toEqual({ error: 'trial_unavailable' })
   })
 

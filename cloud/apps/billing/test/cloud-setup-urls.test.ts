@@ -31,7 +31,7 @@ describe('CLOUD_SETUP_PAGES_URL', () => {
   it('is a configuration error in prod when unset, answered as billing_misconfigured', async () => {
     const h = await createHarness({ BILLING_ENV: 'prod' })
     expect(() => setupPageUrl(h.env, '/start', { session: 's1' })).toThrow(SetupPagesConfigError)
-    const token = await h.desktopToken({ sub: 'u1', email: 'alex@example.com' })
+    const token = await h.desktopToken({ sub: 'u1', email: 'neil@acme.dev' })
     const created = await h.call('POST', '/v1/cloud-setup/sessions', {
       body: { repo: 'https://github.com/acme/web', needs: ['plan'], device: 'MacBook Pro' },
       headers: { authorization: `Bearer ${token}` }

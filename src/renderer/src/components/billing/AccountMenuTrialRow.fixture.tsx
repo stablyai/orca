@@ -22,8 +22,8 @@ function Menu({ entitlement }: { entitlement: OrcaBillingEntitlement }): React.J
               N
             </span>
             <span className="flex min-w-0 flex-col">
-              <span className="truncate font-medium">Alex Doe</span>
-              <span className="truncate text-xs text-muted-foreground">alex@example.com</span>
+              <span className="truncate font-medium">Neil Parker</span>
+              <span className="truncate text-xs text-muted-foreground">neil@acme.dev</span>
             </span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />

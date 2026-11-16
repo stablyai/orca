@@ -10,7 +10,7 @@ const status = (activeOrgId?: string): OrcaProfileAuthStatus => ({
   cloud: {
     cloudProfileId: 'cp',
     userId: 'u1',
-    email: 'alex@example.com',
+    email: 'neil@acme.dev',
     linkedAt: 1,
     ...(activeOrgId ? { activeOrgId, activeOrgName: 'acme' } : {})
   },
