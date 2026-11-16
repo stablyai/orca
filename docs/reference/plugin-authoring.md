@@ -198,6 +198,12 @@ Everything else, such as `node:` builtins, resolves exactly as Node resolves it 
 worker. `orca/worker` holds only types, so import it with `import type`; a value import fails when
 the worker starts.
 
+A worker does not inherit Orca's full environment: tokens, shell-rc variables and display variables
+(`DISPLAY`, `WAYLAND_DISPLAY`) are withheld. It keeps `PATH`, `HOME`, locale and temp-dir
+variables, plus `XDG_RUNTIME_DIR`, `DBUS_SESSION_BUS_ADDRESS` and `SSH_AUTH_SOCK` from Orca's launch
+environment, so `git` credential helpers (such as libsecret) and ssh-agent can reach the session
+Orca started in.
+
 ### Panels, workers and data
 
 A plugin's panels, custom editors and worker are one program. A panel asks its own worker, the
