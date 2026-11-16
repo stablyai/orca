@@ -10,7 +10,10 @@ const mocks = vi.hoisted(() => ({
     worktreeId: 'p4::/ws.wt/one',
     summary: { stream: '//depot/one' }
   })),
-  resolveRoot: vi.fn(async (path: string) => `resolved:${path}`)
+  resolveRoot: vi.fn(async (path: string) => `resolved:${path}`),
+  prepareSetup: vi.fn(async (..._args: unknown[]) => ({
+    setup: { runnerScriptPath: '/ws.wt/one/setup' }
+  }))
 }))
 
 vi.mock('../../../perforce/perforce-copy-backend', () => ({
@@ -28,7 +31,10 @@ vi.mock('../removal/registered-worktree-roots-cache', () => ({
   resolveRegisteredWorktreePath: mocks.resolveRoot
 }))
 vi.mock('../../worktree-remote', () => ({ emitCreateWorktreeProgress: vi.fn() }))
-vi.mock('../create/folder-workspace-creation', () => ({ folderWorkspaceCreateMeta: () => ({}) }))
+vi.mock('../create/folder-workspace-creation', () => ({
+  folderWorkspaceCreateMeta: () => ({}),
+  prepareFolderWorkspaceCreateSetup: mocks.prepareSetup
+}))
 vi.mock('../folder-workspace-model', () => ({
   mergeFolderWorkspace: (_repo: Repo, id: string) => ({ id })
 }))
@@ -64,5 +70,16 @@ describe('createPerforceCopyWorkspace', () => {
     await createPerforceCopyWorkspace({ repoId: 'p4', name: 'one' }, repo({}), store, mainWindow)
     expect(mocks.backendFor).toHaveBeenCalledWith(undefined)
     expect(mocks.create.mock.calls[0]?.[0]).toMatchObject({ sourceDir: 'resolved:/ws' })
+  })
+
+  it('prepares the copy setup, as a folder workspace create does', async () => {
+    const result = await createPerforceCopyWorkspace(
+      { repoId: 'p4', name: 'one' },
+      repo({}),
+      store,
+      mainWindow
+    )
+    expect(mocks.prepareSetup.mock.calls[0]?.[3]).toEqual({ id: 'p4::/ws.wt/one' })
+    expect(result.setup).toEqual({ runnerScriptPath: '/ws.wt/one/setup' })
   })
 })

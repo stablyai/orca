@@ -16,7 +16,10 @@ import {
   resolveRegisteredWorktreePath
 } from '../removal/registered-worktree-roots-cache'
 import { emitCreateWorktreeProgress } from '../../worktree-remote'
-import { folderWorkspaceCreateMeta } from '../create/folder-workspace-creation'
+import {
+  folderWorkspaceCreateMeta,
+  prepareFolderWorkspaceCreateSetup
+} from '../create/folder-workspace-creation'
 import { mergeFolderWorkspace } from '../folder-workspace-model'
 import type { CreateWorktreeArgsWithSystemProvenance } from '../ipc-context-schemas'
 
@@ -52,6 +55,8 @@ export function createPerforceCopyWorkspace(
       perforceStream: summary.stream
     })
     invalidateAuthorizedRootsCache()
-    return { worktree: mergeFolderWorkspace(repo, worktreeId, meta), perforceCopy: summary }
+    const worktree = mergeFolderWorkspace(repo, worktreeId, meta)
+    const setup = await prepareFolderWorkspaceCreateSetup(args, repo, store, worktree)
+    return { worktree, ...setup, perforceCopy: summary }
   })
 }
