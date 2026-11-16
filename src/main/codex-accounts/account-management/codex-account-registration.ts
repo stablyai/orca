@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto'
+import { importCodexHomeHistory } from '../managed-homes/codex-home-history-import'
+import { healPendingCodexAccountThreads } from '../../codex/history/index/codex-account-session-index-heal'
 import { copyFileSync, mkdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesystem-absence'
@@ -16,6 +18,7 @@ import type { CodexRuntimeHomeService } from '../runtime-home-service'
 import type { CodexAuthIdentity as ResolvedCodexIdentity } from '../credentials/codex-auth-identity'
 import type {
   CodexAccountAddTarget,
+  CodexAccountImportOptions,
   CodexAccountReauthenticateOptions,
   ManagedCodexHomeLocation
 } from './codex-account-service-types'
@@ -79,7 +82,7 @@ export class CodexAccountRegistration {
 
   async addFromHome(
     sourceHome: string,
-    target?: CodexAccountAddTarget
+    target?: CodexAccountImportOptions
   ): Promise<CodexRateLimitAccountsState> {
     const accountId = randomUUID()
     const managedHome = await this.dependencies.managedHomes.create(accountId, target)
@@ -91,7 +94,20 @@ export class CodexAccountRegistration {
         managedHomePath,
         accountId
       )
-      return await this.persistCapturedAccount(accountId, managedHome)
+      if (target?.importHistory) {
+        const threads = await importCodexHomeHistory(sourceHome, managedHomePath)
+        const indexed = await healPendingCodexAccountThreads(managedHomePath, threads)
+        if (
+          indexed.failedThreads > 0 ||
+          indexed.missingThreads > 0 ||
+          (indexed.outcome !== 'completed' && indexed.outcome !== 'up-to-date')
+        ) {
+          throw new Error(
+            'Codex could not index the imported history. The source home is unchanged.'
+          )
+        }
+      }
+      return await this.persistCapturedAccount(accountId, managedHome, target?.importHistory)
     } catch (error) {
       await this.dependencies.managedHomes.removeUnlessUnproven(error, managedHomePath, accountId)
       throw error
@@ -204,7 +220,8 @@ export class CodexAccountRegistration {
 
   private async persistCapturedAccount(
     accountId: string,
-    managedHome: ManagedCodexHomeLocation
+    managedHome: ManagedCodexHomeLocation,
+    privateHistory?: boolean
   ): Promise<CodexRateLimitAccountsState> {
     const identity = await this.dependencies.readIdentityFromHome(
       managedHome.managedHomePath,
@@ -218,6 +235,7 @@ export class CodexAccountRegistration {
       id: accountId,
       email: identity.email,
       managedHomePath: managedHome.managedHomePath,
+      ...(privateHistory ? { privateHistory: true } : {}),
       managedHomeRuntime: managedHome.managedHomeRuntime,
       wslDistro: managedHome.wslDistro,
       wslLinuxHomePath: managedHome.wslLinuxHomePath,

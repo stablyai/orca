@@ -14,6 +14,7 @@ import type { MiniMaxCredentialsStatus } from '../../../shared/agent-accounts/us
 export type CodexAccountsApi = {
   importHome: (args: {
     sourceHome: string
+    importHistory?: boolean
     runtime?: 'host' | 'wsl'
     wslDistro?: string | null
   }) => Promise<CodexRateLimitAccountsState>

@@ -18,6 +18,7 @@ export type CodexManagedAccount = {
   id: string
   email: string
   managedHomePath: string
+  privateHistory?: boolean
   managedHomeRuntime?: 'host' | 'wsl'
   wslDistro?: string | null
   wslLinuxHomePath?: string | null

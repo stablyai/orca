@@ -3,6 +3,7 @@ import { FolderOpen, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useTranslate } from '@/i18n/use-translate'
 import { isWindowsAbsolutePathLike } from '../../../../../../shared/file-access/cross-platform-path'
@@ -26,6 +27,7 @@ export function CodexHomeImportForm({
   const t = useTranslate()
   const inputId = useId()
   const [sourceHome, setSourceHome] = useState('')
+  const [importHistory, setImportHistory] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const unavailable = disabled || busy
@@ -63,6 +65,7 @@ export function CodexHomeImportForm({
         try {
           const next = await window.api.codexAccounts.importHome({
             sourceHome: path,
+            importHistory,
             runtime: runtime.runtime,
             wslDistro: runtime.wslDistro
           })
@@ -148,6 +151,31 @@ export function CodexHomeImportForm({
             {error}
           </p>
         )}
+      </div>
+      <div className="space-y-1.5">
+        <div className="flex items-center gap-2">
+          <Checkbox
+            id={`${inputId}-history`}
+            checked={importHistory}
+            disabled={unavailable || runtime.runtime === 'wsl'}
+            onCheckedChange={(checked) => setImportHistory(checked === true)}
+            aria-describedby={`${inputId}-history-hint`}
+          />
+          <Label htmlFor={`${inputId}-history`}>
+            {t('accounts.codex.import.history', 'Import session history')}
+          </Label>
+        </div>
+        <p id={`${inputId}-history-hint`} className="text-xs text-muted-foreground">
+          {runtime.runtime === 'wsl'
+            ? t(
+                'accounts.codex.import.historyWsl',
+                'History import is available for host accounts only.'
+              )
+            : t(
+                'accounts.codex.import.historyHint',
+                'Copy conversations into this account and keep its history separate. The source stays unchanged.'
+              )}
+        </p>
       </div>
       <Button type="submit" disabled={unavailable || !sourceHome.trim()} className="w-full">
         {busy && <Loader2 className="size-4 animate-spin" />}

@@ -304,7 +304,7 @@ export class RuntimeAccountController {
 
   addCodexFromHome(
     sourceHome: string,
-    target?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null }
+    target?: { runtime?: 'host' | 'wsl'; wslDistro?: string | null; importHistory?: boolean }
   ): Promise<CodexRateLimitAccountsState> {
     return this.requireServices().codexAccounts.addAccountFromHome(sourceHome, target)
   }

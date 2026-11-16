@@ -38,6 +38,11 @@ export const narrow = importForm(360)
 
 export const validation = importForm(420, true)
 
+export const withHistory = defineFixture({
+  ...importForm(360),
+  interact: (frame) => frame.querySelector<HTMLButtonElement>('[role="checkbox"]')?.click()
+})
+
 function popoverFixture(width: number) {
   return defineFixture({
     width,

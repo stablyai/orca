@@ -24071,7 +24071,10 @@
         "hint": "Choose the folder containing auth.json, not the file itself.",
         "wslHint": "For WSL, choose its home folder through the Windows file picker.",
         "submit": "Import account",
-        "trigger": "Import from home…"
+        "trigger": "Import from home…",
+        "history": "Import session history",
+        "historyWsl": "History import is available for host accounts only.",
+        "historyHint": "Copy conversations into this account and keep its history separate. The source stays unchanged."
       }
     }
   },

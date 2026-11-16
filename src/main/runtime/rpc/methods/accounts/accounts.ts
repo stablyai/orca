@@ -214,6 +214,7 @@ const ACCOUNT_METHOD_DEFINITIONS = [
         throw new Error('Adding Codex accounts is only available on the Orca host runtime.')
       }
       return runtime.addCodexAccountFromHome(params.sourceHome, {
+        importHistory: params.importHistory,
         runtime: params.runtime,
         wslDistro: params.wslDistro ?? null
       })

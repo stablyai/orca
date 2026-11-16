@@ -7,11 +7,12 @@ export const ACCOUNT_COMMAND_SPECS: CommandSpec[] = [
     path: ['account', 'add'],
     summary: 'Add a managed agent account by signing in on this Orca host',
     usage:
-      'orca account add [--agent claude|codex|opencode|devin] [--home <path>] [--label <name>] [--integration <id>] [--method <id>] [--answer <key=value>]... [--json]',
+      'orca account add [--agent claude|codex|opencode|devin] [--home <path>] [--import-history] [--label <name>] [--integration <id>] [--method <id>] [--answer <key=value>]... [--json]',
     allowedFlags: [
       ...LOCAL_COMMAND_FLAGS,
       'agent',
       'home',
+      'import-history',
       'label',
       'integration',
       'method',
@@ -21,6 +22,7 @@ export const ACCOUNT_COMMAND_SPECS: CommandSpec[] = [
     notes: [
       'Runs the agent login (`claude login` / `codex login`) in this terminal, then registers the account with the local Orca runtime.',
       'For Codex, --home <path> imports auth.json from an existing Codex home without running login; the source directory stays unchanged.',
+      'Add --import-history to copy sessions into a private account history; shared or linked source folders are rejected. Host homes only.',
       'Codex uses device authorization so the browser can complete sign-in from a different machine.',
       'OpenCode 2 uses `opencode auth login --standalone` in private XDG directories. Devin uses `devin auth login --force-manual-token-flow`.',
       'Use --integration <id> to skip the OpenCode integration picker; --label names the saved OpenCode or Devin profile.',

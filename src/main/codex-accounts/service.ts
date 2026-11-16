@@ -25,6 +25,7 @@ import { CodexAccountSelection } from './account-management/codex-account-select
 import { CodexAccountRegistration } from './account-management/codex-account-registration'
 import type {
   CodexAccountAddTarget,
+  CodexAccountImportOptions,
   CodexAccountReauthenticateOptions,
   CodexAccountServiceLifecycle,
   CodexResetCreditConsumeResult
@@ -207,7 +208,7 @@ export class CodexAccountService {
   /** Import credentials from a terminal login on a headless host. */
   async addAccountFromHome(
     sourceHome: string,
-    target?: CodexAccountAddTarget
+    target?: CodexAccountImportOptions
   ): Promise<CodexRateLimitAccountsState> {
     return this.serializeMutation(() => this.registration.addFromHome(sourceHome, target))
   }

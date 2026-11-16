@@ -243,7 +243,7 @@ export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
     rejectAccountRemoteSelectionFlags(ctx, 'orca account add')
     rejectOpenCodeLoginFlagsForAgent(ctx, agent)
     const sourceHome = ctx.flags.get('home')
-    if (sourceHome !== undefined) {
+    if (sourceHome !== undefined || ctx.flags.has('import-history')) {
       if (agent !== 'codex' || typeof sourceHome !== 'string' || !sourceHome.trim()) {
         throw new RuntimeClientError(
           'invalid_argument',
@@ -255,6 +255,7 @@ export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
         'accounts.addCodexFromHome',
         {
           sourceHome: resolve(ctx.cwd, sourceHome.trim()),
+          importHistory: ctx.flags.get('import-history') === true,
           ...getWslAccountTarget(ctx.cwd)
         }
       )
