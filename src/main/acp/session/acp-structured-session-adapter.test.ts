@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
+import { z } from 'zod'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import {
   closeProviderTimelineRigs,
@@ -203,7 +204,7 @@ describe('ACP structured session adapter: approvals', () => {
           agent.reply(frame, { sessionId: PROVIDER_SESSION, configOptions: [mode('auto')] })
         )
         agent.on('session/set_config_option', (frame) => {
-          const { value } = frame.params as { value: string }
+          const { value } = z.object({ value: z.string() }).parse(frame.params)
           agent.reply(frame, { configOptions: [mode(value)] })
         })
       }
