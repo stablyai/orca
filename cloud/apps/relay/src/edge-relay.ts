@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { ASSIGNMENT_LIMITS } from '@orca-cloud/relay-contract'
-import { RELAY_DEFAULT_REGION, type RelayRegion } from '@orca-cloud/relay-contract/relay-regions'
+import { RELAY_DEFAULT_REGION, RelayRegionSchema, type RelayRegion } from '@orca-cloud/relay-contract/relay-regions'
 import type { RelayAssignment } from './assignment/assignment-store.js'
 import { lockedSelector, registerExistingOnlyCell, requireSelectorMatchesAdmission } from './cell-admission-selector.js'
 import type { RelayDatabase, SqlRow } from './database.js'
@@ -18,6 +18,7 @@ import {
 import {
   EDGE_CONTROL_DEFAULTS,
   edgeAnyRegionRolloutPermille,
+  edgeCohortByHost,
   edgeCountryExcluded,
   edgeFrontDoorListsHost,
   edgeRegionRolloutPermille,
@@ -347,6 +348,30 @@ export class EdgeAssignments {
     )[0]
     if (!row || text(row, 'cell_id') !== EDGE_CELL_ID) return null
     return this.answer(identity, integer(row, 'assignment_epoch'), integer(row, 'lease_expires_at'))
+  }
+
+  // The region the host's ask is judged by (inEdgeCohort, and recorded by moveToEdge): the ask's
+  // own, or with cohortRegion 'host' the region a host already on the edge moved there under
+  // (relay_edge_host_regions), so asks naming other regions never flip it. Only that case reads
+  // (one primary key read, outside any lock: a host that leaves meanwhile is judged by the region
+  // it was moved under, which is what kept it there); a host that cannot have an edge row, or one
+  // whose row is not on the edge or has no valid record, is judged by its ask.
+  async cohortRegion(identity: Identity, requestedRegion: RelayRegion | undefined): Promise<RelayRegion | undefined> {
+    const flags = this.config.control?.() ?? EDGE_CONTROL_DEFAULTS
+    if (!this.seeded || flags.mode !== 'on' || !edgeCohortByHost(flags)) { return requestedRegion }
+    if (!mayBeOnEdge(this.config, identity.relayHostId, identity.userId)) { return requestedRegion }
+    const row = (
+      await this.database.query(
+        `SELECT a.cell_id, r.region
+         FROM relay_assignments a
+         LEFT JOIN relay_edge_host_regions r ON r.user_id = a.user_id AND r.relay_host_id = a.relay_host_id
+         WHERE a.user_id = ? AND a.relay_host_id = ?`,
+        [identity.userId, identity.relayHostId]
+      )
+    )[0]
+    if (!row || text(row, 'cell_id') !== EDGE_CELL_ID) { return requestedRegion }
+    const recorded = RelayRegionSchema.safeParse(row.region)
+    return recorded.success ? recorded.data : requestedRegion
   }
 
   // Phone paths again, for a credential Postgres does not hold: devices paired or rotated while the

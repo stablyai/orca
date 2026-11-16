@@ -54,7 +54,24 @@ export type EdgeControlFlags = {
   // edge URL on their next reconnect. A bad value drops only this key (reported in ignoredKeys);
   // the rest of the object still applies.
   frontDoor?: EdgeFrontDoorFlag
+  // Which region a host's cohort is judged by (inEdgeCohort's region, regional rollout and country
+  // exclusion). 'ask' (also when absent): the region the ask names, so a host whose asks name
+  // different regions (the hourly region refresh, the initial open, asks without a region) moves on
+  // and off the edge when those regions' rollouts differ. 'host': a host whose row is on the edge
+  // is judged by the region recorded when it moved there (relay_edge_host_regions), whatever its
+  // asks name, and its kept asks no longer rewrite that record; only a move onto the edge uses the
+  // ask's region. For a fixed set of flags a host then never flips, and the evacuation sweep judges
+  // every edge host by its record (as with regional rollouts). A country exclusion is judged for
+  // that region too (the ask's country), so a host moved on under a region that does not exclude
+  // its country stays: give every in-scope region the same exclusions when the country matters
+  // whatever region its asks name. Front door mapping by country uses the same region. Set it
+  // only once every serving director carries it: an older one ignores it (ignoredKeys) and keeps
+  // judging by the ask. A bad value drops only this key (reported in ignoredKeys) and keeps the
+  // last applied one.
+  cohortRegion?: EdgeCohortRegion
 }
+
+export type EdgeCohortRegion = 'ask' | 'host'
 
 export type EdgeFrontDoorFlag = { url: string; countries?: string[]; hosts?: string[] }
 
@@ -75,8 +92,10 @@ const EdgeControlFlagsSchema = z.object({
     .partialRecord(regionKey, z.array(z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/)).max(250))
     .optional(),
   regionExcludeUnknownCountry: z.partialRecord(regionKey, z.boolean()).optional(),
-  frontDoor: z.unknown().optional()
+  frontDoor: z.unknown().optional(),
+  cohortRegion: z.unknown().optional()
 })
+const EdgeCohortRegionSchema = z.enum(['ask', 'host'])
 const EdgeFrontDoorSchema = z
     .object({
       // A bare https origin; that it is an allowed front door is checked against the boot list.
@@ -133,11 +152,15 @@ export function parseEdgeControlOver(
     regionRolloutPermille,
     regionExcludeCountries,
     regionExcludeUnknownCountry,
-    frontDoor: rawFrontDoor
+    frontDoor: rawFrontDoor,
+    cohortRegion: rawCohortRegion
   } = parsed.data.flags
   const frontDoor = rawFrontDoor === undefined ? undefined : parseFrontDoor(rawFrontDoor)
   if (frontDoor === null) { ignoredKeys.push('frontDoor') }
   const keptFrontDoor = frontDoor === null ? previous?.frontDoor : frontDoor
+  const cohortRegion = rawCohortRegion === undefined ? undefined : EdgeCohortRegionSchema.safeParse(rawCohortRegion)
+  if (cohortRegion?.success === false) { ignoredKeys.push('cohortRegion') }
+  const keptCohortRegion = cohortRegion === undefined ? undefined : cohortRegion.success ? cohortRegion.data : previous?.cohortRegion
   ignoredKeys.sort()
   return {
     flags: {
@@ -147,7 +170,8 @@ export function parseEdgeControlOver(
       ...(regionRolloutPermille === undefined ? {} : { regionRolloutPermille }),
       ...(regionExcludeCountries === undefined ? {} : { regionExcludeCountries }),
       ...(regionExcludeUnknownCountry === undefined ? {} : { regionExcludeUnknownCountry }),
-      ...(keptFrontDoor === undefined ? {} : { frontDoor: keptFrontDoor })
+      ...(keptFrontDoor === undefined ? {} : { frontDoor: keptFrontDoor }),
+      ...(keptCohortRegion === undefined ? {} : { cohortRegion: keptCohortRegion })
     },
     ignoredKeys
   }
@@ -199,6 +223,11 @@ export function edgeRolloutPermille(rolloutPercent: number, flags: EdgeControlFl
 // (relay_edge_host_regions). None: it judges every host 'any' with today's query.
 export function edgeRegionalRollout(flags: EdgeControlFlags): boolean {
   return Object.keys(flags.regionRolloutPermille ?? {}).length > 0
+}
+
+// Whether a host's cohort is judged by its recorded edge region (cohortRegion 'host').
+export function edgeCohortByHost(flags: EdgeControlFlags): boolean {
+  return flags.cohortRegion === 'host'
 }
 
 // Effective rollout for hosts asking for `region`: its regional value, else the global rollout
