@@ -124,7 +124,7 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
           </div>
         )}
 
-        {!versionOnly && (
+        {modalData.repoWideTrust === true && (
           <p className="text-xs text-muted-foreground">
             <Trans
               i18n={i18n}

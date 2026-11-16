@@ -8,16 +8,16 @@ import {
   type HookTrustApproval
 } from '@/runtime/repo-hooks/ensure-hooks-confirmed'
 import type { AutomationSaveContext } from './automation-save-context'
-
-type SetupReviewSaveContext = {
-  local: Pick<AutomationSaveContext['local'], 'targetEdited' | 'editingRowKey'>
-  list: Pick<AutomationSaveContext['list'], 'visibleRows'>
-}
 import type { Automation } from '../../../../../shared/automations/automation-definition'
 import type { AutomationUsageSummary } from '../../../../../shared/automations/history/automation-usage-summary'
 import { getAutomationRunRepoId } from '../../../../../shared/automations/history/automation-run-identity'
 import type { SetupDecision, SetupTrustMismatch } from '../../../../../shared/worktree/create-types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+
+type SetupReviewSaveContext = {
+  local: Pick<AutomationSaveContext['local'], 'targetEdited' | 'editingRowKey'>
+  list: Pick<AutomationSaveContext['list'], 'visibleRows'>
+}
 
 /** Runs create from the automation's base, so approve the orca.yaml there, not the project checkout's. */
 export function approveAutomationSetup(

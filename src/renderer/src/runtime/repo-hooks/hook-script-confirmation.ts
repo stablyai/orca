@@ -18,7 +18,11 @@ export function usesVersionedHookTrust(
   repoId: string,
   context: HookTrustContext
 ): boolean {
-  return context === 'vm' || state.repos.filter((repo) => repo.id === repoId).length > 1
+  return context === 'vm' || isRepoIdOnSeveralHosts(state, repoId)
+}
+
+function isRepoIdOnSeveralHosts(state: AppState, repoId: string): boolean {
+  return state.repos.filter((repo) => repo.id === repoId).length > 1
 }
 
 export function isDesktopHookRepoTrusted(
@@ -109,6 +113,7 @@ export async function confirmScriptContent(
       contentHash,
       previouslyApproved,
       versionOnly,
+      repoWideTrust: !isRepoIdOnSeveralHosts(state, repoId),
       automation: context === 'automation',
       ...(skippedSetupReview ? { skippedSetupReview } : {}),
       onResolve: settle,
