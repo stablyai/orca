@@ -2,22 +2,37 @@ import { open, stat } from 'node:fs/promises'
 import { WORKSPACE_CLEANUP_RULE_GRACE_MS } from '../../../../shared/workspace-cleanup/workspace-cleanup-evaluation'
 import { goneFolderKey, goneFolderOf } from './deleted-workspace-folders'
 
-const TAIL_BYTES = 64 * 1024
+const CHUNK_BYTES = 256 * 1024
+// A cwd value is short; chunks overlap by this much so a match split across a boundary is still read.
+const OVERLAP_BYTES = 8 * 1024
+const MAX_SCAN_BYTES = 16 * 1024 * 1024
 const CWD_FIELD = /"cwd"\s*:\s*("(?:[^"\\]|\\.)*")/g
 
-/** The last `"cwd"` a transcript recorded, from its final 64 KB; null when it records none there. */
+function lastCwdIn(text: string): string | null {
+  let last: string | null = null
+  for (const match of text.matchAll(CWD_FIELD)) {
+    last = match[1]
+  }
+  const parsed: unknown = last === null ? null : JSON.parse(last)
+  return typeof parsed === 'string' ? parsed : null
+}
+
+/** The last `"cwd"` a transcript recorded, read backwards from its end; null when none is found. */
 async function readLastRecordedCwd(filePath: string): Promise<string | null> {
   const handle = await open(filePath, 'r')
   try {
     const { size } = await handle.stat()
-    const length = Math.min(size, TAIL_BYTES)
-    const { buffer } = await handle.read(Buffer.alloc(length), 0, length, size - length)
-    let last: string | null = null
-    for (const match of buffer.toString('utf8').matchAll(CWD_FIELD)) {
-      last = match[1]
+    // Long API blobs carry no cwd, so keep reading back until one appears.
+    for (let end = size; end > 0 && size - end < MAX_SCAN_BYTES; end -= CHUNK_BYTES) {
+      const start = Math.max(0, end - CHUNK_BYTES)
+      const length = Math.min(size, end + OVERLAP_BYTES) - start
+      const { buffer } = await handle.read(Buffer.alloc(length), 0, length, start)
+      const cwd = lastCwdIn(buffer.toString('utf8'))
+      if (cwd !== null) {
+        return cwd
+      }
     }
-    const parsed: unknown = last === null ? null : JSON.parse(last)
-    return typeof parsed === 'string' ? parsed : null
+    return null
   } finally {
     await handle.close()
   }
@@ -36,9 +51,10 @@ export async function isStillIdleInGoneFolder(
     if (now - (await stat(filePath)).mtimeMs < WORKSPACE_CLEANUP_RULE_GRACE_MS) {
       return false
     }
+    // No recorded location means no proof the chat stayed in the gone folder: keep it.
     const lastCwd = await readLastRecordedCwd(filePath)
     if (lastCwd === null) {
-      return true
+      return false
     }
     const lastFolder = await goneFolderOf(lastCwd)
     return lastFolder !== null && goneFolderKey(lastFolder) === folderKey

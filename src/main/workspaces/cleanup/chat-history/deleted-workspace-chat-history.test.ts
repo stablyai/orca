@@ -36,7 +36,12 @@ function session(
 ): AiVaultSession {
   const filePath = join(root, 'transcripts', name)
   mkdirSync(join(root, 'transcripts'), { recursive: true })
-  writeFileSync(filePath, `${JSON.stringify({ cwd })}\n${JSON.stringify({ cwd: lastCwd })}\n`)
+  // A large final record with no cwd, as Claude's API blobs are, so the latest cwd sits far back.
+  const blob = JSON.stringify({ type: 'api-request-blob', body: 'x'.repeat(300 * 1024) })
+  writeFileSync(
+    filePath,
+    `${JSON.stringify({ cwd })}\n${JSON.stringify({ cwd: lastCwd })}\n${blob}\n`
+  )
   utimesSync(filePath, new Date(DAY_AGO), new Date(DAY_AGO))
   return {
     executionHostId: 'local',
@@ -65,6 +70,8 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
     mkdirSync(join(workspaces, 'tools'), { recursive: true })
     mkdirSync(join(root, 'links'), { recursive: true })
     symlinkSync(join(workspaces, 'tools'), join(root, 'links', 'tools'))
+    // A listed folder project under a link whose target workspace folder is gone.
+    symlinkSync(join(appWorkspaces, 'linked-gone'), join(root, 'links', 'dangling'))
     // Transcript parsers trim the recorded cwd, so `spaced` must not read as gone.
     mkdirSync(join(appWorkspaces, 'spaced '), { recursive: true })
     // Agents record the physical cwd; the temp root can sit behind a symlink (macOS /var).
@@ -138,7 +145,8 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
       }),
       getFolderWorkspaces: () => [
         { folderPath: join(appWorkspaces, 'folder-workspace') },
-        { folderPath: join(root, 'links', 'tools') }
+        { folderPath: join(root, 'links', 'tools') },
+        { folderPath: join(root, 'links', 'dangling', 'nested') }
       ]
     } as unknown as RuntimeStore
     const deleted: ChatHistoryTarget[] = []
@@ -164,6 +172,8 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
       session('symlinked-folder-project.jsonl', join(workspaces, 'tools', 'old')),
       session('trimmed-cwd.jsonl', join(appWorkspaces, 'spaced')),
       session('archived-mid-scan.jsonl', join(appWorkspaces, 'archived-mid-scan')),
+      session('pi.jsonl', gone, { agent: 'pi' }),
+      session('dangling-link-target.jsonl', join(appWorkspaces, 'linked-gone', 'nested')),
       session(
         'resumed-elsewhere.jsonl',
         join(appWorkspaces, 'gone-three'),

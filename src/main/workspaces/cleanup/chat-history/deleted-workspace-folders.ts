@@ -92,21 +92,31 @@ export type ListedFolders = {
   gone: Set<string>
 }
 
-/** Follows a listed path's symlinks to where they point, so a dangling link still protects its target. */
+/**
+ * Follows symlinks anywhere along a listed path, dangling ones included, keeping the rest of the
+ * path: a listed `/link/nested` whose `/link` points into a gone workspace still protects it.
+ */
 async function linkTargets(path: string): Promise<string[]> {
   const targets = [path]
   let current = path
   // A few hops covers real setups; a loop just stops protecting further, never deletes more.
   for (let hop = 0; hop < 8; hop += 1) {
-    const stats = await lstat(current).catch(() => null)
-    if (!stats?.isSymbolicLink()) {
-      break
+    let existing = current
+    const rest: string[] = []
+    while ((await presence(existing)) !== 'present') {
+      const parent = dirname(existing)
+      if (parent === existing) {
+        return targets
+      }
+      rest.unshift(basename(existing))
+      existing = parent
     }
-    const link = await readlink(current).catch(() => null)
+    const stats = await lstat(existing).catch(() => null)
+    const link = stats?.isSymbolicLink() ? await readlink(existing).catch(() => null) : null
     if (link === null) {
       break
     }
-    current = resolve(dirname(current), link)
+    current = join(resolve(dirname(existing), link), ...rest)
     targets.push(current)
   }
   return targets

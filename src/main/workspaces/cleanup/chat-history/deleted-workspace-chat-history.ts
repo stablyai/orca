@@ -1,9 +1,9 @@
 import type { RuntimeStore } from '../../../runtime/construction/runtime-store-contract'
 import {
   AI_VAULT_SCOPE_PATHS_MAX_COUNT,
+  type AiVaultAgent,
   type AiVaultSession
 } from '../../../../shared/ai-vault/contracts/ai-vault-types'
-import { isAiVaultDeletableAgent } from '../../../../shared/ai-vault/contracts/ai-vault-session-deletion'
 import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId
@@ -36,11 +36,17 @@ export type ChatHistorySweepDeps = {
   isEnabled: () => boolean
 }
 
+/**
+ * Agents whose transcripts record the cwd on every message, so a chat resumed in another workspace
+ * shows it. Agents that record it once (Pi, OMP, Copilot, Cursor) can't prove that and are kept.
+ */
+const SWEPT_AGENTS: ReadonlySet<AiVaultAgent> = new Set(['claude'])
+
 function isSweepableSession(session: AiVaultSession, now: number): boolean {
   const modifiedAt = Date.parse(session.modifiedAt)
   return (
     normalizeExecutionHostId(session.executionHostId) === LOCAL_EXECUTION_HOST_ID &&
-    isAiVaultDeletableAgent(session.agent) &&
+    SWEPT_AGENTS.has(session.agent) &&
     // Recently written history may belong to a workspace still in use or being recreated.
     Number.isFinite(modifiedAt) &&
     now - modifiedAt >= WORKSPACE_CLEANUP_RULE_GRACE_MS
