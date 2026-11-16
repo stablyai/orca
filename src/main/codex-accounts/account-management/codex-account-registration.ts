@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { copyFileSync, mkdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
-import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesystem-absence'
 import {
   WINDOWS_RM_MAX_RETRIES,
   WINDOWS_RM_RETRY_DELAY_MS
@@ -147,7 +147,7 @@ export class CodexAccountRegistration {
     )
 
     // Restore this runtime's selection while retaining current validation of other runtimes.
-    this.dependencies.store.updateSettings({
+    this.dependencies.selection.saveSettings({
       codexManagedAccounts: updatedAccounts,
       activeCodexManagedAccountId: activeSelection.host,
       activeCodexManagedAccountIdsByRuntime: activeSelection
@@ -232,7 +232,7 @@ export class CodexAccountRegistration {
     const settings = this.dependencies.store.getSettings()
     const selection = normalizeCodexRuntimeSelection(settings)
     const targetSelection = getCodexSelectionTargetForAccount(account)
-    this.dependencies.store.updateSettings({
+    this.dependencies.selection.saveSettings({
       codexManagedAccounts: [...settings.codexManagedAccounts, account],
       activeCodexManagedAccountId: targetSelection.runtime === 'host' ? account.id : selection.host,
       activeCodexManagedAccountIdsByRuntime: setSelectedCodexAccountIdForTarget(
@@ -247,7 +247,7 @@ export class CodexAccountRegistration {
       this.dependencies.runtimeHome.syncForCurrentSelection(targetSelection)
     } catch (error) {
       // Restore settings before caller cleanup removes the failed account's home.
-      this.dependencies.store.updateSettings({
+      this.dependencies.selection.saveSettings({
         codexManagedAccounts: settings.codexManagedAccounts,
         activeCodexManagedAccountId: settings.activeCodexManagedAccountId,
         activeCodexManagedAccountIdsByRuntime: settings.activeCodexManagedAccountIdsByRuntime

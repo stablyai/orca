@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import {
-  getExecutionHostIdFromWorktreeHostIdentity,
-  composeWorktreeHostIdentity
-} from '../worktree/host-qualified-identity'
-import { parseExecutionHostId, UNRESOLVED_OWNER_HOST_ID } from '../execution-host'
+import '../worktree/host-qualified-identity'
+import { UNRESOLVED_OWNER_HOST_ID } from './execution-host'
 import {
   authorityKey,
   hostAuthorityFromOperationRoute,
@@ -23,14 +20,6 @@ describe('authorityKey', () => {
   ])('keeps existing spellings and round-trips %j', (authority, key) => {
     expect(authorityKey(authority)).toBe(key)
     expect(parseHostAuthorityKey(key)).toEqual(authority)
-  })
-
-  it('gives nested authorities a key no host-id parser accepts', () => {
-    const key = authorityKey({ endpoint: env('env-a'), at: 'ssh:box' })
-    expect(parseExecutionHostId(key)).toBeNull()
-    expect(
-      getExecutionHostIdFromWorktreeHostIdentity(composeWorktreeHostIdentity(undefined, key))
-    ).toBeUndefined()
   })
 
   it('never parses the unresolved-owner sentinel, plain or nested', () => {

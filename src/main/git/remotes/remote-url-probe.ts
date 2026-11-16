@@ -3,7 +3,7 @@ import { gitExecFileAsync } from '../command-runner/git-exec-file'
 import { isStableMissingGitRemoteError } from './stable-missing-git-remote-error'
 import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
 import { requireReachableGitRoute } from '../../providers/execution-host-provider-dispatch'
-import { getConnectionExecutionHostId } from '../../../shared/execution-host'
+import { getConnectionExecutionHostId } from '../../../shared/execution-host/execution-host'
 
 // Bound config probes so stalled mounts or WSL cannot hold every forge lookup indefinitely.
 export const REMOTE_URL_PROBE_TIMEOUT_MS = 30_000

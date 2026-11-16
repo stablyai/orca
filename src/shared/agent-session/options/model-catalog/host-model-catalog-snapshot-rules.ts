@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../global-settings-types'
+import type { GlobalSettings } from '../../../settings/global-settings-types'
 import type { PersistedNativeChatSessionOptions } from '../../../native-chat/input/native-chat-session-options'
 import type { AgentSessionModelCatalogResult } from '../../agent-session-wire'
 import { AGENT_SESSION_MODEL_CATALOG_SAVED_ONLY_RUNTIME_CAPABILITY } from '../../structured-agent-session-surface-capabilities'

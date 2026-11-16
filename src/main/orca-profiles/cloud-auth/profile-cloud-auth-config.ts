@@ -2,7 +2,7 @@ import { app } from 'electron'
 import {
   cleanCloudServiceUrl as cleanUrl,
   cleanCloudServiceOrigin as cleanOrigin
-} from '../../../shared/cloud-service-url'
+} from '../../../shared/network/cloud-service-url'
 import { resolvePushGatewayOrigin } from '../../runtime/push/push-gateway-origin'
 
 export type OrcaCloudAuthConfig = {

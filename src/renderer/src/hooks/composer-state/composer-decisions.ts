@@ -2,7 +2,10 @@ import {
   getLinkedWorkItemSuggestedName,
   getLinkedWorkItemWorkspaceName
 } from '../../../../shared/workspace/naming/workspace-name'
-import { normalizeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  normalizeExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import { shouldApplyWorkspaceSourceAutoName } from '../../../../shared/new-workspace/workspace-source'
 import { resolveGitHubWorkItemIdentity } from '../../../../shared/new-workspace/github-work-item-identity'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../../shared/workspace-attachments/workspace-linked-item-source-context'
@@ -13,7 +16,7 @@ import {
 import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 
-import type { JiraIssueKeyCasing } from '../../../../shared/ui-chrome-types'
+import type { JiraIssueKeyCasing } from '../../../../shared/ui-chrome/ui-chrome-types'
 import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 
 import type { WorkspaceCreationTargetHint } from '@/lib/workspace/creation/project-host-workspace-target'

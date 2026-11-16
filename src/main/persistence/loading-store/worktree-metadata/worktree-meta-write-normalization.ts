@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { normalizeStoredTaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import { normalizeWorkspaceLinkedItem } from '../../../../shared/workspace-attachments/workspace-linked-item'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../../shared/workspace-attachments/workspace-linked-item-source-context'
@@ -12,7 +12,7 @@ import { normalizeWorkspaceAttachmentUpdate } from '../../../../shared/workspace
 import {
   mergeDiffCommentMutation,
   type DiffCommentBaseMutation
-} from '../../../../shared/diff-comment-mutation'
+} from '../../../../shared/file-review/diff-comment-mutation'
 
 type WorktreeMetaIdentity = {
   instanceId: string

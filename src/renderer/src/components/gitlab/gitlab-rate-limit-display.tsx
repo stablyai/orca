@@ -9,7 +9,7 @@ import { isWslDistroNotRunningRefusal } from '../../../../shared/remote-runtime/
 import type {
   GetGitLabRateLimitResult,
   GitLabRateLimitSnapshot
-} from '../../../../shared/gitlab-types'
+} from '../../../../shared/gitlab/gitlab-types'
 import { getProviderRateLimitScope } from '@/components/provider-accounts/provider-account-scope'
 import { ProviderHostScopeControl } from '@/components/provider-accounts/ProviderHostScopeControl'
 import { translate } from '@/i18n/i18n'

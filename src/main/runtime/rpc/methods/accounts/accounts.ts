@@ -1,4 +1,5 @@
 import { defineMethod, defineStreamingMethod, type RpcContext } from '../../core'
+import { ACCOUNT_RENAME_METHODS } from './account-rename-methods'
 import type { OrcadFeature } from '../../startup/orcad-readiness'
 import { rpcCallerOperationKey } from '../../callers/rpc-caller-identity'
 import { HostAccountSignInFlows } from '../../../agent-session/environment/host-account-sign-in-flows'
@@ -193,6 +194,7 @@ const ACCOUNT_METHOD_DEFINITIONS = [
     params: RemoveAccountParams,
     handler: async (params, { runtime }) => runtime.removeCodexAccount(params.accountId)
   }),
+  ...ACCOUNT_RENAME_METHODS,
   defineMethod({
     name: 'accounts.addClaudeFromConfigDir',
     permission: 'accounts-admin',

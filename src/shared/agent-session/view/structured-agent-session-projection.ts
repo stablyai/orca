@@ -225,12 +225,11 @@ export function projectStructuredAgentSessionStatus(
   scope?: StructuredAgentSessionWorkScope
 ): StructuredAgentSessionProjectedStatus {
   ;({ items, submissions } = agentSessionCurrentContextRows(items, submissions))
-  if (items.some(pendingStructuredAgentSessionPrompt(scope))) {
-    return 'attention'
-  }
-  return owesStructuredAgentSessionWork(items, submissions, currentFence, scope)
-    ? 'working'
-    : 'idle'
+  return items.some(pendingStructuredAgentSessionPrompt(scope))
+    ? 'attention'
+    : owesStructuredAgentSessionWork(items, submissions, currentFence, scope)
+      ? 'working'
+      : 'idle'
 }
 
 /** Name sidebar activity fields like agent-status entries for direct row consumption. */
@@ -245,8 +244,9 @@ export type StructuredAgentSessionStatusProjection = {
   /** Idle-only latest-request verdict: turn outcome, host-observed end if absent, or refused-send failure. */
   turnOutcome?: AgentTurnOutcome
   statusStartedAt?: number
-  /** An async question still waits for the person's next message; set by the host's journal reads. */
-  awaitsAnswer?: true
+  /** The row of the newest async question still waiting for the person's next message; set by
+   *  the host's journal reads and folded with the person's Skip into the published `awaitsAnswer`. */
+  openAsyncQuestion?: string
 }
 
 /** Share host/client previews; null status means no turn yet. Bound text because sends admit 256 KB and status frames include all sessions;

@@ -1,4 +1,4 @@
-import { getDefaultWorkspaceSession } from '../../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../../shared/orca-profiles/constants'
 import {
   TEST_WORKTREE_ID,
   makeRuntimeStoreWithWorkspaceSession

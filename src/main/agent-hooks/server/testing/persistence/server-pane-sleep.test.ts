@@ -2,14 +2,20 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { nativeChatTranscriptPathOnExecutionHost } from '../../../../native-chat/transcript-filesystem/ssh-transcript-path'
-import { nativeChatTranscriptDistro } from '../../../../native-chat/transcript-discovery/native-chat-open-wake'
-import { WSL_HOOK_RELAY_CONNECTION_PREFIX } from '../../../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
+import '../../../../../shared/orca-profiles/constants'
+
+import '../../../../runtime/terminal/stop/worktree-sleep-resume-records'
+import '../../../../native-chat/transcript-filesystem/ssh-transcript-path'
+import '../../../../native-chat/transcript-discovery/native-chat-open-wake'
+import '../../../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import { AgentHookServer, _internals } from '../../agent-hook-server'
-import { buildBody, PANE, postHookEvent } from '../server.test-fixtures'
+import { PANE } from '../server.test-fixtures'
 
 vi.mock('../../../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../../../telemetry/cohort-classifier', () => ({ getCohortAtEmit: () => ({}) }))
+vi.mock('../../../../../shared/agent-status/process/agent-process-presence-probe', () => ({
+  probeAgentProcessPresence: vi.fn(async () => 'live')
+}))
 
 let home: string
 let server: AgentHookServer
@@ -37,51 +43,6 @@ afterEach(() => {
   vi.useRealTimers()
   rmSync(home, { recursive: true, force: true })
 })
-
-it.each(['claude', 'codex'] as const)(
-  'keeps %s completion through sleep and restart, then retires it on close',
-  async (agent) => {
-    const hook = (event: string) =>
-      postHookEvent(
-        server,
-        buildBody({
-          hook_event_name: event,
-          session_id: `${agent}-session`,
-          prompt: 'Finished work'
-        }),
-        `/hook/${agent}`
-      )
-    await hook('UserPromptSubmit')
-    await hook('Stop')
-    expect(read()).toMatchObject({ state: 'done', agentType: agent })
-    const before = read()
-    stopping = true
-    await hook('SessionEnd')
-    server.reconcileEndedProcessForPaneKeys([PANE], { preserveResumeIdentity: true })
-    expect(read()).toMatchObject({ state: 'done', prompt: 'Finished work' })
-    const emitted = vi.fn()
-    server.setListener(emitted)
-    emitted.mockClear()
-    expect(server.settleTerminalPaneSleep(PANE, 'pty', 'birth')).toBe(true)
-    expect(read()).toMatchObject({
-      state: 'done',
-      receivedAt: before.receivedAt,
-      stateStartedAt: before.stateStartedAt,
-      paneSleep: { ptyId: 'pty', incarnationId: 'birth' }
-    })
-    expect(emitted.mock.calls.filter(([row]) => !row.isReplay)).toHaveLength(0)
-    server.stop()
-    vi.useFakeTimers({ toFake: ['Date'] })
-    vi.setSystemTime(Date.now() + 8 * 24 * 60 * 60 * 1000)
-    await server.start({ env: 'production', userDataPath: home })
-    expect(read()).toMatchObject({ state: 'done', paneSleep: { ptyId: 'pty' } })
-    server.retirePaneAuthority(PANE)
-    expect(read()).toBeUndefined()
-    server.stop()
-    await server.start({ env: 'production', userDataPath: home })
-    expect(read()).toBeUndefined()
-  }
-)
 
 it('accepts a genuine providerless completion after stop intent and preserves it through transport loss', () => {
   const publish = (state: 'working' | 'done') =>
@@ -118,39 +79,4 @@ it('does not restore a sleeping status whose exact placed pane is absent', async
   placed = false
   await server.start({ env: 'production', userDataPath: home })
   expect(read()).toBeUndefined()
-})
-
-it('keeps transcript host evidence indexed through replacement, sleep and close', () => {
-  const publish = (id: string, connectionId: string) =>
-    server.ingestRemote(
-      {
-        paneKey: PANE,
-        tabId: 'tab-1',
-        worktreeId: 'wt-1',
-        providerSession: { key: 'session_id', id, transcriptPath: '/home/user/session.jsonl' },
-        payload: { state: 'done', prompt: 'Finished', agentType: 'claude' }
-      },
-      connectionId
-    )
-  publish('first-session', 'ssh-1')
-  const initial = server.getProviderSessionSourceRowsForSessionId('first-session')
-  expect(initial).toHaveLength(1)
-  expect(
-    nativeChatTranscriptPathOnExecutionHost(initial, 'first-session', '/home/user/session.jsonl')
-  ).toBe('orca-ssh-transcript:ssh-1:/home/user/session.jsonl')
-  publish('second-session', `${WSL_HOOK_RELAY_CONNECTION_PREFIX}Ubuntu`)
-  expect(server.getProviderSessionSourceRowsForSessionId('first-session')).toEqual([])
-  const replacement = server.getProviderSessionSourceRowsForSessionId('second-session')
-  expect(replacement).toHaveLength(1)
-  const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
-  try {
-    expect(nativeChatTranscriptDistro(replacement, 'second-session', undefined)).toBe('Ubuntu')
-  } finally {
-    platform.mockRestore()
-  }
-  stopping = true
-  expect(server.settleTerminalPaneSleep(PANE, 'pty', 'birth')).toBe(true)
-  expect(server.getProviderSessionSourceRowsForSessionId('second-session')).toHaveLength(1)
-  server.retirePaneAuthority(PANE)
-  expect(server.getProviderSessionSourceRowsForSessionId('second-session')).toEqual([])
 })

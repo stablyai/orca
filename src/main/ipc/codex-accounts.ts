@@ -9,7 +9,7 @@ import {
   forgetStaleCodexPanes,
   listStaleCodexPanes
 } from '../codex/configuration/homes/codex-stale-pane-accounts'
-import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 
 export function registerCodexAccountHandlers(
   codexAccounts: CodexAccountService,
@@ -57,6 +57,11 @@ export function registerCodexAccountHandlers(
   )
   ipcMain.handle('codexAccounts:remove', (_event, args: { accountId: string }) =>
     codexAccounts.removeAccount(args.accountId)
+  )
+  ipcMain.handle(
+    'codexAccounts:rename',
+    (_event, args: { accountId: string; displayName: string | null }) =>
+      codexAccounts.renameAccount(args.accountId, args.displayName)
   )
   ipcMain.handle(
     'codexAccounts:select',

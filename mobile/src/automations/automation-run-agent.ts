@@ -3,7 +3,7 @@ import {
   normalizeVisibleExecutionHostIds,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../src/shared/execution-host'
+} from '../../../src/shared/execution-host/execution-host'
 import { parsePaneKey } from '../../../src/shared/workspace-layout/stable-pane-id'
 import { hostScopeCensusIsComplete } from '../../../src/shared/execution-host/runtime-listing-host-scope'
 import { salvagingArray } from '../../../src/shared/validation/zod-salvage'

@@ -1,7 +1,7 @@
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import type { BrowserWorkspace } from '../../../../../shared/browser/workspaces/browser-workspace-types'
-import type { TabGroup } from '../../../../../shared/tab-types'
-import { getGroupVisibleTabOrder } from '@/components/tab-bar/group-tab-order'
+import type { TabGroup } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
+import { getGroupVisibleTabOrder } from '@/lib/workspace/tabs/order/group-tab-order'
 import {
   getNextTabAcrossAllTypes,
   getNextTerminalCycleTab,

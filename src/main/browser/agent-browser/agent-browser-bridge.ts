@@ -169,7 +169,7 @@ export class AgentBrowserBridge extends AgentBrowserBridgeInteractionCommands {
       const session = this.sessions.get(sessionName)
       if (session) {
         this.pendingInterceptRestore.delete(sessionName)
-        session.activeInterceptPatterns = patterns ?? ['*']
+        session.activeInterceptPatterns = patterns?.length ? patterns : ['*']
       }
       return result
     })

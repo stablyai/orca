@@ -1,6 +1,6 @@
 import type { TuiAgent } from '../catalog/tui-agent'
 import { getAgentLaunchExecutableName } from './agent-command-line-intent'
-import { findOptionOccurrence } from '../../command-option-occurrence'
+import { findOptionOccurrence } from '../../cli/command-option-occurrence'
 
 export class OpenCodeCopyServerRouteError extends Error {
   constructor() {

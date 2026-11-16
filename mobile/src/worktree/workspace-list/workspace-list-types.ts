@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../../src/shared/execution-host'
+import type { ExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
 import type { RuntimeWorktreePsSummary } from '../../../../src/shared/worktree/catalog/runtime-worktree-contracts'
 import type { ProjectSectionRepo } from '../../../../src/shared/sidebar-list/sections/project-section-grouping'
 import type { WorkspaceRowFilters } from '../../../../src/shared/workspace-view/workspace-row-filters'

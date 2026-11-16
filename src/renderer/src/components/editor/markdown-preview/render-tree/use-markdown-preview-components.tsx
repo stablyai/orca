@@ -14,7 +14,7 @@ import {
   getMarkdownPreviewBlockRange,
   hasMarkdownPreviewNestedBlock
 } from '../review/markdown-preview-block-model'
-import { preventMiddleButtonDefault } from '@/components/tab-bar/middle-button-default-guard'
+import { preventMiddleButtonDefault } from '@/components/tab-bar/strip/middle-button-default-guard'
 import {
   handleMarkdownPreviewLinkAuxClick,
   handleMarkdownPreviewLinkClick,

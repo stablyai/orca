@@ -1,4 +1,4 @@
-import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
+import { useAgentMenuObservation } from '@/components/agent/launch-menu/use-new-tab-agent-menu-rows'
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
 import { resolveChecksActionAgent } from '@/lib/source-control/ai/source-control-agent-picker'
 import type { SourceControlActionId } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
@@ -23,7 +23,7 @@ import { isReviewThreadResolutionInFlight } from '@/store/github/review-threads/
 import { worktreeLaunchWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
 import { errorMessage } from '../../../../../../shared/errors/error-message'
-import type { GitLabDiscussionResolveResult } from '../../../../../../shared/gitlab-types'
+import type { GitLabDiscussionResolveResult } from '../../../../../../shared/gitlab/gitlab-types'
 
 type ChecksPanelCommentResolutionInput = Pick<
   ChecksPanelControllerState,

@@ -15,6 +15,10 @@ import { ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHos
 import { seedTestAgentSessionRecordStore } from '../records/agent-session-record-store-persistence.test-fixture'
 import { stopStructuredAgentSessionRuntime } from '../structured-agent-session-runtime'
 
+vi.mock('../../../provider-process/provider-process-spawn', () => ({
+  spawnProviderProcess: (spec: unknown, spawnImpl: (spec: unknown) => unknown) => spawnImpl(spec)
+}))
+
 vi.mock('../model-catalog/structured-agent-model-catalog-wiring', async (importOriginal) => {
   const actual = await importOriginal<typeof ModelCatalogWiring>()
   return {

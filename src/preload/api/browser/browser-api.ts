@@ -36,7 +36,7 @@ import type {
   BrowserPagePromptResult
 } from '../../../shared/browser/prompts/browser-page-prompt'
 import type {
-  BrowserSitePermission,
+  BrowserSitePermissionKey,
   BrowserSitePermissionDecision,
   BrowserSitePermissionEntry
 } from '../../../shared/browser/site-settings/browser-site-permission'
@@ -265,7 +265,7 @@ export type BrowserApi = {
   sitePermissionsSet: (args: {
     profileId: string
     origin: string
-    permission: BrowserSitePermission
+    permission: BrowserSitePermissionKey
     decision: BrowserSitePermissionDecision | null
   }) => Promise<BrowserSitePermissionEntry[]>
   notifyActiveTabChanged: (args: { browserPageId: string }) => Promise<boolean>

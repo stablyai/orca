@@ -17,7 +17,7 @@ import {
   ORCAD_MIGRATION_BLOB_CHANNEL_RUNTIME_CAPABILITY,
   ORCAD_MIGRATION_LOCAL_WSL_SOURCE_RUNTIME_CAPABILITY
 } from '../../../../shared/remote-runtime/protocol/orcad-runtime-capabilities'
-import { getDefaultPersistedState } from '../../../../shared/constants'
+import { getDefaultPersistedState } from '../../../../shared/orca-profiles/constants'
 import { terminalTab } from './wsl-mover-profile-rows'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { WslMoveProgressEvent } from '../../../../shared/wsl-move/wsl-move-driver-types'

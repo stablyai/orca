@@ -3,7 +3,7 @@ import type {
   NotificationDispatchRequest,
   NotificationDispatchResult,
   NotificationSettings
-} from '../../shared/notification-settings-types'
+} from '../../shared/notifications/notification-settings-types'
 import { safelyRevealWindow } from '../window/activation/focus-existing-window'
 import { isBackgroundLaunch } from '../window/activation/foreground-activation-policy'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'

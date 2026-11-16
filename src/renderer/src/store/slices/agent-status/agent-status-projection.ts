@@ -31,9 +31,18 @@ import { publishProjectionTopology } from './agent-status-projection-publish-top
 import { publishProjectionRows } from './agent-status-projection-publish-rows'
 import { publishProjectionArrangement } from './agent-status-projection-publish-arrangement'
 
+import { KeyedChangeJournal } from '../../../../../shared/collections/keyed-change-journal'
+
 /** Live keyed derivatives; historical views capture explicitly. */
 export class AgentStatusProjection {
   private data = new AgentStatusProjectionState()
+  private changes = new KeyedChangeJournal()
+  changeCursor(): number {
+    return this.changes.cursor()
+  }
+  changesSince(cursor: number): ReadonlySet<string> | null {
+    return this.changes.since(cursor)
+  }
   get display() {
     return this.data.display
   }
@@ -121,6 +130,11 @@ export class AgentStatusProjection {
     } finally {
       this.data.notifying = false
     }
+  }
+  mobileSource(key: string, tabId: string) {
+    const worktreeId = this.data.mobileOwners.get(key)
+    const tab = this.data.tabs.get(tabId)
+    return worktreeId && tab ? { worktreeId, tab } : undefined
   }
   tabKeys(tabId: string): Iterable<string> {
     return this.data.acceptedByTab.get(tabId) ?? []
@@ -225,6 +239,16 @@ export class AgentStatusProjection {
       )
     const publishCounts = stageProjectionCounts(data, state, rows.prepared)
     return () => {
+      const changed = new Set(topology.changedKeys)
+      for (const [key, next] of rows.prepared) {
+        changed.add(key)
+        for (const rowKey of data.rowsForSource.get(key) ?? []) {
+          changed.add(rowKey)
+        }
+        for (const row of next.rows) {
+          changed.add(row.paneKey)
+        }
+      }
       data.fullResync ||= fullResync
       for (const key of refreshKeys) {
         data.notices.add(`status\0${key}`)
@@ -238,6 +262,14 @@ export class AgentStatusProjection {
       publishProjectionTopology(data, state, changes, topology, rows)
       const rowUpdates = publishProjectionRows(data, state, topology, rows)
       publishProjectionArrangement(data, state, topology, rows, rowUpdates)
+      // Membership changes can move a key across commits a reader skipped.
+      this.changes.publish(
+        fullResync ||
+          topology.moved.size > 0 ||
+          changes.some(({ previous, current }) => !previous || !current)
+          ? null
+          : changed
+      )
     }
   }
 }

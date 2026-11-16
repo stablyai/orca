@@ -1,16 +1,20 @@
 import { z } from 'zod'
+import { AgentSessionStartFailure } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-start-failure'
 import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { ProviderTimelineEvent } from '../../../native-chat/agent-session-timeline/provider-timeline-event'
-import { AcpAgentError, AcpAuthRequiredError, AcpRpcError } from '../../transport/acp-errors'
+import {
+  AcpAgentError,
+  AcpAuthRequiredError,
+  AcpRpcError,
+  temporaryAcpProviderAnswer
+} from '../../transport/acp-errors'
 import type { AcpDialect } from '../../acp-dialects/acp-dialect'
 import type { InitializeResponse } from '../../generated/acp-protocol.generated'
 import type { AcpStructuredConnection } from '../../process/acp-structured-connection'
 import type { AcpStructuredLaunch } from '../../launch/acp-structured-launch-resolution'
 import { providerRequestTimeoutOf } from '../../../provider-process/provider-request-timeout'
-
-import { temporaryAcpStartupAnswer } from './acp-startup-outcome'
 
 const ACP_RESOURCE_NOT_FOUND = -32002
 // Without a `cwd`, OpenCode 2.x lists every folder's sessions.
@@ -25,14 +29,13 @@ export async function acpReopenTakeover(
   resume: NonNullable<AcpStructuredLaunch['resume']>,
   start: { over: boolean; now: number; warn: (fields: { scope: string; error: unknown }) => void }
 ): Promise<Pick<AgentSessionProviderHandleLink, 'supersedesKey' | 'replaces'>> {
+  if (temporaryAcpProviderAnswer(error)) {
+    // Restore already spent its retry budget; an explicit retry gets a fresh flight.
+    throw new AgentSessionStartFailure(error, 'never')
+  }
   // A replacement session cannot resolve sign-in failure, a missed deadline or an abandoned start;
   // its own answer would replace the failure the user must see.
-  if (
-    error instanceof AcpAuthRequiredError ||
-    temporaryAcpStartupAnswer(error) ||
-    providerRequestTimeoutOf(error) ||
-    start.over
-  ) {
+  if (error instanceof AcpAuthRequiredError || providerRequestTimeoutOf(error) || start.over) {
     throw error
   }
   if (

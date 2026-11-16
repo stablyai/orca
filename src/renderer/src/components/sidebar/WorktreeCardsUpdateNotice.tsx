@@ -1,14 +1,20 @@
 import { useEffect, useState } from 'react'
-import { ChevronRight, Folder, Workflow, X } from 'lucide-react'
+import { ChevronRight, Folder, GitBranch, Workflow, X } from 'lucide-react'
+import { Trans } from 'react-i18next'
 import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import { Badge } from '@/components/ui/badge'
 import { Button, buttonVariants } from '@/components/ui/button'
+import { i18n } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store/index'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 import StatusIndicator from './workspace-card/surface/StatusIndicator'
+import {
+  branchStatusIconClassName,
+  overlayNewCardUnreadStatus
+} from './workspace-card/surface/WorktreeCardStatusSlot'
 import { WorktreeCardStatusPill } from './WorktreeCardSlot'
 
 /** True once, for people who already had the experimental cards on when this build arrived. */
@@ -37,11 +43,31 @@ function useWorktreeCardsUpdateNotice(): [visible: boolean, dismiss: () => void]
 
 const SKELETON = 'block h-2 shrink-0 rounded-full bg-foreground/[0.14]'
 
-/** Outlines one new piece of the demo card. */
-function Callout({ children }: { children: React.ReactNode }): React.JSX.Element {
+/** Outlines one new piece of the demo card; `unread` matches the outline to the dot it frames. */
+function Callout({
+  children,
+  tone
+}: {
+  children: React.ReactNode
+  tone?: 'unread'
+}): React.JSX.Element {
   return (
-    <span className="mr-2.5 inline-flex shrink-0 rounded-[6px] outline-1 outline-offset-2 outline-foreground/60 outline-dashed">
+    <span
+      className={cn(
+        'mr-2.5 inline-flex shrink-0 rounded-[6px] outline-1 outline-offset-2 outline-dashed',
+        tone === 'unread' ? 'outline-unread' : 'outline-foreground/60'
+      )}
+    >
       {children}
+    </span>
+  )
+}
+
+function FolderChip(): React.JSX.Element {
+  return (
+    <span className="inline-flex h-3.5 shrink-0 items-center gap-1 rounded-[4px] border border-border px-1">
+      <Folder className="size-2.5 text-muted-foreground" />
+      <span className={`${SKELETON} w-3`} />
     </span>
   )
 }
@@ -56,10 +82,7 @@ function UpdateDemo(): React.JSX.Element {
     >
       <div className="flex min-w-0 items-center gap-1.5">
         <AgentQuestionIcon className="size-3 shrink-0" />
-        <span className="inline-flex h-3.5 shrink-0 items-center gap-1 rounded-[4px] border border-border px-1">
-          <Folder className="size-2.5 text-muted-foreground" />
-          <span className={`${SKELETON} w-3`} />
-        </span>
+        <FolderChip />
         <span className={`${SKELETON} w-7`} />
         <Callout>
           <WorktreeCardStatusPill signal={{ kind: 'needs', count: 1 }} />
@@ -83,12 +106,43 @@ function UpdateDemo(): React.JSX.Element {
           </span>
         </Callout>
       </div>
+      {/* Why a line of its own: on a card that needs you, the question icon owns the lane and hides the dot. */}
+      <div className="flex min-w-0 items-center gap-1.5 border-t border-border pt-1.5 pb-0.5">
+        {/* Why negative margins: the real 20px lane, pulled toward the lines above without clipping its outline. */}
+        <span className="-my-1 -mr-2.5 -ml-0.5 inline-flex">
+          <Callout tone="unread">
+            {overlayNewCardUnreadStatus(
+              <span className="inline-flex size-5 items-center justify-center p-0.5">
+                <GitBranch className={branchStatusIconClassName} />
+              </span>,
+              true
+            )}
+          </Callout>
+        </span>
+        <FolderChip />
+        <span className={`${SKELETON} w-12 bg-foreground/[0.38]`} />
+        <span className={`${SKELETON} ml-auto w-3 bg-foreground/[0.38]`} />
+      </div>
     </div>
   )
 }
 
-function Bullet(): React.JSX.Element {
-  return <span aria-hidden="true" className="mt-1.5 size-1 shrink-0 rounded-full bg-background" />
+/** One caption, led by the glyph it explains. */
+function KeyItem({
+  glyph,
+  children
+}: {
+  glyph: React.ReactNode
+  children: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <li className="flex items-start gap-1.5">
+      <span aria-hidden="true" className="flex h-lh w-5 shrink-0 items-center justify-center">
+        {glyph}
+      </span>
+      <span className="min-w-0">{children}</span>
+    </li>
+  )
 }
 
 export function WorktreeCardsUpdateNotice(): React.JSX.Element | null {
@@ -129,14 +183,32 @@ export function WorktreeCardsUpdateNotice(): React.JSX.Element | null {
       </div>
       <UpdateDemo />
       <ul className="space-y-1 text-xs leading-snug">
-        <li className="flex items-start gap-1.5">
-          <Bullet />
+        <KeyItem
+          glyph={
+            <span className="size-[7px] rounded-full bg-unread-inverse ring-2 ring-unread-inverse/30" />
+          }
+        >
+          <Trans
+            i18n={i18n}
+            defaults={t(
+              'sidebar.worktreeCardsUpdateNotice.unreadCaption',
+              '<label>Blue dot:</label> unread'
+            )}
+            components={{ label: <span className="font-semibold" /> }}
+          />
+        </KeyItem>
+        <KeyItem glyph={<AgentQuestionIcon className="size-3" />}>
           {t('sidebar.worktreeCardsUpdateNotice.statusCaption', 'Title flags agents that need you')}
-        </li>
-        <li className="flex items-start gap-1.5">
-          <Bullet />
+        </KeyItem>
+        <KeyItem
+          glyph={
+            <span className="inline-flex h-3 items-center rounded-[3px] border border-background/45 px-0.5">
+              <Workflow className="size-2" />
+            </span>
+          }
+        >
           {t('sidebar.worktreeCardsUpdateNotice.childrenCaption', 'Parents sum up child worktrees')}
-        </li>
+        </KeyItem>
       </ul>
       {/* Why: points down at the cards this note describes. */}
       <span

@@ -1,10 +1,13 @@
-import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import {
   clearHostSettingOverride,
   getHostSettingOverride,
   setHostSettingOverride
 } from '../../../../shared/execution-host/host-setting-overrides'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { HostSettingOverrides } from '../../../../shared/execution-host/host-setting-overrides'
 
 type OverridesSlice = Pick<GlobalSettings, 'hostSettingOverrides'>
