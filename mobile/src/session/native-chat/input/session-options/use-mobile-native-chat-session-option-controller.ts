@@ -11,6 +11,7 @@ import type {
   SessionOptionValue,
   SessionOptionsSurface
 } from '../../../../../../src/shared/native-chat/input/native-chat-session-options'
+import { useNativeChatTurnNotedOptionPicks } from '../../../../../../src/shared/native-chat/input/session-options/use-native-chat-turn-noted-option-picks'
 import { mobileNativeChatScopeKey } from '../../conversation/mobile-native-chat-scope-key'
 import type { MobileNativeChatSendOutcome } from '../../composer/delivery/mobile-native-chat-send'
 import type { MobileNativeChatSessionOptionPickersProps } from './MobileNativeChatSessionOptionPickers'
@@ -84,6 +85,7 @@ export function useMobileNativeChatSessionOptionController(args: {
     agent,
     hostId,
     worktreeId,
+    isWorking,
     // Phone-only limit: only lists that can retire a model are fetched; desktop also enriches seed lists, without per-visit CLI probes.
     enabled:
       !activeChatStructured &&
@@ -105,16 +107,25 @@ export function useMobileNativeChatSessionOptionController(args: {
     agent: activeChatStructured ? null : agent,
     scopeKey: mobileNativeChatScopeKey(hostId, worktreeId, activeSessionTabId),
     reportedModel,
+    isWorking,
     dispatchCommand,
     onAgentPicker: handleAgentPicker,
     writeSettings
+  })
+  const noted = useNativeChatTurnNotedOptionPicks({
+    scope: activeChatStructured
+      ? mobileNativeChatScopeKey(hostId, worktreeId, activeSessionTabId)
+      : null,
+    isWorking,
+    snapshot: structuredSnapshot,
+    setOption: setStructuredOption
   })
   // Kept with nothing to pick (OMP lists no models): the "/" menu reads the chat's commands from it.
   const structuredController = useMemo<MobileNativeChatSessionOptionsController | null>(
     () =>
       activeChatStructured
         ? {
-            snapshot: structuredSnapshot,
+            snapshot: noted.snapshot,
             optionPickerRequest: structured.optionPickerRequest,
             optionSurface: structured.optionSurface,
             conversationCommands: structured.conversationCommands,
@@ -122,7 +133,7 @@ export function useMobileNativeChatSessionOptionController(args: {
             pendingId: structuredPendingId,
             appliesOnAttach: structured.appliesOnAttach,
             heldPick: structured.heldPick,
-            setOption: setStructuredOption,
+            setOption: noted.setOption,
             invokeAction: invokeStructuredAction,
             recordCommand: () => {}
           }
@@ -130,9 +141,9 @@ export function useMobileNativeChatSessionOptionController(args: {
     [
       activeChatStructured,
       invokeStructuredAction,
-      setStructuredOption,
+      noted.setOption,
+      noted.snapshot,
       structuredPendingId,
-      structuredSnapshot,
       structured.appliesOnAttach,
       structured.heldPick,
       structured.compactInstructions,
@@ -145,12 +156,12 @@ export function useMobileNativeChatSessionOptionController(args: {
     () =>
       activeChatStructured
         ? structuredController
-          ? { controller: structuredController, isWorking }
+          ? { controller: structuredController }
           : null
         : sessionOptions.snapshot.length > 0
-          ? { controller: sessionOptions, isWorking }
+          ? { controller: sessionOptions }
           : null,
-    [activeChatStructured, isWorking, sessionOptions, structuredController]
+    [activeChatStructured, sessionOptions, structuredController]
   )
 
   return { nativeChatSessionOptions, recordCommand: sessionOptions.recordCommand }

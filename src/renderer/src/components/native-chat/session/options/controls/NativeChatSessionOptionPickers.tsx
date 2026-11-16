@@ -22,6 +22,7 @@ import {
   selectedNativeChatChoice,
   nativeChatSessionOptionDisabledReason
 } from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-labels'
+import { hasNativeChatTurnOptionPick } from '../../../../../../../shared/native-chat/input/session-options/native-chat-turn-option-picks'
 import { sayNativeChatSessionOptionTranslated as say } from './native-chat-session-option-labels-text'
 import type { NativeChatOptionPickerRequest } from './native-chat-option-picker-request'
 import { runSessionOptionSurfaceCall } from './native-chat-session-option-surface-call'
@@ -33,7 +34,6 @@ import { NativeChatSessionOptionWriteGroup } from './NativeChatSessionOptionWrit
 export type NativeChatSessionOptionPickersProps = {
   surface: SessionOptionsSurface | null
   snapshot: SessionOptionDescriptor[]
-  isWorking: boolean
   pickerRequest?: NativeChatOptionPickerRequest | null
   /** Where focus lands after a visit that changed something; see `useNativeChatPickerFocusReturn`. */
   focusComposer?: () => void
@@ -68,6 +68,10 @@ function withPendingValue(
   return descriptor
 }
 
+function appliesAfterTurnText(t: Translate): string {
+  return t('components.native-chat.composer.appliesAfterTurn', 'Applies when this turn finishes')
+}
+
 // Keep visible value text inside the accessible name for voice control (WCAG 2.5.3).
 function pillAccessibleName(title: string, value: string, t: Translate = translate): string {
   return value === title
@@ -87,6 +91,7 @@ function PickerTrigger(props: {
   disabled: boolean
   disabledReason: string | null
   dispatched: boolean
+  appliesAfterTurn: boolean
   triggerRef: React.Ref<HTMLButtonElement>
   onKeyDown: React.KeyboardEventHandler<HTMLButtonElement>
 }): React.JSX.Element {
@@ -139,6 +144,7 @@ function PickerTrigger(props: {
               )}
             </div>
           ) : null}
+          {props.appliesAfterTurn ? <div>{appliesAfterTurnText(t)}</div> : null}
         </div>
       </TooltipContent>
     </Tooltip>
@@ -149,7 +155,6 @@ function SessionOptionPopover(props: {
   demandModelCatalog?: () => void
   model: SessionOptionDescriptor
   options: readonly SessionOptionDescriptor[]
-  isWorking: boolean
   /** Only the descriptor being saved holds its write controls. */
   pendingIds: ReadonlySet<string>
   request: NativeChatOptionPickerRequest | null
@@ -160,11 +165,9 @@ function SessionOptionPopover(props: {
   const t = useTranslate()
   const { model, options, pendingIds, demandModelCatalog } = props
   const canOpen = [model, ...options].some(
-    (descriptor) =>
-      descriptor.settable &&
-      !pendingIds.has(descriptor.id) &&
-      (!props.isWorking || descriptor.transport === 'agent-session')
+    (descriptor) => descriptor.settable && !pendingIds.has(descriptor.id)
   )
+  const appliesAfterTurn = hasNativeChatTurnOptionPick([model, ...options])
   // Why here: this unmounts with the pill, so a picker that went away comes back closed.
   const [open, setOpen] = useState(false)
   const [seenRequest, setSeenRequest] = useState<NativeChatOptionPickerRequest | null>(null)
@@ -254,6 +257,7 @@ function SessionOptionPopover(props: {
         dispatched={
           sessionOptionDispatchUnconfirmed(model) || options.some(sessionOptionDispatchUnconfirmed)
         }
+        appliesAfterTurn={appliesAfterTurn}
         triggerRef={focusReturn.triggerRef}
         // Why: a popover trigger opens on Enter and Space only; a menu also takes ArrowDown.
         onKeyDown={(event) => {
@@ -336,6 +340,14 @@ function SessionOptionPopover(props: {
           onSet={set}
           onAction={act}
         />
+        {appliesAfterTurn ? (
+          <div
+            role="status"
+            className="border-t border-border px-3 py-1.5 text-xs text-muted-foreground"
+          >
+            {appliesAfterTurnText(t)}
+          </div>
+        ) : null}
       </PopoverContent>
     </Popover>
   )
@@ -344,7 +356,6 @@ function SessionOptionPopover(props: {
 function NativeChatSessionOptionPickersInner({
   surface,
   snapshot,
-  isWorking,
   pickerRequest,
   focusComposer
 }: NativeChatSessionOptionPickersProps): React.JSX.Element | null {
@@ -379,7 +390,6 @@ function NativeChatSessionOptionPickersInner({
         demandModelCatalog={surface.demandModelCatalog}
         model={model}
         options={options}
-        isWorking={isWorking}
         pendingIds={new Set(pending.keys())}
         request={pickerRequest ?? null}
         onSet={(descriptor, value) =>

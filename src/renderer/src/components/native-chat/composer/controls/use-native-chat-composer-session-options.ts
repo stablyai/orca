@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { useNativeChatSessionOptionCommand } from '../../session/options/terminal/use-native-chat-session-option-command'
 import { useNativeChatSessionOptions } from '../../session/options/terminal/use-native-chat-session-options'
 import type { NativeChatComposerProps } from '../native-chat-composer-types'
@@ -5,6 +6,11 @@ import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
 } from '../../../../../../shared/native-chat/input/native-chat-session-options'
+import { useNativeChatTurnNotedOptionPicks } from '../../../../../../shared/native-chat/input/session-options/use-native-chat-turn-noted-option-picks'
+
+const NO_STRUCTURED_SNAPSHOT: SessionOptionDescriptor[] = []
+const refuseStructuredOption = (): Promise<never> =>
+  Promise.reject(new Error('No structured chat is attached.'))
 
 type ComposerSessionOptionsArgs = Pick<
   NativeChatComposerProps,
@@ -17,6 +23,7 @@ type ComposerSessionOptionsArgs = Pick<
   | 'onSwitchToTerminal'
   | 'readTerminalScreen'
   | 'structuredTransport'
+  | 'isWorking'
 > &
   Pick<Parameters<typeof useNativeChatSessionOptionCommand>[0], 'disabled' | 'resolveTarget'>
 
@@ -31,7 +38,8 @@ export function useNativeChatComposerSessionOptions({
   onSwitchToTerminal,
   readTerminalScreen,
   paneKey,
-  structuredTransport
+  structuredTransport,
+  isWorking = false
 }: ComposerSessionOptionsArgs): {
   isDispatching: boolean
   pty: ReturnType<typeof useNativeChatSessionOptions>
@@ -52,12 +60,29 @@ export function useNativeChatComposerSessionOptions({
     dispatchCommand: dispatch,
     onAgentPicker: onSwitchToTerminal,
     readTerminalScreen,
-    paneKey
+    paneKey,
+    isWorking
   })
+  const structuredSurface = structuredTransport?.optionsSurface ?? null
+  const structured = useNativeChatTurnNotedOptionPicks({
+    scope: structuredTransport?.sessionId ?? null,
+    isWorking,
+    snapshot: structuredTransport?.optionSnapshot ?? NO_STRUCTURED_SNAPSHOT,
+    setOption: structuredSurface?.setOption ?? refuseStructuredOption
+  })
+  const notingSurface = useMemo(
+    () =>
+      structuredSurface && {
+        ...structuredSurface,
+        getSnapshot: () => structured.snapshot,
+        setOption: structured.setOption
+      },
+    [structuredSurface, structured.snapshot, structured.setOption]
+  )
   return {
     isDispatching,
     pty,
-    surface: structuredTransport?.optionsSurface ?? pty.surface,
-    snapshot: structuredTransport?.optionSnapshot ?? pty.snapshot
+    surface: notingSurface ?? pty.surface,
+    snapshot: structuredTransport ? structured.snapshot : pty.snapshot
   }
 }

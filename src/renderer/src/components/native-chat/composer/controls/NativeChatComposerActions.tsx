@@ -298,7 +298,6 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
         <NativeChatSessionOptionPickers
           surface={sessionOptionsSurface}
           snapshot={sessionOptionsSnapshot}
-          isWorking={isWorking}
           pickerRequest={sessionOptionsPickerRequest}
           focusComposer={focusComposer}
         />

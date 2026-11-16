@@ -34,7 +34,6 @@ function ModelPicker() {
         setOption: async () => ({ snapshot: [] }),
         invokeAction: async () => ({ snapshot: [] })
       }}
-      isWorking={true}
       snapshot={[
         {
           id: 'model',

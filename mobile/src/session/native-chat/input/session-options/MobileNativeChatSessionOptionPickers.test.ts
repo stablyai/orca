@@ -2,7 +2,6 @@ import { createElement, useState, type ReactNode } from 'react'
 import { act, type ReactTestRenderer } from 'react-test-renderer'
 import { createWithQueryClient } from '../../../../test-support/query-client-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AccessibilityInfo, Platform } from 'react-native'
 
 import type {
   SessionOptionDescriptor,
@@ -20,7 +19,6 @@ import {
 
 vi.mock('../../../../components/controls/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
 vi.mock('react-native', () => ({
-  AccessibilityInfo: { announceForAccessibilityWithOptions: vi.fn() },
   ActivityIndicator: 'ActivityIndicator',
   Keyboard: { dismiss: vi.fn() },
   Platform: { OS: 'ios' },
@@ -38,7 +36,6 @@ vi.mock('lucide-react-native', () => ({
   ChevronRight: 'ChevronRight',
   FilePenLine: 'FilePenLine',
   Hand: 'Hand',
-  LockKeyhole: 'LockKeyhole',
   ShieldAlert: 'ShieldAlert',
   ShieldCheck: 'ShieldCheck',
   X: 'X'
@@ -75,7 +72,6 @@ describe('MobileNativeChatSessionOptionPickers', () => {
 
   const mount = (
     snapshot: SessionOptionDescriptor[],
-    isWorking = false,
     requestedPage: string | null = null,
     busy: { pendingId?: string; sendInFlight?: boolean } = {}
   ) => {
@@ -86,13 +82,12 @@ describe('MobileNativeChatSessionOptionPickers', () => {
       invokeAction,
       recordCommand: vi.fn()
     }
-    function Pickers({ working }: { working: boolean }) {
+    function Pickers() {
       const [presentation, setPresentation] = useState<MobileNativeChatPickerPresentation | null>(
         requestedPage ? { page: requestedPage, refocus: false } : null
       )
       return createElement(MobileNativeChatSessionOptionPickers, {
         controller,
-        isWorking: working,
         sendInFlight: busy.sendInFlight,
         presentation,
         onDrawerOpen: (page) => setPresentation({ page, refocus: false }),
@@ -100,11 +95,11 @@ describe('MobileNativeChatSessionOptionPickers', () => {
       })
     }
     act(() => {
-      renderer = createWithQueryClient(createElement(Pickers, { working: isWorking }))
+      renderer = createWithQueryClient(createElement(Pickers))
     })
-    return (working: boolean, nextSnapshot = snapshot): void => {
+    return (nextSnapshot = snapshot): void => {
       controller.snapshot = nextSnapshot
-      act(() => renderer!.update(createElement(Pickers, { working })))
+      act(() => renderer!.update(createElement(Pickers)))
     }
   }
 
@@ -134,8 +129,6 @@ describe('MobileNativeChatSessionOptionPickers', () => {
   }
 
   beforeEach(() => {
-    Platform.OS = 'ios'
-    vi.mocked(AccessibilityInfo.announceForAccessibilityWithOptions).mockClear()
     setOption.mockReset()
     setOption.mockResolvedValue(true)
     invokeAction.mockReset()
@@ -149,7 +142,7 @@ describe('MobileNativeChatSessionOptionPickers', () => {
   })
 
   it('names both the saved and running permission on the model pill and in the drill-in', () => {
-    mount([MODEL_DESCRIPTOR, DEFERRED_PERMISSION_DESCRIPTOR], false, 'permissionMode')
+    mount([MODEL_DESCRIPTOR, DEFERRED_PERMISSION_DESCRIPTOR], 'permissionMode')
     expect(pill('Model').props.accessibilityLabel).toMatch(/Full access.*Ask for approval$/)
     const texts = findAllByHostType(findByHostType(renderer!.root, 'BottomDrawer'), 'Text').map(
       (node) => node.props.children
@@ -158,7 +151,7 @@ describe('MobileNativeChatSessionOptionPickers', () => {
   })
 
   it('shows the saved permission as the home row value and the running one in its subtitle', () => {
-    mount([MODEL_DESCRIPTOR, DEFERRED_PERMISSION_DESCRIPTOR], false, 'model')
+    mount([MODEL_DESCRIPTOR, DEFERRED_PERMISSION_DESCRIPTOR], 'model')
     const row = renderer!.root.find(
       (node) =>
         String(node.type) === 'Pressable' &&
@@ -181,11 +174,11 @@ describe('MobileNativeChatSessionOptionPickers', () => {
       transport: 'agent-session',
       settable: false
     }
-    const update = mount([placeholder], true, 'model')
+    const update = mount([placeholder], 'model')
     expect(pill('Model').props.disabled).toBe(true)
     act(() => pill('Model').props.onPress())
     expect(findAllByHostType(renderer!.root, 'BottomDrawer')).toHaveLength(0)
-    update(false, [placeholder, PERMISSION_DESCRIPTOR])
+    update([placeholder, PERMISSION_DESCRIPTOR])
     expect(pill('Model').props.disabled).toBe(false)
     expect(findAllByHostType(renderer!.root, 'BottomDrawer')).toHaveLength(0)
     await act(async () => pill('Model').props.onPress())

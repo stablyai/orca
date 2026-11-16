@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { NativeChatSessionOptionPickers } from './NativeChatSessionOptionPickers'
@@ -41,7 +41,7 @@ it('exposes the current selection on keyboard focus and follows the chat snapsho
   }
   const picker = (snapshot: SessionOptionDescriptor[]) => (
     <TooltipProvider>
-      <NativeChatSessionOptionPickers snapshot={snapshot} surface={surface} isWorking={false} />
+      <NativeChatSessionOptionPickers snapshot={snapshot} surface={surface} />
     </TooltipProvider>
   )
   const view = render(picker([model, effort]))
@@ -76,48 +76,4 @@ it('exposes the current selection on keyboard focus and follows the chat snapsho
   expect(document.getElementById(descriptionId!)?.textContent).toContain(
     'Sent to the agent — not confirmed'
   )
-})
-
-it('keeps a working model-only picker inspectable without allowing changes', async () => {
-  const model: SessionOptionDescriptor = {
-    id: 'model',
-    label: 'Model',
-    category: 'model',
-    transport: 'catalog',
-    settable: true,
-    valueSource: 'applied',
-    kind: {
-      type: 'select',
-      currentValue: 'chat-model',
-      choices: [{ value: 'chat-model', label: 'Chat model' }]
-    }
-  }
-  const surface = {
-    getSnapshot: () => [model],
-    subscribe: () => () => {},
-    setOption: async () => ({ snapshot: [model] }),
-    invokeAction: async () => ({ snapshot: [model] })
-  }
-  const picker = (isWorking: boolean) => (
-    <TooltipProvider>
-      <NativeChatSessionOptionPickers snapshot={[model]} surface={surface} isWorking={isWorking} />
-    </TooltipProvider>
-  )
-  const view = render(picker(true))
-  const informationalTrigger = screen.getByRole('button', { name: 'Model Chat model' })
-  expect(informationalTrigger.getAttribute('aria-disabled')).toBe('true')
-  fireEvent.keyDown(window, { key: 'Tab' })
-  act(() => informationalTrigger.focus())
-  expect(document.activeElement).toBe(informationalTrigger)
-  expect((await screen.findByRole('tooltip')).textContent).toBe('Chat model')
-  fireEvent.click(informationalTrigger)
-  for (const key of ['Enter', ' ', 'ArrowDown']) {
-    fireEvent.keyDown(informationalTrigger, { key })
-  }
-  expect(screen.queryByRole('dialog')).toBeNull()
-  view.rerender(picker(false))
-  expect(document.activeElement).toBe(informationalTrigger)
-  expect(informationalTrigger.getAttribute('aria-disabled')).toBeNull()
-  fireEvent.click(informationalTrigger)
-  expect(await screen.findByRole('dialog')).not.toBeNull()
 })
