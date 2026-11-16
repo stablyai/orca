@@ -55,7 +55,7 @@ import {
   removeManagedStatusLine,
   type ClaudeCompatibleHookSettings
 } from './hooks/hook-settings'
-import { claudeAcceptsExecFormHooks } from './cli-capabilities/claude-hook-event-versions'
+import { claudeAcceptsAsyncHooks, claudeAcceptsExecFormHooks } from './cli-capabilities/claude-hook-event-versions'
 import { getManagedEventHook } from './hooks/claude-managed-event-hook'
 import {
   getClaudeManagedHookPlan,
@@ -206,10 +206,14 @@ export class ClaudeHookService {
     const plan = this.managedHookPlan(options)
     const exePath = this.usesWindowsEntry ? installWindowsClaudeHookExecutable(scriptPath) : null
     const execForm = claudeAcceptsExecFormHooks(options.claudeVersion)
+    const asyncObservational = claudeAcceptsAsyncHooks(options.claudeVersion)
     let nextConfig = applyManagedHooks(
       config,
       (eventName) =>
-        getManagedEventHook(eventName, scriptPath, this.options.settings, exePath, { execForm }),
+        getManagedEventHook(eventName, scriptPath, this.options.settings, exePath, {
+          execForm,
+          asyncObservational
+        }),
       getManagedScriptFileName(this.options.settings),
       plan,
       process.platform !== 'win32'

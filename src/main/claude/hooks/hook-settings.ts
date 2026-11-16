@@ -53,8 +53,12 @@ export const OPENCLAUDE_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
   usesWindowsCompatLauncher: false
 }
 
-/** Exec form (`args`) is only valid for Claude versions that support it. */
-export type NativeHookFormOptions = { execForm?: boolean }
+/** Exec form (`args`) and `async` are only valid for Claude versions that support them. */
+export type NativeHookFormOptions = {
+  execForm?: boolean
+  /** Mark observational events `async: true` so Claude's turn never waits on their hook process. */
+  asyncObservational?: boolean
+}
 
 export function getConfigPath(settings = CLAUDE_HOOK_SETTINGS, configDir?: string): string {
   return join(configDir ?? join(homedir(), settings.configDirName), 'settings.json')
