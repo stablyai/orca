@@ -69,6 +69,7 @@ describe('ACP model catalog probe for Antigravity', () => {
       expect.objectContaining({
         command: '/usr/local/bin/agy',
         args: ['models'],
+        cwd: '/Users/tester',
         envToDelete: expect.arrayContaining(['GEMINI_API_KEY', 'GOOGLE_API_KEY'])
       }),
       expect.objectContaining({ site: 'antigravity-model-catalog-probe' })
