@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
-import type { HostWorktreeInfo } from '../worktree/home-worktree-info'
+import type { RuntimeWorktreeAgentRow } from '../../../src/shared/worktree/catalog/runtime-worktree-contracts'
+import type { HostWorktreeInfo } from '../worktree/catalog/home-worktree-info'
 import type { AgentListInput } from './agent-list-rows'
 import { matchAgentlessWorkspaces } from './agent-list-workspace-matches'
 
@@ -16,7 +16,7 @@ function input(info: Partial<HostWorktreeInfo>, connected = true): AgentListInpu
     hosts: [{ id: 'h1' }],
     hostStates: { h1: connected ? 'connected' : 'disconnected' },
     worktreeInfo: {
-      h1: { hostId: 'h1', totalWorktrees: 0, activeCount: 0, lastActiveWorktree: null, ...info }
+      h1: { hostId: 'h1', totalWorktrees: 0, activeCount: 0, ...info }
     },
     now: 0
   }
