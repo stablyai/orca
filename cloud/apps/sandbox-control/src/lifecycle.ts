@@ -25,7 +25,7 @@ import { applyQueuedRevokes } from './grant-revokes'
 import { ENTRY_POINTS_PROBE, ensureEntryPoints, entryPointsBehind, installEntryPoints, parseEntryPointsProbe } from './golden-images'
 import { RUNTIME_REFRESH_SCRIPT, type RuntimeBundle } from './runtime-bundles'
 import { memberPlaceholder, type MemberGitIdentity } from './github-user-tokens'
-import { actingMember, connectedMembers, memberCoauthors, memberGitConfigs } from './member-git'
+import { connectedMembers, memberCoauthors, memberGitConfigs, soloMember } from './member-git'
 import type { RetentionConfig } from './retention'
 import { ProviderError, type ProviderSandboxState, type SandboxProviderApi } from './sandbox-provider'
 import { egressAccountRoutes, egressSecretHosts, placeholderValues, secretPlaceholder, type SecretEgressHost } from './secret-egress'
@@ -1260,16 +1260,7 @@ async function installMemberGit(deps: LifecycleDeps, row: SandboxRow, sessionId:
   const coauthors = await memberCoauthors(deps.db, row, new Set(configs.map((config) => config.userId)))
   // GH-SOLO: the only person who can use the workspace acts as themselves in the VM with no attested sender
   // (a TUI typed into directly has none), as the egress proxy already allows (memberMayAct).
-  const acting = await actingMember(deps.db, row, deps.now(), null)
-  const soloCandidate = 'userId' in acting && acting.until === null ? acting.userId : null
-  // A grant still being issued to someone else (their device may already be pairing) means not solo.
-  const others = soloCandidate
-    ? await deps.db
-        .prepare(`SELECT COUNT(*) AS n FROM workspace_grants WHERE sandbox_id = ? AND status IN ('issuing', 'active') AND user_id <> ?`)
-        .bind(row.id, soloCandidate)
-        .first<{ n: number }>()
-    : null
-  const solo = soloCandidate && (others?.n ?? 1) === 0 ? soloCandidate : null
+  const solo = await soloMember(deps.db, row)
   const encode = (value: unknown) => btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify(value))))
   const result = await deps.provider.runCommand(sessionId, {
     command: MEMBERS_COMMAND,
@@ -1280,6 +1271,14 @@ async function installMemberGit(deps: LifecycleDeps, row: SandboxRow, sessionId:
   })
   if (result.exitCode !== 0) {
     throw new Error(`members_exit_${result.exitCode}`)
+  }
+  // GH-SOLO: a grant may have started between the read above and the VM write (it drops the mark first, and
+  // this write could have put it back). Re-check now; if it no longer holds, drop it, failing closed.
+  if (solo && (await soloMember(deps.db, row)) !== solo) {
+    const dropped = await deps.provider.runCommand(sessionId, { command: 'bash', args: ['-c', DROP_SOLO_SCRIPT], sudo: true, timeoutMs: 15_000 })
+    if (dropped.exitCode !== 0) {
+      throw new Error(`drop_solo_exit_${dropped.exitCode}`)
+    }
   }
   if (row.git_setup_failed_at) {
     await deps.db.prepare('UPDATE sandboxes SET git_setup_failed_at = NULL WHERE id = ?').bind(row.id).run()

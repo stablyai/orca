@@ -10,6 +10,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { generateGrantRecipientKey } from '../../../../src/main/cloud-workspaces/sealed-grant-node'
 import { GRANT_COMMAND } from '../src/grants'
 import { DROP_SOLO_SCRIPT, MEMBERS_COMMAND } from '../src/lifecycle'
+import { soloMember } from '../src/member-git'
+import { getSandbox } from '../src/store'
 import { createHarness } from './harness'
 
 const IDENTITY = fileURLToPath(new URL('../image/vm/orca-git-identity', import.meta.url).href)
@@ -56,37 +58,78 @@ describe('orca-git-identity in a one-person workspace', () => {
   })
 })
 
-describe('the control plane marks a workspace solo only while one person can use it', () => {
-  it('sends ORCA_SOLO_MEMBER for the owner alone; drops the mark before pairing anyone else, then sends none', async () => {
-    const h = await createHarness({ EGRESS_PROXY_URL: 'https://sandbox.test/v1/egress/proxy', SECRETS_KEK: Buffer.alloc(32, 7).toString('base64'), OPERATOR_TOKEN: 'o'.repeat(40) }, {
+const OP = 'o'.repeat(40)
+const REPO = 'https://github.com/acme/app'
+
+async function workspace(extra: Record<string, string> = {}) {
+  const h = await createHarness(
+    { EGRESS_PROXY_URL: 'https://sandbox.test/v1/egress/proxy', SECRETS_KEK: Buffer.alloc(32, 7).toString('base64'), OPERATOR_TOKEN: OP, ...extra },
+    {
       credentials: { authorizationFor: async () => 'Bearer ghs_app' },
       github: { tokenForRepo: async () => ({ token: 'ghs_repo', expiresAt: h.now() + 3_600_000 }), installationForRepo: async () => null } as never
+    }
+  )
+  const as = (sub: string) => h.token(sub, 'acme', 'sandbox', { org_role: 'member' })
+  const created = await h.call('POST', '/v1/sandboxes', { bearer: await as('alice'), body: { workspaceId: 'ws-1', machineSize: 'standard', repo: { url: REPO }, visibility: 'team' } })
+  const id = created.body.sandbox.id as string
+  const connect = (userId: string, githubUserId: number) =>
+    h.call('POST', '/v1/internal/dev/member-github', { bearer: OP, body: { accountId: 'org:acme', userId, repoUrl: REPO, login: `${userId}-gh`, githubUserId, name: userId } })
+  const grant = async (userId: string) =>
+    h.call('POST', `/v1/team/workspaces/${id}/grants`, {
+      bearer: await as(userId),
+      body: { recipientPublicKeyB64: generateGrantRecipientKey().publicKeyB64, deviceLabel: userId, deviceKind: 'desktop' }
     })
-    const as = (sub: string) => h.token(sub, 'acme', 'sandbox', { org_role: 'member' })
-    const created = await h.call('POST', '/v1/sandboxes', {
-      bearer: await as('alice'),
-      body: { workspaceId: 'ws-1', machineSize: 'standard', repo: { url: 'https://github.com/acme/app' }, visibility: 'team' }
-    })
-    const id = created.body.sandbox.id as string
-    await h.call('POST', '/v1/internal/dev/member-github', {
-      bearer: 'o'.repeat(40),
-      body: { accountId: 'org:acme', userId: 'alice', repoUrl: 'https://github.com/acme/app', login: 'alice-gh', githubUserId: 11, name: 'Alice' }
-    })
-    // A restart re-syncs member identities: alone, she's the solo member.
-    expect((await h.call('POST', `/v1/sandboxes/${id}/restart`, { bearer: await as('alice') })).status).toBe(200)
-    const syncs = () => h.vercel.commands.filter((c) => c.command === MEMBERS_COMMAND)
-    expect(syncs().at(-1)!.env.ORCA_SOLO_MEMBER).toBe('alice')
-    const before = h.vercel.commands.length
-    const grant = await h.call('POST', `/v1/team/workspaces/${id}/grants`, {
-      bearer: await as('bob'),
-      body: { recipientPublicKeyB64: generateGrantRecipientKey().publicKeyB64, deviceLabel: 'b', deviceKind: 'desktop' }
-    })
-    expect(grant.status).toBe(200)
-    const after = h.vercel.commands.slice(before)
+  const syncs = () => h.vercel.commands.filter((c) => c.command === MEMBERS_COMMAND)
+  const restart = async () => expect((await h.call('POST', `/v1/sandboxes/${id}/restart`, { bearer: await as('alice') })).status).toBe(200)
+  return { h, as, id, connect, grant, syncs, restart }
+}
+
+describe('the control plane marks a workspace solo only while one person can use it', () => {
+  it('sends ORCA_SOLO_MEMBER for the owner alone; drops the mark before pairing anyone else, then sends none', async () => {
+    const t = await workspace()
+    await t.connect('alice', 11)
+    await t.restart()
+    expect(t.syncs().at(-1)!.env.ORCA_SOLO_MEMBER).toBe('alice')
+    const before = t.h.vercel.commands.length
+    expect((await t.grant('bob')).status).toBe(200)
+    const after = t.h.vercel.commands.slice(before)
     const drop = after.findIndex((c) => c.command === 'bash' && c.args?.includes(DROP_SOLO_SCRIPT))
     const pair = after.findIndex((c) => c.command === GRANT_COMMAND)
     expect(drop).toBeGreaterThanOrEqual(0)
     expect(drop).toBeLessThan(pair)
-    expect(syncs().at(-1)!.env.ORCA_SOLO_MEMBER).toBeUndefined()
+    expect(t.syncs().at(-1)!.env.ORCA_SOLO_MEMBER).toBeUndefined()
+  })
+
+  it('review HIGH: shared with the cap off, a grantee who sent last is never marked solo (the owner has no grant row)', async () => {
+    const t = await workspace({ MEMBER_GIT_SHARED_MAX_MINUTES: '0' })
+    await t.connect('alice', 11)
+    await t.connect('bob', 22)
+    expect((await t.grant('bob')).status).toBe(200)
+    expect((await t.h.call('POST', `/v1/team/workspaces/${t.id}/sent`, { bearer: await t.as('bob') })).status).toBe(200)
+    await t.restart()
+    expect(t.syncs().at(-1)!.env.ORCA_SOLO_MEMBER).toBeUndefined()
+    expect(await soloMember(t.h.env.SANDBOX_DB, (await getSandbox(t.h.env.SANDBOX_DB, t.id))!)).toBeNull()
+  })
+
+  it('review medium: a grant that starts while the members write is in flight drops the mark again after it', async () => {
+    const t = await workspace()
+    await t.connect('alice', 11)
+    // Bob's grant row appears (issuing) between the sync's read and its VM write.
+    t.h.vercel.commandHandler = (params) => {
+      if (params.command === MEMBERS_COMMAND) {
+        t.h.raw
+          .prepare(`INSERT INTO workspace_grants (id, sandbox_id, account_id, user_id, device_kind, device_label, status, created_at) VALUES ('grt_race', ?, 'org:acme', 'bob', 'desktop', 'b', 'issuing', 1)`)
+          .run(t.id)
+        return { exitCode: 0, stdout: '{"members":1,"devices":0}\n', stderr: '' }
+      }
+      return undefined
+    }
+    const before = t.h.vercel.commands.length
+    await t.restart()
+    const after = t.h.vercel.commands.slice(before)
+    const write = after.findIndex((c) => c.command === MEMBERS_COMMAND && c.env.ORCA_SOLO_MEMBER === 'alice')
+    const drop = after.findIndex((c, i) => i > write && c.command === 'bash' && c.args?.includes(DROP_SOLO_SCRIPT))
+    expect(write).toBeGreaterThanOrEqual(0)
+    expect(drop).toBeGreaterThan(write)
   })
 })
