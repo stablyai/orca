@@ -223,7 +223,8 @@ function AgentLaunchPickerPane({
   const source = draftForEntry?.(entry)
   const setup = useAgentPickerSetup({
     entry,
-    initial: source,
+    // Without a form source, the form's own value is what a kept setup must still derive from.
+    initial: source ?? selected,
     seed: selected ?? source,
     surface: selected?.surface,
     draftScope,

@@ -327,12 +327,7 @@ export const AgentLaunchPicker = memo(
                 entries={entries}
                 initialQuery={initialQuery}
                 searchInputRef={setSearchInput}
-                leadingItems={choices?.map((choice) => (
-                  <DropdownMenuItem key={choice.id} onSelect={choice.onSelect}>
-                    {choice.icon}
-                    {choice.label}
-                  </DropdownMenuItem>
-                ))}
+                choices={choices}
                 onSelectBlankTerminal={onSelectBlankTerminal}
                 value={value}
                 draftForEntry={draftForEntry}

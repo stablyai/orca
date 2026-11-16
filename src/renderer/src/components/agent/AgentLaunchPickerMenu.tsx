@@ -2,7 +2,7 @@ import {
   selectWorktreesByRepo,
   selectFolderWorkspaces
 } from '@/store/workspaces/catalog/workspace-record-fields'
-import { useEffect, useRef, useState, type ComponentProps, type ReactNode, type Ref } from 'react'
+import { useEffect, useRef, useState, type ComponentProps, type Ref } from 'react'
 import { useAppStore } from '@/store/index'
 import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { Input } from '@/components/ui/input'
@@ -11,6 +11,7 @@ import { agentPickerBlankTerminalMatches } from '@/lib/agent-catalog/agent-picke
 import { AgentDefaultContextMenu } from './agent-combobox-items'
 import { AgentPickerMenuRow, type AgentPickerMenuLaunch } from './AgentLaunchPickerMenuRow'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
+import { choiceMatches, type AgentPickerChoice } from './agent-picker-search-rows'
 import { useTranslate } from '@/i18n/use-translate'
 import { retireAgentPickerDrafts, type AgentPickerSetupIdentity } from './AgentLaunchSetupButton'
 import type { NewTabAgentMenuModel } from './launch-menu/new-tab-agent-menu-model'
@@ -83,7 +84,7 @@ export function AgentLaunchPickerMenu({
   defaultAgent,
   onSetDefault,
   onSelectBlankTerminal,
-  leadingItems
+  choices
 }: {
   model?: NewTabAgentMenuModel
   draftScope?: object
@@ -104,7 +105,8 @@ export function AgentLaunchPickerMenu({
   defaultAgent?: AgentPickerEntry['agent'] | 'blank' | null
   onSetDefault?: (agent: AgentPickerEntry['agent'] | 'blank') => void
   onSelectBlankTerminal?: () => void
-  leadingItems?: ReactNode
+  /** Non-agent rows; a search lists the ones it matches and Enter can pick them. */
+  choices?: readonly AgentPickerChoice[]
 }) {
   const t = useTranslate()
   useRetiredAgentPickerDrafts(entries, draftScope, mode, setupDisabled)
@@ -160,6 +162,9 @@ export function AgentLaunchPickerMenu({
   const firstSetup =
     showBlankTerminal || firstEntry ? undefined : setups.find((setup) => enabled(setup.entry))
   const showSearchDefault = searchFocused && query.trim().length > 0
+  const shownChoices = (choices ?? []).filter(
+    (choice) => !query.trim() || choiceMatches(choice, query)
+  )
   return (
     <div ref={root} data-agent-launch-picker="true">
       {!hideSearch ? (
@@ -206,7 +211,6 @@ export function AgentLaunchPickerMenu({
         </div>
       ) : null}
       <div data-agent-picker-results className="max-h-64 overflow-y-auto scrollbar-sleek">
-        {leadingItems}
         <div data-agent-picker-agent-results>
           {showBlankTerminal ? (
             <AgentDefaultContextMenu
@@ -273,7 +277,13 @@ export function AgentLaunchPickerMenu({
               />
             )
           })}
-          {!showBlankTerminal && !visible.length && !setups.length ? (
+          {shownChoices.map((choice) => (
+            <DropdownMenuItem key={choice.id} disabled={disabled} onSelect={choice.onSelect}>
+              {choice.icon}
+              {choice.label}
+            </DropdownMenuItem>
+          ))}
+          {!showBlankTerminal && !visible.length && !setups.length && !shownChoices.length ? (
             <DropdownMenuItem disabled>
               {t('auto.components.agent.AgentCombobox.579c768bde', 'No agents match your search.')}
             </DropdownMenuItem>

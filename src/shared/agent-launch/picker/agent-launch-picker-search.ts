@@ -131,5 +131,13 @@ export function searchAgentPickerModels(
           .map((model) => ({ entry, model, choices: { model: model.id }, label: model.label }))
       : []
   )
-  return [...named, ...searchAgentPickerSetups(entries, query, 24)]
+  // A named agent's rows already list its models; a setup row naming one again would repeat it.
+  const listed = new Set(named.map(({ entry, model }) => `${entry.agent}\u0000${model.id}`))
+  return [
+    ...named,
+    ...searchAgentPickerSetups(entries, query, 24).filter(
+      ({ entry, model, choices }) =>
+        choices.options?.effort !== undefined || !listed.has(`${entry.agent}\u0000${model.id}`)
+    )
+  ]
 }
