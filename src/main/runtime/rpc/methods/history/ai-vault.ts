@@ -26,7 +26,7 @@ import {
 import {
   ensureStructuredAgentSessionHostUnlessRefused,
   tryEnsureStructuredAgentSessionHostForResume
-} from '../../../agent-session/structured-agent-session-host-refusal'
+} from '../../../agent-session/installation/structured-agent-session-host-refusal'
 import {
   clientOpensStructuredChatFromHistory,
   supportsStructuredAgentSessions

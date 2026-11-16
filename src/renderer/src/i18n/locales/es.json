@@ -429,7 +429,6 @@
       "defaultSurfaceKeptChat_other": "{{agents}} siguen como chats, como lo configuraste.",
       "defaultSurfaceSetAllChat": "Poner todos en Chat",
       "defaultSurfaceSetAllTerminal": "Poner todos en Terminal",
-      "sameAsChoice": "Igual que {{agent}} · {{choice}}",
       "modelListFallback": "Lista integrada. Orca no pudo obtener una lista de modelos de este host.",
       "chatUnavailableOnWindows": "{{value0}} Chat aún no está disponible en Windows, así que {{value0}} se abre en una terminal en este host. Los chats en un host macOS o Linux siguen funcionando.",
       "undetectedCommandHint": "Si la CLI de {{agent}} está instalada fuera de PATH, introduce la ruta completa a su ejecutable en este host."
@@ -457,9 +456,6 @@
         "extraArgs": "Argumentos CLI adicionales",
         "launchOptions": "Modelo y permisos",
         "savedLaunchOptions": "Opciones guardadas: {{value0}}. Los servidores antiguos usan su propia configuración de permisos."
-      },
-      "actionPermissions": {
-        "sameAsAgent": "Igual que {{agent}}"
       }
     },
     "ssh": {
@@ -5740,8 +5736,7 @@
           "issueCommand": "Comando de issue",
           "newVmRecipe": "Nueva receta de VM",
           "vmRecipe": "Receta de VM",
-          "thisRepository": "este repositorio",
-          "alwaysTrustRepo": "Confiar siempre en <code>orca.yaml</code> de <repo/>"
+          "thisRepository": "este repositorio"
         },
         "PendingWorktreeRow": {
           "af21e953d1": "Cancelar creación del worktree",
@@ -21607,6 +21602,10 @@
     },
     "wslMoved": {
       "movedToHost": "Movido al host de {{distro}}",
+      "sectionTitle": "Movidos a hosts de WSL ({{count}})",
+      "hide": "Ocultar de esta lista",
+      "hiddenToast": "{{name}} se ocultó de esta lista",
+      "hiddenToastDescription": "“Usar de nuevo en este equipo” sigue en su menú, bajo el host de {{distro}}.",
       "useHere": "Usar de nuevo en este equipo",
       "useHereTitle": "¿Usar {{name}} de nuevo en este equipo?",
       "useHereDescription": "Orca abrirá este proyecto aquí tal como estaba antes de moverlo. Tu código no se ve afectado: nunca se movió. Los cambios hechos en el host {{distro}} desde el traslado, como pestañas y chats nuevos, se quedan en el host y no vuelven. Los proyectos que se movieron junto con este también vuelven. El proyecto también sigue en el host {{distro}} hasta que lo quites allí. Esta ventana se recargará.",
@@ -23483,7 +23482,6 @@
     }
   },
   "agentPicker": {
-    "catalogUnsupported": "Los modelos de {{agent}} no están disponibles en este equipo. Puedes conservar tus opciones o usar Argumentos.",
     "catalogUnsupportedLaunch": "Los modelos de {{agent}} no están disponibles en este equipo. Tus opciones actuales se siguen aplicando.",
     "catalogFailed": "No se pudieron cargar los modelos de {{agent}}. Cierra y vuelve a abrir el selector de agentes para intentarlo de nuevo.",
     "catalogSignIn": "Inicia sesión en {{agent}} para cargar sus modelos y vuelve a abrir el selector de agentes.",
@@ -23499,11 +23497,9 @@
     "setByArguments": "Definido por tus argumentos",
     "searchModels": "Buscar modelos",
     "noModels": "Ningún modelo coincide con tu búsqueda.",
-    "toggleArguments": "Mostrar u ocultar argumentos",
     "argumentsTerminalHint": "Solo se aplica a los lanzamientos en terminal (CLI)",
     "searchAgentModels": "Buscar modelos de {{agent}}…",
     "moreModelsWithCount": "Más modelos ({{total}})",
-    "use": "Usar",
     "select": "Seleccionar agente",
     "promptPlaceholder": "Agregar un prompt (opcional): / para skills, @ para archivos",
     "promptPlaceholderFilesOnly": "Agregar un prompt (opcional): @ para archivos",
@@ -23722,7 +23718,6 @@
     "setupTrust": {
       "reviewTitle": "¿Aprobar los nuevos comandos de configuración de esta automatización?",
       "reviewBody": "Una ejecución omitió la configuración porque cambiaron los comandos de configuración de <code>orca.yaml</code> de su rama. Si los apruebas, las ejecuciones posteriores usarán estos comandos. Apruébalos solo si confías en <repo/>.",
-      "approve": "Aprobar",
       "approved": "Configuración aprobada. Las ejecuciones posteriores de esta automatización la ejecutarán.",
       "skippedSinceApproved": "La configuración no se ejecutó en esta ejecución porque cambiaron los comandos de configuración de orca.yaml de su rama. Ya se aprobaron, así que las ejecuciones posteriores los ejecutarán.",
       "skippedReview": "No se ejecutó la configuración: la rama de esta ejecución contiene comandos de configuración de orca.yaml diferentes de los aprobados para esta automatización. Revísalos para que las ejecuciones posteriores ejecuten la configuración.",

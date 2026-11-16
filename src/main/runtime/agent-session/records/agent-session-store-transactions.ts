@@ -17,7 +17,7 @@ import type { CommandReceiptScope } from '../../../native-chat/agent-session-jou
 import {
   agentSessionRuntimeIncarnation,
   attributeAgentSessionRuntime
-} from '../agent-session-runtime-attribution'
+} from './agent-session-runtime-attribution'
 import {
   beginAgentSessionRuntimeRecord,
   readAgentSessionRuntimeEnds
@@ -25,7 +25,7 @@ import {
 import {
   agentSessionReplacedRuntimes,
   type AgentSessionReplacedRuntime
-} from '../agent-session-replaced-runtime'
+} from '../ownership/agent-session-replaced-runtime'
 import {
   agentSessionStoreRowChanges,
   type AgentSessionStoreRowWrites

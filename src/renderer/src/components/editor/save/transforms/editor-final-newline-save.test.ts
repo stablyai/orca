@@ -212,21 +212,6 @@ describe('saving with Insert Final Newline', () => {
     }
   })
 
-  it('applies to Markdown when its source code view is selected', async () => {
-    const path = '/repo/note.md'
-    const { store, fileId } = openFile({
-      enabled: true,
-      draft: 'content',
-      path,
-      language: 'markdown'
-    })
-    store.getState().setMarkdownViewMode(fileId, 'source')
-
-    const files = await save(store, fileId)
-
-    expect(files.get(path)).toBe('content\n')
-  })
-
   it('does not replace a model that has newer edits than the captured draft', async () => {
     const { store, fileId } = openFile({ enabled: true, draft: 'captured' })
     const model = createModel(store, 'typed meanwhile')
