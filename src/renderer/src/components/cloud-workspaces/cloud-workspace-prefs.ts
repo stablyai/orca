@@ -18,7 +18,7 @@ const MAX_ATTEMPTS = 4
 
 type Edit = (doc: CloudWorkspacePrefsDocument) => CloudWorkspacePrefsDocument
 
-export type CloudWorkspacePrefsSnapshot = {
+type CloudWorkspacePrefsSnapshot = {
   /** `${userId}:${orgId}`; prefs belong to one account, so a team switch starts empty. */
   account: string | null
   /** The server copy with unsaved edits applied: what to render. */

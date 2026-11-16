@@ -12,7 +12,7 @@ import type { EnvironmentBuildView, EnvironmentView } from './cloud-environment-
 /** The prompt carries this much of the visible log (it is redacted and capped again downstream). */
 const LOG_TAIL_LINES = 80
 
-export type EnvironmentFailureFix = {
+type EnvironmentFailureFix = {
   onFixWithAgent: (() => void) | null
   onGiveAccess: (() => void) | null
 }

@@ -15,7 +15,7 @@ import { useOwnerRequestCopy } from '@/lib/orca-cloud/owner-request'
 export type CloneAccessPhase = 'checking' | 'missing' | 'waiting' | 'requested' | 'reachable'
 
 /** Re-check delays while focused after Give Orca access (as REPO-ACCESS-REFRESH backs off). */
-export const CLONE_ACCESS_POLL_DELAYS_MS = [4_000, 4_000, 8_000, 15_000, 30_000] as const
+const CLONE_ACCESS_POLL_DELAYS_MS = [4_000, 4_000, 8_000, 15_000, 30_000] as const
 /** Stop waiting after this long: the button comes back. */
 export const CLONE_ACCESS_WAIT_MS = 3 * 60_000
 

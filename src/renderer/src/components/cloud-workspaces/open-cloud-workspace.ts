@@ -93,7 +93,7 @@ function isPairingRejected(error: unknown): boolean {
   return error instanceof Error && /\b(unauthori[sz]ed|device_revoked)\b/i.test(error.message)
 }
 
-export type OpenCloudWorkspaceOptions = {
+type OpenCloudWorkspaceOptions = {
   /**
    * The server this open connects to, before any of its rows load. A GitHub-only create's sheet
    * hides that server's rows until it hands off to them, so its pending row never doubles up.

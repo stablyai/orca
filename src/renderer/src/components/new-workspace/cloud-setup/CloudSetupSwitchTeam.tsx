@@ -18,7 +18,7 @@ import {
 } from '@/components/sidebar/account-menu/switch-active-team'
 import { useSwitchToPlannedTeam, type PlannedTeam } from './use-switch-to-planned-team'
 
-export function CloudSetupSwitchTeamAction({
+function CloudSetupSwitchTeamAction({
   teams,
   onSwitch
 }: {
@@ -97,7 +97,7 @@ export type CloudSetupSwitchTeam = {
 }
 
 /** Copy and pieces for B2 once the planned teams are known; null when B2 doesn't apply. */
-export function useCloudSetupSwitchTeamFor(
+function useCloudSetupSwitchTeamFor(
   teams: readonly PlannedTeam[],
   onSwitch?: (team: PlannedTeam) => void
 ): CloudSetupSwitchTeam | null {

@@ -10,6 +10,7 @@ import { memberName, type MemberDirectory } from './cloud-workspace-format'
 import { rememberCloudWorkspaces } from './cloud-workspace-identity'
 import { ownerChangeRefusal, previousOwnerToast } from './owner-change-copy'
 import {
+  localStorageOrNull,
   markNewOwnerNoticeSeen,
   markOwnerChangeMadeHere,
   refreshPreviousOwnerNoticesNow
@@ -18,16 +19,8 @@ import {
 /** Long enough to read two sentences about someone else's secrets. */
 const TOLD_TOAST_MS = 12_000
 
-export type OwnerChangeState = { busy: boolean; error: string | null }
+type OwnerChangeState = { busy: boolean; error: string | null }
 const IDLE: OwnerChangeState = { busy: false, error: null }
-
-function localStorageOrNull(): Storage | null {
-  try {
-    return window.localStorage
-  } catch {
-    return null
-  }
-}
 
 export function useCloudWorkspaceOwnerChange({
   directory,

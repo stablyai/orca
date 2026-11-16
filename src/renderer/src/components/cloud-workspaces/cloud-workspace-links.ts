@@ -15,7 +15,7 @@ import { installCloudAccessLostNotice } from './cloud-access-lost-toast'
 /** No input for this long and the desktop stops renewing a paired workspace's lease. */
 const IDLE_MS = 15 * 60_000
 
-export async function handleCloudWorkspaceLink(link: string): Promise<void> {
+async function handleCloudWorkspaceLink(link: string): Promise<void> {
   const parsed = parseCloudWorkspaceLink(link)
   if (!parsed || !(await cloudWorkspacesAvailable())) {
     return

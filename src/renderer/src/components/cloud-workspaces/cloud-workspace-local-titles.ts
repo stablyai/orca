@@ -7,7 +7,7 @@ import type { CloudWorkspace } from '../../../../shared/cloud-workspaces/cloud-w
  * Names this computer gave its own cloud workspaces, by control-plane workspace id. The local VM
  * record links the two (its id is the workspace's `orca-…` id); the name is the sidebar's.
  */
-export function useLocalCloudWorkspaceNames(): ReadonlyMap<string, string> {
+function useLocalCloudWorkspaceNames(): ReadonlyMap<string, string> {
   const pairs = useAppStore((state) =>
     Object.values(state.ephemeralVmRuntimesByWorkspaceId ?? {})
       .map((runtime) => {
@@ -46,7 +46,7 @@ export function withLocalTitles(
 }
 
 /** Teammates see the name too: save it as the workspace's title once, for workspaces this user owns. */
-export function useBackfillLocalTitles(
+function useBackfillLocalTitles(
   workspaces: readonly CloudWorkspace[],
   names: ReadonlyMap<string, string>
 ): void {

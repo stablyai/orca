@@ -5,11 +5,6 @@ import type { OrcaPlanCatalogResult } from '../../../../shared/orca-billing-plan
 // answers from its ETag-checked copy). A failed re-read never replaces a good one.
 let lastResult: OrcaPlanCatalogResult | null = null
 
-/** Test seam: forget the remembered catalog. */
-export function resetPlanCatalogMemory(): void {
-  lastResult = null
-}
-
 function keep(next: OrcaPlanCatalogResult): OrcaPlanCatalogResult {
   if (next.status !== 'ok' && lastResult?.status === 'ok') {
     return lastResult

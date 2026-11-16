@@ -3,7 +3,7 @@ import { focusCascadedAddProjectMenuFirstItem } from './project-selection/Projec
 
 export const PROJECT_COMBOBOX_ADD_PROJECT_KEY = 'add-project'
 
-export type ProjectComboboxKeyDownState = {
+type ProjectComboboxKeyDownState = {
   open: boolean
   armedKey: string | null
   query: string

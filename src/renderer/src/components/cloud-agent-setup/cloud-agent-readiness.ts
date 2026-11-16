@@ -73,7 +73,3 @@ export function offerableDesktopKeys(
   }
   return offers
 }
-
-export function isCloudAgentReady(readiness: CloudAgentReadiness): boolean {
-  return CLOUD_SETUP_AGENTS.some((agent) => readiness[agent] !== null)
-}

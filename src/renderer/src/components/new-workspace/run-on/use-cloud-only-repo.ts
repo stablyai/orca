@@ -205,7 +205,7 @@ export function useCloudOnlyCreate({
  * still works: the panel's GitHub repository row says so and offers the way forward (D3 for
  * folders), and the Project picker lists GitHub repositories with no clone here (D4).
  */
-export function useFolderGitHubStep(repoId: string): {
+function useFolderGitHubStep(repoId: string): {
   folderProject: boolean
   folderStep: CloudSetupStep | null
 } {

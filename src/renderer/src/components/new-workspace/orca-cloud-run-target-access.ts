@@ -112,7 +112,7 @@ export function toOrcaCloudRunTargetAccess(
  * - `act`: run the fix instead of a build that would only fail (sign in, plans, overage, payment).
  * - `blocked`: a member can't fix it; the row and hint say who can, and picking does nothing.
  */
-export type OrcaCloudPick =
+type OrcaCloudPick =
   | { kind: 'select' }
   | { kind: 'act'; run: () => void }
   | { kind: 'blocked' }

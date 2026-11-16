@@ -13,6 +13,7 @@ import { useOrgRoster } from '../billing/team/use-org-roster'
 import { useCloudWorkspaceIdentities } from './cloud-workspace-identity'
 import { newOwnerNotice, previousOwnerNotice, previousOwnerNoticeAction } from './owner-change-copy'
 import {
+  localStorageOrNull,
   dismissPreviousOwnerNotice,
   markNewOwnerNoticeSeen,
   newOwnerWorkspaces,
@@ -22,14 +23,6 @@ import {
 } from './owner-change-notices-store'
 
 export const OWNER_NOTICE_POLL_MS = 60_000
-
-function localStorageOrNull(): Storage | null {
-  try {
-    return window.localStorage
-  } catch {
-    return null
-  }
-}
 
 function openCloudSecrets(): void {
   const store = useAppStore.getState()

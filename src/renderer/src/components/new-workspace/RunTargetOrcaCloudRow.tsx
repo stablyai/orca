@@ -55,7 +55,7 @@ function RowAction({
  * "Sandbox · 8 vCPU · 16 GB" in the Run on menu row. The specs never split: below a 28rem
  * container they drop out whole rather than wrap.
  */
-export function OrcaCloudSpecs({ t }: { t: Translate }): React.JSX.Element {
+function OrcaCloudSpecs({ t }: { t: Translate }): React.JSX.Element {
   return (
     <>
       {t('auto.components.new.workspace.RunTargetCombobox.orcaCloudHosted', 'Sandbox')}
@@ -82,7 +82,7 @@ export function OrcaCloudSpecs({ t }: { t: Translate }): React.JSX.Element {
 export const RUN_ON_SHOWS_HOURS_LEFT = false
 
 /** "41 sandbox hours left" (locale number, plural-aware), or null when not entitled. */
-export function useOrcaCloudHoursLeft(access: OrcaCloudRunTargetAccess): string | null {
+function useOrcaCloudHoursLeft(access: OrcaCloudRunTargetAccess): string | null {
   const t = useTranslate()
   const locale = useIntlLocale()
   if (access.state === 'no-plan' && access.trialOfferSeconds) {

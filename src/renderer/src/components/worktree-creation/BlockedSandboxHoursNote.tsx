@@ -4,7 +4,7 @@ import { useNow } from '@/hooks/use-now'
 import { useTranslate } from '@/i18n/use-translate'
 
 /** Whole minutes left before the sandbox sleeps, never below one while it is still awake. */
-export function minutesUntilSleep(sleepsAt: number, now: number): number {
+function minutesUntilSleep(sleepsAt: number, now: number): number {
   return Math.max(1, Math.ceil((sleepsAt - now) / 60_000))
 }
 

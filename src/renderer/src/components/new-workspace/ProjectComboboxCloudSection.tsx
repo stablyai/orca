@@ -14,10 +14,10 @@ import {
 
 // Row keys share one namespace with project option ids, and GitHub projects are keyed
 // `github:<owner>/<repo>`; this prefix must never collide with a project id.
-export const CLOUD_REPO_KEY_PREFIX = 'cloud-only-repo:'
-export const CLOUD_REPO_MORE_KEY = 'cloud-only-repo-more-access'
-export const CLOUD_REPO_SHOW_MORE_KEY = 'cloud-only-repo-show-more'
-export const CLOUD_REPO_RETRY_KEY = 'cloud-only-repo-retry'
+const CLOUD_REPO_KEY_PREFIX = 'cloud-only-repo:'
+const CLOUD_REPO_MORE_KEY = 'cloud-only-repo-more-access'
+const CLOUD_REPO_SHOW_MORE_KEY = 'cloud-only-repo-show-more'
+const CLOUD_REPO_RETRY_KEY = 'cloud-only-repo-retry'
 
 /** Runs `open` each time `signal` is bumped (never on mount), with the latest closure. */
 export function useOpenOnSignal(signal: number, open: () => void): void {
@@ -41,7 +41,7 @@ export function cloudRepoKey(fullName: string): string {
  * listed repository, null for anything else (a project id, Add project). Project ids such as
  * `github:<owner>/<repo>` never match: rows live in their own `cloud-only-repo:` namespace.
  */
-export function commitCloudRow(
+function commitCloudRow(
   key: string,
   rows: {
     cloudRepos: readonly OrcaCloudGitHubRepository[] | null
@@ -105,7 +105,7 @@ export function useCloudRows(input: CloudRowsInput): {
 
 /** Case-insensitive substring match; the list is short and names are owner/repo. */
 /** The cloud-only rows' keys, in list order, for the shared keyboard cursor. */
-export function cloudRowKeys(
+function cloudRowKeys(
   cloudRepos: readonly OrcaCloudGitHubRepository[] | null,
   query: string,
   onShowMoreCloudRepos: (() => void) | null,

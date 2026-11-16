@@ -84,7 +84,7 @@ function ExternalMenuItem({
   )
 }
 
-export type SidebarHelpMilestones = { done: number; total: number }
+type SidebarHelpMilestones = { done: number; total: number }
 
 /** Every entry the sidebar's former "?" menu offered, now nested under Help in the account menu. */
 export function SidebarHelpSubmenu({

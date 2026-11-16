@@ -11,7 +11,7 @@ export type CloudAgentSetupChoice =
   | { kind: 'gateway'; key: string; model: string; codexModel: string }
   | { kind: 'custom'; baseUrl: string; token: string; model: string }
 
-export type CloudAgentSetupWrite = {
+type CloudAgentSetupWrite = {
   set: Record<string, string>
   /** Which field each variable came from, so a server refusal lands on the right input. */
   field: Record<string, string>

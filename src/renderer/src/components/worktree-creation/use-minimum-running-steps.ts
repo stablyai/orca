@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { WorktreeSetupStepState } from './worktree-setup-steps'
 
-export const MIN_RUNNING_MS = 400
+const MIN_RUNNING_MS = 400
 
 type Step = {
   id: string

@@ -89,7 +89,7 @@ type SandboxState = {
 }
 
 /** This window's view of a sleep in flight for one workspace (workspace-sleep-follower). */
-export type SleepInFlight = {
+type SleepInFlight = {
   /** Sleep started and has not ended (also while the user presses Wake to continue). */
   sleepIntent: boolean
   goingToSleep: boolean

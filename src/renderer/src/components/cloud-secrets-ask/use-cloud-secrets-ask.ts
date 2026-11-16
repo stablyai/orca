@@ -19,7 +19,7 @@ import {
 const UNAVAILABLE: CloudSecretsErrorCode = 'unavailable'
 const NOT_CONFIGURED: CloudSecretsErrorCode = 'not_configured'
 
-export type CloudSecretsAskLoad =
+type CloudSecretsAskLoad =
   | { status: 'loading' }
   /** No Cloud, no environment for this repo, or nothing declared: S2 stays hidden. */
   | { status: 'none' }
@@ -94,7 +94,7 @@ export function useCloudSecretsAskLoad(
   return { load, reload }
 }
 
-export type CloudSecretsSaveResult =
+type CloudSecretsSaveResult =
   | { ok: true; saved: string[]; refused: Record<string, CloudSecretsErrorCode> }
   | { ok: false; error: CloudSecretsErrorCode }
 

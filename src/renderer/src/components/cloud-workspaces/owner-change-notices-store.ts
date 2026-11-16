@@ -56,6 +56,15 @@ export function dismissPreviousOwnerNotice(id: string): void {
   void window.api.cloudWorkspaces.dismissOwnerNotice(id).catch(() => undefined)
 }
 
+/** The notices' per-device memory; null where storage is blocked. */
+export function localStorageOrNull(): Storage | null {
+  try {
+    return window.localStorage
+  } catch {
+    return null
+  }
+}
+
 function madeHereKey(sandboxId: string): string {
   return `orca.ownerChange.madeHere:${sandboxId}`
 }
@@ -88,7 +97,7 @@ export function noticesForThisDevice(
   )
 }
 
-export type NewOwnerWorkspace = { sandboxId: string; transferredAt: number; title: string | null }
+type NewOwnerWorkspace = { sandboxId: string; transferredAt: number; title: string | null }
 
 function newOwnerSeenKey(sandboxId: string, transferredAt: number): string {
   return `orca.ownerChange.newOwnerSeen:${sandboxId}:${transferredAt}`

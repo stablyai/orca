@@ -40,7 +40,7 @@ function SubsectionTitle({
   )
 }
 
-export type CloudEnvironmentPanelProps = {
+type CloudEnvironmentPanelProps = {
   environment: EnvironmentView
   /** The environment the form draft started from (defaults to `environment`). */
   formEnvironment?: EnvironmentView | null
