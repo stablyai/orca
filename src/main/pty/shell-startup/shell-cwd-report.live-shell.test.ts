@@ -49,6 +49,7 @@ describe('prompt cwd reports', () => {
             env: {
               PATH: process.env.PATH ?? '/usr/bin:/bin',
               HOME: home,
+              USER: 'orca-test',
               ZDOTDIR: join(home, 'zsh'),
               ORCA_ORIG_ZDOTDIR: home,
               ORCA_SHELL_FEATURES: 'markers,ready',

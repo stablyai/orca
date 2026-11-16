@@ -1,5 +1,5 @@
 // Encode only on folder changes; re-send each prompt so a child shell's report cannot stick.
-export const BASH_CWD_REPORT_BLOCK = `__orca_cwd_report() {
+export const BASH_CWD_REPORT_BLOCK = `__orca_osc133_cwd_report() {
   if [[ "$PWD" != "\${__orca_cwd_reported-}" ]]; then
     __orca_cwd_reported=$PWD
     local LC_ALL=C __orca_e= __orca_c __orca_i
