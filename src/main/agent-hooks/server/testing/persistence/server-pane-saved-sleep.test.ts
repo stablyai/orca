@@ -53,7 +53,7 @@ it.each(['claude', 'codex'] as const)(
         expect(row).toMatchObject({ state: 'done', paneSleep: { ptyId: 'pty' } })
         if (turn === 'boundary') {
           expect(row.sessionBoundary).toBe(true)
-          expect(agentEntryCompletionAt(row)).toBeNull()
+          expect(agentEntryCompletionAt({ ...row, stateHistory: [] })).toBeNull()
         } else {
           expect(row).toMatchObject({
             interrupted: true,
