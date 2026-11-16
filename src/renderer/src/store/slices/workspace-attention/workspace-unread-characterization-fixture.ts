@@ -1,5 +1,5 @@
 import { vi, type Mock } from 'vitest'
-import { getDefaultSettings } from '../../../../../shared/constants'
+import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
 import type { AppState } from '../../types'
 import { persistWorktreeMeta } from '../worktrees/metadata/worktree-meta-persist'
 import { createTestStore } from '../../testing/app-store-test-fixture'

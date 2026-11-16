@@ -1,4 +1,4 @@
-import type { PersistedState } from '../../persisted-state-types'
+import type { PersistedState } from '../../orca-profiles/persisted-state-types'
 import {
   normalizeWorkspaceSessionKeyToWorkspaceId,
   parseWorkspaceKey

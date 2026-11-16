@@ -1,7 +1,7 @@
 import { selectWorkspaceRuntimeEnvironmentId } from '../../../../../lib/workspace/ownership/workspace-runtime-environment'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
-import { toRuntimeExecutionHostId } from '../../../../../../../shared/execution-host'
+import { toRuntimeExecutionHostId } from '../../../../../../../shared/execution-host/execution-host'
 import { tailscaleHostOfEndpoint } from '../../../../../../../shared/remote-runtime/remote-runtime-tailscale-hint'
 import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'

@@ -1,6 +1,6 @@
 import { BACKGROUND_MOUNT_TERMINAL_WORKTREE_EVENT } from '@/constants/terminal'
 import type { BackgroundMountTerminalWorktreeDetail } from '@/constants/terminal'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { requestSleepingAgentWakeOnMount } from '@/lib/agent-session/resume/sleeping-agent-wake-requests'
 
 const pendingMounts = new Map<string, BackgroundMountTerminalWorktreeDetail>()

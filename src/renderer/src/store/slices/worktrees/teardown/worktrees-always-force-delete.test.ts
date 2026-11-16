@@ -1,6 +1,6 @@
 import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import '../../../../../../shared/constants'
+import '../../../../../../shared/orca-profiles/constants'
 import { makeWorktree } from '../worktree.test-fixture'
 import {
   makeCandidate,

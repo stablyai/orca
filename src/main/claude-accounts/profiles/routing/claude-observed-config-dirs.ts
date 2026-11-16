@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { basename, dirname, isAbsolute, resolve } from 'node:path'
 import { resolveAbsoluteDirOverride } from '../../../../shared/file-access/absolute-dir-override'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { writeFileAtomically } from '../../../filesystem/atomic-file-publication'
 import { isDirectory } from '../claude-profile-homes'
 

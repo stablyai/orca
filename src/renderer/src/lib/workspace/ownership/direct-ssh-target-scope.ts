@@ -4,7 +4,7 @@ import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import { worktreeWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import type {
   DirectSshRepoOwner as RepoOwner,

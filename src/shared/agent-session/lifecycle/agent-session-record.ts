@@ -16,7 +16,7 @@ import {
 import type { AgentSessionLastTurn } from './records/agent-session-last-turn'
 import type { AgentSessionForkedFrom } from './records/agent-session-forked-from'
 export type { AgentSessionForkedFrom }
-import type { ExecutionHostId } from '../../execution-host'
+import type { ExecutionHostId } from '../../execution-host/execution-host'
 import { isAgentSessionConversationCommandRecord } from '../agent-session-conversation-command'
 import type { AgentSessionConversationCommandRecord } from '../agent-session-conversation-command'
 import {

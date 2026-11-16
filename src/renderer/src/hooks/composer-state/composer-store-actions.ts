@@ -1,6 +1,6 @@
 import type { RepoSlice, RepoUpdate } from '../../store/repos/repo-state'
 import type { UISlice } from '../../store/slices/ui/ui-slice-contract'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 
 export type ComposerStoreActions = {

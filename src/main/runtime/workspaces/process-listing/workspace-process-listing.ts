@@ -40,7 +40,7 @@ import { firstWorkRenameDeps } from '../../../agent-hooks/first-work/first-work-
 import { createStructuredChatNamingHandler } from '../../../native-chat/structured-chat-naming'
 import { structuredChatNamingDeps } from '../../agent-session/naming/structured-chat-naming-runtime'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import { chatWorkerTurnStopReporter } from '../../orchestration/workers/turn-stops/chat-worker-turn-stops'
 import { buildWorktreeListingPage } from '../catalog/worktree-listing-host-scope'
 import {

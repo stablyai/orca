@@ -10,7 +10,7 @@ import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
-import { getDefaultPersistedState } from '../../../shared/constants'
+import { getDefaultPersistedState } from '../../../shared/orca-profiles/constants'
 
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({
   loadUserSshConfigMock: vi.fn(),

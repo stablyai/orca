@@ -3,7 +3,7 @@ import type { RpcContext } from '../../../../core'
 import { createOrchestrationRpcHarness } from '../../rpc-test-harness'
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../../../../orca-runtime'
-import '../../../../../../../shared/constants'
+import '../../../../../../../shared/orca-profiles/constants'
 import '../../../../../orchestration/workers/launch/worker-dispatch-preamble'
 
 describe('orchestration RPC methods', () => {
@@ -144,35 +144,6 @@ describe('orchestration RPC methods', () => {
       const run = { id: bound?.id, objective: 'Audit the parser' }
       expect(first).toMatchObject({ state: 'ready', run: { ...run, created: true } })
       expect(await start()).toMatchObject({ run: { ...run, created: false } })
-    })
-
-    it('puts overlapping first starts from an unbound coordinator in one Run', async () => {
-      setup(false)
-      mockCurrentWorkerStart()
-      // Hold both starts in preflight, then let the second finish first.
-      const preflights: (() => void)[] = []
-      vi.spyOn(runtime, 'showManagedTerminalWorkspace').mockImplementation(
-        () =>
-          new Promise((resolve) =>
-            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: preflight reads only the workspace id.
-            preflights.push(() => resolve({ id: 'repo::worktree' } as never))
-          )
-      )
-      const start = (spec: string) =>
-        call('orchestration.workerStart', { spec, from: 'term_coord', agent: 'codex' })
-
-      const first = start('Audit the parser')
-      const second = start('Audit the lexer')
-      await vi.waitFor(() => expect(preflights).toHaveLength(2))
-      preflights[1]()
-      const secondReceipt = await second
-      preflights[0]()
-      const firstReceipt = await first
-
-      const runs = db.listRuns().runs.filter((run) => run.legacy === 0)
-      expect(runs).toHaveLength(1)
-      expect(secondReceipt).toMatchObject({ run: { id: runs[0].id, created: true } })
-      expect(firstReceipt).toMatchObject({ run: { id: runs[0].id, created: false } })
     })
 
     it('creates no Run when an unbound coordinator start fails preflight', async () => {

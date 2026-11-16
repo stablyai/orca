@@ -13,7 +13,7 @@ import type {
   StructuredAgentLaunchHooks
 } from './launch/continuation/structured-agent-launch-settlement'
 import { useAppStore } from '@/store/index'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   beginHostAdmittedStructuredLaunch,
   type DeclinedStructuredLaunchTerminalOptions,

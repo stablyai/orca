@@ -35,7 +35,7 @@ import type {
 import {
   getRepoExecutionHostId,
   type ExecutionHostId
-} from '../../../../../src/shared/execution-host'
+} from '../../../../../src/shared/execution-host/execution-host'
 import { isRpcDeliveryUnknown } from '../../../transport/rpc/rpc-delivery-ambiguity'
 import type { OrcaHookTrustPrompt } from '../../../components/hook-trust/OrcaHookTrustDrawer'
 import type { NewWorktreeDrawerView } from '../modal/use-new-worktree-drawer-navigation'

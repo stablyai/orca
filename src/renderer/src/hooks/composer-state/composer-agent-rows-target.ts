@@ -1,5 +1,5 @@
 import '@/lib/workspace/creation/new-workspace-project-options'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
 import type { AgentMenuRowsTarget } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
 import type { ComposerModel } from './composer-model'

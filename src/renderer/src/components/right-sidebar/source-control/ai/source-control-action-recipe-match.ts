@@ -13,7 +13,7 @@ import {
   saveSourceControlActionRecipe,
   type SourceControlAiWriteTarget
 } from '../../../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 
 type NormalizedSourceControlActionRecipe = {

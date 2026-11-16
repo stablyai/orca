@@ -11,7 +11,7 @@ import type {
   ProfileStateDomainReplacement
 } from './profile-state-authority'
 import { Store } from '../store'
-import { toSshExecutionHostId } from '../../../../shared/execution-host'
+import { toSshExecutionHostId } from '../../../../shared/execution-host/execution-host'
 
 export function deferred<T>() {
   let resolve!: (value: T) => void

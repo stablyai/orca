@@ -4,12 +4,12 @@ import {
   parseExecutionHostId,
   type ExecutionHostId,
   type ExecutionHostScope
-} from '../../execution-host'
+} from '../../execution-host/execution-host'
 import type { ProjectGroup } from '../../project/groups/project-group-types'
 import { getLogicalRepoOrderRankById } from '../sections/project-section-order'
 import type { ProjectSectionModel } from '../sections/project-section-grouping'
 import type { Repo } from '../../repository/repo-types'
-import type { ProjectOrderBy } from '../../ui-chrome-types'
+import type { ProjectOrderBy } from '../../ui-chrome/ui-chrome-types'
 import {
   filterFolderWorkspacesFromOtherDevices,
   isWorkspaceOwnedBySomeoneElse

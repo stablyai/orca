@@ -1,4 +1,4 @@
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { useEffect } from 'react'
 
 import type { ChecksPanelControllerState } from '../panel/use-checks-panel-controller-state'

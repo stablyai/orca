@@ -4,8 +4,11 @@ import {
 } from '../../runtime/rpc/calls/runtime-rpc-result'
 import type { PreloadApi } from '../../../../preload/api-types'
 import type { WebRuntimeSubscribeOptions } from '../web-runtime-subscription-contract'
-import { parseExecutionHostId, toRuntimeExecutionHostId } from '../../../../shared/execution-host'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  parseExecutionHostId,
+  toRuntimeExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'

@@ -5,7 +5,10 @@ import type {
   DirectSshDetectedWorktreeRequest,
   ProviderRequestId
 } from '../../../../shared/worktree/catalog/detected-worktree-provider-contract'
-import { parseExecutionHostId, getRepoDialableSshTargetId } from '../../../../shared/execution-host'
+import {
+  parseExecutionHostId,
+  getRepoDialableSshTargetId
+} from '../../../../shared/execution-host/execution-host'
 import {
   registerSshProviderRequestAbort,
   getSshProviderAuthority,

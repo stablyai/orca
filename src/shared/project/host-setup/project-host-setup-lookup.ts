@@ -1,4 +1,4 @@
-import { getRepoExecutionHostId } from '../../execution-host'
+import { getRepoExecutionHostId } from '../../execution-host/execution-host'
 import type { ProjectHostSetup } from '../project-types'
 import type { Repo } from '../../repository/repo-types'
 import type { WorktreeMeta } from '../../worktree/meta-types'
