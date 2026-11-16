@@ -171,7 +171,7 @@ export function showIdleSleepNotice(
       duration: 8_000,
       description: translate(
         'orcaCloudWorkspace.idleSleptDetail',
-        'Files and chats are saved. It uses no sandbox hours until you open it.'
+        'Your files and chats are saved. Open it to wake it.'
       ),
       action: {
         label: translate('orcaCloudWorkspace.wake', 'Wake'),
