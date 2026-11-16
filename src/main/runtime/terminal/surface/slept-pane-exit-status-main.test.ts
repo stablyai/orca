@@ -90,7 +90,7 @@ it.each([
         clearProviderPtyState('pty-b', { exitProven: true })
       }
       if (launched) {
-        expect(retireAuthority).toHaveBeenCalledWith(PANE_B)
+        expect(retireAuthority).toHaveBeenCalledWith(PANE_B, { confirmedExit: false })
       }
       expect(server.getStatusSnapshotForPane(PANE_B)[0]).toMatchObject({
         state: 'done',
