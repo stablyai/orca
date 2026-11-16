@@ -22,7 +22,7 @@ import {
   markWebRuntimeInitialTerminalBootstrapAwaitingMirror
 } from '@/runtime/web-session-tabs-sync/initial-terminal/web-runtime-initial-terminal-bootstrap'
 
-export type FirstCloudAgentRequest = {
+type FirstCloudAgentRequest = {
   fullName: string
   /**
    * The composer's pick; null is Blank terminal and starts nothing. It starts with no prompt: the

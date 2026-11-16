@@ -8,4 +8,3 @@ export const HostedGitAccessResponseSchema = z.union([
   z.object({ applied: z.literal(true), expiresAt: z.number() }),
   z.object({ applied: z.literal(false), reason: z.string() })
 ])
-export type HostedGitAccessResponse = z.infer<typeof HostedGitAccessResponseSchema>

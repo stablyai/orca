@@ -22,7 +22,7 @@ export type CloudSshErrorCode =
 
 export type CloudSshFailure = { ok: false; code: CloudSshErrorCode; message: string }
 
-export type CloudSshEditorKind = 'vscode' | 'cursor'
+type CloudSshEditorKind = 'vscode' | 'cursor'
 
 export type CloudSshEditor = {
   /** Open In application id from settings. */

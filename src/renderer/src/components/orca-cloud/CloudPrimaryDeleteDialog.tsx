@@ -13,7 +13,6 @@ import {
 } from '@/components/sidebar/workspace-actions/deletion/DeleteCloudWorkspaceParts'
 import { describeError } from '@/components/cloud-workspaces/cloud-workspace-errors'
 import { archiveSandboxThroughControlPlane } from '@/components/cloud-workspaces/cloud-workspace-home-archive'
-import { noteCloudArchiveChanged } from '@/lib/orca-cloud/cloud-archive-changes'
 import {
   noteCloudWorkspaceDeleteSettled,
   noteCloudWorkspaceDeleting
@@ -80,7 +79,6 @@ async function destroyCloudSandbox(target: Target, name: string): Promise<void> 
       )
       return
     }
-    noteCloudArchiveChanged()
     void refreshCloudWorktreeBindings().catch(() => undefined)
     toast.success(translate('orcaCloudWorkspace.deletedNamed', 'Deleted {{name}}', { name }))
   })

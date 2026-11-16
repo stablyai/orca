@@ -1,7 +1,7 @@
 // Coalesces concurrent reads per key, but never hands back a read that may predate the request:
 // asked again while a read is in flight, exactly one more read runs after it and every caller
 // waits for that one (a wake/archive/restart event must not settle on a pre-event answer).
-export type FollowUpCoalescer = {
+type FollowUpCoalescer = {
   run: (key: string, read: () => Promise<void>) => Promise<void>
   clear: () => void
 }

@@ -8,7 +8,7 @@ import {
 export const LEGACY_RUN_ACTION_ID = 'run'
 
 // Conductor ids allow letters, numbers, spaces and hyphens; dots and underscores are harmless extras.
-export const ORCA_RUN_ACTION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9 ._-]{0,63}$/
+const ORCA_RUN_ACTION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9 ._-]{0,63}$/
 const ENV_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/
 const MAX_RUN_ACTION_ENV_ENTRIES = 64
 
@@ -46,7 +46,7 @@ function singleLine(value: string | undefined): string | undefined {
   return text || undefined
 }
 
-export function parseOrcaRunMode(value: unknown): OrcaRunMode | undefined {
+function parseOrcaRunMode(value: unknown): OrcaRunMode | undefined {
   return value === 'concurrent' || value === 'nonconcurrent' ? value : undefined
 }
 
@@ -57,7 +57,7 @@ export function defaultRunActionName(id: string): string {
 }
 
 /** A safe workspace-relative directory, or undefined; absolute and `..` paths never escape the checkout. */
-export function normalizeRunActionCwd(value: unknown): string | undefined {
+function normalizeRunActionCwd(value: unknown): string | undefined {
   const raw = asTrimmedString(value)
   if (!raw) {
     return undefined

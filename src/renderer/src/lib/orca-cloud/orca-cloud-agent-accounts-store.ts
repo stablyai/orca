@@ -228,7 +228,7 @@ export function applyOrcaCloudAgentCredentials(credentials: AgentCredentialsView
   void reloadOrcaCloudAgentAccounts()
 }
 
-export function applyOrcaCloudAgentSources(sources: AgentSourcesView): void {
+function applyOrcaCloudAgentSources(sources: AgentSourcesView): void {
   if (state.load.kind === 'ready') {
     set({ load: { kind: 'ready', status: { ...state.load.status, sources } } })
   }

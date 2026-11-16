@@ -22,7 +22,7 @@ export type CloudRuntimeSkew =
       sandboxBuildCommit: string | null
     }
 
-export type CloudRuntimeSkewInput = RuntimeStatusCompatInput &
+type CloudRuntimeSkewInput = RuntimeStatusCompatInput &
   Pick<RuntimeStatus, 'appVersion' | 'buildCommit'>
 
 export function evaluateCloudRuntimeSkew(

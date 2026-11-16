@@ -10,7 +10,7 @@ const PIPE_TO_SHELL = [
 const SUDO = /(?:^|[\s;&|(`])sudo\b/
 const SUBSTITUTION = /\$\(|`/
 
-export type LocalCommandRisk = {
+type LocalCommandRisk = {
   nonAscii: boolean
   /** Downloads or builds a script and runs it, so the person can't see what it does. */
   pipesToShell: boolean

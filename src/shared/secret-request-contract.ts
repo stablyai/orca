@@ -19,7 +19,7 @@ export const SECRET_REQUEST_MAX_LIFETIME_MS = 60 * 60_000
 export const SECRET_REQUEST_MAX_PENDING = 3
 export const SECRET_REQUEST_MAX_PER_HOUR = 10
 
-export const SecretRequestScopeSchema = z.enum(['personal', 'repo'])
+const SecretRequestScopeSchema = z.enum(['personal', 'repo'])
 export type SecretRequestScope = z.infer<typeof SecretRequestScopeSchema>
 
 const RequestId = z.string().regex(/^sr_[A-Za-z0-9_-]{8,64}$/)
@@ -30,7 +30,7 @@ const RequestId = z.string().regex(/^sr_[A-Za-z0-9_-]{8,64}$/)
 const CONTROL_CHARS = /[\u0000-\u001F\u007F-\u009F]/g
 const BIDI_CHARS = /[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/g
 
-export function sanitizeSecretRequestReason(reason: string): string {
+function sanitizeSecretRequestReason(reason: string): string {
   return reason.replace(BIDI_CHARS, '').replace(CONTROL_CHARS, ' ').replace(/ {2,}/g, ' ').trim()
 }
 

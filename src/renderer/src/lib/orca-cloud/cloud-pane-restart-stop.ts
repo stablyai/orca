@@ -67,7 +67,7 @@ export async function stopRemotePaneTerminalForRestart(
 }
 
 /** The terminal the host ensured for the resume, and whether it spawned it or adopted a live one. */
-export type RemotePaneResume = {
+type RemotePaneResume = {
   handle: string
   disposition: 'created' | 'adopted'
 }

@@ -4,7 +4,7 @@
 // enforces that again on whatever is written back, including the plain-text read-only copy.
 
 /** The parts of an xterm buffer cell the renderer reads. */
-export type RestoreCell = {
+type RestoreCell = {
   getChars(): string
   getWidth(): number
   isBold(): number
@@ -25,7 +25,7 @@ export type RestoreCell = {
   getBgColor(): number
 }
 
-export type RestoreLine = {
+type RestoreLine = {
   isWrapped: boolean
   length: number
   getCell(x: number): RestoreCell | undefined
@@ -69,7 +69,7 @@ function colorParams(
 }
 
 /** The SGR parameters for a cell's attributes (empty for the default pen). */
-export function cellSgrParams(cell: RestoreCell): string[] {
+function cellSgrParams(cell: RestoreCell): string[] {
   const params: string[] = []
   const flags: [number, string][] = [
     [cell.isBold(), '1'],

@@ -9,10 +9,10 @@ export const HOST_AGENT_SIGN_IN_AGENT_NAME: Record<HostAgentSignInAgent, string>
   codex: 'Codex'
 }
 
-export type HostAgentSignInState = 'signedIn' | 'signedOut' | 'notInstalled' | 'unknown'
+type HostAgentSignInState = 'signedIn' | 'signedOut' | 'notInstalled' | 'unknown'
 
 /** How a signed-in agent authenticates; never the credential itself. */
-export type HostAgentSignInMethod = 'orcaAccount' | 'cliLogin' | 'apiKey'
+type HostAgentSignInMethod = 'orcaAccount' | 'cliLogin' | 'apiKey'
 
 export type HostAgentSignInEntry = {
   agent: HostAgentSignInAgent

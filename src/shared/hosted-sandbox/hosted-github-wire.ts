@@ -23,7 +23,6 @@ export const HostedGithubRepoAccessResponseSchema = z.object({
   push: z.enum(['ok', 'not_installed', 'repo_not_selected', 'not_connected']).optional(),
   configureUrl: z.string().url().optional()
 })
-export type HostedGithubRepoAccessPush = NonNullable<HostedGithubRepoAccessResponse['push']>
 export type HostedGithubRepoAccessResponse = z.infer<typeof HostedGithubRepoAccessResponseSchema>
 
 /** GET /v1/github/repositories[?cursor=]: repositories the account's GitHub installations reach. */

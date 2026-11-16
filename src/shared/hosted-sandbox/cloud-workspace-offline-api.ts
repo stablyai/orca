@@ -26,7 +26,7 @@ export type CloudOfflineTerminal = {
   at: number
 }
 
-export type CloudOfflineGitChange = {
+type CloudOfflineGitChange = {
   path: string
   status: string
   area: string
@@ -34,7 +34,7 @@ export type CloudOfflineGitChange = {
   added?: number | null
   removed?: number | null
 }
-export type CloudOfflineCommit = {
+type CloudOfflineCommit = {
   id: string
   subject: string
   author: string | null
@@ -82,7 +82,7 @@ export type CloudOfflineSnapshot = {
 }
 
 /** `unconfirmed`: it may have reached the agent (sent, but the reply never came back). */
-export type CloudQueuedPromptState = 'queued' | 'sending' | 'delivered' | 'failed' | 'unconfirmed'
+type CloudQueuedPromptState = 'queued' | 'sending' | 'delivered' | 'failed' | 'unconfirmed'
 
 export type CloudQueuedPrompt = {
   id: string

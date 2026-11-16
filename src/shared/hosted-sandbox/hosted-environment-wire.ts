@@ -233,9 +233,6 @@ export const HostedEnvironmentBuildStreamLineSchema = z.discriminatedUnion('type
   z.looseObject({ type: z.literal('heartbeat'), at: Millis.optional() }),
   z.looseObject({ type: z.literal('error'), error: z.string().max(128).optional() })
 ])
-export type HostedEnvironmentBuildStreamLine = z.infer<
-  typeof HostedEnvironmentBuildStreamLineSchema
->
 
 export function isHostedEnvironmentId(value: unknown): value is string {
   return typeof value === 'string' && HOSTED_ENVIRONMENT_ID.test(value)

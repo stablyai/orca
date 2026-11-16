@@ -152,15 +152,19 @@ export function formatDuration(ms: number): string {
   })
 }
 
-/** Hours used with one decimal under 100 h ("0.4 h", "12.5 h", "140 h"). */
-export function formatHours(ms: number): string {
+/** Hours with one decimal under 100 ("0.4", "12.5", "140"). */
+function hoursNumber(ms: number): string {
   const h = ms / 3_600_000
   const digits = h >= 100 ? 0 : 1
-  const value = new Intl.NumberFormat(getIntlLocale(), {
+  return new Intl.NumberFormat(getIntlLocale(), {
     maximumFractionDigits: digits,
     minimumFractionDigits: digits
   }).format(h)
-  return translate('orcaCloudWorkspace.duration.hours', '{{value}} h', { value })
+}
+
+/** Hours used: "0.4 h", "12.5 h", "140 h". */
+export function formatHours(ms: number): string {
+  return translate('orcaCloudWorkspace.duration.hours', '{{value}} h', { value: hoursNumber(ms) })
 }
 
 export function formatCents(cents: number): string {
@@ -229,7 +233,7 @@ export function formatCloudRegion(region: string): string {
   return city ? `${city} (${region})` : region
 }
 
-export type DiffStat = { files: number; insertions: number; deletions: number }
+type DiffStat = { files: number; insertions: number; deletions: number }
 
 /** Parses a `--shortstat` line ("2 files changed, 41 insertions(+), 6 deletions(-)"). */
 export function parseDiffStat(line: string | null | undefined): DiffStat | null {
@@ -296,20 +300,11 @@ export const CHANGE_LETTER: Record<ChangeKind, string> = {
   unknown: '?'
 }
 
-/** "Ns ago" hides under a minute, where it would read as noise. */
-export function showUpdatedAgo(fetchedAt: number | null, now: number): boolean {
-  return fetchedAt !== null && now - fetchedAt >= 60_000
-}
-
 /** "14.6 sandbox hours" (one product noun, per the glossary). */
 export function formatSandboxHours(ms: number): string {
-  const h = ms / 3_600_000
-  const digits = h >= 100 ? 0 : 1
-  const value = new Intl.NumberFormat(getIntlLocale(), {
-    maximumFractionDigits: digits,
-    minimumFractionDigits: digits
-  }).format(h)
-  return translate('orcaCloudWorkspace.sandboxHoursValue', '{{value}} sandbox hours', { value })
+  return translate('orcaCloudWorkspace.sandboxHoursValue', '{{value}} sandbox hours', {
+    value: hoursNumber(ms)
+  })
 }
 
 export function percentOf(used: number, total: number): number {

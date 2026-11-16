@@ -12,9 +12,9 @@
 // from then on accepts only that signer, and never a copy older than one it already showed.
 import { base64ToBytes } from './sealed-grant'
 
-export const READ_SNAPSHOT_SIG_INFO = 'orca-cloud-read-sig-v1'
+const READ_SNAPSHOT_SIG_INFO = 'orca-cloud-read-sig-v1'
 
-export type Ed25519Verify = (
+type Ed25519Verify = (
   publicKey: Uint8Array,
   message: Uint8Array,
   signature: Uint8Array
@@ -28,7 +28,7 @@ type SignedFields = {
   signature?: { publicKeyB64: string; signatureB64: string }
 }
 
-export function readSnapshotSignedMessage(sealed: SignedFields): Uint8Array {
+function readSnapshotSignedMessage(sealed: SignedFields): Uint8Array {
   const head = new TextEncoder().encode(
     `${READ_SNAPSHOT_SIG_INFO}:${sealed.workspaceId}:${sealed.snapshotId}:${sealed.nonceB64}:`
   )
@@ -79,7 +79,7 @@ export type ReadSnapshotPin = {
   newestCapturedAt: number
 }
 
-export type ReadSnapshotPinVerdict =
+type ReadSnapshotPinVerdict =
   | { ok: true; pin: ReadSnapshotPin }
   | { ok: false; reason: 'rollback' | 'signer_changed' | 'unsigned' }
 

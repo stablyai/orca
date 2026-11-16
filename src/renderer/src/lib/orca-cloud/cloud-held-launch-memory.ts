@@ -24,7 +24,7 @@ const MAX_RECORDS = 50
  * A record left by a workspace or sandbox deleted while the app was closed never meets its tab
  * again; it ages out (a restored one is also dropped once its tab doesn't come back).
  */
-export const HELD_LAUNCH_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
+const HELD_LAUNCH_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 
 function storage(): Storage | undefined {
   return typeof localStorage === 'undefined' ? undefined : localStorage

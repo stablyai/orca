@@ -6,7 +6,7 @@
 export const ORCA_CLOUD_SETUP_RETURN_CHANNEL = 'cloudSetup:return'
 
 /** Setup session ids are minted by the billing Worker: `cs_` + 22 base64url characters. */
-export const CLOUD_SETUP_SESSION_ID_PATTERN = /^cs_[A-Za-z0-9_-]{22}$/
+const CLOUD_SETUP_SESSION_ID_PATTERN = /^cs_[A-Za-z0-9_-]{22}$/
 
 export type OrcaCloudSetupReturn = { sessionId: string }
 

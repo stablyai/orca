@@ -15,7 +15,7 @@ export function usageAlertLevels(entitlement: OrcaBillingEntitlement): number[] 
  * The share of included hours actually used, floored, for the warning sentence: never below the
  * level billing reported (its count may be fresher) and never 100 while hours remain.
  */
-export function usageWarningUsedPercent(entitlement: OrcaBillingEntitlement): number {
+function usageWarningUsedPercent(entitlement: OrcaBillingEntitlement): number {
   const level = entitlement.usageWarningPercent ?? 0
   const used =
     entitlement.includedSeconds > 0
@@ -49,14 +49,14 @@ export function usageAlertLevel(entitlement: OrcaBillingEntitlement): number | n
 }
 
 /** The start of the window the hours count against: levels reset when it rolls over. */
-export function usageAlertPeriodStart(entitlement: OrcaBillingEntitlement): number | null {
+function usageAlertPeriodStart(entitlement: OrcaBillingEntitlement): number | null {
   return entitlement.usageWindow?.start ?? entitlement.period?.start ?? null
 }
 
 /** Levels already notified, per account (`${userId}:${orgId}`) and billing period. */
 export type UsageAlertLedger = Record<string, { periodStart: number; levels: number[] }>
 
-export type UsageAlertDecision = {
+type UsageAlertDecision = {
   /** The notification to show, or null. */
   notify: { level: number; percent: number } | null
   /** The ledger to persist (the same object when nothing changed). */

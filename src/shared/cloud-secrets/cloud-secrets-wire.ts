@@ -11,7 +11,7 @@ const Scope = z.enum(CLOUD_SECRET_SCOPES)
 const Kind = z.enum(['env', 'agent_key'])
 const Hint = z.string().max(8).nullable()
 
-export const CloudSecretViewSchema = z.object({
+const CloudSecretViewSchema = z.object({
   scope: Scope,
   name: Name,
   kind: Kind,

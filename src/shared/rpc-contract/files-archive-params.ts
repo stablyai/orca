@@ -45,10 +45,3 @@ export type FileArchiveReadResult = {
   /** Entries skipped because they vanished or became unreadable mid-archive. */
   skippedCount: number
 }
-
-export type FileArchiveErrorCode =
-  | 'archive_not_directory'
-  | 'archive_too_large'
-  | 'archive_too_many_entries'
-  | 'archive_not_found'
-  | 'archive_busy'

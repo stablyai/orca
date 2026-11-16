@@ -10,9 +10,9 @@
 // until they act on it again. Opening the workspace claims the wake (single-flight in main) and
 // shows its progress.
 
-export type PredictiveWakeTrigger = 'hover' | 'select' | 'focus'
+type PredictiveWakeTrigger = 'hover' | 'select' | 'focus'
 
-export type PredictiveWakeDeps = {
+type PredictiveWakeDeps = {
   now: () => number
   /** The setting (default on). */
   isEnabled: () => boolean
@@ -46,7 +46,7 @@ export const UNOPENED_HOLD_MS = 3 * 60_000
 /** After a refusal (seat cap, plan) intent leaves the workspace alone for this long. */
 export const REFUSAL_BACKOFF_MS = 10 * 60_000
 
-export type PredictiveWakeController = {
+type PredictiveWakeController = {
   hoverStart: (workspaceId: string) => void
   hoverEnd: (workspaceId: string) => void
   select: (workspaceId: string) => void
@@ -278,7 +278,7 @@ export function isPredictiveWakeOutstanding(workspaceId: string): boolean {
   )
 }
 /** How long before a wake's own start (the server checks in between) its intent may have fired. */
-export const PREDICTIVE_INTENT_LEAD_MS = 5_000
+const PREDICTIVE_INTENT_LEAD_MS = 5_000
 
 /**
  * A wake started on intent counts from when the intent fired (the hover dwell's end), not from

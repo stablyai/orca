@@ -34,4 +34,3 @@ export const HostedWorkspaceMemorySchema = z
     guarded: z.boolean()
   })
   .strip()
-export type HostedWorkspaceMemory = z.infer<typeof HostedWorkspaceMemorySchema>

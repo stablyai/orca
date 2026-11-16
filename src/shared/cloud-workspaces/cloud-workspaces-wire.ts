@@ -101,7 +101,6 @@ export const CloudWorkspaceSchema = z.object({
 })
 
 export type CloudWorkspace = z.infer<typeof CloudWorkspaceSchema>
-export type CloudWorkspacePresence = z.infer<typeof CloudWorkspacePresenceSchema>
 
 /** What Home's Routine runs switch hides (counts and hours stay in the team's totals). */
 export const CloudWorkspaceRoutineRunsSchema = z.object({
@@ -119,12 +118,6 @@ export const CloudWorkspaceListResponseSchema = z.object({
   routineRuns: CloudWorkspaceRoutineRunsSchema.optional().catch(undefined)
 })
 export const CloudWorkspaceResponseSchema = z.object({ workspace: CloudWorkspaceSchema })
-/** PUT/DELETE /v1/team/workspaces/:id/follow (PARITY-FOLLOW). */
-export const CloudWorkspaceFollowSchema = z.object({
-  following: z.boolean(),
-  followers: z.array(Id)
-})
-export type CloudWorkspaceFollow = z.infer<typeof CloudWorkspaceFollowSchema>
 export const CloudWorkspacePresenceResponseSchema = z.object({
   presence: z.array(CloudWorkspacePresenceSchema)
 })
@@ -226,13 +219,6 @@ export function formatWorkspaceNumber(n: number): string {
   return `W-${n}`
 }
 
-/** "W-123", "w123", "#123" or "123" → 123; anything else is null (palette search, pasted ids). */
-export function parseWorkspaceNumber(text: string): number | null {
-  const match = /^\s*(?:w-?|#)?(\d{1,9})\s*$/i.exec(text)
-  const n = match ? Number(match[1]) : Number.NaN
-  return Number.isSafeInteger(n) && n > 0 ? n : null
-}
-
 // Synced sidebar arrangement (/v1/team/prefs; mirrors sandbox-control src/workspace-prefs.ts).
 const SandboxId = z.string().regex(/^sbx_[0-9a-f]{24}$/)
 const SectionName = z.string().min(1).max(64)
@@ -256,13 +242,6 @@ export const EMPTY_CLOUD_WORKSPACE_PREFS: CloudWorkspacePrefsDocument = {
   collapsed: []
 }
 
-/** /v1/team/org: the org's URL slug for links (null for personal accounts or before it is named). */
-export const CloudOrgSlugSchema = z.object({
-  slug: z.string().nullable(),
-  orgId: z.string().nullable()
-})
-export type CloudOrgSlug = z.infer<typeof CloudOrgSlugSchema>
-
 /** What a link names: a sandbox id (orca://cloud/w/<id>) or an org slug and number (orca://cloud/<slug>/W-<n>). */
 export type CloudWorkspaceLinkTarget =
   | { kind: 'id'; workspaceId: string }
@@ -279,18 +258,6 @@ const NUMBER_LINK =
 
 export function cloudWorkspaceLink(id: string, chatId?: string | null): string {
   return `orca://cloud/w/${id}${chatId ? `/c/${encodeURIComponent(chatId)}` : ''}`
-}
-
-/** The server's link for a workspace (slug form when it has one), with a chat appended. */
-export function cloudWorkspaceShareLink(
-  workspace: { id: string; link?: string },
-  chatId?: string | null
-): string {
-  const base = workspace.link && parseCloudWorkspaceLink(workspace.link) ? workspace.link : null
-  if (!base) {
-    return cloudWorkspaceLink(workspace.id, chatId)
-  }
-  return `${base.replace(/\/$/, '')}${chatId ? `/c/${encodeURIComponent(chatId)}` : ''}`
 }
 
 function decodeChat(raw: string | undefined): string | null | undefined {

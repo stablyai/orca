@@ -41,7 +41,7 @@ export type LocalCommandWorkspaceRow = {
   connected: boolean
 }
 
-export type LocalCommandAllowRule = {
+type LocalCommandAllowRule = {
   id: string
   sandboxId: string
   workspaceLabel: string

@@ -4,7 +4,7 @@
 // The line is stable and machine-readable so UIs can render it as an attribution chip and strip it.
 
 // No email: the line is visible to every teammate's agent and stored in transcripts.
-export type MessageSender = { userId: string; name: string }
+type MessageSender = { userId: string; name: string }
 
 const PREFIX = '[orca-sender '
 // Older builds also wrote an email attribute; it is still parsed (so it strips) but never kept.
@@ -50,9 +50,3 @@ export function parseSenderEnvelope(text: string): { sender: MessageSender | nul
     body: stripSenderEnvelopes(text)
   }
 }
-
-/** One-time instruction for agents in shared workspaces (appended to org PR instructions). */
-export const SENDER_AGENT_INSTRUCTIONS =
-  'Messages in this shared workspace start with an [orca-sender name="…" id="…"] line naming the teammate who sent them. ' +
-  'Address that person. Your commits and pushes are attributed to them automatically: Orca checks which ' +
-  "teammate's device sent the message, so there is nothing to pass (`orca sender` shows it)."

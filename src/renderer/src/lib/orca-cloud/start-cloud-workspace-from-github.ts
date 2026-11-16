@@ -30,7 +30,7 @@ import {
   noteGitHubCreateOutcome
 } from './github-cloud-create-key'
 
-export type StartFromGitHubRequest = {
+type StartFromGitHubRequest = {
   repoUrl: string
   fullName: string
   /** The composer's name field: the workspace's name only, never sent to the agent. */

@@ -4,7 +4,7 @@
 // which the create's progress text reads, are separate and unchanged.
 
 /** Phases main sees: the provision call itself, the driver's progress lines, and its return. */
-export const CLOUD_CREATE_MAIN_PHASES = [
+const CLOUD_CREATE_MAIN_PHASES = [
   'provision-start',
   'provisioning',
   'plan-clone',
@@ -16,7 +16,7 @@ export const CLOUD_CREATE_MAIN_PHASES = [
 ] as const
 
 /** Phases the renderer reports after the provision returns, up to the workspace opening. */
-export const CLOUD_CREATE_RENDERER_PHASES = [
+const CLOUD_CREATE_RENDERER_PHASES = [
   'runtime-catalog-start',
   'runtime-catalog-end',
   'env-check-start',
@@ -26,7 +26,7 @@ export const CLOUD_CREATE_RENDERER_PHASES = [
   'failed'
 ] as const
 
-export type CloudCreateMainPhase = (typeof CLOUD_CREATE_MAIN_PHASES)[number]
+type CloudCreateMainPhase = (typeof CLOUD_CREATE_MAIN_PHASES)[number]
 export type CloudCreateRendererPhase = (typeof CLOUD_CREATE_RENDERER_PHASES)[number]
 export type CloudCreatePhase = CloudCreateMainPhase | CloudCreateRendererPhase
 

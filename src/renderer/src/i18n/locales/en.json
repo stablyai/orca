@@ -28893,30 +28893,10 @@
       "saveFailed": "Couldn’t change it. Nothing was changed."
     },
     "separator": " · ",
-    "stepOf": "{{step}} of {{of}}",
-    "settingUp": "Setting up {{agent}}",
-    "finishInBrowser": "Finish in your browser",
-    "preparing": "Getting {{product}} sign-in ready…",
-    "deviceGuard": "Only continue if you started this sign-in in Orca.",
-    "pasteTitle": "Paste a {{agent}} setup token",
-    "saving": "Saving to your Orca account…",
-    "savingDetail": "Every cloud workspace will use it.",
-    "signIn": "Agent sign-in",
-    "optionalOnce": "optional · one time",
-    "offerDetail": "Sign in to {{agents}} once. Every cloud workspace uses it.",
-    "stillOpens": "The workspace still opens.",
-    "expired": "Your {{agent}} sign-in for Orca Cloud expired",
-    "agentSignIn": "{{agent}} sign-in",
     "paused": "Orca account sign-in is paused",
-    "pausedDetail": "This sign-in stays with this workspace.",
-    "error": "Couldn’t check agent sign-in",
-    "errorDetail": "The workspace still opens. Agents can sign in later.",
     "groupAccount": "{{agents}} from your Orca account",
     "groupKey": "{{agents}} with {{key}}",
-    "notOffered": "Signs in for each cloud workspace for now",
-    "expiredDetailRenew": "Renew once. Every cloud workspace picks it up.",
-    "finishInBrowserPasteCloudSignIns": "Finish in your browser, then paste the code in Settings → Cloud agent sign-ins.",
-    "pasteDetailCloudSignIns": "Paste it in Settings → Cloud agent sign-ins."
+    "notOffered": "Signs in for each cloud workspace for now"
   },
   "agentAccountsOverview": {
     "action": {

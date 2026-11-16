@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   CloudWorkspaceSchema,
   formatWorkspaceNumber,
-  parseCloudWorkspaceLink,
-  parseWorkspaceNumber
+  parseCloudWorkspaceLink
 } from './cloud-workspaces-wire'
 import { base64ToBytes, bytesToBase64 } from './sealed-grant'
 import { stripSenderEnvelopes } from './sender-envelope'
@@ -49,14 +48,8 @@ describe('cloud workspace links', () => {
     }
   })
 
-  it('formats and parses workspace numbers', () => {
+  it('formats workspace numbers', () => {
     expect(formatWorkspaceNumber(42)).toBe('W-42')
-    for (const text of ['W-42', 'w42', '#42', ' 42 ']) {
-      expect(parseWorkspaceNumber(text)).toBe(42)
-    }
-    for (const text of ['W-', 'W-0', 'fix 42', '4.2', '']) {
-      expect(parseWorkspaceNumber(text)).toBeNull()
-    }
   })
 })
 

@@ -4,7 +4,7 @@ import type { HostedWorkspaceStatus } from '../../../../shared/hosted-sandbox/ho
 import type { SandboxLimit } from '@/components/worktree-creation/vm-build-sandbox-limit'
 import { SLEEP_COOLDOWN_MS } from './cloud-predictive-wake'
 
-export type PredictiveWakeServerVerdict =
+type PredictiveWakeServerVerdict =
   | 'ok'
   | 'not-sleeping'
   | 'recently-slept'

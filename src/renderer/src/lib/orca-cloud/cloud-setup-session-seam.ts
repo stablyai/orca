@@ -37,7 +37,7 @@ export function getCloudSetupLinkProvider(): SessionLinkProvider | null {
 
 type SessionSource = (sessionId: string) => CloudSetupSessionSnapshot | null
 
-export type CloudSetupStartRequest = {
+type CloudSetupStartRequest = {
   repoId: string
   /** The rows still open when the user clicked (account, team, plan, github). */
   needs: CloudSetupStep['id'][]
@@ -71,7 +71,7 @@ export function getCloudSetupStarter(): SessionStarter | null {
   return starter
 }
 
-export function readCloudSetupSession(sessionId: string | null): CloudSetupSessionSnapshot | null {
+function readCloudSetupSession(sessionId: string | null): CloudSetupSessionSnapshot | null {
   return sessionId && source ? source(sessionId) : null
 }
 
@@ -88,7 +88,7 @@ export function notifyCloudSetupSessionChanged(): void {
   }
 }
 
-export function subscribeCloudSetupSession(listener: () => void): () => void {
+function subscribeCloudSetupSession(listener: () => void): () => void {
   listeners.add(listener)
   return () => listeners.delete(listener)
 }

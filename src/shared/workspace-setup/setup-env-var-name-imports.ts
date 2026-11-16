@@ -3,7 +3,7 @@
 import type { SetupScriptImportFileRead } from './setup-script-imports'
 import { asRecord, parseJsoncObject, parseTomlObject } from './setup-script-import-parsers'
 
-export type SetupEnvVarNameImport = {
+type SetupEnvVarNameImport = {
   names: string[]
   /** Repo-relative files that contributed at least one name. */
   files: string[]

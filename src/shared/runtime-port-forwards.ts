@@ -19,7 +19,7 @@ export type RuntimePortForward = {
   lastError?: string
 }
 
-export type RuntimePortForwardFailureCode =
+type RuntimePortForwardFailureCode =
   | 'port_busy'
   | 'listen_failed'
   | 'host_unsupported'

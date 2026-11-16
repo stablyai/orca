@@ -38,7 +38,7 @@ function isSleepRefused(result: { ok: false; error: string; status?: number }): 
   return result.error === 'not_found' || result.error === 'forbidden' || result.status === 403
 }
 
-export type PairedSleepOutcome = {
+type PairedSleepOutcome = {
   /** Still running: not slept (refused, failed, or no sandbox found for the row). */
   stillRunning: string[]
   /** Of those, refused because this account may not sleep it (a member on a teammate's workspace). */

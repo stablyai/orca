@@ -18,7 +18,7 @@ export type LocalMcpServer = {
   config: unknown
 }
 
-export type McpSyncPlanInput = {
+type McpSyncPlanInput = {
   servers: readonly LocalMcpServer[]
   /** `agent:name` keys the user turned off. */
   excluded: ReadonlySet<string>
@@ -27,7 +27,7 @@ export type McpSyncPlanInput = {
   homeDir: string | null
 }
 
-export type McpSyncPlan = { params: AgentMcpSyncParams; rows: McpSyncServerRow[] }
+type McpSyncPlan = { params: AgentMcpSyncParams; rows: McpSyncServerRow[] }
 
 // Claude merges scopes as local (project) over user; keep the one that wins locally.
 function dedupe(servers: readonly LocalMcpServer[]): LocalMcpServer[] {

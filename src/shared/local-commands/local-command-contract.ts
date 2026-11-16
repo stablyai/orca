@@ -13,7 +13,7 @@ export const LOCAL_COMMANDS_SETTLE_METHOD = 'localCommands.settle'
 
 export const LOCAL_COMMAND_MAX_COMMAND_CHARS = 4000
 /** More lines than a person reads in one prompt is refused rather than scrolled past. */
-export const LOCAL_COMMAND_MAX_LINES = 20
+const LOCAL_COMMAND_MAX_LINES = 20
 export const LOCAL_COMMAND_MAX_CWD_CHARS = 1024
 export const LOCAL_COMMAND_REASON_MAX = 200
 export const LOCAL_COMMAND_DEFAULT_TIMEOUT_SEC = 120
@@ -37,7 +37,7 @@ const HIDDEN_CHARS =
   /[\u0000-\u0008\u000B-\u001F\u007F-\u00A0\u00AD\u0300-\u036F\u061C\u115F\u1160\u1680\u180E\u1AB0-\u1AFF\u1DC0-\u1DFF\u2000-\u200F\u2028-\u202F\u205F-\u206F\u20D0-\u20FF\u2800\u3000\u3164\uFE00-\uFE0F\uFE20-\uFE2F\uFEFF\uFFA0\uFFF9-\uFFFB]|\uDB40[\uDC00-\uDC7F]/
 
 /** True when the text holds a character that could make the shown command differ from the run one. */
-export function hasHiddenCharacters(text: string): boolean {
+function hasHiddenCharacters(text: string): boolean {
   return HIDDEN_CHARS.test(text)
 }
 
@@ -104,7 +104,7 @@ export const LocalCommandAttachParamsSchema = z
 
 const OutputText = z.string().max(LOCAL_COMMAND_OUTPUT_CAP_BYTES * 2)
 
-export const LocalCommandRunResultSchema = z
+const LocalCommandRunResultSchema = z
   .object({
     exitCode: z.number().int().nullable(),
     signal: z.string().max(32).nullable(),
@@ -118,7 +118,7 @@ export const LocalCommandRunResultSchema = z
 export type LocalCommandRunResult = z.infer<typeof LocalCommandRunResultSchema>
 
 /** Why a request ended without running. `denied` is a person's answer; the others are not. */
-export const LocalCommandDeclineReasonSchema = z.enum([
+const LocalCommandDeclineReasonSchema = z.enum([
   'denied',
   'approval_timed_out',
   'not_allowed'
@@ -190,7 +190,7 @@ export type LocalCommandRequestedEvent = {
   expiresInMs: number
 }
 
-export type LocalCommandSettledEvent = {
+type LocalCommandSettledEvent = {
   type: 'settled'
   requestId: string
   status: Exclude<LocalCommandStatus, 'pending'>

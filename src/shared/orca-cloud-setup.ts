@@ -35,7 +35,7 @@ export type CloudSetupStartResult =
 
 export type CloudSetupStepState = 'done' | 'needed' | 'active' | 'pending' | 'failed' | 'optional'
 
-export type CloudSetupSessionStep = {
+type CloudSetupSessionStep = {
   id: 'account' | 'team' | 'plan' | 'github'
   state: CloudSetupStepState
   /** team: its name · plan: 'trial' | 'subscription' | 'checkout' · github: 'requested'. */
