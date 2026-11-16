@@ -17,11 +17,8 @@ export async function withoutRejectedClaudeApiKey(
   const { approved, rejected } = isRecord(responses) ? responses : {}
   // Claude records answers by the trimmed key's last 20 characters.
   const suffix = apiKey.trim().slice(-20)
-  if (
-    !(Array.isArray(approved) && approved.includes(suffix)) &&
-    Array.isArray(rejected) &&
-    rejected.includes(suffix)
-  ) {
+  const lists = (answers: unknown) => Array.isArray(answers) && answers.includes(suffix)
+  if (!lists(approved) && lists(rejected)) {
     for (const name of keyNames) {
       delete env[name]
     }
