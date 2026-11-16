@@ -76,12 +76,12 @@ export function useCodexSwitcherController(codex: ProviderRateLimits) {
     runtimeTarget
   )
   const codexAccountSyncKey = useAppStore((s) => getCodexAccountSyncKey(s.settings))
-  const { accounts, setAccounts, loadAccounts } = useProviderAccountList(
-    'codex',
-    runtimeTarget,
-    codexAccountSyncKey,
-    EMPTY_CODEX_ACCOUNTS
-  )
+  const {
+    accounts,
+    setAccounts,
+    loadAccounts,
+    mountedRef: ownerMountedRef
+  } = useProviderAccountList('codex', runtimeTarget, codexAccountSyncKey, EMPTY_CODEX_ACCOUNTS)
   const accountState = resolveCodexStatusAccountState(
     settings,
     accounts,
@@ -161,6 +161,7 @@ export function useCodexSwitcherController(codex: ProviderRateLimits) {
       fetchSettings,
       isSwitching,
       mountedRef,
+      ownerMountedRef,
       reauthenticatingAccountId,
       recordFeatureInteraction,
       setAccounts,

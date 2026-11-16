@@ -17,6 +17,8 @@ type CodexSignInActionDependencies = {
   fetchSettings: AppState['fetchSettings']
   isSwitching: boolean
   mountedRef: MutableRefObject<boolean>
+  /** False once the account owner changes; gates work for the old owner's menu. */
+  ownerMountedRef: MutableRefObject<boolean>
   reauthenticatingAccountId: string | null
   recordFeatureInteraction: AppState['recordFeatureInteraction']
   setAccounts: (next: CodexRateLimitAccountsState) => void
@@ -35,6 +37,7 @@ export async function signInCodexAccount(
     fetchSettings,
     isSwitching,
     mountedRef,
+    ownerMountedRef,
     reauthenticatingAccountId,
     recordFeatureInteraction,
     setAccounts,
@@ -71,7 +74,7 @@ export async function signInCodexAccount(
         owner: { kind: 'local' },
         target
       })
-    } else if (mountedRef.current && menuOpenRef.current) {
+    } else if (ownerMountedRef.current && menuOpenRef.current) {
       await fetchInactiveCodexAccountUsage()
     }
     toast.success(

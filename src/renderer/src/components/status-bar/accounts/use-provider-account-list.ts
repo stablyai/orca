@@ -44,6 +44,8 @@ export function useProviderAccountList<Provider extends 'claude' | 'codex'>(
   const [local, setLocal] = useState({ ownerKey, accounts: initial, known: false })
   // Why: a list read started before a selection can settle after the selection reply.
   const writeSequenceRef = useRef(0)
+  // Reused in-flight reads keep the sequence from when this list first awaited them.
+  const readStartSequencesRef = useRef(new WeakMap<Promise<ProviderAccountsSnapshot>, number>())
   const accounts = observing
     ? (answer?.accounts ?? initial)
     : local.ownerKey === ownerKey
@@ -71,8 +73,10 @@ export function useProviderAccountList<Provider extends 'claude' | 'codex'>(
     [mountedRef, observing, observation, ownerKey]
   )
   const loadAccounts = useCallback(async () => {
-    const writeSequence = writeSequenceRef.current
-    const snapshot = await fetchProviderAccountsSnapshot(ownerTarget)
+    const request = fetchProviderAccountsSnapshot(ownerTarget)
+    const writeSequence = readStartSequencesRef.current.get(request) ?? writeSequenceRef.current
+    readStartSequencesRef.current.set(request, writeSequence)
+    const snapshot = await request
     if (snapshot.failedProviders?.includes(provider)) {
       console.error(`${provider} account list failed; keeping previous state.`)
       return
