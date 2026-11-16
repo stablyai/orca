@@ -63,7 +63,8 @@ export async function callAbortableRuntimeEnvironment(
         },
         {
           onResponse: (response) => finish(() => resolve(response)),
-          onError: (error) => finish(() => reject(new Error(error.message))),
+          onError: (error) =>
+            finish(() => reject(Object.assign(new Error(error.message), { code: error.code }))),
           onClose: () =>
             finish(() => reject(new Error(`Runtime request closed before ${method} completed`)))
         }

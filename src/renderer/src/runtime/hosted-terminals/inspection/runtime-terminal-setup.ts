@@ -1,6 +1,7 @@
 import { getRuntimeEnvironmentRevision } from '../../rpc/environment-revisions/runtime-environment-revision'
 import type { TerminalSetupStatus } from '../../../../../shared/terminal/pty/lifecycle/terminal-setup-status'
 import { classifyTerminalProcessInspectionFailure } from '../../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
+import { REMOTE_RUNTIME_CONNECT_FAILURE_PHRASE } from '../../../../../shared/remote-runtime/remote-runtime-connect-bound'
 import { toRemoteRuntimeClientErrorLike } from '../../../../../shared/remote-runtime/remote-runtime-client-error-classification'
 import { getRemoteRuntimePtyOwner } from '../identity/remote-runtime-pty-owner'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
@@ -141,9 +142,21 @@ export function terminalSetupStreamLifecycle(
 
 function isSetupTransportLoss(error: unknown): boolean {
   const failure = toRemoteRuntimeClientErrorLike(error)
-  // A live host also returns runtime_unavailable while its graph is reloading.
+  if (failure.code) {
+    return [
+      'CONNECTION_LOST',
+      'DISPOSED',
+      'socket_closed',
+      'connection_closed',
+      'transport_closed',
+      'remote_runtime_unavailable'
+    ].includes(failure.code)
+  }
+  // Electron invoke rejections can strip the transport code before subscription starts.
+  const message = failure.message.toLowerCase()
   return (
-    failure.code !== 'runtime_unavailable' &&
-    classifyTerminalProcessInspectionFailure(error) === 'transport_loss'
+    message.includes(REMOTE_RUNTIME_CONNECT_FAILURE_PHRASE.toLowerCase()) ||
+    message.includes('remote orca runtime closed the connection') ||
+    message.startsWith('runtime request closed before ')
   )
 }

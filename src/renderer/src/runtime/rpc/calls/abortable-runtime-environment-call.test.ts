@@ -40,3 +40,28 @@ it('cancels setup using the preselected id and unsubscribes a late handle', asyn
   await Promise.resolve()
   expect(unsubscribe).toHaveBeenCalled()
 })
+
+it('preserves the transport code and ordinary Error contract', async () => {
+  stubRuntimeEnvironmentBridge({
+    subscribe: async (_args, callbacks) => {
+      callbacks.onError?.({
+        code: 'remote_runtime_unavailable',
+        message: 'Could not connect to the remote Orca runtime.'
+      })
+      return { unsubscribe: () => {}, sendBinary: () => {} }
+    },
+    cancelSubscription: async () => {}
+  })
+  const pending = callAbortableRuntimeEnvironment(
+    'env',
+    'terminal.setupStatus',
+    {},
+    15_000,
+    new AbortController().signal
+  )
+  await expect(pending).rejects.toBeInstanceOf(Error)
+  await expect(pending).rejects.toMatchObject({
+    code: 'remote_runtime_unavailable',
+    message: 'Could not connect to the remote Orca runtime.'
+  })
+})
