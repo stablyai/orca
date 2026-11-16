@@ -1,6 +1,6 @@
 import { app } from 'electron'
-import { sanitizeCrashReportDetails } from '../../../shared/crash-report-redaction'
-import type { CrashReportDetailValue } from '../../../shared/crash-reporting'
+import { sanitizeCrashReportDetails } from '../../../shared/crash-reporting/crash-report-redaction'
+import type { CrashReportDetailValue } from '../../../shared/crash-reporting/crash-reporting'
 import { getSystemMemoryDetails, memoryKBFieldMB } from '../memory/system-memory-details'
 import {
   getStartupRtPrioOutcome,

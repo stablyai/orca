@@ -1,7 +1,7 @@
 import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, posix } from 'node:path'
-import { renameFileWithWindowsRetry } from '../../../shared/windows-retry-file-operations'
+import { renameFileWithWindowsRetry } from '../../../shared/file-write/windows-retry-file-operations'
 import { isProcessAlive } from '../endpoint/identity/daemon-process-inspection'
 import {
   ensureOwnedPrivateDir,

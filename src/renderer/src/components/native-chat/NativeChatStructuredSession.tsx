@@ -153,6 +153,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
   // Final read refusal replaces the pane because no existing action can succeed.
   const viewState = selectNativeChatViewState(session, { readRetries: readFailure?.final !== true })
   const paneActive = props.isVisible && props.isFocusedGroup
+  const parentShown = props.isVisible && childNavigator.child === null
   useNativeChatFontSize(viewState.kind === 'ready' && paneActive, rootRef)
   const activeComposerRef = childNavigator.child ? readOnlyComposerRef : composerRef
   const activeAnswerInputRef = childNavigator.child ? childAnswerInputRef : questionAnswerInputRef
@@ -286,7 +287,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
             pane={props}
             composerRef={composerRef}
             canMention={canMention && childNavigator.child === null}
-            isVisible={props.isVisible && childNavigator.child === null}
+            isVisible={parentShown}
           >
             <NativeChatContextClearFade
               clearing={controller.contextClear.clearing && viewState.kind !== 'error'}
@@ -316,7 +317,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                   forks={forks}
                   messageListRef={submits.messageListRef}
                   session={session}
-                  isVisible={props.isVisible && childNavigator.child === null}
+                  isVisible={parentShown}
                   awaitingInput={prompt === null ? null : 'shown'}
                   stopping={stopControls.stopping}
                   runtimeContext={imageRuntimeContext}
@@ -338,10 +339,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                 editAttachTo={{ terminalTabId: props.tabId, agent: props.agent, transport }}
               />
               {subagents.strip}
-              <NativeChatStructuredWorkerApprovals
-                pane={props}
-                isVisible={props.isVisible && childNavigator.child === null}
-              />
+              <NativeChatStructuredWorkerApprovals pane={props} isVisible={parentShown} />
               {prompt || subagentOpen ? null : (
                 <NativeChatStructuredComposerTabStrips
                   tabId={props.tabId}
@@ -352,6 +350,8 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                   isVisible={props.isVisible}
                   turnId={controller.turnId}
                   workingStartedAt={controller.workingStartedAt}
+                  target={props.target}
+                  focusComposer={focusComposer}
                 />
               )}
               {/* Prompt cards take the composer's slot, below the background-task dock. */}

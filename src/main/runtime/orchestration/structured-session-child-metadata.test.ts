@@ -5,7 +5,7 @@ import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
 } from '../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
-import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
+import { testOrcaSessionId } from '../../../shared/agent-session/identity/orca-session-address-test-fixture'
 import { OrchestrationDb } from './db/orchestration-db'
 import { structuredSessionChildWorkers } from './structured-session-child-workers'
 import {

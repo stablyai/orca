@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { getOpenCodeCliCapabilities } from '../../../shared/opencode-cli-version'
+import { getOpenCodeCliCapabilities } from '../../../shared/agent-launch/startup/opencode-cli-version'
 import { createOpenCodeTextTaskHttp } from './opencode-text-task-http'
 import type { openCodeTextTaskEndpoint } from './opencode-text-task-input'
 

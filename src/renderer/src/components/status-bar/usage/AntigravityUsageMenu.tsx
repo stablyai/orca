@@ -4,7 +4,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import type {
   AntigravityAccountUsage,
   ProviderRateLimits
-} from '../../../../../shared/rate-limit-types'
+} from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { AccountSwitchList } from '../accounts/AccountSwitchList'
 import { AccountSwitchRowItem } from '../accounts/AccountSwitchRowItem'
 import { InlineUsageBars } from './InlineProviderUsage'
@@ -60,6 +60,7 @@ export function AntigravityUsageMenu({
       }
     >
       <AccountSwitchList
+        showResetColumn
         heading={t('auto.components.status.bar.antigravity.accounts', 'Saved Antigravity Accounts')}
       >
         {accounts.map((entry) => (

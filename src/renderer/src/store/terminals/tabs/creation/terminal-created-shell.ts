@@ -2,7 +2,7 @@ import { getLocalProjectExecutionRuntimeContext } from '@/runtime/hosts/prefligh
 import { getProjectRuntimeFolder } from '@/runtime/hosts/wsl/local-project-runtime-workspace'
 import { findLocalFolderWorkspaceRuntimeRepo } from '../../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
-import { isWslUncPath } from '../../../../../../shared/wsl-paths'
+import { isWslUncPath } from '../../../../../../shared/file-access/wsl-paths'
 import {
   getRemoteConnectionIdForWorktree,
   resolveCreatedTabShellOverride,

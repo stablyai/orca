@@ -7,12 +7,12 @@ import { worktreeMatchesVisibleHost } from '@/components/sidebar/worktree-list/l
 import {
   filterFolderWorkspacesFromOtherDevices,
   isWorkspaceOwnedBySomeoneElse
-} from '../../../../shared/workspace-creator-visibility'
+} from '../../../../shared/workspace-view/workspace-creator-visibility'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
-import type { ProjectGroup } from '../../../../shared/project-group-types'
-import type { Repo } from '../../../../shared/repo-types'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import type { StoredAgentAttentionUnread } from '@/attention/agent-attention-contract'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Tab } from '../../../../shared/tab-types'

@@ -27,7 +27,7 @@ export function useTerminalController() {
   const editorClose = Object.assign(closeQueue, useTerminalEditorCloseDialogActions(closeQueue))
   const parking = Object.assign(editorClose, useTerminalParkingFoundation(editorClose))
   useTerminalParkingPass(parking)
-  useTerminalBrowserRetention(parking)
+  useTerminalBrowserRetention()
   const coldActivation = Object.assign(parking, applyTerminalColdActivation(parking))
   useTerminalWatcherEffects(coldActivation)
   useActivationDeferredTabAdmission(coldActivation)

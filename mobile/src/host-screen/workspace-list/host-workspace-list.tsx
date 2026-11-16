@@ -39,7 +39,7 @@ import type {
   WorkspaceListItem,
   Worktree
 } from '../../worktree/workspace-list/workspace-list-types'
-import { DEFAULT_REPO_BADGE_COLOR } from '../../../../src/shared/repo-badge-color'
+import { DEFAULT_REPO_BADGE_COLOR } from '../../../../src/shared/repository/appearance/repo-badge-color'
 import { getWorktreeCardDetails } from '../../../../src/shared/worktree/row-display/card-properties'
 import { hostScreenStyles as styles } from '../host-screen-styles'
 import { useRepoLookById, type RepoLook } from '../catalog/host-repo-looks'

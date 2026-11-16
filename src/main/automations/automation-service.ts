@@ -1,4 +1,4 @@
-import type { AutomationUsageClient } from '../../shared/backend-service-contract'
+import type { AutomationUsageClient } from '../../shared/backend/backend-service-contract'
 import {
   requestAutomationDispatch,
   runAutomationRequestPrecheck
@@ -38,7 +38,7 @@ import { AutomationWakeGate } from './dispatch/automation-wake-settle'
 import type {
   AutomationsChangedPayload,
   PublishAutomationsChanged
-} from '../../shared/runtime-client-events'
+} from '../../shared/remote-runtime/session-graph/runtime-client-events'
 
 const DEFAULT_TICK_MS = 60 * 1000
 

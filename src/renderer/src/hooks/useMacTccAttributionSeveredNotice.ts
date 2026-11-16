@@ -5,7 +5,7 @@ import type {
   PtyManagementFolderAccessMismatch,
   PtyManagementMacTccAttributionHealth
 } from '../../../preload/api/terminal/pty-management-api'
-import { isPluginUiLanguage } from '../../../shared/ui-language'
+import { isPluginUiLanguage } from '../../../shared/i18n/ui-language'
 import { useAppStore } from '@/store/index'
 import {
   usePluginLanguagePackStore,

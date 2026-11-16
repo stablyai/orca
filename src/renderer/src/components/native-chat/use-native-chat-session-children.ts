@@ -2,7 +2,7 @@ import { createCoalescedPollRunner } from '@/lib/source-control/refresh/coalesce
 import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import { useAppStore } from '@/store'
 import { useEffect, useMemo, useState } from 'react'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   ORCHESTRATION_SESSION_CHILDREN_CAPABILITY,
   type OrchestrationSessionChild,
@@ -13,7 +13,7 @@ import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-c
 
 function workerLifecycleKey(state: ReturnType<typeof useAppStore.getState>): string {
   return JSON.stringify(
-    Object.entries(state.agentStatusByPaneKey).flatMap(([key, row]) =>
+    Array.from(state.agentStatusByPaneKey).flatMap(([key, row]) =>
       row.orchestration
         ? [
             [

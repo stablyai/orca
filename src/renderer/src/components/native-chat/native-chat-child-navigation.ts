@@ -2,7 +2,7 @@ import type { NativeChatMessageListHandle } from './messages/actions/use-native-
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { createContext, useCallback, useContext, useMemo, useState, useRef } from 'react'
 
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { nativeChatChildAgentId } from './native-chat-child-agent-id'
 
 export type NativeChatChildSource =

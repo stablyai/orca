@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { AgentChildWorkView } from '../../../../../shared/agent-status/child-work/agent-status-child-work-view'
 
-import { structuredSessionBackgroundTasksView } from '../../../../../shared/structured-session-background-tasks-view'
+import { structuredSessionBackgroundTasksView } from '../../../../../shared/agent-session/view/structured-session-background-tasks-view'
 import {
   attach,
   hostTestState,

@@ -1,9 +1,9 @@
-import { wslDistroForCommand } from '../../../shared/wsl-paths'
+import { wslDistroForCommand } from '../../../shared/file-access/wsl-paths'
 import { spawnProcess } from '@orca/process-host'
 import {
   withCliRuntimeOnPath,
   resolveCliCommand
-} from '../../../shared/node-cli-command-resolution'
+} from '../../../shared/shell/command-resolution/node-cli-command-resolution'
 import { ORCA_AGENT_HOOKS_DISABLED_ENV } from '../../../shared/agent-hook-listener/transport/agent-hook-suppression-env'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { wslAwareSpawn } from '../../git/command-runner/host-routing/wsl-aware-spawn'

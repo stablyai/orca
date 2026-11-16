@@ -14,7 +14,7 @@ import {
   type TextGenerationFailureFields
 } from '../../text-generation-failure-copy'
 import type { GlobalSettings } from '../../global-settings-types'
-import type { Repo } from '../../repo-types'
+import type { Repo } from '../../repository/repo-types'
 import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
 
 import { projectSourceControlAiToLegacyCommitMessageAi as projectLegacySettings } from './settings/source-control-ai-legacy-projection'

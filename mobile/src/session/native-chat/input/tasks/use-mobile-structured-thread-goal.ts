@@ -1,8 +1,9 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
-  AGENT_OWNED_THREAD_GOAL_CLEAR_COMMAND,
+  agentOwnedThreadGoalCommand,
   agentSessionThreadGoalReport
 } from '../../../../../../src/shared/agent-session/agent-session-thread-goal-report'
+import { getNativeChatAgentProfile } from '../../../../../../src/shared/native-chat/native-chat-agent-profiles'
 import type {
   AgentSessionThreadGoalChange,
   AgentSessionThreadGoalResult
@@ -32,8 +33,10 @@ export type MobileStructuredThreadGoal = {
   runningTurn: { startedAt: number | null } | null
   /** Phone clock minus host clock, for reading goal times on the host's clock. */
   hostClockOffsetMs: number
-  /** As `locked`; an agent-owned clear is also a message the agent must take, so it waits while the chat works. */
+  /** As `locked`; an agent-owned clear or resume is also a message the agent must take, so it waits while the chat works. */
   clearLocked: boolean
+  /** An agent-owned goal resumes through the agent's `/goal resume`. */
+  agentResumes: boolean
   /** False when the change was refused or not sent; the error reaches the chat's error banner. */
   change: (change: AgentSessionThreadGoalChange) => Promise<boolean>
 }
@@ -45,7 +48,7 @@ type GoalCommands = Pick<StructuredAgentSessionComposerOptions, 'changeThreadGoa
 export function useMobileStructuredThreadGoal<TCommands extends object>(
   session: Pick<
     MobileStructuredAgentSessionArgs,
-    'hostSupport' | 'enabled' | 'connected' | 'onSendError'
+    'hostSupport' | 'enabled' | 'connected' | 'onSendError' | 'agent'
   >,
   state: Pick<StructuredAgentSessionState, 'items' | 'epoch' | 'hostClock'>,
   chat: {
@@ -87,9 +90,11 @@ export function useMobileStructuredThreadGoal<TCommands extends object>(
       : session.hostSupport?.phoneThreadGoal === true && relayed
         ? 'host'
         : null
+  const agentResumes = getNativeChatAgentProfile(session.agent)?.resumesOwnGoal === true
   const change = useCallback(
     async (next: AgentSessionThreadGoalChange): Promise<boolean> => {
-      if (changes === null || (changes === 'agent' && next.kind !== 'clear')) {
+      const command = changes === 'agent' ? agentOwnedThreadGoalCommand(next, agentResumes) : null
+      if (changes === null || (changes === 'agent' && command === null)) {
         return false
       }
       const count = (by: number) =>
@@ -98,8 +103,8 @@ export function useMobileStructuredThreadGoal<TCommands extends object>(
         )
       count(1)
       try {
-        if (changes === 'agent') {
-          return (await sendRef.current(AGENT_OWNED_THREAD_GOAL_CLEAR_COMMAND)) !== 'rejected'
+        if (command !== null) {
+          return (await sendRef.current(command)) !== 'rejected'
         }
         const result = await mutate<AgentSessionThreadGoalResult>(
           'agentSession.threadGoal',
@@ -119,7 +124,7 @@ export function useMobileStructuredThreadGoal<TCommands extends object>(
         count(-1)
       }
     },
-    [changes, mutate, onSendError, sessionKey]
+    [agentResumes, changes, mutate, onSendError, sessionKey]
   )
   const hostClockOffsetMs = mobileStructuredHostClockOffsetMs(state.hostClock)
   const locked = (pending[sessionKey] ?? 0) > 0 || !session.enabled || !session.connected
@@ -136,6 +141,7 @@ export function useMobileStructuredThreadGoal<TCommands extends object>(
             changes,
             locked,
             clearLocked,
+            agentResumes,
             runningTurn:
               turnId === null
                 ? null
@@ -148,6 +154,7 @@ export function useMobileStructuredThreadGoal<TCommands extends object>(
           }
         : null,
     [
+      agentResumes,
       change,
       changes,
       clearLocked,

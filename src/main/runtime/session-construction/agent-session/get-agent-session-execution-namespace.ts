@@ -1,7 +1,7 @@
 import { OrcaRuntimeWithResolveWorktreeRemovalTarget } from '../../workspaces/workspace-removal-target'
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import type {
   AgentLaunchPreferences,
   RuntimeAgentSessionRpcCaller,
@@ -113,7 +113,9 @@ export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends O
       providerSession: request.providerSession,
       record: record && worktreeIdsEqual(record.worktreeId, worktreeId) ? record : undefined,
       liveRow: sourcePaneKey
-        ? this.getAgentProviderSessionSnapshotFn?.().find((row) => row.paneKey === sourcePaneKey)
+        ? this.getAgentProviderSessionRowsForPaneFn?.(sourcePaneKey).find(
+            (row) => row.paneKey === sourcePaneKey
+          )
         : undefined
     })
   }

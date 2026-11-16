@@ -4,7 +4,7 @@ import { useCallback } from 'react'
 import { settleComposerSubmit } from '@/lib/workspace/creation/composer-submit-cancellation'
 import { getWorkspaceSourceProvider } from '../../../../shared/new-workspace/workspace-source'
 import { canUseIssueCommandForLinkedItemProvider } from '@/lib/workspace/creation/new-workspace'
-import { getSetupConfig } from '../../../../shared/orca-hook-setup-config'
+import { getSetupConfig } from '../../../../shared/workspace-setup/hooks/orca-hook-setup-config'
 import {
   deriveWorkspaceSetupState,
   readWorkspaceSetupInspection,

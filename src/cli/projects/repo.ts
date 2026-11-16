@@ -1,19 +1,39 @@
 import type {
   RuntimeRepoList,
   RuntimeRepoSearchRefs
-} from '../../shared/runtime-worktree-contracts'
+} from '../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import { formatRepoList, formatRepoRefs, formatRepoShow } from './repo-format'
 import { printResult } from '../output/command-result-output'
+import type { BrowserProfileListResult } from '../../shared/browser/runtime/runtime-browser-contracts'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalRepoKind,
+  getOptionalStringFlag,
   getRequiredStringFlag
 } from '../arguments/flags'
 import { resolveRepoPathArgument } from './repo-path-arguments'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { attachCliErrorData } from '../workspaces/worktree-setup-decision-recovery'
 import { resolveHostFlagTarget } from '../hosts/execution-host-flag'
+
+/** `inherit` clears the pick; anything else must name a profile on the repo's Orca host. */
+async function resolveBrowserProfileFlag(
+  client: HandlerContext['client'],
+  value: string
+): Promise<string | null> {
+  if (value === 'inherit') {
+    return null
+  }
+  const { profiles } = (await client.call<BrowserProfileListResult>('browser.profileList')).result
+  if (!profiles.some((profile) => profile.id === value)) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      `Browser profile ${value} was not found. Run \`orca tab profile list\` to see profile ids.`
+    )
+  }
+  return value
+}
 
 async function setRepoHidden(
   { flags, client, json }: Pick<HandlerContext, 'flags' | 'client' | 'json'>,
@@ -66,17 +86,50 @@ export const REPO_HANDLERS: Record<string, CommandHandler> = {
   },
   'repo set': async ({ flags, client, json }) => {
     const repo = getRequiredStringFlag(flags, 'repo')
-    const visibility = getRequiredStringFlag(flags, 'external-worktree-visibility')
-    if (visibility !== 'show' && visibility !== 'hide' && visibility !== 'inherit') {
+    const visibility = getOptionalStringFlag(flags, 'external-worktree-visibility')
+    const browserProfile = getOptionalStringFlag(flags, 'browser-profile')
+    if (visibility === undefined && browserProfile === undefined) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'Pass --external-worktree-visibility or --browser-profile.'
+      )
+    }
+    if (
+      visibility !== undefined &&
+      visibility !== 'show' &&
+      visibility !== 'hide' &&
+      visibility !== 'inherit'
+    ) {
       throw new RuntimeClientError(
         'invalid_argument',
         '--external-worktree-visibility must be show, hide, or inherit.'
       )
     }
+    const browserProfileId =
+      browserProfile === undefined
+        ? undefined
+        : await resolveBrowserProfileFlag(client, browserProfile)
     const result = await client.call<{ repo: Record<string, unknown> }>('repo.update', {
       repo,
-      updates: { externalWorktreeVisibility: visibility === 'inherit' ? null : visibility }
+      updates: {
+        ...(visibility === undefined
+          ? {}
+          : { externalWorktreeVisibility: visibility === 'inherit' ? null : visibility }),
+        ...(browserProfileId === undefined ? {} : { browserProfileId })
+      }
     })
+    // A host from before per-repo browser profiles drops the field and still answers with its row.
+    if (
+      browserProfileId !== undefined &&
+      (result.result.repo.browserProfileId ?? null) !== browserProfileId
+    ) {
+      throw new RuntimeClientError(
+        'incompatible_runtime',
+        visibility === undefined
+          ? 'This Orca host does not support per-repo browser profiles. Update Orca on that host.'
+          : 'This Orca host does not support per-repo browser profiles, so only the worktree visibility was saved. Update Orca on that host.'
+      )
+    }
     printResult(result, json, formatRepoShow)
   },
   'repo hide': (context) => setRepoHidden(context, true),

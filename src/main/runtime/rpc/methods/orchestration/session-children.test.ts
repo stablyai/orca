@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
+import { testOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address-test-fixture'
 import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/agent-session-runtime-capabilities'
 import {

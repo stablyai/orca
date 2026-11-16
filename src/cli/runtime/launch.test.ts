@@ -1,3 +1,4 @@
+import '../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 import { EventEmitter } from 'node:events'
 import { rm } from 'node:fs/promises'
 import 'node:os'
@@ -5,7 +6,7 @@ import { resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer } from '../../shared/remote-runtime/pairing/pairing'
 import { PAIRING_OFFER_VERSION } from '../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
-import '../../shared/serve-update-handoff'
+import '../../shared/remote-runtime/serve-supervisor/serve-update-handoff'
 import './serve/updates/serve-update-supervisor'
 
 const { spawnMock, spawnSyncMock } = vi.hoisted(() => ({

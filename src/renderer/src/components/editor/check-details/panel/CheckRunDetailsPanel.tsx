@@ -11,7 +11,7 @@ import { useCheckRunDetailsFixWithAI } from '../actions/check-run-details-fix-wi
 import { formatCheckRunOutputForClipboard } from '../actions/check-run-clipboard-text'
 import { CheckRunAnnotations } from './CheckRunAnnotations'
 import { CheckRunJobs } from './CheckRunJobs'
-import { CheckRunCopyButton } from './CheckRunCopyButton'
+import { CopyTextButton } from '@/components/clipboard/CopyTextButton'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useCheckDetailsReadingPosition } from '../reading/use-check-details-reading-position'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
@@ -344,7 +344,7 @@ export function CheckRunDetailsPanel({
                     <div className="text-sm font-medium">
                       {t('auto.components.editor.CheckRunDetailsPanel.d098e5529a', 'Output')}
                     </div>
-                    <CheckRunCopyButton
+                    <CopyTextButton
                       text={outputClipboardText}
                       label={t(
                         'auto.components.editor.CheckRunDetailsPanel.copyOutput',

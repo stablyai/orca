@@ -3,7 +3,7 @@ import {
   classifyTerminalEscapeIntroducer,
   type TerminalEscapeIntroducer
 } from '../../../../shared/terminal/protocol/escape/terminal-escape-introducer'
-import { ownRetainedString } from '../../../../shared/own-retained-string'
+import { ownRetainedString } from '../../../../shared/text/own-retained-string'
 
 export function parseAnsiControlSequence(
   value: string,

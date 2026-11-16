@@ -1,4 +1,4 @@
-import { codexCollabRowAgentIds } from './codex-collab-agent-tools'
+import { codexCollabRowAgentIds } from './agent-hook-listener/providers/codex/codex-collab-agent-tools'
 import {
   isTextBlock,
   isToolCallBlock,

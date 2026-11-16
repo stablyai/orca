@@ -417,12 +417,12 @@ jobs:
         run: |
           DIFF_BASE="$(node config/scripts/git/pr-diff-base/git-pull-request-diff-base.mjs "$BASE_SHA")"
           if git diff --quiet "$DIFF_BASE" HEAD -- \
-            src/shared/ephemeral-vm-runtime-store.ts \
-            src/shared/ephemeral-vm-runtime-feature-store.ts \
-            src/shared/ephemeral-vm-runtime-rollback-projection.ts \
-            src/shared/ephemeral-vm-runtimes.ts \
-            src/shared/ephemeral-vm-recipes.ts \
-            src/shared/orca-yaml-hook-types.ts \
+            src/shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store.ts \
+            src/shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-feature-store.ts \
+            src/shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-rollback-projection.ts \
+            src/shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes.ts \
+            src/shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipes.ts \
+            src/shared/workspace-setup/orca-yaml-hook-types.ts \
             config/scripts/runtime-verification/ephemeral-store/run-ephemeral-vm-runtime-store-rollback-repro.mjs \
             config/scripts/runtime-verification/ephemeral-store/ephemeral-vm-runtime-store-cross-version.test.ts \
             src/main/ephemeral-vm/runtime-service.ts \
@@ -856,11 +856,9 @@ jobs:
             src/main/startup/shell-environment/shell-probe-terminal-detach.live-shell.test.ts \
             src/main/startup/shell-environment/shell-probe-lifetime.live-shell.test.ts \
             src/renderer/src/components/terminal-pane/pty-connection/emulation/fish-color-scheme-child-stdin.node-pty.test.ts \
-            src/shared/fish-wsl-cwd-report.node-pty.test.ts \
+            src/shared/shell/wsl/fish-wsl-cwd-report.node-pty.test.ts \
             src/main/wsl/filesystem/wsl-sh-cwd-report.node-pty.test.ts \
-            src/shared/terminal/pty/ingress/pty-reply-echo-shapes.node-pty.test.ts \
-            src/shared/startup-shell-portability.live-shell.test.ts \
-            src/shared/posix-command-path-lookup.test.ts
+            src/shared/terminal/pty/ingress/pty-reply-echo-shapes.node-pty.test.ts
 
   # Shards wait only for the plan, not preflight, which moves them about two minutes earlier.
   unit_plan:

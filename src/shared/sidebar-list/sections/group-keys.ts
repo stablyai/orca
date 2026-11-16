@@ -1,6 +1,6 @@
 import type { Worktree } from '../../worktree/types'
 import { getWorktreeHostIdentity } from '../../worktree/host-qualified-identity'
-import { UNGROUPED_PROJECT_GROUP_KEY } from '../../project-groups'
+import { UNGROUPED_PROJECT_GROUP_KEY } from '../../project/groups/project-groups'
 
 import '../../workspace-view/workspace-pr-groups'
 

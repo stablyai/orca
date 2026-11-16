@@ -1,6 +1,6 @@
 /** Emit periodic renderer_memory samples and one-shot renderer_memory_highwater subsystem censuses. */
-import type { CrashReportDetailValue } from '../../../../shared/crash-reporting'
-import type { RendererProcessMemory } from '../../../../shared/renderer-process-memory'
+import type { CrashReportDetailValue } from '../../../../shared/crash-reporting/crash-reporting'
+import type { RendererProcessMemory } from '../../../../shared/crash-reporting/renderer-process-memory'
 import {
   getBrowserWebviewMemoryProfile,
   type BrowserWebviewMemoryProfile

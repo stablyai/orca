@@ -24,7 +24,7 @@ import {
   queuedEditTextForKeptImages,
   type QueuedMessageImageBlock
 } from '../../../../../../src/shared/queued-message-edit'
-import { appendReturnedDraftText } from '../../../../../../src/shared/returned-draft-text'
+import { appendReturnedDraftText } from '../../../../../../src/shared/native-chat/input/drafts/returned-draft-text'
 import {
   setMobileNativeChatDraftText,
   type MobileComposerWriter

@@ -4,7 +4,7 @@ import { useAppStore } from '@/store'
 import { annotateBrowserPageHandles } from '@/store/slices/browser/hosts/browser-initialization-presentation-ownership'
 import { findPage } from '@/store/slices/browser/pages/browser-page-records'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import type { BrowserPage } from '../../../../../shared/browser-workspace-types'
+import type { BrowserPage } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import type { BrowserTabInfo } from '../../../../../shared/browser/runtime/runtime-browser-contracts'
 import { useRemoteBrowserPageNavigation } from './use-remote-browser-page-navigation'
 import {

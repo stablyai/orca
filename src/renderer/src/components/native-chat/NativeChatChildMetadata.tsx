@@ -7,7 +7,7 @@ import { executionHostIdForStructuredTarget } from '@/runtime/native-chat/sessio
 import { isStructuredAgentId } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import type { OrchestrationSessionChild } from '../../../../shared/orchestration-session-children'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 export function NativeChatChildMetadata({
   worker,

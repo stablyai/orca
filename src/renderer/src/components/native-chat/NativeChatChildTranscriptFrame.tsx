@@ -16,7 +16,7 @@ import { NativeChatSubagentStatusIcon } from './subagents/NativeChatSubagentStat
 import { NativeChatRewindContext } from './messages/actions/native-chat-rewind-context'
 import type { NativeChatChildTranscriptProps } from './NativeChatChildTranscript'
 import { nativeChatWorkerStateLabel, NativeChatSessionChildren } from './NativeChatSessionChildren'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { useStructuredAgentSessionTransportState } from './session/structured/use-structured-agent-session-transport-state'
 import { NativeChatChildMetadata } from './NativeChatChildMetadata'
 

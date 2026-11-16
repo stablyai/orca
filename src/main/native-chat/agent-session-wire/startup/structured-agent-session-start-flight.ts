@@ -4,7 +4,7 @@
 import {
   throwIfSignalAborted,
   waitForPromiseWithSignal
-} from '../../../../shared/abort-signal-reason'
+} from '../../../../shared/concurrency/abort-signal-reason'
 import type { StructuredAgentSessionAttachLock } from '../acquisition/structured-agent-session-attach-lock'
 import type { StructuredAgentSessionEndedEvent } from '../providers/structured-agent-session-adapter'
 import { sameProviderChild } from '../host/structured-agent-session-provider-child'

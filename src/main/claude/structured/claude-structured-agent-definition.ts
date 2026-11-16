@@ -13,6 +13,7 @@ export const CLAUDE_STRUCTURED_AGENT: DirectoryAccountAgentDefinition = {
     compact: true,
     compactInstructions: true,
     compactBesideBackgroundTasks: true,
+    mcpServers: true,
     threadGoal: false,
     contextUsage: true,
     imagePrompts: true,

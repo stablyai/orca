@@ -6,7 +6,7 @@ import type {
   OrcaCloudCapabilities,
   OrcaCloudOrgSummary,
   OrcaCloudSessionPersistence
-} from '../../../shared/orca-profiles'
+} from '../../../shared/orca-profiles/orca-profiles'
 import { getOrcaProfileDirectory } from '../profile-storage-paths'
 import { allowsPlaintextOrcaCloudSession } from '../cloud-auth/profile-cloud-auth-config'
 

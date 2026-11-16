@@ -9,12 +9,12 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { callAntigravityChatAuthConfig } from '@/runtime/provider-accounts/sign-in/runtime-antigravity-accounts-client'
 import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
-import { ANTIGRAVITY_CHAT_AUTH_CONFIG_RUNTIME_CAPABILITY } from '../../../../shared/account-runtime-capabilities'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import { ANTIGRAVITY_CHAT_AUTH_CONFIG_RUNTIME_CAPABILITY } from '../../../../shared/remote-runtime/protocol/account-runtime-capabilities'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   resolveAntigravityChatAuthConfig,
   type AntigravityChatAuthConfig
-} from '../../../../shared/antigravity-chat-auth-config'
+} from '../../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { AntigravityChatAuthSettingRow } from './AntigravityChatAuthSettingRow'

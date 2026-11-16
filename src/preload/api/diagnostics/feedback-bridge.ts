@@ -3,7 +3,7 @@ import type { PreloadApi } from '../../api-types'
 import type {
   FeedbackSubmitArgs,
   FeedbackSubmitResult
-} from '../../../shared/feedback-submit-contract'
+} from '../../../shared/feedback/feedback-submit-contract'
 
 export const feedbackApi = {
   submit: (args: FeedbackSubmitArgs): Promise<FeedbackSubmitResult> =>

@@ -29,6 +29,7 @@ import type { AgentTurnOutcome } from '../agent-status/lifecycle/agent-turn-outc
 import type { AgentSessionRecord } from './lifecycle/agent-session-record'
 import type { AgentProviderSessionMetadata } from './lifecycle/agent-session-resume'
 import type { NativeChatSubagentEntry } from '../native-chat/native-chat-types'
+import type { AgentSessionStatusPermissionFields } from './options/permissions/agent-session-status-permission-fields'
 import type { StructuredAgentSessionProjectedStatus } from './view/structured-agent-session-projection'
 
 export type AgentSessionTurnActivity = {
@@ -214,9 +215,6 @@ export type AgentSessionStatusSummary = {
   model?: string
   /** Legacy host execution report; clients use the saved model for option invalidation. */
   reportedModel?: string
-  /** The chat's saved permission mode; a client re-reads options when it or `model` moves. */
-  permissionMode?: string
-  runtimePermission?: { fence: number; mode: string | null } | null
   /** The chat's saved effort, Fast and speed picks, encoded; another device's pick moves them so a
    *  client re-reads options. Absent from older hosts. */
   effort?: string
@@ -234,6 +232,9 @@ export type AgentSessionStatusSummary = {
   turnOutcome?: AgentTurnOutcome
   /** Host-derived, unpersisted Stop progress while working until its turn ends; clear a settled no-op Stop. Older hosts omit it and older clients ignore it. */
   stopping?: true
+  /** The agent asked a question its turn does not wait on (Codex's async question), and the person
+   *  has not answered it yet. Turn status is unchanged; only the lead state shows it. Older hosts omit it. */
+  awaitsAnswer?: true
   /** Optional live provider tasks let lists show children without journal subscriptions; derive from children when published. */
   backgroundTasks?: AgentSessionBackgroundTask[]
   /** Running/monitoring child views (decodeAgentChildWorkViews); finished children use background tasks only. Omit usage and per-tick freshness here; the background-task channel carries those ticks. Older hosts omit this. */
@@ -261,7 +262,7 @@ export type AgentSessionStatusSummary = {
   updatedAt: number
   /** Date the lead status by its own lifecycle edge, never updatedAt (child rows change it). Missing/older-host dates leave readers tracking time themselves. */
   statusStartedAt?: number
-}
+} & AgentSessionStatusPermissionFields
 
 /** `failedAt` dates the run, so a repeat failure with the same message still republishes. */
 export type AgentSessionNamingError = {
@@ -368,26 +369,8 @@ export type AgentSessionOptionChoice = {
   description?: string
 }
 
-export type AgentSessionModelOption = {
-  resolvedModel?: string | null
-  effortsKnown?: false
-  id: string
-  label: string
-  description?: string
-  isDefault: boolean
-  defaultEffort?: string
-  /** Transient display declaration; null is observed unknown, absence supplies no evidence. */
-  declaredDefaultEffort?: string | null
-  efforts: AgentSessionOptionChoice[]
-  /** Additional structured-chat choices; never CLI effort arguments. Older hosts omit this. */
-  chatEfforts?: AgentSessionOptionChoice[]
-  /** Provider catalog fact. Absent means the host could not determine support. */
-  supportsFastMode?: boolean
-  /** Whether the model runs Approve for me; absent is unknown, which neither offers nor launches it. */
-  supportsAutoMode?: boolean
-  /** Provider tier IDs beyond standard; capable clients replace Fast with one speed choice including default. Absence means unknown. */
-  serviceTiers?: AgentSessionOptionChoice[]
-}
+import type { AgentSessionModelOption } from './agent-session-model-option'
+export type { AgentSessionModelOption }
 
 export type AgentSessionFastModeState = 'off' | 'cooldown' | 'on'
 

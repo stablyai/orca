@@ -8,7 +8,7 @@ export const PR_BROWSER_E2E_SOURCE_ROUTES = [
     specs: ['tests/e2e/browser-image-link-focus.spec.ts'],
     matches: (file) =>
       file ===
-        'src/renderer/src/components/browser-pane/assemble-chrome/browser-page-guest-focus.ts' ||
+        'src/renderer/src/components/browser-pane/assemble-chrome/focus/browser-page-guest-focus.ts' ||
       file === 'tests/e2e/helpers/browser-link-server.ts'
   },
   {
@@ -27,7 +27,7 @@ export const PR_BROWSER_E2E_SOURCE_ROUTES = [
     specs: ['tests/e2e/paired-preview-address-bar-convergence.spec.ts'],
     matches: (file) =>
       isProductSource(file) &&
-      /^src\/renderer\/src\/(?:components\/browser-pane\/(?:workspace-doc\/doc-preview-address-edit|navigate\/(?:workspace-doc-address-submission|use-client-hosted-page-url-submission)|assemble-chrome\/browser-address-bar-suggestions)|lib\/(?:workspace-doc-address-input|browser\/history\/browser-page-conversion-history)|store\/slices\/browser\/pages\/(?:browser-page-conversion|browser-page-conversion-actions))\.tsx?$/.test(
+      /^src\/renderer\/src\/(?:components\/browser-pane\/(?:workspace-doc\/doc-preview-address-edit|navigate\/(?:workspace-doc-address-submission|use-client-hosted-page-url-submission)|assemble-chrome\/address-bar\/browser-address-bar-suggestions)|lib\/(?:browser\/documents\/workspace-doc-address-input|browser\/history\/browser-page-conversion-history)|store\/slices\/browser\/pages\/(?:browser-page-conversion|browser-page-conversion-actions))\.tsx?$/.test(
         file
       )
   },

@@ -15,6 +15,8 @@ import * as ghUtilsOwner2 from '../../../git/command-runner/hosted-cli/gh-exec-f
 import { getPRCheckDetails } from './get-pr-check-details'
 import { prCheckLogTailCache } from './check-job-log-tails'
 
+const { groupExists } = vi.hoisted(() => ({ groupExists: vi.fn(() => true) }))
+
 const { spawnMock, resolverMock, signalMock, forceMock, captureCap } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
   resolverMock: vi.fn(),
@@ -27,6 +29,7 @@ vi.mock('../../repositories/github-api-repository', () => ({
   resolveGitHubRepoExecution: resolverMock
 }))
 vi.mock('@orca/process-host/process-tree-termination', () => ({
+  processGroupExists: groupExists,
   signalProcessTree: signalMock,
   forceTerminateProcessTree: forceMock
 }))
@@ -126,6 +129,7 @@ async function verifyAdmissionIsRetained(): Promise<void> {
 
 describe('real capture and gh diagnostics through check details RPC', () => {
   beforeEach(() => {
+    groupExists.mockReturnValue(true)
     vi.useFakeTimers()
     children.length = 0
     signals.clear()
@@ -143,6 +147,7 @@ describe('real capture and gh diagnostics through check details RPC', () => {
   })
   afterEach(async () => {
     for (const child of children) {
+      groupExists.mockReturnValue(false)
       child.emit('close', 0, null)
     }
     await vi.advanceTimersByTimeAsync(15_000)
@@ -216,6 +221,7 @@ describe('real capture and gh diagnostics through check details RPC', () => {
         child.emit('error', privateFailure())
         await vi.advanceTimersByTimeAsync(0)
         expect(children).toHaveLength(4)
+        groupExists.mockReturnValue(false)
         child.emit('close', 1, null)
       } else {
         // Lower only the test capture cap; the real sinks still report truncation.
@@ -233,6 +239,7 @@ describe('real capture and gh diagnostics through check details RPC', () => {
         // The physical child still holds admission after unverified grace.
         expect(getEventListeners(child, 'close')).toHaveLength(1)
         await verifyAdmissionIsRetained()
+        groupExists.mockReturnValue(false)
         child.emit('close', null, 'SIGKILL')
       }
       const response = await result

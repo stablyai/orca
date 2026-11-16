@@ -1,14 +1,14 @@
 import { createHash } from 'node:crypto'
 import { expect, it, vi } from 'vitest'
-import type { SkillCloudDownloadGrant } from '../../../shared/skill-cloud-contract'
+import type { SkillCloudDownloadGrant } from '../../../shared/skills/sharing/skill-cloud-contract'
 import {
   computeSkillBundleDigest,
   parseSkillBundleManifest
-} from '../../../shared/skill-bundle-manifest'
+} from '../../../shared/skills/packages/skill-bundle-manifest'
 import {
   computeSkillPackageDigest,
   parseSkillPackageManifest
-} from '../../../shared/skill-package-manifest'
+} from '../../../shared/skills/packages/skill-package-manifest'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 
 const mocks = vi.hoisted(() => ({
