@@ -4871,7 +4871,6 @@
       "tests/e2e/dictation-indicator.spec.ts": 14900,
       "tests/e2e/diff-note-delete.spec.ts": 18700,
       "tests/e2e/diff-note-edit.spec.ts": 20900,
-      "tests/e2e/diff-note-layout.spec.ts": 24900,
       "tests/e2e/droid-notification.spec.ts": 65000,
       "tests/e2e/editable-context-paste-ownership.spec.ts": 15700,
       "tests/e2e/electron-home-isolation.spec.ts": 12800,
