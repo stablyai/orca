@@ -184,14 +184,17 @@ export abstract class OrcaRuntimeWithFocusTerminal extends OrcaRuntimeWithWaitFo
   }
 
   protected getPtyIdsForExplicitTabClose(worktreeId: string, tabId: string): string[] {
-    return [...(this.getPtyIdsByTabForExplicitClose(worktreeId).get(tabId) ?? [])]
+    return [...(this.getPtyIdsByTabForExplicitClose(worktreeId, tabId).get(tabId) ?? [])]
   }
 
-  /** One pass over PTYs and leaves for every tab of a workspace, for closes that address many tabs. */
-  protected getPtyIdsByTabForExplicitClose(worktreeId: string): Map<string, Set<string>> {
+  /** One pass over PTYs and leaves; `onlyTabId` keeps a single-tab close from grouping the rest. */
+  protected getPtyIdsByTabForExplicitClose(
+    worktreeId: string,
+    onlyTabId?: string
+  ): Map<string, Set<string>> {
     const byTab = new Map<string, Set<string>>()
     const add = (tabId: string | null | undefined, ptyId: string): void => {
-      if (!tabId) {
+      if (!tabId || (onlyTabId !== undefined && tabId !== onlyTabId)) {
         return
       }
       const ptyIds = byTab.get(tabId) ?? new Set<string>()
