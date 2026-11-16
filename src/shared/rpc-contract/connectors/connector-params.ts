@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { CONNECTOR_SOURCES } from '../../external-conversation-link'
+import { CONNECTOR_SOURCES } from '../../connectors/external-conversation-link'
 import { AgentLaunchFields } from '../agent-launch/agent-launch-params'
 
 const ConnectorDelivery = {

@@ -145,7 +145,7 @@ export function renderFloatingTerminalPanelSurface(
                   onNewBrowserTab={createFloatingBrowserTab}
                   onNewFileTab={createFloatingMarkdownTab}
                   onOpenFileTab={openFloatingMarkdownTab}
-                  newTabMenuOrder="markdown-first"
+                  newTabMenuSurface="floating-panel"
                   onSetCustomTitle={setTabCustomTitle}
                   onSetTabColor={setTabColor}
                   onTogglePaneExpand={(tabId) =>

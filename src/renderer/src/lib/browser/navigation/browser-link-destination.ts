@@ -10,7 +10,7 @@ import { isLiveLinkOpenGroup, liveLinkOpenGroupIds } from '../../links/placement
 import type { LinkOpenIntent } from '../../links/placement/link-open-intent'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '../../workspace/ownership/worktree-runtime-owner'
 import { resolveLinkOpenSidePlacement } from '../../links/placement/adjacent-link-open-group'
-import type { Tab } from '../../../../../shared/tab-types'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { AppState } from '@/store/types'
 import type {
   BrowserPage,

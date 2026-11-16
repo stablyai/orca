@@ -7,7 +7,7 @@ import type {
   AgentSessionQueuedMessageEditHoldResult,
   AgentSessionQueuedMessageUpdateResult
 } from '../../../../shared/agent-session/requests/agent-session-queued-message-wire'
-import { queuedMessageEditableText } from '../../../../shared/queued-message-edit'
+import { queuedMessageEditableText } from '../../../../shared/native-chat/input/queued-messages/queued-message-edit'
 import {
   queuedMessageUpdateDecision,
   type QueuedMessageUpdate

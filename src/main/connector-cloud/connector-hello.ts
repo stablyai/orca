@@ -3,7 +3,7 @@ import {
   CONNECTOR_CLIENT_LIMITS,
   CONNECTOR_CONTRACT_VERSION,
   type ConnectorProject
-} from '../../shared/connector-cloud-contract'
+} from '../../shared/connectors/connector-cloud-contract'
 import type { ConnectorMachine } from './connector-machine'
 import { jsonBytes } from './connector-snapshot'
 

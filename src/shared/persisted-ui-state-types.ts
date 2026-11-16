@@ -13,7 +13,6 @@ import type { StatusBarUsageFormat } from './status-bar/status-bar-usage-format'
 import type { PersistedTrustedOrcaHooks } from './workspace-setup/orca-yaml-hook-types'
 import type { CustomPet } from './pets/pet-types'
 import type {
-  ActivityGroupBy,
   AgentActivityDisplayMode,
   ManualRepoOrderEntry,
   ProjectOrderBy,
@@ -22,13 +21,16 @@ import type {
   RightSidebarTab,
   StatusBarItem,
   TaskResumeState,
-  ThreadReadFilter,
   TopLevelView,
   VisibleWorkspaceHostIds,
   WorkspaceHostOrder,
   WorkspaceHostScope,
   WorktreeCardProperty
 } from './ui-chrome-types'
+import type {
+  ActivityGroupBy,
+  ThreadReadFilter
+} from './agent-status/presentation/agents-view-thread-filters'
 import type { WorkspaceStatusDefinition } from './worktree/types'
 import type { PersistedAutomationHostFilter } from './automations/ownership/automation-host-filter'
 import type { PendingRuntimeRepoRemoval } from './remote-runtime/host-catalog/pending-runtime-repo-removal'
@@ -206,6 +208,8 @@ export type PersistedUIState = {
   codexSharedSettingsNoticeSeen?: boolean
   /** One-shot sidebar note announcing the reworked experimental worktree cards; set on first evaluation, so absent means not yet decided. */
   worktreeCardsUpdateNoticeSeen?: boolean
+  /** One-shot sidebar note inviting Classic users to preview the experimental worktree cards; set when shown. */
+  worktreeCardsIntroNoticeSeen?: boolean
   /** Retired launch card for the speech model update; kept because a paired client from that build still sends it. */
   speechModelUpdateNoticeSeen?: boolean
   /** One-shot pane banner explaining Claude Code's own diff panel; set when the user closes it. */

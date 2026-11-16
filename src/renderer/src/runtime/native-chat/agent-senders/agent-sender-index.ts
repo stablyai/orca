@@ -4,7 +4,7 @@ import type {
   AgentSenderPublication
 } from '../../../../../shared/orchestration/mailbox/agent-sender-associations'
 import { structuredAgentSessionOwnerInputs } from '../session-ownership/structured-agent-session-owner'
-import type { Tab } from '../../../../../shared/tab-types'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { agentSenderAliasParts, assembleAgentSenderAliases } from './agent-sender-alias-projection'
 
 /** `paneKey` is this window's name for the pane; `hostPaneKey` is the name its host gave it. */

@@ -147,6 +147,7 @@ export const UI_STATE_GLOBAL_FIELDS = [
   'codexTerminalServerIsolationNoticeSeen',
   'codexSharedSettingsNoticeSeen',
   'worktreeCardsUpdateNoticeSeen',
+  'worktreeCardsIntroNoticeSeen',
   'speechModelUpdateNoticeSeen',
   'claudeDiffPanelNoticeSeen',
   'claudeAccountSignInNoticeSeen',

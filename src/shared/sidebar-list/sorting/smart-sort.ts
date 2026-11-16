@@ -3,7 +3,7 @@ import type { Repo } from '../../repository/repo-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../worktree/types'
 import type { MigrationUnsupportedPtyEntry } from '../../agent-status/contracts/agent-status-ipc-payload'
-import { tabHasLivePty } from '../../tab-has-live-pty'
+import { tabHasLivePty } from '../../workspace-layout/terminal-surfaces/tab-has-live-pty'
 import { getRuntimePathBasename } from '../../file-access/cross-platform-path'
 import {
   buildWorkspaceRowComparator,
@@ -20,7 +20,7 @@ import {
   type WorktreeAttention
 } from './smart-attention'
 import { smartSortPhase } from './smart-sort-phase'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../sidebar-inputs-switch'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../feed/sidebar-inputs-switch'
 import { compareSmartStamps, recentStamp } from './stamp-order'
 
 /** Recent-sort rank: `lastActivityAt`, floored at `createdAt + CREATE_GRACE_MS` while that window is open. */

@@ -1,6 +1,6 @@
 import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import type { TabGroupLayoutNode } from '../../../../../shared/tab-types'
+import type { TabGroupLayoutNode } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { resetWebSessionFocusIntentForTests } from '../navigation/web-session-focus-intent'
 import { resetWebSessionCloseIntentForTests } from '../closing/web-session-close-intent'
 import { resetWebSessionReorderIntentForTests } from '../navigation/web-session-reorder-intent'

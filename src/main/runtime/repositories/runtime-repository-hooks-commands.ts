@@ -1,5 +1,5 @@
 import { getRepoDialableSshTargetId, isRepoOnCatalogHost } from '../../../shared/execution-host'
-import { scopeHooksToRepoKind } from '../../../shared/folder-workspace-hooks'
+import { scopeHooksToRepoKind } from '../../../shared/folder-workspaces/folder-workspace-hooks'
 import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
 import { readFile } from 'node:fs/promises'
 import type { WorkspaceHookOwner } from '../../../shared/workspace-setup/hooks/workspace-hook-owner'

@@ -2,7 +2,7 @@ import type { AgentStatusStore } from '../../../shared/agent-status/store/agent-
 import {
   commitTmuxSelectedStatus,
   commitTmuxUnavailable
-} from '../../../shared/tmux-selected-status'
+} from '../../../shared/agent-hook-listener/presence/tmux-selected-status'
 import { TmuxAgentHookOwner } from '../../../shared/agent-hook-listener/presence/tmux-agent-hook-owner'
 import type { TmuxManagedPty } from '../../../shared/agent-hook-listener/presence/tmux-agent-hook-contract'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
