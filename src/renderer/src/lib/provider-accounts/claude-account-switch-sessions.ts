@@ -128,7 +128,7 @@ export async function handleRunningClaudeSessionsAfterSwitch(args: {
   }
   let uncheckedCount = 0
   let sharedCount = 0
-  let strandedCount = 0
+  let strandedPtyIds: ReadonlySet<string> = new Set()
   const found = await findClaudeSwitchSessions({
     owner: args.owner,
     target: args.target,
@@ -146,7 +146,7 @@ export async function handleRunningClaudeSessionsAfterSwitch(args: {
       sharedCount = sessions.length
     },
     onStranded: (sessions) => {
-      strandedCount = sessions.length
+      strandedPtyIds = new Set(sessions.map((session) => session.ptyId))
     }
   }).catch((error: unknown) => {
     console.warn('[claude-account-switch] session scan failed:', error)
@@ -179,12 +179,12 @@ export async function handleRunningClaudeSessionsAfterSwitch(args: {
     previousAccountLabel: getClaudeAccountLabel(args.before.state, args.before.accountId),
     nextAccountLabel
   }
-  const openReview = (): void => {
+  const openReview = (reviewSessions = sessions): void => {
     if (generation === switchGeneration) {
       setPrompt({
         id: generation,
         review: true,
-        sessions: { ...sessions, onAccount: [] },
+        sessions: { ...reviewSessions, onAccount: [] },
         ...labels
       })
     }
@@ -194,15 +194,21 @@ export async function handleRunningClaudeSessionsAfterSwitch(args: {
     if (sharedCount > 0) {
       warnSharedSessions(sharedCount, labels.previousAccountLabel)
     }
-    if (strandedCount > 0) {
-      warnStrandedSessions(strandedCount, labels.previousAccountLabel, openReview)
+    if (strandedPtyIds.size > 0) {
+      warnStrandedSessions(strandedPtyIds.size, labels.previousAccountLabel, () =>
+        openReview({
+          onAccount: [],
+          elsewhere: [],
+          cantMove: sessions.cantMove.filter((session) => strandedPtyIds.has(session.ptyId))
+        })
+      )
     }
     return 'show-confirmation'
   }
   if (policy === 'restart') {
     queueClaudeRestarts(sessions.onAccount.map((candidate) => candidate.ptyId))
     const others = sessions.elsewhere.length + sessions.cantMove.length
-    announceRestart(sessions.onAccount.length, nextAccountLabel, others, openReview)
+    announceRestart(sessions.onAccount.length, nextAccountLabel, others, () => openReview())
     return 'handled'
   }
   setPrompt({ id: generation, sessions, ...labels })
@@ -267,12 +273,12 @@ function warnStrandedSessions(count: number, previous: string, review: () => voi
     count === 1
       ? translate(
           'accounts.claude.switchSessions.strandedOne',
-          "1 Claude session may still be on {{previous}}. Orca can't resume it, so restart it yourself to switch.",
+          '1 Claude session may still be on {{previous}}. Restart it manually to switch.',
           { previous }
         )
       : translate(
           'accounts.claude.switchSessions.strandedOther',
-          "{{count}} Claude sessions may still be on {{previous}}. Orca can't resume them, so restart them yourself to switch.",
+          '{{count}} Claude sessions may still be on {{previous}}. Restart them manually to switch.',
           { count, previous }
         ),
     {

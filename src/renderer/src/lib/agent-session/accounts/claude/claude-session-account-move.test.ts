@@ -269,33 +269,39 @@ describe('findMovableClaudeSessions', () => {
     ])
   })
 
-  it.each([false, true])(
-    'moves a saved session when its live row lacks the session (live row: %s)',
-    async (live) => {
-      seedPanes([{ n: 1, ...(live ? { agentType: 'claude' as const, sessionId: null } : {}) }])
-      const paneKey = makePaneKey(tabId(1), leafId(1))
-      useAppStore.setState({
-        sleepingAgentSessionsByPaneKey: {
-          [paneKey]: {
-            paneKey,
-            worktreeId: 'wt1',
-            agent: 'claude',
-            providerSession: {
-              key: 'session_id',
-              id: SESSION_ID,
-              transcriptPath: `${FOLDER_A}/projects/-repo/${SESSION_ID}.jsonl`
-            },
-            prompt: '',
-            state: 'done',
-            capturedAt: 1,
-            updatedAt: 1
-          }
+  it.each([
+    { live: false, wsl: false },
+    { live: true, wsl: false },
+    { live: true, wsl: true }
+  ])('moves a saved session when its live row lacks the session (%j)', async ({ live, wsl }) => {
+    seedPanes([{ n: 1, ...(live ? { agentType: 'claude' as const, sessionId: null } : {}) }])
+    const paneKey = makePaneKey(tabId(1), leafId(1))
+    useAppStore.setState({
+      sleepingAgentSessionsByPaneKey: {
+        [paneKey]: {
+          paneKey,
+          worktreeId: 'wt1',
+          agent: 'claude',
+          providerSession: {
+            key: 'session_id',
+            id: SESSION_ID,
+            transcriptPath: `${FOLDER_A}/projects/-repo/${SESSION_ID}.jsonl`
+          },
+          prompt: '',
+          state: 'done',
+          capturedAt: 1,
+          updatedAt: 1
         }
-      })
+      }
+    })
 
-      expect(await movable()).toEqual([ptyId(1)])
+    if (wsl) {
+      laneByPtyId[ptyId(1)] = 'wsl:Ubuntu'
     }
-  )
+    expect(await movable('acct-a', wsl ? { runtime: 'wsl', wslDistro: 'Ubuntu' } : HOST)).toEqual([
+      'pty-1'
+    ])
+  })
 
   it.each(['timeout', 'transport_loss', 'rejected'])(
     'reports a row-less Claude pane when inspection is unavailable (%s)',
@@ -334,15 +340,6 @@ describe('findMovableClaudeSessions', () => {
   it('reports a WSL Claude with a live row but no session to resume', async () => {
     seedPanes([{ n: 1, agentType: 'claude', sessionId: null }])
     laneByPtyId[ptyId(1)] = 'wsl:Ubuntu'
-    useAppStore.setState({
-      paneForegroundAgentByPaneKey: {
-        [makePaneKey(tabId(1), leafId(1))]: {
-          agent: 'claude',
-          agentEvidence: 'process-read',
-          shellForeground: false
-        }
-      }
-    })
     const found = await scan('acct-a', { runtime: 'wsl', wslDistro: 'Ubuntu' })
     expect(found.cantMove).toEqual([
       {
@@ -351,6 +348,47 @@ describe('findMovableClaudeSessions', () => {
         tabId: 'tab-1',
         leafId: '0195f2ce-1111-4000-8000-000000000001',
         reason: 'no-session'
+      }
+    ])
+  })
+
+  it('does not restart a WSL pane from an old saved conversation alone', async () => {
+    seedPanes([{ n: 1 }])
+    const paneKey = makePaneKey(tabId(1), leafId(1))
+    laneByPtyId[ptyId(1)] = 'wsl:Ubuntu'
+    useAppStore.setState({
+      sleepingAgentSessionsByPaneKey: {
+        [paneKey]: {
+          paneKey,
+          worktreeId: 'wt1',
+          agent: 'claude',
+          providerSession: {
+            key: 'session_id',
+            id: SESSION_ID,
+            transcriptPath: `${FOLDER_A}/projects/-repo/${SESSION_ID}.jsonl`
+          },
+          prompt: '',
+          state: 'done',
+          capturedAt: 1,
+          updatedAt: 1
+        }
+      }
+    })
+    const onUnchecked = vi.fn()
+    const found = await findClaudeSwitchSessions({
+      owner: LOCAL,
+      target: { runtime: 'wsl', wslDistro: 'Ubuntu' },
+      fromAccountId: 'acct-a',
+      toAccountId: 'acct-b',
+      onUnchecked
+    })
+    expect(found).toEqual({ onAccount: [], elsewhere: [], cantMove: [] })
+    expect(onUnchecked).toHaveBeenCalledWith([
+      {
+        ptyId: 'pty-1',
+        worktreeId: 'wt1',
+        tabId: 'tab-1',
+        leafId: '0195f2ce-1111-4000-8000-000000000001'
       }
     ])
   })

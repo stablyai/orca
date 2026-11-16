@@ -147,8 +147,8 @@ function promptDescription(prompt: ClaudeAccountSwitchPrompt, t: Translate = tra
     const count = elsewhere.length + cantMove.length
     return t(
       'accounts.claude.switchSessions.reviewBody',
-      "{{count}} other Claude sessions weren't moved to {{next}}.",
-      { count, next, defaultValue_one: "{{count}} other Claude session wasn't moved to {{next}}." }
+      "{{count}} Claude sessions weren't moved to {{next}}.",
+      { count, next, defaultValue_one: "{{count}} Claude session wasn't moved to {{next}}." }
     )
   }
   return t(

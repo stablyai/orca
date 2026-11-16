@@ -16,7 +16,6 @@ import { isClientOnlyUnverifiableInspection } from '../../../../../../shared/ter
 import type { TerminalProcessInspection as RuntimeTerminalProcessInspection } from '../../../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import { getCodexSelectionLaneKey } from '../../../../../../shared/agent-accounts/codex/codex-selection-lane'
 import type { CodexAccountSelectionTarget } from '../../../../../../shared/agent-accounts/codex/codex-selection-lane'
-import { resolvePaneAgentSessionId } from '@/lib/agent-session/identity/pane-agent-session-id'
 import {
   getCodexAccountSwitchLaneMatcher,
   isForeignMachineCodexPtyId,
@@ -58,6 +57,12 @@ async function isClaudeInForeground(
   if (fresh === null && isAgentForegroundWrapperProcess(inspection.foregroundProcess ?? '')) {
     return 'unchecked'
   }
+  if (
+    recognizeAgentProcess(fresh ?? inspection.foregroundProcess)?.agent === 'claude-agent-teams' &&
+    !agentTeams
+  ) {
+    return 'unchecked'
+  }
   return isClaudeProcess(fresh, agentTeams)
 }
 
@@ -69,7 +74,6 @@ export type LocalClaudePane = ClaudeSessionMoveCandidate & {
   sessionId: string | undefined
   /** False when neither a live row nor a saved record names the session, so no restart can resume it. */
   resumable: boolean
-  hasClaudeEvidence: boolean
   /** A live process read, since any Orca command shares Agent Teams' executable name. */
   agentTeams: boolean
 }
@@ -137,7 +141,6 @@ export function* localClaudePanes(
           transcriptPath: providerSession?.transcriptPath,
           sessionId: providerSession?.id,
           resumable: Boolean(providerSession),
-          hasClaudeEvidence,
           agentTeams:
             foreground?.agent === 'claude-agent-teams' &&
             foreground.agentEvidence === 'process-read' &&
@@ -162,7 +165,14 @@ export async function isClaudeRunning(
     if (state.paneForegroundAgentByPaneKey[paneKey]?.shellForeground) {
       return false
     }
-    return resolvePaneAgentSessionId(state, paneKey) !== null || pane.hasClaudeEvidence
+    const live = state.agentStatusByPaneKey.get(paneKey)
+    if (live?.agentType === 'claude' && live.restoredUnconfirmed !== true) {
+      return true
+    }
+    const foreground = state.paneForegroundAgentByPaneKey[paneKey]
+    return foreground?.agentEvidence === 'process-read' && isClaudeAgent(foreground.agent)
+      ? true
+      : 'unchecked'
   }
   return inspectRuntimeTerminalProcess(pane.ptyId).then(
     (inspection) => isClaudeInForeground(pane.ptyId, inspection, pane.agentTeams),
