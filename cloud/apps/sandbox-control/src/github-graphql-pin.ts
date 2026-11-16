@@ -149,16 +149,20 @@ export function classifyGraphqlRequest(body: string): MemberGraphqlVerdict {
 }
 
 /**
- * Review M2: what a teammate with a shell in a shared workspace could otherwise do as the latest sender: approve a
- * pull request (defeating "review by someone else") or merge one. In shared workspaces these never carry a
- * member's identity; they go out on the installation token, so branch protection still applies.
+ * Review M2: an approval never carries a member's identity, in any workspace (an agent approving as its
+ * sender defeats "review by someone else"); it goes out on the installation token, so branch protection
+ * still applies. Event compared case-insensitively, failing toward the installation token.
  */
-export function approvesOrMerges(fields: readonly { name: string; input: Record<string, unknown> }[]): boolean {
+export function approves(fields: readonly { name: string; input: Record<string, unknown> }[]): boolean {
   return fields.some(
     (field) =>
-      field.name === 'mergePullRequest' ||
-      ((field.name === 'addPullRequestReview' || field.name === 'submitPullRequestReview') && field.input.event === 'APPROVE')
+      (field.name === 'addPullRequestReview' || field.name === 'submitPullRequestReview') && String(field.input.event ?? '').toUpperCase() === 'APPROVE'
   )
+}
+
+/** Review M2: a merge carries a member's identity only in a workspace one person can use. */
+export function merges(fields: readonly { name: string }[]): boolean {
+  return fields.some((field) => field.name === 'mergePullRequest')
 }
 
 /** A literal or variable, as the server would see it. Unknown shapes resolve to undefined (not a member request). */

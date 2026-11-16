@@ -1240,10 +1240,10 @@ export function egressPlaceholderMode(value: string | undefined): boolean | Read
  * orca-git-identity hands an agent only that member's identity. Residual risk: members share the VM
  * user, so a member with a shell could subvert orcad itself; agents and prompts cannot.
  */
-/** Shared workspaces: how long the latest sender keeps acting after their last send. Default 8 h; `0` = no cap. */
+/** Shared workspaces: how long the latest sender keeps acting after their last send. Default 60 min; `0` = no cap. */
 function memberGitSharedMaxMs(env: Env): number | null {
   if (env.MEMBER_GIT_SHARED_MAX_MINUTES === undefined || env.MEMBER_GIT_SHARED_MAX_MINUTES === '') {
-    return 480 * 60_000
+    return 60 * 60_000
   }
   const minutes = Number(env.MEMBER_GIT_SHARED_MAX_MINUTES)
   return Number.isFinite(minutes) && minutes > 0 ? minutes * 60_000 : null

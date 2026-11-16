@@ -10,7 +10,7 @@ import type { ProxiedRoute } from './egress-proxy'
 import { parseGitHubRepo } from './github-app'
 import { memberPlaceholder, type MemberGitIdentity } from './github-user-tokens'
 import { gitBasicAuthorization } from './network-policy'
-import { MEMBER_OUT_OF_REPO_BODY, NODE_REPOSITORY_QUERY, approvesOrMerges, classifyGraphqlRequest, repositoryIdOfNode, type MemberTarget } from './github-graphql-pin'
+import { MEMBER_OUT_OF_REPO_BODY, NODE_REPOSITORY_QUERY, approves, classifyGraphqlRequest, merges, repositoryIdOfNode, type MemberTarget } from './github-graphql-pin'
 import { settledCache } from './settled-cache'
 import type { SandboxRow } from './store'
 
@@ -51,8 +51,8 @@ export type MemberGitDeps = {
  * GH-AS-MEMBER identity rule (replaces the 30-minute window, which lapsed while an agent was still working
  * on its sender's request): in a workspace only one person can use, that person always acts as themselves;
  * in a shared one, the latest member to send a message acts until a different member sends, for at most
- * MEMBER_GIT_SHARED_MAX_MINUTES after that send (default 8 h). Approvals and merges in a shared workspace never
- * carry a member's identity (review M2).
+ * MEMBER_GIT_SHARED_MAX_MINUTES after that send (default 60 min). Approvals never carry a member's identity, and
+ * merges do only in a one-person workspace (review M2).
  */
 export async function memberMayAct(db: D1Database, row: SandboxRow, userId: string, now: number, sharedMaxMs: number | null): Promise<boolean> {
   const ownerToo = row.ownership_transferred_at == null
@@ -192,8 +192,8 @@ async function memberApiCredential(
   const isGraphql = request.method.toUpperCase() === 'POST' && pathname === '/graphql'
   if (!isGraphql) {
     if (allowed(request.method, request.path)) {
-      // Review M2: in a shared workspace a REST approval or merge never carries a member's identity.
-      if (restApprovesOrMerges(request) && (await isSharedWorkspace(deps.db, row))) {
+      // Review M2: a REST approval never carries a member's identity; a merge does only in a one-person workspace.
+      if (restApproves(request) || (restMerges(request) && (await isSharedWorkspace(deps.db, row)))) {
         return app()
       }
       const id = await identity()
@@ -205,7 +205,7 @@ async function memberApiCredential(
   if (!verdict.member) {
     return app()
   }
-  if (approvesOrMerges(verdict.fields) && (await isSharedWorkspace(deps.db, row))) {
+  if (approves(verdict.fields) || (merges(verdict.fields) && (await isSharedWorkspace(deps.db, row)))) {
     return app()
   }
   const id = await identity()
@@ -274,22 +274,26 @@ async function targetsInWorkspaceRepo(deps: MemberGitDeps, row: SandboxRow, appT
   return true
 }
 
-/** REST approval (a review with event APPROVE) or merge, which a shared workspace never signs as a member. */
-function restApprovesOrMerges(request: { method: string; path: string; body: string | null }): boolean {
+/** REST approval: a review, or a pending review's submission, with event APPROVE (any case). */
+function restApproves(request: { method: string; path: string; body: string | null }): boolean {
   const pathname = request.path.split('?')[0] ?? ''
-  const method = request.method.toUpperCase()
-  if (method === 'PUT' && /\/pulls\/\d+\/merge$/.test(pathname)) {
+  if (request.method.toUpperCase() !== 'POST' || !/\/pulls\/\d+\/reviews(\/\d+\/events)?$/.test(pathname)) {
+    return false
+  }
+  try {
+    const event = (JSON.parse(request.body ?? '{}') as { event?: unknown } | null)?.event
+    return String(event ?? '').toUpperCase() === 'APPROVE'
+  } catch {
+    // Unreadable: treat as an approval (fails toward the installation token).
     return true
   }
-  if (method === 'POST' && /\/pulls\/\d+\/reviews(\/\d+\/events)?$/.test(pathname)) {
-    try {
-      return (JSON.parse(request.body ?? '{}') as { event?: unknown }).event === 'APPROVE'
-    } catch {
-      // Unreadable: treat as an approval (fails toward the installation token).
-      return true
-    }
-  }
-  return false
+}
+
+/** REST merge: a pull request's (PUT …/pulls/N/merge) or a branch into another (POST /repos/o/r/merges). */
+function restMerges(request: { method: string; path: string }): boolean {
+  const pathname = request.path.split('?')[0] ?? ''
+  const method = request.method.toUpperCase()
+  return (method === 'PUT' && /\/pulls\/\d+\/merge$/.test(pathname)) || (method === 'POST' && /^\/repos\/[^/]+\/[^/]+\/merges$/.test(pathname))
 }
 
 /** More than one person can use this workspace (owner plus other active grantees). */

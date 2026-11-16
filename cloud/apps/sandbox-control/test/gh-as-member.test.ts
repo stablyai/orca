@@ -120,27 +120,77 @@ describe('GH-AS-MEMBER on api.github.com', () => {
   })
 })
 
-describe('review M2: shared workspaces never approve or merge as a member', () => {
-  it('approval and merge go out on the installation token once a second person can use the workspace; alone, as the member', async () => {
+const grantBob = (t: Awaited<ReturnType<typeof setup>>) =>
+  t.h.raw.prepare(`INSERT INTO workspace_grants (id, sandbox_id, account_id, user_id, device_kind, device_label, status, created_at) VALUES ('g9', ?, 'org:acme', 'bob', 'desktop', 'Bob', 'active', 1)`).run(t.id)
+const sentBy = (t: Awaited<ReturnType<typeof setup>>, user: string, at: number) =>
+  t.h.raw
+    .prepare('INSERT INTO workspace_member_sends (sandbox_id, user_id, sent_at) VALUES (?, ?, ?) ON CONFLICT (sandbox_id, user_id) DO UPDATE SET sent_at = excluded.sent_at')
+    .run(t.id, user, at)
+const MERGE = { query: 'mutation { mergePullRequest(input: { pullRequestId: "PR_in" }) { clientMutationId } }' }
+const COMMENT = { query: 'mutation { addComment(input: { subjectId: "PR_in", body: "x" }) { clientMutationId } }' }
+
+describe('review M2: approvals never as a member; merges only in a one-person workspace', () => {
+  it('an approval goes out on the installation token even when the owner is alone; comments and other reviews are the member', async () => {
     const t = await setup()
-    const approve = { query: 'mutation { addPullRequestReview(input: { pullRequestId: "PR_in", event: APPROVE }) { clientMutationId } }' }
-    const merge = { query: 'mutation { mergePullRequest(input: { pullRequestId: "PR_in" }) { clientMutationId } }' }
-    await t.api('/graphql', 'POST', approve)
-    expect(t.upstream.at(-1)!.authorization).toBe(`Bearer ${MEMBER_TOKEN}`)
-    t.h.raw.prepare(`INSERT INTO workspace_grants (id, sandbox_id, account_id, user_id, device_kind, device_label, status, created_at) VALUES ('g9', ?, 'org:acme', 'bob', 'desktop', 'Bob', 'active', 1)`).run(t.id)
-    t.h.raw.prepare('INSERT INTO workspace_member_sends (sandbox_id, user_id, sent_at) VALUES (?, ?, ?)').run(t.id, 'alice', t.h.now())
-    for (const body of [approve, merge]) {
+    for (const body of [
+      { query: 'mutation { addPullRequestReview(input: { pullRequestId: "PR_in", event: APPROVE }) { clientMutationId } }' },
+      { query: 'mutation { submitPullRequestReview(input: { pullRequestReviewId: "PRR_in", event: APPROVE }) { clientMutationId } }' },
+      {
+        query: 'mutation R($input: AddPullRequestReviewInput!) { addPullRequestReview(input: $input) { clientMutationId } }',
+        variables: { input: { pullRequestId: 'PR_in', event: 'approve' } }
+      }
+    ]) {
       await t.api('/graphql', 'POST', body)
       expect(t.upstream.at(-1)!.authorization).toBe(APP)
     }
-    await t.api('/repos/acme/app/pulls/7/reviews', 'POST', { event: 'APPROVE' })
-    expect(t.upstream.at(-1)!.authorization).toBe(APP)
-    await t.api('/repos/acme/app/pulls/7/merge', 'PUT', {})
-    expect(t.upstream.at(-1)!.authorization).toBe(APP)
-    // A comment is still the latest sender's own.
-    await t.api('/graphql', 'POST', { query: 'mutation { addComment(input: { subjectId: "PR_in", body: "x" }) { clientMutationId } }' })
+    for (const event of ['APPROVE', 'approve', 'Approve']) {
+      await t.api('/repos/acme/app/pulls/7/reviews', 'POST', { event })
+      expect(t.upstream.at(-1)!.authorization).toBe(APP)
+      await t.api('/repos/acme/app/pulls/7/reviews/3/events', 'POST', { event })
+      expect(t.upstream.at(-1)!.authorization).toBe(APP)
+    }
+    await t.api('/repos/acme/app/pulls/7/reviews', 'POST', { event: 'REQUEST_CHANGES', body: 'x' })
     expect(t.upstream.at(-1)!.authorization).toBe(`Bearer ${MEMBER_TOKEN}`)
     await t.api('/repos/acme/app/pulls/7/reviews', 'POST', { event: 'COMMENT', body: 'x' })
+    expect(t.upstream.at(-1)!.authorization).toBe(`Bearer ${MEMBER_TOKEN}`)
+    await t.api('/graphql', 'POST', { query: 'mutation { addPullRequestReview(input: { pullRequestId: "PR_in", event: REQUEST_CHANGES, body: "x" }) { clientMutationId } }' })
+    expect(t.upstream.at(-1)!.authorization).toBe(`Bearer ${MEMBER_TOKEN}`)
+  })
+
+  it('merges (GraphQL, PR merge, branch merge) are the owner alone, the installation token once shared', async () => {
+    const t = await setup()
+    const mergeAll = async () => {
+      const seen: (string | null)[] = []
+      await t.api('/graphql', 'POST', MERGE)
+      seen.push(t.upstream.at(-1)!.authorization)
+      await t.api('/repos/acme/app/pulls/7/merge', 'PUT', {})
+      seen.push(t.upstream.at(-1)!.authorization)
+      await t.api('/repos/acme/app/merges', 'POST', { base: 'main', head: 'f' })
+      seen.push(t.upstream.at(-1)!.authorization)
+      return seen
+    }
+    expect(await mergeAll()).toEqual(Array(3).fill(`Bearer ${MEMBER_TOKEN}`))
+    grantBob(t)
+    sentBy(t, 'alice', t.h.now())
+    expect(await mergeAll()).toEqual(Array(3).fill(APP))
+    // A comment is still the latest sender's own.
+    await t.api('/graphql', 'POST', COMMENT)
+    expect(t.upstream.at(-1)!.authorization).toBe(`Bearer ${MEMBER_TOKEN}`)
+  })
+})
+
+describe('shared-workspace cap: 60 min by default', () => {
+  it("the latest sender acts for 60 min after their send, then the bot; a one-person workspace isn't capped", async () => {
+    const t = await setup()
+    sentBy(t, 'alice', t.h.now() - 10 * 60 * 60_000)
+    await t.api('/graphql', 'POST', COMMENT)
+    expect(t.upstream.at(-1)!.authorization).toBe(`Bearer ${MEMBER_TOKEN}`)
+    grantBob(t)
+    sentBy(t, 'alice', t.h.now() - 61 * 60_000)
+    await t.api('/graphql', 'POST', COMMENT)
+    expect(t.upstream.at(-1)!.authorization).toBe(APP)
+    sentBy(t, 'alice', t.h.now() - 59 * 60_000)
+    await t.api('/graphql', 'POST', COMMENT)
     expect(t.upstream.at(-1)!.authorization).toBe(`Bearer ${MEMBER_TOKEN}`)
   })
 })
