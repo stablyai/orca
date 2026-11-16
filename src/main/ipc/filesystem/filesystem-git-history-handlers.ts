@@ -76,7 +76,8 @@ export function registerFilesystemGitHistoryHandlers({ store }: FilesystemHandle
           getBlame(
             worktreePath,
             validateGitRelativeFilePath(worktreePath, args.filePath),
-            gitOptions
+            gitOptions,
+            args.knownHeadOid
           )
       )
     }

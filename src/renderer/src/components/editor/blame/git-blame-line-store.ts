@@ -8,13 +8,15 @@ export type LineBlame = { kind: 'commit'; commit: GitBlameCommit } | { kind: 'un
 /**
  * Blame for the focused editor's cursor line, read by the status bar. `ownerId` is the publishing
  * editor, so split panes of one file stay distinct; `stale` keeps the last value (dimmed) while
- * typing or loading so the status bar doesn't shift; `git` is null when the commit can't open.
+ * typing or loading so the status bar doesn't shift; `released` means its editor is gone and the
+ * next active editor may take it over; `git` is null when the commit can't open.
  */
 export type FocusedLineBlame = {
   ownerId: string
   fileId: string
   line: LineBlame
   stale: boolean
+  released: boolean
   git: RuntimeGitContext | null
 }
 
@@ -30,6 +32,7 @@ function sameLineBlame(a: FocusedLineBlame | null, b: FocusedLineBlame | null): 
     a.ownerId === b.ownerId &&
     a.fileId === b.fileId &&
     a.stale === b.stale &&
+    a.released === b.released &&
     a.git === b.git &&
     a.line.kind === b.line.kind &&
     commitA === commitB
@@ -47,13 +50,13 @@ export function publishFocusedLineBlame(next: FocusedLineBlame | null): void {
 }
 
 /**
- * Mark the owner's blame stale when its editor goes away; the status bar only shows it while its
- * file is active, and the next active editor takes it over.
+ * Keep the owner's blame (hidden) when its editor goes away, so the next active editor can take it
+ * over as its loading placeholder instead of the status bar shifting.
  */
 export function releaseFocusedLineBlame(ownerId: string): void {
   const current = focusedLineBlameStore.getState()
-  if (current?.ownerId === ownerId && !current.stale) {
-    focusedLineBlameStore.setState({ ...current, stale: true }, true)
+  if (current?.ownerId === ownerId && !current.released) {
+    focusedLineBlameStore.setState({ ...current, stale: true, released: true }, true)
   }
 }
 

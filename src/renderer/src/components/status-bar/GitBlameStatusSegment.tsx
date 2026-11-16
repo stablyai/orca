@@ -45,7 +45,11 @@ export function GitBlameStatusSegment({
   const blame = useFocusedLineBlame()
   // Derived, not stored: only the visible editor's blame shows, so switching worktrees or tabs hides it.
   const visible = useAppStore(
-    (state) => !!blame && state.activeTabType === 'editor' && state.activeFileId === blame.fileId
+    (state) =>
+      !!blame &&
+      !blame.released &&
+      state.activeTabType === 'editor' &&
+      state.activeFileId === blame.fileId
   )
   if (!blame || !visible) {
     return null

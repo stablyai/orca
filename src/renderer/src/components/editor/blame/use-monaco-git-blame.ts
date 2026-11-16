@@ -108,7 +108,7 @@ export function useMonacoGitBlame(params: {
         ed.hasTextFocus() ||
         current?.ownerId === ownerId ||
         (useAppStore.getState().activeFileId === fileId &&
-          (!current || current.fileId !== fileId || current.stale))
+          (!current || current.fileId !== fileId || current.released))
       )
     }
 
@@ -116,10 +116,10 @@ export function useMonacoGitBlame(params: {
       const current = getFocusedLineBlame()
       if (line) {
         const git = loadedRef.current?.target.git ?? null
-        publishFocusedLineBlame({ ownerId, fileId, line, stale: false, git })
+        publishFocusedLineBlame({ ownerId, fileId, line, stale: false, released: false, git })
       } else if (current && (typing || loading)) {
         // Keep the last value, dimmed, so the status bar doesn't shift while typing or loading.
-        publishFocusedLineBlame({ ...current, ownerId, fileId, stale: true })
+        publishFocusedLineBlame({ ...current, ownerId, fileId, stale: true, released: false })
       } else {
         publishFocusedLineBlame(null)
       }
@@ -184,7 +184,6 @@ export function useMonacoGitBlame(params: {
         if (disposed || generation !== loads.generation) {
           return
         }
-        const wasLoading = loading
         loading = false
         const previous = loadedRef.current
         const keep =
@@ -196,9 +195,8 @@ export function useMonacoGitBlame(params: {
             (result.kind === 'ready' && result.headOid === previous.blame.headOid))
         if (keep) {
           loadedRef.current = { ...previous, target }
-          if (wasLoading) {
-            update()
-          }
+          // The target can resolve later (a child repo's worktree id), so refresh the click target.
+          update()
           return
         }
         loadedRef.current =
