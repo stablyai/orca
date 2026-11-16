@@ -20,7 +20,7 @@ import {
 } from './skill-discovery-classification'
 import { rootMayContainSourceKind } from './skill-discovery-source-filter'
 import {
-  isOnStoppedWslDistro,
+  isUnreadableStoppedWslCwd,
   splitStoppedWslDistroRoots,
   stoppedPluginRoot,
   stoppedRootReader,
@@ -48,7 +48,7 @@ import {
 } from '../../../shared/skills/bundled/bundled-skill-names'
 import {
   clearCustomSlashCommandScanCache,
-  discoverCustomSlashCommands
+  discoverSkillScanCommands
 } from './custom-slash-command-discovery'
 
 // Share fixed home-root scans across workspace panes to bound repeated filesystem walks.
@@ -245,13 +245,7 @@ export async function discoverSkills(args: {
       : undefined
   const gateStopped = args.readStoppedWslRootsFor !== 'all'
   const mayReadStopped = stoppedRootReader(args.readStoppedWslRootsFor)
-  const cwdStopped = async (cwd: string | undefined): Promise<boolean> =>
-    gateStopped &&
-    cwd !== undefined &&
-    !mayReadStopped(cwd) &&
-    wslDistroForPath(cwd) !== null &&
-    (await isOnStoppedWslDistro(cwd))
-  const pluginCwdStopped = await cwdStopped(pluginCwd)
+  const pluginCwdStopped = await isUnreadableStoppedWslCwd(pluginCwd, args.readStoppedWslRootsFor)
   const candidateRoots = [
     ...buildSkillDiscoverySources({ ...args, homeDir }),
     ...(pluginCwd && !pluginCwdStopped
@@ -271,12 +265,10 @@ export async function discoverSkills(args: {
     await waitForPromiseWithSignal(withoutLinkedDefaultHomes(readable), args.signal)
   ).filter((root) => rootMayContainSourceKind(root, args.sourceKinds))
   args.signal?.throwIfAborted()
-  const commandsCwd = args.includeCwd !== false ? args.cwd : undefined
-  const scanCommands = commandsCwd !== undefined && !(await cwdStopped(commandsCwd))
   const [scans, commands] = await waitForPromiseWithSignal(
     Promise.all([
       Promise.all(roots.map((root) => scanRootShared(root, refresh))),
-      scanCommands ? discoverCustomSlashCommands({ homeDir, cwd: commandsCwd, refresh }) : []
+      discoverSkillScanCommands({ ...args, homeDir, refresh })
     ]),
     args.signal
   )

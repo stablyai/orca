@@ -1,11 +1,13 @@
 import { mkdir, mkdtemp, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildCustomSlashCommandRoots,
   clearCustomSlashCommandScanCache,
-  discoverCustomSlashCommands
+  COMMAND_SCAN_DEADLINE_MS,
+  discoverCustomSlashCommands,
+  withCommandScanDeadline
 } from './custom-slash-command-discovery'
 
 async function writeCommand(
@@ -110,5 +112,41 @@ describe('discoverCustomSlashCommands', () => {
     await symlink(shared, join(cwd, '.claude', 'commands', 'team'), 'dir')
     const commands = await discoverCustomSlashCommands({ homeDir: home, cwd })
     expect(commands.map((command) => command.name)).toEqual(['team:linked'])
+  })
+})
+
+describe('withCommandScanDeadline', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('resolves no commands once a stalled scan passes the deadline', async () => {
+    vi.useFakeTimers()
+    const bounded = withCommandScanDeadline(new Promise(() => undefined))
+    await vi.advanceTimersByTimeAsync(COMMAND_SCAN_DEADLINE_MS - 1)
+    let settled = false
+    void bounded.then(() => {
+      settled = true
+    })
+    await Promise.resolve()
+    expect(settled).toBe(false)
+    await vi.advanceTimersByTimeAsync(1)
+    await expect(bounded).resolves.toEqual([])
+  })
+
+  it('propagates a rejection and clears its timer', async () => {
+    vi.useFakeTimers()
+    const bounded = withCommandScanDeadline(Promise.reject(new Error('scan failed')))
+    await expect(bounded).rejects.toThrow('scan failed')
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('returns the scan result and clears its timer', async () => {
+    vi.useFakeTimers()
+    const command = { name: 'opsx:apply' } as Awaited<
+      ReturnType<typeof discoverCustomSlashCommands>
+    >[number]
+    await expect(withCommandScanDeadline(Promise.resolve([command]))).resolves.toEqual([command])
+    expect(vi.getTimerCount()).toBe(0)
   })
 })
