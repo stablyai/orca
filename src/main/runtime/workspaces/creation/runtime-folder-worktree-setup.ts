@@ -96,6 +96,7 @@ export async function startRuntimeFolderWorktreeSetupTerminals(args: {
     worktree: args.worktree,
     setup: prepared.setup,
     requiredSetup: prepared.requiredSetup,
+    inProcessSetup: prepared.inProcessSetup,
     startup: args.startup,
     startupFollowup: args.startupFollowup,
     startupLaunchRuntime: prepared.setupPreparationFailure ?? args.startupLaunchRuntime,

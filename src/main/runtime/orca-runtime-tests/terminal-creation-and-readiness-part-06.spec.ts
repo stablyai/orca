@@ -6,6 +6,19 @@ import { dispatchSetupGatedPty } from '../../ipc/pty/spawn-required-setup'
 import { TEST_WORKTREE_ID, TEST_WORKTREE_PATH, store } from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
+  it('allows agent dispatch when the workspace has no required Setup', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.preparedWorkspaceSetup('no-required-setup', false)
+    await expect(
+      runtime.prepareTerminalSetupForSpawn({
+        workspaceId: 'no-required-setup',
+        command: 'codex',
+        agent: 'codex',
+        shell: 'posix'
+      })
+    ).resolves.toBeUndefined()
+  })
+
   it.each([0, 7, null])(
     'retains exact Setup outcome %s captured during spawn, through exit and output eviction',
     async (exitCode) => {
@@ -135,6 +148,8 @@ describe('OrcaRuntimeService', () => {
     expect(spawns[1]?.env?.ORCA_SEQUENCED_STARTUP_COMMAND).toBe('codex')
     expect(spawns[1]?.command).not.toBe('codex')
     expect(spawns[2]?.command).not.toBe('claude')
+    await runtime.onPtyExit('dependent-2', -1)
+    expect(runtime.getPtySetupStatus('dependent-2').state).toBe('unknown')
     runtime.onPtyData(setupPtyId, '__ORCA_SETUP_COMPLETE__:additional-gate:7\r\n', 100)
     await expect(runtime.createTerminal(`id:${worktree.id}`, { command: 'codex' })).rejects.toThrow(
       'Setup did not finish successfully'

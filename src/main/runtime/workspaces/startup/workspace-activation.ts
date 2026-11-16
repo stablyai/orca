@@ -217,7 +217,12 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
       .then(() => {
         pasteWorktreeStartupDraftWhenReady(this.getWorktreeStartupReadinessHost(), handle, draft)
       })
-      .catch((error) => console.warn('[worktree-create] draft retained after Setup failed:', error))
+      .catch((error) =>
+        console.warn(
+          '[worktree-create] startup draft was not delivered because Setup failed:',
+          error
+        )
+      )
   }
 
   /** Before first input only: await composer readiness without startup dialogs or Codex provisional headers. stopOnDialog returns early for the caller's idle report. */

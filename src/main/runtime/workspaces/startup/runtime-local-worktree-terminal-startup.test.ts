@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { startRuntimeLocalWorktreeTerminals } from './runtime-local-worktree-terminal-startup'
+import { SetupTerminalCompletions } from '../../terminal/wait/setup-terminal-completions'
 import { pasteWorktreeStartupDraftWhenReady } from './runtime-worktree-startup-readiness'
 
 afterEach(() => vi.useRealTimers())
@@ -54,3 +55,38 @@ it('pastes the linked draft after slow required Setup and the agent composer bec
   await vi.advanceTimersByTimeAsync(1500)
   expect(writes).toEqual(['\x1b[200~Repair the linked issue\x1b[201~'])
 })
+
+it.each([true, false])(
+  'settles required in-process Setup from the hook result: %s',
+  async (success) => {
+    const hook = Promise.withResolvers<boolean>()
+    const completion = new SetupTerminalCompletions()
+    await startRuntimeLocalWorktreeTerminals({
+      request: { activate: false, promisedAgentChat: true },
+      repo: { id: 'repo' },
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: startup reads only the workspace id and path in this headless case.
+      worktree: { id: 'repo::/task', path: '/task' } as Worktree,
+      requiredSetup: true,
+      inProcessSetup: hook.promise,
+      ports: {
+        canSpawn: false,
+        setupPrepared: (id, required) => completion.preparedWorkspace(id, required),
+        setupFailed: (id) => completion.refuseWorkspace(id),
+        waitForSetupTerminalCompletion: async () => ({ exitCode: null }),
+        createTerminal: async () => {
+          throw new Error('No terminal controller')
+        },
+        provision: async () => {
+          throw new Error('No terminal controller')
+        },
+        pasteDraft() {},
+        sendFollowup() {},
+        activate() {}
+      }
+    })
+    hook.resolve(success)
+    await expect(completion.forWorkspace('repo::/task')).resolves.toEqual({
+      exitCode: success ? 0 : null
+    })
+  }
+)

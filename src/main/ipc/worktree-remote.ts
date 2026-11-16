@@ -208,7 +208,7 @@ type StagedStartupResult = {
   startupTerminal?: CreateWorktreeResult['startupTerminal']
   activationSetup?: CreateWorktreeResult['setup']
   didSpawnSetup: boolean
-  didProvision?: boolean
+  defaultTabsProvisioned?: boolean
   warning?: string
 }
 
@@ -434,7 +434,7 @@ async function spawnLocalStartupAndSetupTerminals(args: {
     }
   })
   return {
-    didProvision: true,
+    defaultTabsProvisioned: started.defaultTabsProvisioned,
     didSpawnSetup: started.didSpawnSetup,
     activationSetup: started.returnedSetup,
     warning: started.warning,
@@ -1830,7 +1830,7 @@ async function performLocalWorktreeCreate(
       provisionedByHost &&
       !stagedStartup.startupTerminal &&
       !stagedStartup.didSpawnSetup &&
-      (setup || defaultTabs?.tabs.length)
+      (setup || (!stagedStartup.defaultTabsProvisioned && defaultTabs?.tabs.length))
     ) {
       void runtime.provisionManagedWorktreeTerminals(
         {
@@ -1838,7 +1838,7 @@ async function performLocalWorktreeCreate(
           worktreeId: worktree.id,
           worktreePath: worktree.path,
           ...(setup ? { setup } : {}),
-          ...(defaultTabs ? { defaultTabs } : {}),
+          ...(!stagedStartup.defaultTabsProvisioned && defaultTabs ? { defaultTabs } : {}),
           hasStartupTerminal: false,
           setupCommandPlatform: getSetupRunnerCommandPlatformForLaunch(setup, 'posix'),
           surfaceOwner: false
@@ -1874,7 +1874,7 @@ async function performLocalWorktreeCreate(
               : setup && !stagedStartup.didSpawnSetup
                 ? { setup }
                 : {}),
-            ...(!stagedStartup.didProvision && defaultTabs ? { defaultTabs } : {})
+            ...(!stagedStartup.defaultTabsProvisioned && defaultTabs ? { defaultTabs } : {})
           }),
       ...(addResult.localBaseRefRefresh
         ? { localBaseRefRefresh: addResult.localBaseRefRefresh }

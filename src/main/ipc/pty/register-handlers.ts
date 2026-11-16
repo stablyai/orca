@@ -111,6 +111,7 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:hasChildProcesses')
   ipcMain.removeHandler('pty:getForegroundProcess')
   ipcMain.removeHandler('pty:inspectProcess')
+  ipcMain.removeHandler('pty:setupStatus')
   ipcMain.removeHandler('pty:confirmForegroundProcess')
   ipcMain.removeHandler('pty:isCodexOnSharedServer')
   ipcMain.removeHandler('pty:disableCodexSharedServerAutoStart')

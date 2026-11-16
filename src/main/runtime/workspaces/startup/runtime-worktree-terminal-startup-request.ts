@@ -1,3 +1,5 @@
+import { formatTerminalStartFailure } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
+import { readableWslDistroHoldText } from '../../../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
 import type { startRuntimeLocalWorktreeTerminals } from './runtime-local-worktree-terminal-startup'
 import type { CreateWorktreeResult } from '../../../../shared/worktree/create-types'
 import { getSetupRunnerCommandPlatformForPath } from '../../../../shared/agent-launch/startup/setup-runner-command'
@@ -54,4 +56,21 @@ export function ownerSurfacing(
   shouldSurface: boolean
 ): Pick<WorktreeProvisionTerminalOptions, 'surfaceOwner'> {
   return shouldSurface ? {} : { surfaceOwner: false }
+}
+
+export function appendTerminalStartWarning(
+  warning: string | undefined,
+  path: string,
+  kind: 'startup' | 'initial',
+  error: unknown
+): string {
+  const message = readableWslDistroHoldText(
+    formatTerminalStartFailure(error) ?? (error instanceof Error ? error.message : String(error))
+  )
+  const failure = `failed to create the ${kind} terminal for ${path}: ${message}`
+  const combined = warning
+    ? `${warning} Also ${failure}`
+    : `${failure[0].toUpperCase()}${failure.slice(1)}`
+  console.warn(`[worktree-create] ${combined}`)
+  return combined
 }

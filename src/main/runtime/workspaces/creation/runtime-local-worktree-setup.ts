@@ -54,6 +54,7 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
   setupTrustMismatch?: SetupTrustMismatch
   hookFound: boolean
   shouldRunSetup: boolean
+  inProcessSetup?: Promise<boolean>
   didStartInProcessSetupHook: boolean
   requiredSetup?: boolean
   setupPreparationFailure?: Error
@@ -112,6 +113,7 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
     )
   let setupPreparationFailure: Error | undefined
   let didStartInProcessSetupHook = false
+  let inProcessSetup: Promise<boolean> | undefined
   if (shouldRunSetup && hooks?.scripts.setup) {
     if (args.shouldUseSetupRunner) {
       try {
@@ -138,13 +140,16 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
       }
     } else {
       didStartInProcessSetupHook = true
-      void runHook('setup', worktreePath, repo, worktreePath, args.runtimeTarget, {
+      inProcessSetup = runHook('setup', worktreePath, repo, worktreePath, args.runtimeTarget, {
         identity: args.identity
-      }).then((result) => {
-        if (!result.success) {
-          console.error(`[hooks] setup hook failed for ${worktreePath}:`, result.output)
-        }
       })
+        .then((result) => {
+          if (!result.success) {
+            console.error(`[hooks] setup hook failed for ${worktreePath}:`, result.output)
+          }
+          return result.success
+        })
+        .catch(() => false)
     }
   } else if (hooks?.scripts.setup && runDecision !== 'skip') {
     const skipped = `orca.yaml setup hook skipped for ${worktreePath}; pass --setup run to run it.`
@@ -160,6 +165,7 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
     hookFound: Boolean(hooks?.scripts.setup),
     shouldRunSetup,
     didStartInProcessSetupHook,
+    ...(inProcessSetup ? { inProcessSetup } : {}),
     requiredSetup,
     ...(setupPreparationFailure ? { setupPreparationFailure } : {})
   }

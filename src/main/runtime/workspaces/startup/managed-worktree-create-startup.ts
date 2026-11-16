@@ -30,7 +30,7 @@ export async function resolveManagedWorktreeCreateStartup(
   const requestedAgentEnabled =
     requestedAgent !== undefined ? isTuiAgentEnabled(requestedAgent, disabledTuiAgents) : false
   if (
-    (args.startup || args.startupAgent || args.startupDraft) &&
+    (args.startup || (!args.startupDraft && args.startupAgent)) &&
     requestedAgent &&
     !requestedAgentEnabled
   ) {

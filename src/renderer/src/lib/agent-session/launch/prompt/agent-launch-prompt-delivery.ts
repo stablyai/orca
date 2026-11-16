@@ -97,7 +97,9 @@ export function deliverLaunchPromptToAgentTab(args: {
         useAppStore.getState().markNativeChatLaunchPromptFailed(tabId)
       }
       const worktreeId = getTerminalTabOwnerWorktreeId(useAppStore.getState().tabsByWorktree, tabId)
-      if (worktreeId) {
+      if (onTimeout) {
+        onTimeout()
+      } else if (worktreeId) {
         createPasteReadinessTimeoutNotice({
           worktreeId,
           tabId,

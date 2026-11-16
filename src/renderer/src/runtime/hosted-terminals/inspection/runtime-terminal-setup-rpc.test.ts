@@ -52,7 +52,7 @@ describe('Setup status RPC outage recovery', () => {
         }
       }
     })
-    const stream = terminalSetupStreamLifecycle(
+    let stream = terminalSetupStreamLifecycle(
       scope,
       () => true,
       () => {},
@@ -81,6 +81,12 @@ describe('Setup status RPC outage recovery', () => {
         })
       }
       await vi.advanceTimersByTimeAsync(0)
+      stream = terminalSetupStreamLifecycle(
+        scope,
+        () => true,
+        () => {},
+        () => {}
+      )
       stream.callbacks.onReady()
       await vi.advanceTimersByTimeAsync(0)
       readers.at(-1)?.onResponse({

@@ -24,8 +24,8 @@ export function bindStartupDraftPaste(session: ConnectPanePtySession): void {
           'render-quiet-after-bracketed-paste'
       )
     : null
-  const setupAbort = new AbortController()
-  let setupWaitInFlight = false
+  let setupAbort = new AbortController()
+  let setupPtyId: string | null = null
   let earlyReadinessData = ''
   let startupDraftReadinessArmed = false
   let startupDraftPasteSettled = !session.ownsStartupDraftPaste
@@ -152,15 +152,21 @@ export function bindStartupDraftPaste(session: ConnectPanePtySession): void {
     }, STARTUP_DRAFT_PASTE_QUIET_MS)
   }
   session.armStartupDraftReadinessObservation = (): void => {
-    if (!startupDraftReadyScanner || startupDraftReadinessArmed || setupWaitInFlight) {
+    if (!startupDraftReadyScanner || startupDraftPasteSettled) {
       return
     }
     const ptyId = getStartupDraftPtyId()
-    if (!ptyId) {
+    if (!ptyId || setupPtyId === ptyId) {
       return
     }
-    setupWaitInFlight = true
-    void waitForRuntimeTerminalSetup(ptyId, setupAbort.signal)
+    setupAbort.abort()
+    setupAbort = new AbortController()
+    const abort = setupAbort
+    setupPtyId = ptyId
+    startupDraftReadinessArmed = false
+    earlyReadinessData = ''
+    clearStartupDraftPasteTimers()
+    void waitForRuntimeTerminalSetup(ptyId, abort.signal)
       .then(() => {
         if (getStartupDraftPtyId() !== ptyId || startupDraftPasteSettled) {
           return
@@ -172,9 +178,12 @@ export function bindStartupDraftPaste(session: ConnectPanePtySession): void {
         session.observeStartupDraftPasteReadiness(data)
       })
       .catch(() => {
+        if (abort.signal.aborted || getStartupDraftPtyId() !== ptyId) {
+          return
+        }
         earlyReadinessData = ''
         startupDraftPasteSettled = true
-        if (!session.disposed && !setupAbort.signal.aborted && session.startupDraftAgent) {
+        if (!session.disposed && !abort.signal.aborted && session.startupDraftAgent) {
           createPasteReadinessTimeoutNotice({
             worktreeId: session.deps.worktreeId,
             tabId: session.deps.tabId,
@@ -186,7 +195,11 @@ export function bindStartupDraftPaste(session: ConnectPanePtySession): void {
       })
   }
   session.observeStartupDraftPasteReadiness = (data: string): void => {
-    if (setupWaitInFlight && !startupDraftReadinessArmed && !startupDraftPasteSettled) {
+    if (
+      setupPtyId === getStartupDraftPtyId() &&
+      !startupDraftReadinessArmed &&
+      !startupDraftPasteSettled
+    ) {
       earlyReadinessData = (earlyReadinessData + data).slice(-64 * 1024)
     }
     if (!startupDraftReadyScanner || !startupDraftReadinessArmed || startupDraftPasteSettled) {

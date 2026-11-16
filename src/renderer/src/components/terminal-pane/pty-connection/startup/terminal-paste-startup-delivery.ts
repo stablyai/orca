@@ -6,12 +6,8 @@ import { CLIENT_PLATFORM } from '@/lib/workspace/creation/new-workspace'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
 export function bindTerminalPasteStartupDelivery(session: ConnectPanePtySession): void {
-  const setupAbort = new AbortController()
-  const cleanup = session.cleanupStartupDraftPasteTimers
-  session.cleanupStartupDraftPasteTimers = () => {
-    setupAbort.abort()
-    cleanup()
-  }
+  let setupAbort: AbortController | undefined
+  session.waitTeardowns.push(() => setupAbort?.abort())
   const isStartupPasteTargetCurrent = (ptyId: string | null): boolean =>
     !session.disposed &&
     session.deps.paneTransportsRef.current.get(session.pane.id) === session.transport &&
@@ -40,6 +36,9 @@ export function bindTerminalPasteStartupDelivery(session: ConnectPanePtySession)
     return session.transport.sendInput('\r', 'launch')
   }
   session.schedulePendingStartupCommandDelivery = (): void => {
+    setupAbort?.abort()
+    const abort = new AbortController()
+    setupAbort = abort
     const startup = session.pendingStartupCommand
     if (!startup || startup.resumeSource?.cancelled) {
       return
@@ -71,9 +70,9 @@ export function bindTerminalPasteStartupDelivery(session: ConnectPanePtySession)
           return
         }
         try {
-          await waitForRuntimeTerminalSetup(ptyId, setupAbort.signal)
+          await waitForRuntimeTerminalSetup(ptyId, abort.signal)
         } catch {
-          if (!setupAbort.signal.aborted && isCurrent()) {
+          if (!abort.signal.aborted && isCurrent()) {
             session.deps.onPtyErrorRef?.current?.(
               session.pane.id,
               `${session.startupDraftAgent ?? 'Agent'} did not start because Setup could not be confirmed. Check the Setup terminal and try again.`

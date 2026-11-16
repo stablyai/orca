@@ -7,13 +7,15 @@ import { structuredAgentSessionCreateParams } from '../../../../../../shared/age
 import {
   createRestTestRig,
   restTestSend,
+  REST_TEST_CALLER,
   type RestTestRig
 } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig.test-fixture'
 import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_NOW as NOW,
   hostTestMessage,
-  hostTestOperationId
+  hostTestOperationId,
+  hostTestAttachParams
 } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { call, runtimeCalls } from '../protocol/structured-agent-session-rpc.test-fixture'
@@ -365,4 +367,18 @@ it('failed required Setup retains the accepted message without starting a provid
     ok: true,
     result: { ok: true, replayed: true }
   })
+})
+
+it('reattaches an existing child despite a newer failed workspace Setup', async () => {
+  const input = hostTestAttachParams(null)
+  expect(await rig.host.attach(REST_TEST_CALLER, input)).toMatchObject({ ok: true })
+  rig.host.deps.probeOwner = async () => ({
+    outcome: 'identity-matched',
+    matchedOn: ['spawn-token']
+  })
+  rig.host.deps.waitForWorkspaceSetup = async () => {
+    throw new Error('New Setup failed')
+  }
+  expect(await rig.host.attach(REST_TEST_CALLER, input)).toMatchObject({ ok: true })
+  expect(rig.adapter.acquire).toHaveBeenCalledOnce()
 })

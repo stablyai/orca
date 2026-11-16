@@ -10,7 +10,7 @@ import { TerminalSetupObservers } from './terminal-setup-observers'
 export const terminalSetupObservers = new TerminalSetupObservers()
 let localObservers = 0
 let stopLocal: (() => void) | undefined
-const activeStreams = new Map<string, symbol>()
+const activeStreams = new Map<string, { restart: () => void }>()
 
 export async function waitForRuntimeTerminalSetup(
   ptyId: string,
@@ -23,6 +23,7 @@ export async function waitForRuntimeTerminalSetup(
       owner.target.environmentId,
       owner.terminal,
       async (readSignal) => {
+        const stream = activeStreams.get(owner.target.environmentId)
         try {
           return await callRuntimeRpc<TerminalSetupStatus>(
             owner.target,
@@ -36,7 +37,7 @@ export async function waitForRuntimeTerminalSetup(
             return null
           }
           if (isSetupTransportLoss(error) && !readSignal.aborted) {
-            terminalSetupObservers.setConnected(owner.target.environmentId, false)
+            stream?.restart()
           }
           throw error
         }
@@ -88,21 +89,46 @@ export function terminalSetupStreamLifecycle(
   onClose: () => void,
   onError: (error: unknown) => void
 ) {
-  const owner = Symbol(scope)
-  activeStreams.set(scope, owner)
-  terminalSetupObservers.setConnected(scope, false)
-  const isActive = (): boolean => activeStreams.get(scope) === owner
+  let closed = false
+  let handle: { unsubscribe: () => void } | undefined
+  const isActive = (): boolean => !closed && activeStreams.get(scope) === owner
+  const releaseHandle = (): void => {
+    const retained = handle
+    handle = undefined
+    retained?.unsubscribe()
+  }
   const disconnect = (): void => {
     if (isActive()) {
       terminalSetupObservers.setConnected(scope, false)
     }
   }
-  const release = (): void => {
-    disconnect()
-    if (isActive()) {
+  const close = (notify: boolean): void => {
+    if (closed) {
+      return
+    }
+    const active = isActive()
+    closed = true
+    if (active) {
       activeStreams.delete(scope)
+      terminalSetupObservers.setConnected(scope, false)
+    }
+    try {
+      if (notify) {
+        onClose()
+      }
+    } finally {
+      releaseHandle()
     }
   }
+  const owner = {
+    restart: () => {
+      if (isActive() && isCurrent()) {
+        close(true)
+      }
+    }
+  }
+  activeStreams.set(scope, owner)
+  terminalSetupObservers.setConnected(scope, false)
   return {
     isActive,
     callbacks: {
@@ -117,25 +143,21 @@ export function terminalSetupStreamLifecycle(
         }
         onError(error)
       },
-      onClose: () => {
-        release()
-        onClose()
-      }
+      onClose: () => close(true)
     },
     retain: async (subscription: Promise<{ unsubscribe: () => void }>) => {
-      let handle: { unsubscribe: () => void }
       try {
         handle = await subscription
       } catch (error) {
-        release()
+        close(false)
         throw error
       }
-      return {
-        unsubscribe: () => {
-          release()
-          handle.unsubscribe()
-        }
+      if (closed) {
+        releaseHandle()
+      } else if (!isActive() || !isCurrent()) {
+        close(false)
       }
+      return { unsubscribe: () => close(false) }
     }
   }
 }

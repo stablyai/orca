@@ -126,15 +126,6 @@ async function runAttach(
     : context.runtimeState.acquireAborts.begin(params.envelope.sessionId)
   const lock = options.lock ?? heldStructuredAgentSessionAttachLock(acquire?.signal)
   try {
-    if (!options.lock && context.deps.waitForWorkspaceSetup) {
-      try {
-        await lock.wait(
-          context.deps.waitForWorkspaceSetup(params.location.workspaceId, params.agent, lock.signal)
-        )
-      } catch (error) {
-        throw launchPreparationFailure(error)
-      }
-    }
     return await runAttachUnderAbort(context, callerKey, params, options, lock)
   } finally {
     acquire?.end()
@@ -184,6 +175,14 @@ async function runAttachUnderAbort(
       eventSink: attemptSink.sink,
       // Drain superseded writes before starting a new child.
       onAcquiring: async () => {
+        const { waitForWorkspaceSetup } = context.deps
+        if (!options.lock && waitForWorkspaceSetup) {
+          await lock
+            .wait(waitForWorkspaceSetup(params.location.workspaceId, params.agent, lock.signal))
+            .catch((error: unknown) => {
+              throw launchPreparationFailure(error)
+            })
+        }
         const barrier = await lock.wait(
           Promise.resolve(context.runtimeState.currentEventSink(sessionId)?.drained())
         )

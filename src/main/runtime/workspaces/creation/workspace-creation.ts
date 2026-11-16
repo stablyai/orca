@@ -229,6 +229,7 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
         worktree,
         setup,
         requiredSetup: preparedSetup.requiredSetup,
+        inProcessSetup: preparedSetup.inProcessSetup,
         defaultTabs,
         startup: effectiveStartup,
         startupFollowup: effectiveStartupFollowup,

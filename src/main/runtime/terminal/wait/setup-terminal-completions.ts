@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { SetupTerminalDependents } from './setup-terminal-dependents'
 import type { TerminalSetupVerdict } from '../../../../shared/terminal/pty/lifecycle/terminal-setup-status'
 import type { SetupAttemptRecipe } from '../../../../shared/agent-launch/startup/setup-attempt-recipe'
 import { mintPtySessionId } from '../../../daemon/sessions/pty-session-id'
@@ -28,32 +28,20 @@ type Attempt = {
   refuse?: () => void
 }
 
-export class SetupTerminalCompletions {
+export class SetupTerminalCompletions extends SetupTerminalDependents {
   private readonly attempts = new Map<string, Attempt>()
   private readonly requiredByWorkspace = new Map<string, WorkspaceAttempt>()
-  private readonly dependents = new Map<
-    string,
-    {
-      workspaceId: string
-      completion: Promise<SetupCompletion>
-      cancel: () => void
-      verdict: TerminalSetupVerdict
-    }
-  >()
   private readonly activeByWorkspace = new Map<string, Set<WorkspaceAttempt>>()
-  private readonly dependentIdsByWorkspace = new Map<string, Set<string>>()
   private readonly byHandle = new Map<string, Attempt>()
 
   constructor(
-    private readonly changed: (ptyId: string, verdict: TerminalSetupVerdict) => void = () => {},
+    changed: (ptyId: string, verdict: TerminalSetupVerdict) => void = () => {},
     private readonly publishFailure: (
       recipe: SetupAttemptRecipe,
       signal: AbortSignal
     ) => Promise<void> = async () => {}
-  ) {}
-
-  status(ptyId: string): TerminalSetupVerdict {
-    return this.dependents.get(ptyId)?.verdict ?? { dependencyId: null, state: 'ready' }
+  ) {
+    super(changed)
   }
 
   capture(workspaceId: string, handle: string, options: TerminalCreateOptions) {
@@ -120,67 +108,6 @@ export class SetupTerminalCompletions {
     }
     workspace.recipe ??= recipe
     workspace.publish()
-  }
-
-  bindDependent(
-    workspaceId: string,
-    ptyId: string,
-    completion: Promise<SetupCompletion>
-  ): () => void {
-    const cancelled = Promise.withResolvers<SetupCompletion>()
-    const dependent: {
-      workspaceId: string
-      verdict: TerminalSetupVerdict
-      completion: Promise<SetupCompletion>
-      cancel: () => void
-    } = {
-      workspaceId,
-      verdict: { dependencyId: randomUUID(), state: 'pending' } satisfies TerminalSetupVerdict,
-      completion: Promise.race([completion, cancelled.promise]),
-      cancel: () => cancelled.resolve({ exitCode: null })
-    }
-    this.forgetDependent(ptyId)
-    this.dependents.set(ptyId, dependent)
-    let ids = this.dependentIdsByWorkspace.get(workspaceId)
-    if (!ids) {
-      ids = new Set()
-      this.dependentIdsByWorkspace.set(workspaceId, ids)
-    }
-    ids.add(ptyId)
-    void dependent.completion.then(({ exitCode }) => {
-      if (this.dependents.get(ptyId) !== dependent || dependent.verdict.state !== 'pending') {
-        return
-      }
-      dependent.verdict = {
-        dependencyId: dependent.verdict.dependencyId,
-        state: exitCode === 0 ? 'ready' : exitCode === null ? 'unknown' : 'failed'
-      }
-      this.changed(ptyId, dependent.verdict)
-    })
-    return () => {
-      if (this.dependents.get(ptyId) === dependent) {
-        this.forgetDependent(ptyId)
-      }
-    }
-  }
-
-  forDependent(ptyId: string): Promise<SetupCompletion> | undefined {
-    return this.dependents.get(ptyId)?.completion
-  }
-
-  forgetDependent(ptyId: string): void {
-    const dependent = this.dependents.get(ptyId)
-    if (!dependent) {
-      return
-    }
-    dependent.cancel()
-    this.changed(ptyId, { dependencyId: dependent.verdict.dependencyId, state: 'unknown' })
-    this.dependents.delete(ptyId)
-    const ids = this.dependentIdsByWorkspace.get(dependent.workspaceId)
-    ids?.delete(ptyId)
-    if (ids?.size === 0) {
-      this.dependentIdsByWorkspace.delete(dependent.workspaceId)
-    }
   }
 
   async gate(workspaceId: string): Promise<WorkspaceAttempt | undefined> {
@@ -259,15 +186,7 @@ export class SetupTerminalCompletions {
   }
 
   forgetWorkspace(workspaceId: string): void {
-    for (const id of this.dependentIdsByWorkspace.get(workspaceId) ?? []) {
-      const dependent = this.dependents.get(id)
-      if (dependent) {
-        dependent.verdict = { dependencyId: dependent.verdict.dependencyId, state: 'unknown' }
-        dependent.cancel()
-        this.changed(id, dependent.verdict)
-      }
-    }
-    this.dependentIdsByWorkspace.delete(workspaceId)
+    this.forgetWorkspaceDependents(workspaceId)
     for (const attempt of this.activeByWorkspace.get(workspaceId) ?? []) {
       attempt.cancel()
       attempt.finish(null)
@@ -285,7 +204,7 @@ export class SetupTerminalCompletions {
   }
 
   exit(ptyId: string, confirmed = false): void {
-    this.forgetDependent(ptyId)
+    this.endDependent(ptyId)
     if (confirmed) {
       this.attempts.get(ptyId)?.refuse?.()
     }

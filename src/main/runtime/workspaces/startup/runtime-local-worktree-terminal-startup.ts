@@ -3,11 +3,10 @@ import {
   provisionArgs,
   callerProvidesInitialSurface,
   setupPlatform,
-  ownerSurfacing
+  ownerSurfacing,
+  appendTerminalStartWarning
 } from './runtime-worktree-terminal-startup-request'
 import { deliverWorktreeInputAfterSetup } from './required-setup-completion'
-import { formatTerminalStartFailure } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
-import { readableWslDistroHoldText } from '../../../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
 import { paneIdentity } from '../../terminal/identity/runtime-terminal-pane-identity'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { shouldSeedWorktreePrimaryTerminal } from '../../../../shared/worktree/creation/worktree-first-surface'
@@ -68,6 +67,7 @@ export type RuntimeLocalWorktreeTerminalStartupResult = {
   warning?: string
   returnedSetup?: CreateWorktreeResult['setup']
   didSpawnSetup: boolean
+  defaultTabsProvisioned: boolean
   didSpawnStartup: boolean
   setupTerminalHandle: string | null
   startupTerminalHandle: string | null
@@ -82,6 +82,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
   worktree: Worktree
   setup?: CreateWorktreeResult['setup']
   requiredSetup?: boolean
+  inProcessSetup?: Promise<boolean>
   defaultTabs?: CreateWorktreeResult['defaultTabs']
   startup?: WorktreeStartupLaunch
   startupFollowup?: WorktreeStartupFollowup
@@ -97,10 +98,20 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
   let { setup } = args
   const requiredSetup = args.requiredSetup ?? setup?.waitForAgentStartup === true
   ports.setupPrepared?.(worktree.id, requiredSetup)
+  if (args.inProcessSetup) {
+    void args.inProcessSetup.then((success) => {
+      if (success) {
+        ports.setupPrepared?.(worktree.id, false)
+      } else {
+        ports.setupFailed?.(worktree.id)
+      }
+    })
+  }
   const shouldActivate = request.activate === true || request.runHooks === true
   let warning = args.warning
   let didSpawnStartup = false
   let didSpawnSetup = false
+  let defaultTabsProvisioned = false
   let setupTerminalHandle: string | null = null
   let startupTerminalHandle: string | null = null
   let startupTerminalTabId: string | null = null
@@ -171,7 +182,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
       startupTerminalPaneKey = terminal.paneKey ?? null
       startupTerminalPtyId = terminal.ptyId ?? null
     } catch (error) {
-      warning = appendFailure(warning, worktree.path, 'startup', error)
+      warning = appendTerminalStartWarning(warning, worktree.path, 'startup', error)
     }
   }
 
@@ -193,6 +204,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
           provisionInBackground ||
           Boolean(setup || defaultTabs))
       if (runtimeWillProvision) {
+        defaultTabsProvisioned = Boolean(defaultTabs)
         const provisioned = await ports.provision({
           ...provisionArgs(
             { ...args, setup },
@@ -223,6 +235,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
       )
     }
   } else if (ports.canSpawn && (setup || defaultTabs || didSpawnStartup)) {
+    defaultTabsProvisioned = Boolean(defaultTabs)
     const provisioning = ports.provision({
       ...provisionArgs(
         { ...args, setup },
@@ -253,7 +266,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
     try {
       await ports.createTerminal(`id:${worktree.id}`, { surfaceOwner: false })
     } catch (error) {
-      warning = appendFailure(warning, worktree.path, 'initial', error)
+      warning = appendTerminalStartWarning(warning, worktree.path, 'initial', error)
     }
   }
   if (setup?.waitForAgentStartup && startupTerminal && (args.draftPaste || args.startupFollowup)) {
@@ -268,7 +281,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
         args.createdWithAgent ?? args.draftPaste?.agent ?? args.startupFollowup?.agent ?? 'Agent'
     })
   }
-  if (requiredSetup && !didSpawnSetup) {
+  if (requiredSetup && !didSpawnSetup && !args.inProcessSetup) {
     ports.setupFailed?.(worktree.id)
   }
   const returnedSetup = didSpawnSetup
@@ -283,6 +296,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
     ...(warning ? { warning } : {}),
     ...(returnedSetup ? { returnedSetup } : {}),
     didSpawnSetup,
+    defaultTabsProvisioned,
     didSpawnStartup,
     setupTerminalHandle,
     startupTerminalHandle,
@@ -290,21 +304,4 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
     startupTerminalPaneKey,
     startupTerminalPtyId
   }
-}
-
-function appendFailure(
-  warning: string | undefined,
-  path: string,
-  kind: 'startup' | 'initial',
-  error: unknown
-): string {
-  const message = readableWslDistroHoldText(
-    formatTerminalStartFailure(error) ?? (error instanceof Error ? error.message : String(error))
-  )
-  const failure = `failed to create the ${kind} terminal for ${path}: ${message}`
-  const combined = warning
-    ? `${warning} Also ${failure}`
-    : `${failure[0].toUpperCase()}${failure.slice(1)}`
-  console.warn(`[worktree-create] ${combined}`)
-  return combined
 }

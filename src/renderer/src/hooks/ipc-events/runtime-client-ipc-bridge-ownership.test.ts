@@ -1,9 +1,17 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { subscribeRuntimeEnvironmentFromPreload } from '../../../../preload/runtime/runtime-environment-subscriptions'
+import { clearRuntimeCompatibilityCache } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
+import {
+  cancelRuntimeEnvironmentSubscriptionFromPreload,
+  subscribeRuntimeEnvironmentFromPreload
+} from '../../../../preload/runtime/runtime-environment-subscriptions'
 import { tagRuntimeSubscriptionReplayResponse } from '../../../../shared/remote-runtime/rpc/runtime-subscription-replay'
 import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
-import { terminalSetupObservers } from '@/runtime/hosted-terminals/inspection/runtime-terminal-setup'
+import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import {
+  waitForRuntimeTerminalSetup,
+  terminalSetupObservers
+} from '@/runtime/hosted-terminals/inspection/runtime-terminal-setup'
 import { registerRuntimeClientIpcBridge } from './runtime-client-ipc-bridge'
 import type { RuntimeClientEvent } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
@@ -14,7 +22,10 @@ import {
 
 const initialState = useAppStore.getState()
 
-beforeEach(() => vi.useFakeTimers())
+beforeEach(() => {
+  vi.useFakeTimers()
+  clearRuntimeCompatibilityCache()
+})
 afterEach(() => {
   useAppStore.setState(initialState, true)
   replaceRuntimeEnvironmentRevisions(initialState.runtimeEnvironments)
@@ -28,13 +39,15 @@ function createHarness() {
   type Callbacks = Parameters<typeof subscribeRuntimeEnvironmentFromPreload>[2]
   let listener: Parameters<Ipc['on']>[1] | undefined
   const pending: ReturnType<typeof Promise.withResolvers<unknown>>[] = []
+  const subscriptionIds: string[] = []
   const issueRead = Promise.withResolvers<null>()
   const ipc: Ipc = {
-    invoke: vi.fn((channel) => {
+    invoke: vi.fn((channel, args) => {
       if (channel !== 'runtimeEnvironments:subscribe') {
         return Promise.resolve()
       }
       const setup = Promise.withResolvers<unknown>()
+      subscriptionIds.push((args as Args).subscriptionId!)
       pending.push(setup)
       return setup.promise
     }),
@@ -48,13 +61,23 @@ function createHarness() {
   const refreshStatus = vi.fn(async () => true)
   const fetchRuntimeEnvironmentRepos = vi.fn(async () => [])
   const acknowledgeAttention = vi.fn(async () => ({ dismissed: 0 }))
-  let nextId = 0
   vi.stubGlobal('window', {
     api: {
       runtimeEnvironments: {
         subscribe: (args: Args, callbacks: Callbacks) =>
-          subscribeRuntimeEnvironmentFromPreload(ipc, args, callbacks, () => `sub-${nextId++}`),
-        call: vi.fn(async () => ({ id: 'r', ok: true, result: [] }))
+          subscribeRuntimeEnvironmentFromPreload(
+            ipc,
+            args,
+            callbacks,
+            () => `sub-${pending.length}`
+          ),
+        cancelSubscription: ({ subscriptionId }: { subscriptionId: string }) =>
+          cancelRuntimeEnvironmentSubscriptionFromPreload(ipc, subscriptionId),
+        call: vi.fn(async (args: { method: string }) =>
+          args.method === 'status.get'
+            ? createCompatibleRuntimeStatusResponse()
+            : { id: 'r', ok: true, result: [] }
+        )
       },
       notifications: { acknowledgeAttention },
       browser: { sessionClientRouteImportSources: async () => ({}) },
@@ -89,7 +112,8 @@ function createHarness() {
     linearCustomViewIssueCache: {},
     checkLinearConnection: vi.fn(async () => {}),
     refreshRuntimeEnvironmentStatus: refreshStatus,
-    fetchRuntimeEnvironmentRepos
+    fetchRuntimeEnvironmentRepos,
+    fetchHostWorkspaceStatuses: vi.fn(async () => {})
   })
   const starts: (() => void)[] = []
   const activateNotifiedWorktree = vi.fn(async () => {})
@@ -137,14 +161,30 @@ function createHarness() {
         }
       }
       listener?.(null, {
-        subscriptionId: `sub-${index}`,
+        subscriptionId: subscriptionIds[index],
         type: 'response',
         response: replay ? tagRuntimeSubscriptionReplayResponse(response) : response
       })
     },
+    status: (index: number) =>
+      listener?.(null, {
+        subscriptionId: subscriptionIds[index],
+        type: 'response',
+        response: {
+          id: 'read',
+          ok: true,
+          _meta: { runtimeId: 'remote-runtime' },
+          result: {
+            runtimeId: 'remote-runtime',
+            ptyId: 'pty-a',
+            dependencyId: null,
+            state: 'ready'
+          }
+        }
+      }),
     error: (index: number) =>
       listener?.(null, {
-        subscriptionId: `sub-${index}`,
+        subscriptionId: subscriptionIds[index],
         type: 'error',
         code: 'remote_runtime_unavailable',
         message: 'Remote runtime connection closed'
@@ -152,7 +192,7 @@ function createHarness() {
     finish: async () => {
       starts.forEach((stop) => stop())
       pending.forEach((setup, index) =>
-        setup.resolve({ subscriptionId: `sub-${index}`, requestId: 'r' })
+        setup.resolve({ subscriptionId: subscriptionIds[index], requestId: 'r' })
       )
       issueRead.resolve(null)
       for (let index = 0; index < 30; index += 1) {
@@ -286,3 +326,42 @@ it('holds a draft through a shared-stream outage during its initial status read'
     await h.finish()
   }
 })
+
+it.each([false, true])(
+  'recovers unary-only status loss through a new owned stream (late handle: %s)',
+  async (lateHandle) => {
+    const h = createHarness()
+    const abort = new AbortController()
+    let wait: Promise<void> | undefined
+    try {
+      h.start()
+      if (!lateHandle) {
+        h.pending[0].resolve({ subscriptionId: 'sub-0', requestId: 'r' })
+        await vi.advanceTimersByTimeAsync(0)
+      }
+      h.emit(0, false, { type: 'ready' })
+      wait = waitForRuntimeTerminalSetup(toRemoteRuntimePtyId('terminal-a', 'host-a'), abort.signal)
+      void wait.catch(() => {})
+      await vi.advanceTimersByTimeAsync(0)
+      h.error(1)
+      await vi.advanceTimersByTimeAsync(0)
+      if (lateHandle) {
+        h.pending[0].resolve({ subscriptionId: 'sub-0', requestId: 'r' })
+      }
+      await vi.advanceTimersByTimeAsync(1000)
+      expect(h.pending).toHaveLength(3)
+      h.emit(2, false, { type: 'ready' })
+      h.pending[2].resolve({ subscriptionId: 'sub-2', requestId: 'r' })
+      await vi.advanceTimersByTimeAsync(0)
+      h.status(3)
+      await expect(wait).resolves.toBeUndefined()
+      expect(h.ipc.invoke).toHaveBeenCalledWith('runtimeEnvironments:unsubscribe', {
+        subscriptionId: 'sub-0'
+      })
+    } finally {
+      abort.abort()
+      await h.finish()
+      await wait?.catch(() => {})
+    }
+  }
+)

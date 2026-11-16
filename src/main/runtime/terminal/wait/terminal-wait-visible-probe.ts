@@ -131,7 +131,7 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
     if (!attempt) {
       return undefined
     }
-    if (attempt.settled) {
+    if (attempt.result) {
       const { exitCode } = await attempt.completion
       if (exitCode !== 0) {
         throw new Error(setupStartFailure(agent))

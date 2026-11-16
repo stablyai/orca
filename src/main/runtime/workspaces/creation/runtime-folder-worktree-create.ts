@@ -165,7 +165,9 @@ export async function createRuntimeFolderWorktree(args: {
   if (preparedSetup?.setupPreparationFailure) {
     deps.terminals.setupFailed?.(worktree.id)
   }
-  if ((preparedSetup?.setup || preparedSetup?.setupPreparationFailure) && deps.setup) {
+  const setupWork =
+    preparedSetup?.setup ?? preparedSetup?.setupPreparationFailure ?? preparedSetup?.inProcessSetup
+  if (preparedSetup && setupWork && deps.setup) {
     return {
       worktree: folderCreateResultWorktree(worktree),
       ...(await startRuntimeFolderWorktreeSetupTerminals({
