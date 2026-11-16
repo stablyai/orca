@@ -1,4 +1,4 @@
-import { chmod, rm, stat } from 'node:fs/promises'
+import { chmod, lstat, rm } from 'node:fs/promises'
 import { isAbsolute, join, sep } from 'node:path'
 import { escapeP4FileArg } from '../p4-command'
 import type { P4Record } from '../p4-tagged-output'
@@ -24,11 +24,14 @@ function localPath(copyRoot: string, rel: string): string {
 }
 
 async function deleteLocalFile(path: string): Promise<boolean> {
-  const info = await stat(path).catch(() => null)
-  if (!info?.isFile()) {
+  const info = await lstat(path).catch(() => null)
+  if (!info || (!info.isFile() && !info.isSymbolicLink())) {
     return false
   }
-  await chmod(path, 0o666)
+  // Why lstat: chmod follows a link and would change a file outside the copy.
+  if (info.isFile()) {
+    await chmod(path, 0o666)
+  }
   await rm(path, { force: true })
   return true
 }
