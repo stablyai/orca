@@ -3,6 +3,7 @@ import type { SessionSearchScanRoots } from '../../ai-vault-search/discovery/ses
 import type { ChildProcess } from 'node:child_process'
 import { createAiVaultScanCancelledError } from '../scan-lifecycle/ai-vault-scan-cancellation'
 import type { AiVaultServiceScanListener } from './session-scanner-service-request-deadline'
+import { trackAiVaultServiceStderr } from './session-scanner-service-exit'
 import {
   AI_VAULT_SERVICE_PROTOCOL_VERSION,
   isAiVaultServiceChildMessage,
@@ -18,7 +19,8 @@ export const AI_VAULT_SERVICE_MAX_CALLS = 16
 export const AI_VAULT_SERVICE_IDLE_TIMEOUT_MS = 10 * 60_000
 export const AI_VAULT_SERVICE_SHUTDOWN_TIMEOUT_MS = 2_000
 
-export type AiVaultServiceProcessFactory = () => ChildProcess
+/** `afterOutOfMemory`: an earlier child exhausted its heap, so this one needs more room. */
+export type AiVaultServiceProcessFactory = (options: { afterOutOfMemory: boolean }) => ChildProcess
 export type AiVaultServiceClientOptions = {
   processFactory: AiVaultServiceProcessFactory
   /** Resolve current consent on every spawn. */
@@ -225,7 +227,11 @@ export function attachAiVaultServiceChild(
   child.on('error', handlers.onFault)
   child.on('disconnect', () => handlers.onFault(new Error('AI Vault service disconnected.')))
   child.on('exit', (code) => handlers.onFault(new Error(`AI Vault service exited (${code}).`)))
-  child.stderr?.on('data', (chunk: Buffer) => handlers.onStderr?.(String(chunk)))
+  child.stderr?.on('data', (chunk: Buffer) => {
+    const text = String(chunk)
+    trackAiVaultServiceStderr(child, text)
+    handlers.onStderr?.(text)
+  })
   child.send({
     type: 'init',
     protocol: AI_VAULT_SERVICE_PROTOCOL_VERSION,

@@ -36,6 +36,7 @@ import {
   type AiVaultServiceResultValue
 } from './session-scanner-service-protocol'
 import { forwardWslDistroNotesToChild } from './session-scanner-service-wsl-notes'
+import { recordAiVaultServiceExit } from './session-scanner-service-exit'
 
 export class AiVaultScannerServiceClient {
   private child: ChildProcess | null = null
@@ -48,6 +49,8 @@ export class AiVaultScannerServiceClient {
   private readonly restartPolicy = new AiVaultServiceRestartPolicy()
   private readonly sessionSearch = new AiVaultServiceSessionSearchHold()
   private disposed = false
+  private ranOutOfMemory = false
+  private readonly awaitingExit = new Set<AiVaultServicePendingCall>()
 
   private readonly stopForwardingWslNotes = forwardWslDistroNotesToChild(() => this.child)
 
@@ -122,17 +125,19 @@ export class AiVaultScannerServiceClient {
     this.restartPolicy.dispose()
     this.idleRetirement.clear()
     const error = new Error('AI Vault service client was disposed.')
-    for (const call of [...this.active.values(), ...this.queue]) {
+    for (const call of [...this.active.values(), ...this.queue, ...this.awaitingExit]) {
       rejectAiVaultServiceCall(call, error)
     }
     this.active.clear()
     this.queue.length = 0
+    this.awaitingExit.clear()
     this.invalidations.rejectAll(error)
     this.retireChild()
   }
 
   private pump(): void {
-    if (this.restartPolicy.restartScheduled) {
+    // Held scans decide this respawn's heap.
+    if (this.restartPolicy.restartScheduled || this.awaitingExit.size > 0) {
       return
     }
     for (const lane of ['cache', 'interactive'] as const) {
@@ -199,7 +204,7 @@ export class AiVaultScannerServiceClient {
     }
     let child: ChildProcess
     try {
-      child = this.options.processFactory()
+      child = this.options.processFactory({ afterOutOfMemory: this.ranOutOfMemory })
     } catch (error) {
       this.restartPolicy.recordFault(() => this.pump())
       return Promise.reject(error instanceof Error ? error : new Error(String(error)))
@@ -290,10 +295,41 @@ export class AiVaultScannerServiceClient {
     this.restartPolicy.recordFault(() => this.pump())
     const active = [...this.active.values()]
     this.active.clear()
+    // A scan that exhausted the heap would exhaust it again; hold it until the exit says why.
+    const held = this.ranOutOfMemory
+      ? []
+      : active.filter((call) => call.sent && call.request.operation === 'scan')
+    for (const call of held) {
+      this.awaitingExit.add(call)
+    }
+    recordAiVaultServiceExit(child, error, (outOfMemory) => {
+      this.ranOutOfMemory ||= outOfMemory
+      this.settleHeldCalls(held, error, outOfMemory)
+    })
     for (const call of active) {
-      this.retryStartOrReject(call, error)
+      if (!held.includes(call)) {
+        this.retryStartOrReject(call, error)
+      }
     }
     this.invalidations.rejectAll(error)
+  }
+
+  private settleHeldCalls(
+    held: AiVaultServicePendingCall[],
+    error: Error,
+    outOfMemory: boolean
+  ): void {
+    for (const call of held.toReversed()) {
+      if (!this.awaitingExit.delete(call)) {
+        continue
+      }
+      if (outOfMemory && !call.cancelled) {
+        this.queue.unshift(call)
+      } else {
+        rejectAiVaultServiceCall(call, error)
+      }
+    }
+    this.pump()
   }
 
   private scheduleIdleIfNeeded(): void {
