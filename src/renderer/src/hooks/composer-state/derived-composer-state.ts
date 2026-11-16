@@ -1,3 +1,4 @@
+import { useProjectGroupSetup } from './use-project-group-setup'
 import { useFolderSetupSupport } from '@/lib/workspace/creation/setup/folder-setup-support'
 import type { DerivedComposerStateInput } from './composer-target-input-contracts'
 
@@ -19,7 +20,7 @@ import {
   DEFAULT_ISSUE_COMMAND_TEMPLATE,
   renderIssueCommandTemplate
 } from '@/lib/workspace/creation/new-workspace'
-import { getSetupConfig } from '../../../../shared/orca-hook-setup-config'
+import { getSetupConfig } from '../../../../shared/workspace-setup/hooks/orca-hook-setup-config'
 import { deriveWorkspaceSetupState } from '@/lib/workspace/creation/setup/workspace-setup-preparation'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
 import { useRetiredWorktreeNames } from '@/hooks/useRetiredWorktreeNames'
@@ -28,6 +29,8 @@ const EMPTY_SPARSE_PRESETS: SparsePreset[] = []
 
 export function useDerivedComposerState(input: DerivedComposerStateInput) {
   const {
+    selectedProjectGroup,
+    isProjectGroupTarget,
     agentPrompt,
     checkedHooksContextKey,
     enableIssueAutomation,
@@ -53,6 +56,8 @@ export function useDerivedComposerState(input: DerivedComposerStateInput) {
     worktreesByRepo,
     yamlHooks
   } = input
+
+  const groupSetup = useProjectGroupSetup(isProjectGroupTarget ? selectedProjectGroup : null)
 
   const sparsePresetsForRepo = sparsePresetsByRepo[repoId]
 
@@ -238,6 +243,7 @@ export function useDerivedComposerState(input: DerivedComposerStateInput) {
   ])
 
   return {
+    groupSetup,
     sparsePresetsForRepo,
     sparsePresets,
     normalizedSparseDirectories,

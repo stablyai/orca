@@ -5,9 +5,9 @@ import type {
   HostQualifiedKnownWorktreeResult,
   ForgetRemovedWorktreesForExecutionHostArgs,
   ForgetRemovedWorktreesForExecutionHostResult
-} from '../../../../shared/detected-worktree-provider-contract'
+} from '../../../../shared/worktree/catalog/detected-worktree-provider-contract'
 import type { DetectedWorktree } from '../../../../shared/worktree/types'
-import { isFolderRepo } from '../../../../shared/repo-kind'
+import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import { projectWorktreeLineageWithHostPeers } from '../../../workspaces/catalog/worktree-lineage-host-peers'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'

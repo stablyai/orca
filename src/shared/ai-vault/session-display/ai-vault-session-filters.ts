@@ -2,8 +2,8 @@
 import {
   normalizeRuntimePathForComparison,
   normalizeRuntimePathSeparators
-} from '../../cross-platform-path'
-import { isClipboardTextByteLengthOverLimit } from '../../clipboard-text'
+} from '../../file-access/cross-platform-path'
+import { isClipboardTextByteLengthOverLimit } from '../../clipboard/clipboard-text'
 import { splitAiVaultSearchQuery } from '../search/ai-vault-search-query-operators'
 import {
   aiVaultSessionInScope,

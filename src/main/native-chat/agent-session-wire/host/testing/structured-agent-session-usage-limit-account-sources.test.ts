@@ -1,3 +1,4 @@
+import { readTestJournalSnapshot } from '../../../agent-session-journal/journal-observation.test-support'
 import { afterEach, expect, it } from 'vitest'
 import {
   createQueuedMessageTestRig,
@@ -8,7 +9,7 @@ import { eventually } from './structured-agent-session-queued-message-rig-provid
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import {
   HOUR,
   fakeAccountSources,
@@ -76,10 +77,12 @@ async function claudeChat(sources: FleetSources) {
     pass: async (at: number) => {
       clock = at
       await current.host.usageLimitContinue.tick()
-      const snapshot = await current.host.journalSnapshot(SESSION)
-      return snapshot.submissions.filter((submission) => submission.origin === 'host')
+      return (await readTestJournalSnapshot(journal)).submissions.filter(
+        (submission) => submission.origin === 'host'
+      )
     },
-    state: () => current.host.usageLimitContinue.readState(SESSION),
+    state: async () =>
+      current.host.usageLimitContinue.readState(SESSION, await journal.reads.usageLimitCut()),
     /** The one continue a pass sent, carried through to an accepted settlement. */
     settle: async (sent: readonly { clientMessageId: string }[]) => {
       expect(sent).toHaveLength(1)
@@ -115,9 +118,9 @@ it('refuses a send whose shell inheritance changed during preparation, then sett
       sources.settings = after
     })
     expect(await chat.pass(DUE)).toEqual([])
-    expect(chat.state()).toMatchObject({ state: 'scheduled' })
+    expect(await chat.state()).toMatchObject({ state: 'scheduled' })
     expect(await chat.pass(DUE + 61_000)).toEqual([])
-    expect(chat.state()).toMatchObject({ state: 'scheduled', continueAt: HELD_UNTIL })
+    expect(await chat.state()).toMatchObject({ state: 'scheduled', continueAt: HELD_UNTIL })
     sources.limits = weekly(0, null, HELD_UNTIL + 15_000)
     await chat.settle(await chat.pass(HELD_UNTIL + 15_000))
   }
@@ -178,9 +181,9 @@ it('never sends on an attribution whose sources moved while it resolved, then se
     second(sources)
     secondRead.release()
     expect(await pass).toEqual([])
-    expect(chat.state()).toMatchObject({ state: 'scheduled' })
+    expect(await chat.state()).toMatchObject({ state: 'scheduled' })
     expect(await chat.pass(DUE + 61_000)).toEqual([])
-    expect(chat.state()).toMatchObject({ state: 'scheduled', continueAt: HELD_UNTIL })
+    expect(await chat.state()).toMatchObject({ state: 'scheduled', continueAt: HELD_UNTIL })
     sources.limits = weekly(0, null, HELD_UNTIL + 15_000)
     await chat.settle(await chat.pass(HELD_UNTIL + 15_000))
   }

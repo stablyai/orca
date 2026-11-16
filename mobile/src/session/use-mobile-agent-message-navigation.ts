@@ -5,12 +5,12 @@ import { structuredAgentSessionPaneKey } from '../../../src/shared/agent-session
 import {
   structuredSessionOpenFailure,
   type StructuredSessionOpenFailure
-} from '../../../src/shared/open-structured-agent-session'
+} from '../../../src/shared/agent-session/view/open-structured-agent-session'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { mobileStructuredSessionOpenMessage } from './native-chat/agent-session/mobile-structured-session-open-message'
 import { openMobileStructuredSession } from './native-chat/agent-session/open-mobile-structured-session'
-import { openMobileAgentMessageTerminal } from '../terminal/session/mobile-agent-message-terminal'
-import type { MobileSessionKeyboardStateModel } from '../terminal/session/use-mobile-session-keyboard-state'
+import { openMobileAgentMessageTerminal } from './tabs/mobile-agent-message-terminal'
+import type { MobileSessionKeyboardStateModel } from '../terminal/session/input-controls/use-mobile-session-keyboard-state'
 
 export function useMobileAgentMessageNavigation(
   client: RpcClient | null,

@@ -9,7 +9,7 @@ import type {
   GitHubPRMergeMethod,
   PRInfo
 } from '../../../../../../shared/github/pull-requests/pull-request-types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import {
   mergeGitHubHostedReview,
   setGitHubHostedReviewAutoMerge,

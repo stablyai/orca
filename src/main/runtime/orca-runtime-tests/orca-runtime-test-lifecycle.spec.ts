@@ -113,7 +113,7 @@ import {
   listWorktrees,
   listWorktreesSharedStrict
 } from '../../git/worktrees/catalog/worktree-scan-cache'
-import { parseOrcaYaml } from '../../../shared/orca-yaml'
+import { parseOrcaYaml } from '../../../shared/workspace-setup/orca-yaml'
 import { removeWorktree } from '../../git/worktrees/removal/worktree-removal'
 import {
   setRuntimeBrowserCommandsFactory,

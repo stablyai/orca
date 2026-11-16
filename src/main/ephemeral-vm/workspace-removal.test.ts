@@ -1,3 +1,4 @@
+import '../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -6,10 +7,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   listEphemeralVmRuntimes,
   upsertEphemeralVmRuntime
-} from '../../shared/ephemeral-vm-runtime-store'
-import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
-import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
-import { RecipeWorkspaceRemovalError } from '../../shared/recipe-host-removal'
+} from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
+import type { EphemeralVmRuntimeRecord } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
+import type { RuntimeRpcResponse } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import { RecipeWorkspaceRemovalError } from '../../shared/remote-runtime/ephemeral-vm-recipes/recipe-host-removal'
 import { mapRuntimeError } from '../runtime/rpc/responses/rpc-response'
 import { removeRecipeWorkspace, type RecipeWorkspaceRemoveParams } from './workspace-removal'
 

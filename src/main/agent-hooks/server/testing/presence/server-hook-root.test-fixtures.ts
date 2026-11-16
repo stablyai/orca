@@ -9,7 +9,7 @@ import {
   type HookPaneProcessIo,
   type HookPaneRoot
 } from '../../../../../shared/agent-hook-listener/presence/hook-process-root-evidence'
-import type { ProcessTableRow } from '../../../../../shared/process-table-snapshot'
+import type { ProcessTableRow } from '../../../../../shared/process-observation/tables/process-table-snapshot'
 
 // Shared harness for the hook server's pane-root acquisition tests. Each test file mocks
 // '../telemetry/client', '../telemetry/cohort-classifier' and the process probe module.

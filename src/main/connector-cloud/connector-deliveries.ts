@@ -4,11 +4,11 @@ import {
   ConnectorDelivery,
   ConnectorDeliveryId,
   type ConnectorDeliveryResult
-} from '../../shared/connector-cloud-contract'
+} from '../../shared/connectors/connector-cloud-contract'
 import {
   CONNECTOR_SOURCE_NAMES,
   type ConnectorSource
-} from '../../shared/external-conversation-link'
+} from '../../shared/connectors/external-conversation-link'
 import type {
   ExternalConversationHost,
   ExternalConversationSeam

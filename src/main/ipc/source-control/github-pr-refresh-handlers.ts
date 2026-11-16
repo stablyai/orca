@@ -4,9 +4,9 @@ import type {
   GitHubPRRefreshCandidate,
   GitHubPRRefreshEnqueueResult,
   GitHubPRRefreshReason,
-  PRRefreshOutcome
+  PRSnapshotReply
 } from '../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { getPRForBranch } from '../../github/client/lookup/get-pr-for-branch'
 import type { GitHubPRBranchLookupOptions } from '../../github/client/lookup/pull-request-lookup-data'
@@ -44,8 +44,8 @@ export function registerGitHubPRRefreshHandlers(
 ): void {
   // The windows these handlers serve are the renderers the coordinator reports to.
   setPRRefreshRendererPort(electronPRRefreshRenderer)
-  function recordPRIfNeeded(repo: Repo, outcome: PRRefreshOutcome): void {
-    if (outcome.kind === 'found' && !stats.hasCountedPR(outcome.pr.url)) {
+  function recordPRIfNeeded(repo: Repo, outcome: PRSnapshotReply): void {
+    if ('kind' in outcome && outcome.kind === 'found' && !stats.hasCountedPR(outcome.pr.url)) {
       stats.record({
         type: 'pr_created',
         at: Date.now(),

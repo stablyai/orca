@@ -1,8 +1,8 @@
-import { BoundedMap } from '../../../shared/bounded-map'
+import { BoundedMap } from '../../../shared/collections/bounded-map'
 import {
   backgroundTaskJournalBody,
   isSettledBackgroundTaskState
-} from '../../../shared/native-chat/input/native-chat-background-task-row'
+} from '../../../shared/native-chat/input/task-lists/native-chat-background-task-row'
 import type { NativeChatBackgroundTaskBlock } from '../../../shared/native-chat/native-chat-types'
 import type {
   ProviderTimelineEvent,

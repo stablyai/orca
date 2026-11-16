@@ -1,4 +1,4 @@
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { refreshLocalRuntimeCapabilities } from '../hosts/capabilities/local-runtime-capabilities'
 import {
   isCurrentLocalStructuredSessionGeneration,

@@ -70,6 +70,16 @@
     }
   },
   "chat": {
+    "mcp": {
+      "status": {
+        "tools_one": "{{count}} tool",
+        "tools_other": "{{count}} tools"
+      },
+      "summary": {
+        "needsAuth_one": "{{count}} needs sign-in",
+        "needsAuth_other": "{{count}} need sign-in"
+      }
+    },
     "notice": {
       "modelFallback": "Claude switched models: {{from}} → {{to}}."
     },
@@ -77,8 +87,7 @@
       "moreCount_one": "{{count}} more",
       "moreCount_other": "{{count}} more",
       "queuedCount_one": "{{count}} queued message",
-      "queuedCount_other": "{{count}} queued messages",
-      "foldNeedsAttention": "{{more}}, a message needs attention"
+      "queuedCount_other": "{{count}} queued messages"
     },
     "subagentGroup": {
       "ran_one": "Ran {{count}} subagent",

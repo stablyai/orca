@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../../src/shared/orca-profiles'
+import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../../src/shared/orca-profiles/orca-profiles'
 import {
   acquireProfileStateMaintenance,
   acquireProfileStateRuntimeAdmission

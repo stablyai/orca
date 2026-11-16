@@ -1,6 +1,6 @@
 import { useShallow } from 'zustand/react/shallow'
-import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
-import type { Tab, TabGroup } from '../../../../shared/tab-types'
+import type { BrowserWorkspace } from '../../../../shared/browser/workspaces/browser-workspace-types'
+import type { Tab, TabGroup } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { useAppStore } from '../../store'
 import { useTabGroupItemProjections } from './useTabGroupItemProjections'

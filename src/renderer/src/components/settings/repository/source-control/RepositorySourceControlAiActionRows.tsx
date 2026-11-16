@@ -10,7 +10,7 @@ import { selectSourceControlActionRecipe } from '../../../../../../shared/source
 import type { RepositorySourceControlAiActionRowsProps } from './repository-source-control-ai-action-rows-props'
 import { sourceControlActionExecutionArgs } from '../../../../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
 import type { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
-import type { NativeChatDefaultSettings } from '../../../../../../shared/structured-native-chat-launch-route'
+import type { NativeChatDefaultSettings } from '../../../../../../shared/agent-launch/choices/structured-native-chat-launch-route'
 import {
   SourceControlActionAgentPickerView,
   sourceControlActionAgentPreview
@@ -311,8 +311,10 @@ const SelectedRepositoryActionRows = memo(
                   {!isLaunchAction ? (
                     <SourceControlActionOptionField
                       label={t('auto.components.settings.AgentsPane.cfb3f35775', 'Arguments')}
+                      controlId={`${sectionId}-arguments`}
                     >
                       <Input
+                        id={`${sectionId}-arguments`}
                         value={agentArgsValue}
                         onChange={(event) => onActionAgentArgsChange(actionId, event.target.value)}
                         disabled={!hasOverride}
@@ -324,13 +326,14 @@ const SelectedRepositoryActionRows = memo(
                   ) : null}
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-[11px] text-muted-foreground">
+                  <Label variant="settings" htmlFor={`${sectionId}-command-template`}>
                     {t(
                       'auto.components.settings.RepositorySourceControlAiActionRows.548a6e1281',
                       'Command template'
                     )}
                   </Label>
                   <textarea
+                    id={`${sectionId}-command-template`}
                     rows={3}
                     value={templateValue}
                     onChange={(event) => onActionTemplateChange(actionId, event.target.value)}

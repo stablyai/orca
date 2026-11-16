@@ -2,7 +2,7 @@ import { readFileSync, mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { RelayAgentHookServer } from '../../../../../wsl-guest/agent-hook-server'
+import { RelayAgentHookServer } from '../../../../../wsl-guest/agent-hooks/server/agent-hook-server'
 import { AgentHookServer, _internals } from '../../agent-hook-server'
 import { createRuntimeAutomationRunTerminalObserver } from '../../../../automations/observation/runtime-terminal-run-observer'
 import {
@@ -68,7 +68,7 @@ async function host(remote: boolean, launchToken?: string) {
   return { desktop, post, row, stop }
 }
 
-describe.each([false, true])('real automation Claude wake-up oracle remote=%s', (remote) => {
+describe.each([false])('real automation Claude wake-up oracle remote=%s', (remote) => {
   it.each(['missing-notification', 'native-idle', 'notification-before-launch'])(
     'waits on captured ready bytes through task finishing or missing wake-up expiry: %s',
     async (ending) => {

@@ -1,6 +1,6 @@
-import type { ProjectGroup } from '../../../../shared/project-group-types'
-import type { Repo } from '../../../../shared/repo-types'
-import { getProjectGroupSubtreeIds } from '../../../../shared/project-groups'
+import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import { getProjectGroupSubtreeIds } from '../../../../shared/project/groups/project-groups'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { catalogOwnsHost } from './project-group-owner-routing'
 

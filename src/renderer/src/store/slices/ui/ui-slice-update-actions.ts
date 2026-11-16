@@ -2,8 +2,8 @@ import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import {
   DEFAULT_BROWSER_PAGE_ZOOM_LEVEL,
   normalizeBrowserPageZoomLevel
-} from '../../../../../shared/browser-page-zoom'
-import { normalizeKagiSessionLink } from '../../../../../shared/browser-url'
+} from '../../../../../shared/browser/site-settings/browser-page-zoom'
+import { normalizeKagiSessionLink } from '../../../../../shared/browser/navigation/browser-url'
 import { DEFAULT_BROWSER_DEVTOOLS_DOCK_LAYOUT } from '../../../../../shared/browser/devtools/browser-devtools-dock'
 export function createUiUpdateActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
   return {

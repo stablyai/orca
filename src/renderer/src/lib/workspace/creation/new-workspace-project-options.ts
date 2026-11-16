@@ -1,8 +1,8 @@
-import { projectHostSetupProjectionFromRepos } from '../../../../../shared/project-host-setup-projection'
-import type { ProjectGroup } from '../../../../../shared/project-group-types'
-import type { Project, ProjectHostSetup } from '../../../../../shared/project-types'
-import type { Repo } from '../../../../../shared/repo-types'
-import { isClipboardTextByteLengthOverLimit } from '../../../../../shared/clipboard-text'
+import { projectHostSetupProjectionFromRepos } from '../../../../../shared/project/host-setup/project-host-setup-projection'
+import type { ProjectGroup } from '../../../../../shared/project/groups/project-group-types'
+import type { Project, ProjectHostSetup } from '../../../../../shared/project/project-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
+import { isClipboardTextByteLengthOverLimit } from '../../../../../shared/clipboard/clipboard-text'
 import type { ExecutionHostRegistryEntry } from '../../../../../shared/execution-host/execution-host-registry-entry'
 import {
   getExecutionHostLabel,
@@ -13,7 +13,7 @@ import {
 import {
   buildProjectGroupingIndex,
   isCheckoutScopedProjectSetup
-} from '../../../../../shared/project-section-grouping'
+} from '../../../../../shared/sidebar-list/sections/project-section-grouping'
 import {
   getDuplicateProjectDetailsById,
   type ProjectSetupDirectory

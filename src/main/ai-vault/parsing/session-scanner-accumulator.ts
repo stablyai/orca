@@ -12,7 +12,7 @@ import type {
   ResumableSessionParseState,
   SessionAccumulator
 } from '../session-scanner-types'
-import { extractString } from '../../../shared/trimmed-string'
+import { extractString } from '../../../shared/text/trimmed-string'
 import { timestampMs } from './session-record-time'
 import {
   NO_TRANSCRIPT_MESSAGES,

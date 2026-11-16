@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
-import type { DiscoveredSkill } from '../../../../../shared/skills'
+import type { DiscoveredSkill } from '../../../../../shared/skills/discovery/skills'
 import { SkillRow } from './SkillRow'
 import { SkillDetailDialog } from './SkillDetailDialog'
 import {

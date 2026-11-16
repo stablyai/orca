@@ -13,6 +13,11 @@ export type MainWindowLoadObserver = {
   onError?: (error: Error) => void
 }
 
+export type MainWindowOpenOptions = Pick<
+  CreateMainWindowOptions,
+  'revealOnDidFinishLoad' | 'revealInBackground'
+>
+
 export type CreateMainWindowOptions = {
   /** Returns true when a manual app.quit() (Cmd+Q) is in progress, so the renderer skips the running-process confirm dialog. */
   getIsQuitting?: () => boolean
@@ -43,6 +48,8 @@ export type CreateMainWindowOptions = {
   deferLoad?: boolean
   /** Reveal after load instead of first paint when startup must show the shell before slower renderer work. */
   revealOnDidFinishLoad?: boolean
+  /** Show without taking the foreground: `orca open` asked, not the user. */
+  revealInBackground?: boolean
   title?: string
   getKeybindings?: () => KeybindingOverrides | undefined
   onBeforeReload?: (options: { ignoreCache: boolean; webContentsId: number }) => void

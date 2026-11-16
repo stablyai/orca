@@ -6,8 +6,8 @@ import {
   type NativeChatContextUsageSummary
 } from '../../../../../shared/native-chat/native-chat-context-usage-summary'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
-import type { NativeChatPtySessionOptionsSurface } from '../../../../../shared/native-chat/input/native-chat-pty-session-options'
-import { ompModelSelector } from '../../../../../shared/omp-model-list-probe'
+import type { NativeChatPtySessionOptionsSurface } from '../../../../../shared/native-chat/input/session-options/native-chat-pty-session-options'
+import { ompModelSelector } from '../../../../../shared/agent-session/options/model-catalog/omp-model-list-probe'
 
 /** Structured facts take precedence; terminal chats use their transcript's last measured response. */
 export function useNativeChatContextUsageSummary(

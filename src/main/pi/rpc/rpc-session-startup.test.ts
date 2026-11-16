@@ -1,3 +1,5 @@
+import { AgentSessionAcquisitionRootExitObservedError } from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-acquisition-errors'
+import { retryableAgentSessionAcquisition } from '../../native-chat/agent-session-wire/startup/structured-agent-session-start-failure'
 import { readFileSync } from 'node:fs'
 import { PassThrough } from 'node:stream'
 import { JsonlRpcPeer } from '../../jsonl-rpc/peer'
@@ -106,5 +108,64 @@ describe('Pi host awaited open', () => {
       })
     ).rejects.toThrow('Pi session is not live')
     expect(child.sent).not.toContainEqual(expect.objectContaining({ type: 'prompt' }))
+  })
+  it('keeps the unanswered exit verdict while process identity recording is held', async () => {
+    const h = await setup()
+    const entered = Promise.withResolvers<void>()
+    const recorded = Promise.withResolvers<void>()
+    await h.adapter.closeSession(sessionId)
+    await h.adapter.drainObservedExits()
+    const acquiring = h.adapter
+      .acquire({
+        ...h.input,
+        fence: 8,
+        onSpawned: () => {
+          entered.resolve()
+          return recorded.promise
+        }
+      })
+      .catch((error: unknown) => error)
+    await entered.promise
+    const child = h.connections.at(-1)
+    if (!child) {
+      throw new Error('held acquisition has no child')
+    }
+    child.exit()
+    recorded.resolve()
+    const error = await acquiring
+    expect(error).toBeInstanceOf(AgentSessionAcquisitionRootExitObservedError)
+    expect(retryableAgentSessionAcquisition(error)).toBe(true)
+    expect(error).toMatchObject({ cause: { retry: 'safe', fact: { kind: 'providerStartFailed' } } })
+  })
+
+  it('keeps cancellation authoritative after an exit during held identity recording', async () => {
+    const h = await setup()
+    const controller = new AbortController()
+    const entered = Promise.withResolvers<void>()
+    const recorded = Promise.withResolvers<void>()
+    await h.adapter.closeSession(sessionId)
+    await h.adapter.drainObservedExits()
+    const acquiring = h.adapter
+      .acquire({
+        ...h.input,
+        fence: 8,
+        signal: controller.signal,
+        onSpawned: () => {
+          entered.resolve()
+          return recorded.promise
+        }
+      })
+      .catch((error: unknown) => error)
+    await entered.promise
+    const child = h.connections.at(-1)
+    if (!child) {
+      throw new Error('held acquisition has no child')
+    }
+    child.exit()
+    controller.abort(new Error('person cancelled the held start'))
+    recorded.resolve()
+    const error = await acquiring
+    expect(error).toBeInstanceOf(AgentSessionAcquisitionRootExitObservedError)
+    expect(retryableAgentSessionAcquisition(error)).toBe(false)
   })
 })

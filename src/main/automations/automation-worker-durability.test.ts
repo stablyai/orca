@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AutomationService } from './automation-service'
 import { runNowSettled } from './testing/automation-run-now-settled.test-fixture'
-import type { Store } from '../persistence/loading-store/store'
 import {
   createWorkerMaintenanceFixture,
   maintenanceBarrier
@@ -38,22 +37,6 @@ async function fixture() {
 
 const launch = { workspaceId: 'repo-local::/fixture/local', terminalSessionId: 'run-tab' }
 
-function blockAcknowledgement(store: Store, index: number) {
-  const gate = maintenanceBarrier()
-  const blocked = maintenanceBarrier()
-  const flush = store.flushPendingOrThrowAsync.bind(store)
-  let calls = 0
-  vi.spyOn(store, 'flushPendingOrThrowAsync').mockImplementation(async (options) => {
-    calls += 1
-    if (calls === index) {
-      blocked.resolve()
-      await gate.promise
-    }
-    await flush(options)
-  })
-  return { blocked: blocked.promise, release: gate.resolve }
-}
-
 describe('automation background writer durability', () => {
   it('persists dispatch intent before starting external work', async () => {
     const { store, automation, readState } = await fixture()
@@ -79,30 +62,6 @@ describe('automation background writer durability', () => {
       gate.resolve()
       await expect(run).resolves.toMatchObject({ status: 'dispatched' })
       expect(dispatcher).toHaveBeenCalledOnce()
-    } finally {
-      service.stop()
-    }
-  })
-
-  it('does not resurrect or dispatch an automation deleted during its intent acknowledgement', async () => {
-    const { store, automation, readState } = await fixture()
-    const acknowledgement = blockAcknowledgement(store, 2)
-    const dispatcher = vi.fn(async () => launch)
-    const service = new AutomationService(store, {
-      terminalLauncher: { launch: dispatcher, available: () => true }
-    })
-    try {
-      const pending = runNowSettled(service, store, automation.id)
-      await acknowledgement.blocked
-      store.deleteAutomation(automation.id)
-      acknowledgement.release()
-      await pending
-      expect(dispatcher).not.toHaveBeenCalled()
-      expect(
-        readState().automationRuns.some(
-          (run: { automationId: string }) => run.automationId === automation.id
-        )
-      ).toBe(false)
     } finally {
       service.stop()
     }

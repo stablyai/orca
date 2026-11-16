@@ -6,7 +6,7 @@ import {
   PluginShotEditorParams,
   PluginShotParams,
   PluginShotReplayParams
-} from '../../../../../shared/rpc-contract/plugins-params'
+} from '../../../../../shared/rpc-contract/plugins/plugins-params'
 
 // Desktop only: a headless `orca serve` has no window to show or capture a plugin in.
 let pluginViewForRpc: PluginViewDesktop | null = null

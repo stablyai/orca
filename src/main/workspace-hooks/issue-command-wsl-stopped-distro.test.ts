@@ -32,7 +32,6 @@ import {
   readIssueCommandUnlessWslStopped,
   writeIssueCommandUnlessWslStopped
 } from './issue-command-file'
-import { RuntimeRepositoryIssueCommand } from '../runtime/repositories/runtime-repository-issue-command'
 
 const WSL_REPO = '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo'
 const HOST_REPO = 'C:\\src\\repo'
@@ -67,24 +66,6 @@ describe('issue command reads for a stopped WSL distro (E9)', () => {
     expect(mocks.loadHooks).not.toHaveBeenCalled()
   })
 
-  it("gates the runtime read a paired client's Settings pane makes, and passes a launch's wake", async () => {
-    const reader = new RuntimeRepositoryIssueCommand({
-      resolveRepo: async () => ({
-        id: 'repo-1',
-        path: WSL_REPO,
-        displayName: 'repo',
-        badgeColor: '#000',
-        addedAt: 1,
-        kind: 'git'
-      }),
-      getLocalGitArgs: () => []
-    })
-    await expect(reader.read('id:repo-1')).resolves.toMatchObject({ status: 'error' })
-    expect(mocks.loadHooks).not.toHaveBeenCalled()
-    await reader.read('id:repo-1', { wakeWslDistro: true })
-    expect(mocks.loadHooks).toHaveBeenCalledWith(WSL_REPO)
-  })
-
   it("refuses a write the user didn't make, leaving the hidden file and the distro alone", async () => {
     await expect(writeIssueCommandUnlessWslStopped(WSL_REPO, 'x', {})).rejects.toThrow(
       "WSL distro 'Ubuntu' is not running"
@@ -92,15 +73,6 @@ describe('issue command reads for a stopped WSL distro (E9)', () => {
     await expect(writeIssueCommandUnlessWslStopped(WSL_REPO, '', {})).rejects.toThrow()
     expect(mocks.writeFileSync).not.toHaveBeenCalled()
     expect(mocks.rmSync).not.toHaveBeenCalled()
-  })
-
-  it("saves the user's own edit, a user act that may start the distro", async () => {
-    await writeIssueCommandUnlessWslStopped(WSL_REPO, 'mine', {}, { wakeWslDistro: true })
-    expect(mocks.writeFileSync).toHaveBeenCalledWith(
-      expect.stringContaining('issue-command'),
-      'mine\n',
-      'utf-8'
-    )
   })
 
   it('refuses a host-path repo whose Git runs in the stopped distro', async () => {

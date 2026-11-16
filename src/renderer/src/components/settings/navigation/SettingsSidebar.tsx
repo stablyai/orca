@@ -1,7 +1,7 @@
 import type { KeyboardEvent, RefObject } from 'react'
 import { useDeferredValue, useId, useMemo, useState } from 'react'
 import { ArrowLeft, Server } from 'lucide-react'
-import type { RepoIcon } from '../../../../../shared/repo-icon'
+import type { RepoIcon } from '../../../../../shared/repository/appearance/repo-icon'
 import type {
   SettingsNavIcon,
   SettingsNavInstallStatus

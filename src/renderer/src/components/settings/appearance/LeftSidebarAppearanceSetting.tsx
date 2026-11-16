@@ -5,7 +5,7 @@ import {
   DEFAULT_LEFT_SIDEBAR_TINT_COLOR,
   DEFAULT_LEFT_SIDEBAR_TINT_OPACITY,
   MAX_LEFT_SIDEBAR_TINT_OPACITY
-} from '../../../../../shared/left-sidebar-appearance'
+} from '../../../../../shared/sidebar-list/appearance/left-sidebar-appearance'
 import { useTranslate } from '@/i18n/use-translate'
 import {
   ColorField,

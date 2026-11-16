@@ -4,7 +4,7 @@ import {
   isClaudeToolUseContent,
   isClaudeToolResultContent,
   claudeToolResultTextParts
-} from '../../../shared/claude-tool-content'
+} from '../../../shared/agent-hook-listener/providers/claude/transcripts/claude-tool-content'
 
 export type DecodedToolCall = {
   kind: 'tool_call'

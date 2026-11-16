@@ -2,10 +2,10 @@ import type {
   RuntimeHostStatusSnapshot,
   RuntimeHostStatusResponse
 } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
-import type { ZcodePlanSite } from '../../../../shared/zcode-plan-sites'
+import type { ZcodePlanSite } from '../../../../shared/agent-accounts/usage-credentials/zcode-plan-sites'
 import type { WorktreeVisibilityDefaults } from '../../../../shared/global-settings-types'
-import { RuntimeRpcCallQueuePool } from '../../../../shared/runtime-rpc-call-queue'
-import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
+import { RuntimeRpcCallQueuePool } from '../../../../shared/remote-runtime/rpc/runtime-rpc-call-queue'
+import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { WebRuntimeClient } from '../web-runtime-client'
 import {
@@ -26,6 +26,7 @@ export const webRuntimeState: {
   zcodePlanSiteRuntimeValue: ZcodePlanSite | null
   worktreeVisibilityDefaultsRuntimeEnvironmentId: string | null
   worktreeVisibilityDefaultsRuntimeValue: WorktreeVisibilityDefaults | null
+  worktreeCardDetailsRowRuntimeEnvironmentId: string | null
   activeClient: WebRuntimeClient | null
   activeClientEnvironmentId: string | null
   cachedDetectedWorktrees: { loadedAt: number; worktrees: Worktree[] } | null
@@ -35,6 +36,7 @@ export const webRuntimeState: {
   zcodePlanSiteRuntimeValue: null,
   worktreeVisibilityDefaultsRuntimeEnvironmentId: null,
   worktreeVisibilityDefaultsRuntimeValue: null,
+  worktreeCardDetailsRowRuntimeEnvironmentId: null,
   activeClient: null,
   activeClientEnvironmentId: null,
   cachedDetectedWorktrees: null

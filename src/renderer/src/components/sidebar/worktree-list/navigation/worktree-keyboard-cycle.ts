@@ -2,7 +2,7 @@ import {
   isViewEntry,
   type WorktreeNavHistoryEntry
 } from '@/store/slices/ui/workspace-navigation-history'
-import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
+import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import {

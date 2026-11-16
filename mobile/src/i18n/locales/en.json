@@ -42,16 +42,18 @@
       "checkUpdates": "Check for updates"
     },
     "browserSettingsScreen": {
+      "askEachTime": "Ask each time",
+      "askEachTimeDescription": "Choose Orca browser, phone browser, or copy the link each time.",
       "desktopBrowser": "Orca browser on desktop",
       "desktopBrowserDescription": "Open in the streamed browser from your paired desktop.",
       "phoneBrowser": "Phone browser",
       "phoneBrowserDescription": "Open in Safari, Chrome, or another browser on this phone.",
       "title": "Browser",
       "linksHeading": "LINKS",
-      "linksDescription": "Choose where HTTP(S) links tapped in terminal output open.",
+      "terminalAndChatLinksDescription": "Choose where web links tapped in terminal output and chat open.",
       "loadFailed": "Could not load browser preferences. Try again.",
       "saveFailed": "Could not save browser preferences. Try again.",
-      "openTerminalLinks": "Open terminal links"
+      "openLinks": "Open links"
     },
     "menuItems": {
       "appearance": "Appearance",
@@ -290,6 +292,33 @@
       "textSize": "Text size",
       "restoreHost": "Restore {{name}}",
       "textSizePickerTitle": "Terminal text size"
+    }
+  },
+  "appMove": {
+    "play": {
+      "title": "Orca is now on Google Play",
+      "description": "This app still works, but updates now come from Google Play. Switching takes a few minutes.",
+      "installTitle": "Install Orca from Google Play",
+      "installDescription": "You can do this now, wherever you are.",
+      "openGooglePlay": "Open Google Play",
+      "cantUseGooglePlay": "I can't use Google Play"
+    },
+    "download": {
+      "title": "Get the new Orca app",
+      "description": "This app still works, but updates and security fixes now come through the new app. Switching takes a few minutes.",
+      "installTitle": "Download the new app",
+      "installDescription": "If your phone asks, allow your browser to install apps.",
+      "download": "Download",
+      "keepThisVersion": "Keep using this version",
+      "keepThisVersionNote": "You'll miss security fixes. We'll remind you in a week."
+    },
+    "pairTitle": "Pair it with your computer",
+    "pairDescription": "In Orca on your computer, go to Settings → Mobile and scan the code.",
+    "deleteTitle": "Delete this app",
+    "deleteDescription": "Once the new app shows your agents. Until then, keep using this one.",
+    "dataKept": "Your agents, chats and workspaces are saved on your computer, so you'll see them all in the new app.",
+    "banner": {
+      "seeHowToSwitch": "See how to switch"
     }
   },
   "accounts": {
@@ -703,7 +732,6 @@
       "automations": "Automations"
     },
     "hostScreenOverlays": {
-      "deleteWorktree": "Delete Worktree",
       "deleteConfirmMessage": "Delete \"{{name}}\" ({{branch}})?",
       "deleteDestroysEnvironment": "This also destroys the environment \"{{environment}}\" that Orca created for it, with any uncommitted work and running terminals on it.",
       "deleteKeepsEnvironment": "The environment \"{{environment}}\" that Orca created for it keeps running: its recipe has no destroy step.",
@@ -714,8 +742,7 @@
       "primaryWorktreeDeleteHint": "Primary worktree — can't be deleted. Remove the project instead.",
       "removeHost": "Remove Host",
       "removeHostMessage": "Remove \"{{name}}\"? You can re-pair later.",
-      "deleteFailed": "Failed to delete \"{{name}}\"",
-      "deleteAnyway": "Delete Anyway"
+      "deleteFailed": "Failed to delete \"{{name}}\""
     },
     "workspaceRenameSheet": {
       "title": "Rename Workspace",
@@ -1276,11 +1303,14 @@
       "refreshWorkspaceTitle": "Refresh the mobile workspace",
       "refreshWorkspaceBody": "The workspace cached for this host is older than the desktop expects. Reconnect to this host to download the current one.",
       "mobileTooOldAppStore": "This desktop needs a newer Orca Mobile app. Update Orca Mobile from the App Store, then try this host again.",
+      "mobileTooOldGooglePlay": "This desktop needs a newer Orca Mobile app. Update Orca Mobile from Google Play, then try this host again.",
       "mobileTooOldGitHubReleases": "This desktop needs a newer Orca Mobile app. Update Orca Mobile from GitHub Releases, then try this host again.",
       "workspaceNeedsUpdateAppStore": "This desktop's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from the App Store, then try this host again.",
+      "workspaceNeedsUpdateGooglePlay": "This desktop's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from Google Play, then try this host again.",
       "workspaceNeedsUpdateGitHubReleases": "This desktop's mobile workspace needs a newer Orca Mobile app. Update Orca Mobile from GitHub Releases, then try this host again.",
       "desktopTooOldBody": "This paired desktop app is too old for your current Orca Mobile app. Update Orca on your computer, then try this host again.",
       "openAppStore": "Open App Store",
+      "openGooglePlay": "Open Google Play",
       "openGitHubReleases": "Open GitHub Releases",
       "getVersion": "Get Orca {{version}}",
       "refreshRecoveryNote": "If this message stays, remove this host and pair it again.",
@@ -1565,7 +1595,6 @@
       "unresolve": "Unresolve",
       "resolve": "Resolve",
       "replyPlaceholder": "Write a reply…",
-      "deleteConfirmTitle": "Delete comment?",
       "deleteConfirmMessage": "This permanently deletes the comment on GitHub."
     },
     "commentsSection": {
@@ -2235,7 +2264,6 @@
       "newCommand": "New quick command"
     },
     "quickCommandsSheet": {
-      "deleteConfirmTitle": "Delete \"{{label}}\"?",
       "untitled": "Untitled",
       "deleteConfirmMessage": "This quick command will be removed from your saved list.",
       "editTitle": "Edit Quick Command",
@@ -3114,7 +3142,10 @@
       "chooseInAgentPicker": "Choose in agent picker…",
       "setWhenSessionStarts": "Set when the session starts.",
       "availableAfterSessionStarts": "Available after the session starts.",
-      "sessionOptions": "Session options"
+      "sessionOptions": "Session options",
+      "permissionAppliesNextMessage": "{{saved}} applies to your next message; running {{active}}",
+      "permissionAppliesNextMessageCompact": "{{saved}} · next message",
+      "permissionAppliesNextMessageTiming": "Applies next message · running {{active}}"
     },
     "streamFrame": {
       "streamFailed": "Transcript stream failed",
@@ -3140,6 +3171,7 @@
     "message": {
       "copyMessage": "Copy message",
       "forkFromResponse": "Fork from this response",
+      "scrollMessageToTop": "Scroll this message to top",
       "forkFromResponseHint": "A new chat with this whole response, up to the end of its turn"
     },
     "messageActionsSheet": {
@@ -3414,7 +3446,10 @@
       "busy": "Another chat or terminal is opening. Wait, then fork the {{agent}} chat again.",
       "unconfirmed": "{{agent}} couldn't confirm the fork. It may have opened anyway; check Session History before forking again.",
       "failed": "{{agent}} couldn't fork this chat. {{detail}}",
-      "unsupported": "This host runs an older Orca. Update Orca on the host, then try again."
+      "unsupported": "This host runs an older Orca. Update Orca on the host, then try again.",
+      "mark": "Fork ·",
+      "markedName": "{{mark}} {{name}}",
+      "accessibleName": "Fork: {{name}}"
     },
     "hostOutage": {
       "offlineAsOf": "{{host}} is offline · as of {{time}}",
@@ -3457,6 +3492,60 @@
       "outcomeUnknownReturned": "Orca couldn't confirm whether the conversation went back to this message. Your message is back in the composer, and Orca checks the conversation before your next message is sent.",
       "timeout": "The chat didn't update after going back to this message. Reopen it to see the latest.",
       "pending": "Wait for the conversation to go back to the earlier message."
+    },
+    "urlRequest": {
+      "title": "Sign-in requested",
+      "open": "Open sign-in page",
+      "decline": "Decline",
+      "opened": "Opened the sign-in page in your browser.",
+      "openAgain": "Open again",
+      "finished": "Sign-in finished",
+      "finishedWith": "Sign-in finished · {{message}}"
+    },
+    "mcp": {
+      "source": {
+        "project": "Project",
+        "local": "Local",
+        "user": "User",
+        "plugin": "Plugin",
+        "session": "Session"
+      },
+      "status": {
+        "connected": "Connected",
+        "pending": "Connecting…",
+        "needsAuth": "Needs sign-in",
+        "failedReason": "Failed: {{error}}",
+        "failed": "Failed",
+        "needsAuthAfterSend": "Needs sign-in. Send a message to sign in here.",
+        "finishOnPage": "Finish on the page that opened",
+        "waitingForSignIn": "Waiting for sign-in…",
+        "tools_one": "{{count}} tool",
+        "tools_other": "{{count}} tools",
+        "off": "Off"
+      },
+      "title": "MCP servers",
+      "notRunning": "MCP servers connect when you send your next message.",
+      "unsupported": "Update Orca on this chat's host to manage MCP servers here.",
+      "readFailed": "Couldn't load MCP servers.",
+      "retry": "Retry",
+      "empty": "No MCP servers are set up for this chat.",
+      "signIn": "Sign in",
+      "reconnect": "Reconnect",
+      "toggleLabel": "Use {{name}}",
+      "actionFailed": "Couldn't do that. Try again.",
+      "openAgain": "Open again",
+      "pastePlaceholder": "Paste address",
+      "pasteLabel": "Sign-in page address",
+      "finish": "Finish",
+      "signInUnfinished": "Sign-in isn't finished yet. Finish it on the page that opened, then tap Done.",
+      "summary": {
+        "signingIn": "signing in to {{name}}",
+        "connected": "{{count}} connected",
+        "needsAuth_one": "{{count}} needs sign-in",
+        "needsAuth_other": "{{count}} need sign-in",
+        "failed": "{{count}} failed"
+      },
+      "pasteHint": "When the browser lands on a page that won't load, copy its address and paste it here."
     }
   },
   "sourceControl": {
@@ -4772,7 +4861,6 @@
       "completed": "Completed",
       "couldNotStart": "Could not start",
       "skipped": "Skipped",
-      "deleteAutomationTitle": "Delete automation?",
       "deleteRetained": "Delete “{{name}}” and its retained runs?",
       "couldNotVerifyTheOriginalAgentPaneReconnectAndTryAgain": "Could not verify the original agent pane. Reconnect and try again.",
       "theOriginalAgentPaneIsNoLongerAvailableToOpenSavedOutputRemainsHere": "The original agent pane is no longer available to open. Saved output remains here.",

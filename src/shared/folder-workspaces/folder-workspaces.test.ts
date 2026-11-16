@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { normalizeFolderWorkspaces } from './folder-workspaces'
-import type { ProjectGroup } from '../project-group-types'
+import type { ProjectGroup } from '../project/groups/project-group-types'
 
 const folderGroup = {
   id: 'group-1',

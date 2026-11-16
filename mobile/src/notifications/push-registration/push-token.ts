@@ -2,7 +2,7 @@ import * as Notifications from 'expo-notifications'
 import type {
   MobilePushApnsEnvironment,
   MobilePushPlatform
-} from '../../../../src/shared/mobile-push-contract'
+} from '../../../../src/shared/notifications/mobile-push-contract'
 
 // Use raw APNs/FCM tokens because Orca’s gateway talks directly to providers, not Expo’s push service.
 

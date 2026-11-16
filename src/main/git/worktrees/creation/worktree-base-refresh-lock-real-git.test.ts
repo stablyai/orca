@@ -16,8 +16,8 @@ function git(cwd: string, args: string[]): string {
   }).trim()
 }
 
-// Primary checkout on `main` one commit behind `refs/remotes/origin/main`, with its index locked.
-async function createBehindRepoWithIndexLock(): Promise<{
+// `main` one commit behind `refs/remotes/origin/main`; `lock` names a file another Git process could hold.
+async function createBehindRepo(lock: 'main-ref' | 'index' = 'main-ref'): Promise<{
   repoPath: string
   lockPath: string
   localOid: string
@@ -42,29 +42,32 @@ async function createBehindRepoWithIndexLock(): Promise<{
   git(repoPath, ['checkout', '--quiet', 'main'])
   git(repoPath, ['update-ref', 'refs/remotes/origin/main', remoteOid])
   git(repoPath, ['branch', '--quiet', '-D', 'upstream'])
-  const lockPath = join(repoPath, '.git', 'index.lock')
+  if (lock === 'main-ref') {
+    git(repoPath, ['checkout', '--quiet', '-b', 'develop'])
+  }
+  const lockPath = join(repoPath, '.git', lock === 'index' ? 'index.lock' : 'refs/heads/main.lock')
   await writeFile(lockPath, '')
   return { repoPath, lockPath, localOid, remoteOid }
 }
 
-function isOwnerFastForward(args: readonly string[]): boolean {
-  return args.includes('merge') && args.includes('--ff-only')
+function isWrite(args: readonly string[]): boolean {
+  return args.includes('update-ref') || args.includes('merge')
 }
 
-/** Counts owner fast-forwards; `onFailure` runs after each failed one, before it is reported. */
+/** Counts writes; `onFailure` runs after each failed one, before it is reported. */
 function spyOnFastForwards(onFailure: () => Promise<void> | void = () => {}): {
-  merges: () => number
+  writes: () => number
   maxConcurrent: () => number
 } {
   const original = gitRunner.gitExecFileAsync
-  let merges = 0
+  let writes = 0
   let active = 0
   let maxConcurrent = 0
   vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args, options) => {
-    if (!isOwnerFastForward(args)) {
+    if (!isWrite(args)) {
       return original(args, options)
     }
-    merges += 1
+    writes += 1
     active += 1
     maxConcurrent = Math.max(maxConcurrent, active)
     try {
@@ -76,7 +79,7 @@ function spyOnFastForwards(onFailure: () => Promise<void> | void = () => {}): {
       active -= 1
     }
   })
-  return { merges: () => merges, maxConcurrent: () => maxConcurrent }
+  return { writes: () => writes, maxConcurrent: () => maxConcurrent }
 }
 
 function refresh(repoPath: string, remote: 'origin' | 'upstream' = 'origin') {
@@ -87,19 +90,19 @@ function refresh(repoPath: string, remote: 'origin' | 'upstream' = 'origin') {
   )
 }
 
-// A fork: checked-out `main` behind `origin/main`, which is one commit behind `upstream/main`.
+// A fork: `main` behind `origin/main`, which is one commit behind `upstream/main`.
 async function createForkRepo(): Promise<{
   repoPath: string
   originOid: string
   upstreamOid: string
 }> {
-  const { repoPath, lockPath, remoteOid: originOid } = await createBehindRepoWithIndexLock()
+  const { repoPath, lockPath, remoteOid: originOid } = await createBehindRepo()
   await rm(lockPath, { force: true })
   git(repoPath, ['checkout', '--quiet', '-b', 'fork-upstream', originOid])
   await writeFile(join(repoPath, 'version.txt'), 'three\n')
   git(repoPath, ['commit', '--quiet', '-am', 'three'])
   const upstreamOid = git(repoPath, ['rev-parse', 'HEAD'])
-  git(repoPath, ['checkout', '--quiet', 'main'])
+  git(repoPath, ['checkout', '--quiet', 'develop'])
   git(repoPath, ['update-ref', 'refs/remotes/upstream/main', upstreamOid])
   git(repoPath, ['branch', '--quiet', '-D', 'fork-upstream'])
   return { repoPath, originOid, upstreamOid }
@@ -117,22 +120,85 @@ afterEach(async () => {
   await Promise.all(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
 
-describe('local base refresh against a held index.lock with real Git', () => {
+describe('local base refresh of a checked-out branch with real Git', () => {
+  it('leaves it alone while another Git process holds its index.lock', async () => {
+    const { repoPath, lockPath, localOid } = await createBehindRepo('index')
+    const spy = spyOnFastForwards()
+
+    await expect(refresh(repoPath)).resolves.toBeUndefined()
+
+    expect(spy.writes()).toBe(0)
+    expect(git(repoPath, ['rev-parse', 'main'])).toBe(localOid)
+    expect(await readFile(lockPath, 'utf8')).toBe('')
+  })
+})
+
+describe('local base refresh of a branch a rebase has reserved with real Git', () => {
+  it('leaves it alone although no worktree lists it as checked out', async () => {
+    const { repoPath, lockPath, localOid } = await createBehindRepo()
+    await rm(lockPath, { force: true })
+    git(repoPath, ['checkout', '--quiet', 'main'])
+    // Stops mid-rebase with HEAD detached; Git still treats main as in use.
+    expect(() => git(repoPath, ['rebase', '--quiet', '--root', '--exec', 'false'])).toThrow()
+    const spy = spyOnFastForwards()
+
+    await expect(refresh(repoPath)).resolves.toBeUndefined()
+
+    expect(spy.writes()).toBe(0)
+    expect(git(repoPath, ['rev-parse', 'main'])).toBe(localOid)
+  })
+
+  it('leaves a branch alone while a linked worktree bisects it', async () => {
+    const { repoPath, lockPath, localOid } = await createBehindRepo()
+    await rm(lockPath, { force: true })
+    const linkedPath = join(repoPath, '..', 'linked')
+    git(repoPath, ['worktree', 'add', '--quiet', linkedPath, 'main'])
+    git(linkedPath, ['bisect', 'start'])
+    git(linkedPath, ['checkout', '--quiet', '--detach'])
+    const spy = spyOnFastForwards()
+
+    await expect(refresh(repoPath)).resolves.toBeUndefined()
+
+    expect(spy.writes()).toBe(0)
+    expect(git(repoPath, ['rev-parse', 'main'])).toBe(localOid)
+  })
+})
+
+describe('local base refresh racing a checkout with real Git', () => {
+  it('skips the write when the branch is checked out while update-ref waits to start', async () => {
+    const { repoPath, lockPath, localOid } = await createBehindRepo()
+    await rm(lockPath, { force: true })
+    const original = gitRunner.gitExecFileAsync
+    vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args, options) => {
+      if (args[0] === 'update-ref') {
+        git(repoPath, ['checkout', '--quiet', 'main'])
+      }
+      return original(args, options)
+    })
+
+    await expect(refresh(repoPath)).resolves.toBeUndefined()
+
+    expect(git(repoPath, ['rev-parse', 'main'])).toBe(localOid)
+    expect(git(repoPath, ['status', '--porcelain'])).toBe('')
+  })
+})
+
+describe('local base refresh against a held ref lock with real Git', () => {
   it('retries once the other git process releases the lock', async () => {
-    const { repoPath, lockPath, remoteOid } = await createBehindRepoWithIndexLock()
+    const { repoPath, lockPath, remoteOid } = await createBehindRepo()
     const spy = spyOnFastForwards(() => rm(lockPath, { force: true }))
 
     const result = await refresh(repoPath)
 
     expect(result).toMatchObject({ status: 'updated' })
-    expect(spy.merges()).toBe(2)
+    expect(spy.writes()).toBe(2)
     expect(git(repoPath, ['rev-parse', 'main'])).toBe(remoteOid)
-    expect(await readFile(join(repoPath, 'version.txt'), 'utf8')).toBe('two\n')
   })
 
   it('reports updated when another process fast-forwarded local while holding the lock', async () => {
-    const { repoPath, remoteOid } = await createBehindRepoWithIndexLock()
-    spyOnFastForwards(() => {
+    const { repoPath, lockPath, remoteOid } = await createBehindRepo()
+    spyOnFastForwards(async () => {
+      await rm(lockPath, { force: true })
       git(repoPath, ['update-ref', 'refs/heads/main', remoteOid])
     })
 
@@ -143,29 +209,29 @@ describe('local base refresh against a held index.lock with real Git', () => {
   })
 
   it('reports skipped_error when the lock outlives every retry', async () => {
-    const { repoPath, localOid } = await createBehindRepoWithIndexLock()
+    const { repoPath, localOid } = await createBehindRepo()
     const spy = spyOnFastForwards()
 
     const result = await refresh(repoPath)
 
     expect(result).toMatchObject({ status: 'skipped_error' })
-    expect(spy.merges()).toBe(4)
+    expect(spy.writes()).toBe(4)
     expect(git(repoPath, ['rev-parse', 'main'])).toBe(localOid)
   })
 })
 
 describe('concurrent local base refreshes of one repo with real Git', () => {
   it('runs one fast-forward and resolves every create without a warning', async () => {
-    const { repoPath, lockPath, remoteOid } = await createBehindRepoWithIndexLock()
+    const { repoPath, lockPath, remoteOid } = await createBehindRepo()
     await rm(lockPath, { force: true })
     const spy = spyOnFastForwards()
     const warn = vi.spyOn(console, 'warn')
 
     const results = await Promise.all([refresh(repoPath), refresh(repoPath), refresh(repoPath)])
 
-    expect(results[0]).toMatchObject({ status: 'updated', ownerWorktreePath: expect.any(String) })
+    expect(results[0]).toEqual({ baseRef: 'origin/main', localBranch: 'main', status: 'updated' })
     expect(results.slice(1)).toEqual([undefined, undefined])
-    expect(spy.merges()).toBe(1)
+    expect(spy.writes()).toBe(1)
     expect(warn).not.toHaveBeenCalled()
     expect(git(repoPath, ['rev-parse', 'main'])).toBe(remoteOid)
   })

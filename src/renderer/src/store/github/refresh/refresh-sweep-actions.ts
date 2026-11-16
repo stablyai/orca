@@ -2,6 +2,7 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { GitHubSlice } from '../github-slice-contract'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { getWorktreeGitHubIssueRepository } from '../../../../../shared/worktree/github-issue-repository'
 import { buildPRRefreshCandidate, findWorktreeReviewOwner } from './worktree-refresh'
 import { issueCacheKey } from '../cache/cache-identity'
 import { evictStaleEntries } from '../cache/cache-policy'
@@ -57,6 +58,7 @@ export const createRefreshSweepActions = (
 
     const branch = candidate.branch
     const ownerSettings = settingsForGitHubRepoOwner(state.settings, repo)
+    const ownerRepo = getWorktreeGitHubIssueRepository(worktree)
     const prKey = candidate.cacheKey
     const issueKey = worktree.linkedIssue
       ? issueCacheKey(
@@ -66,7 +68,8 @@ export const createRefreshSweepActions = (
           ownerSettings,
           repo.connectionId,
           repo.executionHostId,
-          true
+          true,
+          ownerRepo
         )
       : ''
 
@@ -88,7 +91,7 @@ export const createRefreshSweepActions = (
       get().enqueueGitHubPRRefresh(worktreeId, 'post-push', 100, ownerHostId)
     }
     if ((state.worktreeCardProperties ?? []).includes('issue') && worktree.linkedIssue) {
-      void get().fetchIssue(repo.path, worktree.linkedIssue, { repoId: repo.id })
+      void get().fetchIssue(repo.path, worktree.linkedIssue, { repoId: repo.id, ownerRepo })
     }
   }
 })

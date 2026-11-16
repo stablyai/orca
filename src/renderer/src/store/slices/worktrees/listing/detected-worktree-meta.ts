@@ -10,12 +10,12 @@ import {
   getRepoExecutionHostId,
   parseExecutionHostId
 } from '../../../../../../shared/execution-host'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
 import {
   floatingWorkspaceToWorktree,
   isFloatingWorkspaceId
-} from '../../../../../../shared/floating-workspace-worktree'
+} from '../../../../../../shared/workspace/identity/floating-workspace-worktree'
 import { findIndexedDetectedWorktrees } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { findFirstIndexedWorktree } from '../../../../lib/workspace/ownership/worktree-runtime-owner-index'
 import { withoutErasedRequiredWorktreeFields } from '../metadata/worktree-meta-update-application'

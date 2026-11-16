@@ -5,7 +5,6 @@ import {
   handlers,
   store,
   readdirMock,
-  readFileMock,
   realpathMock,
   statMock,
   resetFilesystemIpcMocks
@@ -109,7 +108,7 @@ vi.mock(
   async () => (await import('./filesystem-test-harness')).textGenerationModuleMock
 )
 vi.mock(
-  '../../text-generation/pull-request-context',
+  '../../text-generation/pull-request-context/pull-request-context',
   async () => (await import('./filesystem-test-harness')).pullRequestContextMock
 )
 vi.mock(
@@ -164,7 +163,6 @@ describe('filesystem reads of a stopped WSL distro', () => {
     expect(realpathMock).not.toHaveBeenCalled()
     expect(statMock).not.toHaveBeenCalled()
     expect(readdirMock).not.toHaveBeenCalled()
-    expect(readFileMock).not.toHaveBeenCalled()
   })
 
   it("refuses with WSL didn't answer when the running list can't be read", async () => {

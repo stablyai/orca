@@ -1,4 +1,4 @@
-import { REMOTE_RPC_MAX_CONTENT_BYTES } from '../../../../../shared/remote-rpc-content-budget'
+import { REMOTE_RPC_MAX_CONTENT_BYTES } from '../../../../../shared/remote-runtime/rpc/remote-rpc-content-budget'
 
 export type RemoteBrowserClipboardCommand = 'copy' | 'cut'
 

@@ -1,5 +1,5 @@
 import type { PreloadApi } from '../../../../preload/api-types'
-import type { PairedUiState } from '../../../../shared/pairing-local-ui-fields'
+import type { PairedUiState } from '../../../../shared/remote-runtime/pairing/pairing-local-ui-fields'
 import { readJson, writeJson } from './web-storage'
 import { callRuntimeResult } from './web-runtime-calls'
 

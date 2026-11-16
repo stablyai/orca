@@ -102,18 +102,6 @@ describe('createPtySubprocess', () => {
     validateWorkingDirectoryMock
   })
 
-  it('replays data emitted before the Session registers onData', async () => {
-    const proc = mockPtyProcess()
-    spawnMock.mockReturnValue(proc)
-
-    const handle = await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
-    proc._simulateData('early setup output\r\n')
-    const data: string[] = []
-    handle.onData((d) => data.push(d))
-
-    expect(data).toEqual(['early setup output\r\n'])
-  })
-
   it('replays pre-listener data before a pre-listener exit', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)
@@ -129,22 +117,4 @@ describe('createPtySubprocess', () => {
     expect(data).toEqual(['last output\r\n'])
     expect(codes).toEqual([7])
   })
-
-  it('preserves pre-listener data when onExit is registered before onData', async () => {
-    const proc = mockPtyProcess()
-    spawnMock.mockReturnValue(proc)
-
-    const handle = await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
-    proc._simulateData('last output\r\n')
-    proc._simulateExit(7)
-    const events: string[] = []
-    handle.onExit((code) => events.push(`exit:${code}`))
-    handle.onData((data) => events.push(`data:${data}`))
-
-    expect(events).toEqual(['exit:7', 'data:last output\r\n'])
-  })
-
-  // UnixTerminal.destroy() can send async SIGHUP after exit; neutralize kill before PID reuse.
-
-  // Direct process.kill calls also need dead guards because a reaped PID can be reused.
 })

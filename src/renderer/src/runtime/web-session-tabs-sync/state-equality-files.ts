@@ -1,4 +1,4 @@
-import type { Tab, TabGroup } from '../../../../shared/tab-types'
+import type { Tab, TabGroup } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { OpenFile } from '../../store/slices/editor/types/open-file'
 import type { WebSessionTabsBatchContext, WebSessionTabsSyncState } from './state'
 import { sameStringArray } from './state-equality-core'

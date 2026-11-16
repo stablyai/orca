@@ -1,5 +1,5 @@
 import { parseExecutionHostId, type ExecutionHostId } from '../../execution-host'
-import { parseAppSshPtyId } from '../../ssh-pty-id'
+import { parseAppSshPtyId } from '../../remote-runtime/ssh/ssh-pty-id'
 import { isTerminalLeafId } from '../stable-pane-id'
 import type { TerminalTab } from '../terminal-tab-types'
 import type { WorkspaceSessionState } from '../../workspace-session/workspace-session-state-types'

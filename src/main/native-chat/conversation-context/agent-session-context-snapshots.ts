@@ -3,7 +3,7 @@ import { rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { runKeyedSerializedOperation } from '../../../shared/concurrency/keyed-serialized-operations'
-import { renameFileWithWindowsRetryAsync } from '../../../shared/windows-retry-file-operations'
+import { renameFileWithWindowsRetryAsync } from '../../../shared/file-write/windows-retry-file-operations'
 import {
   ensureOwnedTempStagingRoot,
   getOwnedTempStagingRoot

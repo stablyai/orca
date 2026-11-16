@@ -3,9 +3,9 @@ import { quoteCmdDoubleQuoted } from '../../shell/launch/shell-argument-quoting'
 import {
   isAntigravityReferenceSession,
   antigravityTranscriptReferencePrompt
-} from '../../antigravity-session-origin'
+} from '../../agent-session/lifecycle/provider-handles/antigravity-session-origin'
 import { normalizeAiVaultResumeFilePath } from './ai-vault-resume-path'
-import { ompTranscriptProfileArgs } from '../../omp-profile'
+import { ompTranscriptProfileArgs } from '../../agent-launch/startup/omp-profile'
 import { TUI_AGENT_CONFIG } from '../../agent-launch/catalog/tui-agent-config'
 import {
   clearEnvCommand,
