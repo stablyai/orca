@@ -1,5 +1,5 @@
 import { isConnectingSshStatus } from '@/ssh/ssh-connection-recoverability'
-import type { SshConnectionStatus } from '../../../../../../shared/ssh-types'
+import type { SshConnectionStatus } from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 
 export type SshTargetBusyAction = 'terminate' | 'reset' | 'remove'
 

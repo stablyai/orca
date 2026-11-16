@@ -105,7 +105,7 @@ export async function observeTranscriptPaneLifetime(
       for (const id of Object.values(layout?.ptyIdsByLeafId ?? {})) {
         ownedPtys.add(id)
       }
-      const status = state.agentStatusByPaneKey[paneKey]
+      const status = state.agentStatusByPaneKey.get(paneKey)
       const tab = (state.unifiedTabsByWorktree[worktreeId] ?? []).find(
         (tab) => tab.entityId === tabId
       )

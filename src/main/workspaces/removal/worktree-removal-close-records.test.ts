@@ -12,7 +12,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { toSshExecutionHostId } from '../../../shared/execution-host'
-import { folderWorkspaceKey } from '../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import type { ClosedTerminalTabTombstonesByTabId } from '../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
 
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'

@@ -1,13 +1,13 @@
 import { resolve, relative, isAbsolute, posix, sep, win32 } from 'node:path'
 import type { GlobalSettings, OrcaWorkspaceLayout } from '../../shared/global-settings-types'
-import type { Repo } from '../../shared/repo-types'
+import type { Repo } from '../../shared/repository/repo-types'
 import { isWindowsAbsolutePathLike, resolveRuntimePath } from '../../shared/cross-platform-path'
-import { isWslUncPath, resolveWslRepoWorktreeBasePath } from '../../shared/wsl-paths'
+import { isWslUncPath, resolveWslRepoWorktreeBasePath } from '../../shared/file-access/wsl-paths'
 import { splitWorktreeId } from '../../shared/worktree/id'
 import {
   replaceKnownEmojiWithShortcodes,
   setEmojiShortcodeDatasetLoader
-} from '../../shared/emoji-shortcode-catalog'
+} from '../../shared/text/emoji-shortcode-catalog'
 import { requireEmojiShortcodeDataset } from './deferred-emoji-shortcode-dataset'
 import { getWslHome, getWslHomeAsync } from '../wsl/discovery/distro-catalog'
 import { parseWslPath } from '../wsl/filesystem/unc-path-access'

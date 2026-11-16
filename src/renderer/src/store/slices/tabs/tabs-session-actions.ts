@@ -1,5 +1,5 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
-import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { addAdditionalValidWorkspaceKeys } from '@/lib/workspace/persistence/workspace-session-hydration-keys'
 import {

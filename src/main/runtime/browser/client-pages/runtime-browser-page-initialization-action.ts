@@ -1,10 +1,10 @@
 import {
   normalizeBrowserNavigationUrl,
   redactKagiSessionToken
-} from '../../../../shared/browser-url'
+} from '../../../../shared/browser/navigation/browser-url'
 import type { BrowserPageInitializationAction } from '../../../../shared/browser/client-hosting/browser-page-initialization-action'
-import type { RuntimeBrowserClientPlacement } from '../../../../shared/runtime-browser-placement'
-import { sameRuntimeBrowserPlacement } from '../../../../shared/runtime-browser-placement'
+import type { RuntimeBrowserClientPlacement } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
+import { sameRuntimeBrowserPlacement } from '../../../../shared/browser/client-hosting/runtime-browser-placement'
 import type { BrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry'
 import type { BrowserExecutionHostKeyResolution } from './runtime-browser-client-page-adoption'
 import type {

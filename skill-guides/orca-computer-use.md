@@ -71,7 +71,7 @@ ORCA computer wait --app <app> --window-title "Save As" --json
 
 ## App Selectors
 
-Prefer bundle IDs from `list-apps`; names are acceptable when unambiguous. Use `pid:<number>` only when bundle ID or name matching is ambiguous.
+Prefer bundle IDs from `list-apps`; names are acceptable when unambiguous. Use `pid:<number>` only when bundle ID or name matching is ambiguous. On macOS, apps without a Dock icon (`accessory: true`), such as menu bar apps, are listed only while they show a window.
 
 ```text
 ORCA computer get-app-state --app com.microsoft.edgemac --json
@@ -87,6 +87,7 @@ For apps with multiple windows or ambiguous titles, run `list-windows` first. Pr
 ORCA computer permissions --json
 ORCA computer capabilities --json
 ORCA computer list-apps --json
+ORCA computer launch-app <app> --json
 ORCA computer list-windows --app <app> --json
 ORCA computer get-app-state --app <app> --json
 ORCA computer wait --app <app> (--text <text> | --enabled <text> | --window-title <text>) [--timeout <ms>] --json
@@ -153,15 +154,15 @@ On macOS, `list-windows` and `get-app-state` also read windows that are minimize
 
 On macOS, background actions that would open a menu or dialog over the user are refused before anything is sent: right-clicks and Control-clicks, clicks or drags that start on popup menus, menu buttons, native combo boxes and web `<select>` controls, and buttons whose title ends in an ellipsis (`Save…`), which usually open a dialog. For a popup, native combo box or `<select>`, set the option with `set-value` on that element.
 
-On macOS, every action without `--restore-window` runs in the background: the target app is not brought forward, the user's frontmost app and key window stay put, and the real pointer does not move. `capabilities` reports this as `supports.input.background`.
+On macOS, every action without `--restore-window` runs in the background: the target app is not brought forward, the user's frontmost app and key window stay put, and the real pointer does not move. `capabilities` reports this as `supports.input.background`. With `--restore-window` (after asking the user), clicks, scrolls and drags use the real pointer, which goes back where it was unless the user moved it meanwhile. Some windows never take focus even when raised; a click still goes to such a window while it is the topmost window at the point, and the app the user had in front comes back afterwards unless the click opened a window, menu or popover. If another window covers the point, the click is refused with `window_not_focused` and nothing is sent.
 
 On Linux, element clicks through the element's accessibility action (or, for a list row with none, its list's selection), `set-value`, `type-text --element-index` and secondary actions run without raising the window or moving the pointer, and Return in a focused GTK text field runs its activate action. Scrolling moves the nearest scroll bar under the element or point by whole viewports, or pages a web document, also in the background. Anything that needs the real pointer (other clicks with no accessibility action, right, middle, multiple or modified clicks, scrolls in a view with no scroll bar or document, drags) or the focused window (other keys, typing with no focused editable field) is refused with `background_unavailable` and nothing is sent; so is a click that would open a menu, a keyboard-grabbing popup or a dialog (a GTK 4 or Qt label ending in `…`). Ask the user before retrying with `--restore-window`, which raises only the target window, refuses a window on another workspace and puts the cursor back. On Wayland, synthetic pointer and key input never reaches native windows, so it is refused even with the flag. `action.delivery` is measured: `foreground` when the input went to the window in front or the target came forward.
 
-On Windows, these actions go through UI Automation when the control supports them, without moving the pointer or sending keys: element clicks, `set-value` (including sliders), `type-text --element-index`, scrolls of an element or of the scrollable area under `--x`/`--y` (fractional `--pages` too), and secondary actions such as `Invoke`, `Toggle`, `Select`, `Expand`, `Collapse` and `ScrollToVisible` (the last brings a list or tree item into view). Some apps bring their own window forward when driven this way (WPF apps do for most of these), so read `action.delivery`: `background` means the user's foreground window stayed put, `foreground` means the target came forward. Clicks by coordinates, right, middle, modified and multi-clicks, clicks on elements with no `Invoke`, `Select` or `Toggle` action, scrolls over nothing scrollable, and drags need the real mouse, so they are refused with `background_unavailable` and nothing is sent. `type-text` without `--element-index`, `press-key`, `hotkey` and `paste-text` send keys, which need the window in front, so they are refused the same way; enter text with `type-text --element-index` or `set-value` instead. With `--restore-window` (after asking the user), only the target window comes forward, never one on another virtual desktop, and the pointer goes back where it was.
+On Windows, these actions go through UI Automation when the control supports them, without moving the pointer or sending keys: element clicks, `set-value` (including sliders), `type-text --element-index`, scrolls of an element or of the scrollable area under `--x`/`--y` (fractional `--pages` too), and secondary actions such as `Invoke`, `Toggle`, `Select`, `Expand`, `Collapse` and `ScrollToVisible` (the last brings a list or tree item into view). WinForms buttons, check boxes and radio buttons, and native text boxes, combo boxes and list boxes (user32 and WinForms), are driven through their own window messages, which leave the window where it is. User32 buttons, check boxes and radio buttons use UI Automation, so they can bring their window forward. Other apps can bring their own window forward when driven this way (WPF apps do for most of these), so read `action.delivery`: `background` means the user's foreground window stayed put, `foreground` means the target came forward. Clicks by coordinates, right, middle, modified and multi-clicks, clicks on elements with no `Invoke`, `Select` or `Toggle` action, scrolls over nothing scrollable, and drags need the real mouse, so they are refused with `background_unavailable` and nothing is sent. `type-text` without `--element-index`, `press-key`, `hotkey` and `paste-text` send keys, which need the window in front, so they are refused the same way; enter text with `type-text --element-index` or `set-value` instead. With `--restore-window` (after asking the user), only the target window comes forward, never one on another virtual desktop, and the pointer goes back where it was.
 
 ## Starting Apps
 
-`orca computer` does not launch apps. On macOS, start one without bringing it forward with `open -g -a <App>` (or `open -g -b <bundle-id>`); plain `open -a` brings it to the front. Some apps, such as many Electron apps, still bring their own window forward when it opens. On Windows and Linux a newly started app usually comes to the front, so ask the user before starting one.
+Start a closed app with `ORCA computer launch-app <app>`, not `open -a` or `Start-Process`: those bring the app to the front and take the user's keyboard. `launch-app` asks macOS and Windows to start it in the background and leaves an app that is already running alone. Some apps, such as many Electron apps, still bring their own window forward when they open, so read `delivery`: if it says `foreground`, tell the user the app came to the front. Pass `--activate` only when the user asked for the app to come forward. On Linux it fails with `unsupported_capability`, because a newly started app usually comes to the front there; ask the user before starting one another way.
 
 ## Screenshots
 
@@ -171,6 +172,8 @@ path is absent, use the inline base64 `result.screenshot.data`. Pretty output do
 images.
 
 Use the tree for indexes/actions and the screenshot for visual confirmation; failed capture usually means hidden, minimized, off-screen, or permission-blocked.
+
+For smaller screenshots on any action or `get-app-state`, add `--screenshot-scale 1` (at most one pixel per window point, which halves a Retina capture), `--screenshot-max-edge <px>` and `--screenshot-format jpeg`. The result's `screenshot.format` and `screenshot.scale` say what came back; older runtimes ignore these flags and return the full PNG.
 
 Coordinates passed to `click`, `scroll`, and `drag` are window-local action coordinates. If the screenshot reports `scale` other than `1`, convert visual screenshot pixels before acting:
 

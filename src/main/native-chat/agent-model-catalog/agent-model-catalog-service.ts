@@ -1,6 +1,6 @@
 import { onAgentsRefreshedOnHost } from '../../preflight/agents-refreshed-on-host'
 import { onLiveAccount } from './agent-model-catalog-running-account'
-import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { readAccountList } from './agent-model-catalog-account-list'
 import { captureAgentModelCatalogRead } from './agent-model-catalog-operation'

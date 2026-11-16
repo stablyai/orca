@@ -1,4 +1,4 @@
-import { requestBrowserFocus } from '@/components/browser-pane/host-guest/browser-focus'
+import { requestBrowserFocus } from '@/components/browser-pane/host-guest/input/browser-focus'
 import { findVisibleBrowserLinkTarget } from './visible-browser-link-target'
 import { isFloatingWorkspaceId } from '../../../../../shared/floating-workspace-worktree'
 import { resolveLinkOpenSidePlacement } from '../../links/placement/adjacent-link-open-group'
@@ -7,7 +7,7 @@ import type { CreateBrowserTabOptions } from '@/store/slices/browser/browser-sli
 import type { TabSplitTarget } from '@/store/slices/tabs/tabs-slice-contract'
 import type { Tab, TabGroup } from '../../../../../shared/tab-types'
 import type { OpenWorkspaceBrowserTabRequest } from '../workspace/workspace-browser-tab-open'
-import type { BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
+import type { BrowserWorkspace } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 
 export type HttpLinkBrowserPlacement = { targetGroupId: string } | { split: TabSplitTarget }

@@ -1,7 +1,7 @@
 import React from 'react'
 import type { VirtualItem } from '@tanstack/react-virtual'
 import type { AppState } from '@/store/types'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type {
   WorkspaceLineage,
   WorktreeLineage
@@ -171,6 +171,7 @@ export function renderFolderWorkspaceOption(args: {
           hostContextLabel={row.hostContextLabel}
           lineageChildCount={row.lineageChildCount}
           lineageChildWorktreeIds={row.lineageChildWorktreeIds}
+          lineageDescendantIdentities={row.lineageDescendantIdentities}
           lineageCollapsed={row.lineageCollapsed}
           lineageChildren={lineage?.children}
           lineageChildrenStyle={

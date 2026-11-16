@@ -1,6 +1,6 @@
 import { currentDraftScope } from '../drafts/native-chat-launch-draft-source'
 import { translate } from '@/i18n/i18n'
-import { formatNativeChatFileReference } from '../../../../../shared/agent-image-paste'
+import { formatNativeChatFileReference } from '../../../../../shared/native-chat/input/composer/agent-image-paste'
 import {
   readNativeChatComposerDraft,
   updateNativeChatComposerDraft

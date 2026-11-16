@@ -2,7 +2,7 @@
 import type { OrcadMigrationCatalogPayload } from '../../../../shared/orcad-migration/orcad-migration-manifest'
 import { isRecord } from '../../../../shared/orcad-migration/orcad-migration-manifest-fields'
 import { PTY_SESSION_ID_SEPARATOR } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { rewriteWorktreeIdPath } from '../../../../shared/worktree/id'
 import {
   ORCAD_MIGRATION_PATH_FIELDS,

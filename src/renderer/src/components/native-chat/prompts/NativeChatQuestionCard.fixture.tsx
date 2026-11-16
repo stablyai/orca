@@ -273,6 +273,48 @@ export const previews = defineFixture({
   }
 })
 
+export const previewsFocused = defineFixture({
+  width: 560,
+  render: () => (
+    <div
+      className="native-chat-appearance bg-chat-canvas p-4"
+      style={nativeChatAppearanceStyle({})}
+    >
+      <NativeChatQuestionCard
+        prompt={{
+          questions: [
+            {
+              question: 'Which layout should the settings page use?',
+              multiSelect: false,
+              options: [
+                {
+                  label: 'Sidebar',
+                  description: 'Sections listed on the left.',
+                  preview:
+                    '┌──────────┬───────────────────────────┐\n│ General  │ Theme      [ Dark     ▾ ] │\n│ Editor   │ Font size  [ 13         ] │\n│ Terminal │                           │\n└──────────┴───────────────────────────┘'
+                },
+                {
+                  label: 'Tabs',
+                  description: 'Sections as tabs across the top.',
+                  preview:
+                    '┌─────────┬────────┬──────────┐\n│ General │ Editor │ Terminal │\n├─────────┴────────┴──────────┤\n│ Theme  [ Dark ▾ ]           │\n└─────────────────────────────┘'
+                }
+              ]
+            }
+          ]
+        }}
+        onAnswer={() => {}}
+        onCancel={() => {}}
+      />
+    </div>
+  ),
+  interact: async (frame) => {
+    frame.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')[0]?.click()
+    frame.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')[0]?.focus()
+    await new Promise(requestAnimationFrame)
+  }
+})
+
 const dispatchOptions = [
   {
     label: 'Yes, investigate and report',
@@ -329,4 +371,15 @@ export const multiStep = defineFixture({
 export const narrow = defineFixture({
   width: 400,
   render: () => <FocusedQuestion />
+})
+
+// Answered the first step, then skipped to the last: the footer must still offer Submit.
+export const skippedLastStep = defineFixture({
+  width: 720,
+  render: () => <FocusedQuestion steps={2} />,
+  interact: async (frame) => {
+    frame.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')[0]?.click()
+    frame.querySelectorAll<HTMLButtonElement>('[data-native-chat-question-step]')[1]?.click()
+    await new Promise(requestAnimationFrame)
+  }
 })

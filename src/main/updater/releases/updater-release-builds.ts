@@ -8,7 +8,7 @@ import {
   sortReleaseBuildsNewestFirst,
   type ReleaseBuild,
   type ReleaseChannel
-} from '../../../shared/release-channel'
+} from '../../../shared/updater/release-channel'
 import { parseRetryAfterHeaderMs } from '../../../shared/retry-after-header'
 import {
   getGhRateLimitBlockedUntilMs,

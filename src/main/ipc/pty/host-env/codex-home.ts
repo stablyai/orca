@@ -4,7 +4,7 @@ import {
   isCodexHomeAuthReadyForLaunch,
   waitForManagedCodexAuthReady
 } from '../../../codex-accounts/credentials/managed-codex-auth-readiness'
-import type { CodexAccountSelectionTarget } from '../../../../shared/codex-selection-lane'
+import type { CodexAccountSelectionTarget } from '../../../../shared/agent-accounts/codex/codex-selection-lane'
 import {
   forgetCodexPaneAccount,
   getCodexPaneAccount,
@@ -17,7 +17,7 @@ import {
   isHostCodexHomeForWsl,
   isWslCodexHomeForHost
 } from '../../../pty/shell-startup/codex-home-wsl-env'
-import { isWslShellName } from '../../../../shared/local-windows-terminal-runtime'
+import { isWslShellName } from '../../../../shared/shell/launch/local-windows-terminal-runtime'
 import { parseWslPath } from '../../../wsl/filesystem/unc-path-access'
 import { isWslTerminalSpawn } from '../wsl-terminal-spawn'
 

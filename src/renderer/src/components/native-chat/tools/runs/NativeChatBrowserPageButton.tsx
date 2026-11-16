@@ -18,7 +18,7 @@ import {
   nativeChatToolRunCategory
 } from '../../../../../../shared/native-chat/tools/native-chat-tool-icon'
 import { nativeChatFullCommand } from '../../../../../../shared/native-chat/tools/native-chat-tool-input-text'
-import { parseOrcaBrowserCommand } from '../../../../../../shared/orca-browser-cli-commands'
+import { parseOrcaBrowserCommand } from '../../../../../../shared/browser/automation/orca-browser-cli-commands'
 import type { NativeChatToolCallBlock } from '../../../../../../shared/native-chat/native-chat-types'
 import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 

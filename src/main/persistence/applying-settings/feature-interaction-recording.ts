@@ -1,12 +1,14 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
   compareFeatureInteractionUsageBuckets,
-  getFeatureInteractionCategory,
-  getFeatureInteractionUsageBucket,
+  getFeatureInteractionUsageBucket
+} from '../../../shared/feature-education/interactions/feature-interaction-usage-buckets'
+import { getFeatureInteractionCategory } from '../../../shared/feature-education/interactions/feature-interaction-categories'
+import {
   normalizeFeatureInteractions,
-  normalizeFeatureInteractionTelemetryBuckets,
-  type FeatureInteractionId
-} from '../../../shared/feature-interactions'
+  normalizeFeatureInteractionTelemetryBuckets
+} from '../../../shared/feature-education/interactions/feature-interactions'
+import type { FeatureInteractionId } from '../../../shared/feature-education/interactions/feature-interaction-catalog'
 import { track } from '../../telemetry/client'
 import { getCohortAtEmit } from '../../telemetry/cohort-classifier'
 

@@ -3,10 +3,10 @@ import {
   getRepoExecutionHostId,
   parseExecutionHostId
 } from '../../../../../../shared/execution-host'
-import { isFolderRepo } from '../../../../../../shared/repo-kind'
-import type { WorkspaceHookOwner } from '../../../../../../shared/workspace-hook-owner'
-import type { RuntimeCapability } from '../../../../../../shared/protocol-version'
-import { WORKTREE_FOLDER_SETUP_RUNTIME_CAPABILITY } from '../../../../../../shared/worktree-runtime-capabilities'
+import { isFolderRepo } from '../../../../../../shared/repository/repo-kind'
+import type { WorkspaceHookOwner } from '../../../../../../shared/workspace-setup/hooks/workspace-hook-owner'
+import type { RuntimeCapability } from '../../../../../../shared/remote-runtime/protocol/protocol-version'
+import { WORKTREE_FOLDER_SETUP_RUNTIME_CAPABILITY } from '../../../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 
 export type FolderSetupSupport = 'supported' | 'unsupported' | 'pending'

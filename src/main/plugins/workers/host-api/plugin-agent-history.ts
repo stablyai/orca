@@ -6,7 +6,7 @@ import {
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { PLUGIN_AGENT_SESSION_LIST_LIMIT } from '../../../../shared/plugins/workers/plugin-host-api-agent-history'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { aiVaultSessionListCacheGeneration } from '../../../ai-vault/listing/cached-session-list'
 import { resolveAiVaultScopeRealPaths } from '../../../ai-vault/scope/session-scope-real-paths'
 import type { PluginRuntimeRpc } from './plugin-host-runtime-call'

@@ -2,7 +2,7 @@
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { CrashReportRecord } from '../../../../shared/crash-reporting'
+import type { CrashReportRecord } from '../../../../shared/crash-reporting/crash-reporting'
 import { CrashReportDialogSurface } from './CrashReportDialogSurface'
 
 vi.mock('sonner', () => ({

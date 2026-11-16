@@ -1,5 +1,5 @@
-import { createClaudeCatalogOptions } from '../../../../../../../shared/agent-session/options/agent-session-option-catalog-claude-codex'
-import { catalogModelsFromModelDiscovery } from '../../../../../../../shared/native-chat/input/native-chat-discovered-catalog-models'
+import { createClaudeCatalogOptions } from '../../../../../../../shared/agent-session/options/catalog-providers/agent-session-option-catalog-claude-codex'
+import { catalogModelsFromModelDiscovery } from '../../../../../../../shared/native-chat/input/session-options/native-chat-discovered-catalog-models'
 import {
   getCommitMessageModelDiscoveryHostKeyForLocalRuntime,
   getCommitMessageModelDiscoveryHostKeyForScope,
@@ -19,7 +19,7 @@ import { callStructuredAgentSession } from '@/runtime/native-chat/requests/struc
 import { useAppStore } from '@/store/index'
 import { selectFileListWorktree } from '@/store/workspaces/selection/known-worktree-selection'
 import type { AgentType } from '../../../../../../../shared/agent-status/contracts/agent-status-types'
-import type { CatalogModel } from '../../../../../../../shared/agent-session/options/agent-session-option-catalog-types'
+import type { CatalogModel } from '../../../../../../../shared/agent-session/options/catalog-providers/agent-session-option-catalog-types'
 import type {
   AgentSessionModelCatalogResult,
   AgentSessionModelOption

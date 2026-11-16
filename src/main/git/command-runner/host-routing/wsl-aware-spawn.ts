@@ -4,7 +4,7 @@ import {
   commandLineLength,
   MAX_COMMAND_LINE_CHARS,
   WindowsCommandLineBudgetError
-} from '../../../../shared/windows-command-line-budget'
+} from '../../../../shared/shell/launch/windows-command-line-budget'
 import { resolveCommand, withWslPreparation } from './wsl-command-resolution'
 
 export function wslAwareSpawn(

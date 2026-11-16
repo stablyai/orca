@@ -114,6 +114,11 @@
       "orca-source": "./src/wsl-distro-allowlist.ts",
       "types": "./dist/wsl-distro-allowlist.d.ts",
       "default": "./dist/wsl-distro-allowlist.js"
+    },
+    "./posix-group-termination": {
+      "orca-source": "./src/posix-group-termination.ts",
+      "types": "./dist/posix-group-termination.d.ts",
+      "default": "./dist/posix-group-termination.js"
     }
   },
   "scripts": {

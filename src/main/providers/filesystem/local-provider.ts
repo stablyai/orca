@@ -1,6 +1,9 @@
 import { constants, copyFile, lstat, mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
+import {
+  throwIfSignalAborted,
+  waitForPromiseWithSignal
+} from '../../../shared/concurrency/abort-signal-reason'
 import {
   readAuthorizedDocPreviewFile,
   readAuthorizedDocPreviewFileChunk

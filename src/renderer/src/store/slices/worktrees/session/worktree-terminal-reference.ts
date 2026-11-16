@@ -1,4 +1,4 @@
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId
@@ -25,7 +25,7 @@ import { findRepoForHost } from '../../../repos/repo-host-identity'
 import { readHostedReviewForRepo } from '@/lib/source-control/review/hosted-review-repo-read'
 import { lookupGitHubWorkItemByOwnerRepoForSource } from '@/lib/work-items/github/github-work-item-source-lookup'
 import { buildTaskSourceContextFromRepo } from '../../../../../../shared/work-items/task-source-context'
-import { PrioritySemaphore } from '../../../../../../shared/priority-semaphore'
+import { PrioritySemaphore } from '../../../../../../shared/concurrency/priority-semaphore'
 
 function terminalReviewSourceKey(repo: Repo | null | undefined): string {
   const host = repo && parseExecutionHostId(getRepoExecutionHostId(repo))

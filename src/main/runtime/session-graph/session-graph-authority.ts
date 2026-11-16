@@ -6,10 +6,10 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import { WORKSPACE_ON_OTHER_RUNTIME } from '../../../shared/preflight-runtime-capabilities'
+import { WORKSPACE_ON_OTHER_RUNTIME } from '../../../shared/remote-runtime/protocol/preflight-runtime-capabilities'
 import type { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree as ResolveBrowserNetworkExecutionHostForWorktreeMethods } from '../terminal/launch/terminal-workspace-scope'
 import { OrcaRuntimeWithHasTerminalsForWorktree } from './session-graph-reload-lifecycle'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { startedMainTerminalSurfaces } from '../terminal/surface/main-terminal-surfaces'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
@@ -23,9 +23,12 @@ import {
   runAsWslUserAct,
   wslDistroForPath
 } from '../../wsl/filesystem/wsl-unc-access-gate'
-import { wslDistroHoldMessage } from '../../../shared/wsl-distro-stopped-hold'
+import { wslDistroHoldMessage } from '../../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
 import type { TerminalWorkspaceLaunchScope } from '../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
-import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
+import {
+  folderWorkspaceKey,
+  parseWorkspaceKey
+} from '../../../shared/workspace/identity/workspace-scope'
 import {
   folderCatalogOf,
   resolveKeyedFolderWorkspace,
@@ -74,6 +77,7 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
     this.clearPtyIncarnationHandles()
     this.terminalWaiters.rejectAll('terminal_handle_stale')
     this.refreshWritableFlags()
+    this.releaseUnseededPhoneFrames()
   }
 
   protected shouldRestoreHeadlessGraph(windowId: number): boolean {
@@ -95,6 +99,7 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
     this.terminalWaiters.rejectAll('terminal_handle_stale')
     this.refreshWritableFlags()
     this.markSessionTabsInventoryPublished()
+    this.releaseUnseededPhoneFrames()
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
       this.headlessGraphFallbackAvailable = true
       startedMainTerminalSurfaces(this)?.republish({ force: true })
@@ -251,7 +256,7 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
   }
 
   /** Reconcile client-hosted pages per paired device; one attached client cannot account for another's pages. */
-  markClientHostedPagesReconciled(pairedDeviceId: string): void {
+  async markClientHostedPagesReconciled(pairedDeviceId: string): Promise<void> {
     const held = this.clientHostedPageReconciliation.markReconciled(pairedDeviceId)
     if (!held?.size) {
       return
@@ -261,20 +266,24 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
       return
     }
     const deliver = this.createMobileSessionTabsDelivery()
+    const delivered: Promise<void>[] = []
     for (const worktree of held) {
       const selected = this.selectMobileSessionTabsListeners(worktree, pairedDeviceId, candidates)
       if (selected.length === 0) {
         continue
       }
-      deliver(
-        this.getMobileSessionTabsForWorktree(worktree, pairedDeviceId, {
-          includeAgentSenders: false
-        }),
-        ++this.mobileSessionTabsChangeSequence,
-        pairedDeviceId,
-        selected,
-        'reconciliation'
+      delivered.push(
+        deliver(
+          await this.getMobileSessionTabsForWorktree(worktree, pairedDeviceId, {
+            includeAgentSenders: false
+          }),
+          ++this.mobileSessionTabsChangeSequence,
+          pairedDeviceId,
+          selected,
+          'reconciliation'
+        )
       )
     }
+    await Promise.all(delivered)
   }
 }

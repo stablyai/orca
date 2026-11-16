@@ -8,7 +8,7 @@ import {
   parseWorkspaceKey,
   worktreeWorkspaceKey,
   type WorkspaceKey
-} from '../../../../shared/workspace-scope'
+} from '../../../../shared/workspace/identity/workspace-scope'
 import { folderParentDefeatsInferredParent } from '../../loading-store/workspace-lineage/folder-parent-lineage-persistence'
 import { ownsRawIdBucket } from '../../loading-store/workspace-lineage/metadata-lineage-operations'
 

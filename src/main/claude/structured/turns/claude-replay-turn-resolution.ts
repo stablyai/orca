@@ -161,13 +161,17 @@ export function resolveClaudeReplayTurn(
   return null
 }
 
-/** Adopted UUIDs after root cycle work prove folded delivery; a new root init resets this evidence. */
+/** Adopted UUIDs after root cycle work prove folded delivery; a new root init resets this evidence, except for a steer whose interrupt held the turn open. */
 function claudeReplayIsFoldReceipt(
   session: ClaudeSession,
   waiter: ClaudeDispatchWaiter,
   replayUuid: string
 ): boolean {
-  return replayUuid === waiter.sentUuid && session.translator?.openTurnInLiveProviderCycle === true
+  return (
+    replayUuid === waiter.sentUuid &&
+    (session.translator?.openTurnInLiveProviderCycle === true ||
+      (waiter.steers === true && session.translator?.currentTurnId != null))
+  )
 }
 
 function claudeResultUserMessageUuids(message: Record<string, unknown>): string[] {

@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../../../shared/constants'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { PersistedState } from '../../../../shared/persisted-state-types'
-import type { SshRemotePtyLease, SshTarget } from '../../../../shared/ssh-types'
+import type { SshRemotePtyLease, SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import {
   closeTestStores,
@@ -22,7 +22,7 @@ import {
   type HostRelayTerminalProof
 } from '../../../ssh/migration-source/orcad-migration-terminal-gate'
 import { SshTargetOrcadClaims } from '../../../ssh/targets/ssh-target-orcad-claims'
-import { getManagedOrcadFenceEnvironmentId } from '../../../../shared/managed-orcad-ssh-owner'
+import { getManagedOrcadFenceEnvironmentId } from '../../../../shared/remote-runtime/ssh/managed-orcad-ssh-owner'
 import { listOrcadMigrationSourceCutovers } from '../../../persistence/migrating-orcad-catalog/cutover-journals/orcad-migration-cutover-journal'
 import {
   leaveBehindClearsOrcadMigrationBlockers,

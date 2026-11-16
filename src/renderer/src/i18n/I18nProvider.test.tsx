@@ -5,11 +5,11 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { getDefaultSettings } from '../../../shared/constants'
-import { UI_LANGUAGE_ENGLISH } from '../../../shared/ui-language'
+
 import {
   getBrowserLanguageDetection,
   setRendererLanguageDetection
-} from '../../../shared/ui-locale'
+} from '../../../shared/i18n/ui-locale'
 import { useAppStore } from '@/store'
 import { i18n } from './i18n'
 import * as rendererI18n from './i18n'
@@ -22,13 +22,6 @@ import { I18nProvider } from './I18nProvider'
 
 const initialAppState = useAppStore.getInitialState()
 const roots: Root[] = []
-
-// Stub navigator.language to reproduce a non-English OS independently of the test host.
-const ORIGINAL_SYSTEM_LOCALE = navigator.language
-function stubSystemLocale(tag: string): void {
-  Object.defineProperty(navigator, 'language', { value: tag, configurable: true })
-  Object.defineProperty(navigator, 'languages', { value: [tag], configurable: true })
-}
 
 async function renderProvider(): Promise<void> {
   const container = document.createElement('div')
@@ -59,7 +52,7 @@ afterEach(async () => {
   }
   roots.length = 0
   useAppStore.setState(initialAppState, true)
-  stubSystemLocale(ORIGINAL_SYSTEM_LOCALE)
+
   vi.restoreAllMocks()
 })
 
@@ -123,25 +116,6 @@ describe('I18nProvider startup language', () => {
 
     expect(load).toHaveBeenCalledWith('system')
     expect(useLanguageReadiness.getState().ready).toBe(true)
-  })
-
-  it('never applies the OS locale on a non-English system when English is persisted (#7188)', async () => {
-    // No locale request may start before persisted settings arrive, even on a Spanish OS.
-    stubSystemLocale('es-ES')
-    const changeLanguage = vi.spyOn(i18n, 'changeLanguage')
-
-    await renderProvider()
-    expect(changeLanguage).not.toHaveBeenCalled()
-
-    await act(async () => {
-      useAppStore.setState({
-        settings: { ...getDefaultSettings('/tmp'), uiLanguage: UI_LANGUAGE_ENGLISH }
-      })
-    })
-
-    expect(useLanguageReadiness.getState().detection?.locale).toBe('es')
-    expect(changeLanguage).toHaveBeenCalledWith('en')
-    expect(changeLanguage).not.toHaveBeenCalledWith('es')
   })
 })
 

@@ -6,7 +6,7 @@ import {
 } from '../mac-install/updater-mac-install'
 import { recordUpdaterLifecycle } from '../updater-lifecycle-diagnostics'
 import { isExternallyManagedLinuxInstall } from '../linux-package/linux-update-package-type'
-import { updaterCodedMessage } from '../../../shared/updater-failure-copy'
+import { updaterCodedMessage } from '../../../shared/updater/updater-failure-copy'
 import { QUIT_AND_INSTALL_DELAY_MS } from './updater-state'
 import { UpdaterRemoteStatus } from './updater-remote-status'
 import { prepareThisProcessShipItStaging } from '../mac-install/shipit-leftover-recovery'

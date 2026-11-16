@@ -1,4 +1,4 @@
-import { getRepoHostIdentityForParts } from '../../../../shared/repo-host-identity'
+import { getRepoHostIdentityForParts } from '../../../../shared/repository/repo-host-identity'
 import { createRepoRowExecutionHostLookup } from '../../../../shared/execution-host/worktree-execution-host-resolution'
 import { resolveWorktreeHostRouting } from '../catalog/worktree-launch-host-repo'
 import { resolveHostStructuredAgentLaunchEnvironment } from '../../agent-session/launch/structured-agent-launch-support'
@@ -6,7 +6,7 @@ import { getStructuredAgentSessionHost } from '../../../native-chat/agent-sessio
 import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sources'
 import { RuntimeChatWorkerEvents } from '../../orchestration/workers/turn-stops/chat-worker-runtime-events'
 
-import type { RuntimeWorktreePsResult } from '../../../../shared/runtime-worktree-contracts'
+import type { RuntimeWorktreePsResult } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { ResolvedWorktreeSnapshot } from '../catalog/runtime-resolved-worktree-cache'
 import { buildRuntimeWorktreePsSummaries } from './runtime-worktree-ps-summaries'
 import {
@@ -21,7 +21,7 @@ import { applyRuntimeWorktreePsUnverifiableTerminals } from './runtime-worktree-
 import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
 import { attachRuntimeWorktreeAgentRowWaits } from './runtime-worktree-agent-row-waits'
 import { compareWorktreePs } from './runtime-worktree-status-projection'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { enrichMissingRepoGitRemoteIdentities } from '../../../workspaces/catalog/repo-git-remote-identity-enrichment'
 import { ensureStructuredAgentSessionHost as installStructuredAgentSessionHost } from '../../agent-session/structured-agent-session-runtime'
 import {
@@ -33,6 +33,7 @@ import {
   neverThrowingStructuredAgentSessionLogger
 } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { openAgentSessionRecordStoreOnce } from '../../agent-session/records/agent-session-record-store-slot'
+import { localAgentSessionRecordStoreLocation } from '../../agent-session/records/local-agent-session-record-store-startup-open'
 import type { AgentSessionRecordStore } from '../../agent-session/records/agent-session-record-store'
 import { maybeAutoRenameWorkspaceOnFirstStructuredTurn } from '../../../agent-hooks/first-work/first-work-structured-session-rename'
 import { firstWorkRenameDeps } from '../../../agent-hooks/first-work/first-work-rename-runtime'
@@ -75,7 +76,8 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
   async getWorktreePs(
     limit = DEFAULT_WORKTREE_PS_LIMIT,
     sourceDefaultsSupported = true,
-    includeAgentWait = false
+    includeAgentWait = false,
+    worktreeId?: string
   ): Promise<RuntimeWorktreePsResult> {
     if (!Number.isInteger(limit) || limit <= 0) {
       throw new Error('invalid_limit')
@@ -85,13 +87,12 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       sourceDefaultsSupported
     )
     const freshPtyLiveness = await this.refreshPtyWorktreeRecordsFromController(resolvedWorktrees)
-    const repoById = new Map((this.store?.getRepos() ?? []).map((repo) => [repo.id, repo]))
     const summaries = buildRuntimeWorktreePsSummaries({
       store: this.store,
       resolvedWorktrees,
-      platformByRepoId
+      platformByRepoId,
+      worktreeId
     })
-
     const getSummary = createRuntimeWorktreePsSummaryLookup(
       summaries,
       buildRuntimeWorktreeSummaryPathIndex(summaries, platformByRepoId)
@@ -121,7 +122,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       applyRuntimeWorktreePsSessionActivity({
         store: this.store,
         summaries,
-        repoById,
+        repoById: new Map((this.store?.getRepos() ?? []).map((repo) => [repo.id, repo])),
         ptysById: this.ptysById,
         tabs: this.tabs,
         paneOf: (pty) => this.paneOfPty(pty),
@@ -144,10 +145,9 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       agentList: this.readAgentListPublication()
     })
 
-    const sorted = [...summaries.values()].sort(compareWorktreePs)
     // Apply per-host pagination so hosts sorting last cannot disappear behind a global cap (#18104).
     const page = buildWorktreeListingPage(
-      sorted,
+      [...summaries.values()].sort(compareWorktreePs),
       limit,
       withoutHiddenHosts(this.listKnownExecutionHostIds(), runtimeHiddenHostIds(this.store))
     )
@@ -213,27 +213,27 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
 
   /** Admission needs only the ledger; a later chat host must reuse this store. */
   async openAgentSessionRecordStore(): Promise<AgentSessionRecordStore> {
-    const { store } = await openAgentSessionRecordStoreOnce({
-      stateDirectory: getProfileUserDataPath(),
-      legacySessionTabIds: this.legacyStructuredSessionTabIds,
-      hostId: LOCAL_EXECUTION_HOST_ID,
-      logger: neverThrowingStructuredAgentSessionLogger(createStructuredAgentSessionLogger())
-    })
+    const { store } = await openAgentSessionRecordStoreOnce(
+      localAgentSessionRecordStoreLocation(this.legacyStructuredSessionTabIds)
+    )
     return store
   }
 
-  /** CI-line watches run on every host from startup, whether or not a chat was ever opened. */
-  startPullRequestWatches(): void {
-    void startPRWatchRuntime({
-      stateDirectory: getProfileUserDataPath(),
-      legacySessionTabIds: this.legacyStructuredSessionTabIds,
-      hostId: LOCAL_EXECUTION_HOST_ID,
-      logger: neverThrowingStructuredAgentSessionLogger(createStructuredAgentSessionLogger()),
-      ...prWatchWorkspaceSources({
-        resolveRuntimeFileTarget: (selector) => this.resolveRuntimeFileTarget(selector),
-        store: () => this.requireStore()
-      })
-    })
+  /** CI-line watches run on every host once it serves (`admit`), whether or not a chat was ever opened. */
+  startPullRequestWatches(options: { admit?: boolean } = {}): void {
+    void startPRWatchRuntime(
+      {
+        stateDirectory: getProfileUserDataPath(),
+        legacySessionTabIds: this.legacyStructuredSessionTabIds,
+        hostId: LOCAL_EXECUTION_HOST_ID,
+        logger: neverThrowingStructuredAgentSessionLogger(createStructuredAgentSessionLogger()),
+        ...prWatchWorkspaceSources({
+          resolveRuntimeFileTarget: (selector) => this.resolveRuntimeFileTarget(selector),
+          store: () => this.requireStore()
+        })
+      },
+      options
+    )
   }
 
   /** Defer host creation until profile paths are final and chat is used; reuse an admission-opened record store. */
@@ -295,8 +295,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       ...(this.structuredAgentStatusSinkFn ? { statusSink: this.structuredAgentStatusSinkFn } : {}),
       conversationNaming: nameChat,
       onSessionTabHidden: (sessionId) => this.onStructuredSessionTabHidden(sessionId),
-      queuedAgentMessageOwed: (sessionId, from, peek) =>
-        this.structuredChatMailOwed(sessionId, from, peek),
+      queuedAgentMessageOwed: (sessionId, from) => this.structuredChatMailOwed(sessionId, from),
       assertNoTerminalWriter: (record) => this.assertStructuredChatAcquireAdmissible(record),
       attentionDelivery: createStructuredAttentionMobileDelivery({
         readNotificationSettings: () => this.requireStore().getSettings().notifications,
@@ -318,7 +317,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       hasOpenDispatch: (record) =>
         structuredWorkerOwesWork(this.getOrchestrationDbIfAvailable?.() ?? null, record)
     })
-    // Re-arms watches a chat-runtime teardown stopped; a no-op while they run.
+    // Starts watches not yet running once the host has served: a failed first start or a teardown retries here.
     this.startPullRequestWatches()
   }
 }

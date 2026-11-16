@@ -100,6 +100,9 @@ fingerprint Orca did not give you. New capabilities or changed commands print a 
 
 - `engines.orca` must cover the newest `Since` you use (`references/manifest.md`); components,
   build-less entries and leaving out `publisher` need `>=1.4.246`. Ids starting `orca-` are reserved.
+- `plugin validate` also checks each literal `orca.host.call('name')`: an unknown or proposed
+  method fails (warns when the plugin feature-detects with `orca.host.has`); one newer than `engines.orca` or
+  wrong for the surface warns. The plugin directory runs it on the latest Orca release.
 - `update(atom, fn)` takes an updater only; `set(atom, value)` stores a value. Both throw while
   rendering. Components panels have no hooks and no DOM: state lives in atoms.
 - Keyed atoms (`atom('draft', '')`) survive a hot reload; unkeyed ones and module variables reset.

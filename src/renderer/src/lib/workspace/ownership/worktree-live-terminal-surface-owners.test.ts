@@ -1,6 +1,6 @@
 import '../../../../../shared/layout-owner-switch'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeTerminalSummary } from '../../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalSummary } from '../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { indexLiveTerminalSurfaceOwners } from './worktree-live-terminal-surface-owners'
 
 const WORKTREE_ID = 'repo::/worktree'

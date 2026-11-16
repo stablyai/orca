@@ -1,4 +1,4 @@
-import type { RuntimeTerminalSend } from '../../../../../../shared/runtime-terminal-send-contract'
+import type { RuntimeTerminalSend } from '../../../../../../shared/terminal/runtime/runtime-terminal-send-contract'
 import {
   sanitizeBracketedPasteText as sanitizeTerminalPasteText,
   BRACKETED_PASTE_START as BRACKETED_PASTE_BEGIN,

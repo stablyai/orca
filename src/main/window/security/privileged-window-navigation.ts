@@ -1,5 +1,5 @@
 import { shell, type WebContents } from 'electron'
-import { normalizeExternalBrowserUrl } from '../../../shared/browser-url'
+import { normalizeExternalBrowserUrl } from '../../../shared/browser/navigation/browser-url'
 import { isRendererDocumentNavigation } from './renderer-document-navigation'
 
 /** Keep remote documents from inheriting an Orca window's privileged preload. */

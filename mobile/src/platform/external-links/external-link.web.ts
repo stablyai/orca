@@ -1,4 +1,4 @@
-import { readBridgeExternalLinkUrl } from '../../mobile-web-shell/bridge/bridge-caps'
+import { readBridgeExternalLinkUrl } from '../../mobile-web-shell/bridge/protocol/bridge-caps'
 
 // Use shell linking because RN Web window.open reports success even though both native WebViews refuse new windows.
 // Publish outside React for plain-function callers; missing publication/invalid URLs log refusal without throwing from tap handlers.
@@ -8,6 +8,11 @@ let post: ExternalLinkOpener = () => false
 
 export function publishExternalLinkOpener(opener: ExternalLinkOpener): void {
   post = opener
+}
+
+/** False for a URL the shell would refuse, such as one past the bridge's length limit. */
+export function canOpenExternalLink(url: string): boolean {
+  return readBridgeExternalLinkUrl(url) !== null
 }
 
 export function openExternalLink(url: string): void {

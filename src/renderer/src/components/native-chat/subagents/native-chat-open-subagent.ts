@@ -41,6 +41,20 @@ export function openNativeChatSubagent(paneKey: string, agentId: string | null):
   publish()
 }
 
+/** A closed or replaced chat tab takes its panes' open subagents with it. */
+export function retireNativeChatSubagentViews(tabId: string): void {
+  let retired = false
+  for (const paneKey of openByPane.keys()) {
+    if (paneKey.startsWith(`${tabId}:`)) {
+      openByPane.delete(paneKey)
+      retired = true
+    }
+  }
+  if (retired) {
+    publish()
+  }
+}
+
 export function noteNativeChatSubagentParent(
   paneKey: string,
   agentId: string,

@@ -2,7 +2,7 @@ import type {
   AgentChildWorkEvidence,
   AgentChildWorkEvidenceHandle
 } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
-import { isSettledBackgroundTaskState } from '../../../shared/native-chat/input/native-chat-background-task-row'
+import { isSettledBackgroundTaskState } from '../../../shared/native-chat/input/task-lists/native-chat-background-task-row'
 import { isBackgroundTaskBlock } from '../../../shared/native-chat/native-chat-types'
 import { AGENT_CHILD_WORK_ID_MAX_LENGTH } from '../../../shared/agent-status/child-work/agent-status-child-work-value-guards'
 import type { ProviderTimelineEvent } from '../../native-chat/agent-session-timeline/provider-timeline-event'

@@ -13,7 +13,7 @@ type WorkspaceActivityMaps = {
   ptyIdsByTabId: Record<string, string[]>
   browserTabsByWorktree: Record<string, { id: string }[]>
   unifiedTabsByWorktree: Record<string, Tab[]>
-  agentStatusByPaneKey: Record<string, { structuredHostOwned?: true }>
+  agentStatusByPaneKey: ReadonlyMap<string, { structuredHostOwned?: true }>
   structuredChatSleptAtByPaneKey: StructuredChatSleptAtByPaneKey
 }
 
@@ -35,7 +35,7 @@ export function hasSleepableWorkspaceActivity(
     (activity.unifiedTabsByWorktree[worktreeId] ?? []).some(
       (tab) =>
         isStructuredTab(tab) &&
-        (activity.agentStatusByPaneKey[structuredAgentSessionPaneKey(tab.id, tab.entityId)]
+        (activity.agentStatusByPaneKey.get(structuredAgentSessionPaneKey(tab.id, tab.entityId))
           ?.structuredHostOwned === true ||
           activity.structuredChatSleptAtByPaneKey[
             structuredAgentSessionPaneKey(tab.id, tab.entityId)

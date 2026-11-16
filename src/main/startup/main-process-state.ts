@@ -1,5 +1,5 @@
 import type { BackendSupervisor } from '../backend-desktop/backend-supervisor'
-import type { AutomationUsageClient } from '../../shared/backend-service-contract'
+import type { AutomationUsageClient } from '../../shared/backend/backend-service-contract'
 import { type BrowserWindow, type Tray, app } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
 import type { StatsCollector } from '../stats/collector'
@@ -86,6 +86,7 @@ export const mainProcessState = {
   /** User quit bypasses running-process confirmation during close. */
   isQuitting: false,
   store: null as Store | null,
+  profileShutdownCheckpoint: null as Promise<void> | null,
   profileStateStartup: createInitialProfileStateStartup(),
   profileStateAdmission: createInitialProfileStateAdmission(),
   stats: null as StatsCollector | null,

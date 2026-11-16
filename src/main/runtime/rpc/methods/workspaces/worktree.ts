@@ -14,7 +14,7 @@ import { createWorktreeWithStartupAgent } from '../../../../agent-launch/startup
 import { defineMethod } from '../../core'
 import { buildManagedWorktreeCreateArgs, worktreeCreateRepoSelector } from './worktree-create-args'
 import { resolvePairedCallerHostId } from '../pairing/paired-caller-host-id'
-import { resolveRuntimeNavigationTarget } from '../../../../../shared/runtime-navigation'
+import { resolveRuntimeNavigationTarget } from '../../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import { resolveRpcWorkspaceCreatorProvenance } from '../../callers/workspace-creator-context'
 import {
   WorktreeCreate,
