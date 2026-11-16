@@ -2439,7 +2439,8 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
   const route = `${request.method} ${action ?? ''}${grantId ? ' :grant' : ''}`
   const view = async (r = row) => (await workspaceViews(db, caller, [r], clock(), githubActingOptions(env)))[0]
   if (route === 'GET ') {
-    return json({ workspace: await view() })
+    // TEAM-SHARING hold: the capability rides on the single-workspace answer too (panels and link opens read it).
+    return json({ workspace: await view(), teamSharing: teamSharingEnabled() })
   }
   if (route === 'GET read-snapshot') {
     try {

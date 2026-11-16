@@ -56,6 +56,7 @@ describe('TEAM_SHARING held (the default)', () => {
     // The owner sees it as private (what access follows); the stored value is kept for when sharing ships.
     const own = await t.h.call('GET', `/v1/team/workspaces/${t.id}`, { bearer: await t.token('alice') })
     expect(own.body.workspace).toMatchObject({ visibility: 'private', access: 'owner' })
+    expect(own.body.teamSharing).toBe(false)
     expect(t.h.raw.prepare('SELECT visibility FROM sandboxes WHERE id = ?').get(t.id)).toEqual({ visibility: 'team' })
     // An admin keeps today's management view (scope=all metadata), not the teammate view.
     const admin = await t.token('carol', 'admin')
