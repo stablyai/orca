@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { getHeapStatistics } from 'node:v8'
+import { getHeapSpaceStatistics, getHeapStatistics } from 'node:v8'
 import type { Worker } from 'node:worker_threads'
 import { crashReporter } from 'electron'
 import type { CrashReportBreadcrumbData } from '../../shared/crash-reporting/crash-reporting'
@@ -102,6 +102,7 @@ async function sampleHeaps(live: Set<LiveWorker>): Promise<number> {
     const data: CrashReportBreadcrumbData = {
       totalHeapMB: Math.round(total / MB),
       mainHeapMB: Math.round(mainHeap / MB),
+      ...mainHeapSpaces(),
       workers: heaps.length
     }
     heaps.slice(0, REPORTED_WORKERS).forEach(({ entry, heap }, index) => {
@@ -129,10 +130,12 @@ function annotateCrashReport(
   heaps: readonly WorkerHeap[],
   ledger: ReadonlyMap<number, WorkerSendLedgerEntry>
 ): void {
+  const spaces = mainHeapSpaces()
   const annotations: [string, string][] = [
     [
       'orca-isolate-heap',
-      `main=${Math.round(mainHeap / MB)}MB total=${Math.round(total / MB)}MB ` +
+      `main=${Math.round(mainHeap / MB)}MB old=${spaces.mainOldMB}MB ` +
+        `large=${spaces.mainLargeObjectMB}MB total=${Math.round(total / MB)}MB ` +
         `workers=${heaps.length} at=${new Date().toISOString()}`
     ]
   ]
@@ -154,6 +157,14 @@ function annotateCrashReport(
   } catch {
     // Crash reporting may be off; diagnostics only.
   }
+}
+
+/** Large-object growth means retained big strings or arrays (payloads); old space, many objects. */
+function mainHeapSpaces(): { mainOldMB: number; mainLargeObjectMB: number } {
+  const spaces = getHeapSpaceStatistics()
+  const used = (name: string): number =>
+    Math.round((spaces.find((space) => space.space_name === name)?.space_used_size ?? 0) / MB)
+  return { mainOldMB: used('old_space'), mainLargeObjectMB: used('large_object_space') }
 }
 
 function workerAnnotation(sample: WorkerHeap, slot: WorkerSendLedgerEntry | undefined): string {
