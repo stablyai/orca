@@ -23,17 +23,8 @@ const DESKTOP_SUITE_PREFIXES = [
   'src/packages/process-host/',
   'src/main/agent-launch/',
   'src/main/runtime/rpc/',
-  'src/main/runtime/agent-session/agent-session-',
   'src/main/runtime/agent-session/ownership/agent-session-',
   'src/main/runtime/agent-session/records/agent-session-',
-  'src/main/runtime/agent-session/agent-session-account-',
-  'src/main/runtime/agent-session/agent-session-acquisition-',
-  'src/main/runtime/agent-session/agent-session-conversation-',
-  'src/main/runtime/agent-session/agent-session-launch-',
-  'src/main/runtime/agent-session/agent-session-operation-',
-  'src/main/runtime/agent-session/agent-session-rewind-',
-  'src/main/runtime/agent-session/agent-session-runtime-',
-  'src/main/runtime/agent-session/agent-session-unsaved-',
   'src/main/native-chat/agent-session-wire/'
 ]
 

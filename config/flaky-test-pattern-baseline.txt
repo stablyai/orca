@@ -388,6 +388,7 @@
 1 test-no-wall-clock:src/main/rate-limits/service/service-cursor-usage.test.ts
 1 test-no-wall-clock:src/main/rate-limits/service/service-minimax-usage.test.ts
 3 test-no-wall-clock:src/main/rate-limits/service/service-zcode-usage.test.ts
+1 test-no-wall-clock:src/main/runtime/agent-session/installation/structured-agent-session-held-signal.test.ts
 1 test-no-wall-clock:src/main/runtime/mobile-cloud-relay/testing/mobile-relay-e2ee.integration.test.ts
 2 test-no-wall-clock:src/main/runtime/orchestration/mailbox/terminal-pointer/orchestration-codex-real-pty.integration.test.ts
 1 test-no-wall-clock:src/main/runtime/push/push-registration-rpc.test.ts
