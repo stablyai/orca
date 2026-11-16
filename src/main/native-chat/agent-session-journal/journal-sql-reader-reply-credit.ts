@@ -4,9 +4,14 @@
  * caller has taken the reply. A reader waits while the replies main has not consumed would exceed
  * the budget, so a busy main faces at most the budget plus one reply, whatever the reads return.
  */
-export const JOURNAL_READER_REPLY_CREDIT_BYTES = 32 * 2 ** 20
-/** A leaked credit must never hang a reader: past this it posts anyway and says so. */
+export const JOURNAL_READER_REPLY_CREDIT_BYTES = 64 * 2 ** 20
+/**
+ * A leaked credit must never hang a reader. Main still releasing while room never comes is a leak
+ * or a starved large reply: post after this. Main releasing nothing is a stall: keep holding.
+ */
 export const JOURNAL_READER_REPLY_CREDIT_WAIT_MS = 10_000
+/** Main has released nothing for this long: it is hung, and the hang watchdog owns it. */
+export const JOURNAL_READER_REPLY_STALL_WAIT_MS = 60_000
 const WAIT_SLICE_MS = 100
 const READERS = 16
 /** 0 counts releases, waking any waiting reader; 1 is the total; 2 + index is one reader's share. */
@@ -71,7 +76,8 @@ export function takeJournalReaderReplyCredit(
   now: () => number = Date.now
 ): boolean {
   const counters = new Int32Array(grant.credit)
-  const deadline = now() + JOURNAL_READER_REPLY_CREDIT_WAIT_MS
+  const started = now()
+  const firstWake = Atomics.load(counters, WAKE)
   let granted = true
   while (true) {
     const woken = Atomics.load(counters, WAKE)
@@ -83,7 +89,12 @@ export function takeJournalReaderReplyCredit(
       }
       continue
     }
-    if (now() >= deadline) {
+    const waited = now() - started
+    const released = woken !== firstWake
+    if (
+      (released && waited >= JOURNAL_READER_REPLY_CREDIT_WAIT_MS) ||
+      waited >= JOURNAL_READER_REPLY_STALL_WAIT_MS
+    ) {
       granted = false
       Atomics.add(counters, TOTAL, bytes)
       break

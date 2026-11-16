@@ -123,11 +123,18 @@ export class ReaderSlot {
     private readonly replyCredit?: JournalReaderReplyCredit
   ) {
     this.grant = replyCredit?.claim()
-    this.worker = spawnWorkerThread(workerPath, {
-      name: 'orca-journal-sql-reader',
-      workerData: { filename, originalFilename, replyCredit: this.grant },
-      execArgv: []
-    })
+    try {
+      this.worker = spawnWorkerThread(workerPath, {
+        name: 'orca-journal-sql-reader',
+        workerData: { filename, originalFilename, replyCredit: this.grant },
+        execArgv: []
+      })
+    } catch (error) {
+      if (this.grant) {
+        replyCredit?.retire(this.grant.index)
+      }
+      throw error
+    }
     const startup = setTimeout(() => {
       this.fail(new Error('journal SQL reader did not open within 10000 ms'))
       void this.close()
