@@ -52,6 +52,7 @@ export type OpenCodeWslTextTaskDeps = {
   prepare?: (distro: string) => Promise<OpenCodeWslGuestRuntime>
   spawnAgent?: SpawnSourceControlAgent
   stop?: (child: SpawnedSourceControlAgentProcess) => Promise<void>
+  resolveGuestPaths?: typeof resolveWslGuestPaths
 }
 
 const PREPARATION_TIMEOUT_MS = 180_000
@@ -129,10 +130,11 @@ async function prepareOpenCodeWslTextTask(
 
 async function guestArgs(
   input: OpenCodeWslTextTask,
-  signal: AbortSignal
+  signal: AbortSignal,
+  deps: OpenCodeWslTextTaskDeps
 ): Promise<[string[], string[]]> {
   try {
-    const all = await resolveWslGuestPaths(
+    const all = await (deps.resolveGuestPaths ?? resolveWslGuestPaths)(
       input.distro,
       [...input.prefixArgs, ...input.runArgs],
       signal
@@ -155,7 +157,7 @@ export async function runOpenCodeWslTextTask(
   const runtime = await prepareOpenCodeWslTextTask(input.distro, signal, deps)
   signal.throwIfAborted()
   // Existing WSL launches translate Windows paths in every argument, e.g. `--file C:\x`.
-  const [prefixArgs, runArgs] = await guestArgs(input, signal)
+  const [prefixArgs, runArgs] = await guestArgs(input, signal, deps)
   if (input.shouldExecute?.() === false) {
     throw new OpenCodeTextTaskError('superseded')
   }

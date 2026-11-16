@@ -7,7 +7,7 @@ import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quo
 import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 import { runWslProcess } from '../execution/wsl-runner'
 
-const DRIVE_PATH = /^([A-Za-z]):[/\\](.*)$/s
+const DRIVE_PATH = /^([A-Za-z]):[/\\](.*)$/
 
 type DrivePath = { letter: string; tail: string }
 
@@ -49,7 +49,7 @@ export function wslGuestShellPaths(
     .map((letter) => {
       const name = `orca_drive_${letter}`
       return (
-        `${name}=$(wslpath -u '${letter.toUpperCase()}:\\') && case "$${name}" in /*) ;; *) false ;; esac || ` +
+        `${name}=$(wslpath -u '${letter.toUpperCase()}:\\' 2>/dev/null) && case "$${name}" in /*) ;; *) false ;; esac || ` +
         `{ echo "Orca could not find drive ${letter.toUpperCase()}: in this WSL distro" >&2; exit ${Math.trunc(failureExitCode)}; }; `
       )
     })

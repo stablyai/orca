@@ -32,7 +32,7 @@ const roots = new Map<string, string>()
 // Read since its last start, the default `/mnt/` too: one guest launch per start, not per probe.
 const readSinceStart = new Set<string>()
 const readAt = new Map<string, number>()
-const pending = new Set<string>()
+const pending = new Map<string, Promise<void>>()
 // Bumped on a stop, so a read still in flight then neither marks the restarted distro read.
 const stopCounts = new Map<string, number>()
 const changeListeners = new Set<() => void>()
@@ -62,6 +62,50 @@ function changed(): void {
   }
 }
 
+function startRead(distro: string, read: WslAutomountRootReader): Promise<void> {
+  const key = distroKey(distro)
+  const stopCount = stopCounts.get(key) ?? 0
+  const reading = read(distro)
+    .then((root) => {
+      // Unread (null) retries on the next probe; a stop mid-read leaves it for the restart.
+      if (!root || (stopCounts.get(key) ?? 0) !== stopCount) {
+        return
+      }
+      readSinceStart.add(key)
+      readAt.set(key, performance.now())
+      const previous = roots.get(key) ?? DEFAULT_WSL_AUTOMOUNT_ROOT
+      if (root === previous) {
+        return
+      }
+      if (root === DEFAULT_WSL_AUTOMOUNT_ROOT) {
+        roots.delete(key)
+      } else {
+        roots.set(key, root)
+      }
+      changed()
+    })
+    // Unreadable: links under it fall back to `/mnt/`.
+    .catch(() => {})
+    .finally(() => pending.delete(key))
+  pending.set(key, reading)
+  return reading
+}
+
+/**
+ * Reads `distro`'s root before its Git output is read back, when not yet read since its start.
+ * Only for a caller about to run Git there, so the distro is already running or being started.
+ */
+export function settleWslAutomountRoot(
+  distro: string,
+  read: WslAutomountRootReader = readWslAutomountRoot
+): Promise<void> | null {
+  const key = distroKey(distro)
+  if (readSinceStart.has(key)) {
+    return null
+  }
+  return pending.get(key) ?? startRead(distro, read)
+}
+
 /**
  * Follows the running-distro probes for the distros `wanted` names (the WSL projects' distros):
  * reads a root on a confirmed start, forgets it on a stop. Returns the unsubscribe.
@@ -82,30 +126,7 @@ export function followWslAutomountRoots(
       if (!wasWslDistroLastSeenRunningSettled(distro)) {
         continue
       }
-      pending.add(key)
-      const stopCount = stopCounts.get(key) ?? 0
-      void read(distro)
-        .then((root) => {
-          // Unread (null) retries on the next probe; a stop mid-read leaves it for the restart.
-          if (!root || (stopCounts.get(key) ?? 0) !== stopCount) {
-            return
-          }
-          readSinceStart.add(key)
-          readAt.set(key, performance.now())
-          const previous = roots.get(key) ?? DEFAULT_WSL_AUTOMOUNT_ROOT
-          if (root === previous) {
-            return
-          }
-          if (root === DEFAULT_WSL_AUTOMOUNT_ROOT) {
-            roots.delete(key)
-          } else {
-            roots.set(key, root)
-          }
-          changed()
-        })
-        // Unreadable: links under it fall back to `/mnt/`.
-        .catch(() => {})
-        .finally(() => pending.delete(key))
+      void startRead(distro, read)
     }
   })
   const stopStopped = onRunningWslDistrosStopped((stopped) => {

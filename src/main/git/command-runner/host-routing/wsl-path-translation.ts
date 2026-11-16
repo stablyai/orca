@@ -36,8 +36,12 @@ export function translateWslOutputPath(
   if (!distro || !linuxPath.startsWith('/')) {
     return linuxPath
   }
-  // A drive repo's own output names drives under its distro's automount root.
-  const drive = wsl ? null : wslDrivePathUnderRoots(linuxPath, [wslAutomountRootFor(distro)])
+  // A drive repo's own output names drives under its distro's automount root; drvfs letters are lowercase.
+  const root = wslAutomountRootFor(distro)
+  const drive =
+    wsl || !/^[a-z](?:\/|$)/.test(linuxPath.slice(root.length))
+      ? null
+      : wslDrivePathUnderRoots(linuxPath, [root])
   if (drive) {
     return drive
   }

@@ -6,7 +6,7 @@ import { buildWslExecArgs } from '../../../shared/shell/wsl/wsl-login-shell-comm
 import { removeHostTree } from '../../filesystem/host-tree-removal'
 import {
   guestUncPath,
-  resolveWslGuestPath,
+  resolveWslGuestPaths,
   wslGuestShellPaths
 } from '../../wsl/filesystem/wsl-guest-drive-path'
 import { resolveWslInteropSpawnCwd } from '../../wsl/execution/wsl-interop-spawn-directory'
@@ -55,16 +55,16 @@ function isWslMissingPathError(error: unknown): boolean {
   return error.exitCode === 1 && WSL_MISSING_PATH_STDERR.test(stderr)
 }
 
-/** The path as the filesystem that owns it spells it; a drive path asks its distro for the mount. */
-export async function toLocalWorktreeRuntimePath(
-  targetPath: string,
+/** Paths as the filesystem that owns them spells them; drive paths ask their distro for the mount. */
+export async function toLocalWorktreeRuntimePaths(
+  targetPaths: readonly string[],
   options: LocalWorktreeFilesystemOptions = {},
   signal?: AbortSignal
-): Promise<string> {
+): Promise<string[]> {
   const distro = options.wslDistro?.trim()
   return shouldUseWslFilesystem(options) && distro
-    ? resolveWslGuestPath(distro, targetPath, signal)
-    : targetPath
+    ? resolveWslGuestPaths(distro, targetPaths, signal)
+    : [...targetPaths]
 }
 
 // Exit 2 keeps an unreadable drive mount apart from coreutils' missing-path exit 1.
