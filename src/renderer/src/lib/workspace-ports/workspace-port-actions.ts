@@ -9,7 +9,9 @@ import { browserUrlForPort } from './workspace-port-urls'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
 import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../../shared/browser/runtime/browser-runtime-capabilities'
 import { RUNTIME_BROWSER_UNAVAILABLE_MESSAGE } from '../workspace/creation/surface-policy/client-creation-action-policy'
-import type { useAppStore } from '@/store/index'
+import { canOpenWorkspaceBrowserTabOnRuntime } from '@/lib/browser/workspace/workspace-browser-route-eligibility'
+import { openWorkspaceBrowserTab } from '@/lib/browser/workspace/workspace-browser-tab-open'
+import { useAppStore } from '@/store/index'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type {
   WorkspacePort,
@@ -77,6 +79,16 @@ export async function resolveWorkspacePortBrowserUrl(args: {
   }
 }
 
+// Why: servers without a browser engine (managed SSH, desktop-hosted pages) open links here; ports must too.
+function opensRuntimePortOnThisDesktop(worktreeId: string, environmentId: string): boolean {
+  const state = useAppStore.getState()
+  const capabilities = state.runtimeStatusByEnvironmentId?.get(environmentId)?.status?.capabilities
+  return (
+    !capabilities?.includes(BROWSER_SCREENCAST_RUNTIME_CAPABILITY) &&
+    canOpenWorkspaceBrowserTabOnRuntime(state, worktreeId, environmentId)
+  )
+}
+
 export async function openWorkspacePortInBrowser(args: {
   port: WorkspacePort
   activeWorktreeId?: string | null
@@ -113,6 +125,15 @@ export async function openWorkspacePortInBrowser(args: {
   activateAndRevealWorktree(worktreeId, { providesInitialSurface: true })
   if (args.runtimeTarget.kind === 'environment') {
     try {
+      if (opensRuntimePortOnThisDesktop(worktreeId, args.runtimeTarget.environmentId)) {
+        await openWorkspaceBrowserTab({
+          workspaceId: worktreeId,
+          url,
+          intent: { kind: 'url' },
+          expectedRuntimeEnvironmentId: args.runtimeTarget.environmentId
+        })
+        return { ok: true }
+      }
       await assertRuntimeEnvironmentCapability(
         args.runtimeTarget.environmentId,
         BROWSER_SCREENCAST_RUNTIME_CAPABILITY,
