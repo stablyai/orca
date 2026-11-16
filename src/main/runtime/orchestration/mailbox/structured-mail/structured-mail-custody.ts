@@ -248,6 +248,10 @@ export function settleStructuredMailAttempt(
       break
     }
     case 'unknown':
+      if (owed === 'unavailable') {
+        decision.outstanding = true
+        break
+      }
       retire(false)
       if (owed === 'stale') {
         db.markAsUndelivered([row.message_id])
