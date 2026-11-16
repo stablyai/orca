@@ -116,7 +116,7 @@ export function bindTerminalPaneStatusLifecycle(
  *  proof counts; never fall back to a foreground name, which a live unrecognized agent shares. */
 async function confirmShellAlone(ptyId: string, incarnationId?: string): Promise<boolean> {
   const provider = getProviderForPty(ptyId)
-  if ((await provider.confirmShellForeground?.(ptyId)) === true) {
+  if ((await provider.confirmShellForeground?.(ptyId, { noLiveDescendants: true })) === true) {
     return true
   }
   if (process.platform !== 'win32') {

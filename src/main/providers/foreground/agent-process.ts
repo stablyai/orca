@@ -46,6 +46,8 @@ type ShellForegroundConfirmationOptions = {
     | null
     | Promise<ReadonlySet<number> | null>
   readWindowsProcessIdentityTable?: () => Promise<WindowsProcessIdentityRow[]>
+  /** Exit proof: a running background job (Ctrl-Z, then bg) also keeps the agent alive. */
+  noLiveDescendants?: boolean
 }
 
 function commandExecutable(command: string): string {
@@ -102,6 +104,11 @@ export async function confirmShellForegroundProcess(
       return false
     }
     const confirmed = foregroundShell?.stat.includes('+') === true
+    if (confirmed && foregroundShell && options.noLiveDescendants) {
+      return !collectDescendantsFromIndex(index, foregroundShell.pid).some(
+        (row) => !row.stat.includes('Z')
+      )
+    }
     return confirmed
   } catch {
     return false

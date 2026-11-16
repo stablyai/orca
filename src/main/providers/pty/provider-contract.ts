@@ -198,8 +198,12 @@ export type IPtyProvider = {
   getForegroundProcess(id: string): Promise<string | null>
   /** Strong process evidence captured after the caller's command boundary. */
   confirmForegroundProcess?: (id: string) => Promise<string | null>
-  /** Fresh execution-host proof that the spawned shell owns the PTY foreground. */
-  confirmShellForeground?: (id: string) => Promise<boolean>
+  /** Fresh execution-host proof that the spawned shell owns the PTY foreground. `noLiveDescendants`
+   *  (exit proof) also refuses a running background job where the host can see one. */
+  confirmShellForeground?: (
+    id: string,
+    options?: { noLiveDescendants?: boolean }
+  ) => Promise<boolean>
   /** Persist main's live launch where the PTY outlives main; only the daemon keeps one. */
   setLaunchNote?: (id: string, change: DaemonLaunchNoteChange) => void
   serialize(ids: string[]): Promise<string>
