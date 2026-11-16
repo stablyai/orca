@@ -105,7 +105,10 @@ export function createSupervisedProbeRig(): SupervisedProbeRig {
     },
     bundleOwner: async (source, resolveDir) => {
       const outfile = join(dir, 'owner.cjs')
-      const environmentModule = resolve(__dirname, '../../../../shared/app-environment.ts')
+      const environmentModule = resolve(
+        __dirname,
+        '../../../../shared/app-lifecycle/app-environment.ts'
+      )
       const startup = `
 import { setAppEnvironment } from ${JSON.stringify(environmentModule)}
 setAppEnvironment({

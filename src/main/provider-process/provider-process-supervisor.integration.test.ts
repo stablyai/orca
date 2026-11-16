@@ -36,7 +36,7 @@ vi.mock('node:fs/promises', async (importOriginal) => {
     }
   }
 })
-vi.mock('../../shared/app-environment', () => ({
+vi.mock('../../shared/app-lifecycle/app-environment', () => ({
   getAppEnvironment: () => ({
     getPath: () => state.root,
     getAppPath: () => process.cwd(),

@@ -89,7 +89,7 @@ export const ProjectSectionCatalogSchema = z.object({
   setups: salvagingArray(setupSchema),
   // Until the phone has read the shared UI value (projectOrderBy, ui.get), it orders by this.
   projectOrderBy: z.enum(PROJECT_ORDER_BY_ARMS).catch('manual'),
-  // Every host's project groups, for a list built from the sidebar feed; older desktops omit it.
+  // Every host's project groups, which the phone's list nests under; older desktops omit it.
   projectGroups: salvagedOptional('projectGroups', salvagingArray(ProjectGroupSchema))
 })
 

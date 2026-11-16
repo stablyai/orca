@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { getAppEnvironment } from '../../shared/app-environment'
+import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { resolveProviderChildEnv, type ProviderProcessLaunch } from './provider-process-launch'
 import { PROVIDER_SPAWN_FAILURE_MARKER } from './provider-spawn-failure-report'
 

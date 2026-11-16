@@ -95,6 +95,7 @@ async function gitExecFileAsyncUnlocked(
         )
         const captureOptions = {
           cwd: command.cwd,
+          ownedPosixGroup: process.platform !== 'win32' && !command.wsl,
           encoding: (options.encoding ?? 'utf-8') as BufferEncoding,
           maxBuffer: options.maxBuffer,
           timeout: timeoutMs,
@@ -263,6 +264,7 @@ async function gitExecFileAsyncBufferInSpan(
       })
       const { stdout } = await execFileCapture(resolved.binary, resolved.args, {
         cwd: resolved.cwd,
+        ownedPosixGroup: process.platform !== 'win32' && !resolved.wsl,
         encoding: 'buffer',
         signal: options.signal,
         stdin: options.stdin,

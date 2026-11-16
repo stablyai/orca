@@ -18,7 +18,7 @@ import {
 import {
   findBundledWebClientRoot,
   WEB_CLIENT_INDEX_FILENAME
-} from '../../../../shared/bundled-web-client-root'
+} from '../../../../shared/web-client/bundled-web-client-root'
 import { orcadServeArgs } from '../../../../shared/remote-runtime/serve-supervisor/orcad-serve-argv'
 import { orcadManagedStopRequestPath } from '../../host-lifecycle/managed-stop/orcad-managed-stop-request'
 import { readWorktreeRemovalRecords } from '../../../workspaces/removal/worktree-removal-records'

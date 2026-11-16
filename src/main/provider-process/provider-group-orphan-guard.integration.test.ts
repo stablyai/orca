@@ -23,7 +23,7 @@ import {
 } from './provider-ownership-journal'
 
 const state = vi.hoisted(() => ({ root: '' }))
-vi.mock('../../shared/app-environment', () => ({
+vi.mock('../../shared/app-lifecycle/app-environment', () => ({
   getAppEnvironment: () => ({
     getPath: () => state.root,
     getAppPath: () => process.cwd(),

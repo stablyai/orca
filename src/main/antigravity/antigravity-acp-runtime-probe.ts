@@ -114,7 +114,8 @@ async function initializeFromDisposableFolder(
     )
     outcome.failed = true
   }
-  await rm(folder, { recursive: true, force: true })
+  // Windows single-file runtimes can briefly retain DLLs they unpacked into this folder.
+  await rm(folder, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
   return outcome
 }
 

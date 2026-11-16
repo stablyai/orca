@@ -124,6 +124,7 @@ export class RepoUpdatePersistenceOperations {
       externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
       hiddenAt?: Repo['hiddenAt'] | null
       ghAccount?: GhAccountBinding | null
+      browserProfileId?: string | null
     }
   ): Repo | null {
     const repo = findRepoRowForHostScopedWrite(
@@ -194,6 +195,10 @@ export class RepoUpdatePersistenceOperations {
     ) {
       delete repo.issueSourcePreference
       delete sanitizedUpdates.issueSourcePreference
+    }
+    if ('browserProfileId' in sanitizedUpdates && sanitizedUpdates.browserProfileId == null) {
+      delete repo.browserProfileId
+      delete sanitizedUpdates.browserProfileId
     }
     if ('ghAccount' in sanitizedUpdates && sanitizedUpdates.ghAccount == null) {
       delete repo.ghAccount

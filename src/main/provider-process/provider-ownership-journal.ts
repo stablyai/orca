@@ -5,7 +5,7 @@ import { hostname } from 'node:os'
 import { join, resolve } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
 import { z } from 'zod'
-import { getAppEnvironment } from '../../shared/app-environment'
+import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { profileStateAccessBootIdentity } from '../persistence/profile-state/access/profile-state-access-identity'
 import { readPosixProcessRow, providerOwnerPidAbsent } from './provider-process-row-read'
 import {

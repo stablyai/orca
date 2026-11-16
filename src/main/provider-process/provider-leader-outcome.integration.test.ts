@@ -18,7 +18,7 @@ import {
 import type { CodexStructuredSessionEvent } from '../codex/structured/session-lifecycle/codex-structured-session-state'
 
 const state = vi.hoisted(() => ({ root: '' }))
-vi.mock('../../shared/app-environment', () => ({
+vi.mock('../../shared/app-lifecycle/app-environment', () => ({
   getAppEnvironment: () => ({
     getPath: () => state.root,
     getAppPath: () => process.cwd(),

@@ -1,4 +1,6 @@
 import { useLayoutEffect, useMemo, useRef } from 'react'
+import { setBoundedScopeCacheEntry } from '../../../../../../src/shared/native-chat/native-chat-scope-cache'
+import { MAX_CACHED_TRANSCRIPTS } from '../persistence/mobile-native-chat-transcript-cache'
 import {
   distinctMobileNativeChatRunIdentities,
   sameMobileNativeChatRun,
@@ -201,19 +203,22 @@ export function useMobileNativeChatRowKeys(
   runOwners: ReadonlyMap<string, string>
   runPlacements: ReadonlyMap<string, string>
 } {
-  // Commit snapshots only: discarded React renders must not become the next baseline.
-  const committed = useRef<
-    | (Assigned &
+  // Commit snapshots only: discarded React renders must not become the next baseline. Kept per chat, so a
+  // return keeps the keys its disclosures and reading place were saved under.
+  const committed = useRef(
+    new Map<
+      string,
+      Assigned &
         MobileNativeChatRunHistory & {
           scope: string
           displayed: Assigned & { distinct: boolean }
           serial: number
           runPlacements: ReadonlyMap<string, string>
-        })
-    | null
-  >(null)
+        }
+    >()
+  )
   const assigned = useMemo(() => {
-    const previous = committed.current?.scope === scope ? committed.current : null
+    const previous = committed.current.get(scope) ?? null
     const sourceOf = prepareMobileNativeChatRowSources(messages)
     const prepareSources = () => rows.map(sourceOf)
     const physical = assignMobileNativeChatRowKeys(
@@ -265,7 +270,7 @@ export function useMobileNativeChatRowKeys(
     }
   }, [rows, messages, scope, presentation])
   useLayoutEffect(() => {
-    committed.current = assigned
+    setBoundedScopeCacheEntry(committed.current, assigned.scope, assigned, MAX_CACHED_TRANSCRIPTS)
   }, [assigned])
   return useMemo(() => {
     let idByKey: Map<string, string> | undefined

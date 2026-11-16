@@ -15,7 +15,7 @@ import type { ProviderProcessRow } from './provider-process-row-read'
 import * as descendants from '../pty/process-retirement/pty-descendant-termination'
 
 const state = vi.hoisted(() => ({ root: '' }))
-vi.mock('../../shared/app-environment', () => ({
+vi.mock('../../shared/app-lifecycle/app-environment', () => ({
   getAppEnvironment: () => ({
     getPath: () => state.root,
     getAppPath: () => process.cwd(),
