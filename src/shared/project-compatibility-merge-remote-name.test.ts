@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type { Project } from './project-types'
-import type { Repo } from './repo-types'
-import { mergePreviousProjectMetadata } from './project-compatibility-merge'
+import type { Project } from './project/project-types'
+import type { Repo } from './repository/repo-types'
+import { mergePreviousProjectMetadata } from './project/catalog/project-compatibility-merge'
 
 function repo(fields: Pick<Repo, 'id' | 'path'> & Partial<Repo>): Repo {
   return { displayName: 'x', badgeColor: '#888888', addedAt: 1, ...fields }

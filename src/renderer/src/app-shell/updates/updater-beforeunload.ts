@@ -3,8 +3,8 @@ import {
   ORCA_APP_RESTART_STARTED_EVENT,
   ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT,
   ORCA_UPDATER_QUIT_AND_INSTALL_STARTED_EVENT
-} from '../../../../shared/updater-renderer-events'
-import { ORCA_RENDERER_SHUTDOWN_CHECKPOINT_ABORTED_EVENT } from '../../../../shared/renderer-shutdown-events'
+} from '../../../../shared/updater/updater-renderer-events'
+import { ORCA_RENDERER_SHUTDOWN_CHECKPOINT_ABORTED_EVENT } from '../../../../shared/app-lifecycle/shutdown/renderer-shutdown-events'
 
 let intentionalAppRestartInProgress = false
 

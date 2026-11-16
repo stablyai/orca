@@ -1,8 +1,8 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { Repo } from '../../../shared/repo-types'
-import { isFolderRepo } from '../../../shared/repo-kind'
+import type { Repo } from '../../../shared/repository/repo-types'
+import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import { getRepoIdFromWorktreeId, splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import {
   humanizeBranchSlug,
@@ -24,10 +24,10 @@ import {
 } from '../../git/worktrees/checkout/branch-rename'
 import {
   generateBranchNameFromContext,
-  resolveTextGenerationParams
+  resolveCommitMessageSettings as resolveTextGenerationParams
 } from '../../text-generation/commit-message-text-generation'
-import type { CommitMessageAgentEnvironmentResolvers } from '../../text-generation/commit-message-agent-environment'
-import type { AgentGenerationFailureOutput } from '../../text-generation/agent-failure-output'
+import type { CommitMessageAgentEnvironmentResolvers } from '../../text-generation/execution/commit-message-agent-environment'
+import type { AgentGenerationFailureOutput } from '../../text-generation/failures/agent-failure-output'
 import { resolveGenerationTarget } from './first-work-generation-target'
 import { runFolderWorkspaceTitleAutoRename } from './first-work-workspace-title-rename'
 import { isWslMoveRepoBlocked } from '../../persistence/moving-wsl-projects/orchestration/wsl-move-background-backoff'

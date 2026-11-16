@@ -2,7 +2,7 @@ import { defineMethod } from '../../core'
 import { getRemoteServerUpdaterSnapshot } from '../../../hosts/management/remote-server-updater'
 import { getPublishedHostDescriptor } from '../../../hosts/platform-probe/host-descriptor'
 import { getRuntimeBuildCommit } from '../../../hosts/runtime-build-commit'
-import { StatusGetParams } from '../../../../../shared/rpc-contract/status-params'
+import { StatusGetParams } from '../../../../../shared/rpc-contract/host-management/status-params'
 import { readHostMachineWithin } from '../../../hosts/platform-probe/runtime-host-machine'
 import { MACHINE_NAME_PUBLISH_WAIT_MS } from '../../../hosts/platform-probe/runtime-machine-name'
 

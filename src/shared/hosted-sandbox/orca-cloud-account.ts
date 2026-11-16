@@ -1,4 +1,4 @@
-import type { EphemeralVmRuntimeRecord } from '../ephemeral-vm-runtimes'
+import type { EphemeralVmRuntimeRecord } from '../remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 
 /**
  * The control-plane account a sandbox token acts for, in sandbox-control's own form

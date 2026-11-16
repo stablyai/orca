@@ -3,7 +3,7 @@ import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent
 import {
   agentJournalTurnBody,
   readAgentJournalTurn
-} from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+} from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import {
   closeProviderTimelineRigs,
   SESSION
@@ -118,7 +118,7 @@ describe('ACP compaction settlement', () => {
         sessionId: SESSION,
         fence: 1,
         turnId: command.turnId,
-        resolveLiveTurnId: () => command.turnId
+        resolveLiveTurnId: async () => command.turnId
       })
     ).resolves.toEqual({ cancelled: true })
     const { turn, inside } = await ended(rig, command)

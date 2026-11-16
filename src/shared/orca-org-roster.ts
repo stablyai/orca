@@ -1,5 +1,5 @@
 // A team's roster as auth answers it (GET /v1/desktop/orgs/:orgId/members).
-import type { OrcaOrgMember, OrcaOrgPendingInvite, OrcaOrgRole } from './orca-profiles'
+import type { OrcaOrgMember, OrcaOrgPendingInvite, OrcaOrgRole } from './orca-profiles/orca-profiles'
 
 export type OrcaOrgMembersRoster = {
   members: OrcaOrgMember[]

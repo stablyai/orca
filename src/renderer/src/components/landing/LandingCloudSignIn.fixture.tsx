@@ -1,8 +1,8 @@
 // V3-08: Landing signed out of Orca. Cloud builds with projects show the "Cloud workspaces · Sign in"
 // card; without projects, and in local builds, Landing is unchanged. Signed in, Landing is
 // upstream's, and Add project opens the sidebar's Add project menu.
-import type { Repo } from '../../../../shared/repo-types'
-import type { OrcaProfileAuthStatus } from '../../../../shared/orca-profiles'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import type { OrcaProfileAuthStatus } from '../../../../shared/orca-profiles/orca-profiles'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { resetCloudWorkspacesAvailabilityForFixtures } from '../cloud-workspaces/use-cloud-workspaces'
 import { makeRepo } from '../worktree-jump/worktree-jump-palette-test-fixtures'

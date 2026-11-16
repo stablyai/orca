@@ -3,7 +3,7 @@
 // No public route: the desktop is reachable only through this computer's localhost, and each
 // WebSocket to it needs a single-use ticket that main hands the page (remote-desktop-guest.ts).
 import { cloudPairedSandboxesByEnvironment } from '../cloud-workspaces/cloud-paired-environment-ids'
-import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'
+import { listEphemeralVmRuntimes } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
 import {
   cloudRemoteDesktopUrl,
   type CloudRemoteDesktopFailureCode,

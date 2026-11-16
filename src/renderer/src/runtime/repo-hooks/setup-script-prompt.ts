@@ -1,12 +1,12 @@
 import { formatRunActionsForTrust } from '../../../../shared/orca-yaml-run-actions'
 import { getDefaultRepoHookSettings } from '../../../../shared/constants'
-import { resolveHookCommandSourcePolicy } from '../../../../shared/hook-command-source-policy'
+import { resolveHookCommandSourcePolicy } from '../../../../shared/workspace-setup/hooks/hook-command-source-policy'
 import type {
   SetupScriptImportCandidate,
   UbuntuNote
 } from '../../../../shared/workspace-setup/setup-script-imports'
-import type { RepoHookSettings } from '../../../../shared/orca-yaml-hook-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { RepoHookSettings } from '../../../../shared/workspace-setup/orca-yaml-hook-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { HookCheckResult } from '@/runtime/repo-hooks/runtime-hooks-client'
 import { isRuntimeScopeForbiddenError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { hasEffectiveSetupCommand } from './setup-script-status'

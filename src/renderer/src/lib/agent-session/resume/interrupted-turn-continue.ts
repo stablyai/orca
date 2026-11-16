@@ -107,7 +107,7 @@ export function armInterruptedTurnsForHostRestart(workspaceId: string, now = Dat
     }
   }
   const armed: ArmedTurn[] = []
-  for (const entry of Object.values<StatusEntry | undefined>(state.agentStatusByPaneKey ?? {})) {
+  for (const entry of state.agentStatusByPaneKey?.values() ?? []) {
     const agent = entry?.agentType
     if (
       !entry ||
@@ -158,7 +158,7 @@ export function disarmInterruptedTurns(workspaceId: string): void {
 }
 
 function statusSince(paneKey: string, armedAt: number): StatusEntry | null {
-  const entry: StatusEntry | undefined = useAppStore.getState().agentStatusByPaneKey[paneKey]
+  const entry: StatusEntry | undefined = useAppStore.getState().agentStatusByPaneKey.get(paneKey)
   return entry && entry.updatedAt > armedAt ? entry : null
 }
 

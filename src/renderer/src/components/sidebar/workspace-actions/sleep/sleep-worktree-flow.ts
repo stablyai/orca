@@ -9,7 +9,7 @@ import { toastPairedSleepRefused } from '@/lib/orca-cloud/paired-sleep-refused-t
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import type { WorkspaceSleepOutcome } from '../../../../../../shared/workspace-sleep'
+import type { WorkspaceSleepOutcome } from '../../../../../../shared/workspace/lifecycle/workspace-sleep'
 import { workspaceSleepTarget } from './workspace-sleep-target'
 import { dismissOrcaCloudRestartWarning } from '@/lib/orca-cloud-session-toasts'
 import { notePredictiveWakeSlept } from '@/lib/orca-cloud/cloud-predictive-wake'

@@ -1,8 +1,8 @@
 // Private build only: the API operations behind `orca cloud …` (and `worktree create --on cloud`):
 // selectors, create, message polling and flag readers. No Orca runtime involved.
 import { homedir } from 'node:os'
-import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
-import { RuntimeClientError } from '../runtime/types'
+import { getOptionalStringFlag, getRequiredStringFlag } from '../arguments/flags'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { CloudApiClient, type CloudFetch } from './cloud-api-client'
 import {
   nodeCloudCredentialFs,

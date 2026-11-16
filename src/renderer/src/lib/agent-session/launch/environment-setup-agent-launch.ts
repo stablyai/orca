@@ -4,18 +4,18 @@ import { translate } from '@/i18n/i18n'
 import { resolveDefaultAgentForWorktree } from '@/lib/agent-session/launch/shortcuts/agent-tab-shortcuts'
 import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
 
-import { createNonSecureContextUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import { captureAgentTabLaunchContext } from '@/components/agent-tab-launch-context'
 import { activateAndRevealWorktreeWithOutcome } from '@/lib/workspace/activation/worktree-activation'
 import { reportAgentWorkspaceActivation } from '@/lib/workspace/activation/worktree-activation-outcome'
 import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
-import { isGitRepoKind } from '../../../../../shared/repo-kind'
-import type { Repo } from '../../../../../shared/repo-types'
+import { isGitRepoKind } from '../../../../../shared/repository/repo-kind'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import {
   buildEnvironmentSetupAgentPrompt,
   type EnvironmentSetupFailureContext
-} from '../../../../../shared/environment-setup-agent-prompt'
+} from '../../../../../shared/workspace-setup/environment-doctor/environment-setup-agent-prompt'
 
 /** The Git project an environment-setup agent should work on: the active one, else the first. */
 export function pickEnvironmentSetupRepo(

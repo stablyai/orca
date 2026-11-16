@@ -7,9 +7,9 @@ import {
   ensureRemoteRuntimeSharedControlConnection,
   getRemoteRuntimeSharedControlDiagnostics,
   reconnectRemoteRuntimeSharedControlConnection
-} from '../ipc/runtime-environments/runtime-environment-request-connections'
+} from '../ipc/runtime-environments/connections/runtime-environment-request-connections'
 import { reconnectSharedControlIfIdle } from '../ipc/runtime-environments/runtime-environment-shared-control-reconnect'
-import { isRuntimeEnvironmentManuallyDisconnected } from '../ipc/runtime-environments/runtime-environment-manual-disconnect'
+import { isRuntimeEnvironmentManuallyDisconnected } from '../ipc/runtime-environments/connectivity/runtime-environment-manual-disconnect'
 import { startWakePreconnect, waitForControlReadySince } from './recipe-vm-wake-preconnect'
 
 const CONTROL_PROOF_TIMEOUT_MS = 8_000
@@ -28,10 +28,10 @@ export function preconnectWokenServer(
   isWaking: () => boolean
 ): () => void {
   return startWakePreconnect({
-    ensure: () =>
+    ensure: async () =>
       ensureRemoteRuntimeSharedControlConnection(
         environmentId,
-        getPreferredPairedRuntimeConnection(resolveEnvironment(userDataPath, environmentId))
+        getPreferredPairedRuntimeConnection(await resolveEnvironment(userDataPath, environmentId))
       ),
     isReady: () => controlReadyAt(environmentId) !== null,
     // Only a closed or backing-off socket is redialed; one already dialing is left to finish.

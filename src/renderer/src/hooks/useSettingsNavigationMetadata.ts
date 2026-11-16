@@ -1,3 +1,5 @@
+import { useSupportedGroupHookSettings } from './use-supported-group-hook-settings'
+import type { ProjectGroupSettingsEntry } from './use-supported-group-hook-settings'
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import {
@@ -40,8 +42,8 @@ import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { useTranslate } from '@/i18n/use-translate'
 import type { Translate } from '@/i18n/use-translate'
 import type { SettingsNavSection } from '@/components/settings/navigation/settings-navigation-types'
-import type { ProjectGroupingModel } from '../../../shared/project-section-grouping'
-import type { Repo } from '../../../shared/repo-types'
+import type { ProjectGroupingModel } from '../../../shared/sidebar-list/sections/project-section-grouping'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { SettingsNavigationBuildOptions } from './settings-navigation-build-options'
 
 // Share Settings/Cmd+J visibility without Settings pane UI imports; an architecture test enforces this boundary.
@@ -65,6 +67,7 @@ export function buildSettingsNavigationMetadata(
     isOrcaCloudApiAvailable = false,
     isOrcaTeamAdmin = false,
     repos,
+    projectGroups,
     projectGrouping
   }: {
     isMac: boolean
@@ -80,6 +83,7 @@ export function buildSettingsNavigationMetadata(
     isLinearConnected?: boolean
     isOrcaCloudApiAvailable?: boolean
     isOrcaTeamAdmin?: boolean
+    projectGroups?: readonly ProjectGroupSettingsEntry[]
     repos: readonly Repo[]
     projectGrouping?: ProjectGroupingModel
   },
@@ -117,6 +121,7 @@ export function buildSettingsNavigationMetadata(
     isOrcaCloudApiAvailable,
     isOrcaTeamAdmin,
     repos,
+    projectGroups,
     projectGrouping
   }
 
@@ -138,6 +143,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
   const t = useTranslate()
   // The locale subscription must also invalidate the memo or labels retain the previous language.
   const languageRevision = useUiLanguageRevision()
+  const projectGroups = useSupportedGroupHookSettings()
   const repos = useAppStore((state) => state.repos)
   const projectHostSetupProjection = useProjectHostSetupProjection()
   const settings = useAppStore((state) => state.settings)
@@ -204,6 +210,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
           isOrcaCloudApiAvailable,
           isOrcaTeamAdmin,
           repos,
+          projectGroups,
           projectGrouping: {
             projects: projectHostSetupProjection.projects,
             projectHostSetups: projectHostSetupProjection.setups
@@ -226,6 +233,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
       isOrcaCloudApiAvailable,
       isOrcaTeamAdmin,
       repos,
+      projectGroups,
       projectHostSetupProjection,
       languageRevision,
       t

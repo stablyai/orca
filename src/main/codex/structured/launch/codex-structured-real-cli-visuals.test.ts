@@ -3,10 +3,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { resolveCodexCommand } from '../../../codex-cli/command'
-import { NATIVE_CHAT_VISUALS_SKILL_NAME } from '../../../native-chat/native-chat-visuals-skill-location'
+import { NATIVE_CHAT_VISUALS_SKILL_NAME } from '../../../native-chat/conversation-files/native-chat-visuals-skill-location'
 import { openCodexAppServerConnection } from '../../app-server/codex-app-server-connection'
 import { withCodexVisualsThreadConfig } from './codex-structured-visuals'
-import { codexStructuredPermissionPolicy } from '../../../../shared/codex-permission-policy'
+import { codexStructuredPermissionPolicy } from '../../../../shared/agent-launch/permissions/codex-permission-policy'
 
 const enabled = process.env.ORCA_REAL_CODEX_CLI_TEST === '1'
 const WORKSPACE_POLICY = codexStructuredPermissionPolicy('auto')

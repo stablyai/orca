@@ -11,7 +11,7 @@ import { isCloudSshAlias } from '../cloud-ssh/cloud-ssh-config'
 import { getSshTargetRegistryStore } from '../ssh/targets/ssh-target-registry'
 import { AGENT_CREDENTIAL_NAMES } from '../../shared/cloud-secrets/cloud-secret-rules'
 import { ORCA_CLOUD_HOST_RUNTIME_CAPABILITY } from '../../shared/hosted-sandbox/orca-cloud-host-capability'
-import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'
+import { listEphemeralVmRuntimes } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
 import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import { getConnectionExecutionHostId, toRuntimeExecutionHostId } from '../../shared/execution-host'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
@@ -34,33 +34,56 @@ function endpointHost(endpoint: string): string | null {
   }
 }
 
+function isOrcaCloudEndpoint(endpoint: string): boolean {
+  const host = endpointHost(endpoint)
+  return host !== null && ORCA_CLOUD_ENDPOINT_HOST.test(host)
+}
+
+/** The verdict from this desktop's VM records, or null when it has no record for `environmentId`. */
+function orcaCloudVerdictFromVmRecords(userDataPath: string, environmentId: string): boolean | null {
+  const runtime = listEphemeralVmRuntimes(userDataPath).find(
+    (record) => record.runtimeEnvironmentId === environmentId
+  )
+  if (!runtime) {
+    return null
+  }
+  return runtime.recipe?.provider === 'orca-cloud' || runtime.recipe?.provider === undefined
+}
+
 /**
  * Whether `environmentId` is an Orca Cloud VM. Fails closed: a VM-provisioned host this desktop has no
  * provider record for, or any host on a Vercel Sandbox route, counts as Orca Cloud.
  */
-export function isOrcaCloudRuntimeEnvironment(
+export async function isOrcaCloudRuntimeEnvironment(
   userDataPath: string,
   environmentId: string
-): boolean {
-  const runtime = listEphemeralVmRuntimes(userDataPath).find(
-    (record) => record.runtimeEnvironmentId === environmentId
-  )
-  if (runtime) {
-    return runtime.recipe?.provider === 'orca-cloud' || runtime.recipe?.provider === undefined
+): Promise<boolean> {
+  const fromRecords = orcaCloudVerdictFromVmRecords(userDataPath, environmentId)
+  if (fromRecords !== null) {
+    return fromRecords
   }
-  let environment: ReturnType<typeof resolveEnvironment> | null = null
+  let environment: Awaited<ReturnType<typeof resolveEnvironment>>
   try {
-    environment = resolveEnvironment(userDataPath, environmentId)
+    environment = await resolveEnvironment(userDataPath, environmentId)
   } catch {
     return false
   }
   if (environment.source === 'ephemeral-vm') {
     return true
   }
-  return (environment.endpoints ?? []).some((endpoint) => {
-    const host = endpointHost(endpoint.endpoint)
-    return host !== null && ORCA_CLOUD_ENDPOINT_HOST.test(host)
-  })
+  return (environment.endpoints ?? []).some((endpoint) => isOrcaCloudEndpoint(endpoint.endpoint))
+}
+
+/**
+ * Synchronous form for callers that already hold the connection: this desktop's VM records, else the
+ * connection's own endpoint. It doesn't read the saved-server store, which is async.
+ */
+export function isOrcaCloudRuntimeConnection(
+  userDataPath: string,
+  environmentId: string,
+  endpoint: string
+): boolean {
+  return orcaCloudVerdictFromVmRecords(userDataPath, environmentId) ?? isOrcaCloudEndpoint(endpoint)
 }
 
 /** A host id no host-scoped key names, so only keys set for every host match (the ones a new VM would get). */
@@ -89,7 +112,7 @@ export async function withHostAgentApiKeyEnv(
   // Without the desktop's records nothing can be ruled out, so no keys go anywhere.
   if (
     desktopUserDataPath === null ||
-    isOrcaCloudRuntimeEnvironment(desktopUserDataPath, environmentId)
+    (await isOrcaCloudRuntimeEnvironment(desktopUserDataPath, environmentId))
   ) {
     return params
   }

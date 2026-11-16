@@ -1,14 +1,14 @@
-import { linearIssueReadFailureMessage } from '../../../../src/shared/integration-credential-errors'
-import type { GitHubWorkItem } from '../../../../src/shared/github/work-item-types'
-import type { GitLabWorkItem } from '../../../../src/shared/gitlab-types'
+import { linearIssueReadFailureMessage } from '../../../../src/shared/secure-storage/integration-credential-errors'
+import type { GitHubWorkItem } from '../../../../src/shared/github/work-items/work-item-types'
+import type { GitLabWorkItem } from '../../../../src/shared/gitlab/gitlab-types'
 import type { LinearIssue } from '../../../../src/shared/linear/issue-types'
-import type { BaseRefSearchResult } from '../../../../src/shared/repo-types'
+import type { BaseRefSearchResult } from '../../../../src/shared/repository/repo-types'
 import {
   isSmartWorkspaceSourceQueryWithinLimit,
   type SmartNameMode
 } from '../../../../src/shared/new-workspace/smart-workspace-source-results'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import { isGitHubWorkItemsSshRemoteRequiredError } from '../../../../src/shared/github/work-item-ssh-error'
+import { isGitHubWorkItemsSshRemoteRequiredError } from '../../../../src/shared/github/work-items/work-item-ssh-error'
 import type { MrStateFilter } from './mobile-composer-source-types'
 import type { JiraIssue, JiraSiteSelection } from '../../../../src/shared/jira/jira-types'
 import {

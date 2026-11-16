@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { RuntimeClientError } from '../runtime/types'
-import { normalizeCommandPositionals, parseArgs, validateCommandAndFlags } from '../args'
+import { RuntimeClientError } from '../runtime/connection/types'
+import { normalizeCommandPositionals, parseArgs, validateCommandAndFlags } from '../arguments/args'
 import { COMMAND_SPECS } from '../specs'
 import { parseSecretRequestWait, runSecretRequest, type SecretRequestCliInput } from './secret'
 

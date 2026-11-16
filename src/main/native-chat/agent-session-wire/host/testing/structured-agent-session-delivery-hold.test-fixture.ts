@@ -3,7 +3,10 @@ import { StructuredAgentSessionDeliveryLoop } from '../../delivery/structured-ag
 import type { StructuredAgentSessionHost } from '../structured-agent-session-host'
 
 /** Hold preparation so Stop/close queues before handover; held confirms the gate was reached. */
-export function holdDelivery(): { held: Promise<void>; release: () => void } {
+export function holdDelivery(when?: () => Promise<boolean>): {
+  held: Promise<void>
+  release: () => void
+} {
   const gate = Promise.withResolvers<void>()
   const reached = Promise.withResolvers<void>()
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `prepare` is a prototype method whose privacy is compile-time only; the spy calls it unchanged.
@@ -15,6 +18,9 @@ export function holdDelivery(): { held: Promise<void>; release: () => void } {
     this: unknown,
     ...args: unknown[]
   ) {
+    if (when && !(await when())) {
+      return prepare.apply(this, args)
+    }
     step.mockRestore()
     reached.resolve()
     await gate.promise

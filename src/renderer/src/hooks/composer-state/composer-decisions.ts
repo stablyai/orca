@@ -1,7 +1,7 @@
 import {
   getLinkedWorkItemSuggestedName,
   getLinkedWorkItemWorkspaceName
-} from '../../../../shared/workspace-name'
+} from '../../../../shared/workspace/naming/workspace-name'
 import { normalizeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { shouldApplyWorkspaceSourceAutoName } from '../../../../shared/new-workspace/workspace-source'
 import { resolveGitHubWorkItemIdentity } from '../../../../shared/new-workspace/github-work-item-identity'
@@ -10,7 +10,7 @@ import {
   getGitHubLinkedWorkItemIdentity,
   type SmartGitHubPrStartPointSelection
 } from './source-selection-decisions'
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 
 import type { JiraIssueKeyCasing } from '../../../../shared/ui-chrome-types'

@@ -1,4 +1,4 @@
-import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
+import { callRuntimeEnvironment } from '../ipc/runtime-environments/requests/runtime-environment-transport-routing'
 import type { RuntimeCall } from './hosted-agent-auto-resume'
 
 /** Agent resume after a rollover talks to the environment's orcad over its existing pairing. */

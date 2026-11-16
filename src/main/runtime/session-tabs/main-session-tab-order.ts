@@ -1,7 +1,7 @@
 // Take only order/groups from main; preserve written rows and terminal/exit facts that may be newer than layout bindings.
 
-import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-session-contracts'
-import type { RuntimeMobileSessionSnapshotTab } from '../../../shared/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeMobileSessionSnapshotTab } from '../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type { MainSessionTabRows } from './main-session-tab-rows'
 import { orderIdOf, placeInMainGroups, withStrayIn } from './main-session-tab-group-placement'
 import {

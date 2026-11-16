@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { shouldPollChecksPanelRuntimeSshStatus } from './checks-panel-git-status-snapshot'
-import type { ChecksPanelControllerState } from '../use-checks-panel-controller-state'
+import type { ChecksPanelControllerState } from '../panel/use-checks-panel-controller-state'
 import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 
 type ChecksPanelForegroundEffectsInput = Pick<

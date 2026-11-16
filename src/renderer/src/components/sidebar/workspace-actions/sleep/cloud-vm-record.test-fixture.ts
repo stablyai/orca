@@ -1,7 +1,7 @@
 import type {
   EphemeralVmRuntimeRecord,
   EphemeralVmRuntimeStatus
-} from '../../../../../../shared/ephemeral-vm-runtimes'
+} from '../../../../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 
 const T0 = 1_800_000_000_000
 

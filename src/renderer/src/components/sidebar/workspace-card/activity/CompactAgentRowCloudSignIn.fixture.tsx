@@ -1,10 +1,10 @@
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
-import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
+import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
 import {
   setOrcaCloudAgentAccountsStateForTest,
   type OrcaCloudAgentAccountsState
 } from '@/lib/orca-cloud/orca-cloud-agent-accounts-store'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { OrcaCloudAgentsStatus } from '../../../../../../shared/orca-cloud-agents/orca-cloud-agents-wire'

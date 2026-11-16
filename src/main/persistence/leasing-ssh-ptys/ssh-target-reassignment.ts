@@ -1,4 +1,4 @@
-import type { ProjectHostSetup } from '../../../shared/project-types'
+import type { ProjectHostSetup } from '../../../shared/project/project-types'
 import { toSshExecutionHostId } from '../../../shared/execution-host'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
@@ -15,7 +15,7 @@ import {
 import {
   migrateAutomationHostFilterSshTargetId,
   migrateAutomationsForSshReadoption
-} from '../../automations/automation-ssh-readoption-migration'
+} from '../../automations/ownership/automation-ssh-readoption-migration'
 import { automationIdsPinnedToSshTarget } from '../scheduling-automations/automation-owner-projection'
 import { reassignCanonicalWorktreeMetadataHost } from './canonical-worktree-host-reassignment'
 

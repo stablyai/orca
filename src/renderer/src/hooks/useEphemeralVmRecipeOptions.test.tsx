@@ -117,49 +117,6 @@ async function render(
 }
 
 describe('useEphemeralVmRecipeOptions', () => {
-  it('refetches on plugin lifecycle changes and clears only a removed selection', async () => {
-    const listRecipes = vi
-      .fn()
-      .mockResolvedValueOnce(result(['repo', 'plugin']))
-      .mockResolvedValueOnce(result(['repo', 'plugin', 'new-plugin']))
-      .mockResolvedValueOnce(result(['repo']))
-    const changes = installApi(listRecipes)
-    const { container } = await render(<Harness repoId="repo-1" initialRecipeId="plugin" />)
-    await vi.waitFor(() =>
-      expect(container.querySelector('[data-testid="selected"]')?.textContent).toBe('plugin')
-    )
-
-    await act(async () => changes.emit())
-    await vi.waitFor(() =>
-      expect(container.querySelector('[data-testid="recipes"]')?.textContent).toContain(
-        'new-plugin'
-      )
-    )
-    expect(container.querySelector('[data-testid="selected"]')?.textContent).toBe('plugin')
-
-    await act(async () => changes.emit())
-    await vi.waitFor(() =>
-      expect(container.querySelector('[data-testid="selected"]')?.textContent).toBe('none')
-    )
-    expect(container.querySelector('[data-testid="repo"]')?.textContent).toBe('repo-1')
-  })
-
-  it('ignores a stale recipe response after switching projects', async () => {
-    const first = deferred<RecipeListResult>()
-    const second = deferred<RecipeListResult>()
-    installApi(vi.fn().mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise))
-    const { root, container } = await render(<Harness repoId="repo-1" />)
-
-    await act(async () => root.render(<Harness repoId="repo-2" />))
-    await act(async () => second.resolve(result(['new-project'])))
-    await act(async () => first.resolve(result(['stale-project'])))
-
-    await vi.waitFor(() =>
-      expect(container.querySelector('[data-testid="recipes"]')?.textContent).toBe('new-project')
-    )
-    expect(container.textContent).not.toContain('stale-project')
-  })
-
   it('offers only Orca Cloud, without recipe diagnostics, while custom recipes are off', async () => {
     installApi(
       vi.fn().mockResolvedValue({

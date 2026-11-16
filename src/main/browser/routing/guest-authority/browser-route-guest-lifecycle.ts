@@ -1,4 +1,9 @@
-import { normalizeBrowserNavigationUrl } from '../../../../shared/browser-url'
+import {
+  startBrowserPageAttach,
+  waitForBrowserPageReady
+} from '../../guest-lifecycle/browser-page-memory'
+import type { BrowserRouteWebContentsRegistryDependencies } from './browser-route-webcontents-registry-dependencies'
+import { normalizeBrowserNavigationUrl } from '../../../../shared/browser/navigation/browser-url'
 import '../../../../shared/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/browser/browser-blank-page'
 import type { WebContents } from 'electron'
@@ -117,7 +122,9 @@ export async function navigateBrowserRouteGuest(
     return false
   }
   try {
-    await state.guest.loadURL(normalized)
+    await (startBrowserPageAttach(state.guest, normalized)
+      ? waitForBrowserPageReady(registration.browserPageId, state.guest)
+      : state.guest.loadURL(normalized))
     return true
   } catch {
     return false
@@ -171,4 +178,39 @@ export function retireBrowserRouteGuest(input: {
     input.revokeUnregistered(input.state)
   }
   return isRouteGuestDestroyed(input.state.guest) ? 'retired' : 'retiring'
+}
+
+export function retireBrowserRouteGuestPage(
+  state: BrowserRouteGuestState,
+  dependencies: BrowserRouteWebContentsRegistryDependencies,
+  revoke: () => void
+): void {
+  if (state.retirementRequested) {
+    return
+  }
+  state.retirementRequested = true
+  state.navigationGranted = false
+  // Fence popups before the logical retirement round trip.
+  state.popups?.closeAll()
+  const registration = state.registration
+  const pageAuthority = state.pageAuthority
+  if (!registration || pageAuthority === null) {
+    revoke()
+    return
+  }
+  let started = false
+  try {
+    started = dependencies.retirePreparedPage({
+      partition: registration.partition,
+      browserPageId: registration.browserPageId,
+      pageHostGeneration: registration.pageHostGeneration,
+      rendererWebContentsId: registration.rendererWebContentsId,
+      pageAuthority
+    })
+  } catch {
+    // Exact guest stays revoked even if logical retirement cannot start.
+  }
+  if (!started) {
+    revoke()
+  }
 }

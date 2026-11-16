@@ -8,7 +8,7 @@ import {
   type StructuredAgentResumeInvocation,
   type StructuredAgentCliConversations,
   type StructuredAgentSessionHistory
-} from '../native-chat/structured-agent-cli-conversations'
+} from '../native-chat/conversation-adoption/structured-agent-cli-conversations'
 
 const CLAUDE_TRANSCRIPT_IMPORT = directoryTranscriptImport({
   conversationStore: ({ accountHomePath }) => join(accountHomePath, 'projects'),

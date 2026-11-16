@@ -1,15 +1,16 @@
-import { getRuntimePathBasename } from '../../shared/cross-platform-path'
+import { getRuntimePathBasename } from '../../shared/file-access/cross-platform-path'
 import { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } from '../../shared/shell/launch/terminal-git-credential-guard'
-import type { Repo } from '../../shared/repo-types'
+import type { WorkspaceHookOwner } from '../../shared/workspace-setup/hooks/workspace-hook-owner'
 import { buildWorkspacePortEnv } from '../../shared/workspace-port-block'
 import { peekWorkspacePortBlock } from '../workspace-ports/workspace-port-block-registry'
-import { isFolderRepo } from '../../shared/repo-kind'
+import { isFolderRepo } from '../../shared/repository/repo-kind'
 
 /** The workspace a hook runs for; folder workspaces share one directory, so the path can't name them. */
 export type HookWorkspaceIdentity = {
   worktreeId: string
   /** Names a folder workspace; a worktree's name is its directory's. */
   displayName?: string
+  workspacePath?: string
 }
 
 // Path-valued keys only, so WSL and posix-shell launches translate them; names are not paths.
@@ -22,10 +23,11 @@ export const SETUP_RUNNER_PATH_ENV_KEYS = [
 ] as const
 
 export function getSetupEnvVars(
-  repo: Pick<Repo, 'path' | 'kind'>,
+  repo: Pick<WorkspaceHookOwner, 'path' | 'kind'>,
   worktreePath: string,
   identity?: HookWorkspaceIdentity
 ): Record<string, string> {
+  worktreePath = identity?.workspacePath ?? worktreePath
   const workspaceName =
     identity?.displayName && isFolderRepo(repo)
       ? identity.displayName
@@ -58,7 +60,7 @@ function getWorkspacePortEnv(worktreePath: string): Record<string, string> {
 }
 
 export function getSetupRunnerEnvVars(
-  repo: Repo,
+  repo: WorkspaceHookOwner,
   worktreePath: string,
   identity?: HookWorkspaceIdentity
 ): Record<string, string> {

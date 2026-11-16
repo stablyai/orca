@@ -5,7 +5,7 @@ type MockState = {
   updates: { id: string; patch: Record<string, unknown> }[]
 }
 const state = vi.hoisted((): MockState => ({ records: [], updates: [] }))
-vi.mock('../../shared/ephemeral-vm-runtime-store', () => ({
+vi.mock('../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store', () => ({
   listEphemeralVmRuntimes: () => state.records,
   updateEphemeralVmRuntimeStatus: (_path: string, id: string, patch: Record<string, unknown>) => {
     state.updates.push({ id, patch })
@@ -29,7 +29,7 @@ import {
   markCloudRuntimeSleptElsewhere,
   noteCloudRuntimeRemoteState
 } from './hosted-remote-sleep'
-import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
+import type { EphemeralVmRuntimeRecord } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 
 const RUNNING = {
   id: 'vm-1',

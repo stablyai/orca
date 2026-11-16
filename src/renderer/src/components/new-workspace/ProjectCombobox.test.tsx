@@ -4,7 +4,7 @@ import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NewWorkspaceProjectOption } from '@/lib/workspace/creation/new-workspace-project-options'
-import ProjectCombobox from './ProjectCombobox'
+import ProjectCombobox from './project-selection/ProjectCombobox'
 import { TooltipProvider } from '@/components/ui/tooltip'
 
 // Render inline and expose Radix-style close independently of the component key handler.
@@ -25,7 +25,7 @@ vi.mock('@/components/ui/popover', () => ({
   PopoverContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>
 }))
 
-vi.mock('./use-recent-project-ids', () => ({ useRecentProjectIds: () => [] }))
+vi.mock('./project-selection/use-recent-project-ids', () => ({ useRecentProjectIds: () => [] }))
 
 let container: HTMLDivElement
 let root: Root

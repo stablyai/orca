@@ -30,7 +30,7 @@ import { clearStaleAgentTabTitleOnConfirmedShell } from './confirmed-shell-agent
 export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
   // Share expected-agent derivation between 133;D confirmation and visible resampling so their identity guards cannot drift.
   session.paneHasLiveHookAgentIcon = (state: ReturnType<typeof useAppStore.getState>): boolean => {
-    const entry = state.agentStatusByPaneKey[session.cacheKey]
+    const entry = state.agentStatusByPaneKey.get(session.cacheKey)
     return entry?.state !== 'done' && Boolean(agentTypeToIconAgent(entry?.agentType))
   }
   // One launch ladder serves finish confirmation, visible sampling and OSC color-reply suppression.
@@ -70,7 +70,7 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
   session.deferredConfirmedShellReconcile = null
   /** Confirmed shell return retires main’s latches using one acceptedStatusSeq anchor across the full ladder; deferred row removal is not newer evidence. A foreign delete/rebuild can reset the ordinal, but command-start already cancels normal relaunch races. */
   session.reconcileEndedProcessIfPaneQuiet = (armedAcceptedStatusSeq: number | undefined): void => {
-    const current = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
+    const current = useAppStore.getState().agentStatusByPaneKey.get(session.cacheKey)
     if (current && current.acceptedStatusSeq !== armedAcceptedStatusSeq) {
       return
     }
@@ -222,7 +222,7 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
       parsePaneKey(session.cacheKey)?.leafId
     )
     const state = useAppStore.getState()
-    const entry = state.agentStatusByPaneKey[session.cacheKey]
+    const entry = state.agentStatusByPaneKey.get(session.cacheKey)
     const inferenceResult = session.flushPendingInterruptInference()
     const dropStatus = (): void => {
       if (inferenceResult === true) {

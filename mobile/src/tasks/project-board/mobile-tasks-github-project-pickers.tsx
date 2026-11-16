@@ -10,8 +10,8 @@ import {
   githubProjectIdentityKey as githubProjectKey,
   toGitHubProjectIdentity,
   type GitHubProjectIdentity as GitHubProjectRef
-} from '../../../../src/shared/github/project-identity'
-import { PickerModal } from '../../components/PickerModal'
+} from '../../../../src/shared/github/projects/project-identity'
+import { PickerModal } from '../../components/sheets/PickerModal'
 import { ListGroup, SectionHeader, ListRow } from '../../components/list/ListGroup'
 import { styles } from '../mobile-tasks-legacy-styles'
 import { PROJECT_VIEW_DEFAULT_SORT } from '../task-list/mobile-tasks-options'

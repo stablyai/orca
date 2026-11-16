@@ -1,6 +1,6 @@
 // Orca Cloud from the composer: whether its Run on option is offered, which setup rows are missing,
 // and the remembered default. Pure, so every state the spec draws is unit-tested here.
-import type { OrcaCloudAvailability } from '../../../../../shared/orca-yaml-hook-types'
+import type { OrcaCloudAvailability } from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
 import type { OrcaCloudRunTargetAccess } from '../orca-cloud-run-target-access'
 
 /**

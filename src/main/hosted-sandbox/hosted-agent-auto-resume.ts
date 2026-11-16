@@ -2,7 +2,7 @@
 // the "Resume chats" prompt uses (agentSession.restartResumable → agentSession.restartContinue).
 // Only offers recorded by this drain are continued; older offers stay for the user to decide.
 import { z } from 'zod'
-import { MAX_RESTART_RESUME_SESSIONS } from '../../shared/rpc-contract/structured-agent-session-params'
+import { MAX_RESTART_RESUME_SESSIONS } from '../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
 
 export type RuntimeCall = (method: string, params?: Record<string, unknown>) => Promise<unknown>
 

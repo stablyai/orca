@@ -1,20 +1,22 @@
 import React, { useCallback, useEffect, useRef } from 'react'
-import { DashboardAgentChildDisclosure } from '@/components/dashboard/DashboardAgentChildDisclosure'
+import { DashboardAgentChildDisclosure } from '@/components/dashboard/rows/DashboardAgentChildDisclosure'
 import { AgentStateDot, agentStateLabel, type AgentDotState } from '@/components/AgentStateDot'
 import { AgentChildRowContent } from '@/components/AgentChildRowContent'
-import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
+import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/rows/dashboard-agent-row'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { formatAgentTypeLabel } from '../../../../../../shared/agent-status/presentation/agent-type-label'
 import { cn } from '@/lib/class-names'
 import { viewClaudeAgentFromRow } from '@/lib/agent-session/navigation/claude-agent-row-view'
-import { useClaudeAgentRowView } from '@/components/dashboard/use-claude-agent-row-view'
+import { useClaudeAgentRowView } from '@/components/dashboard/rows/use-claude-agent-row-view'
 import './worktree-card-agent-summary'
 import { agentRowDisplayDotState as getAgentDotState } from '../../../../lib/agent-status/presentation/agent-row-dot-state'
 import { getAgentRowPrimaryText } from '../../../../../../shared/agent-status/presentation/agent-row-primary-text'
 import { formatAgentToolPreview } from '@/lib/agent-status/presentation/agent-row-tool-preview'
 import { agentNoUpdateLabel } from '../../../../../../shared/agent-status/presentation/agent-row-decay-state'
-import { useAgentRowConversationName } from '@/components/dashboard/use-agent-row-conversation-name'
-import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timestamp'
+import { useAgentRowConversationNaming } from '@/components/dashboard/rows/use-agent-row-conversation-name'
+import { ForkMarkedName } from '@/components/native-chat/fork/ForkMarkedName'
+import { forkMarkedNameText } from '@/components/native-chat/fork/fork-marked-name-text'
+import { lastEnteredDoneAt } from '@/components/dashboard/rows/agent-finished-timestamp'
 import CacheTimer, { usePromptCacheCountdownForPane } from './CacheTimer'
 import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
 import { agentVerdictStatusLine } from '@/lib/agent-status/presentation/agent-verdict-status-line'
@@ -26,6 +28,7 @@ import {
 } from '../../../../../../shared/program-status/presentation'
 import { resolveRowProgramStatus } from '@/lib/program-status/agent-row-presentation'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { useHasWorktreeCardUnreadRollup } from '../surface/worktree-card-title-status'
 import { useCloudAgentRowStatus } from '@/components/orca-cloud/use-cloud-agent-row-sign-in'
 import {
   CloudAgentRowSignInDot,
@@ -135,6 +138,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   isUnvisited = false
 }: CompactAgentRowProps) {
   const t = useTranslate()
+  const hasUnreadRollup = useHasWorktreeCardUnreadRollup()
   const view = useClaudeAgentRowView(agent)
   const highlighted = view ? view.current && view.focused : isFocusedPane
   const hasChildDisclosure =
@@ -148,8 +152,10 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   // Orca Cloud only: an agent that started without a sign-in never ran, so it is not "Done".
   const cloudStatus = useCloudAgentRowStatus(agent, reportedDotState, sendTargetStatus)
   const dotState = cloudStatus?.dotState ?? reportedDotState
-  const conversationName = useAgentRowConversationName(agent)
+  const { name: conversationName, forked } = useAgentRowConversationNaming(agent)
   const primary = cloudStatus?.label ?? getCompactAgentPrimary(agent, conversationName)
+  // The fork mark belongs to the conversation name, never to an Orca Cloud status label.
+  const forkNamed = forked && conversationName !== null && !cloudStatus?.label
   // Send-target mode owns row clicks, so only outside it is the status a link to Settings.
   const signIn = cloudStatus?.tooltip ? cloudStatus : null
   const isLineageChild = agent.lineage?.depth === 1
@@ -172,7 +178,11 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   const secondary =
     cloudStatus?.agentName ?? getCompactAgentSecondary(agent, now, stableMessage, presentation, t)
   const { leadingText, trailingText } = getCompactAgentLineOrder(agent, primary, secondary, t)
-  const rowTitle = `${leadingText}${trailingText ? ` - ${trailingText}` : ''}`
+  const shownText = (text: string): string =>
+    forkNamed && text === primary ? forkMarkedNameText(t, text) : text
+  const shownNode = (text: string): React.ReactNode =>
+    forkNamed && text === primary ? <ForkMarkedName name={text} /> : text
+  const rowTitle = `${shownText(leadingText)}${trailingText ? ` - ${shownText(trailingText)}` : ''}`
   const model = agent.entry.model?.trim() ?? ''
   const shortTime = getCompactAgentTime(agent, now)
   const cacheTimer = usePromptCacheCountdownForPane(agent.paneKey, cacheTimerActive)
@@ -249,6 +259,8 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
               title={sendTargetDisabledReason ? null : undefined}
               tooltipSide="right"
               progress={presentation.progress}
+              unread={isUnvisited}
+              unreadDisplay={hasUnreadRollup ? 'label' : 'dot'}
             />
           )}
           {!hideIcon && (
@@ -265,15 +277,15 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
                 tooltip={signIn.tooltip}
                 className={cn('inline hover:underline', leadClassName)}
               >
-                {leadingText}
+                {shownNode(leadingText)}
               </CloudAgentRowSignInTarget>
             ) : (
-              <span className={leadClassName}>{leadingText}</span>
+              <span className={leadClassName}>{shownNode(leadingText)}</span>
             )}
             {trailingText && (
               <span className={highlighted ? 'text-foreground/70' : 'text-muted-foreground/65'}>
                 {' '}
-                - {trailingText}
+                - {shownNode(trailingText)}
               </span>
             )}
           </span>

@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
-import type { CliInstallStatus } from '../../shared/cli-install-types'
-import { resolveAppImageCacheKey } from '../../shared/appimage-cache-identity'
+import type { CliInstallStatus } from '../../shared/cli/cli-install-types'
+import { resolveAppImageCacheKey } from '../../shared/desktop-distribution/appimage/appimage-cache-identity'
 import { CliInstaller } from '../cli/cli-installer'
 import { runKeyedSerializedOperation } from '../../shared/concurrency/keyed-serialized-operations'
 import {
@@ -17,7 +17,10 @@ import {
 } from '../cli/wsl/wsl-cli-status'
 import { runSerializedWslCliRegistrationOperation } from '../cli/wsl/wsl-cli-registration-operation'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
-import { hydrateShellPath, mergePathSegments } from '../startup/hydrate-shell-path'
+import {
+  hydrateShellPath,
+  mergePathSegments
+} from '../startup/shell-environment/hydrate-shell-path'
 import { getDefaultWslDistro } from '../wsl/discovery/distro-catalog'
 import {
   blockedWslDistroForExec,
@@ -91,6 +94,17 @@ async function hydrateLocalShellPathForCli(force = false): Promise<void> {
   }
 }
 
+/** Status without the stale-AppImage repair, which would re-register the command. */
+export async function readLocalCliInstallStatus(): Promise<CliInstallStatus> {
+  await hydrateLocalShellPathForCli()
+  return new CliInstaller().getStatus()
+}
+
+export async function removeLocalCliRegistration(): Promise<CliInstallStatus> {
+  await hydrateLocalShellPathForCli()
+  return runLocalCliRegistrationOperation(() => new CliInstaller().remove())
+}
+
 export function registerCliHandlers(): void {
   let staleAppImageRepairAttempt: {
     promise: Promise<CliInstallStatus | null>
@@ -140,10 +154,7 @@ export function registerCliHandlers(): void {
     return runLocalCliRegistrationOperation(() => new CliInstaller().install())
   })
 
-  ipcMain.handle('cli:remove', async (): Promise<CliInstallStatus> => {
-    await hydrateLocalShellPathForCli()
-    return runLocalCliRegistrationOperation(() => new CliInstaller().remove())
-  })
+  ipcMain.handle('cli:remove', removeLocalCliRegistration)
 
   ipcMain.handle(
     'cli:getWslInstallStatus',

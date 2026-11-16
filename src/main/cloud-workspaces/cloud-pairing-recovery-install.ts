@@ -3,7 +3,7 @@
 import { app, BrowserWindow } from 'electron'
 import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import { cloudSandboxIdForEnvironment } from '../hosted-sandbox/cloud-delete-preflight'
-import { verifyAndRepairRuntimeEnvironmentFromPairingCode } from '../ipc/runtime-environments/runtime-environment-pairing-verification'
+import { verifyAndRepairRuntimeEnvironmentFromPairingCode } from '../ipc/runtime-environments/pairing/runtime-environment-pairing-verification'
 import { invalidateRuntimeEnvironmentTransport } from '../ipc/runtime-environments/runtime-environments'
 import { setRuntimeEnvironmentRejectionObserver } from '../ipc/runtime-environments/runtime-environment-rejection-observer'
 import {
@@ -36,9 +36,9 @@ export function installCloudPairingRecovery(
         ? { sandboxId, kind: 'paired', grantId: binding[1].grantId }
         : { sandboxId, kind: 'owned', grantId: null }
     },
-    revision: (environmentId) => {
+    revision: async (environmentId) => {
       try {
-        const environment = resolveEnvironment(userDataPath(), environmentId)
+        const environment = await resolveEnvironment(userDataPath(), environmentId)
         return environment.pairingRevision ?? environment.createdAt
       } catch {
         return null

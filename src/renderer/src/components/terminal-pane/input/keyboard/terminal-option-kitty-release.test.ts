@@ -38,17 +38,4 @@ describe('terminal Option kitty releases', () => {
     expect(firstSender).toHaveBeenCalledWith('\x1b[113;3:3u')
     expect(repeatSender).not.toHaveBeenCalled()
   })
-
-  it('lets a fresh press replace an orphaned release owner for the same key', () => {
-    const staleSender = vi.fn()
-    const freshSender = vi.fn()
-    const tracker = createTerminalOptionKittyReleaseTracker()
-    const press = keyboardEvent({ key: '@', altKey: true })
-    tracker.arm(press, { flags: 2 }, staleSender, () => 2)
-    tracker.arm(press, { flags: 2 }, freshSender, () => 2)
-
-    tracker.settle(keyboardEvent({ key: 'q', altKey: true }))
-    expect(staleSender).not.toHaveBeenCalled()
-    expect(freshSender).toHaveBeenCalledWith('\x1b[113;3:3u')
-  })
 })

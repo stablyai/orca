@@ -1,7 +1,7 @@
 import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
 import { AGENT_KEY_LAUNCH_ENV_RUNTIME_CAPABILITY } from '../../shared/agent-api-keys/agent-key-launch-env-capability'
 import { toRuntimeExecutionHostId } from '../../shared/execution-host'
-import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { resolveAgentApiKeyLaunchEnv } from './agent-api-key-launch-env'
 
 type CapabilityVerdict = 'supported' | 'unsupported' | 'unknown'

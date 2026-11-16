@@ -1,7 +1,7 @@
 // Private build only: a small HTTPS client for the Orca Cloud public API (/v1/…). Every failure
 // becomes a RuntimeClientError with a stable `cloud_*` code and next steps, so `--json` callers
 // (agents) and people both get an actionable message.
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { cloudApiError, type CloudRequestIntent } from './cloud-api-errors'
 import { jsonFields, type CloudCredentials } from './cloud-credentials'
 

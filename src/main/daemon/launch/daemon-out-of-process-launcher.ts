@@ -1,14 +1,14 @@
 import { randomUUID } from 'node:crypto'
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { childProcessHasExited } from '@orca/process-host/process-tree-termination'
-import type { DaemonReplaceReason } from '../../../shared/daemon-lifecycle-telemetry'
+import type { DaemonReplaceReason } from '../../../shared/telemetry/daemon-lifecycle-telemetry'
 import { DaemonClient } from '../transport/client/daemon-client'
 import {
   DaemonEndpointOwnershipError,
   holdDaemonAdoptionLease,
   reconcileDaemonPidOwnership
 } from './daemon-endpoint-adoption'
-import { LOCAL_PTY_STARTUP_FAIL_OPEN_TIMEOUT_MS } from '../../startup/first-window-startup-services'
+import { LOCAL_PTY_STARTUP_FAIL_OPEN_TIMEOUT_MS } from '../../startup/pty-startup/first-window-startup-services'
 import {
   DAEMON_CHILD_STARTUP_TIMEOUT_MS,
   DaemonEndpointUnavailableError,

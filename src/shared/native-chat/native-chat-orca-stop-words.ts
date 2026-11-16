@@ -1,5 +1,5 @@
-import type { AgentSessionOrcaStopCause } from '../agent-session/lifecycle/agent-session-orca-stop'
-import { joinSentences } from '../sentence-joining'
+import type { AgentSessionOrcaStopCause } from '../agent-session/lifecycle/stopping/agent-session-orca-stop'
+import { joinSentences } from '../text/sentence-joining'
 
 /** English pieces; desktop translates each with the same fallback, the phone keeps English. */
 export const NATIVE_CHAT_ORCA_STOP_COPY = {

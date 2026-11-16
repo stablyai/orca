@@ -103,7 +103,7 @@ describe('createWithCloudAgentHold (the one hold for every Orca Cloud agent laun
 
   it('Start focuses the agent’s tab after the placeholder closes (its neighbour would win)', async () => {
     const { useAppStore } = await import('@/store')
-    const { makeTerminalTab } = await import('@/store/terminals/terminal-row.test-fixture')
+    const { makeTerminalTab } = await import('@/store/terminals/testing/terminal-row.test-fixture')
     const agentTab = toWebTerminalSurfaceTabId('h2')
     useAppStore.setState({
       tabsByWorktree: {
@@ -127,7 +127,7 @@ describe('createWithCloudAgentHold (the one hold for every Orca Cloud agent laun
 
   it('Start focuses the agent’s tab even when it reaches the store after the placeholder closes (create flow)', async () => {
     const { useAppStore } = await import('@/store')
-    const { makeTerminalTab } = await import('@/store/terminals/terminal-row.test-fixture')
+    const { makeTerminalTab } = await import('@/store/terminals/testing/terminal-row.test-fixture')
     const agentTab = toWebTerminalSurfaceTabId('h2')
     const plain = makeTerminalTab({ id: 'plain-terminal', worktreeId: 'w1' })
     useAppStore.setState({ tabsByWorktree: { w1: [plain] }, activeTabId: 'plain-terminal' })
@@ -150,7 +150,7 @@ describe('createWithCloudAgentHold (the one hold for every Orca Cloud agent laun
 
   it('a late agent tab never takes focus from a tab the person picked meanwhile', async () => {
     const { useAppStore } = await import('@/store')
-    const { makeTerminalTab } = await import('@/store/terminals/terminal-row.test-fixture')
+    const { makeTerminalTab } = await import('@/store/terminals/testing/terminal-row.test-fixture')
     const agentTab = toWebTerminalSurfaceTabId('h2')
     const plain = makeTerminalTab({ id: 'plain-terminal', worktreeId: 'w1' })
     const other = makeTerminalTab({ id: 'other', worktreeId: 'w1' })
@@ -307,7 +307,7 @@ describe('NOACCT-MISLABEL: no Claude account is a setup hold, never "didn’t st
 
   it('the person’s own Cancel, with the shell still open, still confirms it', async () => {
     const { useAppStore } = await import('@/store')
-    const { makeTerminalTab } = await import('@/store/terminals/terminal-row.test-fixture')
+    const { makeTerminalTab } = await import('@/store/terminals/testing/terminal-row.test-fixture')
     const { toast } = await import('sonner')
     vi.mocked(toast).mockClear()
     useAppStore.setState({
@@ -327,7 +327,7 @@ describe('NOACCT-MISLABEL: no Claude account is a setup hold, never "didn’t st
 
   it('never confirms a cancel over another workspace or Settings (N-03)', async () => {
     const { useAppStore } = await import('@/store')
-    const { makeTerminalTab } = await import('@/store/terminals/terminal-row.test-fixture')
+    const { makeTerminalTab } = await import('@/store/terminals/testing/terminal-row.test-fixture')
     const { toast } = await import('sonner')
     const tabs = {
       w1: [makeTerminalTab({ id: toWebTerminalSurfaceTabId('h1'), worktreeId: 'w1' })]

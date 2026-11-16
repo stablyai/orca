@@ -1,12 +1,10 @@
-import { RunActionButton } from '../run-actions/RunActionButton'
 import { Suspense, useCallback, useMemo } from 'react'
 import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { useDroppable } from '@dnd-kit/core'
 import { useAppStore } from '../../store/index'
 import TabBar from '../tab-bar/TabBar'
 
-import { TabBarQuickCommandsButton } from '../tab-bar/TabBarQuickCommandsButton'
-import { TabGroupPaneActionsMenu } from './TabGroupPaneActionsMenu'
+import { TabGroupActionChrome } from './TabGroupActionChrome'
 import { useTabGroupWorkspaceModel } from './useTabGroupWorkspaceModel'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { resolveGroupTabFromVisibleId } from './tab-group-visible-id'
@@ -15,19 +13,16 @@ import { tabGroupBodyAnchorName } from './tab-group-body-anchor'
 import { registerTabGroupBody } from './tab-group-body-geometry'
 import { observeTabGroupBodyGridSize } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
 import { useTranslate } from '@/i18n/use-translate'
-import type { TabGroup } from '../../../../shared/tab-types'
+import type { TabGroup } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import { isStructuredTab } from '../../../../shared/agent-session/view/structured-agent-session-tab'
-import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
+import type { ClientHostedBrowserRow } from '../../../../shared/browser/client-hosting/client-hosted-browser-rows'
 import { useClientHostedBrowserRows } from '@/runtime/browser/client-hosting/client-hosted-browser-row-state'
 import { resolveClientHostedBrowserRowStripGroupId } from '../tab-bar/client-hosted-browser-row-strip-placement'
-import { useEditorGroupFileDropOwner } from '../editor/use-editor-group-file-drop-owner'
-import { cn } from '@/lib/class-names'
+import { useEditorGroupFileDropOwner } from '../editor/file-drop/use-editor-group-file-drop-owner'
 import { UNFOCUSED_SPLIT_GROUP_OPACITY } from './split-group-dim'
 import { useWindowBackdropActive } from '@/app-shell/appearance/window-backdrop'
 import { EditorRevealFlash } from './EditorRevealFlash'
 import { SplitPaneLanding } from './SplitPaneLanding'
-import { CloudWorkspaceOwnerChangedChip } from '../cloud-workspaces/CloudWorkspaceOwnerChangedChip'
-import { CloudWorkspacePeople } from '../cloud-workspaces/CloudWorkspacePeople'
 import { CloudGitSetupStrip } from '../orca-cloud/CloudGitSetupStrip'
 import { isSplitLandingGroup } from '@/store/slices/tabs/split-landing-groups'
 
@@ -256,10 +251,6 @@ export default function TabGroupPanel({
     />
   )
 
-  const actionChromeClassName = cn(
-    'ml-1.5 flex shrink-0 items-center gap-0.5 transition-opacity duration-150',
-    !isFocused && 'opacity-50 hover:opacity-100 focus-within:opacity-100'
-  )
   return (
     <div
       // Dim unfocused splits only when siblings exist; keep vertical seams neutral and change only the bottom focus border.
@@ -289,12 +280,12 @@ export default function TabGroupPanel({
       {/* Omit external strips entirely because hidden duplicates would still register competing drag sortables. */}
       {tabStrip !== 'attached' ? null : (
         <div
-          className="@container/tab-strip h-[32px] shrink-0 border-b border-border bg-tab-bar"
+          className="h-[32px] shrink-0 border-b border-border bg-tab-bar"
           data-tab-group-strip-id={groupId}
           data-terminal-focus-release-surface="true"
           data-worktree-id={worktreeId}
         >
-          <div className="flex h-full items-stretch pr-1.5">
+          <div className="flex h-full items-stretch pr-1">
             {/* Why: Electron drag hit-test respects no-drag only on DOM descendants, not z-index siblings, so this no-drag spacer keeps the collapsed left-sidebar's floating toggle clickable. */}
             {reserveCollapsedSidebarHeaderSpace && !sidebarOpen ? (
               <div
@@ -307,29 +298,20 @@ export default function TabGroupPanel({
                 }
               />
             ) : null}
-            <div className="min-w-0 flex-1 h-full">{tabBar}</div>
-            {/* Why: overflowing tabs eat all strip whitespace; keep a window-drag handle while the right sidebar header is closed. */}
-            {reserveRightTitlebarSpace ? <div className="w-10 shrink-0" /> : null}
-            <div
-              className={actionChromeClassName}
-              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-            >
-              {/* One W-number and Run button per workspace: in the focused split, or the only group. */}
-              {!hasSplitGroups || isFocused ? (
-                <>
-                  <CloudWorkspacePeople worktreeId={worktreeId} />
-                  <CloudWorkspaceOwnerChangedChip worktreeId={worktreeId} />
-                </>
+            {/* Why: the tab-strip container excludes the reserved spacers, so width rules see only the room tabs and actions share. */}
+            <div className="@container/tab-strip flex min-w-0 flex-1 items-stretch">
+              <div className="min-w-10 flex-1 h-full">{tabBar}</div>
+              {/* Why: overflowing tabs eat all strip whitespace; keep a window-drag handle while the right sidebar header is closed. It goes first in narrow strips: 203 = 40 gap + 163 for the tab floor and every control, so controls never clip behind it. */}
+              {reserveRightTitlebarSpace ? (
+                <div className="w-10 min-w-0 @max-[203px]/tab-strip:hidden" />
               ) : null}
-              {!hasSplitGroups || isFocused ? <RunActionButton worktreeId={worktreeId} /> : null}
-              <TabBarQuickCommandsButton
+              <TabGroupActionChrome
                 worktreeId={worktreeId}
                 groupId={groupId}
                 isFocused={isFocused}
+                hasSplitGroups={hasSplitGroups}
+                onCloseGroup={commands.closeGroup}
               />
-              {hasSplitGroups ? (
-                <TabGroupPaneActionsMenu isFocused={isFocused} onCloseGroup={commands.closeGroup} />
-              ) : null}
             </div>
             {/* Why: Electron drag hit-test respects no-drag only on DOM descendants, not z-index siblings, so this no-drag spacer keeps the floating right-sidebar toggle + window controls clickable. */}
             {reserveRightTitlebarSpace ? (

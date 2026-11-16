@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { OrcaProfileAuthStatus } from '../../../../shared/orca-profiles'
+import type { OrcaProfileAuthStatus } from '../../../../shared/orca-profiles/orca-profiles'
 import { canManageActiveTeam } from './orca-cloud-team-role'
 
 function status(role: string | undefined, activeOrgId = 'org-1'): OrcaProfileAuthStatus {

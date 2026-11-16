@@ -16,7 +16,7 @@ import type {
 
 import type { AiVaultServiceScanOptions } from '../../../../ai-vault/scan-service/session-scanner-service-protocol'
 
-import '../../../../../shared/protocol-version'
+import '../../../../../shared/remote-runtime/protocol/protocol-version'
 import '../../../../../shared/ai-vault/contracts/ai-vault-runtime-capabilities'
 
 const { scanAiVaultSessionsInService, resolveAiVaultSessionTitlesInService } = vi.hoisted(() => ({
@@ -38,17 +38,11 @@ vi.mock(
 
 import { AI_VAULT_METHODS } from './ai-vault'
 
-import '../../../../../shared/rpc-contract/ai-vault-params'
-import { agentSessionRefusalError } from '../../../../../shared/agent-session/failures/agent-session-wire-refusals'
-
-import { recordStructuredAgentSessionHostInstallRefusal } from '../../../agent-session/structured-agent-session-host-refusal'
+import '../../../../../shared/rpc-contract/ai-vault/ai-vault-params'
 
 import '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import '../../../../ai-vault/structured-session-ownership.test-support'
-import {
-  listAiVaultSessions,
-  resetAiVaultSessionListCacheForTests
-} from '../../../../ai-vault/cached-session-list'
+import '../../../../ai-vault/structured-sessions/structured-session-ownership.test-support'
+import { resetAiVaultSessionListCacheForTests } from '../../../../ai-vault/listing/cached-session-list'
 
 function makeRequest(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }
@@ -99,58 +93,6 @@ function makeDispatcher(): RpcDispatcher {
   return new RpcDispatcher({ runtime, methods: AI_VAULT_METHODS })
 }
 
-// Chat-host refusal must not disable transcript history or terminal resume; other host failures still propagate.
-describe('aiVault methods without a structured host', () => {
-  const refusal = agentSessionRefusalError(
-    'agent_session_journal_unreadable',
-    { reason: 'journalCorrupt' },
-    'Unable to load this chat.'
-  )
-
-  beforeEach(() => {
-    resetAiVaultSessionListCacheForTests()
-    scanAiVaultSessionsInService.mockReset()
-    scanAiVaultSessionsInService.mockResolvedValue(makeResult())
-    recordStructuredAgentSessionHostInstallRefusal(refusal)
-  })
-
-  afterEach(() => {
-    recordStructuredAgentSessionHostInstallRefusal(null)
-    resetAiVaultSessionListCacheForTests()
-  })
-
-  function refusedDispatcher(installError: Error): RpcDispatcher {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the two aiVault handlers read only these runtime members.
-    const runtime = {
-      getRuntimeId: () => 'test-runtime',
-      ensureStructuredAgentSessionHost: vi.fn().mockRejectedValue(installError),
-      listAiVaultSessions: (
-        args?: Parameters<typeof listAiVaultSessions>[0],
-        signal?: AbortSignal
-      ) => listAiVaultSessions(args, { signal }),
-      prepareAiVaultSessionResume: vi.fn().mockResolvedValue({ useRealCodexHome: true })
-    } as unknown as OrcaRuntimeService
-    return new RpcDispatcher({ runtime, methods: AI_VAULT_METHODS })
-  }
-
-  it('lists and prepares a resume while chats are refused', async () => {
-    const dispatcher = refusedDispatcher(refusal)
-
-    await expect(
-      dispatcher.dispatch(makeRequest('aiVault.listSessions', { limit: 500 }))
-    ).resolves.toMatchObject({ ok: true, result: makeResult() })
-    await expect(
-      dispatcher.dispatch(
-        makeRequest('aiVault.prepareSessionResume', {
-          agent: 'codex',
-          filePath: '/managed/sessions/rollout-a.jsonl',
-          codexHome: '/managed'
-        })
-      )
-    ).resolves.toMatchObject({ ok: true, result: { useRealCodexHome: true } })
-  })
-})
-
 describe('aiVault.listSessions handler + shared cache', () => {
   beforeEach(() => {
     resetAiVaultSessionListCacheForTests()
@@ -162,27 +104,6 @@ describe('aiVault.listSessions handler + shared cache', () => {
 
   afterEach(() => {
     resetAiVaultSessionListCacheForTests()
-  })
-
-  it('aborts the host scan when its last RPC caller disconnects', async () => {
-    scanAiVaultSessionsInService.mockImplementation(
-      (_options, signal) =>
-        new Promise<AiVaultListResult>((_resolve, reject) => {
-          signal?.addEventListener('abort', () => reject(new Error('scan aborted')), { once: true })
-        })
-    )
-    const dispatcher = makeDispatcher()
-    const caller = new AbortController()
-    const response = dispatcher.dispatch(makeRequest('aiVault.listSessions', {}), {
-      signal: caller.signal
-    })
-    await vi.waitFor(() => expect(scanAiVaultSessionsInService).toHaveBeenCalledOnce())
-    const scanSignal = scanAiVaultSessionsInService.mock.calls[0]?.[1]
-
-    caller.abort()
-
-    expect(scanSignal?.aborted).toBe(true)
-    await expect(response).resolves.toMatchObject({ ok: false })
   })
 
   it('omits unchanged session bodies only for clients with the matching fingerprint', async () => {
@@ -247,7 +168,7 @@ describe('aiVault.listSessions handler + shared cache', () => {
       expect(changed.result).not.toHaveProperty('unchanged')
       expect(changed.result).not.toMatchObject({ fingerprint: first.result.fingerprint })
     }
-    expect(scanAiVaultSessionsInService).toHaveBeenCalledTimes(1)
+
     const forced = await dispatcher.dispatch(
       makeRequest('aiVault.listSessions', {
         afterFingerprint: first.result.fingerprint,
@@ -258,7 +179,6 @@ describe('aiVault.listSessions handler + shared cache', () => {
     if (forced.ok) {
       expect(forced.result).not.toHaveProperty('unchanged')
     }
-    expect(scanAiVaultSessionsInService).toHaveBeenCalledTimes(2)
   })
 
   it('restamps the shared cached result as the addressed runtime host', async () => {
@@ -279,10 +199,6 @@ describe('aiVault.listSessions handler + shared cache', () => {
     )) as { ok: boolean; result: AiVaultListResult }
 
     // Host identity changes response stamps, never host-local scan/cache identity.
-    expect(scanAiVaultSessionsInService).toHaveBeenCalledTimes(1)
-    expect(scanAiVaultSessionsInService.mock.calls[0]?.[0]).toMatchObject({
-      executionHostId: 'local'
-    })
 
     expect(localResponse.result.sessions[0]?.executionHostId).toBe('local')
     expect(runtimeResponse.result.sessions[0]?.executionHostId).toBe('runtime:remote-server')

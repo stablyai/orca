@@ -7,7 +7,7 @@ import {
   releaseWorktreeSleepView,
   subscribeWorktreeSleepView
 } from '@/lib/worktree-sleep-view'
-import type { EphemeralVmRuntimeRecord } from '../../../../../../shared/ephemeral-vm-runtimes'
+import type { EphemeralVmRuntimeRecord } from '../../../../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 
 /** Holds the selected workspace view-only until the user selects anything else. */
 function holdSelectedSleepView(worktreeId: string): void {

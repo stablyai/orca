@@ -21,10 +21,10 @@ const store = vi.hoisted((): Store => ({
 }))
 vi.mock('../../store', () => ({ useAppStore: { getState: () => store.state } }))
 vi.mock('@/store/slices/tabs/split-landing-groups', () => ({ hasSplitLandingGroup: () => false }))
-vi.mock('@/components/floating-terminal/floating-workspace-focus-reclaim', () => ({
+vi.mock('@/components/floating-terminal/focus/floating-workspace-focus-reclaim', () => ({
   armFloatingPanelReclaimIntent: vi.fn()
 }))
-vi.mock('@/components/floating-terminal/floating-workspace-terminal-actions', () => ({
+vi.mock('@/components/floating-terminal/workspace/floating-workspace-terminal-actions', () => ({
   isFloatingWorkspacePanelFocused: () => false
 }))
 vi.mock('@/store/workspaces/floating/floating-workspace-panel-selector', () => ({

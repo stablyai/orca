@@ -1,7 +1,7 @@
 // The verdict a session-capped host (Orca Cloud) polls to decide renew, idle sleep or rollover.
 // Unlike idle exit it ignores open clients and live shells: a connected desktop is not work.
 import type { OrcadWorkVerdict } from '../../shared/hosted-sandbox/hosted-session-events'
-import type { OrcadIdleProbe } from './orcad-idle-exit-monitor'
+import type { OrcadIdleProbe } from './host-lifecycle/idle-exit/orcad-idle-exit-monitor'
 
 let probes: readonly OrcadIdleProbe[] | null = null
 let idleSince: number | null = null

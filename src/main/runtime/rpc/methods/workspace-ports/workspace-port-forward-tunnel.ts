@@ -13,8 +13,8 @@ import type { BrowserNetworkTunnelOpen } from '../../../../../shared/browser/net
 import {
   WORKSPACE_PORTS_FORWARD_TUNNEL_EARLY_DATA_CAPABILITY,
   WORKSPACE_PORTS_FORWARD_TUNNEL_RUNTIME_CAPABILITY
-} from '../../../../../shared/workspace-ports-runtime-capabilities'
-import { WorkspacePortForwardTunnelParams } from '../../../../../shared/rpc-contract/workspace-ports-params'
+} from '../../../../../shared/remote-runtime/protocol/workspace-ports-runtime-capabilities'
+import { WorkspacePortForwardTunnelParams } from '../../../../../shared/rpc-contract/workspaces/workspace-ports-params'
 import { defineStreamingMethod } from '../../core'
 
 // Each subscription is its own session, so a fixed generation is enough to validate frames.

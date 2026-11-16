@@ -1,18 +1,24 @@
 export * from './github-hosted-review-test-harness'
 export * from './gitlab-test-harness'
 import type * as WorktreeScanCacheModule from '../../git/worktrees/catalog/worktree-scan-cache'
-import { vi, type Mock } from 'vitest'
+import { beforeEach, vi, type Mock } from 'vitest'
 
 import type * as GitUsernameModule from '../../git/repositories/git-username'
 import './repo-creation.spec'
 import type * as WslUncAccessGateModule from '../../wsl/filesystem/wsl-unc-access-gate'
 import type * as FilesystemPathContainmentModule from '../../ipc/filesystem/access/filesystem-path-containment'
-import { reviewHeadRemoteRefComponent } from '../../../shared/review-head-tracking-ref'
+import { reviewHeadRemoteRefComponent } from '../../../shared/worktree/hosted-review/review-head-tracking-ref'
 
 export const ORIGIN_REMOTE_URL = 'git@example.com:group/repo.git'
 export const ORIGIN_HEAD_COMPONENT = reviewHeadRemoteRefComponent('origin', ORIGIN_REMOTE_URL)
 import type { OrcaRuntimeService as OrcaRuntimeServiceConstructor } from '../orca-runtime'
 import { setWorktreeWatcherRemoval } from '../../workspaces/removal/worktree-watcher-removal'
+import { _resetWorktreeCatalogOwnerForTests } from '../../workspaces/catalog/repo-worktree-catalog-owner'
+
+// Each runtime case once had private scan caches; the process-wide catalog owner starts unobserved instead.
+beforeEach(() => {
+  _resetWorktreeCatalogOwnerForTests()
+})
 
 type TestMock = Mock
 
@@ -285,7 +291,7 @@ vi.mock('../../agent-launch/trust/agent-trust-presets', () => ({
 }))
 
 const parseOrcaYamlMock = vi.hoisted(() => vi.fn().mockReturnValue(null))
-vi.mock('../../../shared/orca-yaml', async (importOriginal) => ({
+vi.mock('../../../shared/workspace-setup/orca-yaml', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   parseOrcaYaml: parseOrcaYamlMock
 }))
@@ -337,7 +343,9 @@ vi.mock('../../ipc/filesystem/access/filesystem-auth', () => ({
 }))
 
 vi.mock('../../ipc/worktrees/removal/registered-worktree-roots-cache', () => ({
-  invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock
+  invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock,
+  getRegisteredWorktreeRootsRevision: () => 0,
+  registerWorktreeRootsForRepo: vi.fn()
 }))
 
 vi.mock('../../ipc/worktrees/removal/registered-worktree-roots-scoped-invalidation', () => ({

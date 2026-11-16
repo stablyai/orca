@@ -10,11 +10,11 @@ import { runtimeHostPlatform } from '@/components/terminal-pane/pty-transport/ho
 import {
   agentSessionInstallCommand,
   agentSessionSignInCommand
-} from '../../../../../shared/agent-session/lifecycle/agent-session-setup-commands'
+} from '../../../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import type { AgentSessionAccountKind } from '../../../../../shared/agent-session/agent-session-availability'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
-import { resolveHostAgentStartupShell } from '../../../../../shared/windows-terminal-shell'
+import { resolveHostAgentStartupShell } from '../../../../../shared/shell/launch/windows-terminal-shell'
 import {
   useNativeChatHostCommandTerminal,
   type NativeChatHostCommandTerminal
@@ -58,6 +58,8 @@ type NativeChatInstall = {
 export type NativeChatHostSetup = {
   signIn: NativeChatSignIn | null
   install: NativeChatInstall | null
+  /** The chat's host, so setup links open Settings on it. */
+  host?: RuntimeClientTarget
 }
 
 export const NativeChatHostSetupContext = createContext<NativeChatHostSetup | null>(null)
@@ -229,8 +231,8 @@ function useNativeChatInstall(
     setRechecking(true)
     void (
       environmentId
-        ? state.refreshRuntimeDetectedAgents(environmentId, worktreeId)
-        : state.refreshDetectedAgents(worktreeId, { wakeWslDistro: true })
+        ? state.refreshRuntimeDetectedAgents(environmentId, worktreeId, { userInitiated: true })
+        : state.refreshDetectedAgents(worktreeId, { wakeWslDistro: true, userInitiated: true })
     )
       .then(() => {
         // Refreshes can resolve with cached agents after failure; check their explicit outcome.
@@ -277,5 +279,6 @@ export function useNativeChatHostSetup(input: NativeChatHostSetupInput): NativeC
   const terminal = useNativeChatHostCommandTerminal(input)
   const signIn = useNativeChatSignIn(input, terminal)
   const install = useNativeChatInstall(input, terminal)
-  return useMemo(() => ({ signIn, install }), [signIn, install])
+  const { target } = input
+  return useMemo(() => ({ signIn, install, host: target }), [signIn, install, target])
 }

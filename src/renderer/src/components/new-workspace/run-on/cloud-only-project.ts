@@ -2,7 +2,7 @@
 // paired cloud workspace's, or a server added by hand), can still start a new Orca Cloud sandbox.
 // A sandbox clones from GitHub, so it starts like a GitHub-only repository (D4), with the project's
 // own GitHub repository picked for the person.
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../../shared/execution-host'
 import { orcaCloudGitHubRepoUrl } from '@/lib/orca-cloud/use-orca-cloud-repo-access'
 import {

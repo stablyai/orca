@@ -2,7 +2,7 @@ import { useEffect, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import type { AgentDotState } from '@/components/AgentStateDot'
-import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
+import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
 import { findWorktreeById } from '@/store/github/refresh/worktree-refresh'
 import { resolveWorktreeRowOpenInRuntimeOwner } from '@/lib/workspace/ownership/worktree-row-open-in-owner'
 import { useTranslate } from '@/i18n/use-translate'
@@ -144,7 +144,7 @@ export function useWorkspaceAgentSignIn(
     }
     const tabIds = new Set((s.tabsByWorktree[workspaceId] ?? []).map((tab) => tab.id))
     const panes: WorkspaceAgentPane[] = []
-    for (const [paneKey, entry] of Object.entries(s.agentStatusByPaneKey)) {
+    for (const [paneKey, entry] of s.agentStatusByPaneKey.entries()) {
       const tabId = parsePaneKey(paneKey)?.tabId
       const agent = entry ? cloudRowSignInAgent(entry.agentType ?? '') : null
       if (tabId && agent && tabIds.has(tabId)) {

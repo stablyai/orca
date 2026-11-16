@@ -19,10 +19,10 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({ app: { getPath: () => '/user-data' } }))
-vi.mock('../../shared/ephemeral-vm-runtime-store', () => ({
+vi.mock('../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store', () => ({
   updateEphemeralVmRuntimeStatus: mocks.updateStatus
 }))
-vi.mock('../../shared/ephemeral-vm-workspace-runtime', () => ({
+vi.mock('../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-workspace-runtime', () => ({
   findWorkspaceEphemeralVmRuntime: () => state.record
 }))
 vi.mock('../hosted-sandbox/hosted-remote-sleep', () => ({

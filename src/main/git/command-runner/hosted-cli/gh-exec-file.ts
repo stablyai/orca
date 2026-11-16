@@ -53,7 +53,9 @@ export type GhExecOptions = Omit<GitExecOptions, 'cwd' | 'stdin'> & {
 function nonInteractiveGhEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   return {
     ...env,
-    GH_PROMPT_DISABLED: env.GH_PROMPT_DISABLED ?? '1'
+    GH_PROMPT_DISABLED: env.GH_PROMPT_DISABLED ?? '1',
+    // Why: gh 2.91-2.92 detach `gh send-telemetry` without a console, so its tzutil child flashes a window on Windows.
+    GH_TELEMETRY: env.GH_TELEMETRY ?? 'false'
   }
 }
 

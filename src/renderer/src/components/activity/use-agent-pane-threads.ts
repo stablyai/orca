@@ -15,7 +15,7 @@ import { collectHiddenChildAgentPaneKeys } from './activity-thread-child-agent'
 import {
   EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
   getPairedDeviceIdsByEnvironment
-} from '../../../../shared/workspace-creator-visibility'
+} from '../../../../shared/workspace-view/workspace-creator-visibility'
 import { filterThreadsByActivityScope, resolveActivityScopeRepoIds } from './activity-scope-filter'
 import {
   createActivityThreadSearchMatcher,
@@ -25,7 +25,7 @@ import {
 import type {
   ActivityGroupBy,
   ThreadReadFilter
-} from '../../../../shared/agents-view-thread-filters'
+} from '../../../../shared/agent-status/presentation/agents-view-thread-filters'
 import type { ActivityThreadGroup, AgentPaneThread } from './activity-thread-types'
 
 const EMPTY_PANE_KEYS: ReadonlySet<string> = new Set()
@@ -63,7 +63,7 @@ export function useAllAgentPaneThreads({ badgeOnly = false }: { badgeOnly?: bool
       if (
         badgeOnly &&
         Object.keys(storeData.migrationUnsupportedByPtyId).length === 0 &&
-        !Object.values(storeData.agentStatusByPaneKey).some((entry) =>
+        !Array.from(storeData.agentStatusByPaneKey.values()).some((entry) =>
           freshActivityLiveAgentState(entry, now)
         )
       ) {
@@ -78,7 +78,6 @@ export function useAllAgentPaneThreads({ badgeOnly = false }: { badgeOnly?: bool
           agentStatusByPaneKey: storeData.agentStatusByPaneKey,
           runtimeAgentOrchestrationByPaneKey: storeData.runtimeAgentOrchestrationByPaneKey,
           migrationUnsupportedByPtyId: storeData.migrationUnsupportedByPtyId,
-          retainedAgentsByPaneKey: storeData.retainedAgentsByPaneKey,
           tabsByWorktree: storeData.tabsByWorktree,
           ptyIdsByTabId: storeData.ptyIdsByTabId,
           unifiedTabsByWorktree: storeData.activityTabs,

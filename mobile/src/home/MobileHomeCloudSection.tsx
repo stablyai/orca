@@ -16,7 +16,7 @@ import {
   setPinned
 } from '../../../src/shared/cloud-workspaces/cloud-workspace-arrangement'
 import { formatWorkspaceNumber } from '../../../src/shared/cloud-workspaces/cloud-workspaces-wire'
-import { formatTimeAgo } from '../worktree/agent-row-display'
+import { formatTimeAgo } from '../worktree/agent-lineage/agent-row-display'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'

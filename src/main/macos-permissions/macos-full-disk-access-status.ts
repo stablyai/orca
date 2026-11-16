@@ -1,7 +1,7 @@
 import { open } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import type { DeveloperPermissionStatus } from '../../shared/developer-permissions-types'
+import type { DeveloperPermissionStatus } from '../../shared/app-lifecycle/permissions/developer-permissions-types'
 
 type ReadProbe = (filePath: string) => Promise<void>
 

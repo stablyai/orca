@@ -42,3 +42,13 @@ src/main/text-generation/source-control-wsl-prompt.test.ts
 src/shared/remote-runtime/host-store/wsl-host-deployment-store.test.ts
 tests/e2e/helpers/persisted-profile-state.unit.test.ts
 tests/e2e/relay-region-correction.unit.test.ts
+# Added with the 4fcdfeddfd1 sync (#841): fail identically on upstream 4fcdfeddfd1 on the omarchy lane (Linux bash
+# OSC 133 prompt composition, a journal settlement timing check, the legacy-relay incumbent-shell probe, and the
+# real Claude Code SDK stop test, which needs an authenticated claude binary). Found by running the same select-all
+# set on 4fcdfeddfd1 and on #841's head; nothing failed on #841 alone. Full re-derivation follows the sync.
+src/main/claude/sdk-transport/claude-stream-json-connection.test.ts
+src/main/daemon/shell-readiness/testing/bash-prompt-command-composition.test.ts
+src/main/daemon/shell-readiness/testing/shell-ready-bash-wrapper.test.ts
+src/main/native-chat/agent-session-journal/journal-domain-lifecycle.test.ts
+src/main/providers/local-pty/local-pty-shell-ready-wrapper-generation.test.ts
+src/main/ssh/legacy-relay/endpoints/ssh-relay-endpoint-incumbent-shell.integration.test.ts

@@ -5,8 +5,8 @@ import {
   getRepoExecutionHostId,
   parseExecutionHostId
 } from '../../../../shared/execution-host'
-import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
-import type { Repo } from '../../../../shared/repo-types'
+import { getHostDisplayLabelOverrides } from '../../../../shared/execution-host/host-setting-overrides'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { getAutomationTargetAvailability } from './hosts/automation-target-availability'
 import type { AutomationsPageDestinationState } from './authoring/use-automations-page-destination-state'
 import type { AutomationsPageDestinationFormState } from './authoring/use-automations-page-destination-form'

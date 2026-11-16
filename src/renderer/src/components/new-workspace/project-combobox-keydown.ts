@@ -1,5 +1,5 @@
 import type React from 'react'
-import { focusCascadedAddProjectMenuFirstItem } from './ProjectComboboxAddProjectOption'
+import { focusCascadedAddProjectMenuFirstItem } from './project-selection/ProjectComboboxAddProjectOption'
 
 export const PROJECT_COMBOBOX_ADD_PROJECT_KEY = 'add-project'
 

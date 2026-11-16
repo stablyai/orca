@@ -11,14 +11,14 @@ import {
   finalizeSession,
   updateTimeline,
   timestampIso
-} from '../../session-scanner-accumulator'
-import { addDecodedSessionMessage } from '../../session-scanner-messages'
+} from '../../parsing/session-scanner-accumulator'
+import { addDecodedSessionMessage } from '../../parsing/session-scanner-messages'
 import {
   normalizeFullFirstUserPromptText,
   shouldCaptureFullFirstUserPrompt
-} from '../../session-scanner-first-user-prompt'
-import { normalizeTitleText } from '../../session-scanner-text-normalization'
-import { asRecord } from '../../session-scanner-record-value'
+} from '../../prompts/session-scanner-first-user-prompt'
+import { normalizeTitleText } from '../../parsing/session-scanner-text-normalization'
+import { asRecord } from '../../parsing/session-record-fields'
 import {
   extractOpenCode2MessageText,
   decodeOpenCode2Message,

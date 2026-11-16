@@ -9,7 +9,7 @@ import type { RuntimeMobileSpeechCatalog } from '../speech/runtime-mobile-speech
 import type { RuntimeNativeChatDraftResolutions } from '../agent-session/launch/runtime-native-chat-draft-resolutions'
 import type { RuntimeSessionSearchSettingsController } from '../integrations/ai-vault/runtime-session-search-settings'
 import type { RuntimeSubscriptionRegistry } from '../client/runtime-subscription-registry'
-import type { NotificationAttentionAcknowledgement } from '../../../shared/notification-settings-types'
+import type { NotificationAttentionAcknowledgement } from '../../../shared/notifications/notification-settings-types'
 
 export type RuntimeServiceCommandSurface = {
   listAiVaultSessions: RuntimeAiVaultCommands['list']
@@ -68,6 +68,7 @@ export type RuntimeServiceCommandSurface = {
   runHostAccountSignIn: RuntimeAccountController['runHostSignIn']
   getHostCodexLaunchHome: RuntimeAccountController['hostCodexLaunchHome']
   removeCodexAccount: RuntimeAccountController['removeCodex']
+  renameManagedAccount: RuntimeAccountController['renameAccount']
   addCodexAccountFromHome: RuntimeAccountController['addCodexFromHome']
   addDataAccountFromHome: RuntimeAccountController['addDataFromHome']
   selectDataAccount: RuntimeAccountController['selectData']
@@ -187,6 +188,7 @@ export function installRuntimeServiceCommandSurface(
     runHostAccountSignIn: accounts.runHostSignIn.bind(accounts),
     getHostCodexLaunchHome: accounts.hostCodexLaunchHome.bind(accounts),
     removeCodexAccount: accounts.removeCodex.bind(accounts),
+    renameManagedAccount: accounts.renameAccount.bind(accounts),
     addCodexAccountFromHome: accounts.addCodexFromHome.bind(accounts),
     addDataAccountFromHome: accounts.addDataFromHome.bind(accounts),
     selectDataAccount: accounts.selectData.bind(accounts),
@@ -203,7 +205,8 @@ export function installRuntimeServiceCommandSurface(
     clearOpenAiSpeechKey: speech.clearOpenAiKey.bind(speech),
     startMobileDictation: dictation.start.bind(dictation),
     feedMobileDictation: dictation.feed.bind(dictation),
-    finishMobileDictation: dictation.finish.bind(dictation),
+    finishMobileDictation: (params) =>
+      dictation.finish(params, accounts.getCommitMessageAgentEnvironment()),
     cancelMobileDictation: dictation.cancel.bind(dictation),
     getAllBrowserDrivers: browsers.getAll.bind(browsers),
     reclaimBrowserForDesktop: browsers.reclaimForDesktop.bind(browsers),

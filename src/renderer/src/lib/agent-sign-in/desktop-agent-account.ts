@@ -1,7 +1,7 @@
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
-} from '../../../../shared/managed-account-types'
+} from '../../../../shared/agent-accounts/managed-account-types'
 import type { HostAgentSignInAgent } from '../../../../shared/host-agent-sign-in-status'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { getProviderAccountActiveIdForView } from '@/components/provider-accounts/provider-account-visibility'

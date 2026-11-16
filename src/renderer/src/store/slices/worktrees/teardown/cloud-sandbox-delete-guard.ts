@@ -4,18 +4,18 @@ import {
   ephemeralVmCleanupErrorText,
   ephemeralVmErrorText
 } from '@/runtime/ephemeral-vm/ephemeral-vm-error-copy'
-import type { EphemeralVmRuntimeRecord } from '../../../../../../shared/ephemeral-vm-runtimes'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { EphemeralVmRuntimeRecord } from '../../../../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   CLOUD_ASLEEP_DELETE_REFUSAL,
   CLOUD_UNREACHABLE_DELETE_REFUSAL
-} from '../../../../../../shared/worktree/removal'
+} from '../../../../../../shared/worktree/removal/removal'
 import type { RemoveWorktreeOptions } from './worktree-removal-options'
 import type { WorktreeSliceGet } from '../listing/worktree-slice-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import { ensureHooksConfirmed } from '@/runtime/repo-hooks/ensure-hooks-confirmed'
-import { formatArchiveHookFailure } from '../../../../../../shared/worktree/archive-hook-removal-gate'
+import { formatArchiveHookFailure } from '../../../../../../shared/worktree/removal/archive-hook-removal-gate'
 import {
   archiveHookOutputTail,
   cloudArchiveHookNeedsWake,

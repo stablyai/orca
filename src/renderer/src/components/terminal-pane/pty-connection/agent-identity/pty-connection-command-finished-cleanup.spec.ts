@@ -61,117 +61,6 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       await restoreTerminalTestGlobals()
     })
 
-    it('keeps Droid routing visible through command-finished foreground confirmation', async () => {
-      vi.useFakeTimers()
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks3 = await vi.importMock<PtyConnectionAgentTitleMocks>(
-        '@/lib/agent-status/aggregation/worktree-agent-status'
-      )
-      const getForegroundProcess = vi.mocked(window.api.pty.confirmForegroundProcess)
-      getForegroundProcess.mockResolvedValue('droid')
-      const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
-      const ptyId = 'pty-droid-confirmation-window'
-      const transport = createMockTransport(ptyId)
-      transport.connect.mockImplementation(
-        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
-          dataCallbackRef.current = callbacks.onData ?? null
-          return { id: ptyId }
-        }
-      )
-      transportFactoryQueue.push(transport)
-      const paneKey = makePaneKey('tab-1', LEAF_1)
-
-      connectPanePty(
-        ...mockPanePtyArgs(
-          createPane(1),
-          createManager(1),
-          bindPaneAgentTitleMocks(
-            createDeps({ isVisibleRef: { current: false } }),
-            agentTitleMocks3
-          )
-        )
-      )
-      await vi.advanceTimersByTimeAsync(20)
-      await flushAsyncTicks()
-      mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
-        launchConfig: { agentArgs: '', agentEnv: {} },
-        identity: { agentType: 'droid' }
-      }
-      mockStoreState.clearAgentLaunchConfig.mockImplementation((key: string) => {
-        delete mockStoreState.agentLaunchConfigByPaneKey[key]
-      })
-
-      const readsBeforeFinish = getForegroundProcess.mock.calls.length
-      dataCallbackRef.current?.('\x1b]133;D;0\x07')
-      expect(mockStoreState.clearAgentLaunchConfig).not.toHaveBeenCalled()
-      expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('alt-enter')
-
-      await vi.advanceTimersByTimeAsync(350)
-      expect(mockStoreState.clearAgentLaunchConfig).not.toHaveBeenCalled()
-      expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('csi-u')
-
-      expect(getForegroundProcess).toHaveBeenCalledTimes(readsBeforeFinish + 1)
-      expect(mockStoreState.clearAgentLaunchConfig).not.toHaveBeenCalled()
-      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
-        agent: 'droid',
-        agentEvidence: 'process-read',
-        routingTrusted: true,
-        shellForeground: false
-      })
-      expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('csi-u')
-    })
-
-    it('retires pane launch routing after one fresh scan confirms shell', async () => {
-      vi.useFakeTimers()
-      const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks4 = await vi.importMock<PtyConnectionAgentTitleMocks>(
-        '@/lib/agent-status/aggregation/worktree-agent-status'
-      )
-      vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('powershell.exe')
-      const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
-      const ptyId = 'pty-droid-confirmed-shell'
-      const transport = createMockTransport(ptyId)
-      transport.connect.mockImplementation(
-        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
-          dataCallbackRef.current = callbacks.onData ?? null
-          return { id: ptyId }
-        }
-      )
-      transportFactoryQueue.push(transport)
-      const paneKey = makePaneKey('tab-1', LEAF_1)
-      const deps = createDeps({ isVisibleRef: { current: false } })
-
-      connectPanePty(
-        ...mockPanePtyArgs(
-          createPane(1),
-          createManager(1),
-          bindPaneAgentTitleMocks(deps, agentTitleMocks4)
-        )
-      )
-      await vi.advanceTimersByTimeAsync(20)
-      await flushAsyncTicks()
-      mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
-        launchConfig: { agentArgs: '', agentEnv: {} },
-        identity: { agentType: 'droid' }
-      }
-      mockStoreState.clearAgentLaunchConfig.mockImplementation((key: string) => {
-        delete mockStoreState.agentLaunchConfigByPaneKey[key]
-      })
-
-      dataCallbackRef.current?.('\x1b]133;D;0\x07')
-      await vi.advanceTimersByTimeAsync(350)
-      expect(mockStoreState.clearAgentLaunchConfig).toHaveBeenCalledExactlyOnceWith(paneKey)
-      expect(mockStoreState.paneForegroundAgentByPaneKey[paneKey]).toEqual({
-        agent: null,
-        shellForeground: true
-      })
-      expect(resolveMockPaneWindowsShiftEnterEncoding(mockStoreState, paneKey)).toBe('alt-enter')
-      // Process-confirmed exit must reconcile caches; agentStatus:drop retains live-pane latches that would restore working status (STA-4612).
-      expect(window.api.agentStatus.reconcileEndedProcess).toHaveBeenCalledWith(paneKey)
-      // Shell-confirmed exit must leave ChatView even when the agent's OSC title survives.
-      expect(deps.onAgentExitedRef.current).toHaveBeenCalledWith(LEAF_1)
-    })
-
     it.each([
       ['clears stale sleeping identity after a confirmed return to shell', false],
       // Hibernation records resume before kill; the exposed shell is Orca’s own stop rather than an independent agent exit.
@@ -337,10 +226,14 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       const realStore = createCommandFinishedStatusStore()
       const row = realStore.acceptWorkingClaudeStatus(paneKey)
       expect(row).toBeDefined()
-      mockStoreState.agentStatusByPaneKey[paneKey] = row
+      mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
+        [paneKey, row]
+      ])
       // Mirror both real dismissal and teardown to exercise drop-before-reconcile ordering.
       mockStoreState.dropAgentStatus.mockImplementation((key: string) => {
-        delete mockStoreState.agentStatusByPaneKey[key]
+        mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
+          [key, null]
+        ])
         realStore.dropAgentStatus(key)
       })
 

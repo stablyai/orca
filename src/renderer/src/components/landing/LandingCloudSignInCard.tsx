@@ -5,7 +5,7 @@ import { Cloud } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useTranslate } from '@/i18n/use-translate'
 import { useCloudWorkspacesAvailable } from '@/components/cloud-workspaces/use-cloud-workspaces'
-import type { OrcaProfileAuthStatus } from '../../../../shared/orca-profiles'
+import type { OrcaProfileAuthStatus } from '../../../../shared/orca-profiles/orca-profiles'
 import { OrcaSignInButton, OrcaSignInWaitNotice } from '../OrcaSignInProgress'
 
 /** Signed out of an Orca account this build can sign in to: never signed in, or the session ended. */

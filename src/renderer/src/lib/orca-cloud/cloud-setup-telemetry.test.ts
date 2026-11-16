@@ -5,7 +5,7 @@ vi.mock('@/diagnostics/telemetry/telemetry', () => ({
   track: (...args: unknown[]) => track(...args)
 }))
 
-import { eventSchemas } from '../../../../shared/telemetry-events'
+import { eventSchemas } from '../../../../shared/telemetry/telemetry-event-registry'
 import {
   cloudSetupDurationBucket,
   diffCloudSetupTelemetry,

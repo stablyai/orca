@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
-import type { WorkspaceSleepNotice } from '../../../../../../shared/workspace-sleep'
+import type { WorkspaceSleepNotice } from '../../../../../../shared/workspace/lifecycle/workspace-sleep'
 
 type Selection = { activeWorktreeId: string | null; activeWorkspaceExecutionHostId: null }
 

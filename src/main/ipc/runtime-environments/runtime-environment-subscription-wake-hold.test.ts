@@ -16,13 +16,13 @@ vi.mock('../../../shared/remote-runtime/host-catalog/runtime-environment-host-ki
   classifyRuntimeEnvironmentHost: () => ({ kind: 'paired' })
 }))
 vi.mock('../../wsl/host-lifecycle/wsl-host-gate', () => ({ assertWslHostReachable: () => {} }))
-vi.mock('./runtime-environment-recipe-vm-wake', () => ({
+vi.mock('./managed-orcad/runtime-environment-recipe-vm-wake', () => ({
   RECIPE_VM_IN_FLIGHT_WAKE_HOLD_MS: 60_000,
   awaitRecipeVmInFlightWake: wake.awaitInFlight,
   prepareRecipeVm: wake.prepare
 }))
 
-import { resolveSubscribedRuntimeEnvironment } from './runtime-environment-managed-tunnel'
+import { resolveSubscribedRuntimeEnvironment } from './managed-orcad/runtime-environment-managed-tunnel'
 
 describe('a subscription opened while the VM wakes', () => {
   beforeEach(() => {

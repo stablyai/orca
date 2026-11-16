@@ -19,7 +19,7 @@ import { registerTeamPresenceHandlers } from './cloud-workspaces-team-presence'
 import { wakePairedSandbox } from '../cloud-workspaces/cloud-paired-wake'
 import { registerCloudWorkspacePrefsHandlers } from './cloud-workspaces-prefs'
 import type { CloudReadSnapshotState } from '../../shared/cloud-workspaces/read-snapshot-state'
-import type { RemovedServerStore } from './runtime-environments/runtime-environment-removal-cleanup'
+import type { RemovedServerStore } from './runtime-environments/catalog/runtime-environment-removal-cleanup'
 import {
   CloudEnvironmentId as EnvironmentId,
   createCloudWorkspacesPairings,

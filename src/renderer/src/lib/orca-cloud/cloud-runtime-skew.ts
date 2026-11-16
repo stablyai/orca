@@ -2,7 +2,7 @@ import {
   evaluateRuntimeStatusCompat,
   type RuntimeStatusCompatInput
 } from '@/runtime/rpc/compatibility/runtime-protocol-compat'
-import type { RuntimeStatus } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 /**
  * Version skew between this desktop and the orcad inside an Orca Cloud sandbox. The golden image

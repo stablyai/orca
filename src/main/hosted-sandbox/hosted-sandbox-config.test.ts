@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
-import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
-import type { OrcaProfileCloudSummary } from '../../shared/orca-profiles'
+import { removeTreeSync } from '../../shared/file-write/windows-transient-lock-removal'
+import type { OrcaProfileCloudSummary } from '../../shared/orca-profiles/orca-profiles'
 import { isEnvironmentProviderError } from '../environment-providers/environment-provider-driver'
 import {
   linkOrcaProfileToCloud,

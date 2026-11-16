@@ -1,6 +1,6 @@
 // The fix one click runs before a setup session exists (sign in first, else the plan/billing
 // action); the setup page's fallback when the session can't open.
-import type { OrcaCloudAvailability } from '../../../../../shared/orca-yaml-hook-types'
+import type { OrcaCloudAvailability } from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
 import { getOrcaCloudPick, type OrcaCloudRunTargetAccess } from '../orca-cloud-run-target-access'
 import type { CloudSetupStep } from './cloud-start-model'
 

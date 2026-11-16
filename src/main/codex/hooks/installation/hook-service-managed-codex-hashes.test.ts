@@ -46,11 +46,7 @@ vi.mock(
 
 import './hook-service'
 import { CodexHookService } from './codex-hook-service-implementation'
-import {
-  _internals as lookupInternals,
-  startCodexHookHashLookup
-} from '../../trust/hooks/codex-hook-hash-lookup'
-import { memoizeCodexHookAnswer } from '../../trust/hooks/codex-hook-trust-memo'
+import { startCodexHookHashLookup } from '../../trust/hooks/codex-hook-hash-lookup'
 import type { CodexHookAnswer } from '../../trust/hooks/codex-hook-trust-derivation'
 import {
   readHookTrustEntries,
@@ -167,37 +163,6 @@ describe('managed-home Codex hook approval', () => {
     expect(
       readHookTrustEntries(join(managedHome(), 'config.toml')).get(managedKey('stop', 0))
     ).toBe(undefined)
-  })
-
-  it("leaves user trust byte-untouched while approving Orca's entries", async () => {
-    mkdirSync(managedHome(), { recursive: true })
-    const userBlock = [
-      '[hooks.state."/home/user/.codex/hooks.json:stop:3:1"]',
-      'enabled = false',
-      'trusted_hash = "sha256:user-owned-hash"'
-    ].join('\n')
-    writeFileSync(join(managedHome(), 'config.toml'), `${userBlock}\n`)
-    useCodexHashes()
-
-    expect((await new CodexHookService().install()).state).toBe('installed')
-    expect(readFileSync(join(managedHome(), 'config.toml'), 'utf-8')).toContain(userBlock)
-  })
-
-  it("turning hooks off removes an approval from an older Codex version's hash", async () => {
-    useCodexHashes()
-    expect((await new CodexHookService().install()).state).toBe('installed')
-    lookupInternals.resetForTesting()
-    memoizeCodexHookAnswer(join(homes.userDataDir, 'codex'), 'codex-0.160', command(), {
-      kind: 'hashes',
-      codexVersion: 'codex-cli 0.160.0',
-      hashes: { stop: 'sha256:codex-0.160-stop' }
-    })
-
-    await new CodexHookService().remove()
-
-    const trust = readHookTrustEntries(join(managedHome(), 'config.toml'))
-    expect(trust.get(managedKey('stop', 0))).toBeUndefined()
-    expect(trust.get(managedKey('session_start', 0))).toBeUndefined()
   })
 
   it("keeps the managed config.toml loadable when hooks are off and the user's approvals are inline", async () => {

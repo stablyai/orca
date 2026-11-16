@@ -7,7 +7,7 @@ import { mkdir, rm, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { ipcMain, type BrowserWindow } from 'electron'
-import { getEphemeralVmRecipeResultConnection } from '../../shared/ephemeral-vm-recipes'
+import { getEphemeralVmRecipeResultConnection } from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipes'
 import {
   CLOUD_TRANSFER_ARCHIVE,
   CLOUD_TRANSFER_MAX_BYTES

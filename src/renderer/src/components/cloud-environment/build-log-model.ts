@@ -1,4 +1,4 @@
-import { stripAnsiEscapeSequences } from '../../../../shared/ansi-escape-sequences'
+import { stripAnsiEscapeSequences } from '../../../../shared/terminal/protocol/escape/ansi-escape-sequences'
 import type { EnvironmentBuildStep } from './cloud-environment-types'
 
 export const BUILD_STEPS: readonly EnvironmentBuildStep[] = [

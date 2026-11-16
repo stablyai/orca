@@ -43,8 +43,7 @@ describe('PKCE loopback for cloud setup', () => {
     let authorize = ''
     const flow = beginOrcaCloudPkceFlow(config, 'profile-1', {
       onAuthorizeUrl: (url) => (authorize = url),
-      authorizeParams: { setup: '1', device: 'MacBook Pro', setup_steps: 'github' },
-      holdBrowser: true
+      authorizeParams: { setup: '1', device: 'MacBook Pro', setup_steps: 'github' }
     })
     await vi.waitFor(() => expect(authorize).not.toBe(''))
     const url = new URL(authorize)
@@ -59,8 +58,8 @@ describe('PKCE loopback for cloud setup', () => {
     const browser = fetch(callback, { redirect: 'manual' })
     const code = await flow
     expect(code.code).toBe('the-code')
-    expect(code.finishBrowser).toBeTypeOf('function')
-    code.finishBrowser!('https://auth.test/cloud/setup/start?session=cs_x&ticket=t')
+    expect(code.redirect).toBeTypeOf('function')
+    code.redirect('https://auth.test/cloud/setup/start?session=cs_x&ticket=t')
     const response = await browser
     expect(response.status).toBe(302)
     expect(response.headers.get('location')).toBe(
@@ -72,8 +71,7 @@ describe('PKCE loopback for cloud setup', () => {
     process.env.ORCA_CLOUD_DEV_OPEN_URL_FILE = join(mkdtempSync(join(tmpdir(), 'pkce-')), 'urls')
     let authorize = ''
     const flow = beginOrcaCloudPkceFlow(config, 'profile-1', {
-      onAuthorizeUrl: (url) => (authorize = url),
-      holdBrowser: true
+      onAuthorizeUrl: (url) => (authorize = url)
     })
     await vi.waitFor(() => expect(authorize).not.toBe(''))
     const url = new URL(authorize)
@@ -81,7 +79,7 @@ describe('PKCE loopback for cloud setup', () => {
     callback.searchParams.set('code', 'c')
     callback.searchParams.set('state', url.searchParams.get('state')!)
     const browser = fetch(callback, { redirect: 'manual' })
-    ;(await flow).finishBrowser!('javascript:alert(1)')
+    ;(await flow).redirect('javascript:alert(1)')
     expect((await browser).status).toBe(200)
   })
 })
@@ -177,8 +175,7 @@ describe('COPY-LINK-FIRST-CLICK options', () => {
     expect(pkceSignInOptions({ openBrowser: false })).toEqual({ openBrowser: false })
     expect(pkceSignInOptions({ authorizeParams: { setup: '1' }, openBrowser: false })).toEqual({
       openBrowser: false,
-      authorizeParams: { setup: '1' },
-      holdBrowser: true
+      authorizeParams: { setup: '1' }
     })
   })
 })

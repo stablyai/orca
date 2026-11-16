@@ -1,11 +1,11 @@
-import type { PickerOption } from '../../components/PickerModal'
-import { TaskProviderLogo } from '../../components/TaskProviderLogo'
+import type { PickerOption } from '../../components/sheets/PickerModal'
+import { TaskProviderLogo } from '../../components/icons/TaskProviderLogo'
 import { colors } from '../../theme/mobile-theme'
 import { getLinkedWorkItemSuggestedName } from '../../new-workspace/creation/mobile-workspace-name'
 import type { GitHubProjectSettings } from '../project-board/github-project-reference'
 import type { TaskProvider } from '../../../../src/shared/work-items/task-providers'
-import type { GitHubProjectSortDirection } from '../../../../src/shared/github/project-types'
-import type { ProjectGroup } from '../../../../src/shared/github/project-group-sort'
+import type { GitHubProjectSortDirection } from '../../../../src/shared/github/projects/project-types'
+import type { ProjectGroup } from '../../../../src/shared/github/projects/project-group-sort'
 import type {
   GitHubMode,
   GitHubPreset,

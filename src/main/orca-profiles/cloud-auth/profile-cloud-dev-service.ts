@@ -1,7 +1,7 @@
 import type {
   CreateCloudLinkedOrcaProfileArgs,
   OrcaProfileListState
-} from '../../../shared/orca-profiles'
+} from '../../../shared/orca-profiles/orca-profiles'
 import type { ActiveOrcaProfileState } from '../profile-index-store'
 import { createCloudLinkedOrcaProfileRecord, linkOrcaProfileToCloud } from './profile-cloud-index'
 import { readCloudSession, signInCloudSession } from '../cloud-session/profile-cloud-session-owner'

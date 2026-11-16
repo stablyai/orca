@@ -5,7 +5,7 @@ import {
   writePersistedStateJson
 } from '../../persistence-test-harness'
 // Verify persisted UTF-8 bytes round-trip through secrets, local sessions and remote partitions.
-import { getSecretStore } from '../../../../shared/secret-store'
+import { getSecretStore } from '../../../../shared/secure-storage/secret-store'
 import { mkdtempSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

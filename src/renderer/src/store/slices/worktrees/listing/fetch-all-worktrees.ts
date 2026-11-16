@@ -16,7 +16,10 @@ import { mergeFetchedWorktrees } from './fetched-worktree-merge'
 import { listingMetadataCoverage } from './workspace-metadata-coverage'
 import { notifyRuntimeScopeForbiddenIfNeeded } from './runtime-scope-forbidden-toast'
 import { mapReposForWorktreeRefresh } from './worktree-refresh-pool'
-import { selectWorktreesByRepo } from '../../../workspaces/catalog/workspace-record-fields'
+import {
+  selectDetectedWorktreesByRepo,
+  selectWorktreesByRepo
+} from '../../../workspaces/catalog/workspace-record-fields'
 import { purgeHydratedWorktrees } from './hydrated-worktree-purge'
 import type { WorktreeRefreshResult } from './worktree-refresh-result'
 
@@ -43,6 +46,8 @@ export function createFetchAllWorktrees(
         try {
           const requestStartedState = get()
           const requestStartedWorktrees = selectWorktreesByRepo(requestStartedState)[repo.id]
+          const requestStartedDetectedWorktrees =
+            selectDetectedWorktreesByRepo(requestStartedState)[repo.id]?.worktrees
           const setup = getProjectHostSetupForRepoHost(requestStartedState, repo.id, hostId)
           const parsedHost = parseExecutionHostId(hostId)
           const directSshAuthority =
@@ -71,6 +76,7 @@ export function createFetchAllWorktrees(
             hostId,
             ownerWasMissingAtStart: false,
             requestStartedWorktrees,
+            requestStartedDetectedWorktrees,
             setup,
             refresh: metadata.refresh,
             purgeRemovedWorktrees
