@@ -60,7 +60,8 @@ export function renderPierreDiffCommentAnnotation(
     draftPlaceholder,
     draftSubmitLabel,
     onCancelDraft,
-    onSubmitDraft
+    onSubmitDraft,
+    retainKey
   }: {
     worktreeId: string
     commentOwner?: DiffCommentOwner | null
@@ -75,6 +76,8 @@ export function renderPierreDiffCommentAnnotation(
     draftSubmitLabel?: string
     onCancelDraft?: () => void
     onSubmitDraft?: (body: string) => Promise<boolean>
+    /** Scope for drafts that must outlive this row; omit to keep them only while mounted. */
+    retainKey?: string
   }
 ): React.ReactNode {
   const data = annotation.metadata
@@ -89,6 +92,10 @@ export function renderPierreDiffCommentAnnotation(
         placeholder={draftPlaceholder}
         submitLabel={draftSubmitLabel}
         imageUploadAddress={imageUploadAddress}
+        retainKey={
+          retainKey &&
+          `${retainKey}:compose:${data.startLine ?? data.lineNumber}-${data.lineNumber}`
+        }
         onCancel={onCancelDraft}
         onSubmit={onSubmitDraft}
       />
@@ -107,6 +114,7 @@ export function renderPierreDiffCommentAnnotation(
       author={comment.author}
       createdAtLabel={comment.createdAtLabel}
       url={comment.url}
+      retainKey={retainKey && `${retainKey}:edit:${comment.id}`}
       onDelete={comment.canDelete === false ? undefined : () => onDeleteComment(comment.id)}
       onSubmitEdit={
         onUpdateComment && comment.canEdit !== false

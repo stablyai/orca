@@ -82,7 +82,7 @@ export function DiffSectionItem({
   const [pendingComment, setPendingComment, draftOwner] = useOwnedDiffCommentTarget<{
     lineNumber: number
     startLine?: number
-  }>(worktreeId, noteSource)
+  }>(worktreeId, noteSource, editStateKey && `note:${editStateKey}`)
 
   // Why: a fresh `[]` fallback would invalidate every memo that reads comments.
   const comments = useMemo(

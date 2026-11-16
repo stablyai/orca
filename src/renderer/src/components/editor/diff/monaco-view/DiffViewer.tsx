@@ -81,7 +81,7 @@ export default function DiffViewer({
   const [pendingComment, setPendingComment, draftOwner] = useOwnedDiffCommentTarget<{
     lineNumber: number
     startLine?: number
-  }>(worktreeId, noteSource)
+  }>(worktreeId, noteSource, `note:${modelKey}`)
 
   const renderLimit = useMemo(
     () =>

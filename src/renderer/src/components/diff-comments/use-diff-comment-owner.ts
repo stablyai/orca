@@ -12,6 +12,10 @@ import {
 } from '@/store/slices/diff-comments/diff-comment-owner'
 import type { WorkspaceCopySource } from '@/lib/workspace/ownership/workspace-copy-owner'
 import type { DiffComment } from '../../../../shared/file-review/diff-comment-types'
+import {
+  readRetainedDiffCommentTarget,
+  writeRetainedDiffCommentTarget
+} from './retained-diff-comment-drafts'
 
 /**
  * The notes a surface shows and the copy they belong to, from one read. A retained surface passes
@@ -42,17 +46,25 @@ export function useOwnedDiffComments(owner: DiffCommentOwner | null): DiffCommen
   return useAppStateValue((state) => select(state, owner))
 }
 
-/** A composer target whose owner is captured when it opens, so a later submit saves to that copy. */
+/**
+ * A composer target whose owner is captured when it opens, so a later submit saves to that copy.
+ * With `retainKey` the target outlives this component (virtualized rows, hidden tabs).
+ */
 export function useOwnedDiffCommentTarget<T extends object>(
   worktreeId: string | null | undefined,
-  source: WorkspaceCopySource
+  source: WorkspaceCopySource,
+  retainKey?: string
 ) {
-  const [target, setTarget] = useState<T | null>(null)
-  const capturedOwner = useRef<DiffCommentOwner | null>(null)
+  const [retained] = useState(() =>
+    retainKey ? readRetainedDiffCommentTarget(retainKey) : undefined
+  )
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a retain key is written only by the surface that reads it, with the same target type.
+  const [target, setTarget] = useState<T | null>((retained?.target ?? null) as T | null)
+  const capturedOwner = useRef<DiffCommentOwner | null>(retained?.owner ?? null)
   // Installed keyboard openers keep the first setter they were given, so it reads the current surface.
-  const current = useRef({ worktreeId, source })
+  const current = useRef({ worktreeId, source, retainKey })
   useLayoutEffect(() => {
-    current.current = { worktreeId, source }
+    current.current = { worktreeId, source, retainKey }
   })
   const setOwnedTarget = useCallback<Dispatch<SetStateAction<T | null>>>((value) => {
     // Opening reads the copy this surface shows now; position-only updates keep it.
@@ -63,7 +75,14 @@ export function useOwnedDiffCommentTarget<T extends object>(
         current.current.source
       ).owner
     }
-    setTarget(value)
+    setTarget((previous) => {
+      const next = typeof value === 'function' ? value(previous) : value
+      const { retainKey: key } = current.current
+      if (key) {
+        writeRetainedDiffCommentTarget(key, { target: next, owner: capturedOwner.current })
+      }
+      return next
+    })
   }, [])
   return [target, setOwnedTarget, capturedOwner] as const
 }

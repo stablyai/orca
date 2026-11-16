@@ -5,7 +5,7 @@ import type { GitHubImageIntake } from '@/components/github/use-github-image-upl
 import { useEditorTypography } from '@/hooks/use-editor-typography'
 import { useCodeEditorThemeStore } from '@/store/appearance/code-editor-theme'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
-import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { useCallback, useContext, useLayoutEffect, useMemo, useRef } from 'react'
 import { FileDiff } from '@pierre/diffs/react'
 import type {
   FileDiff as PierreFileDiff,
@@ -36,7 +36,7 @@ import { usePierreDiffFind } from './use-pierre-diff-find'
 import { PierreDiffSearchBar } from './PierreDiffSearchBar'
 import { usePierreDiffShiftWheel } from './use-pierre-diff-shift-wheel'
 import { usePierreDiffNativeView } from './use-pierre-diff-native-view'
-import { installPierreContextualCopy } from './pierre-diff-context-copy'
+import { usePierreDiffContextCopy } from './use-pierre-diff-context-copy'
 import { editorShortcutMatches } from '@/components/editor/commands/editor-shortcuts'
 import { usePierreDiffNoteNavigation } from './use-pierre-diff-note-navigation'
 import { usePierreDiffNoteSelection } from './use-pierre-diff-note-selection'
@@ -239,18 +239,7 @@ export function PierreDiffSurface({
     []
   )
 
-  // Why: Monaco's diff panes owned `editor.copyContext`; restore it for Pierre rows.
-  const fileInfoRef = useRef({ relativePath: filePath, language: language ?? '' })
-  useLayoutEffect(() => {
-    fileInfoRef.current = { relativePath: filePath, language: language ?? '' }
-  }, [filePath, language])
-  useEffect(() => {
-    const node = containerRef.current
-    if (!node) {
-      return
-    }
-    return installPierreContextualCopy(node, () => fileInfoRef.current)
-  }, [])
+  usePierreDiffContextCopy(containerRef, filePath, language)
 
   const options = useMemo(
     () => ({
@@ -354,7 +343,8 @@ export function PierreDiffSurface({
         draftPlaceholder: addCommentPlaceholder,
         draftSubmitLabel: addCommentLabel,
         onCancelDraft: onCancelComment,
-        onSubmitDraft: onSubmitComment
+        onSubmitDraft: onSubmitComment,
+        retainKey: editStateKey && `note:${editStateKey}`
       }),
     [
       worktreeId,
@@ -369,7 +359,8 @@ export function PierreDiffSurface({
       addCommentPlaceholder,
       addCommentLabel,
       onCancelComment,
-      onSubmitComment
+      onSubmitComment,
+      editStateKey
     ]
   )
 

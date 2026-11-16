@@ -13,6 +13,7 @@ import {
 } from '@/lib/source-control/review/comments/comment-body-submit-state'
 import { toast } from 'sonner'
 import { installOpenDraftAddReviewNoteGuard } from '../editor/commands/editor-shortcuts'
+import { useRetainedDiffCommentField } from './retained-diff-comment-drafts'
 
 export type DiffCommentDraftCardProps = {
   lineNumber: number
@@ -23,6 +24,8 @@ export type DiffCommentDraftCardProps = {
   submittingLabel?: string
   initialBody?: string
   onBodyChange?: (body: string) => void
+  /** Keeps text, caret and focus across unmounts (virtualized rows, hidden tabs). */
+  retainKey?: string
   onCancel: () => void
   onSubmit: (body: string) => Promise<boolean>
   onContentResize?: () => void
@@ -46,10 +49,12 @@ export function DiffCommentDraftCard({
   onSubmit,
   onContentResize,
   initialBody = '',
-  onBodyChange
+  onBodyChange,
+  retainKey
 }: DiffCommentDraftCardProps): React.JSX.Element {
   const t = useTranslate()
-  const [body, setBody] = useState(initialBody)
+  const retained = useRetainedDiffCommentField(retainKey)
+  const [body, setBody] = useState(retained.initialBody ?? initialBody)
   const bodyRef = useRef(body)
   const [submitting, setSubmitting] = useState(false)
   const imagePending = useGitHubImagePending()
@@ -93,6 +98,7 @@ export function DiffCommentDraftCard({
 
   const { attachDrop } = images
   const hasImageUpload = !!imageUploadAddress
+  const { bind: bindRetained, restored } = retained
   const focusTextareaRef = useCallback(
     (textarea: HTMLTextAreaElement | null): void => {
       if (hasImageUpload) {
@@ -100,12 +106,18 @@ export function DiffCommentDraftCard({
       } else {
         textareaRef.current = textarea
       }
-      textarea?.focus()
+      bindRetained(textarea)
+      if (!restored) {
+        textarea?.focus()
+      }
     },
-    [attachDrop, hasImageUpload]
+    [attachDrop, hasImageUpload, bindRetained, restored]
   )
 
   useEffect(() => {
+    if (restored) {
+      return
+    }
     const focusTextarea = (): void => textareaRef.current?.focus()
     focusTextarea()
     if (typeof requestAnimationFrame !== 'function') {
@@ -113,7 +125,13 @@ export function DiffCommentDraftCard({
     }
     const frame = requestAnimationFrame(focusTextarea)
     return () => cancelAnimationFrame(frame)
-  }, [])
+  }, [restored])
+
+  const { clear: clearRetained } = retained
+  const cancel = useCallback(() => {
+    clearRetained()
+    onCancel()
+  }, [clearRetained, onCancel])
 
   useLayoutEffect(() => {
     const card = cardRef.current
@@ -154,11 +172,11 @@ export function DiffCommentDraftCard({
       if (/\S/u.test(bodyRef.current)) {
         return
       }
-      onCancel()
+      cancel()
     }
     document.addEventListener('mousedown', onDocumentMouseDown)
     return () => document.removeEventListener('mousedown', onDocumentMouseDown)
-  }, [onCancel])
+  }, [cancel])
 
   const handleSubmit = async (): Promise<void> => {
     if (submitting || imagePending.pendingRef.current) {
@@ -182,7 +200,9 @@ export function DiffCommentDraftCard({
     setSubmitting(true)
     try {
       const result = await onSubmit(bodyState.body)
-      if (result === false && mountedRef.current) {
+      if (result !== false) {
+        retained.clear()
+      } else if (mountedRef.current) {
         setSubmitting(false)
       }
     } catch (err) {
@@ -203,7 +223,7 @@ export function DiffCommentDraftCard({
       if (submitting) {
         return
       }
-      onCancel()
+      cancel()
       return
     }
 
@@ -249,16 +269,19 @@ export function DiffCommentDraftCard({
           rows={3}
           onChange={(e) => {
             images.change(e.target.value)
+            retained.onChange()
             if (resizeDraftTextarea(e.currentTarget)) {
               onContentResizeRef.current?.()
             }
           }}
+          onFocus={retained.onFocus}
+          onBlur={retained.onBlur}
           onKeyDown={handleKeyDown}
         />
 
         {/* Footer */}
         <div className="orca-diff-comment-popover-footer">
-          <Button type="button" variant="ghost" size="sm" onClick={onCancel} disabled={submitting}>
+          <Button type="button" variant="ghost" size="sm" onClick={cancel} disabled={submitting}>
             {t('auto.components.diff.comments.DiffCommentPopover.2b3ce6d394', 'Cancel')}
           </Button>
           <Button
