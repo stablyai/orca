@@ -21,8 +21,8 @@ import {
   type NativeChatTurnJournal
 } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-membership'
 import { nativeChatMessagesWaitingBehindLiveTurn } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-messages-waiting-behind-live-turn'
-import { NATIVE_CHAT_STREAMING_ID } from '../../../../../../src/shared/native-chat/native-chat-streaming'
-import type { NativeChatResolvedPrompt } from '../../../../../../src/shared/native-chat/native-chat-resolution-receipt'
+import { NATIVE_CHAT_STREAMING_ID } from '../../../../../../src/shared/native-chat/transcript/streaming/native-chat-streaming'
+import type { NativeChatResolvedPrompt } from '../../../../../../src/shared/native-chat/input/questions/native-chat-resolution-receipt'
 import { useMobileNativeChatTranscriptRows } from './use-mobile-native-chat-transcript-rows'
 import type { MobileNativeChatRunPresentation } from '../projection/mobile-native-chat-run-descriptors'
 import {

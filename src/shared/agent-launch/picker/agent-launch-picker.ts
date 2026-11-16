@@ -11,10 +11,8 @@ import {
   reconcileAgentChoiceArgs,
   reconcileAgentChoiceArgsDetailed
 } from '../choices/agent-choice-reconciliation'
-import type {
-  AgentSessionModelCatalogResult,
-  AgentSessionModelOption
-} from '../../agent-session/agent-session-wire'
+import type { AgentSessionModelCatalogResult } from '../../agent-session/agent-session-wire'
+import type { AgentSessionModelOption } from '../../agent-session/options/model-catalog/agent-session-model-option'
 import { orderAgentLaunchPickerAgents, type NewTabAgentMenuRow } from './agent-launch-picker-rows'
 import type { TuiAgent } from '../catalog/tui-agent'
 import type { CurrentActionSelection } from '../../source-control/ai/recipes/source-control-action-selection'

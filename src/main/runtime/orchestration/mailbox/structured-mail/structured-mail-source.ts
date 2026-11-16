@@ -1,11 +1,11 @@
-import { readAnswerSenderSnapshot } from '../../../../../shared/agent-session/answer-sender-snapshot'
+import { readAnswerSenderSnapshot } from '../../../../../shared/agent-session/journal/answer-sender-snapshot'
 /** Snapshot distinct sender provenance and join mail to its surviving Run, Dispatch and message records. */
 
 import type {
   AgentMessageSource,
   AgentMessageSender,
   OrchestrationMailNotice
-} from '../../../../../shared/agent-session/agent-session-message-source'
+} from '../../../../../shared/agent-session/journal/agent-session-message-source'
 import type { AgentJournalMessageItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { MessageRow } from '../../db/orchestration-records'
 import type { OrchestrationDb } from '../../db/orchestration-db'
@@ -106,9 +106,8 @@ export function structuredMailSource(input: {
   }
 }
 
-/** One orchestration message as one chat message: the whole message, with who it is from.
- *  `whole` is false when it would exceed a chat message's limit; that one then points at `check`
- *  and stays unread there. */
+/** One orchestration message as one chat card: the whole message, with who it is from, for people.
+ *  `whole` is false when it would exceed a chat message's limit; that card then shows the pointer. */
 export function structuredMailMessage(input: {
   db: OrchestrationDb
   mailboxHandle: string

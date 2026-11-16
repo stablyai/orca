@@ -2,7 +2,7 @@ import { splitPaneTitle } from './sender-pane-title'
 import { senderDispatchLaunch, senderDispatchLaunchReader } from './sender-dispatch-launch'
 // Name another agent from host records when sending on its behalf or listing its worktree.ps row.
 
-import type { AgentMessageSender } from '../../../../../shared/agent-session/agent-session-message-source'
+import type { AgentMessageSender } from '../../../../../shared/agent-session/journal/agent-session-message-source'
 import {
   getAgentRowConversationName,
   type ConversationNameTab

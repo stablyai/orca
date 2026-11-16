@@ -8,7 +8,7 @@ import { resolveRowProgramStatus } from '@/lib/program-status/agent-row-presenta
 import {
   agentMessageSenderView,
   type AgentMessageSenderView
-} from '../../../../../../shared/agent-session/agent-message-presentation'
+} from '../../../../../../shared/agent-session/view/messages/agent-message-presentation'
 
 const EMPTY_VIEW: AgentMessageSenderView = Object.freeze({})
 let rowBuilds = 0

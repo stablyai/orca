@@ -1,5 +1,5 @@
 import { defineStreamingMethod } from '../../../core'
-import { sendingTextAppends } from '../../../../../../shared/agent-session/agent-session-text-append'
+import { sendingTextAppends } from '../../../../../../shared/agent-session/view/live-read/agent-session-text-append'
 import { recordMobileViewOpened } from '../../../../../telemetry/mobile-client-telemetry'
 import { clientRequestsCommands } from '../structured-agent-session-policy'
 import { clientReadsCurrentRequests } from '../conversation/structured-agent-session-current-requests'

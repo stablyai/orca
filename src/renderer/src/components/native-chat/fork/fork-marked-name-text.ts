@@ -2,7 +2,7 @@ import type { Translate } from '@/i18n/use-translate'
 import {
   FORK_MARKED_NAME_SLOTS,
   forkMarkedNameParts
-} from '../../../../../shared/agent-session/agent-session-fork-name-order'
+} from '../../../../../shared/agent-session/conversation-naming/agent-session-fork-name-order'
 
 /** "Fork · <name>" as plain text in the locale's order, for titles and other text-only places. */
 export function forkMarkedNameText(t: Translate, name: string): string {

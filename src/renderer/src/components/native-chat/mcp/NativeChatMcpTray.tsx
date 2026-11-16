@@ -11,7 +11,7 @@ import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/h
 import type {
   AgentSessionMcpOperation,
   AgentSessionMcpResult
-} from '../../../../../shared/agent-session/agent-session-mcp'
+} from '../../../../../shared/agent-session/options/protocol/agent-session-mcp'
 import {
   createAgentSessionMcpPanelHook,
   type AgentSessionMcpPanelState
