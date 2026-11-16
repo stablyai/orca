@@ -73,7 +73,9 @@ export async function inspectSpawnFileWindowsChildProcesses(
         const rows = await (fresh
           ? readWindowsProcessIdentityTableFresh()
           : readWindowsProcessIdentityTable())
-        if ([...members].some((pid) => !rows.some((row) => row.pid === pid && row.name))) {
+        // Panes polling one shared snapshot share its index instead of each rescanning the table.
+        const byPid = getProcessTableIndex(rows).byPid
+        if ([...members].some((pid) => !byPid.get(pid)?.name)) {
           throw new Error('Incomplete shell job identity')
         }
         return rows
