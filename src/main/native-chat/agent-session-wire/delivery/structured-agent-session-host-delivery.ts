@@ -55,6 +55,7 @@ export type StructuredAgentSessionConversationDelivery = {
   ) => Promise<void>
   /** The account move the running child defers. */
   accountTransition: StructuredAgentSessionAccountTransitionRead
+  accountMoveSettled: (sessionId: string) => null
 }
 
 export function createStructuredAgentSessionConversationDelivery(input: {
@@ -259,6 +260,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
   return {
     loop,
     accountTransition: outgrown.accountTransition,
+    accountMoveSettled: outgrown.accountMoveSettled,
     afterCommit,
     afterSettleEdge: (sessionId, journal) => {
       input.clientDelivery.publishStatusAndSettlement(sessionId)

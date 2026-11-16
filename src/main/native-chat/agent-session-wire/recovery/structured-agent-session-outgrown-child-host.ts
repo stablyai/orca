@@ -69,7 +69,7 @@ export function createStructuredAgentSessionOutgrownChildHost(input: {
       next?: AgentJournalSubmission
     ): Promise<StructuredAgentSessionOutgrownChild> => {
       const session = await unlessStopping(sessionId)
-      const outcome = await retireOutgrownStructuredAgentSessionChild(sessionId, session, {
+      return retireOutgrownStructuredAgentSessionChild(sessionId, session, {
         next,
         requiresModelTransitionRestart: (submission) =>
           session?.child?.phase === 'ready' &&
@@ -99,14 +99,6 @@ export function createStructuredAgentSessionOutgrownChildHost(input: {
         now,
         logger: deps.logger
       })
-      if (session) {
-        holds.observe(
-          session,
-          sessionId,
-          outcome.kind === 'deferred' ? (outcome.transition ?? null) : null
-        )
-      }
-      return outcome
     },
     accountTransition: (async (sessionId, launchHome) => {
       const transition = await readStructuredAgentSessionAccountTransition(
@@ -120,6 +112,10 @@ export function createStructuredAgentSessionOutgrownChildHost(input: {
       holds.observe(sessions.get(sessionId), sessionId, transition)
       return transition
     }) satisfies StructuredAgentSessionAccountTransitionRead,
+    accountMoveSettled: (sessionId: string): null => {
+      holds.observe(sessions.get(sessionId), sessionId, null)
+      return null
+    },
     dispose: () => holds.dispose()
   }
 }

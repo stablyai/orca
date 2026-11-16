@@ -216,3 +216,16 @@ it('sends no usage-limit continue to the old account while its subagent still ru
   expect(chat.dispatchedTo('Continue where you left off')).toEqual([chat.child()!.fence])
   expect(chat.child()?.accountHome).toEqual({ variable: 'CODEX_HOME', path: '/homes/b' })
 })
+
+it('lets go of the hold once the person deletes the message it held', async () => {
+  const chat = await chatOnAccountA()
+  chat.background([devServer()])
+  chat.switchTo('/homes/b')
+  const sent = rig!.send('never mind')
+  await sent.result
+  const session = () => rig!.host.collaboratorsForTests().sessions.get(SESSION)
+  await eventually(() => expect(session()?.awaitsAccountMove).toBe(true))
+  expect(await rig!.deleteQueued(sent.id)).toMatchObject({ ok: true })
+  await eventually(() => expect(session()?.awaitsAccountMove).toBeUndefined())
+  expect(chat.dispatchedTo('never mind')).toEqual([])
+})

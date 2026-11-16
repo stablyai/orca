@@ -60,6 +60,8 @@ export type StructuredAgentSessionMutationContext = {
   readStopping: (sessionId: string) => Promise<boolean>
   /** Inside serialization: the account move the running child still defers. */
   accountTransition?: StructuredAgentSessionAccountTransitionRead
+  /** Nothing from the person waits: drop the chat's account-move hold. */
+  accountMoveSettled?: (sessionId: string) => null
   wakeDelivery: (sessionId: string) => void
   /** Stop the provider child inside serialization, retaining the conversation. */
   stopAgent: (sessionId: string, ending: StructuredAgentSessionStopEnding) => Promise<void>

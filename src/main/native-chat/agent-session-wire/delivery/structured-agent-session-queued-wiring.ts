@@ -1,3 +1,4 @@
+import type { SqlAgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import type { StructuredAgentSessionMutationContext } from '../operations/structured-agent-session-mutation-context'
 import type {
   StructuredAgentSessionCaller,
@@ -19,6 +20,22 @@ import {
 } from './structured-agent-session-queued-edit'
 import { moveQueuedStructuredAgentMessage } from './structured-agent-session-queued-move'
 
+const personWaits = new WeakMap<SqlAgentSessionJournal, { revision: string; waits: boolean }>()
+
+/** Whether a card from the person waits; re-listed only when the queue changes. */
+async function personCardWaits(journal: SqlAgentSessionJournal): Promise<boolean> {
+  const revision = journal.queuedMessages.revision()
+  const known = personWaits.get(journal)
+  if (known?.revision === revision) {
+    return known.waits
+  }
+  const waits = (await journal.queuedMessages.list()).some(
+    (card) => card.state === 'waiting' && card.body.from === undefined
+  )
+  personWaits.set(journal, { revision, waits })
+  return waits
+}
+
 /** Read host context lazily during field initialization; session touch renews idle activity. */
 export function wireStructuredAgentSessionQueuedMessages(
   sessions: ReadonlyMap<string, StructuredAgentSessionHostSession> & {
@@ -37,11 +54,11 @@ export function wireStructuredAgentSessionQueuedMessages(
       const stopping = await ctx.readStopping(sessionId)
       const child = sessions.get(sessionId)?.child
       const record = ctx.deps.store.getRecord(sessionId)
-      // Only a waiting card from the person needs the account a start would use.
-      const personWaits = (await journal.queuedMessages.list()).some(
-        (card) => card.state === 'waiting' && card.body.from === undefined
-      )
-      const transition = personWaits ? await ctx.accountTransition?.(sessionId) : null
+      // Only a waiting card from the person needs the account a start would use; with none, a
+      // hold has nothing left to keep.
+      const transition = (await personCardWaits(journal))
+        ? await ctx.accountTransition?.(sessionId)
+        : (ctx.accountMoveSettled?.(sessionId) ?? null)
       return {
         ...(transition ? { awaitsAccountMove: true as const } : {}),
         authority: captureHostStructuredAgentSessionWork(
