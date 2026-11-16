@@ -61,8 +61,9 @@ export async function forgetHostNativeChats(
     let forgotten = false
     try {
       forgotten = await host.serialize(sessionId, async () => {
-        // Any history read opens the conversation, so an open one may be on screen.
-        if (host.hasSession(sessionId)) {
+        // Any history read opens the conversation, so an open one may be on screen. A worker that
+        // still owes a dispatch is settled through its record, so it stays until that is done.
+        if (host.hasSession(sessionId) || host.deps.hasOpenDispatch?.(chat)) {
           return false
         }
         const tabShown = host.isSessionTabVisible(sessionId)
@@ -84,7 +85,7 @@ export async function forgetHostNativeChats(
   return result
 }
 
-/** A shown tab was seeded into status lists and may hold orchestration work: close it the usual way. */
+/** A shown tab was seeded into status lists: close it the usual way so its sink rows go too. */
 async function closeForgottenChatTab(
   host: NonNullable<ReturnType<typeof getStructuredAgentSessionHost>>,
   sessionId: string
