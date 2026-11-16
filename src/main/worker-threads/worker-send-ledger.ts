@@ -119,14 +119,11 @@ export function installWorkerSendLedger(role: WorkerThreadRole): void {
   const view = new DataView(ledger, slot * SLOT_BYTES, SLOT_BYTES)
   writeText(view, ROLE, role)
   const largeSendLog = getEnvironmentData(LARGE_SEND_LOG_KEY)
-  const post: unknown = Reflect.get(port, 'postMessage')
-  if (typeof post !== 'function') {
-    return
-  }
+  const post = port.postMessage
   Object.defineProperty(port, 'postMessage', {
     configurable: true,
     writable: true,
-    value: (...args: unknown[]): unknown => {
+    value: (...args: Parameters<typeof post>): void => {
       try {
         const shape = describeWorkerMessage(args[0])
         recordSend(view, shape)
@@ -136,7 +133,7 @@ export function installWorkerSendLedger(role: WorkerThreadRole): void {
       } catch {
         // Diagnostics only.
       }
-      return Reflect.apply(post, port, args)
+      post.call(port, ...args)
     }
   })
 }

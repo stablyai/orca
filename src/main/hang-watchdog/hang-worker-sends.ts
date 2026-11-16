@@ -21,7 +21,8 @@ export function parseHangWorkerSends(value: unknown): HangWorkerSend[] | null {
     if (typeof item !== 'object' || item === null) {
       continue
     }
-    const field = (key: keyof HangWorkerSend): unknown => Reflect.get(item, key)
+    const field = (key: keyof HangWorkerSend): unknown =>
+      Object.getOwnPropertyDescriptor(item, key)?.value
     const role = text(field('role'))
     const kind = text(field('kind'))
     const items = count(field('items'))

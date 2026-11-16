@@ -36,15 +36,16 @@ export function installFatalSignalListenerGuard(target: EventEmitter = process):
     target.removeAllListeners(signal)
   }
   for (const method of LISTENER_METHODS) {
-    const original: unknown = Reflect.get(target, method)
-    if (typeof original !== 'function') {
-      continue
-    }
+    const original = target[method]
     Object.defineProperty(target, method, {
       configurable: true,
       writable: true,
-      value: function (this: unknown, event: unknown, ...rest: unknown[]): unknown {
-        return FAULT_SIGNALS.has(event) ? this : Reflect.apply(original, this, [event, ...rest])
+      value: function (
+        this: EventEmitter,
+        event: string | symbol,
+        listener: (...args: unknown[]) => void
+      ): EventEmitter {
+        return FAULT_SIGNALS.has(event) ? this : original.call(this, event, listener)
       }
     })
   }
