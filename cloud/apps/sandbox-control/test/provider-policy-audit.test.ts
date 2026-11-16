@@ -92,6 +92,15 @@ describe('resume-raw and echo-probe (dev only, probe accounts only)', () => {
     expect((await h.call('POST', `/v1/internal/sandboxes/${id}/echo-probe?marker=${MARKER}`, { bearer: OP, body: { host: 'evil.example', header: 'x-api-key', placeholder } })).status).toBe(400)
   })
 
+  it('session-token-free puts the token-free compile on the live session (probe accounts only)', async () => {
+    const { h, id, box } = await setup({ SANDBOX_ENV: 'dev' })
+    expect((await h.call('POST', `/v1/internal/sandboxes/${id}/session-token-free`, { bearer: OP })).status).toBe(403)
+    await probeAccount(h, id)
+    expect(JSON.stringify(box().policy)).toContain(MARKER)
+    expect((await h.call('POST', `/v1/internal/sandboxes/${id}/session-token-free`, { bearer: OP })).body).toEqual({ sandboxId: id, applied: true })
+    expect(JSON.stringify(box().policy)).not.toContain(MARKER)
+  })
+
   it('refuses a real dev user’s workspace', async () => {
     const { h, id } = await setup({ SANDBOX_ENV: 'dev' })
     expect((await h.call('POST', `/v1/internal/sandboxes/${id}/resume-raw`, { bearer: OP })).status).toBe(403)

@@ -18,7 +18,7 @@ import { readBearer } from './auth'
 import type { GitHubAppMinter } from './github-app'
 import { bindInstallation, revokeInstallation, timingSafeEqual } from './github-connect'
 import { countAllActive, getControlState, killSwitchOn, setKillSwitch } from './guardrails'
-import { applySandboxPolicy, egressSwapModeFor, guardrails, scrubRecordPolicy, type LifecycleDeps } from './lifecycle'
+import { applySandboxPolicy, compileSandboxPolicy, egressSwapModeFor, guardrails, scrubRecordPolicy, type LifecycleDeps } from './lifecycle'
 import { drainAll, housekeeping } from './retention'
 import { memberChangeTime, recordMemberChange } from './member-changes'
 import { memberEventActor, memberEventTarget, removeMember } from './member-removal'
@@ -93,7 +93,7 @@ export async function handleOperator(
   }
   // Dev only (probe 2, egress-docs): redacted facts about what Vercel holds for one sandbox, read with the
   // Worker's own token. Never a value or a body; anywhere but dev, these routes don't exist.
-  const policyAudit = /^\/v1\/internal\/sandboxes\/([A-Za-z0-9_]+)\/(provider-policy-audit|provider-policy-scrub-test|resume-raw|echo-probe)$/.exec(path)
+  const policyAudit = /^\/v1\/internal\/sandboxes\/([A-Za-z0-9_]+)\/(provider-policy-audit|provider-policy-scrub-test|resume-raw|echo-probe|session-token-free)$/.exec(path)
   if (policyAudit && life.config.environment === 'dev') {
     const row = await getSandbox(life.db, policyAudit[1]!)
     if (!row) {
@@ -106,8 +106,19 @@ export async function handleOperator(
     }
     // resume-raw and echo-probe act on a workspace, so only on throwaway probe accounts (dev:egress-…), never a
     // real dev user's workspace.
-    if ((policyAudit[2] === 'resume-raw' || policyAudit[2] === 'echo-probe') && !row.account_id.startsWith('dev:egress-')) {
+    if ((policyAudit[2] === 'resume-raw' || policyAudit[2] === 'echo-probe' || policyAudit[2] === 'session-token-free') && !row.account_id.startsWith('dev:egress-')) {
       return Response.json({ error: 'not_a_probe_account' }, { status: 403 })
+    }
+    if (policyAudit[2] === 'session-token-free' && request.method === 'POST') {
+      // Probe 2 only: put the token-free compile on the LIVE session, to see whether its header-matched `respond`
+      // rules answer (separates "respond not enforced" from "resume restored something else").
+      if (!row.session_id) {
+        return Response.json({ error: 'not_running' }, { status: 409 })
+      }
+      const { policy } = await compileSandboxPolicy(life, row, { tokenFree: true })
+      await life.provider.updateNetworkPolicy(row.session_id, policy)
+      console.log(JSON.stringify({ event: 'provider_session_token_free', sandboxId: row.id }))
+      return Response.json({ sandboxId: row.id, applied: true })
     }
     if (policyAudit[2] === 'resume-raw' && request.method === 'POST') {
       // Probe 2 only: resume the provider session from its stored record with NO policy write of ours, so a probe
