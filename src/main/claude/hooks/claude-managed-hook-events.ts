@@ -91,6 +91,15 @@ const CLAUDE_POST_TOOL_BATCH_EVENT = {
   definition: { hooks: [{ type: 'command', command: '' }] }
 } as const
 
+// Claude never consumes these hooks' output; Orca only observes them, so Claude need not wait
+// for the hook process to exit. Every other event stays synchronous (Orca decides or reports there).
+export const CLAUDE_ASYNC_OBSERVATIONAL_EVENTS: readonly string[] = [
+  'PostToolUse',
+  'PostToolUseFailure',
+  'PostToolBatch',
+  'Stop'
+]
+
 export const CLAUDE_MANAGED_EVENTS = [
   ...CLAUDE_EVENTS,
   ...CLAUDE_ELICITATION_EVENTS,

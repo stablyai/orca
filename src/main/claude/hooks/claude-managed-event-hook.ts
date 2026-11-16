@@ -1,5 +1,6 @@
 import { buildManagedCommandHook } from '../../agent-hooks/installation/configuration/hook-config-schema'
 import type { HookCommandConfig } from '../../agent-hooks/installation/configuration/hook-config-schema'
+import { CLAUDE_ASYNC_OBSERVATIONAL_EVENTS } from './claude-managed-hook-events'
 import {
   CLAUDE_HOOK_SETTINGS,
   getManagedLifecycleHook,
@@ -21,13 +22,23 @@ export function getManagedEventHook(
   nativeHookPath: string | null = null,
   options: NativeHookFormOptions = {}
 ): HookCommandConfig {
+  // Observational events never feed Claude a decision, so their hook may run without blocking the
+  // turn; `withPreviousManagedAsync` still lets a user's explicit async choice override this default.
+  const withObservationalAsync = (hook: HookCommandConfig): HookCommandConfig =>
+    options.asyncObservational === true && CLAUDE_ASYNC_OBSERVATIONAL_EVENTS.includes(eventName)
+      ? { ...hook, async: true }
+      : hook
   if (process.platform === 'win32') {
-    return getManagedLifecycleHook(scriptPath, settings, nativeHookPath, options)
+    return withObservationalAsync(
+      getManagedLifecycleHook(scriptPath, settings, nativeHookPath, options)
+    )
   }
   const hook = getPosixManagedEventHook(eventName, scriptPath)
-  return eventName === 'PermissionRequest'
-    ? { ...hook, timeout: CLAUDE_PERMISSION_HOOK_TIMEOUT_SECONDS }
-    : hook
+  return withObservationalAsync(
+    eventName === 'PermissionRequest'
+      ? { ...hook, timeout: CLAUDE_PERMISSION_HOOK_TIMEOUT_SECONDS }
+      : hook
+  )
 }
 
 /** The POSIX managed entry, local or remote; PreToolUse outlasts the script's wait for Orca. */
