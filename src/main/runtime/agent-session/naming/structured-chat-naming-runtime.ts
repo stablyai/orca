@@ -7,7 +7,7 @@ import {
 } from '../../../../shared/source-control/ai/generation/conversation-name-generation'
 import { chatNamingAgentTarget } from './structured-chat-naming-agent-launch'
 import type { AgentLaunchProfileSettings } from '../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
-import { chatNamingFailure } from '../../../../shared/chat-naming-failure-copy'
+import { chatNamingFailure } from '../../../../shared/text-generation/chat-naming-failure-copy'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { CommitMessageAgentEnvironmentResolvers } from '../../../text-generation/execution/commit-message-agent-environment'
 import type { StructuredChatNamingDeps } from '../../../native-chat/conversation-naming/structured-chat-naming-types'
@@ -72,7 +72,7 @@ export function structuredChatNamingDeps(
       const useChatAgent = !recipe.agentId && !recipe.agentArgs?.trim()
       const log = { scope: 'conversation-name', sessionId: record.sessionId }
       // These save every CLI run, so a naming run would sit in the user's own history.
-      if (useChatAgent && (record.provider === 'copilot' || record.provider === 'kimi')) {
+      if (useChatAgent && ['copilot', 'kimi', 'cursor'].includes(record.provider)) {
         return null
       }
       if (useChatAgent && (record.provider === 'grok' || record.provider === 'antigravity')) {

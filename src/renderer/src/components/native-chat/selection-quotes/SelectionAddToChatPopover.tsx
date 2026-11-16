@@ -1,5 +1,4 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState, type RefObject } from 'react'
-import { flushSync } from 'react-dom'
 import { Quote } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
@@ -144,17 +143,17 @@ export function SelectionAddToChatPopover({
           onCloseAutoFocus={(event) => event.preventDefault()}
           // Keeps the selection, and the focus, where they are until the quote is taken.
           onMouseDown={(event) => event.preventDefault()}
+          // Never takes focus itself, so it must not keep the composer from taking it.
+          data-focus-behavior="page"
         >
           <div className="p-0.5">
             <Button
               variant="ghost"
               size="xs"
               onClick={(event) => {
-                const button = event.currentTarget.getBoundingClientRect()
-                // Why: the composer refuses focus while an overlay, including this one, is open.
                 // Taken or not (the composer may have locked since), the offer is spent.
-                flushSync(() => setRequest(null))
-                onAdd(request.text, button)
+                setRequest(null)
+                onAdd(request.text, event.currentTarget.getBoundingClientRect())
               }}
             >
               <Quote />

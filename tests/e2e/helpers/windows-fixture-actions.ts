@@ -2,7 +2,7 @@ import { expect } from 'vitest'
 import type {
   ComputerActionResult,
   ComputerSnapshotResult
-} from '../../../src/shared/runtime-types'
+} from '../../../src/shared/computer/computer-use-runtime-types'
 import { findRoleIndex, parseJsonOutput, runOrcaCli } from './computer-driver'
 import type {
   WindowsControlsFixture,

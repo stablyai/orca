@@ -8,8 +8,8 @@ import { isStructuredAgentSessionMainAgentWorking } from '../../../../../../shar
 import type { StructuredAgentSessionState } from '../../../../../../shared/agent-session/structured-agent-session-reducer'
 import type { StructuredAgentSubagentRoster } from '../../../../../../shared/agent-session/view/structured-agent-session-subagent-roster'
 import { selectStructuredAgentTurnActivity } from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-activity'
-import { structuredSessionBackgroundTasksView } from '../../../../../../shared/structured-session-background-tasks-view'
-import { structuredSessionForegroundCommands } from '../../../../../../shared/structured-session-foreground-commands'
+import { structuredSessionBackgroundTasksView } from '../../../../../../shared/agent-session/view/structured-session-background-tasks-view'
+import { structuredSessionForegroundCommands } from '../../../../../../shared/agent-session/view/structured-session-foreground-commands'
 import { useStructuredAgentTurnTiming } from '../../conversation/turns/use-structured-agent-turn-timing'
 import { agentSessionCurrentContextRows } from '../../../../../../shared/agent-session/agent-session-context-clear'
 

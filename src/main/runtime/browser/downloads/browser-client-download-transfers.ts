@@ -7,7 +7,7 @@ import {
   buildBrowserDownloadCollisionCandidate,
   MAX_BROWSER_DOWNLOAD_COLLISION_ATTEMPTS,
   normalizeBrowserDownloadFilename
-} from '../../../../shared/browser-download-filename'
+} from '../../../../shared/browser/downloads/browser-download-filename'
 import type { RuntimeFileMutationExpectation } from '../../files/file-mutation-expectation'
 
 // Remote downloads need an in-workspace home reachable through containment-checked transfers.

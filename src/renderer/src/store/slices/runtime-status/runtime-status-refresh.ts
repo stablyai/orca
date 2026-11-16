@@ -3,7 +3,7 @@ import type {
   RuntimeHostStatusSnapshot
 } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
 
-import type { RuntimeStatus } from '../../../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { unwrapRuntimeRpcResult } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { extractRuntimeTransportDiagnostics } from '@/runtime/hosts/connections/runtime-status-probe-diagnostics'

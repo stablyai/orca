@@ -6,7 +6,7 @@ import { openTranscriptReadStream } from '../../../native-chat/transcript-filesy
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
-import { isKnownHarnessInjectedUserTurnText } from '../../../../shared/harness-injected-user-turns'
+import { isKnownHarnessInjectedUserTurnText } from '../../../../shared/agent-session/journal/harness-injected-user-turns'
 import { normalizePromptField } from '../../../../shared/agent-status/contracts/agent-status-field-normalization'
 import type {
   FileWithMtime,
@@ -30,7 +30,7 @@ import {
   extractMessageText,
   normalizeTitleText
 } from '../../parsing/session-scanner-text-normalization'
-import { extractString } from '../../../../shared/trimmed-string'
+import { extractString } from '../../../../shared/text/trimmed-string'
 import { parseJsonObject } from '../../parsing/session-json-object'
 
 type ParserSessionOptions = {

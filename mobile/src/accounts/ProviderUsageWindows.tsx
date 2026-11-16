@@ -1,9 +1,9 @@
 import { View } from 'react-native'
-import { formatWindowLabel } from '../../../src/shared/rate-limit-window-label'
+import { formatWindowLabel } from '../../../src/shared/agent-usage/rate-limits/rate-limit-window-label'
 import {
   getUsageWindowSections,
   type UsageWindowSection
-} from '../../../src/shared/usage-provider-windows'
+} from '../../../src/shared/agent-usage/display/usage-provider-windows'
 import { UsageBar } from './usage/UsageBar'
 import { getUsageBarState, getWindowResetLabel } from './usage/usage-selectors'
 import type { ProviderRateLimits } from './accounts-snapshot'

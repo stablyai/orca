@@ -3,7 +3,7 @@
  * answers EPERM (WSL 2.7). The same folder opens through its drive path, `C:\x`.
  */
 import { realpath as fsRealpath } from 'node:fs/promises'
-import { parseWslUncPath, toWindowsWslDrivePath } from '../../../shared/wsl-paths'
+import { parseWslUncPath, toWindowsWslDrivePath } from '../../../shared/file-access/wsl-paths'
 
 const WSL_UNC_PREFIX = /^[\\/]{2}(?:wsl\.localhost|wsl\$)[\\/][^\\/]+/i
 const DRIVE_PATH = /^([A-Za-z]):(?:[\\/](.*))?$/

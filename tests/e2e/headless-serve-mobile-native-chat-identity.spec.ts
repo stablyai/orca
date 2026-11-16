@@ -12,9 +12,9 @@ import {
 import { pairMobileClient, type PairedMobileClient } from './helpers/paired-mobile-client'
 import type { AgentStatusEntry } from '../../src/shared/agent-status/contracts/agent-status-types'
 import type { AiVaultSession } from '../../src/shared/ai-vault/contracts/ai-vault-types'
-import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-session-contracts'
-import type { RuntimeTerminalListResult } from '../../src/shared/runtime-terminal-contracts'
-import type { RuntimeWorktreePsSummary } from '../../src/shared/runtime-worktree-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeTerminalListResult } from '../../src/shared/terminal/runtime/runtime-terminal-contracts'
+import type { RuntimeWorktreePsSummary } from '../../src/shared/worktree/catalog/runtime-worktree-contracts'
 import { buildMobileAiVaultResumeLaunch } from '../../mobile/src/agent-history/ai-vault-resume-launch'
 
 test.skip(process.platform === 'win32', 'the fake agents are POSIX shell scripts')

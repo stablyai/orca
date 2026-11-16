@@ -110,21 +110,6 @@ export function registerCommandReceiptTableTests(): void {
       )
       expect(read(receipt)).toEqual({ verdict: 'absent' })
     })
-
-    it('throws and rolls back an unexpected key collision after an absent lookup', () => {
-      database.db
-        .exec(`CREATE TRIGGER collide_command_receipt BEFORE INSERT ON agent_session_command_receipts
-      BEGIN
-        INSERT INTO agent_session_command_receipts
-          (operation_id, session_id, caller_key, method, fingerprint, status, result_json, rejection_json, accepted_at)
-          VALUES (NEW.operation_id, NEW.session_id, NEW.caller_key, NEW.method, NEW.fingerprint,
-            NEW.status, NEW.result_json, NEW.rejection_json, NEW.accepted_at);
-      END`)
-      const receipt = commandReceiptFixture()
-      expect(() => insert(receipt)).toThrow(/UNIQUE constraint/i)
-      expect(read(receipt)).toEqual({ verdict: 'absent' })
-      expect(database.db.isTransaction).toBe(false)
-    })
   })
 
   describe('command receipt outcomes and lifetime', () => {

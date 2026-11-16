@@ -5,14 +5,14 @@ import type {
   ProjectGroup,
   ProjectGroupMutation,
   ProjectGroupUpdate
-} from '../../../shared/project-group-types'
+} from '../../../shared/project/groups/project-group-types'
 import {
   createProjectGroup,
   getProjectGroupSubtreeIds,
   normalizeProjectGroupName
-} from '../../../shared/project-groups'
-import { getNextRootProjectOrder } from '../../../shared/root-project-order'
-import { folderWorkspaceKey } from '../../../shared/workspace-scope'
+} from '../../../shared/project/groups/project-groups'
+import { getNextRootProjectOrder } from '../../../shared/sidebar-list/sections/root-project-order'
+import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { removeWorkspaceSessionOwnersEverywhere } from '../restoring-sessions/session-owner-removal'
 
 export type ProjectGroupMutationOperations = {

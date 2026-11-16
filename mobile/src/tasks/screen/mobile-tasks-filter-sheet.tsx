@@ -4,7 +4,7 @@ import { translate as t } from '../../i18n/mobile-i18n'
 import { BottomDrawer } from '../../components/bottom-drawer/BottomDrawer'
 import { openExternalLink } from '../../platform/external-links/external-link'
 import { Text, View } from 'react-native'
-import type { PickerOption } from '../../components/PickerModal'
+import type { PickerOption } from '../../components/sheets/PickerModal'
 import { styles } from '../mobile-tasks-legacy-styles'
 import {
   LINEAR_GROUP_OPTIONS,

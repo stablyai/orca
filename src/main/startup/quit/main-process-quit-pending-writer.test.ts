@@ -8,7 +8,7 @@ import {
   createSqliteTestStore,
   readPersistedStateJson
 } from '../../persistence/persistence-test-harness'
-import { WILL_QUIT_TEARDOWN_DEADLINE_MS } from '../../../shared/quit-teardown-deadline'
+import { WILL_QUIT_TEARDOWN_DEADLINE_MS } from '../../../shared/app-lifecycle/shutdown/quit-teardown-deadline'
 
 const settled = () => vi.fn(async () => {})
 const idle = () => vi.fn()
@@ -67,8 +67,8 @@ const dependencies: Record<string, Record<string, unknown>> = {
   '../../codex/history/index/codex-state-db-backfill-recovery': {
     stopCodexStateDbBackfillRecoveries: settled()
   },
-  '../../codex/history/bridges/codex-account-session-bridge': {
-    stopCodexAccountSessionBridges: idle()
+  '../../codex/history/shared-store/codex-account-history-index': {
+    stopCodexAccountHistoryWork: idle()
   },
   '../../git/refs/maintenance/local-repo-ref-maintenance': {
     awaitPackedRefsLockRelease: settled()

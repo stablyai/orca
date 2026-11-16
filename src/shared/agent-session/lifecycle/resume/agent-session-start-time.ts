@@ -7,6 +7,9 @@ type SessionIdentity = Pick<
   'agentType' | 'providerSession' | 'connectionId' | 'worktreeId'
 >
 
+type PreviousSession = SessionIdentity &
+  Partial<Pick<AgentStatusEntry, 'firstStateStartedAt' | 'stateHistory' | 'stateStartedAt'>>
+
 function finite(value: number | undefined): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
@@ -24,7 +27,7 @@ export function agentEntrySessionStartedAt(
 /** Missing identity enriches a row; only accepted contradictory identity starts another session. */
 export function resolveAgentSessionStartedAt(args: {
   entry: AgentStatusEntry
-  previous?: AgentStatusEntry
+  previous?: PreviousSession
   previousStartedAt?: number
   identity?: SessionIdentity
 }): number {
@@ -72,6 +75,8 @@ export function resolveAgentSessionStartedAt(args: {
   return (
     finite(previous.firstStateStartedAt) ??
     finite(previousStartedAt) ??
-    agentEntrySessionStartedAt(previous)
+    finite(previous.stateHistory?.[0]?.startedAt) ??
+    finite(previous.stateStartedAt) ??
+    agentEntrySessionStartedAt(entry)
   )
 }

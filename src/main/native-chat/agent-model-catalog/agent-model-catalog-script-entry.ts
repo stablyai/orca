@@ -1,4 +1,4 @@
-import { NODE_INTERPRETER_OPTIONS_WITH_VALUE } from '../../../shared/node-interpreter-options'
+import { NODE_INTERPRETER_OPTIONS_WITH_VALUE } from '../../../shared/agent-status/process/node-interpreter-options'
 
 const NODE_FLAGS = new Set([
   '--no-warnings',

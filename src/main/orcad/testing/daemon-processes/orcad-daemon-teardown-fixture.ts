@@ -7,8 +7,8 @@ import {
   buildProcessTableIndex,
   collectDescendantsFromIndex,
   type ProcessTableIndexOf
-} from '../../../../shared/process-table-index'
-import { removeTree } from '../../../../shared/windows-transient-lock-removal'
+} from '../../../../shared/process-observation/tables/process-table-index'
+import { removeTree } from '../../../../shared/file-write/windows-transient-lock-removal'
 import { parseLinuxStartTicks } from '../../../agent-hooks/installation/locking/managed-hook-owner-identity'
 import { DaemonEndpointOwnershipError } from '../../../daemon/launch/daemon-endpoint-adoption'
 import { parseLinuxProcessState } from '../../../daemon/endpoint/identity/daemon-incarnation-evidence'

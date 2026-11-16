@@ -6,7 +6,7 @@ import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership
 import { closeRemoteBrowserPageInOwningEnvironment } from '../hosts/browser-remote-close'
 import { releaseDocPreviewGrant } from '@/lib/browser/documents/doc-preview-grants'
 import { isLocalBrowserPageOwner } from '../hosts/browser-host-state'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
 import { sendBrowserLayoutCommand } from '../tabs/browser-layout-owner-commands'
 import type {
   BrowserSlice,
@@ -14,7 +14,7 @@ import type {
   BrowserSliceSet,
   RemoteBrowserPageHandle
 } from '../browser-slice-contract'
-import type { BrowserPage } from '../../../../../../shared/browser-workspace-types'
+import type { BrowserPage } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 
 export function createBrowserPageConversionActions(
   set: BrowserSliceSet,

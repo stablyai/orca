@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from 'vitest'
-import type { ComputerActionResult } from '../../src/shared/runtime-types'
+import type { ComputerActionResult } from '../../src/shared/computer/computer-use-runtime-types'
 import { ensureOrcaRuntimeLaunched, runOrcaCli, stopOrcaRuntime } from './helpers/computer-driver'
 import { elementIndex, runPatternAction } from './helpers/windows-fixture-actions'
 import {

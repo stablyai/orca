@@ -12,7 +12,7 @@ import os from 'node:os'
 import { dirname, join } from 'node:path'
 import { runProcessSync } from '@orca/process-host'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { setAppEnvironment } from '../../../../../shared/app-environment'
+import { setAppEnvironment } from '../../../../../shared/app-lifecycle/app-environment'
 import { buildInstallFixture } from './daemon-host-relocation.test-fixture'
 import {
   getDaemonHostRootDir,

@@ -49,6 +49,9 @@ export const CONSUMERS = new Map([
         'ownerInputChanged',
         'ownerInputs',
         'createStructuredSessionMembership',
+        'createStructuredSessionStatusBurst',
+        'sameCapturedInput',
+        'sameStatusInput',
         'sameSemanticTab'
       ])
     }

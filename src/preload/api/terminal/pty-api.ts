@@ -1,10 +1,10 @@
-import type { RuntimeTerminalAttention } from '../../../shared/runtime-terminal-contracts'
-import type { PaintedRestorePane } from '../../../shared/painted-restore-ack'
+import type { RuntimeTerminalAttention } from '../../../shared/terminal/runtime/runtime-terminal-contracts'
+import type { PaintedRestorePane } from '../../../shared/terminal/replay/painted-restore-ack'
 import type {
   PtyFencedTerminationRequest,
   PtyFencedTerminationOutcome
 } from '../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
-import type { ResourceViewAdmission } from '../../../shared/resource-view-admission'
+import type { ResourceViewAdmission } from '../../../shared/diagnostics/resource-view-admission'
 import type { SpawnIntent } from '../../../shared/terminal/pty/admission/spawn-admission-contract'
 import type {
   SavedResumeDecision,
@@ -34,7 +34,7 @@ import type {
   AgentKind,
   LaunchSource,
   RequestKind
-} from '../../../shared/telemetry-property-schemas'
+} from '../../../shared/telemetry/schemas/telemetry-property-schemas'
 import type { TerminalSideEffectBatch } from '../../../shared/terminal/output/terminal-side-effect-facts'
 import type { TerminalViewAttributes } from '../../../shared/terminal/protocol/queries/terminal-view-attributes'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
@@ -42,11 +42,11 @@ import type { TerminalPanePlacement } from '../../../shared/workspace-layout/ter
 import type { AgentPaneLaunchRequest } from '../../../shared/agent-launch/contracts/agent-pane-launch-request'
 import type { PtyManagementApi } from './pty-management-api'
 import type { TerminalProcessInspection } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
-import type { CodexSharedServerStatus } from '../../../shared/codex-shared-server-command'
+import type { CodexSharedServerStatus } from '../../../shared/agent-launch/startup/codex-shared-server-command'
 import type {
   NewerDaemonHeldScreen,
   NewerDaemonReopenResult
-} from '../../../shared/newer-daemon-hold'
+} from '../../../shared/terminal/daemon/newer-daemon-hold'
 
 export type PtyApi = {
   spawn: (opts: {

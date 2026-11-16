@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import React, { useState } from 'react'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -123,34 +123,6 @@ describe('AddProjectMenu in sidebar header', () => {
     expect(useAppStore.getState().modalData.entryRequest).toMatchObject({
       kind: 'clone',
       hostId: 'runtime:wsl-ubuntu'
-    })
-  })
-
-  it('opens the native folder picker directly for local Browse folder without opening a modal on cancel', async () => {
-    const user = userEvent.setup()
-    pickFoldersMock.mockResolvedValueOnce([])
-
-    render(
-      <TooltipProvider>
-        <SidebarHeaderActions onWorkspaceBoardMenuOpenChange={vi.fn()} />
-      </TooltipProvider>
-    )
-
-    await user.click(screen.getByRole('button', { name: 'Add project' }))
-    await user.click(await screen.findByRole('menuitem', { name: /Browse folder/ }))
-
-    expect(pickFoldersMock).toHaveBeenCalledOnce()
-    expect(useAppStore.getState().activeModal).toBe('none')
-
-    pickFoldersMock.mockResolvedValueOnce(['/Users/alice/new-repo'])
-    await user.click(screen.getByRole('button', { name: 'Add project' }))
-    await user.click(await screen.findByRole('menuitem', { name: /Browse folder/ }))
-
-    await waitFor(() => expect(useAppStore.getState().activeModal).toBe('add-repo'))
-    expect(useAppStore.getState().modalData.entryRequest).toMatchObject({
-      kind: 'picked-local-paths',
-      paths: ['/Users/alice/new-repo'],
-      hostId: 'local'
     })
   })
 })

@@ -14,6 +14,8 @@ import {
 /** Identity pins location, provider and account home independently of terminal tabs; the lease separately grants one process writer authority. */
 
 import type { AgentSessionLastTurn } from './records/agent-session-last-turn'
+import type { AgentSessionForkedFrom } from './records/agent-session-forked-from'
+export type { AgentSessionForkedFrom }
 import type { ExecutionHostId } from '../../execution-host'
 import { isAgentSessionConversationCommandRecord } from '../agent-session-conversation-command'
 import type { AgentSessionConversationCommandRecord } from '../agent-session-conversation-command'
@@ -26,7 +28,7 @@ import {
   type AgentSessionProviderContextBoundary
 } from '../agent-session-provider-context'
 import { isStructuredAgentId } from './provider-handles/agent-session-provider-handle-encoding'
-import { isNonNegativeSafeInteger } from '../../ssh-retained-payload-limits'
+import { isNonNegativeSafeInteger } from '../../remote-runtime/ssh/ssh-retained-payload-limits'
 import {
   isAgentSessionAccountHome,
   isOptionalAgentSessionLaunchedAccount,
@@ -103,14 +105,6 @@ export type AgentSessionLease = {
   deathEvidence: AgentSessionDeathEvidence | null
 }
 
-export type AgentSessionForkedFrom = {
-  sessionId: string
-  /** The source response whose turn the fork copied through. */
-  itemId: string
-  /** Where the inherited history ends in this chat's own journal. */
-  childBoundary: { kind: 'item'; itemId: string } | { kind: 'start' }
-}
-
 export type AgentSessionRecord = {
   schemaVersion: typeof AGENT_SESSION_RECORD_SCHEMA_VERSION
   sessionId: string
@@ -131,6 +125,9 @@ export type AgentSessionRecord = {
   /** The permission mode the user chose; Orca's, so a provider's options answer never replaces it. */
   permissionMode?: string
   usageLimitContinueCancel?: { turnItemId: string; resetsAt: number }
+  /** The newest async question row the person skipped; it and every earlier question stop
+   *  waiting on them, on every device. A malformed one is dropped on read. */
+  asyncQuestionsSkippedThrough?: string
   rewind?: AgentSessionRewindRecord
   conversationCommand?: AgentSessionConversationCommandRecord
   /** The conversation's one name: Orca's automatic name or the user's rename. Session History,

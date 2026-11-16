@@ -16,6 +16,9 @@ enum MobileWebShellResponseHeaders {
       // HTTPS images can expose session identity: Android uses a hashed host, iOS the verbatim id.
       // WebKit srcdoc images leaked the embedder origin despite iframe referrerPolicy; set the document header.
       headers["Referrer-Policy"] = "no-referrer"
+    } else if path == MobileWebShellChatVisualFrame.path {
+      headers["Content-Security-Policy"] = MobileWebShellChatVisualFrame.csp
+      headers["Referrer-Policy"] = "no-referrer"
     }
     return headers
   }

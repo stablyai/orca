@@ -3,8 +3,8 @@ import type { LayoutMapLike } from './detect-option-as-alt'
 import type {
   KeyboardLayoutKeyCharacters,
   KeyboardLayoutSnapshot
-} from '../../../../shared/keyboard-layout-snapshot'
-import type { KeyboardLayoutChangeEvent } from '../../../../shared/keyboard-layout-events'
+} from '../../../../shared/keybindings/keyboard-layout-snapshot'
+import type { KeyboardLayoutChangeEvent } from '../../../../shared/keybindings/keyboard-layout-events'
 
 type NavigatorWithKeyboard = Navigator & {
   keyboard?: {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
 import { readFile, writeFile } from 'node:fs/promises'
-import { dirname, extname, join, relative, sep } from 'node:path'
+import { dirname, extname, join, relative, resolve, sep } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { fileURLToPath } from 'node:url'
 import { build, version } from 'esbuild'
@@ -90,6 +90,24 @@ export async function loadClaudeUsageBenchmarkScanner(
       {
         name: 'isolated-transcript-filesystem',
         setup(bundler) {
+          bundler.onResolve({ filter: /(?:^|[/\\])event-loop-yield(?:\.[jt]s)?$/ }, (args) => {
+            if (typeof baselineCommit !== 'string') {
+              return undefined
+            }
+            const logicalPath = relative(ROOT, resolve(args.resolveDir, args.path))
+              .split(sep)
+              .join('/')
+            if (
+              ![
+                'src/shared/event-loop-yield',
+                'src/shared/event-loop-yield.ts',
+                'src/shared/event-loop-yield.js'
+              ].includes(logicalPath)
+            ) {
+              return undefined
+            }
+            return { path: join(ROOT, 'src/shared/event-loop-yield.ts') }
+          })
           bundler.onLoad({ filter: /[/\\]src[/\\].*\.[cm]?[jt]sx?$/ }, async (args) => {
             const modulePath = relative(ROOT, args.path).split(sep).join('/')
             if (!modulePath.startsWith('src/')) {

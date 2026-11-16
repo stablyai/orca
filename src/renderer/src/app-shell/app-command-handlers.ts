@@ -1,6 +1,6 @@
 import { canShowRightSidebarForView } from '@/components/right-sidebar/visibility/right-sidebar-visibility'
 import { runBuiltInOrReplacement } from '@/lib/plugins/commands/plugin-command-replacements'
-import { isFloatingWorkspacePanelFocused } from '@/components/floating-terminal/floating-workspace-terminal-actions'
+import { isFloatingWorkspacePanelFocused } from '@/components/floating-terminal/workspace/floating-workspace-terminal-actions'
 import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
 import { requestScrollToCurrentWorkspaceRevealAndRename } from '@/lib/workspace/navigation/scroll-to-current-workspace-status'
 import { requestVirtualizedScrollAnchorRecord } from '@/hooks/requestVirtualizedScrollAnchorRecord'
@@ -14,7 +14,7 @@ import {
 import { requestTerminalTabRename } from '../components/tab-bar/terminal-tab-rename-request'
 import { useAppStore } from '../store/index'
 import type { usePluginCommands } from '@/store/plugins/catalog/plugin-contribution-catalog'
-import { isGitRepoKind } from '../../../shared/repo-kind'
+import { isGitRepoKind } from '../../../shared/repository/repo-kind'
 import { openPluginsSettings } from '@/components/settings/navigation/open-plugins-settings'
 import { resolveActiveTabRenameTarget } from './active-tab-rename-target'
 import { createPluginsSettingsShortcutHandler } from './plugin-settings-shortcut-handler'
@@ -22,7 +22,7 @@ import type {
   KeybindingActionId,
   KeybindingContext,
   PhysicalModifierToken
-} from '../../../shared/keybindings'
+} from '../../../shared/keybindings/types'
 import { shortcutPlatform } from './app-window-chrome'
 export { useAppShortcutActions } from './use-app-shortcut-actions'
 import type { useAppShortcutActions } from './use-app-shortcut-actions'

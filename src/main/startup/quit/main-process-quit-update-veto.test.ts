@@ -39,7 +39,7 @@ const dependencyExports: [string, string[]][] = [
     '../../codex/history/index/codex-state-db-backfill-recovery',
     ['stopCodexStateDbBackfillRecoveries']
   ],
-  ['../../codex/history/bridges/codex-account-session-bridge', ['stopCodexAccountSessionBridges']],
+  ['../../codex/history/shared-store/codex-account-history-index', ['stopCodexAccountHistoryWork']],
   ['../../git/refs/maintenance/local-repo-ref-maintenance', ['awaitPackedRefsLockRelease']],
   ['../../workspaces/removal/worktree-background-removal', ['stopBackgroundWorktreeRemovals']],
   ['./quit-teardown-deadline', ['settleTeardownWithinDeadline', 'settleWithinMs']],

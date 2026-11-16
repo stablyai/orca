@@ -12,18 +12,18 @@ import type {
   InternalTextGenerationResult,
   TextGenerationOperation
 } from '../source-control-text-generation-types'
-import { parseOpenCodeGenerationOutput } from '../../../shared/opencode-generation-output'
-import { parseAntigravityGenerationOutput } from '../../../shared/antigravity-generation-stream'
+import { parseOpenCodeGenerationOutput } from '../../../shared/text-generation/output/opencode-generation-output'
+import { parseAntigravityGenerationOutput } from '../../../shared/text-generation/output/antigravity-generation-stream'
 import {
   findKimiGenerationFailure,
   parseKimiGenerationOutput
-} from '../../../shared/kimi-generation-output'
+} from '../../../shared/text-generation/output/kimi-generation-output'
 import { formatKimiGenerationFailure } from './kimi-generation-failure'
 import type { CommitMessagePlan } from '../../../shared/source-control/ai/generation/commit-message-plan'
 import {
   textGenerationFailure,
   type TextGenerationFailureFields
-} from '../../../shared/text-generation-failure-copy'
+} from '../../../shared/text-generation/text-generation-failure-copy'
 
 // Their stdout is a name or the user's own dictated words, not a diagnostic worth keeping in the error.
 const OPERATIONS_WITHOUT_STDOUT_DETAIL: ReadonlySet<TextGenerationOperation> = new Set([

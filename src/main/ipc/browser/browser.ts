@@ -12,6 +12,11 @@ import {
   resolveTabRegistrationWaiters
 } from './browser-tab-registration-wait'
 import { registerBrowserGuestViewHandlers } from './browser-guest-view-ipc'
+import { registerBrowserGuestDiscardHandlers } from './browser-guest-discard-ipc'
+import {
+  syncBrowserMemorySaverPolicy,
+  type BrowserMemorySaverSettingsSource
+} from '../../browser/guest-lifecycle/browser-page-idle-discard'
 import { registerBrowserDictationHandlers } from './browser-dictation-ipc'
 import {
   disposeGrabModeStateForPage,
@@ -19,12 +24,12 @@ import {
   resetGrabModeState
 } from './browser-grab-ipc'
 import { registerBrowserSessionProfileHandlers } from './browser-session-profile-ipc'
-import type { BrowserCertificateProceedResult } from '../../../shared/browser-workspace-types'
+import type { BrowserCertificateProceedResult } from '../../../shared/browser/workspaces/browser-workspace-types'
 import {
   cancelBrowserWebAuthnAccountRequests,
   respondToBrowserWebAuthnAccountRequest
 } from '../../browser/webauthn/browser-webauthn-account-picker'
-import type { BrowserWebAuthnAccountResponse } from '../../../shared/browser-webauthn-account'
+import type { BrowserWebAuthnAccountResponse } from '../../../shared/browser/prompts/browser-webauthn-account'
 import type {
   BrowserPagePromptResponse,
   BrowserPagePromptResult
@@ -53,7 +58,9 @@ export function setAgentBrowserBridgeRef(bridge: AgentBrowserBridge | null): voi
   agentBrowserBridgeRef = bridge
 }
 
-export function registerBrowserHandlers(store: BrowserPasswordsSettingsSource): void {
+export function registerBrowserHandlers(
+  store: BrowserPasswordsSettingsSource & BrowserMemorySaverSettingsSource
+): void {
   resetGrabModeState()
   ipcMain.removeHandler('browser:registerGuest')
   ipcMain.removeHandler('browser:isGuestRegistered')
@@ -199,24 +206,44 @@ export function registerBrowserHandlers(store: BrowserPasswordsSettingsSource): 
     }
   )
 
-  ipcMain.handle('browser:unregisterGuest', (event, args: { browserPageId: string }) => {
-    if (!isTrustedBrowserRenderer(event.sender)) {
-      return false
+  ipcMain.handle(
+    'browser:unregisterGuest',
+    (event, args: { browserPageId: string; webContentsId?: number; replacement?: boolean }) => {
+      if (!isTrustedBrowserRenderer(event.sender)) {
+        return false
+      }
+      // Documents withdraw by grant revocation; dropping their intent here could silently settle an unarmed grab.
+      if (typeof args?.browserPageId !== 'string' || isWorkspaceDocPageId(args.browserPageId)) {
+        return false
+      }
+      const currentId = browserManager.getGuestWebContentsId(args.browserPageId)
+      if (
+        args.replacement &&
+        args.webContentsId !== undefined &&
+        currentId !== args.webContentsId
+      ) {
+        return false
+      }
+      // Destroy bridge sessions before unregistering clears the guest mapping.
+      const wcId = browserManager.getGuestWebContentsId(args.browserPageId)
+      if (wcId !== null && agentBrowserBridgeRef) {
+        if (args.replacement) {
+          void agentBrowserBridgeRef.onProcessSwap(args.browserPageId, wcId).catch(() => {})
+        } else {
+          agentBrowserBridgeRef.onTabClosed(wcId)
+        }
+      } else if (!args.replacement && agentBrowserBridgeRef) {
+        void agentBrowserBridgeRef.onPageClosed(args.browserPageId).catch(() => {})
+      }
+      cancelBrowserWebAuthnAccountRequests(args.browserPageId)
+      browserManager.unregisterGuest(
+        args.browserPageId,
+        args.replacement ? 'guest-destroyed' : 'page-closed'
+      )
+      disposeGrabModeStateForPage(args.browserPageId)
+      return true
     }
-    // Documents withdraw by grant revocation; dropping their intent here could silently settle an unarmed grab.
-    if (typeof args?.browserPageId !== 'string' || isWorkspaceDocPageId(args.browserPageId)) {
-      return false
-    }
-    // Destroy bridge sessions before unregistering clears the guest mapping.
-    const wcId = browserManager.getGuestWebContentsId(args.browserPageId)
-    if (wcId !== null && agentBrowserBridgeRef) {
-      agentBrowserBridgeRef.onTabClosed(wcId)
-    }
-    cancelBrowserWebAuthnAccountRequests(args.browserPageId)
-    browserManager.unregisterGuest(args.browserPageId)
-    disposeGrabModeStateForPage(args.browserPageId)
-    return true
-  })
+  )
 
   ipcMain.handle(
     'browser:respondWebAuthnAccount',
@@ -277,6 +304,8 @@ export function registerBrowserHandlers(store: BrowserPasswordsSettingsSource): 
   })
 
   registerBrowserGuestViewHandlers()
+  registerBrowserGuestDiscardHandlers()
+  syncBrowserMemorySaverPolicy(store)
   registerBrowserDictationHandlers()
 
   registerBrowserGrabHandlers()

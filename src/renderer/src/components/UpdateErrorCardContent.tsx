@@ -9,7 +9,7 @@ import {
   RotateCw,
   ShieldAlert
 } from 'lucide-react'
-import type { UpdateInstallBlocker } from '../../../shared/update-status-types'
+import type { UpdateInstallBlocker } from '../../../shared/updater/update-status-types'
 import { Button } from './ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 

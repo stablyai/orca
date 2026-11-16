@@ -5,7 +5,7 @@ import {
   UNRESOLVED_OWNER_HOST_ID
 } from '../../../../../shared/execution-host'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
-import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 
 import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'
 import { findIndexedRepoOwner as findRepoRecord } from './repo-owner-index'
@@ -15,7 +15,7 @@ import {
 } from './worktree-runtime-owner-index'
 import { getActiveWorkspaceExecutionHostId } from './active-workspace-host'
 import { getSingleFocusedRuntimeEnvironmentId } from './single-runtime-legacy-owner'
-import { isEphemeralSetupTerminalWorktreeId } from '../../../../../shared/ephemeral-setup-terminal-worktree-id'
+import { isEphemeralSetupTerminalWorktreeId } from '../../../../../shared/workspace-setup/ephemeral-setup-terminal-worktree-id'
 import { getPairedWebClientEnvironmentId } from '../../../app-shell/platform/paired-web-client-host'
 import {
   findFolderWorkspaceOwner,
@@ -23,7 +23,10 @@ import {
   getRuntimeEnvironmentIdForFolderWorkspace
 } from './folder-workspace-runtime-owner'
 import { namedHostForOwnerRef, resolveOwner, type WorkspaceOwnerRef } from './resolve-owner'
-import { SELF_LOCAL_AUTHORITY, type HostAuthority } from '../../../../../shared/host-authority'
+import {
+  SELF_LOCAL_AUTHORITY,
+  type HostAuthority
+} from '../../../../../shared/execution-host/host-authority'
 import type { ExecutionHostOwnerMatch } from '../../../../../shared/execution-host/worktree-execution-host-resolution'
 import { getFloatingWorkspaceOperationRoute } from './worktree-operation-route'
 import { resolveExplicitWorktreeOperationRouteResult } from './worktree-operation-catalog-route'

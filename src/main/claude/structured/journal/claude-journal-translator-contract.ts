@@ -32,6 +32,8 @@ export type ClaudeJournalTranslatorDeps = {
   goalBackgroundWork?: () => ClaudeGoalBackgroundWork
   /** True when this acquisition's pending startup took a turnless failure result and will fail with it. */
   acceptStartupFailure?: (message: Record<string, unknown>) => boolean
+  /** True while a send written with priority `now` has not been echoed. */
+  steerAwaitingEcho?: () => boolean
 }
 
 export type ClaudeJournalTranslator = {

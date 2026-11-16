@@ -7,7 +7,7 @@ import type {
   AutomationUpdateInput
 } from '../../../../shared/automations/automation-definition'
 import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type {
   AutomationListParams,

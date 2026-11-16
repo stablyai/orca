@@ -6,7 +6,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, vi } from 'vitest'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
@@ -25,10 +25,8 @@ import {
   createTestParams,
   CREATE_TEST_CALLER
 } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-create.test-fixture'
-import {
-  seedTestAgentSessionRecordStore,
-  openTestAgentSessionRecordStoreSlot
-} from '../records/agent-session-record-store-test-harness'
+import { openTestAgentSessionRecordStoreSlot } from '../records/agent-session-record-store-test-harness'
+import { seedTestAgentSessionRecordStore } from '../records/agent-session-record-store-persistence.test-fixture'
 import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { withChatTabChanges } from '../agent-session-tab-layout'

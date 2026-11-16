@@ -1,7 +1,10 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { translateWorkspaceBoardStatusLabel } from '@/components/sidebar/workspace-board-status-label'
-import type { DashboardCard, DashboardFilterOption } from '../../../../../shared/dashboard-snapshot'
+import type {
+  DashboardCard,
+  DashboardFilterOption
+} from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import type { DashboardReviewFilter } from './agent-board-filtering'
 
 export type FilterOption = { id: string; label: string; count: number; color?: string }

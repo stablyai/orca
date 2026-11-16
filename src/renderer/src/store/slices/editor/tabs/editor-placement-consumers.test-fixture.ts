@@ -9,7 +9,7 @@ import {
 } from '@/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
 import type { OpenFile } from '../types/open-file'
 import { createGlobalSettingsFixture } from '../../../../../../shared/global-settings-test-fixture'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
 import { drawTabsFromMain } from '../../tabs/tabs-drawn-from-main.test-fixture'
 import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
 import { beginPendingTab } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'

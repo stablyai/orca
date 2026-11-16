@@ -2,7 +2,7 @@ import type {
   StructuredChatNameGeneration,
   StructuredChatNamingDeps
 } from './conversation-naming/structured-chat-naming-types'
-import { chatNamingFailure } from '../../shared/chat-naming-failure-copy'
+import { chatNamingFailure } from '../../shared/text-generation/chat-naming-failure-copy'
 import {
   createStructuredChatNamingWork,
   type NamingRequest
@@ -15,7 +15,7 @@ import {
   conversationNameSeed
 } from '../../shared/source-control/ai/generation/conversation-name-generation'
 import { hasStructuredChatPromptText } from '../../shared/agent-session/requests/structured-agent-session-first-prompt'
-import { sliceAtCodeUnitLimit } from '../../shared/surrogate-safe-text-slice'
+import { sliceAtCodeUnitLimit } from '../../shared/text/surrogate-safe-text-slice'
 import {
   formatAgentGenerationFailureOutputForDisplay,
   type AgentGenerationFailureOutput

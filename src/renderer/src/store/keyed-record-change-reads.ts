@@ -84,6 +84,30 @@ export function readRecordChanges(next: Keyed, previous: Keyed): RecordChanges |
     : { kind: 'addressed', keys: result.keys, added: result.added, deleted: result.deleted }
 }
 
+/** Whether writes from `previous` to `next` may touch a key `reaches` accepts; unannotated ones may. */
+export function recordChangeReaches(
+  next: Keyed,
+  previous: Keyed | undefined,
+  reaches: (key: string) => boolean
+): boolean {
+  if (!previous) {
+    return true
+  }
+  const changes = readRecordChanges(next, previous)
+  if (!changes) {
+    return false
+  }
+  if (changes.kind !== 'addressed') {
+    return true
+  }
+  for (const key of changes.keys) {
+    if (reaches(key)) {
+      return true
+    }
+  }
+  return false
+}
+
 export function readTabMapChanges(
   next: KeyedSnapshot,
   previous: KeyedSnapshot

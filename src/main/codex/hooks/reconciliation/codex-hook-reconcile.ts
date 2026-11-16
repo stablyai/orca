@@ -1,4 +1,4 @@
-import { withTimeout } from '../../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 import {
   CODEX_HOOK_LAUNCH_WAIT_MS,
   readKnownCodexHookAnswer,

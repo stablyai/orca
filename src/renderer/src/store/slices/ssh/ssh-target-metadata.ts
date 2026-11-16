@@ -1,5 +1,8 @@
-import type { SshTarget, SshTargetSummary } from '../../../../../shared/ssh-types'
-import { sanitizeSshTargetGeneration } from '../../../../../shared/ssh-target-generation'
+import type {
+  SshTarget,
+  SshTargetSummary
+} from '../../../../../shared/remote-runtime/ssh/ssh-types'
+import { sanitizeSshTargetGeneration } from '../../../../../shared/remote-runtime/ssh/ssh-target-generation'
 
 export function sshTargetLabelsEqual(
   labels: Map<string, string>,

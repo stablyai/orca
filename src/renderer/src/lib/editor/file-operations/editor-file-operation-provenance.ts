@@ -1,7 +1,7 @@
 import { parseExecutionHostId } from '../../../../../shared/execution-host'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
-import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { findFolderWorkspaceOwner } from '../../workspace/ownership/folder-workspace-runtime-owner'
 import { resolveOwner } from '../../workspace/ownership/resolve-owner'
 import { captureDirectSshMutationExpectation } from '../../../runtime/hosts/ssh/ssh-mutation-expectation'
@@ -28,7 +28,7 @@ import {
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { AppState } from '@/store/types'
-import type { HostAuthority } from '../../../../../shared/host-authority'
+import type { HostAuthority } from '../../../../../shared/execution-host/host-authority'
 
 export type EditorFileOperationProvenance = {
   generation: WorktreeOperationGenerationSnapshot

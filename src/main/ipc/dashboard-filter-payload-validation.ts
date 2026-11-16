@@ -1,4 +1,4 @@
-import { DASHBOARD_MAX_LABEL_LENGTH } from '../../shared/dashboard-snapshot'
+import { DASHBOARD_MAX_LABEL_LENGTH } from '../../shared/agent-status/presentation/dashboard-snapshot'
 
 const MAX_DASHBOARD_FILTER_OPTIONS = 500
 const MAX_ID_LENGTH = 4_096

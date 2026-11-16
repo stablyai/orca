@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { BrowserPasswordEntryDetailsResult } from '../../../../../../shared/browser-passwords-types'
+import type { BrowserPasswordEntryDetailsResult } from '../../../../../../shared/browser/passwords/browser-passwords-types'
 import { BrowserPasswordsSection } from './BrowserPasswordsSection'
 
 vi.mock('@/i18n/i18n', async (importOriginal) => ({

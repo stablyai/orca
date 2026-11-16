@@ -52,7 +52,7 @@ const PAGE_ENTRY = `
 import { createElement, useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
-import { MobileRichMarkdownEditor } from './MobileRichMarkdownEditor'
+import { MobileRichMarkdownEditor } from './rich-markdown/MobileRichMarkdownEditor'
 import { applyMobileColorScheme } from '../theme/mobile-theme'
 
 /**

@@ -5,8 +5,8 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { runProcess } from '@orca/process-host'
-import { ORCAD_NODE_PTY_DIR } from '../../../shared/orcad-artifacts'
-import { removeTreeSync } from '../../../shared/windows-transient-lock-removal'
+import { ORCAD_NODE_PTY_DIR } from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
+import { removeTreeSync } from '../../../shared/file-write/windows-transient-lock-removal'
 import {
   locatePinnedNodeForTests,
   skipForMissingInputs
@@ -31,8 +31,8 @@ describe.skipIf(skip)('packaged node-pty under the pinned Node', () => {
         stdin: {
           contents: `
               import { LocalPtyProvider } from './src/main/providers/local-pty/local-pty-provider'
-              import { setAppEnvironment } from './src/shared/app-environment'
-              import { getCmdExePath } from './src/shared/windows-batch-spawn'
+              import { setAppEnvironment } from './src/shared/app-lifecycle/app-environment'
+              import { getCmdExePath } from './src/shared/shell/launch/windows-batch-spawn'
               const loaded = require('fs').realpathSync(require.resolve('node-pty'))
               if (!loaded.startsWith(require('fs').realpathSync(${JSON.stringify(packageDir)}))) throw new Error('node-pty resolved outside the package: ' + loaded)
               setAppEnvironment({

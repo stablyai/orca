@@ -50,7 +50,7 @@ export type ClaudeOpenTurnDeps = {
   /** The superseded turn's spawn calls get no announcement now. */
   turnSuperseded: () => void
   /** Ends what the ending turn left open, at the instant it ended; no later frame will. */
-  endOpenWork: (completedAt: number) => void
+  endOpenWork: (sessionId: string | null, completedAt: number, settles?: boolean) => void
   onOpen?: () => void
 }
 
@@ -63,6 +63,8 @@ export class ClaudeOpenTurn {
   private cycleWorkObserved = false
   /** Input choices follow actual work; correlation also includes API errors. */
   inputChoiceWorkObserved = false
+  /** The ending of a step a steer cut short, until the steer's own cycle starts. */
+  private steerHandoffEnd: ClaudeTurnEnd | null = null
   private startedSend: ClaudeStartedSend | null = null
   private readonly opener: (
     frame: Record<string, unknown>,
@@ -126,7 +128,13 @@ export class ClaudeOpenTurn {
     this.startedSend = send
   }
 
+  /** Stop or idle before the steer runs ends the turn as that step ended, not as completed. */
+  holdForSteer(end: ClaudeTurnEnd): void {
+    this.steerHandoffEnd = this.current ? end : null
+  }
+
   observeProviderCycleStart(): void {
+    this.steerHandoffEnd = null
     this.cycleWorkObserved = false
     this.inputChoiceWorkObserved = false
   }
@@ -137,11 +145,12 @@ export class ClaudeOpenTurn {
 
   /** Supersede the previous turn before opening another; a missing result must not leave old work live. */
   open(turn: ClaudeCurrentTurn, observedAt: number): void {
+    this.steerHandoffEnd = null
     this.usageLimitEvidence = null
     this.deps.onOpen?.()
     if (this.current) {
       this.deps.turnSuperseded()
-      this.deps.endOpenWork(observedAt)
+      this.deps.endOpenWork(this.current.sessionId, observedAt)
       this.publish(this.current, {
         state: 'interrupted',
         completedAt: observedAt,
@@ -155,11 +164,12 @@ export class ClaudeOpenTurn {
 
   /** The host already wrote the command row; only publish its eventual end. */
   beginCommand(turn: ClaudeCurrentTurn): void {
+    this.steerHandoffEnd = null
     this.usageLimitEvidence = null
     this.deps.onOpen?.()
     if (this.current) {
       this.deps.turnSuperseded()
-      this.deps.endOpenWork(turn.startedAt)
+      this.deps.endOpenWork(this.current.sessionId, turn.startedAt)
       this.publish(this.current, {
         state: 'interrupted',
         completedAt: turn.startedAt,
@@ -196,10 +206,17 @@ export class ClaudeOpenTurn {
 
   /** Settle activity and context facts in the same turn revision. */
   settle(
-    end: ClaudeTurnEnd,
+    settled: ClaudeTurnEnd,
     contextUsage?: AgentSessionContextUsage,
     stopped?: ClaudeStoppedTurnEnd
   ): void {
+    // Only a verdictless end (idle) takes the held verdict, at idle's time; a real result keeps its own.
+    const held = this.steerHandoffEnd
+    const end =
+      held && settled.outcome === undefined && settled.state === 'completed'
+        ? { state: held.state, outcome: held.outcome, completedAt: settled.completedAt }
+        : settled
+    this.steerHandoffEnd = null
     const quotaEnd = (ending: ClaudeTurnEnd) =>
       this.current !== null &&
       ending.outcome === undefined &&
@@ -212,8 +229,8 @@ export class ClaudeOpenTurn {
     this.cycleWorkObserved = false
     this.inputChoiceWorkObserved = false
     this.usageLimitEvidence = null
-    // End suppressed work even when no turn is open.
-    this.deps.endOpenWork(end.completedAt)
+    // End suppressed work even when no turn is open, at the real settle time.
+    this.deps.endOpenWork(this.current?.sessionId ?? null, settled.completedAt, true)
     if (this.current) {
       this.publish(
         this.current,

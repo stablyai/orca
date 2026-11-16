@@ -2,9 +2,9 @@ import { vi } from 'vitest'
 import type {
   BrowserPage,
   BrowserWorkspace
-} from '../../../../../../shared/browser-workspace-types'
-import type { RuntimeMobileSessionTabsResult } from '../../../../../../shared/runtime-session-contracts'
-import type { Tab, TabGroup } from '../../../../../../shared/tab-types'
+} from '../../../../../../shared/browser/workspaces/browser-workspace-types'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { Tab, TabGroup } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { useAppStore } from '../../../../store/index'
 import { markHydratedBrowserPageHandles } from '../../../../store/slices/browser/hosts/browser-initialization-presentation-ownership'

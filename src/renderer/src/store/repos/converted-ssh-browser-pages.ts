@@ -1,4 +1,4 @@
-import type { BrowserPageConversionOrigin } from '../../../../shared/browser-workspace-types'
+import type { BrowserPageConversionOrigin } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import { getKnownExecutionHostIdForWorktree } from '../../lib/workspace/ownership/worktree-runtime-owner'
 import type { WorktreeRuntimeOwnerState } from '../../lib/workspace/ownership/worktree-runtime-owner-state'

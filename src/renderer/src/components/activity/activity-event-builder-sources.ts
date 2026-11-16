@@ -1,17 +1,15 @@
-import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/session/status/structured-agent-session-tabs'
-import { parseAgentStatusPaneIdentity } from '../../../../shared/agent-status/identity/agent-status-worktree-attribution'
-import { migrationUnsupportedToAgentStatusEntry } from '../../../../shared/migration-unsupported-agent-entry'
+import { migrationUnsupportedToAgentStatusEntry } from '../../../../shared/agent-status/presentation/migration-unsupported-agent-entry'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { ActivityLiveAgentSnapshot, ActivityEvent } from './activity-thread-types'
 
 import { type ActivityEventBuildCache, resolvePaneBuild } from './activity-event-build-cache'
 import type { BuildActivityEventsArgs } from './activity-event-builder'
 
-export function appendUnsupportedAndRetainedEvents(context: {
+export function appendUnsupportedEvents(context: {
   args: BuildActivityEventsArgs
   cache: ActivityEventBuildCache | undefined
   seenCacheKeys: Set<string> | null
@@ -73,46 +71,6 @@ export function appendUnsupportedAndRetainedEvents(context: {
     if (live) {
       liveAgentByPaneKey[entry.paneKey] = live
     }
-    pushPaneEvents(paneEvents, rowEntry)
-  }
-
-  for (const [paneKey, retained] of Object.entries(args.retainedAgentsByPaneKey)) {
-    if (
-      !parseAgentStatusPaneIdentity(
-        paneKey,
-        args.unifiedTabsByWorktree
-          ? getStructuredAgentSessionTabsByPaneKey(args.unifiedTabsByWorktree).get(paneKey)
-          : undefined
-      )
-    ) {
-      continue
-    }
-    const owner = resolveOwner(
-      { worktreeId: retained.worktreeId, tab: retained.tab },
-      retained.entry,
-      retained.tab.ptyId ?? retained.entry.terminalHandle
-    )
-    if (!owner.knownWorktree) {
-      continue
-    }
-    const { events: paneEvents, rowEntry } = resolvePaneBuild(
-      {
-        cacheKey: `retained:${paneKey}`,
-        source: retained,
-        entry: retained.entry,
-        orchestration: args.runtimeAgentOrchestrationByPaneKey?.[paneKey],
-        worktree: owner.worktree,
-        repo: owner.repo,
-        tab: retained.tab,
-        agentType: retained.agentType,
-        agentAlive: false,
-        acknowledgedAt: args.acknowledgedAgentsByPaneKey[paneKey] ?? 0,
-        clearedAt: args.activityClearedAtByPaneKey?.[paneKey] ?? 0,
-        liveState: null
-      },
-      cache,
-      seenCacheKeys
-    )
     pushPaneEvents(paneEvents, rowEntry)
   }
 }

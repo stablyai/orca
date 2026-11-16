@@ -9,7 +9,7 @@ import {
   loadWslMoveFence,
   resetWslMoveFenceForTests
 } from '../../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import {
   adoptRuntimeProvisionedRoot,

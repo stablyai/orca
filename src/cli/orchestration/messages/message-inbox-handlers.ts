@@ -10,6 +10,7 @@ import {
   formatMessageReadOnlyTag,
   type OrchestrationMessageSummary as MessageSummary
 } from '../../../shared/orchestration/mailbox/orchestration-check-output'
+import { RuntimeClientError } from '../../runtime/connection/types'
 import { callOrchestrationMutation } from '../recovery/mutation-request'
 import { requirePeerMailCarrier } from '../identity/agent-server-route'
 import { resolveOrchestrationTerminalHandle } from '../identity/terminal-identity'
@@ -58,13 +59,22 @@ export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
 
   'orchestration inbox': async ({ flags, client, json }) => {
     const full = flags.has('full')
+    const run = getPresentStringFlag(flags, 'run')
     const result = await client.call<{
       messages: MessageSummary[]
       count: number
     }>('orchestration.inbox', {
       limit: getOptionalPositiveIntegerFlag(flags, 'limit'),
-      terminal: getPresentStringFlag(flags, 'terminal')
+      terminal: getPresentStringFlag(flags, 'terminal'),
+      run
     })
+    // Why: a server older than v1.4.257 (reachable via --environment) drops `run` and returns every Run's mail.
+    if (run && result.result.messages.some((message) => message.run_id !== run)) {
+      throw new RuntimeClientError(
+        'incompatible_runtime',
+        'This server ignores --run. Update Orca on it, or use --terminal run:<run_id>.'
+      )
+    }
     if (!full) {
       printOrchestrationResult(result, json, {
         fields: (value): { messages: MessageView[] } => ({

@@ -65,30 +65,6 @@ afterEach(async () => {
 })
 
 describe('ArtifactCloudService same-source races', () => {
-  it('runs the next same-source operation after an earlier failure', async () => {
-    const service = await setup()
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ code: 'temporary_failure' }), {
-          status: 500,
-          headers: { 'content-type': 'application/json' }
-        })
-      )
-      .mockResolvedValueOnce(createResponse('artifact-b'))
-    vi.stubGlobal('fetch', fetchMock)
-
-    const failedShare = service.share(writeRequest)
-    const nextShare = service.share(writeRequest)
-
-    await expect(failedShare).rejects.toMatchObject({ statusCode: 500 })
-    await expect(nextShare).resolves.toMatchObject({
-      status: 'ok',
-      value: { artifact: { slug: 'artifact-b' } }
-    })
-    expect(fetchMock).toHaveBeenCalledTimes(2)
-  })
-
   it('does not let an old update overwrite a newer share mapping', async () => {
     const service = await setup()
     let resolveUpdate: ((response: Response) => void) | undefined

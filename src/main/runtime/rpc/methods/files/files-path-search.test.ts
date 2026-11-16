@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { RpcDispatcher } from '../../dispatcher'
 import { FILE_METHODS } from './files'
-import { remoteRpcContentBudget } from '../../../../../shared/remote-rpc-content-budget'
+import { remoteRpcContentBudget } from '../../../../../shared/remote-runtime/rpc/remote-rpc-content-budget'
 
 describe('file path search RPC method', () => {
   it('keeps the complete paired Quick Open reply within its content budget', async () => {

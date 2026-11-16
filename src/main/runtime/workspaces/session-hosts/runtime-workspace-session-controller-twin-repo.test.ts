@@ -13,7 +13,7 @@ import {
 import { RuntimeWorkspaceSessionController } from './runtime-workspace-session-controller'
 
 const layoutOwner = vi.hoisted(() => ({ isMain: true }))
-vi.mock('../../../../shared/layout-owner-switch', () => ({
+vi.mock('../../../../shared/workspace-layout/layout-owner-switch', () => ({
   get ORCA_LAYOUT_OWNER_IS_MAIN() {
     return layoutOwner.isMain
   }

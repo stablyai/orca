@@ -1,5 +1,8 @@
 import { ipcRenderer } from 'electron'
-import type { BaseRefDefaultResult, BaseRefSearchResult } from '../../../shared/repo-types'
+import type {
+  BaseRefDefaultResult,
+  BaseRefSearchResult
+} from '../../../shared/repository/repo-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { PreloadApi } from '../../api-types'
 

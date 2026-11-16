@@ -2,7 +2,7 @@ import { translate } from '@/i18n/i18n'
 import {
   QUEUED_EDIT_NOTICE_COPY as COPY,
   type QueuedEditNotice
-} from '../../../../../../shared/queued-message-edit'
+} from '../../../../../../shared/native-chat/input/queued-messages/queued-message-edit'
 
 const NOTICES: Record<QueuedEditNotice, () => string> = {
   editChanged: () =>
