@@ -14,9 +14,12 @@ import type {
 import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 
 export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
-  retireProcessAuthority(paneKey: string): void {
+  retireProcessAuthority(
+    paneKey: string,
+    options?: Pick<EndedProcessReconciliationOptions, 'confirmedExit'>
+  ): void {
     const { paneKeys, authorityChanged } = this.revokeProcessAuthority(paneKey)
-    const { untouched } = this.reconcileEndedProcess(paneKeys, undefined, (key) =>
+    const { untouched } = this.reconcileEndedProcess(paneKeys, options, (key) =>
       this.clearRevokedPaneState(key)
     )
     for (const key of untouched) {
