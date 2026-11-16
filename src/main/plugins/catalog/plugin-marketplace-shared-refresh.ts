@@ -1,4 +1,5 @@
 import type { PluginMarketplaceInstaller } from './plugin-marketplace-installer'
+import { marketplaceInstallOf } from './plugin-marketplace-install-origin'
 import type { PluginMarketplaceSourceState } from './plugin-marketplace-projection'
 
 /** How long one update review's catalog refresh is reused by its other previews. */
@@ -24,7 +25,8 @@ export function sharedSourceRefresh(
     }
     const started = refresh(sourceId)
     recent.set(sourceId, { startedAt: now, refresh: started })
-    // Why forget failures: the next check should try the network again, not reuse the error.
+    // Why forget rejections: those mean no usable catalog at all (unknown source, nothing cached),
+    // so the next check should try again. A fetch that fails over a cache resolves and is reused.
     started.catch(() => {
       if (recent.get(sourceId)?.refresh === started) {
         recent.delete(sourceId)
@@ -41,16 +43,17 @@ export function sharedSourceRefresh(
  */
 export async function refreshInstalledPluginCatalog(
   services: {
-    installer: Pick<PluginMarketplaceInstaller, 'findInstalledUpdateListing'>
+    installer: Pick<PluginMarketplaceInstaller, 'readInstallLockfile'>
     marketplace: { refreshSourceShared: (sourceId: string) => Promise<unknown> }
   },
   pluginKey: string
 ): Promise<void> {
   try {
-    const found = await services.installer.findInstalledUpdateListing(pluginKey)
-    await (found
-      ? services.marketplace.refreshSourceShared(found.listing.marketplaceSourceId)
-      : null)
+    // Why the lock entry, not the cached listing: a snapshot that lost the listing is exactly the
+    // one a refresh would repair.
+    const lock = await services.installer.readInstallLockfile()
+    const installed = marketplaceInstallOf(lock.plugins[pluginKey] ?? null)
+    await (installed ? services.marketplace.refreshSourceShared(installed.sourceId) : null)
   } catch (error) {
     console.warn('[plugins] catalog refresh before update preview failed:', error)
   }
