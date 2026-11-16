@@ -322,7 +322,7 @@ describe('temporary saved-session restore failures', () => {
         }
       })
       await rig.acquire()
-      expect(rig.openVerdict()).toMatchObject({ retry: 'safe', fact: { kind: 'startFailed' } })
+      expect(rig.openVerdict()).toMatchObject({ retry: 'never', fact: { kind: 'startFailed' } })
       expect(requests).toEqual([`session/${method}`, `session/${method}`, `session/${method}`])
       expect(await texts(rig)).toEqual([])
       expect(await notRestoredRows(rig)).toEqual([])
