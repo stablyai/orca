@@ -36,6 +36,20 @@ import {
   type LocalAiVaultScanProgressHandle
 } from '../scan-lifecycle/ai-vault-local-scan-progress'
 
+/**
+ * The scanner reads all agent transcripts into memory before parsing — large multi-agent
+ * histories (200+ Claude sessions plus OpenCode/Kilo DBs) exceed the previous 384 MB cap
+ * during the `reading` stage and the child OOMs (#42921). Raise the default to 768 MB to
+ * cover typical desktop RAM headroom; `ORCA_AI_VAULT_SCANNER_HEAP_MB` lets users with
+ * unusually large histories tune without a rebuild.
+ */
+const SCANNER_HEAP_MB_DEFAULT = 768
+
+function scannerHeapMb(): number {
+  const override = Number.parseInt(process.env.ORCA_AI_VAULT_SCANNER_HEAP_MB ?? '', 10)
+  return Number.isInteger(override) && override > 0 ? override : SCANNER_HEAP_MB_DEFAULT
+}
+
 export function spawnAiVaultServiceProcess(): ChildProcess {
   const entryPath = getAiVaultServiceEntryPath()
   if (!existsSync(entryPath)) {
@@ -43,7 +57,7 @@ export function spawnAiVaultServiceProcess(): ChildProcess {
   }
   const child = fork(entryPath, [], {
     stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
-    execArgv: ['--max-old-space-size=384'],
+    execArgv: [`--max-old-space-size=${scannerHeapMb()}`],
     env: buildAiVaultServiceEnv(),
     ...(process.platform === 'win32' ? { windowsHide: true } : {})
   })
