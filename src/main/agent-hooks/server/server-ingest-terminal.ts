@@ -26,10 +26,12 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
     if (!parsedPaneKey || paneKey.length > MAX_PANE_KEY_LEN) {
       return
     }
+    this.forgetAgentExitBefore(paneKey, event.launchedAt)
     const previous = this.state.lastStatusByPaneKey.get(paneKey)
     if (
       previous &&
-      (previous.providerSessionOnly === true
+      // An ended resume row was a predecessor's; only a row since this launch is the agent's own.
+      (previous.providerSessionOnly === true && !previous.agentPresence?.ended
         ? agentProviderSessionsEqual(
             event.agentType,
             previous.providerSession,

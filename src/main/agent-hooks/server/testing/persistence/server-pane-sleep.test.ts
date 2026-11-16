@@ -3,7 +3,10 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getDefaultWorkspaceSession } from '../../../../../shared/constants'
-import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type {
+  AgentProviderSessionMetadata,
+  SleepingAgentSessionRecord
+} from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   applyWorktreeSleepResumeRecords,
   captureWorktreeSleepResumeRecords
@@ -212,6 +215,61 @@ it.each(['idle Codex', 'Claude hook', 'failed resume', 'ordinary exit'] as const
     }
   }
 )
+
+it('retires a hookless resumed Codex quit to its shell, and keeps a later relaunch', async () => {
+  const providerSession: AgentProviderSessionMetadata = { key: 'session_id', id: 'woken-session' }
+  const saved: SleepingAgentSessionRecord = {
+    paneKey: PANE,
+    tabId: 'tab-1',
+    worktreeId: 'wt-1',
+    agent: 'codex',
+    providerSession,
+    prompt: '',
+    state: 'done',
+    capturedAt: 1,
+    updatedAt: 1,
+    origin: 'worktree-sleep',
+    restoreOnTabOpenOnly: true,
+    connectionId: null
+  }
+  const session = {
+    ...getDefaultWorkspaceSession(),
+    sleepingAgentSessionsByPaneKey: { [PANE]: saved }
+  }
+  const sleep = async () => {
+    const capture = await captureWorktreeSleepResumeRecords({
+      worktreeId: 'wt-1',
+      paneKeysByPtyId: new Map([['pty', [PANE]]]),
+      launchByPtyId: new Map(),
+      readRowsForPane: (paneKey) => server.getStatusSnapshotForPane(paneKey),
+      checkAgentPresence: (paneKey, since) => server.checkAgentPresenceSince(paneKey, since ?? 0),
+      capturedAt: 2
+    })
+    return applyWorktreeSleepResumeRecords(session, capture, ['pty']) ?? session
+  }
+  const launch = () =>
+    server.recordLaunchResumeIdentity({
+      paneKey: PANE,
+      worktreeId: 'wt-1',
+      agentType: 'codex',
+      providerSession,
+      launchedAt: Date.now()
+    })
+  vi.useFakeTimers({ toFake: ['Date'] })
+  launch()
+  vi.setSystemTime(Date.now() + 1000)
+  // The launched command's shell-confirmed finish, which clears the pane's row.
+  server.retireProcessAuthority(PANE, { confirmedExit: true })
+  expect((await sleep()).sleepingAgentSessionsByPaneKey?.[PANE]).toBeUndefined()
+
+  vi.setSystemTime(Date.now() + 1000)
+  launch()
+  expect((await sleep()).sleepingAgentSessionsByPaneKey?.[PANE]).toMatchObject({
+    agent: 'codex',
+    providerSession,
+    origin: 'worktree-sleep'
+  })
+})
 
 it('does not restore a sleeping status whose exact placed pane is absent', async () => {
   server.ingestTerminalStatus({

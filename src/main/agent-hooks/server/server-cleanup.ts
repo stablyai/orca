@@ -16,10 +16,12 @@ import { worktreeIdsEqual } from '../../../shared/worktree/id'
 import { isLocalHookConnectionId } from '../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 
-import { recordAgentExit } from './agent-exit-evidence'
+import { endedPresenceOf, recordAgentExit } from './agent-exit-evidence'
 
 export type EndedProcessReconciliationOptions = {
   endedPresence?: AgentProcessPresence
+  /** The pane's shell is back: a process-less owner ended. */
+  confirmedExit?: boolean
   /** Keep resume identity when the pane survives the agent. */
   preserveResumeIdentity?: boolean
 }
@@ -124,7 +126,16 @@ export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
         untouched.push(resolvedPaneKey)
         continue
       }
-      if (options?.endedPresence) {
+      const previous = this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
+        | EnrichedAgentHookEventPayload
+        | undefined
+      const endedPresence =
+        options?.endedPresence ??
+        // A proved process gets its exit from the presence probe, not a possibly newer row.
+        (options?.confirmedExit && previous && !previous.agentPresence?.process
+          ? endedPresenceOf(previous)
+          : undefined)
+      if (endedPresence) {
         // Cleanup drops aliases, but readers may still hold either key.
         const paneKeys = new Set([resolvedPaneKey, paneKey])
         for (const [aliasKey, alias] of this.legacyPaneKeyAliases) {
@@ -132,7 +143,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
             paneKeys.add(aliasKey)
           }
         }
-        recordAgentExit(this.agentExitedAtByPaneKey, paneKeys, options.endedPresence)
+        recordAgentExit(this.agentExitedAtByPaneKey, paneKeys, endedPresence)
         this.scheduleStatusPersist()
       }
       if (!this.hasLiveClaimsForPaneKey(resolvedPaneKey)) {
@@ -140,19 +151,10 @@ export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
         continue
       }
       const resumeRow = options?.preserveResumeIdentity
-        ? this.toRetainedProviderSessionRow(
-            this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
-              | EnrichedAgentHookEventPayload
-              | undefined
-          )
+        ? this.toRetainedProviderSessionRow(previous)
         : null
       const retained =
-        resumeRow && options?.endedPresence
-          ? { ...resumeRow, agentPresence: options.endedPresence }
-          : resumeRow
-      const previous = this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
-        | EnrichedAgentHookEventPayload
-        | undefined
+        resumeRow && endedPresence ? { ...resumeRow, agentPresence: endedPresence } : resumeRow
       clearPane(resolvedPaneKey)
       if (retained) {
         admitLegacyAgentStatus(

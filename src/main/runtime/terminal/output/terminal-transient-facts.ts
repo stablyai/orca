@@ -1,5 +1,6 @@
 import { OrcaRuntimeWithScheduleWaitBlockedCheck } from '../wait/terminal-wait-blocked-checks'
 import type { PtyTransientFact } from '../../../providers/pty/events'
+import { isJobStopStatus } from '../../../../shared/terminal/output/terminal-osc133-command-finished'
 import type {
   TerminalSideEffectBatch,
   TerminalSideEffectFact
@@ -21,7 +22,7 @@ import type {
 import type { TerminalTitleFactMeta } from '../../../../shared/terminal/output/terminal-output-side-effects'
 
 export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRuntimeWithScheduleWaitBlockedCheck {
-  protected abstract retirePtyAgentLaunchAuthority(ptyId: string): void
+  protected abstract retirePtyAgentLaunchAuthority(ptyId: string, confirmedExit?: boolean): void
 
   /** A transient fact the daemon detected while it held scan authority —
    *  emitted through the same fact channel as byte-scanned facts. Arrives
@@ -32,7 +33,7 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
         this.recordTerminalSideEffectFact(ptyId, { kind: 'bell' })
         return
       case 'command-finished':
-        this.retirePtyAgentLaunchAuthority(ptyId)
+        this.retirePtyAgentLaunchAuthority(ptyId, !isJobStopStatus(fact.exitCode))
         this.recordTerminalSideEffectFact(ptyId, {
           kind: 'command-finished',
           exitCode: fact.exitCode
