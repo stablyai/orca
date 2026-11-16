@@ -8,7 +8,8 @@ import { runCountRatchet } from '../../ratchet-baseline/ratchet-baseline.mjs'
 import { OFF_MAIN_ADVICE } from './check-main-blocking-api-ratchet.mjs'
 
 const BASELINE_PATH = 'config/main-blocking-helper-baseline.txt'
-const HELPER_DEPTH = 1
+// Two levels: a timer or handler calling a function that calls the sync reader (the 11-09 and 11-13 regressions).
+const HELPER_DEPTH = 2
 const BLOCKING_FAMILIES = [
   { modules: ['fs', 'node:fs', 'original-fs', 'graceful-fs'], exportPattern: /Sync$/, advice: {} },
   { modules: ['child_process', 'node:child_process'], exportPattern: /Sync$/, advice: {} }
@@ -48,8 +49,8 @@ export async function main(root = process.cwd(), arg = undefined) {
       name: 'main-blocking-helper',
       baselinePath: BASELINE_PATH,
       header: [
-        '# References to functions that make a synchronous fs, child_process or SQLite call, per file, in',
-        '# event-loop code (Electron main, orcad, daemon, preload; worker-only modules excluded).',
+        '# References to functions that make a synchronous fs, child_process or SQLite call, or call such a',
+        '# function, per file, in event-loop code (Electron main, orcad, daemon, preload; worker-only modules excluded).',
         '# This is a RATCHET: counts may only go DOWN.',
         '# Prune: node config/scripts/static-analysis/ratchets/runtime-lifecycle/check-main-blocking-helper-ratchet.mjs --prune'
       ],

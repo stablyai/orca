@@ -60,7 +60,7 @@ Count ratchets (counts per file may only fall) cover classes the audit only warn
 (`config/main-sync-fs-baseline.txt`), and `pnpm check:recurring-timer-ratchet` counts `setInterval`
 calls in production `src/main`, `src/renderer`, `src/shared` and `src/cli`
 (`config/recurring-timer-baseline.txt`). `pnpm check:main-blocking-helper-ratchet` counts references to
-functions that make a synchronous fs, child_process or SQLite call (`config/main-blocking-helper-baseline.txt`),
+functions that make a synchronous fs, child_process or SQLite call, or call such a function (`config/main-blocking-helper-baseline.txt`),
 so a new caller of an existing sync helper in another file fails too. The main-blocking ratchets skip modules
 imported only by worker or utility entries (`config/main-blocking-worker-entries.json`). All run in
 `check:ratchets` on every non-draft PR that runs static analysis. A new use either
