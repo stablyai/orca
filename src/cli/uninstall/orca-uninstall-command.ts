@@ -69,6 +69,7 @@ async function createCliHost(client: RuntimeClient): Promise<OrcaUninstallHost> 
   return {
     platform: process.platform,
     homeDir: homedir(),
+    userDataPath: getDefaultUserDataPath(),
     uid: process.getuid?.() ?? 0,
     identity: await resolveOrcaInstallIdentity({
       platform: process.platform,
@@ -134,7 +135,12 @@ function line(
 export function formatOrcaUninstallPlan(plan: OrcaUninstallPlan): string {
   const lines = [
     ...plan.agents.map((entry) =>
-      line(`${entry.agent} hooks`, entry.paths.join(', '), entry.state, entry.detail)
+      line(
+        `${entry.agent} hooks`,
+        entry.paths.map((each) => each.path).join(', '),
+        entry.state,
+        entry.detail
+      )
     ),
     ...(plan.cliCommand
       ? [

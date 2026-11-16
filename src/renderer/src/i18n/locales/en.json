@@ -1502,7 +1502,7 @@
     "uninstall": {
       "groupTitle": "Uninstall",
       "title": "Uninstall Orca",
-      "searchDescription": "Remove agent hooks, the orca command, the background service and SSH host files.",
+      "searchDescription": "Remove agent hooks, the orca command, the background service and hooks on SSH hosts.",
       "keywords": {
         "uninstall": "uninstall",
         "remove": "remove",
@@ -1530,28 +1530,33 @@
       "button": "Uninstall",
       "uninstalling": "Uninstalling…",
       "rows": {
-        "agents_one": "Hooks in 1 agent",
-        "agents_other": "Hooks in {{count}} agents",
-        "hosts": "SSH hosts",
-        "hostCount_one": "1 host",
-        "hostCount_other": "{{count}} hosts",
+        "hooksIn": "Hooks in {{targets}}",
         "cliCommand": "<cmd>{{name}}</cmd> CLI on your PATH",
         "service": "Background service",
         "hookScripts": "Hook scripts"
       },
       "retry": "Retry",
+      "hookTargets": {
+        "agents_one": "1 agent",
+        "agents_other": "{{count}} agents",
+        "sshHosts_one": "1 SSH host",
+        "sshHosts_other": "{{count}} SSH hosts"
+      },
+      "path": {
+        "codexAccount": "Orca-managed Codex account",
+        "appData": "Orca app data"
+      },
       "host": {
+        "ssh": "SSH",
         "connected": "Connected",
-        "offline": "Offline"
+        "notConnected": "Not connected.",
+        "notConnectedRun": "Not connected. Run <cmd>{{command}}</cmd> on the host."
       },
       "summary": {
-        "agents_one": "hooks in 1 agent",
-        "agents_other": "hooks in {{count}} agents",
+        "hooksIn": "hooks in {{targets}}",
         "cliCommand": "the <cmd>{{name}}</cmd> CLI",
         "service": "a background service",
         "hookScripts": "hook scripts",
-        "hosts_one": "1 SSH host",
-        "hosts_other": "{{count}} SSH hosts",
         "nothing": "Nothing outside the app to remove.",
         "loading": "Checking what Orca installed…",
         "done": "Removed. Delete the app to finish.",
