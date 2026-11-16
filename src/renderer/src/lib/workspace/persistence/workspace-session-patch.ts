@@ -6,11 +6,8 @@ import { pruneLocalTerminalScrollbackBuffers } from '../../../../../shared/works
 import { normalizeBrowserHistoryEntries } from '../../../../../shared/workspace-session/workspace-session-browser-history'
 import { normalizeWorkspaceDocHistoryEntries } from '../../../../../shared/workspace-session/workspace-doc-history'
 import { buildActiveConnectionIdsAtShutdown } from './workspace-session-reconnect-targets'
-import { buildEditorSessionData } from './workspace-session'
-import {
-  buildSanitizedTabsByWorktree,
-  buildTerminalSessionData
-} from './workspace-session-terminal-data'
+import { buildEditorSessionData, buildTerminalSessionData } from './workspace-session'
+import { buildSanitizedTabsByWorktree } from './workspace-session-sanitized-tabs'
 import type { WorkspaceSessionSnapshot } from './workspace-session'
 import {
   buildPersistedBrowserPagesByWorkspace,
