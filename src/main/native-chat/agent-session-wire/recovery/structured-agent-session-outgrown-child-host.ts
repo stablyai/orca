@@ -127,16 +127,14 @@ export function createStructuredAgentSessionOutgrownChildHost(input: {
       if (held?.fresh) {
         return held.transition
       }
+      const reading = await unlessStopping(sessionId)
       const read = holds.begin(sessionId)
-      const transition = await readStructuredAgentSessionAccountTransition(
-        await unlessStopping(sessionId),
-        {
-          work: retainedWork(sessionId),
-          launchAccountHome: options?.launchHome ?? launchAccountHome(sessionId),
-          now,
-          ...(held ? { known: held.transition } : {})
-        }
-      ).catch((error: unknown) => {
+      const transition = await readStructuredAgentSessionAccountTransition(reading, {
+        work: retainedWork(sessionId),
+        launchAccountHome: options?.launchHome ?? launchAccountHome(sessionId),
+        now,
+        ...(held ? { known: held.transition } : {})
+      }).catch((error: unknown) => {
         holds.end(sessionId, read)
         throw error
       })

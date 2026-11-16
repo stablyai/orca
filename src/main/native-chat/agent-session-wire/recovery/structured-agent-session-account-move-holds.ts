@@ -25,6 +25,8 @@ type Hold = {
  *  edge that can end it, so drains in between read nothing. */
 export class AccountMoveHolds {
   private readonly held = new Map<string, Hold>()
+  /** Held chats a Dispatch change can release, so one walks only these. */
+  private readonly onDispatch = new Set<string>()
   /** Reads run outside the chat's lane; only the newest may set or clear its hold. */
   private readonly reading = new Map<string, number>()
   private reads = 0
@@ -108,6 +110,11 @@ export class AccountMoveHolds {
     )
     timer.unref?.()
     this.held.set(sessionId, { transition, fence: session.child.fence, stale: 'none', timer })
+    if (transition.waitsFor === 'dispatch') {
+      this.onDispatch.add(sessionId)
+    } else {
+      this.onDispatch.delete(sessionId)
+    }
     this.unsubscribe ??= this.wakes()?.subscribe((edge) => this.edge(edge))
     if (!wasHeld) {
       this.wake(sessionId)
@@ -116,14 +123,9 @@ export class AccountMoveHolds {
 
   /** A Dispatch change can end only a hold that waits on one; a selection change ends any. */
   private edge(edge: StructuredAgentSessionAccountMoveEdge): void {
-    for (const [id, hold] of this.held) {
-      if (edge === 'account') {
-        this.stale(id, 'account')
-      } else if (hold.transition.waitsFor === 'dispatch') {
-        this.stale(id, 'work')
-      } else {
-        continue
-      }
+    // A copy: waking can release, which edits what is walked.
+    for (const id of Array.from(edge === 'account' ? this.held.keys() : this.onDispatch)) {
+      this.stale(id, edge === 'account' ? 'account' : 'work')
       this.wakeOrRelease(id)
     }
   }
@@ -140,6 +142,7 @@ export class AccountMoveHolds {
   private release(sessionId: string): void {
     this.clearTimer(sessionId)
     this.held.delete(sessionId)
+    this.onDispatch.delete(sessionId)
     this.reading.delete(sessionId)
     if (this.held.size === 0) {
       this.unsubscribe?.()
@@ -160,6 +163,7 @@ export class AccountMoveHolds {
       this.clearTimer(id)
     }
     this.held.clear()
+    this.onDispatch.clear()
     this.reading.clear()
     this.unsubscribe?.()
     this.unsubscribe = undefined
