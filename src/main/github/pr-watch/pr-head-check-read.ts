@@ -1,16 +1,17 @@
-import type { GitHubPRRefreshCandidate } from '../../../shared/github/pull-request-refresh-types'
+import type { GitHubPRRefreshCandidate } from '../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import { PR_CHECK_PAGE_LIMIT } from '../client/check/pr-check-rollup'
 import { readRestPRCheckRollup } from '../client/check/rest-pr-check-pages'
 import type { GhExecOptions } from '../client/github-exec-scope'
 import { assertRateLimitBudget } from '../client/lookup/pr-lookup-rate-limit'
-import { ghExecFileAsync } from '../gh-utils'
-import { githubHostExecOptions, type GitHubApiRepository } from '../github-api-repository'
-import { noteRepositoryRateLimitSpend } from '../rate-limit'
+import { ghExecFileAsync } from '../../git/command-runner/hosted-cli/gh-exec-file'
+import { githubHostExecOptions } from '../repositories/github-repository-host'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../shared/github/repositories/repository-identity'
+import { noteRepositoryRateLimitSpend } from '../api/rate-limit'
 import {
   ghRepoExecOptions,
   githubRepoContext,
   withGitHubRepoExecution
-} from '../github-repository-identity'
+} from '../repositories/github-repository-identity'
 
 type PRRepository = { host: string; owner: string; repo: string }
 

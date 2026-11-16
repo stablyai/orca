@@ -1,4 +1,4 @@
-import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { selectMobileSessionTab } from '../../session-tabs/mobile-session-tab-selection'
 
 type SessionTabGroup = NonNullable<RuntimeMobileSessionTabsSnapshot['tabGroups']>[number]

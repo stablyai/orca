@@ -1,20 +1,21 @@
-import { agentConversationCopyRefusal } from '../../native-chat/agent-conversation-copy-error'
+import { agentConversationCopyRefusal } from '../../native-chat/conversation-adoption/agent-conversation-copy-error'
 import type { StructuredAgentSessionConversationCopyInput } from '../../native-chat/agent-session-wire/providers/structured-agent-session-conversation-copy-input'
 import { readOpenCodeForkCoverageViaWorker } from '../../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn'
 import type { NativeCopyCoverage } from '../../native-chat/agent-session-journal/context-epochs/journal-history-origin'
 import { observeAcpForkSupport } from '../capabilities/acp-fork-support'
 import { normalizeAgentProviderSession } from '../../../shared/agent-session/lifecycle/agent-session-resume'
-import { OpenCodeCopyServerRouteError } from '../../../shared/opencode-launch-command'
+import { OpenCodeCopyServerRouteError } from '../../../shared/agent-launch/startup/opencode-launch-command'
 import {
   agentSessionAccountHomesEqual,
   type AgentSessionAccountHome
-} from '../../../shared/agent-session/lifecycle/agent-session-account-home'
-import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
+} from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
 import type { AiVaultConversationCopy } from '../../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import { resolveSessionFilePath } from '../../native-chat/session-file-resolver'
 import { resolveOmpSessionsDir } from '../../ai-vault/scanners/omp/omp-session-root'
 import { AcpRpcError } from '../transport/acp-errors'
 import { acpAgentName } from '../session/acp-structured-agent-definitions'
+import { acpClientInfo } from '../launch/acp-client-info'
 import type { AcpStructuredConnection } from '../process/acp-structured-connection'
 import type { AcpStructuredSessionAdapterDeps } from '../session/acp-structured-session-adapter-deps'
 
@@ -68,7 +69,7 @@ export async function copyAcpConversation(
           env: launch.env,
           envToDelete: launch.envToDelete
         },
-        { clientInfo: { name: 'orca', version: '1' } }
+        { clientInfo: acpClientInfo(launch.spec, launch.version ?? null) }
       )
       options.track(connection)
       const sessionId = await waitForPromiseWithSignal(

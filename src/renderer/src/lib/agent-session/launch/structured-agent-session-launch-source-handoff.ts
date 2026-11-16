@@ -1,4 +1,4 @@
-import { structuredAgentSessionCreateFingerprint } from '../../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
+import { structuredAgentSessionCreateFingerprint } from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import {
   setStructuredLaunchState,
   type StructuredLaunchState

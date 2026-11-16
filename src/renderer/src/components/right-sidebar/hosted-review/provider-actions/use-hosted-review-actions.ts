@@ -1,5 +1,5 @@
 import { gitLabApiFor } from '@/runtime/repository-gitlab/gitlab-owner-api'
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
@@ -8,8 +8,8 @@ import type { HostedReviewInfo } from '../../../../../../shared/source-control/h
 import type {
   GitHubPRMergeMethod,
   PRInfo
-} from '../../../../../../shared/github/pull-request-types'
-import type { Repo } from '../../../../../../shared/repo-types'
+} from '../../../../../../shared/github/pull-requests/pull-request-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import {
   mergeGitHubHostedReview,
   setGitHubHostedReviewAutoMerge,

@@ -1,5 +1,5 @@
 import { Notification, type NotificationConstructorOptions } from 'electron'
-import type { NotificationDispatchRequest } from '../../shared/notification-settings-types'
+import type { NotificationDispatchRequest } from '../../shared/notifications/notification-settings-types'
 import type { AnnouncedNotification } from '../notifications/announced-notification-registry'
 
 function paneGroupId(paneKey: string): string {

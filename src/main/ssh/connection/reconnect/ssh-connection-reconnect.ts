@@ -1,4 +1,4 @@
-import type { SshConnectionStatus } from '../../../../shared/ssh-types'
+import type { SshConnectionStatus } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { RECONNECT_BACKOFF_MS } from '../ssh-connection-timing'
 import {
   isAuthError,

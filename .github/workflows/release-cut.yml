@@ -668,6 +668,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      tag_object: ${{ steps.draft.outputs.tag_object }}
+      release_sha: ${{ steps.draft.outputs.release_sha }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -685,7 +688,9 @@ jobs:
             config/scripts/release/publication/assert-github-release-is-draft.mjs
 
       - name: Create draft release with bounded generated notes
+        id: draft
         env:
+          SOURCE_SHA: ${{ needs.cut.outputs.source_sha }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.cut.outputs.tag }}
         run: node config/scripts/release/publication/create-draft-release.mjs "$TAG"
@@ -837,18 +842,6 @@ jobs:
         with:
           ref: refs/tags/${{ needs.cut.outputs.tag }}
 
-      - name: Restore skill-sharing test harness from the workflow ref
-        shell: bash
-        env:
-          WORKFLOW_SHA: ${{ github.workflow_sha }}
-        run: |
-          git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
-          SKILL_ROOTS_TEST=src/main/skills/providers/skill-provider-runtime-roots.test.ts
-          if [ ! -f src/main/skills/providers/skill-provider-runtime-roots.ts ]; then
-            SKILL_ROOTS_TEST=src/main/skills/skill-provider-runtime-roots.test.ts
-          fi
-          git show "$WORKFLOW_SHA:src/main/skills/providers/skill-provider-runtime-roots.test.ts" > "$SKILL_ROOTS_TEST"
-
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: node
@@ -865,6 +858,7 @@ jobs:
 
       - name: Run skill package, transaction, and compatibility suites
         env:
+          ORCA_VITEST_ISOLATE_EVERY_FILE: '1'
           ORCA_REAL_PROCESS_SKILL_TEST: '1'
           ORCA_REAL_WINDOWS_SKILL_TEST: ${{ runner.os == 'Windows' && '1' || '0' }}
         run: pnpm test:skill-sharing:release --reporter=json --outputFile=skill-sharing-release-results.json
@@ -898,18 +892,6 @@ jobs:
       - name: Trust the checked-out workspace in the job container
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
-      - name: Restore skill-sharing test harness from the workflow ref
-        shell: bash
-        env:
-          WORKFLOW_SHA: ${{ github.workflow_sha }}
-        run: |
-          git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
-          SKILL_ROOTS_TEST=src/main/skills/providers/skill-provider-runtime-roots.test.ts
-          if [ ! -f src/main/skills/providers/skill-provider-runtime-roots.ts ]; then
-            SKILL_ROOTS_TEST=src/main/skills/skill-provider-runtime-roots.test.ts
-          fi
-          git show "$WORKFLOW_SHA:src/main/skills/providers/skill-provider-runtime-roots.test.ts" > "$SKILL_ROOTS_TEST"
-
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: node
@@ -924,6 +906,7 @@ jobs:
 
       - name: Run skill package, transaction, and compatibility suites
         env:
+          ORCA_VITEST_ISOLATE_EVERY_FILE: '1'
           ORCA_REAL_PROCESS_SKILL_TEST: '1'
         run: pnpm test:skill-sharing:release --reporter=json --outputFile=skill-sharing-release-results.json
 
@@ -1121,7 +1104,9 @@ jobs:
             eb_cache_path: |
               ~\AppData\Local\electron\Cache
               ~\AppData\Local\electron-builder\Cache
-          - os: ubuntu-latest
+          # Why: ubuntu-latest moved to the amd64v3 Ubuntu 26.04 image, whose GCC
+          # defaults to -march=x86-64-v3 and ships AVX in node-pty (#41637).
+          - os: ubuntu-24.04
             platform: linux-x64
             release_command: node "$(if [ -f config/scripts/native-build/node-addons/ensure-native-runtime.mjs ]; then printf %s config/scripts/native-build/node-addons/ensure-native-runtime.mjs; else printf %s config/scripts/ensure-native-runtime.mjs; fi)" --runtime=electron && pnpm exec electron-builder --config config/electron-builder.config.cjs --linux AppImage deb rpm --x64 --publish always -c.publish.releaseType=draft
             unpacked_dir: dist/linux-unpacked
@@ -1321,7 +1306,7 @@ jobs:
           ORCA_BUILD_IDENTITY: ${{ steps.tag-classify.outputs.identity }}
           SHARED_JAVASCRIPT: ${{ needs.release-javascript.outputs.supported }}
           ORCA_RELEASE_JAVASCRIPT_SOURCE_SHA: ${{ needs.release-javascript.outputs.source_sha }}
-          ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
+          ORCA_DIAGNOSTICS_TOKEN_URL: https://orca.dev/diagnostics/token
           ORCA_POSTHOG_WRITE_KEY: ${{ secrets.ORCA_POSTHOG_WRITE_KEY }}
 
       # After the app build so nothing that cleans out/ can drop it; electron-builder ships it.
@@ -2183,6 +2168,7 @@ jobs:
   publish-release:
     needs:
       - cut
+      - create-release
       - build
       - build-mac
       - verify-mac-build
@@ -2193,6 +2179,7 @@ jobs:
     if: >-
       !cancelled() &&
       needs.cut.result == 'success' &&
+      needs.create-release.result == 'success' &&
       needs.build.result == 'success' &&
       needs.build-mac.result == 'success' &&
       needs.verify-mac-build.result == 'success' &&
@@ -2238,6 +2225,33 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.cut.outputs.tag }}
         run: node config/scripts/release/publication/verify-release-required-assets.mjs "$TAG"
+
+      - name: Verify release tag still matches the drafted source
+        # Why: the draft targets default-branch metadata, so undrafting after a moved or deleted tag would publish
+        # these assets under the wrong commit. Fail unless the tag is still the object create-release verified.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.cut.outputs.tag }}
+          TAG_OBJECT: ${{ needs.create-release.outputs.tag_object }}
+          RELEASE_SHA: ${{ needs.create-release.outputs.release_sha }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$TAG_OBJECT" =~ ^[0-9a-f]{40}$ || ! "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::create-release did not record the verified tag object and release commit for $TAG."
+            exit 1
+          fi
+          ref_json="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG")"
+          ref="$(jq -r '.ref' <<<"$ref_json")"
+          object="$(jq -r '.object.sha' <<<"$ref_json")"
+          type="$(jq -r '.object.type' <<<"$ref_json")"
+          commit="$object"
+          if [[ "$type" == "tag" ]]; then
+            commit="$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$object" | jq -r 'select(.object.type == "commit") | .object.sha')"
+          fi
+          if [[ "$ref" != "refs/tags/$TAG" || "$object" != "$TAG_OBJECT" || "$commit" != "$RELEASE_SHA" ]]; then
+            echo "::error::Remote tag $TAG no longer resolves to verified object $TAG_OBJECT (commit $RELEASE_SHA); refusing to publish."
+            exit 1
+          fi
 
       - name: Publish release
         # Reassert prerelease from tag: on 2026-04-27 builder flipped RC to false/latest and broke release math; builder output is not authoritative.
@@ -2357,7 +2371,7 @@ jobs:
     needs:
       - cut
       - publish-release
-    # Why stable-only: onorca.dev's mirror link tracks GitHub's latest release, which skips RCs.
+    # Why stable-only: orca.dev's mirror link tracks GitHub's latest release, which skips RCs.
     if: ${{ !cancelled() && needs.publish-release.result == 'success' && needs.cut.outputs.tag != '' && !contains(needs.cut.outputs.tag, '-rc.') && startsWith(needs.cut.outputs.tag, 'v') }}
     uses: ./.github/workflows/release-mirror-r2.yml
     with:

@@ -1,10 +1,10 @@
 import type { AiVaultSessionPreviewMessage } from '../../../shared/ai-vault/contracts/ai-vault-types'
-import { asRecord } from '../session-scanner-record-value'
+import { asRecord } from '../parsing/session-record-fields'
 import {
   isClaudeToolUseContent,
   isClaudeToolResultContent,
   claudeToolResultTextParts
-} from '../../../shared/claude-tool-content'
+} from '../../../shared/agent-hook-listener/providers/claude/transcripts/claude-tool-content'
 
 export type DecodedToolCall = {
   kind: 'tool_call'

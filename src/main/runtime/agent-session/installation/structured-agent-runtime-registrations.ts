@@ -1,21 +1,22 @@
 import { AcpAtRestCommandCatalog } from '../../../acp/discovery/acp-at-rest-commands'
-import { resolveNativeChatVisualsSkillLocation } from '../../../native-chat/native-chat-visuals-skill-location'
+import { resolveNativeChatVisualsSkillLocation } from '../../../native-chat/conversation-files/native-chat-visuals-skill-location'
 import { withSupportedCodexCli } from '../../../codex/structured/launch/codex-cli-installation-error'
 import { codexStructuredLaunchPart } from '../../../codex/structured/launch/codex-structured-launch-resolution'
 import { claudeStructuredLaunchPart } from '../../../claude/structured/launch/claude-structured-launch-resolution'
-import { claudeNamingInvocation } from '../../../claude/claude-naming-invocation'
-import { createClaudeCommandCatalogProbe } from '../../../claude/claude-command-catalog-probe'
+import { claudeNamingInvocation } from '../../../claude/conversation-naming/claude-naming-invocation'
+import { createClaudeCommandCatalogProbe } from '../../../claude/command-catalog/claude-command-catalog-probe'
 import { CodexStructuredSessionAdapter } from '../../../codex/structured/session-lifecycle/codex-structured-session-adapter'
 import { createCodexAtRestSkillCatalog } from '../../../codex/structured/catalog/codex-at-rest-skills-probe'
 import { CODEX_STRUCTURED_AGENT } from '../../../codex/structured/launch/codex-structured-agent-definition'
 import { CLAUDE_STRUCTURED_AGENT } from '../../../claude/structured/claude-structured-agent-definition'
 import { agentModelCatalogStore } from '../../../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { agentSessionAttachmentStoreRoot } from '../../../native-chat/agent-session-attachments/agent-session-attachment-references'
-import { restoreJournal } from '../../../native-chat/agent-session-journal/replay/journal-open'
+import { journalSqlReads } from '../../../native-chat/agent-session-journal/journal-sql-reads'
 import { createStructuredClaudeRuntimeAdapter } from './structured-claude-runtime-adapter'
 import { acpListingNeedsChatFolder } from '../../../acp/discovery/acp-model-discovery-policy'
 import type { AcpLaunchSpec } from '../../../acp/launch/acp-launch-contract'
 import { acpStructuredAgentDefinition } from '../../../acp/session/acp-structured-agent-definitions'
+import type { AcpSavedSessionReads } from '../../../acp/session/acp-structured-resume-history'
 import { createAcpAgentConnection } from '../../../acp/process/acp-agent-connection'
 import { createOpenCodeAcpConnection } from '../../../opencode/acp/opencode-acp-connection'
 import { acpStructuredLaunchPart } from '../../../acp/launch/acp-structured-launch-resolution'
@@ -145,11 +146,15 @@ function createAcpAdapter(
 ): StructuredAgentRuntimeRegistration['createAdapter'] {
   return (context) => {
     const { deps, followUps } = context
-    const readJournal = (sessionId: string) => restoreJournal(context.journalDatabase.db, sessionId)
+    const { readers } = context.journalDatabase
+    const savedSession: AcpSavedSessionReads = {
+      hasProviderTurn: (sessionId, nativeId) =>
+        journalSqlReads(readers, sessionId).hasProviderTurn(nativeId)
+    }
     const definition = acpStructuredAgentDefinition(spec)
     const sources = structuredAgentLaunchSources(context)
     const part = acpStructuredLaunchPart(spec, {
-      readJournal,
+      savedSession,
       ...deps.acpLaunchCommand,
       dataDirectory: deps.stateDirectory,
       logger: deps.logger

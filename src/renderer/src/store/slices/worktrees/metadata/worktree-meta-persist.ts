@@ -12,12 +12,12 @@ import {
   WORKTREE_RENAME_ERROR_DISMISS_RUNTIME_CAPABILITY,
   WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
   WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY
-} from '../../../../../../shared/protocol-version'
+} from '../../../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import { toRuntimeWorktreeSelector } from '../../../../runtime/rpc/targets/runtime-worktree-selector'
 import { translate } from '@/i18n/i18n'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { encodePushTargetClearForRuntimeRpc } from './hosted-review-link-update-encoding'
 
 type PendingDisplayNameWrite = {

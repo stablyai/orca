@@ -75,7 +75,6 @@ const ALWAYS_PREFIXES = [
   'src/main/daemon/pty-subprocess/spawn-environment.ts',
   'src/main/daemon/pty-subprocess/spawn-file-child-processes.ts',
   'src/main/daemon/pty-subprocess/spawn-file-foreground-process.ts',
-  'src/main/daemon/pty-subprocess/spawn-file-foreground-rejected-agents.test.ts',
   'src/main/daemon/pty-subprocess/spawn-preflight.ts',
   'src/main/daemon/pty-subprocess/subprocess-handle.ts',
   'src/main/providers/',

@@ -1,5 +1,5 @@
 import type { z } from 'zod'
-import { ConnectorErrorResponse } from '../../shared/connector-cloud-contract'
+import { ConnectorErrorResponse } from '../../shared/connectors/connector-cloud-contract'
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 15_000

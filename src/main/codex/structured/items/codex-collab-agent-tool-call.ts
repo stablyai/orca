@@ -1,4 +1,4 @@
-import { codexCollabToolRowName } from '../../../../shared/codex-collab-agent-tools'
+import { codexCollabToolRowName } from '../../../../shared/agent-hook-listener/providers/codex/codex-collab-agent-tools'
 import { collapsedToolInputPrefix } from '../../../../shared/native-chat/tools/native-chat-tool-preview-prefix'
 import { readRecord, readString } from '../../app-server/codex-item-field-readers'
 import type { CodexThreadItem } from './codex-thread-item-identity'
@@ -20,6 +20,9 @@ export type CodexCollabAgentToolCall = {
   /** The receivers that are helpers: every one but those the call reports `notFound`. */
   helperThreadIds: string[]
   prompt: string | null
+  /** What a spawn asked the child to run on. */
+  model: string | null
+  reasoningEffort: string | null
   /** Caller snapshots in receiverThreadIds order, excluding receivers with no snapshot. */
   states: { threadId: string; status: string | null; message: string | null }[]
 }
@@ -53,6 +56,8 @@ export function readCodexCollabAgentToolCall(
       (threadId) => readString(readRecord(snapshots[threadId]), 'status') !== 'notFound'
     ),
     prompt: readString(item, 'prompt'),
+    model: readString(item, 'model'),
+    reasoningEffort: readString(item, 'reasoningEffort'),
     states
   }
 }

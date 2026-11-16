@@ -1,9 +1,12 @@
-import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'
-import type { TaskResumeState, TaskViewPresetId } from '../../../../../shared/ui-chrome-types'
-import type { FeatureInteractionState } from '../../../../../shared/feature-interactions'
-import type { ContextualTourId } from '../../../../../shared/contextual-tours'
-import { normalizeFeatureInteractions } from '../../../../../shared/feature-interactions'
-import { normalizeContextualTourIds } from '../../../../../shared/contextual-tours'
+import type { PersistedUIState } from '../../../../../shared/orca-profiles/persisted-ui-state-types'
+import type {
+  TaskResumeState,
+  TaskViewPresetId
+} from '../../../../../shared/ui-chrome/ui-chrome-types'
+import type { FeatureInteractionState } from '../../../../../shared/feature-education/interactions/feature-interactions'
+import type { ContextualTourId } from '../../../../../shared/feature-education/contextual-tours/contextual-tours'
+import { normalizeFeatureInteractions } from '../../../../../shared/feature-education/interactions/feature-interactions'
+import { normalizeContextualTourIds } from '../../../../../shared/feature-education/contextual-tours/contextual-tours'
 import type { UISlice } from './ui-slice-contract'
 import {
   sanitizeAcknowledgedAgentsByPaneKey,
@@ -137,6 +140,26 @@ export function mergeContextualTourSeenIds(
     merged.add(id)
   }
   return [...merged]
+}
+
+/** One-shot notices set when shown: only an explicit true counts as seen. */
+export function hydrateOneShotNoticesSeen(
+  ui: PersistedUIState
+): Pick<
+  UISlice,
+  | 'codexTerminalServerIsolationNoticeSeen'
+  | 'codexSharedSettingsNoticeSeen'
+  | 'worktreeCardsUpdateNoticeSeen'
+  | 'worktreeCardsIntroNoticeSeen'
+  | 'claudeDiffPanelNoticeSeen'
+> {
+  return {
+    codexTerminalServerIsolationNoticeSeen: ui.codexTerminalServerIsolationNoticeSeen === true,
+    codexSharedSettingsNoticeSeen: ui.codexSharedSettingsNoticeSeen === true,
+    worktreeCardsUpdateNoticeSeen: ui.worktreeCardsUpdateNoticeSeen === true,
+    worktreeCardsIntroNoticeSeen: ui.worktreeCardsIntroNoticeSeen === true,
+    claudeDiffPanelNoticeSeen: ui.claudeDiffPanelNoticeSeen === true
+  }
 }
 
 /** Stale acks/marks are inert (paneKey reuse beats them via stateStartedAt); the sanitizers only bound growth past HYDRATE_MAX_AGE_MS. */

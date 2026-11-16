@@ -5,13 +5,13 @@ import {
   NATIVE_CHAT_VISUAL_TITLE_MAX_LENGTH,
   NATIVE_CHAT_VISUAL_DIRECTIVE_MARKER,
   isNativeChatVisualFileName
-} from '../../../../../../shared/native-chat/native-chat-visual-directive'
+} from '../../../../../../shared/native-chat/visuals/native-chat-visual-directive'
 import { NativeChatInlineVisual } from './NativeChatInlineVisual'
 import type { NativeChatVisualOwner } from './native-chat-visual-owner'
 import { useNativeChatVisualOwner } from './native-chat-visual-owner'
 import {
   NATIVE_CHAT_VISUAL_PLACEHOLDER_PROPERTIES,
-  remarkNativeChatVisuals
+  nativeChatVisualRemarkPlugins
 } from './native-chat-visual-markdown-syntax'
 
 type DivProps = ComponentPropsWithoutRef<'div'> & ExtraProps
@@ -55,7 +55,7 @@ function createVisualExtension(
     )
   }
   return {
-    remarkPlugins: [[remarkNativeChatVisuals, nonce]],
+    remarkPlugins: nativeChatVisualRemarkPlugins(nonce),
     extraFlowSyntaxMarkers: [NATIVE_CHAT_VISUAL_DIRECTIVE_MARKER],
     sanitizeAttributes: { div: [...NATIVE_CHAT_VISUAL_PLACEHOLDER_PROPERTIES] },
     components: { div: VisualPlaceholder }

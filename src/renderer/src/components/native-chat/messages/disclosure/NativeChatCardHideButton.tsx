@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { hideNativeChatCardKind } from './native-chat-card-kind-hidden-toast'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 
 /** Put on a hideable chat card's outer element so its Hide button reveals on card hover. */
 export const NATIVE_CHAT_HIDEABLE_CARD_CLASS = 'group/chat-card'

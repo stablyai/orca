@@ -2,19 +2,22 @@ import { useRef } from 'react'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { getShortcutPlatform } from '@/hooks/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import {
   getClipboardEventText,
   getNativeClipboardChordCommand
 } from '@/components/terminal-pane/clipboard/terminal-clipboard-event-paste'
-import { iterateBrowserTextInsertionChunks } from '../../../../../shared/browser-text-insertion-chunks'
-import { assertClipboardTextWithinLimitWithYield } from '../../../../../shared/clipboard-text'
-import { isEditableKeyboardTarget } from '../host-guest/browser-keyboard'
+import { iterateBrowserTextInsertionChunks } from '../../../../../shared/browser/automation/browser-text-insertion-chunks'
+import { assertClipboardTextWithinLimitWithYield } from '../../../../../shared/clipboard/clipboard-text'
+import { isEditableKeyboardTarget } from '../host-guest/input/browser-keyboard'
 import {
   getRemoteBrowserKeyboardShortcut,
   getRemoteBrowserKeypressKey
 } from './remote-browser-keyboard'
-import { isRemoteBrowserPageMissingError } from './remote-browser-stream-errors'
+import {
+  isRemoteBrowserInputOpenedDialogError,
+  isRemoteBrowserPageMissingError
+} from './remote-browser-stream-errors'
 import type { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
 import type { RemoteBrowserOperationToken } from './remote-browser-stream-tokens'
 import {
@@ -176,6 +179,9 @@ export function useRemoteBrowserPageKeyboard({
         if (isCurrentRemoteOperationToken(operationToken)) {
           if (isRemoteBrowserPageMissingError(error)) {
             closeMissingRemotePage(pageId)
+            return
+          }
+          if (isRemoteBrowserInputOpenedDialogError(error)) {
             return
           }
           setPaneNotice({

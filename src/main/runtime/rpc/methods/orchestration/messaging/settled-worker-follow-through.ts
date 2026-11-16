@@ -1,4 +1,4 @@
-import { parseOrcaSessionAddress } from '../../../../../../shared/orca-session-address'
+import { parseOrcaSessionAddress } from '../../../../../../shared/agent-session/identity/orca-session-address'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import {
@@ -6,8 +6,7 @@ import {
   markUnreadFollowUpMail,
   getFollowUpDispatch,
   hasNewUnreadFollowUpMail,
-  listDispatchesWithFollowUpMail,
-  receivesMailWhole
+  listDispatchesWithFollowUpMail
 } from '../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
 import { FOLLOW_UP_MESSAGE_TYPES } from '../../../../orchestration/db/dispatch-context/worker-follow-up-plan'
 import {
@@ -25,8 +24,8 @@ import {
   startWorkerFollowUp,
   type WorkerFollowUpOutcome
 } from './worker-follow-up'
-import { captureReportedWorkerResumeSession } from '../worker/worker-resume-session-capture'
-import { reportedWorkerOutcome } from '../worker/worker-start-receipt'
+import { captureReportedWorkerResumeSession } from '../worker/follow-up/worker-resume-session-capture'
+import { reportedWorkerOutcome } from '../worker/start/worker-start-receipt'
 
 /** After a report settles (or replays): save the worker's conversation, then continue mail it never read. */
 export function followThroughWorkerReport(
@@ -57,12 +56,6 @@ export function continueUnreadWorkerMail(
 const FOLLOW_UP_TASK = {
   subject: 'New messages',
   body: 'You have new orchestration messages. Read them with the `check` command above, then continue.'
-}
-
-// A chat is handed each message whole right after this Task, one at a time.
-const CHAT_FOLLOW_UP_TASK = {
-  subject: 'New messages',
-  body: 'You have new orchestration messages. They arrive next, one at a time; act on each.'
 }
 
 async function continueUnreadMail(
@@ -119,9 +112,7 @@ async function continueUnreadMail(
             db,
             plan,
             from: first.from_handle,
-            message: receivesMailWhole(plan.latest.assignee_handle)
-              ? CHAT_FOLLOW_UP_TASK
-              : FOLLOW_UP_TASK,
+            message: FOLLOW_UP_TASK,
             takesMailOf: dispatchId
           })
         : plan

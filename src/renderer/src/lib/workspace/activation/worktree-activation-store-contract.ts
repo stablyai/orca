@@ -1,5 +1,5 @@
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
-import type { Tab } from '../../../../../shared/tab-types'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type {
   AgentProviderSessionMetadata,
@@ -7,7 +7,7 @@ import type {
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 import type { AgentStartedTelemetry } from '@/lib/workspace/creation/worktree-startup-payload'
-import type { ClosedTerminalTabTombstonesByTabId } from '../../../../../shared/workspace-layout/closed-terminal-tab-tombstones'
+import type { ClosedTerminalTabTombstonesByTabId } from '../../../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
 import type { PendingWorktreeCreation } from '../creation/pending-worktree-creation'
 
 export type WorktreeActivationStore = Partial<WorktreeRuntimeOwnerState> & {

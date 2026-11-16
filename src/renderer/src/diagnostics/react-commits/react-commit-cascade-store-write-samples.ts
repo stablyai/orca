@@ -1,4 +1,4 @@
-/** Sample the writes driving suspected cascades; React #185’s reported fiber is often a bystander. Unarmed writes read only a flag, per-cascade capture is capped, and formatting waits until reporting (shared/react-update-depth-attribution.ts). */
+/** Sample the writes driving suspected cascades; React #185’s reported fiber is often a bystander. Unarmed writes read only a flag, per-cascade capture is capped, and formatting waits until reporting (shared/crash-reporting/react-update-depth-attribution.ts). */
 
 /**
  * Read on every store write, so it is a plain field load on a shared object

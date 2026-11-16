@@ -1,11 +1,11 @@
 import os from 'node:os'
 import { app } from 'electron'
-import { sanitizeCrashReportString } from '../../../shared/crash-report-redaction'
-import type { CrashReportDiagnosticBundle } from '../../../shared/crash-reporting-diagnostic-bundle'
+import { sanitizeCrashReportString } from '../../../shared/crash-reporting/crash-report-redaction'
+import type { CrashReportDiagnosticBundle } from '../../../shared/crash-reporting/crash-reporting-diagnostic-bundle'
 import { collectDiagnosticBundle, getDiagnosticsStatus } from '../../observability/index'
 import { resolveDiagnosticOrcaChannel } from '../../observability/diagnostic-upload-endpoint'
 import type { FeedbackDiagnosticBundleAttachment } from '../../ipc/feedback-request'
-import type { FeedbackSubmitResult } from '../../../shared/feedback-submit-contract'
+import type { FeedbackSubmitResult } from '../../../shared/feedback/feedback-submit-contract'
 
 const CRASH_REPORT_LOG_LOOKBACK_MINUTES = 3 * 24 * 60
 
@@ -27,7 +27,9 @@ function skippedCrashDiagnosticBundle(): CrashDiagnosticBundleAttachment {
   }
 }
 
-async function collectCrashDiagnosticBundleAttachment(): Promise<CrashDiagnosticBundleAttachment> {
+async function collectCrashDiagnosticBundleAttachment(
+  nativeHangCaptureId?: string
+): Promise<CrashDiagnosticBundleAttachment> {
   const status = getDiagnosticsStatus()
   if (!status.bundleEnabled) {
     return {
@@ -47,7 +49,8 @@ async function collectCrashDiagnosticBundleAttachment(): Promise<CrashDiagnostic
       osRelease: os.release(),
       orcaChannel: resolveDiagnosticOrcaChannel(),
       // Reports after relaunch need logs older than the default 30-minute support window.
-      lookbackMinutes: CRASH_REPORT_LOG_LOOKBACK_MINUTES
+      lookbackMinutes: CRASH_REPORT_LOG_LOOKBACK_MINUTES,
+      nativeHangCaptureId
     })
   } catch (error) {
     return { diagnosticBundle: { status: 'not_uploaded', reason: formatUnknownError(error) } }
@@ -70,10 +73,11 @@ async function collectCrashDiagnosticBundleAttachment(): Promise<CrashDiagnostic
 }
 
 export async function prepareCrashDiagnosticBundle(
-  includeDiagnosticLogs: boolean
+  includeDiagnosticLogs: boolean,
+  nativeHangCaptureId?: string
 ): Promise<CrashDiagnosticBundleAttachment> {
   return includeDiagnosticLogs
-    ? collectCrashDiagnosticBundleAttachment()
+    ? collectCrashDiagnosticBundleAttachment(nativeHangCaptureId)
     : skippedCrashDiagnosticBundle()
 }
 

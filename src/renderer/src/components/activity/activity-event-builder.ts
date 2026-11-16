@@ -1,17 +1,17 @@
+import type { AcceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import { parseAgentStatusPaneIdentity } from '../../../../shared/agent-status/identity/agent-status-worktree-attribution'
-import { tabHasLivePty } from '../../../../shared/tab-has-live-pty'
+import { tabHasLivePty } from '../../../../shared/workspace-layout/terminal-surfaces/tab-has-live-pty'
 import { activityLiveAgentState } from './activity-event-state'
-import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext
 } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { MigrationUnsupportedPtyEntry } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { StructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-tab-name'
-import type { Repo } from '../../../../shared/repo-types'
-import type { Tab } from '../../../../shared/tab-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { ActivityEvent, ActivityLiveAgentSnapshot } from './activity-thread-types'
@@ -22,7 +22,7 @@ import {
   resolvePaneBuild,
   type ActivityEventBuildCache
 } from './activity-event-build-cache'
-import { appendUnsupportedAndRetainedEvents } from './activity-event-builder-sources'
+import { appendUnsupportedEvents } from './activity-event-builder-sources'
 import {
   attributedActivityTabContext,
   resolveActivityEventOwner,
@@ -32,10 +32,9 @@ import type { Translate } from '@/i18n/use-translate'
 
 export type BuildActivityEventsArgs = {
   chatNames: StructuredChatTabNames
-  agentStatusByPaneKey: Record<string, AgentStatusEntry>
+  agentStatusByPaneKey: AcceptedAgentStatuses
   runtimeAgentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
   migrationUnsupportedByPtyId?: Record<string, MigrationUnsupportedPtyEntry>
-  retainedAgentsByPaneKey: Record<string, RetainedAgentEntry>
   tabsByWorktree: Record<string, TerminalTab[]>
   ptyIdsByTabId?: Record<string, string[]>
   unifiedTabsByWorktree?: Record<string, Tab[]>
@@ -67,7 +66,7 @@ export function buildActivityEvents(
   const seenCacheKeys = cache ? new Set<string>() : null
 
   const pushPaneEvents = (paneEvents: ActivityEvent[], rowEntry: AgentStatusEntry): void => {
-    // Live/retained sources can overlap; keep globally unique event IDs with first-source precedence.
+    // Preserve globally unique event IDs with first-source precedence.
     paneEntryByPaneKey[rowEntry.paneKey] ??= rowEntry
     for (const event of paneEvents) {
       if (seenEventIds.has(event.id)) {
@@ -78,7 +77,7 @@ export function buildActivityEvents(
     }
   }
 
-  for (const [paneKey, entry] of Object.entries(args.agentStatusByPaneKey)) {
+  for (const [paneKey, entry] of Array.from(args.agentStatusByPaneKey.entries())) {
     const parsed = parseAgentStatusPaneIdentity(
       paneKey,
       args.unifiedTabsByWorktree
@@ -136,7 +135,7 @@ export function buildActivityEvents(
     pushPaneEvents(paneEvents, rowEntry)
   }
 
-  appendUnsupportedAndRetainedEvents({
+  appendUnsupportedEvents({
     args,
     cache,
     seenCacheKeys,

@@ -367,7 +367,7 @@ export default function AiVaultPanel({
           />
         )}
       </AiVaultPanelSearch>
-      {launchActions.continuationRequest && (
+      {launchActions.continuationOpen && (
         <AgentSessionContinuationDialog
           open
           request={launchActions.continuationRequest}

@@ -1,7 +1,7 @@
 import { StringDecoder } from 'node:string_decoder'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import type { PipedProcessSpawner, PipedProcessSpec } from '@orca/process-host/process-spec'
-import { ownRetainedString } from '../../../../shared/own-retained-string'
+import { ownRetainedString } from '../../../../shared/text/own-retained-string'
 
 /** UTF-16 units, not bytes — this bounds the buffer, it is not a payload contract. */
 const MAX_RESPONSE_CHARS = 20 * 1024 * 1024

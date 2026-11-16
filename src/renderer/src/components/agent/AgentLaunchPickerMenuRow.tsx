@@ -1,4 +1,4 @@
-import { terminalPendingLabel } from '../tab-bar/new-tab-agent-menu-model'
+import { terminalPendingLabel } from './launch-menu/new-tab-agent-menu-model'
 import { memo, useId } from 'react'
 import { Button } from '@/components/ui/button'
 import {
@@ -11,7 +11,7 @@ import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { AgentDefaultContextMenu } from './agent-combobox-items'
 import { AgentLaunchSetupButton, type AgentPickerSetupIdentity } from './AgentLaunchSetupButton'
 import { applyAgentPickerEdit } from '../../../../shared/agent-launch/picker/agent-launch-picker-edits'
-import { chatUnavailableLabel } from '../tab-bar/tab-agent-row-presentation'
+import { chatUnavailableLabel } from './launch-menu/agent-menu-row-presentation'
 import type { NewTabAgentMenuRow } from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
 import {
   agentPickerDraft,
@@ -215,8 +215,7 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
             <Button
               type="button"
               variant="menu-launch"
-              size="menu"
-              className="h-9"
+              size="menu-launch"
               aria-disabled={launchBlocked || undefined}
               aria-describedby={launchBlocked ? reasonId : undefined}
             >

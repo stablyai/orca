@@ -9,11 +9,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type { Repo } from '../../shared/repo-types'
-import { AutomationService } from './service'
+import type { Repo } from '../../shared/repository/repo-types'
+import { AutomationService } from './automation-service'
 
 import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
-import type * as PrecheckRunner from './precheck-runner'
+import type * as PrecheckRunner from './dispatch/precheck-runner'
 
 const runAutomationPrecheckMock = vi.hoisted(() => vi.fn())
 let hasCreatedStoreInCase = false
@@ -29,7 +29,7 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('./precheck-runner', async (importOriginal) => ({
+vi.mock('./dispatch/precheck-runner', async (importOriginal) => ({
   ...(await importOriginal<typeof PrecheckRunner>()),
   runAutomationPrecheck: runAutomationPrecheckMock
 }))

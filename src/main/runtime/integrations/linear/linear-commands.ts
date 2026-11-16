@@ -1,4 +1,4 @@
-import type { RuntimeTerminalShow } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalShow } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import { OrcaRuntimeWithRepositoryCommands } from '../../construction/runtime-repository-command-state'
 import { RuntimeLinearCommands } from './runtime-linear-connection-commands'

@@ -1,7 +1,7 @@
 import type {
   ComputerActionResult,
   ComputerSnapshotResult
-} from '../../../src/shared/runtime-types'
+} from '../../../src/shared/computer/computer-use-runtime-types'
 import { parseJsonOutput, runOrcaCli } from './computer-driver'
 
 export async function doubleClickTextEditWord(): Promise<{

@@ -24,9 +24,10 @@ import { parsePtyStartupIngressIntent } from '../../../shared/terminal/pty/ingre
 import {
   isAgentSessionExecutionClaim,
   isAgentSessionSurfaceBinding
-} from '../../../shared/agent-session/agent-session-host-authority'
+} from '../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import type { DaemonRequest } from '../protocol/daemon-rpc-contract'
 import { TerminalAttachCanceledError } from '../protocol/daemon-errors'
+import { sessionExitCauseLogFields } from '../observability/session-exit-log-fields'
 
 type CreateOrAttachRequest = Extract<DaemonRequest, { type: 'createOrAttach' }>
 
@@ -230,7 +231,7 @@ export class DaemonTerminalAdmission {
         this.options.log.log('session-exited', {
           sessionId: routedSessionId,
           code,
-          cause: cause?.kind
+          ...sessionExitCauseLogFields(cause)
         })
         this.options.streamDataBatcher.enqueueControlEvent(clientId, routedSessionId, {
           type: 'event',

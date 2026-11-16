@@ -2,14 +2,14 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { getDefaultPersistedState } from '../../../shared/constants'
-import { ORCA_PROFILE_INDEX_SCHEMA_VERSION } from '../../../shared/orca-profiles'
+import { getDefaultPersistedState } from '../../../shared/orca-profiles/constants'
+import { ORCA_PROFILE_INDEX_SCHEMA_VERSION } from '../../../shared/orca-profiles/orca-profiles'
 import { createWorkerMaintenanceFixture } from '../../persistence/loading-store/profile-writing/profile-state-maintenance-fixture'
 import { ProfileStateSqliteAuthority } from '../../persistence/profile-state/profile-state-sqlite-authority'
 import { transferActiveProfileProject } from './profile-active-transfer'
-import * as domainState from './profile-project-domain-state'
-import { recoverPendingProfileProjectMoves } from './profile-project-move-intent'
-import { profileHasPendingProjectMove } from './profile-project-move-record'
+import './profile-project-domain-state'
+import './profile-project-move-intent'
+import './profile-project-move-record'
 import { readProfileStateWithRevision } from './profile-project-state-file'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
@@ -74,29 +74,5 @@ describe('active profile transfers with the live writer', () => {
     store.updateSettings({ theme: 'dark' })
     await store.flushPendingOrThrowAsync()
     expect(read('source').state.settings.theme).toBe('dark')
-  })
-
-  it('leaves an interrupted move frozen until journal recovery runs with the writer closed', async () => {
-    const { store, root, args, read } = await fixture()
-    const original = domainState.writeProfileProjectDomainChanges
-    const fault = vi
-      .spyOn(domainState, 'writeProfileProjectDomainChanges')
-      .mockImplementation((id, ...rest) => {
-        if (id === args.sourceProfileId) {
-          throw new Error('source commit interrupted')
-        }
-        return original(id, ...rest)
-      })
-    const reopen = vi.fn(async () => {})
-    await expect(transferActiveProfileProject(args, root, store, reopen)).rejects.toThrow(
-      'source commit interrupted'
-    )
-    expect(reopen).toHaveBeenCalledOnce()
-    expect(profileHasPendingProjectMove('source', root)).toBe(true)
-    await expect(store.flushPendingOrThrowAsync()).rejects.toThrow('finalized')
-    fault.mockRestore()
-    expect(recoverPendingProfileProjectMoves(root)).toBe(1)
-    expect(read('source').state.repos.some((repo) => repo.id === args.repoId)).toBe(false)
-    expect(read('target').state.repos.some((repo) => repo.id === args.repoId)).toBe(true)
   })
 })

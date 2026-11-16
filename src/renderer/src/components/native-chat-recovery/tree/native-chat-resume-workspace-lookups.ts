@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import {
   getCyclicProjectedWorktreeLineageIds,
   getSidebarLineageAncestors
-} from '../../../../../shared/sidebar-list/worktree-lineage-projection'
+} from '../../../../../shared/sidebar-list/lineage/worktree-lineage-projection'
 import {
   getIndexedAllWorktrees,
   getIndexedWorktreeMap
@@ -12,7 +12,7 @@ import {
   composeWorktreeHostIdentity,
   getWorktreeHostIdentity
 } from '../../../../../shared/worktree/host-qualified-identity'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { useAppStore } from '../../../store/index'
 import type { ResumeWorkspaceGroup } from './native-chat-resume-on-restart-grouping'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'

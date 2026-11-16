@@ -1,11 +1,11 @@
 import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
-import { ORCAD_UPDATE_TERMINALS_RUNNING_CODE } from '../../../shared/orcad-managed-runtime'
+import { ORCAD_UPDATE_TERMINALS_RUNNING_CODE } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import {
   getOrcadSshDeployment,
   type KnownRuntimeEnvironment,
   type OrcadSshDeploymentLink
 } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
-import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
+import { getManagedOrcadFenceEnvironmentId } from '../../../shared/remote-runtime/ssh/managed-orcad-ssh-owner'
 import type { ServeReadiness } from '../../server/serve-readiness'
 import { computeLocalOrcadBuildHash } from '../install/orcad-local-build-hash'
 
@@ -15,7 +15,7 @@ import { admitOrcadRecordForIntent, type OrcadUpdateIntent } from './orcad-manag
 import {
   type OrcadTerminalCensus,
   UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
-} from '../../../shared/orcad-terminal-census'
+} from '../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
 import { probeActiveOrcadReadiness } from '../activation/orcad-active-readiness'
 import { resolveOrcadRemoteContext, type OrcadRemoteContext } from '../install/orcad-remote-context'
 import { ORCAD_INSTALL_MODEL } from '../install/remote-install-model'
@@ -47,11 +47,11 @@ export function requireManagedOrcadTargetStore() {
   return targetStore
 }
 
-export function requireManagedOrcadEnvironment(
+export async function requireManagedOrcadEnvironment(
   userDataPath: string,
   selector: string
-): { environment: KnownRuntimeEnvironment; deployment: OrcadSshDeploymentLink } {
-  const environment = resolveEnvironment(userDataPath, selector)
+): Promise<{ environment: KnownRuntimeEnvironment; deployment: OrcadSshDeploymentLink }> {
+  const environment = await resolveEnvironment(userDataPath, selector)
   const deployment = getOrcadSshDeployment(environment)
   if (!deployment || environment.connectionDependency !== 'ssh-tunnel') {
     throw new Error('This server is not managed through an orcad SSH deployment.')

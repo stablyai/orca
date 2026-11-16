@@ -1,14 +1,14 @@
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { isAgentSessionOptions } from '../../../../../shared/agent-session/lifecycle/agent-session-record'
-import { SendBodyStructure } from '../../../../../shared/rpc-contract/structured-agent-session-message-params'
-import { parseExecutionHostId } from '../../../../../shared/execution-host'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import { SendBodyStructure } from '../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-message-params'
+import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type {
   StructuredAgentSessionFirstMessage,
   StructuredAgentSessionForkSource,
   StructuredAgentSessionResumeSource
-} from '../../../../../shared/agent-session/structured-agent-session-create'
+} from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-create'
 import type { StructuredAgentSessionLaunchIntent } from './structured-agent-session-launch-intent'
 
 export type StructuredAgentLaunchPersistedLifecycle = 'pending' | 'visibility-unknown' | 'failed'

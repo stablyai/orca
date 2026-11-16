@@ -10,12 +10,12 @@ import type {
   State,
   TokenizeContext
 } from 'micromark-util-types'
-import type { Processor } from 'unified'
+import type { Processor, PluggableList } from 'unified'
 import {
   NATIVE_CHAT_VISUAL_DIRECTIVE_MAX_LINE_LENGTH,
   NATIVE_CHAT_VISUAL_MAX_PER_MESSAGE,
   parseNativeChatVisualDirectiveLine
-} from '../../../../../../shared/native-chat/native-chat-visual-directive'
+} from '../../../../../../shared/native-chat/visuals/native-chat-visual-directive'
 
 const TOKEN_TYPE = 'nativeChatVisual'
 const COLON = 58
@@ -149,4 +149,8 @@ export function remarkNativeChatVisuals(this: Processor, nonce: string): (tree: 
   data.micromarkExtensions = [...(data.micromarkExtensions ?? []), visualMicromarkExtension]
   data.fromMarkdownExtensions = [...(data.fromMarkdownExtensions ?? []), visualFromMarkdown]
   return (tree) => placeVisuals(tree, true, nonce, { count: 0 })
+}
+
+export function nativeChatVisualRemarkPlugins(nonce: string): PluggableList {
+  return [[remarkNativeChatVisuals, nonce]]
 }

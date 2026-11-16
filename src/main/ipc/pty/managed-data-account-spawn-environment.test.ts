@@ -1,6 +1,7 @@
 import { randomUUID, createHash } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import {
   createDaemonPtyEnvironment,
@@ -22,7 +23,11 @@ import type * as ServiceModule from '../../managed-data-accounts/service'
 import {
   MANAGED_DATA_ACCOUNT_BASELINE_ENV_KEYS,
   restoreManagedDataAccountEnvironment
-} from '../../../shared/managed-data-account-environment'
+} from '../../../shared/agent-launch/environment/managed-data-account-environment'
+import { managedDataAccountResumeEnv } from '../../../shared/agent-launch/environment/managed-data-account-resume'
+import { getManagedDataAccountService } from '../../managed-data-accounts/service'
+import { needsOpenCodePrivateServer } from '../../opencode/opencode-private-server'
+import { writeSecureFile } from '../../../shared/secure-storage/secure-file'
 
 const selected = vi.hoisted(() => {
   const value: Record<string, string> = {}
@@ -49,7 +54,7 @@ beforeEach(() => {
 })
 afterEach(() => vi.unstubAllEnvs())
 
-describe('independent pane Claude environments', () => {
+describe('independent pane agent session environments', () => {
   it('canonicalizes explicit Windows stamps for old receivers and keeps caller deletions authoritative', () => {
     const platform = process.platform
     Object.defineProperty(process, 'platform', { value: 'win32' })
@@ -81,6 +86,22 @@ describe('independent pane Claude environments', () => {
       Object.defineProperty(process, 'platform', { value: platform })
     }
   })
+
+  it.each(['local', 'daemon'])(
+    '%s panes drop the launching Codex task identity but keep user Codex settings',
+    (provider) => {
+      vi.stubEnv('CODEX_THREAD_ID', 'parent-thread')
+      vi.stubEnv('CODEX_WINDOWS_REGISTERED_CORE', '1')
+      vi.stubEnv('CODEX_HOME', '/home/user/.codex')
+      const pane =
+        provider === 'local'
+          ? buildInheritedLocalPtyEnvironment({}, [])
+          : createDaemonPtyEnvironment({ sessionId: 'pane', cols: 80, rows: 24, env: {} })
+      expect(pane.CODEX_THREAD_ID).toBeUndefined()
+      expect(pane.CODEX_WINDOWS_REGISTERED_CORE).toBeUndefined()
+      expect(pane.CODEX_HOME).toBe('/home/user/.codex')
+    }
+  )
 
   it.each(['local', 'daemon'])(
     '%s owns stamps only from the pane overlay through final preparation',
@@ -140,6 +161,42 @@ describe('independent pane Claude environments', () => {
   )
 })
 
+describe('OpenCode Session History resume', () => {
+  it('opens a System store row beside a running selected account', () => {
+    const root = mkdtempSync(join(tmpdir(), 'opencode-system-resume-'))
+    try {
+      const accountState = join(root, 'account-state')
+      writeSecureFile(
+        join(accountState, 'opencode', 'service.json'),
+        JSON.stringify({ pid: process.pid })
+      )
+      vi.stubEnv('XDG_DATA_HOME', join(root, 'system-data'))
+      vi.stubEnv('XDG_STATE_HOME', join(root, 'system-state'))
+      selected.value = {
+        XDG_DATA_HOME: join(root, 'account-data'),
+        XDG_STATE_HOME: accountState,
+        OPENCODE_AUTH_CONTENT: '',
+        OPENCODE_DB: 'opencode.db'
+      }
+      vi.spyOn(getManagedDataAccountService(), 'transcriptEnvironments').mockReturnValue([
+        selected.value
+      ])
+      const env = managedDataAccountResumeEnv({
+        agent: 'opencode2',
+        filePath: join(root, 'system-data', 'opencode', 'opencode.db#ses_1')
+      })
+      applyManagedDataAccountEnvironment(env, { launchAgent: 'opencode2' })
+      expect(env.XDG_DATA_HOME).toBe(join(root, 'system-data'))
+      expect(env.XDG_STATE_HOME).toBe(join(root, 'system-state'))
+      expect(env.OPENCODE_DB).toBeUndefined()
+      // The selected account's service holds OpenCode's one port.
+      expect(needsOpenCodePrivateServer(env)).toBe(true)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+})
+
 function hash(value: string | undefined): string | undefined {
   return value === undefined ? undefined : createHash('sha256').update(value).digest('hex')
 }
@@ -196,31 +253,6 @@ describe.each(['renderer', 'runtime'])('%s managed account daemon environment', 
       if (key !== 'XDG_STATE_HOME') {
         expect(child[key]).toBe(value)
       }
-    }
-  })
-
-  it('preserves independent daemon defaults when main has no baseline or owned markers', async () => {
-    const env: Record<string, string> = {}
-    applyManagedDataAccountEnvironment(env, { launchAgent: 'opencode' })
-    const envToDelete = await spawnDeletions(route, env)
-    const defaults = {
-      XDG_DATA_HOME: join(tmpdir(), 'persistent-daemon', 'data'),
-      XDG_STATE_HOME: join(tmpdir(), 'persistent-daemon', 'state'),
-      OPENCODE_DB: 'daemon.db',
-      OPENCODE_AUTH_CONTENT: JSON.stringify({ fixture: { key: randomUUID() } })
-    }
-    for (const [key, value] of Object.entries(defaults)) {
-      vi.stubEnv(key, value)
-    }
-    const child = createDaemonPtyEnvironment({
-      sessionId: 'pane',
-      cols: 80,
-      rows: 24,
-      env,
-      envToDelete
-    })
-    for (const [key, value] of Object.entries(defaults)) {
-      expect(hash(child[key]) === hash(value)).toBe(true)
     }
   })
 

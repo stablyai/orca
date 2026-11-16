@@ -1,5 +1,5 @@
 import type { OrchestrationPartyLocationResult } from '../../../../shared/orchestration/orchestration-caller-status'
-import type { OrcaSessionId } from '../../../../shared/orca-session-address'
+import type { OrcaSessionId } from '../../../../shared/agent-session/identity/orca-session-address'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import { resolveOrchestrationParty } from './orchestration-party'
 import { OrchestrationError } from '../orchestration-error'

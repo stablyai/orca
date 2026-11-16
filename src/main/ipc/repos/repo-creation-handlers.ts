@@ -1,24 +1,33 @@
-import type { BrowserWindow } from 'electron'
-import { ipcMain } from 'electron'
+import { type BrowserWindow, ipcMain } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { access, mkdir, readdir, rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
 import type { Store } from '../../persistence/loading-store/store'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { RepositoryMetadataOwner } from '../../workspaces/catalog/imported-folder-project-link'
-import { DEFAULT_REPO_BADGE_COLOR, getDefaultWorkspaceDir } from '../../../shared/constants'
-import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
-import { getEffectiveHostSetting } from '../../../shared/host-setting-overrides'
-import { probeGitAvailability } from '../../git/git-availability'
-import { gitExecFileAsync } from '../../git/runner'
-import { inspectGitRepoForRegistrationAsync } from '../../git/repo'
-import { getClonePathComparisonKey, getSavedProjectPathKeys } from '../../git/repo-clone-path'
+import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/repository/appearance/repo-badge-color'
+import { getDefaultWorkspaceDir } from '../../../shared/orca-profiles/constants'
+import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../shared/execution-host/execution-host'
+import { getEffectiveHostSetting } from '../../../shared/execution-host/host-setting-overrides'
+import { probeGitAvailability } from '../../git/command-runner/host-routing/git-availability'
+import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
+import { inspectGitRepoForRegistrationAsync } from '../../git/repositories/discovery/repo-detection'
+import {
+  getClonePathComparisonKey,
+  getSavedProjectPathKeys
+} from '../../git/repositories/cloning/repo-clone-path'
 import { detectRepoLocalMetadata } from '../../repository-icons/repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
 import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
-import { repoCreateFailure, type RepoCreateFailure } from '../../../shared/repo-create-failure-copy'
+import {
+  repoCreateFailure,
+  type RepoCreateFailure
+} from '../../../shared/repository/creation/repo-create-failure-copy'
 import { emitRepoAdded } from './repo-added-telemetry'
 import { notifyReposChanged } from './repos-changed-notification'
 import { addLocalRepoFromPath } from './local-repo-registration'

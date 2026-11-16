@@ -1,5 +1,4 @@
-import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type { ClaudeEnvDeps } from '../../../claude/structured/launch/claude-structured-child-env'
 import { ClaudeStructuredSessionAdapter } from '../../../claude/structured/claude-structured-session-adapter'
 import type { ClaudeStructuredSessionAdapterDeps } from '../../../claude/structured/claude-structured-session-state'
@@ -7,19 +6,15 @@ import type { ClaudeStructuredSessionEvent } from '../../../claude/structured/cl
 import { claudeProviderHandleLink } from '../../../claude/structured/claude-structured-owner-identity'
 import type { StructuredAgentSessionLifecycleEvent } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 
-import {
-  recordAgentSessionProviderHandle,
-  reviseAgentSessionProviderResumePoint
-} from '../ownership/agent-session-provider-handle-transition'
 import type { AgentSessionRecordStore } from '../records/agent-session-record-store'
 import {
   ClaudeAtRestCommandCatalog,
   type ClaudeAtRestCommandsDeps
-} from '../../../claude/claude-at-rest-commands'
-import type { ClaudeCommandCatalogProbe } from '../../../claude/claude-command-catalog-probe'
+} from '../../../claude/command-catalog/claude-at-rest-commands'
+import type { ClaudeCommandCatalogProbe } from '../../../claude/command-catalog/claude-command-catalog-probe'
 import { openClaudeStreamJsonConnection } from '../../../claude/claude-stream-json-connection'
-import type { ClaudeCliFlagSupport } from '../../../claude/claude-cli-flag-support'
-import { prewarmClaudeCliFlags } from '../../../claude/claude-cli-flag-prewarm'
+import type { ClaudeCliFlagSupport } from '../../../claude/cli-capabilities/claude-cli-flag-support'
+import { prewarmClaudeCliFlags } from '../../../claude/cli-capabilities/claude-cli-flag-prewarm'
 
 export type StructuredClaudeRuntimeAdapterDeps = {
   store: AgentSessionRecordStore
@@ -106,9 +101,9 @@ export function createStructuredClaudeRuntimeAdapter(
     persistHandle: async ({ sessionId, providerSessionId, leafUuid, fence }) => {
       const currentFence = store.getRecord(sessionId)?.lease.runtimeFence ?? fence
       const observedAt = Date.now()
-      await store.transitionHandoff(sessionId, (record: AgentSessionRecord) =>
-        recordAgentSessionProviderHandle({
-          record,
+      await store.updateRecord(sessionId, {
+        kind: 'provider-handle',
+        args: {
           fence: currentFence,
           link: claudeProviderHandleLink({
             sessionId: providerSessionId,
@@ -118,18 +113,18 @@ export function createStructuredClaudeRuntimeAdapter(
             observedAt
           }),
           now: observedAt
-        })
-      )
+        }
+      })
     },
     persistResumePoint: async ({ sessionId, providerSessionId, leafUuid, fence }) => {
-      await store.transitionHandoff(sessionId, (record: AgentSessionRecord) =>
-        reviseAgentSessionProviderResumePoint({
-          record,
+      await store.updateRecord(sessionId, {
+        kind: 'resume-point',
+        args: {
           fence,
           handle: claudeProviderHandle(providerSessionId, leafUuid),
           now: Date.now()
-        })
-      )
+        }
+      })
     },
     onEvent: (event) => {
       const lifecycle = structuredClaudeLifecycleEvent(event)

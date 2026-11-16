@@ -1,7 +1,7 @@
 import '../../providers/ssh-host-not-served-error'
 import { describe, expect, it, vi } from 'vitest'
 import './runtime-test-module-registration.spec'
-import '../../../shared/constants'
+import '../../../shared/orca-profiles/constants'
 import {
   MOCK_GIT_WORKTREES,
   computeWorktreePathMock,
@@ -77,6 +77,8 @@ describe('OrcaRuntimeService', () => {
     vi.mocked(listWorktrees)
       .mockImplementationOnce(() => staleScan.promise)
       .mockResolvedValueOnce([createdWorktree])
+      // listDetected prunes after the create, so it observes again with its own pre-scan claim.
+      .mockResolvedValueOnce([...MOCK_GIT_WORKTREES, createdWorktree])
       .mockResolvedValueOnce([...MOCK_GIT_WORKTREES, createdWorktree])
 
     const staleLookup = runtime.showManagedWorktree(TEST_WORKTREE_ID)

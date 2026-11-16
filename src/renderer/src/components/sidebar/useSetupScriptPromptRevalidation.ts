@@ -1,9 +1,12 @@
 import { useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
-import { isGitRepoKind } from '../../../../shared/repo-kind'
-import type { Repo } from '../../../../shared/repo-types'
-import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
+import { isGitRepoKind } from '../../../../shared/repository/repo-kind'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import { getRepoHostIdentity } from '../../../../shared/repository/repo-host-identity'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import type { SetupScriptPromptState } from './setup-script-prompt-render-state'
 
 /** Revisiting an already-activated worktree re-inspects at most this often. */

@@ -1,7 +1,7 @@
 /** Read execution-host process tables: daemon shell-ownership changes only after full-screen exit and misses plain failed/finished commands. Observation failure is unproven. */
-import { confirmShellForegroundProcess } from '../../../providers/agent-foreground-process'
-import { getFreshProcessTableSnapshot } from '../../../../shared/process-table-snapshot-reader'
-import { getProcessTableIndex } from '../../../../shared/process-table-index'
+import { confirmShellForegroundProcess } from '../../../providers/foreground/agent-process'
+import { getFreshProcessTableSnapshot } from '../../../../shared/process-observation/tables/process-table-snapshot-reader'
+import { getProcessTableIndex } from '../../../../shared/process-observation/tables/process-table-index'
 import { isShellProcess } from '../../../../shared/agent-status/process/shell-process-detection'
 import type { TerminalProcessInspection } from '../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 

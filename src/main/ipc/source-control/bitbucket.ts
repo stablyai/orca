@@ -11,7 +11,7 @@ import {
   type BitbucketConnectResult,
   type BitbucketConnectionStatus,
   bitbucketConnectFailure
-} from '../../../shared/bitbucket-credentials'
+} from '../../../shared/bitbucket/bitbucket-credentials'
 
 function optionalString(value: unknown): string | null {
   return typeof value === 'string' ? value : null

@@ -4,6 +4,8 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { DeleteWorktreeDirtyChangeHint } from './DeleteWorktreeDirtyChangeHint'
+import { DeleteWorktreeLocalFilesHint } from './DeleteWorktreeLocalFilesHint'
+import type { DeleteWorktreeLocalFilesState } from './use-delete-worktree-at-risk-local-files'
 import type {
   DeleteWorktreeChangeCheckState,
   DeleteWorktreeDirtyChangePreview
@@ -15,7 +17,7 @@ import {
   getExecutionHostLabel,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 
@@ -52,7 +54,8 @@ export function DeleteWorktreeTargetPreview({
   deleteStateByWorktreeId,
   dirtyChangeCountsByWorktreeId,
   dirtyChangePreviewsByWorktreeId,
-  changeCheckStatesByWorktreeId
+  changeCheckStatesByWorktreeId,
+  atRiskLocalFilesByIdentity
 }: {
   isBatchDelete: boolean
   worktree: Worktree | null
@@ -63,6 +66,7 @@ export function DeleteWorktreeTargetPreview({
   dirtyChangeCountsByWorktreeId: ReadonlyMap<string, number>
   dirtyChangePreviewsByWorktreeId: ReadonlyMap<string, DeleteWorktreeDirtyChangePreview>
   changeCheckStatesByWorktreeId?: ReadonlyMap<string, DeleteWorktreeChangeCheckState>
+  atRiskLocalFilesByIdentity?: ReadonlyMap<string, DeleteWorktreeLocalFilesState>
 }): JSX.Element | null {
   const t = useTranslate()
   const targetIdPrefix = useId()
@@ -111,6 +115,9 @@ export function DeleteWorktreeTargetPreview({
                       preview={dirtyChangePreviewsByWorktreeId.get(
                         item.hostId ? getWorktreeHostIdentity(item) : item.id
                       )}
+                    />
+                    <DeleteWorktreeLocalFilesHint
+                      state={atRiskLocalFilesByIdentity?.get(getWorktreeHostIdentity(item))}
                     />
                     {itemDeleteError ? (
                       <div className="mt-1 whitespace-pre-wrap break-all text-destructive">
@@ -167,6 +174,9 @@ export function DeleteWorktreeTargetPreview({
         preview={dirtyChangePreviewsByWorktreeId.get(
           worktree.hostId ? getWorktreeHostIdentity(worktree) : worktree.id
         )}
+      />
+      <DeleteWorktreeLocalFilesHint
+        state={atRiskLocalFilesByIdentity?.get(getWorktreeHostIdentity(worktree))}
       />
     </div>
   )

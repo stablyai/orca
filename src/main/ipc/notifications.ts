@@ -9,12 +9,12 @@ import type {
   NotificationDispatchResult,
   NotificationPermissionStatusResult,
   StructuredNotificationRead
-} from '../../shared/notification-settings-types'
-import { isNotificationAttentionAcknowledgement } from '../../shared/notification-settings-types'
+} from '../../shared/notifications/notification-settings-types'
+import { isNotificationAttentionAcknowledgement } from '../../shared/notifications/notification-settings-types'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { readNotificationAuthorizationStatus } from './notification-authorization-status'
 import { setTrayAttention } from '../tray/system-tray'
-import { isMainWindowVisible } from '../window/main-window-visibility'
+import { isMainWindowVisible } from '../window/visibility/main-window-visibility'
 import { activeNotificationsById } from './native-notification-lifecycle'
 import { deliverNativeNotification } from './native-notification-delivery'
 import { removeReadMacosNotifications } from './macos-notification-center'
@@ -25,7 +25,7 @@ import {
 } from '../notifications/announced-notification-registry'
 import { registerNotificationSoundHandlers } from './notification-sound-ipc'
 import { openNotificationSystemSettings } from './notification-system-settings-link'
-import { isStructuredAttentionRead } from '../../shared/agent-session/agent-session-attention'
+import { isStructuredAttentionRead } from '../../shared/agent-session/view/agent-session-attention'
 import { isAgentSessionExecutionLocation } from '../../shared/agent-session/lifecycle/agent-session-record'
 import {
   getLastObservedDeliveryOutcome,

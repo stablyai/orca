@@ -1,12 +1,16 @@
 import path from 'node:path'
 import type { SleepingAgentSessionRecord } from '../../src/shared/agent-session/lifecycle/agent-session-resume'
-import type { Repo } from '../../src/shared/repo-types'
+import type { Repo } from '../../src/shared/repository/repo-types'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
   TerminalTab
 } from '../../src/shared/workspace-layout/terminal-tab-types'
-import type { Tab, TabGroup, TabGroupLayoutNode } from '../../src/shared/tab-types'
+import type {
+  Tab,
+  TabGroup,
+  TabGroupLayoutNode
+} from '../../src/shared/workspace-layout/tab-groups/tab-types'
 import type { WorktreeLineage } from '../../src/shared/worktree/lineage-types'
 import type { Worktree } from '../../src/shared/worktree/types'
 import type { NormalizedAccumulatedWorkspaceFixtureOptions } from './accumulated-workspace-profile'

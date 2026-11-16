@@ -10,7 +10,7 @@ import type { TerminalLimitStatus } from '../../../../../../shared/terminal/runt
 import { useAppStore } from '@/store/index'
 import { i18n } from '@/i18n/i18n'
 
-import type { RuntimeStatus } from '../../../../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { advanceRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 
 vi.mock('./terminal-limit-transport', () => ({

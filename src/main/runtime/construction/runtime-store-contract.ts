@@ -1,6 +1,6 @@
 import type { Store } from '../../persistence/loading-store/store'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { VoiceSettings } from '../../../shared/speech-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
+import type { VoiceSettings } from '../../../shared/speech/speech-types'
 
 export type RuntimeStore = {
   getRepos: Store['getRepos']
@@ -104,6 +104,7 @@ export type RuntimeStore = {
   listAutomationRunsPage?: Store['listAutomationRunsPage']
   createAutomation?: Store['createAutomation']
   updateAutomation?: Store['updateAutomation']
+  updateAutomations?: Store['updateAutomations']
   deleteAutomation?: Store['deleteAutomation']
   getSparsePresets?: Store['getSparsePresets']
   saveSparsePreset?: Store['saveSparsePreset']
@@ -122,8 +123,10 @@ export type RuntimeStore = {
     agentWorkspaceTrustEnabled?: GlobalSettings['agentWorkspaceTrustEnabled']
     codexManagedAccounts?: GlobalSettings['codexManagedAccounts']
     codexShareHistoryAcrossAccounts?: GlobalSettings['codexShareHistoryAcrossAccounts']
+    deleteChatHistoryWithWorkspace?: GlobalSettings['deleteChatHistoryWithWorkspace']
     nestedWorkerMaxDepth?: GlobalSettings['nestedWorkerMaxDepth']
     orchestrationWorkerAutoReleaseEnabled?: GlobalSettings['orchestrationWorkerAutoReleaseEnabled']
+    orchestrationCoordinatorApprovalsEnabled?: GlobalSettings['orchestrationCoordinatorApprovalsEnabled']
     workspaceDir: string
     nestWorkspaces: boolean
     workspaceDirHistory?: GlobalSettings['workspaceDirHistory']
@@ -166,6 +169,7 @@ export type RuntimeStore = {
     defaultLinearTeamSelection?: GlobalSettings['defaultLinearTeamSelection']
     githubProjects?: GlobalSettings['githubProjects']
     experimentalNewWorktreeCardStyle?: GlobalSettings['experimentalNewWorktreeCardStyle']
+    worktreeCardDetailsRow?: GlobalSettings['worktreeCardDetailsRow']
     compactWorktreeCards?: GlobalSettings['compactWorktreeCards']
     minimaxGroupId?: GlobalSettings['minimaxGroupId']
     minimaxUsageModels?: GlobalSettings['minimaxUsageModels']
@@ -174,7 +178,10 @@ export type RuntimeStore = {
     prBotAuthorOverrides?: GlobalSettings['prBotAuthorOverrides']
     sourceControlGroupOrder?: GlobalSettings['sourceControlGroupOrder']
     sourceControlCompareAgainstUpstream?: GlobalSettings['sourceControlCompareAgainstUpstream']
+    prAutoRefresh?: GlobalSettings['prAutoRefresh']
     diffShowWhitespace?: GlobalSettings['diffShowWhitespace']
+    newTabMenuLayout?: GlobalSettings['newTabMenuLayout']
+    floatingTerminalNewTabMenuLayout?: GlobalSettings['floatingTerminalNewTabMenuLayout']
     artifactSharingEnabled?: GlobalSettings['artifactSharingEnabled']
     terminalQuickCommands?: GlobalSettings['terminalQuickCommands']
     gitlabProjects?: GlobalSettings['gitlabProjects']
@@ -189,6 +196,7 @@ export type RuntimeStore = {
     terminalHiddenDeliveryGate?: GlobalSettings['terminalHiddenDeliveryGate']
     terminalModelQueryAuthority?: GlobalSettings['terminalModelQueryAuthority']
     worktreeVisibilityDefaults?: GlobalSettings['worktreeVisibilityDefaults']
+    workspaceCleanupPolicy?: GlobalSettings['workspaceCleanupPolicy']
     hostSettingOverrides?: GlobalSettings['hostSettingOverrides']
     activeRuntimeEnvironmentId?: GlobalSettings['activeRuntimeEnvironmentId']
     showPinnedWorktreesInGroups?: GlobalSettings['showPinnedWorktreesInGroups']

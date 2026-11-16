@@ -9,10 +9,10 @@ import {
   getRepoExecutionHostId,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 
-import type { Repo } from '../../../../shared/repo-types'
-import { isFolderRepo } from '../../../../shared/repo-kind'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import { getLocalPtyProvider } from '../../pty/provider/registry'
 import { clearProviderPtyState } from '../../pty/provider/state-cleanup'
 import { killAllProcessesForWorktree } from '../../../runtime/workspaces/removal/worktree-teardown'
@@ -25,7 +25,7 @@ import {
 import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-error'
 import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import { forceDeleteLocalBranch } from '../../../git/worktrees/removal/worktree-branch-removal'
-import { gitExecFileAsync } from '../../../git/runner'
+import { gitExecFileAsync } from '../../../git/command-runner/git-exec-file'
 import type { RemoveWorktreeArgs } from '../ipc-context-schemas'
 import { getWorktreeRemovalInFlightKey } from './worktree-removal-coordinator'
 import { getFolderWorkspaceRootId } from '../folder-workspace-model'

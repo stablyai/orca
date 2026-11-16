@@ -6,7 +6,7 @@ import { agentSessionFailureWords } from '../../../../../shared/agent-session/fa
 import {
   formatOrcaSessionAddress,
   isOrcaSessionId
-} from '../../../../../shared/orca-session-address'
+} from '../../../../../shared/agent-session/identity/orca-session-address'
 import type { StructuredAgentSessionRequestFailure } from '../../../../native-chat/agent-session-wire/observations/structured-agent-session-request-failures'
 import { tuiAgentDisplayName } from '../../../../../shared/agent-launch/catalog/tui-agent-display-names'
 import { resolveStructuredWorkerIdentityForSession } from '../../terminal-authority/structured-sessions/structured-worker-authority'

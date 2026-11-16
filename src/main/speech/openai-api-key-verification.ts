@@ -5,7 +5,7 @@ import {
   resolveOpenAiCompatibleSpeechProviderInput,
   saveOpenAiCompatibleSpeechProvider
 } from './openai-compatible-speech-provider-store'
-import type { OpenAiCompatibleSpeechProvider } from '../../shared/speech-types'
+import type { OpenAiCompatibleSpeechProvider } from '../../shared/speech/speech-types'
 import {
   postOpenAiTranscription,
   readOpenAiErrorMessage,

@@ -1,13 +1,18 @@
 import { resolve, relative, isAbsolute, posix, sep, win32 } from 'node:path'
-import type { GlobalSettings, OrcaWorkspaceLayout } from '../../shared/global-settings-types'
-import type { Repo } from '../../shared/repo-types'
-import { isWindowsAbsolutePathLike, resolveRuntimePath } from '../../shared/cross-platform-path'
-import { isWslUncPath, resolveWslRepoWorktreeBasePath } from '../../shared/wsl-paths'
+import type { GlobalSettings } from '../../shared/settings/global-settings-types'
+import type { OrcaWorkspaceLayout } from '../../shared/worktree/paths/orca-workspace-layout'
+import type { Repo } from '../../shared/repository/repo-types'
+import {
+  isWindowsAbsolutePathLike,
+  resolveRuntimePath
+} from '../../shared/file-access/cross-platform-path'
+import { isWslUncPath, resolveWslRepoWorktreeBasePath } from '../../shared/file-access/wsl-paths'
 import { splitWorktreeId } from '../../shared/worktree/id'
 import {
+  containsEmoji,
   replaceKnownEmojiWithShortcodes,
   setEmojiShortcodeDatasetLoader
-} from '../../shared/emoji-shortcode-catalog'
+} from '../../shared/text/emoji-shortcode-catalog'
 import { requireEmojiShortcodeDataset } from './deferred-emoji-shortcode-dataset'
 import { getWslHome, getWslHomeAsync } from '../wsl/discovery/distro-catalog'
 import { parseWslPath } from '../wsl/filesystem/unc-path-access'
@@ -39,12 +44,6 @@ export function sanitizeWorktreeName(input: string): string {
   }
 
   return sanitized
-}
-
-function containsEmoji(input: string): boolean {
-  return /[\p{Emoji_Presentation}\p{Extended_Pictographic}\p{Regional_Indicator}\u20e3]/u.test(
-    input
-  )
 }
 
 export function ensurePathWithinWorkspace(targetPath: string, workspaceDir: string): string {

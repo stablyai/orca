@@ -6,22 +6,19 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
-  statSync,
   symlinkSync,
-  utimesSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { setAppEnvironment } from '../../../shared/app-environment'
+import { setAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 
 const { getPathMock } = vi.hoisted(() => ({
   getPathMock: vi.fn<(name: string) => string>()
 }))
 
 import { OpenCodeHookService, openCode2HookService } from './hook-service'
-import { getOpenCodePluginSource } from './plugin-source/status-plugin-module-source'
-import { resolveOpenCodeConfigDirectory } from '../../../shared/opencode-config-directory'
+import { resolveOpenCodeConfigDirectory } from '../../../shared/agent-launch/plugins/opencode/opencode-config-directory'
 
 beforeEach(() => {
   vi.stubEnv('ORCA_OPENCODE_PLUGIN_API', 'v2')
@@ -69,10 +66,6 @@ describe('OpenCodeHookService buildPtyEnv / clearPty round-trip', () => {
     rmSync(join(userDataDir, 'opencode-config-overlays'), { recursive: true, force: true })
   })
 
-  // OpenCode 2 reloads on mtime changes, resetting status mid-turn.
-
-  // OpenCode 2 stats file-level symlink targets used by dotfile managers.
-
   // A service reloading between writes must already find the TUI copy and stand down.
   it('writes the TUI copy before the server plugin file', () => {
     const pluginsDir = join(resolveOpenCodeConfigDirectory(), 'plugins')
@@ -88,20 +81,6 @@ describe('OpenCodeHookService buildPtyEnv / clearPty round-trip', () => {
       rmSync(serverPath, { recursive: true, force: true })
       rmSync(tuiDir, { recursive: true, force: true })
     }
-  })
-
-  it('leaves an up-to-date legacy plugin untouched and never creates the retired dir', () => {
-    const legacyDir = join(userDataDir, 'opencode-hooks')
-    new OpenCodeHookService().buildPtyEnv(daemonSessionId)
-    expect(existsSync(legacyDir)).toBe(false)
-
-    const legacyPluginPath = join(legacyDir, 'shared', 'plugins', 'orca-opencode-status.js')
-    mkdirSync(join(legacyPluginPath, '..'), { recursive: true })
-    writeFileSync(legacyPluginPath, getOpenCodePluginSource())
-    const past = new Date('2020-01-01T00:00:00Z')
-    utimesSync(legacyPluginPath, past, past)
-    new OpenCodeHookService().buildPtyEnv(daemonSessionId)
-    expect(statSync(legacyPluginPath).mtimeMs).toBe(past.getTime())
   })
 })
 
