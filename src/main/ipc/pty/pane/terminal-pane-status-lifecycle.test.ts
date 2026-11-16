@@ -16,12 +16,22 @@ const platform = process.platform
 afterEach(() => Object.defineProperty(process, 'platform', { value: platform }))
 
 it.each([
-  ['shell alone after the launched agent quit', 'darwin', true, 'zsh', 'held', false, true],
+  [
+    'shell alone after the launched agent quit',
+    'darwin',
+    true,
+    'zsh',
+    undefined,
+    'held',
+    false,
+    true
+  ],
   [
     'shell alone after a reattach left the launch unknown',
     'darwin',
     true,
     'zsh',
+    undefined,
     'unknown',
     false,
     true
@@ -31,17 +41,55 @@ it.each([
     'darwin',
     false,
     'zsh',
+    'no-children',
     'held',
     false,
     false
   ],
-  ['intervening command retired the launch', 'darwin', true, 'zsh', 'gone', false, false],
-  ['successor launch during inspection', 'darwin', true, 'zsh', 'held', true, false],
-  ['unmarked cmd.exe back alone on Windows', 'win32', false, 'cmd.exe', 'held', false, true],
-  ['agent still foreground on Windows', 'win32', false, 'codex.exe', 'held', false, false]
+  [
+    'intervening command retired the launch',
+    'darwin',
+    true,
+    'zsh',
+    undefined,
+    'gone',
+    false,
+    false
+  ],
+  ['successor launch during inspection', 'darwin', true, 'zsh', undefined, 'held', true, false],
+  [
+    'unmarked cmd.exe back alone in its job on Windows',
+    'win32',
+    false,
+    'cmd.exe',
+    'no-children',
+    'held',
+    false,
+    true
+  ],
+  [
+    'unnamed agent still in the job on Windows',
+    'win32',
+    false,
+    'cmd.exe',
+    'children',
+    'held',
+    false,
+    false
+  ],
+  [
+    'older daemon without a child census on Windows',
+    'win32',
+    false,
+    'cmd.exe',
+    undefined,
+    'held',
+    false,
+    false
+  ]
 ] as const)(
   'proves an unmarked process exit only for the current launch: %s',
-  async (_, os, shellAlone, foreground, evidence, replaced, expected) => {
+  async (_, os, shellAlone, foreground, census, evidence, replaced, expected) => {
     Object.defineProperty(process, 'platform', { value: os })
     const launch = { agentArgs: '', agentEnv: {} }
     let currentLaunch = evidence === 'held' ? launch : evidence === 'gone' ? null : undefined
@@ -52,11 +100,11 @@ it.each([
         }
         return shellAlone
       },
-      // Windows answers from its job census; a scan that names no agent is not that census.
+      // Windows answers from its job census; a foreground name alone is not that census.
       inspectProcess: async () => ({
         foregroundProcess: foreground,
-        hasChildProcesses: foreground !== 'cmd.exe',
-        childProcessEvidence: foreground === 'cmd.exe' ? 'no-children' : 'children'
+        hasChildProcesses: false,
+        ...(census ? { childProcessEvidence: census } : {})
       })
     })
     // SAFETY: This binding's exit probe only reads these two runtime capabilities.

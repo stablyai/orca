@@ -112,7 +112,8 @@ export function bindTerminalPaneStatusLifecycle(
 
 /** The shell alone holds the PTY, with no stopped job behind it. The daemon's proof needs prompt
  *  marks, which cmd and Git Bash often lack; Windows shells stop no jobs, so the host's job census
- *  finding no child beside a shell foreground suffices there. */
+ *  finding no child beside a shell foreground suffices there. Elsewhere only the host's shell-alone
+ *  proof counts; never fall back to a foreground name, which a live unrecognized agent shares. */
 async function confirmShellAlone(ptyId: string, incarnationId?: string): Promise<boolean> {
   const provider = getProviderForPty(ptyId)
   if ((await provider.confirmShellForeground?.(ptyId)) === true) {
