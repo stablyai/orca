@@ -231,6 +231,33 @@ describe('workspace registry', () => {
   })
 })
 
+describe('removed team features answer older desktops clearly (one release)', () => {
+  it('profiles, Pokes and follows are 410 gone; presence is accepted, stored nowhere, and counts as the owner’s activity', async () => {
+    const t = await team()
+    for (const [method, path] of [
+      ['GET', '/v1/team/members/bob/profile?utcOffsetMin=0'],
+      ['POST', '/v1/team/members/bob/poke'],
+      ['GET', '/v1/team/pokes'],
+      ['PUT', '/v1/team/pokes/settings'],
+      ['PUT', `/v1/team/workspaces/${t.id}/follow`],
+      ['DELETE', `/v1/team/workspaces/${t.id}/follow`]
+    ] as const) {
+      const answer = await t.req(t.alice, method, path, method === 'GET' || method === 'DELETE' ? undefined : {})
+      expect([path, answer.status, answer.body]).toEqual([path, 410, { error: 'gone', reason: 'team_features_removed' }])
+    }
+    // A teammate still can't learn the workspace exists through these.
+    expect((await t.req(t.bob, 'PUT', `/v1/team/workspaces/${t.id}/follow`)).status).toBe(404)
+    expect((await t.req(t.bob, 'POST', `/v1/team/workspaces/${t.id}/presence`, { clientId: 'b', state: 'viewing' })).status).toBe(404)
+    // Activity is throttled to a minute.
+    t.h.advance(61_000)
+    const reported = await t.req(t.alice, 'POST', `/v1/team/workspaces/${t.id}/presence`, { clientId: 'a', state: 'typing', chatId: 'c1' })
+    expect(reported.body).toEqual({ presence: [] })
+    expect(t.h.raw.prepare('SELECT COUNT(*) AS n FROM workspace_presence').get()).toEqual({ n: 0 })
+    const view = (await t.req(t.alice, 'GET', `/v1/team/workspaces/${t.id}`)).body.workspace
+    expect(view).toMatchObject({ presence: [], followers: [], following: false, lastActivityAt: t.h.now(), lastActivityBy: 'alice' })
+  })
+})
+
 describe('workspace grants (E2EE pairing through the control plane)', () => {
   it('seals a fresh single-device offer to the owner’s device and nothing usable crosses the control plane', async () => {
     const t = await team()
