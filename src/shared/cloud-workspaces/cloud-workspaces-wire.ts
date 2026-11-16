@@ -4,6 +4,14 @@ import { z } from 'zod'
 
 const Id = z.string().min(1).max(128)
 
+export const CloudWorkspacePresenceSchema = z.object({
+  userId: Id,
+  clientId: Id,
+  state: z.enum(['viewing', 'typing']),
+  chatId: Id.nullable(),
+  at: z.number()
+})
+
 export const CloudWorkspaceCostSchema = z.object({
   computeMs: z.number().min(0),
   rateUsdMicrosPerHour: z.number().min(0),
@@ -93,6 +101,7 @@ export const CloudWorkspaceSchema = z.object({
 })
 
 export type CloudWorkspace = z.infer<typeof CloudWorkspaceSchema>
+export type CloudWorkspacePresence = z.infer<typeof CloudWorkspacePresenceSchema>
 
 /** What Home's Routine runs switch hides (counts and hours stay in the team's totals). */
 export const CloudWorkspaceRoutineRunsSchema = z.object({
@@ -110,6 +119,15 @@ export const CloudWorkspaceListResponseSchema = z.object({
   routineRuns: CloudWorkspaceRoutineRunsSchema.optional().catch(undefined)
 })
 export const CloudWorkspaceResponseSchema = z.object({ workspace: CloudWorkspaceSchema })
+/** PUT/DELETE /v1/team/workspaces/:id/follow (PARITY-FOLLOW). */
+export const CloudWorkspaceFollowSchema = z.object({
+  following: z.boolean(),
+  followers: z.array(Id)
+})
+export type CloudWorkspaceFollow = z.infer<typeof CloudWorkspaceFollowSchema>
+export const CloudWorkspacePresenceResponseSchema = z.object({
+  presence: z.array(CloudWorkspacePresenceSchema)
+})
 export const CloudWorkspaceLinkResponseSchema = z.object({
   workspace: CloudWorkspaceSchema,
   chatId: Id.nullable()
@@ -238,6 +256,13 @@ export const EMPTY_CLOUD_WORKSPACE_PREFS: CloudWorkspacePrefsDocument = {
   collapsed: []
 }
 
+/** /v1/team/org: the org's URL slug for links (null for personal accounts or before it is named). */
+export const CloudOrgSlugSchema = z.object({
+  slug: z.string().nullable(),
+  orgId: z.string().nullable()
+})
+export type CloudOrgSlug = z.infer<typeof CloudOrgSlugSchema>
+
 /** What a link names: a sandbox id (orca://cloud/w/<id>) or an org slug and number (orca://cloud/<slug>/W-<n>). */
 export type CloudWorkspaceLinkTarget =
   | { kind: 'id'; workspaceId: string }
@@ -251,6 +276,22 @@ export type CloudWorkspaceLinkTarget =
 const ID_LINK = /^orca:\/\/cloud\/w\/(sbx_[0-9a-f]{24})(?:\/c\/([A-Za-z0-9_.:%-]{1,256}))?\/?$/
 const NUMBER_LINK =
   /^orca:\/\/cloud\/([a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?)\/[Ww]-(\d{1,9})(?:\/c\/([A-Za-z0-9_.:%-]{1,256}))?\/?$/
+
+export function cloudWorkspaceLink(id: string, chatId?: string | null): string {
+  return `orca://cloud/w/${id}${chatId ? `/c/${encodeURIComponent(chatId)}` : ''}`
+}
+
+/** The server's link for a workspace (slug form when it has one), with a chat appended. */
+export function cloudWorkspaceShareLink(
+  workspace: { id: string; link?: string },
+  chatId?: string | null
+): string {
+  const base = workspace.link && parseCloudWorkspaceLink(workspace.link) ? workspace.link : null
+  if (!base) {
+    return cloudWorkspaceLink(workspace.id, chatId)
+  }
+  return `${base.replace(/\/$/, '')}${chatId ? `/c/${encodeURIComponent(chatId)}` : ''}`
+}
 
 function decodeChat(raw: string | undefined): string | null | undefined {
   if (!raw) {
