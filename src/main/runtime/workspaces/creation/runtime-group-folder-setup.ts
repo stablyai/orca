@@ -21,7 +21,6 @@ import {
   type RuntimeLocalWorktreeTerminalPorts
 } from '../startup/runtime-local-worktree-terminal-startup'
 import { resolveManagedWorktreeCreateStartup } from '../startup/managed-worktree-create-startup'
-import { waitForStructuredSetup } from '../../rpc/methods/agent-launch/agent-launch-worktree-creation'
 
 export type RuntimeGroupFolderCreateInput = FolderWorkspaceCreateInput &
   Pick<
@@ -55,7 +54,6 @@ export async function prepareGroupFolderCreation(args: {
   settings: ReturnType<RuntimeStore['getSettings']>
   ports: RuntimeLocalWorktreeTerminalPorts
   startupBuilders: Parameters<typeof resolveManagedWorktreeCreateStartup>[2]
-  wait: (handle: string, signal: AbortSignal) => Promise<{ exitCode: number | null }>
 }): Promise<FolderWorkspaceCreateResult> {
   const { input, workspace, group } = args
   const result: FolderWorkspaceCreateResult = { folderWorkspace: workspace }
@@ -94,7 +92,13 @@ export async function prepareGroupFolderCreation(args: {
       result.warning = 'Setup did not run. Check the group’s workspace hooks and try Setup again.'
     }
   }
-  if (input.rendererOwnsSetup && input.agentLaunchMode !== 'structured') {
+  args.ports.setupPrepared?.(folderWorkspaceKey(workspace.id), prepared?.requiredSetup === true)
+  if (prepared?.setupPreparationFailure) args.ports.setupFailed?.(folderWorkspaceKey(workspace.id))
+  if (
+    input.rendererOwnsSetup &&
+    input.agentLaunchMode !== 'structured' &&
+    !prepared?.requiredSetup
+  ) {
     result.setup = prepared?.setup
     return result
   }
@@ -112,7 +116,7 @@ export async function prepareGroupFolderCreation(args: {
       : {}),
     startupLaunchSource: input.launchSource,
     awaitTerminalProvisioning: true,
-    observeSetupCompletion: input.agentLaunchMode === 'structured',
+    observeSetupCompletion: true,
     setupOnly: input.agentLaunchMode === 'structured'
   }
   const built = await resolveManagedWorktreeCreateStartup(
@@ -125,10 +129,11 @@ export async function prepareGroupFolderCreation(args: {
     repo: { id: group.id },
     worktree: folderWorkspaceToWorktree(workspace),
     setup: prepared?.setup,
+    requiredSetup: prepared?.requiredSetup,
     startup: built.effectiveStartup,
     startupFollowup: built.effectiveStartupFollowup,
     draftPaste: built.effectiveDraftPaste,
-    startupLaunchRuntime: built.startupLaunchRuntime,
+    startupLaunchRuntime: prepared?.setupPreparationFailure ?? built.startupLaunchRuntime,
     createdWithAgent: built.effectiveCreatedWithAgent,
     promisedAgentChat: input.agentLaunchMode === 'structured',
     ports: args.ports
@@ -152,9 +157,6 @@ export async function prepareGroupFolderCreation(args: {
       ptyId: started.startupTerminalPtyId,
       surface: 'background'
     }
-  }
-  if (input.agentLaunchMode === 'structured') {
-    await waitForStructuredSetup({ waitForSetupTerminalCompletion: args.wait }, result.setupReceipt)
   }
   return result
 }

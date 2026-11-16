@@ -67,6 +67,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends RuntimePtyExitSurfaceRead
     if (exitIncarnationId && candidateIncarnation && exitIncarnationId !== candidateIncarnation) {
       return
     }
+    this.setupTerminalCompletions.exit(ptyId)
     pending?.exitedIncarnations.add(exitIncarnationId ?? candidateIncarnation ?? null)
     // A stop's cleanup can report the exit again, after its stop request is spent.
     const priorExit = this.getPtyLivenessVerdict(ptyId)

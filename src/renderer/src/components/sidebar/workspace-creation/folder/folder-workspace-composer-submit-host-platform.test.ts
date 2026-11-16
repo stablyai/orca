@@ -279,9 +279,9 @@ it.each([
             draft: (draft, requestedAgent) =>
               buildWorktreeStartupForDraft({ ...environment, draft, requestedAgent })
           },
-          wait: async () => ({ exitCode: 0 }),
           ports: {
             canSpawn: true,
+            waitForSetupTerminalCompletion: async () => ({ exitCode: 0 }),
             createTerminal,
             pasteDraft,
             sendFollowup,

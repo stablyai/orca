@@ -148,6 +148,8 @@ export type CreateWorktreeArgs = {
   telemetrySource?: WorkspaceSource
   /** Optionally spawn the first terminal as soon as registration finishes. */
   startup?: WorktreeStartupLaunch
+  /** Unsent task context; the host owns delivery after required Setup. */
+  startupDraft?: string
   /** Correlate concurrent background creates with renderer progress; synchronous callers may omit it. */
   creationId?: string
 }

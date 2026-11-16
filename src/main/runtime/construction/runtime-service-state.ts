@@ -1,3 +1,4 @@
+import { SetupTerminalCompletions } from '../terminal/wait/setup-terminal-completions'
 import { CrewChanges } from '../orchestration/crew/crew-changes'
 import { OrchestrationStructuredMailboxPointerDelivery } from '../orchestration/mailbox/structured-pointer/structured-mailbox-pointer-delivery'
 
@@ -338,4 +339,5 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
   protected launchComposerReadyByPtyId = new Map<string, Promise<boolean>>()
 
   protected setupCompletionTokenByPtyId = new Map<string, string>()
+  protected readonly setupTerminalCompletions = new SetupTerminalCompletions()
 }

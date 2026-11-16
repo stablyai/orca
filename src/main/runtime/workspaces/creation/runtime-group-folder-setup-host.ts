@@ -1,3 +1,8 @@
+import { resolveManagedWorktreeCreateStartup } from '../startup/managed-worktree-create-startup'
+import { startRuntimeLocalWorktreeTerminals } from '../startup/runtime-local-worktree-terminal-startup'
+import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import type { CreateWorktreeResult } from '../../../../shared/worktree/create-types'
 import { OrcaRuntimeWithGetWorktreeTerminalProvisioningHost } from '../startup/workspace-terminal-provisioning'
 import {
   prepareGroupFolderCreation,
@@ -18,6 +23,43 @@ import { resolveStartupAgentLaunchRuntime } from '../../terminal/launch/agent-la
 import { projectGroupHookOwner } from '../../../../shared/workspace-setup/hooks/workspace-hook-owner'
 
 export abstract class OrcaRuntimeWithGroupFolderSetup extends OrcaRuntimeWithGetWorktreeTerminalProvisioningHost {
+  async startCreatedWorktreeTerminals(args: {
+    request: RuntimeManagedWorktreeCreateArgs
+    repo: Repo
+    worktree: Worktree
+    setup?: CreateWorktreeResult['setup']
+    defaultTabs?: CreateWorktreeResult['defaultTabs']
+    setupPreparationFailure?: Error
+  }) {
+    const { request, repo, worktree } = args
+    const built = await resolveManagedWorktreeCreateStartup(
+      request,
+      this.requireStore().getSettings().disabledTuiAgents,
+      {
+        agent: (agent, prompt, preferences, inputs) =>
+          this.buildStartupForAgent(repo, agent, prompt, preferences, inputs),
+        draft: (draft, agent, source, inputs) =>
+          this.buildStartupForDraft(repo, draft, agent, source, inputs)
+      }
+    )
+    if (args.setupPreparationFailure) this.setupTerminalCompletions.refuseWorkspace(worktree.id)
+    return startRuntimeLocalWorktreeTerminals({
+      request,
+      repo,
+      worktree,
+      setup: args.setup,
+      requiredSetup: Boolean(args.setupPreparationFailure) || args.setup?.waitForAgentStartup,
+      defaultTabs: args.defaultTabs,
+      startup: built.effectiveStartup,
+      startupFollowup: built.effectiveStartupFollowup,
+      startupLaunchRuntime: args.setupPreparationFailure ?? built.startupLaunchRuntime,
+      draftPaste: built.effectiveDraftPaste,
+      createdWithAgent: built.effectiveCreatedWithAgent,
+      promisedAgentChat: request.promisedAgentChat,
+      ports: this.localWorktreeTerminalPorts(request, () => {}, worktree)
+    })
+  }
+
   protected finishGroupFolderCreation = async (
     input: RuntimeGroupFolderCreateInput,
     group: ProjectGroup,
@@ -25,6 +67,7 @@ export abstract class OrcaRuntimeWithGroupFolderSetup extends OrcaRuntimeWithGet
   ) => {
     const store = this.requireStore()
     const worktree = this.folderWorkspaceToResolvedWorktree(workspace)
+    this.beginWorkspaceSetup(worktree.id)
     const activation: { wslUserAct?: true } = groupFolderCreationIsUserAct(input)
       ? { wslUserAct: true }
       : {}
@@ -42,7 +85,6 @@ export abstract class OrcaRuntimeWithGroupFolderSetup extends OrcaRuntimeWithGet
       workspace,
       settings: store.getSettings(),
       ports: this.localWorktreeTerminalPorts(activation, () => {}, worktree),
-      wait: (handle, signal) => this.waitForSetupTerminalCompletion(handle, signal),
       startupBuilders: {
         agent: (agent, prompt, launchPreferences, inputs) =>
           buildWorktreeStartupForAgent({
@@ -88,6 +130,10 @@ export abstract class OrcaRuntimeWithGroupFolderSetup extends OrcaRuntimeWithGet
   ): RuntimeLocalWorktreeTerminalPorts {
     return {
       canSpawn: Boolean(this.ptyController?.spawn),
+      setupPrepared: (workspaceId, required) => this.preparedWorkspaceSetup(workspaceId, required),
+      setupFailed: (workspaceId) => this.setupTerminalCompletions.refuseWorkspace(workspaceId),
+      waitForSetupTerminalCompletion: (handle, signal) =>
+        this.waitForSetupTerminalCompletion(handle, signal),
       provisionInBackground: () => this.shouldProvisionWorktreeInBackground(args.navigation),
       createTerminal: (selector, options) =>
         worktree

@@ -149,6 +149,12 @@ export function buildLocalWorktreeCreateArgs(
     repoId: request.repoId,
     ...sharedCreateFields(request, attempt),
     ...(request.startup ? { startup: request.startup } : {}),
+    ...(!request.startup &&
+    (request.options?.creationAgentLaunch?.draft ?? request.options?.startupDraft)
+      ? {
+          startupDraft: request.options?.creationAgentLaunch?.draft ?? request.options?.startupDraft
+        }
+      : {}),
     ...(request.creationId ? { creationId: request.creationId } : {})
   }
 }

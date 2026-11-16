@@ -73,6 +73,7 @@ function fixture(input: Partial<FolderWorkspaceCreateInput> = {}) {
   }))
   const ports: RuntimeLocalWorktreeTerminalPorts = {
     canSpawn: true,
+    waitForSetupTerminalCompletion: (handle, signal) => wait(handle, signal),
     createTerminal,
     pasteDraft: vi.fn(),
     sendFollowup: vi.fn(),
@@ -91,7 +92,11 @@ function fixture(input: Partial<FolderWorkspaceCreateInput> = {}) {
       )
   }
   const buildStartup = vi.fn()
-  const wait = vi.fn(async (): Promise<{ exitCode: number | null }> => ({ exitCode: 0 }))
+  const wait = vi.fn(
+    async (_handle: string, _signal?: AbortSignal): Promise<{ exitCode: number | null }> => ({
+      exitCode: 0
+    })
+  )
   const args = {
     input: { projectGroupId: group.id, ...input },
     group,
@@ -111,12 +116,26 @@ describe('group folder setup lifecycle', () => {
       const { args } = fixture()
       const first = await prepareGroupFolderCreation({
         ...args,
-        input: { ...args.input, rendererOwnsSetup: true }
+        input: { ...args.input, rendererOwnsSetup: true },
+        group: {
+          ...args.group,
+          hookSettings: {
+            ...args.group.hookSettings!,
+            setupAgentStartupPolicy: 'start-immediately'
+          }
+        }
       })
       const second = await prepareGroupFolderCreation({
         ...args,
         workspace: { ...args.workspace, id: 'task-b' },
-        input: { ...args.input, rendererOwnsSetup: true }
+        input: { ...args.input, rendererOwnsSetup: true },
+        group: {
+          ...args.group,
+          hookSettings: {
+            ...args.group.hookSettings!,
+            setupAgentStartupPolicy: 'start-immediately'
+          }
+        }
       })
       expect(first.setup?.cwd).toBe(root)
       expect(first.setup?.envVars).toMatchObject({
@@ -151,32 +170,16 @@ describe('group folder setup lifecycle', () => {
     }
   )
 
-  it('waits for structured Setup through the worktree completion observer', async () => {
-    const { args, wait, createTerminal, buildStartup } = fixture({ agentLaunchMode: 'structured' })
-    let complete: ((value: { exitCode: number | null }) => void) | undefined
-    wait.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          complete = resolve
-        })
-    )
-    const creating = prepareGroupFolderCreation(args)
-    await vi.waitFor(() => expect(wait).toHaveBeenCalled())
-    expect(createTerminal).toHaveBeenCalledOnce()
-    expect(createTerminal.mock.calls[0]).toMatchObject([
-      'id:folder:task-a',
-      { title: 'Setup', cwd: root }
-    ])
-    expect(buildStartup).not.toHaveBeenCalled()
-    let settled = false
-    void creating.then(() => {
-      settled = true
-    })
-    await Promise.resolve()
-    expect(settled).toBe(false)
-    complete?.({ exitCode: 0 })
-    expect(await creating).toMatchObject({
-      folderWorkspace: { id: 'task-a' }
+  it('returns the structured folder and Setup evidence without waiting for completion', async () => {
+    const { args } = fixture({ agentLaunchMode: 'structured' })
+    const result = await prepareGroupFolderCreation(args)
+    expect(result).toMatchObject({
+      folderWorkspace: { id: 'task-a' },
+      setupReceipt: {
+        startupPolicy: 'wait-for-setup',
+        state: 'running',
+        terminalHandle: 'setup-handle'
+      }
     })
   })
 })

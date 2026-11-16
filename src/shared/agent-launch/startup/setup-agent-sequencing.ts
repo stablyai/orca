@@ -1,3 +1,4 @@
+import { setupCompletionPrefix } from './setup-completion-token'
 import { quotePosixShellUnlessPlainNoAt } from '../../shell/launch/shell-argument-quoting'
 import { encodePowerShellCommand } from '../../shell/launch/powershell-command-encoding'
 import { getPosixCodexShellLaunchPreflight } from '../../shell/launch/agents/codex-shell-function'
@@ -11,13 +12,14 @@ import {
 import { createNonSecureContextUuid } from '../../identifiers/non-secure-context-uuid'
 import { quotePowerShellLiteral } from '../../shell/launch/powershell-native-argument'
 
-const DEFAULT_WAIT_TIMEOUT_SECONDS = 2 * 60 * 60
+export const DEFAULT_SETUP_WAIT_TIMEOUT_SECONDS = 2 * 60 * 60
 export const SETUP_COMPLETE_MESSAGE = 'Setup finished; starting agent.'
 export const SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV = 'ORCA_SEQUENCED_STARTUP_COMMAND'
 export const SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV = 'ORCA_SEQUENCED_STARTUP_SCRIPT'
 export const SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV = 'ORCA_SEQUENCED_SETUP_SCRIPT'
 
 export type SequencedSetupAgentCommands = {
+  completionToken: string
   setupCommand: string
   setupEnv?: Record<string, string>
   startupCommand: string
@@ -54,10 +56,11 @@ export function createSequencedSetupAgentCommands(args: {
     : resolution.runnerScriptPathForShell
   // Use distinct markers for overlapping launches of one setup runner.
   const markerPath = `${markerBasePath}.${nonce}.done`
-  const waitTimeoutSeconds = args.waitTimeoutSeconds ?? DEFAULT_WAIT_TIMEOUT_SECONDS
+  const waitTimeoutSeconds = args.waitTimeoutSeconds ?? DEFAULT_SETUP_WAIT_TIMEOUT_SECONDS
 
   if (resolution.shell === 'windows' && !posixGateForWindowsRunner) {
     return {
+      completionToken: nonce,
       setupCommand: buildWindowsSetupCommand(
         resolution.runnerScriptPathForShell,
         markerPath,
@@ -77,6 +80,7 @@ export function createSequencedSetupAgentCommands(args: {
     waitTimeoutSeconds
   )
   return {
+    completionToken: nonce,
     // Why: long worktree paths can push typed wrappers past a PTY's canonical input cap and drop their submit byte.
     setupCommand: `bash -lc 'eval "\${${SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV}:?missing}"'`,
     setupEnv: {
@@ -105,6 +109,7 @@ function buildPosixSetupScript(setupCommand: string, markerPath: string, nonce: 
     'status=$?',
     `printf '%s:%s\\n' ${nonceValue} "$status" > ${tmp}`,
     `mv -f ${tmp} ${marker}`,
+    `printf '\\033]777;${setupCompletionPrefix(nonce)}%s\\007' "$status"`,
     'exit "$status"'
   ].join('; ')
 }
@@ -213,6 +218,7 @@ function buildWindowsSetupCommand(
     '$utf8 = [System.Text.UTF8Encoding]::new($false)',
     '[System.IO.File]::WriteAllText($tmp, ($nonce + ":" + $setupStatus + [Environment]::NewLine), $utf8)',
     'Move-Item -LiteralPath $tmp -Destination $marker -Force',
+    `[Console]::Write(([char]27).ToString() + ']777;${setupCompletionPrefix(nonce)}' + $setupStatus + [char]7)`,
     'exit $setupStatus'
   ].join('; ')
 

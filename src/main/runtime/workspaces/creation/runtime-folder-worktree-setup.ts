@@ -95,15 +95,17 @@ export async function startRuntimeFolderWorktreeSetupTerminals(args: {
     repo: args.repo,
     worktree: args.worktree,
     setup: prepared.setup,
+    requiredSetup: prepared.requiredSetup,
     startup: args.startup,
     startupFollowup: args.startupFollowup,
-    startupLaunchRuntime: args.startupLaunchRuntime,
+    startupLaunchRuntime: prepared.setupPreparationFailure ?? args.startupLaunchRuntime,
     createdWithAgent: args.createdWithAgent,
     promisedAgentChat: args.promisedAgentChat,
     draftPaste: args.draftPaste,
     warning: prepared.warning,
     ports: args.terminals
   })
+
   return {
     ...(started.returnedSetup ? { setup: started.returnedSetup } : {}),
     ...(request.awaitTerminalProvisioning

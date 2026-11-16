@@ -285,3 +285,84 @@ it('answers an old client whose start failed before spawning in plain words', as
   })
   expect(JSON.stringify(answer)).not.toContain(raw)
 })
+
+it.each([true, false])(
+  'keeps accepted input while required Setup waits, then delivers it once (founding=%s)',
+  async (founding) => {
+    const entered = Promise.withResolvers<void>()
+    const setup = Promise.withResolvers<void>()
+    rig.host.deps.waitForWorkspaceSetup = async () => {
+      entered.resolve()
+      await setup.promise
+    }
+    const input = params(undefined, founding)
+    expect(await call('agentSession.create', input, capable)).toMatchObject({
+      ok: true,
+      result: { ok: true }
+    })
+    if (!founding) {
+      expect(await rig.host.send({ callerKey: 'client-1' }, restTestSend('opening'))).toMatchObject(
+        { ok: true }
+      )
+    }
+    await entered.promise
+    rig.clock.now += 11 * 60_000
+    expect(rig.adapter.acquire).not.toHaveBeenCalled()
+    expect((await readTestHostJournal(rig.host, SESSION)).submissions).toMatchObject([
+      { dispatchState: 'pending' }
+    ])
+    setup.resolve()
+    await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledOnce())
+    expect(rig.adapter.acquire).toHaveBeenCalledOnce()
+  }
+)
+
+it('Stop withdraws a launch waiting on Setup and preserves its message after late completion', async () => {
+  const entered = Promise.withResolvers<void>()
+  const setup = Promise.withResolvers<void>()
+  rig.host.deps.waitForWorkspaceSetup = async () => {
+    entered.resolve()
+    await setup.promise
+  }
+  const input = params(undefined, true)
+  expect(await call('agentSession.create', input, capable)).toMatchObject({
+    ok: true,
+    result: { ok: true }
+  })
+  await entered.promise
+  await stopCreatedChat(rig.host)
+  setup.resolve()
+  expect(rig.adapter.acquire).not.toHaveBeenCalled()
+  expect((await readTestHostJournal(rig.host, SESSION)).submissions).toMatchObject([
+    { dispatchState: 'rejected', rejection: { kind: 'cancelled' } }
+  ])
+})
+
+it('failed required Setup retains the accepted message without starting a provider', async () => {
+  const entered = Promise.withResolvers<void>()
+  const setup = Promise.withResolvers<void>()
+  rig.host.deps.waitForWorkspaceSetup = async () => {
+    entered.resolve()
+    await setup.promise
+    throw new Error(
+      'Codex did not start because Setup did not finish successfully. Check the Setup terminal and try again.'
+    )
+  }
+  const input = params(undefined, true)
+  expect(await call('agentSession.create', input, capable)).toMatchObject({
+    ok: true,
+    result: { ok: true }
+  })
+  await entered.promise
+  setup.resolve()
+  await vi.waitFor(async () =>
+    expect((await readTestHostJournal(rig.host, SESSION)).submissions).toMatchObject([
+      { dispatchState: 'rejected' }
+    ])
+  )
+  expect(rig.adapter.acquire).not.toHaveBeenCalled()
+  expect(await call('agentSession.create', input, capable)).toMatchObject({
+    ok: true,
+    result: { ok: true, replayed: true }
+  })
+})

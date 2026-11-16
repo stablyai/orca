@@ -81,6 +81,7 @@ export async function installOnJournal(
     probeOwner: createStructuredAgentSessionOwnerProbe(deps.hostId),
     probeOwners: createStructuredAgentSessionOwnerProbes(deps.hostId),
     resolveWorkspacePath: deps.resolveWorkspacePath,
+    waitForWorkspaceSetup: deps.waitForWorkspaceSetup,
     logger: deps.logger,
     ...(deps.onRequestFailure ? { onRequestFailure: deps.onRequestFailure } : {}),
     observeCommittedRows: observePRWatchCommittedRows,

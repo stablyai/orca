@@ -186,6 +186,8 @@ export type StructuredAgentSessionHostDeps = {
   ) => Promise<Record<string, string> | undefined> | Record<string, string> | undefined
   /** Execution-host path for a new floating session. */
   resolveWorkspacePath?: (workspaceId: string) => Promise<string>
+  /** Required workspace preparation precedes provider clocks and reservations. */
+  waitForWorkspaceSetup?: (workspaceId: string, agent: string, signal: AbortSignal) => Promise<void>
   now?: () => number
   idleSweep?: Pick<StructuredAgentSessionIdleSweepDeps, 'intervalMs' | 'idleMs'>
   usageLimitAutoContinue?: {

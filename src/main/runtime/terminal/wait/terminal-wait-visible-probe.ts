@@ -1,3 +1,4 @@
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import { OrcaRuntimeWithCreateAgentPromptRenderGate } from '../input/terminal-agent-prompt-render'
 import type { RuntimeProviderSnapshotReadOptions } from '../output/provider-snapshot-read-options'
 import type { TerminalWaiter } from './terminal-waiter'
@@ -103,10 +104,42 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
       : buildPtyTerminalWaitResult(handle, 'tui-idle', pty)
   }
 
+  beginWorkspaceSetup(workspaceId: string): void {
+    this.setupTerminalCompletions.beginWorkspace(workspaceId)
+  }
+
+  preparedWorkspaceSetup(workspaceId: string, required: boolean): void {
+    this.setupTerminalCompletions.preparedWorkspace(workspaceId, required)
+  }
+
+  async waitForWorkspaceSetup(
+    workspaceId: string,
+    agent: string,
+    signal?: AbortSignal
+  ): Promise<void> {
+    const completion = this.setupTerminalCompletions.forWorkspace(workspaceId)
+    const outcome =
+      completion && (await (signal ? waitForPromiseWithSignal(completion, signal) : completion))
+    if (outcome && outcome.exitCode !== 0) {
+      throw new Error(
+        `${agent} did not start because Setup did not finish successfully. Check the Setup terminal and try again.`
+      )
+    }
+  }
+
   async waitForSetupTerminalCompletion(
     handle: string,
     signal?: AbortSignal
   ): Promise<{ exitCode: number | null }> {
+    const retained = this.setupTerminalCompletions.forHandle(handle)
+    if (retained) {
+      return await new Promise((resolve, reject) => {
+        const onAbort = (): void => reject(signal?.reason ?? new Error('request_aborted'))
+        if (signal?.aborted) return onAbort()
+        signal?.addEventListener('abort', onAbort, { once: true })
+        void retained.then(resolve).finally(() => signal?.removeEventListener('abort', onAbort))
+      })
+    }
     const ptyId = this.getLivePtyForHandle(handle)?.pty.ptyId
     if (!ptyId) {
       throw new Error('terminal_handle_stale')
@@ -163,7 +196,7 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
         })
           .then((wait) => {
             if (wait.satisfied && wait.condition === 'exit' && wait.status === 'exited') {
-              finish(wait.exitCode)
+              finish(null)
             }
           })
           .catch(fail)

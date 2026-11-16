@@ -5,7 +5,10 @@ import {
   type SetupRunnerShell
 } from '../../../../../shared/agent-launch/startup/setup-runner-command'
 
-const SETUP_COMPLETION_PREFIX = '__ORCA_SETUP_COMPLETE__:'
+import {
+  SETUP_COMPLETION_PREFIX,
+  setupCompletionPrefix as completionPrefix
+} from '../../../../../shared/agent-launch/startup/setup-completion-token'
 const SETUP_COMPLETION_CARRY_LENGTH = SETUP_COMPLETION_PREFIX.length + 96
 const WINDOWS_SETUP_RUNNER_ENV = 'ORCA_SETUP_RUNNER_PATH'
 
@@ -64,7 +67,7 @@ export function createSetupCompletionScanner(
       const markerIndex = combined.lastIndexOf(expectedPrefix)
       if (markerIndex !== -1) {
         const suffix = combined.slice(markerIndex + expectedPrefix.length)
-        const match = suffix.match(/^(-?\d+)\r?\n/)
+        const match = suffix.match(/^(-?\d+)(?:\r?\n|\x07)/)
         if (match) {
           completed = true
           onComplete(Number.parseInt(match[1], 10))
@@ -74,8 +77,4 @@ export function createSetupCompletionScanner(
       carry = combined.slice(-SETUP_COMPLETION_CARRY_LENGTH)
     }
   }
-}
-
-function completionPrefix(completionToken: string): string {
-  return `${SETUP_COMPLETION_PREFIX}${completionToken}:`
 }

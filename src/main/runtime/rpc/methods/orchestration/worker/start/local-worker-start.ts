@@ -1,3 +1,4 @@
+import { awaitWorkerSetupGate } from './readiness/worker-start-setup-gate'
 import { createLocalWorkerStartDispatch } from './local-worker-start-dispatch'
 import { refuseClaimedWorkerTerminal } from '../../../../../orchestration/db/worker-dispatch/worker-terminal-claim'
 import { probeWorkerOpenCodeModelLaunchSupport } from './launch/worker-opencode-model-preflight'
@@ -17,7 +18,6 @@ import { resolveDispatchCallerWorktreeId } from '../../orchestration-caller-work
 import { resolveWorkerStartModeOnHost } from '../../structured-workers/orchestration-worker-start-mode'
 import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import { EXISTING_WORKTREE_SETUP, placeWorkerAgent } from './placement/worker-start-agent-placement'
-import { awaitStructuredWorkerSetupGate } from './readiness/worker-start-structured-setup-gate'
 import { assertOrchestrationWorktreeCreationSupported } from './placement/folder-worktree-placement'
 import { resolveWorkerWorktreeCreationTarget } from './placement/worker-worktree-creation'
 import type { WorkerStartInput } from './worker-start-input'
@@ -206,21 +206,28 @@ export async function startLocalWorker(args: {
       throw new Error('Setup terminal failed to start before the gated agent launch.')
     }
     persistWorkerReadinessStage(setupStage)
+    failedStage = 'setup_wait'
+    const setupWait = await awaitWorkerSetupGate({
+      runtime,
+      setup: setupReceipt,
+      effects
+    })
+    if (setupWait) {
+      persistWorkerSetupWaitOutcome({ ...setupStage, wait: setupWait })
+      if (!setupWait.satisfied) {
+        throw new Error(
+          `${agent ?? 'Agent'} did not start because Setup did not finish successfully. Check the Setup terminal and try again.`
+        )
+      }
+    }
 
     failedStage = 'agent_readiness'
-    // A structured worker's setup gate and its preamble's wait share one deadline: the timeout.
+    // Agent readiness starts after required Setup has completed.
     const readinessDeadline = Date.now() + (params.timeoutMs ?? 60_000)
     // Structured readiness comes from preamble delivery, not TUI idle; only repo wait-for-setup policy gates here.
-    const wait = structuredSession
-      ? await awaitStructuredWorkerSetupGate({
-          runtime,
-          setup: setupReceipt,
-          effects,
-          timeoutMs: Math.max(0, readinessDeadline - Date.now())
-        })
-      : workerChat
-        ? // A chat takes its task as a queued send whatever it is doing, so nothing is waited on.
-          null
+    const wait =
+      structuredSession || workerChat
+        ? null
         : await waitForWorkerAgentReady(runtime, terminalHandle, {
             agent,
             reusesTerminal: Boolean(params.terminal),
@@ -236,9 +243,7 @@ export async function startLocalWorker(args: {
         throw new Error(
           wait.blockedReason
             ? `Agent startup blocked: ${describeTerminalWaitBlockedReason(wait.blockedReason)}`
-            : structuredSession
-              ? `Setup did not finish before the structured worker started (${wait.status}).`
-              : `Agent did not become ready (${wait.status}).`
+            : `Agent did not become ready (${wait.status}).`
         )
       }
     }

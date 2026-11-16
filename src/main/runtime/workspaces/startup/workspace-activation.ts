@@ -279,6 +279,7 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
       setupOnly?: boolean
       setupCommandPlatform: 'windows' | 'posix'
       observeSetupCompletion?: boolean
+      setupCompletionToken?: string
       // Pass the setup wrapper that the agent awaits; a bare runner would execute a different script.
       wrappedSetupCommand?: string
       // Background provisioning must not move the user's sidebar selection.

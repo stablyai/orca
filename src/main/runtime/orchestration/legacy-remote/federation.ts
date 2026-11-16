@@ -1,3 +1,4 @@
+import { waitForRequiredSetup } from '../../workspaces/startup/required-setup-completion'
 import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import { waitForWorkerAgentReady } from '../../terminal/wait/launched-agent-composer-readiness'
 import { describeTerminalWaitBlockedReason } from '../../../../shared/terminal/runtime-policy/terminal-wait-blocked-reason-legacy-alias'
@@ -189,6 +190,27 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
         if (persistFederatedSetupSpawnFailure(setupStage)) {
           failedStage = 'setup_start'
           throw new Error('Setup terminal failed to start before the gated agent launch.')
+        }
+        failedStage = 'setup_wait'
+        try {
+          await waitForRequiredSetup(
+            runtime,
+            {
+              ...setup,
+              terminalHandle: effects.find((effect) => effect.kind === 'setup')?.terminalId
+            },
+            agent ?? 'Agent'
+          )
+          persistFederatedSetupWaitOutcome({
+            ...setupStage,
+            wait: { satisfied: true, status: 'exited' }
+          })
+        } catch (error) {
+          persistFederatedSetupWaitOutcome({
+            ...setupStage,
+            wait: { satisfied: false, status: 'exited' }
+          })
+          throw error
         }
         persistFederatedReadinessStage(setupStage)
         failedStage = 'agent_readiness'

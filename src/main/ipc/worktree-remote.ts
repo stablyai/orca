@@ -1,4 +1,4 @@
-import { readableWslDistroHoldText } from '../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
+import { shouldWaitForSetupBeforeAgentStartup } from '../../shared/agent-launch/startup/setup-agent-startup-policy'
 import { canCheckoutExistingLocalBranch } from '../runtime/workspaces/creation/runtime-worktree-create-git'
 /* eslint-disable max-lines */
 
@@ -147,11 +147,7 @@ import { resolveWorktreeIncludePaths } from '../git/worktrees/content-paths/work
 import { resolveWorktreeSharedDirectories } from '../git/worktrees/content-paths/worktree-shared-directories'
 import { normalizeSparseDirectories } from './sparse-checkout-directories'
 import { attributedSparsePresetId } from './sparse-preset-attribution'
-import {
-  buildSetupRunnerCommand,
-  getSetupRunnerCommandPlatformForPath
-} from '../../shared/agent-launch/startup/setup-runner-command'
-import { createSequencedSetupAgentCommands } from '../../shared/agent-launch/startup/setup-agent-sequencing'
+import { getSetupRunnerCommandPlatformForPath } from '../../shared/agent-launch/startup/setup-runner-command'
 import {
   createWorktreeCreateTimingRecorder,
   localWorktreeCreateExecutionHost,
@@ -212,6 +208,7 @@ type StagedStartupResult = {
   startupTerminal?: CreateWorktreeResult['startupTerminal']
   activationSetup?: CreateWorktreeResult['setup']
   didSpawnSetup: boolean
+  didProvision?: boolean
   warning?: string
 }
 
@@ -403,129 +400,56 @@ async function assertCreatableCrossStoreParent(
 async function spawnLocalStartupAndSetupTerminals(args: {
   runtime: OrcaRuntimeService
   worktree: Worktree
-  startup: CreateWorktreeArgs['startup']
-  setup: CreateWorktreeResult['setup']
-  defaultTabs: CreateWorktreeResult['defaultTabs']
-  createdWithAgent: CreateWorktreeArgs['createdWithAgent']
-  /** An automation's create is background work: its terminals never start a stopped WSL distro (E9). */
+  repo: Repo
+  request: CreateWorktreeArgs
+  setup?: CreateWorktreeResult['setup']
+  defaultTabs?: CreateWorktreeResult['defaultTabs']
+  setupPreparationFailure?: Error
   automationCreate: boolean
 }): Promise<StagedStartupResult> {
-  const { runtime, worktree, startup, defaultTabs, createdWithAgent } = args
-  const userAct = args.automationCreate ? {} : { wslUserAct: true as const }
-  let { setup } = args
-  if (!startup || defaultTabs?.tabs.length) {
+  const { runtime, worktree, request, setup } = args
+  if (
+    !request.startup &&
+    !request.startupDraft &&
+    !setup?.waitForAgentStartup &&
+    !args.setupPreparationFailure
+  ) {
     return { didSpawnSetup: false }
   }
-
-  let warning: string | undefined
-  let startupTerminalHandle: string | null = null
-  let startupTerminal: CreateWorktreeResult['startupTerminal']
-
-  let sequencedStartup = startup
-  let wrappedSetupCommandStr: string | undefined
-  if (startup && setup?.waitForAgentStartup === true) {
-    const platform = getSetupRunnerCommandPlatformForLaunch(
-      setup,
-      process.platform === 'win32' ? 'windows' : 'posix'
-    )
-    const sequenced = createSequencedSetupAgentCommands({
-      runnerScriptPath: setup.runnerScriptPath,
-      startupCommand: startup.command,
-      platform,
-      shell: setup.shell
-    })
-    sequencedStartup = {
-      ...startup,
-      command: sequenced.startupCommand,
-      ...(sequenced.startupEnv ? { env: { ...startup.env, ...sequenced.startupEnv } } : {})
+  const started = await runtime.startCreatedWorktreeTerminals({
+    repo: args.repo,
+    worktree,
+    setup,
+    defaultTabs: args.defaultTabs,
+    setupPreparationFailure: args.setupPreparationFailure,
+    request: {
+      ...request,
+      repoSelector: args.repo.id,
+      awaitTerminalProvisioning: true,
+      observeSetupCompletion: true,
+      promisedAgentChat: Boolean(
+        request.createdWithAgent && !request.startup && !request.startupDraft
+      ),
+      ...(!args.automationCreate ? { wslUserAct: true as const } : {})
     }
-    wrappedSetupCommandStr = sequenced.setupCommand
-    setup = { ...setup, envVars: { ...setup.envVars, ...sequenced.setupEnv } }
-  }
-
-  try {
-    // Git add and metadata registration must finish before runtime PTYs can safely resolve this workspace.
-    const terminal = await runtime.createTerminal(
-      `id:${worktree.id}`,
-      {
-        command: sequencedStartup.command,
-        ...(setup ? { claudeAgentTeamsSourceCommand: startup.command } : {}),
-        env: sequencedStartup.env,
-        ...(sequencedStartup.launchConfig ? { launchConfig: sequencedStartup.launchConfig } : {}),
-        ...(isTuiAgent(createdWithAgent) ? { launchAgent: createdWithAgent } : {}),
-        ...(sequencedStartup.viewMode ? { viewMode: sequencedStartup.viewMode } : {}),
-        startupCommandDelivery: sequencedStartup.startupCommandDelivery,
-        telemetry: sequencedStartup.telemetry,
-        // Submitting renderer owns activation; background completion must not yank users who moved on (#9944).
-        surfaceOwner: false,
-        ...userAct
-      },
-      worktree
-    )
-    startupTerminalHandle = terminal.handle
-    startupTerminal = {
-      spawned: true,
-      surface: terminal.surface
-    }
-  } catch (error) {
-    const message = readableWslDistroHoldText(
-      error instanceof Error ? error.message : String(error)
-    )
-    warning = `Failed to create the startup terminal for ${worktree.path}: ${message}`
-    console.warn(`[worktree-create] ${warning}`)
-    return { didSpawnSetup: false, warning }
-  }
-
-  let didSpawnSetup = false
-  if (setup) {
-    try {
-      const setupCommand =
-        wrappedSetupCommandStr ??
-        buildSetupRunnerCommand(
-          setup.runnerScriptPath,
-          getSetupRunnerCommandPlatformForLaunch(
-            setup,
-            process.platform === 'win32' ? 'windows' : 'posix'
-          ),
-          setup.shell
-        )
-      await runtime.createTerminal(
-        `id:${worktree.id}`,
-        {
-          title: runtime.getSetupTerminalTitle(),
-          command: setupCommand,
-          env: setup.envVars,
-          activate: false,
-          surfaceOwner: false,
-          ...userAct
-        },
-        worktree
-      )
-      didSpawnSetup = true
-    } catch (error) {
-      const message = readableWslDistroHoldText(
-        error instanceof Error ? error.message : String(error)
-      )
-      const nextWarning = `failed to create the setup terminal for ${worktree.path}: ${message}`
-      warning = appendWorktreeCreateWarning(warning, nextWarning)
-      console.warn(`[worktree-create] ${warning}`)
-    }
-  }
-
+  })
   return {
-    ...(setup && !didSpawnSetup
+    didProvision: true,
+    didSpawnSetup: started.didSpawnSetup,
+    activationSetup: started.returnedSetup,
+    warning: started.warning,
+    ...(started.didSpawnStartup
       ? {
-          activationSetup: {
-            ...setup,
-            ...(startupTerminalHandle && wrappedSetupCommandStr
-              ? { command: wrappedSetupCommandStr }
-              : {})
+          startupTerminal: {
+            spawned: true,
+            handle: started.startupTerminalHandle ?? undefined,
+            tabId: started.startupTerminalTabId ?? undefined,
+            paneKey: started.startupTerminalPaneKey,
+            ptyId: started.startupTerminalPtyId,
+            surface: 'background' as const
           }
         }
-      : {}),
-    ...(startupTerminal ? { startupTerminal } : {}),
-    didSpawnSetup,
-    ...(warning ? { warning } : {})
+      : {})
   }
 }
 
@@ -1757,6 +1681,7 @@ async function performLocalWorktreeCreate(
     const meta = store.setWorktreeMeta(hostWorktreeTargetForRepo(worktreeId, repo), metaUpdates)
     return { worktree: mergeWorktree(repo.id, created, meta) }
   })
+  runtime.beginWorkspaceSetup(worktreeId)
   onWorkspaceCreated?.(worktreeId)
   const {
     lineage: worktreeLineage,
@@ -1819,6 +1744,7 @@ async function performLocalWorktreeCreate(
   let setup: CreateWorktreeResult['setup']
   let defaultTabs: CreateWorktreeResult['defaultTabs']
   let setupTrustMismatch: SetupTrustMismatch | undefined
+  let setupPreparationFailure: Error | undefined
   await timing.time('prepare_setup', async () => {
     const createdYamlHooks = loadHooks(worktreePath)
     const createdEffectiveHooks = getEffectiveHooksFromConfig(repo, createdYamlHooks)
@@ -1864,27 +1790,47 @@ async function performLocalWorktreeCreate(
         )
       } catch (error) {
         console.error(`[hooks] Failed to prepare setup runner for ${worktreePath}:`, error)
+        if (
+          shouldWaitForSetupBeforeAgentStartup(
+            repo.hookSettings?.setupAgentStartupPolicy,
+            createdYamlHooks?.setupAgentStartupPolicy
+          )
+        ) {
+          setupPreparationFailure = new Error(
+            'Setup could not be prepared. Check the workspace hooks and try again.'
+          )
+        }
       }
     }
   })
 
+  runtime.preparedWorkspaceSetup(
+    worktreeId,
+    Boolean(setup?.waitForAgentStartup || setupPreparationFailure)
+  )
   // Startup resolves the new id before lifecycle notifications invalidate runtime caches.
   runtime?.invalidateWorktreeCatalog?.(repo.id)
   const stagedStartup = await timing.time('spawn_startup_terminal', () =>
     spawnLocalStartupAndSetupTerminals({
       runtime,
       worktree,
-      startup: args.startup,
+      repo,
+      request: args,
       setup,
       defaultTabs,
-      createdWithAgent: args.createdWithAgent,
+      setupPreparationFailure,
       automationCreate: Boolean(args.automationProvenance)
     })
   )
 
   // Automation terminals are host-provisioned, so return none for renderer launch.
   const provisionedByHost = Boolean(args.automationProvenance)
-  if (provisionedByHost && (setup || defaultTabs?.tabs.length)) {
+  if (
+    provisionedByHost &&
+    !stagedStartup.startupTerminal &&
+    !stagedStartup.didSpawnSetup &&
+    (setup || defaultTabs?.tabs.length)
+  ) {
     void runtime.provisionManagedWorktreeTerminals(
       {
         worktreeSelector: `id:${worktree.id}`,
@@ -1927,7 +1873,7 @@ async function performLocalWorktreeCreate(
             : setup && !stagedStartup.didSpawnSetup
               ? { setup }
               : {}),
-          ...(defaultTabs ? { defaultTabs } : {})
+          ...(!stagedStartup.didProvision && defaultTabs ? { defaultTabs } : {})
         }),
     ...(addResult.localBaseRefRefresh
       ? { localBaseRefRefresh: addResult.localBaseRefRefresh }

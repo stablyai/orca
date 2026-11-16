@@ -5,7 +5,6 @@ import type { RuntimeTerminalCreate } from '../../../../../shared/terminal/runti
 import { callerLaunchSource } from '../../../../agent-launch/agent-started-telemetry'
 import { buildCliWorkspaceProvenance } from '../../../../../shared/worktree/creation/cli-workspace-provenance'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import type { OrcaRuntimeService } from '../../../orca-runtime'
 import {
   finishAutomationWorkspaceProvenanceRequest,
   releaseAutomationWorkspaceProvenanceRequest,
@@ -29,8 +28,6 @@ type WorktreeCreateParams = Extract<
   AgentLaunchParams['target'],
   { kind: 'create-worktree' }
 >['create']
-
-const STRUCTURED_SETUP_WAIT_TIMEOUT_MS = 60_000
 
 export function agentLaunchWorkspaceFactory(
   context: RpcContext,
@@ -120,9 +117,6 @@ export function agentLaunchWorkspaceFactory(
           awaitTerminalProvisioning: true,
           observeSetupCompletion: true
         })
-        if (!startupAgent) {
-          await waitForStructuredSetup(runtime, result.setupReceipt)
-        }
         finishAutomationWorkspaceProvenanceRequest(params.automationProvenanceRequest)
         const warning =
           result.warnings?.reduce(
@@ -156,36 +150,5 @@ function withoutHostActivation(params: WorktreeCreateParams): WorktreeCreatePara
     activate: false,
     runHooks: false,
     ...(params.runHooks === true ? { setupDecision: 'run' as const } : {})
-  }
-}
-
-export async function waitForStructuredSetup(
-  runtime: Pick<OrcaRuntimeService, 'waitForSetupTerminalCompletion'>,
-  receipt: Awaited<ReturnType<OrcaRuntimeService['createManagedWorktree']>>['setupReceipt']
-): Promise<void> {
-  if (
-    !receipt ||
-    receipt.startupPolicy !== 'wait-for-setup' ||
-    receipt.state !== 'running' ||
-    !receipt.terminalHandle
-  ) {
-    return
-  }
-  const abort = new AbortController()
-  let timer: ReturnType<typeof setTimeout> | undefined
-  try {
-    await Promise.race([
-      runtime.waitForSetupTerminalCompletion(receipt.terminalHandle, abort.signal),
-      new Promise<void>((resolve) => {
-        timer = setTimeout(() => {
-          abort.abort(new Error('structured_setup_wait_timeout'))
-          resolve()
-        }, STRUCTURED_SETUP_WAIT_TIMEOUT_MS)
-      })
-    ])
-  } catch {
-    // Setup completion is evidence, not a reason to strand a launch when the PTY disappears.
-  } finally {
-    clearTimeout(timer)
   }
 }

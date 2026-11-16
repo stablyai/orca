@@ -1,3 +1,5 @@
+import { buildRuntimeSetupReceipt } from '../../../runtime/workspaces/creation/runtime-local-worktree-setup'
+import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { randomUUID } from 'node:crypto'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import { getProjectHostSetupWorktreeMeta } from '../../../../shared/project/host-setup/project-host-setup-lookup'
@@ -16,7 +18,11 @@ import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution
 export async function createFolderWorkspace(
   args: CreateWorktreeArgsWithSystemProvenance,
   repo: Repo,
-  store: Store
+  store: Store,
+  runtime: Pick<
+    OrcaRuntimeService,
+    'startCreatedWorktreeTerminals' | 'beginWorkspaceSetup' | 'preparedWorkspaceSetup'
+  >
 ): Promise<CreateWorktreeResult> {
   const now = Date.now()
   const instanceId = randomUUID()
@@ -69,6 +75,7 @@ export async function createFolderWorkspace(
       ? { linkedTaskSourceContext: args.linkedTaskSourceContext }
       : {})
   })
+  runtime.beginWorkspaceSetup(worktreeId)
   const worktree = mergeFolderWorkspace(repo, worktreeId, meta)
   // The window opens the Setup tab from `setup`, as for a new worktree.
   const prepared = await prepareFolderWorktreeSetup({
@@ -81,6 +88,49 @@ export async function createFolderWorkspace(
     shouldUseSetupRunner: true
   })
   const setup = isPreparedFolderSetup(prepared) ? prepared : undefined
+  runtime.preparedWorkspaceSetup(worktreeId, setup?.requiredSetup === true)
+  if (setup && (args.startup || args.startupDraft || setup.requiredSetup)) {
+    const started = await runtime.startCreatedWorktreeTerminals({
+      repo,
+      worktree,
+      setup: setup.setup,
+      defaultTabs: setup.defaultTabs,
+      setupPreparationFailure: setup.setupPreparationFailure,
+      request: {
+        ...args,
+        repoSelector: repo.id,
+        wslUserAct: true,
+        awaitTerminalProvisioning: true,
+        observeSetupCompletion: true,
+        promisedAgentChat: Boolean(args.createdWithAgent && !args.startup && !args.startupDraft)
+      }
+    })
+    return {
+      worktree,
+      setup: started.returnedSetup,
+      setupReceipt: buildRuntimeSetupReceipt(
+        setup,
+        started.didSpawnSetup,
+        started.setupTerminalHandle
+      ),
+      ...(setup.setupTrustMismatch ? { setupTrustMismatch: setup.setupTrustMismatch } : {}),
+      ...(started.didSpawnStartup
+        ? {
+            startupTerminal: {
+              spawned: true,
+              handle: started.startupTerminalHandle ?? undefined,
+              tabId: started.startupTerminalTabId ?? undefined,
+              paneKey: started.startupTerminalPaneKey,
+              ptyId: started.startupTerminalPtyId,
+              surface: 'background' as const
+            }
+          }
+        : {}),
+      ...((started.warning ?? prepared?.warning)
+        ? { warning: started.warning ?? prepared?.warning }
+        : {})
+    }
+  }
   return {
     worktree,
     ...(setup?.setup ? { setup: setup.setup } : {}),

@@ -70,7 +70,7 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
             // Track operational failures; malformed IPC rejected above is outside the creation funnel.
             if (isFolderRepo(repo)) {
               // Folder creation registers metadata; its setup prep checks ownership itself.
-              result = await createFolderWorkspace(createArgs, repo, store)
+              result = await createFolderWorkspace(createArgs, repo, store, runtime)
             } else {
               // Resolve executionHostId-only SSH ownership before any local Git operation.
               const createRoute = requireWorktreeCreateRoute(repo)

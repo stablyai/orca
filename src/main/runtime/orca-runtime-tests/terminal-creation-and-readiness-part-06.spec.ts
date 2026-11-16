@@ -4,28 +4,37 @@ import { OrcaRuntimeService } from '../orca-runtime'
 import { TEST_WORKTREE_ID, TEST_WORKTREE_PATH, store } from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
-  it('replays fast setup completion emitted before its observer is registered', async () => {
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      spawn: vi.fn().mockResolvedValue({ id: 'pty-fast-setup' }),
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    runtime.attachWindow(1)
-    await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
-    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
-    ;(
-      runtime as unknown as { setupCompletionTokenByPtyId: Map<string, string> }
-    ).setupCompletionTokenByPtyId.set('pty-fast-setup', 'token-fast')
-    runtime.onPtyData(
-      'pty-fast-setup',
-      '__ORCA_SETUP_COMPLETE__:wrong:9\r\n__ORCA_SETUP_COMPLETE__:token-fast:0\r\n$',
-      100
-    )
-
-    await expect(runtime.waitForSetupTerminalCompletion(handle)).resolves.toEqual({ exitCode: 0 })
-  })
+  it.each([0, 7, null])(
+    'retains exact Setup outcome %s captured during spawn, through exit and output eviction',
+    async (exitCode) => {
+      const runtime = new OrcaRuntimeService(store)
+      let ptyId = ''
+      runtime.setPtyController({
+        spawn: async (options) => {
+          ptyId = options.sessionId!
+          runtime.onPtyData(ptyId, '__ORCA_SETUP_COMPLETE__:wrong:0\r\n', 100)
+          if (exitCode !== null) {
+            runtime.onPtyData(
+              ptyId,
+              `\x1b]777;__ORCA_SETUP_COMPLETE__:token-fast:${exitCode}\x07`,
+              101
+            )
+          }
+          runtime.onPtyData(ptyId, 'noise'.repeat(100_000), 102)
+          return { id: ptyId }
+        },
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess: async () => null
+      })
+      const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+        setupCompletionToken: 'token-fast'
+      })
+      await runtime.onPtyExit(ptyId, 0)
+      await expect(runtime.waitForSetupTerminalCompletion(handle)).resolves.toEqual({ exitCode })
+      await expect(runtime.waitForSetupTerminalCompletion(handle)).resolves.toEqual({ exitCode })
+    }
+  )
 
   it('drops retained PTY transcript memory when a background terminal exits', async () => {
     const runtime = new OrcaRuntimeService(store)

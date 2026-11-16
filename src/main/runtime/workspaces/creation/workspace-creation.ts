@@ -92,6 +92,7 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
   ): Promise<CreateWorktreeResult> {
     const store = this.requireStore()
     const onWorkspaceCreated = (worktreeId: string): void => {
+      this.beginWorkspaceSetup(worktreeId)
       creation?.named(worktreeId)
       args.onWorkspaceCreated?.(worktreeId)
     }
@@ -196,6 +197,8 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       warning:
         [includeCopyWarning, addResult.upstreamWarning].filter(Boolean).join(' ') || undefined
     })
+    if (preparedSetup.setupPreparationFailure)
+      this.setupTerminalCompletions.refuseWorkspace(worktree.id)
     const { setup, defaultTabs, setupTrustMismatch } = preparedSetup
     let { warning } = preparedSetup
 
@@ -220,10 +223,11 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       repo,
       worktree,
       setup,
+      requiredSetup: preparedSetup.requiredSetup,
       defaultTabs,
       startup: effectiveStartup,
       startupFollowup: effectiveStartupFollowup,
-      startupLaunchRuntime,
+      startupLaunchRuntime: preparedSetup.setupPreparationFailure ?? startupLaunchRuntime,
       createdWithAgent: effectiveCreatedWithAgent,
       promisedAgentChat: args.promisedAgentChat,
       draftPaste: effectiveDraftPaste,
@@ -238,6 +242,7 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       branch: worktree.branch,
       ...createdWorktreeLifecycleIdentity(worktree)
     })
+
     return {
       worktree: {
         ...worktree,

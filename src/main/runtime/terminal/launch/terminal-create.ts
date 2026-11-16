@@ -1,3 +1,4 @@
+import { mintPtySessionId } from '../../../daemon/sessions/pty-session-id'
 import type { TerminalWorkspaceCreationEvidence } from './terminal-workspace-scope'
 import {
   recordTerminalLaunchMetadata,
@@ -62,6 +63,16 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
         throw new Error('runtime_unavailable')
       }
       const workspace = await this.resolveTerminalCreateLaunchScope(selector, opts, ...evidence)
+      if (
+        (opts.startupAgent || opts.launchAgent) &&
+        !opts.env?.[SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV]
+      ) {
+        await this.waitForWorkspaceSetup(
+          workspace.id,
+          opts.startupAgent ?? opts.launchAgent ?? 'Agent',
+          opts.signal
+        )
+      }
       const launchOpts = await this.resolveAgentTerminalCreateOptions(workspace, opts)
       const launchTitleAt = { sequence: this.nextTitleObservationSequence(), epochMs: Date.now() }
       let cwd = this.resolveWorkspaceTerminalStartupCwd(workspace, launchOpts.cwd) ?? workspace.path
@@ -95,6 +106,9 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
       const teamAllocation = terminalCreateTeamAllocation(this.claudeAgentTeams)
       let effectiveLaunchConfig = launchOpts.launchConfig
       let result!: Awaited<ReturnType<NonNullable<RuntimePtyController['spawn']>>>
+      const setupSessionId = launchOpts.setupCompletionToken
+        ? (launchOpts.sessionId ?? mintPtySessionId(workspace.id))
+        : undefined
       const spawnFresh = async (operation: PaneSpawnOperation) => {
         const baseEnv = withAgentLaunchToken(launchOpts.env, launchToken)
         const agentTeams = await teamAllocation
@@ -134,7 +148,16 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
         try {
           const { launchAgent } = launchOpts
           launchOpts.onPtySpawnDispatched?.({ launchConfig: effectiveLaunchConfig, launchAgent })
+          if (setupSessionId && launchOpts.setupCompletionToken) {
+            this.setupTerminalCompletions.begin(
+              setupSessionId,
+              preAllocatedHandle,
+              launchOpts.setupCompletionToken,
+              launchOpts.setupRequired ? workspace.id : undefined
+            )
+          }
           result = await spawnInAdmittedPane(this.store, ptyController, {
+            ...(setupSessionId ? { sessionId: setupSessionId, isNewSession: true } : {}),
             ...initialSize,
             cwd,
             command: sequencedStartupCommand
@@ -301,6 +324,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           ...(warning ? { warning } : {})
         }
       } finally {
+        if (setupSessionId && !result) this.setupTerminalCompletions.forget(setupSessionId)
         teamAllocation.release()
         releaseStablePaneCreate()
       }

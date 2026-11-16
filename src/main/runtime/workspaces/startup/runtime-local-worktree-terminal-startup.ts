@@ -1,3 +1,4 @@
+import { waitForRequiredSetup } from './required-setup-completion'
 import { formatTerminalStartFailure } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import { readableWslDistroHoldText } from '../../../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
 import { paneIdentity } from '../../terminal/identity/runtime-terminal-pane-identity'
@@ -25,6 +26,12 @@ import type {
 
 export type RuntimeLocalWorktreeTerminalPorts = {
   canSpawn: boolean
+  setupPrepared?: (workspaceId: string, required: boolean) => void
+  setupFailed?: (workspaceId: string) => void
+  waitForSetupTerminalCompletion: (
+    handle: string,
+    signal?: AbortSignal
+  ) => Promise<{ exitCode: number | null }>
   provisionInBackground?: () => boolean
   createTerminal: (
     selector: string,
@@ -67,6 +74,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
   repo: Pick<Repo, 'id'>
   worktree: Worktree
   setup?: CreateWorktreeResult['setup']
+  requiredSetup?: boolean
   defaultTabs?: CreateWorktreeResult['defaultTabs']
   startup?: WorktreeStartupLaunch
   startupFollowup?: WorktreeStartupFollowup
@@ -80,6 +88,8 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
 }): Promise<RuntimeLocalWorktreeTerminalStartupResult> {
   const { request, repo, worktree, defaultTabs, startup, ports } = args
   let { setup } = args
+  const requiredSetup = args.requiredSetup ?? setup?.waitForAgentStartup === true
+  ports.setupPrepared?.(worktree.id, requiredSetup)
   const shouldActivate = request.activate === true || request.runHooks === true
   let warning = args.warning
   let didSpawnStartup = false
@@ -91,6 +101,8 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
   let startupTerminalPtyId: string | null = null
   let sequencedStartup = startup
   let wrappedSetupCommand: string | undefined
+  let setupCompletionToken: string | undefined
+  let startupTerminal: RuntimeTerminalCreate | undefined
   if (startup && setup?.waitForAgentStartup === true) {
     const platform = setupPlatform(setup, process.platform === 'win32' ? 'windows' : 'posix')
     const sequenced = createSequencedSetupAgentCommands({
@@ -105,6 +117,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
       ...(sequenced.startupEnv ? { env: { ...startup.env, ...sequenced.startupEnv } } : {})
     }
     wrappedSetupCommand = sequenced.setupCommand
+    setupCompletionToken = sequenced.completionToken
     setup = { ...setup, envVars: { ...setup.envVars, ...sequenced.setupEnv } }
   }
 
@@ -136,11 +149,12 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
         ...(ORCA_LAYOUT_OWNER_IS_MAIN ? { keepPaneOnStartFailure: true as const } : {}),
         ...ownerSurfacing(shouldActivate)
       })
+      startupTerminal = terminal
       request.onStartupTerminalCreated?.(terminal)
-      if (args.draftPaste) {
+      if (!setup?.waitForAgentStartup && args.draftPaste) {
         ports.pasteDraft(terminal.handle, args.draftPaste)
       }
-      if (args.startupFollowup) {
+      if (!setup?.waitForAgentStartup && args.startupFollowup) {
         ports.sendFollowup(terminal.handle, args.startupFollowup, terminal)
       }
       didSpawnStartup = true
@@ -176,7 +190,8 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
             { ...args, setup },
             startupTerminalHandle,
             startupPaneHeld,
-            wrappedSetupCommand
+            wrappedSetupCommand,
+            setupCompletionToken
           ),
           ...(provisionInBackground ? { surfaceOwner: false as const } : {})
         })
@@ -205,11 +220,12 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
         { ...args, setup },
         startupTerminalHandle,
         startupPaneHeld,
-        wrappedSetupCommand
+        wrappedSetupCommand,
+        setupCompletionToken
       ),
       surfaceOwner: false
     })
-    if (request.awaitTerminalProvisioning) {
+    if (request.awaitTerminalProvisioning || setup?.waitForAgentStartup) {
       const provisioned = await provisioning
       didSpawnSetup = provisioned.setupSpawned
       setupTerminalHandle = provisioned.setupTerminalHandle
@@ -232,6 +248,30 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
       warning = appendFailure(warning, worktree.path, 'initial', error)
     }
   }
+  if (setup?.waitForAgentStartup && startupTerminal && (args.draftPaste || args.startupFollowup)) {
+    const terminal = startupTerminal
+    void waitForRequiredSetup(
+      ports,
+      {
+        startupPolicy: 'wait-for-setup',
+        state: didSpawnSetup ? 'running' : 'spawn_failed',
+        ...(setupTerminalHandle ? { terminalHandle: setupTerminalHandle } : {})
+      },
+      args.createdWithAgent ?? args.draftPaste?.agent ?? args.startupFollowup?.agent ?? 'Agent'
+    )
+      .then(() => {
+        if (args.draftPaste) ports.pasteDraft(terminal.handle, args.draftPaste)
+        if (args.startupFollowup)
+          ports.sendFollowup(terminal.handle, args.startupFollowup, terminal)
+      })
+      .catch((error: unknown) =>
+        console.warn(
+          '[worktree-create]',
+          error instanceof Error ? error.message : 'Setup did not finish successfully.'
+        )
+      )
+  }
+  if (requiredSetup && !didSpawnSetup) ports.setupFailed?.(worktree.id)
   const returnedSetup = didSpawnSetup
     ? undefined
     : setup
@@ -257,7 +297,8 @@ function provisionArgs(
   args: Parameters<typeof startRuntimeLocalWorktreeTerminals>[0],
   primaryTerminalHandle: string | null,
   hasStartupTerminal: boolean,
-  wrappedSetupCommand?: string
+  wrappedSetupCommand?: string,
+  setupCompletionToken?: string
 ): WorktreeTerminalProvisioningArgs {
   return {
     worktreeSelector: `id:${args.worktree.id}`,
@@ -272,6 +313,7 @@ function provisionArgs(
     startupNeedsTerminal: args.startup !== undefined,
     setupCommandPlatform: setupPlatform(args.setup, 'posix'),
     observeSetupCompletion: args.request.observeSetupCompletion,
+    ...(setupCompletionToken ? { setupCompletionToken } : {}),
     ...(wrappedSetupCommand ? { wrappedSetupCommand } : {})
   }
 }

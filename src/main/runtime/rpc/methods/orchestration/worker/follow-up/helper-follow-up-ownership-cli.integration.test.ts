@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { getFollowUpDispatch } from '../../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
 import { continueAllUnreadWorkerMail } from '../../messaging/settled-worker-follow-through'
 import { z } from 'zod'
-import * as setupGate from '../start/readiness/worker-start-structured-setup-gate'
+import * as setupGate from '../start/readiness/worker-start-setup-gate'
 import {
   receipt,
   type Started,
@@ -40,7 +40,7 @@ describe('which helpers a worker may continue, through CLI argv, RPC and SQLite'
       vi.mocked(h.runtime.createTerminal).mockRejectedValueOnce(new Error('spawn failed'))
     } else {
       await placeNextWorkerInChat()
-      vi.spyOn(setupGate, 'awaitStructuredWorkerSetupGate').mockResolvedValueOnce({
+      vi.spyOn(setupGate, 'awaitWorkerSetupGate').mockResolvedValueOnce({
         satisfied: false,
         status: 'exited'
       })

@@ -26,6 +26,7 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
   /** Key id this host's claims are minted under. */
   claimKeyId: string
   resolveWorkspacePath: (workspaceId: string) => Promise<string>
+  waitForWorkspaceSetup?: StructuredAgentSessionHostDeps['waitForWorkspaceSetup']
   resolveCodexCommand?: (options?: {
     pathEnv?: string | null
     homePath?: string

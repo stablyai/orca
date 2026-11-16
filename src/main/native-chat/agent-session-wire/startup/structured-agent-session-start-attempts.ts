@@ -1,3 +1,5 @@
+import { launchPreparationFailure } from '../providers/structured-agent-session-adapter-errors'
+import { providerStartupFailureFact } from './structured-agent-session-failure-text'
 import { structuredAgentSessionHandingOver } from '../delivery/structured-agent-session-handing-over'
 import { randomUUID } from 'node:crypto'
 import { setTimeout as delay } from 'node:timers/promises'
@@ -43,8 +45,6 @@ export function registerStructuredAgentSessionStart(
   const { startFlights: flights, startupAttempts: attempts, acquireAborts } = context.runtimeState
   const acquire = acquireAborts.begin(sessionId)
   let attemptId = randomUUID()
-  let handle = attempts.begin(sessionId, attemptId)
-  const registeredAt = handle.registeredAt
   const children: NonNullable<ReturnType<typeof flights.get>>['children'] = []
   const register = () =>
     flights.register(sessionId, {
@@ -56,6 +56,38 @@ export function registerStructuredAgentSessionStart(
     })
   const attempting = Promise.resolve()
     .then(async (): Promise<StructuredAgentSessionResumeOutcome> => {
+      const preparationLock = structuredAgentSessionStartFlightLock({
+        sessionId,
+        attemptId,
+        signal: acquire.signal,
+        flights,
+        serialize: context.serialize
+      })
+      const record = await preparationLock.commit(async () =>
+        context.deps.store.requireWritableRecord(sessionId)
+      )
+      try {
+        await preparationLock.wait(
+          context.deps.waitForWorkspaceSetup?.(
+            record.location.workspaceId,
+            record.provider,
+            acquire.signal
+          ) ?? Promise.resolve()
+        )
+      } catch (error) {
+        if (acquire.signal.aborted) throw error
+        return {
+          ...failedStructuredAgentSessionStart(),
+          failure: providerStartupFailureFact(launchPreparationFailure(error))
+        }
+      }
+      const queued = await preparationLock.commit(async () => {
+        context.deps.store.requireWritableRecord(sessionId)
+        return structuredAgentSessionStartStillQueued(context.sessions.get(sessionId), startedFor)
+      })
+      if (!queued) return { ...failedStructuredAgentSessionStart(), aborted: true }
+      let handle = attempts.begin(sessionId, attemptId)
+      const registeredAt = handle.registeredAt
       let result: StructuredAgentSessionResumeOutcome = failedStructuredAgentSessionStart()
       for (let number = 0; number < 5; number++) {
         throwIfSignalAborted(acquire.signal)

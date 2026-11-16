@@ -1,3 +1,4 @@
+import { shouldWaitForSetupBeforeAgentStartup } from '../../../../shared/agent-launch/startup/setup-agent-startup-policy'
 import type {
   CreateWorktreeResult,
   SetupDecision,
@@ -54,6 +55,8 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
   hookFound: boolean
   shouldRunSetup: boolean
   didStartInProcessSetupHook: boolean
+  requiredSetup?: boolean
+  setupPreparationFailure?: Error
 }> {
   const { request, repo, worktreePath, settings } = args
   let warning = args.warning
@@ -101,6 +104,13 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
       // A new branch may introduce an unapproved hook; worktree already exists, so skip/warn below rather than fail the create.
     }
   }
+  const requiredSetup =
+    shouldRunSetup &&
+    shouldWaitForSetupBeforeAgentStartup(
+      repo.hookSettings?.setupAgentStartupPolicy,
+      yamlHooks?.setupAgentStartupPolicy
+    )
+  let setupPreparationFailure: Error | undefined
   let didStartInProcessSetupHook = false
   if (shouldRunSetup && hooks?.scripts.setup) {
     if (args.shouldUseSetupRunner) {
@@ -115,6 +125,10 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
           args.identity
         )
       } catch (error) {
+        if (requiredSetup)
+          setupPreparationFailure = new Error(
+            'Setup could not be prepared. Check the workspace hooks and try Setup again.'
+          )
         console.error(`[hooks] Failed to prepare setup runner for ${worktreePath}:`, error)
         if (isFolderRepo(repo)) {
           const failed = `Setup did not run: Orca could not write its setup file in ${worktreePath}.`
@@ -144,7 +158,9 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
     ...(setupTrustMismatch ? { setupTrustMismatch } : {}),
     hookFound: Boolean(hooks?.scripts.setup),
     shouldRunSetup,
-    didStartInProcessSetupHook
+    didStartInProcessSetupHook,
+    requiredSetup,
+    ...(setupPreparationFailure ? { setupPreparationFailure } : {})
   }
 }
 
@@ -157,7 +173,8 @@ export function buildRuntimeSetupReceipt(
   return {
     requested: effectiveDecision,
     hookFound,
-    startupPolicy: setup?.waitForAgentStartup ? 'wait-for-setup' : 'start-immediately',
+    startupPolicy:
+      prepared.requiredSetup || setup?.waitForAgentStartup ? 'wait-for-setup' : 'start-immediately',
     state: !hookFound
       ? 'not_configured'
       : effectiveDecision === 'skip' || !shouldRunSetup

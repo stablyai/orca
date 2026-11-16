@@ -14,6 +14,8 @@ export type WorktreeProvisionTerminalOptions = {
   cwd?: string
   title?: string
   command?: string
+  setupRequired?: boolean
+  setupCompletionToken?: string
   env?: Record<string, string>
   activate?: boolean
   surfaceOwner?: false
@@ -60,6 +62,7 @@ export type WorktreeTerminalProvisioningArgs = {
   startupNeedsTerminal?: boolean
   setupCommandPlatform: 'windows' | 'posix'
   observeSetupCompletion?: boolean
+  setupCompletionToken?: string
   // Why: setup and startup must use the same wrapper when startup waits for setup.
   wrappedSetupCommand?: string
   surfaceOwner?: false
@@ -224,15 +227,17 @@ export async function provisionWorktreeTerminals(
     }
     if (args.setup) {
       const completionToken =
-        args.observeSetupCompletion && !args.wrappedSetupCommand ? randomUUID() : null
-      const observed = completionToken
-        ? buildObservedSetupCommand(
-            args.setup.runnerScriptPath,
-            args.setupCommandPlatform,
-            completionToken,
-            args.setup.shell
-          )
-        : null
+        args.setupCompletionToken ??
+        (args.observeSetupCompletion || args.setup.waitForAgentStartup ? randomUUID() : null)
+      const observed =
+        completionToken && !args.wrappedSetupCommand
+          ? buildObservedSetupCommand(
+              args.setup.runnerScriptPath,
+              args.setupCommandPlatform,
+              completionToken,
+              args.setup.shell
+            )
+          : null
       const command =
         args.wrappedSetupCommand ??
         observed?.command ??
@@ -247,6 +252,12 @@ export async function provisionWorktreeTerminals(
         title: host.getSetupTerminalTitle?.() ?? 'Setup',
         command,
         env,
+        ...(completionToken
+          ? {
+              setupCompletionToken: completionToken,
+              setupRequired: args.setup.waitForAgentStartup === true
+            }
+          : {}),
         // Keep failed setup in its pane to show the failure.
         ...(ORCA_LAYOUT_OWNER_IS_MAIN ? { keepPaneOnStartFailure: true as const } : {}),
         ...surfacing

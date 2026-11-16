@@ -289,7 +289,10 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends RuntimeAgent
         this.dropAgentStatusForRemovedWorktreeFn?.(worktreeId, ALL_EXECUTION_HOSTS_SCOPE)
       })
     },
-    emitWorktreeLifecycle: (event) => this.worktreeLifecycleEvents.emit(event)
+    emitWorktreeLifecycle: (event) => {
+      if (event.kind === 'removed') this.setupTerminalCompletions.forgetWorkspace(event.worktreeId)
+      this.worktreeLifecycleEvents.emit(event)
+    }
   })
 
   private readonly repositoryCatalogDeps = {

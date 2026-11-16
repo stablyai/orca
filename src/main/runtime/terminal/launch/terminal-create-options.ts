@@ -17,6 +17,9 @@ import type { SpawnIntent } from '../../../../shared/terminal/pty/admission/spaw
 
 export type TerminalCreateOptions = {
   command?: string
+  /** Main-owned Setup evidence is installed before the command can run. */
+  setupRequired?: boolean
+  setupCompletionToken?: string
   /** Spawn Windows shell as the PTY process; selecting it through command creates only a child and later returns to the unwanted default shell. */
   shellOverride?: string
   claudeAgentTeamsSourceCommand?: string
