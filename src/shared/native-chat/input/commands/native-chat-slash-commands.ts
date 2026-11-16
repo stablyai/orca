@@ -6,7 +6,7 @@ import {
   isCustomSlashCommandToken,
   sanitizeCustomSlashCommandDescription,
   type DiscoveredSlashCommand
-} from '../../../custom-slash-commands'
+} from '../../../skills/discovery/custom-slash-commands'
 
 /** Terminal replies: composer answers locally without sending; transcript surfaces an agent-written row; absent means terminal/effect-only feedback. */
 export type NativeChatCommandReply = 'composer' | 'transcript'

@@ -2,8 +2,8 @@
 // and `~/.claude/commands`. The TUI lists them next to its built-ins, so Orca's
 // chat picker has to discover them rather than curate them.
 
-import { stripUnsafeDisplayCharacters } from './display-text-safety'
-import { isTokenSafe } from './native-chat/native-chat-reported-skill'
+import { stripUnsafeDisplayCharacters } from '../../text/display-text-safety'
+import { isTokenSafe } from '../../native-chat/native-chat-reported-skill'
 
 export type CustomSlashCommandScope = 'project' | 'user'
 

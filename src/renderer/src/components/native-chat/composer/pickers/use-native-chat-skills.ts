@@ -6,7 +6,7 @@ import type {
   DiscoveredSkill,
   SkillDiscoveryResult
 } from '../../../../../../shared/skills/discovery/skills'
-import type { DiscoveredSlashCommand } from '../../../../../../shared/custom-slash-commands'
+import type { DiscoveredSlashCommand } from '../../../../../../shared/skills/discovery/custom-slash-commands'
 import { getNativeChatAgentProfile } from '../../../../../../shared/native-chat/input/commands/native-chat-agent-profiles'
 import { isNativeChatSkillForAgent } from '../../../../../../shared/native-chat/input/commands/native-chat-skill-visibility'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'

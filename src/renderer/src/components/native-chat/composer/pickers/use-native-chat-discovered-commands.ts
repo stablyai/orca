@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
-import type { DiscoveredSlashCommand } from '../../../../../../shared/custom-slash-commands'
+import type { DiscoveredSlashCommand } from '../../../../../../shared/skills/discovery/custom-slash-commands'
+import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import {
   mergeDiscoveredSlashCommands,
+  type NativeChatSessionSkill,
   type SlashCommandSuggestion
 } from '../../../../../../shared/native-chat/input/commands/native-chat-slash-commands'
+import { nativeChatPickerCommands } from '../../../../../../shared/native-chat/input/commands/native-chat-skill-visibility'
+import { useNativeChatSkills } from './use-native-chat-skills'
 
 const NO_COMMANDS: readonly DiscoveredSlashCommand[] = []
 
@@ -39,4 +43,36 @@ export function useNativeChatDiscoveredCommands(
       : commands
   }, [agentCommands, commands, discovered, scope])
   return { commands, sendCommands }
+}
+
+/** Skill discovery plus the picker and send command lists built from it. */
+export function useNativeChatPickerCommands(args: {
+  agent: AgentType
+  agentCommands: readonly SlashCommandSuggestion[]
+  sessionSkills: readonly NativeChatSessionSkill[] | undefined
+  terminalTabId: string
+  launchWorktreeId: string | undefined
+  skillPickerTriggered: boolean
+}): {
+  discovery: ReturnType<typeof useNativeChatSkills>
+  pickerCommands: readonly SlashCommandSuggestion[]
+  sendCommands: () => readonly SlashCommandSuggestion[]
+} {
+  const { agent, terminalTabId, launchWorktreeId } = args
+  const discovery = useNativeChatSkills(
+    agent,
+    terminalTabId,
+    args.skillPickerTriggered,
+    launchWorktreeId
+  )
+  const { commands, sendCommands } = useNativeChatDiscoveredCommands(
+    args.agentCommands,
+    args.sessionSkills === undefined ? discovery.commands : undefined,
+    `${terminalTabId}\0${launchWorktreeId ?? ''}\0${agent}`
+  )
+  const pickerCommands = useMemo(
+    () => nativeChatPickerCommands(agent, commands, discovery.skills),
+    [agent, commands, discovery.skills]
+  )
+  return { discovery, pickerCommands, sendCommands }
 }

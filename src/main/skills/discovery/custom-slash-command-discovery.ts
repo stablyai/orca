@@ -5,7 +5,7 @@ import {
   dedupeCustomSlashCommands,
   type CustomSlashCommandScope,
   type DiscoveredSlashCommand
-} from '../../../shared/custom-slash-commands'
+} from '../../../shared/skills/discovery/custom-slash-commands'
 import { SKILL_FILE_MAX_DEPTH } from '../../../shared/skills/discovery/skill-discovery-depth'
 import { readSkillSummary } from './skill-discovery-summary'
 import { runSkillCandidateTasks } from '../filesystem/skill-candidate-concurrency'

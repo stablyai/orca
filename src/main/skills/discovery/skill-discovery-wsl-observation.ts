@@ -1,6 +1,6 @@
 import { posix as pathPosix } from 'node:path'
 import { summarizeSkillMarkdown } from '../../../shared/skills/discovery/skill-metadata'
-import type { DiscoveredSlashCommand } from '../../../shared/custom-slash-commands'
+import type { DiscoveredSlashCommand } from '../../../shared/skills/discovery/custom-slash-commands'
 import type {
   DiscoveredSkill,
   SkillDiscoveryResult,
