@@ -1,7 +1,6 @@
 import type { WorktreePtyHostFence } from '../workspaces/removal/worktree-pty-host-fence'
 import type { RuntimeTerminalClose } from '../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { RuntimePtyTabCloseAuthority } from '../terminal/records/runtime-terminal-state-records'
-import type { PtyIncarnationId } from '../../../shared/terminal/pty/lifecycle/pty-incarnation'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-path-identity'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
@@ -11,15 +10,13 @@ import { closeMainOwnedPaneByHandle } from './main-handle-close'
 import {
   NO_STOP,
   OrcaRuntimeWithExplicitCloseTabPtyStops,
-  type ExplicitCloseStop
+  type ExplicitCloseStop,
+  type OwedPtyIncarnations
 } from './explicit-terminal-close-pty-stops'
 import {
   closePairedHostLeafFirst,
   isTerminalTabPinnedInSession
 } from './paired-host-terminal-close'
-
-// undefined: no record yet; a record appearing later is a new registration, not this PTY.
-type OwedPtyStop = { ptyId: string; incarnationId: PtyIncarnationId | null | undefined }
 
 export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithExplicitCloseTabPtyStops {
   protected abstract getResolvedWorktreeMap(): Promise<Map<string, ResolvedWorktree>>
@@ -74,28 +71,16 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
     )
   }
 
-  /** Captured before asking the window, so a failed close never stops a successor reusing a PTY id. */
-  private captureOwedPtyStops(ptyIds: readonly string[]): OwedPtyStop[] {
-    return ptyIds.map((ptyId) => ({ ptyId, incarnationId: this.ptysById.get(ptyId)?.incarnationId }))
-  }
-
   /** Main owns these PTYs once it asked the window to close their tab; only a pinned tab may keep them running. */
   private async stopOwedPtysThenRethrow(
     error: unknown,
     target: { worktreeId: string; tabId: string },
-    owed: readonly OwedPtyStop[],
+    owed: OwedPtyIncarnations,
     addressedPtyId: string
   ): Promise<never> {
     const refused = error instanceof Error && error.message === 'terminal_tab_pinned'
     if (!refused && !this.isTabPinnedInAnySession(target.worktreeId, target.tabId)) {
-      const unchanged = owed
-        .filter(({ ptyId, incarnationId }) => {
-          return this.ptysById.get(ptyId)?.incarnationId === incarnationId
-        })
-        .map(({ ptyId }) => ptyId)
-      if (unchanged.length > 0) {
-        await this.stopExplicitlyClosedTabPtys(unchanged, addressedPtyId)
-      }
+      await this.stopExplicitlyClosedTabPtys([...owed.keys()], addressedPtyId, owed)
     }
     throw error
   }

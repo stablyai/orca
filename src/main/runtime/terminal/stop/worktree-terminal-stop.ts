@@ -26,6 +26,7 @@ import { mainHoldsTerminal } from '../surface/main-pane-verdict'
 import { summarizeWorktreePtyStopVerdict } from '../../workspaces/removal/worktree-pty-stop-verdict'
 import { describeMobileSessionTabCloseRefusal } from '../../session-lifecycle/close/mobile-session-tab-close-refusal-message'
 import type { MobileSessionTabCloseOutcome } from '../../session-lifecycle/close/mobile-session-tab-close-outcome'
+import type { PtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
 import { clearClosedWorktreeResumeRecords } from './worktree-sleep-resume-records'
 import { anySleepKeyNames, hostSleepKey, resolveSleepScope } from './worktree-terminal-sleep-key'
 import type { WorktreeSleepScope } from './worktree-terminal-sleep-key'
@@ -82,13 +83,20 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
           snapshot.tabs.flatMap((tab) => (tab.type === 'terminal' ? [tab.parentTabId] : []))
         )
       ]
-      const stopWorktreeTerminals = () =>
-        this.stopTerminalsForWorktree(`id:${worktree.id}`, {
-          resolvedWorktreeId: worktree.id,
-          ...hostFence
-        })
+      // Each tab close leaves PTY teardown to main: a close that fails midway still owes the attempted tabs' stops.
+      const owed = new Map<string, PtyIncarnationId | null | undefined>()
+      const stopOwedThenThrow = async (error: unknown): Promise<never> => {
+        // Graph-free: the window that held the tabs may be the thing that went away.
+        await this.stopExplicitlyClosedTabPtys([...owed.keys()], '', owed)
+        throw error
+      }
       let closed = 0
       for (const parentTabId of parentTabIds) {
+        for (const [ptyId, incarnationId] of this.captureOwedPtyStops(
+          this.getPtyIdsForExplicitTabClose(worktree.id, parentTabId)
+        )) {
+          owed.set(ptyId, incarnationId)
+        }
         let result: MobileSessionTabCloseOutcome
         try {
           result = await this.closeMobileSessionTab(`id:${worktree.id}`, parentTabId, {
@@ -97,17 +105,20 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
             localPtyTeardownOwnedExternally: true
           })
         } catch (error) {
-          // Each request left PTY teardown to main; a window that never answered must not orphan them.
-          await stopWorktreeTerminals()
-          throw error
+          return stopOwedThenThrow(error)
         }
         if (result.refused) {
-          throw new Error(describeMobileSessionTabCloseRefusal(result.refusalReason))
+          return stopOwedThenThrow(
+            new Error(describeMobileSessionTabCloseRefusal(result.refusalReason))
+          )
         }
         closed += 1
       }
       await this.clearWorktreeTerminalResumeRecords(worktree.id, sessionHostId, parentTabIds)
-      const { stopped } = await stopWorktreeTerminals()
+      const { stopped } = await this.stopTerminalsForWorktree(`id:${worktree.id}`, {
+        resolvedWorktreeId: worktree.id,
+        ...hostFence
+      })
       const ptyStop = summarizeWorktreePtyStopVerdict(
         targetPtyIds,
         (ptyId) => this.getPtyLivenessVerdict(ptyId),
