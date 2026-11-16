@@ -59,8 +59,9 @@ ORCA orchestration worker-show --dispatch <dispatch-id> --json
 ```
 
 Use the same caller and receipt host; retain any `--on <server>` shown by the CLI's
-recovery query. If the receipt is absent, expired, or inconclusive, do not resend;
-tell your owner. Never resend with a fresh UUID.
+recovery query. If the CLI printed that the request was not sent, follow its printed
+retry command. Otherwise, if the receipt is absent, expired, or inconclusive, do not
+resend; tell your owner. Never resend with a fresh UUID.
 
 Agent launches and terminal sends have no prompt file option: keep their argv
 short and point the agent at a brief saved on its execution host.
