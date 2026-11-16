@@ -12053,7 +12053,7 @@
             "agentLaunch": "在你的工作区中启动智能体（包括 SSH）"
           },
           "decisionFailed": "无法保存权限决定，请重试",
-          "fullAccessWarning": "完全访问：作为普通程序运行，可以读取你的文件、使用网络、运行其他程序，并控制 Orca（包括你的终端和智能体）。",
+          "fullAccessWarning": "完全访问：作为普通程序运行，可以读取你的文件、使用你已保存的登录信息和 SSH 密钥、使用网络、运行其他程序，并控制 Orca（包括你的终端和智能体）。",
           "uiWarning": "在 Orca 中运行发布者的代码来绘制其视图。Orca 会显示它能访问什么，并在启用前征求你的同意"
         },
         "PluginConsentProvenance": {
