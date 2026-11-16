@@ -1,5 +1,4 @@
 import { toast } from 'sonner'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { useAppStore } from '@/store/index'
 import { translate } from '@/i18n/i18n'
 import {
@@ -7,7 +6,6 @@ import {
   type WorktreeCreationRequest
 } from '@/lib/workspace/creation/pending-worktree-creation'
 import {
-  type BackgroundWorktreeCreationOptions,
   beginBackgroundWorktreePreparation,
   continueBackgroundWorktreeCreation,
   runBackgroundWorktreeCreation
@@ -21,7 +19,7 @@ export const COMPOSER_CREATE_PREPARE_DEADLINE_MS = 5 * 60_000
 
 export type ComposerCreateHandoff = {
   /** Starts creation, continuing the staged sidebar row when one exists. */
-  start: (request: WorktreeCreationRequest, options?: BackgroundWorktreeCreationOptions) => void
+  start: (request: WorktreeCreationRequest) => void
   /** True once a staged sidebar row owns the submit. */
   isHandedOff: () => boolean
   /** Reports a handed-off failure; returns false when the composer still owns it. */
@@ -30,17 +28,8 @@ export type ComposerCreateHandoff = {
   dispose: () => void
 }
 
-/** "Create more" in the prompt-first pane keeps the user where they are instead of opening the creation. */
-export function getComposerCreationOptions(
-  createMultiple: boolean,
-  settings: Pick<GlobalSettings, 'promptFirstComposer'> | null | undefined
-): BackgroundWorktreeCreationOptions {
-  return { revealCreationSurface: !(createMultiple && settings?.promptFirstComposer === true) }
-}
-
 export function scheduleComposerCreateHandoff({
   stagingRequest,
-  creationOptions = {},
   onHandOff,
   isCancelled,
   reopenComposer,
@@ -49,7 +38,6 @@ export function scheduleComposerCreateHandoff({
 }: {
   /** Display-only placeholder; never executed, so Retry cannot run it. */
   stagingRequest: WorktreeCreationRequest
-  creationOptions?: BackgroundWorktreeCreationOptions
   onHandOff: () => void
   isCancelled: () => boolean
   /** Restores the user's input once the closed composer can no longer show it. */
@@ -94,7 +82,7 @@ export function scheduleComposerCreateHandoff({
     if (finished || isCancelled()) {
       return
     }
-    stagedCreationId = beginBackgroundWorktreePreparation(stagingRequest, creationOptions)
+    stagedCreationId = beginBackgroundWorktreePreparation(stagingRequest)
     onHandOff()
     deadline = setTimeout(
       () =>
@@ -109,13 +97,13 @@ export function scheduleComposerCreateHandoff({
   }, delayMs)
 
   return {
-    start: (request, options) => {
+    start: (request) => {
       if (finished) {
         return
       }
       finish()
       if (stagedCreationId === null) {
-        runBackgroundWorktreeCreation(request, options)
+        runBackgroundWorktreeCreation(request)
         return
       }
       const store = useAppStore.getState()
@@ -135,7 +123,7 @@ export function scheduleComposerCreateHandoff({
         store.setSidebarOpen(true)
         return
       }
-      continueBackgroundWorktreeCreation(stagedCreationId, request, options)
+      continueBackgroundWorktreeCreation(stagedCreationId, request)
     },
     isHandedOff: () => stagedCreationId !== null,
     fail,

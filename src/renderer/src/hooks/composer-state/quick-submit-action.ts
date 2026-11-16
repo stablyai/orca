@@ -11,16 +11,12 @@ import {
   getWorkspaceCreateErrorToastMessage
 } from '@/lib/workspace/creation/workspace-create-error-format'
 import { toast } from 'sonner'
-import {
-  getComposerCreationOptions,
-  scheduleComposerCreateHandoff
-} from '@/lib/workspace/creation/composer-create-handoff'
+import { scheduleComposerCreateHandoff } from '@/lib/workspace/creation/composer-create-handoff'
 
 import type { ComposerModel } from './composer-model'
 
 type QuickSubmitActionInput = Pick<
   ComposerModel,
-  | 'createMultiple'
   | 'effectiveLinkedPR'
   | 'executeQuickCreation'
   | 'fallbackCreatureName'
@@ -52,7 +48,6 @@ type QuickSubmitActionInput = Pick<
 
 export function useQuickSubmitAction(input: QuickSubmitActionInput) {
   const {
-    createMultiple,
     effectiveLinkedPR,
     executeQuickCreation,
     fallbackCreatureName,
@@ -169,7 +164,6 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
           quickPrompt: '',
           quickTelemetry: null
         },
-        creationOptions: getComposerCreationOptions(createMultiple, liveStore.settings),
         // Why: closing (even under "Create more") keeps a later dismiss from cancelling this submit.
         onHandOff: () => onCreated?.(),
         isCancelled: isSubmissionCancelled,
@@ -215,7 +209,6 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
       }
     },
     [
-      createMultiple,
       effectiveLinkedPR,
       executeQuickCreation,
       fallbackCreatureName,

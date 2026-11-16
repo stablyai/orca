@@ -2,7 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { createUIStore } from './ui-slice-test-harness'
 import { MODAL_DISMISSED_KEY } from './modal-slot-dismissal'
 import { getDefaultSettings } from '../../../../../shared/constants'
-import { selectWorkspaceComposerPaneActive } from '@/lib/workspace/creation/workspace-composer-pane-surface'
+import {
+  resolveWorkspaceComposerPaneExit,
+  selectWorkspaceComposerPaneActive
+} from '@/lib/workspace/creation/workspace-composer-pane-surface'
 
 function storeWithPromptFirst(promptFirstComposer = true) {
   const store = createUIStore()
@@ -107,5 +110,39 @@ describe('prompt-first composer dialog fallback', () => {
     store.setState({ activeWorktreeId: 'wt-2' })
 
     expect(selectWorkspaceComposerPaneActive(store.getState())).toBe(false)
+  })
+})
+
+describe('prompt-first composer when a creation takes the center', () => {
+  it('moves the open pane composer to the dialog without settling it', () => {
+    const store = storeWithPromptFirst()
+    const onDismissed = vi.fn()
+    const data = { [MODAL_DISMISSED_KEY]: onDismissed }
+    store.getState().openModal('new-workspace-composer', data)
+    const request = store.getState().workspaceComposerPaneRequest!
+    store.setState({
+      activePendingCreationId: 'creation-1',
+      pendingWorktreeCreations: {
+        'creation-1': { loaderVisible: true } as never
+      }
+    })
+
+    expect(resolveWorkspaceComposerPaneExit(store.getState(), request)).toBe('move-to-dialog')
+    store.getState().moveWorkspaceComposerPaneToDialog(request)
+
+    expect(store.getState().workspaceComposerPaneRequest).toBeNull()
+    expect(store.getState().activeModal).toBe('new-workspace-composer')
+    expect(store.getState().modalData).toBe(data)
+    expect(onDismissed).not.toHaveBeenCalled()
+  })
+
+  it('dismisses the pane composer when the user switches workspaces', () => {
+    const store = storeWithPromptFirst()
+    store.getState().openModal('new-workspace-composer', {})
+    const request = store.getState().workspaceComposerPaneRequest!
+
+    store.setState({ activeWorktreeId: 'wt-2' })
+
+    expect(resolveWorkspaceComposerPaneExit(store.getState(), request)).toBe('dismiss')
   })
 })

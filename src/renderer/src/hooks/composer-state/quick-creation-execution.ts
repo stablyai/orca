@@ -9,7 +9,6 @@ import { isWorkspaceStatusAllowedOnHost } from '@/store/workspaces/status/host-w
 import { settleComposerSubmit } from '@/lib/workspace/creation/composer-submit-cancellation'
 import { runBackgroundWorktreeCreation } from '@/lib/workspace/creation/worktree-creation-flow'
 import type { ComposerCreateHandoff } from '@/lib/workspace/creation/composer-create-handoff'
-import { getComposerCreationOptions } from '@/lib/workspace/creation/composer-create-handoff'
 import { translate } from '@/i18n/i18n'
 import { prepareQuickComposerStartup } from './quick-startup-plan'
 import { buildQuickCreationRequest, type QuickSubmitOptions } from './quick-creation-request'
@@ -254,8 +253,11 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         clearNewWorkspaceDraft()
       }
 
-      const startCreation = handoff?.start ?? runBackgroundWorktreeCreation
-      startCreation(request, getComposerCreationOptions(createMultiple, settings))
+      if (handoff) {
+        handoff.start(request)
+      } else {
+        runBackgroundWorktreeCreation(request)
+      }
 
       // The composer already closed at handoff; closing again could dismiss a newer modal.
       if (handoff?.isHandedOff()) {

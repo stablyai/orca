@@ -60,6 +60,14 @@ export function createUiModalActions(set: UISliceSet, get: UISliceGet): Partial<
       if (get().workspaceComposerPaneRequest === request) {
         replaceComposerPane(set, get, null)
       }
+    },
+    moveWorkspaceComposerPaneToDialog: (request) => {
+      if (get().workspaceComposerPaneRequest !== request) {
+        return
+      }
+      // Why: ownership moves with the data, so its dismissal callback stays unsettled.
+      set({ workspaceComposerPaneRequest: null })
+      replaceModalSlot(set, get, 'new-workspace-composer', request.data)
     }
   }
 }

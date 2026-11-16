@@ -22,7 +22,7 @@ import {
   getWorkspaceCreateErrorToastMessage
 } from '@/lib/workspace/creation/workspace-create-error-format'
 
-export type BackgroundWorktreeCreationOptions = {
+type ContinueBackgroundWorktreeCreationOptions = {
   revealCreationSurface?: boolean
 }
 
@@ -65,11 +65,9 @@ function seedPendingChatDraft(
 function revealPendingCreation(
   creationId: string,
   request: WorktreeCreationRequest,
-  phase: WorktreeCreationPhase,
-  options: BackgroundWorktreeCreationOptions = {}
+  phase: WorktreeCreationPhase
 ): void {
   const store = useAppStore.getState()
-  const previousActiveCreationId = store.activePendingCreationId
   const indeterminate = getWorktreeCreationIndeterminate(request)
   const loaderVisible = !(
     isInstantFolderWorktreeCreation(store, request) &&
@@ -86,10 +84,6 @@ function revealPendingCreation(
     request
   })
   seedPendingChatDraft(creationId, request)
-  if (options.revealCreationSurface === false) {
-    store.setActivePendingWorktreeCreation(previousActiveCreationId)
-    return
-  }
   // Creation UI renders only in terminal view; activate it before publishing the panel.
   if (loaderVisible) {
     store.setActiveView('terminal')
@@ -98,19 +92,13 @@ function revealPendingCreation(
 }
 
 /** Start creation without blocking the composer; the pending panel owns preparation and errors. */
-export function runBackgroundWorktreeCreation(
-  request: WorktreeCreationRequest,
-  options: BackgroundWorktreeCreationOptions = {}
-): string {
+export function runBackgroundWorktreeCreation(request: WorktreeCreationRequest): string {
   const store = useAppStore.getState()
   const existingCreationId = findPendingLinkedWorkItemCreationId(
     store.pendingWorktreeCreations,
     request
   )
   if (existingCreationId) {
-    if (options.revealCreationSurface === false) {
-      return existingCreationId
-    }
     store.updatePendingWorktreeCreation(existingCreationId, { loaderVisible: true })
     store.setActivePendingWorktreeCreation(existingCreationId)
     store.setActiveView('terminal')
@@ -119,18 +107,15 @@ export function runBackgroundWorktreeCreation(
   }
   // Plain-HTTP LAN clients lack randomUUID; createBrowserUuid uses getRandomValues fallback.
   const creationId = createBrowserUuid()
-  revealPendingCreation(creationId, request, getInitialWorktreeCreationPhase(request), options)
+  revealPendingCreation(creationId, request, getInitialWorktreeCreationPhase(request))
   startWorktreeCreation(creationId, request)
   return creationId
 }
 
 /** Stage a pending entry before async preflight so the UI shows immediate progress. */
-export function beginBackgroundWorktreePreparation(
-  request: WorktreeCreationRequest,
-  options: BackgroundWorktreeCreationOptions = {}
-): string {
+export function beginBackgroundWorktreePreparation(request: WorktreeCreationRequest): string {
   const creationId = createBrowserUuid()
-  revealPendingCreation(creationId, request, 'preparing', options)
+  revealPendingCreation(creationId, request, 'preparing')
   return creationId
 }
 
@@ -138,7 +123,7 @@ export function beginBackgroundWorktreePreparation(
 export function continueBackgroundWorktreeCreation(
   creationId: string,
   request: WorktreeCreationRequest,
-  options: BackgroundWorktreeCreationOptions = {}
+  options: ContinueBackgroundWorktreeCreationOptions = {}
 ): boolean {
   const store = useAppStore.getState()
   const staged = store.pendingWorktreeCreations[creationId]

@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
-import type { BackgroundWorktreeCreationOptions } from '@/lib/workspace/creation/worktree-creation-flow'
 
 const flow = vi.hoisted(() => ({
   begin: vi.fn(() => 'staged-1'),
@@ -49,15 +48,11 @@ function makeRequest(name: string, linkedPR?: number): WorktreeCreationRequest {
 const stagingRequest = makeRequest('staged')
 const finalRequest = makeRequest('final')
 
-function schedule(
-  isCancelled: () => boolean = () => false,
-  creationOptions?: BackgroundWorktreeCreationOptions
-) {
+function schedule(isCancelled: () => boolean = () => false) {
   const onHandOff = vi.fn()
   const reopenComposer = vi.fn()
   const handoff = scheduleComposerCreateHandoff({
     stagingRequest,
-    creationOptions,
     onHandOff,
     reopenComposer,
     isCancelled
@@ -65,31 +60,31 @@ function schedule(
   return { handoff, onHandOff, reopenComposer }
 }
 
-function handOff(creationOptions?: BackgroundWorktreeCreationOptions): ReturnType<typeof schedule> {
-  const scheduled = schedule(undefined, creationOptions)
+function handOff(): ReturnType<typeof schedule> {
+  const scheduled = schedule()
   vi.advanceTimersToNextTimer()
   store.pendingWorktreeCreations['staged-1'] = { creationId: 'staged-1', request: stagingRequest }
   return scheduled
 }
 
-describe('scheduleComposerCreateHandoff', () => {
-  beforeEach(() => {
-    vi.useFakeTimers()
-    for (const id of Object.keys(store.pendingWorktreeCreations)) {
-      delete store.pendingWorktreeCreations[id]
-    }
-  })
-  afterEach(() => {
-    vi.useRealTimers()
-    vi.clearAllMocks()
-  })
+beforeEach(() => {
+  vi.useFakeTimers()
+  for (const id of Object.keys(store.pendingWorktreeCreations)) {
+    delete store.pendingWorktreeCreations[id]
+  }
+})
+afterEach(() => {
+  vi.useRealTimers()
+  vi.clearAllMocks()
+})
 
+describe('scheduleComposerCreateHandoff', () => {
   it('starts directly without staging or closing when preflight is fast', () => {
     const { handoff, onHandOff } = schedule()
-    handoff.start(finalRequest, { revealCreationSurface: false })
+    handoff.start(finalRequest)
     vi.runAllTimers()
 
-    expect(flow.run).toHaveBeenCalledWith(finalRequest, { revealCreationSurface: false })
+    expect(flow.run).toHaveBeenCalledWith(finalRequest)
     expect(flow.begin).not.toHaveBeenCalled()
     expect(onHandOff).not.toHaveBeenCalled()
     expect(handoff.fail('boom')).toBe(false)
@@ -98,22 +93,13 @@ describe('scheduleComposerCreateHandoff', () => {
   it('closes the composer onto a staged row when preflight stalls, then continues it', () => {
     const { handoff, onHandOff } = handOff()
 
-    expect(flow.begin).toHaveBeenCalledWith(stagingRequest, {})
+    expect(flow.begin).toHaveBeenCalledWith(stagingRequest)
     expect(onHandOff).toHaveBeenCalledTimes(1)
 
     handoff.start(finalRequest)
     handoff.dispose()
-    expect(flow.continue).toHaveBeenCalledWith('staged-1', finalRequest, undefined)
+    expect(flow.continue).toHaveBeenCalledWith('staged-1', finalRequest)
     expect(toastError).not.toHaveBeenCalled()
-  })
-
-  it('keeps the creation surface hidden across a stalled handoff', () => {
-    const hidden = { revealCreationSurface: false }
-    const { handoff } = handOff(hidden)
-    handoff.start(finalRequest, hidden)
-
-    expect(flow.begin).toHaveBeenCalledWith(stagingRequest, hidden)
-    expect(flow.continue).toHaveBeenCalledWith('staged-1', finalRequest, hidden)
   })
 
   it('focuses an existing creation for the same PR instead of duplicating it', () => {
@@ -128,7 +114,9 @@ describe('scheduleComposerCreateHandoff', () => {
     expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('staged-1')
     expect(store.setActivePendingWorktreeCreation).toHaveBeenCalledWith('other')
   })
+})
 
+describe('scheduleComposerCreateHandoff failures', () => {
   it('reports a handed-off failure once with a way back to the composer', () => {
     const { handoff, reopenComposer } = handOff()
 

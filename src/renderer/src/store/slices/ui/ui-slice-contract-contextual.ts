@@ -72,6 +72,8 @@ export type UISliceContextual = {
   closeModal: () => void
   /** Settles this pane request; a no-op once a newer request replaced it. */
   closeWorkspaceComposerPane: (request: WorkspaceComposerPaneRequest) => void
+  /** Hands this pane request's data, unsettled, to the dialog composer. */
+  moveWorkspaceComposerPaneToDialog: (request: WorkspaceComposerPaneRequest) => void
   featureTipsSeenIds: FeatureTipSeenId[]
   markFeatureTipsSeen: (ids: FeatureTipId[]) => void
   /** Main's once-decided Chat UI launch tip variant; null until read. */

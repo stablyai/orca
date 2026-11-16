@@ -49,6 +49,20 @@ export function hasNavigatedAwayFromWorkspaceComposerPane(
   )
 }
 
+/**
+ * What an open pane request does once its center changes under it.
+ * Why: a creation taking the center (e.g. "Create more") keeps the composer, as a dialog over it.
+ */
+export function resolveWorkspaceComposerPaneExit(
+  state: PaneSurfaceState,
+  request: WorkspaceComposerPaneRequest
+): 'stay' | 'dismiss' | 'move-to-dialog' {
+  if (!hasNavigatedAwayFromWorkspaceComposerPane(state, request)) {
+    return 'stay'
+  }
+  return selectWorktreeCreationSurfaceShown(state) ? 'move-to-dialog' : 'dismiss'
+}
+
 export function selectWorkspaceComposerPaneActive(
   state: PaneSurfaceState & Pick<AppState, 'workspaceComposerPaneRequest'>
 ): boolean {
