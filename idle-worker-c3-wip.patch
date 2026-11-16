@@ -1,0 +1,1051 @@
+diff --git a/src/main/native-chat/agent-session-journal/database/journal-domain-database.test.ts b/src/main/native-chat/agent-session-journal/database/journal-domain-database.test.ts
+index cf341b40e51..192ac145f68 100644
+--- a/src/main/native-chat/agent-session-journal/database/journal-domain-database.test.ts
++++ b/src/main/native-chat/agent-session-journal/database/journal-domain-database.test.ts
+@@ -31,6 +31,9 @@ import { readMailWithdrawal } from '../writing/mail-withdrawal-receipts'
+ import { structuredAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
+ import { migrateJournalDomainSchema } from '../journal-domain-schema'
+ import { JOURNAL_DOMAIN_SCHEMA_001 } from './journal-domain-schema-001'
++import { journalFailureCustodySql } from '../journal-failure-custody'
++import { markJournalOrchestrationAttached } from '../journal-failure-authority'
++import { OrchestrationDb } from '../../../runtime/orchestration/db/orchestration-db'
+ 
+ const cleanup: (() => void)[] = []
+ afterEach(() => {
+@@ -379,7 +382,7 @@ it('upgrades schema one atomically without trusting old forms or changing source
+     VALUES('chat','epoch','item',0,1,1,0,1,'authoritative source','{}')`)
+   const pragma = db.pragma.bind(db)
+   const publication = vi.spyOn(db, 'pragma').mockImplementation((sql, ...args) => {
+-    if (sql === 'user_version = 2') {
++    if (sql === 'user_version = 3') {
+       throw new Error('version publication failed')
+     }
+     return pragma(sql, ...args)
+@@ -388,8 +391,15 @@ it('upgrades schema one atomically without trusting old forms or changing source
+   publication.mockRestore()
+   expect(db.pragma('user_version', { simple: true })).toBe(1)
+   expect(() => db.prepare('SELECT wire_version FROM journal_items')).toThrow(/no such column/)
++  expect(
++    db
++      .prepare(
++        "SELECT name FROM sqlite_master WHERE name LIKE 'journal_failure_%' OR name='journal_failed_session_candidates'"
++      )
++      .all()
++  ).toEqual([])
+   migrateJournalDomainSchema(db)
+-  expect(db.pragma('user_version', { simple: true })).toBe(2)
++  expect(db.pragma('user_version', { simple: true })).toBe(3)
+   expect(db.prepare('SELECT payload_json,wire_version FROM journal_items').get()).toEqual({
+     payload_json: 'authoritative source',
+     wire_version: null
+@@ -401,6 +411,57 @@ it('upgrades schema one atomically without trusting old forms or changing source
+   })
+ })
+ 
++it.each([1, 2])(
++  'upgrades schema %s with opaque records and preserves committed clear mail custody',
++  (version) => {
++    const root = directory()
++    const orchestration = new OrchestrationDb(join(root, 'orchestration.db'))
++    cleanup.push(() => orchestration.close())
++    const db = new Database(':memory:')
++    cleanup.push(() => db.close())
++    db.exec(
++      version === 1
++        ? JOURNAL_DOMAIN_SCHEMA_001.replace('  wire_version INTEGER,\n', '')
++        : JOURNAL_DOMAIN_SCHEMA_001
++    )
++    db.pragma(`user_version=${version}`)
++    db.prepare('INSERT INTO agent_session_records(session_id,record_json) VALUES(?,?)').run(
++      'opaque',
++      'opaque source body'
++    )
++    db.prepare('INSERT INTO agent_session_records(session_id,record_json) VALUES(?,?)').run(
++      'previous',
++      JSON.stringify({
++        conversationCommand: {
++          command: 'clear',
++          phase: 'committed',
++          replacementSessionId: 'current'
++        }
++      })
++    )
++    orchestration.insertMessage({
++      from: 'coordinator',
++      to: 'orca_session_id:previous',
++      subject: 'kept through clear'
++    })
++    migrateJournalDomainSchema(db)
++    db.prepare('ATTACH DATABASE ? AS orchestration_authority').run(join(root, 'orchestration.db'))
++    markJournalOrchestrationAttached(db)
++    expect(
++      db
++        .prepare(`${journalFailureCustodySql(db)} SELECT COUNT(*) AS waiting FROM sources`)
++        .get('current', 'epoch')
++    ).toEqual({ waiting: 1 })
++    expect(
++      db.prepare("SELECT record_json FROM agent_session_records WHERE session_id='opaque'").get()
++    ).toEqual({ record_json: 'opaque source body' })
++    db.prepare("UPDATE agent_session_records SET record_json=? WHERE session_id='opaque'").run(
++      'still opaque'
++    )
++    expect(db.pragma('user_version', { simple: true })).toBe(3)
++  }
++)
++
+ it('records the original as last absorbed without copying its later profile metadata', async () => {
+   const root = directory()
+   const filename = journalDatabasePath(root)
+diff --git a/src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts b/src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts
+index 5e0e6c3ca78..8faa313838a 100644
+--- a/src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts
++++ b/src/main/native-chat/agent-session-journal/database/journal-domain-migrations.ts
+@@ -32,8 +32,9 @@ export function migrateJournalDomainSchema(db: Database.Database): void {
+           WHERE hidden=0 AND queue_failure_report_turn_item_id IS NOT NULL;
+         CREATE INDEX journal_failed_session_candidates ON journal_items(session_id,epoch,queue_failed_at)
+           WHERE hidden=0 AND queue_failed_outcome=1 AND queue_failed_at>0;
+-        CREATE INDEX journal_failure_mail_lineage ON agent_session_records(json_extract(record_json,'$.conversationCommand.replacementSessionId'))
+-          WHERE json_extract(record_json,'$.conversationCommand.command')='clear' AND json_extract(record_json,'$.conversationCommand.phase')='committed';
++        CREATE INDEX journal_failure_mail_lineage ON agent_session_records(CASE WHEN json_valid(record_json) THEN json_extract(record_json,'$.conversationCommand.replacementSessionId') END)
++          WHERE CASE WHEN json_valid(record_json) THEN json_extract(record_json,'$.conversationCommand.command') END='clear'
++            AND CASE WHEN json_valid(record_json) THEN json_extract(record_json,'$.conversationCommand.phase') END='committed';
+         CREATE TRIGGER journal_failure_resume_attempt AFTER INSERT ON journal_submission_attempts
+           WHEN NEW.queued=1
+           BEGIN UPDATE journal_failure_resumes SET attempted_message_id=NEW.message_id
+diff --git a/src/main/native-chat/agent-session-journal/journal-domain-queue-failures.ts b/src/main/native-chat/agent-session-journal/journal-domain-queue-failures.ts
+index a409146a212..55ccc58c67f 100644
+--- a/src/main/native-chat/agent-session-journal/journal-domain-queue-failures.ts
++++ b/src/main/native-chat/agent-session-journal/journal-domain-queue-failures.ts
+@@ -1,4 +1,7 @@
+-import { journalFailureAuthoritySql } from './journal-failure-authority'
++import {
++  journalFailureAuthoritySql,
++  type JournalFailureEnqueueAuthority
++} from './journal-failure-authority'
+ import type Database from '../../sqlite/sync-database'
+ import { invalidateJournalDomainQueue } from './journal-domain-queue-revision'
+ import { isDeepStrictEqual } from 'node:util'
+@@ -91,16 +94,38 @@ export function refreshJournalDomainQueueFailureReports(
+ 
+ /** The tied header group is bounded by the same 200-position construction limit as history. */
+ export function readJournalDomainQueueFailure(db: Database.Database, target: Target): number {
++  return readJournalDomainQueueFailureGate(db, target).failedAt
++}
++
++export function readJournalDomainQueueFailureGate(
++  db: Database.Database,
++  target: Target
++): {
++  failedAt: number
++  boundary?: number
++  authority?: JournalFailureEnqueueAuthority
++} {
+   const source = readJournalDomainQueueFailureSource(db, target)
+   if (!source) {
+-    return 0
++    return { failedAt: 0 }
+   }
+   const resumed = db
+     .prepare(
+-      `SELECT 1 FROM journal_failure_resumes AS grant WHERE session_id=? AND epoch=? AND source_item_id=? AND failed_at=? AND ${journalFailureAuthoritySql(db, 'grant')}`
++      `SELECT authority_json,dispatch_id FROM journal_failure_resumes AS grant WHERE session_id=? AND epoch=? AND source_item_id=? AND failed_at=? AND ${journalFailureAuthoritySql(db, 'grant')}`
+     )
+     .get(target.sessionId, target.epoch, source.itemId, source.failedAt)
+-  return resumed ? 0 : source.boundary
++  return {
++    failedAt: resumed ? 0 : source.boundary,
++    boundary: source.boundary,
++    ...(resumed?.authority_json
++      ? {
++          authority: {
++            ...JSON.parse(String(resumed.authority_json)),
++            dispatchId: String(resumed.dispatch_id)
++          }
++        }
++      : {})
++  }
+ }
+ 
+ export function readJournalDomainQueueFailureSource(db: Database.Database, target: Target) {
+diff --git a/src/main/native-chat/agent-session-journal/journal-domain-queue-pauses.ts b/src/main/native-chat/agent-session-journal/journal-domain-queue-pauses.ts
+index 55f568f6b68..29e46fdd319 100644
+--- a/src/main/native-chat/agent-session-journal/journal-domain-queue-pauses.ts
++++ b/src/main/native-chat/agent-session-journal/journal-domain-queue-pauses.ts
+@@ -7,7 +7,8 @@ import {
+ } from './queued-messages/queued-message-pause'
+ import { JOURNAL_SQL_ACCEPTED_INPUT_COLUMNS } from './journal-sql-accepted-inputs'
+ import type { SqliteRow } from '../../sqlite/sqlite-statement'
+-import { readJournalDomainQueueFailure } from './journal-domain-queue-failures'
++import { readJournalDomainQueueFailureGate } from './journal-domain-queue-failures'
++import type { JournalFailureEnqueueAuthority } from './journal-failure-authority'
+ import { invalidateJournalDomainQueue } from './journal-domain-queue-revision'
+ 
+ type Target = { sessionId: string; epoch: string }
+@@ -19,7 +20,7 @@ export function readJournalDomainQueuePauseContext(
+   reopenFloor: AgentJournalCursor | null,
+   messageIds: readonly string[],
+   snapshot?: { head: SqliteRow; clearMembers: ReadonlySet<string> }
+-): QueuePauseContext {
++): QueuePauseContext & { failureResumeAuthority?: JournalFailureEnqueueAuthority } {
+   const prefix = [target.sessionId, target.epoch] as const
+   const head =
+     snapshot?.head ??
+@@ -66,17 +67,24 @@ export function readJournalDomainQueuePauseContext(
+     latestAcceptedTurnSequence: Number(head.latest_accepted ?? 0),
+     latestPersonAcceptedSequence: Number(head.latest_person_accepted ?? 0)
+   }
+-  return createQueuePauseContext(
++  const failure = readJournalDomainQueueFailureGate(db, target)
++  const context = createQueuePauseContext(
+     {
+       epoch: target.epoch,
+       marks,
+       ...accepted,
+       latestPersonAcceptedTurnSequence: accepted.latestPersonAcceptedSequence,
+-      failedAt: readJournalDomainQueueFailure(db, target),
++      failedAt: failure.failedAt,
+       reopenFloor
+     },
+     clearMembers
+   )
++  return {
++    ...context,
++    ...(failure.authority && (failure.boundary ?? 0) >= marks.resumedSequence
++      ? { failureResumeAuthority: failure.authority }
++      : {})
++  }
+ }
+ 
+ /** The command appends its own reopen event before the admission event. */
+diff --git a/src/main/native-chat/agent-session-journal/journal-failure-authority.ts b/src/main/native-chat/agent-session-journal/journal-failure-authority.ts
+index ce5bae8087d..2af87693609 100644
+--- a/src/main/native-chat/agent-session-journal/journal-failure-authority.ts
++++ b/src/main/native-chat/agent-session-journal/journal-failure-authority.ts
+@@ -10,6 +10,11 @@ export const forgetJournalOrchestrationAttachment = (db: Database.Database): voi
+ export const journalOrchestrationAttached = (db: Database.Database): boolean => attached.has(db)
+ 
+ export type JournalFailureAuthority = { runId: string; snapshot: string }
++export type JournalFailureEnqueueAuthority = JournalFailureAuthority & { dispatchId: string }
++export type JournalFailureEnqueueFence = <T>(
++  authority: JournalFailureEnqueueAuthority,
++  enqueue: () => T
++) => T
+ 
+ export const FAILURE_AUTHORITY_COLUMNS = `json_array(r.id,r.consumer_generation,r.coordinator_handle,r.coordinator_pane_key,
+   CASE WHEN r.coordinator_orca_session_id_generation=r.consumer_generation THEN r.coordinator_orca_session_id END,
+diff --git a/src/main/native-chat/agent-session-journal/journal-failure-custody.ts b/src/main/native-chat/agent-session-journal/journal-failure-custody.ts
+index 79fe8fac762..d69e20ac728 100644
+--- a/src/main/native-chat/agent-session-journal/journal-failure-custody.ts
++++ b/src/main/native-chat/agent-session-journal/journal-failure-custody.ts
+@@ -5,9 +5,9 @@ import { journalOrchestrationAttached } from './journal-failure-authority'
+ export function journalFailureCustodySql(db: Database.Database): string {
+   return `WITH RECURSIVE target AS (SELECT ? AS session_id, ? AS epoch),
+     lineage(session_id) AS (SELECT session_id FROM target UNION SELECT r.session_id
+-      FROM agent_session_records r JOIN lineage l ON json_extract(r.record_json,'$.conversationCommand.replacementSessionId')=l.session_id
+-      WHERE json_extract(r.record_json,'$.conversationCommand.command')='clear'
+-        AND json_extract(r.record_json,'$.conversationCommand.phase')='committed'),
++      FROM agent_session_records r JOIN lineage l ON CASE WHEN json_valid(r.record_json) THEN json_extract(r.record_json,'$.conversationCommand.replacementSessionId') END=l.session_id
++      WHERE CASE WHEN json_valid(r.record_json) THEN json_extract(r.record_json,'$.conversationCommand.command') END='clear'
++        AND CASE WHEN json_valid(r.record_json) THEN json_extract(r.record_json,'$.conversationCommand.phase') END='committed'),
+     cards AS (SELECT q.message_id,q.payload_json FROM journal_queue_cards q,target t
+       WHERE q.session_id=t.session_id AND q.epoch=t.epoch AND q.state='waiting'),
+     pointers AS (SELECT c.message_id, json_extract(m.value,'$.messageId') AS source_id
+diff --git a/src/main/native-chat/agent-session-journal/journal-failure-history.test.ts b/src/main/native-chat/agent-session-journal/journal-failure-history.test.ts
+index e66e8470f15..1703616237e 100644
+--- a/src/main/native-chat/agent-session-journal/journal-failure-history.test.ts
++++ b/src/main/native-chat/agent-session-journal/journal-failure-history.test.ts
+@@ -25,6 +25,36 @@ afterEach(async () => {
+   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+ })
+ 
++it('continues past a legacy page without waiting messages', async () => {
++  const root = await mkdtemp(join(tmpdir(), 'journal-failed-sparse-history-'))
++  roots.push(root)
++  const { db: source } = openJournalDatabase(journalDatabasePath(root))
++  for (let n = 0; n < 33; n++) {
++    const sessionId = `empty-${String(n).padStart(2, '0')}`
++    publishJournalSessionEpoch(source, { sessionId, workspaceId: 'workspace' }, 'epoch')
++    publishJournalOutcomeEpoch(source, sessionId, 'epoch', journalSqlRetryRows(false))
++  }
++  source.close()
++  const db = await JournalSqlDatabase.open(root, {
++    readerPath: journalSqlReaderPath(),
++    writerPath: journalSqlWorkerPath(),
++    onMaintenanceError: (error) => {
++      throw error
++    }
++  })
++  databases.push(db)
++  expect(await db.readers.database({ kind: 'failed-candidates', after: null })).toEqual({
++    kind: 'failed-candidates',
++    sessionIds: [],
++    nextAfter: 'empty-31'
++  })
++  expect(await db.readers.database({ kind: 'failed-candidates', after: 'empty-31' })).toEqual({
++    kind: 'failed-candidates',
++    sessionIds: [],
++    nextAfter: null
++  })
++})
++
+ it('discovers historical waiting sessions in bounded pages and retains failure identity after source rebuild', async () => {
+   const root = await mkdtemp(join(tmpdir(), 'journal-failed-history-'))
+   roots.push(root)
+@@ -78,7 +108,8 @@ it('discovers historical waiting sessions in bounded pages and retains failure i
+   expect(candidates).not.toMatchObject({ sessionIds: expect.arrayContaining(['saved-32']) })
+   expect(await db.readers.database({ kind: 'failed-candidates', after: 'saved-31' })).toEqual({
+     kind: 'failed-candidates',
+-    sessionIds: ['saved-32']
++    sessionIds: ['saved-32'],
++    nextAfter: null
+   })
+   const published: string[] = []
+   db.watchConverted((id) => published.push(id))
+diff --git a/src/main/native-chat/agent-session-journal/journal-sql-database-read.ts b/src/main/native-chat/agent-session-journal/journal-sql-database-read.ts
+index 57cf8bea25f..861533299ed 100644
+--- a/src/main/native-chat/agent-session-journal/journal-sql-database-read.ts
++++ b/src/main/native-chat/agent-session-journal/journal-sql-database-read.ts
+@@ -31,7 +31,7 @@ export type JournalSqlDatabaseReadResult =
+   | { kind: 'receipt'; receipt: ReturnType<typeof readCommandReceipt> }
+   | { kind: 'epoch'; epoch: string | null }
+   | { kind: 'sessions'; sessionIds: string[] }
+-  | { kind: 'failed-candidates'; sessionIds: string[] }
++  | { kind: 'failed-candidates'; sessionIds: string[]; nextAfter: string | null }
+   | {
+       kind: 'retired-heads'
+       heads: { sessionId: string; epoch: string }[]
+diff --git a/src/main/native-chat/agent-session-journal/journal-sql-queue-read.ts b/src/main/native-chat/agent-session-journal/journal-sql-queue-read.ts
+index 723c9848950..0b8216ae39a 100644
+--- a/src/main/native-chat/agent-session-journal/journal-sql-queue-read.ts
++++ b/src/main/native-chat/agent-session-journal/journal-sql-queue-read.ts
+@@ -1,3 +1,4 @@
++import type { JournalFailureEnqueueAuthority } from './journal-failure-authority'
+ import type { JournalCurrentWorkAuthority } from './journal-observer-read'
+ import {
+   selectJournalEligibleQueueCard,
+@@ -60,7 +61,7 @@ export type JournalSqlQueueReadResult =
+   | { kind: 'revision'; revision: string }
+   | { kind: 'cleared-through'; sequence: number }
+   | { kind: 'next-input-card'; card: QueuedMessageRow | null }
+-  | { kind: 'failure-holds'; held: boolean }
++  | { kind: 'failure-holds'; held: boolean; authority?: JournalFailureEnqueueAuthority }
+   | { kind: 'held-delivery'; delivery: AgentSessionHeldDelivery | null }
+   | { kind: 'pauses'; pauses: DerivedQueuePause[] }
+   | { kind: 'user-stop-in-force'; stop: JournalLatestStop | null }
+@@ -150,13 +151,14 @@ export function readJournalSqlQueue(
+       })
+       return { kind: 'next-input-card', card: selected.kind === 'selected' ? selected.card : null }
+     }
+-    case 'failure-holds':
++    case 'failure-holds': {
++      const context = readJournalDomainQueuePauseContext(db, target, facts.reopenFloor, [])
+       return {
+         kind: 'failure-holds',
+-        held: readJournalDomainQueuePauseContext(db, target, facts.reopenFloor, []).pauses.some(
+-          (pause) => pause.reason === 'failed'
+-        )
++        authority: context.failureResumeAuthority,
++        held: context.pauses.some((pause) => pause.reason === 'failed')
+       }
++    }
+     case 'held-delivery':
+       return {
+         kind: 'held-delivery',
+diff --git a/src/main/native-chat/agent-session-journal/journal-sql-queued-messages.ts b/src/main/native-chat/agent-session-journal/journal-sql-queued-messages.ts
+index 21ee5e4f41a..b98f6f7c35c 100644
+--- a/src/main/native-chat/agent-session-journal/journal-sql-queued-messages.ts
++++ b/src/main/native-chat/agent-session-journal/journal-sql-queued-messages.ts
+@@ -108,7 +108,11 @@ export class SqlJournalQueuedMessages {
+   }
+ 
+   async failureHolds(): Promise<boolean> {
+-    return (await this.read({ kind: 'failure-holds' }, 'failure-holds')).held
++    return (await this.failureGate()).held
++  }
++
++  async failureGate() {
++    return this.read({ kind: 'failure-holds' }, 'failure-holds')
+   }
+ 
+   async heldDelivery() {
+diff --git a/src/main/native-chat/agent-session-journal/journal-sql-reader-entry.ts b/src/main/native-chat/agent-session-journal/journal-sql-reader-entry.ts
+index 104355b5bd6..995f9e11f74 100644
+--- a/src/main/native-chat/agent-session-journal/journal-sql-reader-entry.ts
++++ b/src/main/native-chat/agent-session-journal/journal-sql-reader-entry.ts
+@@ -119,20 +119,32 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
+             .get()
+           const legacy =
+             (originalHasOutcomes ? original : undefined)
+-              ?.prepare(`SELECT e.session_id FROM journal_outcome_epochs e
+-            WHERE e.session_id>? AND EXISTS(SELECT 1 FROM journal_outcomes q INDEXED BY journal_outcome_keys
++              ?.prepare(`WITH page AS MATERIALIZED (SELECT session_id,generation FROM journal_outcome_epochs
++                WHERE session_id>? ORDER BY session_id LIMIT 32)
++            SELECT e.session_id,EXISTS(SELECT 1 FROM journal_outcomes q INDEXED BY journal_outcome_keys
+               WHERE q.generation=e.generation AND q.field='queue.cards' AND q.deleted=0
+                 AND json_extract(q.value_json,'$[1].state')='waiting'
+                 AND NOT EXISTS(SELECT 1 FROM journal_outcomes newer INDEXED BY journal_outcome_keys
+-                  WHERE newer.generation=q.generation AND newer.field=q.field AND newer.entry_key=q.entry_key AND newer.seq>q.seq))
+-            ORDER BY e.session_id LIMIT 32`)
++                  WHERE newer.generation=q.generation AND newer.field=q.field AND newer.entry_key=q.entry_key AND newer.seq>q.seq)) AS candidate
++            FROM page e ORDER BY e.session_id`)
+               .all(after) ?? []
+-          const sessionIds = [
+-            ...new Set([...candidates, ...legacy].map((row) => String(row.session_id)))
+-          ]
++          const boundaries = [candidates, legacy]
++            .filter((rows) => rows.length === 32)
++            .map((rows) => String(rows.at(-1)!.session_id))
+             .sort()
+-            .slice(0, 32)
+-          reply({ type: 'database', id, result: { kind: 'failed-candidates', sessionIds } })
++          const nextAfter = boundaries[0] ?? null
++          const sessionIds = [
++            ...new Set(
++              [...candidates, ...legacy.filter((row) => row.candidate)]
++                .map((row) => String(row.session_id))
++                .filter((id) => nextAfter === null || id <= nextAfter)
++            )
++          ].sort()
++          reply({
++            type: 'database',
++            id,
++            result: { kind: 'failed-candidates', sessionIds, nextAfter }
++          })
+           break
+         }
+         reply({ type: 'database', id, result: readJournalSqlDatabase(db, operation.operation) })
+diff --git a/src/main/native-chat/agent-session-wire/delivery/structured-agent-session-delivery-loop-deps.ts b/src/main/native-chat/agent-session-wire/delivery/structured-agent-session-delivery-loop-deps.ts
+index e78d16636b9..6e9e45d5de9 100644
+--- a/src/main/native-chat/agent-session-wire/delivery/structured-agent-session-delivery-loop-deps.ts
++++ b/src/main/native-chat/agent-session-wire/delivery/structured-agent-session-delivery-loop-deps.ts
+@@ -1,3 +1,4 @@
++import type { JournalFailureEnqueueFence } from '../../agent-session-journal/journal-failure-authority'
+ import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+ import type { UnsentSendHold } from '../../agent-session-journal/queued-messages/journal-unsent-send-hold'
+ import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
+@@ -21,6 +22,7 @@ import type {
+ } from '../host/structured-agent-session-host-types'
+ 
+ export type StructuredAgentSessionDeliveryLoopDeps = {
++  withFailureResumeAuthority?: JournalFailureEnqueueFence
+   startFlights?: Pick<StructuredAgentSessionStartFlights, 'get'>
+   activityChanged?: (sessionId: string) => void
+   deliveryOrder: StructuredAgentSessionDeliveryOrder
+diff --git a/src/main/native-chat/agent-session-wire/delivery/structured-agent-session-host-delivery.ts b/src/main/native-chat/agent-session-wire/delivery/structured-agent-session-host-delivery.ts
+index 9bfed79bc7d..d049b3144aa 100644
+--- a/src/main/native-chat/agent-session-wire/delivery/structured-agent-session-host-delivery.ts
++++ b/src/main/native-chat/agent-session-wire/delivery/structured-agent-session-host-delivery.ts
+@@ -1,5 +1,4 @@
+ import { selectableStructuredSubmission } from './structured-agent-session-input-selection'
+-// Open conversations with queued sends always need delivery; opening also wakes leftover recovery.
+ 
+ import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
+ import { hostStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-host-current-work'
+@@ -105,6 +104,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
+       [...(sessions.get(sessionId)?.child?.heldSends?.() ?? [])].some((id) => id !== continuingId)
+   })
+   const loop = new StructuredAgentSessionDeliveryLoop({
++    withFailureResumeAuthority: deps.withFailureResumeAuthority,
+     activityChanged: (id) => sessions.get(id)?.workChanged?.(),
+     sessions,
+     adapter: deps.adapter,
+@@ -277,7 +277,6 @@ export function createStructuredAgentSessionConversationDelivery(input: {
+   // Queue death-proof revisions without awaiting: the writer may already hold session serialization.
+   const stopResettling = deps.store.onDeathEvidence((sessionId) => {
+     const session = sessions.get(sessionId)
+-    // User-close retires its handle; the next open can derive proof.
+     if (session && session.child?.close?.cause !== 'user-close') {
+       void input
+         .trackStart(
+diff --git a/src/main/native-chat/agent-session-wire/delivery/structured-agent-session-input-handover.ts b/src/main/native-chat/agent-session-wire/delivery/structured-agent-session-input-handover.ts
+index c77de3768e7..8900a449ec9 100644
+--- a/src/main/native-chat/agent-session-wire/delivery/structured-agent-session-input-handover.ts
++++ b/src/main/native-chat/agent-session-wire/delivery/structured-agent-session-input-handover.ts
+@@ -91,8 +91,15 @@ export async function beginStructuredAgentSessionInputHandover(
+             return { kind: 'acquire' as const, reason: 'permission' as const }
+           }
+           const retained = await deps.retainedWork?.(sessionId, next.clientMessageId)
+-          await validate(signal)
+-          admission = enqueue(mode ?? 'own', retained === true, body)
++          const authority = await validate(signal)
++          const write = () => (admission = enqueue(mode ?? 'own', retained === true, body))
++          if (authority) {
++            if (!deps.withFailureResumeAuthority) {
++              throw new StructuredAgentSessionInputNotAdmitted()
++            }
++            return deps.withFailureResumeAuthority(authority, write)
++          }
++          admission = write()
+           return admission
+         })
+         try {
+diff --git a/src/main/native-chat/agent-session-wire/delivery/structured-agent-session-input-readiness.ts b/src/main/native-chat/agent-session-wire/delivery/structured-agent-session-input-readiness.ts
+index 6113a9dcc89..3b43c5057ca 100644
+--- a/src/main/native-chat/agent-session-wire/delivery/structured-agent-session-input-readiness.ts
++++ b/src/main/native-chat/agent-session-wire/delivery/structured-agent-session-input-readiness.ts
+@@ -14,6 +14,7 @@ import { structuredAgentSessionCommandRunning } from '../operations/structured-a
+ import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
+ import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
+ import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session/agent-session-approval-subject'
++import type { JournalFailureEnqueueAuthority } from '../../agent-session-journal/journal-failure-authority'
+ 
+ /** Queue conversion and provider handoff use the same live child acceptance rule. */
+ export function structuredAgentSessionChildAcceptsInput(input: {
+@@ -36,19 +37,24 @@ export async function structuredAutomaticMailWaits(
+   journal: AgentSessionJournal,
+   submission: AgentJournalSubmission,
+   work: StructuredAgentSessionObservedWork | null
+-): Promise<boolean> {
++): Promise<{ held: boolean; authority?: JournalFailureEnqueueAuthority }> {
+   if (
+     submission.origin !== 'host' ||
+     submission.queuedMessageId === undefined ||
+     (await journal.queuedMessages.get(submission.queuedMessageId))?.consumedAs !==
+       submission.clientMessageId
+   ) {
+-    return false
++    return { held: false }
++  }
++  const failure = await journal.queuedMessages.failureGate()
++  return {
++    ...failure,
++    held:
++      failure.held ||
++      Boolean(
++        work?.hasActionablePrompt() && !pendingPromptsAllUnanswerableHere(work.actionablePrompts())
++      )
+   }
+-  return Boolean(
+-    (await journal.queuedMessages.failureHolds()) ||
+-    (work?.hasActionablePrompt() && !pendingPromptsAllUnanswerableHere(work.actionablePrompts()))
+-  )
+ }
+ 
+ /** Rechecked on the host lane before preparation and the synchronous provider enqueue. */
+@@ -60,7 +66,7 @@ export async function assertStructuredAgentSessionInputReady(input: {
+   next: AgentJournalSubmission
+   disposed: boolean
+   signal?: AbortSignal
+-}): Promise<void> {
++}): Promise<JournalFailureEnqueueAuthority | undefined> {
+   const { deps, sessionId, session, binding, next, disposed, signal } = input
+   const work = await deps.currentWork(sessionId)
+   const waits = await structuredAutomaticMailWaits(session.journal, next, work)
+@@ -90,7 +96,7 @@ export async function assertStructuredAgentSessionInputReady(input: {
+       )
+     })
+   }
+-  if (waits) {
++  if (waits.held) {
+     throw new StructuredAgentSessionInputNotAdmitted({
+       state: 'rejected',
+       ...agentSessionFailureWords(
+@@ -99,4 +105,5 @@ export async function assertStructuredAgentSessionInputReady(input: {
+       )
+     })
+   }
++  return waits.authority
+ }
+diff --git a/src/main/native-chat/agent-session-wire/host/structured-agent-session-host-tabs.ts b/src/main/native-chat/agent-session-wire/host/structured-agent-session-host-tabs.ts
+index 0e9828037b8..4fbac118080 100644
+--- a/src/main/native-chat/agent-session-wire/host/structured-agent-session-host-tabs.ts
++++ b/src/main/native-chat/agent-session-wire/host/structured-agent-session-host-tabs.ts
+@@ -158,11 +158,14 @@ export function createStructuredAgentSessionTabSurface(
+           kind: 'failed-candidates',
+           after
+         })
+-        if (page.kind !== 'failed-candidates' || page.sessionIds.length === 0) {
++        if (page.kind !== 'failed-candidates') {
+           break
+         }
+         publishFailures(await Promise.all(page.sessionIds.map(savedFailure)))
+-        after = page.sessionIds.at(-1)!
++        after = page.nextAfter
++        if (after === null) {
++          break
++        }
+       }
+     },
+     getPersistedVisibleSessionTabIndex: () => host.deps.store.getVisibleSessionTabIndex(),
+diff --git a/src/main/native-chat/agent-session-wire/host/structured-agent-session-host-types.ts b/src/main/native-chat/agent-session-wire/host/structured-agent-session-host-types.ts
+index 1379d9fb25b..5be2eddebef 100644
+--- a/src/main/native-chat/agent-session-wire/host/structured-agent-session-host-types.ts
++++ b/src/main/native-chat/agent-session-wire/host/structured-agent-session-host-types.ts
+@@ -1,3 +1,4 @@
++import type { JournalFailureEnqueueFence } from '../../agent-session-journal/journal-failure-authority'
+ import type {
+   AgentModelCatalogSource,
+   AgentModelCatalogService
+@@ -209,6 +210,7 @@ export type StructuredAgentSessionHostDeps = {
+   hasOwedSwitchWork?: (record: AgentSessionRecord) => boolean
+   /** Read-only custody for an agent's queued mail; absent: always owed. */
+   queuedAgentMessageOwed?: (sessionId: string, from: AgentMessageSource) => QueuedMessageOwed
++  withFailureResumeAuthority?: JournalFailureEnqueueFence
+   /** Advisory tab-hidden notice; failures are logged. */
+   onSessionTabHidden?: (sessionId: string, tabId?: string) => void
+   /** Throws while a terminal may still write the record's head conversation; run before a spawn. */
+diff --git a/src/main/runtime/agent-session/installation/structured-agent-session-host-assembly.ts b/src/main/runtime/agent-session/installation/structured-agent-session-host-assembly.ts
+index 5ca49b58601..2ba48703498 100644
+--- a/src/main/runtime/agent-session/installation/structured-agent-session-host-assembly.ts
++++ b/src/main/runtime/agent-session/installation/structured-agent-session-host-assembly.ts
+@@ -91,6 +91,9 @@ export async function installOnJournal(
+       : {}),
+     ...(deps.hasOpenDispatch ? { hasOpenDispatch: deps.hasOpenDispatch } : {}),
+     ...(deps.queuedAgentMessageOwed ? { queuedAgentMessageOwed: deps.queuedAgentMessageOwed } : {}),
++    ...(deps.withFailureResumeAuthority
++      ? { withFailureResumeAuthority: deps.withFailureResumeAuthority }
++      : {}),
+     ...(deps.startupLimits ? { startupLimits: deps.startupLimits } : {}),
+     ...(deps.onSessionTabHidden ? { onSessionTabHidden: deps.onSessionTabHidden } : {}),
+     ...(deps.launchAccountHome ? { launchAccountHome: deps.launchAccountHome } : {}),
+diff --git a/src/main/runtime/agent-session/installation/structured-agent-session-runtime-contract.ts b/src/main/runtime/agent-session/installation/structured-agent-session-runtime-contract.ts
+index c21b44ae013..5ec8ba53a24 100644
+--- a/src/main/runtime/agent-session/installation/structured-agent-session-runtime-contract.ts
++++ b/src/main/runtime/agent-session/installation/structured-agent-session-runtime-contract.ts
+@@ -69,6 +69,7 @@ export type StructuredAgentSessionRuntimeDeps = StructuredAgentSessionTransportO
+   hasOpenDispatch?: StructuredAgentSessionHostDeps['hasOpenDispatch']
+   /** See `StructuredAgentSessionHostDeps.queuedAgentMessageOwed`. */
+   queuedAgentMessageOwed?: StructuredAgentSessionHostDeps['queuedAgentMessageOwed']
++  withFailureResumeAuthority?: StructuredAgentSessionHostDeps['withFailureResumeAuthority']
+   resolveCodexAccountKind?: (home: string) => AgentSessionAccountKind | undefined
+   /** Launch prep's sync for a probed home; see `CodexModelCatalogProbeDeps.prepareHome`. */
+   prepareCodexCatalogProbeHome?: (homePath: string) => void
+diff --git a/src/main/runtime/orchestration/db/failure-resume-enqueue.ts b/src/main/runtime/orchestration/db/failure-resume-enqueue.ts
+new file mode 100644
+index 00000000000..ddd84f68017
+--- /dev/null
++++ b/src/main/runtime/orchestration/db/failure-resume-enqueue.ts
+@@ -0,0 +1,50 @@
++import type { OrchestrationDb } from './orchestration-db'
++import { runLifecycleWriteTransaction } from './lifecycle-write-transaction-runner'
++import type { JournalFailureEnqueueAuthority } from '../../../native-chat/agent-session-journal/journal-failure-authority'
++import { StructuredAgentSessionInputNotAdmitted } from '../../../native-chat/agent-session-wire/delivery/structured-agent-session-input-admission'
++
++export function failureResumeAuthoritySnapshot(
++  run: NonNullable<ReturnType<OrchestrationDb['getRun']>>,
++  dispatch: NonNullable<ReturnType<OrchestrationDb['getDispatchContextById']>>
++): string {
++  return JSON.stringify([
++    run.id,
++    run.consumer_generation,
++    run.coordinator_handle,
++    run.coordinator_pane_key,
++    run.coordinator_orca_session_id_generation === run.consumer_generation
++      ? run.coordinator_orca_session_id
++      : null,
++    dispatch.id,
++    dispatch.status,
++    dispatch.consumer_generation,
++    dispatch.assignee_handle,
++    dispatch.assignee_orca_session_id,
++    dispatch.assignee_pane_key,
++    dispatch.process_incarnation,
++    dispatch.host_scope,
++    dispatch.capability_revoked_at
++  ])
++}
++
++/** The authority writer stays fenced through the synchronous provider write; no await owns this lock. */
++export function withFailureResumeAuthority<T>(
++  db: OrchestrationDb,
++  authority: JournalFailureEnqueueAuthority,
++  enqueue: () => T
++): T {
++  return runLifecycleWriteTransaction(db.db, 'failure_resume_enqueue', () => {
++    const dispatch = db.getDispatchContextById(authority.dispatchId)
++    const run = dispatch && db.getRun(dispatch.run_id)
++    if (
++      !dispatch ||
++      dispatch.status !== 'dispatched' ||
++      !run ||
++      run.id !== authority.runId ||
++      failureResumeAuthoritySnapshot(run, dispatch) !== authority.snapshot
++    ) {
++      throw new StructuredAgentSessionInputNotAdmitted()
++    }
++    return enqueue()
++  })
++}
+diff --git a/src/main/runtime/orchestration/terminal-authority/structured-sessions/structured-chat-coordinator-mail-rig.test-fixture.ts b/src/main/runtime/orchestration/terminal-authority/structured-sessions/structured-chat-coordinator-mail-rig.test-fixture.ts
+index 1bfe6a854d7..1fc3f1f7230 100644
+--- a/src/main/runtime/orchestration/terminal-authority/structured-sessions/structured-chat-coordinator-mail-rig.test-fixture.ts
++++ b/src/main/runtime/orchestration/terminal-authority/structured-sessions/structured-chat-coordinator-mail-rig.test-fixture.ts
+@@ -1,3 +1,4 @@
++import { withFailureResumeAuthority } from '../../db/failure-resume-enqueue'
+ import { readTestHostJournal } from '../../../../native-chat/agent-session-journal/journal-observation.test-support'
+ // End-to-end coordinator-mail rig: real session/orchestration state and RPC, fake Codex child. Import registers lifecycle hooks.
+ 
+@@ -266,6 +267,8 @@ beforeEach(async () => {
+       runtime.onStructuredSessionStatusForMail(summary)
+     },
+     onSessionTabHidden: (sessionId) => runtime.onStructuredSessionTabHidden(sessionId),
++    withFailureResumeAuthority: (authority, enqueue) =>
++      withFailureResumeAuthority(db, authority, enqueue),
+     queuedAgentMessageOwed: (sessionId, from) => runtime.structuredChatMailOwed(sessionId, from)
+   })
+   dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
+diff --git a/src/main/runtime/orchestration/terminal-authority/structured-sessions/structured-chat-held-mail.test.ts b/src/main/runtime/orchestration/terminal-authority/structured-sessions/structured-chat-held-mail.test.ts
+index 9b5a981ce6f..fb9a9ac5f54 100644
+--- a/src/main/runtime/orchestration/terminal-authority/structured-sessions/structured-chat-held-mail.test.ts
++++ b/src/main/runtime/orchestration/terminal-authority/structured-sessions/structured-chat-held-mail.test.ts
+@@ -15,9 +15,12 @@ import {
+   settleTurn
+ } from './structured-chat-coordinator-mail-rig.test-fixture'
+ import { JournalSqlOwner } from '../../../../native-chat/agent-session-journal/journal-sql-owner'
+-import { runProcess } from '@orca/process-host'
++import { runProcess, runProcessSync } from '@orca/process-host'
+ import { join } from 'node:path'
+ import { OrchestrationError } from '../../orchestration-error'
++import { SqlJournalQueuedMessages } from '../../../../native-chat/agent-session-journal/journal-sql-queued-messages'
++import { readTestHostJournal } from '../../../../native-chat/agent-session-journal/journal-observation.test-support'
++import * as failureAuthority from '../../db/failure-resume-enqueue'
+ 
+ it('keeps group recipient outcomes negative for legacy retries without duplicating mail', async () => {
+   const { dispatchId } = await failedWorker()
+@@ -266,6 +269,127 @@ it.each(['before commit', 'after commit', 'other process', 'settled before', 'se
+   }
+ )
+ 
++it.each(['before enqueue', 'during enqueue'])(
++  'fences a separate authority writer %s',
++  async (edge) => {
++    const { dispatchId, worker } = await failedWorker()
++    const to = `dispatch:${dispatchId}`
++    const held = await call(
++      'orchestration.send',
++      { to, subject: 'saved work', deliveryOutcome: true },
++      { sessionId: COORDINATOR }
++    )
++    const runId = db.getDispatchContextById(dispatchId)!.run_id
++    const node =
++      process.env.ORCA_TEST_NODE_EXECUTABLE ??
++      (!process.versions.bun ? process.execPath : undefined)
++    if (!node) {
++      throw new Error('test requires the pinned Node runtime')
++    }
++    const update = {
++      program: node,
++      args: [
++        '-e',
++        "const { DatabaseSync } = require('node:sqlite'); const db = new DatabaseSync(process.argv[1], { timeout: 0 }); db.prepare('UPDATE runs SET consumer_generation=consumer_generation+1 WHERE id=?').run(process.argv[2]); db.close()",
++        join(root, 'orchestration.db'),
++        runId
++      ],
++      cwd: root
++    }
++    let handedOver = false
++    let changed = false
++    const write = JournalSqlOwner.prototype.write
++    const writer = vi.spyOn(JournalSqlOwner.prototype, 'write').mockImplementation(async function (
++      this: JournalSqlOwner,
++      command
++    ) {
++      const result = await write.call(this, command)
++      if (command.target.sessionId === PEER_CHAT && command.operation.kind === 'handover') {
++        handedOver = true
++      }
++      return result
++    })
++    const read = SqlJournalQueuedMessages.prototype.failureGate
++    const gate = vi
++      .spyOn(SqlJournalQueuedMessages.prototype, 'failureGate')
++      .mockImplementation(async function (this: SqlJournalQueuedMessages) {
++        const result = await read.call(this)
++        if (edge === 'before enqueue' && handedOver && result.authority && !changed) {
++          changed = true
++          const written = await runProcess(update)
++          expect(written, written.stderr).toMatchObject({ code: 0 })
++        }
++        return result
++      })
++    const fence = failureAuthority.withFailureResumeAuthority
++    const fenced = vi
++      .spyOn(failureAuthority, 'withFailureResumeAuthority')
++      .mockImplementation((database, authority, enqueue) =>
++        fence(database, authority, () => {
++          if (edge === 'during enqueue' && !changed) {
++            changed = true
++            const written = runProcessSync(update)
++            expect(written.code).not.toBe(0)
++            expect(written.stderr).toMatch(/locked/)
++          }
++          return enqueue()
++        })
++      )
++    try {
++      await call(
++        'orchestration.send',
++        { to, resume: true, expectedFailureId: held.failureId, deliveryOutcome: true },
++        { sessionId: COORDINATOR }
++      )
++      await vi.waitFor(async () => {
++        expect(changed).toBe(true)
++        if (edge === 'during enqueue') {
++          expect(worker.turns).toHaveLength(2)
++        } else {
++          expect((await readTestHostJournal(host, PEER_CHAT)).submissions).toEqual(
++            expect.arrayContaining([expect.objectContaining({ dispatchState: 'rejected' })])
++          )
++        }
++      }, WAIT)
++      if (edge === 'before enqueue') {
++        expect(worker.turns).toHaveLength(1)
++      } else {
++        expect(runProcessSync(update).code).toBe(0)
++      }
++    } finally {
++      writer.mockRestore()
++      gate.mockRestore()
++      fenced.mockRestore()
++    }
++  }
++)
++
++it('replays worker completion without ordinary-mail delivery presentation or another settlement', async () => {
++  const { dispatchId } = await failedWorker()
++  const dispatch = db.getDispatchContextById(dispatchId)!
++  const input = request(
++    'orchestration.send',
++    {
++      type: 'worker_done',
++      subject: 'Done',
++      payload: JSON.stringify({ taskId: dispatch.task_id, dispatchId, outcome: 'succeeded' })
++    },
++    { sessionId: PEER_CHAT }
++  )
++  const first = await dispatcher.dispatch(input)
++  expect(first).toMatchObject({ ok: true, result: { lifecycle: { action: 'completed' } } })
++  const replay = await dispatcher.dispatch(input)
++  expect(replay).toMatchObject({ ok: true, result: { lifecycle: { action: 'completed' } } })
++  if (!first.ok || !replay.ok) {
++    throw new Error('completion failed')
++  }
++  expect(replay.result).not.toHaveProperty('state', 'queued')
++  expect(db.getTask(dispatch.task_id)?.status).toBe('completed')
++  expect(
++    db.getUnreadMessages(`run:${dispatch.run_id}`).filter((row) => row.subject === 'Done')
++  ).toHaveLength(1)
++})
++
+ it('serializes distinct coordinator recoveries of one observed failure', async () => {
+   const { dispatchId, worker } = await failedWorker()
+   const to = `dispatch:${dispatchId}`
+diff --git a/src/main/runtime/rpc/methods/orchestration/federation/peer-mail.test.ts b/src/main/runtime/rpc/methods/orchestration/federation/peer-mail.test.ts
+index a18cd9064fb..5322c7ad135 100644
+--- a/src/main/runtime/rpc/methods/orchestration/federation/peer-mail.test.ts
++++ b/src/main/runtime/rpc/methods/orchestration/federation/peer-mail.test.ts
+@@ -125,7 +125,7 @@ describe('agent mail between paired Orca servers', () => {
+       orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
+       orchestrationRequestId: `request_${requestCount}`,
+       method,
+-      params
++      params: method === 'orchestration.send' ? { ...params, deliveryOutcome: true } : params
+     })
+   }
+ 
+@@ -148,6 +148,45 @@ describe('agent mail between paired Orca servers', () => {
+     return side.db.getUnreadMessages(handle)
+   }
+ 
++  it.each([false, true])(
++    'keeps paired-server custody unconfirmed on replay without resending, upgraded=%s',
++    async (upgraded) => {
++      const input = {
++        id: 'peer-saved-send',
++        authToken: 'local',
++        orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
++        orchestrationRequestId: 'peer-saved-send',
++        method: 'orchestration.send',
++        params: {
++          from: 'term_a',
++          on: 'devB',
++          to: 'term_b',
++          subject: 'one remote instruction',
++          ...(upgraded ? { deliveryOutcome: true } : {})
++        }
++      }
++      for (let n = 0; n < 2; n++) {
++        expect(await a.dispatcher.dispatch(input)).toMatchObject(
++          upgraded
++            ? {
++                ok: true,
++                result: { delivered: false, state: 'unknown', target: { address: 'term_b' } }
++              }
++            : {
++                ok: false,
++                error: {
++                  code: 'recipient_delivery_unconfirmed',
++                  data: { delivered: false, state: 'unknown' }
++                }
++              }
++        )
++      }
++      expect(
++        mailFor(b, 'term_b').filter((row) => row.subject === 'one remote instruction')
++      ).toHaveLength(1)
++    }
++  )
++
+   it('carries a terminal agent mail to the paired server and its flagless reply back', async () => {
+     const sent = await mutation(a, 'orchestration.send', {
+       from: 'term_a',
+diff --git a/src/main/runtime/rpc/methods/orchestration/messaging/peer-mail-send.ts b/src/main/runtime/rpc/methods/orchestration/messaging/peer-mail-send.ts
+index 5c87806fb78..aeea749dcc7 100644
+--- a/src/main/runtime/rpc/methods/orchestration/messaging/peer-mail-send.ts
++++ b/src/main/runtime/rpc/methods/orchestration/messaging/peer-mail-send.ts
+@@ -13,6 +13,7 @@ import {
+ import type { RpcContext } from '../../../core'
+ import { recordReceiptBeforeNudge } from './mutation-replay-nudge'
+ import type { SendParams } from './send-params'
++import { unknownStoredDelivery } from './send-delivery-hold'
+ 
+ const NOTHING_SENT = { effectsApplied: false } as const
+ 
+@@ -101,7 +102,7 @@ export async function sendPeerMail(args: {
+   })
+   return recordReceiptBeforeNudge(
+     args.recordMutationReceipt,
+-    { message: { id, to }, server: server.name },
++    unknownStoredDelivery({ message: { id, to }, server: server.name }, to),
+     () => runtime.ensureOrchestrationFederationRelay(),
+     { kind: 'federation' }
+   )
+diff --git a/src/main/runtime/rpc/methods/orchestration/messaging/resume-worker-failure.ts b/src/main/runtime/rpc/methods/orchestration/messaging/resume-worker-failure.ts
+index 1a439625c4f..530e6fefcdc 100644
+--- a/src/main/runtime/rpc/methods/orchestration/messaging/resume-worker-failure.ts
++++ b/src/main/runtime/rpc/methods/orchestration/messaging/resume-worker-failure.ts
+@@ -1,3 +1,4 @@
++import { failureResumeAuthoritySnapshot } from '../../../../orchestration/db/failure-resume-enqueue'
+ import type { z } from 'zod'
+ import type { SendParams } from './send-params'
+ import type { RpcContext } from '../../../core'
+@@ -72,24 +73,7 @@ export async function resumeWorkerFailure(
+   const run = db.getRun(dispatch.run_id)!
+   const authorization = {
+     runId: run.id,
+-    snapshot: JSON.stringify([
+-      run.id,
+-      run.consumer_generation,
+-      run.coordinator_handle,
+-      run.coordinator_pane_key,
+-      run.coordinator_orca_session_id_generation === run.consumer_generation
+-        ? run.coordinator_orca_session_id
+-        : null,
+-      dispatch.id,
+-      dispatch.status,
+-      dispatch.consumer_generation,
+-      dispatch.assignee_handle,
+-      dispatch.assignee_orca_session_id,
+-      dispatch.assignee_pane_key,
+-      dispatch.process_incarnation,
+-      dispatch.host_scope,
+-      dispatch.capability_revoked_at
+-    ])
++    snapshot: failureResumeAuthoritySnapshot(run, dispatch)
+   }
+   const operationId = `${ctx.orchestrationMutation.callerFingerprint}:${ctx.orchestrationMutation.requestId}`
+   const result = await host.resumeFailure(
+diff --git a/src/main/runtime/rpc/methods/orchestration/messaging/send-replay.ts b/src/main/runtime/rpc/methods/orchestration/messaging/send-replay.ts
+index 2ab1311ded8..c1a19f8d22e 100644
+--- a/src/main/runtime/rpc/methods/orchestration/messaging/send-replay.ts
++++ b/src/main/runtime/rpc/methods/orchestration/messaging/send-replay.ts
+@@ -29,8 +29,13 @@ export function replayAcceptedSend(
+   const replayNudge =
+     readMutationReplayNudge(replayedMutationReceipt) ??
+     (legacyReplayNudge ? { kind: 'messages' as const, targets: [legacyReplayNudge] } : undefined)
++  const lifecycle = params.type === 'worker_done' || params.type === 'heartbeat'
+   if (!replayNudge) {
+-    return { receipt: observeStoredSend(runtime, replayedMutationReceipt, caller) }
++    return {
++      receipt: lifecycle
++        ? replayedMutationReceipt
++        : observeStoredSend(runtime, replayedMutationReceipt, caller)
++    }
+   }
+   const db = runtime.getOrchestrationDb()
+   replayMutationNudge(runtime, replayNudge)
+@@ -42,7 +47,7 @@ export function replayAcceptedSend(
+   }
+   followThroughWorkerReport(runtime, db, settled)
+   const receipt = stripMutationReplayNudge(replayedMutationReceipt)
+-  return { receipt: observeStoredSend(runtime, receipt, caller) }
++  return { receipt: lifecycle ? receipt : observeStoredSend(runtime, receipt, caller) }
+ }
+ 
+ export function replayAcceptedSendForCaller(
+diff --git a/src/main/runtime/rpc/methods/orchestration/messaging/stored-message-delivery.ts b/src/main/runtime/rpc/methods/orchestration/messaging/stored-message-delivery.ts
+index 52ff8ca7075..1147662cc04 100644
+--- a/src/main/runtime/rpc/methods/orchestration/messaging/stored-message-delivery.ts
++++ b/src/main/runtime/rpc/methods/orchestration/messaging/stored-message-delivery.ts
+@@ -10,6 +10,17 @@ export async function observeStoredSend(
+   if (!receipt || typeof receipt !== 'object') {
+     return receipt
+   }
++  if (
++    'server' in receipt &&
++    'message' in receipt &&
++    receipt.message &&
++    typeof receipt.message === 'object'
++  ) {
++    const message = receipt.message
++    if ('to' in message && typeof message.to === 'string') {
++      return unknownStoredDelivery(receipt, message.to)
++    }
++  }
+   const messages =
+     'messages' in receipt && Array.isArray(receipt.messages)
+       ? receipt.messages
+diff --git a/src/main/runtime/workspaces/process-listing/workspace-process-listing.ts b/src/main/runtime/workspaces/process-listing/workspace-process-listing.ts
+index bc751c4ee87..f1317550482 100644
+--- a/src/main/runtime/workspaces/process-listing/workspace-process-listing.ts
++++ b/src/main/runtime/workspaces/process-listing/workspace-process-listing.ts
+@@ -1,3 +1,4 @@
++import { withFailureResumeAuthority } from '../../orchestration/db/failure-resume-enqueue'
+ import { getRepoHostIdentityForParts } from '../../../../shared/repository/repo-host-identity'
+ import { createRepoRowExecutionHostLookup } from '../../../../shared/execution-host/worktree-execution-host-resolution'
+ import { resolveWorktreeHostRouting } from '../catalog/worktree-launch-host-repo'
+@@ -145,7 +146,6 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
+       agentList: this.readAgentListPublication()
+     })
+ 
+-    // Apply per-host pagination so hosts sorting last cannot disappear behind a global cap (#18104).
+     const page = buildWorktreeListingPage(
+       [...summaries.values()].sort(compareWorktreePs),
+       limit,
+@@ -280,7 +280,6 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
+       prepareLaunchAccountHome: (record, launchDirectory) =>
+         this.prepareStructuredAgentLaunchAccountHome(record, launchDirectory),
+       onRequestFailure: (failure) => this.onStructuredRequestFailureForErrorMail(failure),
+-      // Structured chat has no CLI hooks; this projection drives first-work renaming.
+       onSessionStatusChanged: (summary, options) => {
+         this.crewChanges.notify(new Set(['status', 'names']))
+         this.onStructuredSessionStatusForMail(summary)
+@@ -295,6 +294,8 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
+       ...(this.structuredAgentStatusSinkFn ? { statusSink: this.structuredAgentStatusSinkFn } : {}),
+       conversationNaming: nameChat,
+       onSessionTabHidden: (sessionId) => this.onStructuredSessionTabHidden(sessionId),
++      withFailureResumeAuthority: (authority, enqueue) =>
++        withFailureResumeAuthority(this.getOrchestrationDb(), authority, enqueue),
+       queuedAgentMessageOwed: (sessionId, from) => this.structuredChatMailOwed(sessionId, from),
+       assertNoTerminalWriter: (record) => this.assertStructuredChatAcquireAdmissible(record),
+       attentionDelivery: createStructuredAttentionMobileDelivery({
+@@ -302,7 +303,6 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
+         readWorkspaceLabels: (scope) =>
+           readStructuredAttentionWorkspaceLabels(this.requireStore(), scope),
+         isWorkspaceMuted: (scope) => this.isWorkspaceNotificationMuted(scope.workspaceId),
+-        // The same contexts the session's chat row carries.
+         readOrchestration: (paneKey) => this.agentOrchestrationProjection.getForPaneKey(paneKey),
+         dispatch: (event) => this.mobileNotifications.dispatch(event),
+         reconcile: (state) => this.mobileNotifications.reconcileStructuredPromptAttention(state),
+@@ -313,11 +313,9 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
+           ...this.workerTurnStopReportDeps,
+           openExistingDb: () => this.getExistingOrchestrationDb()
+         }),
+-      // Re-read dispatch ownership each sweep; absence of a database cannot keep the worker alive.
+       hasOpenDispatch: (record) =>
+         structuredWorkerOwesWork(this.getOrchestrationDbIfAvailable?.() ?? null, record)
+     })
+-    // Starts watches not yet running once the host has served: a failed first start or a teardown retries here.
+     this.startPullRequestWatches()
+   }
+ }
