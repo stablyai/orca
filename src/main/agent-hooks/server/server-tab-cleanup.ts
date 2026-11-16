@@ -19,15 +19,16 @@ export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
     options?: Pick<EndedProcessReconciliationOptions, 'confirmedExit'>
   ): void {
     const identity = this.paneAgentIdentity(paneKey)
+    const shared = identity?.processTopology === 'shared'
     const { paneKeys, authorityChanged } = this.revokeProcessAuthority(paneKey)
     const { untouched } = this.reconcileEndedProcess(
       paneKeys,
-      {
-        ...options,
-        preserveResumeIdentity: !options?.confirmedExit || identity?.processTopology === 'shared'
-      },
+      { ...options, preserveResumeIdentity: !options?.confirmedExit && !shared },
       (key) => this.clearRevokedPaneState(key)
     )
+    if (shared) {
+      this.releaseSharedPaneConversation(paneKey, identity.status)
+    }
     for (const key of untouched) {
       this.clearTmuxInnerSubjects(key)
       this.clearPaneProcessState(key)

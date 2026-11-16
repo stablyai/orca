@@ -107,15 +107,32 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
   }
 
   protected recordPaneAgentExit(paneKey: string, endedPresence: AgentProcessPresence): void {
-    const paneKeys = new Set([this.resolvePaneKeyAlias(paneKey), paneKey])
-    for (const [aliasKey, alias] of this.legacyPaneKeyAliases) {
-      if (alias.stablePaneKey === this.resolvePaneKeyAlias(paneKey)) {
-        paneKeys.add(aliasKey)
-      }
-    }
+    const paneKeys = this.paneKeysWithAliases(paneKey)
     const exitedAt = Date.now()
     const status = this.paneAgentIdentity(paneKey)?.status
     recordAgentExit(this.agentExitedAtByPaneKey, paneKeys, endedPresence, exitedAt)
+    this.retirePaneResume(paneKeys, status, exitedAt)
+  }
+
+  /** A shared server's client left the pane; its conversation lives on there, never resumed here. */
+  protected releaseSharedPaneConversation(
+    paneKey: string,
+    status: PaneAgentIdentity['status']
+  ): void {
+    this.retirePaneResume(this.paneKeysWithAliases(paneKey), status, Date.now())
+  }
+
+  private paneKeysWithAliases(paneKey: string): Set<string> {
+    const stable = this.resolvePaneKeyAlias(paneKey)
+    const aliases = [...this.legacyPaneKeyAliases].filter(([, a]) => a.stablePaneKey === stable)
+    return new Set([stable, paneKey, ...aliases.map(([aliasKey]) => aliasKey)])
+  }
+
+  private retirePaneResume(
+    paneKeys: Set<string>,
+    status: PaneAgentIdentity['status'] | undefined,
+    exitedAt: number
+  ): void {
     for (const key of paneKeys) {
       const saved = this.terminalPaneLifecycle?.readSavedRecord?.(key)
       this.terminalPaneLifecycle?.retireSavedRecord?.(key, exitedAt)

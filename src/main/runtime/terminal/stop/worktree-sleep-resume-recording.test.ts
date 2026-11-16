@@ -247,7 +247,8 @@ describe('a hookless resumed Codex across wakes and shell-confirmed command fini
     ['suspended', ['148'], true],
     ['macOS suspended', ['146'], true],
     ['suspended, then another command', ['148', '0'], true],
-    ['macOS suspended, then another command', ['146', '0'], true]
+    ['macOS suspended, then another command', ['146', '0'], true],
+    ['macOS suspended, then a listing and another command', ['146', 'listing', '0'], true]
   ] as const)('%s', async (_, finishes, keepsRecovery) => {
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(1_000)
@@ -336,6 +337,17 @@ describe('a hookless resumed Codex across wakes and shell-confirmed command fini
         tick()
         if (status === 'unmarked') {
           await server.reconcilePaneProcessExit(PANE_KEY)
+        } else if (status === 'listing') {
+          // An inventory refresh (`orca worktree ps`) re-mints the restored surface's receipt.
+          const internals = runtime as unknown as {
+            ptysById: Map<string, unknown>
+            rememberRestoredOrchestrationAuthority(pty: unknown, handle: string, id: string): void
+          }
+          internals.rememberRestoredOrchestrationAuthority(
+            internals.ptysById.get('pty-3'),
+            'term-3',
+            'pty-3'
+          )
         } else {
           runtime.onPtyData('pty-3', `\x1b]133;C\x07\x1b]133;D;${status}\x07`, Date.now())
         }

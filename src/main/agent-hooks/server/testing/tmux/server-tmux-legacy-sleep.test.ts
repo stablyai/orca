@@ -122,7 +122,7 @@ it('does not recapture a detached tmux writer from its remaining live checkpoint
     prompt: 'In tmux'
   })
   await server.checkAgentPresenceSince(PANE, 0)
-  const saved: SleepingAgentSessionRecord = {
+  let saved: SleepingAgentSessionRecord | undefined = {
     paneKey: PANE,
     worktreeId: 'wt-1',
     agent: 'claude',
@@ -133,20 +133,23 @@ it('does not recapture a detached tmux writer from its remaining live checkpoint
     updatedAt: NOW,
     origin: 'live'
   }
-  const retireSavedRecord = vi.fn()
   server.setTerminalPaneLifecycle({
     ownsProcess: () => true,
-    isStopping: () => false,
-    isReversibleStop: () => false,
+    isStopping: () => true,
+    isReversibleStop: () => true,
     isPlaced: () => true,
     readSavedRecord: () => saved,
-    retireSavedRecord
+    retireSavedRecord: () => {
+      saved = undefined
+    }
   })
   // Detach ends the outer command, while the original agent remains under its server.
   runningPane(101, ...TMUX)
   server.retireProcessAuthority(PANE, { confirmedExit: true })
-  expect(retireSavedRecord).not.toHaveBeenCalled()
+  expect(saved).toBeUndefined()
   expect(server.row()).toBeUndefined()
+  // The sleep's physical stop must not promote a stale checkpoint into a pane-owned agent.
+  expect(server.settleTerminalPaneSleep(PANE, 'pty')).toBe(false)
   const capture = await captureWorktreeSleepResumeRecords({
     worktreeId: 'wt-1',
     paneKeysByPtyId: new Map([['pty', [PANE]]]),
@@ -157,5 +160,5 @@ it('does not recapture a detached tmux writer from its remaining live checkpoint
     checkAgentPresence: (key, since) => server.checkAgentPresenceSince(key, since ?? 0),
     capturedAt: NOW + 1_000
   })
-  expect(capture.get('pty')).toEqual({ records: [], retiredPaneKeys: [PANE] })
+  expect(capture.get('pty')?.records).toEqual([])
 })

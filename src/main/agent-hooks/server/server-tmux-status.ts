@@ -32,6 +32,8 @@ export abstract class AgentHookServerTmuxStatus extends AgentHookServerOpenCodeB
         if (this.getAgentStatusDisposition(paneKey) === 'suppress') {
           return
         }
+        // Read before the clear below drops the selected row, the only mark that it's shared.
+        const identity = this.paneAgentIdentity(paneKey)
         if (subject && !this.canonicalSubjectsByPane.has(paneKey)) {
           this.canonicalSubjectsByPane.set(
             paneKey,
@@ -41,6 +43,9 @@ export abstract class AgentHookServerTmuxStatus extends AgentHookServerOpenCodeB
         }
         this.clearTmuxSelectedStatus(paneKey, true)
         this.clearPaneState(paneKey, { preserveTmuxInnerSubjects: true, statusUnavailable: true })
+        if (identity?.processTopology === 'shared') {
+          this.releaseSharedPaneConversation(paneKey, identity.status)
+        }
       }
     })
     return this.tmuxOwner
