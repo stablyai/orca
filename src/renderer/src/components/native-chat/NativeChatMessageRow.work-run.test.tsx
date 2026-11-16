@@ -17,7 +17,7 @@ const unusedChatLeaves = vi.hoisted(() => ({
 vi.mock('./media/visuals/NativeChatInlineVisual', () => ({
   NativeChatInlineVisual: unusedChatLeaves.inlineVisual
 }))
-vi.mock('@/lib/open-agent-message-sender', () => ({
+vi.mock('@/lib/agent-session/open/open-agent-message-sender', () => ({
   openAgentMessageSender: unusedChatLeaves.openSender
 }))
 afterEach(() => {
