@@ -2,7 +2,13 @@ import {
   TEXT_ACTION_DEFAULT_MODEL,
   textActionArgumentsOwnModel
 } from '../../../../shared/agent-launch/picker/agent-launch-picker-text-action'
-import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog'
+import {
+  findCatalogModel,
+  getAgentSessionOptionLaunchCatalog
+} from '../../../../shared/agent-session/options/agent-session-option-catalog'
+import { claudeListedModelLabel } from '../../../../shared/agent-session/options/model-catalog/claude-model-list-probe'
+import { readHostModelCatalogSnapshot } from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
+import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { agentPickerArgumentsKnown } from '../../../../shared/agent-launch/picker/agent-launch-picker-authority'
 import { agentPickerPanelArguments } from '../../../../shared/agent-launch/picker/agent-launch-picker-arguments'
 import { isFastServiceTier } from '../../../../shared/agent-session/options/model-catalog/structured-agent-session-discovered-model'
@@ -80,7 +86,7 @@ export function agentLaunchSetupSummary(
       : state.currentModel === TEXT_ACTION_DEFAULT_MODEL
         ? entry.textGeneration?.defaultLabel
         : (state.models.find((candidate) => candidate.id === state.currentModel)?.label ??
-          state.currentModel)
+          agentLaunchModelLabel(entry, state.currentModel))
   const level = state.optionRows.find(
     (row) => row.category === 'thought_level' && row.kind.type === 'select'
   )
@@ -106,4 +112,23 @@ export function agentLaunchSetupSummary(
       : undefined,
     fast ? say('fast') : undefined
   ].filter((part): part is string => Boolean(part))
+}
+
+/** A model's name without its host's listing loaded: the cached listing, the release's catalog, then the id. */
+function agentLaunchModelLabel(entry: AgentPickerEntry, modelId: string): string {
+  const target = structuredAgentSessionTargetForHost(entry.rows[0]?.executionHostId ?? 'local')
+  const cached = target
+    ? readHostModelCatalogSnapshot(target, entry.agent, { newLaunch: true, seedsModel: true })
+    : undefined
+  const listed =
+    cached && cached.origin !== 'unknown'
+      ? cached.models.find((candidate) => candidate.id === modelId)?.label
+      : undefined
+  const seed = getAgentSessionOptionLaunchCatalog(entry.agent)
+  return (
+    listed ??
+    (seed ? findCatalogModel(seed, modelId)?.label : undefined) ??
+    // Claude's listing names a row by the model id it runs; reuse that naming.
+    (entry.agent === 'claude' ? claudeListedModelLabel(modelId) : modelId)
+  )
 }

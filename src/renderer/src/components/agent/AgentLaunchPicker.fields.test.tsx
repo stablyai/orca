@@ -158,3 +158,20 @@ it('moves between the agent tabs with the keyboard', async () => {
   await user.keyboard('{Shift>}{Tab}{/Shift}{ArrowDown}')
   expect(document.activeElement).toBe(search())
 })
+
+it('names the model in the closed trigger before its host listing has loaded', () => {
+  const claude: AgentPickerEntry = { ...entry('claude', 'Claude'), catalog: { origin: 'unknown' } }
+  act(() =>
+    root.render(
+      <AgentLaunchPicker
+        model={model}
+        entries={[claude]}
+        agent="claude"
+        cli
+        value={{ agent: 'claude', surface: 'terminal', choices: { model: 'claude-opus-5-5' } }}
+        onPick={picks}
+      />
+    )
+  )
+  expect(trigger().textContent).toBe('Claude (CLI) · Claude Opus 5.5')
+})
