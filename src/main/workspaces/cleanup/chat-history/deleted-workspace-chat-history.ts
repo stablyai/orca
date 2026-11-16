@@ -16,6 +16,7 @@ import {
   goneFolderOf,
   isStillGone,
   listedCatalogFingerprint,
+  listedLinksUnchanged,
   readListedFolders,
   type ListedFolders,
   readWorkspaceParents,
@@ -126,7 +127,8 @@ export async function sweepDeletedWorkspaceChatHistory(
   let current: CurrentRows | null = null
   const readCurrent = async (): Promise<CurrentRows> => {
     const fingerprint = listedCatalogFingerprint(deps.store)
-    if (current && current.fingerprint === fingerprint) {
+    // Claims also follow symlinks, which can be retargeted without any catalog change.
+    if (current?.fingerprint === fingerprint && (await listedLinksUnchanged(current.listed))) {
       return current
     }
     const listedNow = await readListedFolders(deps.store)

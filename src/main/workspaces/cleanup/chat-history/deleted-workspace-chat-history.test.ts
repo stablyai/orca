@@ -4,6 +4,7 @@ import {
   realpathSync,
   rmSync,
   symlinkSync,
+  unlinkSync,
   utimesSync,
   writeFileSync
 } from 'node:fs'
@@ -79,6 +80,7 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
       symlinkSync(join(workspaces, 'tools'), join(root, 'links', 'tools'))
       // A listed folder project under a link whose target workspace folder is gone.
       symlinkSync(join(appWorkspaces, 'linked-gone'), join(root, 'links', 'dangling'))
+      symlinkSync(join(appWorkspaces, 'live'), join(root, 'links', 'moving'))
       // Transcript parsers trim the recorded cwd, so `spaced` must not read as gone.
       mkdirSync(join(appWorkspaces, 'spaced '), { recursive: true })
       // Agents record the physical cwd; the temp root can sit behind a symlink (macOS /var).
@@ -154,7 +156,9 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
         getFolderWorkspaces: () => [
           { folderPath: join(appWorkspaces, 'folder-workspace') },
           { folderPath: join(root, 'links', 'tools') },
-          { folderPath: join(root, 'links', 'dangling', 'nested') }
+          { folderPath: join(root, 'links', 'dangling', 'nested') },
+          // Points at a live workspace until the sweep has started deleting `gone-seven`.
+          { folderPath: join(root, 'links', 'moving') }
         ]
       } as unknown as RuntimeStore
       const deleted: ChatHistoryTarget[] = []
@@ -184,6 +188,8 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
         session('flat-workspace-subfolder.jsonl', join(workspaces, 'docs', 'packages', 'old')),
         session('gone-physical.jsonl', physical(join(appWorkspaces, 'gone-two'))),
         // Archived right after its first chat is removed: the second must still be kept.
+        session('retargeted-1.jsonl', join(appWorkspaces, 'gone-seven')),
+        session('retargeted-2.jsonl', join(appWorkspaces, 'gone-seven')),
         session('archived-between-1.jsonl', join(appWorkspaces, 'gone-six')),
         session('archived-between-2.jsonl', join(appWorkspaces, 'gone-six')),
         session('checkout-subfolder.jsonl', physical(join(root, 'repos', 'sibling', 'website'))),
@@ -214,6 +220,10 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
           for (const target of targets) {
             if (await shouldDelete(target)) {
               removed.push(target)
+              if (basename(target.filePath) === 'retargeted-1.jsonl') {
+                unlinkSync(join(root, 'links', 'moving'))
+                symlinkSync(join(appWorkspaces, 'gone-seven'), join(root, 'links', 'moving'))
+              }
               if (basename(target.filePath) === 'archived-between-1.jsonl') {
                 archivedDuringScan[`app::${join(appWorkspaces, 'gone-six')}`] = {}
               }
@@ -228,9 +238,10 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
         'gone.jsonl',
         'gone-subfolder.jsonl',
         'gone-physical.jsonl',
+        'retargeted-1.jsonl',
         'archived-between-1.jsonl'
       ])
-      expect(result).toEqual({ deleted: 4, failed: 0, freedBytes: 84 })
+      expect(result).toEqual({ deleted: 5, failed: 0, freedBytes: 105 })
     }
   )
 

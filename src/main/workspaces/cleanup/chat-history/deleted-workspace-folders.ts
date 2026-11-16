@@ -115,6 +115,8 @@ export type ListedFolders = {
   claims: Set<string>
   /** False when a listed path's symlinks couldn't be followed to the end: then nothing is proven. */
   complete: boolean
+  /** Where each listed path that goes through a symlink led, to notice a link retargeted later. */
+  links: Map<string, string>
 }
 
 const MAX_LINK_HOPS = 8
@@ -159,7 +161,12 @@ async function linkTargets(path: string): Promise<{ targets: string[]; complete:
 }
 
 export async function readListedFolders(store: RuntimeStore): Promise<ListedFolders> {
-  const listed: ListedFolders = { present: new Set(), claims: new Set(), complete: true }
+  const listed: ListedFolders = {
+    present: new Set(),
+    claims: new Set(),
+    complete: true,
+    links: new Map()
+  }
   const identities = new Map<string, Promise<Identity | null | undefined>>()
   const cachedIdentity = async (path: string): Promise<Identity | null> => {
     let id = identities.get(path)
@@ -178,6 +185,9 @@ export async function readListedFolders(store: RuntimeStore): Promise<ListedFold
   for (const listedPath of new Set(listedPaths(store))) {
     const { targets, complete } = await linkTargets(listedPath)
     listed.complete &&= complete
+    if (targets.length > 1) {
+      listed.links.set(listedPath, targets.join('\0'))
+    }
     for (const path of targets) {
       const id = await cachedIdentity(path)
       if (id) {
@@ -281,4 +291,15 @@ export async function isStillGone(folder: GoneFolder): Promise<boolean> {
     (await presence(join(folder.ancestor, folder.name))) === 'missing' &&
     !(await hasLookalikeSibling(folder))
   )
+}
+
+/** Whether every listed symlink still leads where it did when `listed` was read. */
+export async function listedLinksUnchanged(listed: ListedFolders): Promise<boolean> {
+  for (const [listedPath, recorded] of listed.links) {
+    const { targets, complete } = await linkTargets(listedPath)
+    if (!complete || targets.join('\0') !== recorded) {
+      return false
+    }
+  }
+  return true
 }
