@@ -272,21 +272,24 @@ describe('startCodexSessionBackfillInBackground', () => {
     )
   })
 
-  it('recovers historical sessions omitted by an explicitly bounded pass', async () => {
-    const missedRelativePath = join('2026', '06', '01', 'rollout-missed.jsonl')
-    writeManagedSession(missedRelativePath, 'missed\n')
-    writeManagedSession(join('2026', '08', '05', 'rollout-launch.jsonl'), 'launch\n')
-    await startCodexSessionBackfillInBackground({
-      ignoreCompletionMarker: true,
-      boundedScan: true,
-      scanFrom: ['2026', '08', '05']
-    })
-    expect(existsSync(join(getSystemSessionsRoot(), missedRelativePath))).toBe(false)
-    await startCodexSessionBackfillInBackground()
-    expect(readFileSync(join(getSystemSessionsRoot(), missedRelativePath), 'utf-8')).toBe(
-      'missed\n'
-    )
-  })
+  it.each([true, false])(
+    'recovers historical sessions omitted by a date-filtered pass with boundedScan=%s',
+    async (boundedScan) => {
+      const missedRelativePath = join('2026', '06', '01', 'rollout-missed.jsonl')
+      writeManagedSession(missedRelativePath, 'missed\n')
+      writeManagedSession(join('2026', '08', '05', 'rollout-launch.jsonl'), 'launch\n')
+      await startCodexSessionBackfillInBackground({
+        ignoreCompletionMarker: true,
+        boundedScan,
+        scanFrom: ['2026', '08', '05']
+      })
+      expect(existsSync(join(getSystemSessionsRoot(), missedRelativePath))).toBe(false)
+      await startCodexSessionBackfillInBackground()
+      expect(readFileSync(join(getSystemSessionsRoot(), missedRelativePath), 'utf-8')).toBe(
+        'missed\n'
+      )
+    }
+  )
 
   it.each([100, 1000])(
     'caps launch folder reads with %i historical year folders',

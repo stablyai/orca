@@ -99,11 +99,7 @@ async function runCodexSessionBackfillOncePerHost(
     summary.failedHealAuditRecords === 0
   ) {
     writeBackfillMarker(paths.markerPath, paths.systemSessionsRoot, summary, markerGeneration, {
-      coverage:
-        !scanPlan.boundedScan ||
-        (!baseline?.hasBaseline && !scanPlan.scanFrom && !progress.truncated)
-          ? 'full'
-          : 'bounded',
+      coverage: !scanPlan.scanFrom && !progress.truncated ? 'full' : 'bounded',
       coveredScanDates: baseline?.pendingScanDates ?? [],
       progress,
       resumed: !!scanPlan.scanCursor,
