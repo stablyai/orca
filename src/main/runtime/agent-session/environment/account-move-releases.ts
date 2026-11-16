@@ -1,4 +1,5 @@
 import type { CrewChanges } from '../../orchestration/crew/crew-changes'
+import type { StructuredAgentSessionAccountMoveEdge } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host-types'
 import type { AccountsSnapshot, RuntimeAccountController } from './runtime-account-controller'
 
 /** The accounts a start would use; usage and name updates leave it unchanged. */
@@ -18,12 +19,12 @@ function selectionKey(snapshot: AccountsSnapshot): string {
 export function accountMoveReleases(
   dispatches: Pick<CrewChanges, 'subscribe'>,
   accounts: Pick<RuntimeAccountController, 'onChanged'>
-): { subscribe: (wake: () => void) => () => void } {
+): { subscribe: (wake: (edge: StructuredAgentSessionAccountMoveEdge) => void) => () => void } {
   return {
     subscribe: (wake) => {
       const stopDispatches = dispatches.subscribe((facets) => {
         if (facets.has('topology')) {
-          wake()
+          wake('dispatch')
         }
       })
       let selection: string | undefined
@@ -33,7 +34,7 @@ export function accountMoveReleases(
           const next = selectionKey(snapshot)
           // The first answer has nothing to compare: a switch may be what sent it.
           if (next !== selection) {
-            wake()
+            wake('account')
           }
           selection = next
         })

@@ -86,6 +86,8 @@ export function createStructuredAgentSessionHostMutationContext(
     readStopping: input.clientDelivery.readStopping,
     accountTransition: input.conversationDelivery.accountTransition,
     accountMoveSettled: input.conversationDelivery.accountMoveSettled,
+    accountMoveHeld: input.conversationDelivery.accountMoveHeld,
+    accountMoveEvidence: input.conversationDelivery.accountMoveEvidence,
     wakeDelivery: (sessionId) => input.conversationDelivery.loop.wake(sessionId),
     stopAgent: (sessionId, ending) => input.lifetime.stopAgent(sessionId, ending),
     wakeQueuedDrain: (sessionId) => input.queued.drain.schedule(sessionId),

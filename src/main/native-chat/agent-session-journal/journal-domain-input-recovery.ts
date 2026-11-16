@@ -180,9 +180,11 @@ function holdUnsent(
     )
     .get(target.sessionId, target.epoch)
   let position = Math.min(0, Number(first?.position ?? 0)) - batch.length
-  const rejection = agentSessionFailureWords(agentSessionFailureFact(hold.cause), {
-    surface: 'rejection'
-  })
+  const keptForMove = hold.cause === 'accountMove'
+  const rejection = agentSessionFailureWords(
+    agentSessionFailureFact(keptForMove ? 'notDelivered' : hold.cause),
+    { surface: 'rejection' }
+  )
   const failures: unknown[] = []
   for (const { submission } of batch) {
     const restoreUnsentEvents = checkpointJournalRequestEvents(db)
@@ -256,7 +258,9 @@ function holdUnsent(
             clientMessageId: submission.clientMessageId,
             state: 'rejected',
             ...rejection,
-            ...(unrun ? { rejection: { ...rejection.rejection, neverReachedAgent: true } } : {}),
+            ...(unrun || keptForMove
+              ? { rejection: { ...rejection.rejection, neverReachedAgent: true } }
+              : {}),
             fence: operation.fence,
             recovered: true,
             ...(body ? { keptAsQueuedMessageId: submission.clientMessageId } : {})

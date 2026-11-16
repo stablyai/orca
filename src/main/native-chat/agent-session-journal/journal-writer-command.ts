@@ -124,7 +124,11 @@ export type JournalWriterInputOperation =
   | {
       kind: 'hold-unsent'
       fence: number
-      hold: { cause: 'hostRestarted' } | { cause: 'chatClosed'; select?: JournalSubmissionSelector }
+      hold:
+        | { cause: 'hostRestarted' }
+        | { cause: 'chatClosed'; select?: JournalSubmissionSelector }
+        /** The person's send the old account must not take; it waits for the account move. */
+        | { cause: 'accountMove'; select: JournalSubmissionSelector }
       unrun?: true | JournalSubmissionSelector
     }
   | {

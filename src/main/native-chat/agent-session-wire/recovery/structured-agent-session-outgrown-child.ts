@@ -155,6 +155,8 @@ export type StructuredAgentSessionOutgrownChild =
   | { kind: 'retired' }
   /** `transition` is absent when only the launch mode or model changed. */
   | { kind: 'deferred'; transition?: StructuredAgentSessionAccountTransition }
+  /** The person's send went back to the queue to wait for the account move. */
+  | { kind: 'kept' }
 
 type AccountTransitionDeps = {
   work: OutgrownChildWorkReads
@@ -162,10 +164,15 @@ type AccountTransitionDeps = {
   now: () => number
 }
 
+type AccountMove = Pick<StructuredAgentSessionAccountTransition, 'cause' | 'from' | 'to'>
+
 /** The account move a running child defers, read without stopping anything. */
 export async function readStructuredAgentSessionAccountTransition(
   session: AccountTransitionReading | undefined,
-  deps: AccountTransitionDeps
+  deps: AccountTransitionDeps & {
+    /** A move already read for this child, whose account selection has not changed since. */
+    known?: AccountMove
+  }
 ): Promise<StructuredAgentSessionAccountTransition | null> {
   const child = session?.child
   if (!session || !child || child.phase === 'starting' || child.close) {
@@ -179,6 +186,10 @@ export async function readStructuredAgentSessionAccountTransition(
   )
   if (!owed) {
     return null
+  }
+  if (deps.known) {
+    const { cause, from, to } = deps.known
+    return { cause, ...owed, from, to }
   }
   const to = await launchedUnderOtherAccount(child, deps.launchAccountHome)
   if (!to && !(await session.journal.reads.outgrownChild({ fence: child.fence })).signedOut) {

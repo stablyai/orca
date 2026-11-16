@@ -20,20 +20,27 @@ import {
 } from './structured-agent-session-queued-edit'
 import { moveQueuedStructuredAgentMessage } from './structured-agent-session-queued-move'
 
-const personWaits = new WeakMap<SqlAgentSessionJournal, { revision: string; waits: boolean }>()
+type WaitingCards = { person: boolean; other: boolean }
+const waitingByRevision = new WeakMap<
+  SqlAgentSessionJournal,
+  { revision: string; waiting: WaitingCards }
+>()
 
-/** Whether a card from the person waits; re-listed only when the queue changes. */
-async function personCardWaits(journal: SqlAgentSessionJournal): Promise<boolean> {
+/** Whose cards wait, the person's or anyone else's; re-listed only when the queue changes. */
+async function waitingCards(journal: SqlAgentSessionJournal): Promise<WaitingCards> {
   const revision = journal.queuedMessages.revision()
-  const known = personWaits.get(journal)
+  const known = waitingByRevision.get(journal)
   if (known?.revision === revision) {
-    return known.waits
+    return known.waiting
   }
-  const waits = (await journal.queuedMessages.list()).some(
-    (card) => card.state === 'waiting' && card.body.from === undefined
-  )
-  personWaits.set(journal, { revision, waits })
-  return waits
+  const waiting = { person: false, other: false }
+  for (const card of await journal.queuedMessages.list()) {
+    if (card.state === 'waiting' || card.state === 'returned') {
+      waiting[card.body.from === undefined ? 'person' : 'other'] = true
+    }
+  }
+  waitingByRevision.set(journal, { revision, waiting })
+  return waiting
 }
 
 /** Read host context lazily during field initialization; session touch renews idle activity. */
@@ -49,6 +56,14 @@ export function wireStructuredAgentSessionQueuedMessages(
     conversationFence: (sessionId) =>
       structuredAgentSessionConversationFence(context().deps.store, sessionId),
     wakeDelivery: (sessionId) => context().wakeDelivery(sessionId),
+    // An untouched hold over only the person's cards leaves nothing a selection could take.
+    idle: async (sessionId, journal) => {
+      if (context().accountMoveHeld?.(sessionId) !== true) {
+        return false
+      }
+      const waiting = await waitingCards(journal)
+      return waiting.person && !waiting.other
+    },
     captureSelection: async (sessionId, journal) => {
       const ctx = context()
       const stopping = await ctx.readStopping(sessionId)
@@ -56,7 +71,7 @@ export function wireStructuredAgentSessionQueuedMessages(
       const record = ctx.deps.store.getRecord(sessionId)
       // Only a waiting card from the person needs the account a start would use; with none, a
       // hold has nothing left to keep.
-      const transition = (await personCardWaits(journal))
+      const transition = (await waitingCards(journal)).person
         ? await ctx.accountTransition?.(sessionId)
         : (ctx.accountMoveSettled?.(sessionId) ?? null)
       return {
@@ -113,6 +128,10 @@ export function wireStructuredAgentSessionQueuedMessages(
   return {
     drain,
     refresh,
+    accountMoveEvidence: (sessionId: string) => {
+      context().accountMoveEvidence?.(sessionId)
+      drain.schedule(sessionId)
+    },
     onOpened: (sessionId: string) => {
       const journal = sessions.get(sessionId)?.journal
       if (journal) {

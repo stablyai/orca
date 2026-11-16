@@ -1,4 +1,4 @@
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { readTestJournalSnapshot } from '../../../agent-session-journal/journal-observation.test-support'
 import type { AgentMessageSource } from '../../../../../shared/agent-session/agent-session-message-source'
 import type { AgentChildWorkView } from '../../../../../shared/agent-status/child-work/agent-status-child-work-view'
@@ -52,10 +52,18 @@ async function chatOnAccountA() {
     }
   })
   rig = current
-  current.host.deps.launchAccountHome = async () => ({ variable: 'CODEX_HOME', path: home })
+  let accountReads = 0
+  let onAccountRead: (() => void) | undefined
+  current.host.deps.launchAccountHome = async () => {
+    accountReads++
+    const read = onAccountRead
+    onAccountRead = undefined
+    read?.()
+    return { variable: 'CODEX_HOME', path: home }
+  }
   current.host.deps.hasOpenDispatch = () => openDispatch
   // What the runtime fires when a Dispatch settles or the account selection changes.
-  const releases = new Set<() => void>()
+  const releases = new Set<(edge: 'dispatch' | 'account') => void>()
   current.host.deps.accountMoveWakes = {
     subscribe: (wake) => {
       releases.add(wake)
@@ -99,7 +107,18 @@ async function chatOnAccountA() {
     /** The Dispatch settles in the orchestration store, with no write to this chat. */
     closeDispatch: () => {
       openDispatch = false
-      releases.forEach((wake) => wake())
+      releases.forEach((wake) => wake('dispatch'))
+    },
+    accountReads: () => accountReads,
+    /** Runs once, inside the next read of the account a start would use. */
+    onNextAccountRead: (run: () => void) => {
+      onAccountRead = run
+    },
+    /** Orchestration changes that touch no Dispatch of this chat. */
+    unrelatedDispatchChanges: (count: number) => {
+      for (let i = 0; i < count; i++) {
+        releases.forEach((wake) => wake('dispatch'))
+      }
     },
     setOpenDispatch: (open: boolean) => {
       openDispatch = open
@@ -228,4 +247,47 @@ it('lets go of the hold once the person deletes the message it held', async () =
   expect(await rig!.deleteQueued(sent.id)).toMatchObject({ ok: true })
   await eventually(() => expect(session()?.awaitsAccountMove).toBeUndefined())
   expect(chat.dispatchedTo('never mind')).toEqual([])
+})
+
+it('wakes a chat held on child work for none of 10 or 100 unrelated Dispatch changes', async () => {
+  const chat = await chatOnAccountA()
+  chat.background([devServer()])
+  chat.switchTo('/homes/b')
+  await rig!.send('held').result
+  const host = rig!.host.collaboratorsForTests()
+  await eventually(() => expect(host.sessions.get(SESSION)?.awaitsAccountMove).toBe(true))
+  const wake = vi.spyOn(host.conversationDelivery.loop, 'wake')
+  const reads = chat.accountReads()
+
+  chat.unrelatedDispatchChanges(10)
+  expect(wake).not.toHaveBeenCalled()
+  chat.unrelatedDispatchChanges(100)
+  expect(wake).not.toHaveBeenCalled()
+  expect(chat.accountReads()).toBe(reads)
+  expect(chat.dispatchedTo('held')).toEqual([])
+})
+
+it('takes a send back from the old account when its work shows up only after the send was accepted', async () => {
+  const chat = await chatOnAccountA()
+  chat.switchTo('/homes/b')
+  // The agent reports a background command after the send is accepted, before it is handed over.
+  chat.onNextAccountRead(() => chat.background([devServer()]))
+  const sent = rig!.send('raced')
+  expect(await sent.result).toMatchObject({ ok: true })
+  await eventually(async () =>
+    expect(await rig!.drafts()).toEqual([{ messageId: sent.id, state: 'waiting' }])
+  )
+  expect(chat.dispatchedTo('raced')).toEqual([])
+  // Its accepted copy is answered by the card, so the chat shows it once.
+  expect((await rig!.submission(sent.id))?.keptAsQueuedMessageId).toBe(sent.id)
+
+  const mail = rig!.send('mail meanwhile', undefined, { internal: true, from: MAIL })
+  await mail.result
+  await eventually(() => expect(chat.dispatchedTo('mail meanwhile')).toEqual([chat.accountA]))
+  await rig!.settleAccepted(await rig!.handoffId(mail.id), 'mail meanwhile')
+
+  chat.background([devServer({ membership: 'settled', state: 'done', outcome: 'succeeded' })])
+  await eventually(() => expect(chat.dispatchedTo('raced')).toHaveLength(1))
+  expect(chat.dispatchedTo('raced')).toEqual([chat.child()!.fence])
+  expect(chat.child()?.accountHome).toEqual({ variable: 'CODEX_HOME', path: '/homes/b' })
 })

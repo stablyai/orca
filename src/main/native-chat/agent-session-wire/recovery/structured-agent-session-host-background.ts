@@ -20,7 +20,7 @@ export function start(
     now: context.now,
     // A read, outside the chat's lane: one busy chat must not delay every other continue.
     awaitsAccountMove: async (id, launchHome) =>
-      !!(await context.accountTransition?.(id, launchHome))
+      !!(await context.accountTransition?.(id, { launchHome, observe: false }))
   })
   limit.start()
   return limit
@@ -29,13 +29,13 @@ export function start(
 /** Settled background work can release a card waiting for an account move. */
 export function childWorkChanged(
   tasks: { publish: (id: string) => void },
-  queued: { drain: { schedule: (id: string) => void } },
+  queued: { accountMoveEvidence: (id: string) => void },
   delivery: Pick<StructuredAgentSessionClientDelivery, 'childWorkOpen'>,
   id: string
 ): void {
   tasks.publish(id)
   if (!delivery.childWorkOpen(id)) {
-    queued.drain.schedule(id)
+    queued.accountMoveEvidence(id)
   }
 }
 

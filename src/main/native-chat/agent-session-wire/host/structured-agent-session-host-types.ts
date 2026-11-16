@@ -61,6 +61,9 @@ import type { StructuredAgentSessionStartupLimits } from '../startup/structured-
 import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { AgentSessionSwitchResult } from '../../../../shared/agent-session/requests/agent-session-switch-execution'
 
+/** What can end an account-move hold besides a journal write in its own chat. */
+export type StructuredAgentSessionAccountMoveEdge = 'dispatch' | 'account'
+
 export type StructuredAgentSessionCaller = {
   callerKey: string
   clientKind?: 'mobile' | 'runtime'
@@ -210,7 +213,9 @@ export type StructuredAgentSessionHostDeps = {
   ) => boolean
   /** Fires when a held account move may have settled with no journal write of its own: a
    *  Dispatch closing, or the account selection changing. */
-  accountMoveWakes?: { subscribe: (listener: () => void) => () => void }
+  accountMoveWakes?: {
+    subscribe: (listener: (edge: StructuredAgentSessionAccountMoveEdge) => void) => () => void
+  }
   /** Read-only custody for an agent's queued mail; absent: always owed. */
   queuedAgentMessageOwed?: (sessionId: string, from: AgentMessageSource) => QueuedMessageOwed
   /** Advisory tab-hidden notice; failures are logged. */
