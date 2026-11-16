@@ -18,7 +18,9 @@ import { ANTIGRAVITY_ACP_HOME } from '../../shared/agent-session/lifecycle/provi
 import { ANTIGRAVITY_CHAT_HOME_FOLDER } from './antigravity-chat-home'
 import { antigravityUserHome, linkAntigravityUserSkills } from './antigravity-chat-user-skills'
 
-type SignInOwner = Pick<AcpAgentConnection, 'close' | 'onExit' | 'exited'>
+type SignInOwner = Pick<AcpAgentConnection, 'close' | 'exited'> & {
+  onExit(listener: () => void): void
+}
 const retained = new ProviderAcquisitionStarts<Pick<SignInOwner, 'close' | 'onExit'>>()
 const folder = hostFolderAccountBinding('GEMINI_HOME', ANTIGRAVITY_CHAT_HOME_FOLDER, [
   ANTIGRAVITY_ACP_HOME

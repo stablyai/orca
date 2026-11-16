@@ -23,6 +23,7 @@
 8 src/main/amp/hook-service.ts
 2 src/main/amp/managed-plugin-install-status.ts
 1 src/main/antigravity/antigravity-host-acp.ts
+1 src/main/antigravity/antigravity-sign-in-home.ts # one same-filesystem token promotion per explicit account replacement; cancellation check and success publish cannot yield (reviewed constant work)
 1 src/main/antigravity/native-account-launch.ts
 5 src/main/antigravity/native-account-store.ts
 2 src/main/antigravity/native-credential-backend.ts
