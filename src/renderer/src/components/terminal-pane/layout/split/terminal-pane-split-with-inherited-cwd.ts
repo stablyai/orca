@@ -1,4 +1,4 @@
-import type { TerminalPaneSplitSource } from '../../../../../../shared/feature-education-telemetry'
+import type { TerminalPaneSplitSource } from '../../../../../../shared/feature-education/feature-education-telemetry'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { splitWebRuntimeTerminal } from '@/runtime/hosted-terminals/actions/web-runtime-terminal-split'

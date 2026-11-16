@@ -18,7 +18,7 @@ describe('OrcaRuntimeService', () => {
     // Re-keying a shared PTY handle must preserve its in-flight waiter.
     runtime.preAllocateHandleForPty('pty-agent')
     runtime.attachWindow(TEST_WINDOW_ID)
-    runtime.syncWindowGraph(TEST_WINDOW_ID, {
+    await runtime.syncWindowGraph(TEST_WINDOW_ID, {
       tabs: [
         {
           tabId,
@@ -57,7 +57,7 @@ describe('OrcaRuntimeService', () => {
         }
       )
 
-    runtime.syncWindowGraph(TEST_WINDOW_ID, {
+    await runtime.syncWindowGraph(TEST_WINDOW_ID, {
       tabs: [
         {
           tabId,

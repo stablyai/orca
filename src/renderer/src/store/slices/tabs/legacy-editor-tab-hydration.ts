@@ -1,5 +1,5 @@
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
-import type { Tab } from '../../../../../shared/tab-types'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 
 /** Sessions predating the unified strip stored editor membership in the saved file list. */
 export function legacyEditorTabs(session: WorkspaceSessionState): Record<string, Tab[]> {

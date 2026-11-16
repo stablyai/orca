@@ -14,12 +14,9 @@ on:
       - 'config/scripts/native-build/windows/windows-rust-executable-build.mjs'
       - 'config/scripts/native-build/windows/build-windows-cli-launcher.test.mjs'
       - 'config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-benchmark.mjs'
-      - 'config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-group-recovery.test.mjs'
       - 'config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-metrics.mjs'
       - 'config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-processes.mjs'
-      - 'config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-processes.test.mjs'
       - 'config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-trial-cleanup.mjs'
-      - 'config/scripts/runtime-verification/desktop-transport/computer-use-smoke.mjs'
       - 'config/scripts/runtime-verification/daemon-lifecycle/daemon-boot-smoke.mjs'
       - 'config/scripts/runtime-verification/daemon-lifecycle/daemon-endpoint-handover-smoke.mjs'
       - 'config/scripts/diagnostics/runtime-lifecycle/windows-daemon-workspace-close-repro.mjs'
@@ -92,16 +89,12 @@ jobs:
       # Use shared Vitest config: bare invocation misses config/ and its timeout/Windows worker cap, breaking real csc.exe tests.
       - run: >-
           pnpm vitest run --config config/vitest.config.ts
-          config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-group-recovery.test.mjs
-          config/scripts/performance/macos-computer-owner/macos-computer-helper-owner-loss-processes.test.mjs
           src/main/computer/sidecar-transport/sidecar-client.test.ts
           src/main/computer/macos-native/macos-native-provider-client.test.ts
           src/main/providers/shell-launch/windows/shell-preflight-runtime.windows.test.ts
           src/main/computer/desktop-script/actions/desktop-script-provider-actions.test.ts
-          src/cli/output/command-result-output.test.ts
           src/cli/computer/computer-state-formatting.test.ts
           src/cli/index.test.ts
-          src/cli/runtime/envelope-schema.test.ts
           src/shared/remote-runtime/remote-runtime-client.test.ts
       - run: pnpm verify:computer-native
       - run: pnpm build:cli

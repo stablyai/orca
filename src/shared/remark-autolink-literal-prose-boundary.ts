@@ -1,5 +1,5 @@
 import type { Processor } from 'unified'
-import { splitAtProseUrlTerminators } from './prose-url-boundary'
+import { splitAtProseUrlTerminators } from './text/prose-url-boundary'
 
 type MarkdownNode = {
   type: string

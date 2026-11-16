@@ -27,11 +27,11 @@ const MUTATION_PLANS =
 const MUTATION_ADMISSION =
   '/src/main/native-chat/agent-session-wire/structured-agent-session-mutation-admission.ts'
 
-export type RpcReply = {
+export type RpcReply<Result = unknown> = {
   id: string
   ok: boolean
   streaming?: true
-  result?: unknown
+  result?: Result
   error?: { code: string; message: string }
 }
 
@@ -163,7 +163,7 @@ function capabilityStrings(module: Record<string, unknown>): readonly string[] {
 
 async function loadWorkingTreeBuild(): Promise<AgentSessionWireBuild> {
   const [protocol, dispatcher, methodRegistry] = await Promise.all([
-    import('../../../src/shared/protocol-version'),
+    import('../../../src/shared/remote-runtime/protocol/protocol-version'),
     import('../../../src/main/runtime/rpc/dispatcher'),
     import('../../../src/main/runtime/rpc/methods/rpc-method-registry')
   ])

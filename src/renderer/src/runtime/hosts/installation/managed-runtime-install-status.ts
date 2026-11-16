@@ -1,5 +1,5 @@
-import type { ManagedRuntimeInstallState } from '../../../../../shared/managed-runtime-install'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { ManagedRuntimeInstallState } from '../../../../../shared/agent-launch/installation/managed-runtime-install'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   createRevisionedHostStateStore,
   type RevisionedHostSnapshot

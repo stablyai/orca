@@ -1,4 +1,4 @@
-import { removeTree } from '../../../shared/windows-transient-lock-removal'
+import { removeTree } from '../../../shared/file-write/windows-transient-lock-removal'
 import { randomUUID } from 'node:crypto'
 import type SyncDatabase from '../../sqlite/sync-database'
 import { openVersionedCacheDatabase } from '../../sqlite/versioned-cache-database'

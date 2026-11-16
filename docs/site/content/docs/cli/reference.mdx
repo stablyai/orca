@@ -39,6 +39,8 @@ orca open --json
 orca status --json
 ```
 
+`orca open` starts Orca without taking keyboard focus from the app you're using. If an Orca window is already open, it does nothing.
+
 Use `--json` when another tool will parse the result. Human-readable output is for quick terminal checks.
 
 ## Selectors
@@ -306,6 +308,7 @@ Use `orca computer` for native desktop apps outside the built-in browser:
 ```bash
 orca computer permissions --json
 orca computer list-apps --json
+orca computer launch-app Safari --json
 orca computer get-app-state --app com.apple.Safari --json
 orca computer click --app com.apple.Safari --element-index 12 --json
 orca computer paste-text --app com.apple.Safari --text "hello" --json

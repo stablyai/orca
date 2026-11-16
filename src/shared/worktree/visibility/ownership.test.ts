@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { GlobalSettings } from '../../global-settings-types'
-import type { Repo } from '../../repo-types'
+import type { Repo } from '../../repository/repo-types'
 import type { WorktreeMeta } from '../meta-types'
 import type { Worktree } from '../types'
 
@@ -9,7 +9,7 @@ import {
   buildKnownOrcaWorkspaceLayouts,
   toDetectedWorktree
 } from './ownership'
-import { EXTERNAL_WORKTREE_VISIBILITY_ROLLOUT_AT } from '../../external-worktree-visibility'
+import { EXTERNAL_WORKTREE_VISIBILITY_ROLLOUT_AT } from './external-worktree-visibility'
 
 function makeRepo(overrides: Partial<Repo> = {}): Repo {
   return {

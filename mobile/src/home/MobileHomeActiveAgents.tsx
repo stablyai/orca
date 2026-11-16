@@ -3,7 +3,7 @@ import type { AgentListRow } from '../agents/agent-list-rows'
 import { MobileAgentListRows, type AgentListRowHandlers } from '../agents/MobileAgentListRows'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { HostProfile } from '../host-catalog/host-profile'
-import { areStructurallyEqual } from '../worktree/structural-equality'
+import { areStructurallyEqual } from '../worktree/catalog/structural-equality'
 import { MobileHomeSectionHeading } from './MobileHomeSectionHeading'
 
 // Enough to act on without pushing Desktops off the first screen; the Agents tab has the rest.

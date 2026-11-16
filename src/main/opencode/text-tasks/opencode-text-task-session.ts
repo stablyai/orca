@@ -8,7 +8,7 @@ import { openCodeTextTaskTarget } from './opencode-text-task-target'
 import type { TextGenerationOperation } from '../../text-generation/source-control-text-generation-types'
 import { createOpenCodeTextTaskHttp } from './opencode-text-task-http'
 import { z } from 'zod'
-import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
 import type { OpenCodeTextTaskInput } from './opencode-text-task-input'
 
 export type OpenCodeTextTaskSession = {

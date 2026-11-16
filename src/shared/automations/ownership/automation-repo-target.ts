@@ -1,5 +1,5 @@
 import type { Automation } from '../automation-definition'
-import type { Repo } from '../../repo-types'
+import type { Repo } from '../../repository/repo-types'
 import type { WorkspaceRunContext } from '../../work-items/task-source-context'
 import {
   getRepoExecutionHostId,

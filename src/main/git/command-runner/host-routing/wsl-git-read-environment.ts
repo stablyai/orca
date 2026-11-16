@@ -3,7 +3,7 @@ import { assertWslDistroAllowed } from '@orca/process-host/wsl-distro-allowlist'
 import {
   buildWslCapturedLoginShellCommand,
   buildWslExecArgs
-} from '../../../../shared/wsl-login-shell-command'
+} from '../../../../shared/shell/wsl/wsl-login-shell-command'
 import { resolveWslInteropSpawnCwd } from '../../../wsl/execution/wsl-interop-spawn-directory'
 
 export type WslGitReadEnvironment = { gitPath: string; home: string; path: string }

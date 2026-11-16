@@ -30,13 +30,13 @@ import {
 import {
   getLineageChildrenByParentId,
   getLineageChildWorktree
-} from '@/components/right-sidebar/folder-workspace-attached-worktrees'
+} from '@/components/right-sidebar/folder-workspaces/folder-workspace-attached-worktrees'
 import { COMBOBOX_POPOVER_SURFACE } from '../type-ahead/type-ahead-combobox-styles'
 import {
   sharesWorktreeLineageBoundary,
   type WorktreeLineageBoundary
-} from '../../../../../shared/resolved-worktree-lineage'
-import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
+} from '../../../../../shared/worktree/lineage/resolved-worktree-lineage'
+import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import type {
   WorkspaceLineage,
   WorktreeLineage

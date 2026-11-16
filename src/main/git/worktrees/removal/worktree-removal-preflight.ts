@@ -6,6 +6,7 @@ import {
   SUBMODULE_REMOVAL_REFUSAL
 } from '../../../../shared/worktree/removal/removal'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
+import { gitStreamStdout } from '../../command-runner/git-stream-stdout'
 import { resolveGitDir } from '../../source-control/resolve-git-dir'
 import type { WorktreeRemovalPreflightOptions } from '../worktree-operation-options'
 import {
@@ -92,18 +93,44 @@ async function containsSubmoduleCheckout(
   if (adminDirectory && !(await isWorktreePathMissing(join(adminDirectory, 'modules')))) {
     return true
   }
-  const { stdout: index } = await gitExecFileAsync(['ls-files', '--stage', '-z'], execution)
-  for (const entry of index.split('\0')) {
-    if (
-      entry.startsWith('160000 ') &&
-      !(await isWorktreePathMissing(
-        join(hostWorktreePath, entry.slice(entry.indexOf('\t') + 1), '.git')
-      ))
-    ) {
+  for (const gitlink of await readGitlinkPaths(execution)) {
+    if (!(await isWorktreePathMissing(join(hostWorktreePath, gitlink, '.git')))) {
       return true
     }
   }
   return false
+}
+
+/** Stream the index keeping only gitlinks; a large repository's full listing exceeds the buffered cap. */
+async function readGitlinkPaths(
+  execution: Parameters<typeof gitExecFileAsync>[1]
+): Promise<string[]> {
+  const { cwd, env, wslDistro, signal, admissionTier, timeout } = execution
+  const gitlinks: string[] = []
+  const keepGitlink = (entry: string): void => {
+    if (entry.startsWith('160000 ')) {
+      gitlinks.push(entry.slice(entry.indexOf('\t') + 1))
+    }
+  }
+  let carry = ''
+  await gitStreamStdout(['ls-files', '--stage', '-z'], {
+    cwd,
+    env,
+    wslDistro,
+    signal,
+    admissionTier,
+    timeoutMs: timeout,
+    // Only gitlink paths are retained, so index size is not a memory risk.
+    maxBuffer: Number.MAX_SAFE_INTEGER,
+    maxStderrBuffer: 64 * 1024,
+    onStdout: (chunk) => {
+      const entries = (carry + chunk).split('\0')
+      carry = entries.pop() ?? ''
+      entries.forEach(keepGitlink)
+    }
+  })
+  keepGitlink(carry)
+  return gitlinks
 }
 
 /** Exclude only the untracked shared links tolerated by the caller. */

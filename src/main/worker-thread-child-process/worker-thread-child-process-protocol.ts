@@ -4,6 +4,7 @@ export type WorkerThreadChildSpec = {
   args: string[]
   cwd?: string
   env?: Record<string, string | undefined>
+  terminationBarrier?: true
 }
 
 export type WorkerThreadChildRequest =
@@ -11,12 +12,15 @@ export type WorkerThreadChildRequest =
   | { type: 'stdin-write'; id: number; data: string }
   | { type: 'stdin-end'; id: number }
   | { type: 'output-consumed'; id: number; bytes: number }
+  | { type: 'stop-owned-group'; id: number }
+  | { type: 'release'; id: number }
   | { type: 'kill'; id: number; signal?: NodeJS.Signals }
 
 export type WorkerThreadChildErrorPayload = { message: string; code?: string }
 
 export type WorkerThreadChildEvent =
   | { type: 'spawn'; id: number; pid: number | undefined }
+  | { type: 'group-terminated'; id: number }
   // Structured clone turns a Buffer into a plain Uint8Array.
   | { type: 'stdout' | 'stderr'; id: number; chunk: Uint8Array }
   // 'spawn-error': process creation threw, so no exit or close will follow.

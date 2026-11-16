@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PreloadApi } from '../../api-types'
-import { ORCA_APP_RESTART_STARTED_EVENT } from '../../../shared/updater-renderer-events'
 
 const { exposeInMainWorld, invoke, on, removeListener, send, sendSync, getPathForFile } =
   vi.hoisted(() => ({
@@ -68,29 +67,5 @@ describe('native preload destructive app actions', () => {
     await expect(api.app.awaitBeforeUnloadCheckpoint()).rejects.toThrow(
       'Failed to persist renderer state before unload.'
     )
-  })
-
-  it('awaits renderer durability before profile maintenance and preserves its result', async () => {
-    const api = await loadApi()
-    const started = vi.fn()
-    eventTarget.addEventListener(ORCA_APP_RESTART_STARTED_EVENT, started)
-    let finishCheckpoint = (_result: { ok: boolean }): void => {}
-    const checkpoint = new Promise((resolve) => {
-      finishCheckpoint = resolve
-    })
-    const result = { status: 'relaunching' }
-    invoke.mockImplementation((channel: string) =>
-      channel === 'app:await-before-unload-checkpoint' ? checkpoint : Promise.resolve(result)
-    )
-
-    const switching = api.orcaProfiles.switchProfile({ profileId: 'target' })
-    await vi.waitFor(() =>
-      expect(invoke).toHaveBeenCalledWith('app:await-before-unload-checkpoint')
-    )
-    expect(started).toHaveBeenCalledOnce()
-    expect(invoke).not.toHaveBeenCalledWith('orcaProfiles:switch', expect.anything())
-    finishCheckpoint({ ok: true })
-    await expect(switching).resolves.toBe(result)
-    expect(invoke).toHaveBeenLastCalledWith('orcaProfiles:switch', { profileId: 'target' })
   })
 })

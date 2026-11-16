@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto'
 import * as gitExecFile from '../../../../git/command-runner/git-exec-file'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import type { WorktreeLineage } from '../../../../../shared/worktree/lineage-types'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { WorktreeMeta } from '../../../../../shared/worktree/meta-types'
 import type { AgentSessionRecordStore } from '../../../agent-session/records/agent-session-record-store'
 import '../../../orca-runtime-tests/runtime-test-module-registration.spec'
@@ -33,7 +33,7 @@ type MetadataWrite = {
 }
 
 // Real managed creation/authority/metadata; only external Git and terminal effects are substituted.
-export function managedCwdLaunchFixture(
+export async function managedCwdLaunchFixture(
   records: AgentSessionRecordStore,
   parent: Pick<Worktree, 'id' | 'path' | 'repoId'>,
   directory: string
@@ -154,7 +154,7 @@ export function managedCwdLaunchFixture(
   const caller = runtime.preAllocateHandleForPty(ptyId)
   registerLivePty(runtime, ptyId, parent.id, null, { tabId, leafId })
   runtime.attachWindow(1)
-  runtime.syncWindowGraph(1, {
+  await runtime.syncWindowGraph(1, {
     tabs: [{ tabId, worktreeId: parent.id, title: 'Codex', activeLeafId: leafId, layout: null }],
     leaves: [{ tabId, worktreeId: parent.id, leafId, paneRuntimeId: 1, ptyId, paneTitle: null }]
   })

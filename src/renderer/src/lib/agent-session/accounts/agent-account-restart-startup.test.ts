@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
@@ -29,20 +30,24 @@ const SESSION_ID = '01a006a6-1d07-70a1-bad5-f9110d5845c0'
 function seedAgentStatus(entry: Partial<AgentStatusEntry> | null): void {
   const paneKey = makePaneKey(TAB_ID, LEAF_ID)
   useAppStore.setState({
-    agentStatusByPaneKey: entry
-      ? {
-          [paneKey]: {
-            paneKey,
-            tabId: TAB_ID,
-            state: 'done',
-            prompt: '',
-            updatedAt: 1,
-            stateStartedAt: 1,
-            stateHistory: [],
-            ...entry
-          }
-        }
-      : {},
+    agentStatusByPaneKey: acceptedAgentStatuses(
+      Object.entries(
+        entry
+          ? {
+              [paneKey]: {
+                paneKey,
+                tabId: TAB_ID,
+                state: 'done',
+                prompt: '',
+                updatedAt: 1,
+                stateStartedAt: 1,
+                stateHistory: [],
+                ...entry
+              }
+            }
+          : {}
+      )
+    ),
     agentLaunchConfigByPaneKey: {},
     sleepingAgentSessionsByPaneKey: {}
   })
@@ -104,7 +109,7 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
       state: 'waiting',
       providerSession: { key: 'session_id', id: SESSION_ID }
     })
-    const ownEntry = useAppStore.getState().agentStatusByPaneKey[makePaneKey(TAB_ID, LEAF_ID)]
+    const ownEntry = useAppStore.getState().agentStatusByPaneKey.get(makePaneKey(TAB_ID, LEAF_ID))!
     if (!ownEntry) {
       throw new Error('Missing seeded status')
     }
@@ -121,10 +126,12 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
           ptyIdsByLeafId: { [otherLeaf]: 'pty-other' }
         }
       },
-      agentStatusByPaneKey: {
-        [makePaneKey(TAB_ID, LEAF_ID)]: ownEntry,
-        [otherPaneKey]: { ...ownEntry, paneKey: otherPaneKey, tabId: otherTab }
-      }
+      agentStatusByPaneKey: acceptedAgentStatuses(
+        Object.entries({
+          [makePaneKey(TAB_ID, LEAF_ID)]: ownEntry,
+          [otherPaneKey]: { ...ownEntry, paneKey: otherPaneKey, tabId: otherTab }
+        })
+      )
     })
 
     expect(buildPaneAccountRestartStartup('claude', pane)).toBeNull()

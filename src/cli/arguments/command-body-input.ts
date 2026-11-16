@@ -1,7 +1,8 @@
 import { readFile } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
+import { readStdin } from './flag-or-stdin-payload'
 import { getRequiredStringFlag, getRequiredStringFlagAllowingEmpty } from './flags'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 
 type BodyOptions = {
   required: boolean
@@ -66,12 +67,5 @@ async function readBodyFile(path: string, cwd: string): Promise<string> {
   if (path !== '-') {
     return readFile(isAbsolute(path) ? path : join(cwd, path), 'utf8')
   }
-  if (process.stdin.isTTY) {
-    throw new RuntimeClientError('invalid_argument', 'stdin body requested but stdin is a TTY')
-  }
-  const chunks: Buffer[] = []
-  for await (const chunk of process.stdin) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)))
-  }
-  return Buffer.concat(chunks).toString('utf8')
+  return readStdin('body')
 }

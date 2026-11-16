@@ -3,12 +3,11 @@ import type {
   AgentSessionHistoryResult
 } from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
-import { snapshotLatestTurn } from '../publication/history/agent-session-history-latest-turn'
-import type { StructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
+import type { StructuredAgentSessionObservedWork } from './structured-agent-session-observed-work'
 
 /** Absent projection preserves legacy raw-turn behavior without current prompt IDs. */
 export type AgentSessionPublishedWork = Pick<
-  StructuredAgentSessionCurrentWork,
+  StructuredAgentSessionObservedWork,
   | 'publishedLatestTurn'
   | 'actionablePromptIds'
   | 'actionablePrompts'
@@ -38,10 +37,10 @@ function publishedWorkFields(
 }
 
 export function agentSessionPublishedWorkFields(
-  journal: AgentSessionJournal,
+  _journal: AgentSessionJournal,
   work: AgentSessionPublishedWork
 ): PublishedWorkFields {
-  return publishedWorkFields(snapshotLatestTurn(journal.itemsRead()), work)
+  return publishedWorkFields(null, work)
 }
 
 /** Page-local effective values; off-page sends ride separately budgeted subscriber batches. */

@@ -3,7 +3,7 @@ import {
   type AiVaultAgent
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { SleepingAgentLaunchConfig } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { measureUtf8ByteLength } from '../../../../../../shared/utf8-byte-limits'
+import { measureUtf8ByteLength } from '../../../../../../shared/text/utf8-byte-limits'
 import {
   normalizeExecutionHostId,
   type ExecutionHostId

@@ -29,11 +29,11 @@ export type WslMoveOrchestratorPorts = {
    */
   prepareHost: (distro: string, stillWanted: () => boolean) => Promise<WslMoveHostReadiness>
   /** E11: the user's Remove of the distro's host has not proven its server stopped. */
-  hostRemovalPending: (distro: string) => boolean
+  hostRemovalPending: (distro: string) => boolean | Promise<boolean>
   /** Whether the distro has a WSL host record or bridge projects; a distro with neither is pruned. */
-  isDistroInUse: (distro: string) => boolean
+  isDistroInUse: (distro: string) => boolean | Promise<boolean>
   /** Whether the distro still has a WSL host record; never connects. */
-  hasHost: (distro: string) => boolean
+  hasHost: (distro: string) => boolean | Promise<boolean>
   /** Whether the distro's host connection is ready now; never connects. Gates timer steps. */
   isHostReady: (distro: string) => boolean
   /** `userAsked`: the user's own step may finish a committed earlier move now, reloading the window. */

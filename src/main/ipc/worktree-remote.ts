@@ -1,4 +1,4 @@
-import { readableWslDistroHoldText } from '../../shared/wsl-distro-stopped-hold'
+import { readableWslDistroHoldText } from '../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
 import { canCheckoutExistingLocalBranch } from '../runtime/workspaces/creation/runtime-worktree-create-git'
 /* eslint-disable max-lines */
 
@@ -9,7 +9,7 @@ import { existsSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import type { Store } from '../persistence/loading-store/store'
 import type { GitAdmissionTier } from '../../shared/rpc-contract/source-control/git-admission-tier-params'
-import type { Repo } from '../../shared/repo-types'
+import type { Repo } from '../../shared/repository/repo-types'
 import type {
   CreateWorktreeArgs,
   CreateWorktreeProgressEvent,
@@ -57,7 +57,7 @@ import type {
   RemoteFetchResult,
   RemoteTrackingBase
 } from '../runtime/repositories/runtime-remote-fetch-controller'
-import { getProjectHostSetupWorktreeMeta } from '../../shared/project-host-setup-lookup'
+import { getProjectHostSetupWorktreeMeta } from '../../shared/project/host-setup/project-host-setup-lookup'
 import { getEffectiveHooks, loadHooks } from '../workspace-hooks/hooks'
 import {
   createSetupRunnerScript,
@@ -102,8 +102,11 @@ import {
   type ExecutionHostId
 } from '../../shared/execution-host'
 import type { BranchPrefixSettings } from '../../shared/git/branches/branch-prefix'
-import { parseWorkspaceKey, worktreeWorkspaceKey } from '../../shared/workspace-scope'
-import { sharesWorktreeLineageBoundary } from '../../shared/resolved-worktree-lineage'
+import {
+  parseWorkspaceKey,
+  worktreeWorkspaceKey
+} from '../../shared/workspace/identity/workspace-scope'
+import { sharesWorktreeLineageBoundary } from '../../shared/worktree/lineage/resolved-worktree-lineage'
 import { CrossStoreParentRefSchema } from '../../shared/rpc-contract/workspaces/cross-store-parent-params'
 import { assertParentInAnotherStore } from '../runtime/workspaces/lineage/cross-store-parent-store-check'
 import {

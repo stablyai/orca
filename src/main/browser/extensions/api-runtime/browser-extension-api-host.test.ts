@@ -95,7 +95,7 @@ const extensionSession = {
     on: vi.fn()
   },
   serviceWorkers: { on: vi.fn(), getAllRunning: () => ({}), getWorkerFromVersionID: vi.fn() },
-  protocol: { handle: vi.fn(), unhandle: vi.fn() }
+  protocol: { handle: vi.fn(), unhandle: vi.fn(), isProtocolHandled: vi.fn(() => true) }
 }
 const handled: unknown[][] = []
 
@@ -275,4 +275,30 @@ describe('extension subframe listener retirement', () => {
       host.forgetBrowserExtensionContexts(sess)
     }
   })
+})
+
+it('forgets the extension protocol twice without Electron refusing the second unhandle', () => {
+  const handled = new Set<string>()
+  const unhandle = vi.fn((scheme: string) => {
+    if (!handled.delete(scheme)) {
+      throw new Error(`Failed to unhandle protocol: ${scheme}`)
+    }
+  })
+  const sess = {
+    ...extensionSession,
+    protocol: {
+      handle: (scheme: string) => {
+        handled.add(scheme)
+      },
+      isProtocolHandled: (scheme: string) => handled.has(scheme),
+      unhandle
+    }
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this session copies the host's stub and replaces only protocol, which the retirement path calls.
+  const session = sess as unknown as Electron.Session
+  host.attachBrowserExtensionApiHostToSession(session, 'deleted-profile')
+  host.forgetBrowserExtensionContexts(session)
+  expect(() => host.forgetBrowserExtensionContexts(session)).not.toThrow()
+  expect(unhandle).toHaveBeenCalledTimes(1)
+  expect(unhandle).toHaveBeenCalledWith('orca-extension-api')
 })

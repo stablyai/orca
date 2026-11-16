@@ -15,7 +15,7 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null,
       clearBuffer
     })
-    syncSinglePty(runtime, 'pty-1')
+    await syncSinglePty(runtime, 'pty-1')
 
     runtime.onPtyData(
       'pty-1',
@@ -48,7 +48,7 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null,
       resetInputModes
     })
-    syncSinglePty(runtime, 'pty-1')
+    await syncSinglePty(runtime, 'pty-1')
     // An app armed these and crashed with no command end.
     runtime.onPtyData('pty-1', 'prompt$ app\r\n\x1b[>31u\x1b[?1000h\x1b[?2004h', 123)
     const [terminal] = (await runtime.listTerminals()).terminals
@@ -71,7 +71,7 @@ describe('OrcaRuntimeService', () => {
     const runtime = new OrcaRuntimeService(store)
 
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
+    await runtime.syncWindowGraph(1, {
       tabs: [
         {
           tabId: 'tab-1',
@@ -158,7 +158,7 @@ describe('OrcaRuntimeService', () => {
       serializeProviderBuffer,
       hasRendererSerializer: () => false
     })
-    syncSinglePty(runtime)
+    await syncSinglePty(runtime)
     runtime.onPtyData('pty-1', 'shell history\r\n', 100)
     runtime.synchronizePtyOutputSequenceFromProvider(
       'pty-1',

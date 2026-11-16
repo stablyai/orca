@@ -9,7 +9,7 @@ import {
   type StateIndicatorTooltipSide
 } from '@/components/StateIndicatorTooltip'
 import { getWorktreeStatusLabel } from '@/lib/workspace/activity/worktree-status'
-import type { WorktreeStatus } from '../../../../../../shared/worktree-status-rollup'
+import type { WorktreeStatus } from '../../../../../../shared/worktree/row-display/worktree-status-rollup'
 
 export type Status = WorktreeStatus
 

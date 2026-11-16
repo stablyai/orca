@@ -1,6 +1,6 @@
 import type { AppState } from '@/store/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { blockRemovalForUnsavedFiles } from './removal-unsaved-files'
 import { getExecutionHostIdForFolderWorkspace } from '@/lib/workspace/ownership/folder-workspace-runtime-owner'
 import '../../../../../../shared/folder-workspaces/folder-workspace-execution-host'
@@ -32,7 +32,8 @@ export function folderWorkspaceDeleteClosesTabs(
 export function deleteFolderWorkspaceUnlessUnsaved(
   getState: () => AppState,
   folderWorkspaceId: string,
-  executionHostId?: ExecutionHostId
+  executionHostId?: ExecutionHostId,
+  options?: { allowFailedArchiveHook?: boolean }
 ): Promise<boolean> | null {
   const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
   const pendingIdentity = composeWorktreeHostIdentity(
@@ -54,7 +55,15 @@ export function deleteFolderWorkspaceUnlessUnsaved(
     return null
   }
   const deletion = getState()
-    .deleteFolderWorkspace(folderWorkspaceId, executionHostId ? { executionHostId } : undefined)
+    .deleteFolderWorkspace(
+      folderWorkspaceId,
+      executionHostId || options?.allowFailedArchiveHook
+        ? {
+            ...(executionHostId ? { executionHostId } : {}),
+            ...(options?.allowFailedArchiveHook ? { allowFailedArchiveHook: true } : {})
+          }
+        : undefined
+    )
     .then((deleted) => {
       const current = getState()
       if (

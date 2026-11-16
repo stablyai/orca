@@ -1,5 +1,5 @@
 import { isStructuredTab } from '../../../../../shared/agent-session/view/structured-agent-session-tab'
-import type { Tab } from '../../../../../shared/tab-types'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 
 type DirectoryTab = {
   id: string

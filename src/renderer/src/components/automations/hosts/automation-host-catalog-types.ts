@@ -3,7 +3,7 @@ import type {
   StableAutomationAuthorityRef,
   StableAutomationCatalogRef
 } from '../../../../../shared/automations/ownership/automation-owner-ref'
-import type { SshConnectionStatus } from '../../../../../shared/ssh-types'
+import type { SshConnectionStatus } from '../../../../../shared/remote-runtime/ssh/ssh-types'
 
 /** Authority storage-query health, independent of execution targets; SSH downtime must not prevent listing/editing stored records. */
 export type AutomationAuthorityHealth =

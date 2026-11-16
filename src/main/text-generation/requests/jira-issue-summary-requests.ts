@@ -8,7 +8,7 @@ import type {
 import {
   textGenerationFailure,
   textGenerationFailureCodeFields
-} from '../../../shared/text-generation-failure-copy'
+} from '../../../shared/text-generation/text-generation-failure-copy'
 import { getStatus } from '../../jira/client'
 import {
   prepareLocalCommitMessageAgentEnv,

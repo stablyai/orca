@@ -1,5 +1,5 @@
 import type { Literal, PhrasingContent } from 'mdast'
-import { splitAtProseUrlTerminators } from '../../shared/prose-url-boundary'
+import { splitAtProseUrlTerminators } from '../../shared/text/prose-url-boundary'
 import { httpCandidateNormalizer, type HttpLinkSpan } from './adf-http-link'
 import { bareEmailSpans } from './adf-bare-email'
 import { escapeMarkdownTextLinkDestination } from './adf-media-destination'

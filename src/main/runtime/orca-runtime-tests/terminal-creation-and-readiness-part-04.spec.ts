@@ -55,7 +55,7 @@ describe('OrcaRuntimeService', () => {
         terminalDriverChanged: vi.fn()
       })
       runtime.attachWindow(1)
-      runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+      await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
       electronMocks.BrowserWindow.fromId.mockReturnValue({
         isDestroyed: () => false,
         webContents: { send: windowSend }
@@ -92,13 +92,13 @@ describe('OrcaRuntimeService', () => {
 
   it('accepts workspace-less terminal create replies only from the target renderer', async () => {
     const webContents = { send: vi.fn() }
-    const send = vi.fn((_channel: string, payload: { requestId: string }) => {
+    const send = vi.fn(async (_channel: string, payload: { requestId: string }) => {
       ipcMain.emit(
         'terminal:tabCreateReply',
         { sender: { send: vi.fn() } },
         { requestId: payload.requestId, error: 'spoofed renderer reply' }
       )
-      runtime.syncWindowGraph(1, {
+      await runtime.syncWindowGraph(1, {
         tabs: [
           {
             tabId: 'tab-renderer',
@@ -128,7 +128,7 @@ describe('OrcaRuntimeService', () => {
     webContents.send = send
     const runtime = new OrcaRuntimeService(store)
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     electronMocks.BrowserWindow.fromId.mockReturnValue({
       isDestroyed: () => false,
       webContents

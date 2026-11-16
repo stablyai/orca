@@ -15,10 +15,10 @@ export function renderSnapshot(
   const screenshotHeight =
     positiveRoundedNumber(snapshot.screenshotHeight) ?? Math.max(1, Math.round(bounds?.height ?? 1))
   const screenshotScale = positiveNumber(snapshot.screenshotScale) ?? 1
-  const screenshot = snapshot.screenshotPngBase64
+  const screenshot = snapshot.screenshotBase64
     ? {
-        data: snapshot.screenshotPngBase64,
-        format: 'png' as const,
+        data: snapshot.screenshotBase64,
+        format: snapshot.screenshotFormat === 'jpeg' ? ('jpeg' as const) : ('png' as const),
         width: screenshotWidth,
         height: screenshotHeight,
         scale: screenshotScale
@@ -49,6 +49,13 @@ export function renderSnapshot(
       treeText,
       elementCount: snapshot.elements?.length ?? 0,
       focusedElementId,
+      ...(snapshot.elements === undefined
+        ? {}
+        : {
+            disabledElementIndexes: snapshot.elements
+              .filter((element) => element.isDisabled === true)
+              .map((element) => element.index)
+          }),
       ...(snapshot.rootElementIndex === undefined
         ? {}
         : { rootElementIndex: snapshot.rootElementIndex }),
@@ -90,7 +97,7 @@ function desktopScreenshotFailureStatus(
 }
 
 export function snapshotWithoutScreenshot(snapshot: BridgeSnapshot): BridgeSnapshot {
-  return snapshot.screenshotPngBase64 ? { ...snapshot, screenshotPngBase64: null } : snapshot
+  return snapshot.screenshotBase64 ? { ...snapshot, screenshotBase64: null } : snapshot
 }
 
 function normalizedFocusedElementId(snapshot: BridgeSnapshot): number | null {

@@ -1,4 +1,4 @@
-import type { RepoKind } from '../../../repo-types'
+import type { RepoKind } from '../../../repository/repo-types'
 import type { CheckStatus, PRInfo, PRMergeableState, PRState } from '../pull-request-types'
 
 /** Classified failures drive stable empty-state copy. Auth/permission/repo_unavailable/gh_unavailable make existing-review lookup impossible and must hide Create. */

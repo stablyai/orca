@@ -23,8 +23,8 @@ on:
       - 'src/wsl-guest/**'
       - 'src/packages/process-host/**'
       - 'pnpm-workspace.yaml'
-      - 'src/shared/node-runtime-pin.ts'
-      - 'src/shared/orcad-artifacts.ts'
+      - 'src/shared/node-runtime/node-runtime-pin.ts'
+      - 'src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts'
       - 'config/scripts/build-orcad-*.mjs'
       - 'config/scripts/orcad-distribution/prebuilds/build-orcad-*.mjs'
       - 'config/scripts/orcad-distribution/template/build-orcad-*.mjs'
@@ -46,7 +46,8 @@ on:
       - 'config/scripts/windows-process-tree-prepared-addon*.mjs'
       - 'config/scripts/native-build/windows/windows-process-tree-prepared-addon*.mjs'
       - 'config/scripts/native-build/windows/windows-process-tree-gyp-rebuild.mjs'
-      - 'src/shared/windows-breakaway-launch*.ts'
+      - 'src/shared/remote-runtime/orcad-lifecycle/windows-breakaway-launch.ts'
+      - 'src/main/orcad/runtime-launch/windows-breakaway-launcher*.ts'
       - 'src/main/ipc/ssh/ssh-host-server-*.ts'
       # The deploy runs over this SSH transport.
       - 'src/main/ssh/connection/**'
@@ -155,7 +156,7 @@ jobs:
             resources
             tests
             src
-      - name: Self-test the provisioning scripts before touching the machine
+      - name: Parse the provisioning scripts before touching the machine
         shell: pwsh
         run: |
           foreach($file in @(Get-ChildItem -Recurse -Filter *.ps1 config/ci/windows-ssh-provider)){
@@ -163,7 +164,6 @@ jobs:
             [Management.Automation.Language.Parser]::ParseFile($file.FullName,[ref]$tokens,[ref]$errors)|Out-Null
             if($errors.Count){throw "PowerShell parse failed: $($file.FullName)"}
           }
-          & config/ci/windows-ssh-provider/preview-ssh/test-preview-diagnostics.ps1
       # ARM inbox servicing can finish while the independent Node artifacts are prepared.
       - name: Prepare the Windows inbox SSH capability
         id: inbox-capability

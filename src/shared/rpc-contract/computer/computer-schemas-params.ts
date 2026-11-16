@@ -24,6 +24,10 @@ export const ComputerTarget = z.object({
 
 export const ComputerObserveTargetBase = ComputerTarget.extend({
   noScreenshot: OptionalBoolean,
+  // Older runtimes strip these and return the full-size PNG; the result's screenshot says what it is.
+  screenshotFormat: z.enum(['png', 'jpeg']).optional(),
+  screenshotScale: z.number().positive().finite().optional(),
+  screenshotMaxEdge: OptionalPositiveInt,
   restoreWindow: OptionalBoolean,
   // Older runtimes strip this and return the full tree, so callers need no capability check.
   treeDiff: OptionalBoolean,
@@ -62,6 +66,14 @@ export const ComputerObserveTarget = ComputerObserveTargetBase.extend({
 }).superRefine(validateComputerTarget)
 
 export const ListApps = z.object({}).strict()
+
+export const LaunchApp = z
+  .object({
+    app: requiredString('Missing app'),
+    // Only with the user's OK: the app comes to the front and takes the keyboard.
+    activate: z.boolean().optional()
+  })
+  .strict()
 
 export const ListWindows = z
   .object({
@@ -217,7 +229,9 @@ export const Hotkey = ComputerObserveTargetBase.extend({
 })
 
 export const ComputerPermissions = z.object({
-  id: z.enum(['accessibility', 'screenshots']).optional()
+  id: z.enum(['accessibility', 'screenshots']).optional(),
+  // Older hosts drop it and open as before; Settings buttons leave it off so a click always opens.
+  skipGranted: z.boolean().optional()
 })
 
 export const PasteText = ComputerObserveTargetBase.extend({

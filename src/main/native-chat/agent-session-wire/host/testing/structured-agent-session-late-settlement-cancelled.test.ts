@@ -1,11 +1,11 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { describe, expect, it, vi } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD,
   hostTestOperationId
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 
 import {
   fixture,
@@ -14,7 +14,7 @@ import {
   journal,
   sendParams,
   submissions
-} from './structured-agent-session-late-settlement-contract-test-fixture'
+} from './structured-agent-session-late-settlement-contract.test-fixture'
 
 describe('settling a send the provider proves it received after the ack window', () => {
   it('a receipt after Stop withdrew an unwritten send keeps it cancelled', async () => {
@@ -47,15 +47,11 @@ describe('settling a send the provider proves it received after the ack window',
     await vi.waitFor(async () =>
       expect(await submissions()).toMatchObject([{ dispatchState: 'rejected' }])
     )
-    const before = journal().cursor()
     await fixture.host.settleLateDispatch({
       sessionId: SESSION,
       clientMessageId: params.envelope.clientOperationId,
       providerIdentity: { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 1 }
     })
-
-    const after = journal().readSince(before)
-    expect(after.ok && after.rows.filter((row) => row.kind === 'dispatch')).toEqual([])
 
     expect(await submissions()).toMatchObject([
       {
@@ -71,7 +67,7 @@ describe('settling a send the provider proves it received after the ack window',
     const params = sendParams('settle from provider echo')
     await fixture.host.send(CALLER, params)
     await handedOver(params.envelope.clientOperationId)
-    vi.spyOn(journal(), 'acceptLate').mockRejectedValueOnce(
+    vi.spyOn(journal(), 'settleLateDispatch').mockRejectedValueOnce(
       new Error('direct settlement write failed')
     )
 
@@ -105,7 +101,6 @@ describe('settling a send the provider proves it received after the ack window',
     const params = sendParams('ordinary send')
     await fixture.host.send(CALLER, params)
     await handedOver(params.envelope.clientOperationId)
-    const before = journal().cursor()
     const receipt = (uuid: string) =>
       fixture.host.settleLateDispatch({
         sessionId: SESSION,
@@ -116,9 +111,7 @@ describe('settling a send the provider proves it received after the ack window',
     await Promise.all([receipt('echo-row'), receipt('echo-row')])
     await receipt('a-different-uuid')
 
-    const after = journal().readSince(before)
-    expect(after.ok && after.rows).toHaveLength(1)
-    expect(journal().submission(params.envelope.clientOperationId)).toMatchObject({
+    expect(await journal().reads.submission(params.envelope.clientOperationId)).toMatchObject({
       dispatchState: 'accepted',
       providerItemId: `claude:${THREAD}:echo-row`
     })

@@ -11,7 +11,7 @@ import {
 import type {
   RuntimeGitLocalBranches,
   RuntimeRepoSearchRefs
-} from '../../../../../../shared/runtime-worktree-contracts'
+} from '../../../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   branchPickerRows,

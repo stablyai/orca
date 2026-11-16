@@ -1,4 +1,4 @@
-import { pickerRepos } from '../../../../shared/hidden-projects'
+import { pickerRepos } from '../../../../shared/project/catalog/hidden-projects'
 import type { ComposerModel } from './composer-model'
 
 type Repos = ComposerModel['eligibleRepos']

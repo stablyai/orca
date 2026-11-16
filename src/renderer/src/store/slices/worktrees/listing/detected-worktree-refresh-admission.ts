@@ -1,7 +1,7 @@
 import { getEnvironmentSshStateGeneration } from '../../ssh/runtime-environment-ssh'
 import { getRuntimeEnvironmentConnectionGeneration } from '../../runtime-status/runtime-status-connection-generation'
 import type { AppState } from '../../../types'
-import type { HostQualifiedDetectedWorktreeResult } from '../../../../../../shared/detected-worktree-provider-contract'
+import type { HostQualifiedDetectedWorktreeResult } from '../../../../../../shared/worktree/catalog/detected-worktree-provider-contract'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { AdmittedDetectedWorktreeRefresh } from './worktree-slice-types'
 import { directSshAuthoritiesEqual, getCurrentDirectSshAuthority } from './direct-ssh-authority'

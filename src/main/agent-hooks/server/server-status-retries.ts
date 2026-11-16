@@ -107,6 +107,16 @@ export abstract class AgentHookServerStatusRetries extends AgentHookServerStatus
     this.claudeHelperKills.clear(paneKey)
   }
 
+  protected replaceTranscriptPollRow(
+    previous: EnrichedAgentHookEventPayload,
+    next: EnrichedAgentHookEventPayload
+  ): void {
+    const poll = this.transcriptPollScheduler.peek(previous.paneKey)
+    if (poll?.original === previous && next.paneKey === previous.paneKey) {
+      poll.original = next
+    }
+  }
+
   protected scheduleTranscriptPoll(
     source: AgentHookSource,
     body: unknown,

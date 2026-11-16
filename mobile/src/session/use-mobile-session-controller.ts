@@ -12,7 +12,7 @@ import { useMobileSessionTerminalStreamDisplay } from '../terminal/session/strea
 import { useMobileSessionTerminalList } from '../terminal/session/inventory/use-mobile-session-terminal-list'
 import { useMobileSessionTabApplication } from './tabs/use-mobile-session-tab-application'
 import { useMobileSessionDocumentReaders } from '../files/session-documents/use-mobile-session-document-readers'
-import { useMobileSessionDiffComments } from '../source-control/review/use-mobile-session-diff-comments'
+import { useMobileSessionDiffComments } from '../source-control/review/review-notes/use-mobile-session-diff-comments'
 import { useMobileSessionMarkdownActions } from '../files/session-documents/use-mobile-session-markdown-actions'
 import { useMobileSessionTabReconciliation } from './tabs/use-mobile-session-tab-reconciliation'
 import { useMobileSessionLifecycle } from './use-mobile-session-lifecycle'

@@ -1,5 +1,5 @@
 import type { ParsedFileLinkLocation } from '../../../../src/shared/file-links/file-link-location'
-import type { RuntimeMobileTerminalTheme } from '../../../../src/shared/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileTerminalTheme } from '../../../../src/shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type { TerminalOscLinkRange } from '../../../../src/shared/terminal/links/terminal-osc-link-ranges'
 import type { StyleProp, ViewStyle } from 'react-native'
 import type { TerminalFitDimensions } from '../viewport/terminal-grid-fit'

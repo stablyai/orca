@@ -4,7 +4,7 @@ import { hasUsageWindows } from './service-result-policy'
 import {
   normalizeCodexAccountSelectionTarget,
   type CodexAccountSelectionTarget
-} from '../../../shared/codex-selection-lane'
+} from '../../../shared/agent-accounts/codex/codex-selection-lane'
 import {
   normalizeClaudeAccountSelectionTarget,
   type ClaudeAccountSelectionTarget
@@ -14,7 +14,7 @@ import type {
   RateLimitRuntimeTarget,
   RateLimitState,
   CodexRateLimitResetResult
-} from '../../../shared/rate-limit-types'
+} from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 
 export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceInactiveAccounts {
   async refresh(): Promise<RateLimitState> {
@@ -137,10 +137,11 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     target?: CodexAccountSelectionTarget
   ): Promise<RateLimitState> {
     const nextTarget = normalizeCodexAccountSelectionTarget(target)
-    // Weekly-only plans still need outgoing switcher snapshots.
+    // Weekly-only and monthly-only plans still need outgoing switcher snapshots.
     if (
       outgoingAccountId &&
-      (this.state.codex?.session || this.state.codex?.weekly) &&
+      this.state.codex &&
+      hasUsageWindows(this.state.codex) &&
       this.isSameCodexTarget(this.codexFetchTarget, nextTarget)
     ) {
       this.inactiveCodexCache.set(outgoingAccountId, this.state.codex)

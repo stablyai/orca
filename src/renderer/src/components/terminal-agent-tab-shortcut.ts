@@ -1,4 +1,4 @@
-import type { KeybindingActionId, KeybindingOverrides } from '../../../shared/keybindings'
+import type { KeybindingActionId, KeybindingOverrides } from '../../../shared/keybindings/types'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { useAppStore } from '../store'
 import type { AppState } from '../store/types'

@@ -50,7 +50,7 @@ import {
 } from '@/lib/workspace/creation/project-host-setup-options'
 import { useAppStore } from '@/store'
 import '@/lib/workspace/creation/new-workspace-composer-repo'
-import { getNewWorkspaceDialogEligibleRepos } from '../../../../shared/new-workspace-dialog-repo'
+import { getNewWorkspaceDialogEligibleRepos } from '../../../../shared/new-workspace/new-workspace-dialog-repo'
 
 export function useTargetChangeActions(input: TargetChangeActionsInput) {
   const {
