@@ -45,11 +45,6 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
     return win
   }
 
-  /** A serve or orcad host with no window attached; main answers for what a window would publish. */
-  hasHeadlessAuthority(): boolean {
-    return this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID
-  }
-
   protected getAvailableAuthoritativeWindow(): BrowserWindow | null {
     if (this.authoritativeWindowId === null) {
       return null

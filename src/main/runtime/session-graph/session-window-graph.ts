@@ -20,8 +20,13 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAdmi
   declare protected terminalGroupGridSizes?: RuntimeSyncWindowGraph['terminalGroupGridSizes']
   declare protected singleGroupWorkspaceGridSize?: RuntimeSyncWindowGraph['singleGroupWorkspaceGridSize']
 
-  shouldRelayTerminalBrowserOpens(): boolean {
+  /** No window attached; main stands in for one (serve, orcad, or a main-owned layout between windows). */
+  hasHeadlessAuthority(): boolean {
     return this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID
+  }
+
+  shouldRelayTerminalBrowserOpens(): boolean {
+    return this.hasHeadlessAuthority()
   }
 
   async syncWindowGraph(
