@@ -1,5 +1,7 @@
 import type { PreloadApi } from '../../../../preload/api-types'
 import {
+  GITLAB_ISSUE_SEARCH_RUNTIME_CAPABILITY,
+  GITLAB_ISSUE_SEARCH_UPDATE_REQUIRED_MESSAGE,
   GITLAB_LIST_LABELS_RUNTIME_CAPABILITY,
   GITLAB_LIST_LABELS_UPDATE_REQUIRED_MESSAGE,
   GITLAB_MR_INVOLVEMENT_RUNTIME_CAPABILITY,
@@ -93,19 +95,32 @@ export function createRuntimeGitLabApi(transport: RuntimeGitLabTransport): GitLa
     listWorkItems: (args) =>
       route<GitLabApiResult<'listWorkItems'>>(GITLAB_WEB_RPC_METHODS.listWorkItems, args),
     issue: () => Promise.resolve(null),
-    listIssues: (args) =>
-      args.labels?.length
-        ? routeRequiring<GitLabApiResult<'listIssues'>>(
-            GITLAB_WEB_RPC_METHODS.listIssues,
-            args,
-            GITLAB_LIST_LABELS_RUNTIME_CAPABILITY,
-            {
-              items: [],
-              totalPages: 0,
-              error: { type: 'unknown', message: GITLAB_LIST_LABELS_UPDATE_REQUIRED_MESSAGE }
-            }
-          )
-        : route<GitLabApiResult<'listIssues'>>(GITLAB_WEB_RPC_METHODS.listIssues, args),
+    listIssues: (args) => {
+      const method = GITLAB_WEB_RPC_METHODS.listIssues
+      const refusal = (message: string): GitLabApiResult<'listIssues'> => ({
+        items: [],
+        totalPages: 0,
+        error: { type: 'unknown', message }
+      })
+      // Why labels alone: a server with the labels capability also takes the issue search.
+      if (args.labels?.length) {
+        return routeRequiring(
+          method,
+          args,
+          GITLAB_LIST_LABELS_RUNTIME_CAPABILITY,
+          refusal(GITLAB_LIST_LABELS_UPDATE_REQUIRED_MESSAGE)
+        )
+      }
+      if (args.query?.trim()) {
+        return routeRequiring(
+          method,
+          args,
+          GITLAB_ISSUE_SEARCH_RUNTIME_CAPABILITY,
+          refusal(GITLAB_ISSUE_SEARCH_UPDATE_REQUIRED_MESSAGE)
+        )
+      }
+      return route<GitLabApiResult<'listIssues'>>(method, args)
+    },
     createIssue: (args) =>
       route<GitLabApiResult<'createIssue'>>(GITLAB_WEB_RPC_METHODS.createIssue, args),
     updateIssue: (args) =>
