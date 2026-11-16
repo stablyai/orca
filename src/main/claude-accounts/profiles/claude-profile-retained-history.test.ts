@@ -154,6 +154,15 @@ describe('Claude account retained history', () => {
     expect(existsSync(join(f.home, 'history.jsonl'))).toBe(false)
     expect(readFileSync(join(f.systemDefault, 'history.jsonl'), 'utf8')).toBe('shared prompts\n')
 
+    // Once System default's file is replaced, the old link holds only this account's prompts.
+    const h = fixture()
+    rmSync(join(h.home, 'history.jsonl'))
+    linkPromptHistory(h.systemDefault, h.home)
+    rmSync(join(h.systemDefault, 'history.jsonl'))
+    write(join(h.systemDefault, 'history.jsonl'), 'new shared\n')
+    await removeClaudeProfileFolder(h.folder, { deleteRetainedHistory: false })
+    expect(readFileSync(join(h.home, 'history.jsonl'), 'utf8')).toBe('shared prompts\n')
+
     const g = fixture()
     rmSync(join(g.home, 'history.jsonl'))
     write(join(g.home, 'history.jsonl'), 'mine\n')

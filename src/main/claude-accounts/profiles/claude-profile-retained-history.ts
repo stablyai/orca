@@ -26,36 +26,70 @@ function absentAsNull(error: unknown): null {
   throw error
 }
 
-// On Windows the profile's prompt history is a hardlink to the shared file recorded at link time.
+// On Windows Orca hardlinks the profile's prompt history to the shared file and records its
+// identity; once the shared file is replaced, the old link holds this account's own prompts.
 async function isLinkedPromptHistory(home: string): Promise<boolean> {
+  const stats = await lstat(join(home, PROMPT_HISTORY), { bigint: true }).catch(absentAsNull)
+  if (!stats?.isFile() || stats.nlink < 2n) {
+    return false
+  }
   const record = await readFile(join(home, PROMPT_HISTORY_LINK_RECORD), 'utf8').catch(absentAsNull)
-  const stats = await lstat(join(home, PROMPT_HISTORY), { bigint: true })
   return record?.trim() === fileIdentity(stats)
 }
 
-/**
- * History only this account holds: what never became a link into System default. Links, the
- * sign-in, `.claude.json` and settings are never retained.
- */
-async function isRetainedClaudeHistory(home: string, entry: Dirent): Promise<boolean> {
-  if (entry.isSymbolicLink()) {
-    return false
+/** Decides per entry; read before anything in `home` is removed, the link record included. */
+async function retainedHistoryFilter(home: string): Promise<(entry: Dirent) => boolean> {
+  const linkedPromptHistory = await isLinkedPromptHistory(home)
+  // History only this account holds: what never became a link into System default. Links, the
+  // sign-in, `.claude.json` and settings are never retained.
+  return (entry) => {
+    if (entry.isSymbolicLink()) {
+      return false
+    }
+    if (
+      entry.name.endsWith(MERGE_PENDING_SUFFIX) ||
+      PROMPT_HISTORY_ASIDE.some((prefix) => entry.name.startsWith(prefix))
+    ) {
+      return true
+    }
+    if (HISTORY_DIRS.includes(entry.name)) {
+      return entry.isDirectory()
+    }
+    return entry.name === PROMPT_HISTORY && entry.isFile() && !linkedPromptHistory
   }
-  if (
-    entry.name.endsWith(MERGE_PENDING_SUFFIX) ||
-    PROMPT_HISTORY_ASIDE.some((prefix) => entry.name.startsWith(prefix))
-  ) {
-    return true
-  }
-  if (HISTORY_DIRS.includes(entry.name)) {
-    return entry.isDirectory()
-  }
-  return entry.name === PROMPT_HISTORY && entry.isFile() && !(await isLinkedPromptHistory(home))
 }
 
 async function isRealDirectory(path: string): Promise<boolean> {
   const stats = await lstat(path).catch(absentAsNull)
   return stats !== null && stats.isDirectory() && !stats.isSymbolicLink()
+}
+
+/** Bytes of files under one retained entry, never through a link; unreadable parts fail it. */
+async function measureEntry(path: string): Promise<number> {
+  const scan = await scanWorkspaceSpaceEntryTree<Dirent>({
+    rootPath: path,
+    rootName: basename(path),
+    concurrency: MEASURE_CONCURRENCY,
+    entryName: (child) => child.name,
+    joinPath: join,
+    classifyEntry: async (entryPath) => {
+      const stats = await lstat(entryPath)
+      if (stats.isSymbolicLink()) {
+        return { kind: 'symlink', sizeBytes: 0 }
+      }
+      return stats.isDirectory()
+        ? { kind: 'directory', sizeBytes: 0 }
+        : { kind: 'file', sizeBytes: stats.size }
+    },
+    readDirectory: (directory) => opendir(directory),
+    checkCancelled: () => {},
+    createCancellationError: () => new Error('Cancelled'),
+    isCancellationError: () => false
+  })
+  if (scan.skippedEntryCount > 0) {
+    throw new RetainedHistoryUnreadableError(`Could not read all of ${path}`)
+  }
+  return scan.sizeBytes
 }
 
 /** Bytes of files in the retained entries; an unreadable entry fails the whole measurement. */
@@ -64,36 +98,12 @@ export async function measureRetainedClaudeHistory(folder: string): Promise<numb
   if (!(await isRealDirectory(folder)) || !(await isRealDirectory(home))) {
     return 0
   }
+  const retained = await retainedHistoryFilter(home)
   let bytes = 0
   for (const entry of await readdir(home, { withFileTypes: true })) {
-    if (!(await isRetainedClaudeHistory(home, entry))) {
-      continue
+    if (retained(entry)) {
+      bytes += await measureEntry(join(home, entry.name))
     }
-    const path = join(home, entry.name)
-    const scan = await scanWorkspaceSpaceEntryTree<Dirent>({
-      rootPath: path,
-      rootName: basename(path),
-      concurrency: MEASURE_CONCURRENCY,
-      entryName: (child) => child.name,
-      joinPath: join,
-      classifyEntry: async (entryPath) => {
-        const stats = await lstat(entryPath)
-        if (stats.isSymbolicLink()) {
-          return { kind: 'symlink', sizeBytes: 0 }
-        }
-        return stats.isDirectory()
-          ? { kind: 'directory', sizeBytes: 0 }
-          : { kind: 'file', sizeBytes: stats.size }
-      },
-      readDirectory: (directory) => opendir(directory),
-      checkCancelled: () => {},
-      createCancellationError: () => new Error('Cancelled'),
-      isCancellationError: () => false
-    })
-    if (scan.skippedEntryCount > 0) {
-      throw new RetainedHistoryUnreadableError(`Could not read all of ${path}`)
-    }
-    bytes += scan.sizeBytes
   }
   return bytes
 }
@@ -136,7 +146,7 @@ async function removeIfEmpty(dir: string): Promise<void> {
 
 /**
  * Delete an account folder (`claude-profiles/<id>`). Its retained conversations stay unless the
- * user asked to delete them, or nothing in them is worth keeping.
+ * user asked to delete them; a retained entry that holds nothing goes too.
  */
 export async function removeClaudeProfileFolder(
   folder: string,
@@ -146,17 +156,20 @@ export async function removeClaudeProfileFolder(
     await removeWithoutFollowingLinks(folder)
     return
   }
-  // An unmeasurable folder keeps its history.
-  const deleteAll =
-    options.deleteRetainedHistory ||
-    (await measureRetainedClaudeHistory(folder).catch(() => null)) === 0
   const home = join(folder, 'home')
   const homeIsReal = await isRealDirectory(home)
   if (homeIsReal) {
-    // Decide per entry as it is removed, so history a writer adds meanwhile is never swept up.
+    const retained = await retainedHistoryFilter(home)
+    // Decide per entry as it is removed, so history a writer adds meanwhile is never swept up;
+    // an unmeasurable entry is kept.
     for (const entry of await readdir(home, { withFileTypes: true })) {
-      if (deleteAll || !(await isRetainedClaudeHistory(home, entry))) {
-        await removeWithoutFollowingLinks(join(home, entry.name))
+      const path = join(home, entry.name)
+      const keep =
+        !options.deleteRetainedHistory &&
+        retained(entry) &&
+        (await measureEntry(path).catch(() => null)) !== 0
+      if (!keep) {
+        await removeWithoutFollowingLinks(path)
       }
     }
   }
@@ -189,13 +202,14 @@ const GUEST_PREAMBLE = [
   '  if [ -e "$entry" ] || [ -L "$entry" ]; then printf "%s\\0" "$entry"; fi',
   'done; }',
   // Fails rather than undercount: an unreadable home would otherwise list as empty.
+  'listable_home() { real_dir "$folder" && real_dir "$home" && { [ -r "$home" ] && [ -x "$home" ] || exit 1; }; }',
+  `entry_bytes() { find "$1" -type f -printf '%s\\n' | awk '{ s += $1 } END { printf "%.0f", s }'; }`,
   'measure_total() {',
   '  local total=0 entry size',
-  '  if real_dir "$folder" && real_dir "$home"; then',
-  '    [ -r "$home" ] && [ -x "$home" ] || return 1',
+  '  if listable_home; then',
   '    while IFS= read -r -d "" entry; do',
   '      kept "$entry" || continue',
-  `      size=$(find "$entry" -type f -printf '%s\\n' | awk '{ s += $1 } END { printf "%.0f", s }') || return 1`,
+  '      size=$(entry_bytes "$entry") || exit 1',
   '      total=$((total + size))',
   '    done < <(entries "$home")',
   '  fi',
@@ -207,14 +221,13 @@ const GUEST_PREAMBLE = [
 export const GUEST_REMOVE_KEEPING_HISTORY_SCRIPT = [
   ...GUEST_PREAMBLE,
   'real_dir "$folder" || { rm -f -- "$folder"; exit; }',
-  'delete_all=0',
-  '[ "${2:-}" = delete ] && delete_all=1',
-  '[ "$(measure_total 2>/dev/null)" = 0 ] && delete_all=1',
   'failed=0',
   'remove() { rm -rf -- "$1" || failed=1; }',
-  'if real_dir "$home"; then',
+  // An unmeasurable entry is kept; one that holds nothing goes.
+  'keep() { [ "${2:-}" != delete ] && kept "$1" && [ "$(entry_bytes "$1" 2>/dev/null || echo unknown)" != 0 ]; }',
+  'if listable_home; then',
   '  while IFS= read -r -d "" entry; do',
-  '    { [ "$delete_all" = 0 ] && kept "$entry"; } || remove "$entry"',
+  '    keep "$entry" "${2:-}" || remove "$entry"',
   '  done < <(entries "$home")',
   'fi',
   'while IFS= read -r -d "" entry; do',
