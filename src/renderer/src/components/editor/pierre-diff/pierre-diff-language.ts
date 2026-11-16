@@ -78,7 +78,8 @@ function registerPluginSyntax(syntax: PluginSyntaxMetadata): string {
       ? payload.grammars.map((grammar, index) => ({
           // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: main validated each grammar's shape; TextMate reads applyEndPatternLast 0/1 like a boolean.
           ...(grammar as Omit<LanguageRegistration, 'name'>),
-          name: grammar.scopeName === payload.scopeName ? name : `${name}-${index}`
+          name: grammar.scopeName === payload.scopeName ? name : `${name}-${index}`,
+          workerOnly: true
         }))
       : [{ name, scopeName: `text.${name}`, patterns: [], repository: {} }]
     return { default: grammars }
@@ -86,20 +87,10 @@ function registerPluginSyntax(syntax: PluginSyntaxMetadata): string {
   return name
 }
 
-/**
- * Main's language for a file, as a Shiki grammar. An enabled plugin syntax that claims the file
- * wins only on read-only diffs: Pierre's editor tokenizes on the main thread, and plugin
- * grammars must never run where the window cannot terminate them.
- */
-export function usePierreDiffLanguage(
-  filePath: string,
-  coreLanguage: string,
-  allowPluginSyntax: boolean
-): string {
+/** Plugin grammars are worker-only; the renderer's registered fallback has no patterns. */
+export function usePierreDiffLanguage(filePath: string, coreLanguage: string): string {
   const syntaxes = usePluginSyntaxes()
-  const syntax = allowPluginSyntax
-    ? resolvePluginSyntaxForFile(syntaxes, filePath, coreLanguage)
-    : null
+  const syntax = resolvePluginSyntaxForFile(syntaxes, filePath, coreLanguage)
   return useMemo(
     () =>
       syntax ? registerPluginSyntax(syntax) : resolvePierreDiffLanguage(filePath, coreLanguage),

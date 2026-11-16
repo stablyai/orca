@@ -307,7 +307,10 @@ function PRFilesCombinedDiffSections({
   )
 
   return (
-    <PierreDiffProviders scrollContainerRef={scrollContainerRef}>
+    <PierreDiffProviders
+      scrollContainerRef={scrollContainerRef}
+      overview={{ sections, virtualizer, sideBySide }}
+    >
       <PRFilesCombinedDiffBody
         viewStateKey={viewStateKey}
         imageUploadAddress={() =>

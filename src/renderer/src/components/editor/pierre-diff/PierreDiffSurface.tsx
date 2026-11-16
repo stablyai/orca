@@ -1,5 +1,5 @@
 import { countLinesEmptyAsZero } from '../../../../../shared/source-control/diff/large-diff-render-limit'
-import { resolvePierreDiffTheme } from './pierre-diff-theme'
+import { buildPierreDiffSelectionStyle, resolvePierreDiffTheme } from './pierre-diff-theme'
 import type { DiffCommentOwner } from '@/store/slices/diff-comments/diff-comment-owner'
 import type { GitHubImageIntake } from '@/components/github/use-github-image-uploads'
 import { useEditorTypography } from '@/hooks/use-editor-typography'
@@ -32,6 +32,8 @@ import {
   type PierreDiffAnnotationData,
   type PierreDiffCommentAnnotation
 } from './pierre-diff-comment-annotations'
+import { usePierreDiffOverview } from './use-pierre-diff-overview'
+import { usePierrePluginTokenizer } from './use-pierre-plugin-tokenizer'
 import { usePierreDiffFind } from './use-pierre-diff-find'
 import { PierreDiffSearchBar } from './PierreDiffSearchBar'
 import { usePierreDiffShiftWheel } from './use-pierre-diff-shift-wheel'
@@ -47,10 +49,11 @@ import { withPierreDiffEditState } from './pierre-diff-edit-state'
 import { shouldAutoFocusPierreDiffHost, shouldFocusPierreDiffHost } from './pierre-diff-host-focus'
 
 export type PierreDiffInstance = PierreFileDiff<PierreDiffAnnotationData> &
-  Partial<Pick<VirtualizedFileDiff, 'getLinePosition'>>
+  Partial<Pick<VirtualizedFileDiff, 'getLinePosition' | 'layoutVersion'>>
 
 export type PierreDiffSurfaceProps = {
   fileDiff: FileDiffMetadata
+  overviewKey?: string
   modifiedContent?: string
   sideBySide: boolean
   settings?: PierreDiffSettings | null
@@ -92,6 +95,7 @@ export type PierreDiffSurfaceProps = {
  */
 export function PierreDiffSurface({
   fileDiff,
+  overviewKey,
   modifiedContent,
   sideBySide,
   settings,
@@ -167,6 +171,13 @@ export function PierreDiffSurface({
     }
     host.focus({ preventScroll: true })
   }, [autoFocusHost, isEditable])
+  const { onPostRender: overviewPostRender, onEditChange: overviewEditChange } =
+    usePierreDiffOverview(
+      overviewKey ?? filePath,
+      fileDiff,
+      editorRef,
+      JSON.stringify([sideBySide && !narrowLayout, collapseUnchanged, typography])
+    )
   const onEditChangeRef = useRef(onEditChange)
   const {
     searchBar,
@@ -179,8 +190,9 @@ export function PierreDiffSurface({
     onEditChangeRef.current = (file) => {
       onEditChange?.(file)
       searchEditChange()
+      overviewEditChange()
     }
-  }, [onEditChange, searchEditChange])
+  }, [onEditChange, searchEditChange, overviewEditChange])
   const shiftWheelPostRender = usePierreDiffShiftWheel()
   const nativeViewPostRender = usePierreDiffNativeView(
     editStateKey,
@@ -211,7 +223,8 @@ export function PierreDiffSurface({
       shiftWheelPostRender,
       nativeViewPostRender,
       noteSelection.onPostRender,
-      unicodePostRender
+      unicodePostRender,
+      overviewPostRender
     ],
     [
       onPostRender,
@@ -220,7 +233,8 @@ export function PierreDiffSurface({
       shiftWheelPostRender,
       nativeViewPostRender,
       noteSelection.onPostRender,
-      unicodePostRender
+      unicodePostRender,
+      overviewPostRender
     ]
   )
   const postRenderRef = useRef(postRenderChain)
@@ -274,14 +288,9 @@ export function PierreDiffSurface({
     ]
   )
   const style = useMemo(() => {
-    const selection =
-      editorTheme?.data.colors['editor.selectionBackground'] ??
-      (themeType === 'dark' ? '#264f78' : '#add6ff')
     return {
       ...buildPierreDiffStyle(settings, editorFontZoomLevel, typography),
-      '--orca-diff-selection-bg': selection,
-      '--orca-diff-inactive-selection-bg':
-        editorTheme?.data.colors['editor.inactiveSelectionBackground'] ?? selection
+      ...buildPierreDiffSelectionStyle(editorTheme, themeType)
     }
   }, [settings, editorFontZoomLevel, typography, editorTheme, themeType])
   const metrics = useMemo(
@@ -300,10 +309,12 @@ export function PierreDiffSurface({
       ),
     [comments, filePath, pendingComment, fileDiff.additionLines.length, modifiedContent]
   )
+  const createTokenizer = usePierrePluginTokenizer(filePath, language ?? 'plaintext')
   const editorOptions = useMemo<EditorOptions<'file-diff', PierreDiffAnnotationData, undefined>>(
     () =>
       withPierreDiffEditState(
         {
+          createTokenizer,
           onAttach: (editor) => {
             editorRef.current = editor
             const host = containerRef.current
@@ -325,7 +336,7 @@ export function PierreDiffSurface({
         isEditable ? editStateKey : undefined,
         fileDiff
       ),
-    [autoFocusHost, isEditable, editStateKey, fileDiff]
+    [autoFocusHost, isEditable, editStateKey, fileDiff, createTokenizer]
   )
   const renderAnnotation = useCallback(
     (annotation: PierreDiffCommentAnnotation) =>

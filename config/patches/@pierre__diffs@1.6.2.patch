@@ -49,6 +49,11 @@ index 8055c09b642caddcf411182dad3313866b02d15c..7c4d06b11a2bf1dac5482a830881fc40
    setSelections(selections: (Range & {
      direction: 'none' | 'backward' | 'forward';
    })[]): void;
+diff --git a/dist/editor/editor.d.ts b/dist/editor/editor.d.ts
+--- a/dist/editor/editor.d.ts
++++ b/dist/editor/editor.d.ts
+@@ -34,0 +35 @@
++  createTokenizer?: (options: import("../highlighter/tokenizer-types.js").DiffsEditorTokenizerOptions, highlighter: DiffsHighlighter) => import("../highlighter/DiffsEditorTokenizer.js").DiffsEditorTokenizer;
 diff --git a/dist/editor/editor.js b/dist/editor/editor.js
 index bf17cea32f39ee60ff7520b17f44d99a8e7e98aa..902c019d28215fddc669a8e524ac514c8f7411a3 100644
 --- a/dist/editor/editor.js
@@ -64,6 +69,14 @@ index bf17cea32f39ee60ff7520b17f44d99a8e7e98aa..902c019d28215fddc669a8e524ac514c
  	setSelections(selections) {
  		const textDocument = this.#editSession?.document;
  		if (textDocument === void 0) throw new Error("Editor.setSelections: Text document is not initialized");
+diff --git a/dist/editor/editor.js b/dist/editor/editor.js
+--- a/dist/editor/editor.js
++++ b/dist/editor/editor.js
+@@ -727 +727 @@
+-		if (this.#tokenizer != null && this.#tokenizer.highlighter !== highlighter) {
++		if (this.#tokenizer != null && (this.#tokenizer.highlighter !== highlighter || this.#tokenizer.createTokenizer !== this.#options.createTokenizer)) {
+@@ -735,0 +736 @@
++			createTokenizer: this.#options.createTokenizer,
 diff --git a/dist/index.d.ts b/dist/index.d.ts
 index 2c16007aeaa1b98a76b94bf6a4b45988b8cd3fec..6b37e36d6c9c72f43c8f742514fb839b223e5a10 100644
 --- a/dist/index.d.ts
@@ -567,3 +580,52 @@ index 31166ff003ae36c64b225e2ed7ad2b0272a16850..13895411f0198651d57704b7bc7027ee
  	createRenderTaskCallbacks(task) {
  		return new Promise((resolve, reject) => {
  			task.callbacks.add({
+diff --git a/dist/editor/tokenizer.d.ts b/dist/editor/tokenizer.d.ts
+--- a/dist/editor/tokenizer.d.ts
++++ b/dist/editor/tokenizer.d.ts
+@@ -6,0 +7 @@
++  createTokenizer?: (options: import("../highlighter/tokenizer-types.js").DiffsEditorTokenizerOptions, highlighter: DiffsHighlighter) => import("../highlighter/DiffsEditorTokenizer.js").DiffsEditorTokenizer;
+@@ -17,0 +19 @@
++  createTokenizer: EditorTokenizerProps["createTokenizer"];
+@@ -20 +22 @@
+-  constructor({ codeOptions, highlighter, textDocument, matchBrackets, setStyle, onDeferTokenize, onThemeChange, __debug }: EditorTokenizerProps);
++  constructor({ codeOptions, highlighter, textDocument, matchBrackets, createTokenizer, setStyle, onDeferTokenize, onThemeChange, __debug }: EditorTokenizerProps);
+diff --git a/dist/editor/tokenizer.js b/dist/editor/tokenizer.js
+--- a/dist/editor/tokenizer.js
++++ b/dist/editor/tokenizer.js
+@@ -7,0 +8 @@
++	createTokenizer;
+@@ -21 +22 @@
+-	constructor({ codeOptions, highlighter, textDocument, matchBrackets, setStyle, onDeferTokenize, onThemeChange, __debug }) {
++	constructor({ codeOptions, highlighter, textDocument, matchBrackets, createTokenizer, setStyle, onDeferTokenize, onThemeChange, __debug }) {
+@@ -41,0 +43 @@
++		this.createTokenizer = createTokenizer;
+@@ -46 +48 @@
+-		this.#tokenizer = highlighter.createEditorTokenizer({
++		this.#tokenizer = (createTokenizer ?? ((options) => highlighter.createEditorTokenizer(options)))({
+@@ -53 +55 @@
+-		});
++		}, highlighter);
+diff --git a/dist/highlighter/backends/shiki.js b/dist/highlighter/backends/shiki.js
+--- a/dist/highlighter/backends/shiki.js
++++ b/dist/highlighter/backends/shiki.js
+@@ -0,0 +1 @@
++import { isWorkerContext } from "../../utils/isWorkerContext.js";
+@@ -73 +74,4 @@
+-			this.raw.loadLanguageSync(lang.data);
++			const workerOnly = lang.data.some((grammar) => grammar.workerOnly === true);
++            const inWorker = typeof __DIFFS_WORKER__ !== "undefined" ? __DIFFS_WORKER__ : isWorkerContext();
++            const data = workerOnly && !inWorker ? lang.data.map(({ name, scopeName, aliases }) => ({ name, scopeName, aliases, patterns: [] })) : lang.data;
++            this.raw.loadLanguageSync(data);
+diff --git a/dist/components/VirtualizedFileDiff.js b/dist/components/VirtualizedFileDiff.js
+--- a/dist/components/VirtualizedFileDiff.js
++++ b/dist/components/VirtualizedFileDiff.js
+@@ -39,0 +40 @@
++	layoutVersion = 0;
+@@ -123,0 +125 @@
++		this.layoutVersion++;
+diff --git a/dist/components/VirtualizedFileDiff.d.ts b/dist/components/VirtualizedFileDiff.d.ts
+--- a/dist/components/VirtualizedFileDiff.d.ts
++++ b/dist/components/VirtualizedFileDiff.d.ts
+@@ -15,0 +16 @@
++  readonly layoutVersion: number;

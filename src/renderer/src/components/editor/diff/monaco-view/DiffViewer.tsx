@@ -93,7 +93,7 @@ export default function DiffViewer({
     [largeDiffRenderLimit, originalContent, modifiedContent]
   )
   const hasLineCommentAction = Boolean(commentOwner || onAddLineComment)
-  const lang = usePierreDiffLanguage(relativePath, language, !editable)
+  const lang = usePierreDiffLanguage(relativePath, language)
 
   const diffInput = useMemo<PierreDiffInput | null>(
     () =>
@@ -299,7 +299,7 @@ export default function DiffViewer({
   )
 
   return (
-    <div className="flex flex-col flex-1 min-h-0">
+    <div className="relative flex flex-col flex-1 min-h-0">
       <div ref={scrollContainerRef} className="flex-1 min-h-0 overflow-auto scrollbar-editor">
         {renderLimit.limited ? (
           <LargeDiffFallback

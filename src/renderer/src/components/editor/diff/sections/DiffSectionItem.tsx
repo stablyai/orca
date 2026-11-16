@@ -75,7 +75,7 @@ export function DiffSectionItem({
   )
   const isEditable = section.area === 'unstaged'
   const language = detectLanguage(section.path)
-  const lang = usePierreDiffLanguage(section.path, language, !isEditable)
+  const lang = usePierreDiffLanguage(section.path, language)
   const hasLineCommentAction = Boolean(commentOwner || onAddLineComment)
 
   const sectionBodyRef = useRef<HTMLDivElement | null>(null)
@@ -273,6 +273,7 @@ export function DiffSectionItem({
           <PierreDiffSurface
             key={renderKey ?? editStateKey}
             fileDiff={fileDiff}
+            overviewKey={section.key}
             modifiedContent={section.modifiedContent}
             sideBySide={sideBySide}
             settings={settings}
@@ -325,6 +326,7 @@ export function DiffSectionItem({
       pendingComment,
       language,
       section.path,
+      section.key,
       section.modifiedContent,
       setPendingComment,
       settings,

@@ -7,31 +7,44 @@ import { preparePierreDiffHighlight } from './pierre-diff-highlight'
 const scheduler = createPierreDiffParseScheduler(() => new PierreDiffParseWorker())
 let nextRequestId = 0
 
-export async function requestPierreFileDiff(
-  input: PierreDiffInput,
-  signal: AbortSignal,
-  blockOnHighlight = false,
-  onHighlightError?: (error: unknown) => void
-) {
+export async function requestPierreDiffMetadata(input: PierreDiffInput, signal: AbortSignal) {
   const identity = getPierreDiffCacheIdentity(
     JSON.stringify([
       input.cacheKey,
       input.path,
       input.oldPath,
       input.status,
+      input.lang,
       input.parseDiffOptions
     ]),
     input.originalContent,
     input.modifiedContent
   )
-  const diff = await scheduler.request({ id: ++nextRequestId, identity, input }, signal)
+  return scheduler.request({ id: ++nextRequestId, identity, input }, signal)
+}
+
+export async function requestPierreFileDiff(
+  input: PierreDiffInput,
+  signal: AbortSignal,
+  blockOnHighlight = false,
+  onHighlightError?: (error: unknown) => void
+) {
+  const diff = await requestPierreDiffMetadata(input, signal)
   // Why conditional: entering edit mode otherwise highlights the whole file synchronously, so an
   // editable surface still waits. For a read-only diff, awaiting it put a whole-file AST
   // structured-clone on the critical path -- Pierre paints a viewport-windowed plain AST first and
   // upgrades when this resolves, so blocking here only delayed the first paint.
   const highlight = preparePierreDiffHighlight(diff, signal)
   if (blockOnHighlight) {
-    await highlight
+    try {
+      await highlight
+    } catch (error) {
+      if (signal.aborted || !diff.lang?.startsWith('orca-plugin-syntax-')) {
+        throw error
+      }
+      // A stalled initial highlight must not prevent entering edit mode.
+      return { ...diff, lang: 'text' }
+    }
   } else {
     // Why report rather than swallow: a dead worker pool used to reject this call, which gave the
     // user the retry affordance. Detaching it must not cost that -- only an abort is silent.

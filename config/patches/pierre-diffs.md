@@ -48,3 +48,16 @@ Same-line-count edits also retain replacement hunks when whitespace is ignored.
 The cached original-line set uses the same trimmed comparison as jsdiff; an edit
 that matches an original line still rebuilds the hunks. This avoids a full-file
 diff on each keystroke in large replacements without hiding reverted changes.
+
+The editor also accepts an optional `createTokenizer` factory. Orca supplies an
+async adapter for plugin languages, using the existing terminable plugin grammar
+worker and its progress/document deadlines. A failed initial plugin highlight
+falls back to plain text so edit mode can still attach. Worker-only grammars
+register empty patterns with the renderer's Shiki backend; full patterns are
+attached only inside highlight workers. The existing 30-second render execution
+deadline retires and replaces a stalled read-only highlight worker.
+
+`VirtualizedFileDiff.layoutVersion` exposes the existing layout invalidation
+counter. The overview ruler reads this counter in post-render callbacks and uses
+`getLinePosition` only after diff/layout changes, including context expansion;
+scroll-only renders do not recompute marker geometry.

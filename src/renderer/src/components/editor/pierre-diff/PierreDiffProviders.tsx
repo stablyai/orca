@@ -1,6 +1,8 @@
+import { PierreDiffOverviewRuler, type CombinedDiffOverview } from './PierreDiffOverviewRuler'
+import { PierreDiffOverviewContext, type DiffOverviewSource } from './pierre-diff-overview'
 import { useCodeEditorThemeStore } from '@/store/appearance/code-editor-theme'
 import { resolvePierreDiffTheme } from './pierre-diff-theme'
-import { useEffect, useState, type RefObject } from 'react'
+import { useCallback, useEffect, useMemo, useState, type RefObject } from 'react'
 import { Virtualizer } from '@pierre/diffs'
 import { EditProvider, WorkerPoolContext, VirtualizerContext } from '@pierre/diffs/react'
 import type { PierreDiffAnnotationData } from './pierre-diff-comment-annotations'
@@ -18,11 +20,40 @@ import { PierreDiffNarrowLayoutContext } from './pierre-diff-layout'
  */
 export function PierreDiffProviders({
   children,
-  scrollContainerRef
+  scrollContainerRef,
+  overview
 }: {
   children: React.ReactNode
   scrollContainerRef: RefObject<HTMLElement | null>
+  overview?: CombinedDiffOverview
 }): React.JSX.Element {
+  const [sources, setSources] = useState<ReadonlyMap<string, DiffOverviewSource>>(new Map())
+  const combined = Boolean(overview)
+  const publish = useCallback(
+    (path: string, source: DiffOverviewSource) => {
+      setSources((previous) => {
+        const existing = previous.get(path)
+        if (
+          existing?.original === source.original &&
+          existing.modified === source.modified &&
+          existing.height === source.height &&
+          existing.inset === source.inset &&
+          existing.layout === source.layout &&
+          JSON.stringify(existing.markers) === JSON.stringify(source.markers)
+        ) {
+          return previous
+        }
+        const next = new Map(combined ? previous : [])
+        if (next.size >= 256 && !next.has(path)) {
+          next.delete(next.keys().next().value!)
+        }
+        next.set(path, source)
+        return next
+      })
+    },
+    [combined]
+  )
+  const overviewContext = useMemo(() => ({ publish }), [publish])
   // Why: lazy initializer keeps worker startup off app launch until a diff opens.
   const [pool] = useState(createDiffHighlightPool)
   const editorTheme = useCodeEditorThemeStore((s) => s.monaco)
@@ -50,14 +81,21 @@ export function PierreDiffProviders({
   }, [scrollContainerRef, virtualizer])
 
   return (
-    <WorkerPoolContext.Provider value={pool}>
-      <VirtualizerContext.Provider value={virtualizer}>
-        <PierreDiffNarrowLayoutContext.Provider value={narrow}>
-          <EditProvider<PierreDiffAnnotationData, undefined> createEditor={createPierreEditor}>
-            {children}
-          </EditProvider>
-        </PierreDiffNarrowLayoutContext.Provider>
-      </VirtualizerContext.Provider>
-    </WorkerPoolContext.Provider>
+    <PierreDiffOverviewContext.Provider value={overviewContext}>
+      <PierreDiffOverviewRuler
+        scrollContainerRef={scrollContainerRef}
+        sources={sources}
+        combined={overview && { ...overview, sideBySide: overview.sideBySide && !narrow }}
+      />
+      <WorkerPoolContext.Provider value={pool}>
+        <VirtualizerContext.Provider value={virtualizer}>
+          <PierreDiffNarrowLayoutContext.Provider value={narrow}>
+            <EditProvider<PierreDiffAnnotationData, undefined> createEditor={createPierreEditor}>
+              {children}
+            </EditProvider>
+          </PierreDiffNarrowLayoutContext.Provider>
+        </VirtualizerContext.Provider>
+      </WorkerPoolContext.Provider>
+    </PierreDiffOverviewContext.Provider>
   )
 }

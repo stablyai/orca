@@ -110,62 +110,64 @@ export function PRFilesCombinedDiffBody({
           onCollapsedChange={setFileTreeCollapsed}
           onNavigate={handleTreeNavigate}
         />
-        <div
-          {...combinedDiffViewportAttributes}
-          ref={scrollContainerRef}
-          className="min-w-0 flex-1 overflow-auto scrollbar-editor"
-        >
-          <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
-            {virtualizer.getVirtualItems().map((virtualItem) => {
-              const section = sections[virtualItem.index]
-              if (!section) {
-                return null
-              }
-              return (
-                <div
-                  key={virtualItem.key}
-                  {...combinedDiffRowAttributes}
-                  data-index={virtualItem.index}
-                  ref={virtualizer.measureElement}
-                  className="absolute left-0 top-0 w-full"
-                  style={{ top: `${virtualItem.start}px` }}
-                >
-                  <DiffSectionItem
-                    editStateKey={`${viewStateKey}:${section.key}`}
-                    section={section}
-                    index={virtualItem.index}
-                    isBranchMode={false}
-                    sideBySide={sideBySide}
-                    sectionHeight={sectionHeights[virtualItem.index]}
-                    worktreeId={`github-pr:${repoId}:${prNumber}`}
-                    inlineComments={inlineReviewComments}
-                    loadSection={loadSection}
-                    retrySection={retrySection}
-                    toggleSection={toggleSection}
-                    openSection={openFilesOnGitHub}
-                    openSectionTitle={t(
-                      'auto.components.GitHubItemDialog.85a2b66f54',
-                      'Open files on GitHub'
-                    )}
-                    renderHeaderTrailingContent={renderViewedCheckbox}
-                    imageUploadAddress={imageUploadAddress}
-                    onAddLineComment={handleAddLineComment}
-                    addLineCommentLabel={t(
-                      'auto.components.GitHubItemDialog.bf43425540',
-                      'Comment'
-                    )}
-                    addLineCommentPlaceholder={t(
-                      'auto.components.GitHubItemDialog.86d84a17ca',
-                      'Add a review comment'
-                    )}
-                    getCommentableLineNumbers={getCommentableLineNumbers}
-                    setSectionHeights={setSectionHeights}
-                    setSections={setSections}
-                    handleSectionSaveRef={handleSectionSaveRef}
-                  />
-                </div>
-              )
-            })}
+        <div className="relative min-w-0 flex-1">
+          <div
+            {...combinedDiffViewportAttributes}
+            ref={scrollContainerRef}
+            className="h-full overflow-auto scrollbar-editor"
+          >
+            <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
+              {virtualizer.getVirtualItems().map((virtualItem) => {
+                const section = sections[virtualItem.index]
+                if (!section) {
+                  return null
+                }
+                return (
+                  <div
+                    key={virtualItem.key}
+                    {...combinedDiffRowAttributes}
+                    data-index={virtualItem.index}
+                    ref={virtualizer.measureElement}
+                    className="absolute left-0 top-0 w-full"
+                    style={{ top: `${virtualItem.start}px` }}
+                  >
+                    <DiffSectionItem
+                      editStateKey={`${viewStateKey}:${section.key}`}
+                      section={section}
+                      index={virtualItem.index}
+                      isBranchMode={false}
+                      sideBySide={sideBySide}
+                      sectionHeight={sectionHeights[virtualItem.index]}
+                      worktreeId={`github-pr:${repoId}:${prNumber}`}
+                      inlineComments={inlineReviewComments}
+                      loadSection={loadSection}
+                      retrySection={retrySection}
+                      toggleSection={toggleSection}
+                      openSection={openFilesOnGitHub}
+                      openSectionTitle={t(
+                        'auto.components.GitHubItemDialog.85a2b66f54',
+                        'Open files on GitHub'
+                      )}
+                      renderHeaderTrailingContent={renderViewedCheckbox}
+                      imageUploadAddress={imageUploadAddress}
+                      onAddLineComment={handleAddLineComment}
+                      addLineCommentLabel={t(
+                        'auto.components.GitHubItemDialog.bf43425540',
+                        'Comment'
+                      )}
+                      addLineCommentPlaceholder={t(
+                        'auto.components.GitHubItemDialog.86d84a17ca',
+                        'Add a review comment'
+                      )}
+                      getCommentableLineNumbers={getCommentableLineNumbers}
+                      setSectionHeights={setSectionHeights}
+                      setSections={setSections}
+                      handleSectionSaveRef={handleSectionSaveRef}
+                    />
+                  </div>
+                )
+              })}
+            </div>
           </div>
         </div>
       </div>

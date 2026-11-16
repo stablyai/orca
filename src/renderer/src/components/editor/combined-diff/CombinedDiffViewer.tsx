@@ -313,7 +313,10 @@ export default function CombinedDiffViewer({
   const allSectionsCollapsed = sectionRowKeys.allSectionsCollapsed
 
   return (
-    <PierreDiffProviders scrollContainerRef={scrollContainerRef}>
+    <PierreDiffProviders
+      scrollContainerRef={scrollContainerRef}
+      overview={{ sections, virtualizer, sideBySide: preferences.sideBySide }}
+    >
       <div className="flex flex-col flex-1 min-h-0">
         <CombinedDiffToolbar
           activeGroupId={activeGroupId}

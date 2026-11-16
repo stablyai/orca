@@ -30,3 +30,16 @@ export function resolvePierreDiffTheme(theme: PluginMonacoTheme | null): ThemesT
   }
   return { dark: theme.name, light: theme.name }
 }
+
+export function buildPierreDiffSelectionStyle(
+  theme: PluginMonacoTheme | null,
+  type: 'light' | 'dark'
+) {
+  const selection =
+    theme?.data.colors['editor.selectionBackground'] ?? (type === 'dark' ? '#264f78' : '#add6ff')
+  return {
+    '--orca-diff-selection-bg': selection,
+    '--orca-diff-inactive-selection-bg':
+      theme?.data.colors['editor.inactiveSelectionBackground'] ?? selection
+  }
+}
