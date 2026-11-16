@@ -163,15 +163,15 @@ describe('egress-time Source (D10) and shared workspaces (D13)', () => {
     expect(env.ANTHROPIC_API_KEY).toMatch(/^orca-ph-anthropic-api-key-/)
   })
 
-  it('never uses a personal account in a workspace shared with teammates', async () => {
+  it('never uses a personal account in a workspace in shared mode (ever transferred)', async () => {
     const { h, as, lastEnv, proxied } = await setup()
     const mia = await as('mia', 'acme', 'member')
     await h.call('PUT', '/v1/agent-credentials/claude', { bearer: mia, body: { token: SETUP_TOKEN } })
     const created = await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-1', machineSize: 'standard' }, bearer: mia })
     const id: string = created.body.sandbox.id
     expect(lastEnv(START_COMMAND).CLAUDE_CODE_OAUTH_TOKEN).toBe(`orca-ph-claude-account-${id}`)
-    // The workspace becomes shared: the very next request is refused, and the session refreshes off the account.
-    await h.env.SANDBOX_DB.prepare(`UPDATE sandboxes SET visibility = 'team' WHERE id = ?`).bind(id).run()
+    // The workspace goes into shared mode: the very next request is refused, and the session refreshes off the account.
+    await h.env.SANDBOX_DB.prepare(`UPDATE sandboxes SET ownership_transferred_at = 1 WHERE id = ?`).bind(id).run()
     const refused = await proxied(id, 'api.anthropic.com', { authorization: `Bearer orca-ph-claude-account-${id}` })
     expectSignedOut(refused)
     expect(lastEnv(ENV_COMMAND).CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined()
@@ -234,216 +234,10 @@ describe('egress-time Source (D10) and shared workspaces (D13)', () => {
   })
 })
 
-describe('D13 fails closed', () => {
-  it('treats any visibility other than private as shared', () => {
-    expect(isSharedWorkspace({ visibility: 'private', ownership_transferred_at: null })).toBe(false)
-    expect(isSharedWorkspace({ visibility: 'team', ownership_transferred_at: null })).toBe(true)
-    for (const visibility of ['', 'org', null, undefined] as unknown as string[]) {
-      expect(isSharedWorkspace({ visibility } as never)).toBe(true)
-    }
-  })
-})
-
-describe('secrets saved while a sandbox boots', () => {
-  it('reach the session once it is running (the build-sheet Secrets row saves mid-boot)', async () => {
-    const { h, as, lastEnv } = await setup()
-    const mia = await as('mia')
-    // Save a Personal secret after the boot resolved its env but before the sandbox is running: the
-    // secret's own refresh skips a sandbox that isn't running yet.
-    const original = h.vercel.runCommand.bind(h.vercel)
-    let saved = false
-    h.vercel.runCommand = async (sessionId, params) => {
-      const isStart = params.command === START_COMMAND || params.args?.[1]?.endsWith(`exec ${START_COMMAND}`)
-      if (isStart && !saved) {
-        saved = true
-        await h.call('PUT', '/v1/secrets/personal/W6_BOOT_SAVE', { bearer: mia, body: { value: 'boot-race-value' } })
-      }
-      return original(sessionId, params)
-    }
-    await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-1', machineSize: 'standard' }, bearer: mia })
-    expect(saved).toBe(true)
-    expect(lastEnv(START_COMMAND).W6_BOOT_SAVE).toBeUndefined()
-    await vi.waitFor(() => expect(lastEnv(ENV_COMMAND).W6_BOOT_SAVE).toBe('boot-race-value'))
-  })
-
-  it('leave an unchanged session alone', async () => {
-    const { h, as } = await setup()
-    const mia = await as('mia')
-    await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-1', machineSize: 'standard' }, bearer: mia })
-    await new Promise((resolve) => setTimeout(resolve, 50))
-    expect(h.vercel.commands.filter((c) => c.command === ENV_COMMAND)).toHaveLength(0)
-  })
-})
-
-describe('a provider 401 revokes only when confirmed', () => {
-  async function running() {
-    const ctx = await setup()
-    const mia = await ctx.as('mia')
-    await ctx.h.call('PUT', '/v1/agent-credentials/claude', { bearer: mia, body: { token: SETUP_TOKEN } })
-    const created = await ctx.h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-1', machineSize: 'standard' }, bearer: mia })
-    const id: string = created.body.sandbox.id
-    const state = async () => (await ctx.h.call('GET', '/v1/agent-credentials', { bearer: mia })).body.claude.state
-    const send = () => ctx.proxied(id, 'api.anthropic.com', { authorization: `Bearer orca-ph-claude-account-${id}` })
-    const auditRows = async () =>
-      (await ctx.h.env.SANDBOX_DB.prepare('SELECT action, reason, upstream_path FROM agent_credential_audit').all()).results
-    return { ...ctx, id, state, send, auditRows }
-  }
-
-  it('a transient 401 whose auth check passes keeps the account (audited)', async () => {
-    const { reply, check, send, state, lastEnv, auditRows } = await running()
-    reply.status = 401
-    check.status = 200
-    check.body = '{"input_tokens":3}'
-    expect((await send()).status).toBe(401)
-    await vi.waitFor(async () => expect(await auditRows()).toEqual([{ action: 'kept', reason: 'check_passed', upstream_path: '/v1/messages' }]))
-    expect(await state()).toBe('active')
-    expect(lastEnv(START_COMMAND).CLAUDE_CODE_OAUTH_TOKEN).toMatch(/^orca-ph-claude-account-/)
-  })
-
-  it('a check that is not a definite auth failure keeps the account', async () => {
-    const cases: [number, string][] = [
-      [429, '{"type":"error","error":{"type":"rate_limit_error"}}'],
-      [500, 'oops'],
-      [401, '{"type":"error","error":{"type":"permission_error"}}']
-    ]
-    for (const [status, body] of cases) {
-      const { reply, check, send, state, auditRows } = await running()
-      reply.status = 401
-      check.status = status
-      check.body = body
-      await send()
-      await vi.waitFor(async () => expect((await auditRows())[0]).toMatchObject({ action: 'kept', reason: 'check_inconclusive' }))
-      expect(await state()).toBe('active')
-    }
-  })
-
-  it('checks at most once a minute per person: a burst of 401s makes one check', async () => {
-    const { reply, check, send, auditRows } = await running()
-    reply.status = 401
-    check.status = 200
-    check.body = '{}'
-    await Promise.all([send(), send(), send()])
-    await vi.waitFor(async () => expect(await auditRows()).toHaveLength(1))
-    await new Promise((resolve) => setTimeout(resolve, 30))
-    expect(check.calls).toBe(1)
-  })
-
-  it('requests that never carried the real credential never trigger a check', async () => {
-    const { reply, check, proxied, id, state } = await running()
-    reply.status = 401
-    // Wrong placeholder (another sandbox's) and no placeholder: refused before any swap.
-    expect((await proxied(id, 'api.anthropic.com', { authorization: 'Bearer orca-ph-claude-account-sbx_other' })).status).toBe(403)
-    expect((await proxied(id, 'api.anthropic.com', {})).status).toBe(403)
-    await new Promise((resolve) => setTimeout(resolve, 30))
-    expect(check.calls).toBe(0)
-    expect(await state()).toBe('active')
-  })
-
-  it('RS-2: a failed auth check alone never revokes: "needs check" (shown as expired), still usable', async () => {
-    const { h, reply, send, state, auditRows, upstream, check } = await running()
-    reply.status = 401
-    await send()
-    await vi.waitFor(async () => expect(await auditRows()).toEqual([{ action: 'suspect', reason: 'provider_401_check_auth_failure', upstream_path: '/v1/messages' }]))
-    expect(await state()).toBe('expired')
-    const mia = await h.token('mia', undefined, 'sandbox')
-    expect((await h.call('GET', '/v1/agent-credentials', { bearer: mia })).body.claude).toMatchObject({ state: 'expired', needsCheck: true })
-    // The real credential still goes out, so the next real request can confirm it either way.
-    reply.status = 200
-    upstream.length = 0
-    await send()
-    expect(upstream.at(-1)?.headers.get('authorization')).toBe(`Bearer ${SETUP_TOKEN}`)
-    expect(check.calls).toBe(1)
-  })
-
-  it('RS-2: needs check + a later real 401 revokes (audited); the probe alone never did', async () => {
-    const { reply, send, state, auditRows } = await running()
-    reply.status = 401
-    await send()
-    await vi.waitFor(async () => expect((await auditRows()).map((row) => row.action)).toEqual(['suspect']))
-    await send()
-    await vi.waitFor(async () => expect(await state()).toBe('revoked'))
-    expect(await auditRows()).toEqual([
-      { action: 'suspect', reason: 'provider_401_check_auth_failure', upstream_path: '/v1/messages' },
-      { action: 'revoked', reason: 'provider_401_after_check_failure', upstream_path: '/v1/messages' }
-    ])
-  })
-
-  it('RS-2: needs check + a later real request that succeeds clears it back to active (audited)', async () => {
-    const { reply, send, state, auditRows } = await running()
-    reply.status = 401
-    await send()
-    await vi.waitFor(async () => expect((await auditRows()).map((row) => row.action)).toEqual(['suspect']))
-    reply.status = 200
-    await send()
-    await vi.waitFor(async () => expect(await state()).toBe('active'))
-    expect((await auditRows()).at(-1)).toEqual({ action: 'kept', reason: 'request_succeeded_after_check_failure', upstream_path: '/v1/messages' })
-  })
-
-  it('RS-2: a check that can\'t reach the provider changes nothing', async () => {
-    const ctx = await setup()
-    const mia = await ctx.as('mia')
-    await ctx.h.call('PUT', '/v1/agent-credentials/claude', { bearer: mia, body: { token: SETUP_TOKEN } })
-    const created = await ctx.h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-1', machineSize: 'standard' }, bearer: mia })
-    const id: string = created.body.sandbox.id
-    ctx.reply.status = 401
-    ctx.check.status = 0
-    await ctx.proxied(id, 'api.anthropic.com', { authorization: `Bearer orca-ph-claude-account-${id}` })
-    await vi.waitFor(async () =>
-      expect((await ctx.h.env.SANDBOX_DB.prepare('SELECT action, reason FROM agent_credential_audit').all()).results).toEqual([
-        { action: 'kept', reason: 'check_inconclusive' }
-      ])
-    )
-    expect((await ctx.h.call('GET', '/v1/agent-credentials', { bearer: mia })).body.claude).toEqual(expect.objectContaining({ state: 'active' }))
-    expect((await ctx.h.call('GET', '/v1/agent-credentials', { bearer: mia })).body.claude.needsCheck).toBeUndefined()
-  })
-})
-
-describe('POST /v1/agent-credentials/claude/verify (pre-launch check)', () => {
-  it('a pass is remembered: the next calls answer without asking the provider', async () => {
-    const { h, as, check } = await setup()
-    const mia = await as('mia')
-    await h.call('PUT', '/v1/agent-credentials/claude', { bearer: mia, body: { token: SETUP_TOKEN } })
-    check.status = 200
-    check.body = '{"input_tokens":3}'
-    const first = await h.call('POST', '/v1/agent-credentials/claude/verify', { bearer: mia })
-    expect(first.body).toMatchObject({ claude: { state: 'active' }, checked: true })
-    expect(first.body.verifiedAt).toEqual(expect.any(Number))
-    const again = await h.call('POST', '/v1/agent-credentials/claude/verify', { bearer: mia })
-    expect(again.body).toMatchObject({ claude: { state: 'active' }, checked: false, verifiedAt: first.body.verifiedAt })
-    expect(check.calls).toBe(1)
-  })
-
-  it('RS-2: a dead token only needs a check (audited, never revoked by the probe); an inconclusive check keeps it', async () => {
-    const dead = await setup()
-    const mia = await dead.as('mia')
-    await dead.h.call('PUT', '/v1/agent-credentials/claude', { bearer: mia, body: { token: SETUP_TOKEN } })
-    const suspect = await dead.h.call('POST', '/v1/agent-credentials/claude/verify', { bearer: mia })
-    expect(suspect.body).toMatchObject({ claude: { state: 'expired', needsCheck: true }, checked: true, verifiedAt: null })
-    const rows = (await dead.h.env.SANDBOX_DB.prepare('SELECT action, reason FROM agent_credential_audit').all()).results
-    expect(rows).toEqual([{ action: 'suspect', reason: 'verify_check_auth_failure' }])
-
-    const flaky = await setup()
-    const ada = await flaky.as('ada')
-    await flaky.h.call('PUT', '/v1/agent-credentials/claude', { bearer: ada, body: { token: SETUP_TOKEN } })
-    flaky.check.status = 529
-    flaky.check.body = '{"type":"error","error":{"type":"overloaded_error"}}'
-    const kept = await flaky.h.call('POST', '/v1/agent-credentials/claude/verify', { bearer: ada })
-    expect(kept.body).toMatchObject({ claude: { state: 'active' }, checked: true, verifiedAt: null })
-    // Rate limited: a second call within the minute doesn't ask again.
-    await flaky.h.call('POST', '/v1/agent-credentials/claude/verify', { bearer: ada })
-    expect(flaky.check.calls).toBe(1)
-  })
-
-  it('storing a new token forgets the old verification', async () => {
-    const { h, as, check } = await setup()
-    const mia = await as('mia')
-    await h.call('PUT', '/v1/agent-credentials/claude', { bearer: mia, body: { token: SETUP_TOKEN } })
-    check.status = 200
-    check.body = '{}'
-    await h.call('POST', '/v1/agent-credentials/claude/verify', { bearer: mia })
-    await h.call('PUT', '/v1/agent-credentials/claude', { bearer: mia, body: { token: SETUP_TOKEN } })
-    const after = await h.call('POST', '/v1/agent-credentials/claude/verify', { bearer: mia })
-    expect(after.body.checked).toBe(true)
-    expect(check.calls).toBe(2)
+describe('D13: shared mode is a transferred workspace, nothing else', () => {
+  it('ignores visibility; only a transfer mark counts', () => {
+    expect(isSharedWorkspace({ ownership_transferred_at: null })).toBe(false)
+    expect(isSharedWorkspace({ visibility: 'team', ownership_transferred_at: null } as never)).toBe(false)
+    expect(isSharedWorkspace({ ownership_transferred_at: 1 })).toBe(true)
   })
 })

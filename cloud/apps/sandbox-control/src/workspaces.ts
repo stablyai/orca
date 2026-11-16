@@ -9,7 +9,6 @@
 // Access rule: a workspace is visible to its owner, and to every member of the owning org when
 // visibility is `team`. Org owners/admins additionally see private rows' metadata (scope=all) so a
 // departed member's workspaces can be reassigned or archived — metadata only, never access.
-import { effectiveVisibility, teamSharingEnabled } from './team-sharing'
 import { githubActingViews, type GithubActingOptions, type GithubActingView } from './git-actor'
 import type { TeamMembershipCheck } from './team-membership'
 import { z } from 'zod'
@@ -59,12 +58,12 @@ export function isOwner(caller: SandboxCaller, row: SandboxRow): boolean {
   return row.account_id === caller.accountId && row.user_id === caller.userId
 }
 
-/** Can the caller see this row at all (list, links, presence)? */
+/**
+ * Can the caller see this row at all (list, links)? Only its owner: workspaces are never shared with teammates
+ * (org admins get metadata through their own paths: scope=all, requireVisible). `visibility` is no longer read.
+ */
 export function canSee(caller: SandboxCaller, row: SandboxRow): boolean {
-  if (row.account_id !== caller.accountId || row.status === 'destroyed') {
-    return false
-  }
-  return row.user_id === caller.userId || (effectiveVisibility(row) === 'team' && caller.orgId !== undefined)
+  return row.account_id === caller.accountId && row.status !== 'destroyed' && row.user_id === caller.userId
 }
 
 /** Can the caller pair a device with it (grant) or keep it awake (lease)? */
@@ -232,8 +231,8 @@ export async function workspaceViews(
       // The link to copy: org slug + number when both exist, else the sandbox id form.
       link: workspaceLink(row, slug),
       repo: repoView(row),
-      // TEAM-SHARING hold: what access actually follows (stored `team` reads private while held).
-      visibility: effectiveVisibility(row),
+      // Always private: workspaces are never shared (the stored column is no longer read).
+      visibility: 'private' as const,
       section: row.section,
       archivedAt: row.archived_at,
       createdBy: row.created_by ?? row.user_id,
@@ -288,7 +287,8 @@ export async function listWorkspaces(db: D1Database, caller: SandboxCaller, url:
     .bind(caller.accountId)
     .all<SandboxRow>()
   const matching = results.filter((row) => {
-    if (q.scope === 'mine' ? row.user_id !== caller.userId : q.scope === 'team' ? !canSee(caller, row) : false) {
+    // `team` is kept as an alias of `mine` (older mobile builds send it).
+    if (q.scope !== 'all' && !canSee(caller, row)) {
       return false
     }
     if (q.by && row.user_id !== q.by && row.created_by !== q.by) {
@@ -317,8 +317,8 @@ export async function listWorkspaces(db: D1Database, caller: SandboxCaller, url:
   ])
   return {
     workspaces: views.map((view, i) => ({ ...view, routineName: routineNames.get(rows[i]!.id) ?? null })),
-    // TEAM-SHARING hold: whether workspaces can be shared with the team on this control plane (older ones omit it).
-    teamSharing: teamSharingEnabled(),
+    // Workspaces can't be shared with the team (kept, always false, for clients that read it).
+    teamSharing: false,
     // Home: offer the Routine runs switch only when the team has routines, and say what it hides
     // (its count and hours still belong in the team's totals).
     routineRuns: {
@@ -397,13 +397,9 @@ export async function patchWorkspace(
   if (patch.archived === true) {
     throw new WorkspaceError('invalid_request', 'archive_via_lifecycle')
   }
-  if (patch.visibility === 'team' && !teamSharingEnabled()) {
-    // TEAM-SHARING hold (team-sharing.ts): sharing with the team isn't available yet.
+  if (patch.visibility === 'team') {
+    // Workspaces can't be shared with the team (older desktops still offer it: a known error for them).
     throw new WorkspaceError('invalid_request', 'team_sharing_unavailable')
-  }
-  if (patch.visibility === 'team' && !row.account_id.includes('org:')) {
-    // A personal account has no team to share with.
-    throw new WorkspaceError('invalid_request', 'personal_account')
   }
   if (patch.ownerUserId !== undefined && patch.ownerUserId !== row.user_id) {
     // Membership is proven by the new owner's own token later; here the caller must be allowed to hand it over.
@@ -449,7 +445,7 @@ export async function patchWorkspace(
   const next = await updateRegistry(db, row.id, {
     ...(patch.title !== undefined ? { name: patch.title } : {}),
     ...(patch.branch !== undefined ? { repo_branch: patch.branch } : {}),
-    ...(patch.visibility !== undefined ? { visibility: patch.visibility } : {}),
+    // `visibility: 'private'` is accepted and ignored: the column is no longer written or read.
     ...(patch.section !== undefined ? { section: patch.section } : {}),
     // Archiving is a lifecycle change (archiveSandbox stops the VM, then sets archived_at); this edit
     // can only clear a label left by an older label-only archive.
@@ -466,9 +462,8 @@ export async function patchWorkspace(
     )
   }
   const ownerChanged = transferring
-  const wentPrivate = row.visibility === 'team' && next.visibility === 'private'
   // Archiving goes through the lifecycle (archive_via_lifecycle above); the team route revokes on archive itself.
-  return { row: next, revoke: ownerChanged ? 'all_but_new_owner' : wentPrivate ? 'non_owner' : 'none' }
+  return { row: next, revoke: ownerChanged ? 'all_but_new_owner' : 'none' }
 }
 
 export const PresenceSchema = z

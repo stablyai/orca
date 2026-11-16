@@ -1,18 +1,16 @@
 // GIT-ACTOR: who a workspace's GitHub actions (pushes, PRs, comments) go out as right now, on the workspace view
-// (`githubActing`, plus the viewer's own connection as `you`). The same rule the egress proxy applies
-// (member-git.ts actingMember); the desktop never recomputes it. Approvals always, and merges in shared
-// workspaces, still go out as the bot.
+// (`githubActing`, plus the viewer's own connection as `you`). The owner always acts (member-git.ts memberMayAct):
+// as themselves once connected, else as the Orca bot. Approvals always go out as the bot.
 import { parseGitHubRepo } from './github-app'
 import type { GitHubUserTokenRow } from './github-user-tokens'
-import { pickActing } from './member-git'
 import type { SandboxRow } from './store'
 
 export type GithubActing =
-  | { actingAs: 'member'; userId: string; login: string; until?: number }
-  | { actingAs: 'bot'; reason: 'not_github' | 'off' | 'no_sender_yet' | 'sender_not_connected' | 'reconnect' | 'window_expired' }
+  | { actingAs: 'member'; userId: string; login: string }
+  | { actingAs: 'bot'; reason: 'not_github' | 'off' | 'sender_not_connected' | 'reconnect' }
 
-/** The env side: whether GH-AS-MEMBER applies to an account, and the shared-workspace cap. */
-export type GithubActingOptions = { enabled: (accountId: string) => boolean; sharedMaxMs: number | null }
+/** The env side: whether GH-AS-MEMBER applies to an account. */
+export type GithubActingOptions = { enabled: (accountId: string) => boolean }
 
 /** Usable without a reconnect: an access token still valid, or a refresh token that can renew it. */
 function usable(token: GitHubUserTokenRow | null, now: number): token is GitHubUserTokenRow {
@@ -33,10 +31,7 @@ async function inChunks<T>(ids: readonly string[], read: (chunk: readonly string
 }
 const marks = (ids: readonly string[]) => ids.map(() => '?').join(', ')
 
-/**
- * The view for every row at once, in a fixed number of reads whatever the list size: active grants and sends
- * for all rows, then the GitHub connections of everyone involved (the viewer and each row's acting member).
- */
+/** The view for every row at once: one read of GitHub connections per account (the viewer and each owner). */
 export async function githubActingViews(
   db: D1Database,
   rows: readonly SandboxRow[],
@@ -48,47 +43,11 @@ export async function githubActingViews(
   if (rows.length === 0) {
     return out
   }
-  const live = rows.filter((row) => row.repo_url && parseGitHubRepo(row.repo_url) && options.enabled(row.account_id))
-  const ids = live.map((row) => row.id)
-  const [grants, sends] = await Promise.all([
-    inChunks(ids, (chunk) =>
-      db
-        .prepare(`SELECT DISTINCT sandbox_id, user_id FROM workspace_grants WHERE status = 'active' AND sandbox_id IN (${marks(chunk)})`)
-        .bind(...chunk)
-        .all<{ sandbox_id: string; user_id: string }>()
-        .then((r) => r.results)
-    ),
-    inChunks(ids, (chunk) =>
-      db
-        .prepare(`SELECT sandbox_id, user_id, sent_at FROM workspace_member_sends WHERE sandbox_id IN (${marks(chunk)})`)
-        .bind(...chunk)
-        .all<{ sandbox_id: string; user_id: string; sent_at: number }>()
-        .then((r) => r.results)
-    )
-  ])
-  const granteesOf = new Map<string, string[]>()
-  for (const g of grants) {
-    granteesOf.set(g.sandbox_id, [...(granteesOf.get(g.sandbox_id) ?? []), g.user_id])
-  }
-  const latestOf = new Map<string, { user_id: string; sent_at: number }>()
-  for (const send of sends) {
-    const seen = latestOf.get(send.sandbox_id)
-    if (!seen || send.sent_at > seen.sent_at) {
-      latestOf.set(send.sandbox_id, send)
-    }
-  }
-  const acting = new Map(live.map((row) => [row.id, pickActing(row, granteesOf.get(row.id) ?? [], latestOf.get(row.id) ?? null, now, options.sharedMaxMs)]))
-  // One read per account (normally one) for every connection the views need.
   const tokens = new Map<string, GitHubUserTokenRow>()
   const key = (accountId: string, userId: string) => `${accountId}\u0000${userId}`
   const accounts = new Map<string, Set<string>>()
   for (const row of rows) {
-    const users = accounts.get(row.account_id) ?? new Set<string>([viewerUserId])
-    const pick = acting.get(row.id)
-    if (pick && 'userId' in pick) {
-      users.add(pick.userId)
-    }
-    accounts.set(row.account_id, users)
+    accounts.set(row.account_id, (accounts.get(row.account_id) ?? new Set<string>([viewerUserId])).add(row.user_id))
   }
   for (const [accountId, users] of accounts) {
     const found = await inChunks([...users], (chunk) =>
@@ -104,34 +63,26 @@ export async function githubActingViews(
   }
   for (const row of rows) {
     const viewer = tokens.get(key(row.account_id, viewerUserId)) ?? null
-    out.set(row.id, { githubActing: decide(row, acting.get(row.id), tokens, key, now, options), you: usable(viewer, now) ? { connected: true, login: viewer.github_login } : { connected: false } })
+    out.set(row.id, {
+      githubActing: decide(row, tokens.get(key(row.account_id, row.user_id)) ?? null, now, options),
+      you: usable(viewer, now) ? { connected: true, login: viewer.github_login } : { connected: false }
+    })
   }
   return out
 }
 
-function decide(
-  row: SandboxRow,
-  pick: ReturnType<typeof pickActing> | undefined,
-  tokens: ReadonlyMap<string, GitHubUserTokenRow>,
-  key: (accountId: string, userId: string) => string,
-  now: number,
-  options: GithubActingOptions
-): GithubActing {
+function decide(row: SandboxRow, owner: GitHubUserTokenRow | null, now: number, options: GithubActingOptions): GithubActing {
   if (!row.repo_url || !parseGitHubRepo(row.repo_url)) {
     return { actingAs: 'bot', reason: 'not_github' }
   }
-  if (!options.enabled(row.account_id) || !pick) {
+  if (!options.enabled(row.account_id)) {
     return { actingAs: 'bot', reason: 'off' }
   }
-  if ('none' in pick) {
-    return { actingAs: 'bot', reason: pick.none === 'stale' ? 'window_expired' : 'no_sender_yet' }
-  }
-  const token = tokens.get(key(row.account_id, pick.userId)) ?? null
-  if (!token) {
+  if (!owner) {
     return { actingAs: 'bot', reason: 'sender_not_connected' }
   }
-  if (!usable(token, now)) {
+  if (!usable(owner, now)) {
     return { actingAs: 'bot', reason: 'reconnect' }
   }
-  return { actingAs: 'member', userId: pick.userId, login: token.github_login, ...(pick.until !== null ? { until: pick.until } : {}) }
+  return { actingAs: 'member', userId: row.user_id, login: owner.github_login }
 }

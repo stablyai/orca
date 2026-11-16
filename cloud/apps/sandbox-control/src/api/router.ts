@@ -430,7 +430,7 @@ async function route(request: Request, url: URL, caller: ApiCaller, ctx: ApiCont
         ...(caller.via === 'workspace' ? { originRef: caller.sandboxId } : {}),
         limit: 500
       })
-      // Default: yours plus team-visible ones. `scope=all` (owners/admins): every workspace's metadata.
+      // Default: yours. `scope=all` (owners/admins): every workspace's metadata.
       const scopeAll = url.searchParams.get('scope') === 'all'
       if (scopeAll && !isOrgAdmin(caller)) {
         throw new ApiError(403, 'forbidden', 'admin_required')
@@ -523,7 +523,7 @@ async function route(request: Request, url: URL, caller: ApiCaller, ctx: ApiCont
         })
         await auditCaller(ctx.db, caller, { action: 'workspace.wake', targetType: 'workspace', targetId: row.id, detail: { ms: Math.round(performance.now() - started), state: answer.state } }, ctx.now())
         const fresh = (await getWorkspace(ctx.db, caller.accountId, id)) ?? row
-        // A teammate may wake a team workspace but never gets its connection endpoint.
+        // Only the owner reaches here (open = owner); the connection endpoint is theirs.
         return json({ workspace: workspaceView(fresh), ...answer, ...(isWorkspaceOwner(caller, row) ? {} : { endpoint: null }) })
       }
       if (sub === 'archive' && method === 'POST') {

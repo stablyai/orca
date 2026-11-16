@@ -39,7 +39,6 @@
 // Operator (OPERATOR_TOKEN): /v1/internal/* (see operator.ts)
 // Public share links (src/share-gateway.ts): /s/<token>/*, plus the root-path cookie fallback
 // Vercel network-policy forwardURL target (Vercel sandbox OIDC):  /v1/egress/proxy
-import { configureTeamSharing, teamSharingEnabled } from './team-sharing'
 import { purgeTeamSecrets, teamDeleteRoute, teamWorkspaceCount } from './team-delete'
 import { ReadSnapshotRouteError, getReadSnapshot, handleReaderKeysRoute, pruneReadSnapshotToOwner, revokeDeviceSessionReaderKeys } from './read-snapshots'
 import { refreshEnvironment, refreshStaleEnvironments, type GoldenRefreshOptions } from './environment-golden-refresh'
@@ -139,7 +138,7 @@ import { credentialPushTargets, markCredentialChanged, pushCredentialChange, pus
 import { markExpiredAccountCredentials, refreshGitHubUserTokens } from './credential-refresh'
 import type { CredentialAgent } from './agent-credential-names'
 import { ACCOUNT_PROVIDERS, accountProvider, claudeAccount } from './account-providers'
-import { sharedWorkspaceMode } from './shared-workspace'
+import { isSharedWorkspace } from './shared-workspace'
 import { handleAccountRequestSucceeded, handleAccountUnauthorized, runScheduledAccountChecks, verifyAccountCredential } from './agent-credential-checks'
 import { codexBrokerTick, handleCodexBrokerRoute, type BrokerDeps } from './codex-broker'
 import { codexAccount, parseStoredCodex, refreshCodexLeases, storeCodexLogin } from './codex-credentials'
@@ -209,8 +208,7 @@ import {
   recordOwnerDeviceForCreate,
   revokeForAccessChange,
   revokeGrantsForDeviceSession,
-  revokeOne,
-  sweepHeldTeamGrants
+  revokeOne
 } from './grants'
 import { getOrgPrompts, putOrgPrompts } from './org-prompts'
 import {
@@ -222,7 +220,7 @@ import {
   storeUserToken,
   userAuthorizeUrl
 } from './github-user-tokens'
-import { memberGitRoutes, memberMayAct, recordMemberSend } from './member-git'
+import { memberGitRoutes, memberMayAct } from './member-git'
 import type { GithubActingOptions } from './git-actor'
 import { egressAllowlistSetting, PlatformHostSuffixesConfigError } from './network-policy'
 import { getWorkspacePrefs, putWorkspacePrefs } from './workspace-prefs'
@@ -383,8 +381,8 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
     identity: async (row, userId) => {
       const keyring = keyringFor(env)
       const now = (deps.now ?? Date.now)()
-      // GH-AS-MEMBER: the only person who can use the workspace, or its latest sender (member-git.ts memberMayAct).
-      return keyring && memberGit(row.account_id) && (await memberMayAct(env.SANDBOX_DB, row, userId, now, memberGitSharedMaxMs(env)))
+      // GH-AS-MEMBER: the owner always acts (member-git.ts memberMayAct).
+      return keyring && memberGit(row.account_id) && memberMayAct(row, userId)
         ? memberGitIdentity(env.SANDBOX_DB, await keyring, githubConnect(env, deps), row.account_id, userId, now)
         : null
     }
@@ -478,7 +476,7 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
                 scheduleEnvRefresh(env, deps, row)
                 return signedOut('account_owner_changed')
               }
-              if (await sharedWorkspaceMode(env.SANDBOX_DB, row)) {
+              if (isSharedWorkspace(row)) {
                 scheduleEnvRefresh(env, deps, row)
                 return signedOut('account_not_shared')
               }
@@ -1238,30 +1236,15 @@ export function egressPlaceholderMode(value: string | undefined): boolean | Read
   return false
 }
 
-/**
- * Git as the sender (MEMBER_GIT_IDENTITY: unset = on for every account, `off`, `on`, or
- * `accounts:<id>,<id>`). orcad attests which paired device sent each turn and the root-only
- * orca-git-identity hands an agent only that member's identity. Residual risk: members share the VM
- * user, so a member with a shell could subvert orcad itself; agents and prompts cannot.
- */
 /** GIT-ACTOR (git-actor.ts): GH-AS-MEMBER on, and member git on for the account. */
 function githubActingOptions(env: Env): GithubActingOptions {
   const memberGit = memberGitEnabled(env)
   return {
-    enabled: (accountId) => env.GH_AS_MEMBER === 'on' && env.MEMBER_GIT_IDENTITY !== 'off' && memberGit(accountId),
-    sharedMaxMs: memberGitSharedMaxMs(env)
+    enabled: (accountId) => env.GH_AS_MEMBER === 'on' && env.MEMBER_GIT_IDENTITY !== 'off' && memberGit(accountId)
   }
 }
 
-/** Shared workspaces: how long the latest sender keeps acting after their last send. Default 60 min; `0` = no cap. */
-function memberGitSharedMaxMs(env: Env): number | null {
-  if (env.MEMBER_GIT_SHARED_MAX_MINUTES === undefined || env.MEMBER_GIT_SHARED_MAX_MINUTES === '') {
-    return 60 * 60_000
-  }
-  const minutes = Number(env.MEMBER_GIT_SHARED_MAX_MINUTES)
-  return Number.isFinite(minutes) && minutes > 0 ? minutes * 60_000 : null
-}
-
+/** Git as the owner (MEMBER_GIT_IDENTITY: unset = on for every account, `off`, `on`, or `accounts:<id>,<id>`). */
 export function memberGitEnabled(env: Env): (accountId: string) => boolean {
   // On by default: orcad attests each turn's sender and orca-git-identity refuses any other member.
   if (env.MEMBER_GIT_IDENTITY === undefined || env.MEMBER_GIT_IDENTITY.trim() === '') {
@@ -1358,7 +1341,6 @@ async function shareGateway(request: Request, url: URL, env: Env, deps: Deps): P
 }
 
 export async function handleRequest(request: Request, env: Env, deps: Deps = {}): Promise<Response> {
-  configureTeamSharing(env)
   try {
     return await routeRequest(request, env, deps)
   } catch (error) {
@@ -2440,7 +2422,7 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
   const view = async (r = row) => (await workspaceViews(db, caller, [r], clock(), githubActingOptions(env)))[0]
   if (route === 'GET ') {
     // TEAM-SHARING hold: the capability rides on the single-workspace answer too (panels and link opens read it).
-    return json({ workspace: await view(), teamSharing: teamSharingEnabled() })
+    return json({ workspace: await view(), teamSharing: false })
   }
   if (route === 'GET read-snapshot') {
     try {
@@ -2453,11 +2435,10 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
     }
   }
   if (route === 'POST sent') {
-    // The caller's own client: "I just sent a message here" (opens their git-as-sender window).
+    // Older desktops still report sends; the owner always acts now, so there is nothing to record.
     if (!canOpen(caller, row)) {
       throw new WorkspaceError('not_found')
     }
-    await recordMemberSend(db, row.id, caller.userId, now)
     return json({ ok: true })
   }
   if (route === 'PUT follow' || route === 'DELETE follow') {
@@ -2549,21 +2530,7 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
             })
           )
         : null
-      // Who can open a workspace decides who its agents act as and whose secrets it gets, so both
-      // directions of a share, and a change of owner, go in the team's audit log.
-      if (patched.row.visibility !== current.visibility) {
-        await auditSession(
-          db,
-          caller,
-          {
-            action: patched.row.visibility === 'team' ? 'workspace.shared_with_team' : 'workspace.made_private',
-            targetType: 'workspace',
-            targetId: row.id,
-            detail: { from: current.visibility, to: patched.row.visibility }
-          },
-          now
-        )
-      }
+      // A change of owner decides who its agents act as and whose secrets it gets: it goes in the team's audit log.
       if (transferred) {
         await timer.step('audit', async () => {
           await auditSession(
@@ -2599,16 +2566,6 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
               await pruneReadSnapshotToOwner(db, patched.row)
               return revokeForAccessChange(life, patched.row, revoke, caller.userId)
             })
-      if (patched.row.status === 'running' && !transferred && patched.row.visibility !== current.visibility) {
-        // A share changes which account (if any) the agents use (D10/D13): rebuild the env now.
-        // Never for a new owner: a transferred workspace is stopped, and its env is not rebuilt for them.
-        const work = refreshSandboxEnv(life, patched.row).catch(() => false)
-        if (deps.waitUntil) {
-          deps.waitUntil(work)
-        } else {
-          await work
-        }
-      }
       const workspace = await timer.step('view', () => view(patched.row))
       if (transferred) {
         console.log(ownerTransferTimingLine(timer.durations(), clock() - now))
@@ -2804,15 +2761,11 @@ function errorResponse(error: unknown): Response {
   return fail('internal_error', 500)
 }
 
-/** TEAM-SHARING hold: whether this isolate has run the held-grants sweep yet (a value, never a promise). */
-let heldSweepRan = false
-
 export default {
   fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     return handleRequest(request, env, { waitUntil: (work) => ctx.waitUntil(work.catch(() => undefined)) })
   },
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    configureTeamSharing(env)
     // Every minute: routines (schedule slots, run polling). Every fifth minute: everything else.
     ctx.waitUntil(
       lifecycleDeps(env, {}).then(async (life) => {
@@ -2843,17 +2796,6 @@ export default {
     )
     const fifthMinute = new Date(controller.scheduledTime).getUTCMinutes() % 5 === 0
     ctx.waitUntil(credentialTick(env, fifthMinute))
-    // TEAM-SHARING hold: every fifth minute, and on an isolate's first run (so right after a deploy).
-    if (!teamSharingEnabled() && (fifthMinute || !heldSweepRan)) {
-      heldSweepRan = true
-      ctx.waitUntil(
-        lifecycleDeps(env, {}).then(async (life) => {
-          const swept = life ? await sweepHeldTeamGrants(life).catch(() => null) : null
-          // Counts only.
-          console.log(JSON.stringify({ event: 'team_sharing_held_sweep', ...(swept ?? { failed: true }) }))
-        })
-      )
-    }
     if (env.AGENT_ACCOUNTS_CODEX === 'on') {
       ctx.waitUntil(codexTick(env, fifthMinute))
     }

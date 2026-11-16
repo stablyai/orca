@@ -16,7 +16,7 @@ import { effectiveSecrets } from './secrets'
 import { getSandbox, type SandboxRow } from './store'
 import { agentCredentialState, isUsable } from './agent-credentials'
 import { accountProvider } from './account-providers'
-import { sharedWorkspaceMode } from './shared-workspace'
+import { isSharedWorkspace } from './shared-workspace'
 
 export type AgentSource = 'sign-in' | 'key'
 type OfferAnswer = 'unanswered' | 'accepted' | 'declined'
@@ -158,7 +158,7 @@ export async function agentSourcesView(
     owner = { userId: row.user_id, displayName: names.get(row.user_id) ?? null, isCaller: row.user_id === caller.userId }
   }
   // D13: personal accounts never apply in a workspace shared with teammates.
-  const sharedWorkspace = row ? await sharedWorkspaceMode(db, row) : false
+  const sharedWorkspace = row ? isSharedWorkspace(row) : false
   return { defaults, inWorkspace, workspace, effective: resolved, coveredByKey: covered, signInOffer, owner, sharedWorkspace }
 }
 
@@ -222,7 +222,7 @@ export async function deleteAgentSourcesForSandbox(db: D1Database, sandboxId: st
 export type AgentMode = 'account' | 'inside' | 'omit' | 'keep'
 export async function agentModesFor(
   db: D1Database,
-  row: Pick<SandboxRow, 'id' | 'user_id' | 'visibility' | 'ownership_transferred_at'>,
+  row: Pick<SandboxRow, 'id' | 'user_id' | 'ownership_transferred_at'>,
   env: Readonly<Record<string, string>>,
   options: {
     providerEnabled: Record<CredentialAgent, boolean>
@@ -237,7 +237,7 @@ export async function agentModesFor(
   const inWorkspace = inWorkspaceAgents(rows)
   const covered = coveredByKey(new Set(Object.keys(env)))
   const modes = {} as Record<CredentialAgent, AgentMode>
-  const shared = await sharedWorkspaceMode(db, row)
+  const shared = isSharedWorkspace(row)
   for (const agent of CREDENTIAL_AGENTS) {
     if (!workspace[agent] && inWorkspace[agent]) {
       // Nothing of Orca's for this agent: no placeholder, no key, no egress route, so the login the person
