@@ -14,9 +14,9 @@ describe('refreshCloudGitActor', () => {
   it('dedupes reads in flight and within the fresh window; a forced read goes through', async () => {
     const gitActor = vi.fn(async () => ({
       ok: true,
-      value: { gitActor: { kind: 'bot', reason: 'stale' } }
+      value: { id: 'sbx_a', githubActing: { actingAs: 'bot', reason: 'window_expired' } }
     }))
-    vi.stubGlobal('window', { api: { cloudWorkspaces: { gitActor } } })
+    vi.stubGlobal('window', { api: { cloudWorkspaces: { get: gitActor } } })
     await Promise.all([refreshCloudGitActor('sbx_a'), refreshCloudGitActor('sbx_a')])
     await refreshCloudGitActor('sbx_a')
     expect(gitActor).toHaveBeenCalledTimes(1)
@@ -24,8 +24,10 @@ describe('refreshCloudGitActor', () => {
     expect(gitActor).toHaveBeenCalledTimes(2)
   })
 
-  it('an older desktop bridge without gitActor reads nothing', async () => {
-    vi.stubGlobal('window', { api: { cloudWorkspaces: {} } })
+  it('a failed read leaves nothing and doesn’t throw', async () => {
+    vi.stubGlobal('window', {
+      api: { cloudWorkspaces: { get: async () => ({ ok: false, error: 'x' }) } }
+    })
     await expect(refreshCloudGitActor('sbx_b')).resolves.toBeUndefined()
   })
 })

@@ -269,30 +269,3 @@ describe('cloud workspaces client: owner change (OWNER-TRANSFER)', () => {
     expect(init?.method).toBe('POST')
   })
 })
-
-describe('cloud workspaces client: git actor (GH-ACTING-LINE)', () => {
-  it('asks for feature git-actor on the detail read and parses the actor', async () => {
-    const { client, fetch } = clientAnswering(200, {
-      workspace: { id: SBX },
-      gitActor: { kind: 'member', userId: 'u1', login: 'octo-dev', until: 123 },
-      viewerConnected: true
-    })
-    expect(await client.gitActor(SBX)).toEqual({
-      gitActor: { kind: 'member', userId: 'u1', login: 'octo-dev', until: 123 },
-      viewerConnected: true
-    })
-    const [url, init] = fetch.mock.calls[0]!
-    expect(String(url)).toBe(`https://cp.example.test/v1/team/workspaces/${SBX}`)
-    expect(new Headers(init?.headers).get('x-orca-sandbox-features')).toBe('git-actor')
-  })
-
-  it('an older control plane (no field) or an unknown shape reads as no actor', async () => {
-    expect(await clientAnswering(200, { workspace: { id: SBX } }).client.gitActor(SBX)).toEqual({})
-    expect(
-      await clientAnswering(200, {
-        gitActor: { kind: 'robot' },
-        viewerConnected: 'yes'
-      }).client.gitActor(SBX)
-    ).toEqual({})
-  })
-})

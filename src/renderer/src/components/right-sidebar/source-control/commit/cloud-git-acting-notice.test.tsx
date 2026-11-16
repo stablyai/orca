@@ -5,7 +5,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import type { CloudWorkspaceGitActor } from '../../../../../../shared/cloud-workspaces/cloud-workspaces-wire'
+import type { CloudGitActing } from '@/components/cloud-workspaces/cloud-git-acting-copy'
 import { CloudGitActingNoticeView } from './cloud-git-acting-notice'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
@@ -17,10 +17,7 @@ afterEach(async () => {
   document.body.innerHTML = ''
 })
 
-async function show(
-  answer: CloudWorkspaceGitActor | null,
-  onConnect = vi.fn()
-): Promise<HTMLElement> {
+async function show(answer: CloudGitActing | null, onConnect = vi.fn()): Promise<HTMLElement> {
   const container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
@@ -40,8 +37,8 @@ const connectButton = (c: HTMLElement) =>
 describe('who pushes and PRs go out as, in source control', () => {
   it('a member: as @login, no action', async () => {
     const c = await show({
-      gitActor: { kind: 'member', userId: 'u1', login: 'octo-dev' },
-      viewerConnected: true
+      githubActing: { actingAs: 'member', userId: 'u1', login: 'octo-dev' },
+      you: { connected: true }
     })
     expect(c.textContent).toContain('Pushes and PRs go out as @octo-dev')
     expect(connectButton(c)).toBeNull()
@@ -50,7 +47,10 @@ describe('who pushes and PRs go out as, in source control', () => {
   it('the bot for a viewer who isn’t connected: Connect GitHub', async () => {
     const onConnect = vi.fn()
     const c = await show(
-      { gitActor: { kind: 'bot', reason: 'no_connected_member' }, viewerConnected: false },
+      {
+        githubActing: { actingAs: 'bot', reason: 'sender_not_connected' },
+        you: { connected: false }
+      },
       onConnect
     )
     expect(c.textContent).toContain('Pushes and PRs go out as Orca bot')
@@ -59,13 +59,40 @@ describe('who pushes and PRs go out as, in source control', () => {
   })
 
   it('the bot after the hour lapsed, viewer connected: says why, no action', async () => {
-    const c = await show({ gitActor: { kind: 'bot', reason: 'stale' }, viewerConnected: true })
+    const c = await show({
+      githubActing: { actingAs: 'bot', reason: 'window_expired' },
+      you: { connected: true }
+    })
     expect(c.textContent).toContain('no one has sent in the last hour')
     expect(connectButton(c)).toBeNull()
   })
 
+  it('nobody has sent yet in a shared workspace: whoever sends next', async () => {
+    const c = await show({
+      githubActing: { actingAs: 'bot', reason: 'no_sender_yet' },
+      you: { connected: true }
+    })
+    expect(c.textContent).toContain('whoever sends next, or Orca bot')
+  })
+
+  it('reconnect (the solo owner’s token expired) and not connected: bot with Connect GitHub', async () => {
+    const c = await show({
+      githubActing: { actingAs: 'bot', reason: 'reconnect' },
+      you: { connected: false }
+    })
+    expect(c.textContent).toContain('Pushes and PRs go out as Orca bot')
+    expect(connectButton(c)).not.toBeNull()
+  })
+
   it('no actor (not GitHub, identities off, older control plane): nothing', async () => {
-    expect((await show({ viewerConnected: false })).textContent).toBe('')
+    for (const reason of ['off', 'not_github'] as const) {
+      expect(
+        (await show({ githubActing: { actingAs: 'bot', reason }, you: { connected: false } }))
+          .textContent
+      ).toBe('')
+      await act(async () => root?.unmount())
+    }
+    expect((await show({ you: { connected: false } })).textContent).toBe('')
     expect((await show(null)).textContent).toBe('')
   })
 })
