@@ -18,15 +18,14 @@ const HOST = MANAGED.hostBackend!.spec
 const ZED = { name: 'zed', version: '0.0.0' }
 const ORCA = { name: 'orca', version: '1' }
 
-async function initializeClientInfo(spec: AcpLaunchSpec, version?: string): Promise<unknown> {
+async function initializeParams(spec: AcpLaunchSpec, version?: string): Promise<unknown> {
   const rig = await openAcpAdapterRig({
     spec,
     ...(version ? { launch: { version } } : {}),
     initialize: { authMethods: [{ id: 'oauth-personal', name: 'Google' }] }
   })
   await rig.acquire()
-  const { params } = await rig.frame('initialize')
-  return (params as { clientInfo?: unknown }).clientInfo
+  return (await rig.frame('initialize')).params
 }
 
 it.each([
@@ -38,7 +37,7 @@ it.each([
 ])(
   'initializes %s with the identity that unlocks its models',
   async (_label, spec, version, expected) => {
-    expect(await initializeClientInfo(spec, version)).toEqual(expected)
+    expect(await initializeParams(spec, version)).toMatchObject({ clientInfo: expected })
   }
 )
 
