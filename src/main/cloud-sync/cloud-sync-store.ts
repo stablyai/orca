@@ -9,14 +9,12 @@ import type { CloudSyncChoice, IndexEntry } from './cloud-sync-plan'
 export type { CloudSyncChoice }
 
 /** `.context` is small and holds what people come back for (plans, screenshots): on by default. */
-export const DEFAULT_SYNC_CHOICE: CloudSyncChoice = { context: true, mirror: false }
+export const DEFAULT_SYNC_CHOICE: CloudSyncChoice = { context: true }
 
 const ChoicesSchema = z.object({
   version: z.literal(1),
-  workspaces: z.record(
-    z.string(),
-    z.object({ context: z.boolean().optional(), mirror: z.boolean().optional() })
-  )
+  // z.object drops keys it doesn't name, so records saved by older builds still load.
+  workspaces: z.record(z.string(), z.object({ context: z.boolean().optional() }))
 })
 
 const IndexEntrySchema = z.object({
@@ -66,10 +64,7 @@ export function createCloudSyncStore(userDataPath: string) {
     dir,
     async choice(workspaceId: string): Promise<CloudSyncChoice> {
       const saved = (await loadChoices()).workspaces[workspaceId]
-      return {
-        context: saved?.context ?? DEFAULT_SYNC_CHOICE.context,
-        mirror: saved?.mirror ?? DEFAULT_SYNC_CHOICE.mirror
-      }
+      return { context: saved?.context ?? DEFAULT_SYNC_CHOICE.context }
     },
     async setChoice(
       workspaceId: string,

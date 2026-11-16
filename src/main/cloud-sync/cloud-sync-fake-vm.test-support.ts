@@ -6,8 +6,6 @@ import type { SyncCall } from './cloud-sync-remote'
 const ParamsSchema = z.looseObject({
   relativePath: z.string().optional(),
   relativePaths: z.array(z.string()).optional(),
-  candidatePaths: z.array(z.string()).optional(),
-  includeIgnored: z.boolean().optional(),
   offset: z.number().optional(),
   length: z.number().optional()
 })
@@ -17,7 +15,6 @@ export const VM_ROOT = '/vercel/sandbox/project'
 
 export type FakeVm = {
   files: Map<string, { content: Buffer; mtime: number }>
-  ignored: Set<string>
   calls: string[]
   statManySupported: boolean
   asleep: boolean
@@ -36,13 +33,11 @@ function codeError(code: string, message = code): Error {
 
 export function createFakeVm(): FakeVm {
   const files = new Map<string, { content: Buffer; mtime: number }>()
-  const ignored = new Set<string>()
   const calls: string[] = []
   const watches = new Set<(event: unknown) => void>()
   let clock = 1_000
   const vm: FakeVm = {
     files,
-    ignored,
     calls,
     statManySupported: true,
     asleep: false,
@@ -91,16 +86,6 @@ export function createFakeVm(): FakeVm {
           throw new Error(`ENOENT: no such file or directory, scandir '${dir}'`)
         }
         return [...names].map(([name, isDirectory]) => ({ name, isDirectory, isSymlink: false }))
-      }
-      case 'files.listAll': {
-        const candidates = p.candidatePaths
-        return [...files.keys()].filter(
-          (path) =>
-            // Like orcad: gitignored files are listed unless includeIgnored is false.
-            (p.includeIgnored !== false || !ignored.has(path)) &&
-            !path.startsWith('.context/') &&
-            (!candidates || candidates.includes(path))
-        )
       }
       case 'files.statMany': {
         if (!vm.statManySupported) {

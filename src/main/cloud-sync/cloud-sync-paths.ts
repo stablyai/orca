@@ -48,7 +48,7 @@ export function displayPath(path: string, home: string = homedir()): string {
 }
 
 /**
- * A cloud-relative path that is safe to mirror: forward slashes, no empty/`.`/`..` segments, no
+ * A cloud-relative path that is safe to copy here: forward slashes, no empty/`.`/`..` segments, no
  * absolute or drive paths, no control characters, never inside `.git` or this sync's temp dir.
  */
 export function isSafeSyncPath(path: string): boolean {

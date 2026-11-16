@@ -309,8 +309,8 @@ export function CloudWorkspaceStatusPanel({
         </p>
       ) : null}
 
-      {/* ARCHIVED-DEAD-ACTIONS: .context sync and mirroring run for this desktop's own cloud
-          workspaces only, so a paired card doesn't offer them. */}
+      {/* ARCHIVED-DEAD-ACTIONS: .context sync runs for this desktop's own cloud workspaces only,
+          so a paired card doesn't offer it. */}
       {state === 'archived' || paired ? null : (
         <OnComputerRow view={sync} onOpen={() => setLayer('onComputer')} />
       )}

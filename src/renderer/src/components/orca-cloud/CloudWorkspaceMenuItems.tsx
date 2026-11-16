@@ -2,19 +2,10 @@ import React, { useContext } from 'react'
 import { useCloudTeamSharingEnabled } from '@/lib/orca-cloud/cloud-team-sharing-flag'
 import { ArchiveSnapshotTooltip } from './ArchiveSnapshotTooltip'
 import { toast } from 'sonner'
-import {
-  Archive,
-  ArchiveRestore,
-  HardDriveDownload,
-  Link2,
-  Lock,
-  RotateCw,
-  Users
-} from 'lucide-react'
+import { Archive, ArchiveRestore, Link2, Lock, RotateCw, Users } from 'lucide-react'
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
 import { toastSharedWithTeam } from '@/components/cloud-workspaces/shared-with-team-toast'
-import { isCloudSyncAvailable, requestCloudSyncFocus } from '@/lib/orca-cloud/cloud-sync-store'
 import {
   ConfirmationDialogContext,
   type ConfirmationDialogContextValue
@@ -32,8 +23,6 @@ import {
   type CloudWorkspace
 } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 import { useCloudWorkspaceView } from './use-cloud-workspace-view'
-import { useCloudWorkspace } from '@/lib/orca-cloud/orca-cloud-workspace-store'
-import { isPairedCloudStatusRow } from '@/lib/orca-cloud/orca-cloud-workspace-rows'
 import { useCloudPanelActions } from './use-cloud-panel-actions'
 import { useCloudWorkspaceRecord } from './use-cloud-workspace-record'
 
@@ -73,8 +62,6 @@ function CloudMenuRows({
   const { workspace, reload } = useCloudWorkspaceRecord(worktreeId, hostId)
   const confirm = useContext(ConfirmationDialogContext)
   const busy = view.pending !== undefined
-  // Mirroring syncs this desktop's own cloud workspaces; a paired one has no synced copy here.
-  const paired = useCloudWorkspace((state) => isPairedCloudStatusRow(state, worktreeId))
   const archived = view.state === 'archived'
   const groups = cloudWorkspaceActionGroups({
     surface: 'sidebar',
@@ -95,12 +82,6 @@ function CloudMenuRows({
         <DropdownMenuItem disabled={busy} onSelect={actions.onRestart}>
           <RotateCw className="size-3.5" />
           {t('orcaCloudWorkspace.restart', 'Restart')}
-        </DropdownMenuItem>
-      ) : null}
-      {isCloudSyncAvailable() && view.state !== 'archived' && !paired ? (
-        <DropdownMenuItem onSelect={() => requestCloudSyncFocus(worktreeId)}>
-          <HardDriveDownload className="size-3.5" />
-          {t('orcaCloudSync.menuItem', 'Mirror to this computer…')}
         </DropdownMenuItem>
       ) : null}
       {has('archive') && actions.onArchive ? (
