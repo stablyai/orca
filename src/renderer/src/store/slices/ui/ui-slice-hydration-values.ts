@@ -139,6 +139,26 @@ export function mergeContextualTourSeenIds(
   return [...merged]
 }
 
+/** One-shot notices set when shown: only an explicit true counts as seen. */
+export function hydrateOneShotNoticesSeen(
+  ui: PersistedUIState
+): Pick<
+  UISlice,
+  | 'codexTerminalServerIsolationNoticeSeen'
+  | 'codexSharedSettingsNoticeSeen'
+  | 'worktreeCardsUpdateNoticeSeen'
+  | 'worktreeCardsIntroNoticeSeen'
+  | 'claudeDiffPanelNoticeSeen'
+> {
+  return {
+    codexTerminalServerIsolationNoticeSeen: ui.codexTerminalServerIsolationNoticeSeen === true,
+    codexSharedSettingsNoticeSeen: ui.codexSharedSettingsNoticeSeen === true,
+    worktreeCardsUpdateNoticeSeen: ui.worktreeCardsUpdateNoticeSeen === true,
+    worktreeCardsIntroNoticeSeen: ui.worktreeCardsIntroNoticeSeen === true,
+    claudeDiffPanelNoticeSeen: ui.claudeDiffPanelNoticeSeen === true
+  }
+}
+
 /** Stale acks/marks are inert (paneKey reuse beats them via stateStartedAt); the sanitizers only bound growth past HYDRATE_MAX_AGE_MS. */
 export function hydrateAgentReadState(
   ui: PersistedUIState
