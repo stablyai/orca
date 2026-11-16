@@ -1,9 +1,9 @@
 // Private build only: `orca cloud routine list|run`. Routines live on the control plane
 // (GET /v1/routines, POST /v1/routines/:id/run, GET /v1/routines/:id/runs/:runId); each run starts
 // its own cloud workspace. Human output uses the glossary's run states; --json prints the API view.
-import type { CommandHandler } from '../dispatch'
-import { getOptionalPositiveIntegerFlag, getRequiredStringFlag } from '../flags'
-import { RuntimeClientError } from '../runtime/types'
+import type { CommandHandler } from '../dispatch/dispatch'
+import { getOptionalPositiveIntegerFlag, getRequiredStringFlag } from '../arguments/flags'
+import { RuntimeClientError } from '../runtime/connection/types'
 import type {
   Routine,
   RoutineRun,

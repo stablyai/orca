@@ -1,10 +1,10 @@
 // In-process lifecycle steps for built-in providers (Orca Cloud). They answer exactly what a recipe
 // process would — stdout JSON, stderr progress, an exit code — so records, timeouts, pairing reuse
 // and failure copy keep one path.
-import type { EphemeralVmRecipeContext } from './ephemeral-vm-recipe-runner'
-import type { ProcessRunResult } from './ephemeral-vm-recipe-process'
-import type { EphemeralVmFailure } from './ephemeral-vm-failure-copy'
-import type { OrcaVmRecipeLifecycleMode, OrcaVmRecipeProviderId } from './orca-yaml-hook-types'
+import type { EphemeralVmRecipeContext } from './remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-runner'
+import type { ProcessRunResult } from './remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-process'
+import type { EphemeralVmFailure } from './remote-runtime/ephemeral-vm-recipes/ephemeral-vm-failure-copy'
+import type { OrcaVmRecipeLifecycleMode, OrcaVmRecipeProviderId } from './workspace-setup/orca-yaml-hook-types'
 
 export type RecipeStepProviderResult = ProcessRunResult & {
   /** A catalogued failure that replaces the generic "exited with code" copy. */

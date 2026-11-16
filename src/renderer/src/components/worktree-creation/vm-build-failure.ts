@@ -1,4 +1,4 @@
-import type { EnvironmentDoctorCheck } from '../../../../shared/environment-doctor-types'
+import type { EnvironmentDoctorCheck } from '../../../../shared/workspace-setup/environment-doctor/environment-doctor-types'
 import type { PendingWorktreeCreation } from '@/lib/workspace/creation/pending-worktree-creation'
 import {
   classifyEntitlementDenial,

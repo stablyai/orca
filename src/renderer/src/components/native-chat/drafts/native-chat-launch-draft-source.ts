@@ -1,5 +1,5 @@
 import type { AgentPickerRetainedSetup } from '../../../../../shared/agent-launch/picker/agent-launch-picker-authority'
-import type { SshRepoReadoption } from '../../../../../shared/ssh-types'
+import type { SshRepoReadoption } from '../../../../../shared/remote-runtime/ssh/ssh-types'
 import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'
 import {
   parseExecutionHostId,

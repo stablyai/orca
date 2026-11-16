@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { AgentComboboxSurfaceRows } from '@/components/agent/agent-combobox-surface-items'
 import { orcaCloudAgentMenuModel } from '@/lib/orca-cloud/orca-cloud-agent-picker'
-import { NewWorkspaceComposerAgentSection } from './NewWorkspaceComposerAgentSection'
+import { NewWorkspaceComposerAgentSection } from './composer/NewWorkspaceComposerAgentSection'
 
 const noop = (): void => {}
 

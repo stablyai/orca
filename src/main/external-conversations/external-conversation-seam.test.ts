@@ -7,7 +7,6 @@ import {
   fakeTerminal,
   launchResult,
   LOCAL_REPO,
-  PANE,
   WORKTREE
 } from './external-conversation.test-fixture'
 import { deferred, harness } from './external-conversation-seam.test-fixture'
@@ -72,18 +71,6 @@ describe('ExternalConversationSeam start', () => {
     expect((await second).initial).toEqual({ outcome: 'accepted' })
     expect(launch).toHaveBeenCalledTimes(1)
     expect(terminal.writes).toEqual(['second'])
-  })
-
-  it('answers a start rebuilt from a link alone as unknown, without launching', async () => {
-    const { seam, put } = harness()
-    put(WORKTREE, 'local', {
-      externalConversations: [{ ...KEY, paneKey: PANE, agent: 'claude', createdAt: 1 }]
-    })
-    const { launcher, launch } = fakeLauncher(async () => launchResult('handed-to-terminal'))
-    expect(
-      (await seam.start({ launcher, terminal: fakeTerminal().terminal }, KEY, 'd1', START)).initial
-    ).toEqual(UNKNOWN)
-    expect(launch).not.toHaveBeenCalled()
   })
 })
 

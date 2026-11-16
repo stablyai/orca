@@ -1,4 +1,4 @@
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import React, { useCallback, useMemo, useState } from 'react'
 import { RefreshCw, Save, Sparkles, Terminal, TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -15,7 +15,7 @@ import {
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
-import { commitMessagePickerModel } from '@/components/feature-wall/ai-commit-pr-picker'
+import { commitMessagePickerModel } from '@/components/feature-wall/commit-pr-settings/ai-commit-pr-picker'
 import type { AgentPickerEntry } from '../../../../../../shared/agent-launch/picker/agent-launch-picker'
 import { planSourceControlTextGeneration } from '@/lib/source-control/ai/source-control-generation-plan'
 import {
@@ -28,7 +28,7 @@ import { formatLinkedIssueTemplateValue } from '../../../../../../shared/source-
 import type { SourceControlTextActionId } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import type { SourceControlAiWriteTarget } from '../../../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
 import type { SourceControlRenderSettings } from '../listing/use-worktree-context'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { toast } from 'sonner'
 import { SourceControlActionVariableChips } from '../../../source-control/SourceControlActionVariableChips'
@@ -98,7 +98,7 @@ export function SourceControlTextGenerationDialogForm({
   const t = useTranslate()
   const entries = useMemo<AgentPickerEntry[]>(
     () =>
-      listCommitMessageAgentCapabilities().map((capability) => ({
+      listCommitMessageAgentCapabilities(actionId).map((capability) => ({
         agent: capability.id,
         label: agentLabel(capability.id),
         rows: [{ agent: capability.id, kind: 'cli' }],
@@ -109,7 +109,7 @@ export function SourceControlTextGenerationDialogForm({
         catalog: { origin: 'unknown' },
         arguments: ''
       })),
-    []
+    [actionId]
   )
   const pickerModel = useMemo(() => commitMessagePickerModel(entries), [entries])
   const showCustomAgent = Boolean(

@@ -37,7 +37,7 @@ vi.mock('@/store', () => {
         }
       ]
     },
-    agentStatusByPaneKey: world.status ? { [STATUS_KEY]: world.status } : {}
+    agentStatusByPaneKey: new Map(Object.entries(world.status ? { [STATUS_KEY]: world.status } : {}))
   })
   const useAppStore = (selector: (s: ReturnType<typeof read>) => unknown): unknown =>
     selector(read())

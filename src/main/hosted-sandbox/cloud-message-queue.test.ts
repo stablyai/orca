@@ -7,8 +7,8 @@ import {
   agentSessionOperationKey,
   evaluateAgentSessionOperation,
   type AgentSessionOperationRow
-} from '../../shared/agent-session/lifecycle/agent-session-operation-ledger'
-import { SendParams } from '../../shared/rpc-contract/structured-agent-session-params'
+} from '../../shared/agent-session/lifecycle/operations/agent-session-operation-ledger'
+import { SendParams } from '../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
 import {
   createCloudMessageQueue,
   MAX_FAILURES,

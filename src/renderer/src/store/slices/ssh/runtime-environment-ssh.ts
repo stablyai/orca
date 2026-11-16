@@ -1,7 +1,10 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
-import type { SshConnectionState, SshTargetSummary } from '../../../../../shared/ssh-types'
-import { persistedUIValuesEqual as sshConnectionStatesEqual } from '../../../../../shared/persisted-ui-equality'
+import type {
+  SshConnectionState,
+  SshTargetSummary
+} from '../../../../../shared/remote-runtime/ssh/ssh-types'
+import { persistedUIValuesEqual as sshConnectionStatesEqual } from '../../../../../shared/collections/persisted-ui-equality'
 import {
   collectSshTargetGenerations,
   sshTargetGenerationsEqual,

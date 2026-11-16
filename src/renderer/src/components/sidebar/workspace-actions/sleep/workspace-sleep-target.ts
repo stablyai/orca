@@ -3,17 +3,20 @@ import {
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
-import { authorityKey, SELF_LOCAL_AUTHORITY } from '../../../../../../shared/host-authority'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import {
+  authorityKey,
+  SELF_LOCAL_AUTHORITY
+} from '../../../../../../shared/execution-host/host-authority'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type {
   WorkspaceSleepHost,
   WorkspaceSleepTarget
-} from '../../../../../../shared/workspace-sleep'
+} from '../../../../../../shared/workspace/lifecycle/workspace-sleep'
 import { resolveOwner } from '@/lib/workspace/ownership/resolve-owner'
 import { resolveTerminalPtyOwner } from '@/lib/workspace/ownership/terminal-worktree-route'
 import { runtimeRpcTargetForAuthorityKey } from '@/runtime/rpc/targets/runtime-client-target'
 import { workspacePublishingHosts } from '@/store/slices/worktrees/teardown/host-twin-purge-scopes'
-import { resolveTerminalTeardownOwner } from '@/store/terminals/terminal-teardown-owner'
+import { resolveTerminalTeardownOwner } from '@/store/terminals/sleep/terminal-teardown-owner'
 import type { AppState } from '@/store/types'
 
 /** One runtime per copy of the workspace; with no listing row, the workspace's route. */

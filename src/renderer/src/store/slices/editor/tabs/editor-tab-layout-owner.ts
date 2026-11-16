@@ -1,6 +1,6 @@
 // Layout-owner editor opens/closes/promotions/moves/renames reach main before drawing (editor-tab-*-through-layout-owner, restored-editor-move-through-layout-owner).
 
-import type { Tab } from '../../../../../../shared/tab-types'
+import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { LayoutEditorFile } from '../../../../../../shared/workspace-layout/workspace-layout-model'
 import type { AppState } from '../../../types'
 import type { OpenFile } from '../types/open-file'

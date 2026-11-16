@@ -22,13 +22,13 @@ import { getCloudWorkspacesService } from '../ipc/cloud-workspaces'
 import {
   callRuntimeEnvironment,
   subscribeRuntimeEnvironment
-} from '../ipc/runtime-environments/runtime-environment-transport-routing'
+} from '../ipc/runtime-environments/requests/runtime-environment-transport-routing'
 import { getTrustedUIRendererWindow, isTrustedUIRenderer, sendToTrustedUIRenderer } from '../ipc/ui'
 import { retainNotificationUntilRelease } from '../ipc/native-notification-lifecycle'
 import { translateMain } from '../i18n/main-i18n'
 import { hostShellEnvironment } from '../runtime/agent-session/environment/structured-agent-shell-environment'
-import { safelyRevealWindow } from '../window/focus-existing-window'
-import { isBackgroundLaunch } from '../window/foreground-activation-policy'
+import { safelyRevealWindow } from '../window/activation/focus-existing-window'
+import { isBackgroundLaunch } from '../window/activation/foreground-activation-policy'
 import { LocalCommandAuditLog } from './local-command-audit-log'
 import {
   createLocalCommandBridge,
@@ -43,7 +43,7 @@ import {
   stopAllLocalCommands
 } from './local-command-executor'
 import { isLocalCommandSandboxId, LocalCommandSettingsStore } from './local-command-settings-store'
-import { onEphemeralVmRuntimesChanged } from '../../shared/ephemeral-vm-runtime-store-events'
+import { onEphemeralVmRuntimesChanged } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store-events'
 import { eventField } from './local-command-request-checks'
 import {
   createLocalCommandSettingsController,

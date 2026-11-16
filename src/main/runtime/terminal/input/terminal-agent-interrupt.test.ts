@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import type { RuntimeTerminalSend } from '../../../../shared/runtime-terminal-send-contract'
+import type { RuntimeTerminalSend } from '../../../../shared/terminal/runtime/runtime-terminal-send-contract'
 import { interruptWorkingAgent } from './terminal-agent-interrupt'
 
 const PANE = 'tab-1:11111111-1111-4111-8111-111111111111'

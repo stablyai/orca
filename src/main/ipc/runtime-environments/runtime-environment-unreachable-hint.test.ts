@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { withRuntimeUnreachableHint } from './runtime-environment-unreachable-hint'
+import { withRuntimeUnreachableHint } from './requests/runtime-environment-unreachable-hint'
 
 const FAILURE = 'Could not connect to the remote Orca runtime: socket closed.'
 const ENDPOINT = 'wss://203.0.113.7:6768'

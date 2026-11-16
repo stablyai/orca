@@ -16,6 +16,7 @@ import { CloudWokeAgentNotice } from '../orca-cloud/offline/CloudWokeAgentNotice
 import { CloudChatBannerSlot } from './CloudChatBannerSlot'
 import { CloudPaneBannerPortal } from './CloudPaneBannerPortal'
 import { resetCloudChatBannerSlotsForTest } from './cloud-chat-banner-slot'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 
 vi.mock('@/i18n/use-translate', () => ({
   useTranslate: () => (_key: string, fallback: string, params?: Record<string, unknown>) =>
@@ -46,7 +47,7 @@ function setEvidence(evidenceObservedAt: number): void {
     evidenceObservedAt,
     updatedAt: evidenceObservedAt
   }
-  useAppStore.setState({ agentStatusByPaneKey: { [paneKey]: entry } })
+  useAppStore.setState({ agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({ [paneKey]: entry })) })
 }
 
 /** The pane's woke bar, with the chat view open (its column's slot) or closed. */

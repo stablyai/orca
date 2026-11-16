@@ -1,4 +1,4 @@
-import { nativeChatPreferenceFor } from '../../../shared/structured-native-chat-launch-route'
+import { nativeChatPreferenceFor } from '../../../shared/agent-launch/choices/structured-native-chat-launch-route'
 import {
   readAgentLaunchModeSettings,
   decideAgentLaunchMode

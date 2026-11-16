@@ -1,19 +1,25 @@
-import { issueBrowserGuestNavigation } from '../host-guest/browser-guest-metadata-cache'
+import { issueBrowserGuestNavigation } from '../host-guest/metadata/browser-guest-metadata-cache'
 import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ArtifactPublishButton } from '@/components/artifacts/ArtifactPublishButton'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import type { BrowserReloadTrigger } from '../navigate/browser-reload-action'
-import BrowserAddressBar from './BrowserAddressBar'
-import { BrowserChromeToolbar } from './browser-chrome-toolbar'
+import BrowserAddressBar from './address-bar/BrowserAddressBar'
+import { BrowserChromeToolbar } from './toolbar/browser-chrome-toolbar'
 import { BrowserPasswordSaveButton } from '../passwords/BrowserPasswordSaveButton'
-import { BrowserReloadControl } from './browser-reload-control'
-import { BrowserToolbarMenu } from './BrowserToolbarMenu'
-import { BrowserExtensionToolbar, BrowserExtensionsMenuSub } from './browser-extension-toolbar'
-import { BrowserOpenSourceFileButton, BrowserPageStateChips } from './browser-address-chips'
-import { useBrowserExtensionToolbar } from './use-browser-extension-toolbar'
-import { SshEgressIndicator } from './browser-egress-indicator'
-import { destroyPersistentWebview } from '../host-guest/webview-registry'
+import { BrowserReloadControl } from './toolbar/browser-reload-control'
+import { BrowserToolbarMenu } from './toolbar/BrowserToolbarMenu'
+import {
+  BrowserExtensionToolbar,
+  BrowserExtensionsMenuSub
+} from './extensions/browser-extension-toolbar'
+import {
+  BrowserOpenSourceFileButton,
+  BrowserPageStateChips
+} from './address-bar/browser-address-chips'
+import { useBrowserExtensionToolbar } from './extensions/use-browser-extension-toolbar'
+import { useBrowserExtensionsTour } from '../use-browser-extensions-tour'
+import { SshEgressIndicator } from './feedback/browser-egress-indicator'
 import {
   getShareableBrowserArtifactFile,
   readBrowserHtmlArtifactRequest
@@ -22,11 +28,11 @@ import {
   canOpenBrowserFileInWorkspaceEditor,
   openBrowserFileSource
 } from '../navigate/browser-file-editor-open'
-import type { GrabModeHook } from '../annotate/useGrabMode'
+import type { GrabModeHook } from '../annotate/grab/useGrabMode'
 import type {
   BrowserPageConversionOrigin,
   BrowserViewportPresetId
-} from '../../../../../shared/browser-workspace-types'
+} from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   advanceAcrossBrowserPageConversion,
   returnAcrossBrowserPageConversion
@@ -34,7 +40,7 @@ import {
 import '@/lib/browser/documents/file-preview'
 import { convertBrowserPageToWorkspaceDoc } from '@/lib/browser/documents/file-preview-page-conversion'
 import type { GrabIntent } from '../../../../../shared/browser/element-grab/browser-grab-types'
-import type { BrowserChromeNoteActions } from './browser-chrome-toolbar'
+import type { BrowserChromeNoteActions } from './toolbar/browser-annotate-split-button'
 
 /** Binds the shared browser chrome to a browsing page: an editable address bar and session tools. */
 export function BrowserPageToolbar({
@@ -140,6 +146,11 @@ export function BrowserPageToolbar({
     isActive,
     `${currentBrowserUrl}\n${loading}`
   )
+  const extensionDiscoveryTarget = useAppStore(
+    (state) =>
+      isActive && state.activeTabType === 'browser' && state.activeBrowserTabId === workspaceId
+  )
+  useBrowserExtensionsTour(extensionDiscoveryTarget, extensionToolbar !== null)
 
   return (
     <BrowserChromeToolbar
@@ -198,6 +209,7 @@ export function BrowserPageToolbar({
                 <ArtifactPublishButton
                   sourceKey={shareableArtifactFile.filePath}
                   size="icon-xs"
+                  variant="muted-field-icon"
                   createRequest={() => readBrowserHtmlArtifactRequest(currentBrowserUrl)}
                 />
               ) : null}
@@ -249,11 +261,11 @@ export function BrowserPageToolbar({
       notes={notes}
       overflowMenu={(overflow) => (
         <BrowserToolbarMenu
+          extensionDiscoveryTarget={extensionDiscoveryTarget}
           currentProfileId={sessionProfileId}
           workspaceId={workspaceId}
           browserPageId={browserPageId}
           viewportPresetId={viewportPresetId}
-          onDestroyWebview={() => destroyPersistentWebview(browserPageId)}
           isActive={isActive}
           isBlankTab={isBlankTab}
           pageActions={{

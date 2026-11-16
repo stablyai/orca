@@ -2,19 +2,19 @@ import {
   isBundledSkillLeaveReason,
   type BundledSkillOutcome,
   type BundledSkillPlan
-} from '../../../../../shared/bundled-skill-plan'
+} from '../../../../../shared/skills/bundled/bundled-skill-plan'
 import type {
   BundledSkillLocation,
   BundledSkillLocationState
-} from '../../../../../shared/bundled-skill-locations'
+} from '../../../../../shared/skills/bundled/bundled-skill-locations'
 import {
   bundledSkillInstallAgents,
   bundledSkillOutcomeText,
   summarizeBundledSkillPlan,
   type BundledSkillPlanState,
   type BundledSkillResultSummary
-} from '../../../../../shared/bundled-skill-summary'
-import { SKILL_INSTALL_PROVIDERS } from '../../../../../shared/skill-install-providers'
+} from '../../../../../shared/skills/bundled/bundled-skill-summary'
+import { SKILL_INSTALL_PROVIDERS } from '../../../../../shared/skills/installation/skill-install-providers'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 
@@ -37,6 +37,7 @@ export function updatedSkillsLabel(
     : updated
 }
 
+/** Translated reason Orca left a location alone; unknown reasons from newer hosts fall back. */
 export function leaveReasonText(
   reason: string | null | undefined,
   t: Translate = translate
@@ -47,6 +48,11 @@ export function leaveReasonText(
   switch (reason) {
     case 'edited':
       return t('auto.components.skills.skillPlanOpCopy.edited', 'Skill edited outside Orca')
+    case 'other-build':
+      return t(
+        'auto.components.skills.skillPlanOpCopy.otherBuild',
+        'Installed by another Orca version'
+      )
     case 'other':
       return t('auto.components.skills.skillPlanOpCopy.other', 'A different skill uses this name')
     case 'unwritable':
@@ -87,13 +93,19 @@ export function locationStateText(location: BundledSkillLocation): string {
     'keep-link': () =>
       translate('auto.components.skills.skillPlanOpCopy.keepLink', 'Link, no change'),
     leave: () =>
-      translate(
-        'auto.components.skills.skillPlanOpCopy.updateSkipped',
-        'Update skipped: {{value0}}',
-        {
-          value0: leaveReasonText(location.reason)
-        }
-      ),
+      // Another build's copy was never meant to update, so it is kept rather than skipped.
+      location.reason === 'other-build'
+        ? translate(
+            'auto.components.skills.skillPlanOpCopy.otherBuildKept',
+            'Kept: written by another Orca version'
+          )
+        : translate(
+            'auto.components.skills.skillPlanOpCopy.updateSkipped',
+            'Update skipped: {{value0}}',
+            {
+              value0: leaveReasonText(location.reason)
+            }
+          ),
     unknown: () =>
       translate('auto.components.skills.skillPlanOpCopy.needsAttention', 'Needs attention')
   }

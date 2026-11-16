@@ -3,7 +3,7 @@ import { getLocalExecutionHostLabel } from '../../../../../shared/execution-host
 import { translateLocalExecutionHostLabel } from '../../sidebar/execution-host-label'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   SettingsSearchableSelect,
   type SettingsSearchableSelectOption

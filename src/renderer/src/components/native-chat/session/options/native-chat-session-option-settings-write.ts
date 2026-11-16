@@ -1,6 +1,6 @@
 import type { NativeChatSessionOptionSettingsMutation } from '../../../../../../shared/native-chat/input/native-chat-session-options'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 /** Apply deltas at the owning runtime so desktop/mobile choices cannot replace each other’s records. */
 export function enqueueSessionOptionSettingsWrite(

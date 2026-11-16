@@ -1,20 +1,20 @@
 import { app, ipcMain, MessageChannelMain, utilityProcess, type WebContents } from 'electron'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
-import { BackendPortRpc } from '../../shared/backend-port-rpc'
+import { BackendPortRpc } from '../../shared/backend/backend-port-rpc'
 import {
   BACKEND_CONNECTION_CHANGED,
   BACKEND_PORT_DELIVERY,
   BACKEND_PORT_REQUEST,
   BACKEND_UTILITY_PROCESS_NAME,
   type AutomationUsageClient
-} from '../../shared/backend-service-contract'
+} from '../../shared/backend/backend-service-contract'
 import { backendMessagePort } from '../backend/backend-message-port'
 import {
   currentWorkerEntryLayout,
   resolveWorkerThreadEntryPath
 } from '../worker-threads/worker-thread-entry-path'
 import { ManagedOrcadEventWindow } from '../managed-server/lifecycle/orcad-managed-event-window'
-import { ORCAD_SHUTDOWN_DEADLINE_MS } from '../orcad/orcad-stop-deadlines'
+import { ORCAD_SHUTDOWN_DEADLINE_MS } from '../orcad/host-lifecycle/managed-stop/orcad-stop-deadlines'
 import {
   createBackendDesktopCapabilities,
   trustsBackendRenderer,

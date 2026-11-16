@@ -7,7 +7,7 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { HostKindIcon } from './HostKindIcon'
+import { HostKindIcon } from './icons/HostKindIcon'
 
 // Rows ask whether they're cloud from here, next to the glyph that draws the answer.
 export { cloudWorktreeRowStatus } from '../cloud/cloud-worktree-row'

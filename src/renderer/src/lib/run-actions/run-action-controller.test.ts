@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { OrcaRunAction } from '../../../../shared/orca-yaml-hook-types'
+import type { OrcaRunAction } from '../../../../shared/workspace-setup/orca-yaml-hook-types'
 
 type Tab = { id: string }
 type MockState = {

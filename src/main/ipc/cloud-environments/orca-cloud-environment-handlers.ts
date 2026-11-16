@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto'
 import { ipcMain, type IpcMainInvokeEvent, type WebContents } from 'electron'
 import { z } from 'zod'
 import { getRepoDialableSshTargetId } from '../../../shared/execution-host'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import {
   ORCA_CLOUD_ENVIRONMENT_BUILD_EVENT_CHANNEL,
   type OrcaCloudEnvironmentBuildEvent,

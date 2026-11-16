@@ -1,12 +1,12 @@
 // Private build only: `orca cloud …` handlers. They never touch the Orca runtime (ctx.client): they
 // call the Orca Cloud public API over HTTPS, so they work inside a sandbox with no desktop app running.
-import type { CommandHandler } from '../dispatch'
+import type { CommandHandler } from '../dispatch/dispatch'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
   getRequiredStringFlag
-} from '../flags'
-import { RuntimeClientError } from '../runtime/types'
+} from '../arguments/flags'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { CloudApiClient } from './cloud-api-client'
 import {
   describeCloudToken,

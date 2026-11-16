@@ -1,8 +1,6 @@
 import React from 'react'
-import {
-  toRuntimeExecutionHostId,
-  type ExecutionHostId
-} from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { Worktree } from '../../../../../shared/worktree/types'
 import type { AutomationListRow } from '../listing/automation-list-row-identity'
 import type {
   AutomationRunsDashboardEntry,
@@ -10,6 +8,8 @@ import type {
 } from './automation-runs-dashboard-model'
 import { AutomationRunsDashboard } from './AutomationRunsDashboard'
 import type { AutomationsPageView } from '../automation-page-state'
+import type { PendingAutomationRunNavigation } from '../../../store/slices/ui/ui-slice-contract-core'
+import { automationRowHostId } from '../automations-page-navigation'
 
 export function AutomationRunsDashboardSurface({
   rows,
@@ -20,8 +20,8 @@ export function AutomationRunsDashboardSurface({
   onLoadMore,
   now,
   onRefresh,
+  worktreeForRun,
   setPageView,
-  setRunPageOrigin,
   selectAutomationRow,
   setPendingAutomationRunNavigation,
   setIsDetailOpen
@@ -34,14 +34,10 @@ export function AutomationRunsDashboardSurface({
   onLoadMore: () => void
   now: number
   onRefresh: () => void
+  worktreeForRun: (entry: AutomationRunsDashboardEntry) => Worktree | null
   setPageView: (view: AutomationsPageView) => void
-  setRunPageOrigin: (origin: 'runs' | 'automation') => void
   selectAutomationRow: (rowKey: string | null) => void
-  setPendingAutomationRunNavigation: (navigation: {
-    automationId: string
-    runId: string | null
-    hostId?: ExecutionHostId
-  }) => void
+  setPendingAutomationRunNavigation: (navigation: PendingAutomationRunNavigation) => void
   setIsDetailOpen: (open: boolean) => void
 }): React.JSX.Element {
   return (
@@ -54,18 +50,16 @@ export function AutomationRunsDashboardSurface({
       onLoadMore={onLoadMore}
       now={now}
       onRefresh={onRefresh}
+      worktreeForRun={worktreeForRun}
       onOpenRun={(entry) => {
-        const authority = entry.row.catalogRef?.authority
-        setRunPageOrigin('runs')
+        const hostId: ExecutionHostId | undefined = automationRowHostId(entry.row)
         setPageView('run')
         selectAutomationRow(entry.row.key)
         setPendingAutomationRunNavigation({
           automationId: entry.row.automation.id,
           runId: entry.run.id,
-          hostId:
-            authority?.kind === 'runtime'
-              ? toRuntimeExecutionHostId(authority.environmentId)
-              : undefined
+          hostId,
+          origin: 'runs'
         })
         setIsDetailOpen(true)
       }}

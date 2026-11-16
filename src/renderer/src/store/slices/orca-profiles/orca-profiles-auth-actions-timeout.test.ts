@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   ConnectCurrentOrcaProfileResult,
   OrcaProfileAuthStatus
-} from '../../../../../shared/orca-profiles'
+} from '../../../../../shared/orca-profiles/orca-profiles'
 import { registerSignInNotice } from '@/lib/orca-cloud/sign-in-notice-visibility'
 import { createTestStore } from '../../testing/app-store-test-fixture'
 

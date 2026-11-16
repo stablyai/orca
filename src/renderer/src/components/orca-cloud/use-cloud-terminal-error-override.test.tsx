@@ -6,6 +6,7 @@ import { seedCloudWorkspaceSnapshot } from '@/lib/orca-cloud/orca-cloud-workspac
 import type { HostedWorkspaceStatus } from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
 import { RUNTIME_ENVIRONMENT_ASLEEP_MESSAGE } from '../../../../shared/remote-runtime/recipe-vm-wake'
 import { TerminalErrorToast } from '../terminal-pane/errors/TerminalErrorToast'
+import { TooltipProvider } from '@/components/ui/tooltip'
 
 vi.mock('@/components/sidebar/workspace-actions/sleep/use-worktree-sleep-state', () => ({
   useIsSleepingWorktree: () => false
@@ -31,13 +32,16 @@ function seed(state: HostedWorkspaceStatus['state']): void {
   })
 }
 
+// The regular toast's copy button uses the app tooltip, which the app root provides.
 const toast = (worktreeId: string, error: string) => (
-  <TerminalErrorToast
-    worktreeId={worktreeId}
-    error={error}
-    paneOnClient={false}
-    onDismiss={() => {}}
-  />
+  <TooltipProvider>
+    <TerminalErrorToast
+      worktreeId={worktreeId}
+      error={error}
+      paneOnClient={false}
+      onDismiss={() => {}}
+    />
+  </TooltipProvider>
 )
 
 afterEach(() => {

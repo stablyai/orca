@@ -1,5 +1,5 @@
 import type { Translate } from '@/i18n/use-translate'
-import type { EnvironmentDoctorCheck } from '../../../../shared/environment-doctor-types'
+import type { EnvironmentDoctorCheck } from '../../../../shared/workspace-setup/environment-doctor/environment-doctor-types'
 
 /** A check's message and fix in the UI language; uncoded checks (older servers) keep the host's English. */
 export function environmentCheckCopy(

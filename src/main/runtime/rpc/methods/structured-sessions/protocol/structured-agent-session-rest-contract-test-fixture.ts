@@ -4,17 +4,17 @@ import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-
 import {
   createRestTestRig,
   foundRestTestChat
-} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
+} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig.test-fixture'
 
-import { HOST_TEST_SESSION as SESSION } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
-import type { RestTestRig } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
+import { HOST_TEST_SESSION as SESSION } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
+import type { RestTestRig } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig.test-fixture'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { RpcResponse } from '../../../core'
 import { RpcDispatcher } from '../../../dispatcher'
 import type { RpcDispatchStreamingOptions } from '../../../dispatch/dispatcher-stream-options'
 import { STRUCTURED_AGENT_SESSION_METHODS } from '../structured-agent-session'
 import type * as fileOperations from 'node:fs/promises'
-import * as contextSnapshots from '../../../../../native-chat/agent-session-context-snapshots'
+import * as contextSnapshots from '../../../../../native-chat/conversation-context/agent-session-context-snapshots'
 
 vi.mock('node:fs/promises', { spy: true })
 export const actualFiles = await vi.importActual<typeof fileOperations>('node:fs/promises')

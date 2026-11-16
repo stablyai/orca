@@ -12,7 +12,7 @@ import {
 } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ListRow } from '../components/list/ListGroup'
-import { MobileStateView } from '../components/MobileStateView'
+import { MobileStateView } from '../components/feedback/MobileStateView'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { structuredSessionOperationId } from '../session/native-chat/agent-session/structured-session-operation-id'
 import { SettingsNavBar } from '../settings/settings-screen-frame'

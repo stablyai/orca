@@ -19,8 +19,11 @@ import {
   seedCurrentCodexTranscript,
   terminalIdentity
 } from './helpers/completed-worker-retirement-fixture'
-import { RuntimeClient } from '../../src/cli/runtime-client'
-import type { RuntimeTerminalRead, RuntimeTerminalSummary } from '../../src/shared/runtime-types'
+import { RuntimeClient } from '../../src/cli/runtime/client'
+import type {
+  RuntimeTerminalRead,
+  RuntimeTerminalSummary
+} from '../../src/shared/terminal/runtime/runtime-terminal-contracts'
 import { splitWorktreeIdForFilesystem } from '../../src/shared/worktree/id'
 
 const PROVIDER_SESSION_ID = '019feb51-2269-71c2-89c6-faa8dc65c8dc'

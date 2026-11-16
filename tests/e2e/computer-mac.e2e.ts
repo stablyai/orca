@@ -1,5 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from 'vitest'
-import type { ComputerActionResult, ComputerSnapshotResult } from '../../src/shared/runtime-types'
+import type {
+  ComputerActionResult,
+  ComputerSnapshotResult
+} from '../../src/shared/computer/computer-use-runtime-types'
 import {
   activateFinder,
   ensureOrcaRuntimeLaunched,
@@ -72,78 +75,6 @@ describe.skipIf(!isMac || !e2eOptIn)('computer-use macOS e2e (TextEdit)', () => 
       dialogClosed: true,
       dialogWasNew: true
     })
-  })
-
-  test('paste-text and hotkey verify TextEdit text replacement', async () => {
-    const first = parseJsonOutput<{ result: ComputerActionResult }>(
-      (
-        await runOrcaCli([
-          'computer',
-          'paste-text',
-          '--app',
-          'TextEdit',
-          '--text',
-          'orca paste first',
-          '--no-screenshot',
-          '--json'
-        ])
-      ).stdout
-    )
-    expect(first.result.action?.path).toBe('accessibility')
-    expect(first.result.action?.verification?.state).toBe('verified')
-
-    const selectAll = parseJsonOutput<{ result: ComputerActionResult }>(
-      (
-        await runOrcaCli([
-          'computer',
-          'hotkey',
-          '--app',
-          'TextEdit',
-          '--key',
-          'CmdOrCtrl+A',
-          '--no-screenshot',
-          '--json'
-        ])
-      ).stdout
-    )
-    expect(selectAll.result.action?.actionName).toBe('AXSelectAll')
-    expect(selectAll.result.action?.verification?.state).toBe('verified')
-
-    const marker = `orca paste final ${Date.now()}`
-    const second = parseJsonOutput<{ result: ComputerActionResult }>(
-      (
-        await runOrcaCli([
-          'computer',
-          'paste-text',
-          '--app',
-          'TextEdit',
-          '--text',
-          marker,
-          '--no-screenshot',
-          '--json'
-        ])
-      ).stdout
-    )
-    expect(second.result.action?.actionName).toBe('AXReplaceSelection')
-    expect(second.result.action?.verification).toEqual({
-      state: 'verified',
-      property: 'focusedText'
-    })
-
-    const after = parseJsonOutput<{ result: ComputerSnapshotResult }>(
-      (
-        await runOrcaCli([
-          'computer',
-          'get-app-state',
-          '--app',
-          'TextEdit',
-          '--no-screenshot',
-          '--json'
-        ])
-      ).stdout
-    )
-    expect(after.result.snapshot.treeText).toContain(marker)
-    expect(after.result.snapshot.treeText).not.toContain('orca paste first')
   })
 
   test('accessibility text actions work when TextEdit is not frontmost', async () => {

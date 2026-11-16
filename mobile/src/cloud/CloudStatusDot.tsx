@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { Animated, Easing, View } from 'react-native'
-import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
+import { useReducedMotionEnabled } from '../platform/accessibility/use-reduced-motion'
 import { colors, radii } from '../theme/mobile-theme'
 import type { CloudWorkspaceStatus } from './cloud-control-plane-client'
 import { cloudStatusColor, isCloudStatusTransitional } from './cloud-workspace-display'

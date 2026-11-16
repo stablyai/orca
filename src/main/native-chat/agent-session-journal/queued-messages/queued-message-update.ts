@@ -4,7 +4,7 @@ import { agentSessionSendBodyFingerprint } from '../../../../shared/agent-sessio
 import {
   queuedMessageWithEdit,
   type QueuedMessageEdit
-} from '../../../../shared/queued-message-edit'
+} from '../../../../shared/native-chat/input/queued-messages/queued-message-edit'
 import { isUnsettledQueuedMessage, type QueuedMessageRow } from './queued-message-table'
 
 export type QueuedMessageUpdate = QueuedMessageEdit & {

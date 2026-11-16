@@ -24,8 +24,8 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import type { RunActionRun, RunActionStatus } from '@/lib/run-actions/run-actions-store'
-import type { OrcaRunAction } from '../../../../shared/orca-yaml-hook-types'
-import type { WorkspacePort } from '../../../../shared/workspace-ports'
+import type { OrcaRunAction } from '../../../../shared/workspace-setup/orca-yaml-hook-types'
+import type { WorkspacePort } from '../../../../shared/workspace/ports/workspace-ports'
 
 export function isRunLive(status: RunActionStatus | undefined): boolean {
   return status === 'running' || status === 'stopping'

@@ -3,7 +3,7 @@ import type {
   OrcaCloudSignInEnd,
   OrcaCloudSignInProgress,
   OrcaProfileAuthStatus
-} from '../../../../../../shared/orca-profiles'
+} from '../../../../../../shared/orca-profiles/orca-profiles'
 import { OrcaAccountSettingsPane } from './OrcaAccountSettingsPane'
 
 const width = 760

@@ -106,8 +106,8 @@ it.each(['load', 'resume'] as const)(
         resume: {
           sessionId: 'saved-session',
           key: 'acp:grok:saved',
-          mayBeUnsaved: () => false,
-          unannouncedLosses: () => []
+          mayBeUnsaved: async () => false,
+          lossKeys: []
         }
       },
       deps: { logger: createStructuredAgentSessionLogger() },

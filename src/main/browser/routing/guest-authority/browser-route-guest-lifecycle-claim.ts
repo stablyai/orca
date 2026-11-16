@@ -28,3 +28,20 @@ export function claimBrowserRouteGuestLifecycle(
     isCurrent: () => !state.retirementRequested && registrationMatches()
   })
 }
+
+export function claimRegisteredBrowserRouteGuestLifecycle(
+  registration: BrowserRoutePageGuestIdentity,
+  state: BrowserRouteGuestState | undefined,
+  registrationMatches: (state: BrowserRouteGuestState) => boolean,
+  hasAuthority: (state: BrowserRouteGuestState) => boolean
+): BrowserRouteGuestLifecycleClaim | null {
+  return claimBrowserRouteGuestLifecycle(registration, state, () =>
+    Boolean(
+      state &&
+      (!state.registration ||
+        (browserRoutePageKey(state.registration) === browserRoutePageKey(registration) &&
+          hasAuthority(state))) &&
+      registrationMatches(state)
+    )
+  )
+}

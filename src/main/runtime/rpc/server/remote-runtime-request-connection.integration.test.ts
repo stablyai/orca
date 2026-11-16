@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest'
 
 import { getDefaultRepoHookSettings } from '../../../../shared/constants'
 
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 
 import { parsePairingCode } from '../../../../shared/remote-runtime/pairing/pairing'
 
@@ -24,13 +24,13 @@ import { subscribeRemoteRuntimeTransport } from '../../../../shared/remote-runti
 import type {
   RuntimeClientEvent,
   RuntimeClientEventStreamMessage
-} from '../../../../shared/runtime-client-events'
+} from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
 
 import type { OrcaRuntimeService } from '../../orca-runtime'
 
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 
-import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../../shared/host-runtime-capabilities'
+import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../../shared/remote-runtime/protocol/host-runtime-capabilities'
 
 const REMOTE_RUNTIME_TEST_TIMEOUT_MS = 15_000
 const REMOTE_RUNTIME_REQUEST_TIMEOUT_MS = 5_000

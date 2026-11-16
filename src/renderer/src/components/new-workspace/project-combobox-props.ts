@@ -1,7 +1,7 @@
 import type { CloudReposRetry } from './ProjectComboboxCloudUnavailable'
 import type { NewWorkspaceProjectOption } from '@/lib/workspace/creation/new-workspace-project-options'
 import type { OrcaCloudGitHubRepository } from '@/lib/orca-cloud/use-orca-cloud-github-repositories'
-import type { ProjectComboboxAddProjectMenu } from './ProjectComboboxAddProjectOption'
+import type { ProjectComboboxAddProjectMenu } from './project-selection/ProjectComboboxAddProjectOption'
 
 export type ProjectComboboxProps = {
   options: readonly NewWorkspaceProjectOption[]

@@ -18,7 +18,7 @@ import { useTerminalPaneContextActions } from './use-terminal-pane-context-actio
 import { useTerminalPaneMobileActions } from './use-terminal-pane-mobile-actions'
 import { useTerminalPaneProjection } from './use-terminal-pane-projection'
 import { useLayoutOwnerPaneTree } from '../layout/ownership/use-layout-owner-pane-tree'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 
 // Switch point: the mounted tab follows main's pane tree. Chosen once per build, so hook order is fixed.
 const useLayoutOwnerPaneTreeWhenMain = ORCA_LAYOUT_OWNER_IS_MAIN
@@ -32,16 +32,16 @@ export function useTerminalPaneController(props: TerminalPaneProps) {
   const store = Object.assign(chat, useTerminalPaneStoreBindings(chat))
   const startup = Object.assign(store, useTerminalPaneStartupActions(store))
   const layout = Object.assign(startup, useTerminalPaneLayoutPersistence(startup))
-  useHostPaneTitleSync(layout)
   const bindings = Object.assign(layout, useTerminalPaneLayoutBindings(layout))
   const close = Object.assign(
     bindings,
     useTerminalPaneCloseActions(bindings),
     useTerminalPaneTabDetachActions(bindings)
   )
-  useTerminalPaneLifecycleStage(close)
-  const reconciliation = Object.assign(close, useTerminalPaneReconciliation(close))
-  useLayoutOwnerPaneTreeWhenMain(close)
+  const mounted = Object.assign(close, useTerminalPaneLifecycleStage(close))
+  useHostPaneTitleSync(mounted)
+  const reconciliation = Object.assign(mounted, useTerminalPaneReconciliation(mounted))
+  useLayoutOwnerPaneTreeWhenMain(mounted)
   useTerminalPaneGlobalListeners(reconciliation)
   useTerminalPanePasteListeners(reconciliation)
   useTerminalPaneTitleEffects(reconciliation)

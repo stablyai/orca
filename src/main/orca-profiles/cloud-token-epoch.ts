@@ -1,7 +1,7 @@
 // Bumped whenever a cached Orca Cloud sandbox token may no longer speak for the right team or role:
 // a team switch commit, or any change to the signed-in user's memberships or roles. Token caches
 // compare epochs so a role change (owner -> member -> owner) never reuses a token minted before it.
-import type { OrcaCloudOrgSummary } from '../../shared/orca-profiles'
+import type { OrcaCloudOrgSummary } from '../../shared/orca-profiles/orca-profiles'
 
 let epoch = 0
 const membershipSignatures = new Map<string, string>()

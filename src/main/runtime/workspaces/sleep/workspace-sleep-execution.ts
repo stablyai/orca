@@ -6,7 +6,7 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
-import type { RuntimeWorktreeTerminalSleepResult } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeWorktreeTerminalSleepResult } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type {
   WorkspaceChatStopReceipt,
   WorkspaceSleepHost,
@@ -14,7 +14,7 @@ import type {
   WorkspaceSleepOutcome,
   WorkspaceSleepRequest,
   WorkspaceSleepTarget
-} from '../../../../shared/workspace-sleep'
+} from '../../../../shared/workspace/lifecycle/workspace-sleep'
 import {
   requestRemoteWorktreeSleep,
   type RemoteWorkspaceCall

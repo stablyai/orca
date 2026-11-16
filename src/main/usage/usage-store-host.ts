@@ -1,4 +1,4 @@
-import type { AgentTokenUsage } from '../../shared/telemetry-agent-token-usage-schema'
+import type { AgentTokenUsage } from '../../shared/telemetry/schemas/telemetry-agent-token-usage-schema'
 import type { UsageWorktreeRef } from './worktree-attribution/usage-worktree-metadata'
 
 export type UsageWorktreeCatalog = {

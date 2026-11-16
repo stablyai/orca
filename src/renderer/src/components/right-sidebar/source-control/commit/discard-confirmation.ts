@@ -24,11 +24,7 @@ export function getDiscardEntryConfirmationCopy(
 
   if (discardDeletesEntryFile(entry)) {
     return {
-      title: t(
-        'auto.components.right.sidebar.source.control.discard.confirmation.96c772bee9',
-        'Delete "{{value0}}"?',
-        { value0: name }
-      ),
+      title: t('common.delete', 'Delete'),
       description: t(
         'auto.components.right.sidebar.source.control.discard.confirmation.d97bf697c9',
         'This will permanently delete this file. This cannot be undone.'
@@ -77,11 +73,7 @@ export function getDiscardAreaConfirmationCopy(
   switch (area) {
     case 'untracked':
       return {
-        title: t(
-          'sourceControl.discard.deleteUntrackedTitle',
-          'Delete {{count}} untracked files?',
-          { count, defaultValue_one: 'Delete {{count}} untracked file?' }
-        ),
+        title: t('common.delete', 'Delete'),
         description:
           count === 1
             ? t(
@@ -98,10 +90,7 @@ export function getDiscardAreaConfirmationCopy(
                 }
               ),
         deleteAction: true,
-        confirmLabel:
-          count === 1
-            ? t('sourceControl.discard.delete', 'Delete')
-            : t('sourceControl.discard.deleteCount', 'Delete {{count}}', { count })
+        confirmLabel: t('common.delete', 'Delete')
       }
     case 'staged':
       return {

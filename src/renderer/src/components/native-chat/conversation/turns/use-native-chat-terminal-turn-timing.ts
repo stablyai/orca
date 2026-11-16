@@ -1,7 +1,7 @@
+import { useAgentStatusSelector } from '@/runtime/agent-status/use-agent-status'
 import { useMemo } from 'react'
-import { useAppStore } from '../../../../store/index'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
-import type { NativeChatSettledTurns } from '../../../../../../shared/native-chat/transcript/native-chat-turn-status'
+import type { NativeChatSettledTurns } from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-status'
 import {
   nativeChatHookLatestTurnWorkedSeconds,
   nativeChatHookTurnStartedAt,
@@ -17,13 +17,10 @@ export function useNativeChatTerminalTurnTiming(
   messages: readonly NativeChatMessage[],
   turnActive: boolean
 ): { workingStartedAt: number | null; settledTurns: NativeChatSettledTurns } {
-  const turnStartedAt = useAppStore((s) =>
-    nativeChatHookTurnStartedAt(s.agentStatusByPaneKey[paneKey])
+  const turnStartedAt = useAgentStatusSelector(paneKey, nativeChatHookTurnStartedAt)
+  const latestWorkedSeconds = useAgentStatusSelector(paneKey, (entry) =>
+    nativeChatHookLatestTurnWorkedSeconds(entry, resolveNativeChatHookState(entry) === null)
   )
-  const latestWorkedSeconds = useAppStore((s) => {
-    const entry = s.agentStatusByPaneKey[paneKey]
-    return nativeChatHookLatestTurnWorkedSeconds(entry, resolveNativeChatHookState(entry) === null)
-  })
   const transcriptSettled = useMemo(() => nativeChatTranscriptSettledTurns(messages), [messages])
   const latestTurnId = useMemo(() => nativeChatLatestTurnId(messages), [messages])
   const settledTurns = useMemo(

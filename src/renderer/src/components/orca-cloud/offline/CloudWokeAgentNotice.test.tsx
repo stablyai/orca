@@ -9,6 +9,7 @@ import {
   AGENT_RELAUNCH_WATCH_MS
 } from '@/lib/orca-cloud/cloud-woke-agent-strip'
 import { CloudWokeAgentNotice } from './CloudWokeAgentNotice'
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 
 vi.mock('@/i18n/use-translate', () => ({
   useTranslate: () => (_key: string, fallback: string, params?: Record<string, unknown>) =>
@@ -41,7 +42,7 @@ function setAgentRow(
     ...(row.evidenceObservedAt === undefined ? {} : { evidenceObservedAt: row.evidenceObservedAt }),
     updatedAt: row.updatedAt ?? asleepAt
   }
-  useAppStore.setState({ agentStatusByPaneKey: { [paneKey]: entry } })
+  useAppStore.setState({ agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({ [paneKey]: entry })) })
 }
 
 /** A pane whose screen the test controls: at a shell prompt or not, and when it redraws. */

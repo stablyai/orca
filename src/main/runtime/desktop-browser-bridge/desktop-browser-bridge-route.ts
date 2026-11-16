@@ -5,9 +5,9 @@ import {
   DESKTOP_BROWSER_BRIDGE_UNAVAILABLE_CODE,
   DESKTOP_BROWSER_BRIDGE_UNAVAILABLE_MESSAGE,
   isDesktopBrowserBridgeMethod
-} from '../../../shared/desktop-browser-bridge-protocol'
+} from '../../../shared/browser/client-hosting/desktop-browser-bridge-protocol'
 import { BROWSER_EXPECT_URL_UNSUPPORTED_CODE } from '../../../shared/browser/client-hosting/browser-expected-url'
-import { browserWaitRequestTimeoutMs } from '../../../shared/browser-wait-timeout'
+import { browserWaitRequestTimeoutMs } from '../../../shared/browser/automation/browser-wait-timeout'
 import type { RpcCallerIdentity } from '../rpc/callers/rpc-caller-identity'
 import { assertClientOpenableUrl } from '../browser/client-pages/browser-client-page-opening'
 import type { DesktopBrowserBridgeRegistry } from './desktop-browser-bridge-registry'

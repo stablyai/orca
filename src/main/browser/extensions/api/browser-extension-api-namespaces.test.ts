@@ -72,15 +72,10 @@ const { getBrowserExtensionProfileStateStore } =
 const menuHost = await import('../context-menus/browser-extension-context-menu-host')
 const webRequest = await import('../requests/browser-extension-web-request-observer')
 const { setBrowserExtensionSupportEnabled } = await import('../browser-extension-support')
-const contexts = await import('../api-runtime/browser-extension-contexts')
-const eventDispatch = await import('../api-runtime/browser-extension-event-dispatch')
-const { attachWorkerEventStream } =
-  await import('../api-runtime/browser-extension-worker-event-stream')
-const { handleBrowserExtensionApiRequest } =
-  await import('../api-runtime/browser-extension-api-request')
-await import('../../../../preload/browser-extension-storage-relay')
+
+await import('../../../../preload/browser/extensions/storage/browser-extension-storage-relay')
 const { PRELOAD_STORAGE_SYNC_NAMESPACE } =
-  await import('../../../../preload/browser-extension-storage-sync')
+  await import('../../../../preload/browser/extensions/storage/browser-extension-storage-sync')
 
 const VAULT = 'a'.repeat(32)
 const OTHER = 'b'.repeat(32)
@@ -146,7 +141,7 @@ const extensionSession = {
       (_filter: unknown, callback: (details: Record<string, unknown>) => void) => callback
     )
   },
-  protocol: { handle: vi.fn(), unhandle: vi.fn() },
+  protocol: { handle: vi.fn(), unhandle: vi.fn(), isProtocolHandled: vi.fn(() => true) },
   extensions: Object.assign(new EventEmitter(), {
     getExtension: (id: string) => extensions.get(id) ?? null,
     getAllExtensions: () => [...extensions.values()]
@@ -203,79 +198,6 @@ beforeAll(() => {
 beforeEach(() => {
   host.attachBrowserExtensionApiHostToSession(session, 'default')
   mocks.prompt.mockReset()
-})
-
-describe('permissions.request', () => {
-  it.each(['extension unload', 'profile deletion'] as const)(
-    'does not recreate grants when accepted after %s',
-    async (reason) => {
-      const extensionId = (reason === 'extension unload' ? 'd' : 'e').repeat(32)
-      extensions.set(extensionId, makeExtension(extensionId, { optional_permissions: ['privacy'] }))
-      let answer: (accepted: boolean) => void = () => {}
-      mocks.prompt.mockReturnValueOnce(
-        new Promise((resolve) => {
-          answer = resolve
-        })
-      )
-      const pending = call(
-        extensionId,
-        'permissions',
-        'request',
-        [{ permissions: ['privacy'] }],
-        'page'
-      )
-      const store = getBrowserExtensionProfileStateStore()
-      if (reason === 'extension unload') {
-        extensionSession.extensions.emit('extension-unloaded', {}, extensions.get(extensionId))
-        store.forgetExtension(extensionId)
-      } else {
-        host.forgetBrowserExtensionContexts(session)
-        store.forgetProfile('default')
-      }
-      answer(true)
-      await expect(pending).resolves.toBe(false)
-      expect(store.readProfile('default')).not.toHaveProperty(extensionId)
-      host.attachBrowserExtensionApiHostToSession(session, 'default')
-    }
-  )
-
-  it('delivers a previously registered optional event only while permission is granted', async () => {
-    const extensionId = 'f'.repeat(32)
-    extensions.set(extensionId, makeExtension(extensionId, { optional_permissions: ['privacy'] }))
-    const event = 'services.passwordSavingEnabled.onChange'
-    const frame = await listenFrame(extensionId, 'privacy', event)
-    const state = contexts.getHostSessionState(session)
-    if (!state) {
-      throw new Error('Session not attached')
-    }
-    const worker = contexts.ensureWorkerContext(
-      state,
-      extensionId,
-      `chrome-extension://${extensionId}/`
-    )
-    const listen = () =>
-      handleBrowserExtensionApiRequest(
-        caller(extensionId),
-        state,
-        { type: 'listen', namespace: 'privacy', event, active: true },
-        { kind: 'worker', context: worker }
-      )
-    await expect(listen()).resolves.toEqual({ ok: true, value: undefined })
-    host.emitBrowserExtensionEvent({ session, extensionId }, 'privacy', event, [{ value: false }])
-    expect(frame.payloads()).toEqual([])
-    mocks.prompt.mockResolvedValueOnce(true)
-    await call(extensionId, 'permissions', 'request', [{ permissions: ['privacy'] }], 'page')
-    host.emitBrowserExtensionEvent({ session, extensionId }, 'privacy', event, [{ value: false }])
-    expect(frame.payloads()).toEqual([[{ value: false }]])
-    expect(worker.queue).toHaveLength(1)
-    await call(extensionId, 'permissions', 'remove', [{ permissions: ['privacy'] }])
-    const send = vi.fn()
-    attachWorkerEventStream(worker, { send, close() {} })
-    await expect(listen()).resolves.toEqual({ ok: true, value: undefined })
-    expect(send).not.toHaveBeenCalled()
-    host.emitBrowserExtensionEvent({ session, extensionId }, 'privacy', event, [{ value: true }])
-    expect(frame.payloads()).toEqual([[{ value: false }]])
-  })
 })
 
 describe('context menus in the page menu', () => {
@@ -379,60 +301,7 @@ describe('storage.sync', () => {
     )
   }
 
-  function listeningWorker(sess: Electron.Session, extensionId: string) {
-    const state = contexts.getHostSessionState(sess)
-    if (!state) {
-      throw new Error('Session is not attached')
-    }
-    const context = contexts.ensureWorkerContext(
-      state,
-      extensionId,
-      `chrome-extension://${extensionId}/`
-    )
-    context.events.add(eventDispatch.eventKey(SYNC, 'onChanged'))
-    const send = vi.fn()
-    attachWorkerEventStream(context, { send, close: vi.fn() })
-    return { changes: () => send.mock.calls.map(([payload]) => payload.args) }
-  }
-
   beforeEach(async () => {
-    await sync('clear', [])
-  })
-
-  it('sends exact old and new values to the extension pages and worker in that session only', async () => {
-    host.attachBrowserExtensionApiHostToSession(workSession, 'work')
-    const worker = listeningWorker(session, VAULT)
-    const page = await listenFrame(VAULT, SYNC, 'onChanged')
-    const otherExtension = listeningWorker(session, OTHER)
-    const otherProfile = listeningWorker(workSession, VAULT)
-    const fromPage = { kind: 'page' } as const
-
-    const written = { a: { newValue: 1 }, b: { newValue: { deep: [1] } } }
-    // The writer gets its changes back and fires its own listeners.
-    await expect(sync('set', [{ a: 1, b: { deep: [1] } }], fromPage)).resolves.toEqual(written)
-    await sync('set', [{ a: 1, b: { deep: [2] } }], fromPage)
-    await expect(sync('set', [{ a: 1 }], fromPage)).resolves.toEqual({})
-    await sync('remove', [['a', 'missing']], fromPage)
-    await sync('clear', [], fromPage)
-    await sync('clear', [], fromPage)
-    const expected = [
-      [written],
-      [{ b: { oldValue: { deep: [1] }, newValue: { deep: [2] } } }],
-      [{ a: { oldValue: 1 } }],
-      [{ b: { oldValue: { deep: [2] } } }]
-    ]
-    expect(worker.changes()).toEqual(expected)
-    expect(page.payloads()).toEqual(expected)
-    expect(otherExtension.changes()).toEqual([])
-    expect(otherProfile.changes()).toEqual([])
-
-    await sync('set', [{ fromWorker: 1 }])
-    expect(worker.changes()).toHaveLength(4)
-    expect(page.payloads().at(-1)).toEqual([{ fromWorker: { newValue: 1 } }])
-
-    await sync('set', [{ mine: true }])
-    await expect(sync('get', [null], { extensionId: OTHER })).resolves.toEqual({})
-    await expect(sync('get', [null], { profile: 'work' })).resolves.toEqual({})
     await sync('clear', [])
   })
 

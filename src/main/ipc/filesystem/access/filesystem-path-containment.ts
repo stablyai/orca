@@ -1,7 +1,7 @@
 import { resolve, relative, isAbsolute, sep, dirname } from 'node:path'
 import { statSync } from 'node:fs'
 import { realpathAcrossWslDriveMount } from '../../../wsl/filesystem/wsl-unc-drive-fs-path'
-import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 
 /** Check native-path containment; accept Unicode-equivalent spellings only after proving filesystem identity. */
 export function isDescendantOrEqual(resolvedTarget: string, resolvedBase: string): boolean {

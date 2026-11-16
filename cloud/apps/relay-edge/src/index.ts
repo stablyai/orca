@@ -8,11 +8,13 @@ import { SPLICE_SLOTS, makeConnId, parseConnId } from './splice-slot'
 import { metric, requestPlace } from './metrics'
 import { admitPreAuth, notOnEdge } from './preauth'
 import { objectHealth } from './health'
-import { AssignBodySchema, DrainBodySchema, EraseBodySchema, ExportBodySchema, verifyAdminRequest, type AdminOp } from './admin'
+import { INGRESS_HEADER } from '../../../packages/relay-contract/src/ingress-header'
+import { fromTokenSource, readIngress, type Ingress } from './ingress'
+import { AssignBodySchema, DrainBodySchema, EraseBodySchema, ExportBodySchema, VerifyBodySchema, verifyAdminRequest, type AdminOp } from './admin'
 
 export { HostRelay, SpliceRelay }
 
-const INTERNAL_HEADERS = ['x-edge-claims', 'x-edge-origin', 'x-edge-kind', 'x-edge-conn-id', 'x-edge-place']
+const INTERNAL_HEADERS = ['x-edge-claims', 'x-edge-origin', 'x-edge-kind', 'x-edge-conn-id', 'x-edge-place', INGRESS_HEADER, 'x-orca-client-ip', 'x-orca-client-country']
 
 function reject(status: number, retryAfter?: number): Response {
   const headers = retryAfter === undefined ? undefined : { 'retry-after': String(retryAfter) }
@@ -22,6 +24,7 @@ function reject(status: number, retryAfter?: number): Response {
 function forward(
   env: Env,
   request: Request,
+  ingress: Ingress | null,
   relayHostId: string,
   extra: Record<string, string>,
   target: 'host' | 'splice' = 'host',
@@ -29,8 +32,9 @@ function forward(
 ): Promise<Response> {
   const headers = new Headers(request.headers)
   for (const name of INTERNAL_HEADERS) { headers.delete(name) }
-  headers.set('x-edge-origin', new URL(request.url).origin)
-  headers.set('x-edge-place', requestPlace(request))
+  // The origin the client dialled: bound into the host proof transcript.
+  headers.set('x-edge-origin', ingress?.origin ?? new URL(request.url).origin)
+  headers.set('x-edge-place', requestPlace(request, ingress))
   for (const [name, value] of Object.entries(extra)) { headers.set(name, value) }
   const init = new Request(request.url, { method: 'GET', headers })
   if (target === 'splice') { return env.SPLICE_RELAY.get(env.SPLICE_RELAY.idFromName(spliceObject)).fetch(init) }
@@ -82,6 +86,13 @@ async function handleAdminCall(env: Env, request: Request, op: AdminOp): Promise
     const result = await host(body.data.relayHostId).adminDrain(replay)
     return Response.json(result, { status: result.outcome === 'replay' || result.outcome === 'jti_full' ? 409 : 200 })
   }
+  if (op === 'verify') {
+    const body = VerifyBodySchema.safeParse(verified.body)
+    if (!body.success) { return reject(400) }
+    // none and not_here are decisions (200); only a replayed or overflowing jti is 409.
+    const result = await host(body.data.relayHostId).adminVerify(body.data, replay)
+    return Response.json(result, { status: result.outcome === 'replay' || result.outcome === 'jti_full' ? 409 : 200 })
+  }
   const body = EraseBodySchema.safeParse(verified.body)
   if (!body.success) { return reject(400) }
   const { outcome } = await host(body.data.relayHostId).adminErase(body.data.userId, replay)
@@ -98,12 +109,24 @@ export default {
     }
     if (url.search) { return reject(400) }
     if (url.pathname === '/__health/object') { return objectHealth(env, request) }
-    const admin = url.pathname.match(/^\/__admin\/(assign|export|erase|drain)$/)
+    // Director admin calls are signature-authenticated and never go through a front door: matched
+    // before the ingress rules, so an egress overlap with a front door's ranges cannot 403 them.
+    const admin = url.pathname.match(/^\/__admin\/(assign|export|erase|drain|verify)$/)
     if (admin) { return handleAdmin(env, request, admin[1] as AdminOp) }
+    // A trusted ingress hop (ingress.ts) stands in for the Worker's own URL and the caller's address;
+    // anything else, including a header that fails to verify, is treated as absent.
+    const ingress = await readIngress(edgeConfig(env), request)
+    if (!ingress && fromTokenSource(edgeConfig(env), request)) {
+      // From a front door's egress ranges but not trusted (missing or wrong token, origin or client
+      // address): refused, never keyed on the shared egress address as if it were a direct client.
+      metric(env, 'ingress_rejected', 1, '', [], '', requestPlace(request))
+      return reject(403)
+    }
+    if (!ingress && request.headers.has(INGRESS_HEADER)) { metric(env, 'ingress_refused', 1, '', [], '', requestPlace(request)) }
     // Spike-only: force the object to reset (simulates eviction / runtime restart).
     const abort = url.pathname.match(/^\/__spike\/abort\/([^/]+)$/)
     if (abort && env.SPIKE_ADMIN === '1') {
-      return forward(env, request, abort[1], { 'x-edge-kind': 'abort' })
+      return forward(env, request, ingress, abort[1], { 'x-edge-kind': 'abort' })
     }
     const abortSplice = url.pathname.match(/^\/__spike\/abort-splice\/([^/]+)$/)
     if (abortSplice && env.SPIKE_ADMIN === '1') {
@@ -111,7 +134,7 @@ export default {
       const parsed = parseConnId(connId)
       if (!parsed) { return reject(429) }
       // Resets the whole slot object: every splice currently in that slot.
-      return forward(env, request, '', { 'x-edge-kind': 'abort', 'x-edge-conn-id': connId }, 'splice', parsed.object)
+      return forward(env, request, ingress, '', { 'x-edge-kind': 'abort', 'x-edge-conn-id': connId }, 'splice', parsed.object)
     }
     if (env.SPIKE_DEBUG === '1') {
       if (url.pathname === '/__spike/info') {
@@ -141,7 +164,7 @@ export default {
         return Response.json({ colo: cf?.colo ?? 'local', ms })
       }
       const info = url.pathname.match(/^\/__spike\/host\/([A-Za-z0-9_-]{16})$/)
-      if (info) { return forward(env, request, info[1], { 'x-edge-kind': 'info' }) }
+      if (info) { return forward(env, request, ingress, info[1], { 'x-edge-kind': 'info' }) }
     }
     const isUpgrade = request.headers.get('upgrade')?.toLowerCase() === 'websocket'
 
@@ -154,12 +177,12 @@ export default {
         // desktops treat any refused upgrade the same (a network error, retried through the
         // director), so this changes no client behavior; it keeps an outage out of the 401s.
         if (verified?.reason === 'keys_unavailable') {
-          metric(env, 'control_upgrade', 1, 'keys_unavailable', [], '', requestPlace(request))
+          metric(env, 'control_upgrade', 1, 'keys_unavailable', [], '', requestPlace(request, ingress))
           return reject(503, 5)
         }
         return reject(401)
       }
-      return forward(env, request, verified.claims.relayHostId, {
+      return forward(env, request, ingress, verified.claims.relayHostId, {
         'x-edge-kind': 'control',
         'x-edge-claims': JSON.stringify(verified.claims)
       })
@@ -167,7 +190,7 @@ export default {
 
     const phone = url.pathname.match(/^\/v1\/connect\/([^/]+)$/)
     if (phone) {
-      if (!(await admitPreAuth(env, request, 'phone'))) { return reject(429) }
+      if (!(await admitPreAuth(env, request, 'phone', ingress))) { return reject(429) }
       if (!isUpgrade) { return reject(426) }
       // 429 for malformed ids matches the GCE cells.
       if (!HOST_ID.test(phone[1])) { return reject(429) }
@@ -178,21 +201,21 @@ export default {
         .allocateConnId(phone[1])
         .catch(() => makeConnId(phone[1], Math.floor(Math.random() * SPLICE_SLOTS)))
       if (connId === null) {
-        metric(env, 'not_on_edge', 1, '', [], '', requestPlace(request))
+        metric(env, 'not_on_edge', 1, '', [], '', requestPlace(request, ingress))
         return notOnEdge()
       }
       const parsed = parseConnId(connId)!
-      return forward(env, request, phone[1], { 'x-edge-kind': 'phone', 'x-edge-conn-id': connId }, 'splice', parsed.object)
+      return forward(env, request, ingress, phone[1], { 'x-edge-kind': 'phone', 'x-edge-conn-id': connId }, 'splice', parsed.object)
     }
 
     const data = url.pathname.match(/^\/v1\/host\/data\/([^/]+)$/)
     if (data) {
-      if (!(await admitPreAuth(env, request, 'data'))) { return reject(429) }
+      if (!(await admitPreAuth(env, request, 'data', ingress))) { return reject(429) }
       if (!isUpgrade) { return reject(426) }
       const connId = decodeURIComponent(data[1])
       const parsed = parseConnId(connId)
       if (!parsed) { return reject(429) }
-      return forward(env, request, parsed.relayHostId, { 'x-edge-kind': 'data', 'x-edge-conn-id': connId }, 'splice', parsed.object)
+      return forward(env, request, ingress, parsed.relayHostId, { 'x-edge-kind': 'data', 'x-edge-conn-id': connId }, 'splice', parsed.object)
     }
     return reject(404)
   }

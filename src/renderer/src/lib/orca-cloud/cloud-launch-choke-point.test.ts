@@ -19,7 +19,7 @@ const ALLOWED: Record<string, string> = {
     'pane spawn gate',
   // Local runtime only (this computer), never an Orca Cloud host.
   'components/terminal-pane/pty-transport/ipc/ipc-pty-spawn-request.ts': 'local runtime',
-  'store/terminals/window-tab-start-in-main.ts': 'local runtime'
+  'store/terminals/tabs/creation/window-tab-start-in-main.ts': 'local runtime'
 }
 
 function sources(dir: string): string[] {

@@ -5,18 +5,16 @@ import {
 } from './use-slept-remote-page'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
 import type {
   RemoteBrowserOperationToken,
   RemoteBrowserViewportSize
 } from './remote-browser-stream-tokens'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser/screencast/browser-screencast-protocol'
-import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
-import { browserPageExists } from '../describe-page/browser-page-load-error'
+import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   REMOTE_BROWSER_STREAM_IDLE,
   type RemoteBrowserStreamStatus
@@ -28,6 +26,13 @@ import {
   type RemoteBrowserStreamBridge
 } from './remote-browser-page-input-model'
 import { subscribeRuntimeEnvironment } from '@/runtime/rpc/environment-revisions/runtime-environment-pairing-refresh'
+import {
+  readRemoteBrowserPage,
+  readRemoteBrowserPageObservation
+} from './remote-browser-page-observation'
+import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
+import { javaScriptDialogPrompt } from '../browser-javascript-dialog-prompt'
+import { useCloseOrphanedRemotePageOnTeardown } from './use-close-orphaned-remote-page'
 
 export function useRemoteBrowserPageLifecycle({
   browserTab,
@@ -63,9 +68,9 @@ export function useRemoteBrowserPageLifecycle({
   const pendingFrameDecodeRef = useRef(0)
   const mountedRef = useRef(true)
   const isActiveRef = useRef(isActive)
+  const currentWorkspaceIdRef = useRef(browserTab.workspaceId)
   const currentBrowserTabIdRef = useRef(browserTab.id)
   const currentWorktreeIdRef = useRef(browserTab.worktreeId)
-  const currentWorkspaceIdRef = useRef(browserTab.workspaceId)
   const currentBrowserTabUrlRef = useRef(browserTab.url)
   const runtimeWorktree = useMemo(() => toRuntimeWorktreeSelector(worktreeId), [worktreeId])
   const runtimeWorktreeRef = useRef(runtimeWorktree)
@@ -75,11 +80,13 @@ export function useRemoteBrowserPageLifecycle({
   const lifecycleRef = useRef<RemoteBrowserStreamLifecycle | null>(null)
   const closeBrowserPage = useAppStore((s) => s.closeBrowserPage)
   const closeBrowserTab = useAppStore((s) => s.closeBrowserTab)
+  // Stable for the provider's life, so the once-built lifecycle may hold it.
+  const confirm = useConfirmationDialog()
 
   useLayoutEffect(() => {
+    currentWorkspaceIdRef.current = browserTab.workspaceId
     currentBrowserTabIdRef.current = browserTab.id
     currentWorktreeIdRef.current = browserTab.worktreeId
-    currentWorkspaceIdRef.current = browserTab.workspaceId
     currentBrowserTabUrlRef.current = browserTab.url
     activeRuntimeEnvironmentIdRef.current = activeRuntimeEnvironmentId
     isActiveRef.current = isActive
@@ -101,12 +108,21 @@ export function useRemoteBrowserPageLifecycle({
         isActive: () => isActiveRef.current,
         getTabId: () => currentBrowserTabIdRef.current,
         getEnvironmentId: () => activeRuntimeEnvironmentIdRef.current,
-        browserPageExists
+        browserPageExists: (pageId) =>
+          Boolean(
+            readRemoteBrowserPage(useAppStore.getState(), currentWorkspaceIdRef.current, pageId)
+          )
       },
       callRpc: callRuntimeRpc,
       subscribeScreencast: (args, callbacks) => subscribeRuntimeEnvironment(args, callbacks),
       getWorktreeSelector: () => runtimeWorktreeRef.current,
       getCurrentUrl: () => currentBrowserTabUrlRef.current,
+      readCurrentObservation: () =>
+        readRemoteBrowserPageObservation(
+          useAppStore.getState(),
+          currentWorkspaceIdRef.current,
+          currentBrowserTabIdRef.current
+        ),
       readStoredHandle: () =>
         useAppStore.getState().remoteBrowserPageHandlesByPageId[currentBrowserTabIdRef.current] ??
         null,
@@ -137,7 +153,8 @@ export function useRemoteBrowserPageLifecycle({
         streamBridgeRef.current.closeMissingRemotePage(remotePageId),
       waitForViewportSize: () => streamBridgeRef.current.waitForViewportSize(),
       readViewportSize: () => remoteViewportSizeRef.current,
-      syncViewport: (pageId) => streamBridgeRef.current.syncViewport(pageId)
+      syncViewport: (pageId) => streamBridgeRef.current.syncViewport(pageId),
+      askJavaScriptDialog: (dialog, signal) => javaScriptDialogPrompt.ask(confirm, dialog, signal)
     })
   }
   const lifecycle = lifecycleRef.current
@@ -263,35 +280,14 @@ export function useRemoteBrowserPageLifecycle({
     lifecycle
   ])
 
-  useEffect(() => {
-    if (!activeRuntimeEnvironmentId) {
-      return
-    }
-    return () => {
-      const remotePageId = lifecycle.tokens.remotePage
-      if (!remotePageId) {
-        return
-      }
-      const state = useAppStore.getState()
-      const currentEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
-      const pageStillExists = browserPageExists(browserTab.id)
-      if (currentEnvironmentId === activeRuntimeEnvironmentId && pageStillExists) {
-        return
-      }
-      const removedHandle = state.removeRemoteBrowserPageHandle(browserTab.id, remotePageId)
-      lifecycle.tokens.setRemotePage(null)
-      if (!removedHandle) {
-        return
-      }
-      // Why: remote tabs outlive React components on the daemon; close only when the local page or its runtime environment is gone.
-      void callRuntimeRpc(
-        { kind: 'environment', environmentId: removedHandle.environmentId },
-        'browser.tabClose',
-        { worktree: runtimeWorktree, page: removedHandle.remotePageId },
-        { timeoutMs: 15_000, suppressFeatureInteraction: true }
-      ).catch(() => {})
-    }
-  }, [activeRuntimeEnvironmentId, browserTab.id, lifecycle, runtimeWorktree, worktreeId])
+  useCloseOrphanedRemotePageOnTeardown({
+    activeRuntimeEnvironmentId,
+    browserTabId: browserTab.id,
+    workspaceId: browserTab.workspaceId,
+    lifecycle,
+    runtimeWorktree,
+    worktreeId
+  })
 
   return {
     lifecycle,

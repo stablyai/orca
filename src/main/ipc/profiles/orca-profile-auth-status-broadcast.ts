@@ -4,7 +4,7 @@ import {
   ORCA_PROFILE_SIGN_IN_PROGRESS_CHANGED_CHANNEL,
   type OrcaCloudSignInEnd,
   type OrcaCloudSignInProgress
-} from '../../../shared/orca-profiles'
+} from '../../../shared/orca-profiles/orca-profiles'
 
 function broadcast(channel: string, ...args: unknown[]): void {
   for (const window of BrowserWindow.getAllWindows()) {

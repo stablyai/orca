@@ -8,8 +8,6 @@ export const NEWER_AUTH = '{"tokens":{"expires_at":3000}}\n'
 export const INTRUDER_AUTH = '{"tokens":{"expires_at":9000}}\n'
 
 export const TORN_AUTH = '{"tokens":{"exp'
-export const SOURCE_CREDENTIALS = '{"server":{"access_token":"source"}}\n'
-export const TORN_CREDENTIALS = '{"server":'
 export const RETIRED_SESSION = '{"session":"retired"}\n'
 export const RETIRED_SESSION_SEGMENTS = ['sessions', '2026', '08', '26', 'retired.jsonl']
 

@@ -1,3 +1,4 @@
+import { getAgentSettingsRowId } from './agent-settings-navigation'
 import {
   getClaudeSubagentNavigationTitle,
   getClaudeSubagentNavigationDescription,
@@ -99,8 +100,10 @@ const AGENT_AWAKE_SEARCH_ENTRY_ID = 'agent-awake'
 const AGENT_CHAT_CHOICE_SEARCH_ENTRY_ID = 'agent-chat-choice'
 /** The Installed list, where each chat agent's row holds its Chat | CLI choice. */
 export const AGENTS_INSTALLED_SECTION_ID = 'agents-installed'
+
 /** The top Chat or Terminal tiles that set this computer's default. */
 export const AGENT_DEFAULT_SURFACE_SECTION_ID = 'agents-default-surface'
+export const AGENT_PERMISSIONS_SECTION_ID = 'agents-permissions'
 const AGENT_WORKSPACE_TRUST_SEARCH_ENTRY_ID = 'agent-workspace-trust'
 const AGENT_RUNTIME_SEARCH_ENTRY_ID = 'agent-runtime'
 const CODEX_TERMINAL_SERVER_ISOLATION_SEARCH_ENTRY_ID = 'codex-terminal-server-isolation'
@@ -114,6 +117,12 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
     ),
     keywords: buildAgentSettingsKeywords()
   },
+  ...getAgentCatalog().map((agent) => ({
+    title: agent.label,
+    description: agent.cmd,
+    targetSectionId: getAgentSettingsRowId(agent.id),
+    keywords: [agent.id, agent.cmd, ...(agent.searchAliases ?? [])]
+  })),
   {
     title: translate('auto.components.settings.agents.search.1523c4190f', 'Agent runtime'),
     id: AGENT_RUNTIME_SEARCH_ENTRY_ID,
@@ -212,6 +221,7 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
     keywords: getAgentAwakeSearchKeywords()
   },
   {
+    targetSectionId: AGENT_PERMISSIONS_SECTION_ID,
     title: translate('auto.components.settings.agents.search.788559d398', 'Agent permissions'),
     description: translate(
       'settings.agents.permissionsSearchDescription',

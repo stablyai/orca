@@ -9,7 +9,7 @@ import { defineMethod, type RpcContext } from '../../core'
 import {
   CreateAgentSessionParams,
   EnsureAgentSessionParams
-} from '../../../../../shared/rpc-contract/agent-session-params'
+} from '../../../../../shared/rpc-contract/terminal/agent-session-params'
 import { withAgentKeyLaunchEnv } from '../../../../../shared/agent-api-keys/agent-key-launch-env'
 
 function callerContext(context: RpcContext): RuntimeAgentSessionRpcCaller {

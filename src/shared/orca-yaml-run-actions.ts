@@ -1,8 +1,8 @@
-import type { OrcaRunAction, OrcaRunActionHost, OrcaRunMode } from './orca-yaml-hook-types'
+import type { OrcaRunAction, OrcaRunActionHost, OrcaRunMode } from './workspace-setup/orca-yaml-hook-types'
 import {
   isOrcaYamlFieldWithinLimit,
   MAX_ORCA_YAML_COLLECTION_ENTRIES
-} from './orca-yaml-file-limit'
+} from './workspace-setup/orca-yaml-file-limit'
 
 /** The id of a run action written as one bare string (`scripts.run: pnpm dev`). */
 export const LEGACY_RUN_ACTION_ID = 'run'

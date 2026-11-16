@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Editor } from '@tiptap/core'
-import type { RichMarkdownContextMenuCommandPayload } from '../../../../../../shared/rich-markdown-context-menu'
+import type { RichMarkdownContextMenuCommandPayload } from '../../../../../../shared/editor/markdown/rich-markdown-context-menu'
 import { createRichMarkdownExtensions } from '../schema/rich-markdown-extensions'
 import { createRichMarkdownEditorCodec } from '../document/rich-markdown-source-transport'
 import { useRichMarkdownTableContextMenu } from './use-rich-markdown-table-context-menu'

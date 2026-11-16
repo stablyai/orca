@@ -8,7 +8,7 @@ vi.mock('react-native', () => ({
   Text: 'Text',
   View: 'View'
 }))
-vi.mock('../components/MobileAgentIcon', () => ({
+vi.mock('../components/icons/MobileAgentIcon', () => ({
   MobileAgentIcon: 'MobileAgentIcon'
 }))
 vi.mock('../i18n/use-mobile-translation', () => ({

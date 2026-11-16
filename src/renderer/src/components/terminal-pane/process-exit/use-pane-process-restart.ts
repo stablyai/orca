@@ -6,6 +6,7 @@ import { releasePaneTransportForRestart } from './pane-restart-transport-handoff
 import { clearPaneTerminalError } from '../errors/terminal-error-accumulation'
 import type { PtyConnectionDeps } from '../pty-connection/pty-connection-deps'
 import type { TerminalPaneCloseController } from '../layout/close/use-terminal-pane-close-actions'
+import { clearRetainedInlineScrollback } from '../snapshots/terminal-scrollback-ref-hydration'
 
 export function usePaneProcessRestart({
   clearCodexRestartNotice,
@@ -14,6 +15,7 @@ export function usePaneProcessRestart({
   clearTabPtyId,
   cwd,
   dispatchNotification,
+  initialLayoutRef,
   isActiveRef,
   isVisibleRef,
   markTerminalBell,
@@ -49,6 +51,7 @@ export function usePaneProcessRestart({
   | 'clearTabPtyId'
   | 'cwd'
   | 'dispatchNotification'
+  | 'initialLayoutRef'
   | 'isActiveRef'
   | 'isVisibleRef'
   | 'markTerminalBell'
@@ -130,6 +133,9 @@ export function usePaneProcessRestart({
         startup,
         ...(replacesPtyId ? { replacesPtyId } : {}),
         mountFollowsTerminalPark: false,
+        invalidateRetainedInlineScrollback: (leafId) => {
+          initialLayoutRef.current = clearRetainedInlineScrollback(initialLayoutRef.current, leafId)
+        },
         paneTransportsRef,
         paneMode2031Ref,
         paneKittyKeyboardModesRef,
@@ -170,6 +176,7 @@ export function usePaneProcessRestart({
       cwd,
       dispatchNotification,
       handlePaneProcessDied,
+      initialLayoutRef,
       isActiveRef,
       isVisibleRef,
       markTerminalBell,

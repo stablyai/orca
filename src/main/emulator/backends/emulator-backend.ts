@@ -4,7 +4,7 @@ import type {
   EmulatorSessionInfo,
   EmulatorStreamCodec
 } from '../emulator-types'
-import type { EmulatorCodedMessage } from '../../../shared/emulator-failure-copy'
+import type { EmulatorCodedMessage } from '../../../shared/emulator/emulator-failure-copy'
 
 export type { EmulatorBackendKind, EmulatorStreamCodec }
 

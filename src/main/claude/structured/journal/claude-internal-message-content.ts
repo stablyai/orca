@@ -1,4 +1,4 @@
-import { asRecord } from '../../../ai-vault/session-scanner-record-value'
+import { asRecord } from '../../../ai-vault/parsing/session-record-fields'
 import type { ClaudeJournalTranslator } from './claude-journal-translator-contract'
 
 export function withClaudeConversationContent(
@@ -23,6 +23,17 @@ export function isClaudeInjectedUserMessage(frame: Record<string, unknown>): boo
       frame.isSynthetic === true ||
       frame.isCompactSummary === true ||
       asRecord(frame.origin)?.kind === 'task-notification')
+  )
+}
+
+/** A delivered task notification: Claude resuming on its own, a turn no prompt opened. */
+export function isClaudeTaskNotificationTurnStart(frame: Record<string, unknown>): boolean {
+  return (
+    frame.type === 'user' &&
+    asRecord(frame.origin)?.kind === 'task-notification' &&
+    frame.isMeta !== true &&
+    frame.isSynthetic !== true &&
+    frame.isCompactSummary !== true
   )
 }
 

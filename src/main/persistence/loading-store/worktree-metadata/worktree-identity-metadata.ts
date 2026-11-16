@@ -1,5 +1,5 @@
 import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachments/workspace-attachment-mutation'
-import type { DiffCommentBaseMutation } from '../../../../shared/diff-comment-mutation'
+import type { DiffCommentBaseMutation } from '../../../../shared/file-review/diff-comment-mutation'
 import { randomUUID } from 'node:crypto'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
@@ -18,7 +18,7 @@ import { WORKTREE_METADATA_DOMAINS } from '../../profile-save-domains'
 import {
   isLocalOnlyWorktreeMetaId,
   worktreeMetaHostFor
-} from '../../../../shared/worktree/local-only-worktree-meta-ids'
+} from '../../../../shared/worktree/metadata/local-only-worktree-meta-ids'
 
 type MetadataRuntime = Pick<StoreRuntimeState, 'state'> &
   Partial<Pick<StoreRuntimeState, 'worktreeMetaWriteListeners'>>

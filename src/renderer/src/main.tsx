@@ -26,7 +26,7 @@ import { primeTerminalWebglAddon } from './lib/pane-manager/terminal-rendering/t
 import { SkillWarningPreviewLauncher } from './components/skills/installation/preview/SkillWarningPreviewLauncher'
 import { installBrowserClientPageRenderer } from './components/browser-pane/browser-client-page-renderer-installation'
 import { registerBrowserClientPageGuestMessageHandler } from './components/browser-pane/browser-client-page-retained-elements'
-import { handleGuestWindowCloseMessage } from './components/browser-pane/host-guest/browser-page-window-close'
+import { handleGuestWindowCloseMessage } from './components/browser-pane/host-guest/lifecycle/browser-page-window-close'
 import { installOsFileDropCancellationGuard } from './lib/files/drop/os-file-drop-cancellation-guard'
 import { installBodyOverlayAttributes } from './lib/overlay-interaction/body-overlay-attributes'
 import { applyWindowMaterialToDocument } from './app-shell/appearance/window-material-runtime'

@@ -2,18 +2,18 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { AgentSessionOwnerProbe } from '../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
-import { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
+import type { AgentSessionOwnerProbe } from '../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
+import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
 import {
   closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
+  createTrackedJournalOpener
 } from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import {
   providerContextBoundaryForClear,
   type AgentSessionConversationClear
 } from './records/agent-session-conversation-command-record'
 import { isAgentSessionRefusalError } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
-import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type { AgentSessionRecordStore } from './records/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from './records/agent-session-record-store-test-harness'
 
@@ -22,12 +22,14 @@ const SOURCE = 'session-alpha'
 const INDETERMINATE: AgentSessionOwnerProbe = { outcome: 'indeterminate', reason: 'no answer' }
 
 let directory: string
+const journals = createTrackedJournalOpener()
 
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'orca-agent-session-clear-commit-'))
 })
 
 afterEach(async () => {
+  await journals.closeAll()
   await closeTestJournalHostDatabases()
   await rm(directory, { recursive: true, force: true })
 })
@@ -109,8 +111,8 @@ async function prepare(released = true) {
       now: NOW + 1
     })
   }
-  const journal = new AgentSessionJournal({
-    database: openTestJournalHostDatabase(directory),
+  const journal = await journals.open({
+    stateDirectory: directory,
     identity: {
       sessionId: SOURCE,
       workspaceId: 'workspace-1',
@@ -120,7 +122,6 @@ async function prepare(released = true) {
     },
     now: () => NOW + 5
   })
-  await journal.open()
   const completed = clear(store.getRecord(SOURCE)!.lease.runtimeFence)
   const operation = {
     callerKey: completed.command.callerKey,
@@ -128,9 +129,9 @@ async function prepare(released = true) {
   }
   await store.admitOperation({ ...operation, fingerprint: 'clear', now: NOW })
   const append = (input = completed) =>
-    journal.context.clear(
-      providerContextBoundaryForClear(input),
-      store.conversationReceipts.clear(() => input, operation)
+    journal.write(
+      { kind: 'context-clear', boundary: providerContextBoundaryForClear(input) },
+      () => ({ receipt: store.conversationReceipts.clear(() => input, operation) })
     )
   return { store, journal, completed, operation, append }
 }
@@ -163,9 +164,9 @@ describe('clear transaction', () => {
     expect(journal.cursor()).toEqual(before)
     expect((await open()).getRecord(SOURCE)?.conversationName).toBe('Saved name')
     expect(
-      journal.queuedMessages.list().map(({ messageId, state }) => ({ messageId, state }))
+      (await journal.queuedMessages.list()).map(({ messageId, state }) => ({ messageId, state }))
     ).toEqual(['first', 'command', 'last'].map((messageId) => ({ messageId, state: 'waiting' })))
-    expect(journal.queuedMessages.pauses()).toEqual([])
+    expect(await journal.queuedMessages.pauses()).toEqual([])
     expect((await open()).getRecord(SOURCE)?.providerContextBoundary).toBeUndefined()
     expect((await open()).getRecord(SOURCE)?.providerHandleChain).toEqual(previousChain)
     expect(store.getOperationRow(operation.callerKey, operation.operationId)?.outcome.status).toBe(

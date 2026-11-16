@@ -8,7 +8,7 @@ import {
   type OrcaBillingTeamPlan,
   type OrcaBillingTeamPlansResult
 } from '../../../../../shared/orca-billing'
-import type { OrcaProfileAuthStatus } from '../../../../../shared/orca-profiles'
+import type { OrcaProfileAuthStatus } from '../../../../../shared/orca-profiles/orca-profiles'
 
 export type PlannedTeam = { orgId: string; name: string; planLabel: string | null }
 

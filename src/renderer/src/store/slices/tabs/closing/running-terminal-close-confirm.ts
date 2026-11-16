@@ -5,7 +5,6 @@ import type { CloseTerminalDialogCopyKind } from '@/components/terminal-pane/lay
  *  running child process. `onConfirm` performs the original close. */
 export type RunningTerminalCloseConfirmRequest = {
   terminalTabId: string
-  tabLabel: string
   copyKind: CloseTerminalDialogCopyKind
   onConfirm: () => void
   onCancel?: () => void

@@ -32,7 +32,7 @@ import {
 } from './billing-client'
 import { getBillingEndpoints } from './billing-config'
 import { getBillingDevKeyFile, mintDevBillingToken } from './billing-dev-token'
-import { cleanCloudServiceUrl } from '../../shared/cloud-service-url'
+import { cleanCloudServiceUrl } from '../../shared/network/cloud-service-url'
 import { listOrcaProfileOrgMembers } from '../orca-profiles/cloud-org/profile-cloud-org-members-service'
 
 type Ready =

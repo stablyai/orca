@@ -3,7 +3,7 @@ import { useIsWorktreeGoingToSleep, useIsWorktreeSleepViewHeld } from '@/lib/wor
 import { useAppStore } from '@/store/index'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
 import { isOrcaCloudRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/orca-cloud-environment-name'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 
 /**
  * An Orca Cloud workspace whose setup script can't be inspected right now: asleep or waking

@@ -3,8 +3,8 @@
 import { app, Notification } from 'electron'
 import { retainNotificationUntilRelease } from '../ipc/native-notification-lifecycle'
 import { getTrustedUIRendererWindow } from '../ipc/ui'
-import { safelyRevealWindow } from '../window/focus-existing-window'
-import { isBackgroundLaunch } from '../window/foreground-activation-policy'
+import { safelyRevealWindow } from '../window/activation/focus-existing-window'
+import { isBackgroundLaunch } from '../window/activation/foreground-activation-policy'
 import { mainI18n, translateMain } from '../i18n/main-i18n'
 import { usageAlertSentence } from '../../shared/orca-billing-usage-alerts'
 import {

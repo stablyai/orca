@@ -2,7 +2,7 @@ import type { UISlice, UISliceSet } from './ui-slice-contract'
 import {
   DEFAULT_AGENTS_GROUP_BY,
   DEFAULT_AGENTS_READ_FILTER
-} from '../../../../../shared/agents-view-thread-filters'
+} from '../../../../../shared/agent-status/presentation/agents-view-thread-filters'
 import { normalizeVisibleExecutionHostIds } from '../../../../../shared/execution-host'
 
 /** Agents-view preferences; each setter persists immediately and stays separate from workspace-nav state. */

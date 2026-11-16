@@ -6,8 +6,8 @@ import {
   createFakeSpawnedChild
 } from '../../../../shared/__fixtures__/fake-spawned-child'
 import type { GhExecOptions } from '../../../git/command-runner/hosted-cli/gh-exec-file'
-import { clearGhAccountTokenCacheForTests } from '../../gh-account-token'
-import { clearGhCapabilityStateForTests } from '../../gh-capability-state'
+import { clearGhAccountTokenCacheForTests } from '../../accounts/gh-account-token'
+import { clearGhCapabilityStateForTests } from '../../accounts/gh-capability-state'
 import { getPRCheckDetails } from './get-pr-check-details'
 import { prCheckLogTailCache } from './check-job-log-tails'
 
@@ -16,7 +16,9 @@ const { spawnMock, resolverMock } = vi.hoisted(() => ({
   resolverMock: vi.fn()
 }))
 vi.mock('node:child_process', async (original) => ({ ...(await original()), spawn: spawnMock }))
-vi.mock('../../github-api-repository', () => ({ resolveGitHubRepoExecution: resolverMock }))
+vi.mock('../../repositories/github-api-repository', () => ({
+  resolveGitHubRepoExecution: resolverMock
+}))
 vi.mock('@orca/process-host', async (original) => {
   const actual = await original<typeof ProcessHostModule>()
   return {

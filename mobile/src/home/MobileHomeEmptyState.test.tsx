@@ -12,7 +12,9 @@ vi.mock('react-native', () => ({
 }))
 vi.mock('react-native-reanimated', () => ({ default: { View: 'AnimatedView' } }))
 vi.mock('lucide-react-native', () => ({ QrCode: 'QrCode' }))
-vi.mock('../components/OrcaLogo', () => ({ OrcaLogo: 'OrcaLogo' }))
+vi.mock('../components/icons/OrcaLogo', () => ({ OrcaLogo: 'OrcaLogo' }))
+// The app-move banner reaches native store modules; this test covers the empty state's own copy.
+vi.mock('./MobileHomeAppMoveBanner', () => ({ MobileHomeAppMoveBanner: () => null }))
 
 describe('MobileHomeEmptyState', () => {
   const mounted: ReturnType<typeof create>[] = []

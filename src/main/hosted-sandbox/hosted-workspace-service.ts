@@ -6,7 +6,7 @@ import { failQueuedCloudPrompts } from './cloud-offline-seam'
 import { ipcMain, type BrowserWindow } from 'electron'
 import { listTeamCloudRuntimes } from './orca-cloud-active-account'
 import { HOSTED_ACCOUNT_CHANNELS, registerHostedAccountHandlers } from './hosted-account-ipc'
-import { updateEphemeralVmRuntimeStatus } from '../../shared/ephemeral-vm-runtime-store'
+import { updateEphemeralVmRuntimeStatus } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
 import {
   ORCA_CLOUD_WORKSPACE_CHANNELS as CH,
   type CloudWakeProgressEvent,

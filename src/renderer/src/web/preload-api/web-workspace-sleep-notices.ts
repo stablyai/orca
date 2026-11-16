@@ -1,4 +1,4 @@
-import type { WorkspaceSleepNotice } from '../../../../shared/workspace-sleep'
+import type { WorkspaceSleepNotice } from '../../../../shared/workspace/lifecycle/workspace-sleep'
 
 const listeners = new Set<(notice: WorkspaceSleepNotice) => void>()
 

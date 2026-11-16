@@ -1,10 +1,10 @@
 import { setTimeout as delay } from 'node:timers/promises'
-import { stripAnsiEscapeSequences } from '../../../shared/ansi-escape-sequences'
+import { stripAnsiEscapeSequences } from '../../../shared/terminal/protocol/escape/ansi-escape-sequences'
 import {
   signInCallbackPort,
   type HostAccountSignInChannel,
   type HostAccountSignInPrompt
-} from '../../../shared/host-account-sign-in-types'
+} from '../../../shared/agent-accounts/host-account-sign-in-types'
 import type { ClaudeCommandConfig, ClaudeCommandOptions } from './claude-command-process'
 import { isClaudeLocalSignInLink, prepareClaudeSignInBrowser } from './claude-sign-in-browser'
 

@@ -5,14 +5,14 @@ import type {
   AgentLaunchModeReason,
   AgentLaunchModeReceipt
 } from '../../shared/agent-launch/contracts/agent-launch-intent'
-import { RUNTIME_CAPABILITIES } from '../../shared/protocol-version'
+import { RUNTIME_CAPABILITIES } from '../../shared/remote-runtime/protocol/protocol-version'
 import { STRUCTURED_AGENT_RUNTIME_METADATA } from '../runtime/agent-session/installation/structured-agent-runtime-metadata'
 import {
   nativeChatPreferenceFor,
   resolveStructuredNativeChatSupport,
   type NativeChatDefaultSettings,
   type StructuredNativeChatBlocker
-} from '../../shared/structured-native-chat-launch-route'
+} from '../../shared/agent-launch/choices/structured-native-chat-launch-route'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type {
   StructuredAgentCreateSupportReason,
@@ -69,7 +69,8 @@ const DOWNGRADE_DETAIL: Record<AgentLaunchDowngradeReason, string> = {
   structured_support_unknown: 'the execution host has not established structured session support',
   wsl_execution_runtime: 'this workspace runs under WSL',
   codex_on_windows: 'Codex has no structured session on Windows',
-  chat_unavailable_on_windows: "this agent's chat isn't available on Windows yet",
+  chat_unavailable_on_windows:
+    "on Windows this agent's chat runs on agy, which is missing, outdated, or not signed in with a personal Google account",
   structured_unsupported_on_host: 'the execution host cannot create one here',
   chat_runtime_not_installed:
     "its chat runtime isn't installed on this host (install it from a new chat tab in Orca)"

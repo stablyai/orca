@@ -1,5 +1,5 @@
-import type { CommandHandler } from '../dispatch'
-import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
+import type { CommandHandler } from '../dispatch/dispatch'
+import { getOptionalStringFlag, getRequiredStringFlag } from '../arguments/flags'
 import {
   formatLocalCommandOutcome,
   parseLocalCommandTimeout,

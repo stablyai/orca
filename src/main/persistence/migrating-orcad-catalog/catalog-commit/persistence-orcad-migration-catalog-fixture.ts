@@ -6,11 +6,11 @@ import type {
   OrcadMigrationDormantStatePayload,
   OrcadMigrationManifest
 } from '../../../../shared/orcad-migration/orcad-migration-manifest'
-import type { ProjectGroup } from '../../../../shared/project-group-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
-import { worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
-import { computeOrcadMigrationManifestSha256 } from '../../../orcad/orcad-migration-manifest-digest'
+import { worktreeWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
+import { computeOrcadMigrationManifestSha256 } from '../../../orcad/migration/orcad-migration-manifest-digest'
 
 export const PROJECT_GROUP: ProjectGroup = {
   id: 'group-1',

@@ -1,3 +1,4 @@
+import { BrowserWindow } from 'electron'
 import type { ResolvedBrowserCommandTarget } from '../session-routing/agent-browser-command-target'
 import { BrowserError } from '../../browser-error'
 import { normalizeCdpPointerButton } from '../../cdp/input/cdp-pointer-targets'
@@ -91,17 +92,20 @@ export abstract class AgentBrowserBridgePointerCommands extends AgentBrowserBrid
     )
   }
 
-  // Guard embedded-guest presses to restore user focus; emulation prevents page blur.
-  // Offscreen pages need native focus for caret and IME input.
+  // Emulation keeps the page focused for the agent without taking the user's keyboard.
   protected async focusPageForPress(
     wc: Electron.WebContents,
     webContentsId: number
   ): Promise<() => void> {
+    await enablePageFocusEmulation((method, params) => wc.debugger.sendCommand(method, params))
     if (!isEmbeddedGuest(wc)) {
-      wc.focus()
+      // Native focus activates and raises a popup or serve window, so only use it inside a focused one.
+      // fromWebContents also returns the BaseWindow that hosts a popup's view.
+      if (BrowserWindow.fromWebContents(wc)?.isFocused()) {
+        wc.focus()
+      }
       return () => {}
     }
-    await enablePageFocusEmulation((method, params) => wc.debugger.sendCommand(method, params))
     return await this.browserManager.guardUserFocusForAgentInput(webContentsId)
   }
 

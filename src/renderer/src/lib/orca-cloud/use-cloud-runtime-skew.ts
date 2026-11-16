@@ -2,8 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { useAppStore } from '@/store'
 import { runtimeEnvironmentIdForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
 import { unwrapRuntimeRpcResult } from '@/runtime/rpc/calls/runtime-rpc-result'
-import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
-import type { RuntimeStatus } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { RuntimeStatus } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { evaluateCloudRuntimeSkew, type CloudRuntimeSkew } from './cloud-runtime-skew'
 
 const STATUS_TIMEOUT_MS = 10_000

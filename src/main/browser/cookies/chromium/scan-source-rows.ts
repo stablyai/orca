@@ -1,4 +1,4 @@
-import type { BrowserCookieImportResult } from '../../../../shared/browser-workspace-types'
+import type { BrowserCookieImportResult } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   isGoogleSourceBoundCookie,
   isNonTransplantableCookieDomain

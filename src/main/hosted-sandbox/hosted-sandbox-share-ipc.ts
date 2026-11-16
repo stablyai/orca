@@ -2,7 +2,7 @@
 // Cloud sandbox behind it, so a renderer can only reach sandboxes this profile created.
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { z } from 'zod'
-import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'
+import { listEphemeralVmRuntimes } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
 import {
   CLOUD_SHARE_CHANNELS,
   SHARE_AUDIENCES,

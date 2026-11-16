@@ -17,8 +17,8 @@ import type {
   BitbucketConnectArgs,
   BitbucketConnectResult,
   BitbucketConnectionStatus
-} from '../../shared/bitbucket-credentials'
-import { bitbucketConnectFailure } from '../../shared/bitbucket-credentials'
+} from '../../shared/bitbucket/bitbucket-credentials'
+import { bitbucketConnectFailure } from '../../shared/bitbucket/bitbucket-credentials'
 
 export type { BitbucketConnectArgs, BitbucketConnectResult, BitbucketConnectionStatus }
 

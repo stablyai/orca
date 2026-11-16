@@ -8,14 +8,15 @@ import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-va
 import {
   openTranscriptReadStream,
   wslGatedStat
-} from '../../../native-chat/wsl-transcript-fs-access'
+} from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import { readNodeFileWithinLimit } from '../../../../shared/file-content/node-bounded-file-reader'
-import { isWslUncPath } from '../../../../shared/wsl-paths'
-import { throwIfAiVaultScanCancelled } from '../../ai-vault-scan-cancellation'
-import { WslTranscriptFsError } from '../../../native-chat/wsl-transcript-fs-error'
-import { parseJsonObject, timestampMs } from '../../session-scanner-values'
+import { isWslUncPath } from '../../../../shared/file-access/wsl-paths'
+import { throwIfAiVaultScanCancelled } from '../../scan-lifecycle/ai-vault-scan-cancellation'
+import { WslTranscriptFsError } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-error'
+import { parseJsonObject } from '../../parsing/session-json-object'
+import { timestampMs } from '../../parsing/session-record-time'
 import { antigravityHistoryPromptHash } from './antigravity-history-prompt'
-import { antigravitySessionOrigin } from '../../../../shared/antigravity-session-origin'
+import { antigravitySessionOrigin } from '../../../../shared/agent-session/lifecycle/provider-handles/antigravity-session-origin'
 import { antigravityAcpSessionMetadataPath } from './session-scanner-antigravity-paths'
 
 const HISTORY_MATCH_WINDOW_MS = 2_000

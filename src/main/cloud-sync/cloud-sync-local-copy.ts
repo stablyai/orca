@@ -2,8 +2,8 @@
 // removing it would take with it, and removing it (archive, delete, sync turned off).
 import { rm, rmdir } from 'node:fs/promises'
 import { basename, join } from 'node:path'
-import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
-import { getEphemeralVmRecipeResultConnection } from '../../shared/ephemeral-vm-recipes'
+import type { EphemeralVmRuntimeRecord } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
+import { getEphemeralVmRecipeResultConnection } from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipes'
 import type { CloudSyncRemovalPreview } from '../../shared/cloud-sync/cloud-sync-contract'
 import { localStatAt, removeCopies } from './cloud-sync-local-writes'
 import { SYNC_TEMP_DIR, cloudSyncFolder } from './cloud-sync-paths'

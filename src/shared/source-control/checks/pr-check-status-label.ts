@@ -1,4 +1,4 @@
-import type { PRCheckDetail } from '../../github/check-types'
+import type { PRCheckDetail } from '../../github/checks/check-types'
 
 export function getCheckConclusion(check: PRCheckDetail): NonNullable<PRCheckDetail['conclusion']> {
   return check.conclusion ?? 'pending'

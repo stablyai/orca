@@ -4,12 +4,12 @@ import { getDeleteWorktreeToastCopy } from './delete-worktree-toast'
 import { useTranslate } from '@/i18n/use-translate'
 import { DeleteNestedWorktreesDialog } from './DeleteNestedWorktreesDialog'
 import { WorktreeForceDeleteButton } from './WorktreeForceDeleteButton'
-import { isNestedWorktreeRemovalError } from '../../../../../../shared/worktree/nested-removal'
+import { isNestedWorktreeRemovalError } from '../../../../../../shared/worktree/removal/nested-removal'
 import {
   CLOUD_DELETE_NOT_SENT_IN_USE,
   CLOUD_DELETE_NOT_SENT_NO_DESTROY,
   isCloudDeleteNotSentError
-} from '../../../../../../shared/recipe-host-removal'
+} from '../../../../../../shared/remote-runtime/ephemeral-vm-recipes/recipe-host-removal'
 import { translate } from '@/i18n/i18n'
 import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
@@ -18,7 +18,7 @@ import {
   SUBMODULE_DIRTY_REMOVAL_DETAIL,
   type WorktreeForceDeleteReason,
   type WorktreeRemovalTarget
-} from '../../../../../../shared/worktree/removal'
+} from '../../../../../../shared/worktree/removal/removal'
 
 type DeleteWorktreeFailureToastOptions = {
   error: string

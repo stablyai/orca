@@ -1,6 +1,6 @@
-import type { CommandHandler } from '../dispatch'
-import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
-import { RuntimeClientError } from '../runtime/types'
+import type { CommandHandler } from '../dispatch/dispatch'
+import { getOptionalStringFlag, getRequiredStringFlag } from '../arguments/flags'
+import { RuntimeClientError } from '../runtime/connection/types'
 import {
   SECRET_REQUEST_ERRORS,
   SECRET_REQUEST_REASON_MAX,

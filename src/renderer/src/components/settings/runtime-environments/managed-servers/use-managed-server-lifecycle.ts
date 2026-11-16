@@ -6,9 +6,9 @@ import {
   type OrcadManagedDeferral,
   type OrcadManagedPastLiveTerminals,
   type OrcadManagedRuntimeStatus
-} from '../../../../../../shared/orcad-managed-runtime'
+} from '../../../../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import type { ManagedOrcadPreloadApi } from '../../../../../../preload/api/managed-orcad-api'
+import type { ManagedOrcadPreloadApi } from '../../../../../../preload/api/runtime/managed-orcad-api'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { managedServerOutcomeLabel } from './managed-server-copy'
 

@@ -9,8 +9,8 @@ import {
   type RuntimeDownloadResult,
   type RuntimeDownloadStartArgs
 } from '../../shared/runtime-downloads/runtime-download-contract'
-import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
-import { getRuntimeEnvironmentRegistryRoot } from '../ipc/runtime-environments/runtime-environment-registry-root'
+import { callRuntimeEnvironment } from '../ipc/runtime-environments/requests/runtime-environment-transport-routing'
+import { getRuntimeEnvironmentRegistryRoot } from '../ipc/runtime-environments/catalog/runtime-environment-registry-root'
 import { sanitizeLocalDownloadFilename } from '../ipc/filesystem/local-download-filename'
 import {
   cleanupLocalTransferPath,

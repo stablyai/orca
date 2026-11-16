@@ -3,7 +3,7 @@ import {
   failQueuedCloudPrompts
 } from '../../../hosted-sandbox/cloud-offline-seam'
 import { ipcMain } from 'electron'
-import type { WorkspaceSleepRequest } from '../../../../shared/workspace-sleep'
+import type { WorkspaceSleepRequest } from '../../../../shared/workspace/lifecycle/workspace-sleep'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
 import type { RestoredPane } from '../../../runtime/terminal/recovery/restored-pane-start'
 

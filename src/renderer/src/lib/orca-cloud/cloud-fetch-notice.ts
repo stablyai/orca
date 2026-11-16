@@ -2,7 +2,7 @@
 // swaps in for a placeholder. Right after a create that can miss for a moment, and the doctor's
 // `git ls-remote origin HEAD` says "Cannot reach remote". The workspace checks again before saying
 // anything, and when it still can't reach GitHub the line has a Check again action.
-import type { EnvironmentDoctorCheck } from '../../../../shared/environment-doctor-types'
+import type { EnvironmentDoctorCheck } from '../../../../shared/workspace-setup/environment-doctor/environment-doctor-types'
 import type { CloudSetupNotice } from '@/runtime/ephemeral-vm/ephemeral-vm-environment-check-triage'
 import {
   getCloudSetupNoticesRecord,

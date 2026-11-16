@@ -1,11 +1,11 @@
-import type { SidebarFeedDomains } from '../../../../shared/sidebar-list/sidebar-feed-domains'
+import type { SidebarFeedDomains } from '../../../../shared/sidebar-list/feed/sidebar-feed-domains'
 import { getExecutionHostIdFromWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import {
   indexPendingVmCheckouts,
   isPendingVmCheckout,
   type PendingVmCheckout,
   type PendingVmCheckoutIndex
-} from '../../../../shared/pending-vm-checkouts'
+} from '../../../../shared/remote-runtime/ephemeral-vm-store/pending-vm-checkouts'
 
 type CheckoutRow = {
   repoId: string

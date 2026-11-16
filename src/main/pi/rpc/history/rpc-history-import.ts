@@ -6,7 +6,7 @@ import { legacyItemBody } from '../../../native-chat/agent-session-journal/histo
 import { decodePiSessionEntryLine } from '../../../native-chat/agent-session-journal/history-import/journal-pi-active-branch'
 import '../../../native-chat/agent-session-journal/writing/journal-row-builders'
 import { journalLifecycleItemMutation } from '../../../native-chat/agent-session-journal/writing/journal-lifecycle-mutation'
-import type { StructuredAgentSessionTransitionJournal } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-transition'
+import type { AgentSessionJournalReads } from '../../../native-chat/agent-session-journal/journal-reads'
 import {
   continuedOutsideNotice,
   continuedOutsideRecordId,
@@ -86,20 +86,32 @@ export function piHistoryEntryIdentity(
 }
 
 /** Stage all outside rows before writing; exclude journaled entries so prior imports cannot veto newer ones. */
-export function createPiHistoryImportPlan(input: {
+export async function createPiHistoryImportPlan(input: {
   sessionFile: string
-  journal: StructuredAgentSessionTransitionJournal
+  epoch: string
+  reads: Pick<AgentSessionJournalReads, 'historyItems'>
   path: readonly PiSessionEntry[]
   rewound: boolean
   divider: boolean
   check: () => void
-}): HistoryCatchUpPlan | null {
+}): Promise<HistoryCatchUpPlan | null> {
   const batch = createHistoryCatchUpBatch()
+  const saved = new Set(
+    (
+      await input.reads.historyItems(
+        input.path.map((entry) =>
+          agentJournalItemKey(piHistoryEntryIdentity(input.sessionFile, entry.id))
+        )
+      )
+    )
+      .filter((entry) => entry.item !== null)
+      .map((entry) => entry.key)
+  )
   const entryIds: string[] = []
   for (const entry of input.path) {
     input.check()
     const identity = piHistoryEntryIdentity(input.sessionFile, entry.id)
-    if (input.journal.item(input.journal.canonicalItemId(agentJournalItemKey(identity))) !== null) {
+    if (saved.has(agentJournalItemKey(identity))) {
       continue
     }
     const message = decodePiSessionEntryLine(JSON.stringify(entry), entry.id)
@@ -131,5 +143,5 @@ export function createPiHistoryImportPlan(input: {
   }
   return batch.size === 0
     ? null
-    : batch.finish('pi-history-import', [input.journal.epoch, input.sessionFile, entryIds])
+    : batch.finish('pi-history-import', [input.epoch, input.sessionFile, entryIds])
 }

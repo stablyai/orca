@@ -8,7 +8,7 @@ import { useMenuScopedWorktreeCatalog } from './use-menu-scoped-worktree-catalog
 import { useMenuLineageParent } from './use-menu-lineage-parent'
 import { useWorkspaceMenuActivity } from './workspace-lineage-menu-actions'
 import { getWorkspaceDeleteLineage } from '../deletion/workspace-delete-lineage'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { getDeleteStateForWorktreeHost } from '../deletion/worktree-delete-state-host-match'
 import {
   EMPTY_WORKTREES,
@@ -20,6 +20,7 @@ import {
   shouldRemoveProjectFromContextMenu
 } from './worktree-context-menu-policy'
 import { useWorktreeContextMenuCommands } from './use-worktree-context-menu-commands'
+import { selectWorkspaceShowsUnread } from '../../worktree-card-slot-rollup'
 import {
   useWorktreeParentPickerTransition,
   type PendingParentPicker
@@ -93,6 +94,10 @@ export function useWorktreeContextMenuModel({
     )
   )
   const updateWorktreeLineage = useAppStore((s) => s.updateWorktreeLineage)
+  // The menu offers what the card shows: unread when any agent result or the flag is unread.
+  const showsUnread = useAppStore((s) =>
+    menuOpen ? selectWorkspaceShowsUnread(s, worktree) : worktree.isUnread
+  )
   const scopeRef = useRef<HTMLDivElement>(null)
   const contextMenuOpenedAtRef = useRef<number | null>(null)
   const activeContextWorktrees = menuOpen ? contextWorktrees : effectiveSelectedWorktrees
@@ -252,6 +257,7 @@ export function useWorktreeContextMenuModel({
     setMenuOpenState,
     setWorkspaceUnreadByUser,
     setWorktreesPinnedAndReveal,
+    showsUnread,
     sleepableWorktrees,
     subtreeSleepableWorktrees,
     statusesForWorktree,
@@ -295,6 +301,7 @@ export function useWorktreeContextMenuModel({
 
   return {
     ...commands,
+    showsUnread,
     activeContextWorktrees,
     batchDeleteWorktrees,
     children,

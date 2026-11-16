@@ -1,9 +1,9 @@
 // Which listed workspaces are Orca Cloud workspaces, for worktree.ps rows (the phone draws them as cloud).
 // Why cached: ps runs on every list poll, and the runtime store is a file read plus a schema parse.
-import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'
-import { onEphemeralVmRuntimesChanged } from '../../shared/ephemeral-vm-runtime-store-events'
-import type { EphemeralVmRuntimeStatus } from '../../shared/ephemeral-vm-runtimes'
-import type { RuntimeWorktreePsSummary } from '../../shared/runtime-worktree-contracts'
+import { listEphemeralVmRuntimes } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
+import { onEphemeralVmRuntimesChanged } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store-events'
+import type { EphemeralVmRuntimeStatus } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
+import type { RuntimeWorktreePsSummary } from '../../shared/worktree/catalog/runtime-worktree-contracts'
 
 // A write that skips the change event still shows up within this long.
 const MAX_AGE_MS = 15_000

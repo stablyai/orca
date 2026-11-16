@@ -2,8 +2,8 @@
 // Write mutations to fact owners—PTY connection/output/tail or title/status tracker—then reproject.
 
 import type { PtyLivenessVerdict } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
-import type { RuntimeSyncedTab } from '../../../../shared/runtime-session-contracts'
-import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
+import type { RuntimeSyncedTab } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import { resolveTerminalTabTitle } from '../../../../shared/workspace-layout/tab-groups/tab-title-resolution'
 import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 import type { LoadedWorkspaceLayout } from '../../../../shared/workspace-layout/persistence/workspace-layout-load-types'
 import {

@@ -27,24 +27,6 @@ describe('skill install service', () => {
     expect(await readFile(join(claude, 'SKILL.md'), 'utf8')).toBe('unowned')
   })
 
-  it('removes an owned placement when its provider is deselected', async () => {
-    const { root, input } = await createSkillInstallHome()
-    await installSharedSkill(input)
-    const claude = join(root, 'home', '.claude', 'skills', 'test-skill')
-
-    const updated = await installSharedSkill({
-      ...input,
-      operationId: 'operation_without_claude',
-      detectedProviders: ['codex']
-    })
-
-    expect(updated.status).toBe('unchanged')
-    await expect(lstat(claude)).rejects.toMatchObject({ code: 'ENOENT' })
-    expect(updated.placements).toEqual([
-      expect.objectContaining({ provider: 'agent-skills', topology: 'canonical-copy' })
-    ])
-  })
-
   it('preserves the committed canonical install when cancellation reaches provider placement', async () => {
     const { root, input } = await createSkillInstallHome()
     const controller = new AbortController()

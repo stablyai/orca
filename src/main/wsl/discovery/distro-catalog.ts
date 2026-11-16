@@ -1,6 +1,6 @@
 import { runProcessSync } from '@orca/process-host'
-import { buildWslExecArgs } from '../../../shared/wsl-login-shell-command'
-import { toWindowsWslPath } from '../../../shared/wsl-paths'
+import { buildWslExecArgs } from '../../../shared/shell/wsl/wsl-login-shell-command'
+import { toWindowsWslPath } from '../../../shared/file-access/wsl-paths'
 import { filterUserWslDistros, parseWslDistros } from './wsl-distro-list-output'
 import { wslDistroListRetryDelayMs } from './wsl-distro-retry'
 import {
@@ -27,6 +27,7 @@ import {
   type RunningWslDistroReadOptions
 } from './wsl-running-distro-cache'
 import { clearWslHomeCache, getCachedWslHome, rememberWslHome } from './wsl-home-cache'
+import { notifyWslDiscoveryChanged } from './wsl-discovery-change'
 
 // Measured on a slow PC: a cold systemd distro takes 4-11 s to answer its first exec, and killing
 // wsl.exe mid-boot leaves the distro failing every call with Wsl/Service/E_UNEXPECTED for 14+ s.
@@ -76,11 +77,16 @@ function cacheWslDistroList(rawDistros: string[], probeSequence: number): string
   if (userDistros.length === 0 && wslDistroCache !== null && wslDistroCache.length > 0) {
     return wslDistroCache
   }
+  wslDistroCacheSequence = probeSequence
+  const changed = wslDistroCache?.join('\0') !== userDistros.join('\0')
+  wslDistroCache = userDistros
+  // After the list is written, so route reconciliation never sees half-updated discovery.
   if (userDistros.length > 0) {
     dropStaleWslAvailabilityFailure()
   }
-  wslDistroCacheSequence = probeSequence
-  wslDistroCache = userDistros
+  if (changed) {
+    notifyWslDiscoveryChanged()
+  }
   if (wslDistroCache.length === 0) {
     armWslDistroListRetry()
   }

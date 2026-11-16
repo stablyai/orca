@@ -2,12 +2,12 @@ import { describe, expect, it, vi } from 'vitest'
 
 const runtimes: { status: string; runtimeEnvironmentId?: string }[] = []
 let listOk = true
-vi.mock('../ipc/runtime-environments/runtime-environment-transport-routing', () => ({
+vi.mock('../ipc/runtime-environments/requests/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: vi.fn(async () =>
     listOk ? { ok: true, result: {} } : { ok: false, error: { code: 'x', message: 'x' } }
   )
 }))
-vi.mock('../../shared/ephemeral-vm-runtime-store', () => ({
+vi.mock('../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store', () => ({
   listEphemeralVmRuntimes: () =>
     runtimes.map((r) => ({
       ...r,

@@ -1,6 +1,6 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { ORCA_CLOUD_RECIPE_ID } from '../../../../shared/hosted-sandbox/orca-cloud-recipe-id'
-import { NewWorkspaceComposerAdvancedSection } from './NewWorkspaceComposerAdvancedSection'
+import { NewWorkspaceComposerAdvancedSection } from './composer/NewWorkspaceComposerAdvancedSection'
 import { runOnHonoursParentWorktree } from './run-on/cloud-advanced-options'
 
 const noop = (): void => {}

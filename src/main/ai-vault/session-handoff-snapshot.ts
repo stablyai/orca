@@ -1,23 +1,23 @@
 import {
   buildOpenCodeSqliteCandidatePath,
   splitOpenCodeSqliteCandidate
-} from '../../shared/opencode-sqlite-session-path'
+} from '../../shared/agent-session/lifecycle/provider-handles/opencode-sqlite-session-path'
 import {
   AI_VAULT_SESSION_HANDOFF_TIMEOUT_MS,
   isAiVaultDatabaseAgent,
   type AiVaultSessionHandoffArgs,
   type AiVaultSessionHandoffResult
 } from '../../shared/ai-vault/contracts/ai-vault-session-handoff'
-import { formatWorkerTranscriptMessage } from '../../shared/worker-transcript-text'
-import { isWslUncPath, toLinuxPath } from '../../shared/wsl-paths'
-import { readOpenCodeNativeChatTranscriptFull } from '../native-chat/transcript-opencode'
-import { writeAgentSessionContextSnapshot } from '../native-chat/agent-session-context-snapshots'
-import { wakeNativeChatTranscriptDistro } from '../native-chat/native-chat-open-wake'
+import { formatWorkerTranscriptMessage } from '../../shared/native-chat/transcript/worker-transcript-text'
+import { isWslUncPath, toLinuxPath } from '../../shared/file-access/wsl-paths'
+import { readOpenCodeNativeChatTranscriptFull } from '../native-chat/transcript-history/opencode/transcript-opencode'
+import { writeAgentSessionContextSnapshot } from '../native-chat/conversation-context/agent-session-context-snapshots'
+import { wakeNativeChatTranscriptDistro } from '../native-chat/transcript-discovery/native-chat-open-wake'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { wslDistroForPath } from '../wsl/filesystem/wsl-unc-access-gate'
-import { getAiVaultWslScanHomeDirs } from './ai-vault-scan-roots'
+import { getAiVaultWslScanHomeDirs } from './discovery/ai-vault-scan-roots'
 import { openCodeWslPath } from './scanners/opencode/reader-transport/session-scanner-opencode-wsl-client'
-import { configureOpenCodeTranscriptWslReaders } from '../native-chat/transcript-opencode-database'
+import { configureOpenCodeTranscriptWslReaders } from '../native-chat/transcript-history/opencode/transcript-opencode-database'
 
 /** Copies one database-backed conversation into its own hand-off snapshot on this host,
  *  so the new agent never gets a path to the account-wide database. */

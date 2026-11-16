@@ -9,7 +9,7 @@
 // Opening an orca://cloud link still works; one to a workspace you can't open shows the usual
 // no-access message.
 import { useAppStore } from '@/store'
-import type { OrcaProfileAuthStatus } from '../../../../shared/orca-profiles'
+import type { OrcaProfileAuthStatus } from '../../../../shared/orca-profiles/orca-profiles'
 
 export const CLOUD_TEAM_SHARING_FLAG = 'cloudTeamSharing'
 export const CLOUD_SHARE_LINK_ACTION_ID = 'cloudWorkspace.copyLink'

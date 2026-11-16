@@ -6,9 +6,9 @@ import {
   forceTerminateProcessTree,
   signalProcessTree
 } from '@orca/process-host/process-tree-termination'
-import { withTimeout } from '../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 import { createOutputSink } from '@orca/process-host/bounded-output-sink'
-import { readFetchResponseJsonWithinLimit } from '../../../shared/fetch-response-body'
+import { readFetchResponseJsonWithinLimit } from '../../../shared/network/fetch-response-body'
 import { cancelUnreadResponseBody } from '../../lib/unread-response-body'
 import type { ChildProcess } from 'node:child_process'
 import { createProviderSpawnSpec } from '../../provider-process/provider-process-supervisor'

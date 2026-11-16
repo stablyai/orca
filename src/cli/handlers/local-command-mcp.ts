@@ -10,7 +10,7 @@ import {
   LOCAL_COMMAND_REASON_MAX,
   type LocalCommandStatusResult
 } from '../../shared/local-commands/local-command-contract'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import {
   explainLocalCommandError,
   formatLocalCommandOutcome,

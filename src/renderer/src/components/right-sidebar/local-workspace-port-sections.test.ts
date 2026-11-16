@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { WorkspacePort } from '../../../../shared/workspace-ports'
+import type { WorkspacePort } from '../../../../shared/workspace/ports/workspace-ports'
 import {
   getLocalWorkspacePortSections,
   shouldShowCenteredPortsEmpty
-} from './local-workspace-port-sections'
+} from './ports/local-workspace-port-sections'
 
 const external = (
   port: number,

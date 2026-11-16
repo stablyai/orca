@@ -6,14 +6,14 @@ import {
   getRepoExecutionHostId,
   getRepoSshConnectionId
 } from '../../../../../shared/execution-host'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'
-import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
-} from '../../../../../shared/cross-platform-path'
+} from '../../../../../shared/file-access/cross-platform-path'
 import { getFolderWorkspaceConnectionId } from './folder-workspace-connection'
 import { findFolderWorkspaceCandidateRepos } from '../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import {

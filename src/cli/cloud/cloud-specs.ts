@@ -1,6 +1,6 @@
 // Private build only: `orca cloud …` command specs.
-import type { CommandSpec } from '../args'
-import { LOCAL_COMMAND_FLAGS } from '../args'
+import type { CommandSpec } from '../discovery/command-spec'
+import { LOCAL_COMMAND_FLAGS } from '../arguments/args'
 import { ORCA_CLOUD_SANDBOX_SPEC } from '../../shared/hosted-sandbox/hosted-sandbox-wire'
 
 const CREDENTIALS_NOTE =
