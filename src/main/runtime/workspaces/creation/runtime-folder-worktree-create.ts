@@ -180,7 +180,8 @@ export async function createRuntimeFolderWorktree(args: {
         promisedAgentChat: args.promisedAgentChat,
         draftPaste: args.draftPaste,
         terminals: deps.terminals
-      }))
+      })),
+      ...copy?.result
     }
   }
   const shouldActivate = request.activate === true || request.runHooks === true

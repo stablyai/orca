@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import { createRuntimeFolderWorktree } from './runtime-folder-worktree-create'
 import type { HostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
+import type * as SetupModule from './runtime-folder-worktree-setup'
 
 const perforceCopies = vi.hoisted(() => {
   const summary = {
@@ -26,6 +27,13 @@ const perforceCopies = vi.hoisted(() => {
 
 vi.mock('../../runtime-perforce-copy-commands', () => ({
   createRuntimePerforceCopy: perforceCopies.createRuntimePerforceCopy
+}))
+
+const preparedSetup = { effectiveDecision: 'run', setup: { runnerScriptPath: '/folder.wt/task/s' } }
+vi.mock('./runtime-folder-worktree-setup', async (importOriginal) => ({
+  ...(await importOriginal<typeof SetupModule>()),
+  prepareFolderWorktreeSetup: vi.fn(async () => preparedSetup),
+  startRuntimeFolderWorktreeSetupTerminals: vi.fn(async () => ({ setup: preparedSetup.setup }))
 }))
 
 type CreateArgs = Parameters<typeof createRuntimeFolderWorktree>[0]
@@ -84,6 +92,17 @@ describe('a workspace create in a Perforce project', () => {
       { workspaceDir: '/ws', nestWorkspaces: false }
     )
     expect(result.worktree.id).toBe('repo-1::/folder.wt/task')
+    expect(result.perforceCopy).toBe(perforceCopies.summary)
+  })
+
+  it('reports the copy when its setup starts too', async () => {
+    const { deps } = createDeps()
+    const result = await createRuntimeFolderWorktree({
+      request: { repoSelector: `id:${repo.id}`, name: 'task', perforceCopy: {} },
+      repo,
+      deps: { ...deps, setup: { runtimeTarget: () => undefined, shouldUseSetupRunner: true } }
+    })
+    expect(result.setup).toBe(preparedSetup.setup)
     expect(result.perforceCopy).toBe(perforceCopies.summary)
   })
 
