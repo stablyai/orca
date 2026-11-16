@@ -233,6 +233,11 @@ export function settleStructuredMailAttempt(
       if (message) {
         reconcileLifecycleMessage(db, message)
       }
+      // Unreadable custody keeps the attempt until a later observation can tell whether its owner moved.
+      if (owed === 'unavailable') {
+        decision.outstanding = true
+        break
+      }
       // The agent was sent a pointer, not the mail: it stays unread until `check` takes it.
       retire(false)
       if (owed === 'stale') {

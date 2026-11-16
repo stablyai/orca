@@ -57,6 +57,8 @@ export function NativeChatAutoReviewDenialRow({
         )}
         bodyClassName="text-chat-warning"
       >
+        {/* The row's summary truncates; the person sees the whole action before approving it. */}
+        {`${denial.summary}\n\n`}
         {denial.rationale ??
           t('components.native-chat.notices.autoReviewNoReason', 'No reason was given.')}
       </NativeChatDetailsDisclosure>
