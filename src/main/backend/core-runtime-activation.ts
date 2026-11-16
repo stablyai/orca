@@ -26,7 +26,7 @@ import {
 } from '../../shared/ai-vault/search/ai-vault-search-settings'
 import { adoptWslHostLoginEnvironmentLogged } from '../orcad/host-runtime/orcad-wsl-host-login-environment'
 import { createOrcadStartupTiming } from '../orcad/diagnostics/orcad-startup-timing'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/workspace-layout/layout-owner-switch'
 import { restoreOrcadTerminalAuthority } from '../orcad/host-runtime/orcad-restored-terminal-authority'
 import { installOrcadFeatureReadiness } from '../runtime/rpc/startup/orcad-readiness'
 import { isAgentStatusHooksEnabled } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'

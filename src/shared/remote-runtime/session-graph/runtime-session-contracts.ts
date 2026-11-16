@@ -3,7 +3,7 @@ import type {
   AgentSenderPublication,
   AgentSenderRevision
 } from '../../orchestration/mailbox/agent-sender-associations'
-import type { MobileProjectSectionCatalog } from '../../mobile-project-sections-contract'
+import type { MobileProjectSectionCatalog } from '../../sidebar-list/catalog/mobile-project-sections-contract'
 import type { AgentStatusOrchestrationContext } from '../../agent-status/contracts/agent-status-types'
 import type { RemoteServerUpdateSupport } from '../host-catalog/remote-server-update'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../control/remote-runtime-shared-control-types'

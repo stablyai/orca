@@ -10,7 +10,7 @@ import {
   splitRetryUnknownError,
   type RendererSplit
 } from './terminal-split-retry'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { Worktree } from '../../../../shared/worktree/types'
 
 export abstract class OrcaRuntimeWithSplitTerminal extends OrcaRuntimeWithStopExplicitlyClosedTabPtys {

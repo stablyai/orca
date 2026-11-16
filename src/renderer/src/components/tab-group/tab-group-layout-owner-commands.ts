@@ -15,7 +15,7 @@ import { layoutFramesFlowing } from '@/runtime/workspace-layout/frames/layout-fr
 import { splitRatioIntentAt } from '../../../../shared/workspace-layout/tab-groups/split-ratio-intents'
 import { serverTabCount } from '@/store/workspace-layout/frames/frame-drawn-desktop-created-tabs'
 import { tabOrderAnchor } from '../../../../shared/workspace-layout/tab-groups/tab-order'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 
 export type TabDrop =
   | { kind: 'reorder'; tabId: string; groupId: string; tabOrder: string[] }

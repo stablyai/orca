@@ -8,7 +8,7 @@ import {
   buildBackgroundTaskGroups as buildGroups,
   buildBackgroundTaskGroupsFromViews,
   type BackgroundTaskGroup
-} from '../../../../../../shared/background-task-roster'
+} from '../../../../../../shared/agent-status/presentation/background-tasks/background-task-roster'
 import { sayBackgroundTaskTranslated as say } from './background-task-words-text'
 
 type TaskKind = AgentSessionBackgroundTask['kind']

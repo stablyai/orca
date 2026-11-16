@@ -10,7 +10,7 @@ import {
 } from '../../agent-status/contracts/agent-status-freshness'
 import { agentEntryCompletionAt } from '../../agent-status/lifecycle/agent-completion-time'
 import { agentTurnEndedOnPurpose } from '../../agent-status/lifecycle/agent-main-agent-verdict'
-import { migrationUnsupportedToAgentStatusEntry } from '../../migration-unsupported-agent-entry'
+import { migrationUnsupportedToAgentStatusEntry } from '../../agent-status/presentation/migration-unsupported-agent-entry'
 import { resolveDecayedAgentRowState } from '../../agent-status/presentation/agent-row-decay-state'
 import { tabHasLivePty } from '../../workspace-layout/terminal-surfaces/tab-has-live-pty'
 import { isSyntheticAgentPermissionTitle } from '../../agent-status/title/synthetic-agent-title'
