@@ -287,52 +287,59 @@ describe('startCodexSessionBackfillInBackground', () => {
     expect(existsSync(getMarkerPath())).toBe(true)
   })
 
-  it('keeps a racing launch date pending without discarding the baseline', async () => {
-    writeManagedSession(join('2026', '05', '26', 'rollout-a.jsonl'), '{"id":"a"}\n')
-    let raceStarted = false
-
-    const raced = await startCodexSessionBackfillInBackground({
-      shouldStop: () => {
-        if (!raceStarted) {
-          raceStarted = true
-          markLaunchPending(['2026', '08', '05'])
-        }
-        return false
-      }
-    })
-
-    expect(raced).toMatchObject({ linkedFiles: 1, stopped: false })
-    expect(readMarker()).toMatchObject({
-      version: 4,
-      coverage: 'full',
-      pendingScanDates: [['2026', '08', '05']]
-    })
-    const racedAudit = readFileSync(getAuditLogPath(), 'utf-8')
-
-    writeManagedSession(join('2026', '08', '05', 'rollout-raced.jsonl'), '{"id":"raced"}\n')
-    const recovered = await startCodexSessionBackfillInBackground()
-
-    expect(recovered).toMatchObject({ scannedFiles: 1, linkedFiles: 1 })
-    expect(readMarker()).toMatchObject({ pendingScanDates: [] })
-    expect(readFileSync(getAuditLogPath(), 'utf-8')).not.toBe(racedAudit)
-  })
-
-  it('does not let a bounded pass certify history no baseline ever covered', async () => {
+  it('recovers historical sessions omitted by an explicitly bounded pass', async () => {
     const missedRelativePath = join('2026', '06', '01', 'rollout-missed.jsonl')
     writeManagedSession(missedRelativePath, 'missed\n')
     writeManagedSession(join('2026', '08', '05', 'rollout-launch.jsonl'), 'launch\n')
-
-    const bounded = await startCodexSessionBackfillInBackground({
+    await startCodexSessionBackfillInBackground({
       ignoreCompletionMarker: true,
-      scanDates: [['2026', '08', '05']]
+      boundedScan: true,
+      scanFrom: ['2026', '08', '05']
     })
-    expect(bounded).toMatchObject({ scannedFiles: 1, linkedFiles: 1 })
-    expect(existsSync(getMarkerPath())).toBe(false)
+    expect(existsSync(join(getSystemSessionsRoot(), missedRelativePath))).toBe(false)
+    await startCodexSessionBackfillInBackground()
+    expect(readFileSync(join(getSystemSessionsRoot(), missedRelativePath), 'utf-8')).toBe(
+      'missed\n'
+    )
+  })
 
-    const recovered = await startCodexSessionBackfillInBackground()
-    expect(recovered).toMatchObject({ scannedFiles: 2, linkedFiles: 1 })
-    expect(existsSync(join(getSystemSessionsRoot(), missedRelativePath))).toBe(true)
-    expect(readMarker()).toMatchObject({ version: 4, coverage: 'full' })
+  it.each([100, 1000])(
+    'caps launch folder reads with %i historical year folders',
+    async (years) => {
+      writeManagedSession(join('2000', '01', '01', 'rollout-baseline.jsonl'), 'baseline\n')
+      await startCodexSessionBackfillInBackground()
+      for (let year = 3000; year < 3000 + years; year += 1) {
+        mkdirSync(join(getManagedSessionsRoot(), String(year), '01'), { recursive: true })
+      }
+      fsMockState.scanDirectoryReads = []
+      await startCodexSessionBackfillInBackground({ ignoreCompletionMarker: true })
+      expect(fsMockState.scanDirectoryReads.length).toBeLessThanOrEqual(128)
+    }
+  )
+
+  it('resumes older publication after a capped launch while still publishing fresh rollouts', async () => {
+    writeManagedSession(join('2025', '01', '01', 'rollout-baseline.jsonl'), 'baseline\n')
+    await startCodexSessionBackfillInBackground()
+    for (const month of ['01', '02']) {
+      for (let day = 1; day <= 28; day += 1) {
+        writeManagedSession(
+          join('2026', month, String(day).padStart(2, '0'), 'rollout-a.jsonl'),
+          'history\n'
+        )
+      }
+    }
+    await startCodexSessionBackfillInBackground({ ignoreCompletionMarker: true })
+    expect(existsSync(join(getSystemSessionsRoot(), '2026', '01', '25', 'rollout-a.jsonl'))).toBe(
+      false
+    )
+    writeManagedSession(join('2026', '03', '01', 'rollout-new.jsonl'), 'new\n')
+    await startCodexSessionBackfillInBackground()
+    expect(
+      readFileSync(join(getSystemSessionsRoot(), '2026', '03', '01', 'rollout-new.jsonl'), 'utf-8')
+    ).toBe('new\n')
+    expect(
+      readFileSync(join(getSystemSessionsRoot(), '2026', '01', '01', 'rollout-a.jsonl'), 'utf-8')
+    ).toBe('history\n')
   })
 
   it('recovers a post-install audit interruption without duplicating prior events', async () => {

@@ -2,6 +2,7 @@ import type * as NodeFs from 'node:fs'
 import type * as NodeFsPromises from 'node:fs/promises'
 
 export const fsMockState = {
+  scanDirectoryReads: [] as string[],
   failLink: false,
   failLinkTransiently: false,
   failLinkPermission: false,
@@ -16,6 +17,7 @@ export const fsMockState = {
 }
 
 export function resetCodexSessionBackfillFsMocks(): void {
+  fsMockState.scanDirectoryReads = []
   fsMockState.failLink = false
   fsMockState.failLinkTransiently = false
   fsMockState.failLinkPermission = false
@@ -103,6 +105,10 @@ export function createNodeFsPromisesMock(actual: typeof NodeFsPromises): typeof 
         throw errnoError('EACCES: hardlink permission denied', 'EACCES')
       }
       return actual.link(...args)
+    },
+    readdir: (...args: Parameters<typeof actual.readdir>) => {
+      fsMockState.scanDirectoryReads.push(String(args[0]))
+      return actual.readdir(...args)
     },
     opendir: (...args: Parameters<typeof actual.opendir>) => {
       if (args[0] === fsMockState.failDirectoryPath) {

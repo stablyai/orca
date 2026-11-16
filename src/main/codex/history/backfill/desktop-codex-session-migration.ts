@@ -22,8 +22,7 @@ export function createDesktopCodexSessionMigration(
     isQuitting,
     resolveSystemCodexHomePathOverride: () =>
       resolveHostCodexSessionSourceHome(store.getSettings()),
-    prepareScheduledRun: (scanDates) =>
-      getRuntimeHome()?.prepareHostSystemDefaultSessionMigrationPass(scanDates),
+    prepareScheduledRun: () => getRuntimeHome()?.prepareHostSystemDefaultSessionMigrationPass(),
     finishScheduledRun: () => getRuntimeHome()?.finishHostSystemDefaultSessionMigrationPass(),
     startBackfill: startCodexSessionBackfillInBackground,
     startIndexHeal: startCodexSessionIndexHealInBackground

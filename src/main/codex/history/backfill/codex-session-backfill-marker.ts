@@ -3,27 +3,29 @@ import { dirname } from 'node:path'
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { writeFileAtomically } from '../../../filesystem/atomic-file-publication'
 import {
-  expandCodexSessionBackfillDatesThroughToday,
-  getCodexSessionBackfillDate,
+  isCodexSessionBackfillDate,
   mergeCodexSessionBackfillDates,
   parseCodexSessionBackfillDates,
   subtractCodexSessionBackfillDates
 } from './codex-session-backfill-scan-dates'
 import type {
   CodexSessionBackfillDate,
+  CodexSessionBackfillScanProgress,
   CodexSessionBackfillSummary
 } from './codex-session-backfill-types'
 
 const CODEX_SESSION_BACKFILL_MARKER_VERSION = 4
 // v3 certified a full walk; accept it as a baseline to avoid rescanning after upgrade.
 const MARKER_BASELINE_VERSIONS: ReadonlySet<number> = new Set([3, 4])
-// Use a full walk once abnormal-exit recovery exceeds this many dates.
-const MAX_PENDING_SCAN_DATES = 31
 
 let markerInvalidationGeneration = 0
 
 export type CodexSessionBackfillBaseline = {
-  /** Dates that may still contain unpublished rollouts, widened after an active launch. */
+  hasBaseline: boolean
+  scanFrom?: CodexSessionBackfillDate
+  scanCursor?: readonly string[]
+  needsScan: boolean
+  /** Legacy pending dates remain inclusive lower bounds. */
   pendingScanDates: readonly CodexSessionBackfillDate[]
 }
 
@@ -34,33 +36,34 @@ export function captureCodexSessionBackfillMarkerGeneration(): number {
 /** Certified history may still need bounded scans for pending dates. */
 export function readCodexSessionBackfillBaseline(
   markerPath: string,
-  systemSessionsRoot: string,
-  today: CodexSessionBackfillDate = getCodexSessionBackfillDate()
+  systemSessionsRoot: string
 ): CodexSessionBackfillBaseline | null {
   const record = readMarkerRecord(markerPath)
-  if (!record?.hasBaseline || !matchesTargetRoot(record, systemSessionsRoot)) {
+  if (!record || !matchesTargetRoot(record, systemSessionsRoot)) {
     return null
   }
   // Previously empty sources may gain sessions and need another async scan.
-  if (record.baselineScannedFiles === 0 || record.needsFullScan) {
+  if (record.baselineScannedFiles === 0 && !record.scanCursor && !record.launchActive) {
     return null
   }
-  // A pane active at completion may have written unrecorded dates before an abnormal exit.
-  const pendingScanDates = record.launchActive
-    ? expandCodexSessionBackfillDatesThroughToday(
-        record.pendingScanDates,
-        today,
-        MAX_PENDING_SCAN_DATES
-      )
-    : record.pendingScanDates
-  return pendingScanDates ? { pendingScanDates } : null
+  return {
+    hasBaseline: record.hasBaseline && !record.needsFullScan,
+    pendingScanDates: record.pendingScanDates,
+    scanFrom: record.scanFrom,
+    scanCursor: record.scanCursor,
+    needsScan:
+      record.needsFullScan ||
+      record.launchActive ||
+      record.pendingScanDates.length > 0 ||
+      !!record.scanCursor
+  }
 }
 
 export function hasCompletedCodexSessionBackfillMarker(
   markerPath: string,
   systemSessionsRoot: string
 ): boolean {
-  return readCodexSessionBackfillBaseline(markerPath, systemSessionsRoot) !== null
+  return readCodexSessionBackfillBaseline(markerPath, systemSessionsRoot)?.hasBaseline === true
 }
 
 export function writeCodexSessionBackfillMarker(
@@ -69,22 +72,21 @@ export function writeCodexSessionBackfillMarker(
   summary: CodexSessionBackfillSummary,
   expectedGeneration: number,
   options: {
-    /** Bounded passes can extend but cannot establish a full-history baseline. */
+    /** Full coverage requires reaching the end of an unrestricted history traversal. */
     coverage: 'full' | 'bounded'
     coveredScanDates: readonly CodexSessionBackfillDate[]
+    progress: CodexSessionBackfillScanProgress
     /** Live panes can still write into these dates, so keep them pending. */
     retainPendingScanDates?: boolean
   }
 ): void {
   const record = readMarkerRecord(markerPath)
   const current = record && matchesTargetRoot(record, systemSessionsRoot) ? record : null
-  // A bounded pass cannot certify history it never scanned.
-  if (options.coverage !== 'full' && !current?.hasBaseline) {
-    return
-  }
+  const fullCoverage = options.coverage === 'full' || current?.hasBaseline === true
   // A racing launch can write behind the walk; preserve its pending dates.
   const generationCurrent = expectedGeneration === markerInvalidationGeneration
-  const clearCovered = generationCurrent && options.retainPendingScanDates !== true
+  const clearCovered =
+    generationCurrent && !options.progress.truncated && options.retainPendingScanDates !== true
   const currentPendingScanDates = current?.pendingScanDates ?? []
   const coveredScanDates =
     options.coverage === 'full' ? currentPendingScanDates : options.coveredScanDates
@@ -96,9 +98,14 @@ export function writeCodexSessionBackfillMarker(
     version: CODEX_SESSION_BACKFILL_MARKER_VERSION,
     systemSessionsRoot,
     // Records the retained full-history baseline, including after a bounded pass.
-    coverage: 'full',
+    coverage: fullCoverage ? 'full' : 'bounded',
     completedAt: Date.now(),
-    launchActive: options.retainPendingScanDates === true,
+    launchActive: !clearCovered,
+    scanFrom:
+      generationCurrent && !options.progress.truncated
+        ? (options.progress.recentDates.at(-1) ?? current?.scanFrom)
+        : current?.scanFrom,
+    scanCursor: generationCurrent ? options.progress.cursor : current?.scanCursor,
     // Empty bounded scans must not erase the count from the full-history baseline.
     baselineScannedFiles:
       options.coverage === 'full' ? summary.scannedFiles : current?.baselineScannedFiles,
@@ -115,7 +122,7 @@ export function writeCodexSessionBackfillMarker(
 export function markCodexSessionBackfillMarkerPending(
   markerPath: string,
   systemSessionsRoot: string,
-  scanDates: readonly CodexSessionBackfillDate[]
+  scanDates: readonly CodexSessionBackfillDate[] = []
 ): boolean {
   // Prevent older in-flight passes from clearing these dates.
   markerInvalidationGeneration += 1
@@ -125,7 +132,7 @@ export function markCodexSessionBackfillMarkerPending(
   }
   const pendingScanDates = mergeCodexSessionBackfillDates(record?.pendingScanDates, scanDates)
   const pending = describePendingScanDates(pendingScanDates, record?.needsFullScan === true)
-  if (pendingScanDates.length === record?.pendingScanDates.length) {
+  if (pendingScanDates.length === record?.pendingScanDates.length && record.launchActive) {
     return record.needsFullScan
   }
   try {
@@ -135,6 +142,7 @@ export function markCodexSessionBackfillMarkerPending(
       coverage: 'bounded',
       // Preserve existing version/coverage, including v3's implicit full baseline.
       ...record?.raw,
+      launchActive: true,
       ...pending
     })
   } catch (error) {
@@ -177,6 +185,8 @@ type CodexSessionBackfillMarkerRecord = {
   pendingScanDates: CodexSessionBackfillDate[]
   needsFullScan: boolean
   launchActive: boolean
+  scanFrom?: CodexSessionBackfillDate
+  scanCursor?: readonly string[]
   baselineScannedFiles: number | undefined
 }
 
@@ -192,6 +202,8 @@ function readMarkerRecord(markerPath: string): CodexSessionBackfillMarkerRecord 
       coverage?: unknown
       pendingScanDates?: unknown
       needsFullScan?: unknown
+      scanFrom?: unknown
+      scanCursor?: unknown
       launchActive?: unknown
       baselineScannedFiles?: unknown
       summary?: { scannedFiles?: unknown }
@@ -212,6 +224,16 @@ function readMarkerRecord(markerPath: string): CodexSessionBackfillMarkerRecord 
       pendingScanDates: parseCodexSessionBackfillDates(marker.pendingScanDates),
       needsFullScan: marker.needsFullScan === true,
       launchActive: marker.launchActive === true,
+      scanFrom: isCodexSessionBackfillDate(marker.scanFrom) ? marker.scanFrom : undefined,
+      scanCursor:
+        Array.isArray(marker.scanCursor) &&
+        marker.scanCursor.length <= 3 &&
+        marker.scanCursor.every(
+          (part, index) =>
+            typeof part === 'string' && (index === 0 ? /^\d{4}$/ : /^\d{2}$/).test(part)
+        )
+          ? marker.scanCursor
+          : undefined,
       baselineScannedFiles:
         typeof baselineScannedFiles === 'number' ? baselineScannedFiles : undefined
     }
@@ -231,14 +253,12 @@ function matchesTargetRoot(
   )
 }
 
-// Full-scan demand must survive its originating launch or overflowed dates will never be revisited.
+// Preserve legacy full-scan demand while compacting pending dates to their inclusive floor.
 function describePendingScanDates(
   pendingScanDates: readonly CodexSessionBackfillDate[],
   stillOwesFullScan: boolean
 ): { pendingScanDates: readonly CodexSessionBackfillDate[]; needsFullScan: boolean } {
-  return pendingScanDates.length > MAX_PENDING_SCAN_DATES || stillOwesFullScan
-    ? { pendingScanDates: [], needsFullScan: true }
-    : { pendingScanDates, needsFullScan: false }
+  return { pendingScanDates: pendingScanDates.slice(0, 1), needsFullScan: stillOwesFullScan }
 }
 
 function writeMarkerRecord(markerPath: string, record: Record<string, unknown>): void {

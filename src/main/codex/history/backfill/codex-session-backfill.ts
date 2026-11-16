@@ -18,16 +18,12 @@ import {
 import {
   captureCodexSessionBackfillMarkerGeneration,
   readCodexSessionBackfillBaseline,
-  writeCodexSessionBackfillMarker as writeBackfillMarker,
-  type CodexSessionBackfillBaseline
+  writeCodexSessionBackfillMarker as writeBackfillMarker
 } from './codex-session-backfill-marker'
-import {
-  getCodexSessionBackfillScanDates,
-  mergeCodexSessionBackfillDates
-} from './codex-session-backfill-scan-dates'
+import { resolveCodexSessionBackfillScanPlan } from './codex-session-backfill-scan-dates'
 import type {
-  CodexSessionBackfillDate,
   CodexSessionBackfillOptions,
+  CodexSessionBackfillScanProgress,
   CodexSessionBackfillPaths,
   CodexSessionBackfillSummary
 } from './codex-session-backfill-types'
@@ -80,10 +76,15 @@ async function runCodexSessionBackfillOncePerHost(
   if (!scanPlan) {
     return null
   }
-  const summary = await backfillManagedCodexSessionsIntoSystemHome(paths, {
-    ...options,
-    scanDates: scanPlan.scanDates
-  })
+  const progress: CodexSessionBackfillScanProgress = { recentDates: [], truncated: false }
+  const summary = await backfillManagedCodexSessionsIntoSystemHome(
+    paths,
+    {
+      ...options,
+      ...scanPlan
+    },
+    progress
+  )
   // Leave failed passes uncertified so the next startup retries without overwriting published files.
   if (
     !summary.stopped &&
@@ -94,38 +95,24 @@ async function runCodexSessionBackfillOncePerHost(
     summary.failedHealAuditRecords === 0
   ) {
     writeBackfillMarker(paths.markerPath, paths.systemSessionsRoot, summary, markerGeneration, {
-      coverage: scanPlan.scanDates ? 'bounded' : 'full',
-      coveredScanDates: scanPlan.scanDates ?? [],
+      coverage:
+        !scanPlan.boundedScan ||
+        (!baseline?.hasBaseline && !scanPlan.scanFrom && !progress.truncated)
+          ? 'full'
+          : 'bounded',
+      coveredScanDates: baseline?.pendingScanDates ?? [],
+      progress,
       retainPendingScanDates: options.retainPendingScanDates === true
     })
   }
   return summary
 }
 
-// Missing scanDates requests a full walk; null skips an already-covered baseline.
-function resolveCodexSessionBackfillScanPlan(
-  baseline: CodexSessionBackfillBaseline | null,
-  options: CodexSessionBackfillOptions
-): { scanDates?: readonly CodexSessionBackfillDate[] } | null {
-  const requestedScanDates = options.scanDates?.length ? options.scanDates : undefined
-  if (options.fullScanRequired) {
-    return {}
-  }
-  if (!baseline) {
-    return { scanDates: requestedScanDates }
-  }
-  const scanDates = mergeCodexSessionBackfillDates(baseline.pendingScanDates, requestedScanDates)
-  if (scanDates.length > 0) {
-    return { scanDates }
-  }
-  // With certified history, a launch pass only needs the date receiving new rollouts.
-  return options.ignoreCompletionMarker ? { scanDates: getCodexSessionBackfillScanDates() } : null
-}
-
 /** Hardlink mutable rollouts without replacing existing targets; cross-volume snapshots cannot stay coherent. */
 export async function backfillManagedCodexSessionsIntoSystemHome(
   paths: CodexSessionBackfillPaths,
-  options: CodexSessionBackfillOptions = {}
+  options: CodexSessionBackfillOptions = {},
+  progress: CodexSessionBackfillScanProgress = { recentDates: [], truncated: false }
 ): Promise<CodexSessionBackfillSummary> {
   const summary: CodexSessionBackfillSummary = {
     stopped: false,
@@ -147,6 +134,7 @@ export async function backfillManagedCodexSessionsIntoSystemHome(
     for await (const managedSessionFilePath of listCodexSessionBackfillFilesForDates(
       paths.managedSessionsRoot,
       options,
+      progress,
       async (directoryPath, error) => {
         // Incomplete walks must remain retryable instead of certifying unreadable dates.
         summary.failedDirectories += 1
@@ -177,6 +165,7 @@ export async function backfillManagedCodexSessionsIntoSystemHome(
       )
     }
   }
+  summary.scanTruncated = progress.truncated
   summary.stopped ||= options.shouldStop?.() === true
   await auditPass.finish(summary)
   // Recheck opt-out after the async append so a stopped pass cannot certify completion.
