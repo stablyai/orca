@@ -85,7 +85,12 @@ export function DeleteWorktreeChangesSummary({
   const checkState = dirtyChanges.checkStates.get(key)
   const preview = dirtyChanges.previews.get(key)
   const atRiskLocalFiles = atRiskLocalFilesByIdentity.get(getWorktreeHostIdentity(worktree))
-  const loss = deleteWorktreeLossLine(changeCount, unsavedFiles.length, t)
+  const loss = deleteWorktreeLossLine(
+    changeCount,
+    unsavedFiles.length,
+    t,
+    (atRiskLocalFiles?.count ?? 0) > 0
+  )
   const status =
     changeCount !== undefined || !checkState || checkState === 'complete'
       ? null

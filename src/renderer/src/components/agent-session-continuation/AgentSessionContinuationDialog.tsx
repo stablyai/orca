@@ -1,7 +1,7 @@
 import { useAgentPickerDraftScope } from '../agent/AgentLaunchSetupButton'
 import { agentsOfferedForLaunch } from '@/lib/agent-session/launch/inventory/host-chat-program'
 import { worktreeLaunchWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
 import {
@@ -66,6 +66,7 @@ export function AgentSessionContinuationDialog({
   const workspace = request ? worktreeLaunchWorkspace(request.worktreeId) : null
   const abortRef = useRef<AbortController | null>(null)
   const agentFieldRef = useRef<HTMLDivElement>(null)
+  const contextLabelId = useId()
   const settings = useAppStore((state) => state.settings)
   const [pick, setPick] = useState<{
     request: AgentSessionContinuationRequest | null
@@ -330,7 +331,7 @@ export function AgentSessionContinuationDialog({
         </div>
 
         <div className="grid min-w-0 gap-1.5">
-          <label className="text-[13px] font-medium">
+          <label id={contextLabelId} className="text-[13px] font-medium">
             {t('components.agentSessionContinuation.context', 'Context')}
           </label>
           <Select
@@ -342,7 +343,7 @@ export function AgentSessionContinuationDialog({
               }
             }}
           >
-            <SelectTrigger className="min-w-0 w-full" size="sm">
+            <SelectTrigger aria-labelledby={contextLabelId} className="min-w-0 w-full" size="sm">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>

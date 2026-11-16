@@ -376,7 +376,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
                 atRiskLocalFilesByIdentity={atRiskLocalFilesByIdentity}
                 preserveChildren={preserveChildrenSelected}
                 canPreserveChildren={canPreserveChildren}
-                disabled={isDeleting}
+                disabled={isDeleting || isSavingForcePreference}
                 onPreserveChildrenChange={setPreserveChildren}
               />
             )}

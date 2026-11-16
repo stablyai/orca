@@ -131,6 +131,18 @@ export const clean = dialogFixture({ target: shortWorktree, entries: [] })
 
 export const dirtyWithUnsavedFiles = dialogFixture({ target: shortWorktree, unsaved: true })
 
+export const dirtyWithIgnoredFiles = dialogFixture({
+  target: shortWorktree,
+  unsaved: true,
+  ignored: true
+})
+
+export const cleanWithIgnoredFiles = dialogFixture({
+  target: shortWorktree,
+  entries: [],
+  ignored: true
+})
+
 export const showChangesOpen = dialogFixture({ target: shortWorktree, unsaved: true }, () => {
   ;[...document.querySelectorAll<HTMLButtonElement>('button[aria-expanded]')]
     .find((button) => button.textContent?.includes('Show changes'))

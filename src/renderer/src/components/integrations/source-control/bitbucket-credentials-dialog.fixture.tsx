@@ -1,5 +1,5 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
-import type { BitbucketAuthMode } from '../../../../../shared/bitbucket-credentials'
+import type { BitbucketAuthMode } from '../../../../../shared/bitbucket/bitbucket-credentials'
 import { BitbucketCredentialsDialog } from './bitbucket-credentials-dialog'
 
 function credentialsFixture(initialAuthMode: BitbucketAuthMode) {
