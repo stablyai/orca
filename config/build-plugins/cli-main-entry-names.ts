@@ -34,5 +34,7 @@ export const CLI_MAIN_ENTRY_NAMES = [
   // `orca uninstall` runs the app's cleanup in the CLI process.
   'uninstall/orca-install-identity',
   'uninstall/orca-uninstall-cleanup',
-  'cli/cli-installer'
+  'cli/cli-installer',
+  // The CLI's own app environment, so main-process removers can resolve profile paths.
+  'backend/node-service-environment'
 ] as const

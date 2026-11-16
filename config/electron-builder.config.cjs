@@ -366,6 +366,7 @@ module.exports = {
     // `orca uninstall` runs the app's cleanup in the CLI process.
     'out/main/uninstall/orca-{install-identity,uninstall-cleanup}.js',
     'out/main/cli/cli-installer.js',
+    'out/main/backend/node-service-environment.js',
     'out/main/daemon-entry.js',
     'out/main/session-scanner-service-entry.js',
     'out/main/wsl-transcript-fs-process-entry.js',
