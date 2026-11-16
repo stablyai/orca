@@ -193,9 +193,9 @@
 2 src/renderer/src/components/worktree-jump/state/use-worktree-jump-palette-store-state.ts
 4 src/renderer/src/components/worktree-jump/tasks/use-worktree-jump-palette-task-url.ts
 1 src/renderer/src/components/worktree-jump/workspaces/worktree-jump-palette-create-worktree.ts
-1 src/renderer/src/hooks/composer-state/composer-navigation-actions.ts
+1 src/renderer/src/hooks/composer-state/card-projection/composer-navigation-actions.ts
 1 src/renderer/src/hooks/composer-state/composer-source-state.ts
-1 src/renderer/src/hooks/composer-state/runtime-target-selection.ts
+1 src/renderer/src/hooks/composer-state/workspace-target/runtime-target-selection.ts
 2 src/renderer/src/hooks/editor-external-watch-targets.ts
 2 src/renderer/src/hooks/ipc-events/app-lifetime-ipc-bridge.ts
 1 src/renderer/src/hooks/ipc-events/runtime-environment-subscription-selection.ts
