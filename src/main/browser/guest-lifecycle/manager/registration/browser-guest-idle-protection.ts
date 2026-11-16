@@ -77,7 +77,7 @@ export function installBrowserGuestIdleProtection(
     owner.audibleChangedAt = performance.now()
     changed()
   }
-  // Background title and favicon changes protect the loaded page for its lifetime,
+  // Background title and favicon changes protect the current document until the next commit,
   // ignoring load-time churn. Electron has no loaded-idle state or favicon reason, so this also
   // counts a quiet page's first update after load and media-query favicon swaps.
   let title: string | null = null
@@ -98,13 +98,20 @@ export function installBrowserGuestIdleProtection(
     favicons = key
     backgroundUpdate(changed)
   }
+  const committed = (): void => {
+    owner.backgroundActivity = false
+    title = null
+    favicons = null
+  }
   guest.on('audio-state-changed', audioChanged)
   guest.on('page-title-updated', titleUpdated)
   guest.on('page-favicon-updated', faviconUpdated)
+  guest.on('did-navigate', committed)
   return () => {
     idleProtection.delete(guest)
     guest.off('audio-state-changed', audioChanged)
     guest.off('page-title-updated', titleUpdated)
     guest.off('page-favicon-updated', faviconUpdated)
+    guest.off('did-navigate', committed)
   }
 }
