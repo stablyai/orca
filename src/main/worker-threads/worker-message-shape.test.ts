@@ -24,9 +24,12 @@ describe('describeWorkerMessage', () => {
   })
 
   it('stays bounded on cyclic, deep and huge payloads', () => {
+    // Wide and self-referential: each object is read once and keys share one budget.
     const cyclic: Record<string, unknown> = { type: 'loop' }
-    cyclic.self = cyclic
-    expect(describeWorkerMessage(cyclic).truncated).toBe(true)
+    for (let key = 0; key < 10_000; key += 1) {
+      cyclic[`k${key}`] = cyclic
+    }
+    expect(describeWorkerMessage(cyclic)).toMatchObject({ kind: 'loop', items: 10_001 })
 
     let deep: Record<string, unknown> = { leaf: true }
     for (let level = 0; level < 100_000; level += 1) {

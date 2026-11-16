@@ -37,6 +37,8 @@ const MAX_KIND = LAST_KIND + TEXT_BYTES
 const LARGE_SEND_BYTES = 16 * 2 ** 20
 const LARGE_SEND_ITEMS = 50_000
 const LARGE_SEND_DEPTH = 100
+const TRUNCATED_LARGE_SEND_BYTES = 4 * 2 ** 20
+const TRUNCATED_LARGE_SEND_ITEMS = 10_000
 
 export type WorkerSendLedgerEntry = {
   role: string
@@ -157,11 +159,14 @@ function recordSend(view: DataView, shape: WorkerMessageShape): void {
   view.setFloat64(HEAP_USED, getHeapStatistics().used_heap_size, true)
 }
 
+/** Counts are lower bounds once a walk is cut short, so a truncated walk needs less evidence. */
 function isLargeSend(shape: WorkerMessageShape): boolean {
   return (
     shape.bytes >= LARGE_SEND_BYTES ||
     shape.items >= LARGE_SEND_ITEMS ||
-    shape.depth >= LARGE_SEND_DEPTH
+    shape.depth >= LARGE_SEND_DEPTH ||
+    (shape.truncated &&
+      (shape.bytes >= TRUNCATED_LARGE_SEND_BYTES || shape.items >= TRUNCATED_LARGE_SEND_ITEMS))
   )
 }
 
