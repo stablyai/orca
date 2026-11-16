@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { WORKSPACE_LINEAGE_DOMAINS } from '../../profile-save-domains'
 import type { WorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import type { CrossStoreWorkspaceLineage } from '../../../../shared/worktree/lineage-types'

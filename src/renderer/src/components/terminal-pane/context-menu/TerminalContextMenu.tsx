@@ -27,7 +27,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { shouldIgnoreTerminalMenuPointerDownOutside } from './terminal-context-menu-dismiss'
 import type { TerminalQuickCommand } from '../../../../../shared/terminal/quick-commands/terminal-quick-command-types'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import {
   formatOptionalPrimaryShortcutLabel,
   formatPrimaryShortcutLabel

@@ -6,7 +6,7 @@ import {
   type DashboardCard,
   type DashboardSnapshot,
   type DashboardRevealAgentArgs as AgentRevealArgs
-} from '../../../../../shared/dashboard-snapshot'
+} from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import type { RepoIcon } from '../../../../../shared/repository/appearance/repo-icon'
 import { cn } from '@/lib/class-names'
 import { TooltipProvider } from '@/components/ui/tooltip'

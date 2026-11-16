@@ -51,17 +51,6 @@ const SPECIFIC_PLUGIN_ROUTES = [
     'plugin-git-fixture|plugin-gleam-catalog-fixture'
   ),
   pluginRoute(
-    'plugins.file-type-suggestion',
-    ['plugin-file-type-suggestion'],
-    [
-      'src\\/renderer\\/src\\/components\\/editor\\/plugin-editors\\/PluginFileTypeSuggestion\\.tsx$',
-      `${UI}state\\/use-plugin-settings-writes`,
-      'src\\/main\\/plugins\\/catalog\\/plugin-file-type-suggestion',
-      'src\\/shared\\/plugins\\/contributions\\/plugin-(?:file-type|file-match|custom-editor-core-file-types)'
-    ].join('|'),
-    'plugin-git-fixture|plugin-smoke'
-  ),
-  pluginRoute(
     'plugins.try-it',
     ['plugin-try-it'],
     [

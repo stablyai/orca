@@ -2,7 +2,7 @@ import type { AgentPaneChange } from '../agent-hooks/observations/agent-transiti
 import type { PendingPrompt } from '../../shared/agent-status/contracts/agent-pending-prompt'
 import type { AgentStatusHooksSettings } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
-import type { ExternalConversationLink } from '../../shared/external-conversation-link'
+import type { ExternalConversationLink } from '../../shared/connectors/external-conversation-link'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { admitConnectorAgent } from './connector-agents'
 import { cancelConversation, type CancelTerminal } from './external-conversation-cancel'

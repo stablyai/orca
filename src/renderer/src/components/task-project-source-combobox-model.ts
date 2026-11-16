@@ -1,4 +1,4 @@
-import { getRepoExecutionHostId } from '../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../shared/repository/repo-types'
 import type { TaskProjectPickerGroup } from './task-page/task-page-default-repo-selection'
 

@@ -1,7 +1,7 @@
 import { terminalLaunchOpened } from './new-tab/launch-agent-in-new-tab-host-agents'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
-import { parseExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { useAppStore } from '@/store/index'
 import {
   adoptAgentSessionLaunchVerdict,

@@ -1,6 +1,6 @@
 import type { AppState } from '../../types'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
-import type { KeyedDeadlines } from '../../../../../shared/keyed-deadlines'
+import type { KeyedDeadlines } from '../../../../../shared/collections/keyed-deadlines'
 import { classifyPaneKeyLiveness } from './agent-status-capacity-eviction'
 import type { Candidate } from './agent-status-projection-types'
 import type { AgentStatusProjectionState } from './agent-status-projection-state'
@@ -40,7 +40,7 @@ export function projectionEvictionKeys(
     }
     drafts.set(statuses, draft)
   }
-  const classify = classifyPaneKeyLiveness(layouts)
+  const classify = classifyPaneKeyLiveness(layouts, data.represented)
   for (const [key, row] of statuses.replacementsSince(draft.offset)) {
     draft.dead.delete(key)
     draft.fresh.delete(key)

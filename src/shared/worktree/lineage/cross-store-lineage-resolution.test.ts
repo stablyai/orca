@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { LOCAL_EXECUTION_HOST_ID, toRuntimeExecutionHostId } from '../../execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  toRuntimeExecutionHostId
+} from '../../execution-host/execution-host'
 
 import { getWorktreeHostIdentity } from '../host-qualified-identity'
 import {

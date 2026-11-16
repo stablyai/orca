@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { FolderOpen, Puzzle, RotateCw, Settings2, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import type {
   BrowserExtensionActionResult,
   BrowserExtensionListing,

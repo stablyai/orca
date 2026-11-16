@@ -19,7 +19,7 @@ import { localPtySpawnCwd } from '../host-env/spawn-cwd'
 import { resolvePtySpawnStartupTarget } from '../spawn-startup-target'
 import { resolvePtySpawnHostEnv } from '../spawn-host-env'
 import { ptySpawnPaneFromIds, stampPtySpawnPaneEnv } from '../spawn-pane-env'
-import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
+import { getConnectionExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   ensureJcodeRuntimeDir,
   JCODE_RUNTIME_DIR_ENV_KEY

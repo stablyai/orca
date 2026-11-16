@@ -22,7 +22,7 @@ import { dedupeTabOrder } from '../../../../../../shared/workspace-layout/tab-gr
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import { emptySplitGroup, splitGroupEntries } from '../../../slices/tabs/tabs-group-actions'
 import { ownsGlobalSelection } from '../../../workspaces/selection/global-selection-owner'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
 import {
   recordCreatedTerminalTabInLayoutOwner,
   terminalTabCreateCommand,

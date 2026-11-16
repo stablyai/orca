@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { WorkspaceStatusDefinition } from '../../../src/shared/worktree/types'
-import type { ExecutionHostId } from '../../../src/shared/execution-host'
+import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'
 import type {
   WorkspaceGroupBy,
   WorkspaceSortBy

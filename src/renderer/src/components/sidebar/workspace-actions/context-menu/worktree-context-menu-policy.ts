@@ -7,7 +7,7 @@ import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { isGitRepoKind } from '../../../../../../shared/repository/repo-kind'
 import '@/lib/workspace/creation/new-workspace-composer-repo'
-import { getNewWorkspaceDialogEligibleRepos } from '../../../../../../shared/new-workspace-dialog-repo'
+import { getNewWorkspaceDialogEligibleRepos } from '../../../../../../shared/new-workspace/new-workspace-dialog-repo'
 import type {
   WorkspaceStatus,
   WorkspaceStatusDefinition,

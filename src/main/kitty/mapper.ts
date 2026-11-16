@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 import type { TerminalColorOverrides } from '../../shared/terminal-themes/terminal-color-overrides'
 import {
   normalizeTerminalHexColor,

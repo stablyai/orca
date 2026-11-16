@@ -1,4 +1,4 @@
-import { isKnownHarnessInjectedUserTurnText } from '../harness-injected-user-turns'
+import { isKnownHarnessInjectedUserTurnText } from '../agent-session/journal/harness-injected-user-turns'
 import { isTextBlock, type NativeChatMessage } from './native-chat-types'
 import { isNativeChatProviderTurnStart } from './transcript/turns/native-chat-provider-turn-start'
 

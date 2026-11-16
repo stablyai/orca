@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import type React from 'react'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import type { DiffSection } from '../../diff/sections/diff-section-types'
 import { combinedDiffViewPreferences } from '../remember-view/combined-diff-view-memory'
 import { getInitialCombinedDiffSectionLoadIndices } from '../load-sections/combined-diff-initial-section-load'

@@ -7,7 +7,7 @@ import {
   assertResourceViewVisible,
   isResourceWindowVisible
 } from '../window/visibility/resource-view-admission'
-import type { ResourceViewAdmission } from '../../shared/resource-view-admission'
+import type { ResourceViewAdmission } from '../../shared/diagnostics/resource-view-admission'
 
 export function registerMemoryHandlers(store: Store): void {
   ipcMain.handle(

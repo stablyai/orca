@@ -1,4 +1,8 @@
-import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../../shared/tab-types'
+import type {
+  Tab,
+  TabGroup,
+  TabGroupLayoutNode
+} from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { getEffectiveLayoutForWorktree } from '@/components/terminal/split-group-mount'
 import { collectTabGroupLayoutGroupIds } from '../../../../../shared/workspace-layout/tab-groups/tab-group-moves'
 

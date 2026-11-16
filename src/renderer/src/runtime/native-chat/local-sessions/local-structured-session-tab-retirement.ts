@@ -1,5 +1,5 @@
 import type { WorktreeRuntimeOwnerState } from '../../../lib/workspace/ownership/worktree-runtime-owner-state'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import type { WebSessionTabsSyncState } from '../../web-session-tabs-sync/state'
 

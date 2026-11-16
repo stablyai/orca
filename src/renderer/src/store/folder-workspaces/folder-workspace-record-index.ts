@@ -3,8 +3,8 @@ import type {
   QualifiedFolderHostState,
   FolderHostWorkspace
 } from '../../../../shared/folder-workspaces/folder-workspace-execution-host'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { selectFolderWorkspaces } from '../workspaces/catalog/workspace-record-fields'
 

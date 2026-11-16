@@ -1,4 +1,4 @@
-import { createE2EConfig, type E2EConfig } from '../../../shared/e2e-config'
+import { createE2EConfig, type E2EConfig } from '../../../shared/app-lifecycle/launch/e2e-config'
 
 export function getMainE2EConfig(): E2EConfig {
   return createE2EConfig({

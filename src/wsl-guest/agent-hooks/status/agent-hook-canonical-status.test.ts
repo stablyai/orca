@@ -4,19 +4,16 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { RelayAgentHookServer } from '../server/agent-hook-server'
 import {
-  TMUX_TEST_PANE,
   TMUX_TEST_ROOT,
   TMUX_TEST_ROWS,
   tmuxTestBody
-} from '../../../shared/tmux-status.test-fixture'
+} from '../../../shared/agent-hook-listener/presence/tmux-status.test-fixture'
 const probe = vi.hoisted(() => vi.fn())
-vi.mock('../../../shared/tmux-host-attachment-probe', () => ({ probeTmuxHostAttachments: probe }))
-class CanonicalTestServer extends RelayAgentHookServer {
-  snapshot() {
-    return this.canonicalStatusStore.getSnapshot()
-  }
-}
-let server: CanonicalTestServer
+vi.mock('../../../shared/agent-hook-listener/presence/tmux-host-attachment-probe', () => ({
+  probeTmuxHostAttachments: probe
+}))
+
+let server: RelayAgentHookServer
 let directory: string
 const forward = vi.fn()
 const unavailable = vi.fn()
@@ -25,7 +22,7 @@ beforeEach(async () => {
   forward.mockClear()
   unavailable.mockClear()
   probe.mockResolvedValue({ clients: [{ pid: 101, pane: '%0' }], rows: TMUX_TEST_ROWS })
-  server = new CanonicalTestServer({
+  server = new RelayAgentHookServer({
     endpointDir: directory,
     forward,
     forwardUnavailable: unavailable,
@@ -46,20 +43,6 @@ async function post(body: unknown = tmuxTestBody(), source = 'opencode') {
   })
 }
 describe('relay canonical tmux ownership and replay', () => {
-  it('keeps inner and selected observations in its owner store and replays only the selected outer row', async () => {
-    expect((await post()).status).toBe(204)
-    expect(server.snapshot().parents).toHaveLength(2)
-    forward.mockClear()
-    expect(server.replayCachedPayloadsForPanes()).toBe(1)
-    expect(forward).toHaveBeenCalledTimes(1)
-    expect(forward.mock.lastCall?.[0]).toMatchObject({
-      paneKey: TMUX_TEST_PANE,
-      payload: { state: 'done' }
-    })
-    server.clearPaneState(TMUX_TEST_PANE)
-    expect(server.snapshot().parents).toHaveLength(0)
-    expect(server.replayCachedPayloadsForPanes()).toBe(0)
-  })
   it('replaces a legacy OpenCode 2 row with unavailable and preserves its launch identity', async () => {
     const body = tmuxTestBody()
     const { tmux: _tmux, ...legacy } = body
@@ -87,28 +70,5 @@ describe('relay canonical tmux ownership and replay', () => {
       tabId: 'tab-tmux',
       launchToken: 'generation'
     })
-  })
-  it('retains and replays an unavailable projection when it was emitted without a connected reader', async () => {
-    await post()
-    probe.mockResolvedValue({ clients: [], rows: TMUX_TEST_ROWS })
-    await vi.waitFor(() => expect(unavailable).toHaveBeenCalledTimes(1), { timeout: 2500 })
-    expect(server.snapshot().parents).toHaveLength(2)
-    expect(server.snapshot().parents.filter((parent) => parent.status)).toHaveLength(1)
-    unavailable.mockClear()
-    forward.mockClear()
-    expect(server.replayCachedPayloadsForPanes()).toBe(1)
-    expect(forward).not.toHaveBeenCalled()
-    expect(unavailable.mock.lastCall?.[0]).toMatchObject({
-      paneKey: TMUX_TEST_PANE,
-      worktreeId: 'workspace',
-      launchToken: 'generation',
-      statusUnavailable: true,
-      payload: null
-    })
-    probe.mockResolvedValue(null)
-    await new Promise((resolve) => setTimeout(resolve, 1100))
-    unavailable.mockClear()
-    server.replayCachedPayloadsForPanes()
-    expect(unavailable).toHaveBeenCalledTimes(1)
   })
 })

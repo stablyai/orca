@@ -12,7 +12,7 @@ import type {
   GitUpstreamStatus
 } from '../../../../../../shared/git/status/git-status-types'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { GitPushTarget } from '../../../../../../shared/worktree/types'
 import {
   beginAutomaticUpstreamRefresh,

@@ -9,7 +9,7 @@ import {
   toRuntimeExecutionHostId,
   type ExecutionHostId,
   type ExecutionHostScope
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { AiVaultSessionResumeTargetState } from '../session-actions/ai-vault-session-resume'
 

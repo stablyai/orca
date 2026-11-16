@@ -1,5 +1,5 @@
 import type { AppState } from '@/store/types'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { NotificationWorkspaceOwner } from '../../../../../shared/notifications/notification-source'
 import {
   resolveNotificationTabOwner,
@@ -8,7 +8,7 @@ import {
 import type { WorkspaceAttachmentOrigin } from '../../../../../shared/worktree/types'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { terminalLayoutContainsLeaf } from '../../../../../shared/workspace-session/workspace-session-pane-ownership'
-import type { Tab } from '../../../../../shared/tab-types'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 
 export type WorkspaceReferenceTerminalContext = {
   kind?: 'terminal'

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { resolveResourceManagerWorktreeTarget } from './resource-manager-worktree-target'
 
 const LOCAL = 'local' as ExecutionHostId
