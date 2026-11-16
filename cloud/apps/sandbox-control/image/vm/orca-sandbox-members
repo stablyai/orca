@@ -51,6 +51,15 @@ done < <(jq -c '.[]' <<<"$coauthors")
 DEVICES_JQ='add | [.[] | select(.userId | test("^[A-Za-z0-9_.:-]+$")) | .userId as $u | (.deviceIds // [])[] | select(test("^[A-Za-z0-9_-]{1,128}$")) | {key: ., value: $u}] | group_by(.key) | map(select((map(.value) | unique | length) == 1) | .[0]) | from_entries'
 jq -c -s "$DEVICES_JQ" <(printf '%s' "$json") <(printf '%s' "$coauthors") >"$tmp/devices.json"
 devices="$(jq 'length' "$tmp/devices.json")"
+# GH-SOLO: ORCA_SOLO_MEMBER = the only person who can use this workspace (absent when shared). orca-git-identity
+# then acts as them without an attested sender, matching the control plane.
+solo="${ORCA_SOLO_MEMBER:-}"
+solo_file=''
+case "$solo" in '' | *[!A-Za-z0-9_.:-]*) solo='' ;; esac
+if [ -n "$solo" ]; then
+  solo_file="$tmp/$(printf '%s' "$solo" | tr ':' '_').gitconfig"
+  if [ -s "$solo_file" ]; then printf '%s\n' "$solo" >"$tmp/solo"; else solo=''; solo_file=''; fi
+fi
 chmod 0700 "$tmp" && chmod 0600 "$tmp"/*
 rm -rf "$DIR.old"
 [ -d "$DIR" ] && mv "$DIR" "$DIR.old"
@@ -71,6 +80,21 @@ fi
 user_home="$(getent passwd "$USER_NAME" | cut -d: -f6)"
 [ -n "$orcad_pid" ] && user_home="$(tr '\0' '\n' <"/proc/$orcad_pid/environ" | sed -n 's/^HOME=//p' | head -n 1)"
 [ -n "$user_home" ] && rm -rf "$user_home/.orca-sandbox/members"
+# GH-SOLO: in a one-person workspace a plain `git commit` (no turn at all) is theirs too: the default author is
+# the member's GitHub noreply identity. Marked, so a workspace that becomes shared goes back to Orca's.
+if [ -n "$user_home" ]; then
+  as_user() { sudo -u "$USER_NAME" env HOME="$user_home" git config --global "$@"; }
+  solo_email="$( [ -n "$solo" ] && git config -f "$DIR/$(printf '%s' "$solo" | tr ':' '_').gitconfig" user.email 2>/dev/null || true)"
+  if [ -n "$solo_email" ]; then
+    as_user user.name "$(git config -f "$DIR/$(printf '%s' "$solo" | tr ':' '_').gitconfig" user.name)"
+    as_user user.email "$solo_email"
+    as_user orca.soloauthor true
+  elif [ "$(as_user --get orca.soloauthor 2>/dev/null || true)" = true ]; then
+    as_user user.name 'Orca'
+    as_user user.email 'noreply@orca.dev'
+    as_user --unset orca.soloauthor || true
+  fi
+fi
 # Commits outside a teammate's turn still need an author (images older than orca-sandbox-start's default).
 if [ -n "$user_home" ]; then
   sudo -u "$USER_NAME" env HOME="$user_home" git config --global user.email >/dev/null 2>&1 \

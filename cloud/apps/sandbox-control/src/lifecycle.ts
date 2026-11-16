@@ -25,7 +25,7 @@ import { applyQueuedRevokes } from './grant-revokes'
 import { ENTRY_POINTS_PROBE, ensureEntryPoints, entryPointsBehind, installEntryPoints, parseEntryPointsProbe } from './golden-images'
 import { RUNTIME_REFRESH_SCRIPT, type RuntimeBundle } from './runtime-bundles'
 import { memberPlaceholder, type MemberGitIdentity } from './github-user-tokens'
-import { connectedMembers, memberCoauthors, memberGitConfigs } from './member-git'
+import { actingMember, connectedMembers, memberCoauthors, memberGitConfigs } from './member-git'
 import type { RetentionConfig } from './retention'
 import { ProviderError, type ProviderSandboxState, type SandboxProviderApi } from './sandbox-provider'
 import { egressAccountRoutes, egressSecretHosts, placeholderValues, secretPlaceholder, type SecretEgressHost } from './secret-egress'
@@ -1245,17 +1245,36 @@ export async function syncMemberGit(deps: LifecycleDeps, row: SandboxRow, sessio
   }
 }
 
+/**
+ * GH-SOLO: before another person's device is paired, the VM stops treating the workspace as one person's
+ * (orca-git-identity would otherwise act as the owner for that device's agents too). The members sync after
+ * the grant writes it back if it still holds.
+ */
+export const DROP_SOLO_SCRIPT = 'rm -f /etc/orca/members/solo'
+
 /** Throws when the VM did not take the identities; on success the VM's setup reads ready. */
 async function installMemberGit(deps: LifecycleDeps, row: SandboxRow, sessionId: string): Promise<number> {
   await ensureEntryPoints(deps, sessionId)
   await refreshGitCredentials(deps, row, sessionId)
   const configs = await memberGitConfigs({ db: deps.db, identity: deps.memberIdentity! }, row)
   const coauthors = await memberCoauthors(deps.db, row, new Set(configs.map((config) => config.userId)))
+  // GH-SOLO: the only person who can use the workspace acts as themselves in the VM with no attested sender
+  // (a TUI typed into directly has none), as the egress proxy already allows (memberMayAct).
+  const acting = await actingMember(deps.db, row, deps.now(), null)
+  const soloCandidate = 'userId' in acting && acting.until === null ? acting.userId : null
+  // A grant still being issued to someone else (their device may already be pairing) means not solo.
+  const others = soloCandidate
+    ? await deps.db
+        .prepare(`SELECT COUNT(*) AS n FROM workspace_grants WHERE sandbox_id = ? AND status IN ('issuing', 'active') AND user_id <> ?`)
+        .bind(row.id, soloCandidate)
+        .first<{ n: number }>()
+    : null
+  const solo = soloCandidate && (others?.n ?? 1) === 0 ? soloCandidate : null
   const encode = (value: unknown) => btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify(value))))
   const result = await deps.provider.runCommand(sessionId, {
     command: MEMBERS_COMMAND,
     // GIT-COAUTHOR: a separate variable, which an image's older members script simply ignores.
-    env: { ORCA_MEMBERS_B64: encode(configs), ORCA_COAUTHORS_B64: encode(coauthors) },
+    env: { ORCA_MEMBERS_B64: encode(configs), ORCA_COAUTHORS_B64: encode(coauthors), ...(solo ? { ORCA_SOLO_MEMBER: solo } : {}) },
     sudo: true,
     timeoutMs: 30_000
   })
