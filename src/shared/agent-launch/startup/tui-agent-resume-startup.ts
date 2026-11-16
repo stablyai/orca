@@ -14,7 +14,10 @@ import {
 } from './tui-agent-startup-shell'
 import { TUI_AGENT_CONFIG } from '../catalog/tui-agent-config'
 import type { TuiAgent } from '../catalog/tui-agent'
-import { buildAgentResumeLaunchCommand } from './agent-resume-launch-command'
+import {
+  buildAgentResumeLaunchCommand,
+  findClaudeExecutableIndex
+} from './agent-resume-launch-command'
 import { buildAiVaultResumeShellCommand } from '../../ai-vault/resume/ai-vault-resume-command'
 import { normalizeRuntimePathForComparison } from '../../file-access/cross-platform-path'
 import { parseWslUncPath } from '../../file-access/wsl-paths'
@@ -130,7 +133,9 @@ export function buildAgentResumeStartupPlan(args: {
 
 function passesTextAfterTerminator(command: string, shell: AgentStartupShell): boolean {
   const parsed = tokenizeStartupCommand(command, shell)
-  const terminator = parsed.ok ? parsed.tokens.indexOf('--') : -1
+  const terminator = parsed.ok
+    ? parsed.tokens.indexOf('--', findClaudeExecutableIndex(parsed.tokens, shell) + 1)
+    : -1
   return parsed.ok && terminator !== -1 && terminator < parsed.tokens.length - 1
 }
 

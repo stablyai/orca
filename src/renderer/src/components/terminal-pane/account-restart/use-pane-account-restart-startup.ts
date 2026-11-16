@@ -14,7 +14,8 @@ export function usePaneAccountRestartStartup({
       agent: AccountRestartAgent,
       leafId: string,
       discovered?: AgentProviderSessionMetadata,
-      continueWork?: boolean
+      continueWork?: boolean,
+      warnsWhenHeld?: boolean
     ) =>
       buildPaneAccountRestartStartup(
         agent,
@@ -27,7 +28,8 @@ export function usePaneAccountRestartStartup({
             .tabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId)?.shellOverride
         },
         discovered,
-        continueWork
+        continueWork,
+        warnsWhenHeld
       ),
     [tabId, worktreeId]
   )

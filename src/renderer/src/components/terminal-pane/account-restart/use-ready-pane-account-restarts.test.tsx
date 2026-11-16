@@ -17,8 +17,12 @@ import type * as paneSelectionLane from '@/lib/agent-session/accounts/codex-pane
 import type * as sonner from 'sonner'
 import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
 import type { ClaudeAccountSwitchRunningSessions } from '../../../../../shared/agent-accounts/claude/claude-account-switch-settings'
-import { recordQueuedClaudeRestarts } from '@/lib/agent-session/accounts/claude/claude-queued-restart-records'
+import {
+  recordQueuedClaudeRestarts,
+  takeQueuedClaudeRestart
+} from '@/lib/agent-session/accounts/claude/claude-queued-restart-records'
 import { useReadyPaneAccountRestarts } from './use-ready-pane-account-restarts'
+import { lookUpDiscoveredClaudeRestart } from './discovered-claude-restart'
 import { useTerminalPaneLayoutBindings } from '../layout/ownership/use-terminal-pane-layout-bindings'
 import type { TerminalPaneLayoutController } from '../layout/persistence/use-terminal-pane-layout-persistence'
 
@@ -229,8 +233,8 @@ describe('on-screen restart of a Claude pane no hook named', () => {
   const realBuild = (
     agent: AccountRestartAgent,
     leafId: string,
-    session?: AgentProviderSessionMetadata
-  ) => buildPaneAccountRestartStartup(agent, { tabId: 'tab-1', worktreeId: 'wt1', leafId }, session)
+    ...rest: [AgentProviderSessionMetadata?, boolean?, boolean?]
+  ) => buildPaneAccountRestartStartup(agent, { tabId: 'tab-1', worktreeId: 'wt1', leafId }, ...rest)
   const switchAccount = () =>
     handleRunningClaudeSessionsAfterSwitch({
       owner: { kind: 'local' },
@@ -373,6 +377,91 @@ describe('on-screen restart of a Claude pane no hook named', () => {
     expect(handleRestartPane).not.toHaveBeenCalled()
     expect(discoverClaudeSession).not.toHaveBeenCalled()
     expect(toast.warning).toHaveBeenCalledWith('accounts.claude.switchSessions.notMovedToOne')
+  })
+
+  it('says a pane a hook names was not moved when another pane holds its session at restart', async () => {
+    const otherLeaf = '22222222-2222-4222-8222-222222222222'
+    const named = {
+      ...useAppStore.getState().agentStatusByPaneKey.get(PANE_KEY)!,
+      providerSession: { key: 'session_id', id: SESSION } as const
+    }
+    useAppStore.setState((state) => ({
+      tabsByWorktree: {
+        wt1: [...state.tabsByWorktree.wt1, { ...state.tabsByWorktree.wt1[0], id: 'tab-2' }]
+      },
+      ptyIdsByTabId: { 'tab-1': [OLD_PTY], 'tab-2': ['pty-other'] },
+      terminalLayoutsByTabId: {
+        'tab-1': LAYOUT,
+        'tab-2': { ...LAYOUT, ptyIdsByLeafId: { [otherLeaf]: 'pty-other' } }
+      },
+      agentStatusByPaneKey: acceptedAgentStatuses([
+        [PANE_KEY, named],
+        [`tab-2:${otherLeaf}`, { ...named, paneKey: `tab-2:${otherLeaf}`, tabId: 'tab-2' }]
+      ])
+    }))
+    renderReadyPaneAccountRestarts(realBuild)
+
+    await act(async () => {
+      queueFromSwitch('restart')
+      await flush()
+    })
+
+    expect(handleRestartPane).not.toHaveBeenCalled()
+    expect(toast.warning).toHaveBeenCalledWith('accounts.claude.switchSessions.notMovedToOne')
+  })
+
+  it.each([
+    { order: 'older first', putBack: [0, 1] },
+    { order: 'newer first', putBack: [1, 0] }
+  ])(
+    'keeps the newer switch record when two restarts held for a turn are put back, $order',
+    async ({ putBack }) => {
+      const resolvers: ((found: typeof record) => void)[] = []
+      discoverClaudeSession
+        .mockReset()
+        .mockImplementation(() => new Promise((resolve) => resolvers.push(resolve)))
+      useAppStore
+        .getState()
+        .setAgentStatus(PANE_KEY, { state: 'working', prompt: 'next', agentType: 'claude' })
+      const pane = { ptyId: OLD_PTY, tabId: 'tab-1', leafId: LEAF }
+      const runs = ['session-older', 'session-newer'].map((id) => {
+        recordQueuedClaudeRestarts(
+          [OLD_PTY],
+          false,
+          new Map([[OLD_PTY, { key: 'session_id', id }]])
+        )
+        return lookUpDiscoveredClaudeRestart(
+          'claude',
+          pane,
+          takeQueuedClaudeRestart(OLD_PTY),
+          () => null
+        )
+      })
+      await flush()
+      resolvers[putBack[0]](record)
+      await flush()
+      resolvers[putBack[1]](record)
+      await Promise.all(runs)
+
+      expect(takeQueuedClaudeRestart(OLD_PTY)?.session?.id).toBe('session-newer')
+    }
+  )
+
+  it('says nothing for a pane whose agent was replaced by another before the restart ran', async () => {
+    useAppStore.setState((state) => ({
+      agentStatusByPaneKey: acceptedAgentStatuses([
+        [PANE_KEY, { ...state.agentStatusByPaneKey.get(PANE_KEY)!, agentType: 'codex' }]
+      ])
+    }))
+    renderReadyPaneAccountRestarts(realBuild)
+
+    await act(async () => {
+      queueFromSwitch('restart')
+      await flush()
+    })
+
+    expect(handleRestartPane).not.toHaveBeenCalled()
+    expect(toast.warning).not.toHaveBeenCalled()
   })
 
   it('queues nothing again, and says so, for a pane that took another terminal during the lookup', async () => {

@@ -13,6 +13,8 @@ import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolv
 import { getLocalProjectExecutionRuntimeContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import { repoMatchesHostIdentity } from '@/store/repos/repo-host-identity'
 import { isSessionHeldByAnotherPane } from '@/lib/agent-session/identity/claude-session-pane-holders'
+import { warnSessionsLeftBehind } from '@/lib/provider-accounts/claude-account-switch-notices'
+import { discoveredRestartAccountLabel } from '@/lib/agent-session/accounts/claude/claude-pane-session-lookup'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { normalizeAgentProviderSession } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { AGENT_SESSION_ACCOUNT_SWITCH_TERMINAL_CONTINUATION_MESSAGE } from '../../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-continuation'
@@ -115,7 +117,7 @@ export function resolveAgentAccountRestartResumeStartup(
   // A live invocation takes the one decision's answer, none included.
   const launchConfig = entry
     ? state.getAgentLaunchConfigForStatusEntry(entry)
-    : sleeping?.agent === agent
+    : sleeping?.agent === agent && sleepingMatchingLookup !== null
       ? sleeping.launchConfig
       : undefined
   const resumeTarget = resolveAccountRestartLaunchTarget(state, args, projectRuntime)
@@ -124,7 +126,7 @@ export function resolveAgentAccountRestartResumeStartup(
     ? providerSession
     : withoutFlagsNamedIn(
         providerSession,
-        [cmdOverrides.claude, launchConfig?.agentCommand, launchConfig?.agentArgs],
+        [launchConfig?.agentCommand?.trim() || cmdOverrides.claude, launchConfig?.agentArgs],
         resolveStartupShell(resumeTarget.platform, resumeTarget.shell)
       )
   const startupPlan = buildAgentResumeStartupPlan({
@@ -167,7 +169,8 @@ export function buildPaneAccountRestartStartup(
   agent: AccountRestartAgent,
   args: AccountRestartPane,
   discovered?: AgentProviderSessionMetadata,
-  continueWork = false
+  continueWork = false,
+  warnsWhenHeld = false
 ): AgentAccountRestartStartup | null {
   const resume = resolveAgentAccountRestartResumeStartup(agent, args, discovered, continueWork)
   const sessionId = resume && (resume.resumeProviderSession ?? discovered)?.id
@@ -181,6 +184,9 @@ export function buildPaneAccountRestartStartup(
       sessionId
     )
   ) {
+    if (warnsWhenHeld) {
+      warnSessionsLeftBehind(1, discoveredRestartAccountLabel())
+    }
     return null
   }
   return resume ?? (agent === 'codex' ? buildCodexAccountRestartStartup(args) : null)

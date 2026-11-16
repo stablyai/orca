@@ -7,18 +7,21 @@ export type ClaudePaneLookups = ReadonlyMap<string, AgentProviderSessionMetadata
 export type QueuedClaudeRestart = {
   restartAll: boolean
   session?: AgentProviderSessionMetadata
+  order: number
 }
 
 let records = new Map<string, QueuedClaudeRestart>()
+let switches = 0
 
 export function recordQueuedClaudeRestarts(
   ptyIds: readonly string[],
   restartAll: boolean,
   sessions: ReadonlyMap<string, AgentProviderSessionMetadata> = new Map()
 ): void {
+  switches += 1
   for (const ptyId of ptyIds) {
     const session = sessions.get(ptyId)
-    records.set(ptyId, { restartAll, ...(session ? { session } : {}) })
+    records.set(ptyId, { restartAll, order: switches, ...(session ? { session } : {}) })
   }
 }
 
@@ -29,7 +32,10 @@ export function takeQueuedClaudeRestart(ptyId: string): QueuedClaudeRestart | un
 }
 
 export function restoreQueuedClaudeRestart(ptyId: string, record: QueuedClaudeRestart): void {
-  records.set(ptyId, record)
+  const held = records.get(ptyId)
+  if (!held || held.order < record.order) {
+    records.set(ptyId, record)
+  }
 }
 
 export function moveQueuedClaudeRestart(fromPtyId: string, toPtyId: string): void {

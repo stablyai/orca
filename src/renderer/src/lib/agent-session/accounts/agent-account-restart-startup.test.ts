@@ -137,6 +137,63 @@ describe('buildPaneAccountRestartStartup for Claude', () => {
     expect(buildPaneAccountRestartStartup('claude', pane)).toBeNull()
   })
 
+  it('resumes a looked-up session on its own model, not the launch line of an older sleeping session', () => {
+    useAppStore.setState({
+      sleepingAgentSessionsByPaneKey: {
+        [makePaneKey(TAB_ID, LEAF_ID)]: {
+          paneKey: makePaneKey(TAB_ID, LEAF_ID),
+          worktreeId: WORKTREE_ID,
+          prompt: '',
+          state: 'done',
+          capturedAt: 1,
+          updatedAt: 1,
+          agent: 'claude',
+          providerSession: { key: 'session_id', id: 'older-session' },
+          launchConfig: { agentCommand: 'claude --model lane-model-a', agentArgs: '', agentEnv: {} }
+        }
+      }
+    })
+
+    const command = buildPaneAccountRestartStartup('claude', pane, {
+      key: 'session_id',
+      id: SESSION_ID,
+      model: 'lane-model-b'
+    })?.command
+
+    expect(command).toContain('lane-model-b')
+    expect(command).not.toContain('lane-model-a')
+  })
+
+  it('keeps the effort of a looked-up session when its recorded launch line, not the override, runs', () => {
+    const original = useAppStore.getState()
+    try {
+      seedAgentStatus({ agentType: 'claude' })
+      useAppStore.setState({
+        settings: {
+          ...getDefaultSettings('/home/dev'),
+          agentCmdOverrides: { claude: 'claude --effort low' }
+        },
+        getAgentLaunchConfigForStatusEntry: () => ({
+          agentCommand: 'claude',
+          agentArgs: '',
+          agentEnv: {}
+        })
+      })
+
+      const command = buildPaneAccountRestartStartup('claude', pane, {
+        key: 'session_id',
+        id: SESSION_ID,
+        effort: 'high'
+      })?.command
+
+      expect(command?.match(/--effort/g)).toEqual(['--effort'])
+      expect(command).toContain('high')
+      expect(command).not.toContain('low')
+    } finally {
+      useAppStore.setState(original)
+    }
+  })
+
   it.each([
     ['workspace folder', undefined, "cd '/recorded/session' && "],
     ['saved tab folder', '/recorded/session', '']

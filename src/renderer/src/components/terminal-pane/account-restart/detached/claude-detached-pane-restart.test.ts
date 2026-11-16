@@ -1,5 +1,6 @@
 import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
 import { provideLayoutFrameTerminalPanes } from '@/runtime/workspace-layout/frames/layout-frame-terminal-panes'
 import { registerRuntimeTerminalTab } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
@@ -22,7 +23,7 @@ const NEW_PTY = 'wt1@@new'
 const SESSION_ID = '00000000-0000-4000-8000-0000000000a1'
 
 function seedClaudePane(
-  overrides: Partial<Pick<AgentStatusEntry, 'state' | 'providerSession'>> = {}
+  overrides: Partial<Pick<AgentStatusEntry, 'state' | 'providerSession' | 'agentType'>> = {}
 ): void {
   const paneKey = makePaneKey('tab-1', LEAF_ID)
   useAppStore.setState({
@@ -277,6 +278,91 @@ describe('detached Claude account-move restart', () => {
       }
     }
   )
+
+  it('says a session was not moved when another pane holds it at restart', async () => {
+    const warning = vi.spyOn(toast, 'warning').mockImplementation(() => 0)
+    const uninstall = installCodexDetachedPaneRestartExecutor()
+    try {
+      seedClaudePane()
+      const otherLeaf = '22222222-2222-4222-8222-222222222222'
+      const state = useAppStore.getState()
+      const own = state.agentStatusByPaneKey.get(makePaneKey('tab-1', LEAF_ID))!
+      useAppStore.setState({
+        tabsByWorktree: {
+          wt1: [...state.tabsByWorktree.wt1, { ...state.tabsByWorktree.wt1[0], id: 'tab-2' }]
+        },
+        ptyIdsByTabId: { ...state.ptyIdsByTabId, 'tab-2': ['wt1@@other'] },
+        terminalLayoutsByTabId: {
+          ...state.terminalLayoutsByTabId,
+          'tab-2': {
+            root: { type: 'leaf', leafId: otherLeaf },
+            activeLeafId: otherLeaf,
+            expandedLeafId: null,
+            ptyIdsByLeafId: { [otherLeaf]: 'wt1@@other' }
+          }
+        },
+        agentStatusByPaneKey: acceptedAgentStatuses([
+          [makePaneKey('tab-1', LEAF_ID), own],
+          [
+            makePaneKey('tab-2', otherLeaf),
+            { ...own, paneKey: makePaneKey('tab-2', otherLeaf), tabId: 'tab-2' }
+          ]
+        ])
+      })
+      setRunningSessionSetting('restart')
+      queueFromSwitch()
+      await settle()
+
+      expect(window.api.pty.spawn).not.toHaveBeenCalled()
+      expect(warning).toHaveBeenCalledTimes(1)
+    } finally {
+      uninstall()
+      warning.mockRestore()
+    }
+  })
+
+  it('says nothing for a pane whose agent was replaced by another before the restart ran', async () => {
+    const warning = vi.spyOn(toast, 'warning').mockImplementation(() => 0)
+    const uninstall = installCodexDetachedPaneRestartExecutor()
+    try {
+      seedClaudePane({ agentType: 'codex' })
+      setRunningSessionSetting('restart')
+      queueFromSwitch()
+      await settle()
+
+      expect(window.api.pty.spawn).not.toHaveBeenCalled()
+      expect(warning).not.toHaveBeenCalled()
+    } finally {
+      uninstall()
+      warning.mockRestore()
+    }
+  })
+
+  it('keeps the decision of a switch that lands while an earlier restart looks up its session', async () => {
+    const found = { key: 'session_id', id: SESSION_ID } as const
+    const laterSwitch = async () => {
+      setPaneState('working')
+      recordQueuedClaudeRestarts([OLD_PTY], true, new Map([[OLD_PTY, found]]))
+      useAppStore.getState().queuePaneAccountRestarts([OLD_PTY], 'claude')
+      return found
+    }
+    Object.assign(window.api.pty, {
+      discoverClaudeSession: vi.fn().mockImplementationOnce(laterSwitch).mockResolvedValue(found)
+    })
+    const uninstall = installCodexDetachedPaneRestartExecutor()
+    try {
+      seedClaudePane({ providerSession: undefined })
+      setRunningSessionSetting('restart')
+      recordQueuedClaudeRestarts([OLD_PTY], false, new Map([[OLD_PTY, found]]))
+      useAppStore.getState().queuePaneAccountRestarts([OLD_PTY], 'claude')
+      await settle()
+      await settle()
+
+      expect(window.api.pty.spawn).toHaveBeenCalledTimes(1)
+    } finally {
+      uninstall()
+    }
+  })
 
   it('tries a restart-all session again when a new restart is queued after it gave up', async () => {
     const spawn = vi.mocked(window.api.pty.spawn)

@@ -33,7 +33,6 @@ import type {
 import type { ClaudePaneLookups } from './claude-queued-restart-records'
 import {
   claudeSwitchCandidatePanes,
-  hasSleepingSession,
   type ClaudeSwitchCandidatePane
 } from './claude-switch-candidate-panes'
 
@@ -177,8 +176,8 @@ async function isClaudeRunning(
   )
 }
 
-function sleepingPaneRow(state: AppState, pane: ClaudeSwitchCandidatePane): ScannedPane | null {
-  return pane.inLane && hasSleepingSession(state, pane)
+function unnamedPaneRow(state: AppState, pane: ClaudeSwitchCandidatePane): ScannedPane | null {
+  return pane.inLane && state.pendingPaneAccountRestarts[pane.ptyId] !== 'claude'
     ? { group: 'cantMove', pane, reason: 'no-session' }
     : null
 }
@@ -222,7 +221,7 @@ export async function findClaudeSwitchSessions(args: {
     ...claudeSwitchCandidatePanes(state, args.owner, args.target, args.restartAll, args.discovered)
   ]
   const scanned = panes.flatMap((pane) => {
-    const row = pane.entry || pane.session ? scanPane(pane, scanArgs) : sleepingPaneRow(state, pane)
+    const row = pane.entry || pane.session ? scanPane(pane, scanArgs) : unnamedPaneRow(state, pane)
     return row ? [row] : []
   })
   const inspected: InspectedClaudePane[] = await Promise.all(

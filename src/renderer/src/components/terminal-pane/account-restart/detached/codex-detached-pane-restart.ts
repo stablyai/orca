@@ -168,7 +168,7 @@ async function executeDetachedCodexPaneRestart(
         (session) => buildPaneAccountRestartStartup(agent, pane, session, continueWork),
         rejectedSpawns > 0
       )
-    : buildPaneAccountRestartStartup(agent, pane, undefined, continueWork)
+    : buildPaneAccountRestartStartup(agent, pane, undefined, continueWork, true)
   if (!startup) {
     return
   }

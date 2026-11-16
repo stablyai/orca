@@ -597,13 +597,38 @@ it.each(['ask', 'restart', 'keep'] as const)(
     dropStatus(1)
     const { discoverClaudeSession } = stubLookups(() => recorded(1, FOLDERS['acct-a']))
 
+    vi.mocked(inspectRuntimeTerminalProcess).mockClear()
+
     await switchAccount('acct-a', 'acct-b')
 
     expect(discoverClaudeSession).not.toHaveBeenCalled()
+    expect(inspectRuntimeTerminalProcess).not.toHaveBeenCalled()
     expect(pending()).toEqual({})
     expect(getClaudeAccountSwitchPrompt()).toBeNull()
   }
 )
+
+it('counts a pane no lookup named as not moved under restart-all when Claude or an unreadable process runs there', async () => {
+  seed('restart-all', { 1: FOLDERS['acct-a'], 2: null, 3: null, 4: null })
+  dropStatus(2, 3, 4)
+  stubLookups(() => null)
+  const foreground = (id: string) => (id === ptyId(3) ? 'pwsh' : id === ptyId(4) ? null : 'claude')
+  vi.mocked(inspectRuntimeTerminalProcess).mockImplementation(async (id) => ({
+    foregroundProcess: id === ptyId(4) ? 'node' : foreground(id),
+    hasChildProcesses: true
+  }))
+  vi.mocked(confirmRuntimeTerminalForegroundProcess).mockImplementation(async (id) =>
+    foreground(id)
+  )
+
+  await switchAccount('acct-a', 'acct-b')
+
+  expect(pending()).toEqual({ 'pty-1': 'claude' })
+  expect(toast.success).toHaveBeenCalledWith(
+    'accounts.claude.switchSessions.restartingOne',
+    expect.objectContaining({ description: 'accounts.claude.switchSessions.notMovedOther:2' })
+  )
+})
 
 it('names an unreadable terminal in the console without its worktree path', async () => {
   seed('restart', { 1: FOLDERS['acct-a'] })
@@ -635,6 +660,21 @@ const breadcrumbs = (recordBreadcrumb: ReturnType<typeof vi.fn>) =>
     .map(([crumb]) => crumb)
     .filter((crumb) => crumb.name === 'claude_account_switch')
 
+it('does not count a pane as not moved while an earlier restart-all still has its restart queued', async () => {
+  seed('restart-all', { 1: null })
+  dropStatus(1)
+  stubLookups(() => recorded(1, FOLDERS['acct-a']))
+  await switchAccount('acct-a', 'acct-b')
+  expect(pending()).toEqual({ 'pty-1': 'claude' })
+  stubLookups(() => null)
+  vi.mocked(toast.warning).mockClear()
+
+  await switchAccount('acct-b', 'acct-c')
+
+  expect(pending()).toEqual({ 'pty-1': 'claude' })
+  expect(toast.warning).not.toHaveBeenCalled()
+})
+
 it('records one breadcrumb per switch, listing panes until the detail is full', async () => {
   seed('restart-all', { 1: null, 2: null, 3: null, 4: null, 5: null, 6: null, 7: null })
   dropStatus(1, 2, 3, 4, 5, 6, 7)
@@ -642,6 +682,12 @@ it('records one breadcrumb per switch, listing panes until the detail is full', 
   const { recordBreadcrumb } = stubLookups((id) =>
     id === 'wt1@@a0000001' ? recorded(1, FOLDERS['acct-a']) : null
   )
+  const shell = (id: string) => (id === 'wt1@@a0000002' ? 'pwsh' : 'claude')
+  vi.mocked(inspectRuntimeTerminalProcess).mockImplementation(async (id) => ({
+    foregroundProcess: shell(id),
+    hasChildProcesses: true
+  }))
+  vi.mocked(confirmRuntimeTerminalForegroundProcess).mockImplementation(async (id) => shell(id))
 
   await switchAccount('acct-a', 'acct-b')
 
@@ -657,9 +703,9 @@ it('records one breadcrumb per switch, listing panes until the detail is full', 
         seen: 7,
         queued: 1,
         waitingForTurn: 0,
-        notMoved: 'not-found=6',
+        notMoved: 'not-running=1,no-session=5',
         panes:
-          'a0000001 lookup queued on-account, a0000002 none kept not-found, a0000003 none kept not-found, a0000004 none kept not-found, a0000005 none kept not-found, a0000006 none kept not-found (+1 more)'
+          'a0000001 lookup queued on-account, a0000002 none kept not-running, a0000003 none kept no-session, a0000004 none kept no-session, a0000005 none kept no-session, a0000006 none kept no-session (+1 more)'
       }
     }
   ])

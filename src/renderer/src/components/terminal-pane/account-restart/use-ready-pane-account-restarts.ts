@@ -56,7 +56,13 @@ export function useReadyPaneAccountRestarts({
       }
       const startup =
         agent && !restartsOnLookedUpSession({ tabId, leafId: pane.leafId }, queued)
-          ? buildAccountRestartStartup(agent, pane.leafId, undefined, queued?.restartAll)
+          ? buildAccountRestartStartup(
+              agent,
+              pane.leafId,
+              undefined,
+              queued?.restartAll,
+              !queued?.session
+            )
           : null
       if (agent && startup) {
         // Why: one Claude switch restarts many panes at once; none was the one the user clicked.
