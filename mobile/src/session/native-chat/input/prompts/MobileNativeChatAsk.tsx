@@ -15,6 +15,7 @@ import {
   askQuestionShowsPreviews,
   askConfirmLabel,
   askTypedText,
+  askUnansweredRequired,
   toggleAskOption
 } from '../../../../../../src/shared/native-chat/input/questions/native-chat-ask-card-rules'
 import { colors, pressedStyle } from '../../../../theme/mobile-theme'
@@ -179,7 +180,10 @@ export function MobileNativeChatAsk({
 
   const advance = async (sel = selections): Promise<void> => {
     autoAdvance.cancel()
-    if (isLast) {
+    const unanswered = askUnansweredRequired(prompt.questions, (i) => isAnswered(i, sel))
+    if (isLast && unanswered !== -1) {
+      showStep(() => unanswered)
+    } else if (isLast) {
       await submit(sel)
     } else {
       showStep((i) => Math.min(i + 1, total - 1))
@@ -204,7 +208,7 @@ export function MobileNativeChatAsk({
   }
 
   const confirm = (): void => {
-    const action = askConfirmAction({ isLast, anyAnswered: anyAnswered() })
+    const action = askConfirmAction({ isLast, anyAnswered: anyAnswered(), waitsForAnswer })
     if (action === 'cancel') {
       void cancel()
     } else if (action === 'proceed') {
@@ -217,8 +221,18 @@ export function MobileNativeChatAsk({
   const otherSelected = (selections[index] ?? []).includes(OTHER)
   const freeTextInput = freeTextInputs?.[index]
   const currentAnswered = isAnswered(index)
-  const confirmLabel = askConfirmLabel(currentAnswered, isLast, anyAnswered())
+  // A required question offers Next or Submit, never Skip, and waits until it is answered.
+  const waitsForAnswer = q.required === true && !currentAnswered
+  const unansweredRequired = askUnansweredRequired(prompt.questions, (i) => isAnswered(i))
+  const confirmLabel = askConfirmLabel(
+    currentAnswered || waitsForAnswer,
+    isLast,
+    anyAnswered(),
+    unansweredRequired !== -1 && unansweredRequired !== index
+  )
   const confirmSkips = confirmLabel === 'skip'
+  const confirmBlocked =
+    askConfirmAction({ isLast, anyAnswered: anyAnswered(), waitsForAnswer }) === 'stay'
 
   return (
     <View style={styles.card}>
@@ -341,10 +355,11 @@ export function MobileNativeChatAsk({
           style={({ pressed }) => [
             styles.next,
             confirmSkips && styles.nextSkip,
+            confirmBlocked && styles.nextBlocked,
             pressed && pressedStyle
           ]}
           onPress={confirm}
-          disabled={submitting}
+          disabled={submitting || confirmBlocked}
         >
           <Text style={[styles.nextText, confirmSkips && styles.nextSkipText]}>
             {confirmLabels(t)[confirmLabel]}

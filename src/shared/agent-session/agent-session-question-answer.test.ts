@@ -80,16 +80,26 @@ describe('agent-session grouped question answers', () => {
 
     expect(isValidAgentSessionQuestionAnswers(questions, answers)).toBe(true)
     expect(isValidAgentSessionQuestionAnswers(questions, answers.toReversed())).toBe(true)
+    // A skippable question may be left empty while another is answered; a required one (or one from
+    // a host that predates skipping) may not.
+    const partial = [{ ...answers[0]!, optionIds: [] }, answers[1]!]
+    const skippable = questions.map((question) => ({ ...question, skippable: true as const }))
+    expect(isValidAgentSessionQuestionAnswers(questions, partial)).toBe(false)
+    expect(isValidAgentSessionQuestionAnswers(skippable, partial)).toBe(true)
     const invalid = [
       [],
       [...answers, { questionId: 'q3', optionIds: [] }],
       [answers[0]!, answers[0]!],
       [{ ...answers[0]!, questionId: 'unknown' }, answers[1]!],
-      [{ ...answers[0]!, optionIds: [] }, answers[1]!],
-      [{ ...answers[0]!, other: 'not offered' }, answers[1]!]
+      [{ ...answers[0]!, other: 'not offered' }, answers[1]!],
+      // Every question skipped: nothing to submit.
+      [
+        { questionId: 'q1', optionIds: [] },
+        { questionId: 'q2', optionIds: [], other: '  ' }
+      ]
     ]
     for (const candidate of invalid) {
-      expect(isValidAgentSessionQuestionAnswers(questions, candidate)).toBe(false)
+      expect(isValidAgentSessionQuestionAnswers(skippable, candidate)).toBe(false)
     }
     expect(
       isValidAgentSessionQuestionAnswers(

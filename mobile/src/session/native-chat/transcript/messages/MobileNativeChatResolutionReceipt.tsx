@@ -80,12 +80,10 @@ export function MobileNativeChatResolutionReceipt({
           {body.detail}
         </Text>
       ) : null}
-      {answers.map((answer, index) => {
+      {answers.map((answer) => {
         const heading = nativeChatReceiptAnswerHeading(subject, answer)
         return (
-          <View
-            key={body.kind === 'question' ? (body.questions?.[index]?.id ?? 'answer') : 'answer'}
-          >
+          <View key={answer.key}>
             {heading ? (
               <MobileNativeChatQuestionText
                 content={heading}

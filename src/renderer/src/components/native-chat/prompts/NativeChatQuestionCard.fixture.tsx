@@ -330,7 +330,7 @@ const dispatchOptions = [
   }
 ]
 
-function FocusedQuestion({ steps = 1 }: { steps?: number }) {
+function FocusedQuestion({ steps = 1, requiredStep }: { steps?: number; requiredStep?: number }) {
   return (
     <div
       className="native-chat-appearance bg-chat-canvas p-4"
@@ -345,7 +345,8 @@ function FocusedQuestion({ steps = 1 }: { steps?: number }) {
                 : 'Where should the report go?',
             header: i === 0 ? 'Investigate' : 'Report',
             multiSelect: false,
-            options: dispatchOptions
+            options: dispatchOptions,
+            ...(i === requiredStep ? { required: true as const } : {})
           }))
         }}
         onAnswer={() => {}}
@@ -380,6 +381,45 @@ export const skippedLastStep = defineFixture({
   interact: async (frame) => {
     frame.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')[0]?.click()
     frame.querySelectorAll<HTMLButtonElement>('[data-native-chat-question-step]')[1]?.click()
+    await new Promise(requestAnimationFrame)
+  }
+})
+
+// Answered the first step; the required last step keeps Submit idle until it is answered.
+export const requiredLastStep = defineFixture({
+  width: 720,
+  render: () => <FocusedQuestion steps={2} requiredStep={1} />,
+  interact: async (frame) => {
+    frame.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')[0]?.click()
+    frame.querySelectorAll<HTMLButtonElement>('[data-native-chat-question-step]')[1]?.click()
+    await new Promise(requestAnimationFrame)
+  }
+})
+
+// Skipped the required first step and pressed Submit on the last: the card returns to the first.
+export const requiredSkippedStep = defineFixture({
+  width: 720,
+  render: () => <FocusedQuestion steps={2} requiredStep={0} />,
+  interact: async (frame) => {
+    frame.querySelectorAll<HTMLButtonElement>('[data-native-chat-question-step]')[1]?.click()
+    await new Promise(requestAnimationFrame)
+    frame.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')[0]?.click()
+    await new Promise((resolve) => setTimeout(resolve, 600))
+    await new Promise(requestAnimationFrame)
+  }
+})
+
+// Answered step 1, then passed the required step 2 by its chip: the last step says Next, since its
+// press returns there instead of sending.
+export const requiredPassedStep = defineFixture({
+  width: 720,
+  render: () => <FocusedQuestion steps={3} requiredStep={1} />,
+  interact: async (frame) => {
+    frame.querySelectorAll<HTMLButtonElement>('[data-native-chat-question-step]')[0]?.click()
+    await new Promise(requestAnimationFrame)
+    frame.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')[0]?.click()
+    await new Promise(requestAnimationFrame)
+    frame.querySelectorAll<HTMLButtonElement>('[data-native-chat-question-step]')[2]?.click()
     await new Promise(requestAnimationFrame)
   }
 })
