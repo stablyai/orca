@@ -1525,6 +1525,7 @@
       "tryAgain": "Try again",
       "keeps": "Projects, worktrees and Orca settings stay.",
       "keepsShared": "{{name}} is also installed, so hooks it shares stay too.",
+      "closesTerminals": "Open terminals will close.",
       "removing": "Removing…",
       "button": "Uninstall",
       "uninstalling": "Uninstalling…",
@@ -1532,7 +1533,8 @@
         "hooksIn": "Hooks in {{targets}}",
         "cliCommand": "<cmd>{{name}}</cmd> CLI on your PATH",
         "service": "<cmd>orca serve</cmd> server",
-        "hookScripts": "Hook scripts"
+        "hookScripts": "Hook scripts",
+        "terminalDaemon": "Terminal background process"
       },
       "retry": "Retry",
       "hookTargets": {
@@ -1555,6 +1557,7 @@
         "hooksIn": "hooks in {{targets}}",
         "cliCommand": "the <cmd>{{name}}</cmd> CLI",
         "service": "the <cmd>orca serve</cmd> server",
+        "terminalDaemon": "the terminal background process",
         "hookScripts": "hook scripts",
         "nothing": "Nothing outside the app to remove.",
         "loading": "Checking what Orca installed…",
