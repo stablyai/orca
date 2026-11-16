@@ -16,9 +16,9 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   DOMAIN_FILE,
   findMigrationReopenedTabs,
-  findRunningOrca,
   LEGACY_FILE
 } from './close-migration-reopened-tabs.mjs'
+import { findRunningOrca } from './orca-running.mjs'
 
 const SCRIPT = path.join(import.meta.dirname, 'close-migration-reopened-tabs.mjs')
 const roots = []
@@ -33,10 +33,10 @@ const tabId = (session) => `structured-agent-session-${session}`
 
 /**
  * The older journal has chats L0..L7 (L4 open there). Before the faulty pass the store showed L0,
- * never viewed here, and L1, converted. The pass then appended, in journal order: a copy of L1 (the user
- * closed it since), L2, a copy of L3 holding a reply only an older build saved, L4, a copy of L5,
- * L6, which the user has written in since, and L7, which the user closed and reopened on a paired
- * device. A chat N created here sits between the last two.
+ * never viewed here, and L1, converted. The pass then appended, in journal order: a copy of L1
+ * holding a reply only an older build saved, L2, duplicate copies of L3, L4 and L5 (the copies of
+ * L3 and L5 open), L6, which the user has written in since, and L7, which the user closed and
+ * reopened on a paired device. A chat N created here sits between the last two.
  */
 function writeProfile() {
   const userData = mkdtempSync(path.join(tmpdir(), 'orca-tab-repair-'))
@@ -78,7 +78,7 @@ function writeProfile() {
       'e1',
       `${original}-item`,
       1,
-      original === 'L3' ? 'other' : 'reply'
+      original === 'L1' ? 'other' : 'reply'
     )
     insert(domain, 'journal_chat_state', copy, 'e1', 2)
     insert(domain, 'journal_chat_state', original, 'e1', 2)
@@ -86,7 +86,7 @@ function writeProfile() {
   insert(domain, 'journal_chat_state', 'L0', null, 0)
   insert(domain, 'journal_chat_state', 'L6', 'e1', 5)
   insert(domain, 'agent_session_records', 'N', '{}')
-  const tabs = ['L0', 'L1', null, 'L2', copyId('L3'), 'L4', copyId('L5'), 'L6', 'N']
+  const tabs = ['L0', 'L1', copyId('L1'), 'L2', copyId('L3'), 'L4', copyId('L5'), 'L6', 'N']
   tabs.forEach((session, position) => {
     if (session !== null) {
       insert(domain, 'agent_session_tabs', tabId(session), session, position)
@@ -146,9 +146,9 @@ describe('close-migration-reopened-tabs', () => {
     const userData = writeProfile()
     const found = select(userData)
     // L0 and L1 were open before the pass (L1's copy proves it, and L0 sits below it), L4 was open
-    // in the older journal, L6 has new turns, N was made here, L7's tab is the user's, and the copy
-    // of L3 holds a reply only an older build saved.
-    expect(found.close.map((tab) => tab.session)).toEqual(['L2', copyId('L5')])
+    // in the older journal, the copy of L1 holds a reply only an older build saved, L6 has new
+    // turns, N was made here, and L7's tab is the user's.
+    expect(found.close.map((tab) => tab.session)).toEqual(['L2', copyId('L3'), copyId('L5')])
     expect(found.kept).toEqual({
       writtenSince: 0,
       openBefore: 1,
@@ -156,20 +156,32 @@ describe('close-migration-reopened-tabs', () => {
       notFromJournal: 0
     })
     expect(found.leftOpen).toBe(0)
-    expect(found.copies.duplicates.map((copy) => copy.original)).toEqual(['L1', 'L5'])
+    expect(found.copies.duplicates.map((copy) => copy.original)).toEqual(['L3', 'L5'])
     expect(found.copies.olderBuildTurns).toBe(1)
 
     // A later revision of the item can't show which branch the copy grew from, so it isn't a
     // duplicate; without a duplicate copy's tab, nothing proves the tabs came from the faulty pass.
-    const revised = select(userData, (domain) =>
-      domain.prepare('UPDATE journal_items SET revision=2 WHERE session_id=?').run('L5')
+    const revised = select(writeProfile(), (domain) =>
+      domain.prepare("UPDATE journal_items SET revision=2 WHERE session_id IN ('L3','L5')").run()
     )
     expect(revised.close).toEqual([])
 
-    const unproven = select(userData, (domain) =>
-      domain.prepare('DELETE FROM agent_session_tabs WHERE session_id=?').run(copyId('L5'))
+    const unproven = select(writeProfile(), (domain) =>
+      domain
+        .prepare('DELETE FROM agent_session_tabs WHERE session_id IN (?, ?)')
+        .run(copyId('L3'), copyId('L5'))
     )
     expect(unproven.close).toEqual([])
+
+    // A tab the older journal shows marks where the pass began; L0 below it was there already.
+    const below = select(writeProfile(), (domain) => {
+      domain.prepare('DELETE FROM agent_session_tabs').run()
+      const insert = domain.prepare('INSERT INTO agent_session_tabs VALUES (?, ?, ?)')
+      for (const [position, session] of ['L0', 'L4', copyId('L5')].entries()) {
+        insert.run(tabId(session), session, position)
+      }
+    })
+    expect(below.close.map((tab) => tab.session)).toEqual([copyId('L5')])
   })
 
   it('keeps a tab the user reopened on this desktop after the update', () => {
@@ -178,7 +190,7 @@ describe('close-migration-reopened-tabs', () => {
       domain.prepare('DELETE FROM agent_session_tabs WHERE session_id IN (?, ?)').run('N', 'L7')
       domain.prepare('INSERT INTO agent_session_tabs VALUES (?, ?, ?)').run(tabId('L7'), 'L7', 8)
     })
-    expect(found.close.map((tab) => tab.session)).toEqual(['L2', copyId('L5')])
+    expect(found.close.map((tab) => tab.session)).toEqual(['L2', copyId('L3'), copyId('L5')])
     expect(found.leftOpen).toBe(1)
   })
 
@@ -187,7 +199,7 @@ describe('close-migration-reopened-tabs', () => {
     const before = snapshot(userData)
     const dry = run(userData)
     expect(dry.status).toBe(0)
-    expect(dry.stdout).toContain('Would close 2 of 9 chat tabs')
+    expect(dry.stdout).toContain('Would close 3 of 10 chat tabs')
     expect(snapshot(userData)).toEqual(before)
 
     const applied = run(userData, '--apply')
@@ -197,7 +209,7 @@ describe('close-migration-reopened-tabs', () => {
     roots.push(backup)
     expect(snapshot(backup)).toEqual(before)
     expect(read(userData, 'SELECT session_id FROM agent_session_tabs ORDER BY position')).toEqual(
-      ['L0', 'L1', copyId('L3'), 'L4', 'L6', 'N', 'L7'].map((session_id) => ({ session_id }))
+      ['L0', 'L1', copyId('L1'), 'L4', 'L6', 'N', 'L7'].map((session_id) => ({ session_id }))
     )
     expect(read(userData, 'SELECT count(*) AS n FROM agent_session_records')).toEqual([{ n: 12 }])
 

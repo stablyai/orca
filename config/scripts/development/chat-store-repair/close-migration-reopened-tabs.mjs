@@ -13,28 +13,23 @@
 //   Don't run anything else against my Orca data.
 //   If it would close any tabs, ask me before running it again with `--apply`, and tell me to quit Orca first.
 //   After `--apply`, show me the backup folder it prints.
-import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import {
-  closeSync,
   constants,
   copyFileSync,
   existsSync,
-  lstatSync,
   mkdirSync,
   mkdtempSync,
-  openSync,
-  readFileSync,
-  readlinkSync,
   rmSync,
   statfsSync,
   statSync
 } from 'node:fs'
-import { hostname, tmpdir } from 'node:os'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { DatabaseSync } from 'node:sqlite'
 import { getAppDataDir } from '../instance-isolation/dev-instance-isolation.mjs'
+import { findRunningOrca } from './orca-running.mjs'
 
 export const DOMAIN_FILE = 'agent-session-domain.db'
 export const LEGACY_FILE = 'agent-session-journal.db'
@@ -251,9 +246,9 @@ export function findMigrationReopenedTabs(legacy, domain) {
         upper.position - lower.position - 1 <= b - a - 1
       )
     }
-    // A copied chat was converted before the pass, so its own tab was already there.
+    // A tab that was or may have been open before the pass marks where the pass began.
     let low = first
-    while (low > 0 && !copied.has(tabs[low - 1].session) && follows(tabs[low - 1], tabs[low])) {
+    while (low > 0 && !openBefore(tabs[low - 1]) && follows(tabs[low - 1], tabs[low])) {
       low -= 1
     }
     pass.push(...tabs.slice(low, last + 1).filter(passId))
@@ -262,7 +257,11 @@ export function findMigrationReopenedTabs(legacy, domain) {
       .slice(last + 1)
       .filter(
         (tab) =>
-          passId(tab) && order(tab) !== undefined && !openBefore(tab) && untouched(tab.session)
+          passId(tab) &&
+          order(tab) !== undefined &&
+          !openBefore(tab) &&
+          (!copyOf.has(tab.session) || duplicates.has(tab.session)) &&
+          untouched(tab.session)
       ).length
   }
 
@@ -301,161 +300,6 @@ export function findMigrationReopenedTabs(legacy, domain) {
       olderBuildTurns: copyOf.size - duplicates.size
     }
   }
-}
-
-/** Why Orca may be using this profile, or null. Evidence that can't be checked counts as running. */
-export function findRunningOrca(userData, probe = {}) {
-  const host = probe.hostname ?? hostname()
-  const alive = probe.isAlive ?? isAlive
-  const name = probe.processName ?? processName
-  const startedAt = probe.processStartedAtMs ?? processStartedAtMs
-  const machine = probe.machineIdentity ?? machineIdentity
-  const looksLikeOrca = (pid) => {
-    const image = name(pid)
-    // A reused PID after a crash belongs to something else; an unreadable name stays a refusal.
-    return image === null || /orca|electron|node/i.test(image)
-  }
-  // Chromium's singleton: a "host-pid" symlink on macOS and Linux, removed when Orca quits.
-  const singleton = path.join(userData, 'SingletonLock')
-  if (lstatSync(singleton, { throwIfNoEntry: false })?.isSymbolicLink()) {
-    const target = readlinkSync(singleton)
-    const dash = target.lastIndexOf('-')
-    const lockHost = target.slice(0, dash)
-    const pid = Number(target.slice(dash + 1))
-    if (lockHost !== host) {
-      return `Orca on ${lockHost} may be using this profile. If no Orca runs there, open and quit Orca here once to clear it`
-    }
-    if (Number.isSafeInteger(pid) && pid > 0 && alive(pid) && looksLikeOrca(pid)) {
-      return `Orca is running (process ${pid})`
-    }
-  }
-  // On Windows, Chromium holds "lockfile" open without write sharing while it runs.
-  const lockfile = path.join(userData, 'lockfile')
-  if ((probe.platform ?? process.platform) === 'win32' && existsSync(lockfile)) {
-    try {
-      closeSync(openSync(lockfile, 'r+'))
-    } catch (error) {
-      if (['EBUSY', 'EPERM', 'EACCES'].includes(error?.code)) {
-        return 'Orca is running (its lockfile is in use)'
-      }
-    }
-  }
-  // The desktop app and a standalone orcad both hold orcad.lock; it stays behind after they exit.
-  const lockPath = path.join(userData, 'orcad.lock')
-  let record
-  try {
-    record = JSON.parse(readFileSync(lockPath, 'utf8'))
-  } catch {
-    return null
-  }
-  if (!Number.isSafeInteger(record?.pid)) {
-    return null
-  }
-  const ours = record.machineIdentity === undefined ? null : machine()
-  const elsewhere =
-    record.machineIdentity !== undefined
-      ? ours !== record.machineIdentity
-      : record.host !== undefined && record.host !== host
-  if (elsewhere) {
-    return `${lockPath} names ${record.host ?? 'another machine'}, process ${record.pid}. If no Orca or orcad runs there, delete that file`
-  }
-  if (!alive(record.pid) || !looksLikeOrca(record.pid)) {
-    return null
-  }
-  const platform = probe.platform ?? process.platform
-  if (record.linuxStartTicks !== undefined && record.bootId !== undefined) {
-    // Linux records carry the kernel's own start identity; wall time there drifts.
-    const actual = (probe.linuxIncarnation ?? linuxIncarnation)(record.pid)
-    if (
-      actual !== null &&
-      (actual.bootId !== record.bootId || actual.startTicks !== record.linuxStartTicks)
-    ) {
-      return null
-    }
-  } else if (platform !== 'linux' && typeof record.startedAtMs === 'number') {
-    const actual = startedAt(record.pid)
-    // A different start time means the PID now belongs to another process.
-    if (actual !== null && Math.abs(actual - record.startedAtMs) > 5000) {
-      return null
-    }
-  }
-  return `Orca is running (process ${record.pid})`
-}
-
-function isAlive(pid) {
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch (error) {
-    return error?.code === 'EPERM'
-  }
-}
-
-function run(program, args) {
-  try {
-    return execFileSync(program, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
-  } catch {
-    return null
-  }
-}
-
-function processName(pid) {
-  const output =
-    process.platform === 'win32'
-      ? run('tasklist', ['/FI', `PID eq ${pid}`, '/FO', 'CSV', '/NH'])
-      : // The command line, not comm: Linux shows a node process's main thread name there.
-        run('ps', ['-p', String(pid), '-o', 'args='])
-  return output?.trim() || null
-}
-
-function processStartedAtMs(pid) {
-  const output =
-    process.platform === 'win32'
-      ? run('powershell', [
-          '-NoProfile',
-          '-Command',
-          `(Get-Process -Id ${pid}).StartTime.ToUniversalTime().ToString('o')`
-        ])
-      : run('ps', ['-p', String(pid), '-o', 'lstart='])
-  const ms = output ? Date.parse(output.trim()) : Number.NaN
-  return Number.isFinite(ms) ? ms : null
-}
-
-function linuxIncarnation(pid) {
-  try {
-    const stat = readFileSync(`/proc/${pid}/stat`, 'utf8')
-    // Field 22, counted after the parenthesised command name, which may hold spaces.
-    const startTicks = stat
-      .slice(stat.lastIndexOf(')') + 1)
-      .trim()
-      .split(/\s+/)[19]
-    const bootId = readFileSync('/proc/sys/kernel/random/boot_id', 'utf8').trim()
-    return startTicks && bootId ? { startTicks, bootId } : null
-  } catch {
-    return null
-  }
-}
-
-/** The same machine identity Orca writes into orcad.lock. */
-function machineIdentity() {
-  if (process.platform === 'linux') {
-    try {
-      return readFileSync('/etc/machine-id', 'utf8').trim() || null
-    } catch {
-      return null
-    }
-  }
-  if (process.platform === 'win32') {
-    const guid = /MachineGuid\s+REG_SZ\s+(\S+)/i.exec(
-      run('reg', ['query', 'HKLM\\SOFTWARE\\Microsoft\\Cryptography', '/v', 'MachineGuid']) ?? ''
-    )?.[1]
-    return guid ? `win32-machine-guid:${guid.toLowerCase()}` : null
-  }
-  return (
-    /"IOPlatformUUID"\s*=\s*"([^"]*)"/
-      .exec(run('/usr/sbin/ioreg', ['-rd1', '-c', 'IOPlatformExpertDevice']) ?? '')?.[1]
-      ?.toLowerCase() ?? null
-  )
 }
 
 /** Copies each database with its -wal/-shm; with Orca stopped, the files are consistent. */
@@ -600,25 +444,28 @@ function main() {
     return
   }
   const running = findRunningOrca(userData)
-  const legacy = openSnapshot(path.join(userData, LEGACY_FILE))
   let found
   try {
-    const domain = openSnapshot(path.join(userData, DOMAIN_FILE))
+    const legacy = openSnapshot(path.join(userData, LEGACY_FILE))
     try {
-      found = findMigrationReopenedTabs(legacy.db, domain.db)
+      const domain = openSnapshot(path.join(userData, DOMAIN_FILE))
+      try {
+        found = findMigrationReopenedTabs(legacy.db, domain.db)
+      } finally {
+        domain.close()
+      }
     } finally {
-      domain.close()
+      legacy.close()
     }
   } catch (error) {
     // A copy taken while Orca writes can mix two checkpoints; with Orca quit it can't.
     if (running) {
       throw new Error(
-        `${running}, and its chat store changed while being read. Quit Orca and run again.`
+        `Reading the chat store failed (${error.message}). ${running}, so it may have changed while being read; quit Orca and run again.`,
+        { cause: error }
       )
     }
     throw error
-  } finally {
-    legacy.close()
   }
   if (found.repaired !== null) {
     console.log(
@@ -638,10 +485,13 @@ function main() {
     }
   }
   if (!options.apply) {
+    const preview = running
+      ? ` (${running}, so these counts are a preview; quit it for exact ones.)`
+      : ''
     console.log(
       found.close.length > 0
-        ? `Dry run: nothing changed. Quit Orca, then run again with --apply to close them.${running ? ` (${running}, so these counts are a preview; --apply counts again once it's quit.)` : ''}`
-        : 'Dry run: nothing changed, and there is nothing to close.'
+        ? `Dry run: nothing changed. Quit Orca, then run again with --apply to close them.${preview}`
+        : `Dry run: nothing changed, and there is nothing to close.${preview}`
     )
     return
   }
