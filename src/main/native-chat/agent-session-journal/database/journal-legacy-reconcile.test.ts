@@ -256,14 +256,22 @@ it('keeps closed chats closed and adds no copies when a file from before revisio
   const first = await upgrade(root)
   expect(await first.convert('chat-1')).toBe('epoch')
   asOlderChatStore(first.db)
+  // As in the reported profile, the copy saw the original's WAL, recorded by its size alone.
+  const receipt = first.db
+    .prepare('SELECT value FROM agent_session_store_meta WHERE key=?')
+    .get('journal.legacy-source-copy.v1')!
+  expect(JSON.parse(String(receipt.value)).wal).toEqual({
+    kind: 'nonempty',
+    size: expect.any(String)
+  })
   await first.close()
 
   // The original stays open with its WAL unchanged: nothing was written since the copy.
   const unchanged = await upgrade(root)
   expect(tabbedChats(unchanged.db)).toEqual(['chat-0'])
-  expect(unchanged.db.prepare('SELECT COUNT(*) AS records FROM agent_session_records').get()).toEqual(
-    { records: 100 }
-  )
+  expect(
+    unchanged.db.prepare('SELECT COUNT(*) AS records FROM agent_session_records').get()
+  ).toEqual({ records: 100 })
   await unchanged.close()
 })
 
