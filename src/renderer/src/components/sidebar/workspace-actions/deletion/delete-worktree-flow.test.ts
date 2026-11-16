@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => {
     isDirty: boolean
     mode: 'edit'
   }[] = []
+  const noRepos: { id: string; displayName: string; connectionId?: string }[] = []
   const state = {
     settings: { skipDeleteWorktreeConfirm: false },
     worktreeMap: new Map<
@@ -36,7 +37,7 @@ const mocks = vi.hoisted(() => {
         removalError?: string
       }
     >(),
-    repos: [] as { id: string; displayName: string; connectionId?: string }[],
+    repos: noRepos,
     sshTargetLabels: new Map<string, string>(),
     sshConnectionStates: new Map<string, { status: string }>(),
     worktreeLineageById: {},

@@ -50,17 +50,20 @@ function installApi(listRecipes: ReturnType<typeof vi.fn>): {
   emit: (contentPacksChanged?: boolean) => void
 } {
   let listener: ((event: { contentPacksChanged: boolean }) => void) | null = null
-  window.api = {
-    ephemeralVm: { listRecipes },
-    plugins: {
-      onChanged: vi.fn((nextListener) => {
-        listener = nextListener
-        return () => {
-          listener = null
-        }
-      })
+  Object.defineProperty(window, 'api', {
+    configurable: true,
+    value: {
+      ephemeralVm: { listRecipes },
+      plugins: {
+        onChanged: vi.fn((nextListener: (event: { contentPacksChanged: boolean }) => void) => {
+          listener = nextListener
+          return () => {
+            listener = null
+          }
+        })
+      }
     }
-  } as never
+  })
   return {
     emit: (contentPacksChanged = true) => listener?.({ contentPacksChanged })
   }

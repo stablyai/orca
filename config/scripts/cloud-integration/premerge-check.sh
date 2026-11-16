@@ -210,6 +210,17 @@ fi
 # their own dependencies (pg, ...), so install it and build its packages before running any cloud app suite.
 cloud_apps=$(git diff --name-only "$base"...HEAD -- cloud/apps | cut -d/ -f1-3 | sort -u)
 cloud_pkgs=$(git diff --name-only "$base"...HEAD -- cloud/apps cloud/packages | cut -d/ -f1-3 | sort -u)
+# Cloud apps import desktop modules from src/shared/ by relative path, which neither the root typecheck nor the src test
+# selection covers: #847 removed src/shared/cloud-workspaces exports sandbox-control used and passed premerge. Any
+# src/shared change also runs the suite and typecheck of every cloud app that imports from src/shared.
+if [[ -n "$(git diff --name-only "$base"...HEAD -- src/shared)" ]]; then
+  shared_apps=$(git grep -lE "(\.\./)+src/shared/" -- 'cloud/apps/*' | cut -d/ -f1-3 | sort -u)
+  if [[ -n "$shared_apps" ]]; then
+    echo "premerge: src/shared changed; adding the cloud apps that import it:" $shared_apps
+    cloud_apps=$(printf "%s\n" $cloud_apps $shared_apps | sort -u)
+    cloud_pkgs=$(printf "%s\n" $cloud_pkgs $shared_apps | sort -u)
+  fi
+fi
 if [[ -n "$cloud_pkgs" ]]; then
   (cd cloud && pnpm install --frozen-lockfile >/dev/null && pnpm -r --filter "./packages/**" build >/dev/null)
 fi
