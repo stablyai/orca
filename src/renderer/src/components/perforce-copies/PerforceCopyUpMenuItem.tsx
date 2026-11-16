@@ -3,22 +3,21 @@ import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { streamShortName } from '../../../../shared/perforce/workspace-copy/workspace-copy-name-rules'
-import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getPerforceCopyUpTarget } from './perforce-copy-target'
 
 /** Workspace-menu entry for a Perforce copy on a stream of its own; renders nothing otherwise. */
 export function PerforceCopyUpMenuItem({
-  repo,
   worktree,
   disabled
 }: {
-  repo: Repo | null | undefined
-  worktree: Pick<Worktree, 'id' | 'path' | 'perforceStream'>
+  worktree: Pick<Worktree, 'id' | 'repoId' | 'path' | 'hostId' | 'perforceStream'>
   disabled?: boolean
 }) {
   const openModal = useAppStore((s) => s.openModal)
-  const target = getPerforceCopyUpTarget(repo, worktree)
+  const repos = useAppStore((s) => s.repos)
+  const settings = useAppStore((s) => s.settings)
+  const target = getPerforceCopyUpTarget({ repos, settings }, worktree)
   if (!target) {
     return null
   }

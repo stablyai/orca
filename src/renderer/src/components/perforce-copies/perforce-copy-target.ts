@@ -34,12 +34,14 @@ function copyTargetForRepo(
     : null
 }
 
+type CopyTargetState = {
+  repos: readonly Repo[]
+  settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
+}
+
 /** The delete-confirmation target when `worktree` is a Perforce copy of a folder project, else null. */
 export function getPerforceCopyDeleteTarget(
-  state: {
-    repos: readonly Repo[]
-    settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null
-  },
+  state: CopyTargetState,
   worktree: Pick<Worktree, 'id' | 'repoId' | 'path' | 'hostId'>
 ): PerforceCopyDeleteTarget | null {
   const repo = findRepoForHost(state.repos, worktree.repoId, {
@@ -51,12 +53,12 @@ export function getPerforceCopyDeleteTarget(
 
 export type PerforceCopyUpTarget = PerforceCopyDeleteTarget & { stream: string; parent: string }
 
-/** The copy-up target when `worktree` is a Perforce copy of `repo` on a stream of its own, else null. */
+/** The copy-up target when `worktree` is a Perforce copy on a stream of its own, else null. */
 export function getPerforceCopyUpTarget(
-  repo: Repo | null | undefined,
-  worktree: Pick<Worktree, 'id' | 'path' | 'perforceStream'>
+  state: CopyTargetState,
+  worktree: Pick<Worktree, 'id' | 'repoId' | 'path' | 'hostId' | 'perforceStream'>
 ): PerforceCopyUpTarget | null {
-  const copy = copyTargetForRepo(repo, worktree)
+  const copy = getPerforceCopyDeleteTarget(state, worktree)
   const stream = worktree.perforceStream
   const parent = copy && stream ? copyOwnStreamParent(stream, copy.copyName) : null
   return copy && stream && parent ? { ...copy, stream, parent } : null
