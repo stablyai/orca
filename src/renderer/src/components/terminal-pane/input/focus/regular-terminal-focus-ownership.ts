@@ -20,6 +20,27 @@ export function setRegularTerminalInputFocusAttribute(focused: boolean): void {
   document.documentElement.toggleAttribute(REGULAR_TERMINAL_INPUT_FOCUSED_ATTRIBUTE, focused)
 }
 
+// Why: returning from a browser guest gives the helper no text-field relatedTarget, yet macOS keeps
+// the guest's input context (#23864); a page focus loss marks the next helper arrival for a rebuild.
+let pageFocusLostSinceHelperArrival = false
+let pageFocusLossTracked = false
+
+export function trackPageFocusLossForTerminalIme(): void {
+  if (pageFocusLossTracked || typeof window === 'undefined') {
+    return
+  }
+  pageFocusLossTracked = true
+  window.addEventListener('blur', () => {
+    pageFocusLostSinceHelperArrival = true
+  })
+}
+
+export function consumePageFocusLossForTerminalIme(): boolean {
+  const lost = pageFocusLostSinceHelperArrival
+  pageFocusLostSinceHelperArrival = false
+  return lost
+}
+
 export function getPaneOwnedActiveHelperTextarea(
   container: HTMLElement,
   activeElement: Element | null

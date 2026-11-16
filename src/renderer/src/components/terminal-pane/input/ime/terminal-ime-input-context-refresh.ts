@@ -10,8 +10,8 @@ export type TerminalImeInputContextRefreshOptions = {
 }
 
 const refreshingHelpers = new WeakSet<HTMLElement>()
-// Why: overlapping refreshes drop the first typed character (#9233); one per frame is enough.
-const pendingRefocus = new WeakSet<HTMLElement>()
+// Why: overlapping refreshes drop the first typed character (#9233), so requests in one frame share a refocus.
+const pendingRefocusSkipHandlers = new WeakMap<HTMLElement, ((active: Element | null) => void)[]>()
 
 /** A field the OS input method composes into, whose input context can outlive its focus. */
 export function isTextEntryElement(target: EventTarget | null): boolean {
@@ -60,7 +60,11 @@ export function refreshTerminalImeInputContext(
     return false
   }
 
-  if (pendingRefocus.has(helper)) {
+  const pendingSkipHandlers = pendingRefocusSkipHandlers.get(helper)
+  if (pendingSkipHandlers) {
+    if (options.onRefocusSkipped) {
+      pendingSkipHandlers.push(options.onRefocusSkipped)
+    }
     return true
   }
   const ownerDocument = helper.ownerDocument
@@ -73,22 +77,28 @@ export function refreshTerminalImeInputContext(
   }
 
   const schedule = options.scheduleRefocus ?? scheduleNextFrame
-  pendingRefocus.add(helper)
+  const skipHandlers = options.onRefocusSkipped ? [options.onRefocusSkipped] : []
+  pendingRefocusSkipHandlers.set(helper, skipHandlers)
+  const refocusSkipped = (active: Element | null): void => {
+    for (const handler of skipHandlers) {
+      handler(active)
+    }
+  }
   schedule(() => {
-    pendingRefocus.delete(helper)
+    pendingRefocusSkipHandlers.delete(helper)
     if (!helper.isConnected) {
-      options.onRefocusSkipped?.(ownerDocument.activeElement)
+      refocusSkipped(ownerDocument.activeElement)
       return
     }
     const active = ownerDocument.activeElement
     if (active === helper || isDocumentBodyOrNull(active, ownerDocument)) {
       helper.focus()
       if (ownerDocument.activeElement !== helper) {
-        options.onRefocusSkipped?.(ownerDocument.activeElement)
+        refocusSkipped(ownerDocument.activeElement)
       }
       return
     }
-    options.onRefocusSkipped?.(active)
+    refocusSkipped(active)
   })
 
   return true

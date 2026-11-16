@@ -1,11 +1,13 @@
 import { useEffect } from 'react'
 import {
+  consumePageFocusLossForTerminalIme,
   isXtermHelperTextarea,
   releaseTerminalFocusForOutsidePointerDown,
   releaseTerminalFocusForWindowBlur,
   resyncTerminalFocusForWindowFocus,
   setRegularTerminalInputFocusAttribute,
-  syncFocusAfterFailedReclaim
+  syncFocusAfterFailedReclaim,
+  trackPageFocusLossForTerminalIme
 } from './regular-terminal-focus-ownership'
 import {
   isTextEntryElement,
@@ -22,6 +24,7 @@ export function useRegularTerminalInputFocus({
     if (!container) {
       return
     }
+    trackPageFocusLossForTerminalIme()
     let ownsRegularTerminalFocus = false
     let releasedHelperOnWindowBlur: HTMLElement | null = null
     let refreshingImeInputContext = false
@@ -38,9 +41,12 @@ export function useRegularTerminalInputFocus({
         return
       }
       syncFocused(true)
-      // Why any text field: macOS keeps the input context of the field focus came from (an address
-      // bar, a browser page's IME field, another terminal), so composed text never arrives (#23864).
-      if (isTextEntryElement(event.relatedTarget) && event.relatedTarget !== event.target) {
+      // Why: macOS keeps the input context of the field or browser page focus came from (#23864).
+      const pageFocusWasLost = consumePageFocusLossForTerminalIme()
+      if (
+        pageFocusWasLost ||
+        (isTextEntryElement(event.relatedTarget) && event.relatedTarget !== event.target)
+      ) {
         refreshingImeInputContext = true
         try {
           refreshTerminalImeInputContext(event.target, {
@@ -85,6 +91,8 @@ export function useRegularTerminalInputFocus({
         })
       ) {
         releasedHelperOnWindowBlur = null
+        // Resync already rebuilt or reclaimed this helper; its refocus must not start a second refresh.
+        consumePageFocusLossForTerminalIme()
       }
     }
     if (
