@@ -59,14 +59,14 @@ export class AgentSessionSubscribers {
   }
 
   /** What waits behind each subscriber's active delivery, for memory diagnostics. */
-  retention(): SubscriberDeliveryRetention[] {
+  retention(measured: Map<object, number>): SubscriberDeliveryRetention[] {
     const now = this.now()
     const lanes: SubscriberDeliveryRetention[] = []
     for (const session of this.bySession.values()) {
       for (const subscriber of session.values()) {
         const lane = this.lanes.get(subscriber)
         if (lane && !lane.idle) {
-          lanes.push(lane.retention(now))
+          lanes.push(lane.retention(now, measured))
         }
       }
     }

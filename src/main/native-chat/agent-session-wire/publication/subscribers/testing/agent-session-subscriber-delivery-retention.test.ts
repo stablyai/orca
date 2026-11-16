@@ -100,7 +100,9 @@ it('retains only the active and newest live text behind a stalled transport', as
 
 it('releases waiting live text when the subscriber closes during a stalled delivery', async () => {
   const pane = await blockedSubscriber()
-  for (let index = 0; index < SNAPSHOTS; index++) {
+  pane.publish(0)
+  await new Promise<void>((resolve) => setImmediate(resolve))
+  for (let index = 1; index < SNAPSHOTS; index++) {
     pane.publish(index)
   }
   pane.close()

@@ -232,6 +232,9 @@ export class ReaderSlot {
     }
     this.worker.ref()
     const bytes = reservedReplyBytes(operation)
+    // A request rejected by slot failure or close leaves the admission queue at once.
+    const settled = new AbortController()
+    const admissionSignal = signal ? AbortSignal.any([signal, settled.signal]) : settled.signal
     const result = new Promise<JournalSqlReaderResult>((resolve, reject) => {
       let ticket: JournalReaderTicket | undefined
       this.pending.set(id, {
@@ -246,6 +249,7 @@ export class ReaderSlot {
         },
         reject: (error) => {
           ticket?.consumed()
+          settled.abort(error)
           reject(error)
         }
       })
@@ -254,7 +258,7 @@ export class ReaderSlot {
           if (bytes === undefined || !this.pending.has(id)) {
             return
           }
-          const admitted = await this.admission.admit(bytes, signal)
+          const admitted = await this.admission.admit(bytes, admissionSignal)
           if (!this.pending.has(id)) {
             admitted.consumed()
             return
@@ -267,6 +271,7 @@ export class ReaderSlot {
           }
         })
         .catch((error: unknown) => {
+          ticket?.consumed()
           this.pending.delete(id)
           if (this.pending.size === 0) {
             this.worker.unref()

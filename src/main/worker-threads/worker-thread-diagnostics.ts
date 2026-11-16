@@ -99,13 +99,14 @@ async function sampleHeaps(live: Set<LiveWorker>): Promise<number> {
   )
   heaps.sort((a, b) => b.heap - a.heap)
   const total = heaps.reduce((sum, { heap }) => sum + heap, mainHeap)
-  annotateCrashReport(mainHeap, total, heaps, ledger)
+  const retention = readRetention()
+  annotateCrashReport(mainHeap, total, heaps, ledger, retention)
   if (total >= BREADCRUMB_BYTES) {
     const data: CrashReportBreadcrumbData = {
       totalHeapMB: Math.round(total / MB),
       mainHeapMB: Math.round(mainHeap / MB),
       ...mainHeapSpaces(),
-      ...retentionData(),
+      ...retentionData(retention),
       workers: heaps.length
     }
     heaps.slice(0, REPORTED_WORKERS).forEach(({ entry, heap }, index) => {
@@ -131,7 +132,8 @@ function annotateCrashReport(
   mainHeap: number,
   total: number,
   heaps: readonly WorkerHeap[],
-  ledger: ReadonlyMap<number, WorkerSendLedgerEntry>
+  ledger: ReadonlyMap<number, WorkerSendLedgerEntry>,
+  retention: Retention
 ): void {
   const spaces = mainHeapSpaces()
   const annotations: [string, string][] = [
@@ -141,7 +143,7 @@ function annotateCrashReport(
         `large=${spaces.mainLargeObjectMB}MB total=${Math.round(total / MB)}MB ` +
         `workers=${heaps.length} at=${new Date().toISOString()}`
     ],
-    ...retentionAnnotations()
+    ...retentionAnnotations(retention)
   ]
   for (let index = 0; index < REPORTED_WORKERS; index += 1) {
     const sample = heaps[index]
@@ -164,9 +166,16 @@ function annotateCrashReport(
 }
 
 /** Replies and live text main holds across async boundaries, beside the heap they may explain. */
-function retentionAnnotations(): [string, string][] {
-  const reads = readJournalReaderRetention()
-  const lanes = readSubscriberRetention()
+type Retention = {
+  reads: ReturnType<typeof readJournalReaderRetention>
+  lanes: ReturnType<typeof readSubscriberRetention>
+}
+
+function readRetention(): Retention {
+  return { reads: readJournalReaderRetention(), lanes: readSubscriberRetention() }
+}
+
+function retentionAnnotations({ reads, lanes }: Retention): [string, string][] {
   return [
     [
       'orca-reader-pool',
@@ -182,9 +191,7 @@ function retentionAnnotations(): [string, string][] {
   ]
 }
 
-function retentionData(): CrashReportBreadcrumbData {
-  const reads = readJournalReaderRetention()
-  const lanes = readSubscriberRetention()
+function retentionData({ reads, lanes }: Retention): CrashReportBreadcrumbData {
   return {
     readsInFlight: reads.inFlight,
     readsUnconsumed: reads.unconsumed,

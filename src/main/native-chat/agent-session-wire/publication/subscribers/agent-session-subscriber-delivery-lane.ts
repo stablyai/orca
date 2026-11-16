@@ -2,7 +2,7 @@ import type { AgentJournalRenderItem } from '../../../../../shared/agent-session
 import type { AgentSessionTurnActivity } from '../../../../../shared/agent-session/agent-session-wire'
 import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
 import type { SubscriberDeliveryPort } from './agent-session-subscriber-catch-up'
-import { jsonBytes } from '../history/json-string-shortening'
+import { describeWorkerMessage } from '../../../../worker-threads/worker-message-shape'
 
 /** Reads every row after the subscriber's cursor when it runs, so a later one covers an earlier one. */
 export type SubscriberCatchUp = {
@@ -108,12 +108,19 @@ export class SubscriberDeliveryLane {
     this.stop.abort()
   }
 
-  retention(now: number): SubscriberDeliveryRetention {
+  /** `measured` spans one sample: subscribers of one chat share each snapshot, measured once. */
+  retention(now: number, measured: Map<object, number>): SubscriberDeliveryRetention {
     const entries = this.active ? [this.active, ...this.pending] : this.pending
     let liveTextBytes = 0
     for (const entry of entries) {
       if (entry.kind === 'live-text') {
-        liveTextBytes += jsonBytes(entry.liveText.items)
+        const { items } = entry.liveText
+        let bytes = measured.get(items)
+        if (bytes === undefined) {
+          bytes = describeWorkerMessage(items).bytes
+          measured.set(items, bytes)
+        }
+        liveTextBytes += bytes
       }
     }
     const oldest = entries.reduce((since, entry) => Math.min(since, entry.since), now)
