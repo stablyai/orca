@@ -1,3 +1,4 @@
+import { notifyHostOfMirroredEditorClose } from '@/runtime/web-session-tabs-sync/closing/close-mirrored-editor-tab'
 import { closedEditorTabOrder } from '../closing/recently-closed-editor-tabs'
 import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { AppState } from '../../../types'
@@ -39,6 +40,10 @@ export function editorTabsRetirement(
     const closed = views.filter(({ tab }) => !placements.workspaceByTabId.has(tab.id))
     if (closed.length === 0) {
       return
+    }
+    // Why: the tab is already gone, so closeFile's notify finds nothing; without this the host's next snapshot reopens it.
+    for (const { tab, file } of closed) {
+      notifyHostOfMirroredEditorClose(before, tab.worktreeId, file.id, new Set([tab.id]))
     }
     set((state) => {
       let history = state.recentlyClosedEditorTabsByWorktree
