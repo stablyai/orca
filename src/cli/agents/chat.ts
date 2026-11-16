@@ -50,10 +50,13 @@ function resolveSessionId(flag: string | undefined, isRemote: boolean): string {
   return fromPane ?? given
 }
 
+const CHAT_LIST_PS_LIMIT = 1000
+
 export const CHAT_HANDLERS: Record<string, CommandHandler> = {
   'chat list': async ({ flags, client, json }) => {
     const result = await client.call<RuntimeWorktreePsResult>('worktree.ps', {
-      limit: getOptionalPositiveIntegerFlag(flags, 'limit')
+      // The host defaults to a 200-worktree page; a bigger fleet must not drop chat rows.
+      limit: getOptionalPositiveIntegerFlag(flags, 'limit') ?? CHAT_LIST_PS_LIMIT
     })
     const chats: ChatListEntry[] = result.result.worktrees.flatMap((worktree) =>
       worktree.agents.flatMap((agent) => {
@@ -146,7 +149,7 @@ export const CHAT_HANDLERS: Record<string, CommandHandler> = {
     }
     printResult({ ...result, result: projected }, json, (value) => {
       const header = value.reset ? `cursor reset: ${value.reset}; showing the bounded tail.\n` : ''
-      const footer = `\n---\nhasOlder=${value.hasOlder} hasNewer=${value.hasNewer} nextCursor=${value.window.nextCursor}`
+      const footer = `\n---\nhasOlder=${value.hasOlder} hasNewer=${value.hasNewer} nextCursor=${JSON.stringify(value.window.nextCursor ?? null)}`
       return header + (value.lines.length > 0 ? value.lines.join('\n') : '(no rows)') + footer
     })
   },
