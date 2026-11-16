@@ -124,7 +124,7 @@ function populateFoldScopes(lines: readonly MobileDiffLine[], rows: MobileDiffRe
       continue
     }
     const indent = indentColumns(line.text)
-    while (scopes.length > 0 && scopes[scopes.length - 1].indent >= indent) {
+    while ((scopes.at(-1)?.indent ?? -1) >= indent) {
       scopes.pop()
     }
     while (foldIndex < folds.length && folds[foldIndex].endIndex <= index) {
