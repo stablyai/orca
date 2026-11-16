@@ -1,8 +1,11 @@
 import { formatUiCoarseRelativeTime } from '@/i18n/relative-time-format'
 import { translate } from '@/i18n/i18n'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 import type { IMarkdownString } from 'monaco-editor'
 import type { GitBlameCommit } from '../../../../../shared/git/blame/git-blame-types'
 import type { LineBlame } from './git-blame-line-store'
+
+const DATE_FORMAT: Intl.DateTimeFormatOptions = { dateStyle: 'medium', timeStyle: 'short' }
 
 /** `Ada Lovelace, 3 months ago`, shared by the inline annotation and the status bar. */
 export function formatLineBlameSummary(line: LineBlame, now = Date.now()): string {
@@ -21,7 +24,7 @@ export function formatBlameCommitDetails(commit: GitBlameCommit): {
 } {
   return {
     heading: commit.authorEmail ? `${commit.author} <${commit.authorEmail}>` : commit.author,
-    date: new Date(commit.authorTime).toLocaleString(),
+    date: uiDateTimeFormat(DATE_FORMAT).format(commit.authorTime),
     shortOid: commit.oid.slice(0, 8),
     summary: commit.summary
   }

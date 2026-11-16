@@ -5,6 +5,7 @@ import { getEditorFileReadContext } from '@/lib/editor/file-operations/editor-fi
 import { getRuntimeGitBlame } from '@/runtime/source-control/git/runtime-git-blame-client'
 import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
 import type { GitBlameResult } from '../../../../../shared/git/blame/git-blame-types'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { canUseChangesModeForFile } from '../view-mode/editor-panel-file-mode'
 import { mapBufferLinesToHead, splitBlameLines, UNCOMMITTED_LINE } from './blame-line-mapping'
 import {
@@ -15,7 +16,8 @@ import {
 import { blameHoverMarkdown, formatLineBlameSummary } from './git-blame-presentation'
 
 type ReadyBlame = Extract<GitBlameResult, { kind: 'ready' }>
-type LoadedBlame = { blame: ReadyBlame; headLines: string[]; git: RuntimeGitContext }
+// `git` is null where the editor's root is not the repo (folder workspaces), so commits can't open.
+type LoadedBlame = { blame: ReadyBlame; headLines: string[]; git: RuntimeGitContext | null }
 
 // monaco.editor.CursorChangeReason.Explicit: arrow keys, clicks, go-to; typing is NotSet.
 const CURSOR_CHANGE_EXPLICIT = 3
@@ -64,8 +66,6 @@ export function useMonacoGitBlame(params: {
   const mappingRef = useRef<{ versionId: number; mapping: Int32Array | null } | null>(null)
   const typingRef = useRef(false)
   const updateRef = useRef<() => void>(() => {})
-  const inlineEnabledRef = useRef(inlineEnabled)
-  inlineEnabledRef.current = inlineEnabled
 
   useEffect(() => {
     const ed = mountedEditor
@@ -102,7 +102,7 @@ export function useMonacoGitBlame(params: {
     const update = (): void => {
       const line = lineBlameAtCursor()
       const position = ed.getPosition()
-      if (!line || !position || !inlineEnabledRef.current) {
+      if (!line || !position || !inlineEnabled) {
         decorations.clear()
       } else {
         const column = ed.getModel()?.getLineMaxColumn(position.lineNumber) ?? 1
@@ -127,8 +127,7 @@ export function useMonacoGitBlame(params: {
       }
       const focused = ed.hasTextFocus() || useAppStore.getState().activeFileId === fileId
       if (focused) {
-        const git = loadedRef.current?.git
-        publishFocusedLineBlame(line && git ? { fileId, line, git } : null)
+        publishFocusedLineBlame(line ? { fileId, line, git: loadedRef.current?.git ?? null } : null)
       }
     }
     updateRef.current = update
@@ -156,7 +155,7 @@ export function useMonacoGitBlame(params: {
       updateRef.current = () => {}
       clearFocusedLineBlame(fileId)
     }
-  }, [mountedEditor, enabled, fileId])
+  }, [mountedEditor, enabled, fileId, inlineEnabled])
 
   // HEAD moving is the only thing that changes blame; main answers repeats from its cache.
   useEffect(() => {
@@ -186,7 +185,11 @@ export function useMonacoGitBlame(params: {
       }
       loadedRef.current =
         result.kind === 'ready'
-          ? { blame: result, headLines: splitBlameLines(result.headText), git: context }
+          ? {
+              blame: result,
+              headLines: splitBlameLines(result.headText),
+              git: parseWorkspaceKey(file.worktreeId)?.type === 'folder' ? null : context
+            }
           : null
       mappingRef.current = null
       updateRef.current()

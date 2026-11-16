@@ -6,7 +6,8 @@ import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git
 export type LineBlame = { kind: 'commit'; commit: GitBlameCommit } | { kind: 'uncommitted' }
 
 /** Blame for the focused editor's cursor line, read by the status bar. */
-export type FocusedLineBlame = { fileId: string; line: LineBlame; git: RuntimeGitContext }
+/** `git` is null when the commit cannot be opened from this editor. */
+export type FocusedLineBlame = { fileId: string; line: LineBlame; git: RuntimeGitContext | null }
 
 const focusedLineBlameStore = createStore<FocusedLineBlame | null>(() => null)
 
@@ -14,11 +15,10 @@ function sameLineBlame(a: FocusedLineBlame | null, b: FocusedLineBlame | null): 
   if (!a || !b) {
     return a === b
   }
+  const commitA = a.line.kind === 'commit' ? a.line.commit : null
+  const commitB = b.line.kind === 'commit' ? b.line.commit : null
   return (
-    a.fileId === b.fileId &&
-    a.git === b.git &&
-    a.line.kind === b.line.kind &&
-    (a.line.kind !== 'commit' || a.line.commit === (b.line as typeof a.line).commit)
+    a.fileId === b.fileId && a.git === b.git && a.line.kind === b.line.kind && commitA === commitB
   )
 }
 

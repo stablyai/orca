@@ -12,20 +12,21 @@ import {
 import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from './composition/status-bar-context-menu-policy'
 
 async function openBlamedCommit(blame: FocusedLineBlame, failureMessage: string): Promise<void> {
-  if (blame.line.kind !== 'commit' || !blame.git.worktreeId) {
+  const git = blame.git
+  if (blame.line.kind !== 'commit' || !git?.worktreeId) {
     return
   }
   const { commit } = blame.line
   try {
-    const result = await getRuntimeGitCommitCompare(blame.git, commit.oid)
+    const result = await getRuntimeGitCommitCompare(git, commit.oid)
     if (result.summary.status !== 'ready') {
       throw new Error(result.summary.errorMessage ?? failureMessage)
     }
     useAppStore
       .getState()
       .openCommitAllDiffs(
-        blame.git.worktreeId,
-        blame.git.worktreePath,
+        git.worktreeId,
+        git.worktreePath,
         result.summary,
         result.entries,
         commit.summary
@@ -47,6 +48,7 @@ export function GitBlameStatusSegment({
   }
   const summary = formatLineBlameSummary(blame.line)
   const details = blame.line.kind === 'commit' ? formatBlameCommitDetails(blame.line.commit) : null
+  const canOpen = details !== null && blame.git?.worktreeId != null
   const failureMessage = t('editor.gitBlame.openCommitFailed', 'Failed to load commit diff')
 
   return (
@@ -55,7 +57,7 @@ export function GitBlameStatusSegment({
         <button
           type="button"
           {...STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS}
-          disabled={!details}
+          disabled={!canOpen}
           onClick={() => void openBlamedCommit(blame, failureMessage)}
           className="inline-flex min-w-0 cursor-pointer items-center gap-1 rounded px-1 py-0.5 text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground disabled:cursor-default disabled:hover:bg-transparent"
           aria-label={t('editor.gitBlame.statusAriaLabel', 'Git blame: {{summary}}', { summary })}
@@ -74,9 +76,11 @@ export function GitBlameStatusSegment({
               {details.date} · <span className="font-mono">{details.shortOid}</span>
             </span>
             <span>{details.summary}</span>
-            <span className="text-muted-foreground">
-              {t('editor.gitBlame.openCommitHint', 'Click to open the commit')}
-            </span>
+            {canOpen ? (
+              <span className="text-muted-foreground">
+                {t('editor.gitBlame.openCommitHint', 'Click to open the commit')}
+              </span>
+            ) : null}
           </div>
         ) : (
           summary
