@@ -902,7 +902,8 @@
       "copyCode": "Code kopieren",
       "openImage": "Bild öffnen",
       "wrapLines": "Zeilen umbrechen",
-      "disableLineWrap": "Zeilenumbruch deaktivieren"
+      "disableLineWrap": "Zeilenumbruch deaktivieren",
+      "codeLabel": "Code"
     },
     "markdownCallout": {
       "note": "Hinweis",

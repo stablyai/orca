@@ -1014,7 +1014,8 @@
       "copyCode": "Copiar código",
       "openImage": "Abrir imagem",
       "wrapLines": "Quebrar linhas",
-      "disableLineWrap": "Desativar quebra de linha"
+      "disableLineWrap": "Desativar quebra de linha",
+      "codeLabel": "Código"
     },
     "markdownCallout": {
       "note": "Nota",

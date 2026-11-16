@@ -940,7 +940,8 @@
       "copyCode": "Copier le code",
       "openImage": "Ouvrir l'image",
       "wrapLines": "Retour à la ligne",
-      "disableLineWrap": "Désactiver le retour à la ligne"
+      "disableLineWrap": "Désactiver le retour à la ligne",
+      "codeLabel": "Code"
     },
     "markdownCallout": {
       "note": "Remarque",
