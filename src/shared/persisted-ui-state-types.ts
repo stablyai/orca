@@ -43,6 +43,8 @@ export type PersistedUIState = {
   jiraQuickFilterState?: JiraQuickFilterState
   lastActiveRepoId: string | null
   lastActiveWorktreeId: string | null
+  /** Parent of the last project folder picked in a repo open dialog; seeds the next picker's defaultPath. */
+  lastProjectPickerDirectory?: string
   /** Active top-level view at save time, restored on relaunch; sanitized to 'terminal' if unknown or now-gated. */
   activeView: TopLevelView
   sidebarWidth: number

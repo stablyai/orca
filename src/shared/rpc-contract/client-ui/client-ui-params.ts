@@ -128,6 +128,7 @@ export const UiUpdateFields = z
   .object({
     lastActiveRepoId: NullableString.optional(),
     lastActiveWorktreeId: NullableString.optional(),
+    lastProjectPickerDirectory: z.string().optional(),
     // Why: sync hydration ignores this persisted startup view, so paired windows stay put.
     activeView: TopLevelViewSchema.optional(),
     sidebarWidth: z.number().finite().optional(),

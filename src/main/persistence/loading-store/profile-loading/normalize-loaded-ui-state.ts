@@ -221,6 +221,10 @@ export function normalizeLoadedUiState(
       parsed.ui?.setupGuideBrowserMilestoneLegacyComplete === true,
     // Persist pending notices before windows exist so a crash cannot discard them.
     osc52ClipboardDefaultOnNoticePending: osc52ClipboardNoticePending,
+    lastProjectPickerDirectory:
+      typeof parsed.ui?.lastProjectPickerDirectory === 'string'
+        ? parsed.ui.lastProjectPickerDirectory
+        : undefined,
     sortBy: migrate ? ('smart' as const) : sort,
     _explorerDisplayRootMigrated: true,
     explorerDisplayRootByWorktree,

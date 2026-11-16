@@ -14,6 +14,10 @@ export const UI_STATE_DISPOSITIONS = {
     'Owed to a paired server; a WSL move only moves local projects.'
   ),
   lastActiveWorktreeId: moveDisposition(38, { rewriteDesktopCopy: true }),
+  lastProjectPickerDirectory: notApplicableDisposition(
+    38,
+    'Names a desktop-local path; the OS pickers ignore it when it does not exist on the host.'
+  ),
   manualRepoOrder: moveDisposition(38, {
     rewriteDesktopCopy: true,
     note: "The desktop copy's hostId changes from 'local' to the WSL host."
