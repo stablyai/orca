@@ -447,7 +447,6 @@
 3 test-no-wall-clock:src/main/wsl/orcad/wsl-orcad-real-distro-lane.test.ts
 1 test-no-wall-clock:src/renderer/src/components/activity/activity-auto-mark-read-loop.react185.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/browser-pane/assemble-chrome/browser-workspace-pane.adoption-chrome.test.tsx
-1 test-no-wall-clock:src/renderer/src/components/sidebar/worktree-list/listing/WorktreeList.lineage-agent-expansion-coupling.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/terminal-pane/pty-connection/emulation/fish-color-scheme-child-stdin.node-pty.test.ts
 2 test-no-wall-clock:src/renderer/src/components/terminal-pane/snapshots/remote-snapshot-alt-screen-host-chain.test.ts
 1 test-no-wall-clock:src/renderer/src/components/terminal/initial-terminal-structured-launch.test.tsx
@@ -542,7 +541,6 @@
 1 test-timeout-needs-reason:src/renderer/src/lib/source-control/checks/check-run-details-log-normalization-performance.test.ts
 1 test-timeout-needs-reason:src/shared/__tests__/process-host/windows-tree-kill-late-taskkill.win32.test.ts
 1 test-timeout-needs-reason:src/shared/shell/wsl/wsl-login-shell-command.test.ts
-1 test-timeout-needs-reason:tests/e2e/active-view-restart-restore.spec.ts
 1 test-timeout-needs-reason:tests/e2e/agent-send-picker-reveal.spec.ts
 1 test-timeout-needs-reason:tests/e2e/agent-session-log-tail-stability.spec.ts
 1 test-timeout-needs-reason:tests/e2e/browser-agent-input-focus-isolation-native.spec.ts
