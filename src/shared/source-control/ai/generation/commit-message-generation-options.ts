@@ -53,21 +53,15 @@ export function compactRecipeOptions<T extends GenerationArgument>(
   tokens: T[],
   aliases: readonly string[],
   valueOptions: readonly string[] = [],
-  keepFirst = false
+  keepFirst = false,
+  takesValue: boolean | 'required' = valueOptions.length ? 'required' : true
 ): T[] {
   const result: T[] = []
   let cursor = 0
   let kept = false
   const optionTokens = generationOptionTokens(tokens)
   const findNext = (startIndex: number) =>
-    findOptionOccurrence(
-      optionTokens,
-      aliases,
-      true,
-      valueOptions,
-      startIndex,
-      valueOptions.length ? 'required' : true
-    )
+    findOptionOccurrence(optionTokens, aliases, true, valueOptions, startIndex, takesValue)
   let found = findNext(cursor)
   while (found) {
     const end = found.index + found.consumed

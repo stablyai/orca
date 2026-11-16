@@ -1,3 +1,4 @@
+import { compactRecipeOptions } from '../../../shared/source-control/ai/generation/commit-message-generation-options'
 import {
   generationOptionTokens,
   type GenerationArgument
@@ -10,19 +11,7 @@ import type { AgentGenerationFailureOutput } from './agent-failure-output'
 const PROMPT_VALUE_OPTIONS = ['--prompt', '-p']
 
 function withoutOption<T extends GenerationArgument>(args: T[], aliases: readonly string[]): T[] {
-  const optionTokens = generationOptionTokens(args)
-  const result: T[] = []
-  let cursor = 0
-  for (;;) {
-    const option = findOptionOccurrence(optionTokens, aliases, true, PROMPT_VALUE_OPTIONS, cursor)
-    if (!option) {
-      return [...result, ...args.slice(cursor)]
-    }
-    for (; cursor < option.index; cursor++) {
-      result.push(args[cursor])
-    }
-    cursor = option.index + option.consumed
-  }
+  return compactRecipeOptions(args, aliases, PROMPT_VALUE_OPTIONS, false, true)
 }
 
 /** Copilot rejects models the account's plan or org policy hides; rerun once on Copilot's own default model. */
