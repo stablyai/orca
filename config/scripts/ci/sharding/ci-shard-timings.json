@@ -3557,7 +3557,6 @@
       "src/renderer/src/components/settings/mobile/MobilePane.test.tsx": 1581,
       "src/renderer/src/components/settings/advanced/network/NodeDistMirrorDialog.test.tsx": 2412,
       "src/renderer/src/components/plugins/list/PluginsSettingsSection.lifecycle.test.tsx": 5402,
-      "src/renderer/src/components/settings/runtime-environments/pairing/RuntimePairingGeneratorForm.test.tsx": 461,
       "src/renderer/src/components/settings/repository/worktrees/SparsePresetSettingsSection.test.tsx": 744,
       "src/renderer/src/components/settings/tasks/TaskSourceSimpleSetup.test.tsx": 527,
       "src/renderer/src/components/settings/TerminalAppearanceSection.ghostty.test.ts": 549,
