@@ -1216,13 +1216,14 @@ html.native-shell .app-layout {
 }
 
 /* Side-by-side seams widen over the right pane only; the box (and the left pane's scrollbar edge) keeps today's stacking.
-   z-index 31 keeps the far side above in-pane edge UI (diff/outline separators are z-30) in either focus state. */
+   z-index 31 keeps the far side above in-pane edge UI (diff/outline separators are z-30) in either focus state;
+   the 1px end insets leave sub-pixel overlaps with a perpendicular parent seam to that parent. */
 .tab-group-split-resize-handle.has-far-overhang::before {
   content: '';
   position: absolute;
   z-index: 31;
-  top: 0;
-  bottom: 0;
+  top: 1px;
+  bottom: 1px;
   left: 100%;
   width: var(--divider-far-overhang);
 }
