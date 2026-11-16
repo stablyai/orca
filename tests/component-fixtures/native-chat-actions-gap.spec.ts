@@ -6,9 +6,11 @@ test.use({ viewport: { width: 1000, height: 720 } })
 
 const GAP = 12
 
+// The block itself, not whichever inline element holds its text.
 const LAST_BLOCK: Record<string, (page: Page) => Locator> = {
-  paragraph: (page) => page.getByText('Nothing changed since the last check.', { exact: true }),
-  list: (page) => page.getByText('Release notes', { exact: true })
+  paragraph: (page) =>
+    page.getByRole('paragraph').filter({ hasText: 'Nothing changed since the last check.' }),
+  list: (page) => page.getByRole('listitem').filter({ hasText: 'Release notes' })
 }
 
 for (const [ending, lastBlock] of Object.entries(LAST_BLOCK)) {
