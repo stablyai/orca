@@ -130,6 +130,14 @@ describe('saved agent status cadence', () => {
     })
   })
 
+  it('commits a prompt submitted while the previous turn is still working', async () => {
+    await prompt('first request')
+    await vi.advanceTimersByTimeAsync(1)
+    await prompt('follow-up request')
+    await vi.advanceTimersByTimeAsync(1)
+    expect(readPrompt()).toBe('follow-up request')
+  })
+
   it('commits a turn completion carried by a working row without a main-agent fact', async () => {
     const identity = {
       paneKey: PANE,

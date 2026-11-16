@@ -6,7 +6,9 @@ export function turnFactsNeedUrgentPersist(
   next: EnrichedAgentHookEventPayload
 ): boolean {
   return (
-    next.payload.prompt !== previous?.payload.prompt ||
+    // Only a submitted prompt opens a turn; terminal-derived prompt streams stay on the checkpoint.
+    ((next.hookEventName === 'UserPromptSubmit' || next.hasExplicitPrompt === true) &&
+      next.payload.prompt !== previous?.payload.prompt) ||
     // A new turn may repeat its prompt; opening it is the fact a crash must not lose.
     (next.payload.state === 'working' && previous?.payload.state !== 'working') ||
     (next.payload.mainAgent?.state === 'working' &&
