@@ -1,9 +1,12 @@
 // Require structured.v1 across every agentSession method before exposing journals or mutations,
-// except rename, which also admits rename-only clients (requireRenameStructuredHost).
+// except rename and close, which also admit rename-only and close-only clients.
 // Legacy tab restore may still install the host for fallback rows; that never admits agentSession calls.
 
 import { agentSessionRefusalError } from '../../../../../../shared/agent-session/failures/agent-session-wire-refusals'
-import { AGENT_SESSION_RENAME_ONLY_CLIENT_CAPABILITY } from '../../../../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import {
+  AGENT_SESSION_CLOSE_ONLY_CLIENT_CAPABILITY,
+  AGENT_SESSION_RENAME_ONLY_CLIENT_CAPABILITY
+} from '../../../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { StructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import type { StructuredAgentSessionCaller } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-host-types'
@@ -69,6 +72,27 @@ export function requireStructuredSessionHost(
 /** Close/cancel/unsubscribe/release check wire capability and host only; new-work admission conditions must never strand already-owned children. */
 export function requireStructuredCleanupHost(ctx: RpcContext): StructuredAgentSessionHost {
   requireStructuredCapability(ctx)
+  return requireHostOrRefusal()
+}
+
+/** Closing reads no journal, so a client that asked only to close chats (the paired CLI) may. */
+export function requireCloseStructuredCapability(ctx: RpcContext): void {
+  if (!ctx.clientCapabilities?.includes(AGENT_SESSION_CLOSE_ONLY_CLIENT_CAPABILITY)) {
+    requireStructuredCapability(ctx)
+  }
+}
+
+/** The CLI may close a chat at rest after a restart, before anything built the host; desktop and phone closes never build one. */
+export async function requireCloseStructuredHost(
+  ctx: RpcContext
+): Promise<StructuredAgentSessionHost> {
+  requireCloseStructuredCapability(ctx)
+  const fromCli =
+    ctx.caller?.kind === 'local-cli' ||
+    ctx.clientCapabilities?.includes(AGENT_SESSION_CLOSE_ONLY_CLIENT_CAPABILITY) === true
+  if (fromCli && !getStructuredAgentSessionHost()) {
+    await ctx.runtime.ensureStructuredAgentSessionHost()
+  }
   return requireHostOrRefusal()
 }
 

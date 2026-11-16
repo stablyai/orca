@@ -6,18 +6,22 @@ import type {
 } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
-import { AGENT_SESSION_RENAME_ONLY_CLIENT_CAPABILITY } from '../../../shared/agent-session/structured-agent-session-surface-capabilities'
+import {
+  AGENT_SESSION_CLOSE_ONLY_CLIENT_CAPABILITY,
+  AGENT_SESSION_RENAME_ONLY_CLIENT_CAPABILITY
+} from '../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import { REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY } from '../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import { CLI_AGENT_CALLER_CLIENT_CAPABILITY } from '../../../shared/remote-runtime/cli-agent-caller-capability'
 import { sendRemoteRuntimeRequestOnSocket } from '../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import type { RuntimeStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { RuntimeClientError } from './types'
 
-// Paired CLI callers are not exempt from the host's agent.launch or chat rename gates like the local socket is.
+// Paired CLI callers are not exempt from the host's agent.launch or chat rename and close gates like the local socket is.
 const CLI_CLIENT_CAPABILITIES = [
   AGENT_LAUNCH_RUNTIME_CAPABILITY,
   REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
   AGENT_SESSION_RENAME_ONLY_CLIENT_CAPABILITY,
+  AGENT_SESSION_CLOSE_ONLY_CLIENT_CAPABILITY,
   CLI_AGENT_CALLER_CLIENT_CAPABILITY
 ] as const
 
