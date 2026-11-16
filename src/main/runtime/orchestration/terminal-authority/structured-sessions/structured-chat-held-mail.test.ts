@@ -198,7 +198,9 @@ it.each(['before commit', 'after commit', 'other process', 'settled before', 'se
           return
         }
         if (edge === 'other process') {
-          const node = process.env.ORCA_TEST_NODE_EXECUTABLE
+          const node =
+            process.env.ORCA_TEST_NODE_EXECUTABLE ??
+            (!process.versions.bun ? process.execPath : undefined)
           if (!node) {
             throw new Error('test requires the pinned Node runtime')
           }
@@ -207,7 +209,7 @@ it.each(['before commit', 'after commit', 'other process', 'settled before', 'se
             program: node,
             args: [
               '-e',
-              "const { DatabaseSync } = require('node:sqlite'); const db = new DatabaseSync(process.argv[1]); db.prepare('UPDATE runs SET consumer_generation=consumer_generation+1 WHERE id=?').run(process.argv[2]); db.close()",
+              "const { DatabaseSync } = require('node:sqlite'); const db = new DatabaseSync(process.argv[1], { timeout: 5000 }); db.prepare('UPDATE runs SET consumer_generation=consumer_generation+1 WHERE id=?').run(process.argv[2]); db.close()",
               join(root, 'orchestration.db'),
               runId
             ],
@@ -250,7 +252,7 @@ it.each(['before commit', 'after commit', 'other process', 'settled before', 'se
           { sessionId: COORDINATOR }
         )
       )
-      expect(answer).toMatchObject(
+      expect(answer, JSON.stringify(answer)).toMatchObject(
         edge !== 'after commit' && edge !== 'settled after'
           ? { ok: false, error: { code: 'worker_resume_blocked' } }
           : { ok: true, result: { state: 'resuming' } }

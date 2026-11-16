@@ -143,6 +143,38 @@ describe('orchestration federation control mail', () => {
     workerDb.close()
   })
 
+  it('keeps legacy relay receipt retries negative without losing or duplicating custody', async () => {
+    vi.spyOn(homeRuntime, 'ensureOrchestrationFederationRelay').mockImplementation(() => {})
+    const input: RpcRequest = {
+      id: 'legacy-relay',
+      authToken: 'coordinator-token',
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
+      orchestrationRequestId: 'legacy-relay-request',
+      method: 'orchestration.send',
+      params: {
+        from: 'term_coord',
+        to: `dispatch:${dispatchId}`,
+        subject: 'Continue',
+        type: 'status'
+      }
+    }
+    for (const _retry of [0, 1]) {
+      expect(await homeDispatcher.dispatch(input)).toMatchObject({
+        ok: false,
+        error: {
+          code: 'recipient_delivery_unconfirmed',
+          data: {
+            delivered: false,
+            state: 'unknown',
+            relay: { dispatchId, accepted: true },
+            target: { address: `dispatch:${dispatchId}` }
+          }
+        }
+      })
+    }
+    expect(homeDb.listPendingFederationRelay(dispatchId, 'to_worker')).toHaveLength(1)
+  })
+
   it('routes an exact Dispatch message through the durable relay', async () => {
     vi.spyOn(homeRuntime, 'ensureOrchestrationFederationRelay').mockImplementation(() => {})
     const sent = await homeDispatcher.dispatch({
@@ -152,6 +184,7 @@ describe('orchestration federation control mail', () => {
       orchestrationRequestId: 'send-control-request',
       method: 'orchestration.send',
       params: {
+        deliveryOutcome: true,
         from: 'term_coord',
         to: `dispatch:${dispatchId}`,
         subject: 'Continue',
@@ -162,7 +195,12 @@ describe('orchestration federation control mail', () => {
 
     expect(sent).toMatchObject({
       ok: true,
-      result: { relay: { dispatchId, accepted: true } }
+      result: {
+        relay: { dispatchId, accepted: true },
+        delivered: false,
+        state: 'unknown',
+        target: { address: `dispatch:${dispatchId}` }
+      }
     })
     expect(homeDb.listPendingFederationRelay(dispatchId, 'to_worker')).toHaveLength(1)
 
