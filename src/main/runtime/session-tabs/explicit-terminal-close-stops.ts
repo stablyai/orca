@@ -64,6 +64,26 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
     return close
   }
 
+  private isTabPinnedInAnySession(worktreeId: string, tabId: string): boolean {
+    return this.getWorkspaceSessionHostIdsForTab(worktreeId, tabId).some((hostId) =>
+      isTerminalTabPinnedInSession(this.store?.getWorkspaceSession?.(hostId), { worktreeId, tabId })
+    )
+  }
+
+  /** Main owns these PTYs once it asked the window to close their tab; only a pinned tab may keep them running. */
+  private async stopPtysThenRethrow(
+    error: unknown,
+    target: { worktreeId: string; tabId: string },
+    ptyIds: readonly string[],
+    addressedPtyId: string
+  ): Promise<never> {
+    const refused = error instanceof Error && error.message === 'terminal_tab_pinned'
+    if (!refused && !this.isTabPinnedInAnySession(target.worktreeId, target.tabId)) {
+      await this.stopExplicitlyClosedTabPtys(ptyIds, addressedPtyId)
+    }
+    throw error
+  }
+
   /** null when this machine owns the PTY; see `closePairedHostLeafFirst` otherwise. */
   private closeOnOwningPairedHost(
     handle: string,
@@ -74,11 +94,7 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
     return closePairedHostLeafFirst(leaf, method, {
       call: (environmentId, hostMethod, params, timeoutMs) =>
         this.callOrchestrationWorkerServer(environmentId, hostMethod, params, timeoutMs),
-      isTabPinned: () =>
-        closesTab &&
-        this.getWorkspaceSessionHostIdsForTab(leaf.worktreeId, leaf.tabId).some((hostId) =>
-          isTerminalTabPinnedInSession(this.store?.getWorkspaceSession?.(hostId), leaf)
-        ),
+      isTabPinned: () => closesTab && this.isTabPinnedInAnySession(leaf.worktreeId, leaf.tabId),
       readBoundLeaf: () => this.getLiveLeafForHandle(handle).leaf
     })
   }
@@ -139,7 +155,12 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
           })
         } catch (error) {
           if (!(error instanceof Error) || error.message !== 'workspace_session_unavailable') {
-            throw error
+            return this.stopPtysThenRethrow(
+              error,
+              { worktreeId: pty.pty.worktreeId, tabId },
+              ptyIdsToKill,
+              pty.pty.ptyId
+            )
           }
           this.notifyRendererOfHeadlessTerminalClose(tabId)
         }
@@ -179,7 +200,12 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
         } catch (error) {
           // The tab went away concurrently; fall through and close the PTY alone.
           if (!(error instanceof Error) || error.message !== 'tab_not_found') {
-            throw error
+            return this.stopPtysThenRethrow(
+              error,
+              { worktreeId: pty.pty.worktreeId, tabId },
+              ptyIdsToKill,
+              pty.pty.ptyId
+            )
           }
           tabClosed = false
         }
@@ -230,7 +256,14 @@ export abstract class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRun
         ? [leaf.ptyId]
         : []
     if (closesTab && this.notifier?.closeTerminalTab) {
-      await this.notifier.closeTerminalTab(leaf.tabId, { localPtyTeardownOwnedExternally: true })
+      try {
+        await this.notifier.closeTerminalTab(leaf.tabId, { localPtyTeardownOwnedExternally: true })
+      } catch (error) {
+        if (hostClose || !leaf.ptyId) {
+          throw error
+        }
+        return this.stopPtysThenRethrow(error, leaf, ptyIdsToKill, leaf.ptyId)
+      }
     }
     if (hostClose) {
       if (!closesTab) {
