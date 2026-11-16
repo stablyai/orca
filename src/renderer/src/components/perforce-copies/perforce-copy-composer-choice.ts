@@ -90,9 +90,12 @@ export async function resolvePerforceCopyComposerChoice(
     return undefined
   }
   const key = perforceCopyChoiceKey(repoId, hostId)
-  // Why: a create submitted before the host answered waits for it, so a host that cannot copy gets
-  // a shared-folder workspace instead of a create that fails.
-  if ((usePerforceCopyComposerChoiceStore.getState().byRepo[key]?.ready ?? null) === null) {
+  // Why: a create submitted before the host answered, or while it re-checks, waits for it, so a host
+  // that cannot copy gets a shared-folder workspace instead of a create that fails.
+  if (
+    readinessChecks.has(key) ||
+    (usePerforceCopyComposerChoiceStore.getState().byRepo[key]?.ready ?? null) === null
+  ) {
     await checkPerforceCopyReadiness(repoId, hostId)
   }
   const choice = usePerforceCopyComposerChoiceStore.getState().byRepo[key]

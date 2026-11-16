@@ -72,6 +72,15 @@ describe('resolvePerforceCopyComposerChoice', () => {
     expect(readiness.calls).toBe(1)
   })
 
+  it('waits for a re-check in flight instead of trusting an earlier answer', async () => {
+    const { setChoice } = usePerforceCopyComposerChoiceStore.getState()
+    setChoice(perforceCopyChoiceKey('p4', null), { ready: true })
+    readiness.ready = false
+    const composer = checkPerforceCopyReadiness('p4', null)
+    await expect(resolvePerforceCopyComposerChoice('p4')).resolves.toBeUndefined()
+    await composer
+  })
+
   it("uses the chosen base once answered, and shares the folder when the host can't copy", async () => {
     const { setChoice } = usePerforceCopyComposerChoiceStore.getState()
     setChoice(perforceCopyChoiceKey('p4', null), {
