@@ -1,0 +1,125 @@
+name: Zotz Windows installer
+
+# Builds the unsigned Zotz NSIS installer and publishes it as the rolling `windows-latest` prerelease of the fork.
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+  pull_request:
+    paths:
+      - '.github/workflows/zotz-windows-installer.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: zotz-windows-installer-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    if: github.repository == 'HugoRodriguezDEV/zotz'
+    runs-on: windows-2022
+    timeout-minutes: 90
+    permissions:
+      contents: write
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      # pnpm must be on PATH before setup-node so setup-node can locate the store.
+      - name: Setup pnpm
+        uses: pnpm/setup@v2
+        with:
+          install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          check-latest: true
+          cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            mobile/pnpm-lock.yaml
+
+      - name: Resolve electron-builder download versions
+        id: eb-versions
+        shell: bash
+        run: node -p "const d = require('./package.json').devDependencies; 'versions=electron' + d.electron + '-builder' + d['electron-builder']" >> "$GITHUB_OUTPUT"
+
+      - name: Cache electron-builder downloads
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~\AppData\Local\electron\Cache
+            ~\AppData\Local\electron-builder\Cache
+          key: electron-builder-win-${{ steps.eb-versions.outputs.versions }}
+          restore-keys: |
+            electron-builder-win-
+
+      - name: Install dependencies
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: pnpm install --frozen-lockfile
+
+      - uses: ./.github/actions/install-mobile-dependencies
+
+      - name: Ensure the Rust toolchain for the Windows CLI launcher
+        shell: pwsh
+        run: |
+          if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
+            rustup toolchain install stable --profile minimal
+            rustup default stable
+          }
+          cargo --version
+
+      - name: Build the Windows agent hook
+        run: node config/scripts/native-build/windows/build-windows-agent-hook.mjs
+
+      - name: Build the Windows CLI launcher
+        run: node config/scripts/native-build/windows/build-windows-cli-launcher.mjs
+
+      - name: Build app
+        run: pnpm build:release
+
+      - name: Package the installer
+        shell: pwsh
+        env:
+          ORCA_BUILD_COMMIT: ${{ github.sha }}
+        run: |
+          node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --runtime=electron
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          pnpm exec electron-builder --config config/electron-builder.config.cjs --win --publish never
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Copy-Item dist/orca-windows-setup.exe dist/zotz-windows-setup.exe
+
+      - name: Smoke the packaged CLI
+        run: node config/scripts/desktop-distribution/runtime-verification/smoke-packaged-cli.mjs --app-dir=dist/win-unpacked
+
+      - name: Upload the installer artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: zotz-windows-setup
+          path: dist/zotz-windows-setup.exe
+          if-no-files-found: error
+
+      - name: Publish the windows-latest prerelease
+        if: github.event_name != 'pull_request'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          notes="Instalador de Windows sin firmar (SmartScreen avisará). Commit ${GITHUB_SHA::10}, run ${GITHUB_RUN_ID}."
+          gh release delete windows-latest --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes || true
+          gh release create windows-latest dist/zotz-windows-setup.exe \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
+            --title "Zotz para Windows (último build de main)" --notes "$notes"
