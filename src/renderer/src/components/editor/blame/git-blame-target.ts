@@ -1,5 +1,6 @@
 import type { AppState } from '@/store/types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { getEditorFileReadContext } from '@/lib/editor/file-operations/editor-file-operation-owner'
 import { getFolderFileConnectionOwnerFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
@@ -47,7 +48,8 @@ export function resolveGitBlameTarget(state: AppState, file: OpenFile): GitBlame
     }
     const { target, connectionId } = getEditorFileReadContext(state, file, repo.path)
     const worktreeId =
-      state.worktreesByRepo[repo.id]?.find((worktree) => worktree.path === repo.path)?.id ?? null
+      selectWorktreesByRepo(state)[repo.id]?.find((worktree) => worktree.path === repo.path)?.id ??
+      null
     // Remote calls address the repo by worktree id; without one only the local route works.
     if (!worktreeId && target.kind !== 'local') {
       return null

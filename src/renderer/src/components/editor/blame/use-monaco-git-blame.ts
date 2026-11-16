@@ -100,17 +100,20 @@ export function useMonacoGitBlame(params: {
       return commit ? { kind: 'commit', commit } : null
     }
 
+    // The focused pane is active; the active file also takes over from another file or a closed
+    // tab, but never from a live split pane of itself.
+    const isActivePane = (): boolean => {
+      const current = getFocusedLineBlame()
+      return (
+        ed.hasTextFocus() ||
+        current?.ownerId === ownerId ||
+        (useAppStore.getState().activeFileId === fileId &&
+          (!current || current.fileId !== fileId || current.stale))
+      )
+    }
+
     const publish = (line: LineBlame | null): void => {
       const current = getFocusedLineBlame()
-      const owns = current?.ownerId === ownerId
-      // The focused pane publishes; the active file also takes over from another file or a closed
-      // tab, but never from a live split pane of itself.
-      const claimable =
-        useAppStore.getState().activeFileId === fileId &&
-        (!current || current.fileId !== fileId || current.stale)
-      if (!ed.hasTextFocus() && !owns && !claimable) {
-        return
-      }
       if (line) {
         const git = loadedRef.current?.target.git ?? null
         publishFocusedLineBlame({ ownerId, fileId, line, stale: false, git })
@@ -123,6 +126,11 @@ export function useMonacoGitBlame(params: {
     }
 
     const update = (): void => {
+      // Inactive panes do no work: a split of the same file would otherwise remap per keystroke.
+      if (!isActivePane()) {
+        decorations.clear()
+        return
+      }
       const position = ed.getPosition()
       const line = typing ? null : lineBlameAtCursor()
       if (!line || !position || !inlineEnabled) {
