@@ -37,7 +37,11 @@ export function wireStructuredAgentSessionQueuedMessages(
       const stopping = await ctx.readStopping(sessionId)
       const child = sessions.get(sessionId)?.child
       const record = ctx.deps.store.getRecord(sessionId)
-      const transition = await ctx.accountTransition?.(sessionId)
+      // Only a waiting card from the person needs the account a start would use.
+      const personWaits = (await journal.queuedMessages.list()).some(
+        (card) => card.state === 'waiting' && card.body.from === undefined
+      )
+      const transition = personWaits ? await ctx.accountTransition?.(sessionId) : null
       return {
         ...(transition ? { awaitsAccountMove: true as const } : {}),
         authority: captureHostStructuredAgentSessionWork(

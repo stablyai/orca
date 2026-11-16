@@ -59,7 +59,7 @@ export function createStructuredAgentSessionOutgrownChildHost(input: {
   // Personal Stop holds handover meanwhile; its next step decides.
   const unlessStopping = async (sessionId: string) =>
     (await clientDelivery.readStopping(sessionId)) ? undefined : sessions.get(sessionId)
-  const holds = new AccountMoveHolds(input.wake, () => deps.accountMoveWakes, now)
+  const holds = new AccountMoveHolds(input.wake, () => deps.accountMoveWakes, now, sessions)
 
   return {
     retainedWork,
@@ -129,11 +129,13 @@ export function createStructuredAgentSessionOutgrownChildHost(input: {
 class AccountMoveHolds {
   private readonly held = new Map<string, ReturnType<typeof setTimeout> | null>()
   private unsubscribe: (() => void) | undefined
+  private disposed = false
 
   constructor(
     private readonly wake: (sessionId: string) => void,
     private readonly wakes: () => StructuredAgentSessionHostDeps['accountMoveWakes'],
-    private readonly now: () => number
+    private readonly now: () => number,
+    private readonly sessions: ReadonlyMap<string, StructuredAgentSessionHostSession>
   ) {}
 
   observe(
@@ -141,38 +143,55 @@ class AccountMoveHolds {
     sessionId: string,
     transition: StructuredAgentSessionAccountTransition | null
   ): void {
+    if (this.disposed) {
+      return
+    }
     const wasHeld = this.held.has(sessionId)
-    this.clearTimer(sessionId)
     if (!transition || !session) {
       if (session) {
         delete session.awaitsAccountMove
       }
-      this.held.delete(sessionId)
-      if (this.held.size === 0) {
-        this.unsubscribe?.()
-        this.unsubscribe = undefined
-      }
-      if (wasHeld) {
+      this.release(sessionId)
+      if (wasHeld && session) {
         // Republish so the queue stops naming the held card's wait.
         this.wake(sessionId)
       }
       return
     }
+    this.clearTimer(sessionId)
     session.awaitsAccountMove = true
     const until = transition.wakeUpUntil
     const timer =
       until === undefined
         ? null
-        : setTimeout(() => this.wake(sessionId), Math.max(0, until - this.now()) + 1)
+        : setTimeout(() => this.wakeOrRelease(sessionId), Math.max(0, until - this.now()) + 1)
     timer?.unref?.()
     this.held.set(sessionId, timer)
     this.unsubscribe ??= this.wakes()?.subscribe(() => {
       for (const id of this.held.keys()) {
-        this.wake(id)
+        this.wakeOrRelease(id)
       }
     })
     if (!wasHeld) {
       this.wake(sessionId)
+    }
+  }
+
+  /** A chat closed while held has nothing left to send. */
+  private wakeOrRelease(sessionId: string): void {
+    if (this.sessions.has(sessionId)) {
+      this.wake(sessionId)
+    } else {
+      this.release(sessionId)
+    }
+  }
+
+  private release(sessionId: string): void {
+    this.clearTimer(sessionId)
+    this.held.delete(sessionId)
+    if (this.held.size === 0) {
+      this.unsubscribe?.()
+      this.unsubscribe = undefined
     }
   }
 
@@ -184,6 +203,7 @@ class AccountMoveHolds {
   }
 
   dispose(): void {
+    this.disposed = true
     for (const id of this.held.keys()) {
       this.clearTimer(id)
     }
