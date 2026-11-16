@@ -384,7 +384,7 @@ export function CombinedDiffFileTree({
           )}
         </div>
       </aside>
-      {/* Why: the aside clips overflow; a zero-width anchor at its edge lets the grab area widen without changing layout. */}
+      {/* Why: the aside clips overflow; a zero-width anchor at its edge lets the grab area widen without changing layout (right-px keeps the strip inside the aside border, as before). */}
       <div className="relative w-0 shrink-0">
         <div
           role="separator"
@@ -397,7 +397,7 @@ export function CombinedDiffFileTree({
           aria-valuemin={Math.round(minWidth)}
           aria-valuenow={Math.round(width)}
           tabIndex={0}
-          className="group absolute inset-y-0 right-0 z-30 w-1 cursor-col-resize outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          className="group absolute inset-y-0 right-px z-30 w-1 cursor-col-resize outline-none focus-visible:ring-1 focus-visible:ring-ring"
           onMouseDown={handleResizeStart}
           onKeyDown={handleResizeKeyDown}
         >
