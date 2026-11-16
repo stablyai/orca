@@ -175,7 +175,7 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
     const now = Date.now()
     const storedTitles = storedAiVaultTitles(state, requests)
     const requestsToScan = requests.filter((request) => {
-      const stored = storedTitles.get(request.tabId)
+      const stored = storedTitles(request)
       const identityMatches =
         stored?.agent === request.agent && stored.sessionId === request.providerSession.id
       if (stored && !identityMatches) {
@@ -234,7 +234,7 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
               titleRefreshInterval(
                 currentState,
                 request,
-                currentStoredTitles.get(request.tabId)
+                currentStoredTitles(request)
               ) -
               Date.now()
           )

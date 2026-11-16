@@ -55,18 +55,25 @@ export function changedTitleRefreshHosts(state: AppState, previous: AppState): S
 
 type StoredTitle = TerminalTab['aiVaultTitle']
 
-/** Each request tab's saved title, reading only the request workspaces' tabs. */
+function storedTitleKey(worktreeId: string, tabId: string): string {
+  return `${worktreeId}\0${tabId}`
+}
+
+/** Reads each request's saved title from its own workspace, visiting only the request workspaces' tabs. */
 export function storedAiVaultTitles(
   state: AppState,
   requests: readonly AiVaultTitleRequest[]
-): Map<string, StoredTitle> {
+): (request: AiVaultTitleRequest) => StoredTitle {
   const stored = new Map<string, StoredTitle>()
   for (const worktreeId of new Set(requests.map((request) => request.worktreeId))) {
     for (const tab of state.tabsByWorktree[worktreeId] ?? []) {
-      stored.set(tab.id, tab.aiVaultTitle)
+      const key = storedTitleKey(worktreeId, tab.id)
+      if (!stored.has(key)) {
+        stored.set(key, tab.aiVaultTitle)
+      }
     }
   }
-  return stored
+  return (request) => stored.get(storedTitleKey(request.worktreeId, request.tabId))
 }
 
 export function titleRefreshInterval(
