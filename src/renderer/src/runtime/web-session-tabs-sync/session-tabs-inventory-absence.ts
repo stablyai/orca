@@ -1,7 +1,7 @@
 import type {
   RuntimeMobileSessionTabsRemovedResult,
   RuntimeMobileSessionTabsResult
-} from '../../../../shared/runtime-types'
+} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   MAX_TRACKED_SESSION_TABS_INVENTORY_OMISSIONS,
   VISIBILITY_INVENTORY_REMOVAL_EPOCH,

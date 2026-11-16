@@ -1,7 +1,7 @@
-import { mergeCommandEnvironment } from '../../../shared/command-environment'
-import { textGenerationFailure } from '../../../shared/text-generation-failure-copy'
+import { mergeCommandEnvironment } from '../../../shared/shell/launch/command-environment'
+import { textGenerationFailure } from '../../../shared/text-generation/text-generation-failure-copy'
 import { cleanAgentAnswer } from '../../text-generation/failures/source-control-agent-failure'
-import { wslDistroForCommand } from '../../../shared/wsl-paths'
+import { wslDistroForCommand } from '../../../shared/file-access/wsl-paths'
 import type { CommitMessagePlan } from '../../../shared/source-control/ai/generation/commit-message-plan'
 import { OpenCodeTextTaskError, runOwnedOpenCodeTextTask } from './opencode-owned-text-task'
 import { runOpenCodeWslTextTask } from './wsl/opencode-wsl-text-task'
@@ -40,7 +40,7 @@ export async function runOpenCodeTextTask(input: {
   const deadline = AbortSignal.timeout(SOURCE_CONTROL_GENERATION_TIMEOUT_MS)
   const signal = AbortSignal.any([canceled.signal, deadline])
   const cancel = () => canceled.abort()
-  const lane = localGenerationLaneKey(input.operation, input.target.cwd)
+  const lane = localGenerationLaneKey(input.operation, input.target.cwd, input.target.laneId)
   setLocalGenerationCancelToken(lane, cancel)
   try {
     if (input.shouldExecute?.() === false) {

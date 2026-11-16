@@ -3,8 +3,8 @@ import {
   commitTmuxSelectedStatus,
   commitTmuxUnavailable
 } from '../../../shared/tmux-selected-status'
-import { TmuxAgentHookOwner } from '../../../shared/tmux-agent-hook-owner'
-import type { TmuxManagedPty } from '../../../shared/tmux-agent-hook-contract'
+import { TmuxAgentHookOwner } from '../../../shared/agent-hook-listener/presence/tmux-agent-hook-owner'
+import type { TmuxManagedPty } from '../../../shared/agent-hook-listener/presence/tmux-agent-hook-contract'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type { AgentHookUnavailableEnvelope } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 

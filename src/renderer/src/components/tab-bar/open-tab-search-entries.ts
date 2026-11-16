@@ -1,4 +1,4 @@
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { buildSearchableBrowserPages } from '@/lib/browser/palette/browser-palette-page-entries'
 import type { SearchableBrowserPage } from '@/lib/browser/palette/browser-palette-search'
@@ -109,7 +109,6 @@ export type OpenTabSearchAgentState = Pick<
   AppState,
   | 'agentStatusByPaneKey'
   | 'paneForegroundAgentByPaneKey'
-  | 'retainedAgentsByPaneKey'
   | 'sleepingAgentSessionsByPaneKey'
   | 'terminalLayoutsByTabId'
 >
@@ -167,7 +166,6 @@ export function selectOpenTabSearchAgentState(state: AppState): OpenTabSearchAge
   return {
     agentStatusByPaneKey: state.agentStatusByPaneKey,
     paneForegroundAgentByPaneKey: state.paneForegroundAgentByPaneKey,
-    retainedAgentsByPaneKey: state.retainedAgentsByPaneKey,
     sleepingAgentSessionsByPaneKey: state.sleepingAgentSessionsByPaneKey,
     terminalLayoutsByTabId: state.terminalLayoutsByTabId
   }
@@ -217,7 +215,6 @@ export function buildOpenTabSearchEntries(
       tabsByWorktree: state.tabsByWorktree,
       openFiles: state.openFiles,
       agentStatusByPaneKey: agentState.agentStatusByPaneKey,
-      retainedAgentsByPaneKey: agentState.retainedAgentsByPaneKey,
       sleepingAgentSessionsByPaneKey: agentState.sleepingAgentSessionsByPaneKey,
       terminalLayoutsByTabId: agentState.terminalLayoutsByTabId,
       paneForegroundAgentByPaneKey: agentState.paneForegroundAgentByPaneKey,

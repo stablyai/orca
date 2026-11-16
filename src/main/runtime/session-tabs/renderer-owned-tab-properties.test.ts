@@ -10,23 +10,21 @@ import { join } from 'node:path'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+} from '../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 
 import { closeTestJournalHostDatabases } from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 
 import { createStructuredChatNamingHandler } from '../../native-chat/structured-chat-naming'
 
-import { recordingStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { recordingStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 
+import { ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost } from '../agent-session/records/agent-session-record-store-test-harness'
 import {
   readPersistedTestAgentSessionStore,
   seedTestAgentSessionRecordStore
-} from '../agent-session/records/agent-session-record-store-test-harness'
+} from '../agent-session/records/agent-session-record-store-persistence.test-fixture'
 
-import {
-  ensureStructuredAgentSessionHost,
-  stopStructuredAgentSessionRuntime
-} from '../agent-session/structured-agent-session-runtime'
+import { stopStructuredAgentSessionRuntime } from '../agent-session/structured-agent-session-runtime'
 
 import type { AgentSessionRecordStore } from '../agent-session/records/agent-session-record-store'
 
@@ -47,7 +45,7 @@ import { RpcDispatcher } from '../rpc/dispatcher'
 
 import { SESSION_TAB_MUTATION_METHODS } from '../rpc/methods/session-tabs/session-tab-mutation-methods'
 
-function fixture(session = makeWorkspaceSessionWithHeadlessTerminal()) {
+async function fixture(session = makeWorkspaceSessionWithHeadlessTerminal()) {
   const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(session)
   const runtime = new OrcaRuntimeService(runtimeStore)
   const notifier = {
@@ -63,7 +61,7 @@ function fixture(session = makeWorkspaceSessionWithHeadlessTerminal()) {
     terminalDriverChanged: vi.fn()
   } satisfies RuntimeNotifier
   runtime.attachWindow(1)
-  runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+  await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
   electronMocks.BrowserWindow.fromId.mockReturnValue({ isDestroyed: () => false })
   runtime.setNotifier(notifier)
   const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_MUTATION_METHODS })
@@ -85,7 +83,7 @@ it('refuses a combined native chat edit before saving its name, while accepting 
   const sessionId = record.sessionId
   const tabId = `agent-session:${sessionId}`
   const alias = 'Existing tab alias'
-  const { runtime, dispatcher, getSession, notifier } = fixture(
+  const { runtime, dispatcher, getSession, notifier } = await fixture(
     makeWorkspaceSessionWithHeadlessTerminal({
       unifiedTabs: {
         [TEST_WORKTREE_ID]: [

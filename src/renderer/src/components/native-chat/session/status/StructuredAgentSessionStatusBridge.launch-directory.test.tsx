@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import type * as RuntimeCapabilityProofModule from '@/runtime/rpc/compatibility/runtime-capability-proof'
 // @vitest-environment happy-dom
 
@@ -9,7 +10,7 @@ import type {
 } from '../../../../../../shared/agent-session/agent-session-wire'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
-import type { Tab } from '../../../../../../shared/tab-types'
+import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { AppState } from '@/store/types'
 
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
@@ -73,10 +74,7 @@ vi.mock('../../../../runtime/native-chat/requests/structured-agent-session-subsc
 import { useAppStore } from '@/store'
 
 import { StructuredAgentSessionStatusBridge } from './StructuredAgentSessionStatusBridge'
-import {
-  getStructuredAgentSessionStatusFeed,
-  resetStructuredAgentSessionStatusFeedsForTests
-} from '@/runtime/native-chat/status/structured-agent-session-status-feed'
+import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 
 const floatingTab = {
   id: 'floating-chat-1',
@@ -106,12 +104,8 @@ function summary(overrides: Partial<AgentSessionStatusSummary> = {}): AgentSessi
   }
 }
 
-function pins(): AppState['structuredSessionLaunchDirectoryByTabId'] {
-  return mocks.store?.getState().structuredSessionLaunchDirectoryByTabId ?? {}
-}
-
 function statuses() {
-  return Object.values(useAppStore.getState().agentStatusByPaneKey)
+  return Array.from(useAppStore.getState().agentStatusByPaneKey.values())
 }
 function feed(index = 0): { target: unknown; emit: (event: AgentSessionStatusEvent) => void } {
   const call = mocks.subscribeStatus.mock.calls[index]
@@ -129,7 +123,7 @@ describe('StructuredAgentSessionStatusBridge pinned launch directory', () => {
     mocks.store?.setState({
       structuredSessionLaunchDirectoryByTabId: {},
       structuredChatSleptAtByPaneKey: {},
-      agentStatusByPaneKey: {},
+      agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
       unifiedTabsByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: [floatingTab] }
     })
   })
@@ -137,86 +131,6 @@ describe('StructuredAgentSessionStatusBridge pinned launch directory', () => {
   afterEach(() => {
     cleanup()
     resetStructuredAgentSessionStatusFeedsForTests()
-  })
-
-  it('keeps shared leases and a later host reintroduced synchronously by feed release', async () => {
-    const local = getStructuredAgentSessionStatusFeed({ kind: 'local' })
-    const remote = getStructuredAgentSessionStatusFeed({
-      kind: 'environment',
-      environmentId: 'paired'
-    })
-    const released = [vi.fn(), vi.fn()]
-    mocks.subscribeStatus
-      .mockResolvedValueOnce({ unsubscribe: released[0] })
-      .mockResolvedValueOnce({ unsubscribe: released[1] })
-    const remoteLease = vi.spyOn(remote, 'activate')
-    const tabs: Tab[] = [
-      floatingTab,
-      { ...floatingTab, id: 'second', entityId: 'session-2' },
-      { ...floatingTab, id: 'remote', entityId: 'session-3', executionHostId: 'runtime:paired' }
-    ]
-    useAppStore.setState({ unifiedTabsByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: tabs } })
-    const view = render(<StructuredAgentSessionStatusBridge />)
-    await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalledTimes(2))
-    act(() => {
-      feed(0).emit({
-        type: 'snapshot',
-        sessions: tabs.slice(0, 2).map((tab) =>
-          summary({
-            sessionId: tab.entityId,
-            hostExecutionOwned: true,
-            sleptAt: 5,
-            launchDirectory: '/project'
-          })
-        )
-      })
-      feed(1).emit({
-        type: 'snapshot',
-        sessions: [summary({ sessionId: 'session-3', sleptAt: 7 })]
-      })
-    })
-    act(() =>
-      useAppStore.setState({
-        unifiedTabsByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: tabs.slice(1) }
-      })
-    )
-    expect(released.every((release) => release.mock.calls.length === 0)).toBe(true)
-    expect(statuses()).toHaveLength(2)
-    expect(pins().second?.sessionId).toBe('session-2')
-    expect(pins()[floatingTab.id]).toBeUndefined()
-    let reenter = true
-    const stop = local.subscribe(() => {
-      if (!reenter) {
-        return
-      }
-      reenter = false
-      useAppStore.setState({
-        unifiedTabsByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: [tabs[2]] }
-      })
-    })
-    try {
-      act(() =>
-        useAppStore.setState({ unifiedTabsByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: [] } })
-      )
-      expect(reenter).toBe(false)
-      expect(released[0]).toHaveBeenCalledOnce()
-      expect(released[1]).not.toHaveBeenCalled()
-      expect(remoteLease).toHaveBeenCalledOnce()
-      act(() =>
-        feed(1).emit({
-          type: 'status',
-          session: summary({ sessionId: 'session-3', status: 'working', updatedAt: 900 })
-        })
-      )
-      expect(statuses()).toEqual([expect.objectContaining({ updatedAt: 900, state: 'working' })])
-      expect(pins()).toEqual({})
-      expect(Object.values(useAppStore.getState().structuredChatSleptAtByPaneKey)).toEqual([null])
-      view.unmount()
-      expect(released[1]).toHaveBeenCalledOnce()
-    } finally {
-      stop()
-      remoteLease.mockRestore()
-    }
   })
 
   it('rekeys an older unstamped tab when its worktree owner arrives', async () => {

@@ -1,3 +1,8 @@
+import {
+  desktopWorkspaceSleepPlatform,
+  installDesktopWorkspaceVmWaker,
+  configureDesktopCloudServices
+} from '../../runtime/construction/desktop-workspace-services'
 import { wireRecipeWorkspaceRemoval } from '../../ephemeral-vm/recipe-workspace-removal-wiring'
 import { wireGitHubIssueLinkTitleFill } from '../../github/workspace-links/github-issue-link-title-wiring'
 import {
@@ -25,43 +30,25 @@ import { agentHookRuntimeDeps } from '../../agent-hooks/runtime/agent-hook-runti
 import { getDaemonProvider } from '../../daemon/providers/lifecycle/daemon-provider-state'
 import type { TerminalSideEffectBatch } from '../../../shared/terminal/output/terminal-side-effect-facts'
 import { resolveTuiAgentLaunchEnv } from '../../../shared/agent-launch/choices/tui-agent-launch-defaults'
-import { callRuntimeEnvironment } from '../../ipc/runtime-environments/runtime-environment-transport-routing'
-import { createOrchestrationEnvironmentTransport } from '../../ipc/runtime-environments/orchestration-environment-transport'
-import { trackRuntimeEnvironmentVerifiedTransitions } from '../../ipc/runtime-environments/runtime-environment-verified-transitions'
-import { onRuntimeEnvironmentStatusPublished } from '../../ipc/runtime-environments/runtime-environment-status-owner'
+import { createOrchestrationEnvironmentTransport } from '../../ipc/runtime-environments/requests/orchestration-environment-transport'
+import { trackRuntimeEnvironmentVerifiedTransitions } from '../../ipc/runtime-environments/status/runtime-environment-verified-transitions'
+import { onRuntimeEnvironmentStatusPublished } from '../../ipc/runtime-environments/status/runtime-environment-status-owner'
 import { mainProcessState as state } from '../main-process-state'
-import { suspendEphemeralVmWorkspace } from '../../ephemeral-vm/workspace-suspend'
-import {
-  acceptEphemeralVmWorkspaceWake,
-  resumeEphemeralVmWorkspace
-} from '../../ephemeral-vm/workspace-resume'
-import { registerRecipeVmWaker } from '../../runtime/workspaces/sleep/recipe-vm-waker-registry'
-import { setSshHostAsleepCheck } from '../../ssh/connection/ssh-host-sleep-hold'
-import {
-  isRecipeVmSshTargetAsleep,
-  setRecipeVmAsleepStoreRoot
-} from '../../ephemeral-vm/recipe-vm-asleep'
-import { openRecipeVmEnvironment } from '../../ipc/runtime-environments/runtime-environment-recipe-vm-wake'
-import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
-import { findWorkspaceEphemeralVmRuntime } from '../../../shared/ephemeral-vm-workspace-runtime'
 import { installWslOrcadAccountShim } from '../wsl-startup/wsl-orcad-account-env-wiring'
 import {
   codexStructuredLaunchHomeResolvers,
   prepareCodexRuntimeHomeForLaunch
 } from '../agent-accounts/codex-launch-preparation'
 import { resolveHostAgentBaseEnvironment } from '../../runtime/agent-session/environment/structured-agent-shell-environment'
-import type { RuntimeDesktopWindowStatus } from '../../../shared/runtime-session-contracts'
-import { ArtifactCloudService } from '../../artifacts/artifact-cloud-service'
-import { SkillCloudService } from '../../skills/cloud/skill-cloud-package-service'
-import { isArtifactSharingEnabled } from '../../../shared/artifacts/artifact-sharing-gate'
+import type { RuntimeDesktopWindowStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   AgentStatusObservedPaneIdentities,
   recordObservedAgentStatusPaneIdentity
 } from '../../runtime/terminal/identity/agent-status-observed-pane-identity'
+import { bindTerminalPaneStatusLifecycle } from '../../ipc/pty/pane/terminal-pane-status-lifecycle'
 import { startAgentStateRulesLiveUpdates } from '../../runtime/agent-state-rules/agent-state-rules-live-update'
 import { recordDurableCrashBreadcrumb } from '../../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { getRuntimeEnvironmentRegistryRoot } from '../../ipc/runtime-environments/runtime-environment-registry-root'
 import { openOffscreenBrowserPageLink } from '../../runtime/browser/commands/offscreen-browser-page-link'
 
 export function getDesktopWindowStatus(): RuntimeDesktopWindowStatus {
@@ -104,7 +91,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     attestAgentHookCompatibilityAuthority: (candidate) =>
       agentHookServer.attestCompatibilityAuthority(candidate),
     retireAgentHookCompatibilityAuthority: (paneKey) =>
-      agentHookServer.retirePaneAuthority(paneKey),
+      agentHookServer.retireProcessAuthority(paneKey),
     canRecoverPersistentLocalPtys: () => getDaemonProvider() !== null,
     // Resolve per call: the RPC server/device registry is constructed later with this runtime.
     getPairedDeviceName: (pairedDeviceId) =>
@@ -128,21 +115,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
       onEnvironmentVerified: (listener) =>
         onRuntimeEnvironmentStatusPublished(trackRuntimeEnvironmentVerifiedTransitions(listener))
     },
-    workspaceSleepPlatform: {
-      callEnvironment: (environmentId, method, params, timeoutMs) =>
-        callRuntimeEnvironment(
-          getRuntimeEnvironmentRegistryRoot(),
-          environmentId,
-          method,
-          params,
-          timeoutMs
-        ),
-      ownsVm: (workspaceId) =>
-        findWorkspaceEphemeralVmRuntime(app.getPath('userData'), workspaceId) !== undefined,
-      suspendVm: (workspaceId) => suspendEphemeralVmWorkspace(store, workspaceId),
-      acceptWake: (workspaceId) => acceptEphemeralVmWorkspaceWake(workspaceId),
-      resumeVm: (workspaceId, request) => resumeEphemeralVmWorkspace(store, workspaceId, request)
-    },
+    workspaceSleepPlatform: desktopWorkspaceSleepPlatform(store, () => app.getPath('userData')),
     // Paired/local settings writes must reconcile the scanner child through the same path.
     applySessionSearchSettings: applySessionSearchSettingsChange,
     skillTransactionRecovery: state.skillTransactionRecovery
@@ -163,21 +136,9 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   // Each host titles its own workspaces' untitled GitHub issue links once, when they are linked.
   const disposeIssueLinkTitleFill = wireGitHubIssueLinkTitleFill(store, runtime)
   app.once('will-quit', disposeIssueLinkTitleFill)
+  bindTerminalPaneStatusLifecycle(runtime, store)
   state.runtime = runtime
-  // Opening a recipe VM's workspace from a client wakes the VM through the runtime's one owner.
-  registerRecipeVmWaker({
-    state: (workspaceId, suspended) => runtime.workspaceVmState(workspaceId, suspended),
-    noteOpened: (workspaceId) => runtime.noteWorkspaceReopened(workspaceId),
-    holdOpen: (workspaceId, suspended, timeoutMs, signal) =>
-      runtime.holdWorkspaceVmOpen(workspaceId, suspended, timeoutMs, signal),
-    openEnvironment: (selector) => {
-      const root = getRuntimeEnvironmentRegistryRoot()
-      return openRecipeVmEnvironment(root, resolveEnvironment(root, selector))
-    }
-  })
-  // A sleeping VM's SSH host takes no background login until its workspace wakes (#36363).
-  setRecipeVmAsleepStoreRoot(getRuntimeEnvironmentRegistryRoot)
-  setSshHostAsleepCheck((targetId) => isRecipeVmSshTargetAsleep(app.getPath('userData'), targetId))
+  installDesktopWorkspaceVmWaker(runtime, () => app.getPath('userData'))
   runtime.attachAgentStatusStore(agentHookServer)
   agentHookServer.subscribeEnrichedStatus((enriched) =>
     recordObservedAgentStatusPaneIdentity(observedPaneIdentities, enriched, runtime)
@@ -216,12 +177,7 @@ export function configureRuntimeServices(runtime: OrcaRuntimeService): void {
   if (!store || !claudeAccounts || !codexAccounts || !rateLimits) {
     throw new Error('Account services must be initialized before runtime wiring')
   }
-  runtime.setArtifactService(
-    new ArtifactCloudService(app.getPath('userData'), () =>
-      isArtifactSharingEnabled(state.store?.getSettings())
-    )
-  )
-  runtime.setSkillCloudService(new SkillCloudService(app.getPath('userData')))
+  configureDesktopCloudServices(runtime, () => state.store?.getSettings(), app.getPath('userData'))
   runtime.setAccountServices({ claudeAccounts, codexAccounts, rateLimits })
   installWslOrcadAccountShim(store)
   runtime.setCommitMessageAgentEnvironmentResolvers({

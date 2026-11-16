@@ -5,15 +5,15 @@ import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session
 import type {
   RuntimeMobileSessionCreateTerminalResult,
   RuntimeMobileSessionTabsSnapshot
-} from '../../../../shared/runtime-session-contracts'
-import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
+} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type { OwnedMobileTerminalCreateOptions } from './mobile-terminal-create'
 import { randomUUID } from 'node:crypto'
 import { copySleepingAgentLaunchConfig } from './runtime-agent-launch-resolution'
 import { deriveRemoteRuntimeTerminalCreateHandle } from '../identity/remote-runtime-terminal-create-identity'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { mintServePtySessionId } from '../../../../shared/terminal/pty/lifecycle/pty-session-id-format'
-import { placeCreatedSessionTab } from '../../../../shared/session-tab-placement'
+import { placeCreatedSessionTab } from '../../../../shared/workspace-layout/tab-groups/session-tab-placement'
 import { insertTabIdIntoOrder } from '../../../../shared/workspace-layout/tab-groups/tab-order'
 import type { OrcaRuntimeWithBuildPtyTerminalSummary as PtyTerminalSummaryMethods } from '../query/pty-terminal-summary'
 import {

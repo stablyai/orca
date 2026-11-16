@@ -1,4 +1,4 @@
-import { DEFAULT_UI_LOCALE, resolveRendererUiLocale } from '../../../shared/ui-locale'
+import { DEFAULT_UI_LOCALE, resolveRendererUiLocale } from '../../../shared/i18n/ui-locale'
 import {
   UI_LANGUAGE_CHINESE,
   UI_LANGUAGE_CHINESE_TRADITIONAL,
@@ -16,7 +16,7 @@ import {
   UI_LANGUAGE_NATIVE_NAMES,
   type BuiltInUiLanguage,
   type UiLanguage
-} from '../../../shared/ui-language'
+} from '../../../shared/i18n/ui-language'
 
 export const DEFAULT_LOCALE = DEFAULT_UI_LOCALE
 

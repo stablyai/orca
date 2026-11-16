@@ -1,9 +1,9 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { z } from 'zod'
-import type { WorkerStartParams } from '../../../../../shared/rpc-contract/orchestration-worker-start-params'
+import type { WorkerStartParams } from '../../../../../shared/rpc-contract/orchestration/orchestration-worker-start-params'
 import { ORCHESTRATION_REMOTE_OWNED_WORKERS_RUNTIME_CAPABILITY } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { ORCHESTRATION_CONTRACT_PREFLIGHT_TIMEOUT_MS } from '../../../../../shared/orchestration/orchestration-timing-budgets'
-import type { RuntimeStatus } from '../../../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { RpcContext } from '../../../rpc/core'
 import { prepareWorkerStart } from '../../../rpc/methods/orchestration/worker/worker-start-method'
@@ -87,7 +87,7 @@ export async function startRemoteOwnedWorker(
     ctx
   )
   const db = runtime.getOrchestrationDb()
-  const server = runtime.resolveOrchestrationWorkerServer(params.on!)
+  const server = await runtime.resolveOrchestrationWorkerServer(params.on!)
   const { run } = bindRun()
   // An older CLI sends no request ID; the start still runs, but a retry cannot find it.
   const forward = remoteForwardKey(runtime, ctx, params.from, callerRequestId ?? randomUUID())!

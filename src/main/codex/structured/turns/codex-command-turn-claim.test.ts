@@ -5,12 +5,13 @@ import { agentJournalItemKey } from '../../../../shared/agent-session/journal/ag
 import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionSinkAdmission
 } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
-import type { StructuredAgentSessionRevisionJournal } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
+import { journalTimelineItemsView } from '../../../native-chat/agent-session-journal/writing/journal-timeline-view'
+import { resolveJournalTimelineItem } from '../../../native-chat/agent-session-journal/writing/journal-timeline-resolution'
 import { createCodexJournalTranslator } from '../journal/codex-structured-journal-translation'
 import type { CodexStructuredSessionEvent } from '../session-lifecycle/codex-structured-session-state'
 
@@ -49,10 +50,13 @@ function recorder(refuseRevisions = 0) {
     turnScope?: AgentJournalTurnScope
   ) => writes.push({ key: agentJournalItemKey(identity), body, turnScope })
   const commandTurn: AgentJournalItemBody = RUNNING
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the claim resolver reads only `itemBody`.
-  const journal = {
+  const view = {
+    ...journalTimelineItemsView(
+      () => null,
+      () => []
+    ),
     itemBody: (itemId: string) => (itemId === COMMAND_TURN_KEY ? commandTurn : null)
-  } as unknown as StructuredAgentSessionRevisionJournal
+  }
   let refusals = refuseRevisions
   const sink: StructuredAgentSessionEventSink = {
     appendItem: (identity, body, options) => record(identity, body, options.turnScope),
@@ -70,14 +74,14 @@ function recorder(refuseRevisions = 0) {
         }
       }
     },
-    tryReviseResolvedItemAndPublish: (_bytes, resolve, options) => {
+    tryReviseResolvedItemAndPublish: (bytes, resolution, options) => {
       if (refusals > 0) {
         refusals -= 1
         return { accepted: false, reason: 'backpressure' }
       }
-      const resolved = resolve(journal)
-      if (resolved) {
-        record(resolved.identity, resolved.body, options.turnScope)
+      const resolved = resolveJournalTimelineItem(view, resolution, options.turnScope, bytes)
+      if (resolved.kind === 'resolved') {
+        record(resolved.item.identity, resolved.item.body, options.turnScope)
       }
       return ACCEPTED
     }

@@ -80,11 +80,22 @@ function wireItem(item: AgentJournalRenderItem): HistoryItemForm {
 // Revision objects are immutable, so readers/subscribers may reuse wire forms.
 const sentForms = new WeakMap<AgentJournalRenderItem, HistoryItemForm>()
 
+/** A matching persisted presentation already supplies the exact current form and byte count. */
+export function rememberAgentJournalItemWireForm(
+  item: AgentJournalRenderItem,
+  bytes: number
+): HistoryItemForm {
+  const form = { item, bytes }
+  sentForms.set(item, form)
+  return form
+}
+
 export function agentJournalItemForWire(item: AgentJournalRenderItem): HistoryItemForm {
   let sent = sentForms.get(item)
   if (sent === undefined) {
     sent = wireItem(item)
     sentForms.set(item, sent)
+    sentForms.set(sent.item, sent)
   }
   return sent
 }

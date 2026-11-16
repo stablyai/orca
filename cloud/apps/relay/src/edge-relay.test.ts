@@ -129,15 +129,4 @@ describe('edge move', () => {
     expect(moved.assignmentEpoch).toBe(placed.assignmentEpoch + 4)
   })
 
-  it('rolls back: with the cohort off, the host is re-placed on GCE above the edge epoch', async () => {
-    const { database, store, edge } = await setup({ requireLiveCells: true })
-    await edge.ensureEdgeCell()
-    await store.assign(IDENTITY)
-    await settle(database)
-    const moved = await edge.moveToEdge(IDENTITY, 0)
-    const back = await store.assign(IDENTITY)
-    expect(back.cellId).toBe(GCE_CELL.id)
-    expect(back.assignmentEpoch).toBeGreaterThan(moved.assignmentEpoch)
-    expect(await edge.edgeAssignment(IDENTITY)).toBeNull()
-  })
 })

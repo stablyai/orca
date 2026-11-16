@@ -1,9 +1,9 @@
 import { isDeepStrictEqual } from 'node:util'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { Project } from '../../../shared/project-types'
-import type { Repo } from '../../../shared/repo-types'
-import { getRepoKind } from '../../../shared/repo-kind'
+import type { Project } from '../../../shared/project/project-types'
+import type { Repo } from '../../../shared/repository/repo-types'
+import { getRepoKind } from '../../../shared/repository/repo-kind'
 import { splitWorktreeId } from '../../../shared/worktree/id'
 import {
   composeWorktreeHostIdentity,
@@ -219,6 +219,10 @@ export function isLocallyRemovableWorktreeMetadataRow(
     return false
   }
   const canonical = identityKeys?.[0] ? state.worktreeMetaByIdentity?.[identityKeys[0]] : undefined
+  // An archived workspace's checkout is missing on purpose; its row is the workspace.
+  if (legacy?.archivedCheckout || canonical?.archivedCheckout) {
+    return false
+  }
   return !(
     (legacy?.hostId && legacy.hostId !== LOCAL_EXECUTION_HOST_ID) ||
     (canonical?.hostId && canonical.hostId !== LOCAL_EXECUTION_HOST_ID) ||

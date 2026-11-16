@@ -1,7 +1,7 @@
 import { Laptop, Loader2, X } from 'lucide-react'
 import { TabHoverCard } from './TabHoverCard'
 import { useTranslate } from '@/i18n/use-translate'
-import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
+import type { ClientHostedBrowserRow } from '../../../../shared/browser/client-hosting/client-hosted-browser-rows'
 import {
   ACTIVE_TAB_INDICATOR_CLASSES,
   getTabRootStateClasses,

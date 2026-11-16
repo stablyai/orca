@@ -151,6 +151,33 @@
       "title": "Terminal"
     }
   },
+  "appMove": {
+    "play": {
+      "title": "O Orca agora está no Google Play",
+      "description": "Este app continua funcionando, mas as atualizações agora vêm do Google Play. A troca leva só alguns minutos.",
+      "installTitle": "Instale o Orca pelo Google Play",
+      "installDescription": "Você pode fazer isso agora, de onde estiver.",
+      "openGooglePlay": "Abrir o Google Play",
+      "cantUseGooglePlay": "Não consigo usar o Google Play"
+    },
+    "download": {
+      "title": "Baixe o novo app do Orca",
+      "description": "Este app continua funcionando, mas as atualizações e correções de segurança agora vêm pelo novo app. A troca leva só alguns minutos.",
+      "installTitle": "Baixe o novo app",
+      "installDescription": "Se o celular pedir, permita que o navegador instale apps.",
+      "download": "Baixar",
+      "keepThisVersion": "Continuar usando esta versão",
+      "keepThisVersionNote": "Você vai ficar sem as correções de segurança. Vamos lembrar você em uma semana."
+    },
+    "pairTitle": "Pareie com o seu computador",
+    "pairDescription": "No Orca do seu computador, vá em Configurações → Mobile e escaneie o código.",
+    "deleteTitle": "Exclua este app",
+    "deleteDescription": "Assim que o novo app mostrar seus agentes. Até lá, continue usando este.",
+    "dataKept": "Seus agentes, chats e workspaces ficam salvos no seu computador, então você verá tudo no novo app.",
+    "banner": {
+      "seeHowToSwitch": "Veja como trocar"
+    }
+  },
   "browser": {
     "addressField": {
       "urlPlaceholder": "URL"
@@ -244,6 +271,7 @@
     "message": {
       "copyMessage": "Copiar mensagem",
       "forkFromResponse": "Criar ramificação a partir desta resposta",
+      "scrollMessageToTop": "Rolar esta mensagem para o topo",
       "forkFromResponseHint": "Um novo chat com toda esta resposta, até o fim do turno"
     },
     "messageActionsSheet": {
@@ -708,7 +736,10 @@
       "busy": "Outro chat ou terminal está abrindo. Aguarde e tente ramificar o chat do {{agent}} novamente.",
       "unconfirmed": "{{agent}} não conseguiu confirmar a ramificação. Ela pode ter sido aberta; confira o histórico de sessões antes de tentar novamente.",
       "failed": "{{agent}} não conseguiu ramificar este chat. {{detail}}",
-      "unsupported": "Este host executa uma versão antiga do Orca. Atualize o Orca no host e tente novamente."
+      "unsupported": "Este host executa uma versão antiga do Orca. Atualize o Orca no host e tente novamente.",
+      "mark": "Fork ·",
+      "markedName": "{{mark}} {{name}}",
+      "accessibleName": "Fork: {{name}}"
     }
   },
   "common": {
@@ -1060,8 +1091,10 @@
       "desktopTooOldBody": "A versão do app desktop pareado é antiga demais para a sua versão atual do Orca Mobile. Atualize o Orca no seu computador e tente se conectar a este host novamente.",
       "getVersion": "Baixar o Orca {{version}}",
       "mobileTooOldAppStore": "Este desktop precisa de uma versão mais recente do Orca Mobile. Atualize o Orca Mobile pela App Store e tente se conectar a este host novamente.",
+      "mobileTooOldGooglePlay": "Este desktop precisa de uma versão mais recente do Orca Mobile. Atualize o Orca Mobile pelo Google Play e tente se conectar a este host novamente.",
       "mobileTooOldGitHubReleases": "Este desktop precisa de uma versão mais recente do Orca Mobile. Atualize o Orca Mobile pelo GitHub Releases e tente se conectar a este host novamente.",
       "openAppStore": "Abrir a App Store",
+      "openGooglePlay": "Abrir o Google Play",
       "openGitHubReleases": "Abrir GitHub Releases",
       "refreshRecoveryNote": "Se esta mensagem persistir, remova este host e faça o pareamento novamente.",
       "refreshWorkspaceBody": "O espaço de trabalho em cache deste host é mais antigo do que o desktop espera. Reconecte-se a este host para baixar a versão atual.",
@@ -1070,6 +1103,7 @@
       "updateMobileTitle": "Atualizar o Orca Mobile",
       "updateRecoveryNote": "Já atualizou? Volte para Hosts e atualize a conexão. Se esta mensagem persistir, remova este host e faça o pareamento novamente.",
       "workspaceNeedsUpdateAppStore": "O espaço de trabalho mobile deste desktop precisa de uma versão mais recente do Orca Mobile. Atualize o Orca Mobile pela App Store e tente se conectar a este host novamente.",
+      "workspaceNeedsUpdateGooglePlay": "O espaço de trabalho mobile deste desktop precisa de uma versão mais recente do Orca Mobile. Atualize o Orca Mobile pelo Google Play e tente se conectar a este host novamente.",
       "workspaceNeedsUpdateGitHubReleases": "O espaço de trabalho mobile deste desktop precisa de uma versão mais recente do Orca Mobile. Atualize o Orca Mobile pelo GitHub Releases e tente se conectar a este host novamente."
     },
     "richMarkdownEditor": {
@@ -1778,7 +1812,6 @@
       "deleteConfirmMessage": "Excluir \"{{name}}\" ({{branch}})?",
       "deleteDestroysEnvironment": "Isto também destrói o ambiente \"{{environment}}\" que o Orca criou para ele, com as alterações não confirmadas e os terminais em execução nele.",
       "deleteKeepsEnvironment": "O ambiente \"{{environment}}\" que o Orca criou para ele continua em execução: a receita não tem um passo de destruição.",
-      "deleteWorktree": "Excluir Worktree",
       "pin": "Fixar",
       "primaryWorktreeDeleteHint": "Worktree primária — não pode ser excluída. Remova o projeto em vez disso.",
       "removeHost": "Remover host",
@@ -1786,8 +1819,7 @@
       "sleep": "Suspender",
       "unpin": "Desafixar",
       "rename": "Renomear",
-      "deleteFailed": "Falha ao excluir \"{{name}}\"",
-      "deleteAnyway": "Excluir Mesmo Assim"
+      "deleteFailed": "Falha ao excluir \"{{name}}\""
     },
     "workspaceDetailsSheet": {
       "checksFailing": "Verificações: com falha",
@@ -1968,7 +2000,6 @@
       "daysAgo_one": "há {{count}} d",
       "daysAgo_other": "há {{count}} d",
       "deleteConfirmMessage": "Isso exclui permanentemente o comentário no GitHub.",
-      "deleteConfirmTitle": "Excluir comentário?",
       "editPlaceholder": "Edite o comentário…",
       "hoursAgo_many": "há {{count}} h",
       "hoursAgo_one": "há {{count}} h",
@@ -2828,7 +2859,6 @@
       "addTitle": "Adicionar Comando Rápido",
       "chooseAgentTitle": "Escolher Agente",
       "deleteConfirmMessage": "Este comando rápido será removido da sua lista salva.",
-      "deleteConfirmTitle": "Excluir \"{{label}}\"?",
       "editTitle": "Editar Comando Rápido",
       "editorDescription": "Salve comandos de terminal ou prompts de agente para acesso rápido.",
       "title": "Comandos Rápidos",
@@ -3283,12 +3313,14 @@
       "title": "Aparência"
     },
     "browserSettingsScreen": {
+      "askEachTime": "Perguntar sempre",
+      "askEachTimeDescription": "Escolha sempre entre o navegador do Orca, o do celular ou copiar o link.",
       "desktopBrowser": "Navegador do Orca no desktop",
       "desktopBrowserDescription": "Abrir no navegador transmitido pelo seu desktop pareado.",
-      "linksDescription": "Escolha onde abrir os links HTTP(S) ao tocar neles na saída do terminal.",
+      "terminalAndChatLinksDescription": "Escolha onde abrir os links da web ao tocar neles na saída do terminal e no chat.",
       "linksHeading": "LINKS",
       "loadFailed": "Não foi possível carregar as preferências do navegador. Tente novamente.",
-      "openTerminalLinks": "Abrir links do terminal",
+      "openLinks": "Abrir links",
       "phoneBrowser": "Navegador do celular",
       "phoneBrowserDescription": "Abrir no Safari, Chrome ou outro navegador neste celular.",
       "saveFailed": "Não foi possível salvar as preferências do navegador. Tente novamente.",
@@ -4796,7 +4828,6 @@
       "outcome": "Resultado",
       "allOutcomes": "Todos os resultados",
       "couldNotStart": "Não foi possível iniciar",
-      "deleteAutomationTitle": "Excluir automação?",
       "deleteRetained": "Excluir “{{name}}” e suas execuções retidas?",
       "couldNotVerifyTheOriginalAgentPaneReconnectAndTryAgain": "Não foi possível verificar o painel original do agente. Reconecte e tente novamente.",
       "theOriginalAgentPaneIsNoLongerAvailableToOpenSavedOutputRemainsHere": "O painel original do agente não pode mais ser aberto. A saída salva permanece aqui.",

@@ -4,7 +4,7 @@ import { classifyRemotePairingHostname } from '../../shared/remote-runtime/pairi
 import type {
   LocalNetworkConnectionTestFailure,
   LocalNetworkConnectionTestResult
-} from '../../shared/developer-permissions-types'
+} from '../../shared/app-lifecycle/permissions/developer-permissions-types'
 
 const CONNECT_TIMEOUT_MS = 4_000
 const CHILD_TIMEOUT_MS = CONNECT_TIMEOUT_MS + 1_000

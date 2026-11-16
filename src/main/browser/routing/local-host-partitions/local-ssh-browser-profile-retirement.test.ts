@@ -77,6 +77,10 @@ vi.mock('../../extensions/profile-sessions/browser-extension-session-loader', ()
   attachBrowserExtensionsToProfileSession() {},
   async detachBrowserExtensionsFromProfileSession() {}
 }))
+vi.mock('../../cookies/session-restore/browser-session-cookie-restore', () => ({
+  trackBrowserSessionCookies() {},
+  forgetBrowserSessionCookies() {}
+}))
 vi.mock('../../../persistence/loading-store/user-data-path', () => ({
   getCanonicalUserDataPath: () => state.directory
 }))

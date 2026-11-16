@@ -7,7 +7,7 @@ import type * as GitUsernameModule from '../../git/repositories/git-username'
 import './repo-creation.spec'
 import type * as WslUncAccessGateModule from '../../wsl/filesystem/wsl-unc-access-gate'
 import type * as FilesystemPathContainmentModule from '../../ipc/filesystem/access/filesystem-path-containment'
-import { reviewHeadRemoteRefComponent } from '../../../shared/review-head-tracking-ref'
+import { reviewHeadRemoteRefComponent } from '../../../shared/worktree/hosted-review/review-head-tracking-ref'
 
 export const ORIGIN_REMOTE_URL = 'git@example.com:group/repo.git'
 export const ORIGIN_HEAD_COMPONENT = reviewHeadRemoteRefComponent('origin', ORIGIN_REMOTE_URL)
@@ -291,7 +291,7 @@ vi.mock('../../agent-launch/trust/agent-trust-presets', () => ({
 }))
 
 const parseOrcaYamlMock = vi.hoisted(() => vi.fn().mockReturnValue(null))
-vi.mock('../../../shared/orca-yaml', async (importOriginal) => ({
+vi.mock('../../../shared/workspace-setup/orca-yaml', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   parseOrcaYaml: parseOrcaYamlMock
 }))

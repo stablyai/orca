@@ -1,6 +1,6 @@
 // Restart adoption can publish a pane before its exported handle registers; any handle issued in that gap must stay valid or become stale.
 import { expect, it, vi } from 'vitest'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/runtime-session-contracts'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
@@ -49,7 +49,7 @@ it('gives a restored pane one handle: none before its adoption registers, then t
     getForegroundProcess: async () => null,
     listProcesses: async () => [{ id: PTY, cwd: TEST_WORKTREE_PATH, title: 'sh' }]
   })
-  runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
+  await runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
 
   // Adopted starts can create the record before handle registration.
   runtime['getOrCreatePtyWorktreeRecord'](PTY)

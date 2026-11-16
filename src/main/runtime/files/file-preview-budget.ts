@@ -3,7 +3,7 @@ import type { RuntimeFilePreviewResult } from '../../../shared/file-content/runt
 import {
   REMOTE_RPC_MAX_CONTENT_BYTES,
   remoteRpcResultExceedsContentBudget
-} from '../../../shared/remote-rpc-content-budget'
+} from '../../../shared/remote-runtime/rpc/remote-rpc-content-budget'
 
 export const MOBILE_FILE_READ_MAX_BYTES = 512 * 1024
 

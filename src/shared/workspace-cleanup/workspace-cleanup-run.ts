@@ -32,20 +32,31 @@ export type WorkspaceCleanupWorkspaceRef = {
   path: string
 }
 
-export type WorkspaceCleanupRunRow = WorkspaceCleanupWorkspaceRef & {
-  outcome: WorkspaceCleanupRunOutcome
-  reason?: WorkspaceCleanupRuleReason
-  keepCause?: WorkspaceCleanupKeepCause
-  waiting?: WorkspaceCleanupWaiting
-  /** Kept because the re-check right before removal found something new. */
-  keptOnRecheck?: true
-  /** The unmerged branch Git kept after the checkout was removed. */
-  branchKept?: string
-  /** Last measured checkout size; absent when Orca never measured it. */
-  sizeBytes?: number
-  /** Plain-words failure for 'failed' rows. */
-  error?: string
+// Evidence the run already read, kept so a row can say which PR or which files; older runs lack it.
+export const WORKSPACE_CLEANUP_ROW_IGNORED_FILE_LIMIT = 3
+
+export type WorkspaceCleanupRowDetails = {
+  /** The merged pull request that holds HEAD. */
+  prNumber?: number
+  /** Ignored files the main checkout lacks; `samplePaths` holds at most a few names. */
+  ignoredFiles?: { count: number; samplePaths: string[]; complete: boolean }
 }
+
+export type WorkspaceCleanupRunRow = WorkspaceCleanupWorkspaceRef &
+  WorkspaceCleanupRowDetails & {
+    outcome: WorkspaceCleanupRunOutcome
+    reason?: WorkspaceCleanupRuleReason
+    keepCause?: WorkspaceCleanupKeepCause
+    waiting?: WorkspaceCleanupWaiting
+    /** Kept because the re-check right before removal found something new. */
+    keptOnRecheck?: true
+    /** The unmerged branch Git kept after the checkout was removed. */
+    branchKept?: string
+    /** Last measured checkout size; absent when Orca never measured it. */
+    sizeBytes?: number
+    /** Plain-words failure for 'failed' rows. */
+    error?: string
+  }
 
 export type WorkspaceCleanupRun = {
   id: string
@@ -69,10 +80,11 @@ export type WorkspaceCleanupReport = {
   nextRunAt: number | null
 }
 
-export type WorkspaceCleanupPreviewRow = WorkspaceCleanupWorkspaceRef & {
-  evaluation: WorkspaceCleanupEvaluation
-  sizeBytes?: number
-}
+export type WorkspaceCleanupPreviewRow = WorkspaceCleanupWorkspaceRef &
+  WorkspaceCleanupRowDetails & {
+    evaluation: WorkspaceCleanupEvaluation
+    sizeBytes?: number
+  }
 
 export type WorkspaceCleanupPreview = {
   evaluatedAt: number

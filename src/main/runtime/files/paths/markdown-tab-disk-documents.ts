@@ -8,8 +8,8 @@ import {
   utf8ByteLength,
   type RuntimeMarkdownReadTabResult,
   type RuntimeMarkdownSaveTabResult
-} from '../../../../shared/mobile-markdown-document'
-import type { RuntimeMobileSessionMarkdownTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
+} from '../../../../shared/editor/markdown/mobile-markdown-document'
+import type { RuntimeMobileSessionMarkdownTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type {
   FileWriteDiskPrecondition,
   FileWriteResult

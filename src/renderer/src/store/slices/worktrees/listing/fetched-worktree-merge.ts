@@ -1,4 +1,4 @@
-import { captureWorkspaceTerminalNoticeRemoval } from '../../../terminals/terminal-notice-removal'
+import { captureWorkspaceTerminalNoticeRemoval } from '../../../terminals/retirement/terminal-notice-removal'
 import type { StateCreator } from 'zustand'
 import { appliedWorktreeCatalogVersionPatch } from './worktree-catalog-version-state'
 import type { AppState } from '../../../types'
@@ -216,7 +216,7 @@ export function mergeFetchedWorktrees(
       s.detectedWorktreesByRepo[args.repoId],
       refreshResult,
       args.hostId,
-      args.setup,
+      args,
       matchOptions
     )
     // Stored rows from a stopped WSL distro lack branch state the scanned rows already have.

@@ -3,12 +3,14 @@ import { createHash } from 'node:crypto'
 import { readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { basename, dirname, join } from 'node:path'
-import { ORCAD_SERVER_ENTRY_FILENAME } from '../../../../src/shared/orcad-artifacts.ts'
 
 const root = join(import.meta.dirname, '../../..', '..')
-const { turnedOnDarkBuildDefines } = createRequire(import.meta.url)(
-  '../../../dark-build-switches.cjs'
-)
+const require = createRequire(import.meta.url)
+// require avoids MODULE_TYPELESS_PACKAGE_JSON from ESM-importing TS under typeless package.json.
+const {
+  ORCAD_SERVER_ENTRY_FILENAME
+} = require('../../../../src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts')
+const { turnedOnDarkBuildDefines } = require('../../../dark-build-switches.cjs')
 
 export const ORCAD_ENTRY_POINT = 'src/main/orcad/main.ts'
 export const ORCAD_LAUNCHER_ENTRY_POINT = 'src/main/orcad/launcher.ts'
@@ -16,12 +18,16 @@ export const ORCAD_SERVER_BUILD_TARGET = 'node24'
 // Host entry points must load before Orca selects its bundled runtime.
 const ORCAD_COMPAT_BUILD_TARGET = 'node18'
 export const ORCAD_CHILD_ENTRY_POINTS = {
+  environmentStore:
+    'src/shared/remote-runtime/host-store/runtime-environment-store-worker-entry.ts',
   watcher: 'src/main/ipc/filesystem/watcher-process/parcel-watcher-process-entry.ts',
   daemon: 'src/main/daemon/daemon-entry.ts',
   writer: 'src/main/persistence/profile-state/writer/profile-state-writer-worker-entry.ts',
   backup: 'src/main/persistence/profile-state/backup/profile-state-backup-worker-entry.ts',
   sessionSearch: 'src/main/ai-vault-search/worker/session-search-worker-entry.ts',
   foreignSqliteReader: 'src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry.ts',
+  journalSql: 'src/main/native-chat/agent-session-journal/journal-sql-worker-entry.ts',
+  journalSqlReader: 'src/main/native-chat/agent-session-journal/journal-sql-reader-entry.ts',
   agentIdentityWorker: 'src/main/agent-hooks/identity/agent-identity-worker-entry.ts',
   portScanCommandWorker: 'src/main/ports/port-scan-command-worker-entry.ts',
   commandPathDirectoryWorker: 'src/main/ipc/command-path/command-path-directory-worker-entry.ts',

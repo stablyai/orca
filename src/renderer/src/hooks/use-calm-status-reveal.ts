@@ -3,7 +3,7 @@ import {
   CALM_STATUS_IDLE,
   stepCalmStatusReveal,
   type CalmStatusReveal
-} from '../../../shared/calm-status-reveal'
+} from '../../../shared/remote-runtime/connection-status/calm-status-reveal'
 
 export type CalmStatusView = { visible: boolean; downSince: number | null }
 

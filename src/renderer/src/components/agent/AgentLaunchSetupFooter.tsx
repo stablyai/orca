@@ -15,7 +15,7 @@ import {
   type AgentPickerSurface
 } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { agentPickerEntryOptions } from '../../../../shared/agent-launch/picker/agent-launch-picker-catalog'
-import { formatKeybinding } from '../../../../shared/keybindings'
+import { formatKeybinding } from '../../../../shared/keybindings/formatting'
 
 export function agentLaunchSetupArgumentsNote(
   label: string,

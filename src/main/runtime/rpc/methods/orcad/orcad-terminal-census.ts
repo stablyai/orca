@@ -5,7 +5,7 @@ import {
   ORCAD_TERMINAL_CENSUS_METHOD,
   OrcadTerminalCensusParamsSchema,
   type OrcadTerminalCensus
-} from '../../../../../shared/orcad-terminal-census'
+} from '../../../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
 
 const SPAWN_SETTLE_MS = 10_000
 const UNVERIFIABLE: OrcadTerminalCensus = {

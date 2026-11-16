@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ZcodePlanCredentialsStatus } from '../../../../../../shared/zcode-plan-sites'
+import type { ZcodePlanCredentialsStatus } from '../../../../../../shared/agent-accounts/usage-credentials/zcode-plan-sites'
 import { createZcodePlanCredentialsApi } from '../../../../web/preload-api/web-agent-accounts-api'
 import { useZcodePlanCredentials } from './use-zcode-plan-credentials'
 

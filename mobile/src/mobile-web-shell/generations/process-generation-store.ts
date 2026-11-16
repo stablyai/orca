@@ -2,7 +2,7 @@ import { Directory, Paths } from 'expo-file-system'
 import { generationStoreDirectory } from '../../../modules/orca-mobile-web-shell/src/generation-store-directory'
 import { createGenerationStore, type GenerationStore } from './generation-store'
 import { createExpoGenerationFileSystem } from './generation-store-file-system'
-import { dropHomeSparePage } from '../home-spare-page'
+import { dropHomeSparePage } from '../page-document/home-spare-page'
 
 const GENERATION_STORE_DIRECTORY_NAME = 'mobile-web'
 

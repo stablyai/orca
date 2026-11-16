@@ -6,8 +6,8 @@ import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
 import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
-import { keybindingMatchesAction } from '../../../../../../shared/keybindings'
-import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
+import { keybindingMatchesAction } from '../../../../../../shared/keybindings/matching'
+import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
 import type { PinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
 import type { LastActiveCycleWorkspace, SidebarWorkspacePreview } from './worktree-keyboard-cycle'
 import { resolveCycledWorkspaceRow } from './worktree-keyboard-cycle'
@@ -16,7 +16,7 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import { focusActiveWorkspaceSurfaceFromSidebar } from './focus-workspace-surface'
 import type { WorktreeContextMenuDeleteIntent } from '../../workspace-actions/context-menu/worktree-context-menu-delete-intent'
 import { useSidebarWorkspaceDeleteKeyboard } from './use-sidebar-workspace-delete-keyboard'
-import { textInputOwnsComposition } from '../../../../../../shared/text-input-shortcut-policy'
+import { textInputOwnsComposition } from '../../../../../../shared/keybindings/text-input-shortcut-policy'
 import { useWorkspaceNeighborPrewarm } from './use-neighbor-prewarm'
 
 const PREVIEW_COMMIT_FIRST_REPEAT_MS = 120
@@ -202,6 +202,8 @@ export function useWorktreeListKeyboardNavigation(args: {
         !hasVisibleOverlay()
       ) {
         scrollRef.current?.focus()
+        // A terminal that finishes mounting after this shortcut must not take the keys back.
+        scrollRef.current?.setAttribute('data-keyboard-navigation', '')
         e.preventDefault()
         return
       }
@@ -227,10 +229,9 @@ export function useWorktreeListKeyboardNavigation(args: {
         commitPreview()
       }
     }
-    const handlePointerDown = (event: PointerEvent) => {
-      if (!(event.target instanceof Node && scrollRef.current?.contains(event.target))) {
-        endListNavigation()
-      }
+    // Why every press: a click on a row or agent row hands keys back to the workspace; modifier selection reclaims them on click.
+    const handlePointerDown = () => {
+      endListNavigation()
       resetDeleteGesture()
       dropPreview()
     }

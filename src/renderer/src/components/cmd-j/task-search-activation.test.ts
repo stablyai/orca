@@ -1,5 +1,5 @@
 import { afterEach, expect, it } from 'vitest'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { findCmdJTaskWorkspace } from './task-search-activation'
 import { jiraTaskIssue, jiraTaskSource, jiraTaskResult } from './task-search.test-fixture'
 import { makeWorktree } from '../worktree-jump/worktree-jump-palette-test-fixtures'

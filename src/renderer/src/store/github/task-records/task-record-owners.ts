@@ -1,8 +1,8 @@
-import { deleteConfirmedListSnapshot } from '@/components/task-page/github/task-page-github-work-item-mutation-registry'
-import { deleteLastConfirmedClientValue } from '@/components/task-page/github/task-page-github-confirmed-client-values'
+import { deleteConfirmedListSnapshot } from '@/components/task-page/github/mutations/task-page-github-work-item-mutation-registry'
+import { deleteLastConfirmedClientValue } from '@/components/task-page/github/mutations/task-page-github-confirmed-client-values'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { AppState } from '../../types'
 import type { StoreApi } from 'zustand'
 import {

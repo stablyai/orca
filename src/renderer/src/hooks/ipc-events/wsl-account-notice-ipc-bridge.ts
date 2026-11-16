@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import type { WslOrcadAccountNotAppliedEvent } from '../../../../shared/wsl-orcad-account-notice'
+import type { WslOrcadAccountNotAppliedEvent } from '../../../../shared/remote-runtime/wsl-hosts/wsl-orcad-account-notice'
 
 export function showWslAccountNotAppliedNotice({ distro }: WslOrcadAccountNotAppliedEvent): void {
   toast.info(

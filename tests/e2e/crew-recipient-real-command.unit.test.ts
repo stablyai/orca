@@ -1,3 +1,6 @@
+import { retireAgentSessionRecordStore } from '../../src/main/runtime/agent-session/records/agent-session-record-store-slot'
+import { openTestAgentSessionRecordStoreSlot } from '../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
+import { createStructuredAgentSessionLogger } from '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { ORCHESTRATION_CREW_METHODS } from '../../src/main/runtime/rpc/methods/orchestration/crew-methods'
 import {
   CrewFrame,
@@ -8,8 +11,6 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import * as profileStorage from '../../src/main/orca-profiles/profile-storage-paths'
 import { randomUUID } from 'node:crypto'
-
-import { releaseAgentSessionRecordStore } from '../../src/main/runtime/agent-session/records/agent-session-record-store-slot'
 
 import { afterEach, expect, it, vi } from 'vitest'
 
@@ -23,8 +24,9 @@ vi.mock(
   })
 )
 afterEach(async () => {
-  const remaining = await releaseAgentSessionRecordStore()
-  remaining?.journalDatabase.close()
+  await retireAgentSessionRecordStore(async (opened) => {
+    await opened?.journalDatabase.close()
+  })
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
 })
@@ -39,6 +41,14 @@ it('publishes a restored session peer in the first completed Crew frame', async 
   const controller = new AbortController()
   let subscription: Promise<void> | undefined
   try {
+    const openSlot = () =>
+      openTestAgentSessionRecordStoreSlot({
+        stateDirectory: directory,
+        hostId: 'local',
+        legacySessionTabIds: [],
+        logger: createStructuredAgentSessionLogger()
+      })
+    await openSlot()
     const seed = await h.runtime.openAgentSessionRecordStore()
     for (const [i, sessionId] of ids.entries()) {
       await seed.founding.commit({
@@ -65,11 +75,13 @@ it('publishes a restored session peer in the first completed Crew frame', async 
         now: fixtureNow
       })
     }
-    const released = await releaseAgentSessionRecordStore()
-    if (!released) {
-      throw new Error('Expected fixture-owned seeded slot')
-    }
-    released.journalDatabase.close()
+    await retireAgentSessionRecordStore(async (opened) => {
+      if (!opened) {
+        throw new Error('Expected fixture-owned seeded slot')
+      }
+      await opened.journalDatabase.close()
+    })
+    await openSlot()
     h.db.insertMessage({
       from: `orca_session_id:${ids[1]}`,
       to: `orca_session_id:${ids[0]}`,
@@ -99,8 +111,9 @@ it('publishes a restored session peer in the first completed Crew frame', async 
   } finally {
     controller.abort()
     await subscription
-    const opened = await releaseAgentSessionRecordStore()
-    opened?.journalDatabase.close()
+    await retireAgentSessionRecordStore(async (opened) => {
+      await opened?.journalDatabase.close()
+    })
     h.close()
     profilePath.mockRestore()
   }

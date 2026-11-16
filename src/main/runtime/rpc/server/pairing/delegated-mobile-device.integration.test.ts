@@ -16,7 +16,7 @@ import { sendRemoteRuntimeRequestOnSocket } from '../../../../../shared/remote-r
 import {
   DELEGATED_MOBILE_DEVICE_SYNC_METHOD,
   type DelegatedMobileDeviceSyncResult
-} from '../../../../../shared/delegated-mobile-device-contract'
+} from '../../../../../shared/remote-runtime/pairing/delegated-mobile-device-contract'
 import {
   authenticateMobileWsSession,
   createEncryptedWsResponseReader,

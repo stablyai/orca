@@ -1,6 +1,6 @@
 // Preserve per-group selection across shared membership moves; removed selections fall back to the first tab.
 
-import type { RuntimeMobileSessionTabGroup } from '../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabGroup } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { LayoutGroup } from '../../../shared/workspace-layout/workspace-layout-model'
 
 export function withSelectedTabs(

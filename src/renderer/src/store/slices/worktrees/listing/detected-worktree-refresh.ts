@@ -14,7 +14,7 @@ import type {
   HostQualifiedDetectedWorktreeResult,
   ProviderRequestId,
   SshExecutionHostId
-} from '../../../../../../shared/detected-worktree-provider-contract'
+} from '../../../../../../shared/worktree/catalog/detected-worktree-provider-contract'
 import type {
   DetectedWorktreeRefreshOptions,
   DetectedWorktreeRefreshOutcome

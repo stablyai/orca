@@ -1,15 +1,15 @@
 import type { Store } from '../persistence/loading-store/store'
 import { loadHooks } from '../workspace-hooks/hooks'
-import type { EphemeralVmRecipeDoctorResult } from '../../shared/ephemeral-vm-recipes'
-import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'
-import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
-import { isFolderRepo, isGitRepoKind } from '../../shared/repo-kind'
-import type { OrcaVmRecipe } from '../../shared/orca-yaml-hook-types'
+import type { EphemeralVmRecipeDoctorResult } from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipes'
+import { listEphemeralVmRuntimes } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
+import type { EphemeralVmRuntimeRecord } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
+import { isFolderRepo, isGitRepoKind } from '../../shared/repository/repo-kind'
+import type { OrcaVmRecipe } from '../../shared/workspace-setup/orca-yaml-hook-types'
 import {
   EphemeralVmFailureError,
   ephemeralVmFailure,
   type EphemeralVmFailure
-} from '../../shared/ephemeral-vm-failure-copy'
+} from '../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-failure-copy'
 
 export type EphemeralVmRecipeListResult = {
   status: 'ok' | 'error'

@@ -1,5 +1,5 @@
 import { recognizeAgentProcess } from '../../../shared/agent-status/process/agent-process-recognition'
-import type { RemoteForegroundEvidence } from '../../../shared/foreground-process-evidence'
+import type { RemoteForegroundEvidence } from '../../../shared/terminal/pty/foreground/foreground-process-evidence'
 import { buildPaneProcessFingerprint } from '../../providers/foreground/posix-pane-fingerprint'
 import type { Session } from '../sessions/session'
 

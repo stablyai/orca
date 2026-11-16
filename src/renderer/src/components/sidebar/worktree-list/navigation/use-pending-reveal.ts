@@ -2,18 +2,20 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-import { getWorktreeOptionId } from '../rows/option-dom'
-import { getRenderRowOptionId } from './active-descendant-option'
+import {
+  requestVirtualizedScrollAnchorRecord,
+  supersedeVirtualizedScrollAnchorRestore
+} from '@/hooks/requestVirtualizedScrollAnchorRecord'
 import { getRenderRowSidebarKey, rowKeyMatchesRenderRow } from './render-row-lookup'
 import {
-  findOnScreenWorktreeOption,
+  getPreferredMountedWorktreeOptionId,
   revealMountedSidebarRowElement,
   revealMountedWorktreeElement
 } from './mounted-row-reveal'
-import { getSidebarRowRevealAncestorKeys } from './reveal-ancestors'
 import {
   expandGroupsForWorktreeReveal,
   MAX_REVEAL_RETRIES,
+  preparePendingSidebarRowReveal,
   resolvePendingWorktreeRevealTarget,
   type PendingSidebarRevealArgs
 } from './pending-reveal-inputs'
@@ -48,6 +50,12 @@ export function usePendingSidebarReveal(args: PendingSidebarRevealArgs): void {
     pinnedDisplayPolicy
   } = args
 
+  const scrollToReveal = useCallback(
+    (top: number, behavior: ScrollBehavior) =>
+      virtualizer.scrollToOffset(top, { behavior: behavior === 'smooth' ? 'smooth' : 'auto' }),
+    [virtualizer]
+  )
+
   const scheduleRetryTick = useCallback(
     (cancelled: () => boolean) => {
       schedulePendingRevealFrame(() => {
@@ -67,6 +75,7 @@ export function usePendingSidebarReveal(args: PendingSidebarRevealArgs): void {
       return
     }
     const current = argsRef.current
+    supersedeVirtualizedScrollAnchorRestore(current.scrollRef.current)
     const isCurrent = () => useAppStore.getState().pendingRevealWorktree === pendingRevealWorktree
     if (
       !pendingRevealWorktree.rowKey &&
@@ -85,13 +94,13 @@ export function usePendingSidebarReveal(args: PendingSidebarRevealArgs): void {
         return
       }
       const currentRows = argsRef.current.renderRows
-      const rowKey = pendingRevealWorktree.rowKey
       const { targetIndex, outcome } = resolvePendingWorktreeRevealTarget(
         argsRef.current,
         pendingRevealWorktree
       )
       if (outcome === 'clear') {
         pendingRevealRetryRef.current = null
+        requestVirtualizedScrollAnchorRecord(argsRef.current.scrollRef.current)
         clearPendingRevealWorktreeId(pendingRevealWorktree)
         return
       }
@@ -100,18 +109,14 @@ export function usePendingSidebarReveal(args: PendingSidebarRevealArgs): void {
       }
       const targetRow = currentRows[targetIndex]
       const container = argsRef.current.scrollRef.current
-      const { worktreeId, executionHostId } = pendingRevealWorktree
-      const targetOptionId = getRenderRowOptionId(targetRow, worktreeId, executionHostId)
       const revealedOption = container
         ? revealMountedWorktreeElement(
             container,
-            worktreeId,
+            pendingRevealWorktree.worktreeId,
             pendingRevealWorktree.behavior,
-            rowKey
-              ? getWorktreeOptionId(rowKey)
-              : (findOnScreenWorktreeOption(container, worktreeId, executionHostId, targetOptionId)
-                  ?.id ?? targetOptionId),
-            markRevealScroll
+            getPreferredMountedWorktreeOptionId(container, targetRow, pendingRevealWorktree),
+            markRevealScroll,
+            scrollToReveal
           )
         : null
       if (revealedOption) {
@@ -129,11 +134,13 @@ export function usePendingSidebarReveal(args: PendingSidebarRevealArgs): void {
           })
         }
         pendingRevealRetryRef.current = null
+        requestVirtualizedScrollAnchorRecord(argsRef.current.scrollRef.current)
         clearPendingRevealWorktreeId(pendingRevealWorktree)
         return
       }
 
       // Why: virtual indexing can leave the card edge clipped; stage it into the window, then retry the exact DOM reveal.
+      supersedeVirtualizedScrollAnchorRestore(argsRef.current.scrollRef.current)
       virtualizer.scrollToIndex(targetIndex, { align: 'auto', behavior: 'auto' })
       if (!isCurrent()) {
         return
@@ -150,6 +157,7 @@ export function usePendingSidebarReveal(args: PendingSidebarRevealArgs): void {
         return
       }
       pendingRevealRetryRef.current = null
+      requestVirtualizedScrollAnchorRecord(argsRef.current.scrollRef.current)
       clearPendingRevealWorktreeId(pendingRevealWorktree)
     })
     return () => {
@@ -183,6 +191,7 @@ export function usePendingSidebarReveal(args: PendingSidebarRevealArgs): void {
     flashRevealedRow,
     markRevealScroll,
     setRenamingWorktreeId,
+    scrollToReveal,
     schedulePendingRevealFrame,
     cancelPendingRevealFrames,
     scheduleRetryTick
@@ -195,31 +204,10 @@ export function usePendingSidebarReveal(args: PendingSidebarRevealArgs): void {
     ) {
       return
     }
-    const current = argsRef.current
     const isCurrent = () =>
       useAppStore.getState().pendingRevealSidebarRow === pendingRevealSidebarRow
 
-    const isProjectHeaderTarget =
-      pendingRevealSidebarRow.rowKey.startsWith('project-group:') ||
-      pendingRevealSidebarRow.rowKey.startsWith('project:') ||
-      pendingRevealSidebarRow.rowKey.startsWith('repo:')
-    if (isProjectHeaderTarget && current.groupBy !== 'repo') {
-      return
-    }
-
-    let toggledAncestor = false
-    for (const groupKey of getSidebarRowRevealAncestorKeys({
-      rowKey: pendingRevealSidebarRow.rowKey,
-      repoMap: current.repoMap,
-      projectGroups: current.projectGroups,
-      projectGrouping: current.projectGrouping
-    })) {
-      if (current.collapsedGroups.has(groupKey)) {
-        current.toggleGroup(groupKey)
-        toggledAncestor = true
-      }
-    }
-    if (toggledAncestor) {
+    if (!preparePendingSidebarRowReveal(argsRef.current, pendingRevealSidebarRow)) {
       return
     }
 
@@ -250,6 +238,7 @@ export function usePendingSidebarReveal(args: PendingSidebarRevealArgs): void {
           return
         }
         pendingRowRevealRetryRef.current = null
+        requestVirtualizedScrollAnchorRecord(argsRef.current.scrollRef.current)
         clearPendingRevealSidebarRow(pendingRevealSidebarRow)
         toast.error(
           translate(
@@ -266,7 +255,8 @@ export function usePendingSidebarReveal(args: PendingSidebarRevealArgs): void {
             container,
             pendingRevealSidebarRow.rowKey,
             pendingRevealSidebarRow.behavior,
-            markRevealScroll
+            markRevealScroll,
+            scrollToReveal
           )
         : null
       if (revealedElement) {
@@ -274,10 +264,12 @@ export function usePendingSidebarReveal(args: PendingSidebarRevealArgs): void {
           flashRevealedRow(pendingRevealSidebarRow.rowKey)
         }
         pendingRowRevealRetryRef.current = null
+        requestVirtualizedScrollAnchorRecord(argsRef.current.scrollRef.current)
         clearPendingRevealSidebarRow(pendingRevealSidebarRow)
         return
       }
 
+      supersedeVirtualizedScrollAnchorRestore(argsRef.current.scrollRef.current)
       virtualizer.scrollToIndex(targetIndex, { align: 'auto', behavior: 'auto' })
       if (!isCurrent()) {
         return
@@ -286,6 +278,7 @@ export function usePendingSidebarReveal(args: PendingSidebarRevealArgs): void {
         return
       }
       pendingRowRevealRetryRef.current = null
+      requestVirtualizedScrollAnchorRecord(argsRef.current.scrollRef.current)
       clearPendingRevealSidebarRow(pendingRevealSidebarRow)
     })
 
@@ -306,6 +299,7 @@ export function usePendingSidebarReveal(args: PendingSidebarRevealArgs): void {
     pendingRevealRetryTick,
     flashRevealedRow,
     markRevealScroll,
+    scrollToReveal,
     clearPendingRevealSidebarRow,
     schedulePendingRevealFrame,
     cancelPendingRevealFrames,

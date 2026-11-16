@@ -9,10 +9,10 @@ import {
 import {
   TOGGLE_FLOATING_TERMINAL_EVENT,
   requestFloatingTerminalOpenMaximized
-} from '@/components/floating-terminal/floating-terminal'
-import { createFloatingWorkspaceTourInteractionSnapshot } from '@/components/floating-terminal/floating-workspace-tour-interaction-snapshot'
-import { persistFloatingTerminalPanelOpen } from '../components/floating-terminal/floating-terminal-panel-view-state'
-import { useAppStore } from '../store'
+} from '@/components/floating-terminal/workspace/floating-workspace-open-intent'
+import { createFloatingWorkspaceTourInteractionSnapshot } from '@/components/floating-terminal/workspace/floating-workspace-tour-interaction-snapshot'
+import { persistFloatingTerminalPanelOpen } from '../components/floating-terminal/state/floating-terminal-panel-view-state'
+import { useAppStore } from '../store/index'
 import { selectFloatingVisibleTabCount } from '../store/workspaces/floating/floating-workspace-panel-selector'
 
 export type FloatingWorkspacePanelState = ReturnType<typeof useFloatingWorkspacePanel>

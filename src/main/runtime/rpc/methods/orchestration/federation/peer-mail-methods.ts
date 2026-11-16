@@ -11,7 +11,7 @@ import {
   PeerMailAckParams,
   PeerMailDeliverParams,
   PeerMailPullParams
-} from '../../../../../../shared/rpc-contract/orchestration-peer-mail-params'
+} from '../../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 
 const NOTHING_DELIVERED = { effectsApplied: false } as const
 const MAX_PULL_WAIT_MS = 25_000

@@ -1,9 +1,9 @@
-import { delayUnlessAborted } from '../../shared/abort-aware-delay'
+import { delayUnlessAborted } from '../../shared/concurrency/abort-aware-delay'
 import {
   CONNECTOR_PATHS,
   ConnectorReplyResponse,
   type ConnectorConversation
-} from '../../shared/connector-cloud-contract'
+} from '../../shared/connectors/connector-cloud-contract'
 import type { ConnectorResult } from './connector-cloud-request'
 import type { ConnectorTransport } from './connector-machine'
 import { connectorRetryDelayMs } from './connector-outbox'

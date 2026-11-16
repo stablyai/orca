@@ -6,7 +6,7 @@ import { runWslProcess, type WslResult, type WslSpec } from '../../../wsl/execut
 import { translateArgForWsl } from './wsl-path-translation'
 import { acquireGitAdmission } from '../admission/git-subprocess-admission'
 import { nonInteractiveGitEnv } from '../git-environment/git-process-env'
-import type { GitAdmissionTier } from '../../../../shared/rpc-contract/git-admission-tier-params'
+import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-control/git-admission-tier-params'
 import { isWslDirectGitReadCommand } from '../../../../shared/git/commands/git-command-classification'
 import {
   classifyLineEndingSample,
