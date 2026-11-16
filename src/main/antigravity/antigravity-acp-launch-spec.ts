@@ -64,7 +64,7 @@ const ANTIGRAVITY_MANAGED_LAUNCH_SPEC = {
   scrubEnvironment: scrubAntigravityAcpEnvironment,
   dialect: ANTIGRAVITY_ACP_DIALECT,
   clientInfo: antigravityClientInfo,
-  loginCommand: agentSessionSetupFor('antigravity')?.loginCommand ?? [],
+  loginCommand: [],
   authMethod: ({ antigravityChatAuth }) =>
     resolveAntigravityChatAuthConfig(antigravityChatAuth).method,
   authMethodUnavailableMessage:
@@ -116,6 +116,7 @@ const ANTIGRAVITY_HOST_LAUNCH_SPEC: AcpLaunchSpec = {
   args: ({ fullAccess }) => ['acp', ...(fullAccess ? [AGY_SKIP_PERMISSIONS_FLAG] : [])],
   env: {},
   scrubEnvironment: scrubAgyHostApiKeys,
+  loginCommand: agentSessionSetupFor('antigravity')?.loginCommand ?? [],
   authMethod: undefined,
   authMethodUnavailableMessage: undefined,
   signIn: undefined,

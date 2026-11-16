@@ -22,8 +22,6 @@ import {
   fillUnknownCatalogEfforts,
   enrichStructuredAgentEfforts
 } from './model-catalog/agent-session-model-efforts'
-import { structuredAgentSessionRememberedPickModel } from './selection/structured-agent-session-remembered-pick-model'
-import type { SessionOptionValue } from '../../native-chat/input/native-chat-session-options'
 import type {
   AgentSessionAcceptedInputSources,
   AgentSessionOptionsResult
@@ -31,10 +29,11 @@ import type {
 import { labelFromModelId } from './model-catalog/model-id-label'
 import type { AgentSessionModelCatalogResult } from '../agent-session-wire'
 import { listingVerifiedModelIds } from './model-catalog/structured-agent-session-listing-verified-ids'
-import {
-  decodeStructuredAgentSessionOptionValue,
-  encodeStructuredAgentSessionOptionValue
-} from './selection/structured-agent-session-option-codec'
+import { decodeStructuredAgentSessionOptionValue } from './selection/structured-agent-session-option-codec'
+export {
+  structuredAgentSessionOptionPicks,
+  type StructuredSessionOptionPick
+} from './selection/structured-agent-session-option-picks'
 
 export function structuredAgentSessionOptionCatalog(
   seed: AgentSessionOptionCatalog,
@@ -49,7 +48,9 @@ export function structuredAgentSessionOptionCatalog(
       id: result.current.model,
       label: labelFromModelId(result.current.model),
       description: result.current.model,
-      options: seed.unknownModelOptions ?? []
+      options: (seed.unknownModelOptions ?? []).filter((option) =>
+        STRUCTURED_LAUNCH_SEED_OPTION_IDS.some((id) => id === option.id)
+      )
     })
   }
   return { ...seed, models, defaultModelIsCliDefault: true }
@@ -291,39 +292,4 @@ export function commitStructuredAgentSessionOptionValues(
     }
   }
   return next
-}
-
-export type StructuredSessionOptionPick = {
-  modelId: string
-  optionId: string
-  value: SessionOptionValue
-  adoptModelAsLaunchDefault?: boolean
-}
-
-/** Persist only reseedable IDs, using provider-committed values after reconciliation. Effort-only picks adopt their controls’ model
- * because launch reads effort only under a stored model. Pre-commit state is valid: committed supplies changed model, record supplies unchanged model. */
-export function structuredAgentSessionOptionPicks(
-  state: StructuredAgentSessionOptionState,
-  committed: Readonly<Record<string, string>>,
-  existingChat = false
-): StructuredSessionOptionPick[] {
-  if (!state.catalog) {
-    return []
-  }
-  const remembered = structuredAgentSessionRememberedPickModel(state, committed.model, existingChat)
-  if (!remembered) {
-    return []
-  }
-  return STRUCTURED_LAUNCH_SEED_OPTION_IDS.flatMap((optionId) => {
-    const value = committed[optionId]
-    if (value === undefined) {
-      return []
-    }
-    const decoded = decodeStructuredAgentSessionOptionValue(optionId, value)
-    return decoded === null ||
-      (typeof decoded === 'string' && !decoded.trim()) ||
-      encodeStructuredAgentSessionOptionValue(optionId, decoded) === null
-      ? []
-      : [{ ...remembered, optionId, value: decoded }]
-  })
 }

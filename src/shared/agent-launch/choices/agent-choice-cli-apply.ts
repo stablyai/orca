@@ -50,7 +50,11 @@ export function agentChoiceCliApply(
         ? mergeAgentChoiceSettings(agent, encoder.names, trailing, encoder.key, value)
         : encoder.kind === 'config'
           ? [emitted, `${encoder.key}=${configString(String(value))}`]
-          : [emitted, String(value)],
+          : encoder.kind === 'flag'
+            ? value === true || value === 'true'
+              ? [emitted]
+              : []
+            : [emitted, String(value)],
     removeAgentArgs: (tokens) =>
       forms.reduce(
         (kept, form) =>
@@ -62,7 +66,8 @@ export function agentChoiceCliApply(
                 form.names,
                 form.kind === 'config'
                   ? (value) => agentChoiceConfigValue(value ?? '', form.key) !== undefined
-                  : undefined
+                  : undefined,
+                form.kind !== 'flag'
               ),
         [...tokens]
       )

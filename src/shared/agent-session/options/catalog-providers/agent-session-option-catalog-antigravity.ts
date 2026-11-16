@@ -10,7 +10,9 @@ const ANTIGRAVITY_EFFORT: CatalogOption = {
     choices: [
       { value: 'low', label: 'Low' },
       { value: 'medium', label: 'Medium' },
-      { value: 'high', label: 'High' }
+      { value: 'high', label: 'High' },
+      { value: 'xhigh', label: 'Extra high' },
+      { value: 'max', label: 'Max' }
     ],
     defaultValue: 'high'
   },
@@ -27,6 +29,32 @@ const ANTIGRAVITY_EFFORT: CatalogOption = {
       '--effort'
     ),
     midSession: { kind: 'command', build: (value) => `/effort ${String(value)}` }
+  }
+}
+
+const ANTIGRAVITY_REMOTE_AGENT: CatalogOption = {
+  id: 'remoteAgent',
+  label: 'Remote agent',
+  kind: { type: 'boolean', defaultValue: false },
+  apply: {
+    ...agentChoiceCliApply(
+      'antigravity',
+      [{ kind: 'flag', names: ['--remote-agent'], lift: 'bare' }],
+      '--remote-agent'
+    )
+  }
+}
+
+const ANTIGRAVITY_REMOTE_CONTROL: CatalogOption = {
+  id: 'remoteControl',
+  label: 'Remote control',
+  kind: { type: 'boolean', defaultValue: false },
+  apply: {
+    ...agentChoiceCliApply(
+      'antigravity',
+      [{ kind: 'flag', names: ['--remote-control'], lift: 'bare' }],
+      '--remote-control'
+    )
   }
 }
 
@@ -48,5 +76,5 @@ export const ANTIGRAVITY_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
     ),
     midSession: { kind: 'agent-picker', command: '/model' }
   },
-  unknownModelOptions: [ANTIGRAVITY_EFFORT]
+  unknownModelOptions: [ANTIGRAVITY_EFFORT, ANTIGRAVITY_REMOTE_AGENT, ANTIGRAVITY_REMOTE_CONTROL]
 }

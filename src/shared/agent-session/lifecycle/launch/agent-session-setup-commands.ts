@@ -49,8 +49,8 @@ export const AGENT_SESSION_SETUP_COMMANDS = [
     loginCommand: ['cursor-agent', 'login'],
     installCommand: 'curl https://cursor.com/install -fsS | bash'
   },
-  // An `agy` login does not sign its chats in: they keep their own sign-in.
-  { agent: 'antigravity', loginCommand: [] }
+  // Host `agy acp` uses `agy acp --login`; managed Antigravity chats keep their own sign-in in Settings.
+  { agent: 'antigravity', loginCommand: ['agy', 'acp', '--login'] }
 ] as const
 
 export function agentSessionSetupFor(agent: string | undefined) {
@@ -66,7 +66,12 @@ export function agentSessionSignInCommand(
 ): string | null {
   const entry = agentSessionSetupFor(agent)
   // Why: host terminals follow the selected managed Claude account; other managed logins aren't known to land.
-  if (!entry || (options.account === 'managed' && entry.agent !== 'claude')) {
+  // Host `agy acp` owns `agy acp --login` (`system`); managed Antigravity chats sign in through Settings.
+  if (
+    !entry ||
+    (options.account === 'managed' && entry.agent !== 'claude') ||
+    (entry.agent === 'antigravity' && options.account !== 'system')
+  ) {
     return null
   }
   if (entry.agent === 'claude' && options.account === 'system') {

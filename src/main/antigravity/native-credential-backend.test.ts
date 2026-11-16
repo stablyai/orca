@@ -1,13 +1,31 @@
 import { describe, expect, it, vi } from 'vitest'
-import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { credential } from './native-account-test-fixtures'
-import { createAntigravityFileCredentialBackend } from './native-credential-backend'
+import {
+  createAntigravityFileCredentialBackend,
+  createAntigravityHostCredentialBackend
+} from './native-credential-backend'
+import { hasAntigravityLinuxSecretService } from './native-linux-credentials'
 
 vi.mock('./native-macos-credentials', () => ({
   readAntigravityMacOSCredential: vi.fn(),
   writeAntigravityMacOSCredential: vi.fn()
+}))
+
+vi.mock('./native-linux-credentials', () => ({
+  readAntigravityLinuxCredential: vi.fn(async () => null),
+  writeAntigravityLinuxCredential: vi.fn(),
+  hasAntigravityLinuxSecretService: vi.fn(async () => false)
 }))
 
 describe('execution-host native credential authority', () => {
@@ -30,6 +48,35 @@ describe('execution-host native credential authority', () => {
         await expect(backend.read()).rejects.toThrow('read safely')
       }
     } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('uses file fallback on headless Linux when Secret Service is unavailable despite the fallback marker', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-agy-headless-linux-'))
+    const originalEnv = process.env
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('linux')
+    process.env = { DBUS_SESSION_BUS_ADDRESS: 'unix:path=/run/user/1000/bus' }
+    try {
+      const root = join(dir, '.gemini', 'antigravity-cli')
+      mkdirSync(join(root, 'cache'), { recursive: true })
+      const tokenPath = join(root, 'antigravity-oauth-token')
+      writeFileSync(tokenPath, credential('a'), { mode: 0o600 })
+      writeFileSync(join(root, 'cache', 'antigravity-keyring-unavailable'), '1')
+
+      vi.mocked(hasAntigravityLinuxSecretService).mockResolvedValue(false)
+
+      const backend = createAntigravityHostCredentialBackend(dir)
+      expect((await backend.read())?.identity?.subject).toBe('a')
+      await backend.write(credential('b'), credential('a'))
+      expect(readFileSync(tokenPath, 'utf8')).toBe(credential('b'))
+
+      // When Secret Service IS reachable, the fallback marker remains ambiguous and must throw.
+      vi.mocked(hasAntigravityLinuxSecretService).mockResolvedValue(true)
+      await expect(backend.read()).rejects.toThrow('fallback marker')
+    } finally {
+      process.env = originalEnv
+      platformSpy.mockRestore()
       rmSync(dir, { recursive: true, force: true })
     }
   })

@@ -58,12 +58,29 @@ const CLAUDE_SWITCHES = [
   '-v',
   '--version'
 ]
+const ANTIGRAVITY_SWITCHES = [
+  '-c',
+  '--continue',
+  '--dangerously-skip-permissions',
+  '--disable-slash-commands',
+  '-h',
+  '--help',
+  '--new-project',
+  '-p',
+  '--print',
+  '--remote-agent',
+  '--remote-control',
+  '--sandbox',
+  '-v',
+  '--version'
+]
 const EXTRA_CARRIERS: Partial<Record<TuiAgent, readonly string[]>> = {
   claude: CLAUDE_PERMISSION_OPTIONS,
   'claude-agent-teams': CLAUDE_PERMISSION_OPTIONS,
   codex: ['-a', '--ask-for-approval', '-s', '--sandbox', '--yolo', '--not-so-yolo', '--full-auto'],
   grok: ['--permission-mode', '--always-approve', '--yolo', '--dangerously-skip-permissions'],
   gemini: ['--approval-mode', '-y'],
+  antigravity: ['--dangerously-skip-permissions', '--mode', '--sandbox'],
   // Why: Kimi rejects --yolo (and its aliases) combined with --auto.
   kimi: ['-y', '--yolo', '--yes', '--auto-approve']
 }
@@ -133,7 +150,11 @@ export function permissionOptionInventory(agent: TuiAgent): PermissionOptionInve
   const carriers = new Set(EXTRA_CARRIERS[agent])
   const values = new Set(agent === 'codex' ? CODEX_VALUES : [])
   const switches = new Set<string>(
-    agent === 'claude' || agent === 'claude-agent-teams' ? CLAUDE_SWITCHES : []
+    agent === 'claude' || agent === 'claude-agent-teams'
+      ? CLAUDE_SWITCHES
+      : agent === 'antigravity'
+        ? ANTIGRAVITY_SWITCHES
+        : []
   )
   for (const { token, next } of recipes) {
     if (!token.startsWith('-')) {
@@ -150,7 +171,9 @@ export function permissionOptionInventory(agent: TuiAgent): PermissionOptionInve
     }
   }
   for (const { form } of forms) {
-    if (form.kind !== 'recipe') {
+    if (form.kind === 'flag') {
+      form.names.forEach((name) => switches.add(name))
+    } else if (form.kind !== 'recipe') {
       form.names.forEach((name) => values.add(name))
     }
   }

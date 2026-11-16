@@ -1,10 +1,11 @@
-import { existsSync } from 'node:fs'
+import { access } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
   readAntigravityMacOSCredential,
   writeAntigravityMacOSCredential
 } from './native-macos-credentials'
 import {
+  hasAntigravityLinuxSecretService,
   readAntigravityLinuxCredential,
   writeAntigravityLinuxCredential
 } from './native-linux-credentials'
@@ -36,6 +37,18 @@ function hostKeyring() {
   throw new Error('Native Antigravity account switching is not supported on this host.')
 }
 
+export async function antigravityUsesFileCredentialAuthority(
+  env: NodeJS.ProcessEnv = process.env
+): Promise<boolean> {
+  if (
+    isAntigravityFileStorageHost(env) ||
+    (process.platform === 'linux' && isAntigravityContainerOrWslHost())
+  ) {
+    return true
+  }
+  return process.platform === 'linux' && !(await hasAntigravityLinuxSecretService(env))
+}
+
 export function createAntigravityHostCredentialBackend(home: string): AntigravityCredentialBackend {
   if (process.platform === 'win32') {
     return createAntigravityWindowsCredentialBackend(getAntigravityWindowsHome(process.env))
@@ -50,8 +63,16 @@ export function createAntigravityHostCredentialBackend(home: string): Antigravit
   }
   const keyring = hostKeyring()
   const marker = join(root, 'cache', 'antigravity-keyring-unavailable')
+  const hasMarker = () =>
+    access(marker).then(
+      () => true,
+      () => false
+    )
   async function read() {
-    if (existsSync(marker)) {
+    if (await hasMarker()) {
+      if (process.platform === 'linux' && !(await hasAntigravityLinuxSecretService())) {
+        return file.read()
+      }
       throw new Error(
         'Antigravity has a keyring fallback marker; Orca cannot verify which credential store agy will use.'
       )
@@ -64,8 +85,18 @@ export function createAntigravityHostCredentialBackend(home: string): Antigravit
       if ((await read())?.contents !== (expected ?? undefined)) {
         throw new Error(CONFLICT)
       }
+      if (process.platform === 'linux' && (await hasMarker())) {
+        if (await hasAntigravityLinuxSecretService()) {
+          throw new Error(CONFLICT)
+        }
+        await file.write(contents, expected)
+        if ((await read())?.contents !== contents) {
+          throw new Error(CONFLICT)
+        }
+        return
+      }
       const native = await keyring.read()
-      if (existsSync(marker)) {
+      if (await hasMarker()) {
         throw new Error(CONFLICT)
       }
       if (native) {
