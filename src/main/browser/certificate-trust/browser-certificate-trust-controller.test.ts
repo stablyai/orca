@@ -1,7 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { BrowserCertificateTrustController } from './browser-certificate-trust-controller'
-import { resetSessionProxyApplicationForTests } from '../../network/proxy-settings'
+import {
+  resetSessionProxyApplicationForTests,
+  setProxySessionOverride
+} from '../../network/proxy-settings'
 
 const FIRST_CERTIFICATE = certificate('first certificate')
 let beforeRequestListener:
@@ -167,5 +170,15 @@ describe('BrowserCertificateTrustController', () => {
 
     expect(controller.proceed('page-2', 'challenge-2')).toEqual({ ok: true })
     expect(beforeRequest({ webContentsId: otherGuest.id })).toHaveBeenCalledWith({})
+  })
+
+  it('keeps extension recovery requests available after proxy application and rollback fail', async () => {
+    vi.mocked(browserSession.setProxy).mockRejectedValue(new Error('proxy unavailable'))
+    await expect(
+      setProxySessionOverride(browserSession, { mode: 'direct' }, { mode: 'system' })
+    ).rejects.toThrow('Could not apply or restore proxy configuration')
+    expect(beforeRequest({ url: 'https://example.test/' })).toHaveBeenCalledWith({ cancel: true })
+    expect(beforeRequest({ url: 'orca-extension-api://bridge/invoke' })).toHaveBeenCalledWith({})
+    vi.mocked(browserSession.setProxy).mockResolvedValue(undefined)
   })
 })

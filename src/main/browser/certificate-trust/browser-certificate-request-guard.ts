@@ -49,7 +49,9 @@ export class BrowserCertificateRequestGuard {
     // Chromium caches trust per session; gate requests to preserve approval per WebContents.
     session.webRequest.onBeforeRequest((details, callback) => {
       reportBrowserSessionWebRequest(session, 'onBeforeRequest', details)
-      const readiness = getProxySessionApplicationReadiness(session)
+      const readiness = /^(https?|wss?):/.test(details.url)
+        ? getProxySessionApplicationReadiness(session)
+        : true
       const answer = (ready: boolean): void => {
         if (!ready || this.shouldBlockRequest(session, details)) {
           callback({ cancel: true })
