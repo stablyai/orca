@@ -85,6 +85,20 @@
       "unreadCaption": "<label>Blue dot:</label> unread",
       "dismiss": "Dismiss"
     },
+    "worktreeCardsIntroNotice": {
+      "title": "New card style",
+      "experimental": "Experimental",
+      "dismiss": "Not now",
+      "previewBody": "Agent status, unread dots and child summaries on every card. This is a preview of your list.",
+      "classicBody": "Back to your current cards. Flip to New to preview again.",
+      "switchLabel": "Card style",
+      "classic": "Classic",
+      "new": "New",
+      "keep": "Keep new",
+      "laterToast": "Try the new cards any time from Workspace options › Card style",
+      "keptTitle": "New cards are on",
+      "keptBody": "Change it here, under Card style."
+    },
     "revealFiltered": {
       "title": "Reveal hidden workspace?",
       "description": "The active workspace is hidden in the sidebar. Revealing it will adjust only the filters hiding it.",
