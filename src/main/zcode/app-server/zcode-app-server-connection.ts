@@ -1,8 +1,8 @@
-import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import { spawnProcess } from '@orca/process-host'
 import { spawnManagedProviderProcess } from '../../provider-process/managed-provider-process'
 import { createClaudeChildTreeReaper } from '../../claude/child-process/claude-agent-sdk-exit-proof'
 import type { ProviderProcessLaunch } from '../../provider-process/provider-process-launch'
+import type { ProviderProcessSpawner } from '../../provider-process/provider-process-spawn'
 import { buildZcodeAppServerExitError, ZcodeAppServerTimeoutError } from './zcode-app-server-errors'
 import { withProviderSpawnAbsence } from '../../provider-process/provider-executable-missing'
 import { afterProviderOutputDrains } from '../../provider-process/provider-exit-output-drain'
@@ -26,7 +26,7 @@ export const DEFAULT_ZCODE_REQUEST_TIMEOUT_MS = 30_000
 export function spawnZcodeAppServerConnection(
   launch: ZcodeAppServerLaunch,
   handlers: ZcodeAppServerConnectionHandlers = {},
-  spawnImpl: PipedProcessSpawner = spawnProcess
+  spawnImpl: ProviderProcessSpawner = spawnProcess
 ): Promise<ZcodeAppServerConnection> {
   const managed = spawnManagedProviderProcess(launch, {
     spawnImpl,

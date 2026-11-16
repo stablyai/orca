@@ -1,5 +1,5 @@
 import type { StructuredAgentSessionHostDeps } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host-types'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { AgentSessionAccountKind } from '../../../../shared/agent-session/agent-session-availability'
 import type { StructuredAgentSessionTransportOverrides } from '../structured-agent-session-transport-overrides'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
