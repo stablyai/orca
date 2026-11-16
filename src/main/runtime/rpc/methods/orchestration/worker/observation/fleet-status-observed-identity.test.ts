@@ -8,7 +8,7 @@ import type { OrcaRuntimeService } from '../../../../../orca-runtime'
 
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 
-import { OrcaRuntimeWithGetOrchestrationDispatchAuthority } from '../../../../../terminal/output/terminal-orchestration-authority'
+import { readOrchestrationFleetAgentStatusSnapshot } from '../../../../../orchestration/addressing/orchestration-fleet-agent-status-snapshot'
 
 import {
   AgentStatusObservedPaneIdentities,
@@ -74,9 +74,7 @@ function createWorld(): ObservedWorld {
       }),
     runtime: {
       getOrchestrationFleetAgentStatusSnapshot: () =>
-        OrcaRuntimeWithGetOrchestrationDispatchAuthority.prototype.getOrchestrationFleetAgentStatusSnapshot.call(
-          host as never
-        )
+        readOrchestrationFleetAgentStatusSnapshot(host)
     } as unknown as OrcaRuntimeService
   }
 }
