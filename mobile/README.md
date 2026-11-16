@@ -193,9 +193,11 @@ other catalogs may lag and fall back to English. `pnpm verify:mobile-localizatio
 `ORCA_ANDROID_KEY_ALIAS` and `ORCA_ANDROID_KEY_PASSWORD` at build time; nothing is written into the
 project. Without them, local release builds keep Expo's debug key.
 
-The keystore in these secrets is the Play **upload key**. Google re-signs every upload with its own
-Play app signing key (SHA-256 `A0:A6:67:69:…:DA:07`), which no one outside Google holds. The
-workflow fails before building if any of these is missing:
+The keystore in these secrets is the Orca **release key** (`CN=Orca, O=Stably AI`, SHA-256
+`19:68:CC:3A:…:AD:BC`). It signs the GitHub APK directly and is Play's upload key; Google re-signs
+Play uploads with its own app signing key (`A0:A6:67:69:…:DA:07`), which no one outside Google
+holds. Every GitHub install pins the release key, so back it up: losing it means no GitHub install
+can be updated in place. The workflow fails before building if any of these is missing:
 
 | Name                             | Kind   | Value                                                   |
 | -------------------------------- | ------ | ------------------------------------------------------- |
@@ -210,17 +212,20 @@ workflow fails before building if any of these is missing:
 Android ships as `dev.orca.app` (iOS keeps `com.stably.orca.mobile`). Pushing an `android-v<version>`
 tag, or running `.github/workflows/mobile-android-release.yml` by hand, does this:
 
-- builds the AAB with the upload key and uploads it to Play's internal testing track
-- downloads Google's signed universal APK for that versionCode (`fastlane android download_signed_apk`)
-  and fails unless its `V3.0 Signer` is Google's app signing key. It also fails if the APK carries
-  Play's automatic-protection license check (`com.pairip.licensecheck`): that check closes the app
-  wherever Google Play is disabled or unreachable, such as mainland China. Keep **automatic
-  protection off** in Play Console (Test and release > App integrity).
-- publishes that APK and its `.sha256` as the `android-v<version>` GitHub pre-release
+- builds the AAB and a universal APK in one Gradle run, both signed with the release key, and fails
+  unless the APK's signer is that key
+- uploads the AAB to Play's internal testing track
+- publishes the APK and its `.sha256` as the `android-v<version>` GitHub pre-release
 
-Play and GitHub installs are the same signed app, so either can update the other. Promotion to
-production is manual in Play Console. A manual run with `publish_github_release` off only builds the
-AAB and validates it with Play (`validate_only`); nothing is released.
+The GitHub APK is our own build, not the APK Play generates. Play Console's automatic protection
+adds a license check to every APK Play delivers, which closes the app wherever Google Play is
+disabled or unreachable, such as mainland China (#42973). Our build has no such check.
+
+The two channels carry different signing keys, so neither can update the other: moving between a
+Play install and a GitHub install means uninstalling first. `android-v0.0.65` on GitHub was Google's
+APK, so its users uninstall once as well. Promotion to production is manual in Play Console. A manual
+run with `publish_github_release` off only builds both and validates the AAB with Play
+(`validate_only`); nothing is released.
 
 Play rejects a versionCode it has seen, so bump `expo.android.versionCode` for every release. The
 upload fails before anything is published when the bump is missing.

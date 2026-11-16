@@ -1,7 +1,9 @@
 name: Mobile Android Release
 
 # Release Android independently so App Store review cannot block its shipping cadence.
-# dev.orca.app ships on Google Play and as an APK on GitHub; both are the same Play-signed build.
+# dev.orca.app ships on Google Play and as an APK on GitHub. Play's APKs carry its license check,
+# which closes the app where Play is unreachable (mainland China, #42973), so the GitHub APK is our
+# own build, signed with the release key instead of Google's app signing key.
 on:
   push:
     tags:
@@ -24,10 +26,15 @@ jobs:
     permissions:
       contents: read
 
+    env:
+      GITHUB_APK: android/app/build/outputs/apk/release/app-release.apk
+      # The release key's certificate (CN=Orca, O=Stably AI). Every GitHub install pins it.
+      GITHUB_APK_CERT_SHA256: '19:68:CC:3A:F4:90:97:24:F7:FA:AC:8D:4E:3C:5E:F9:16:97:AE:FB:69:05:E2:EA:65:0D:19:1B:B3:9F:AD:BC'
+
     outputs:
+      cert_sha256: ${{ env.GITHUB_APK_CERT_SHA256 }}
       publish_release: ${{ steps.release.outputs.publish_release }}
       version: ${{ steps.release.outputs.version }}
-      version_code: ${{ steps.release.outputs.android_version_code }}
       tag: ${{ steps.release.outputs.tag }}
 
     defaults:
@@ -96,24 +103,46 @@ jobs:
           umask 077
           printf '%s' "$ORCA_ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/orca-release.keystore"
 
-      - name: Build Play app bundle
+      # One run so the AAB and the GitHub APK come from the same compile and the same key.
+      - name: Build Play app bundle and GitHub APK
         env:
           ORCA_ANDROID_REQUIRE_RELEASE_SIGNING: 'true'
           ORCA_ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/orca-release.keystore
           ORCA_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ORCA_ANDROID_KEYSTORE_PASSWORD }}
           ORCA_ANDROID_KEY_ALIAS: ${{ secrets.ORCA_ANDROID_KEY_ALIAS }}
           ORCA_ANDROID_KEY_PASSWORD: ${{ secrets.ORCA_ANDROID_KEY_PASSWORD }}
-        run: cd android && ./gradlew bundleRelease
+        run: cd android && ./gradlew bundleRelease assembleRelease
 
       - name: Remove upload keystore
         if: always()
         run: rm -f "$RUNNER_TEMP/orca-release.keystore"
+
+      # GitHub installs only take updates signed by the same key, so a swapped or debug key must not ship.
+      - name: Verify GitHub APK signing certificate
+        run: |
+          set -euo pipefail
+          expected="${GITHUB_APK_CERT_SHA256//:/}"
+          expected="${expected,,}"
+          apksigner="$(ls -d "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)"
+          certs="$("$apksigner" verify --print-certs "$GITHUB_APK" | sed -En 's/^(Signer #[0-9]+|V[0-9.]+ Signer):? certificate SHA-256 digest: //p' | sort -u)"
+          if [ "$certs" != "$expected" ]; then
+            echo "::error::The GitHub APK signing certificate ($certs) is not the Orca release key ($GITHUB_APK_CERT_SHA256)."
+            exit 1
+          fi
+          echo "GitHub APK is signed with the Orca release key $GITHUB_APK_CERT_SHA256"
 
       - name: Upload AAB artifact
         uses: actions/upload-artifact@v7
         with:
           name: orca-mobile-aab
           path: mobile/android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: error
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: orca-mobile-apk
+          path: mobile/${{ env.GITHUB_APK }}
           if-no-files-found: error
 
   # Its own job so a Play outage can be rerun without rebuilding. Play rejects a versionCode it has
@@ -172,8 +201,7 @@ jobs:
         if: always()
         run: rm -f "$RUNNER_TEMP/play-service-account.json"
 
-  # The GitHub APK is Google's universal APK for the uploaded bundle, so it carries the same
-  # app signing key as Play installs and either channel can update the other.
+  # After the Play upload, so a versionCode Play rejects fails before anything is published.
   github-release:
     needs: [android-build, play-internal-upload]
     if: needs.android-build.outputs.publish_release == 'true'
@@ -185,11 +213,7 @@ jobs:
       contents: write
 
     env:
-      BUNDLE_FROZEN: 'true'
-      FASTLANE_SKIP_UPDATE_CHECK: '1'
-      FASTLANE_HIDE_CHANGELOG: '1'
-      FASTLANE_OPT_OUT_USAGE: '1'
-      APK: build/play/app-release.apk
+      APK: build/github/app-release.apk
 
     defaults:
       run:
@@ -199,31 +223,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Setup Ruby and fastlane
-        uses: ruby/setup-ruby@v1
+      - name: Download APK artifact
+        uses: actions/download-artifact@v8
         with:
-          ruby-version: '3.3'
-          bundler-cache: true
-          working-directory: mobile
-
-      - name: Write Play service account key
-        env:
-          ORCA_PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.ORCA_PLAY_SERVICE_ACCOUNT_JSON }}
-        run: |
-          set -euo pipefail
-          umask 077
-          key="$RUNNER_TEMP/play-service-account.json"
-          printf '%s' "$ORCA_PLAY_SERVICE_ACCOUNT_JSON" > "$key"
-          echo "ORCA_PLAY_JSON_KEY_PATH=$key" >> "$GITHUB_ENV"
-
-      # Fails unless the V3.0 signer is Google's Play app signing key.
-      - name: Download and verify the Play-signed universal APK
-        id: signer
-        run: bundle exec fastlane android download_signed_apk version_code:"${{ needs.android-build.outputs.version_code }}" destination:"$PWD/$APK"
-
-      - name: Remove Play service account key
-        if: always()
-        run: rm -f "$RUNNER_TEMP/play-service-account.json"
+          name: orca-mobile-apk
+          path: mobile/build/github
 
       # Publish size/digest to distinguish truncated downloads (missing tail signature block) from bad APK builds.
       - name: Checksum the APK
@@ -242,14 +246,6 @@ jobs:
             echo "sha256=$sha256"
           } >> "$GITHUB_OUTPUT"
           echo "APK is $bytes bytes, sha256 $sha256"
-
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: orca-mobile-apk
-          path: |
-            mobile/build/play/app-release.apk
-            mobile/build/play/app-release.apk.sha256
 
       - name: Ensure GitHub release tag
         if: ${{ !startsWith(github.ref, 'refs/tags/android-v') }}
@@ -275,9 +271,9 @@ jobs:
 
           # printf rather than a heredoc: YAML block indentation would leak into the Markdown.
           # Both platforms' commands are named because a reader on macOS has no sha256sum.
-          signer_line='- Signing certificate SHA-256: `${{ steps.signer.outputs.cert_sha256 }}`\n'
+          signer_line='- Signing certificate SHA-256: `${{ needs.android-build.outputs.cert_sha256 }}`\n'
           verification_section() {
-            printf '\n### Verify your download\n\n- Size: `%s` bytes\n- SHA-256: `%s`\n%b\nA "no certificate" or "problem parsing the package" install failure is usually a truncated download — check the size first, then `sha256sum -c app-release.apk.sha256` (`shasum -a 256 -c` on macOS).\n' \
+            printf '\n### Verify your download\n\n- Size: `%s` bytes\n- SHA-256: `%s`\n%b\nA "no certificate" or "problem parsing the package" install failure is usually a truncated download — check the size first, then `sha256sum -c app-release.apk.sha256` (`shasum -a 256 -c` on macOS).\n\nThis APK is signed with a different key from the Google Play app and from `android-v0.0.65`. If Android says "App not installed" over one of those, uninstall it first, then pair again.\n' \
               '${{ steps.apk.outputs.bytes }}' '${{ steps.apk.outputs.sha256 }}' "$signer_line"
           }
 
