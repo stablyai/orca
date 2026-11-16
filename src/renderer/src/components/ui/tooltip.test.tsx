@@ -56,6 +56,7 @@ it('opens when assistive tech moves focus after a pointer interaction', () => {
   for (const type of ['pointerdown', 'mousedown', 'pointerup']) {
     document.body.dispatchEvent(new PointerEvent(type, { bubbles: true }))
   }
+  vi.runAllTimers()
   // Screen-reader focus arrives as a focus event with no preceding input or script focus() call.
   act(() => {
     trigger().dispatchEvent(new FocusEvent('focusin', { bubbles: true }))

@@ -20,9 +20,12 @@ function onPointerDown(): void {
   modality = 'pointer'
 }
 
-// A press moves focus by the time it ends; later focus without new input isn't the pointer's.
+// A press has moved focus once its release task ends (a <label> click focuses its control after
+// pointerup and click listeners); later focus without new input isn't the pointer's.
 function onPointerUp(): void {
-  inputSinceLastFocus = false
+  setTimeout(() => {
+    inputSinceLastFocus = false
+  }, 0)
 }
 
 function onFocusIn(): void {
