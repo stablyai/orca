@@ -47,6 +47,8 @@ export function useCodexSwitcherController(codex: ProviderRateLimits) {
   const [isSwitching, setIsSwitching] = useState(false)
   const [isRedeemingReset, setIsRedeemingReset] = useState(false)
   const [reauthenticatingAccountId, setReauthenticatingAccountId] = useState<string | null>(null)
+  // Why: pending-action flags outlive an owner change; the list hook's guard is per owner.
+  const mountedRef = useRef(true)
   const menuOpenRef = useRef(open)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
@@ -74,7 +76,7 @@ export function useCodexSwitcherController(codex: ProviderRateLimits) {
     runtimeTarget
   )
   const codexAccountSyncKey = useAppStore((s) => getCodexAccountSyncKey(s.settings))
-  const { accounts, setAccounts, loadAccounts, mountedRef } = useProviderAccountList(
+  const { accounts, setAccounts, loadAccounts } = useProviderAccountList(
     'codex',
     runtimeTarget,
     codexAccountSyncKey,
@@ -85,6 +87,13 @@ export function useCodexSwitcherController(codex: ProviderRateLimits) {
     accounts,
     activeRuntimeEnvironmentId
   )
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   useEffect(() => {
     menuOpenRef.current = open
@@ -106,9 +115,7 @@ export function useCodexSwitcherController(codex: ProviderRateLimits) {
         wslDistro: target.wslDistro
       })
       recordFeatureInteraction('codex-account-switching')
-      if (mountedRef.current) {
-        setAccounts(next)
-      }
+      setAccounts(next)
       // Why: remote selections live on the server; local GlobalSettings are untouched, so refetching is pure churn.
       if (!hasActiveRuntimeEnvironment) {
         await fetchSettings()

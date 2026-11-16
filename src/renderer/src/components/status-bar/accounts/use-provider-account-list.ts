@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import {
   fetchProviderAccountsSnapshot,
   getProviderAccountsOwnerKey,
@@ -42,6 +42,8 @@ export function useProviderAccountList<Provider extends 'claude' | 'codex'>(
     noSnapshot
   )
   const [local, setLocal] = useState({ ownerKey, accounts: initial, known: false })
+  // Why: a list read started before a selection can settle after the selection reply.
+  const writeSequenceRef = useRef(0)
   const accounts = observing
     ? (answer?.accounts ?? initial)
     : local.ownerKey === ownerKey
@@ -55,6 +57,7 @@ export function useProviderAccountList<Provider extends 'claude' | 'codex'>(
       if (!mountedRef.current) {
         return
       }
+      writeSequenceRef.current += 1
       if (observing) {
         observation.setAccounts(next)
       } else {
@@ -68,12 +71,13 @@ export function useProviderAccountList<Provider extends 'claude' | 'codex'>(
     [mountedRef, observing, observation, ownerKey]
   )
   const loadAccounts = useCallback(async () => {
+    const writeSequence = writeSequenceRef.current
     const snapshot = await fetchProviderAccountsSnapshot(ownerTarget)
     if (snapshot.failedProviders?.includes(provider)) {
       console.error(`${provider} account list failed; keeping previous state.`)
       return
     }
-    if (mountedRef.current) {
+    if (mountedRef.current && writeSequence === writeSequenceRef.current) {
       if (observing) {
         observation.setAccounts(snapshot[provider])
       } else {
