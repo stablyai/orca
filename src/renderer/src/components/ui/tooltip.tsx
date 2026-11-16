@@ -3,7 +3,7 @@ import * as TooltipPrimitive from 'radix-ui/tooltip'
 
 import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/class-names'
-import { isKeyboardInputModality } from '@/lib/keyboard/keyboard-input-modality'
+import { isKeyboardOrVirtualFocus } from '@/lib/keyboard/keyboard-input-modality'
 import { PortalContainerContext, usePortalContainer } from './portal-container-context'
 
 function TooltipProvider({
@@ -38,8 +38,8 @@ function TooltipTrigger({
       onFocus={(event) => {
         onFocus?.(event)
         // Why: focus restored to the trigger after a mouse-closed dialog/menu/panel must not pop the
-        // label; preventDefault skips Radix's open-on-focus unless the focus followed keyboard input.
-        if (!isKeyboardInputModality()) {
+        // label; preventDefault skips Radix's open-on-focus unless keyboard or assistive tech moved focus.
+        if (!isKeyboardOrVirtualFocus()) {
           event.preventDefault()
         }
       }}

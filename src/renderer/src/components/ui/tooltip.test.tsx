@@ -52,6 +52,17 @@ it('stays closed when focus is restored after a pointer interaction', () => {
   expect(tooltipOpen()).toBe(false)
 })
 
+it('opens when assistive tech moves focus after a pointer interaction', () => {
+  for (const type of ['pointerdown', 'mousedown', 'pointerup']) {
+    document.body.dispatchEvent(new PointerEvent(type, { bubbles: true }))
+  }
+  // Screen-reader focus arrives as a focus event with no preceding input or script focus() call.
+  act(() => {
+    trigger().dispatchEvent(new FocusEvent('focusin', { bubbles: true }))
+  })
+  expect(tooltipOpen()).toBe(true)
+})
+
 it('opens on hover', () => {
   act(() => {
     trigger().dispatchEvent(
