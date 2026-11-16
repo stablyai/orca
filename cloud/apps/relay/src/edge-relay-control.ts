@@ -46,7 +46,11 @@ export type EdgeControlFlags = {
   // cohort (inEdgeCohort) and answered `url` whatever its country, exclusion included, so an
   // excluded country's host can reach the edge only through the front door. Dropping it from the
   // list puts it back under the exclusion and rollout (an excluded host leaves the edge at its next
-  // ask or the evacuation sweep). Absent: no host is newly mapped, and mapped hosts return to the
+  // ask or, when its bucket is above the rollout, the evacuation sweep; one under it stays until its
+  // control drops). Like removing an allow list entry, only remove a host while leaveCeilingPermille
+  // is unset or above its bucket, or its asks skip the leave and lose its edge-only devices. List a
+  // host only while every serving director carries the same ORCA_RELAY_EDGE_FRONT_DOOR_URLS: one
+  // without it answers a listed live host the edge's own URL (stayOnEdge). Absent: no host is newly mapped, and mapped hosts return to the
   // edge URL on their next reconnect. A bad value drops only this key (reported in ignoredKeys);
   // the rest of the object still applies.
   frontDoor?: EdgeFrontDoorFlag
