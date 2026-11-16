@@ -17,7 +17,10 @@ import {
   cachedWorktreePathsForScope
 } from './worktree-head-identity-cached-paths'
 import { invalidateGitStatusReads } from '../../../git/source-control/git-read-cache-invalidation'
-import { notifyWorktreeGitStatusMetadataChanged } from '../../worktree-remote'
+import {
+  notifyWorktreeGitStatusMetadataChanged,
+  notifyWorktreesChanged
+} from '../../worktree-remote'
 import {
   notifyGitStatusChangedForRemoteClients,
   notifyWatchedWorktreeCatalogChanged,
@@ -173,9 +176,9 @@ export function scheduleWorktreeBaseNotification(
         headIdentityScope,
         headMoveRepoIds.length > 0
           ? () => {
-              // Unpublished heads fall back to the re-list this burst would have needed.
+              // Owners and remote clients were already told; the local renderer re-lists unpublished heads.
               for (const repoId of headMoveRepoIds) {
-                notifyWatchedWorktreeCatalogChanged(watch.mainWindow, repoId)
+                notifyWorktreesChanged(watch.mainWindow, repoId)
               }
             }
           : undefined
