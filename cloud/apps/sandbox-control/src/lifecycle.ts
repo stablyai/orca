@@ -516,27 +516,27 @@ export function egressPolicy(
           : []),
         ...(appOnFirewall && gitToken
           ? [
-              // APPROVALS-REFUSED: every write with the App placeholder goes to the proxy, which reads it and refuses
-              // approvals; only reads (GET/HEAD) are swapped by the firewall. Not scoped by path: the firewall matches
-              // the raw path and GitHub normalizes it (review G1, the #776 lesson).
+              // APPROVALS-REFUSED: the firewall swaps the App token only for reads (GET/HEAD); every other request
+              // with the App placeholder, whatever its method or path, goes to the proxy, which reads it and refuses
+              // approvals (review G1 and its low: an unexpected method is inspected, not swapped).
+              ...githubPlaceholderHeaders(row).map(
+                (placeholder): CredentialRoute => ({
+                  host: 'api.github.com',
+                  header: 'authorization',
+                  placeholders: [placeholder],
+                  paths: [{ startsWith: '/', methods: ['GET', 'HEAD'] }],
+                  via: 'transform',
+                  // `Bearer <placeholder>` / `token <placeholder>`: the same scheme with the real token.
+                  value: `${placeholder.slice(0, placeholder.indexOf(' '))} ${gitToken}`
+                })
+              ),
               {
                 host: 'api.github.com',
                 header: 'authorization',
                 placeholders: githubPlaceholderHeaders(row),
                 via: 'forward' as const,
-                forwardURL: proxyUrl,
-                paths: [{ startsWith: '/', methods: ['POST', 'PUT', 'PATCH', 'DELETE'] }]
-              },
-              ...githubPlaceholderHeaders(row).map(
-              (placeholder): CredentialRoute => ({
-                host: 'api.github.com',
-                header: 'authorization',
-                placeholders: [placeholder],
-                via: 'transform',
-                // `Bearer <placeholder>` / `token <placeholder>`: the same scheme with the real token.
-                value: `${placeholder.slice(0, placeholder.indexOf(' '))} ${gitToken}`
-              })
-            )
+                forwardURL: proxyUrl
+              }
             ]
           : [
               {

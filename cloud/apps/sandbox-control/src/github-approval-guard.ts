@@ -45,14 +45,14 @@ const writes = (method: string) => !['GET', 'HEAD', 'OPTIONS'].includes(method.t
 
 /**
  * Review G2: a write whose path GitHub would normalize differently than these checks read it (percent-escapes, empty
- * or dot segments) is refused outright, so `/repos/o/r/pulls/7/%72eviews` or `/x/%2e%2e/repos/...` can't slip past.
+ * or dot segments, `;` matrix parameters) is refused outright, so `/repos/o/r/pulls/7/%72eviews` or `/x/%2e%2e/repos/...` can't slip past.
  */
 export function unnormalizedWrite(method: string, path: string): boolean {
   if (!writes(method)) {
     return false
   }
   const raw = path.split('?')[0] ?? ''
-  return raw.includes('%') || raw.includes('//') || raw.split('/').some((segment) => segment === '.' || segment === '..')
+  return raw.includes('%') || raw.includes('//') || raw.includes(';') || raw.split('/').some((segment) => segment === '.' || segment === '..')
 }
 
 /** Requests whose body the approval check must read (the proxy reads it as text only for these). */

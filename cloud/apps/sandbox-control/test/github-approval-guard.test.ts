@@ -75,7 +75,7 @@ describe('REST approvals', () => {
 
 describe('review G2 and G4: unnormalized write paths; approval-shaped REST actions', () => {
   it('a write with escapes, empty or dot segments is refused before any check; reads are untouched', () => {
-    for (const path of ['/repos/o/r/pulls/7/%72eviews', '/x/%2e%2e/repos/o/r/pulls/7/reviews', '//repos/o/r/pulls/7/reviews', '/repos/o/r/./pulls/7/reviews', '/repos/o/r/../r/pulls/7/reviews']) {
+    for (const path of ['/repos/o/r/pulls/7/reviews;x', '/repos/o/r/pulls/7/%72eviews', '/x/%2e%2e/repos/o/r/pulls/7/reviews', '//repos/o/r/pulls/7/reviews', '/repos/o/r/./pulls/7/reviews', '/repos/o/r/../r/pulls/7/reviews']) {
       expect(unnormalizedWrite('POST', path), path).toBe(true)
     }
     expect(unnormalizedWrite('GET', '/repos/o/r/%2e%2e')).toBe(false)
