@@ -130,6 +130,10 @@ export function settleWslAutomountRoot(
       return false
     }
     await options.admit?.()
+    // Another caller may have read, or failed to, while this one waited for admission.
+    if (readSinceStart.has(key) || recentlyFailed(key)) {
+      return false
+    }
     return waitForPromiseWithSignal(pending.get(key) ?? startRead(distro, read), options.signal)
   }
   return (async () => {
