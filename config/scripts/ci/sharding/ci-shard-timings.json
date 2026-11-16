@@ -3241,7 +3241,6 @@
       "src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.failure-message.test.tsx": 3251,
       "src/renderer/src/components/browser-pane/workspace-doc/doc-preview-external-link-confirmation.test.ts": 1057,
       "src/renderer/src/components/browser-pane/workspace-doc/doc-preview-webview-attach.test.ts": 200,
-      "src/renderer/src/components/cmd-j/palette-focus-restore-target.test.ts": 186,
       "src/renderer/src/components/cmd-j/task-search-activation.test.ts": 1880,
       "src/renderer/src/components/confirmation-dialog.test.tsx": 1231,
       "src/renderer/src/components/connect-dialog-outside-dismiss.test.tsx": 1125,
