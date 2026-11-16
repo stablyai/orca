@@ -100,6 +100,7 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
     this.refreshWritableFlags()
     this.markSessionTabsInventoryPublished()
     this.releaseUnseededPhoneFrames()
+    this.releaseAgentSenderHistoryIfUnobserved()
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
       this.headlessGraphFallbackAvailable = true
       startedMainTerminalSurfaces(this)?.republish({ force: true })
