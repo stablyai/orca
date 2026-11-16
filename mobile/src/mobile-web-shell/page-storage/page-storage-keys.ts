@@ -26,7 +26,9 @@ export const TERMINAL_SETTINGS_STORAGE_KEYS = [
   'orca:terminalTextScale',
   'orca:terminalFontStyle',
   'orca:terminalAutocompleteEnabled',
-  'orca:terminalLinkOpenMode'
+  'orca:terminalLinkOpenMode',
+  /** Chat text size, font and spacing, so an open chat follows Settings too. */
+  'orca:nativeChatText'
 ] as const
 
 export const PAGE_STORAGE_EXACT_KEYS = [
@@ -45,7 +47,9 @@ export const PAGE_STORAGE_EXACT_KEYS = [
   /** The split terminal's chosen direction. */
   'orca:terminalSplitLayout',
   /** Terminal font, line spacing and weight. */
-  'orca:terminalFontStyle'
+  'orca:terminalFontStyle',
+  /** Chat text size, font and spacing; a pinch in a chat saves here. */
+  'orca:nativeChatText'
 ] as const
 
 /**
@@ -55,7 +59,8 @@ export const PAGE_STORAGE_EXACT_KEYS = [
  */
 export const NEGOTIATED_PAGE_STORAGE_KEYS = [
   'orca:terminalSplitLayout',
-  'orca:terminalFontStyle'
+  'orca:terminalFontStyle',
+  'orca:nativeChatText'
 ] as const
 
 /** Whether a page that declared `storageKeys` (null: declared nothing) reads this key in `init`. */
