@@ -1,3 +1,5 @@
+import { isCurrentPlatformIosWeb } from '@/app-shell/platform/ios-web-platform'
+
 export type TerminalImeInputContextRefocusScheduler = (callback: () => void) => void
 
 export type TerminalImeInputContextRefreshOptions = {
@@ -32,8 +34,18 @@ export function isTerminalImeInputContextRefreshing(target: EventTarget | null):
   return target instanceof HTMLElement && refreshingHelpers.has(target)
 }
 
+/** The helper is blurred only until its scheduled refocus, so callers can treat it as focused. */
+export function isTerminalImeInputContextRefocusPending(helper: HTMLElement): boolean {
+  return pendingRefocusSkipHandlers.has(helper)
+}
+
+// Why not iOS web: its UA also says Mac, and a blur there drops the on-screen keyboard for good.
 function isMacUserAgent(): boolean {
-  return typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
+  return (
+    typeof navigator !== 'undefined' &&
+    navigator.userAgent.includes('Mac') &&
+    !isCurrentPlatformIosWeb()
+  )
 }
 
 export function scheduleNextFrame(callback: () => void): void {
