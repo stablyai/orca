@@ -2,7 +2,10 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRowAttribution
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { createAgentSessionDeltaCoalescer } from '../../../native-chat/agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
+import {
+  agentSessionTextCheckpointDueIn,
+  createAgentSessionDeltaCoalescer
+} from '../../../native-chat/agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
 import { CodexItemStreamRetention } from './codex-item-stream-retention'
 import { appendCodexItemAndPublish } from '../journal/codex-structured-journal-sink'
 import { codexJournalItem, codexStreamingJournalItem } from './codex-structured-item-translation'
@@ -37,6 +40,7 @@ export function createCodexStructuredItemStreams(
 ): CodexStructuredItemStreams {
   const states = new CodexItemStreamRetention()
   const checkpointLengths = new Map<string, number>()
+  const checkpointTimes = new Map<string, number>()
   const pendingCheckpoints = new Set<string>()
   // Resolve attribution on each append so later-discovered parents reach existing rows.
   const producers = new Map<string, { threadId: string; turnId: string | null }>()
@@ -54,6 +58,7 @@ export function createCodexStructuredItemStreams(
     coalescer.forget(key)
     states.forget(key)
     checkpointLengths.delete(key)
+    checkpointTimes.delete(key)
     pendingCheckpoints.delete(key)
     producers.delete(key)
     const pending = pendingPatches.get(key)
@@ -104,7 +109,15 @@ export function createCodexStructuredItemStreams(
     }).accepted
   }
 
+  const isText = (key: string): boolean => {
+    const type = states.get(key)?.item.type
+    return type === 'agentMessage' || type === 'reasoning' || type === 'plan'
+  }
+
   const shouldPersist = (key: string, textLength: number): boolean => {
+    if (isText(key)) {
+      return true
+    }
     const checkpointLength = checkpointLengths.get(key) ?? 0
     const nextLength = Math.max(checkpointLength + 32, Math.ceil(checkpointLength * 1.125))
     return !(checkpointLength > 0 && textLength < nextLength)
@@ -117,6 +130,7 @@ export function createCodexStructuredItemStreams(
     const state = states.get(key)
     if (state && append(key, state, text)) {
       checkpointLengths.set(key, text.length)
+      checkpointTimes.set(key, performance.now())
       pendingCheckpoints.delete(key)
       return true
     }
@@ -130,6 +144,7 @@ export function createCodexStructuredItemStreams(
     isProtected: (key) => states.isPersistent(key),
     schedule: deps.schedule,
     shouldEmit: shouldPersist,
+    dueIn: (key) => (isText(key) ? agentSessionTextCheckpointDueIn(checkpointTimes.get(key)) : 0),
     emit: (key, text) => {
       return persist(key, text, false)
     }
@@ -156,7 +171,9 @@ export function createCodexStructuredItemStreams(
   }
 
   const flush = (threadId?: string): boolean => {
-    let flushed = coalescer.flushAll()
+    let flushed = coalescer.flushAll(
+      threadId === undefined ? undefined : (key) => producers.get(key)?.threadId === threadId
+    )
     for (const key of pendingCheckpoints) {
       // flushAll already placed every stream's first row; re-saving other threads would bypass their cadence.
       if (threadId !== undefined && producers.get(key)?.threadId !== threadId) {
@@ -278,6 +295,7 @@ export function createCodexStructuredItemStreams(
       coalescer.dispose()
       states.clear()
       checkpointLengths.clear()
+      checkpointTimes.clear()
       pendingCheckpoints.clear()
       producers.clear()
       pendingPatches.clear()

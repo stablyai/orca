@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
@@ -38,25 +38,17 @@ function recorder() {
   }
 }
 
+afterEach(() => vi.useRealTimers())
+
 function manualWindow() {
-  const pending: (() => void)[] = []
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
   return {
-    schedule: (run: () => void) => {
-      pending.push(run)
-      return () => {
-        const index = pending.indexOf(run)
-        if (index !== -1) {
-          pending.splice(index, 1)
-        }
-      }
+    schedule: (run: () => void, ms: number) => {
+      const timer = setTimeout(run, ms)
+      return () => clearTimeout(timer)
     },
-    fire: () => {
-      const due = pending.splice(0)
-      for (const run of due) {
-        run()
-      }
-    },
-    idle: () => pending.length === 0
+    fire: () => vi.advanceTimersToNextTimer(),
+    idle: () => vi.getTimerCount() === 0
   }
 }
 
@@ -104,7 +96,9 @@ describe('Codex streamed checkpoint admission', () => {
     })
     delta('x')
     window.fire()
-    expect(tap.rows).toHaveLength(rows + 1)
+    expect(tap.rows.at(-1)?.body).toMatchObject({
+      blocks: [{ type: 'text', text: `${'a'.repeat(128)}${'b'.repeat(32)}x` }]
+    })
     translator.flush()
     expect(tap.rows.at(-1)?.body).toMatchObject({
       blocks: [{ type: 'text', text: `${'a'.repeat(128)}${'b'.repeat(32)}x` }]
@@ -112,3 +106,34 @@ describe('Codex streamed checkpoint admission', () => {
     translator.dispose()
   })
 })
+
+it.each(['item/agentMessage/delta', 'item/reasoning/summaryTextDelta', 'item/plan/delta'])(
+  'delivers a paused %s tail without a different thread forcing it early',
+  (method) => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
+    const tap = recorder()
+    const translator = createCodexJournalTranslator({ sink: tap.sink })
+    const prefix = 'a'.repeat(20000)
+    const delta = (text: string) =>
+      translator.handle(notification(method, { itemId: 'reply', delta: text }))
+    delta(prefix)
+    vi.advanceTimersByTime(60)
+    delta(' paused tail')
+    translator.handle({
+      ...notification('item/started', { item: { type: 'agentMessage', id: 'other' } }),
+      threadId: 'other-thread'
+    })
+    vi.advanceTimersByTime(399)
+    const expectedBody = (text: string) =>
+      method === 'item/plan/delta'
+        ? { kind: 'status', text, presentation: 'plan-document' }
+        : { kind: 'message', blocks: [{ type: 'text', text }] }
+    expect(tap.rows.at(-1)?.body).toMatchObject(expectedBody(prefix))
+    vi.advanceTimersByTime(1)
+    expect(tap.rows.at(-1)?.body).toMatchObject(expectedBody(`${prefix} paused tail`))
+    delta(' final tail')
+    translator.flush()
+    expect(tap.rows.at(-1)?.body).toMatchObject(expectedBody(`${prefix} paused tail final tail`))
+    translator.dispose()
+  }
+)
