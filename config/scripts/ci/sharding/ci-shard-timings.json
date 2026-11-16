@@ -32,7 +32,6 @@
       "config/scripts/static-analysis/ratchets/renderer-state/check-focus-read-ratchet.test.mjs": 79,
       "config/scripts/node-runtime/pin-policy/check-node-runtime-pin.test.mjs": 640,
       "config/scripts/static-analysis/repository-layout/check-root-directory-entries.test.mjs": 936,
-      "config/scripts/static-analysis/process-boundaries/check-runtime-electron-ratchet-graph.test.mjs": 160,
       "config/scripts/static-analysis/process-boundaries/check-runtime-electron-ratchet.test.mjs": 3540,
       "config/scripts/ci/unit-selection/check-test-file-runners.test.mjs": 267,
       "config/scripts/ci/workflow-contracts/ci-closed-pr-cancellation.test.mjs": 112,
