@@ -24,7 +24,7 @@ import {
 import { findLiveRunTabId, runPanePtyId, sameRunTab } from './run-action-tabs'
 
 /** Conductor's grace period: an interrupted dev server gets this long before its shell is closed. */
-export const RUN_ACTION_STOP_GRACE_MS = 5_000
+const RUN_ACTION_STOP_GRACE_MS = 5_000
 const INTERRUPT = '\x03'
 const RELAUNCH_TAB_SETTLE_MS = 5_000
 
@@ -135,7 +135,7 @@ async function stopConflictingRuns(
   await Promise.all(conflicting.map((run) => stopRunAction(run.worktreeId, run.actionId)))
 }
 
-export type StartRunActionOptions = {
+type StartRunActionOptions = {
   /** Focus the run's terminal; background starts (auto-run, host restart) leave focus alone. */
   activate?: boolean
   /** Where the run's terminal goes when it has no earlier terminal to replace. */

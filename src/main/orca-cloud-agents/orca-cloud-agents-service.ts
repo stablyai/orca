@@ -27,7 +27,7 @@ import {
   type CodexBrokerSession
 } from './codex-broker-driver'
 
-export type OrcaCloudAgentsServiceDeps = {
+type OrcaCloudAgentsServiceDeps = {
   client: AgentCredentialsClient | null
   spawnSetupToken: SpawnSetupToken
   openExternal: (url: string) => Promise<void>

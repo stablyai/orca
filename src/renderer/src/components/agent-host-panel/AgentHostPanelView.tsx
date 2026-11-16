@@ -25,7 +25,7 @@ function footerLabel(link: AgentHostFooterLink, t: Translate): string {
   }
 }
 
-export type AgentHostPanelViewProps = {
+type AgentHostPanelViewProps = {
   capabilities: AgentHostCapabilities
   /** The first part of the subline: the host name, or the Cloud workspace. */
   subject: string | null

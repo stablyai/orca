@@ -120,7 +120,7 @@ export function stopAllLocalCommands(): void {
   running.clear()
 }
 
-export type LocalCommandExecution = {
+type LocalCommandExecution = {
   command: string
   cwd: string
   timeoutSec: number

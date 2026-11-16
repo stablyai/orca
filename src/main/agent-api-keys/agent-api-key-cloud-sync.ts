@@ -49,7 +49,7 @@ const TRANSIENT: ReadonlySet<CloudSecretsErrorCode> = new Set([
 
 const PERSONAL = { scope: 'personal' } as const
 
-export type AgentApiKeyCloudSyncOptions = {
+type AgentApiKeyCloudSyncOptions = {
   ledgerPath: string
   /** Signed out (or no Orca Cloud): keys stay on this computer. */
   link: () => Promise<AgentApiKeyCloudLink>

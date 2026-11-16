@@ -8,7 +8,6 @@ import {
 } from '../../../shared/agent-config-sync/agent-config-sync-contract'
 import { listEphemeralVmRuntimes } from '../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
 import { writeFileAtomically } from '../../filesystem/atomic-file-publication'
-import { callRuntimeEnvironment } from '../../ipc/runtime-environments/requests/runtime-environment-transport-routing'
 import { defaultAgentConfigHomes } from '../agent-config-roots'
 import { applyAgentConfigSyncResults, planAgentConfigSync } from './agent-config-sync-plan'
 import { exchangeAgentConfig } from './agent-config-host-exchange'
@@ -17,13 +16,14 @@ import { readOrCreateSyncerId } from './syncer-id'
 import {
   DEFAULT_PREFERENCES,
   MAX_EXCLUDED,
-  RuntimeCallError,
+  callCloudHost,
   errorCode,
+  findCloudRuntime,
   parsePreferences,
   trackedAgentConfigPaths
 } from './cloud-agent-config-sync-support'
 
-export type CloudAgentConfigSyncDeps = {
+type CloudAgentConfigSyncDeps = {
   userDataPath: string
   broadcast: (status: AgentConfigSyncStatus) => void
   broadcastPreferences?: (preferences: CloudAgentConfigSyncPreferences) => void
@@ -64,19 +64,8 @@ export function createCloudAgentConfigSync(deps: CloudAgentConfigSyncDeps): Clou
       }))
   const call =
     deps.call ??
-    (async (environmentId: string, method: string, params: unknown, timeoutMs: number) => {
-      const response = await callRuntimeEnvironment(
-        deps.userDataPath,
-        environmentId,
-        method,
-        params,
-        timeoutMs
-      )
-      if (response.ok) {
-        return response.result
-      }
-      throw new RuntimeCallError(response.error.message, response.error.code)
-    })
+    ((environmentId: string, method: string, params: unknown, timeoutMs: number) =>
+      callCloudHost(deps.userDataPath, environmentId, method, params, timeoutMs))
 
   let preferences: CloudAgentConfigSyncPreferences | null = null
   const ready = readFile(preferencesPath, 'utf8')
@@ -91,10 +80,7 @@ export function createCloudAgentConfigSync(deps: CloudAgentConfigSyncDeps): Clou
   }
 
   function cloudRuntime(environmentId: string) {
-    return listEphemeralVmRuntimes(deps.userDataPath).find(
-      (runtime) =>
-        runtime.runtimeEnvironmentId === environmentId && runtime.recipe?.provider === 'orca-cloud'
-    )
+    return findCloudRuntime(deps.userDataPath, environmentId)
   }
 
   async function plan(environmentId: string) {

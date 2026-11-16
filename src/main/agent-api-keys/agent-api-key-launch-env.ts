@@ -2,7 +2,7 @@ import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import type { ExecutionHostId } from '../../shared/execution-host'
 
 /** Installed only by the desktop: a host (orcad) never holds the user's vault, so its launches get nothing here. */
-export type AgentApiKeyLaunchEnvResolver = (
+type AgentApiKeyLaunchEnvResolver = (
   agent: TuiAgent,
   hostId: ExecutionHostId
 ) => Promise<Record<string, string>>

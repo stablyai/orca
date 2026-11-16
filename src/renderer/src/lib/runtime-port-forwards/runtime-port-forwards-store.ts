@@ -16,7 +16,7 @@ type ForwardState = {
   announcement: string
 }
 
-export type RuntimePortForwardFailure = {
+type RuntimePortForwardFailure = {
   code: Extract<RuntimePortForwardOpenResult, { ok: false }>['code']
   localPort: number
 }

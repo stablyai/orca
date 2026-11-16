@@ -10,7 +10,7 @@ import { refreshCloudEnvironmentIds, useIsCloudEnvironment } from './cloud-envir
 import { openCloudRemoteDesktop } from './open-cloud-remote-desktop'
 
 /** The workspace's remote desktop tab (there is at most one), or null. */
-export function selectRemoteDesktopTabId(state: AppState, worktreeId: string): string | null {
+function selectRemoteDesktopTabId(state: AppState, worktreeId: string): string | null {
   const tab = (state.browserTabsByWorktree[worktreeId] ?? []).find((candidate) =>
     isCloudRemoteDesktopUrl(candidate.url)
   )
@@ -34,7 +34,7 @@ export function openOrGoToRemoteDesktop(worktreeId: string): void {
   }
 }
 
-export type RemoteDesktopTabEntry = {
+type RemoteDesktopTabEntry = {
   /** Orca Cloud workspaces only. */
   available: boolean
   /** The workspace already has its desktop tab: the entry goes to it. */

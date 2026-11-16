@@ -9,7 +9,7 @@ import type { LocalCommandWorkspaceSetting } from './local-command-settings-stor
 import type { LocalCommandPrompt } from '../../shared/local-commands/local-command-desktop-types'
 import { assessLocalCommandRisk } from '../../shared/local-commands/local-command-risk'
 
-export const LOCAL_COMMAND_REQUEST_ID = /^lc_[A-Za-z0-9_-]{16,64}$/
+const LOCAL_COMMAND_REQUEST_ID = /^lc_[A-Za-z0-9_-]{16,64}$/
 
 /** What orcad sent, checked again here: the VM is never trusted to have validated it. */
 export const LocalCommandRequestedEventSchema = z.object({

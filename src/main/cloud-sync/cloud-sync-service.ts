@@ -28,7 +28,7 @@ import type { CloudSyncStore } from './cloud-sync-store'
 /** Archived elsewhere is only visible on the control plane; checked on this slow beat. */
 const ARCHIVE_CHECK_MS = 10 * 60_000
 
-export type CloudSyncServiceDeps = {
+type CloudSyncServiceDeps = {
   store: CloudSyncStore
   listRuntimes: () => EphemeralVmRuntimeRecord[]
   callFor: (environmentId: string) => SyncCall

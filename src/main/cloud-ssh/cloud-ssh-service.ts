@@ -50,7 +50,7 @@ export type CloudSshServiceDeps = {
   now?: () => number
 }
 
-export type CloudSshAccess = {
+type CloudSshAccess = {
   alias: string
   configFile: string
   command: string

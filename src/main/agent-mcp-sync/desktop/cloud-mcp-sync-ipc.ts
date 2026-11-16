@@ -1,12 +1,11 @@
 import { BrowserWindow, ipcMain } from 'electron'
 import { isMcpRecord } from '../../../shared/agent-mcp-sync/mcp-server-portability'
 import type { McpSyncStatus } from '../../../shared/agent-mcp-sync/mcp-sync-contract'
-import { CLOUD_MCP_SYNC_CHANGED_CHANNEL } from '../../../shared/agent-mcp-sync/mcp-sync-preferences'
 import {
-  createCloudMcpSync,
-  type CloudMcpSync,
+  CLOUD_MCP_SYNC_CHANGED_CHANNEL,
   type CloudMcpSyncPreferences
-} from './cloud-mcp-sync'
+} from '../../../shared/agent-mcp-sync/mcp-sync-preferences'
+import { createCloudMcpSync, type CloudMcpSync } from './cloud-mcp-sync'
 import { createCloudMcpEgress } from './cloud-mcp-egress'
 import type { HostedSandboxControlPlaneClientOptions } from '../../hosted-sandbox/hosted-sandbox-request'
 

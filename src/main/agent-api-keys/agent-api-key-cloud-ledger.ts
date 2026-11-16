@@ -38,7 +38,7 @@ function isEntry(value: unknown): value is LedgerEntry {
   )
 }
 
-export function parseLedger(text: string): LedgerFile {
+function parseLedger(text: string): LedgerFile {
   const ledger: LedgerFile = { version: 1, accounts: {} }
   if (text.length > MAX_LEDGER_BYTES) {
     return ledger

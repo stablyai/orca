@@ -3,7 +3,7 @@ import type { RuntimeDownloadErrorCode } from '../../../../../../shared/runtime-
 
 export type RuntimeDownloadFailureAction = 'retry' | 'download_instead' | 'refresh' | 'reveal'
 
-export type RuntimeDownloadFailureCopy = {
+type RuntimeDownloadFailureCopy = {
   title: string
   detail: string
   /** 'neutral' for limits and deliberate refusals; 'error' when something actually broke. */

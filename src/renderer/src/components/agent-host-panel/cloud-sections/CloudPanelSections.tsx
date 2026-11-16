@@ -49,7 +49,7 @@ function ownerLabel(owner: CloudKeyOwner, t: Translate): string {
 }
 
 /** A read that failed: transport problems say where, without the save-oriented "Nothing was changed". */
-export function cloudPanelLoadErrorTitle(code: CloudSecretsErrorCode, t: Translate): string {
+function cloudPanelLoadErrorTitle(code: CloudSecretsErrorCode, t: Translate): string {
   return code === 'unavailable' || code === 'timeout' || code === 'unknown'
     ? t('agentHostPanel.unreachable', 'Couldn’t reach Orca Cloud.')
     : cloudSecretsErrorCopy(code, t)

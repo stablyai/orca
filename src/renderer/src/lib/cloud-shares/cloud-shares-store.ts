@@ -8,7 +8,7 @@ import type {
   ShareLink
 } from '../../../../shared/hosted-sandbox/hosted-sandbox-share-wire'
 
-export type CloudSharesState =
+type CloudSharesState =
   /** Not asked yet: share UI stays hidden until the environment is known to be Orca Cloud. */
   | { status: 'unknown'; shares: [] }
   /** First fetch for an environment seen as Orca Cloud before: the section shows a placeholder. */
@@ -82,7 +82,7 @@ export function isCloudSharesAvailable(state: CloudSharesState): boolean {
   return state.status === 'ready' || state.status === 'error' || state.status === 'loading'
 }
 
-export function refreshCloudShares(environmentId: string): Promise<void> {
+function refreshCloudShares(environmentId: string): Promise<void> {
   const running = inflight.get(environmentId)
   if (running) {
     return running

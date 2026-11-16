@@ -6,9 +6,9 @@ import {
 } from '../../../../shared/runtime-port-forwards'
 
 // A listener must be missing from this many scans in a row before its auto forward closes.
-export const AUTO_FORWARD_MISSING_SCANS_BEFORE_CLOSE = 2
+const AUTO_FORWARD_MISSING_SCANS_BEFORE_CLOSE = 2
 
-export type AutoForwardPlan = {
+type AutoForwardPlan = {
   open: WorkspacePort[]
   close: RuntimePortForward[]
   /** Remote ports seen in this scan, for the next scan's missing counts. */
@@ -38,7 +38,7 @@ const AGENT_CLI_PROCESS_NAMES: ReadonlySet<string> = new Set([
 ])
 
 /** The start of the OS ephemeral range (Linux's default; macOS and Windows start higher, at 49152). */
-export const EPHEMERAL_PORT_START = 32_768
+const EPHEMERAL_PORT_START = 32_768
 
 /** `codex`, `/usr/bin/codex`, `codex.exe` and `codex-linux-x64` all name Codex. */
 export function isAgentCliProcessName(processName: string | undefined): boolean {

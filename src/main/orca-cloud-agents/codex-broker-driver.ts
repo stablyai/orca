@@ -28,7 +28,7 @@ export function isCodexSignInUrl(value: string): boolean {
   )
 }
 
-export type CodexBrokerDriverDeps = {
+type CodexBrokerDriverDeps = {
   client: Pick<
     AgentCredentialsClient,
     'startCodexBroker' | 'codexBrokerStatus' | 'cancelCodexBroker'

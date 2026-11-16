@@ -5,8 +5,6 @@ import type { OrcaBillingEntitlement, OrcaBillingTeamPlan } from '../../shared/o
 import { OrcaCloudRequestError } from '../orca-profiles/cloud-auth/profile-cloud-client'
 import { normalizeEntitlement } from './billing-entitlement-schema'
 
-export { normalizeEntitlement }
-
 const REQUEST_TIMEOUT_MS = 20_000
 const MAX_TOKEN_LENGTH = 8 * 1024
 
@@ -42,7 +40,7 @@ const explicitOrg = { unsupportedUntil: 0 }
 const EXPLICIT_ORG_RETRY_MS = 10 * 60_000
 
 /** The `org` claim of a billing token (null: personal). Decodes only; billing verifies it. */
-export function readBillingTokenOrg(token: string): string | null {
+function readBillingTokenOrg(token: string): string | null {
   let payload: unknown = null
   try {
     payload = JSON.parse(Buffer.from(token.split('.')[1] ?? '', 'base64url').toString('utf8'))

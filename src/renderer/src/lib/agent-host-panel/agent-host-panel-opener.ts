@@ -4,7 +4,7 @@ import { useSyncExternalStore } from 'react'
 
 export type AgentHostPanelFocus = 'claude' | 'codex' | 'keys' | { secret: string }
 
-export type OpenAgentHostPanel = (target: {
+type OpenAgentHostPanel = (target: {
   /** The runtime environment id of the host. */
   hostId: string
   focus?: AgentHostPanelFocus

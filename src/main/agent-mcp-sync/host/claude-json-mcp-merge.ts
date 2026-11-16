@@ -2,7 +2,7 @@ import type { McpSyncHostOutcome } from '../../../shared/agent-mcp-sync/mcp-sync
 import { fingerprintMcpValue } from './mcp-sync-ledger'
 import { isMcpRecord } from '../../../shared/agent-mcp-sync/mcp-server-portability'
 
-export type ClaudeMcpMergeResult = {
+type ClaudeMcpMergeResult = {
   /** New file text, or null when the file needs no write. */
   text: string | null
   ledger: Record<string, string>

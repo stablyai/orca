@@ -104,10 +104,6 @@ function emit(): void {
   }
 }
 
-export function getRunActionRuns(): RunsByWorktree {
-  return runs
-}
-
 export function getRunActionRun(worktreeId: string, actionId: string): RunActionRun | null {
   return runs[worktreeId]?.[actionId] ?? null
 }

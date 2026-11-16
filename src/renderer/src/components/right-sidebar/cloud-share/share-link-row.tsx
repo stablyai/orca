@@ -34,7 +34,7 @@ export function ShareAudienceIcon({
   return <Icon size={13} className={className} aria-hidden />
 }
 
-export function useShareAudienceLabel(audience: ShareLink['audience']): string {
+function useShareAudienceLabel(audience: ShareLink['audience']): string {
   const t = useTranslate()
   return audience === 'public'
     ? t('auto.components.right.sidebar.CloudShare.audiencePublicShort', 'Public')

@@ -11,7 +11,7 @@ import {
 } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { AgentHostAvailability, AgentHostKind } from './agent-host-capabilities'
 
-export type AgentHostEnvironmentFacts = {
+type AgentHostEnvironmentFacts = {
   name?: string | null
   source?: RuntimeEnvironmentSource
   orcadDeployment?: OrcadDeploymentLink | null

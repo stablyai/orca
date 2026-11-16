@@ -56,7 +56,7 @@ function abbreviateHome(text: string): string {
 }
 
 /** VS Code and Cursor that are actually installed: saved Open In apps first, then the built-ins. */
-export function detectCloudSshEditors(
+function detectCloudSshEditors(
   saved: readonly OpenInApplication[],
   resolve: (command: string) => string | null = (command) =>
     resolveExternalEditorExecutable(command)

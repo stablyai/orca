@@ -137,8 +137,3 @@ export async function signOutSshAgent(
       .catch(() => null)) ?? null
   )
 }
-
-/** Fixtures and tests only. */
-export function setSshAgentStateForTest(targetId: string, state: Partial<HostState>): void {
-  set(targetId, state)
-}

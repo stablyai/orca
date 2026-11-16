@@ -24,7 +24,7 @@ export type LocalStat = { size: number; mtimeMs: number } | null
 /** Whether `.context` sync is on for a workspace (this member's choice on this computer). */
 export type CloudSyncChoice = { context: boolean }
 
-export type SyncLimits = {
+type SyncLimits = {
   maxFiles: number
   maxBytes: number
   maxFileBytes: number
@@ -65,7 +65,7 @@ export function emptySyncState(
   }
 }
 
-export type SyncPlan = {
+type SyncPlan = {
   /** Paths to copy from the cloud, smallest first so the folder fills in quickly. */
   download: string[]
   /** Paths this computer copied earlier that the cloud no longer has (or no longer includes). */

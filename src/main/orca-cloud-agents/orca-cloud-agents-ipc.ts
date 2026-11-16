@@ -19,7 +19,7 @@ import {
   type OrcaCloudAgentsService
 } from './orca-cloud-agents-service'
 
-export const ORCA_CLOUD_AGENTS_SETUP_CHANGED = 'orcaCloudAgents:setupChanged'
+const ORCA_CLOUD_AGENTS_SETUP_CHANGED = 'orcaCloudAgents:setupChanged'
 
 const Agent = z.enum(ORCA_CLOUD_ACCOUNT_AGENTS)
 const AgentRequest = z.object({ agent: Agent })

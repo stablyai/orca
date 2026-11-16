@@ -17,7 +17,7 @@ export type DesiredAgentConfigItem = AgentConfigItemRef & {
   files: AgentConfigDigestEntry[]
 }
 
-export type AgentConfigSyncPlan = {
+type AgentConfigSyncPlan = {
   rows: AgentConfigSyncRow[]
   desired: DesiredAgentConfigItem[]
 }
@@ -76,7 +76,7 @@ function rowOf(item: LocalAgentConfigItem, key: string, included: boolean): Agen
 }
 
 /** Opt-in kinds (memory) sync only when turned on; everything else unless turned off. */
-export function agentConfigItemIncluded(
+function agentConfigItemIncluded(
   key: string,
   kind: AgentConfigItemKind,
   excluded: ReadonlySet<string>,
