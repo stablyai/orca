@@ -1,6 +1,6 @@
 import { defineMethod } from '../../core'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
-import { isRepoHidden } from '../../../../../shared/hidden-projects'
+import { isRepoHidden } from '../../../../../shared/project/catalog/hidden-projects'
 import { resolveReplySnapshot } from '../../workspace-client-views/content-snapshot-id'
 import { PROJECT_GROUP_METHODS } from './project-group-rpc-methods'
 import { PROJECT_RUNTIME_METHODS } from './project-runtime-rpc-methods'

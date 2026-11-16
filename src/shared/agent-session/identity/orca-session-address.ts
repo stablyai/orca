@@ -1,5 +1,5 @@
 import { isAgentSessionId } from '../lifecycle/agent-session-record'
-import { isTerminalHandle } from '../../terminal-handle-prefix'
+import { isTerminalHandle } from '../../terminal/terminal-handle-prefix'
 import { ORCA_SESSION_ADDRESS_PREFIX } from './orca-session-address-prefix'
 
 /** Orca-minted structured session identity (record id/ORCA_AGENT_SESSION_ID), never provider identity. Orchestration stores bare lineage-root ids after /clear,

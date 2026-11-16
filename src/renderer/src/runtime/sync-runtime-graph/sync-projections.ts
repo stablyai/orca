@@ -1,5 +1,5 @@
 import type { AppState } from '@/store/types'
-import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
+import { resolveTerminalTabTitle } from '../../../../shared/workspace-layout/tab-groups/tab-title-resolution'
 import { remoteTabFaviconUrl } from '../../../../shared/browser/browser-favicon-url'
 import { stableHashString } from './editor-draft-hash'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'

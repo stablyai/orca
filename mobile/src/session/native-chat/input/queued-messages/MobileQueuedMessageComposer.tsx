@@ -9,7 +9,7 @@ import {
   updateMobileNativeChatDraftInputs,
   useMobileNativeChatDraftInputs
 } from '../../composer/drafts/mobile-native-chat-draft-inputs'
-import { prepareQueuedMessageEditText } from '../../../../../../src/shared/queued-message-edit-command'
+import { prepareQueuedMessageEditText } from '../../../../../../src/shared/native-chat/input/queued-messages/queued-message-edit-command'
 import type { AgentMessageSource } from '../../../../../../src/shared/agent-session/agent-session-message-source'
 import { MobileAgentMessageSenders } from '../../transcript/agent-messages/MobileAgentMessageSenders'
 import { queuedMessageStyles as styles } from './mobile-native-chat-queued-message-styles'

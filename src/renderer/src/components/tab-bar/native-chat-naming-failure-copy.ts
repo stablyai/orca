@@ -2,7 +2,7 @@ import { translate } from '@/i18n/i18n'
 import {
   CHAT_NAMING_FAILURE_COPY as EN,
   type ChatNamingFailureCode
-} from '../../../../shared/chat-naming-failure-copy'
+} from '../../../../shared/text-generation/chat-naming-failure-copy'
 import type { AgentSessionNamingError } from '../../../../shared/agent-session/agent-session-wire'
 
 const COPY: Record<ChatNamingFailureCode, () => string> = {

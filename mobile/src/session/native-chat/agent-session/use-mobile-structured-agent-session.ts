@@ -1,4 +1,4 @@
-import { asyncQuestionSourceScope as questionSourceScope } from '../../../../../src/shared/native-chat/input/native-chat-ask'
+import { useMobileStructuredAsyncQuestions } from './use-mobile-structured-async-questions'
 import { structuredChatTranscriptIdentity } from '../transcript/persistence/mobile-native-chat-transcript-store'
 import { useMemo, useRef } from 'react'
 import { tuiAgentDisplayName } from '../../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
@@ -261,7 +261,7 @@ export function useMobileStructuredAgentSession(
       () => (client && sessionId ? { client, sessionId } : null),
       [client, sessionId]
     ),
-    asyncQuestionSourceScope: questionSourceScope({ kind: 'journal', agent, sessionId, epoch }),
+    ...useMobileStructuredAsyncQuestions(args, epoch),
     imagePreviewsByMessageId: sends.imagePreviewsByMessageId,
     submissions: state.submissions,
     session: {

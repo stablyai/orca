@@ -141,7 +141,11 @@ beforeEach(async () => {
     providerHandle: { kind: 'claude', sessionId: PROVIDER_SESSION_ID, leafUuid: null }
   })
   expect(await host.attach(CALLER, params)).toMatchObject({ ok: true })
-  await vi.waitFor(() => expect(host.readStatusSummary(SESSION)?.hostExecutionPhase).toBe('ready'))
+  // Why 10s, as the actions fixture waits: under a loaded CI runner attach outlasts the 1s default.
+  await vi.waitFor(
+    () => expect(host.readStatusSummary(SESSION)?.hostExecutionPhase).toBe('ready'),
+    { timeout: 10_000 }
+  )
   await Promise.all(lifecycle)
 })
 

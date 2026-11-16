@@ -2,7 +2,7 @@ import type { RuntimeHeadlessTabProperties as HeadlessTabPropertiesMethods } fro
 import type { RuntimeHeadlessTabGroups as HeadlessTabGroupsMethods } from './headless-tab-group-moves'
 import type { RuntimeHeadlessTerminalTabTitles as PersistHeadlessTerminalTitleMethods } from './headless-terminal-tab-titles'
 import { OrcaRuntimeWithMainLayoutTabMoves } from './main-layout-session-tab-move'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 import type {
   RuntimeMobileSessionTabMove,
   RuntimeMobileSessionTabMoveResult,

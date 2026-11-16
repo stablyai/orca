@@ -9,7 +9,7 @@ import {
   getPairedDeviceIdsByEnvironment
 } from '../../../../../../shared/workspace-view/workspace-creator-visibility'
 import type { VisibleWorktreeOptions } from './compute-visible-worktrees'
-import { indexHiddenProjects } from '../../../../../../shared/hidden-projects'
+import { indexHiddenProjects } from '../../../../../../shared/project/catalog/hidden-projects'
 
 /** Isolate store reads so sidebar, palette and keyboard shortcuts can share the pure visibility filter. */
 export function buildVisibleWorktreeOptionsFromState(

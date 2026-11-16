@@ -18,7 +18,7 @@ import type { Worktree } from '../../../../../../shared/worktree/types'
 import {
   hiddenProjectRowFacts,
   type HiddenProjects
-} from '../../../../../../shared/hidden-projects'
+} from '../../../../../../shared/project/catalog/hidden-projects'
 import { isInactiveWorkspace } from '@/lib/workspace/activity/worktree-activity-state'
 
 export type DesktopWorkspaceRowFactInputs = {

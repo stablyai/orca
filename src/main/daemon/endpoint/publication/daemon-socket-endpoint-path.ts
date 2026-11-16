@@ -2,7 +2,7 @@
 import { createHash } from 'node:crypto'
 import { lstatSync, mkdirSync } from 'node:fs'
 import { posix } from 'node:path'
-import { unixSocketPathFits } from '../../../../shared/unix-socket-path-limit'
+import { unixSocketPathFits } from '../../../../shared/network/unix-socket-path-limit'
 import { errnoCodeOrUnknown } from '../../../../shared/errors/errno-code'
 import { PRIVATE_DIR_MODE } from './daemon-private-file-modes'
 

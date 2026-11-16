@@ -1,5 +1,5 @@
 import { WORKSPACE_ATTACHMENT_RUNTIME_CAPABILITIES } from '../../workspace-attachments/workspace-attachment-capabilities'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../sidebar-inputs-switch'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../sidebar-list/feed/sidebar-inputs-switch'
 
 export const WORKTREE_RENAME_ERROR_DISMISS_RUNTIME_CAPABILITY =
   'worktree.rename-error-dismiss.v1' as const
