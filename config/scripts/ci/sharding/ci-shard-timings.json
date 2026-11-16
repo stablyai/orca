@@ -5045,7 +5045,6 @@
       "tests/e2e/terminal-pane-close-layout-consistency.spec.ts": 128900,
       "tests/e2e/terminal-pane-content-retention.spec.ts": 45100,
       "tests/e2e/terminal-pane-split-identity.spec.ts": 81000,
-      "tests/e2e/terminal-pane-title-editing.spec.ts": 189100,
       "tests/e2e/terminal-pane-title-strip-placement.spec.ts": 62400,
       "tests/e2e/terminal-parked-cli-split.spec.ts": 28900,
       "tests/e2e/terminal-parked-close-retirement.spec.ts": 16300,
