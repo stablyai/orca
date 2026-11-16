@@ -37,6 +37,29 @@ export async function readShellCsp() {
   return parseCspDirectives(source, 'listOf(', ').joinToString')
 }
 
+// Read the shipped Kotlin chat visual frame: its policy and the fixed document the shell serves.
+export async function readChatVisualFrame() {
+  const source = await readFile(
+    join(
+      projectDir,
+      'mobile/modules/orca-mobile-web-shell/android/src/main/java/expo/modules/orcamobilewebshell/MobileWebShellChatVisualFrame.kt'
+    ),
+    'utf8'
+  )
+  const cspStart = source.indexOf('MOBILE_WEB_SHELL_CHAT_VISUAL_FRAME_CSP = listOf(')
+  const csp = parseCspDirectives(source.slice(cspStart), 'listOf(', ').joinToString')
+  const documentMatch =
+    /MOBILE_WEB_SHELL_CHAT_VISUAL_FRAME_DOCUMENT = """\n([\s\S]*?)\n""".trimIndent\(\)/.exec(source)
+  if (!documentMatch) {
+    throw new Error('could not parse the chat visual frame document')
+  }
+  const document = documentMatch[1]
+    .split('\n')
+    .map((line) => line.replace(/^ {2}/, ''))
+    .join('\n')
+  return { csp, document }
+}
+
 // Read literal document headers from Kotlin; CSP constant stays readShellCsp’s job. Throw if none found or browser defaults could masquerade as shell guarantees.
 export async function readShellDocumentHeaders() {
   const source = await readFile(
