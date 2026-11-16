@@ -279,7 +279,6 @@ describe('startCodexSessionBackfillInBackground', () => {
       writeManagedSession(missedRelativePath, 'missed\n')
       writeManagedSession(join('2026', '08', '05', 'rollout-launch.jsonl'), 'launch\n')
       await startCodexSessionBackfillInBackground({
-        ignoreCompletionMarker: true,
         boundedScan,
         scanFrom: ['2026', '08', '05']
       })
