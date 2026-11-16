@@ -345,7 +345,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
             {isBatchDelete ? (
               <DeleteWorktreeTargetPreview
                 isBatchDelete
-                unsavedFiles={unsavedFiles}
+                unsavedFileCount={unsavedFiles.length}
                 worktree={worktree}
                 worktrees={worktrees}
                 collisionWorktrees={allWorktrees}

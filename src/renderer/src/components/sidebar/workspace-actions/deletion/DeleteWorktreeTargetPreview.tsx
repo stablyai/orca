@@ -22,11 +22,6 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { DialogDisclosure, DialogWarning } from '@/components/ui/dialog-parts'
 import { deleteWorktreeLossLine } from './DeleteWorktreeChangesSummary'
-import { useAppStore } from '@/store'
-import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import { worktreePurgeClosedFileIds } from '@/store/slices/worktrees/teardown/worktree-purge-closed-files'
-
-const EMPTY_UNSAVED_FILES: readonly OpenFile[] = []
 
 function getCollisionIds(worktrees: readonly Worktree[]): ReadonlySet<string> {
   const seen = new Set<string>()
@@ -54,7 +49,7 @@ function getTargetHostLabel(
 
 export function DeleteWorktreeTargetPreview({
   isBatchDelete,
-  unsavedFiles = EMPTY_UNSAVED_FILES,
+  unsavedFileCount = 0,
   worktree,
   worktrees,
   collisionWorktrees,
@@ -66,7 +61,7 @@ export function DeleteWorktreeTargetPreview({
   atRiskLocalFilesByIdentity
 }: {
   isBatchDelete: boolean
-  unsavedFiles?: readonly OpenFile[]
+  unsavedFileCount?: number
   worktree: Worktree | null
   worktrees: readonly Worktree[]
   collisionWorktrees: readonly Worktree[]
@@ -94,7 +89,7 @@ export function DeleteWorktreeTargetPreview({
           ? 0
           : dirtyCounts.reduce((total, count) => total + count, 0)
         : undefined,
-      unsavedFiles.length,
+      unsavedFileCount,
       t,
       ignored
     )
@@ -111,8 +106,6 @@ export function DeleteWorktreeTargetPreview({
             {worktrees.map((item, index) => {
               const itemDeleteState = getDeleteStateForWorktreeHost(item, deleteStateByWorktreeId)
               const itemDeleteError = getWorktreeDeleteErrorToShow(item, itemDeleteState, t)
-              const closedFileIds = worktreePurgeClosedFileIds(useAppStore.getState(), [item])
-              const unsavedCount = unsavedFiles.filter((file) => closedFileIds.has(file.id)).length
               const labelIds = {
                 name: `${targetIdPrefix}-${index}-name`,
                 path: `${targetIdPrefix}-${index}-path`,
@@ -139,17 +132,6 @@ export function DeleteWorktreeTargetPreview({
                           {getTargetHostLabel(item, hostLabelById, t)}
                         </div>
                       ) : null}
-                      <p className="mt-0.5 text-muted-foreground">
-                        {deleteWorktreeLossLine(
-                          dirtyChangeCountsByWorktreeId.get(
-                            item.hostId ? getWorktreeHostIdentity(item) : item.id
-                          ),
-                          unsavedCount,
-                          t,
-                          (atRiskLocalFilesByIdentity?.get(getWorktreeHostIdentity(item))?.count ??
-                            0) > 0
-                        )}
-                      </p>
                       {itemDeleteError ? (
                         <DialogDisclosure
                           label={t('worktree.delete.errorDetails', 'Details')}

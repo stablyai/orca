@@ -1,7 +1,8 @@
 import type { AppState } from '@/store/types'
 import { findIndexedWorktreeOwner } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
-import { getPairedWebClientEnvironmentId } from '@/app-shell/platform/paired-web-client-host'
+import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
+import { isUnattributedTwinWorktree } from '@/lib/workspace/ownership/terminal-worktree-route'
 import { selectEphemeralVmWorkspaceRuntime } from '@/store/slices/ephemeral-vm/ephemeral-vm-lifecycle'
 import {
   resolveExplicitWorktreeOperationRouteResult,
@@ -25,7 +26,11 @@ export function canSleepInsteadOfClosingTab(
   args: { worktreeId: string; terminalTabId: string; busyPtyIds: readonly string[] }
 ): boolean {
   const worktree = findIndexedWorktreeOwner(selectWorktreesByRepo(state), args.worktreeId)
-  if (!worktree || getPairedWebClientEnvironmentId(state)) {
+  if (
+    !worktree ||
+    isPairedWebClientWindow() ||
+    isUnattributedTwinWorktree(state, args.worktreeId)
+  ) {
     return false
   }
   const owner = resolveExplicitWorktreeOperationRouteResult(state, args.worktreeId)

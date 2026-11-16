@@ -55,10 +55,28 @@ function eligible(state: AppState): boolean {
 }
 
 describe('canSleepInsteadOfClosingTab', () => {
-  it('hides sleep for a paired browser even when its catalog calls the server local', () => {
+  it('refuses an unstamped legacy workspace whose repository has competing terminal owners', () => {
+    worktrees.set('wt-1', { id: 'wt-1' })
+    const state = stateWith({ agentType: 'claude', providerSession: SESSION }, false, 'local')
+    state.repos = [...state.repos, { ...state.repos[0], executionHostId: 'runtime:env-1' }]
+    expect(resolveTerminalPtyOwner(state, 'wt-1')).toEqual({ kind: 'ambiguous' })
+    expect(eligible(state)).toBe(false)
+  })
+  it('hides sleep for paired browsers independently of catalog hydration or server count', () => {
     worktrees.set('wt-1', { id: 'wt-1', hostId: 'local' })
     windowKind.pairedWeb = true
-    expect(eligible(stateWith({ agentType: 'claude', providerSession: SESSION }))).toBe(false)
+    const state = stateWith({ agentType: 'claude', providerSession: SESSION })
+    expect(eligible(state)).toBe(false)
+    expect(eligible({ ...state, runtimeEnvironments: [] })).toBe(false)
+    expect(
+      eligible({
+        ...state,
+        runtimeEnvironments: [
+          ...state.runtimeEnvironments,
+          { ...state.runtimeEnvironments[0], id: 'env-2' }
+        ]
+      })
+    ).toBe(false)
   })
   it('refuses contested catalog owners even when focus selects the local copy', () => {
     worktrees.set('wt-1', { id: 'wt-1', hostId: 'local' })

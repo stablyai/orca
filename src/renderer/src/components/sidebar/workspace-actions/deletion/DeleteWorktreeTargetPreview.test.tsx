@@ -1,10 +1,8 @@
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
-import { cleanup, render, screen, within } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, expect, it } from 'vitest'
-import { useAppStore } from '@/store'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
-import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { DeleteWorktreeTargetPreview } from './DeleteWorktreeTargetPreview'
 
@@ -44,8 +42,7 @@ it.each([
     unsaved: 2,
     ignored: false,
     incomplete: true,
-    warning: '2 unsaved files will be lost',
-    row: '2 unsaved files will be lost'
+    warning: '2 unsaved files will be lost'
   },
   {
     name: 'uncommitted changes and ignored files',
@@ -53,8 +50,7 @@ it.each([
     unsaved: 0,
     ignored: true,
     incomplete: false,
-    warning: '26 uncommitted changes and ignored files will be lost',
-    row: '13 uncommitted changes and ignored files will be lost'
+    warning: '26 uncommitted changes and ignored files will be lost'
   },
   {
     name: 'all three known losses',
@@ -62,8 +58,7 @@ it.each([
     unsaved: 2,
     ignored: true,
     incomplete: false,
-    warning: '26 uncommitted changes, 2 unsaved files and ignored files will be lost',
-    row: '13 uncommitted changes, 2 unsaved files and ignored files will be lost'
+    warning: '26 uncommitted changes, 2 unsaved files and ignored files will be lost'
   },
   {
     name: 'clean workspaces with incomplete scans',
@@ -71,8 +66,7 @@ it.each([
     unsaved: 0,
     ignored: false,
     incomplete: true,
-    warning: null,
-    row: null
+    warning: null
   },
   {
     name: 'ignored files only',
@@ -80,33 +74,22 @@ it.each([
     unsaved: 0,
     ignored: true,
     incomplete: false,
-    warning: 'Ignored files will be lost',
-    row: 'Ignored files will be lost'
+    warning: 'Ignored files will be lost'
   }
 ])(
   'preserves the independent consequences for $name',
-  ({ changes, unsaved, ignored, incomplete, warning, row }) => {
+  ({ changes, unsaved, ignored, incomplete, warning }) => {
     const worktrees = [
       makeWorktree({ id: 'wt-1', repoId: 'repo-1', displayName: 'fix-login' }),
       makeWorktree({ id: 'wt-2', repoId: 'repo-1', displayName: 'docs-refresh' })
     ]
-    const files: OpenFile[] = Array.from({ length: unsaved }, (_, index) => ({
-      id: `file-${index}`,
-      filePath: `/tmp/project/file-${index}`,
-      relativePath: `file-${index}`,
-      worktreeId: 'wt-1',
-      language: 'typescript',
-      isDirty: true,
-      mode: 'edit'
-    }))
-    useAppStore.setState({ openFiles: files, worktreesByRepo: { 'repo-1': worktrees } })
     const { container } = render(
       <DeleteWorktreeTargetPreview
         isBatchDelete
         worktree={null}
         worktrees={worktrees}
         collisionWorktrees={worktrees}
-        unsavedFiles={files}
+        unsavedFileCount={unsaved}
         hostLabelById={new Map()}
         deleteStateByWorktreeId={{}}
         dirtyChangeCountsByWorktreeId={
@@ -144,10 +127,6 @@ it.each([
     expect(warnings).toHaveLength(warning ? 1 : 0)
     if (warning) {
       expect(warnings[0]).toHaveTextContent(warning)
-    }
-    const firstRow = screen.getAllByRole('listitem')[0]
-    if (row) {
-      expect(within(firstRow).getByText(row)).toBeVisible()
     }
     expect(screen.queryByText('Some changes couldn’t be fully checked.')).toBe(
       incomplete ? screen.getByText('Some changes couldn’t be fully checked.') : null
