@@ -371,6 +371,8 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
               isVisible={props.isVisible}
               turnId={controller.turnId}
               workingStartedAt={controller.workingStartedAt}
+              target={props.target}
+              focusComposer={focusComposer}
             />
           )}
           {composerShown || subagentOpen ? null : <NativeChatPromptSlotNotices notices={notices} />}

@@ -1,5 +1,5 @@
 import { resolveOrcaSessionParty } from '../addressing/orchestration-party'
-import { isOrcaSessionId } from '../../../../shared/orca-session-address'
+import { isOrcaSessionId } from '../../../../shared/agent-session/identity/orca-session-address'
 import { SessionLinkParticipant } from '../../../../shared/session-link'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { OrcaRuntimeService } from '../../orca-runtime'

@@ -8,7 +8,7 @@ import { JiraSavedFilterMutationParam } from '../../shared/rpc-contract/jira/jir
 import { BrowserWindow, ipcMain, webContents, type WebContents } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
-import { isFeatureInteractionId } from '../../shared/feature-interactions'
+import { isFeatureInteractionId } from '../../shared/feature-education/interactions/feature-interactions'
 import { isWslMoveWindowWriteHeld } from '../persistence/moving-wsl-projects/quiescence/wsl-move-window-write-hold'
 import { isTrustedMainRendererSender } from './main-renderer-sender-trust'
 

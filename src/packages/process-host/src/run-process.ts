@@ -1,17 +1,16 @@
 import type { ChildProcess, ChildProcessWithoutNullStreams } from 'node:child_process'
-import { resolveSpawn, type ResolvedSpawn } from './spawn-resolution'
+import { resolveSpawn } from './spawn-resolution'
+import { createPosixGroupTermination, PROCESS_EXIT_GRACE_MS } from './posix-group-termination'
 import { forceTerminateProcessTree, signalProcessTree } from './process-tree-termination'
 import { inFlightWindowsTreeKill } from './windows-tree-kill'
 
 import { hasSpawnObserver, notifySpawnObserver } from './spawn-observer'
 import { createOutputSink } from './bounded-output-sink'
 import { createChildTerminationReporter } from './child-termination-reporter'
-import { spawnNativeProcess, spawnNativeProcessSync } from './native-process-spawn'
+import { spawnNativeProcess } from './native-process-spawn'
 
 import type { PipedProcessSpec, ProcessSpec, ProcessResult } from './process-spec'
 import { DEFAULT_PROCESS_TIMEOUT_MS, DEFAULT_MAX_OUTPUT_BYTES } from './process-spec'
-// Bound waits for children that ignore termination and never emit close.
-const PROCESS_EXIT_GRACE_MS = 2_000
 // An unverifiable, silent tree must not leave barrier callers pending forever.
 const BARRIER_UNVERIFIED_EXIT_GRACE_MS = 10_000
 
@@ -63,6 +62,15 @@ export function runProcess(
     let deferredClose: { code: number | null; signal: NodeJS.Signals | null } | null = null
     let deferredError: Error | null = null
     let rootExitedBeforeBarrier = false
+    const nativeGroupTermination =
+      spec.terminationBarrier === true && process.platform !== 'win32'
+        ? createPosixGroupTermination(child, () => {
+            terminationReporter.report()
+            if (barrierStopping) {
+              markBarrierTerminationVerified()
+            }
+          })
+        : undefined
 
     const settle = (act: () => void): void => {
       if (settled) {
@@ -148,7 +156,10 @@ export function runProcess(
 
     const resolveBarrierIfSafe = (): void => {
       const rootExit = deferredClose ?? deferredExit
-      if (barrierTerminationVerified || (rootExitedBeforeBarrier && rootExit)) {
+      if (
+        barrierTerminationVerified ||
+        (!nativeGroupTermination && rootExitedBeforeBarrier && rootExit)
+      ) {
         settleBarrierOutcome()
         return
       }
@@ -162,6 +173,18 @@ export function runProcess(
 
     // Barrier callers wait for termination evidence, bounded by a final deadline.
     const stopAndSettle = (): void => {
+      if (nativeGroupTermination) {
+        if (barrierStopping) {
+          return
+        }
+        barrierStopping = true
+        void nativeGroupTermination.stop().then((verified) => {
+          barrierAttemptComplete = true
+          barrierTerminationVerified = verified
+          resolveBarrierIfSafe()
+        })
+        return
+      }
       if (spec.terminationBarrier) {
         barrierStopping = true
         initialBarrierTermination ??= signalBarrierTree()
@@ -261,7 +284,12 @@ export function runProcess(
       }
     })
     child.once('close', (code, signal) => {
-      terminationReporter.report()
+      deferredClose = { code, signal }
+      if (nativeGroupTermination) {
+        nativeGroupTermination.close()
+      } else {
+        terminationReporter.report()
+      }
       if (!barrierStopping) {
         rootExitedBeforeBarrier = true
       }
@@ -287,42 +315,4 @@ function terminate(child: ChildProcess, signal?: NodeJS.Signals): void {
   }
 }
 
-/** Prefer runProcess; reserve blocking execution for synchronous entry points and teardown. */
-export function runProcessSync(spec: ProcessSpec): ProcessResult {
-  const resolved = resolveSpawn(spec, process.platform)
-  return runResolvedProcessSync(spec, resolved)
-}
-
-function runResolvedProcessSync(spec: ProcessSpec, resolved: ResolvedSpawn): ProcessResult {
-  const result = spawnNativeProcessSync(
-    resolved.file,
-    resolved.args,
-    {
-      ...resolved.options,
-      input: spec.input,
-      timeout: spec.timeoutMs === null ? undefined : (spec.timeoutMs ?? DEFAULT_PROCESS_TIMEOUT_MS),
-      maxBuffer: spec.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES,
-      // Keep raw output without applying the nonexistent 'buffer' encoding to string stdin.
-      encoding: null
-    },
-    hasSpawnObserver() ? notifySpawnObserver : undefined
-  )
-  const timedOut = result.error
-    ? 'code' in result.error && result.error.code === 'ETIMEDOUT'
-    : false
-  if (result.error && !timedOut) {
-    throw result.error
-  }
-  return {
-    code: result.status,
-    signal: result.signal,
-    stdout: spec.captureStdoutAsBytes ? '' : (result.stdout?.toString('utf8') ?? ''),
-    ...(spec.captureStdoutAsBytes ? { stdoutBytes: result.stdout ?? Buffer.alloc(0) } : {}),
-    stderr: spec.captureStderrAsBytes ? '' : (result.stderr?.toString('utf8') ?? ''),
-    ...(spec.captureStderrAsBytes ? { stderrBytes: result.stderr ?? Buffer.alloc(0) } : {}),
-    // ENOBUFS is rethrown above, so truncated output never reaches this result.
-    outputTruncated: false,
-    // SIGTERM can be deliberate; only ETIMEDOUT proves a timeout.
-    timedOut
-  }
-}
+export { runProcessSync } from './run-process-sync'

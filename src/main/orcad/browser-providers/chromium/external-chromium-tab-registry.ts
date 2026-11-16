@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import type { RuntimeBrowserCommandHost } from '../../../runtime/browser/commands/browser-command-contracts'
 import { BrowserError } from '../../../browser/browser-error'
-import { normalizeBrowserNavigationUrl } from '../../../../shared/browser-url'
+import { normalizeBrowserNavigationUrl } from '../../../../shared/browser/navigation/browser-url'
 import type { ExternalChromiumBrowserSession } from './external-chromium-browser-session'
 import {
   externalChromiumTabInfo,
@@ -74,7 +74,7 @@ export class ExternalChromiumTabRegistry {
     this.pagesByPublicId.set(publicPageId, page)
     this.pagesByAgentId.set(agentPageId, page)
     this.setActivePage(page)
-    host.markHeadlessBrowserSessionTabActive?.(worktreeId, publicPageId, {
+    await host.markHeadlessBrowserSessionTabActive?.(worktreeId, publicPageId, {
       ...(typeof params.targetGroupId === 'string' ? { targetGroupId: params.targetGroupId } : {}),
       // External creates have no paired-device caller; preserve host-wide focus behavior.
       focusesHost: true

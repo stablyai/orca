@@ -2,7 +2,7 @@ import type {
   ClaudeAccountSignIn,
   ClaudeRateLimitAccountsState,
   ClaudeSignInRequest
-} from '../../shared/managed-account-types'
+} from '../../shared/agent-accounts/managed-account-types'
 import { ClaudeAccountRegistration } from './sign-in/claude-account-registration'
 import {
   ClaudeAccountSelection,
@@ -13,12 +13,13 @@ import {
 import { runClaudeCommandProcess } from './sign-in/claude-command-process'
 import { runClaudeLoginSession } from './sign-in/claude-login-session'
 import { runClaudePastedCodeLogin } from './sign-in/claude-pasted-code-login'
-import type { HostAccountSignInChannel } from '../../shared/host-account-sign-in-types'
+import type { HostAccountSignInChannel } from '../../shared/agent-accounts/host-account-sign-in-types'
 import type { ClaudeRuntimeAuthService } from './runtime-auth-service'
 import type { ClaudeAccountSelectionTarget } from './selection/runtime-selection'
 
 export class ClaudeAccountService {
   private mutationQueue: Promise<unknown> = Promise.resolve()
+  private readonly renameListeners = new Set<() => void>()
   private cancelPendingClaudeLogin: (() => boolean) | null = null
   private pendingSignInLink: Promise<string | null> | null = null
   private openWslSignInLink: ((signInLink: string) => void) | null = null
@@ -26,7 +27,7 @@ export class ClaudeAccountService {
   private readonly registration: ClaudeAccountRegistration
 
   constructor(
-    store: ClaudeAccountStore,
+    private readonly store: ClaudeAccountStore,
     rateLimits: ClaudeAccountUsage,
     private readonly runtimeAuth: ClaudeAccountRuntime &
       Pick<ClaudeRuntimeAuthService, 'getRuntimeConfigDir'>,
@@ -103,6 +104,28 @@ export class ClaudeAccountService {
   removeAccount(accountId: string): Promise<ClaudeRateLimitAccountsState> {
     this.supersedePendingLogin()
     return this.serializeMutation(() => this.selection.remove(accountId))
+  }
+
+  // Outside the mutation queue: a pending sign-in can hold it for minutes, and this
+  // synchronous write touches no state a queued account change reads.
+  renameAccount(accountId: string, displayName: string | null): ClaudeRateLimitAccountsState {
+    const before = this.store.getSettings().managedAccountDisplayNames
+    const state = this.selection.rename(accountId, displayName)
+    // Account streams otherwise republish only on usage changes; an unchanged name writes nothing.
+    if (this.store.getSettings().managedAccountDisplayNames !== before) {
+      for (const listener of this.renameListeners) {
+        listener()
+      }
+    }
+    return state
+  }
+
+  /** Listeners live as long as their account stream subscription. */
+  onAccountRenamed(listener: () => void): () => void {
+    this.renameListeners.add(listener)
+    return () => {
+      this.renameListeners.delete(listener)
+    }
   }
 
   selectAccount(accountId: string | null): Promise<ClaudeRateLimitAccountsState> {

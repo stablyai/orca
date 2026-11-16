@@ -1,4 +1,4 @@
-import { markdownMathSelectionText } from '../../../../../shared/markdown-math-selection'
+import { markdownMathSelectionText } from '../../../../../shared/markdown/markdown-math-selection'
 
 /** Only agent-reply prose marked with this attribute may be quoted. */
 export const NATIVE_CHAT_QUOTE_SOURCE_PROPS = { 'data-native-chat-quote-source': '' } as const

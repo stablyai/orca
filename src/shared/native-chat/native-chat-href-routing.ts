@@ -1,4 +1,4 @@
-import { isWindowsAbsolutePathLike } from '../cross-platform-path'
+import { isWindowsAbsolutePathLike } from '../file-access/cross-platform-path'
 import { fileUriToFilesystemPath } from '../file-links/file-uri-path'
 
 export type NativeChatHrefRoute =

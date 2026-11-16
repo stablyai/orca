@@ -1,4 +1,4 @@
-import type { SkillBundleInstallProgress } from '../../../shared/skill-bundle-install-contract'
+import type { SkillBundleInstallProgress } from '../../../shared/skills/installation/skill-bundle-install-contract'
 
 const POLL_INTERVAL_MS = 150
 

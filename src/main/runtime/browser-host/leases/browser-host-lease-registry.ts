@@ -29,7 +29,7 @@ import {
 import type {
   RuntimeBrowserClientPlacement,
   RuntimeBrowserPlacement
-} from '../../../../shared/runtime-browser-placement'
+} from '../../../../shared/browser/client-hosting/runtime-browser-placement'
 import { requireLiveBrowserClientPage } from '../reconciliation/browser-host-page-authority'
 import type { BrowserHostFenceReason } from './browser-host-lease-fence'
 import { dispatchBrowserHostLeaseFence } from './browser-host-lease-fence-dispatch'

@@ -4,7 +4,7 @@ import {
   orchestrationSenderAgent,
   type SenderNamingSources
 } from './orchestration-sender-name'
-import { parseOrcaSessionAddress } from '../../../../../shared/orca-session-address'
+import { parseOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
 import {
   agentMessageSenderName,
   type AgentMessageSender

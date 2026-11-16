@@ -1,4 +1,4 @@
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { buildSearchableBrowserPages } from '@/lib/browser/palette/browser-palette-page-entries'
 import type { SearchableBrowserPage } from '@/lib/browser/palette/browser-palette-search'

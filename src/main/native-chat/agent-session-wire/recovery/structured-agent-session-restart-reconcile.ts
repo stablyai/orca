@@ -6,7 +6,7 @@ import type { AgentSessionWireRefusal } from '../../../../shared/agent-session/f
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 import { classifyStoreFailure } from '../acquisition/structured-agent-session-attach'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
-import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
+import { mapWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
 
 const MAX_RECONCILIATION_PASSES = 8
 

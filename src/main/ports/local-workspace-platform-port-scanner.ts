@@ -1,6 +1,6 @@
 import { readFile, readdir, readlink } from 'node:fs/promises'
-import { LSOF_NONBLOCKING_ARGS } from '../../shared/lsof-nonblocking-args'
-import { getProcessOutputFields } from '../../shared/process-output-field-scanner'
+import { LSOF_NONBLOCKING_ARGS } from '../../shared/process-observation/lsof-nonblocking-args'
+import { getProcessOutputFields } from '../../shared/process-observation/process-output-field-scanner'
 import { readWindowsProcessTable } from '../windows/windows-process-table'
 import { runPortScanCommand } from './port-scan-command-client'
 import { parseDarwinNetstatListeners } from './darwin-netstat-listeners'

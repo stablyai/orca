@@ -11,7 +11,7 @@ import {
 } from '../../../shared/agent-session/agent-session-attachments'
 import type { RuntimeFilePreviewResult } from '../../../shared/file-content/runtime-file-read'
 import { readAuthorizedDocPreviewFile } from '../../../shared/document-preview/doc-preview-file-access'
-import { renameFileWithWindowsRetryAsync } from '../../../shared/windows-retry-file-operations'
+import { renameFileWithWindowsRetryAsync } from '../../../shared/file-write/windows-retry-file-operations'
 import { IMAGE_FILE_MIME_TYPES } from '../../../shared/file-preview/image-mime-types'
 import {
   LOCAL_PREVIEWABLE_BINARY_MAX_BYTES,

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { isOrcaSessionId, type OrcaSessionId } from './orca-session-address'
+import { isOrcaSessionId, type OrcaSessionId } from './agent-session/identity/orca-session-address'
 import { isStructuredAgentId } from './agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 export {

@@ -5,7 +5,7 @@ import { OrcaRuntimeService } from '../../../orca-runtime'
 import { SessionLinkStore } from '../../../orchestration/session-links/session-link-store'
 import { sessionLinkTestParticipants as participants } from '../../../orchestration/session-links/session-link-test-fixture'
 import { SESSION_LINK_METHODS } from './session-link-methods'
-import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
+import { testOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address-test-fixture'
 import { sessionLinkSendReceipt } from '../../../../../shared/session-link-receipt'
 import { sessionLinkNextMessage } from '../../../../../shared/session-link-wait'
 import {

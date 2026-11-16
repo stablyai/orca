@@ -22,7 +22,7 @@ import {
   type OrcaProfileIndex,
   type OrcaProfileListState,
   type OrcaProfileSummary
-} from '../../shared/orca-profiles'
+} from '../../shared/orca-profiles/orca-profiles'
 import {
   getOrcaProfileDataFile,
   getOrcaProfileDirectory,

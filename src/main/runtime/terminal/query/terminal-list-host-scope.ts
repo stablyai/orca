@@ -5,7 +5,7 @@ import {
   parseExecutionHostId,
   toSshExecutionHostId
 } from '../../../../shared/execution-host'
-import type { RuntimeTerminalSummary } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalSummary } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { RuntimeFederationOperations } from '../../orchestration/federation/runtime-federation-operations'

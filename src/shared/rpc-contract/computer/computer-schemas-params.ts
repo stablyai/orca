@@ -24,6 +24,10 @@ export const ComputerTarget = z.object({
 
 export const ComputerObserveTargetBase = ComputerTarget.extend({
   noScreenshot: OptionalBoolean,
+  // Older runtimes strip these and return the full-size PNG; the result's screenshot says what it is.
+  screenshotFormat: z.enum(['png', 'jpeg']).optional(),
+  screenshotScale: z.number().positive().finite().optional(),
+  screenshotMaxEdge: OptionalPositiveInt,
   restoreWindow: OptionalBoolean,
   // Older runtimes strip this and return the full tree, so callers need no capability check.
   treeDiff: OptionalBoolean,

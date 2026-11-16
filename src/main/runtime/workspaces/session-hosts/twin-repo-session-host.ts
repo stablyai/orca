@@ -5,7 +5,7 @@ import {
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { WORKSPACE_SESSION_FIELD_OWNERSHIP } from '../../../../shared/workspace-session/workspace-session-host-field-ownership'
@@ -13,7 +13,7 @@ import {
   contestedPartitionHosts,
   pickPrimaryHostForClaims
 } from '../../../../shared/workspace-session/workspace-session-contested-primary-host'
-import { worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
+import { worktreeWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 
 export type CachedWorktreeHost = Pick<Worktree, 'id' | 'hostId' | 'runtimeOwnerEnvironmentId'>

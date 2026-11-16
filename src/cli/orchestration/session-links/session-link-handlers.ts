@@ -14,7 +14,7 @@ import {
   SESSION_LINK_OWNER_CHOICES_CAPABILITY,
   SESSION_LINK_GROUP_CAPABILITY
 } from '../../../shared/session-link'
-import type { RuntimeStatus } from '../../../shared/runtime-types'
+import type { RuntimeStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 function linkOperationError(error: unknown, guidance: string): Error {
   const message = `${error instanceof Error ? error.message : String(error)}\n${guidance}`

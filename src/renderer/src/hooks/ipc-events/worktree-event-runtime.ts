@@ -7,7 +7,7 @@ import {
 } from '../../../../shared/execution-host'
 export const recentlyRenamedWorktreeIdExpiry = new Map<string, number>()
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
-import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
+import type { RuntimeClientEvent } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
 import type { AppState } from '../../store/types'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import type { WorktreeSortOrderUpdate } from '../../../../shared/worktree/metadata/sort-order-update'

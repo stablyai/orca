@@ -1,5 +1,5 @@
 import type { RuntimeClient } from '../../../src/cli/runtime/client'
-import type { RuntimeMobileSessionTabsResult } from '../../../src/shared/runtime-types'
+import type { RuntimeMobileSessionTabsResult } from '../../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
 
 // Read authoritative host tabs directly so a copied client ownership policy cannot weaken close assertions.
 export async function readHostTabs(

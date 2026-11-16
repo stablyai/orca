@@ -7,7 +7,7 @@ import { SESSION_LINK_METHODS } from './session-link-methods'
 import { stopSessionLinkTurns } from '../../../orchestration/session-links/session-link-stop'
 import { sessionLinkCandidates } from '../../../orchestration/session-links/session-link-participants'
 import { sessionLinkTestParticipants as participants } from '../../../orchestration/session-links/session-link-test-fixture'
-import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
+import { testOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address-test-fixture'
 
 vi.mock('../../../orchestration/session-links/session-link-delivery', () => ({
   redriveSessionLinks: vi.fn(async () => {}),

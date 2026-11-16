@@ -1,4 +1,4 @@
-import { isOrcaSessionId } from '../../../../shared/orca-session-address'
+import { isOrcaSessionId } from '../../../../shared/agent-session/identity/orca-session-address'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import { canonicalOrcaSessionId } from '../addressing/session-lineage/canonical-orca-session-id'
 import { SessionLinkStore } from './session-link-store'

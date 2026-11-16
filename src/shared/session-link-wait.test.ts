@@ -1,4 +1,4 @@
-import { testOrcaSessionId } from './orca-session-address-test-fixture'
+import { testOrcaSessionId } from './agent-session/identity/orca-session-address-test-fixture'
 import { describe, expect, it } from 'vitest'
 import { SessionLinkEvent } from './session-link'
 import { sessionLinkNextMessage, sessionLinkWaitingFor } from './session-link-wait'

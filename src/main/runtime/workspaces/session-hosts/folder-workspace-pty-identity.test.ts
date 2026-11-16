@@ -5,7 +5,7 @@ import {
   type HostWorktreeTarget
 } from '../../../../shared/worktree/host-qualified-identity'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
-import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
+import type { RuntimeClientEvent } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
 import '../../../../shared/workspace-layout/stable-pane-id'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../../../shared/worktree/id'

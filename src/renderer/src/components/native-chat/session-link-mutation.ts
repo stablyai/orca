@@ -1,6 +1,6 @@
 import type { RefObject } from 'react'
 import { SessionLinkSnapshot } from '../../../../shared/session-link'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 

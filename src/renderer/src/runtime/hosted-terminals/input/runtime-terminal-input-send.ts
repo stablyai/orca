@@ -3,7 +3,7 @@ import { recordRuntimeTerminalInputForPtyId } from './runtime-terminal-input-rec
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { getRemoteRuntimePtyOwner } from '../identity/remote-runtime-pty-owner'
 import type { TerminalInputKind } from '../../../../../shared/terminal/input/terminal-input-kind'
-import type { RuntimeTerminalSend } from '../../../../../shared/runtime-terminal-send-contract'
+import type { RuntimeTerminalSend } from '../../../../../shared/terminal/runtime/runtime-terminal-send-contract'
 
 const DESKTOP_RUNTIME_CLIENT = { id: 'orca-desktop', type: 'desktop' } as const
 

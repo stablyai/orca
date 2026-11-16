@@ -1,12 +1,16 @@
 import { ipcMain } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
-import type { BaseRefDefaultResult, BaseRefSearchResult, Repo } from '../../../shared/repo-types'
+import type {
+  BaseRefDefaultResult,
+  BaseRefSearchResult,
+  Repo
+} from '../../../shared/repository/repo-types'
 import {
   clampRepoSearchRefsLimit,
   REPO_SEARCH_REFS_DEFAULT_LIMIT,
   isRepoSearchRefsRequestLimit
-} from '../../../shared/repo-search-limits'
-import { isFolderRepo } from '../../../shared/repo-kind'
+} from '../../../shared/git/refs/repo-search-limits'
+import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import {
   getRepoExecutionHostId,
   getRepoRoutingConnectionId,

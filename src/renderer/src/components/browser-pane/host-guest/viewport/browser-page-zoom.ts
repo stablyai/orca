@@ -1,5 +1,5 @@
-import type { BrowserPageZoomCommand } from '../../../../../../shared/browser-page-zoom'
-import type { BrowserPageSiteDisplay } from '../../../../../../shared/browser-site-display'
+import type { BrowserPageZoomCommand } from '../../../../../../shared/browser/site-settings/browser-page-zoom'
+import type { BrowserPageSiteDisplay } from '../../../../../../shared/browser/site-settings/browser-site-display'
 
 export const ORCA_BROWSER_PAGE_ZOOM_EVENT = 'orca:browser-page-zoom'
 

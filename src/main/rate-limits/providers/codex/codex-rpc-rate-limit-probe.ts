@@ -1,5 +1,5 @@
-import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
-import { extractCodexAuthError } from '../../../../shared/codex-auth-errors'
+import type { ProviderRateLimits } from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { extractCodexAuthError } from '../../../../shared/agent-accounts/codex/codex-auth-errors'
 import { codexSpawnEnoent, isSpawnEnoent } from '../../../codex-cli/windows-only-agent-cli'
 import {
   excerptAgentFailureOutput,

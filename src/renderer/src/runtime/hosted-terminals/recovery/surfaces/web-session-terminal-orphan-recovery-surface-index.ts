@@ -1,8 +1,8 @@
 import type {
   RuntimeMobileSessionRetiredTerminalSurface,
   RuntimeMobileSessionTabsResult
-} from '../../../../../../shared/runtime-session-contracts'
-import type { RuntimeMobileSessionTerminalClientTab } from '../../../../../../shared/runtime-mobile-session-tab-contracts'
+} from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeMobileSessionTerminalClientTab } from '../../../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode

@@ -6,13 +6,13 @@ import {
   type CrashReportCopyDiagnosticsArgs,
   type CrashReportSubmitArgs,
   formatCrashReportText
-} from '../../../shared/crash-reporting'
+} from '../../../shared/crash-reporting/crash-reporting'
 import type { CrashReportStore } from '../../crash-reporting/reports/crash-report-store'
-import { rendererCrashBreadcrumbOrigin } from '../../../shared/crash-breadcrumb-origin'
+import { rendererCrashBreadcrumbOrigin } from '../../../shared/crash-reporting/crash-breadcrumb-origin'
 import {
   assertClipboardTextWriteWithinLimit,
   isClipboardTextWriteTooLargeError
-} from '../../../shared/clipboard-text'
+} from '../../../shared/clipboard/clipboard-text'
 import { formatCrashReportCopyText } from '../../crash-reporting/reports/crash-report-copy-text'
 import {
   recentRendererErrorReportKeys,

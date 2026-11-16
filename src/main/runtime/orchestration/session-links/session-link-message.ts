@@ -1,5 +1,8 @@
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { isOrcaSessionId, formatOrcaSessionAddress } from '../../../../shared/orca-session-address'
+import {
+  isOrcaSessionId,
+  formatOrcaSessionAddress
+} from '../../../../shared/agent-session/identity/orca-session-address'
 import {
   sessionLinkPeers,
   SESSION_LINK_MESSAGE_BYTES,

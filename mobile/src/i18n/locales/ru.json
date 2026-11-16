@@ -257,6 +257,7 @@
     "message": {
       "copyMessage": "Копировать сообщение",
       "forkFromResponse": "Создать ответвление от этого ответа",
+      "scrollMessageToTop": "Прокрутить к началу сообщения",
       "forkFromResponseHint": "Новый чат со всем этим ответом до конца хода"
     },
     "messageActionsSheet": {
@@ -2974,12 +2975,14 @@
       "title": "Внешний вид"
     },
     "browserSettingsScreen": {
+      "askEachTime": "Спрашивать каждый раз",
+      "askEachTimeDescription": "Каждый раз выбирать браузер Orca, браузер телефона или копирование ссылки.",
       "desktopBrowser": "Браузер Orca на компьютере",
       "desktopBrowserDescription": "Открывать в браузере сопряжённого компьютера с трансляцией на телефон.",
-      "linksDescription": "Выберите, где открывать HTTP(S)-ссылки при нажатии на них в выводе терминала.",
+      "terminalAndChatLinksDescription": "Выберите, где открывать веб-ссылки при нажатии на них в выводе терминала и в чате.",
       "linksHeading": "ССЫЛКИ",
       "loadFailed": "Не удалось загрузить настройки браузера. Повторите попытку.",
-      "openTerminalLinks": "Открывать ссылки из терминала",
+      "openLinks": "Открывать ссылки",
       "phoneBrowser": "Браузер телефона",
       "phoneBrowserDescription": "Открывать в Safari, Chrome или другом браузере на этом телефоне.",
       "saveFailed": "Не удалось сохранить настройки браузера. Повторите попытку.",

@@ -9,7 +9,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type {
   BrowserCookieImportResult,
   BrowserSessionProfile
-} from '../../../shared/browser-workspace-types'
+} from '../../../shared/browser/workspaces/browser-workspace-types'
 
 type ImportExecution = BrowserCookieImportResult & {
   executionMachine: 'client' | 'remote'
@@ -41,6 +41,8 @@ vi.mock('electron', () => ({
   session: { fromPartition: (partition: string) => mocks.sessions.get(partition) },
   ipcMain: {
     removeHandler: vi.fn(),
+    on: vi.fn(),
+    removeAllListeners: vi.fn(),
     handle: (channel: string, handler: (event: { sender: unknown }, args: unknown) => unknown) =>
       mocks.handlers.set(channel, handler)
   }
@@ -61,7 +63,9 @@ vi.mock('./sources/browser-cookie-detection', () => ({
   detectInstalledBrowsers: mocks.detect,
   selectBrowserProfile: vi.fn()
 }))
-vi.mock('../guest-lifecycle/manager/browser-manager', () => ({ browserManager: {} }))
+vi.mock('../guest-lifecycle/manager/browser-manager', () => ({
+  browserManager: { cancelGrabOp: vi.fn() }
+}))
 vi.mock('./client-route/client-route-cookie-import-source-store', () => ({
   recordClientRouteCookieImportSource: vi.fn()
 }))

@@ -2,10 +2,10 @@ import type { AppState } from '../../../types'
 import type {
   BrowserPage,
   BrowserWorkspace
-} from '../../../../../../shared/browser-workspace-types'
-import { remapBrowserPageDocLocation } from '../../../../../../shared/browser-page-doc-location'
+} from '../../../../../../shared/browser/workspaces/browser-workspace-types'
+import { remapBrowserPageDocLocation } from '../../../../../../shared/browser/workspaces/browser-page-doc-location'
 import { splitWorktreeIdForFilesystem } from '../../../../../../shared/worktree/id'
-import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { worktreeWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { getWorktreeIdFromVisitKey } from '@/lib/workspace/activation/worktree-visit-recency'
 import {
   remapClosedTerminalTabSnapshotCwds,

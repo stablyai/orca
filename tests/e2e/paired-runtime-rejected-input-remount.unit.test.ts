@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 // Carry real host PTY write refusal through dispatcher → WriteUnavailable → renderer transport → pty-connection remount.
 // Main has no local registry for remote: ids; cover every liveness reply so that final recovery hop cannot drop refusal.
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
@@ -325,7 +326,7 @@ describe('host-rejected paired-runtime input reaches a pane remount', () => {
       consumePendingColdRestore: vi.fn(() => null),
       consumePendingSnapshot: vi.fn(() => null),
       runtimePaneTitlesByTabId: {},
-      agentStatusByPaneKey: {},
+      agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
 
       paneForegroundAgentByPaneKey: {},
       sleepingAgentSessionsByPaneKey: {},

@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { exportProfileStateJson, importProfileStateJson } from './profile-state-documents'
 import { readProfileStateRevision } from '../database/profile-state-revision'
 import { openProfileStateDatabase } from '../database/profile-state-database'
-import { profileStateDatabaseFile } from '../../../../shared/profile-state-storage-paths'
+import { profileStateDatabaseFile } from '../../../../shared/orca-profiles/profile-state-storage-paths'
 import { writeProfileStateDomains } from './profile-state-domain-writes'
 import { buildProfileStateCutoverFixture } from '../../profile-state-cutover-fixture'
 

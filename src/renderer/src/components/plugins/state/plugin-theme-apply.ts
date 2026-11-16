@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { resolveDocumentTheme } from '@/app-shell/appearance/document-theme'
-import { pluginAppThemeSlotUpdate } from '../../../../../shared/plugin-theme-settings'
+import { pluginAppThemeSlotUpdate } from '../../../../../shared/plugins/appearance/plugin-theme-settings'
 import {
   hasTerminalColorOverrides,
   TERMINAL_COLOR_OVERRIDES_SETTING

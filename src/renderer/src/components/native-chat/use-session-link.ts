@@ -1,7 +1,7 @@
 import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import { executeSessionLinkMutation, type LinkMutation } from './session-link-mutation'
 import { subscribeRuntimeHostContactRegained } from '@/runtime/hosts/connections/runtime-host-contact-regained'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { z } from 'zod'
 import {
@@ -13,7 +13,7 @@ import {
   SESSION_LINK_PAIRED_DESKTOP_CAPABILITY,
   SESSION_LINK_GROUP_CAPABILITY
 } from '../../../../shared/session-link'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { useTranslate } from '@/i18n/use-translate'
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import { structuredAgentSessionHostSupports } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'

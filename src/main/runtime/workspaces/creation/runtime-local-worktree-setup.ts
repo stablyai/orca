@@ -3,7 +3,7 @@ import type {
   SetupDecision,
   SetupTrustMismatch
 } from '../../../../shared/worktree/create-types'
-import type { WorkspaceHookOwner } from '../../../../shared/workspace-hook-owner'
+import type { WorkspaceHookOwner } from '../../../../shared/workspace-setup/hooks/workspace-hook-owner'
 import { loadHooks, runHook } from '../../../workspace-hooks/hooks'
 import {
   createSetupRunnerScript,
@@ -21,7 +21,7 @@ import {
 } from '../../../workspace-hooks/created-worktree-setup-trust'
 import type { HookWorkspaceIdentity } from '../../../workspace-hooks/setup-hook-env-vars'
 import { scopeHooksToRepoKind } from '../../../../shared/folder-workspace-hooks'
-import { isFolderRepo } from '../../../../shared/repo-kind'
+import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 

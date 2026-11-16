@@ -155,7 +155,7 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'config/scripts/desktop-distribution/runtime-verification/verify-packaged-windows-agent-hook.test.mjs',
   'src/main/windows/windows-registry-addon.test.ts',
   'src/main/daemon/executable-host/windows/testing/daemon-host-process-package.test.ts',
-  'src/shared/windows-security-addon.win32.test.ts',
+  'src/shared/secure-storage/windows-security-addon.win32.test.ts',
   'config/scripts/desktop-distribution/runtime-verification/package-electron-runtime-contract.test.mjs',
   'config/scripts/desktop-distribution/runtime-verification/electron-builder-runtime-resources.test.mjs',
   'src/main/browser/client-pages/renderer/browser-client-page-renderer-lifecycle.electron.test.ts',
@@ -164,9 +164,7 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/shared/__tests__/process-host/windows-cmd-shim-resolution.win32.test.ts',
   'src/shared/__tests__/process-host/windows-tree-kill-late-taskkill.win32.test.ts',
   'src/shared/agent-launch/startup/omp-fresh-launch-cmd.win32.test.ts',
-  'src/shared/windows-batch-spawn.win32.test.ts',
-  'src/main/claude/structured/launch/claude-structured-child-env.test.ts',
-  'src/main/agent-hooks/installation/commands/windows-hook-payload-delivery.test.ts',
+  'src/shared/shell/launch/windows-batch-spawn.win32.test.ts',
   'src/main/jcode/hook-gate-script.test.ts',
   'src/main/agent-hooks/installation/commands/windows-native-hook-exe-hosts.test.ts',
   'src/main/agent-hooks/installation/commands/windows-batch-hook-launcher.test.ts',
@@ -191,7 +189,6 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/main/cursor/hook-service.test.ts',
   'src/main/orca-profiles/profile-index-store.test.ts',
   'src/main/startup/windows-install-permissions/windows-install-dir-acl-repair.win32.test.ts',
-  'src/main/startup/windows-startup/windows-app-data-path.test.ts',
   'src/main/startup/windows-startup/windows-std-handle-inheritance.win32.test.ts',
   'src/main/startup/windows-startup/windows-isolated-spawner.win32.test.ts',
   'src/main/runtime/workspaces/catalog/worktree-scan-admin-fingerprint-gate.test.ts',
@@ -200,7 +197,6 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/main/ipc/preflight-provider-command-selection.test.ts',
   'src/main/ipc/preflight-runnable-local-cli.test.ts',
   'src/main/managed-server/install/remote-node-runtime-store-windows.test.ts',
-  'src/main/skills/bundled-skill-install/bundled-skill-local-host.test.ts',
   'src/main/skills/bundled-skill-install/bundled-skill-plan-selection.test.ts'
 ]
 

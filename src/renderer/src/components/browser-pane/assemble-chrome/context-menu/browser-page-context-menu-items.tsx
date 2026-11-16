@@ -12,7 +12,7 @@ import {
   normalizeExternalBrowserUrl,
   SEARCH_ENGINE_LABELS,
   type SearchEngine
-} from '../../../../../../shared/browser-url'
+} from '../../../../../../shared/browser/navigation/browser-url'
 import type { BrowserPageContextMenuState } from '../../describe-page/browser-page-types'
 import { BrowserPageExtensionMenuItems } from '../extensions/browser-page-extension-menu-items'
 

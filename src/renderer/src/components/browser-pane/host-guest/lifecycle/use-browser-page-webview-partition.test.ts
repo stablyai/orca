@@ -2,7 +2,7 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, expect, it } from 'vitest'
 import { useAppStore } from '@/store/index'
-import type { BrowserSessionProfile } from '../../../../../../shared/browser-workspace-types'
+import type { BrowserSessionProfile } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import { useBrowserPageWebviewPartition } from './use-browser-page-webview-partition'
 
 const initialState = useAppStore.getState()

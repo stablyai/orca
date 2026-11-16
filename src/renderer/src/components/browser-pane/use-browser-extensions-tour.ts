@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useAppStore } from '@/store/index'
 import { isContextualTourSessionConsumed } from '@/store/slices/ui/ui-slice-tour-actions'
-import type { ContextualTourId } from '../../../../shared/contextual-tours'
-import type { FeatureInteractionState } from '../../../../shared/feature-interactions'
+import type { ContextualTourId } from '../../../../shared/feature-education/contextual-tours/contextual-tours'
+import type { FeatureInteractionState } from '../../../../shared/feature-education/interactions/feature-interactions'
 import {
   activeBrowserExtensionsBanner,
   type BrowserExtensionsBannerAssignmentReply

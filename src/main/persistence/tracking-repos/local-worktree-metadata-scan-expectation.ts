@@ -1,9 +1,9 @@
 import { isDeepStrictEqual } from 'node:util'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { Project } from '../../../shared/project-types'
-import type { Repo } from '../../../shared/repo-types'
-import { getRepoKind } from '../../../shared/repo-kind'
+import type { Project } from '../../../shared/project/project-types'
+import type { Repo } from '../../../shared/repository/repo-types'
+import { getRepoKind } from '../../../shared/repository/repo-kind'
 import { splitWorktreeId } from '../../../shared/worktree/id'
 import {
   composeWorktreeHostIdentity,

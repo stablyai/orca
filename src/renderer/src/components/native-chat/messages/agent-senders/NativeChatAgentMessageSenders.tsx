@@ -14,7 +14,7 @@ import {
   useAgentMessageSenderLabel
 } from './native-chat-agent-message-sender-label'
 import { useAgentMessageSenderOpens } from './native-chat-agent-message-sender-view'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 /** Link a sender only where its one resolution can open something; otherwise a plain name. */
 export function NativeChatAgentMessageSenders({

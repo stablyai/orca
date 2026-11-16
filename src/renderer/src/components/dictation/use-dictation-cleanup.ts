@@ -3,9 +3,9 @@ import { useAppStore } from '@/store'
 import {
   isDictationCleanupOn,
   type DictationCleanupResult
-} from '../../../../shared/dictation-cleanup'
-import { createNonSecureContextUuid } from '../../../../shared/non-secure-context-uuid'
-import { appendDictationText } from '../../../../shared/dictation-transcript-spacing'
+} from '../../../../shared/speech/dictation/dictation-cleanup'
+import { createNonSecureContextUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
+import { appendDictationText } from '../../../../shared/speech/dictation/dictation-transcript-spacing'
 import { dictationPillAnchorFor, type DictationPillAnchor } from './dictation-pill-anchor'
 import type { DictationKeptRecording } from './dictation-kept-recording'
 

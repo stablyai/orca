@@ -31,7 +31,7 @@ describe('OrcaRuntimeService', () => {
       serializeProviderBuffer,
       hasRendererSerializer: () => false
     })
-    syncSinglePty(runtime)
+    await syncSinglePty(runtime)
     runtime.onPtyData('pty-1', 'shell history\r\n', 100)
     runtime.synchronizePtyOutputSequenceFromProvider(
       'pty-1',
@@ -69,7 +69,7 @@ describe('OrcaRuntimeService', () => {
         serializeProviderBuffer,
         hasRendererSerializer: () => false
       })
-      syncSinglePty(runtime)
+      await syncSinglePty(runtime)
       runtime.onPtyData('pty-1', 'shell history\r\n', 100)
       runtime.synchronizePtyOutputSequenceFromProvider(
         'pty-1',
@@ -117,7 +117,7 @@ describe('OrcaRuntimeService', () => {
       serializeProviderBuffer,
       hasRendererSerializer: () => false
     })
-    syncSinglePty(runtime)
+    await syncSinglePty(runtime)
     runtime.onPtyData('pty-1', 'old shell\r\n', 100)
     runtime.synchronizePtyOutputSequenceFromProvider(
       'pty-1',
@@ -171,7 +171,7 @@ describe('OrcaRuntimeService', () => {
       serializeProviderBuffer,
       hasRendererSerializer: () => false
     })
-    syncSinglePty(runtime)
+    await syncSinglePty(runtime)
     runtime.synchronizePtyOutputSequenceFromProvider(
       'pty-1',
       { value: 900, generation: 'continued' },
@@ -181,7 +181,7 @@ describe('OrcaRuntimeService', () => {
 
     const readPromise = runtime.readTerminal(terminal.handle)
     await vi.waitFor(() => expect(serializeProviderBuffer).toHaveBeenCalledOnce())
-    syncSinglePty(runtime, 'pty-2')
+    await syncSinglePty(runtime, 'pty-2')
     resolveSnapshot({
       data: '\x1b[?1049hWrong terminal frame\r\n',
       cols: 80,
@@ -202,7 +202,7 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null,
       hasRendererSerializer: () => false
     })
-    syncSinglePty(runtime)
+    await syncSinglePty(runtime)
     runtime.onPtyData(
       'pty-1',
       '\x1b[?1049hBuild passed\r\n────────\r\n❯ \x1b[2mproceed with the release\r\n  and close the pull request\x1b[22m\x1b[1A\x1b[3G',
@@ -233,7 +233,7 @@ describe('OrcaRuntimeService', () => {
       hasRendererSerializer: () => true,
       serializeBuffer
     })
-    syncSinglePty(runtime)
+    await syncSinglePty(runtime)
 
     const [terminal] = (await runtime.listTerminals()).terminals
     runtime.onPtyData('pty-1', '   \n', 100)

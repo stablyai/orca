@@ -249,6 +249,7 @@
     "message": {
       "copyMessage": "Nachricht kopieren",
       "forkFromResponse": "Ab dieser Antwort abzweigen",
+      "scrollMessageToTop": "Diese Nachricht ganz nach oben scrollen",
       "forkFromResponseHint": "Ein neuer Chat mit dieser vollständigen Antwort bis zum Ende des Durchgangs"
     },
     "messageActionsSheet": {
@@ -2828,12 +2829,14 @@
       "title": "Darstellung"
     },
     "browserSettingsScreen": {
+      "askEachTime": "Jedes Mal fragen",
+      "askEachTimeDescription": "Jedes Mal zwischen Orca-Browser, Smartphone-Browser und Link kopieren wählen.",
       "desktopBrowser": "Orca-Browser auf dem Desktop",
       "desktopBrowserDescription": "Im gestreamten Browser des gekoppelten Desktops öffnen.",
-      "linksDescription": "Auswählen, wo HTTP(S)-Links aus der Terminalausgabe beim Antippen geöffnet werden.",
+      "terminalAndChatLinksDescription": "Auswählen, wo Weblinks aus der Terminalausgabe und dem Chat beim Antippen geöffnet werden.",
       "linksHeading": "LINKS",
       "loadFailed": "Browser-Einstellungen konnten nicht geladen werden. Erneut versuchen.",
-      "openTerminalLinks": "Terminal-Links öffnen",
+      "openLinks": "Links öffnen",
       "phoneBrowser": "Browser auf dem Smartphone",
       "phoneBrowserDescription": "In Safari, Chrome oder einem anderen Browser auf diesem Smartphone öffnen.",
       "saveFailed": "Browser-Einstellungen konnten nicht gespeichert werden. Erneut versuchen.",

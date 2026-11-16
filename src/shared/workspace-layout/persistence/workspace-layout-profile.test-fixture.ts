@@ -9,7 +9,7 @@ import {
   type ExecutionHostId
 } from '../../execution-host'
 import { toRemoteRuntimePtyId } from '../../remote-runtime/remote-runtime-pty-id'
-import { toAppSshPtyId } from '../../ssh-pty-id'
+import { toAppSshPtyId } from '../../remote-runtime/ssh/ssh-pty-id'
 import type { WorkspaceSessionState } from '../../workspace-session/workspace-session-state-types'
 import {
   addWorkspace,

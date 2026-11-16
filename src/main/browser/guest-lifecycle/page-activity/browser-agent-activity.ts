@@ -8,7 +8,7 @@ import {
   BROWSER_AGENT_CURSOR_CHANNEL,
   type BrowserAgentActivityEvent,
   type BrowserAgentCursorEvent
-} from '../../../../shared/browser-agent-activity-contract'
+} from '../../../../shared/browser/automation/browser-agent-activity-contract'
 import {
   getActiveRpcAgentSessionId,
   getActiveRpcCaller

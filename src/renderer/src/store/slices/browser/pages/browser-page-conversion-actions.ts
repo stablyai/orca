@@ -14,7 +14,7 @@ import type {
   BrowserSliceSet,
   RemoteBrowserPageHandle
 } from '../browser-slice-contract'
-import type { BrowserPage } from '../../../../../../shared/browser-workspace-types'
+import type { BrowserPage } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 
 export function createBrowserPageConversionActions(
   set: BrowserSliceSet,

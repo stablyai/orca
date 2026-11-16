@@ -4,7 +4,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import {
   throwIfSignalAborted,
   waitForPromiseWithSignal
-} from '../../../../shared/abort-signal-reason'
+} from '../../../../shared/concurrency/abort-signal-reason'
 import { refuseUnclassified } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { agentSessionWriteNoticeEnglish } from '../../../../shared/agent-session/failures/agent-session-refusal-notice'
 import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
