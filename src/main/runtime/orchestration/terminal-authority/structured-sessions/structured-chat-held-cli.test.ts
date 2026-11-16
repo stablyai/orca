@@ -26,11 +26,14 @@ it.each([
   'prints actual sender outcomes for $failure, reset=$reset, with a copy-ready coordinator retry',
   async (scenario) => {
     const { failure, code, reset } = scenario
+    const clock = reset
+      ? vi.spyOn(Date, 'now').mockReturnValue(Date.UTC(2026, 10, 15, 22, 10))
+      : null
     const group = 'group' in scenario && scenario.group === true
     const { dispatchId, worker, notify } = await failedWorker(
       code,
       failure,
-      reset ? Date.UTC(2099, 0, 1, 23, 10) : undefined
+      reset ? Date.UTC(2026, 10, 15, 23, 10) : undefined
     )
     await host.deps.store.setUserConversationName(PEER_CHAT, 'Build worker', 'rename')
     await host.deps.store.setUserConversationName(COORDINATOR, 'Coordinator', 'rename')
@@ -100,6 +103,9 @@ it.each([
             throw new Error('Missing CLI receipt')
           }
           latest = { ...response.result }
+          if (reset) {
+            expect(latest).toMatchObject({ resetsAt: 1794784200000 })
+          }
           return response
         })
         vi.spyOn(client, 'call').mockImplementation(transport)
@@ -187,6 +193,7 @@ it.each([
         expect(latest).toMatchObject({ delivered: false, state: 'held', recoveryUsed: true })
       }
     } finally {
+      clock?.mockRestore()
       process.exitCode = originalExitCode ?? 0
       vi.unstubAllEnvs()
       console.info(`CLI evidence ${failure}\n${transcript.join('\n\n')}`)
