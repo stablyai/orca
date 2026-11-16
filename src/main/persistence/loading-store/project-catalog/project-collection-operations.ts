@@ -11,7 +11,7 @@ import type {
   ProjectHostSetupUpdateResult,
   ProjectUpdateArgs
 } from '../../../../shared/project/project-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { RepoHostTarget } from '../../../../shared/repository/repo-host-identity'
 import { ProjectGroupPersistenceOperations } from '../../tracking-repos/project-group-operations'

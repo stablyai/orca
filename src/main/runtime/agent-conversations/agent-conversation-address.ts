@@ -4,7 +4,7 @@ import {
   parseOrcaSessionAddress,
   type OrcaSessionId
 } from '../../../shared/agent-session/identity/orca-session-address'
-import { isTerminalHandle } from '../../../shared/terminal-handle-prefix'
+import { isTerminalHandle } from '../../../shared/terminal/terminal-handle-prefix'
 import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { AGENT_CONVERSATION_REFUSAL_CODES as CODES } from '../../../shared/agent-conversations/agent-conversation-contracts'
 import { lookupOrcaAgentSession } from '../orchestration/mailbox/routing/structured-session-mail-address'

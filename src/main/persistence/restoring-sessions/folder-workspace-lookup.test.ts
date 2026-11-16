@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import { FolderWorkspacePersistenceOperations } from './folder-workspace-operations'
 
 function folder(id: string, name: string): FolderWorkspace {

@@ -18,7 +18,7 @@ import {
 import { resolveLineageRunningSession } from '../orchestration/addressing/session-lineage/structured-session-lineage'
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import type { ResolvedAgentConversation } from './agent-conversation-address'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { connectionEvidenceHostId } from '../workspaces/process-listing/runtime-worktree-summary-paths'
 import { runtimeWorktreeAgentRowNames } from '../workspaces/process-listing/runtime-worktree-agent-rows'
 import type { RuntimeOrchestrationSenderNames } from '../orchestration/mailbox/senders/runtime-orchestration-sender-names'
