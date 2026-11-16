@@ -104,6 +104,10 @@ export type JournalDomainImport = JournalDomainImportHeader & {
   pages: Generator<JournalDomainImportPage>
 }
 
+export type RestoredJournalDomainImport = JournalDomainImportHeader & {
+  pages: () => Generator<JournalDomainImportPage>
+}
+
 const PAGE_ROWS = 512
 const PAGE_BYTES = 1024 * 1024
 
@@ -117,6 +121,15 @@ export function prepareJournalDomainImport(
   db: Database.Database,
   sessionId: string
 ): JournalDomainImport | null {
+  const restored = restoreJournalDomainImport(db, sessionId)
+  return restored && { ...restored, pages: restored.pages() }
+}
+
+/** As prepareJournalDomainImport, with pages that can be read again without restoring again. */
+export function restoreJournalDomainImport(
+  db: Database.Database,
+  sessionId: string
+): RestoredJournalDomainImport | null {
   if (db.isTransaction) {
     throw new Error('journal domain import reads its frozen source outside a transaction')
   }
@@ -137,6 +150,7 @@ export function prepareJournalDomainImport(
     cards
   )
   placeImportedLegacyQueue(state, cards, personal)
+  const retiredAccepted = readImportedRetiredAcceptances(db, state)
   return {
     sessionId,
     workspaceId: String(
@@ -167,7 +181,7 @@ export function prepareJournalDomainImport(
       },
       queueFailureBoundary: journalInputOrder(state).newestTurn.importBoundary()
     },
-    pages: importPages(state, cards, personal, readImportedRetiredAcceptances(db, state))
+    pages: () => importPages(state, cards, personal, retiredAccepted)
   }
 }
 

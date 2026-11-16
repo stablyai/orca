@@ -12,6 +12,13 @@ import {
 } from './journal-domain-database'
 import { journalDatabasePath } from './journal-host-database'
 import { insertJournalRow, publishJournalSessionEpoch } from '../durable-rows/journal-row-table'
+import { publishJournalOutcomeEpoch } from '../outcomes/journal-outcome-epoch.test-fixture'
+import { persistJournalOutcomeRows } from '../outcomes/journal-outcome-table'
+import {
+  advanceJournalOutcomeSource,
+  journalOutcomeSource
+} from '../outcomes/journal-outcome-format'
+import { restoreJournal } from '../replay/journal-open'
 import { journalSqlRetryRows } from '../journal-sql-retry-rows.test-fixture'
 import { JournalSqlReaderPool } from '../journal-sql-reader-pool'
 import { JournalSqlConversions } from '../journal-sql-conversions'
@@ -40,6 +47,26 @@ function turn(itemId: string, seq: number): ItemRow {
     seq,
     itemId,
     body: { kind: 'turn', turnId: itemId, state: 'completed', outcome: 'success' }
+  }
+}
+
+/** An agent reply: what an older Orca adds when someone really uses a chat. */
+function reply(itemId: string, seq: number): ItemRow {
+  return {
+    ...savedTurn,
+    seq,
+    itemId,
+    body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: itemId }] }
+  }
+}
+
+/** A CI line: what an older Orca adds to a watched chat with no one typing. */
+function ciLine(itemId: string, seq: number): ItemRow {
+  return {
+    ...savedTurn,
+    seq,
+    itemId,
+    body: { kind: 'status', presentation: 'pull-request-event', text: 'Checks passed' }
   }
 }
 
@@ -112,9 +139,9 @@ it('keeps every chat and turn an older Orca saved after a downgrade, without cha
   await first.close()
 
   runJournalTransaction(original, () => {
-    insertJournalRow(original, 'converted', turn('older-turn', tip + 1))
-    insertJournalRow(original, 'unopened', turn('older-unopened-turn', tip + 1))
-    insertJournalRow(original, 'closed', turn('older-closed-turn', tip + 1))
+    insertJournalRow(original, 'converted', reply('older-turn', tip + 1))
+    insertJournalRow(original, 'unopened', reply('older-unopened-turn', tip + 1))
+    insertJournalRow(original, 'closed', reply('older-closed-turn', tip + 1))
     original
       .prepare('INSERT INTO agent_session_attachment_claims VALUES(?,?,?)')
       .run('older-upload', 'converted', 100)
@@ -153,7 +180,21 @@ it('keeps every chat and turn an older Orca saved after a downgrade, without cha
           .record_json
       )
     )
-  ).toEqual({ sessionId: copy, lease: { sessionId: copy } })
+  ).toEqual({
+    sessionId: copy,
+    // Its own provider conversation, started on its first send; the original keeps its own.
+    providerHandleChain: [],
+    lease: {
+      sessionId: copy,
+      claimStatus: 'released',
+      ownerProcess: null,
+      reservedSpawnToken: null,
+      handoffStage: null,
+      handoffOperationId: null,
+      provenHandleLinkId: null,
+      deathEvidence: null
+    }
+  })
   expect(
     db
       .prepare('SELECT session_id FROM agent_session_tabs')
@@ -211,7 +252,7 @@ it('fills in revisions for chats converted before they were kept, then still kee
   await unchanged.close()
 
   runJournalTransaction(original, () => {
-    insertJournalRow(original, 'converted', turn('older-turn', tip + 1))
+    insertJournalRow(original, 'converted', reply('older-turn', tip + 1))
   })
   original.pragma('wal_checkpoint(TRUNCATE)')
   const later = await upgrade(root)
@@ -299,7 +340,7 @@ it('keeps only what an older Orca wrote after a file from before revisions were 
   await first.close()
 
   // The older Orca continues one converted chat and starts another.
-  insertJournalRow(original, 'converted', turn('older-turn', tip + 1))
+  insertJournalRow(original, 'converted', reply('older-turn', tip + 1))
   olderOrcaChat(original, 'started-older', [rows[0], turn('started-turn', 2)])
   const later = await upgrade(root)
   cleanup.push(later.close)
@@ -319,7 +360,7 @@ it('keeps only what an older Orca wrote after a file from before revisions were 
   })
 
   // Baselines now exist, so a later write by the older Orca is still kept, and nothing else moves.
-  insertJournalRow(original, 'idle', turn('older-idle-turn', tip + 1))
+  insertJournalRow(original, 'idle', reply('older-idle-turn', tip + 1))
   await later.close()
   cleanup.pop()
   const again = await upgrade(root)
@@ -328,4 +369,188 @@ it('keeps only what an older Orca wrote after a file from before revisions were 
   expect(again.db.prepare('SELECT COUNT(*) AS records FROM agent_session_records').get()).toEqual({
     records: known.length + 2
   })
+})
+
+function record(db: Database.Database, sessionId: string): Record<string, unknown> {
+  return JSON.parse(
+    String(
+      db.prepare('SELECT record_json FROM agent_session_records WHERE session_id=?').get(sessionId)!
+        .record_json
+    )
+  )
+}
+
+function saveRecord(db: Database.Database, sessionId: string, fields: Record<string, unknown>) {
+  db.prepare('UPDATE agent_session_records SET record_json=? WHERE session_id=?').run(
+    JSON.stringify({ ...record(db, sessionId), ...fields }),
+    sessionId
+  )
+}
+
+it('takes only bookkeeping an older Orca wrote as the new baseline, with the renames made there', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-legacy-reconcile-'))
+  cleanup.push(() => rmSync(root, { recursive: true, force: true }))
+  const { db: original } = openJournalDatabase(journalDatabasePath(root))
+  cleanup.push(() => original.close())
+  for (const id of ['watched', 'renamed-there', 'renamed-here']) {
+    olderOrcaChat(original, id, rows)
+    saveRecord(original, id, { conversationName: id, updatedAt: 100 })
+  }
+  const first = await upgrade(root)
+  expect(await first.convert('watched')).toBe('epoch')
+  saveRecord(first.db, 'renamed-here', {
+    conversationName: 'Named here',
+    conversationNameSource: 'user',
+    updatedAt: 200
+  })
+  const tabs = tabbedChats(first.db)
+  await first.close()
+
+  // The older Orca adds CI lines with no one typing, settles leases at launch, and a person renames one.
+  runJournalTransaction(original, () => {
+    insertJournalRow(original, 'watched', ciLine('ci-watched', tip + 1))
+    // An open sets a send it never handed over back as a queued card with the send's own text.
+    const send = rows.find((row) => row.kind === 'submission')!
+    insertJournalRow(original, 'watched', {
+      ...rows.find((row) => row.kind === 'queue')!,
+      kind: 'queue',
+      seq: tip + 2,
+      messageId: send.clientMessageId,
+      change: {
+        op: 'queued',
+        body: send.body,
+        position: 1,
+        queuedAt: { epoch: 'epoch', sequence: send.seq }
+      }
+    })
+    insertJournalRow(original, 'renamed-here', ciLine('ci-renamed-here', tip + 1))
+    // Launch-time lease settlement stamps `updatedAt` on every record it touches.
+    saveRecord(original, 'renamed-here', {
+      lease: { sessionId: 'renamed-here', lastRenewedAt: 300 },
+      updatedAt: 300
+    })
+    saveRecord(original, 'renamed-there', {
+      conversationName: 'Named there',
+      conversationNameSource: 'user',
+      updatedAt: 300
+    })
+  })
+  const later = await upgrade(root)
+  cleanup.push(later.close)
+  expect(
+    later.db
+      .prepare('SELECT session_id FROM agent_session_records ORDER BY session_id')
+      .all()
+      .map((row) => String(row.session_id))
+  ).toEqual(['renamed-here', 'renamed-there', 'watched'])
+  expect(tabbedChats(later.db)).toEqual(tabs)
+  expect(record(later.db, 'renamed-here')).toMatchObject({ conversationName: 'Named here' })
+  expect(record(later.db, 'renamed-there')).toMatchObject({
+    conversationName: 'Named there',
+    conversationNameSource: 'user'
+  })
+  expect(items(later.db, 'watched')).not.toContain('ci-watched')
+})
+
+it('keeps a message an older Orca rewrote at a revision this file also reached', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-legacy-reconcile-'))
+  cleanup.push(() => rmSync(root, { recursive: true, force: true }))
+  const { db: original } = openJournalDatabase(journalDatabasePath(root))
+  cleanup.push(() => original.close())
+  olderOrcaChat(original, 'diverged', [...rows, reply('answer', tip + 1)])
+  const first = await upgrade(root)
+  expect(await first.convert('diverged')).toBe('epoch')
+  // This file revised the answer; with no revision kept, only the item's own revision is left.
+  first.db
+    .prepare(`UPDATE journal_items SET revision=2,
+      payload_json=json_set(payload_json,'$.revision',2,'$.body.blocks[0].text','here')
+      WHERE session_id='diverged' AND item_id='answer'`)
+    .run()
+  asOlderChatStore(first.db)
+  await first.close()
+
+  insertJournalRow(original, 'diverged', {
+    ...reply('answer', tip + 2),
+    revision: 2,
+    body: { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'older' }] }
+  })
+  const later = await upgrade(root)
+  cleanup.push(later.close)
+  const [copy] = later.db
+    .prepare("SELECT session_id FROM agent_session_records WHERE session_id!='diverged'")
+    .all()
+    .map((row) => String(row.session_id))
+  expect(
+    later.db
+      .prepare(`SELECT json_extract(payload_json,'$.body.blocks[0].text') AS text FROM journal_items
+        WHERE session_id=? AND item_id='answer'`)
+      .get(copy!)
+  ).toEqual({ text: 'older' })
+})
+
+it('keeps a reply and queued text an older Orca saved as outcome records, not a CI line', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-legacy-reconcile-'))
+  cleanup.push(() => rmSync(root, { recursive: true, force: true }))
+  const { db: original } = openJournalDatabase(journalDatabasePath(root))
+  cleanup.push(() => original.close())
+  const saved = journalSqlRetryRows(true)
+  const end = saved.length
+  const chats = ['replied', 'queued', 'watched']
+  runJournalTransaction(original, () => {
+    for (const id of chats) {
+      publishJournalSessionEpoch(original, { sessionId: id, workspaceId: 'workspace' }, 'epoch')
+      publishJournalOutcomeEpoch(original, id, 'epoch', saved)
+      original
+        .prepare('INSERT INTO agent_session_records VALUES(?,?)')
+        .run(id, JSON.stringify({ sessionId: id, lease: { sessionId: id } }))
+    }
+  })
+  const first = await upgrade(root)
+  for (const id of chats) {
+    expect(await first.convert(id)).toBe('epoch')
+  }
+  await first.close()
+
+  const queuedLater: JournalRow = {
+    ...saved.find((row) => row.kind === 'queue')!,
+    kind: 'queue',
+    messageId: 'later',
+    seq: end + 1,
+    change: {
+      op: 'queued',
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'later' }] },
+      position: 2,
+      queuedAt: { epoch: 'epoch', sequence: end }
+    }
+  }
+  // As an older Orca appends: one outcome record past the coverage this file read.
+  const append = (id: string, row: JournalRow) => {
+    const { state } = restoreJournal(original, id)!
+    const written = persistJournalOutcomeRows(
+      original,
+      state,
+      journalOutcomeSource(original, id, 'epoch')!,
+      [row]
+    )
+    advanceJournalOutcomeSource(original, id, 'epoch', written.state.lastSequence)
+  }
+  runJournalTransaction(original, () => {
+    append('replied', reply('older-reply', end + 1))
+    append('queued', queuedLater)
+    append('watched', ciLine('ci', end + 1))
+  })
+  const later = await upgrade(root)
+  cleanup.push(later.close)
+  const copies = later.db
+    .prepare('SELECT session_id FROM agent_session_records WHERE session_id NOT IN (?,?,?)')
+    .all(...chats)
+    .map((row) => String(row.session_id))
+  expect(copies).toHaveLength(2)
+  expect(copies.flatMap((copy) => items(later.db, copy))).toContain('older-reply')
+  expect(
+    later.db
+      .prepare(`SELECT session_id FROM journal_queue_cards WHERE message_id='later'`)
+      .all()
+      .map((row) => String(row.session_id))
+  ).toEqual(copies.filter((copy) => !items(later.db, copy).includes('older-reply')))
 })

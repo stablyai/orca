@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import type Database from '../../../sqlite/sync-database'
 import type { SqliteRow } from '../../../sqlite/sqlite-statement'
 import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
-import { prepareJournalDomainImport, type JournalDomainImportPage } from '../journal-domain-import'
+import type { RestoredJournalDomainImport } from '../journal-domain-import'
 import {
   finishJournalDomainImport,
   insertJournalDomainImportPage
@@ -16,20 +16,34 @@ import {
   openJournalLegacySource,
   recordJournalLegacyChatRevision
 } from './journal-legacy-source'
+import { readJournalStoreMeta, writeJournalStoreMeta } from './journal-store-meta'
 import {
   captureJournalLegacySourceReceipt,
   JOURNAL_LEGACY_SOURCE_RECEIPT,
+  journalLegacySourceLastRead,
   sameJournalLegacySource
 } from './journal-legacy-source-receipt'
+import { olderMessageCursor, olderOrcaAddedMessages } from './journal-legacy-older-messages'
+import { chatHistoryRestore } from './journal-legacy-message-compare'
+import {
+  applyOlderOrcaRecordEdits,
+  takeOlderOrcaRecordEdits,
+  JOURNAL_LEGACY_PERSON_EDITS_KEPT,
+  keepJournalLegacyPersonEdits,
+  olderOrcaRecordKeepingEditsHere,
+  passOlderOrcaRecordEditsToCopy
+} from './journal-legacy-record-edits'
 
 /** Set after a pass absorbed every original chat, so each chat here carries its revision. */
 export const JOURNAL_LEGACY_REVISIONS_KEPT = 'journal.legacy-revisions-kept.v1'
 
 /**
  * An older Orca keeps writing the original journal after a downgrade. When the original changed,
- * each original chat's revision is compared with the one this file shows: a chat it started, or
- * one not converted here yet, joins as itself; a converted chat it continued is kept as a second
- * chat beside it, so no turn it saved goes missing. Nothing here deletes a chat or its turns.
+ * each original chat's revision is compared with the one this file shows. A chat it started joins
+ * as itself. One it added a real message to joins as itself when not converted here yet, or is
+ * kept as a second chat beside a converted one, so no message it saved goes missing. Anything
+ * else it wrote is taken as the new baseline, with the edits a person made to the chat's record.
+ * Nothing here deletes a chat or its turns.
  */
 export function reconcileJournalLegacySource(stateDirectory: string, db: Database.Database): void {
   const sourcePath = journalDatabasePath(stateDirectory)
@@ -39,20 +53,29 @@ export function reconcileJournalLegacySource(stateDirectory: string, db: Databas
   if (captured.disposition === 'no-source-at-initialization') {
     return
   }
-  const saved = readMeta(db, JOURNAL_LEGACY_SOURCE_RECEIPT)
+  const saved = readJournalStoreMeta(db, JOURNAL_LEGACY_SOURCE_RECEIPT)
   const unchanged = sameJournalLegacySource(saved, captured)
-  const kept = readMeta(db, JOURNAL_LEGACY_REVISIONS_KEPT) !== undefined
+  const kept = readJournalStoreMeta(db, JOURNAL_LEGACY_REVISIONS_KEPT) !== undefined
   if (unchanged && kept) {
+    keepJournalLegacyPersonEdits(sourcePath, db, saved)
     return
   }
   const receipt = JSON.stringify(captured)
-  const pass: Pass = { changed: !unchanged, kept, baselines: [] }
+  const pass: Pass = {
+    changed: !unchanged,
+    kept,
+    lastRead: journalLegacySourceLastRead(saved),
+    baselines: [],
+    recordEdits: []
+  }
   const source = openJournalLegacySource(sourcePath)
-  let complete: boolean
+  let complete = false
   try {
     complete = absorbChats(source, db, pass)
   } finally {
     source.close()
+    // Applied as soon as read, as each chat's own write was: a later pass compares with them.
+    complete = applyOlderOrcaRecordEdits(db, pass.recordEdits) && complete
   }
   // Baselines read while another process wrote the original are not current; read them next launch.
   // An original without a certifiable identity can't be rechecked, so its baselines stand.
@@ -68,8 +91,9 @@ export function reconcileJournalLegacySource(stateDirectory: string, db: Databas
     }
     // A failed chat leaves the original unabsorbed, so the next launch retries it.
     if (complete) {
-      writeMeta(db, JOURNAL_LEGACY_SOURCE_RECEIPT, receipt)
-      writeMeta(db, JOURNAL_LEGACY_REVISIONS_KEPT, '1')
+      writeJournalStoreMeta(db, JOURNAL_LEGACY_SOURCE_RECEIPT, receipt)
+      writeJournalStoreMeta(db, JOURNAL_LEGACY_REVISIONS_KEPT, '1')
+      writeJournalStoreMeta(db, JOURNAL_LEGACY_PERSON_EDITS_KEPT, '1')
     }
   })
 }
@@ -79,7 +103,10 @@ type Pass = {
   changed: boolean
   /** Every chat in the original at the copy was given a revision here. */
   kept: boolean
+  /** When the original was last read, in ms; null when no receipt says. */
+  lastRead: number | null
   baselines: [string, string][]
+  recordEdits: (() => void)[]
 }
 
 type Claim = SqliteRow
@@ -141,7 +168,7 @@ function readAdoption(source: Database.Database, db: Database.Database): Adoptio
     tabbed: new Set(tabs.map((row) => String(row.session_id))),
     takenTabs: new Set(tabs.map((row) => String(row.tab_id))),
     nextPosition: Number(tail?.tail ?? -1) + 1,
-    tabsRecorded: readMeta(db, AGENT_SESSION_TABS_RECORDED) !== undefined
+    tabsRecorded: readJournalStoreMeta(db, AGENT_SESSION_TABS_RECORDED) !== undefined
   }
 }
 
@@ -154,50 +181,81 @@ function absorbChat(
 ): void {
   // A chat with no history still has a value, so one deleted here stays deleted.
   const revision = journalLegacyChatRevision(source, id) ?? 'null'
-  const shown = readMeta(db, journalLegacyChatRevisionKey(id))
+  const shown = readJournalStoreMeta(db, journalLegacyChatRevisionKey(id))
+  const baseline = (): void => {
+    pass.baselines.push([id, revision])
+    takeOlderOrcaRecordEdits(source, db, id, pass.recordEdits)
+  }
   if (revision === shown) {
+    takeOlderOrcaRecordEdits(source, db, id, pass.recordEdits)
     return
   }
+  const here =
+    db.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?').get(id) !== undefined
   const chat = db.prepare('SELECT epoch FROM journal_chat_state WHERE session_id=?').get(id)
   const converted = chat?.epoch !== null && chat?.epoch !== undefined
   // A file copied before revisions were kept has none to compare. An original as copied wrote
-  // nothing since; otherwise a chat this file cataloged but hasn't converted converts from the
-  // current original, so nothing is hidden. The copy cataloged every chat with history, so one it
-  // didn't is new, unless it has none: then it may have been deleted here.
+  // nothing since; otherwise a chat held here but not converted converts from the current
+  // original, so nothing is hidden. The copy cataloged every chat with history, so one it didn't
+  // is new, unless it has none: then it may have been deleted here.
   if (
     shown === undefined &&
-    (!pass.changed || (!converted && (chat !== undefined || (!pass.kept && revision === 'null'))))
+    (!pass.changed ||
+      (!converted && (chat !== undefined ? here : !pass.kept && revision === 'null')))
   ) {
-    pass.baselines.push([id, revision])
+    baseline()
+    return
+  }
+  // A chat this file never saw: the older Orca started it.
+  if (shown === undefined && chat === undefined && !here) {
+    runJournalTransaction(db, () => {
+      adoptChat(source, db, id, id, adoption)
+      recordJournalLegacyChatRevision(db, id, revision)
+    })
+    return
+  }
+  // With nothing to compare against, its messages are kept rather than taken as shown.
+  const cursor = olderMessageCursor(shown, converted ? String(chat.epoch) : null, pass.lastRead)
+  const restore = chatHistoryRestore(source, id, cursor)
+  if (cursor !== null && !olderOrcaAddedMessages(source, db, id, cursor, revision, restore)) {
+    baseline()
     return
   }
   if (converted) {
-    keepContinuedChat(source, db, id, revision, shown !== undefined, adoption, pass)
+    keepContinuedChat(source, db, id, revision, adoption, pass, restore())
     return
   }
-  // Not converted here yet: its conversion reads the current original, so it joins as itself.
+  // Not converted here yet: its conversion reads the current original, so it joins as itself, with
+  // the record of the build that added its newest message.
   runJournalTransaction(db, () => {
     adoptChat(source, db, id, id, adoption)
     recordJournalLegacyChatRevision(db, id, revision)
   })
 }
 
-/** The original's record, a tab and a catalog row; history converts lazily as usual. */
+/** The original's record, a tab and a catalog row, returning the record read; history converts lazily. */
 function adoptChat(
   source: Database.Database,
   db: Database.Database,
   id: string,
   as: string,
   adoption: Adoption
-): void {
-  const record = String(
+): string {
+  const original = String(
     source.prepare('SELECT record_json FROM agent_session_records WHERE session_id=?').get(id)!
       .record_json
   )
-  // A copy takes its own id and leaves the original's /clear successor to the original.
+  const record = as === id ? olderOrcaRecordKeepingEditsHere(db, id, original) : original
+  // A copy takes its own id and starts its own provider conversation on its first send, as after
+  // /clear: the original keeps its conversation, its owner and its /clear successor.
   db.prepare(`INSERT INTO agent_session_records(session_id,record_json) VALUES(?1,
-    CASE WHEN ?1=?3 THEN ?2 ELSE json_remove(json_set(?2,'$.sessionId',?1,'$.lease.sessionId',?1),
-      '$.conversationCommand') END)
+    CASE WHEN ?1=?3 THEN ?2 ELSE json_remove(json_set(?2,'$.sessionId',?1,'$.lease.sessionId',?1,
+      '$.providerHandleChain',json('[]'),'$.lease.claimStatus','released',
+      '$.lease.ownerProcess',NULL,'$.lease.reservedSpawnToken',NULL,'$.lease.handoffStage',NULL,
+      '$.lease.handoffOperationId',NULL,'$.lease.provenHandleLinkId',NULL,
+      '$.lease.deathEvidence',NULL),
+      '$.conversationCommand','$.providerContextBoundary','$.rewind','$.launchedAccount',
+      '$.acquiredAccount') END)
     ON CONFLICT(session_id) DO UPDATE SET record_json=excluded.record_json`).run(as, record, id)
   // The older build wrote this chat, so it is shown even if it was closed here.
   if (!adoption.tabsRecorded) {
@@ -221,6 +279,7 @@ function adoptChat(
   if (as !== id) {
     insertClaims(db, as, adoption.claims.get(id) ?? [])
   }
+  return original
 }
 
 /**
@@ -233,7 +292,7 @@ function recordTabIndex(db: Database.Database, adoption: Adoption): void {
     .all()) {
     addTab(db, adoption, String(id), structuredAgentSessionTabId(String(id)))
   }
-  writeMeta(db, AGENT_SESSION_TABS_RECORDED, '1')
+  writeJournalStoreMeta(db, AGENT_SESSION_TABS_RECORDED, '1')
   adoption.tabsRecorded = true
 }
 
@@ -252,70 +311,35 @@ function addTab(db: Database.Database, adoption: Adoption, sessionId: string, ta
 }
 
 /**
- * The original's version of a converted chat it moved past becomes a second chat beside it. With
- * no revision to compare (files copied before revisions were kept), the original moved past this
- * chat only if its restored history has an item this chat never held.
+ * The original's version of a converted chat the older Orca added messages to becomes a second
+ * chat beside it, read page by page so no history is held in memory at once.
  */
 function keepContinuedChat(
   source: Database.Database,
   db: Database.Database,
   id: string,
   revision: string,
-  compared: boolean,
   adoption: Adoption,
-  pass: Pass
+  pass: Pass,
+  imported: RestoredJournalDomainImport | null
 ): void {
-  const imported = prepareJournalDomainImport(source, id)
   if (!imported) {
     pass.baselines.push([id, revision])
+    takeOlderOrcaRecordEdits(source, db, id, pass.recordEdits)
     return
   }
-  const { pages: read, ...header } = imported
-  let pages: Iterable<JournalDomainImportPage> = read
-  if (!compared) {
-    const all = [...read]
-    if (heldEveryItem(db, id, all)) {
-      pass.baselines.push([id, revision])
-      return
-    }
-    pages = all
-  }
+  const { pages, ...header } = imported
   // Derived from the revision, so an interrupted import resumes into the same chat.
   const copy = createHash('sha256').update(`${id}\0${revision}`).digest('hex').slice(0, 32)
   const target = { sessionId: copy, epoch: header.epoch }
-  for (const page of pages) {
+  for (const page of pages()) {
     runJournalTransaction(db, () => insertJournalDomainImportPage(db, target, page))
   }
   runJournalTransaction(db, () => {
     finishJournalDomainImport(db, { ...header, sessionId: copy, sourceRevision: null })
-    adoptChat(source, db, id, copy, adoption)
+    passOlderOrcaRecordEditsToCopy(db, id, adoptChat(source, db, id, copy, adoption))
     recordJournalLegacyChatRevision(db, id, revision)
   })
-}
-
-/**
- * Removing an item here leaves its tombstone, so every item this chat converted stays held, at
- * its converted revision or a later one.
- */
-function heldEveryItem(
-  db: Database.Database,
-  id: string,
-  pages: readonly JournalDomainImportPage[]
-): boolean {
-  const held = new Map(
-    db
-      .prepare(`SELECT item_id AS id, MAX(revision) AS revision FROM (
-          SELECT item_id, revision FROM journal_items WHERE session_id=?1
-          UNION ALL SELECT item_id, ?2 FROM journal_item_tombstones WHERE session_id=?1)
-        GROUP BY item_id`)
-      .all(id, Number.MAX_SAFE_INTEGER)
-      .map((row) => [String(row.id), Number(row.revision)])
-  )
-  return pages.every(
-    (page) =>
-      page.kind !== 'items' ||
-      page.rows.every(({ item }) => (held.get(item.itemId) ?? -1) >= item.revision)
-  )
 }
 
 /** Uploads the older Orca attached stay claimed, so the sweeper never removes them. */
@@ -325,16 +349,4 @@ function insertClaims(db: Database.Database, sessionId: string, claims: readonly
   for (const claim of claims) {
     insert.run(claim.upload_id!, sessionId, claim.claimed_at!)
   }
-}
-
-function readMeta(db: Database.Database, key: string): string | undefined {
-  const row = db.prepare('SELECT value FROM agent_session_store_meta WHERE key=?').get(key)
-  return row === undefined ? undefined : String(row.value)
-}
-
-function writeMeta(db: Database.Database, key: string, value: string): void {
-  db.prepare('INSERT OR REPLACE INTO agent_session_store_meta (key, value) VALUES (?, ?)').run(
-    key,
-    value
-  )
 }

@@ -7,9 +7,11 @@ import {
   JOURNAL_BUSY_TIMEOUT_MS,
   JOURNAL_SIZE_LIMIT_BYTES,
   journalPragmaNumber,
+  runJournalTransaction,
   type OpenJournalDatabase
 } from './journal-database'
 import { journalDatabasePath } from './journal-host-database'
+import { writeJournalStoreMeta } from './journal-store-meta'
 import {
   JOURNAL_DOMAIN_SCHEMA_VERSION,
   migrateJournalDomainSchema
@@ -20,6 +22,10 @@ import {
   JOURNAL_LEGACY_REVISIONS_KEPT,
   reconcileJournalLegacySource
 } from './journal-legacy-reconcile'
+import {
+  JOURNAL_LEGACY_PERSON_EDITS_KEPT,
+  recordJournalLegacyPersonEdits
+} from './journal-legacy-record-edits'
 import {
   captureJournalLegacySourceReceipt,
   JOURNAL_LEGACY_SOURCE_RECEIPT
@@ -53,6 +59,8 @@ export async function initializeJournalDomainDatabase(stateDirectory: string): P
         const source = openJournalLegacySource(sourcePath)
         try {
           importJournalDomainProfile(source, db)
+          // From the records as copied, so a write to the original since is still an edit there.
+          runJournalTransaction(db, () => recordJournalLegacyPersonEdits(db, db))
         } finally {
           source.close()
         }
@@ -62,6 +70,7 @@ export async function initializeJournalDomainDatabase(stateDirectory: string): P
       )
       meta.run(JOURNAL_LEGACY_SOURCE_RECEIPT, JSON.stringify(sourceReceipt))
       meta.run(JOURNAL_LEGACY_REVISIONS_KEPT, '1')
+      writeJournalStoreMeta(db, JOURNAL_LEGACY_PERSON_EDITS_KEPT, '1')
       const checkpoint = db.prepare('PRAGMA wal_checkpoint(TRUNCATE)').get()
       if (checkpoint?.busy !== 0 || checkpoint.log !== checkpoint.checkpointed) {
         throw new Error('chat initialization could not fold its private WAL')

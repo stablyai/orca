@@ -10,6 +10,10 @@ import {
   openJournalDomainDatabase
 } from './journal-domain-database'
 import { journalDatabasePath } from './journal-host-database'
+import {
+  sameJournalLegacySource,
+  type JournalLegacySourceReceipt
+} from './journal-legacy-source-receipt'
 import { insertJournalRow, publishJournalSessionEpoch } from '../durable-rows/journal-row-table'
 import { journalSqlRetryRows } from '../journal-sql-retry-rows.test-fixture'
 import { JournalSqlReaderPool } from '../journal-sql-reader-pool'
@@ -94,4 +98,20 @@ it('still refuses a version-four journal that lost the record tables its version
     'no such table: agent_session_records'
   )
   expect(existsSync(journalDomainDatabasePath(root))).toBe(false)
+})
+
+it('proves the original unchanged across a new device number, never by a WAL size alone', () => {
+  const current: JournalLegacySourceReceipt = {
+    version: 1,
+    profileCopyInventoryVersion: 1,
+    disposition: 'copied-source',
+    main: { dev: '16777233', ino: '5', size: '4096', mtimeNs: '100', ctimeNs: '100' },
+    wal: { kind: 'nonempty', size: '8192', ino: '6', mtimeNs: '200' }
+  }
+  // Saved before a reboot gave the volume a new device number.
+  const saved = { ...current, main: { ...current.main, dev: '16777229' } }
+  expect(sameJournalLegacySource(JSON.stringify(saved), current)).toBe(true)
+  // Saved before WAL identity was kept: reused frames can keep the size after a write.
+  const sizeOnly = { ...saved, wal: { kind: 'nonempty', size: '8192' } }
+  expect(sameJournalLegacySource(JSON.stringify(sizeOnly), current)).toBe(false)
 })

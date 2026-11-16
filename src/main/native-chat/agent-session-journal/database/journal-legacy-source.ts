@@ -1,6 +1,7 @@
 import Database from '../../../sqlite/sync-database'
 import { ensureJournalAdditiveTables, journalPragmaNumber } from './journal-database'
 import { createAgentSessionRecordTablesSql } from './journal-database-schema'
+import { writeJournalStoreMeta } from './journal-store-meta'
 
 /**
  * Opens the original journal read-only, shaped as this build's writable open would have left it.
@@ -95,8 +96,5 @@ export function recordJournalLegacyChatRevision(
   sessionId: string,
   revision: string
 ): void {
-  db.prepare('INSERT OR REPLACE INTO agent_session_store_meta (key, value) VALUES (?, ?)').run(
-    journalLegacyChatRevisionKey(sessionId),
-    revision
-  )
+  writeJournalStoreMeta(db, journalLegacyChatRevisionKey(sessionId), revision)
 }
