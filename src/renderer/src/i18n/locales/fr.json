@@ -23027,6 +23027,7 @@
       "tabClose": "Fermer l'onglet actif",
       "tabCloseAll": "Fermer tous les onglets de l'éditeur",
       "tabRename": "Renommer l'onglet actif",
+      "tabMoveToSplitRight": "Déplacer l'onglet vers la division de droite",
       "tabReopenClosed": "Rouvrir l'onglet fermé",
       "tabMoveLeft": "Déplacer l'onglet actif vers la gauche",
       "tabMoveRight": "Déplacer l'onglet actif vers la droite",

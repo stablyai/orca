@@ -22295,6 +22295,7 @@
       "tabClose": "關閉目前分頁",
       "tabCloseAll": "關閉所有編輯器分頁",
       "tabRename": "重新命名目前分頁",
+      "tabMoveToSplitRight": "將分頁移到右側分割",
       "tabReopenClosed": "重新開啟已關閉的分頁",
       "tabMoveLeft": "將使用中的分頁左移",
       "tabMoveRight": "將使用中的分頁右移",
