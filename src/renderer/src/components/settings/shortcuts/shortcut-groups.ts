@@ -2,10 +2,6 @@ import {
   KEYBINDING_DEFINITIONS,
   agentTabActionId
 } from '../../../../../shared/keybindings/definitions'
-import {
-  CLOUD_SHARE_LINK_ACTION_ID,
-  cloudTeamSharingEnabled
-} from '@/lib/orca-cloud/cloud-team-sharing-flag'
 import type {
   KeybindingActionId,
   KeybindingDefinition
@@ -35,10 +31,6 @@ export function groupDefinitions(
   const hiddenAgentActionIds = new Set<KeybindingActionId>(
     disabledAgentTabActionIds(disabledTuiAgents)
   )
-  // SHARE-LINKS-HOLD: no ⌘⌥⇧L entry while share links are held.
-  if (!cloudTeamSharingEnabled()) {
-    hiddenAgentActionIds.add(CLOUD_SHARE_LINK_ACTION_ID)
-  }
   const groups = new Map<string, KeybindingDefinition[]>()
   for (const definition of [...KEYBINDING_DEFINITIONS, ...additionalDefinitions]) {
     if (hiddenAgentActionIds.has(definition.id)) {

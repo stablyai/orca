@@ -1323,10 +1323,6 @@
         "soonTitle_one": "{{value0}} requires two-factor authentication in {{count}} day",
         "soonTitle_other": "{{value0}} requires two-factor authentication in {{count}} days"
       },
-      "teammates": {
-        "daySandboxHours_one": "{{hours}} sandbox hour",
-        "daySandboxHours_other": "{{hours}} sandbox hours"
-      },
       "terminal": {
         "pane": {
           "TerminalErrorToast": {

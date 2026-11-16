@@ -96,7 +96,6 @@ export type PickerEmptyReason =
   /** Everything you can open is in the sidebar already. */
   | { kind: 'all-in-sidebar' }
   | { kind: 'none-running' }
-  | { kind: 'teammate'; name: string }
   | { kind: 'none' }
 
 export function PickerEmptyState({
@@ -140,18 +139,6 @@ export function PickerEmptyState({
           t(
             'components.cloudWorkspaces.picker.emptyRunningBody',
             'Teammates’ running workspaces can count toward the limit too. Try again in a moment.'
-          )
-        ]
-      case 'teammate':
-        return [
-          t(
-            'components.cloudWorkspaces.picker.emptyTeammateTitle',
-            '{{name}} has no cloud workspaces you can see',
-            { name: reason.name }
-          ),
-          t(
-            'components.cloudWorkspaces.picker.emptyTeammateBody',
-            'Private workspaces only show to their owner.'
           )
         ]
       case 'none':

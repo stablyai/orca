@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react'
-import { cloudTeamSharingEnabled } from '@/lib/orca-cloud/cloud-team-sharing-flag'
 import { SquareTerminal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
@@ -21,27 +20,16 @@ import { LocalCommandText } from '../../local-commands/LocalCommandText'
 
 const AUDIT_ROWS = 20
 
-function workspaceDetail(
-  row: LocalCommandWorkspaceRow,
-  t: Translate,
-  teamSharing = cloudTeamSharingEnabled()
-): string {
-  // TEAM-SHARING-HOLD: no mention of sharing while team sharing is held.
-  const shared = teamSharing && row.shared
+function workspaceDetail(row: LocalCommandWorkspaceRow, t: Translate): string {
   if (row.isOwner === false) {
     return t('localCommands.settings.notOwner', 'Only the workspace owner can turn this on.')
   }
   if (!row.enabled) {
-    return shared
-      ? t('localCommands.settings.offShared', 'Off · Shared with your team')
-      : t('localCommands.settings.off', 'Off')
+    return t('localCommands.settings.off', 'Off')
   }
-  const sharing = shared
-    ? ` · ${t('localCommands.settings.sharedOn', 'Shared with your team')}`
-    : ''
   return row.connected
-    ? `${t('localCommands.settings.onConnected', 'On · Connected')}${sharing}`
-    : `${t('localCommands.settings.onWaiting', 'On · Connects when the workspace is running')}${sharing}`
+    ? t('localCommands.settings.onConnected', 'On · Connected')
+    : t('localCommands.settings.onWaiting', 'On · Connects when the workspace is running')
 }
 
 function outcomeLabel(outcome: LocalCommandAuditOutcome, t: Translate): string {
@@ -309,7 +297,8 @@ export function OrcaCloudLocalCommandsPane(): React.JSX.Element {
         return
       }
       const enabling = !row.enabled
-      let allowShared = false
+      // A workspace the control plane still runs in shared mode (one whose owner changed) refuses
+      // with `shared_needs_confirmation`; that safety check still asks before turning it on.
       const confirmShared = (): Promise<boolean> =>
         confirm({
           title: t(
@@ -325,23 +314,15 @@ export function OrcaCloudLocalCommandsPane(): React.JSX.Element {
           surface: 'security',
           initialFocus: 'cancel'
         })
-      if (
-        enabling &&
-        row.shared &&
-        cloudTeamSharingEnabled() &&
-        !(allowShared = await confirmShared())
-      ) {
-        return
-      }
       setPendingSandboxId(row.sandboxId)
       setError(null)
       try {
         let result = await api.setEnabled({
           sandboxId: row.sandboxId,
           enabled: enabling,
-          allowShared
+          allowShared: false
         })
-        // Sharing wasn't known when the row rendered: ask now, then try once more.
+        // The control plane says it runs shared: ask now, then try once more.
         if (!result.ok && result.error === 'shared_needs_confirmation' && (await confirmShared())) {
           result = await api.setEnabled({
             sandboxId: row.sandboxId,

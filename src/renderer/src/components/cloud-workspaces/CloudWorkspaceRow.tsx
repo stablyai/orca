@@ -1,27 +1,18 @@
 import { CloudStatusGlyph } from '@/components/orca-cloud/CloudStatusGlyph'
-import {
-  cloudTeamSharingEnabled,
-  useCloudTeamSharingEnabled
-} from '@/lib/orca-cloud/cloud-team-sharing-flag'
 import React, { useId, useState } from 'react'
 import { GitBranch, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { type Translate, useIntlLocale, useTranslate } from '@/i18n/use-translate'
-import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { cn } from '@/lib/class-names'
-import { useAppStore } from '@/store'
-import { keybindingMatchesAction } from '../../../../shared/keybindings/matching'
 import type { CloudWorkspace } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 import type { CloudDotState } from '@/lib/orca-cloud/orca-cloud-workspace-state'
-import { MemberAvatar, PresenceStack } from './CloudMemberAvatars'
+import { MemberAvatar } from './CloudMemberAvatars'
 import { CloudWorkspaceRowMenu, isReadableAsleep, type RowActions } from './CloudWorkspaceRowMenu'
 import {
   formatSandboxHours,
   formatRelative,
   memberName,
-  presenceSummary,
-  presentMembers,
   repoLabel,
   sandboxHours,
   type MemberDirectory
@@ -116,57 +107,17 @@ export function CloudWorkspaceRow({
     hours,
     defaultValue_one: '{{hours}} sandbox hour'
   })
-  const teamSharing = useCloudTeamSharingEnabled()
   const lastActive = formatRelative(w.lastActivityAt, now, t, intlLocale)
-  const presence = presenceSummary(
-    presentMembers(w.presence, selfId),
-    directory,
-    selfId,
-    t,
-    intlLocale
-  )
   const revealOpen = opening || menuOpen
-  const visibility =
-    w.visibility === 'private'
-      ? t('auto.components.cloudWorkspaces.private', 'Private')
-      : t('auto.components.cloudWorkspaces.sharedWithTeam', 'Shared with team')
-  const description = presence
-    ? t(
-        'auto.components.cloudWorkspaces.rowDescriptionWithPresence2',
-        '{{usage}}. Last active {{lastActive}}. {{visibility}}. {{presence}}.',
-        { usage, lastActive, visibility, presence }
-      )
-    : t(
-        'auto.components.cloudWorkspaces.rowDescription2',
-        '{{usage}}. Last active {{lastActive}}. {{visibility}}.',
-        {
-          usage,
-          lastActive,
-          visibility
-        }
-      )
+  const description = t(
+    'auto.components.cloudWorkspaces.rowDescription3',
+    '{{usage}}. Last active {{lastActive}}.',
+    { usage, lastActive }
+  )
 
   return (
     <li
       data-cloud-workspace-row=""
-      onKeyDown={(event) => {
-        // Menu items render in a portal but still bubble through React; only this row's own DOM counts.
-        if (!(event.target instanceof Node) || !event.currentTarget.contains(event.target)) {
-          return
-        }
-        if (
-          cloudTeamSharingEnabled() &&
-          keybindingMatchesAction(
-            'cloudWorkspace.copyLink',
-            event.nativeEvent,
-            getShortcutPlatform(),
-            useAppStore.getState().keybindings
-          )
-        ) {
-          event.preventDefault()
-          actions.copyLink(w)
-        }
-      }}
       className={cn(
         'group relative isolate flex items-center gap-3 rounded-lg pr-2 transition-colors hover:bg-accent',
         menuOpen && 'bg-accent'
@@ -222,12 +173,7 @@ export function CloudWorkspaceRow({
             >
               {title}
             </span>
-            <CloudWorkspaceRowBadges
-              workspace={w}
-              selfId={selfId}
-              ownerName={ownerName}
-              revealNumber={revealOpen}
-            />
+            <CloudWorkspaceRowBadges workspace={w} revealNumber={revealOpen} />
           </span>
           <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
             <MemberAvatar userId={w.ownerUserId} directory={directory} selfId={selfId} size="sm" />
@@ -276,15 +222,6 @@ export function CloudWorkspaceRow({
         </span>
       </button>
 
-      {/* TEAM-SHARING-HOLD: who's here only exists on a shared workspace. */}
-      {teamSharing ? (
-        <PresenceStack
-          presence={w.presence}
-          directory={directory}
-          selfId={selfId}
-          onGoToChat={canOpen ? (member) => actions.goToChat(w, member) : undefined}
-        />
-      ) : null}
       <Tooltip>
         <TooltipTrigger asChild>
           <span className="w-28 text-right text-xs tabular-nums text-muted-foreground">

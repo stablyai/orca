@@ -1,8 +1,7 @@
 // GH-ACTING-LINE: who a cloud workspace's pushes and PRs go out as right now, in words. The control
-// plane decides (the only person, else a shared workspace's latest sender within the hour, else
-// Orca's bot) and says so in the workspace's `githubActing`; this only puts it into words.
-// Nothing when it's absent (an older control plane, a row the caller can't open), or for `off` /
-// `not_github`.
+// plane decides (its owner, else Orca's bot) and says so in the workspace's `githubActing`; this only
+// puts it into words. Nothing when it's absent (an older control plane, a row the caller can't open),
+// or for `off` / `not_github`.
 import type { Translate } from '@/i18n/use-translate'
 import type { CloudWorkspace } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 
@@ -12,8 +11,6 @@ export type GitActingLine = {
   text: string
   /** It falls back to Orca's bot and the viewer hasn't connected GitHub: offer Connect GitHub. */
   connect: boolean
-  /** The member it acts as, for the people tooltip; null for the bot. */
-  userId: string | null
 }
 
 export function gitActingLine(answer: CloudGitActing | null, t: Translate): GitActingLine | null {
@@ -26,33 +23,14 @@ export function gitActingLine(answer: CloudGitActing | null, t: Translate): GitA
       text: t('cloudGitActing.member', 'Pushes and PRs go out as @{{login}}', {
         login: acting.login
       }),
-      connect: false,
-      userId: acting.userId
+      connect: false
     }
   }
-  const connect = answer?.you?.connected === false
+  const bot = t('cloudGitActing.bot', 'Pushes and PRs go out as Orca bot')
   switch (acting.reason) {
     case 'not_github':
     case 'off':
       return null
-    case 'no_sender_yet':
-      return {
-        text: t(
-          'cloudGitActing.noSenderYet',
-          'Pushes and PRs go out as whoever sends next, or Orca bot'
-        ),
-        connect,
-        userId: null
-      }
-    case 'window_expired':
-      return {
-        text: t(
-          'cloudGitActing.stale',
-          'Pushes and PRs go out as Orca bot (no one has sent in the last hour)'
-        ),
-        connect,
-        userId: null
-      }
     case 'transferred':
       // A workspace that changed owners is the App's on GitHub for good: connecting wouldn't change it.
       return {
@@ -60,16 +38,15 @@ export function gitActingLine(answer: CloudGitActing | null, t: Translate): GitA
           'cloudGitActing.transferred',
           'Pushes and PRs go out as Orca bot (this workspace changed owners)'
         ),
-        connect: false,
-        userId: null
+        connect: false
       }
+    // `no_sender_yet`, `sender_not_connected` and `window_expired` come only from control planes
+    // that still had team sharing; they read as the plain bot line.
+    case 'no_sender_yet':
     case 'sender_not_connected':
+    case 'window_expired':
     case 'reconnect':
-      return {
-        text: t('cloudGitActing.bot', 'Pushes and PRs go out as Orca bot'),
-        connect,
-        userId: null
-      }
+      return { text: bot, connect: answer?.you?.connected === false }
   }
 }
 

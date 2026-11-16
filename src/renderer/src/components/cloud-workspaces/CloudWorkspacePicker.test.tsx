@@ -64,17 +64,13 @@ type ListResult = { ok: true; value: CloudWorkspace[] } | { ok: false; error: st
 let listResult: ListResult
 
 const MINE = workspace({ title: 'Already in my sidebar' })
-const SHARED = workspace({
-  title: 'Refund webhooks',
-  ownerUserId: 'user_grace',
-  createdBy: 'user_grace',
-  access: 'can_open'
-})
+// Yours, started on another computer: not in this sidebar.
+const ELSEWHERE = workspace({ title: 'Refund webhooks' })
 
 beforeEach(() => {
   mocks.inSidebar = new Set([MINE.id])
   mocks.openCloudWorkspace.mockReset()
-  listResult = { ok: true, value: [MINE, SHARED] }
+  listResult = { ok: true, value: [MINE, ELSEWHERE] }
   vi.stubGlobal('api', {
     cloudWorkspaces: {
       available: () => Promise.resolve(true),
@@ -98,7 +94,7 @@ function renderPicker(): void {
 }
 
 describe('Open cloud workspace…', () => {
-  it('lists a teammate’s shared workspace and leaves out what the sidebar already shows', async () => {
+  it('lists a workspace started elsewhere and leaves out what the sidebar already shows', async () => {
     renderPicker()
     act(() => openCloudWorkspacePicker())
     expect(await screen.findByText('Refund webhooks')).toBeTruthy()
@@ -112,7 +108,7 @@ describe('Open cloud workspace…', () => {
     act(() => openCloudWorkspacePicker())
     fireEvent.click(await screen.findByRole('button', { name: /^Refund webhooks, Running/ }))
     await waitFor(() => expect(getCloudWorkspacePickerRequest()).toBeNull())
-    expect(mocks.openCloudWorkspace).toHaveBeenCalledWith(SHARED)
+    expect(mocks.openCloudWorkspace).toHaveBeenCalledWith(ELSEWHERE)
   })
 
   it('a failed open stays open (the error is a toast), so another can be picked', async () => {
@@ -136,15 +132,6 @@ describe('Open cloud workspace…', () => {
     renderPicker()
     act(() => openCloudWorkspacePicker())
     expect(await screen.findByRole('button', { name: 'Try again' })).toBeTruthy()
-  })
-
-  it('a teammate focus lists their workspaces, sidebar ones included', async () => {
-    mocks.inSidebar = new Set([SHARED.id])
-    renderPicker()
-    act(() => openCloudWorkspacePicker({ kind: 'teammate', userId: 'user_grace' }))
-    expect(await screen.findByText('Refund webhooks')).toBeTruthy()
-    expect(screen.getByText('Grace Hopper’s cloud workspaces')).toBeTruthy()
-    expect(screen.queryByText('Already in my sidebar')).toBeNull()
   })
 })
 

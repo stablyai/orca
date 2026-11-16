@@ -5,7 +5,6 @@ import type { RowActions } from './CloudWorkspaceRowMenu'
 import {
   DIRECTORY,
   FIXTURE_NOW,
-  presence,
   SELF_ID,
   teamWorkspaces,
   workspace
@@ -15,9 +14,6 @@ const WIDTH = 760
 const ACTIONS: RowActions = {
   open: () => {},
   read: () => {},
-  copyLink: () => {},
-  copyWorkspaceLink: () => {},
-  goToChat: () => {},
   patch: () => {},
   archive: () => {},
   unarchive: () => {},
@@ -26,11 +22,8 @@ const ACTIONS: RowActions = {
 }
 const MEMBERS = [...DIRECTORY.entries()].map(([userId, m]) => ({ userId, name: m.name }))
 
-// Shared with the team and two teammates in it: every menu entry is present.
-const MENU_ROW = workspace({
-  title: 'Checkout retries',
-  presence: [presence('user_grace', 'typing'), presence('user_linus')]
-})
+// Yours, with teammates to hand it to: every menu entry is present.
+const MENU_ROW = workspace({ title: 'Checkout retries' })
 
 function Row({
   w = MENU_ROW,
@@ -90,7 +83,7 @@ async function openSubmenu(frame: HTMLElement, label: string): Promise<void> {
   await waitFor(() => document.querySelector('[data-slot="dropdown-menu-sub-content"]'))
 }
 
-/** Each lifecycle state as its own row: status dot, status text, lock, cost and time. */
+/** Each lifecycle state as its own row: status dot, status text, cost and time. */
 export const statuses = defineFixture({
   width: WIDTH,
   render: () => (
@@ -103,40 +96,12 @@ export const statuses = defineFixture({
   )
 })
 
-/** Share/private, copy links, go to a teammate's chat, move to section and reassign live in the row menu. */
+/** Open, reassign owner and the lifecycle actions live in the row menu. */
 export const menuOpen = defineFixture({
   width: WIDTH,
   render: () => (
     <div className="h-[420px]">
       <Row />
-    </div>
-  ),
-  interact: async (frame) => {
-    openMenu(frame)
-    await waitFor(() => document.querySelector('[data-slot="dropdown-menu-content"]'))
-  }
-})
-
-/** In front with a terminal focused: a second row copies the link to that terminal. */
-export const menuTerminalFocused = defineFixture({
-  width: WIDTH,
-  render: () => (
-    <div className="h-[420px]">
-      <Row actions={{ ...ACTIONS, focusedItem: () => 'terminal' }} />
-    </div>
-  ),
-  interact: async (frame) => {
-    openMenu(frame)
-    await waitFor(() => document.querySelector('[data-slot="dropdown-menu-content"]'))
-  }
-})
-
-/** In front with an agent chat focused: the second row names the chat. */
-export const menuChatFocused = defineFixture({
-  width: WIDTH,
-  render: () => (
-    <div className="h-[420px]">
-      <Row actions={{ ...ACTIONS, focusedItem: () => 'chat' }} />
     </div>
   ),
   interact: async (frame) => {
@@ -153,30 +118,6 @@ export const reassignOwner = defineFixture({
     </div>
   ),
   interact: (frame) => openSubmenu(frame, 'Reassign owner')
-})
-
-export const followSubmenu = defineFixture({
-  width: WIDTH,
-  render: () => (
-    <div className="h-[420px]">
-      <Row />
-    </div>
-  ),
-  interact: (frame) => openSubmenu(frame, "Go to a teammate's chat")
-})
-
-/** A private workspace offers "Share with team" instead of "Make private". */
-export const privateMenu = defineFixture({
-  width: WIDTH,
-  render: () => (
-    <div className="h-[420px]">
-      <Row w={workspace({ title: 'Flaky e2e repro', visibility: 'private' })} />
-    </div>
-  ),
-  interact: async (frame) => {
-    openMenu(frame)
-    await waitFor(() => document.querySelector('[data-slot="dropdown-menu-content"]'))
-  }
 })
 
 /** The row menu's Archive item focused: the shared snapshot definition beside it. */

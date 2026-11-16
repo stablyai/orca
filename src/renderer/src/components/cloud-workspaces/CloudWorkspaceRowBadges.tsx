@@ -1,8 +1,7 @@
-// The small marks after a cloud workspace's title in Open cloud workspace…: private, started by a
-// routine, and its W-number (shown on hover or focus; its space is held so nothing shifts).
-import { useCloudTeamSharingEnabled } from '@/lib/orca-cloud/cloud-team-sharing-flag'
-import React from 'react'
-import { CalendarClock, Lock } from 'lucide-react'
+// The small marks after a cloud workspace's title in Open cloud workspace…: started by a routine,
+// and its W-number (shown on hover or focus; its space is held so nothing shifts).
+import type React from 'react'
+import { CalendarClock } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
@@ -13,46 +12,15 @@ import {
 
 export function CloudWorkspaceRowBadges({
   workspace: w,
-  selfId,
-  ownerName,
   revealNumber
 }: {
   workspace: CloudWorkspace
-  selfId: string | null
-  ownerName: string
   revealNumber: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const revealOpen = revealNumber
-  // TEAM-SHARING-HOLD: every workspace is private while sharing is held; no badge says so.
-  const teamSharing = useCloudTeamSharingEnabled()
   return (
     <>
-      {teamSharing && w.visibility === 'private' && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Lock
-              role="img"
-              className="size-3 shrink-0 text-muted-foreground"
-              aria-label={t('auto.components.cloudWorkspaces.private', 'Private')}
-            />
-          </TooltipTrigger>
-          <TooltipContent side="top">
-            {w.ownerUserId === selfId
-              ? t(
-                  'auto.components.cloudWorkspaces.privateTooltipYou',
-                  'Private — only you can see it'
-                )
-              : t(
-                  'auto.components.cloudWorkspaces.privateTooltip',
-                  'Private — only {{name}} can open it',
-                  {
-                    name: ownerName
-                  }
-                )}
-          </TooltipContent>
-        </Tooltip>
-      )}
       {w.fromRoutine === true && (
         <Tooltip>
           <TooltipTrigger asChild>

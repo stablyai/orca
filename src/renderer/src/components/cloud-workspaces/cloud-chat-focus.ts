@@ -1,5 +1,5 @@
-// Store-bound side of cloud chat ids: which chat this device has in front, and bringing a chat
-// (from a link or a teammate being followed) to the front once its tab has synced here.
+// Store-bound side of cloud chat ids: bringing a chat (from an orca://cloud link) to the front once
+// its tab has synced here.
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
@@ -8,27 +8,11 @@ import { activateStructuredAgentSessionById } from '@/lib/agent-session/structur
 import { activateTabAndFocusPane } from '@/lib/workspace/tabs/activate-tab-and-focus-pane'
 import { activateTerminalTabOnOwner } from '@/lib/workspace/tabs/terminal-tab-owner-activation'
 import { getRemoteRuntimeTerminalHandle } from '@/runtime/hosted-terminals/identity/remote-runtime-pty-owner'
-import {
-  cloudChatIdForTab,
-  findCloudChatTarget,
-  parseCloudChatId,
-  type CloudChatTarget
-} from './cloud-chat-id'
+import { findCloudChatTarget, parseCloudChatId, type CloudChatTarget } from './cloud-chat-id'
 
 /** Tabs of a just-opened workspace arrive from its server shortly after; wait this long for them. */
 const FOCUS_WAIT_MS = 8_000
 const FOCUS_RETRY_MS = 250
-
-/** The shareable id of the chat in front of this worktree, or null (editor, browser, local PTY…). */
-export function currentCloudChatId(worktreeId: string): string | null {
-  const state = useAppStore.getState()
-  const tab = state.getActiveTab(worktreeId)
-  return cloudChatIdForTab(
-    tab,
-    tab ? state.terminalLayoutsByTabId[tab.entityId] : undefined,
-    getRemoteRuntimeTerminalHandle
-  )
-}
 
 /**
  * Searches the preferred worktree first, then every other one: a chat can sit in any worktree of

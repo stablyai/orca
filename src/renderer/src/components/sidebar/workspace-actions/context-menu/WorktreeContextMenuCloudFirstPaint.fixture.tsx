@@ -60,15 +60,13 @@ function firstPaint(asleep: boolean) {
     store: {
       repos: [repo],
       worktreesByRepo: { [repo.id]: [worktree] },
-      // Team sharing on, so the Share row (which needs the team's record) is in the menu.
       orcaProfileAuthStatus: {
         activeProfileId: 'p',
         configured: true,
         state: 'connected',
         persistence: 'encrypted',
         cloud: { cloudProfileId: 'c', userId: 'u', email: 'e', activeOrgId: 'o', linkedAt: 0 },
-        organizations: [{ orgId: 'o', name: 'Team', role: 'Owner' }],
-        capabilities: { flags: { cloudTeamSharing: true }, refreshedAt: 0 }
+        organizations: [{ orgId: 'o', name: 'Team', role: 'Owner' }]
       },
       ephemeralVmRuntimesByWorkspaceId: {
         [worktree.id]: {

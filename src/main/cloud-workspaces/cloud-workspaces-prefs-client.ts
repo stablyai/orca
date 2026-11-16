@@ -1,10 +1,8 @@
-// Synced cloud workspace prefs (pins, order, sections) and the org's link slug, on the same
-// authenticated call as the rest of the team registry client.
+// Synced cloud workspace prefs (pins, order, sections), on the same authenticated call as the rest
+// of the team registry client.
 import type { z } from 'zod'
 import {
-  CloudOrgSlugSchema,
   CloudWorkspacePrefsSchema,
-  type CloudOrgSlug,
   type CloudWorkspacePrefs,
   type CloudWorkspacePrefsDocument
 } from '../../shared/cloud-workspaces/cloud-workspaces-wire'
@@ -34,11 +32,6 @@ export function cloudWorkspacePrefsMethods(call: Call) {
         revision,
         deviceId
       })
-    },
-    /** The org's link slug; `name` (the org name this client shows) names it the first time. */
-    getOrgSlug(name?: string | null): Promise<CloudOrgSlug> {
-      const qs = name ? `?${new URLSearchParams({ name: name.slice(0, 120) })}` : ''
-      return call('GET', `/v1/team/org${qs}`, CloudOrgSlugSchema)
     }
   }
 }

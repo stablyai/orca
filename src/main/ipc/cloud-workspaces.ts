@@ -15,7 +15,7 @@ import { setCloudReaderKeyRevoker } from '../cloud-workspaces/cloud-reader-key-s
 import { profileReaderKey, profileReadPins } from '../cloud-workspaces/cloud-read-profile-access'
 import { setCloudPairingVerifiedListener } from '../cloud-workspaces/cloud-pairing-seam'
 import { requestCloudGonePrune } from '../hosted-sandbox/cloud-gone-prune-request'
-import { registerTeamPresenceHandlers } from './cloud-workspaces-team-presence'
+import { registerOwnerChangeHandlers } from './cloud-workspaces-owner-change'
 import { wakePairedSandbox } from '../cloud-workspaces/cloud-paired-wake'
 import { registerCloudWorkspacePrefsHandlers } from './cloud-workspaces-prefs'
 import type { CloudReadSnapshotState } from '../../shared/cloud-workspaces/read-snapshot-state'
@@ -40,7 +40,7 @@ const LinkTarget = z.discriminatedUnion('kind', [
 ])
 const ListQuery = z
   .object({
-    scope: z.enum(['mine', 'team', 'all']).optional(),
+    scope: z.enum(['mine', 'all']).optional(),
     by: z.string().max(128).optional(),
     repo: z.string().max(2048).optional(),
     section: z.string().max(64).optional(),
@@ -52,7 +52,6 @@ const Patch = z
   .object({
     title: z.string().max(120).nullable().optional(),
     branch: z.string().max(255).nullable().optional(),
-    visibility: z.enum(['private', 'team']).optional(),
     section: z.string().max(64).nullable().optional(),
     archived: z.boolean().optional(),
     ownerUserId: z.string().max(128).optional(),
@@ -121,7 +120,7 @@ export async function readCloudWorkspaceSnapshot(
 /** The team registry service, for main-process readers (null when this build has no control plane). */
 export const getCloudWorkspacesService = (): Promise<CloudWorkspacesService | null> => getService()
 
-/** Stable per-install id for presence rows (one row per device, not per window). */
+/** Stable per-install id (one per device, not per window), sent with synced sidebar prefs writes. */
 async function clientIdFor(userDataPath: string): Promise<string> {
   const file = join(userDataPath, 'cloud-workspaces-client-id')
   try {
@@ -136,7 +135,7 @@ async function clientIdFor(userDataPath: string): Promise<string> {
   try {
     await writeFile(file, id, { mode: 0o600 })
   } catch {
-    // Presence still works for this session.
+    // The id still works for this session.
   }
   return id
 }
@@ -177,13 +176,6 @@ export function registerCloudWorkspacesHandlers(
     const s = await getService()
     return !s ? NOT_CONFIGURED : parsed.success ? s.get(parsed.data.id) : INVALID
   })
-  handle('cloudWorkspaces:noteSent', async (args) => {
-    const parsed = z.object({ id: Id }).safeParse(args)
-    const s = await getService()
-    if (s && parsed.success) {
-      await s.noteSent(parsed.data.id)
-    }
-  })
   handle('cloudWorkspaces:patch', async (args) => {
     const parsed = z.object({ id: Id, patch: Patch }).safeParse(args)
     const s = await getService()
@@ -191,15 +183,6 @@ export function registerCloudWorkspacesHandlers(
       ? NOT_CONFIGURED
       : parsed.success
         ? s.patch(parsed.data.id, parsed.data.patch)
-        : INVALID
-  })
-  handle('cloudWorkspaces:follow', async (args) => {
-    const parsed = z.object({ id: Id, follow: z.boolean() }).safeParse(args)
-    const s = await getService()
-    return !s
-      ? NOT_CONFIGURED
-      : parsed.success
-        ? s.follow(parsed.data.id, parsed.data.follow)
         : INVALID
   })
   handle('cloudWorkspaces:resolveLink', async (args) => {
@@ -285,12 +268,7 @@ export function registerCloudWorkspacesHandlers(
   })
   handle('cloudWorkspaces:setActive', async (args) => {
     const parsed = z
-      .object({
-        sandboxId: Id.nullable(),
-        chatId: ChatId.nullable().optional(),
-        typing: z.boolean().optional(),
-        leased: z.boolean().optional()
-      })
+      .object({ sandboxId: Id.nullable(), leased: z.boolean().optional() })
       .safeParse(args)
     const s = await getService()
     if (parsed.success) {
@@ -313,7 +291,7 @@ export function registerCloudWorkspacesHandlers(
         : INVALID
   })
   registerCloudWorkspacePrefsHandlers(handle, getService)
-  registerTeamPresenceHandlers(handle, getService)
+  registerOwnerChangeHandlers(handle, getService)
   // Handlers are re-registered per main window; the quit hook must only be added once.
   if (!quitHookInstalled) {
     quitHookInstalled = true

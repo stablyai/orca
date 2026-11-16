@@ -17,21 +17,13 @@ function fixture(answer: CloudGitActing) {
   })
 }
 
-export const member = fixture({
+export const owner = fixture({
   githubActing: { actingAs: 'member', userId: 'u1', login: 'octo-dev' },
   you: { connected: true, login: 'octo-dev' }
 })
 export const botConnect = fixture({
-  githubActing: { actingAs: 'bot', reason: 'sender_not_connected' },
+  githubActing: { actingAs: 'bot', reason: 'reconnect' },
   you: { connected: false }
-})
-export const noSenderYet = fixture({
-  githubActing: { actingAs: 'bot', reason: 'no_sender_yet' },
-  you: { connected: true }
-})
-export const windowExpired = fixture({
-  githubActing: { actingAs: 'bot', reason: 'window_expired' },
-  you: { connected: true }
 })
 export const transferred = fixture({
   githubActing: { actingAs: 'bot', reason: 'transferred' },

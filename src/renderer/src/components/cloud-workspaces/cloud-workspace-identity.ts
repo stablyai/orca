@@ -1,19 +1,15 @@
-// Which cloud workspace (sandbox) a sidebar worktree is, and that workspace's number (W-123) and
-// link. Numbers and links come from the control plane's list; the worktree mapping comes from this
-// desktop: the owner's own hosted runtime (by worktree id) or a teammate's paired runtime
-// environment (by host id). A tiny external store so palette rows and headers stay cheap.
+// Which cloud workspace (sandbox) a sidebar worktree is, and that workspace's number (W-123).
+// Numbers come from the control plane's list; the worktree mapping comes from this desktop: the
+// owner's own hosted runtime (by worktree id) or a paired runtime environment (by host id). A tiny external store so palette rows and headers stay cheap.
 import { useSyncExternalStore } from 'react'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type { CloudWorkspace } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 
 export type CloudWorkspaceIdentity = {
   number: number | null
-  link: string | null
   title: string | null
   /** What this account may do with it (PAIRED-ARCHIVE: only its creator archives a sandbox). */
   access?: CloudWorkspace['access']
-  /** SHARE-LINK-PRIVATE: whether teammates can open the copied link yet. */
-  visibility?: CloudWorkspace['visibility']
   /**
    * OWNER-TRANSFER: who owns it, and when its owner was first changed (null: never). A workspace
    * made from one inherits the time, so one made later was never handed over itself.
@@ -41,10 +37,8 @@ function sameIdentity(a: CloudWorkspaceIdentity | undefined, b: CloudWorkspaceId
   return (
     a !== undefined &&
     a.number === b.number &&
-    a.link === b.link &&
     a.title === b.title &&
     a.access === b.access &&
-    a.visibility === b.visibility &&
     a.ownerUserId === b.ownerUserId &&
     a.createdAt === b.createdAt &&
     a.ownershipTransferredAt === b.ownershipTransferredAt
@@ -58,10 +52,8 @@ export function rememberCloudWorkspaces(workspaces: readonly CloudWorkspace[]): 
   for (const w of workspaces) {
     const identity = {
       number: w.number ?? null,
-      link: w.link ?? null,
       title: w.title,
       access: w.access,
-      visibility: w.visibility,
       ownerUserId: w.ownerUserId,
       createdAt: w.createdAt,
       ownershipTransferredAt: w.ownershipTransferredAt ?? null

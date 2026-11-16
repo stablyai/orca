@@ -1,14 +1,9 @@
 // @vitest-environment happy-dom
-// TEAM-SHARING-HOLD: the approval dialog says nothing about teammates while team sharing is held.
+// Workspaces aren't shared with the team: the approval dialog says nothing about teammates, even
+// for a workspace the control plane still runs in shared mode (one whose owner changed).
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-
-const teamSharing = vi.hoisted(() => ({ on: false }))
-vi.mock('@/lib/orca-cloud/cloud-team-sharing-flag', () => ({
-  cloudTeamSharingEnabled: () => teamSharing.on,
-  useCloudTeamSharingEnabled: () => teamSharing.on
-}))
+import { afterEach, describe, expect, it } from 'vitest'
 
 import { Dialog } from '@/components/ui/dialog'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -54,14 +49,10 @@ async function show(): Promise<string> {
   return document.body.textContent ?? ''
 }
 
-describe('the teammates note on a local command request', () => {
-  it('held: no mention of teammates', async () => {
-    teamSharing.on = false
-    expect(await show()).not.toContain('Teammates share this workspace')
-  })
-
-  it('sharing on: says a teammate may have led to it', async () => {
-    teamSharing.on = true
-    expect(await show()).toContain('Teammates share this workspace')
+describe('a local command request', () => {
+  it('never mentions teammates', async () => {
+    const text = await show()
+    expect(text).not.toMatch(/teammate/i)
+    expect(text).toContain('ls -la')
   })
 })

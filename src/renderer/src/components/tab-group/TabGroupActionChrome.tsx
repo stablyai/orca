@@ -3,10 +3,9 @@ import { cn } from '@/lib/class-names'
 import { RunActionButton } from '../run-actions/RunActionButton'
 import { TabBarQuickCommandsButton } from '../tab-bar/TabBarQuickCommandsButton'
 import { CloudWorkspaceOwnerChangedChip } from '../cloud-workspaces/CloudWorkspaceOwnerChangedChip'
-import { CloudWorkspacePeople } from '../cloud-workspaces/CloudWorkspacePeople'
 import { TabGroupPaneActionsMenu } from './TabGroupPaneActionsMenu'
 
-/** The attached tab strip's trailing actions: workspace people and Run, quick commands, pane menu. */
+/** The attached tab strip's trailing actions: owner-change chip and Run, quick commands, pane menu. */
 export function TabGroupActionChrome({
   worktreeId,
   groupId,
@@ -37,7 +36,6 @@ export function TabGroupActionChrome({
           Dropped with quick commands in narrow strips so they never clip. */}
       {!hasSplitGroups || isFocused ? (
         <div className="contents @max-[163px]/tab-strip:hidden">
-          <CloudWorkspacePeople worktreeId={worktreeId} />
           <CloudWorkspaceOwnerChangedChip worktreeId={worktreeId} />
           <RunActionButton worktreeId={worktreeId} />
         </div>

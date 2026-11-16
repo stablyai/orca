@@ -33,7 +33,6 @@ import { applyWindowMaterialToDocument } from './app-shell/appearance/window-mat
 import { registerPlanBillingMenuItem } from './components/billing/register-plan-billing-menu-item'
 import { installOrcaCloudSessionEvents } from './lib/orca-cloud-session-events'
 import { installCloudWorkspaceLinks } from './components/cloud-workspaces/cloud-workspace-links'
-import { installCloudMessageSenderFromStore } from './lib/cloud-message-sender-install'
 import { installRunActionEvents } from './lib/run-actions/run-action-events'
 
 const disposeOsFileDropGuard = installOsFileDropCancellationGuard()
@@ -47,8 +46,6 @@ import.meta.hot?.dispose(disposeRunActionEvents)
 const disposeOrcaCloudSessionEvents = installOrcaCloudSessionEvents()
 import.meta.hot?.dispose(disposeOrcaCloudSessionEvents)
 const disposeCloudWorkspaceLinks = installCloudWorkspaceLinks()
-const disposeCloudMessageSender = installCloudMessageSenderFromStore()
-import.meta.hot?.dispose(disposeCloudMessageSender)
 import.meta.hot?.dispose(disposeCloudWorkspaceLinks)
 recordRendererCrashBreadcrumb('renderer_bootstrap_started', { dev: import.meta.env.DEV })
 installRendererCrashDiagnostics()
