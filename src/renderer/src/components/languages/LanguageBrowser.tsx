@@ -3,7 +3,10 @@ import { useTranslate } from '@/i18n/use-translate'
 import { useLanguageReadiness } from '@/i18n/language-readiness'
 import { useAppStore } from '@/store'
 import { usePluginLanguagePackStore } from '@/store/plugins/localization/plugin-language-packs'
-import { getRendererLanguageDetection, SUPPORTED_UI_LOCALES } from '../../../../shared/i18n/ui-locale'
+import {
+  getRendererLanguageDetection,
+  SUPPORTED_UI_LOCALES
+} from '../../../../shared/i18n/ui-locale'
 import { isPluginUiLanguage, UI_LANGUAGE_SYSTEM } from '../../../../shared/i18n/ui-language'
 import {
   isUsablePluginLanguagePack,
