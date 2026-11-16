@@ -77,13 +77,15 @@ esac
 ```
 
 Fallback for an agent whose `status` exit code says nothing about auth: capture the output with
-stderr folded in and match the agent's exact success line. Match a variable, not a pipe, so the
-provider process cannot take SIGPIPE:
+stderr folded in and match the agent's success text with `case`, so the provider process cannot
+take SIGPIPE and no here-string is needed:
 
 ```bash
 status="$(vercel sandbox exec "$auth" ${vercel_args[@]+"${vercel_args[@]}"} --timeout 30s -- bash -lc 'codex login status 2>&1')"
-grep -Eq 'Logged in using ChatGPT|Logged in via device' <<<"$status" \
-  || { echo "agent not logged in; not snapshotting" >&2; exit 1; }
+case "$status" in
+  *'Logged in using ChatGPT'*|*'Logged in via device'*) ;;
+  *) echo "agent not logged in; not snapshotting" >&2; exit 1 ;;
+esac
 ```
 
 Then re-snapshot and record the new id:
