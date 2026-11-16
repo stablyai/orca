@@ -13,7 +13,7 @@ import type { OrcaRuntimeWithSyncMobileSessionTabs as SyncMobileSessionTabsMetho
 import { OrcaRuntimeWithNotifySshStateChanged } from '../workspaces/workspace-host-notifications'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { ActiveGroupViewFacts } from '../view-facts/active-group-view-facts'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { RuntimePtyWorktreeRecord } from '../terminal/records/runtime-terminal-state-records'
 import type { SessionTitleAuthority } from '../session-tabs/session-title-publisher'

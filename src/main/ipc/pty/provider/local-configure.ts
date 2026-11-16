@@ -2,7 +2,7 @@ import { getClaudeAgentViewService } from '../../../claude/agent-view/agent-view
 import { inheritOmpLaunchEnvironment } from '../host-env/omp-launch-environment'
 import { getAppEnvironment } from '../../../../shared/app-lifecycle/app-environment'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { isAgentStatusHooksEnabled } from '../../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { isPwshAvailableAsync } from '../../../pty/shell-startup/pwsh'
 import { LocalPtyProvider } from '../../../providers/local-pty/local-pty-provider'

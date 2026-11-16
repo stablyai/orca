@@ -2,7 +2,7 @@ import { vi, type Mock } from 'vitest'
 import type { CreateWorktreeArgs } from '../../../shared/worktree/create-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
-import { getDefaultSettings } from '../../../shared/constants'
+import { getDefaultSettings } from '../../../shared/orca-profiles/constants'
 import { firstWorkRenameDeps } from '../../agent-hooks/first-work/first-work-rename-runtime'
 import {
   maybeAutoRenameBranchOnFirstWork,

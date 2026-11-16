@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../execution-host'
+import type { ExecutionHostId } from '../../execution-host/execution-host'
 
 /** Use stable pane IDs: paired-server handles exist only on that server. */
 export type TerminalPaneRevealTarget = {

@@ -10,7 +10,8 @@ import {
   carriedChatUiLaunchSettings
 } from '../../../../shared/native-chat/native-chat-providers'
 import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../../shared/source-control/ai/settings/auto-rename-branch-from-work-settings'
-import { getDefaultSettings, normalizeAgentActivityDisplayMode } from '../../../../shared/constants'
+import { getDefaultSettings } from '../../../../shared/orca-profiles/constants'
+import { normalizeAgentActivityDisplayMode } from '../../../../shared/agent-status/presentation/agent-activity-display-mode'
 import { normalizeWorktreeCardProperties } from '../../../../shared/worktree/row-display/card-properties'
 import {
   normalizeContextualTourIds,
@@ -23,12 +24,12 @@ import {
 } from '../../../../shared/feature-education/interactions/feature-interactions'
 import type { FeatureInteractionId } from '../../../../shared/feature-education/interactions/feature-interaction-catalog'
 
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type {
   PairedUiState,
   PairingLocalUiField
 } from '../../../../shared/remote-runtime/pairing/pairing-local-ui-fields'
-import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
+import type { PersistedUIState } from '../../../../shared/orca-profiles/persisted-ui-state-types'
 import { normalizeStatusBarUsageMode } from '../../../../shared/status-bar/status-bar-usage-mode'
 import { normalizeStatusBarUsageFormat } from '../../../../shared/status-bar/status-bar-usage-format'
 import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-themes/terminal-custom-themes'

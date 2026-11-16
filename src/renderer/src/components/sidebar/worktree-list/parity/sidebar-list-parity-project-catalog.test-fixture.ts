@@ -3,7 +3,7 @@ import { mergeFetchedReposForHost } from '@/store/repos/repo-catalog-identity'
 import {
   parseExecutionHostId,
   toRuntimeExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { adoptEndpointRepo } from '../../../../../../shared/project/catalog/endpoint-catalog-adoption'
 import { applyManualRepoOrder } from '../../../../../../shared/repository/manual-repo-order'
 import { mergeFetchedHostProjectCatalog } from '../../../../../../shared/project/catalog/project-compatibility-host-merge'

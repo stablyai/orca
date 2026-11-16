@@ -1,5 +1,5 @@
 import '../../orca-runtime-tests/orca-runtime-test-lifecycle.spec'
-import { getDefaultWorkspaceSession } from '../../../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/constants'
 import { describe, expect, it, vi } from 'vitest'
 
 import '../../orca-runtime-tests/runtime-test-module-registration.spec'

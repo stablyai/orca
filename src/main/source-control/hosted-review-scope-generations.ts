@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../shared/execution-host'
+import type { ExecutionHostId } from '../../shared/execution-host/execution-host'
 import { MAX_BRANCH_MAP_ENTRIES } from './hosted-review-refresh-pacing'
 
 /** Fence lookups begun before review creation so they cannot reinstall stale absence (#11532). */

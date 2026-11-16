@@ -1,6 +1,6 @@
 import type { LocalGitExecOptions } from '../../../git/refs/resolution/repo-default-base-ref'
 import { randomUUID } from 'node:crypto'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { getProjectHostSetupWorktreeMeta } from '../../../../shared/project/host-setup/project-host-setup-lookup'
 import type { GitWorktreeInfo, GitPushTarget, Worktree } from '../../../../shared/worktree/types'
 import type { Repo } from '../../../../shared/repository/repo-types'

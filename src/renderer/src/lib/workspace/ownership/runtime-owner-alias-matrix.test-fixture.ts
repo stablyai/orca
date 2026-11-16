@@ -1,5 +1,5 @@
 /** Owner-resolution cases spanning every branch: local, direct SSH, runtime, HUB-proxied SSH, twins. */
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 
 export type OwnerResolutionCase = {

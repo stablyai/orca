@@ -8,7 +8,10 @@ import {
   type AutomationCapturedHostIssue
 } from '../../../shared/automations/ownership/automation-list-scope'
 import { AUTOMATION_CAPTURED_HOST_REFUSALS } from '../../../shared/automations/ownership/automation-owner-conflict'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId
+} from '../../../shared/execution-host/execution-host'
 import type { ProjectHostSetup } from '../../../shared/project/project-types'
 import type { Repo } from '../../../shared/repository/repo-types'
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'

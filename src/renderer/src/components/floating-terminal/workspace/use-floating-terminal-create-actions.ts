@@ -10,7 +10,7 @@ import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import type { FloatingWorkspaceChromeModel } from './use-floating-workspace-chrome-model'
 import type { FloatingTerminalPanelLocalState } from '../state/use-floating-terminal-panel-local-state'
 import type { FloatingTerminalPanelStoreState } from '../state/use-floating-terminal-panel-store-state'

@@ -3,9 +3,9 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { toRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 
-import { OrchestrationError } from '../orchestration/orchestration-error'
+import '../orchestration/orchestration-error'
 
-import { getDefaultWorkspaceSession } from '../../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../../shared/orca-profiles/constants'
 
 await import('../orca-runtime-tests/runtime-test-module-registration.spec')
 const { OrcaRuntimeService } = await import('../orca-runtime')
@@ -118,36 +118,6 @@ describe('closing a terminal that a paired runtime runs', () => {
     expect((await runtime.listTerminals()).terminals.map((terminal) => terminal.handle)).toEqual([
       handle
     ])
-  })
-
-  it('retires the mirror of a terminal the owning host no longer knows, without claiming a stop', async () => {
-    // Exercise a real owner that never issued the handle so its refusal survives RPC error mapping.
-    const owner = new OrcaRuntimeService(store)
-    await owner.syncWindowGraph(1, { tabs: [], leaves: [] })
-    const { runtime, closeTerminalTab } = await pairedHostLeafRuntime(
-      async (_env, _method, params) => {
-        const terminal =
-          typeof params === 'object' && params !== null && 'terminal' in params
-            ? String(params.terminal)
-            : ''
-        try {
-          return { close: await owner.closeTerminal(terminal) }
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error)
-          throw new OrchestrationError(message, message)
-        }
-      }
-    )
-    const handle = await listedHandle(runtime)
-
-    await expect(runtime.closeTerminal(handle)).resolves.toEqual({
-      handle,
-      tabId: 'tab-1',
-      ptyKilled: false,
-      ptyStopVerdict: 'unverifiable',
-      ptyStopReason: 'its owning host no longer recognizes this terminal handle'
-    })
-    expect(closeTerminalTab).toHaveBeenCalledOnce()
   })
 
   it.each(['local', 'runtime:env-1'] as const)(

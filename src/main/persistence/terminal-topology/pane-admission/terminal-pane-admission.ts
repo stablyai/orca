@@ -1,7 +1,7 @@
 // Persist runtime pane membership before spawning through the same layout model used by client commands.
 
 import { randomUUID } from 'node:crypto'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import {
   leafIdsOf,

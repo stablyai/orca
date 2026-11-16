@@ -8,7 +8,7 @@ import type {
 } from '../../../../shared/orcad-migration/orcad-migration-manifest'
 import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
 import type { Repo } from '../../../../shared/repository/repo-types'
-import { getDefaultWorkspaceSession } from '../../../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/constants'
 import { worktreeWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { computeOrcadMigrationManifestSha256 } from '../../../orcad/migration/orcad-migration-manifest-digest'
 
