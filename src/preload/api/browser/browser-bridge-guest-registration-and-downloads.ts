@@ -1,3 +1,4 @@
+import { browserGuestDiscardApi } from './browser-bridge-guest-discard'
 import type { BrowserGuestMetadata } from '../../../shared/browser/guest-lifecycle/browser-guest-metadata'
 import type { BrowserDevToolsDockBounds } from '../../../shared/browser/devtools/browser-devtools-dock'
 import { ipcRenderer } from 'electron'
@@ -21,6 +22,7 @@ import { browserClientPageRendererRequests } from '../../renderer/renderer-runti
 import type { PreloadApi } from '../../api-types'
 
 export const browserGuestRegistrationAndDownloadsApi = {
+  ...browserGuestDiscardApi,
   onClientPageRendererRequest: browserClientPageRendererRequests.subscribe,
   readClientHostId: (): string | null => readBrowserClientHostIdArgument(process.argv),
   getGuestMetadata: (args: {
@@ -50,8 +52,11 @@ export const browserGuestRegistrationAndDownloadsApi = {
     sessionProfileId?: string | null
     webContentsId: number
   }): Promise<boolean> => ipcRenderer.invoke('browser:repairGuestRegistration', args),
-  unregisterGuest: (args: { browserPageId: string }): Promise<void> =>
-    ipcRenderer.invoke('browser:unregisterGuest', args),
+  unregisterGuest: (args: {
+    browserPageId: string
+    webContentsId?: number
+    replacement?: boolean
+  }): Promise<void> => ipcRenderer.invoke('browser:unregisterGuest', args),
   onWebAuthnAccountRequest: (
     callback: (request: BrowserWebAuthnAccountRequest) => void
   ): (() => void) => {

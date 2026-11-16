@@ -4,7 +4,7 @@ import {
   parseExecutionHostId,
   toSshExecutionHostId,
   type ParsedExecutionHost
-} from '../../shared/execution-host'
+} from '../../shared/execution-host/execution-host'
 import {
   ambiguousEnvironments,
   ambiguousSshTargets,
@@ -17,7 +17,7 @@ import {
   type EnvironmentSummary,
   type SshTargetSummary
 } from './host-selector-alternatives'
-import { normalizeTypedName, stripWrappingQuotes } from '../../shared/typed-name-normalization'
+import { normalizeTypedName, stripWrappingQuotes } from '../../shared/text/typed-name-normalization'
 import type { RuntimeClient } from '../runtime/client'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { isLocalEnvironmentSelector } from './local-environment-selector'

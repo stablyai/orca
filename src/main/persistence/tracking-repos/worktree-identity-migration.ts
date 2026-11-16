@@ -4,8 +4,11 @@ import type {
 } from '../../../shared/browser/workspaces/browser-workspace-types'
 import { remapBrowserPageDocLocation } from '../../../shared/browser/workspaces/browser-page-doc-location'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
-import { type WorkspaceKey, worktreeWorkspaceKey } from '../../../shared/workspace-scope'
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import {
+  type WorkspaceKey,
+  worktreeWorkspaceKey
+} from '../../../shared/workspace/identity/workspace-scope'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import {
   getWorktreeIdFromHostIdentity,
   isWorktreeHostIdentity
@@ -299,6 +302,10 @@ export function migrateWorktreeIdentity(
   const showDotfiles = state.ui?.showDotfilesByWorktree
   if (showDotfiles) {
     changed = moveKey(showDotfiles) || changed
+  }
+  const notificationsMuted = state.ui?.notificationsMutedByWorktree
+  if (notificationsMuted) {
+    changed = moveKey(notificationsMuted) || changed
   }
 
   return changed

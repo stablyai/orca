@@ -1,5 +1,5 @@
 import { isAbsoluteFilesystemPathInput } from '../../../../../shared/browser/navigation/browser-url'
-import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import type { BrowserPageDocLocation } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import { getRelativePathInsideRoot, joinPath } from '@/lib/path'
 import { getWorkspaceFilePreviewPlan } from '@/lib/browser/documents/file-preview'

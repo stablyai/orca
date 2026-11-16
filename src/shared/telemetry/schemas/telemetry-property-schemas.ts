@@ -4,8 +4,8 @@ import {
   FEATURE_WALL_TOUR_DEPTH_STEPS
 } from '../../feature-education/explore/feature-wall-tour-depth'
 import { SETUP_SCRIPT_IMPORT_PROVIDERS } from '../../workspace-setup/setup-script-import-providers'
-import { WORKSPACE_SOURCE_VALUES } from '../../workspace-source'
-import type { GlobalSettings } from '../../global-settings-types'
+import { WORKSPACE_SOURCE_VALUES } from '../../workspace/creation/workspace-source'
+import type { GlobalSettings } from '../../settings/global-settings-types'
 
 // Wire names use product names (claude-code for the claude CLI); tuiAgentToAgentKind maps unknowns to other.
 export const AGENT_KIND_VALUES = [

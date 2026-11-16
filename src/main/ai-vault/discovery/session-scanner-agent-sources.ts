@@ -1,11 +1,11 @@
 import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { pathSegments } from './session-file-discovery'
-import { resolveAbsoluteDirOverride } from '../../../shared/absolute-dir-override'
+import { resolveAbsoluteDirOverride } from '../../../shared/file-access/absolute-dir-override'
 import type { AiVaultAgent } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import type { AiVaultDeletableAgent } from '../../../shared/ai-vault/contracts/ai-vault-session-deletion'
 import { resolveGrokSessionsDir } from '../../../shared/agent-hook-listener/providers/grok/grok-session-paths'
-import { resolveKiroHomeDir } from '../../../shared/kiro-home'
+import { resolveKiroHomeDir } from '../../../shared/agent-launch/environment/kiro-home'
 import { uniqueCodexSessionsDirs } from '../scanners/codex/session-scanner-codex-paths'
 import {
   clineMessagesPathForMetadata,

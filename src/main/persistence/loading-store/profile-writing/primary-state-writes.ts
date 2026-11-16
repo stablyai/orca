@@ -1,8 +1,8 @@
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import {
   parseCodexResetCreditAttemptLedger,
   type CodexResetCreditAttemptLedger
-} from '../../../../shared/codex-reset-credit-attempt-ledger'
+} from '../../../../shared/agent-accounts/codex/codex-reset-credit-attempt-ledger'
 import {
   stopAfterFailedPrimaryStateMutation,
   type PrimaryStateWriteOperationsRuntime
@@ -14,7 +14,7 @@ import { writeProfileStateInWorker } from './primary-state-write-worker'
 import type { DurableProfileStateMutation } from '../store-runtime-state'
 import { profileStateWriterFailureOutcome } from '../../profile-state/writer/profile-state-writer-errors'
 import { notifyWorkspaceSessionOperationEnded } from '../workspace-sessions/workspace-session-write-listeners'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 
 const primaryStateWriteOperationsContext = Symbol('PrimaryStateWriteOperations')
 export class PrimaryStateWriteOperations {

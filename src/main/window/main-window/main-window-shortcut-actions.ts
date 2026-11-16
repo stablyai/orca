@@ -1,5 +1,5 @@
 import type { BrowserWindow } from 'electron'
-import type { WindowShortcutAction } from '../../../shared/window-shortcut-policy'
+import type { WindowShortcutAction } from '../../../shared/keybindings/window-shortcut-policy'
 import { reloadWithRendererCheckpoint } from '../renderer-relays/native-unload-coordinator'
 
 export function sendResolvedWindowShortcutAction(

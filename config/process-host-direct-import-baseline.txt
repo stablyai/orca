@@ -14,7 +14,6 @@ src/main/browser/network/egress/browser-route-egress-electron-launch.ts
 src/main/codex-accounts/legacy-wsl-auth-drain/legacy-wsl-runtime-auth-drain-script-harness.ts
 src/main/codex-accounts/service.ts
 src/main/computer/desktop-script/desktop-script-provider-bridge.ts
-src/main/computer/macos-permissions/macos-computer-use-permission-status.ts
 src/main/computer/macos-permissions/macos-computer-use-permissions.ts
 src/main/computer/macos-native/macos-native-provider-transport.ts
 src/main/computer/sidecar-transport/sidecar-client.ts
@@ -67,7 +66,7 @@ src/main/startup/linux-display/ensure-virtual-display.ts
 src/main/pty/process-retirement/windows-process-tree-kill.ts
 src/main/pty/shell-startup/zsh-startup-hook-pty-harness.ts
 src/shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-process.ts
-src/shared/fish-binary-requirement.ts
+src/shared/shell/testing/fish-binary-requirement.ts
 src/shared/process-observation/tables/process-table-ps-capture.ts
 src/shared/terminal/pty/native-process/pty-slave-line-discipline-echo.ts
 src/shared/terminal/pty/native-process/shell-process-readiness.ts

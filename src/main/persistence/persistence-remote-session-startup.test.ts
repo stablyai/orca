@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { getDefaultWorkspaceSession } from '../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../shared/orca-profiles/constants'
 import type {
   BrowserPage,
   BrowserWorkspace

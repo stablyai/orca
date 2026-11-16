@@ -3,7 +3,7 @@ import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { ensureDetectedAgentsForWorktree } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
 
-import { createNonSecureContextUuid } from '../../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import { useAppStore } from '@/store/index'
 import {
   acquireAgentLaunchChoices,

@@ -18,7 +18,7 @@ import {
   getFishCodexShellLaunchPreflight,
   getPosixCodexShellLaunchPreflight
 } from '../../../shared/shell/launch/agents/codex-shell-function'
-import { resolveFishBinary } from '../../../shared/fish-binary-requirement'
+import { resolveFishBinary } from '../../../shared/shell/testing/fish-binary-requirement'
 import { getPowerShellAgentWrappers } from '../../../shared/shell/launch/agents/powershell-agent-wrappers'
 
 const roots: string[] = []

@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
-import { formatResetDuration } from '../../../../../shared/rate-limit-reset-format'
-import { formatWindowLabel as formatSharedWindowLabel } from '../../../../../shared/rate-limit-window-label'
+import { formatResetDuration } from '../../../../../shared/agent-usage/rate-limits/rate-limit-reset-format'
+import { formatWindowLabel as formatSharedWindowLabel } from '../../../../../shared/agent-usage/rate-limits/rate-limit-window-label'
 
 const WEEK_MINUTES = 60 * 24 * 7
 

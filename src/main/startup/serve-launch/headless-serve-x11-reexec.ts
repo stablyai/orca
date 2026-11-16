@@ -2,7 +2,7 @@ import { app } from 'electron'
 import {
   HEADLESS_SERVE_OZONE_PLATFORM_SWITCH,
   hasExplicitOzonePlatform
-} from '../../../shared/headless-serve-ozone-platform'
+} from '../../../shared/app-lifecycle/launch/headless-serve-ozone-platform'
 
 export type HeadlessServeX11ReexecOptions = {
   isServeMode: boolean

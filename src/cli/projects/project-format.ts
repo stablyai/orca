@@ -5,7 +5,7 @@ import type {
   ProjectHostSetupDeleteResult,
   ProjectHostSetupResult,
   ProjectHostSetupUpdateResult
-} from '../../shared/project-types'
+} from '../../shared/project/project-types'
 
 export function formatProjectList(result: { projects: Project[] }): string {
   if (result.projects.length === 0) {

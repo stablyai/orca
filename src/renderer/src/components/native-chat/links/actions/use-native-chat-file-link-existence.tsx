@@ -5,14 +5,14 @@ import {
   getRuntimeEnvironmentRevision,
   onRuntimeEnvironmentRevisionsChanged
 } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
-import type { FileLinkExists } from '../../../../../../shared/native-chat/native-chat-file-link-tree'
+import type { FileLinkExists } from '../../../../../../shared/native-chat/file-access/native-chat-file-link-tree'
 import { useNativeChatFileLinkContext } from './use-native-chat-file-link-context'
 import {
   createNativeChatFileLinkExistence,
   NativeChatFileLinkExistenceContext
 } from './native-chat-file-link-existence'
-import type { NativeChatFileLinkExistence } from '../../../../../../shared/native-chat/native-chat-file-link-existence'
-import { createNativeChatFileLinkHooks } from '../../../../../../shared/native-chat/native-chat-file-link-hooks'
+import type { NativeChatFileLinkExistence } from '../../../../../../shared/native-chat/file-access/native-chat-file-link-existence'
+import { createNativeChatFileLinkHooks } from '../../../../../../shared/native-chat/file-access/native-chat-file-link-hooks'
 
 const { useNativeChatFileLinkExistsFrom, useRecheckNativeChatFileLinksWhenSettled } =
   createNativeChatFileLinkHooks({ useEffect, useMemo, useRef, useSyncExternalStore })

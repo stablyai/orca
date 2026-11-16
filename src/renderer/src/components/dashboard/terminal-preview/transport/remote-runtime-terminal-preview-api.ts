@@ -1,4 +1,4 @@
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import { takeCurrentTerminalDeliveryCredit } from '@/lib/pane-manager/terminal-output/terminal-delivery-credit'
 import { getRemoteRuntimeTerminalMultiplexer } from '@/runtime/hosted-terminals/streams/registry/remote-runtime-terminal-multiplexer-registry'
 import type {

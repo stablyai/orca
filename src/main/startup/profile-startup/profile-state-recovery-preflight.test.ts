@@ -14,7 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   PROFILE_STATE_RECOVERY_FLAG,
   PROFILE_STATE_RECOVERY_RESULT_PREFIX
-} from '../../../shared/profile-state-recovery-command'
+} from '../../../shared/orca-profiles/profile-state-recovery-command'
 import { acquireProfileStateRuntimeAdmission } from '../../persistence/profile-state/access/profile-state-access'
 import { profileStateJsonExportPath } from '../../persistence/profile-state/legacy-json/profile-state-export-path'
 import {

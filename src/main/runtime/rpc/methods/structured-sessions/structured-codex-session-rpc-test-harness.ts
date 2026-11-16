@@ -14,8 +14,8 @@ import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/age
 import {
   AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-} from '../../../../../shared/agent-session/agent-session-runtime-capabilities'
-import type { RuntimeCapability } from '../../../../../shared/protocol-version'
+} from '../../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
+import type { RuntimeCapability } from '../../../../../shared/remote-runtime/protocol/protocol-version'
 import { attachFingerprintFields } from '../../../../native-chat/agent-session-wire/acquisition/structured-agent-session-attach'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { RpcRequest, RpcResponse } from '../../core'

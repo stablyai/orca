@@ -251,6 +251,9 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
   cancelUsageLimitContinue = (id: string, cut: usageLimitContinue.UsageLimitContinueIdentity) =>
     this.updateRecord(id, { kind: 'cancel-continue', cut })
 
+  skipAsyncQuestions = (id: string, itemId: string) =>
+    this.updateRecord(id, { kind: 'skip-async-questions', itemId })
+
   /** Reconcile loaded leases before writer admission. Newer databases keep verdicts in memory only and cannot grant writers. */
   async reconcileOnRestart(args: AgentSessionRestartProbeArgs) {
     const probes = await collectAgentSessionRestartProbes(this, args)

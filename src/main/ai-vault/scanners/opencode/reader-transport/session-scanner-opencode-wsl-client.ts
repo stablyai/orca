@@ -2,7 +2,7 @@ import type { AiVaultSession } from '../../../../../shared/ai-vault/contracts/ai
 import {
   waitForPromiseWithSignal,
   throwIfSignalAborted
-} from '../../../../../shared/abort-signal-reason'
+} from '../../../../../shared/concurrency/abort-signal-reason'
 import { buildWslExecArgs } from '../../../../../shared/shell/wsl/wsl-login-shell-command'
 import { parseWslUncPath } from '../../../../../shared/file-access/wsl-paths'
 import { resolveWslExecutablePath } from '../../../../wsl/execution/wsl-executable-path'

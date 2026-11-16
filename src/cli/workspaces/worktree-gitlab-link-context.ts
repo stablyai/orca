@@ -1,5 +1,5 @@
 import { parseRemoteProjectRefCandidate } from '../../main/gitlab/projects/project-ref-parser'
-import type { Repo } from '../../shared/repo-types'
+import type { Repo } from '../../shared/repository/repo-types'
 import type { RuntimeWorktreeRecord } from '../../shared/worktree/catalog/runtime-worktree-contracts'
 import { parseGitLabIssueOrMRLink, type ProjectSlug } from '../../shared/new-workspace/gitlab-links'
 import { RuntimeClientError } from '../runtime/connection/types'

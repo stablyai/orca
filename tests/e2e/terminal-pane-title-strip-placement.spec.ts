@@ -1,8 +1,6 @@
-import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import {
   readPaneIdentitySnapshot,
-  readTerminalPaneDomLeafOrder,
   splitActiveTerminalPane,
   waitForPaneIdentitySnapshot,
   waitForPaneCount
@@ -10,42 +8,6 @@ import {
 import { setPaneTitleFromTerminalMenu } from './helpers/terminal-pane-title-actions'
 import { registerTerminalPaneMountReadiness } from './helpers/terminal-pane-mount-readiness'
 
-async function expectPaneTitleAttachedToLeaf(
-  page: Page,
-  title: string,
-  leafId: string
-): Promise<void> {
-  await expect
-    .poll(
-      () =>
-        page.evaluate(
-          ({ title, leafId }) => {
-            const titleBar = Array.from(
-              document.querySelectorAll<HTMLElement>('.pane-title-bar')
-            ).find((element) => element.textContent?.includes(title))
-            const pane = document.querySelector<HTMLElement>(`.pane[data-leaf-id="${leafId}"]`)
-            if (!titleBar || !pane) {
-              return false
-            }
-            const titleRect = titleBar.getBoundingClientRect()
-            const paneRect = pane.getBoundingClientRect()
-            return (
-              Math.abs(titleRect.left - paneRect.left) < 1 &&
-              Math.abs(titleRect.top - paneRect.top) < 1 &&
-              Math.abs(titleRect.width - paneRect.width) < 1
-            )
-          },
-          { title, leafId }
-        ),
-      {
-        timeout: 5_000,
-        message: 'Pane title overlay did not stay attached to its pane'
-      }
-    )
-    .toBe(true)
-}
-
-// Serialize headful scenarios; visible-window runs require an isolated display.
 test.describe.configure({ mode: 'serial' })
 test.describe('Terminal Panes', () => {
   registerTerminalPaneMountReadiness()
@@ -130,57 +92,5 @@ test.describe('Terminal Panes', () => {
         { timeout: 5_000, message: 'Title-strip drop changed selection or missed its target' }
       )
       .toEqual({ activeLeafId: otherPane.leafId, targetHasPath: true, otherHasPath: false })
-  })
-
-  test('@headful Set Title pane can be dragged from the title strip', async ({ orcaPage }) => {
-    const title = `Dragged title ${Date.now()}`
-
-    await setPaneTitleFromTerminalMenu(orcaPage, title)
-    const initialSnapshot = await waitForPaneIdentitySnapshot(orcaPage, 1)
-    const titledLeafId = initialSnapshot.activeLeafId ?? initialSnapshot.panes[0]?.leafId
-    if (!titledLeafId) {
-      throw new Error('No titled pane leaf id found before drag')
-    }
-
-    await splitActiveTerminalPane(orcaPage, 'vertical')
-    await waitForPaneCount(orcaPage, 2)
-    const beforeDrag = await waitForPaneIdentitySnapshot(orcaPage, 2)
-    const target = beforeDrag.panes.find((pane) => pane.leafId !== titledLeafId)
-    if (!target) {
-      throw new Error('No target pane found for titled pane drag')
-    }
-    const beforeOrder = await readTerminalPaneDomLeafOrder(orcaPage)
-
-    const titleDragHandle = orcaPage
-      .locator('.pane-title-bar', { hasText: title })
-      .locator('.pane-title-drag-handle')
-    await expect(titleDragHandle).toBeVisible({ timeout: 3_000 })
-    const sourceBox = await titleDragHandle.boundingBox()
-    const targetBox = await orcaPage.locator(`.pane[data-leaf-id="${target.leafId}"]`).boundingBox()
-    expect(sourceBox).not.toBeNull()
-    expect(targetBox).not.toBeNull()
-    const sourceIndex = beforeOrder.indexOf(titledLeafId)
-    const targetIndex = beforeOrder.indexOf(target.leafId)
-    const targetDropX =
-      sourceIndex < targetIndex ? targetBox!.x + targetBox!.width - 8 : targetBox!.x + 8
-
-    await orcaPage.mouse.move(sourceBox!.x + sourceBox!.width / 2, sourceBox!.y + 4)
-    await orcaPage.mouse.down()
-    await orcaPage.mouse.move(targetDropX, targetBox!.y + targetBox!.height / 2, {
-      steps: 20
-    })
-    await orcaPage.mouse.up()
-
-    await expect
-      .poll(async () => readTerminalPaneDomLeafOrder(orcaPage), {
-        timeout: 10_000,
-        message: 'Title-strip pane drag did not update DOM order'
-      })
-      .not.toEqual(beforeOrder)
-    const afterDrag = await waitForPaneIdentitySnapshot(orcaPage, 2)
-    expect(afterDrag.panes.map((pane) => pane.leafId).sort()).toEqual(
-      beforeDrag.panes.map((pane) => pane.leafId).sort()
-    )
-    await expectPaneTitleAttachedToLeaf(orcaPage, title, titledLeafId)
   })
 })

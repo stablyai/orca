@@ -1,4 +1,4 @@
-import { AntigravityChatAuthConfigError } from '../../shared/antigravity-chat-auth-config'
+import { AntigravityChatAuthConfigError } from '../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import { AcpAgentError } from '../acp/transport/acp-errors'
 import '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { isAgentSessionPreSpawnError } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'

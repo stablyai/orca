@@ -13,7 +13,9 @@ async function makeRuntimeWithHookRow(
 ) {
   const statusStore = new AgentHookServer()
   const runtime = new OrcaRuntimeService(store, undefined, {
-    getAgentStatusSnapshot: () => statusStore.getStatusSnapshot()
+    getAgentStatusSnapshot: () => statusStore.getStatusSnapshot(),
+    getPublicAgentStatusSnapshotForPane: (paneKey, terminalHandle) =>
+      statusStore.getPublicStatusSnapshotForPane(paneKey, terminalHandle)
   })
   runtime.setPtyController({
     spawn: vi.fn().mockResolvedValue({ id: 'pty-ps-agent-wait' }),

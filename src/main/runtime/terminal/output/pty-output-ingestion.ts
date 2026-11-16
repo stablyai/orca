@@ -19,7 +19,7 @@ import {
   computeTerminalTailWaitState,
   tailGainedNewerBlockedReason
 } from '../wait/terminal-wait-tail-state'
-import { extractOscTitleScanTail } from '../../../../shared/osc-title-scan-tail'
+import { extractOscTitleScanTail } from '../../../../shared/agent-status/title/osc-title-scan-tail'
 
 export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecutionContext {
   protected abstract recordOsc7MetadataForPty(

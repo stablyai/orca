@@ -3,7 +3,7 @@ import type {
   AgentStatusEntry,
   AgentType
 } from '../../../../../shared/agent-status/contracts/agent-status-types'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
@@ -146,7 +146,7 @@ export function collectAgentPaneConversations<Agent extends AgentType>(
         worktreeId: options.pane.worktreeId,
         tabId: tabIdFromPaneKey(
           options.pane.paneKey,
-          state.agentStatusByPaneKey[options.pane.paneKey]?.tabId ??
+          state.agentStatusByPaneKey.get(options.pane.paneKey)?.tabId ??
             state.sleepingAgentSessionsByPaneKey[options.pane.paneKey]?.tabId
         )
       }
@@ -200,7 +200,12 @@ export function collectAgentPaneConversations<Agent extends AgentType>(
       worktreeId: record.worktreeId
     })
   }
-  for (const entry of records(state.agentStatusByPaneKey)) {
+  const live = options.pane
+    ? [state.agentStatusByPaneKey.get(options.pane.paneKey)].filter(
+        (entry): entry is NonNullable<typeof entry> => entry !== undefined
+      )
+    : state.agentStatusByPaneKey.values()
+  for (const entry of live) {
     registerCandidate(state, tabsById, candidates, isAgent, liveCandidate(entry))
   }
 

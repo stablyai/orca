@@ -3,7 +3,7 @@ import { z } from 'zod'
 import {
   createIncrementalNdjsonFramer,
   encodeNdjson
-} from '../../shared/main-process-ndjson-framer'
+} from '../../shared/json-stream/main-process-ndjson-framer'
 import { detachProviderStreamErrorHandler } from '../provider-process/provider-stdio-error-boundary'
 import { ProviderStdioWriteQueue } from '../provider-process/provider-stdio-write-queue'
 import { ProviderOutputEnd } from '../provider-process/provider-output-end'

@@ -9,7 +9,7 @@ export function useNativeChatStatusEntry(
   const entry = useAppStore(
     useShallow((state) =>
       preferredPaneKey
-        ? state.agentStatusByPaneKey[preferredPaneKey]
+        ? state.agentStatusByPaneKey.get(preferredPaneKey)
         : findTabAgentEntry(state.agentStatusByPaneKey, terminalTabId)
     )
   )

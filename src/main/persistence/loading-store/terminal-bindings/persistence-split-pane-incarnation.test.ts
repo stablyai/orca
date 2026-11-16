@@ -5,7 +5,7 @@ import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { ProfileStateSqliteAuthority } from '../../profile-state/profile-state-sqlite-authority'
-import { getDefaultWorkspaceSession } from '../../../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/constants'
 
 import { makeTerminalTab, TEST_LEAF_1, TEST_LEAF_2 } from '../../persistence-session-fixtures'
 

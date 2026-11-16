@@ -1,6 +1,12 @@
 import { isWorktreeRetiredByRemoval } from '../../../../../shared/worktree/removal/removal-visibility'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
-import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
+import {
+  folderWorkspaceKey,
+  parseWorkspaceKey
+} from '../../../../../shared/workspace/identity/workspace-scope'
 import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
 import { getFolderWorkspaceHostIdentity } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import type {

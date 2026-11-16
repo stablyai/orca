@@ -12,7 +12,7 @@ import { encodeBase64Bytes } from '@/lib/base64-bytes'
 import { readBrowserAttachmentFile } from '@/lib/files/drop/browser-attachment-files'
 import { callEnvironmentEnvelope } from './web-runtime-calls'
 import { resolveEnvironment } from './web-runtime-session'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
 
 const ATTACHMENT_CALL_TIMEOUT_MS = 30_000
 const SERVER_CHANGED = 'The paired Orca server changed while the request was in progress.'

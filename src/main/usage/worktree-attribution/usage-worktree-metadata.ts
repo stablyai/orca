@@ -1,13 +1,13 @@
 import { basename } from 'node:path'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import {
   getRepoMainWorktreeId,
   splitWorktreeId,
   splitWorktreeIdForFilesystem
 } from '../../../shared/worktree/id'
-import { isFolderRepo } from '../../../shared/repo-kind'
+import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
-import { getRepoRoutingConnectionId } from '../../../shared/execution-host'
+import { getRepoRoutingConnectionId } from '../../../shared/execution-host/execution-host'
 import { canonicalWorktreePath } from '../../git/worktrees/catalog/worktree-path-comparison'
 
 export type UsageWorktreeRef = {

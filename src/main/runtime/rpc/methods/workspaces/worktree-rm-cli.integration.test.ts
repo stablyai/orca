@@ -12,10 +12,10 @@ import {
   storeWorktreeMeta
 } from '../../../orca-runtime-tests/runtime-store-partial-fixture'
 import type { WorktreeMeta } from '../../../../../shared/worktree/meta-types'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { HostWorktreeTarget } from '../../../../../shared/worktree/host-qualified-identity'
 
-import * as appEnvironment from '../../../../../shared/app-environment'
+import * as appEnvironment from '../../../../../shared/app-lifecycle/app-environment'
 import type { SshTarget } from '../../../../../shared/remote-runtime/ssh/ssh-types'
 
 import { getRuntimeMetadataPath } from '../../../../../shared/remote-runtime/bootstrap/runtime-bootstrap'

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link2, Plus, X } from 'lucide-react'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { Button } from '../../../ui/button'
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '../../../ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '../../../ui/popover'
@@ -15,7 +15,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 
 type WorktreeSymlinksSectionProps = {

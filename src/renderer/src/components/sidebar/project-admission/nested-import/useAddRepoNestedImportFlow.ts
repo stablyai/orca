@@ -13,7 +13,7 @@ import type { AddRepoExistingWorkspaceSource } from '../../../../../../shared/te
 import type {
   NestedRepoScanResult,
   ProjectGroupImportResult
-} from '../../../../../../shared/project-group-types'
+} from '../../../../../../shared/project/groups/project-group-types'
 import type { WorktreeFetchOptions } from '@/store/slices/worktrees/listing/worktree-fetch-options'
 import { translate } from '@/i18n/i18n'
 import { worktreeRefreshOptions } from '../host-selection/add-repo-runtime-owner'

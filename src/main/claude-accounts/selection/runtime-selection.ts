@@ -1,8 +1,8 @@
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type {
   ClaudeManagedAccount,
   ClaudeManagedAccountRuntimeSelection
-} from '../../../shared/managed-account-types'
+} from '../../../shared/agent-accounts/managed-account-types'
 
 export type ClaudeAccountSelectionTarget = {
   runtime?: 'host' | 'wsl'

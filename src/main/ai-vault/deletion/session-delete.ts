@@ -3,13 +3,13 @@ import type {
   AiVaultDeleteSessionResult,
   AiVaultSessionDeleteRemoval
 } from '../../../shared/ai-vault/contracts/ai-vault-session-deletion'
-import { isPathInsideOrEqual } from '../../../shared/cross-platform-path'
+import { isPathInsideOrEqual } from '../../../shared/file-access/cross-platform-path'
 import {
   validateAiVaultSessionDeleteTarget,
   type ValidateAiVaultSessionDeleteTargetArgs
 } from './session-delete-target'
 import { tryDeleteWslUncPath, WslDeleteValidationError } from '../../wsl/filesystem/wsl-unc-delete'
-import { isENOENT } from '../../ipc/filesystem/access/filesystem-path-containment'
+import { isENOENT } from '../../filesystem/local-file-io/filesystem-path-containment'
 
 /** Desktop moves to Trash; a plain-Node host has none, so it removes permanently after the user confirmed. */
 export type AiVaultSessionPathRemover = (removal: AiVaultSessionDeleteRemoval) => Promise<void>

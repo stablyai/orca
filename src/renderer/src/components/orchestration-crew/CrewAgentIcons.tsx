@@ -6,7 +6,7 @@ import { cn } from '@/lib/class-names'
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { mapAgentStatusStateToVisualStatus } from '@/lib/agent-status/aggregation/worktree-agent-status'
 import { getWorktreeStatusLabel } from '@/lib/workspace/activity/worktree-status'
-import type { WorktreeStatus } from '../../../../shared/worktree-status-rollup'
+import type { WorktreeStatus } from '../../../../shared/worktree/row-display/worktree-status-rollup'
 import {
   useAgentMessageSenderViews,
   type AgentMessageSenderInput
@@ -18,7 +18,7 @@ import {
   isOrcaSessionId,
   formatOrcaSessionAddress
 } from '../../../../shared/agent-session/identity/orca-session-address'
-import type { AgentMessageSenderView } from '../../../../shared/agent-session/agent-message-presentation'
+import type { AgentMessageSenderView } from '../../../../shared/agent-session/view/messages/agent-message-presentation'
 import type { OrchestrationCrewRow } from '../../../../shared/orchestration/orchestration-crew'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 

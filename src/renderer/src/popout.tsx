@@ -14,7 +14,7 @@ import { applyCodeFontSmoothing } from './lib/editor/appearance/code-font-smooth
 import { I18nProvider } from './i18n/I18nProvider'
 import { useTranslate } from './i18n/use-translate'
 import { useAppStore } from './store/index'
-import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 import { getOrCreateRendererRoot } from './app-shell/startup/react-renderer-root'
 import { setReactCommitCascadeRendererSurface } from './diagnostics/react-commits/react-commit-cascade-telemetry'
 import { installOsFileDropCancellationGuard } from './lib/files/drop/os-file-drop-cancellation-guard'

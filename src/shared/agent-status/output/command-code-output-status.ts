@@ -4,8 +4,8 @@ import {
   isCommandCodeIdlePromptCandidate
 } from './command-code-prompt-text'
 import { stripTerminalControl } from '../../terminal/protocol/escape/terminal-control-stripping'
-import { escapeRegex } from '../../string-utils'
-import { ownRetainedString } from '../../own-retained-string'
+import { escapeRegex } from '../../text/regex-escaping'
+import { ownRetainedString } from '../../text/own-retained-string'
 
 type CommandCodeOutputStatusDetector = {
   observe: (data: string) => boolean

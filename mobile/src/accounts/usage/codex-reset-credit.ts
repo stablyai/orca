@@ -1,7 +1,7 @@
 import {
   buildCodexResetCreditExpectedScope,
   type CodexResetCreditExpectedScope
-} from '../../../../src/shared/codex-reset-credit-scope'
+} from '../../../../src/shared/agent-accounts/codex/codex-reset-credit-scope'
 import {
   codexResetCreditConsume,
   type MobileCodexResetCreditRpcSender,

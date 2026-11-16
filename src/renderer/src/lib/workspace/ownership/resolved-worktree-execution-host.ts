@@ -3,9 +3,12 @@ import {
   parseExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
-import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+} from '../../../../../shared/execution-host/execution-host'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
+import {
+  folderWorkspaceKey,
+  parseWorkspaceKey
+} from '../../../../../shared/workspace/identity/workspace-scope'
 import {
   findIndexedFolderWorkspaceOwner,
   findIndexedProjectGroupOwner

@@ -4,7 +4,11 @@ import {
   waitForDarwinTerminalNaming
 } from './darwin-terminal-naming-single-flight'
 import { loadLibprocAddon, type LibprocProcessRow, type LibprocQuery } from './libproc-addon'
-import { DEADLINE_PASSED, beforeDeadline, monotonicNow } from '../../deadline-settle-notifier'
+import {
+  DEADLINE_PASSED,
+  beforeDeadline,
+  monotonicNow
+} from '../../concurrency/deadline-settle-notifier'
 import {
   isNativeReaderHealthy,
   readFreshNativeTable,

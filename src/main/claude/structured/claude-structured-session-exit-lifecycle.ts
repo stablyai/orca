@@ -1,5 +1,5 @@
 import type { ClaudeStreamJsonConnection } from '../claude-stream-json-connection'
-import { withTimeout } from '../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 import {
   agentSessionFailureFact,
   providerDiagnosticOf
@@ -10,6 +10,7 @@ import {
   startupAcquisitionRefusal
 } from '../../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 import { providerSpawnAbsent } from '../../provider-process/provider-executable-missing'
+import { providerOutcomeLost } from '../../provider-process/provider-process-exit-status'
 import {
   claudeSessionHasTurnWork,
   settledClaudeTurnEndLeaf
@@ -161,15 +162,17 @@ export function settleClaudeUnexpectedExit(
       failure:
         exit.error instanceof ClaudePluginInputError
           ? exit.error.failure
-          : startupAcquisitionRefusal(exit.error) || providerSpawnAbsent(exit.error)
-            ? providerStartupFailureFact(exit.error)
-            : startupFailure
-              ? providerStartupFailureFact(startupFailure)
-              : providerExitObserved(exit.error)
-                ? agentSessionFailureFact('providerExited', {
-                    detail: providerDiagnosticOf(exit.error)
-                  })
-                : agentSessionFailureFact('hostFault'),
+          : providerOutcomeLost(exit.error)
+            ? agentSessionFailureFact('hostFault')
+            : startupAcquisitionRefusal(exit.error) || providerSpawnAbsent(exit.error)
+              ? providerStartupFailureFact(exit.error)
+              : startupFailure
+                ? providerStartupFailureFact(startupFailure)
+                : providerExitObserved(exit.error)
+                  ? agentSessionFailureFact('providerExited', {
+                      detail: providerDiagnosticOf(exit.error)
+                    })
+                  : agentSessionFailureFact('hostFault'),
       cause: 'unexpected-exit',
       ...(report instanceof AgentSessionAcquisitionRootExitObservedError &&
       report.deathEvidenceKind === 'kill-delivered'

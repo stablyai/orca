@@ -9,12 +9,13 @@ import {
   agentSessionAccountHomesEqual,
   type AgentSessionAccountHome
 } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
-import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
 import type { AiVaultConversationCopy } from '../../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import { resolveSessionFilePath } from '../../native-chat/session-file-resolver'
 import { resolveOmpSessionsDir } from '../../ai-vault/scanners/omp/omp-session-root'
 import { AcpRpcError } from '../transport/acp-errors'
 import { acpAgentName } from '../session/acp-structured-agent-definitions'
+import { acpClientInfo } from '../launch/acp-client-info'
 import type { AcpStructuredConnection } from '../process/acp-structured-connection'
 import type { AcpStructuredSessionAdapterDeps } from '../session/acp-structured-session-adapter-deps'
 
@@ -68,7 +69,7 @@ export async function copyAcpConversation(
           env: launch.env,
           envToDelete: launch.envToDelete
         },
-        { clientInfo: { name: 'orca', version: '1' } }
+        { clientInfo: acpClientInfo(launch.spec, launch.version ?? null) }
       )
       options.track(connection)
       const sessionId = await waitForPromiseWithSignal(

@@ -1,6 +1,6 @@
 import type { SpeechApi } from '../../../../preload/api/speech/speech-api'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { getDefaultVoiceSettings } from '../../../../shared/constants'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
+import { getDefaultVoiceSettings } from '../../../../shared/orca-profiles/constants'
 import type {
   SpeechErrorEvent,
   SpeechLifecycleEvent,
@@ -12,10 +12,10 @@ import {
   PCM_BYTES_PER_SAMPLE
 } from '../../../../shared/rpc-contract/speech/speech-params'
 import { encodeBase64Bytes } from '@/lib/base64-bytes'
-import { createNonSecureContextUuid } from '../../../../shared/non-secure-context-uuid'
-import { errorMessage } from '../../../../shared/error-message'
+import { createNonSecureContextUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
+import { errorMessage } from '../../../../shared/errors/error-message'
 import { callRuntimeResult } from './web-runtime-calls'
-import { withTimeout } from '../../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 import { pairedDictationFinishTimeoutMs } from '../../../../shared/speech/dictation/dictation-finish-deadlines'
 
 const MAX_CHUNK_SAMPLES = MAX_DICTATION_AUDIO_CHUNK_BYTES / PCM_BYTES_PER_SAMPLE

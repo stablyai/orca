@@ -1,7 +1,7 @@
 import {
   textGenerationFailure,
   type TextGenerationFailureFields
-} from '../../../shared/text-generation-failure-copy'
+} from '../../../shared/text-generation/text-generation-failure-copy'
 import type { CommitMessagePlan } from '../../../shared/source-control/ai/generation/commit-message-plan'
 import {
   commandLineLength,

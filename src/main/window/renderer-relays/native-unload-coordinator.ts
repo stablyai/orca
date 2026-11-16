@@ -3,7 +3,7 @@ import { ipcMain, type BrowserWindow, type WebContents } from 'electron'
 import {
   QUIT_RENDERER_ACK_TIMEOUT_MS,
   WILL_QUIT_TEARDOWN_DEADLINE_MS
-} from '../../../shared/quit-teardown-deadline'
+} from '../../../shared/app-lifecycle/shutdown/quit-teardown-deadline'
 
 type BeforeReload = (options: { webContentsId: number; ignoreCache: boolean }) => void
 /** saved: durable; failed: renderer refused (cancel); unreachable: reload as before; superseded: document already gone. */

@@ -9,8 +9,8 @@ import {
   isSafeExecutableBasename
 } from '../../../shared/agent-launch/installation/managed-agent-command-token'
 import type { ManagedAgentHookTarget } from '../../../shared/agent-hook-listener/configuration/managed-agent-hook-targets'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
-import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
+import { mapWithConcurrency } from '../../../shared/concurrency/map-with-concurrency'
 import {
   hydrateShellPath,
   mergePathSegments

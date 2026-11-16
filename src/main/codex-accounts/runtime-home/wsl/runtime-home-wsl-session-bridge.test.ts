@@ -6,7 +6,7 @@ import type * as CodexConfigMirror from '../../../codex/configuration/settings/c
 import type * as CodexHomePaths from '../../../codex/configuration/homes/codex-home-paths'
 import type * as LegacyWslRuntimeAuthDrain from '../../legacy-wsl-auth-drain/legacy-wsl-runtime-auth-drain'
 import type * as WslCodexAuthBatchReader from './wsl-codex-auth-batch-reader'
-import type * as WslCodexSessionBridge from '../../../codex/history/bridges/wsl-codex-session-bridge'
+import type * as WslCodexAccountHistory from '../../../codex/history/shared-store/wsl-codex-account-history'
 import { createSettings } from '../runtime-home-settings-test-fixtures'
 import {
   createCodexAuthJson,
@@ -143,10 +143,14 @@ describe('CodexRuntimeHomeService', () => {
       )
       // Launch-time sibling bridging is covered elsewhere; this pins only the drain's own target.
       vi.doMock(
-        '../../../codex/history/bridges/wsl-codex-session-bridge',
+        '../../../codex/history/shared-store/wsl-codex-account-history',
         async (importOriginal) => ({
-          ...(await importOriginal<typeof WslCodexSessionBridge>()),
-          startWslCodexSessionBridgeInBackground: vi.fn(() => Promise.resolve())
+          ...(await importOriginal<typeof WslCodexAccountHistory>()),
+          WslCodexAccountHistoryLaunches: class {
+            run(): Promise<void> {
+              return Promise.resolve()
+            }
+          }
         })
       )
       const retiredHome = join(guestHome, '.local', 'share', 'orca', 'codex-runtime-home', 'home')
@@ -219,7 +223,7 @@ describe('CodexRuntimeHomeService', () => {
         await Promise.all(drainTasks)
         expect(existsSync(linkedSessionPath)).toBe(false)
       } finally {
-        vi.doUnmock('../../../codex/history/bridges/wsl-codex-session-bridge')
+        vi.doUnmock('../../../codex/history/shared-store/wsl-codex-account-history')
         vi.doUnmock('../../../codex/configuration/settings/codex-config-mirror')
         vi.doUnmock('../../../codex/configuration/homes/codex-home-paths')
         vi.doUnmock('../../legacy-wsl-auth-drain/legacy-wsl-runtime-auth-drain')

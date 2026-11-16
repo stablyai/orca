@@ -5,8 +5,8 @@ import type {
   AgentStatusState,
   AgentType
 } from '../../../../../shared/agent-status/contracts/agent-status-types'
-import { tabHasLivePty } from '../../../../../shared/tab-has-live-pty'
-import type { WorktreeStatus } from '../../../../../shared/worktree-status-rollup'
+import { tabHasLivePty } from '../../../../../shared/workspace-layout/terminal-surfaces/tab-has-live-pty'
+import type { WorktreeStatus } from '../../../../../shared/worktree/row-display/worktree-status-rollup'
 import { tuiAgentToAgentKind } from '../../../../../shared/agent-status/identity/agent-kind'
 import { agentTypeToIconAgent } from '../../../../../shared/agent-status/presentation/agent-type-icon-agent'
 import type { AgentKind } from '../../../../../shared/telemetry/schemas/telemetry-property-schemas'

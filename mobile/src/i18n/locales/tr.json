@@ -114,11 +114,7 @@
       "codeNoLongerValid": "Bu eşleştirme kodunun süresi doldu, kod zaten kullanıldı veya değiştirildi. Bilgisayarınızda yeni bir kod gösterip tekrar tarayın."
     },
     "terminalSettings": {
-      "defaultText": "Varsayılan (%100)",
       "keepPhoneSize": "Telefon boyutunda tut (varsayılan)",
-      "largeText": "Büyük (%125)",
-      "largerText": "Daha büyük (%150)",
-      "largestText": "En Büyük (%200)",
       "leaveAppDescription": "Telefonunuzda terminal kullanırken Orca, terminali ekranınıza sığacak şekilde küçültür. Uygulamayı kapattığınızda veya başka bir uygulamaya geçtiğinizde bu ayar, terminalin telefon boyutunda kalmasını (etkileşimli CLI araçlarının düzeninin değişmemesi için) ya da masaüstü boyutuna geri dönmesini belirler. Boyutu elle değiştirmek için masaüstündeki bildirim çubuğunda Geri yükle seçeneğini her zaman kullanabilirsiniz.",
       "leaveAppHeading": "UYGULAMADAN AYRILDIĞINIZDA",
       "noPairedDesktops": "Henüz eşleştirilmiş masaüstü yok. Terminal davranışını ayarlamak için bir masaüstü eşleştirin.",
@@ -127,12 +123,6 @@
       "restoreAfterSeconds_one": "{{count}} sn sonra",
       "restoreAfterSeconds_other": "{{count}} sn sonra",
       "restoreHost": "{{name}} için geri yükleme",
-      "smallerText": "Daha küçük (%75)",
-      "smallestText": "En küçük (%50)",
-      "textSize": "Metin boyutu",
-      "textSizeDescription": "Terminal metninin boyutunu ayarlayın. Küçük boyutlarda, kenarlarda boşluk kalacak şekilde daha fazla sütun sığar; büyük boyutlarda daha az sütun görünür — yatay kaydırmak için yana sürükleyin. Terminalde iki parmakla yakınlaştırma da yapabilirsiniz; bu işlem bu ayarı günceller. Yalnızca bu cihazdaki görünümü etkiler; masaüstü terminalini değiştirmez.",
-      "textSizeHeading": "METİN BOYUTU",
-      "textSizePickerTitle": "Terminal metin boyutu",
       "title": "Terminal"
     }
   },
@@ -249,6 +239,7 @@
     "message": {
       "copyMessage": "Mesajı kopyala",
       "forkFromResponse": "Bu yanıttan çatalla",
+      "scrollMessageToTop": "Bu mesajı yukarı kaydır",
       "forkFromResponseHint": "Bu yanıtın tamamını turun sonuna kadar içeren yeni bir sohbet"
     },
     "messageActionsSheet": {
@@ -2828,12 +2819,14 @@
       "title": "Görünüm"
     },
     "browserSettingsScreen": {
+      "askEachTime": "Her seferinde sor",
+      "askEachTimeDescription": "Her seferinde Orca tarayıcısı, telefon tarayıcısı veya bağlantıyı kopyalama arasında seçim yapın.",
       "desktopBrowser": "Masaüstündeki Orca tarayıcısı",
       "desktopBrowserDescription": "Eşleştirdiğiniz masaüstü bilgisayardan aktarılan tarayıcıda açın.",
-      "linksDescription": "Terminal çıktısında dokunduğunuz HTTP(S) bağlantılarının nerede açılacağını seçin.",
+      "terminalAndChatLinksDescription": "Terminal çıktısında ve sohbette dokunduğunuz web bağlantılarının nerede açılacağını seçin.",
       "linksHeading": "BAĞLANTILAR",
       "loadFailed": "Tarayıcı tercihleri yüklenemedi. Yeniden deneyin.",
-      "openTerminalLinks": "Terminal bağlantılarını aç",
+      "openLinks": "Bağlantıları aç",
       "phoneBrowser": "Telefon tarayıcısı",
       "phoneBrowserDescription": "Bu telefondaki Safari, Chrome veya başka bir tarayıcıda açın.",
       "saveFailed": "Tarayıcı tercihleri kaydedilemedi. Yeniden deneyin.",

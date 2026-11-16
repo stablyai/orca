@@ -1,6 +1,6 @@
 import { ipcMain, type WebContents } from 'electron'
 import { z } from 'zod'
-import { errorMessage } from '../../shared/error-message'
+import { errorMessage } from '../../shared/errors/error-message'
 import { panelSessionTokenSchema } from '../../shared/plugins/frames/plugin-frame-bridge'
 import type { PluginHostCallOutcome } from '../../shared/plugins/frames/plugin-protocol'
 import { PLUGIN_PANEL_REQUEST_MAX_TIMEOUT_MS } from '../../shared/plugins/workers/plugin-panel-bridge-protocol'

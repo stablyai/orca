@@ -2,12 +2,12 @@
   "accounts": {
     "claude": {
       "switchSessions": {
-        "body_one": "{{count}} Claude session is still running on {{previous}}. Restarting continues the conversation on {{next}}. Busy sessions wait for idle before restarting.",
-        "body_other": "{{count}} Claude sessions are still running on {{previous}}. Restarting continues each conversation on {{next}}. Busy sessions wait for idle before restarting.",
+        "body_one": "{{count}} Claude session is still running on {{previous}}. Restarting continues the conversation on {{next}}. Busy sessions stop their current work and restart now.",
+        "body_other": "{{count}} Claude sessions are still running on {{previous}}. Restarting continues each conversation on {{next}}. Busy sessions stop their current work and restart now.",
         "restartCount_one": "Restart {{count}} session",
         "restartCount_other": "Restart {{count}} sessions",
-        "reviewBody_one": "{{count}} other Claude session wasn't moved to {{next}}.",
-        "reviewBody_other": "{{count}} other Claude sessions weren't moved to {{next}}."
+        "reviewBody_one": "{{count}} Claude session wasn't moved to {{next}}.",
+        "reviewBody_other": "{{count}} Claude sessions weren't moved to {{next}}."
       }
     },
     "hostSignIn": {
@@ -330,6 +330,8 @@
       },
       "github": {
         "PRFilterSections": {
+          "authorCount_one": "{{count}} author",
+          "authorCount_other": "{{count}} authors",
           "labelCount_one": "{{count}} label",
           "labelCount_other": "{{count}} labels"
         },
@@ -1606,6 +1608,11 @@
     }
   },
   "components": {
+    "RepositoryBrowserProfileSection": {
+      "keywordCookies": "cookies",
+      "keywordProfile": "browser profile",
+      "keywordSignIn": "sign in"
+    },
     "native-chat": {
       "approval": {
         "allow": "Allow",
@@ -1844,6 +1851,16 @@
         "settingsUnconfirmed": "Codex did not confirm the selected model and effort. This goal change was not sent. Check the chat and try again.",
         "stopUnconfirmed": "Codex could not confirm Stop. Check the chat before continuing."
       },
+      "mcp": {
+        "status": {
+          "tools_one": "{{count}} tool",
+          "tools_other": "{{count}} tools"
+        },
+        "summary": {
+          "needsAuth_one": "{{count}} needs sign-in",
+          "needsAuth_other": "{{count}} need sign-in"
+        }
+      },
       "notices": {
         "compaction": "Context compacted",
         "contextCleared": "Context cleared",
@@ -1861,6 +1878,10 @@
         "orcaStopUnnamedServer": "the remote server",
         "orcaStopUpdate": "Orca on {{machine}} restarted for an update while this response was in progress.",
         "plan": "Plan",
+        "restartContinueRefused": "Orca couldn't continue this chat after the restart. Send a message to continue it.",
+        "restartContinueUnconfirmed": "Orca asked this agent to continue after the restart but couldn't confirm it did. Check its latest reply before sending another message.",
+        "restartContinued": "Orca asked this agent to continue after a restart. Your own prompt was not re-sent.",
+        "restartNotConnected": "Orca couldn't reconnect this chat after the restart, so it didn't ask the agent to continue.",
         "stoppedBeforeStart": "Stopped manually"
       },
       "openedPullRequests": {
@@ -2192,6 +2213,12 @@
         }
       },
       "delete": {
+        "ignoredFiles": {
+          "lost_one": "{{count}} ignored file will be lost",
+          "lost_other": "{{count}} ignored files will be lost",
+          "morePaths_one": "and {{count}} more ignored path",
+          "morePaths_other": "and {{count}} more ignored paths"
+        },
         "unsavedEdits": {
           "blocked_one": "Save or close {{count}} unsaved file in {{name}} first",
           "blocked_other": "Save or close {{count}} unsaved files in {{name}} first",
@@ -2288,6 +2315,10 @@
       "linkedCount_one": "{{count}} workspace linked to {{key}}",
       "linkedCount_other": "{{count}} workspaces linked to {{key}}"
     }
+  },
+  "languages": {
+    "pluginsDisabledCount_one": "{{count}} community translation needs plugins turned on.",
+    "pluginsDisabledCount_other": "{{count}} community translations need plugins turned on."
   },
   "localBuild": {
     "liveTerminals_one": "{{count}} live terminal will reconnect after restart.",
@@ -2493,6 +2524,22 @@
         "passphraseRequired": "Cannot parse privateKey: Encrypted private OpenSSH key detected, but no passphrase given",
         "permissionDenied": "Permission denied",
         "permissionDeniedPublickey": "Permission denied (publickey)"
+      }
+    },
+    "uninstall": {
+      "rows": {
+        "agents_one": "Hooks in 1 agent",
+        "agents_other": "Hooks in {{count}} agents",
+        "hostCount_one": "1 host",
+        "hostCount_other": "{{count}} hosts"
+      },
+      "summary": {
+        "agents_one": "hooks in 1 agent",
+        "agents_other": "hooks in {{count}} agents",
+        "hosts_one": "1 SSH host",
+        "hosts_other": "{{count}} SSH hosts",
+        "problems_one": "1 item needs you before you delete the app.",
+        "problems_other": "{{count}} items need you before you delete the app."
       }
     }
   },

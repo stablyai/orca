@@ -3,7 +3,7 @@ import { useBottomDrawerFollowUp } from '../../components/bottom-drawer/use-bott
 import type { RouteAndItemStateModel } from '../screen-state/use-mobile-tasks-route-and-item-state'
 import type { WorkspaceSshRecord } from '../../new-workspace/creation/workspace-ssh-gate'
 import { useProjectRowCommentDraft, useTaskCommentDraft } from '../item-detail/task-draft-rows'
-import type { BaseRefSearchResult } from '../../../../src/shared/repo-types'
+import type { BaseRefSearchResult } from '../../../../src/shared/repository/repo-types'
 import type {
   GitHubProjectPartialFailure,
   GitHubProjectSettings,
@@ -11,7 +11,7 @@ import type {
   GitHubProjectViewSummary
 } from './github-project-reference'
 import type { GitHubProjectIdentity as GitHubProjectRef } from '../../../../src/shared/github/projects/project-identity'
-import type { PersistedTrustedOrcaHooks } from '../../../../src/shared/orca-yaml-hook-types'
+import type { PersistedTrustedOrcaHooks } from '../../../../src/shared/workspace-setup/orca-yaml-hook-types'
 import type { SparsePreset } from '../../../../src/shared/worktree/create-types'
 import type { WorkspaceAgentChoice } from '../../new-workspace/creation/workspace-agent-selection'
 import type {

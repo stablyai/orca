@@ -2,7 +2,7 @@
 
 import { translate } from '@/i18n/i18n'
 import { readIpcErrorDetail } from '@/runtime/errors/ipc-error'
-import { isClipboardTextTooLargeError } from '../../../../../../shared/clipboard-text'
+import { isClipboardTextTooLargeError } from '../../../../../../shared/clipboard/clipboard-text'
 
 export type NativeChatComposerNoticeContent = {
   text: string

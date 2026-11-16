@@ -1,6 +1,6 @@
 import type { AppState } from '@/store/types'
 import type { RuntimeMobileSessionBrowserTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
-import type { Tab } from '../../../../shared/tab-types'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import { editorRowHost } from '../../../../shared/workspace-session/session-tab-file-host'
 import { remoteTabFaviconUrl } from '../../../../shared/browser/browser-favicon-url'
 import type { MobileSessionWorktreeInputs } from './types'

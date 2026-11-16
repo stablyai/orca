@@ -39,7 +39,7 @@ export function collectSleepingAgentSessionRecordsForWorktree(
       state.sleepingAgentSessionsByPaneKey,
       worktreeId
     )) {
-      const liveEntry = state.agentStatusByPaneKey[existing.paneKey]
+      const liveEntry = state.agentStatusByPaneKey.get(existing.paneKey)
       if (
         existing.worktreeId !== worktreeId ||
         existing.origin !== 'live' ||
@@ -62,7 +62,7 @@ export function collectSleepingAgentSessionRecordsForWorktree(
     }
   }
 
-  for (const [paneKey, entry] of Object.entries(state.agentStatusByPaneKey)) {
+  for (const [paneKey, entry] of Array.from(state.agentStatusByPaneKey.entries())) {
     if (allowedPaneKeys && !allowedPaneKeys.has(paneKey)) {
       continue
     }

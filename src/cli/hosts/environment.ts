@@ -9,7 +9,7 @@ import {
   LOCAL_HOST_LIST_NAME,
   type SshTargetSummary
 } from './host-selector-alternatives'
-import { normalizeTypedName } from '../../shared/typed-name-normalization'
+import { normalizeTypedName } from '../../shared/text/typed-name-normalization'
 import { getDefaultUserDataPath } from '../runtime/profile/metadata'
 import { RuntimeClientError } from '../runtime/connection/types'
 import type { RuntimeClient } from '../runtime/client'
