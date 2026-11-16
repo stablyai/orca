@@ -288,6 +288,10 @@ it('keeps only what an older Orca wrote after a file from before revisions were 
     .prepare('INSERT INTO agent_session_records VALUES(?,?)')
     .run('empty', JSON.stringify({ sessionId: 'empty', lease: { sessionId: 'empty' } }))
   original.prepare("DELETE FROM agent_session_tabs WHERE session_id!='open'").run()
+  // As every older Orca that saves tabs leaves its index.
+  original
+    .prepare("INSERT INTO agent_session_store_meta VALUES('session_tabs_recorded','1')")
+    .run()
   const first = await upgrade(root)
   expect(await first.convert('idle')).toBe('epoch')
   expect(await first.convert('converted')).toBe('epoch')

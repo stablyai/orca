@@ -161,16 +161,13 @@ function absorbChat(
   const chat = db.prepare('SELECT epoch FROM journal_chat_state WHERE session_id=?').get(id)
   const converted = chat?.epoch !== null && chat?.epoch !== undefined
   // A file copied before revisions were kept has none to compare. An original as copied wrote
-  // nothing since; otherwise a chat this file holds but hasn't converted converts from the current
-  // original, so nothing is hidden. Its copy cataloged every chat with history, so one it doesn't
-  // know is new, unless it has none: then it may have been deleted here.
+  // nothing since; otherwise a chat this file cataloged but hasn't converted converts from the
+  // current original, so nothing is hidden. The copy cataloged every chat with history, so one it
+  // didn't is new, unless it has none: then it may have been deleted here.
   if (
     shown === undefined &&
     (!pass.changed ||
-      (!converted &&
-        (chat !== undefined ||
-          (!pass.kept && revision === 'null') ||
-          db.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?').get(id))))
+      (!converted && (chat !== undefined || (!pass.kept && revision === 'null'))))
   ) {
     pass.baselines.push([id, revision])
     return
