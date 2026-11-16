@@ -11,7 +11,6 @@ import { readJournalDomainSubmissionBody } from './journal-domain-submission-rec
 import type { JournalHistoryOrigin } from './context-epochs/journal-history-origin'
 import type { JournalLatestStop } from './context-epochs/journal-stop-turn-end'
 import { providerTimelineKeyPart } from '../agent-session-timeline/provider-timeline-identity'
-import { codexJournalThreadKeyPrefix } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 
 export type JournalDomainEntityRead = Extract<
   JournalSqlPointRead['operation'],
@@ -52,9 +51,8 @@ export function readJournalDomainEntity(
   switch (operation.kind) {
     case 'provider-turn-in-namespace': {
       const prefixKey = `p:${providerTimelineKeyPart(operation.namespace)}:`
-      // Codex rows name their thread in columns, a turn row through its opening user item; an
-      // accepted send proves Codex saw the thread too.
-      const codexPrefix = codexJournalThreadKeyPrefix(operation.namespace)
+      // Codex rows name their thread in columns and an accepted send proves Codex saw the thread.
+      // A turn row (whose opener may be Orca's own send) counts when written since `sinceFence`.
       return {
         kind: operation.kind,
         present:
@@ -66,8 +64,8 @@ export function readJournalDomainEntity(
           WHERE session_id=? AND epoch=? AND hidden=0 AND codex_thread_id=? AND codex_turn_id IS NOT NULL
           UNION ALL SELECT 1 FROM journal_submission_attempts INDEXED BY journal_submission_codex_turn
           WHERE session_id=? AND epoch=? AND current=1 AND dispatch_state='accepted' AND codex_thread_id=?
-          UNION ALL SELECT 1 FROM journal_items INDEXED BY journal_items_opener
-          WHERE session_id=? AND epoch=? AND hidden=0 AND opener_item_id>=? AND opener_item_id<?
+          UNION ALL SELECT 1 FROM journal_items INDEXED BY journal_items_kind
+          WHERE session_id=? AND epoch=? AND hidden=0 AND kind='turn' AND owner_fence>=?
           LIMIT 1`)
             .get(
               ...prefix,
@@ -78,8 +76,7 @@ export function readJournalDomainEntity(
               ...prefix,
               operation.namespace,
               ...prefix,
-              codexPrefix,
-              `${codexPrefix.slice(0, -1)};`
+              operation.sinceFence ?? null
             ) !== undefined
       }
     }

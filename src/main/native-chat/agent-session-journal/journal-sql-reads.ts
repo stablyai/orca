@@ -41,7 +41,7 @@ export type JournalSqlReads = AgentSessionJournalReads & {
   namingPrompt(hostStartedAt?: number): Promise<string>
   automationRun(messageId: string, inputIds: readonly string[]): Promise<AgentJournalSnapshot>
   historySourceItems(clientMessageIds: readonly string[]): Promise<AgentJournalRenderItem[]>
-  hasProviderTurn(nativeId: string): Promise<boolean>
+  hasProviderTurn(nativeId: string, sinceFence?: number): Promise<boolean>
   savedItemIds(itemIds: readonly string[]): Promise<string[]>
   forkMarkerGroup(
     boundary: AgentSessionForkedFrom['childBoundary'],
@@ -135,8 +135,14 @@ export function journalSqlReads(
       }
       return items
     },
-    hasProviderTurn: async (namespace) =>
-      (await read({ kind: 'provider-turn-in-namespace', namespace })).present,
+    hasProviderTurn: async (namespace, sinceFence) =>
+      (
+        await read({
+          kind: 'provider-turn-in-namespace',
+          namespace,
+          ...(sinceFence !== undefined ? { sinceFence } : {})
+        })
+      ).present,
     savedItemIds: async (itemIds) => (await read({ kind: 'saved-item-ids', itemIds })).itemIds,
     forkMarkerGroup: async (boundary, previousSequence) =>
       (await read({ kind: 'fork-marker-group', boundary, previousSequence })).snapshot,

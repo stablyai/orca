@@ -164,10 +164,16 @@ export function codexStructuredLaunchPart(
       })
     }
     // Codex saves a thread at its first turn; one that exchanged a turn lost its history, not nothing.
+    // Turns written since this thread's creation fence ran on it, even before Codex echoed the send.
     const supersedeIfUnsaved =
       resumeThreadId !== null &&
       head?.origin === 'created' &&
-      (await nothingExchangedOn(deps.savedSession, record.sessionId, resumeThreadId))
+      (await nothingExchangedOn(
+        deps.savedSession,
+        record.sessionId,
+        resumeThreadId,
+        head.mintedAtFence
+      ))
     return {
       launch: {
         command,

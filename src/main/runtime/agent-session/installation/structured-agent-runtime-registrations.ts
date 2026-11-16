@@ -44,8 +44,8 @@ import type {
 function savedProviderTurns(context: StructuredAgentAdapterContext): SavedProviderTurnReads {
   const { readers } = context.journalDatabase
   return {
-    hasProviderTurn: (sessionId, nativeId) =>
-      journalSqlReads(readers, sessionId).hasProviderTurn(nativeId)
+    hasProviderTurn: (sessionId, nativeId, sinceFence) =>
+      journalSqlReads(readers, sessionId).hasProviderTurn(nativeId, sinceFence)
   }
 }
 

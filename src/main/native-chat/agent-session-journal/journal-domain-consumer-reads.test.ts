@@ -571,12 +571,14 @@ it('counts a Codex thread as exchanged once it has a turn row or an accepted sen
     body: agentJournalTurnBody({
       turnId: 'turn-3',
       state: 'running',
-      userItemId: 'codex:thread-started:turn-3:0'
+      // Codex replied to turn/start before echoing the send, so Orca's send opens the turn.
+      userItemId: 'orca:send'
     }),
     options
   })
   expect(await reads.hasProviderTurn('thread-replied')).toBe(true)
   expect(await reads.hasProviderTurn('thread-sent')).toBe(true)
-  expect(await reads.hasProviderTurn('thread-started')).toBe(true)
   expect(await reads.hasProviderTurn('thread-other')).toBe(false)
+  expect(await reads.hasProviderTurn('thread-other', 1)).toBe(true)
+  expect(await reads.hasProviderTurn('thread-other', 2)).toBe(false)
 })

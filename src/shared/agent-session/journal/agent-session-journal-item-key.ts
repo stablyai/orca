@@ -118,11 +118,6 @@ export function agentJournalItemKey(identity: AgentJournalItemIdentity): string 
   ].join(KEY_DELIMITER)
 }
 
-/** Every Codex item key on `threadId` starts with this; a range scan finds the thread's rows. */
-export function codexJournalThreadKeyPrefix(threadId: string): string {
-  return ['codex', encodePart(threadId), ''].join(KEY_DELIMITER)
-}
-
 /** Key for the pre-dispatch submission placeholder, before any provider echo. */
 export function agentJournalSubmissionKey(clientMessageId: string): string {
   return agentJournalItemKey({ provider: 'orca', clientMessageId })
