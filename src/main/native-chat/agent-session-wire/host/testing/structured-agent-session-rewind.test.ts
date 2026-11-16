@@ -143,7 +143,7 @@ async function attachAndStart(fence: number | null) {
 }
 
 /** The start runs after attach returns and applies a pending rewind before its child is ready;
- *  a start that fails drops the child. Both publish status after the child's 'starting'. */
+ *  a start that fails drops the child. Both publish status after the new child's 'starting'. */
 function startupSettled(): Promise<void> {
   const { promise, resolve } = Promise.withResolvers<void>()
   let starting = false
@@ -154,9 +154,10 @@ function startupSettled(): Promise<void> {
         return
       }
       const phase = event.session.hostExecutionPhase
+      // Only a status after this start's 'starting' counts; an earlier child's 'ready' can still arrive.
       if (phase === 'starting') {
         starting = true
-      } else if (phase === 'ready' || starting) {
+      } else if (starting) {
         resolve()
       }
     }
