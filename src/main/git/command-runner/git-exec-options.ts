@@ -48,3 +48,27 @@ export type GitBufferExecOptions = {
   signal?: AbortSignal
   stdin?: string
 }
+
+/** Result of a streamed git command; `stoppedEarly` is true when onStdout asked to stop before the child exited. */
+export type GitStreamResult = { stoppedEarly: boolean }
+
+export type GitStreamOptions = {
+  cwd: string
+  env?: NodeJS.ProcessEnv
+  wslDistro?: string
+  /** Runs the host's Git even in a WSL-runtime project (local-git-runtime-route.ts); say why. */
+  hostGit?: true
+  preferWslDirectGit?: boolean
+  signal?: AbortSignal
+  /** Byte backstop; defaults to DEFAULT_GIT_MAX_BUFFER. */
+  maxBuffer?: number
+  /** Independent stderr cap for parsers that stream an arbitrarily large population. */
+  maxStderrBuffer?: number
+  /** Explicit wall-clock deadline; read commands default to the production backstop. */
+  timeoutMs?: number
+  /** Overrides only the default read deadline in tests. */
+  timeoutMsForTest?: number
+  admissionTier?: GitAdmissionTier
+  /** Return true to kill the child and resolve with stoppedEarly=true. */
+  onStdout: (chunk: string) => boolean | void
+}

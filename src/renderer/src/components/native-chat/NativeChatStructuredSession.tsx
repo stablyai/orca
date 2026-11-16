@@ -304,7 +304,6 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
               messages={controller.messages}
               view={continuation.view}
             >
-              {/* Inside the stop view, so its Fork windows know the chat hit a usage limit. */}
               <NativeChatRowActionsProvider pane={props} chat={controller} forks={forks}>
                 <NativeChatHostSetupContext.Provider value={setup}>
                   <NativeChatWorkerApprovalTimeline party={workerApprovalParty}>
@@ -372,6 +371,8 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
               isVisible={props.isVisible}
               turnId={controller.turnId}
               workingStartedAt={controller.workingStartedAt}
+              target={props.target}
+              focusComposer={focusComposer}
             />
           )}
           {composerShown || subagentOpen ? null : <NativeChatPromptSlotNotices notices={notices} />}

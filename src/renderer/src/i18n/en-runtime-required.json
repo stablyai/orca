@@ -330,10 +330,10 @@
       },
       "github": {
         "PRFilterSections": {
-          "labelCount_one": "{{count}} label",
-          "labelCount_other": "{{count}} labels",
           "authorCount_one": "{{count}} author",
-          "authorCount_other": "{{count}} authors"
+          "authorCount_other": "{{count}} authors",
+          "labelCount_one": "{{count}} label",
+          "labelCount_other": "{{count}} labels"
         },
         "project": {
           "ProjectPicker": {
@@ -1850,6 +1850,16 @@
         "settingsRejected": "Codex could not apply the selected model and effort. This goal change was not sent. Check the selection and try again.",
         "settingsUnconfirmed": "Codex did not confirm the selected model and effort. This goal change was not sent. Check the chat and try again.",
         "stopUnconfirmed": "Codex could not confirm Stop. Check the chat before continuing."
+      },
+      "mcp": {
+        "status": {
+          "tools_one": "{{count}} tool",
+          "tools_other": "{{count}} tools"
+        },
+        "summary": {
+          "needsAuth_one": "{{count}} needs sign-in",
+          "needsAuth_other": "{{count}} need sign-in"
+        }
       },
       "notices": {
         "compaction": "Context compacted",

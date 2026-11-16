@@ -16,7 +16,6 @@ import type { TuiAgent } from '../../../../../src/shared/agent-launch/catalog/tu
 import type { StructuredAgentSessionForkSource } from '../../../../../src/shared/agent-session/structured-agent-session-create'
 import type { StructuredAgentSessionHostCapabilityState } from '../../../../../src/shared/agent-session/structured-agent-session-host-capability'
 import type { ChatForkPreset } from '../../chat-fork/chat-fork-selection'
-import { useRegisteredAgent } from './use-mobile-registered-fork-agent'
 import {
   nativeChatForkInventory,
   nativeChatForkSupport,
@@ -30,6 +29,7 @@ import {
   type NativeChatTurnJournal
 } from '../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-membership'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
+import { useMobileRegisteredAgent } from '../agent-session/use-mobile-registered-agent'
 
 /** The fork a response offers: none, an empty held slot, drawn disabled, or pressable. */
 export type MobileNativeChatForkOffer = 'hidden' | 'reserved' | 'disabled' | 'available'
@@ -110,7 +110,7 @@ export function useMobileNativeChatFork(input: {
       : input.hostCapabilities.includes(AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY)
         ? 'supported'
         : 'unsupported'
-  const registered = useRegisteredAgent(input.client, host, input.agent)
+  const registered = useMobileRegisteredAgent(input.client, host === 'supported', input.agent)
   const support = useMemo(
     () => nativeChatForkSupport(host, registered, input.sessionForkSupport, inheritedOriginal),
     [host, registered, input.sessionForkSupport, inheritedOriginal]

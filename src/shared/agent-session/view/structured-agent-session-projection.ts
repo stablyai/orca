@@ -225,12 +225,11 @@ export function projectStructuredAgentSessionStatus(
   scope?: StructuredAgentSessionWorkScope
 ): StructuredAgentSessionProjectedStatus {
   ;({ items, submissions } = agentSessionCurrentContextRows(items, submissions))
-  if (items.some(pendingStructuredAgentSessionPrompt(scope))) {
-    return 'attention'
-  }
-  return owesStructuredAgentSessionWork(items, submissions, currentFence, scope)
-    ? 'working'
-    : 'idle'
+  return items.some(pendingStructuredAgentSessionPrompt(scope))
+    ? 'attention'
+    : owesStructuredAgentSessionWork(items, submissions, currentFence, scope)
+      ? 'working'
+      : 'idle'
 }
 
 /** Name sidebar activity fields like agent-status entries for direct row consumption. */

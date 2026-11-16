@@ -31,6 +31,7 @@ export function stageProjectionTopology(
     )
   )
   const changedTabs = new Set<string>()
+  const bindingTabs = new Set<string>()
   const acceptedKeys = new Set(changes.map((change) => change.paneKey))
   const changedKeys = new Set([...acceptedKeys, ...refreshKeys])
   const nextTabs = new Map<string, TerminalTab | null>()
@@ -52,6 +53,7 @@ export function stageProjectionTopology(
         nextTabs.set(tab.id, null)
         nextTabOwners.set(tab.id, null)
         changedTabs.add(tab.id)
+        bindingTabs.add(tab.id)
       }
       for (const tab of state.tabsByWorktree[owner] ?? []) {
         if (diff?.kind === 'addressed' && !diff.tabIds.has(tab.id)) {
@@ -60,6 +62,7 @@ export function stageProjectionTopology(
         nextTabs.set(tab.id, tab)
         nextTabOwners.set(tab.id, owner)
         changedTabs.add(tab.id)
+        bindingTabs.add(tab.id)
       }
     }
   }
@@ -113,6 +116,9 @@ export function stageProjectionTopology(
       ? diff.keys
       : new Set([...Object.keys(previous?.[field] ?? {}), ...Object.keys(state[field] ?? {})])) {
       changedTabs.add(tab)
+      if (field !== 'runtimePaneTitlesByTabId' && state[field][tab] !== previous?.[field][tab]) {
+        bindingTabs.add(tab)
+      }
     }
   }
   for (const field of [
@@ -205,6 +211,7 @@ export function stageProjectionTopology(
     previous,
     moved,
     changedTabs,
+    bindingTabs,
     acceptedKeys,
     changedKeys,
     nextTabs,

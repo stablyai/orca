@@ -1,6 +1,6 @@
 import { discoverAndroidSdkFromHost } from './android-sdk-host-discovery'
 import { EmulatorError } from '../emulator-errors'
-import { emulatorFailureText } from '../../../shared/emulator-failure-copy'
+import { emulatorFailureText } from '../../../shared/emulator/emulator-failure-copy'
 import type { AndroidSdkPaths } from './android-sdk-discovery'
 
 // Rediscover host SDKs per call so installs and settings changes work without restarting.

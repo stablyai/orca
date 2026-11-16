@@ -104,8 +104,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/shared/workspace-session/workspace-session-salvage.test.ts',
   'src/main/git/repositories/discovery/repo-detection.test.ts',
   'src/main/native-chat/paste-files/native-chat-paste-files.test.ts',
-  'src/main/computer/desktop-script/runtime-host/desktop-script-serve-channel.test.ts',
-  'src/main/providers/working-directory/validation.test.ts',
   'src/main/pty/process-retirement/posix-pty-process-groups.integration.test.ts',
   'src/shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-output-capture.test.ts',
   'src/main/native-chat/agent-session-journal/**/*.test.ts',

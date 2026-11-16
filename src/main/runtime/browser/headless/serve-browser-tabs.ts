@@ -124,6 +124,18 @@ export class ServeBrowserTabs {
     return found ? this.restore(found) : false
   }
 
+  /** Whether the page's tab is saved, so a freed page can start again from it. */
+  isSaved(page: { browserPageId: string; worktreeId: string }): boolean {
+    return this.startableIn(page.worktreeId).some((saved) => saved.pageId === page.browserPageId)
+  }
+
+  /** The workspace whose saved tab shows the page, for a close that names only the page. */
+  savedWorktreeOf(pageId: string): string | undefined {
+    return [...this.deps.savedWorktreeIds()].find((id) =>
+      this.isSaved({ browserPageId: pageId, worktreeId: id })
+    )
+  }
+
   /** Whether a saved tab could register once a window mounts it; every worktree's when none is named. */
   hasStartable(worktreeId: string | undefined): boolean {
     const worktreeIds = worktreeId ? [worktreeId] : this.deps.savedWorktreeIds()

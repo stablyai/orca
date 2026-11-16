@@ -8,7 +8,7 @@ import {
   type SetStateAction
 } from 'react'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
-import { appendReturnedDraftText } from '../../../../../../src/shared/returned-draft-text'
+import { appendReturnedDraftText } from '../../../../../../src/shared/native-chat/input/drafts/returned-draft-text'
 import {
   findLandedImagePreviewEchoes,
   mergeSentImagePreviews,

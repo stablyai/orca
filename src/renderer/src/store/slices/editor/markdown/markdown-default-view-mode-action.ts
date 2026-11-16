@@ -5,7 +5,7 @@ import type { GlobalSettings } from '../../../../../../shared/global-settings-ty
 import {
   normalizeMarkdownDefaultViewMode,
   type MarkdownDefaultViewMode
-} from '../../../../../../shared/markdown-default-view-mode'
+} from '../../../../../../shared/editor/markdown/markdown-default-view-mode'
 
 type MarkdownDefaultViewModeState = Pick<AppState, 'openFiles' | 'markdownViewMode'> & {
   settings: Pick<GlobalSettings, 'markdownDefaultViewMode'> | null
