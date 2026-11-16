@@ -34,7 +34,7 @@ import { agentPickerBlankTerminalMatches } from '@/lib/agent-catalog/agent-picke
 import {
   agentLaunchSetupSummary,
   rememberPickedAgentModel,
-  usePickedAgentModelsVersion
+  usePickedAgentModel
 } from './agent-launch-setup-state'
 import { useAgentLaunchPickerInventory } from './use-agent-launch-picker-inventory'
 import {
@@ -170,7 +170,6 @@ export const AgentLaunchPicker = memo(
         onCatalogOpen?.(catalogAgent)
       }
     }, [catalogAgent, onCatalogOpen])
-    const pickedModelsVersion = usePickedAgentModelsVersion()
     const pick = useCallback<typeof onPick>(
       (picked, next, from, surface) => {
         if (next && from) {
@@ -190,15 +189,16 @@ export const AgentLaunchPicker = memo(
     // render, the summary rebuilds the agent's model catalog, and its labels are translated.
     const summaryKey =
       entry && draft && !setupDisabled && triggerLabel === undefined
-        ? JSON.stringify([languageRevision, pickedModelsVersion, draft])
+        ? JSON.stringify([languageRevision, draft])
         : null
+    const pickedModel = usePickedAgentModel(entry, draft?.choices.model)
     const summary = useMemo(() => {
       if (!entry || !summaryKey) {
         return ''
       }
-      const [, , parsed]: [unknown, unknown, AgentPickerDraft] = JSON.parse(summaryKey)
-      return agentLaunchSetupSummary(entry, parsed).join(' · ')
-    }, [entry, summaryKey])
+      const [, parsed]: [unknown, AgentPickerDraft] = JSON.parse(summaryKey)
+      return agentLaunchSetupSummary(entry, parsed, pickedModel).join(' · ')
+    }, [entry, summaryKey, pickedModel])
     // Only a dropdown with Open in names where the agent runs, as Open in does.
     const surface =
       entry && !setupDisabled && !entry.textGeneration
