@@ -9,7 +9,7 @@ function homeDrivePath(env: NodeJS.ProcessEnv): string | null {
   return `${env.HOMEDRIVE}${env.HOMEPATH}`
 }
 
-export function isSafeImplicitPtyCwd(path: string | null | undefined): path is string {
+function isSafeImplicitPtyCwd(path: string | null | undefined): path is string {
   return !isRootLikePath(path)
 }
 
@@ -29,13 +29,4 @@ export function resolveSafePtyDefaultCwd(env: NodeJS.ProcessEnv = process.env): 
     throw new Error('No safe default working directory is available for terminal launch.')
   }
   return selected
-}
-
-export function assertSafeAgentStartupCwd(cwd: string | undefined, command: string): void {
-  if (isSafeImplicitPtyCwd(cwd)) {
-    return
-  }
-  throw new Error(
-    `Automatic agent startup command "${command}" requires a non-root workspace working directory.`
-  )
 }

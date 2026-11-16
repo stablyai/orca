@@ -20,7 +20,6 @@ import {
 } from '../shell-launch/windows/powershell'
 import { buildWindowsPowerShellSpawnAttempts } from '../shell-launch/windows/shell-fallback-chain'
 import { resolveWindowsShellLaunchArgs } from '../shell-launch/windows/shell-args'
-import { assertSafeAgentStartupCwd } from '../working-directory/default-cwd'
 import type { PtySpawnOptions } from '../pty/provider-contract'
 
 type WslLaunchContext = { distro: string; treatPosixCwdAsWsl: true }
@@ -198,10 +197,6 @@ export function createLocalPtyLaunchPlan(
 
   const defaultCwd = getDefaultCwd()
   const cwd = args.cwd || defaultCwd
-  // Validate effective cwd: omitted cwd resolves to a safe default.
-  if (args.command && startupAgentRecognition) {
-    assertSafeAgentStartupCwd(cwd, args.command)
-  }
   const wslInfo = process.platform === 'win32' ? parseWslPath(cwd) : null
   const worktreeWslContext =
     process.platform === 'win32' ? getWslContextFromWorktreeId(args.worktreeId) : undefined

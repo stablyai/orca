@@ -13,10 +13,7 @@ import {
   POWERLEVEL10K_WIZARD_DISABLE_ENV,
   seedPowerlevel10kWizardEnv
 } from '../../pty/shell-startup/powerlevel10k-wizard-env'
-import {
-  resolveSafePtyDefaultCwd,
-  assertSafeAgentStartupCwd
-} from '../../providers/working-directory/default-cwd'
+import { resolveSafePtyDefaultCwd } from '../../providers/working-directory/default-cwd'
 import {
   resolveEffectiveWindowsPowerShell,
   shouldProbeWindowsPowerShellAvailability,
@@ -70,9 +67,6 @@ export function createPtyShellLaunchPlan(
   let windowsFallbackAttempts: WindowsShellSpawnAttempt[] = []
   const startupAgentRecognition = recognizeAgentProcessFromCommandLine(opts.command)
   const requestedCwd = opts.cwd || resolveSafePtyDefaultCwd()
-  if (opts.command && startupAgentRecognition) {
-    assertSafeAgentStartupCwd(requestedCwd, opts.command)
-  }
   let spawnCwd = requestedCwd
   let validationCwd = spawnCwd
 
