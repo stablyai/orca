@@ -18,26 +18,23 @@ import {
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
+import { formatUiNarrowDuration } from '@/i18n/relative-time-format'
 export { getStatsPaneSearchEntries } from './stats-search'
 
-function formatDuration(ms: number): string {
-  if (ms <= 0) {
-    return '0m'
-  }
-
-  const totalMinutes = Math.floor(ms / 60_000)
+function formatDuration(ms: number, intlLocale?: string): string {
+  const totalMinutes = Math.max(0, Math.floor(ms / 60_000))
   const totalHours = Math.floor(totalMinutes / 60)
   const totalDays = Math.floor(totalHours / 24)
-  const remainingHours = totalHours % 24
-  const remainingMinutes = totalMinutes % 60
+  const unit = (value: number, name: 'day' | 'hour' | 'minute'): string =>
+    formatUiNarrowDuration(value, name, intlLocale)
 
   if (totalDays > 0) {
-    return `${totalDays}d ${remainingHours}h`
+    return `${unit(totalDays, 'day')} ${unit(totalHours % 24, 'hour')}`
   }
   if (totalHours > 0) {
-    return `${totalHours}h ${remainingMinutes}m`
+    return `${unit(totalHours, 'hour')} ${unit(totalMinutes % 60, 'minute')}`
   }
-  return `${totalMinutes}m`
+  return unit(totalMinutes, 'minute')
 }
 
 function formatTrackingSince(
@@ -143,7 +140,7 @@ export function StatsPane(): React.JSX.Element {
                 />
                 <StatCard
                   label={t('auto.components.stats.StatsPane.1c96f433e2', 'Time agents worked')}
-                  value={formatDuration(summary.totalAgentTimeMs)}
+                  value={formatDuration(summary.totalAgentTimeMs, intlLocale)}
                   icon={<Clock className="size-4" />}
                 />
                 <StatCard
