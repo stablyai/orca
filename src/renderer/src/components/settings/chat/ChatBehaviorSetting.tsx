@@ -204,10 +204,7 @@ export function ChatBehaviorSetting({
           label={entries.composerSpellcheck.title}
           description={entries.composerSpellcheck.description}
           checked={composerSpellcheckEnabled}
-          ariaLabel={t(
-            'components.settings.nativeChat.composerSpellcheckToggleLabel',
-            'Toggle spellcheck in the message box'
-          )}
+          ariaLabel={entries.composerSpellcheck.title}
           onChange={() =>
             updateSettings({ nativeChatComposerSpellcheck: !composerSpellcheckEnabled })
           }

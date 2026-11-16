@@ -122,7 +122,7 @@ function NativePromptEditor({
         'aria-multiline': 'true',
         'aria-label': placeholder,
         spellcheck: spellcheck ? 'true' : 'false',
-        // Safari/iOS honor these separately from spellcheck.
+        // Chromium on macOS still applies system text replacements under spellcheck=false; autocorrect=off stops them.
         ...(spellcheck ? {} : { autocorrect: 'off', autocapitalize: 'off' }),
         class: `${className ?? ''} whitespace-pre-wrap break-words [&_p]:m-0 [&_p.is-editor-empty:only-child]:before:content-[attr(data-placeholder)] [&_p.is-editor-empty:only-child]:before:text-chat-foreground-faint [&_p.is-editor-empty:only-child]:before:float-left [&_p.is-editor-empty:only-child]:before:h-0 [&_p.is-editor-empty:only-child]:before:pointer-events-none`,
         ...Object.fromEntries(Object.entries(events).filter(([key]) => key.startsWith('aria-')))

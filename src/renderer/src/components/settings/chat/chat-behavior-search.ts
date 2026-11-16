@@ -104,10 +104,13 @@ export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
   },
   composerSpellcheck: {
     targetSectionId: 'chat-composer-spellcheck',
-    title: translate('components.settings.nativeChat.composerSpellcheckTitle', 'Check spelling'),
+    title: translate(
+      'components.settings.nativeChat.composerSpellcheckTitle',
+      'Spellcheck and autocorrect'
+    ),
     description: translate(
       'components.settings.nativeChat.composerSpellcheckCopy',
-      'Underlines misspelled words in the message box. Turn off to stop spellcheck there without changing it system-wide.'
+      'Underlines misspelled words and applies system text replacements in the message box. Turn off to stop both here without changing them system-wide.'
     ),
     keywords: [
       translate('components.settings.nativeChat.composerSpellcheckSearchSpelling', 'spellcheck'),
