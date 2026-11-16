@@ -246,6 +246,10 @@
       "reason": "RNW's measure() is asynchronous and drops its callback for a detached node, so a held mic released over the dictation cancel button would never stop. The page reads the DOM box synchronously; native keeps measure()."
     },
     {
+      "file": "src/session/chat-fork/shell-chat-fork-handoff.web.ts",
+      "reason": "The page's one RPC client is the bridge to the desktop that served it, and its host store holds only that desktop, so its Fork sheet could never offer another paired host. This one hands the Fork sheet to the shell over native.chat.fork, which lists every paired host, runs a fork bound for another one itself and hands one for this desktop back for the page to run. Shells that do not grant the verb get null, and the page keeps its own sheet for this host."
+    },
+    {
       "file": "src/platform/accessibility/accessibility-announcer.web.ts",
       "reason": "React Native Web's announceForAccessibility is a no-op and VoiceOver in the shell's WebView doesn't read the page's live regions, so the page asks the shell to announce through native.a11y.announce; without it, the caller keeps its live region."
     }

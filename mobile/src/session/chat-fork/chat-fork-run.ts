@@ -2,15 +2,11 @@ import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-a
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import type { StructuredAgentSessionForkSource } from '../../../../src/shared/agent-session/structured-agent-session-create'
 import { chatForkTransferErrorCode } from '../../../../src/shared/ai-vault/fork-transfer/chat-fork-transfer-limits'
-import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
 import { triggerError } from '../../platform/haptics/haptics'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { MobileWorktreeForkMode } from '../mobile-structured-chat-worktree-fork'
 import { chatForkCopy } from './chat-fork-copy'
-import {
-  buildChatForkRecap,
-  type ChatForkRecapScope
-} from '../../../../src/shared/agent-session/context/chat-fork-recap'
+import type { ChatForkRecapScope } from '../../../../src/shared/agent-session/context/chat-fork-recap'
 import type {
   ChatForkPath,
   ChatForkSurface
@@ -29,8 +25,8 @@ export type ChatForkRunSource = {
   worktreeId: string
   agent: TuiAgent
   terminal: boolean
-  title?: string
-  messages: readonly NativeChatMessage[]
+  /** The chat up to the fork point as a first message; null when it has no words to hand over. */
+  recap: (scope: ChatForkRecapScope, throughItemId: string) => string | null
 }
 
 export type ChatForkRunDeps = {
@@ -137,14 +133,7 @@ export async function runChatFork(
   }
   let recap: string | undefined
   if (target.path === 'recap') {
-    recap =
-      buildChatForkRecap({
-        messages: source.messages,
-        throughItemId: forkFrom.throughItemId,
-        scope: target.recapScope,
-        sourceAgent: source.agent,
-        sourceTitle: source.title
-      }) ?? undefined
+    recap = source.recap(target.recapScope, forkFrom.throughItemId) ?? undefined
     if (!recap) {
       report(chatForkCopy.noRecap())
       return

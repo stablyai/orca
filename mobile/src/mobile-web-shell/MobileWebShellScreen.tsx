@@ -25,6 +25,8 @@ import { useNativeImageActions } from '../platform/image-actions/native-image-ac
 import { processDeviceStore } from '../device-store/device-store'
 import { serveDeviceStoreVerb } from './native-capabilities/device-store-verb-server'
 import { BRIDGE_STORE_VERB } from './bridge/native-capabilities/bridge-store-verb'
+import { BRIDGE_CHAT_FORK_VERB } from './bridge/native-capabilities/bridge-chat-fork-verb'
+import { useShellChatForkSheet } from './native-capabilities/use-shell-chat-fork-sheet'
 import { useAppLeavesForeground } from './session/use-app-leaves-foreground'
 import { useShellPageBack } from './routing/use-shell-page-back'
 import { useShellStackPop } from './routing/use-shell-stack-pop'
@@ -153,6 +155,7 @@ export function MobileWebShellScreen({
   const serveDeviceVerb = useNativeDeviceVerbs(readySessionId)
   const servePdfView = useNativePdfViewer(hostId, readySessionId)
   const serveImageAction = useNativeImageActions(readySessionId)
+  const chatFork = useShellChatForkSheet(hostId, readySessionId)
   // Read the shell's storage for this host.
   const serveNativeVerb = (verb: BridgeNativeVerb, params: unknown): Promise<unknown> =>
     verb === 'native.storage.read'
@@ -163,7 +166,9 @@ export function MobileWebShellScreen({
           ? serveImageAction(params)
           : verb === BRIDGE_STORE_VERB
             ? serveDeviceStoreVerb(processDeviceStore(), hostId, params)
-            : serveDeviceVerb(verb, params)
+            : verb === BRIDGE_CHAT_FORK_VERB
+              ? chatFork.serve(params)
+              : serveDeviceVerb(verb, params)
   // Both externalLink and cancelled navigation use this filtered opener. Report device-handler failure without throwing from a native frame callback; neither path has a reply.
   const openUrlForPage = (url: string) => {
     void Linking.openURL(url).catch((error: unknown) => {
@@ -408,6 +413,7 @@ export function MobileWebShellScreen({
         <ShellPageCover label={SHELL_OPENING_LABEL} visible={pageFrame === 'unpainted'} />
       )}
       <ShellDevFacts state={state} droppedBinaryFrames={droppedBinaryFrames} />
+      {chatFork.sheet}
     </View>
   )
 }

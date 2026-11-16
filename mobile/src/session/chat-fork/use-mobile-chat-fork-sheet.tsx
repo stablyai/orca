@@ -1,18 +1,20 @@
 import { useCallback, useRef, useState, type RefObject } from 'react'
+import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent'
 import { isTuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent-config'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
-import { AI_VAULT_CHAT_FORK_EXPORT_CAPABILITY } from '../../../../src/shared/ai-vault/resume/ai-vault-resume-preparation'
+import type { StructuredAgentSessionForkSource } from '../../../../src/shared/agent-session/structured-agent-session-create'
 import type { ExecutionHostId } from '../../../../src/shared/execution-host'
 import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
 import { useRpcClientContext } from '../../transport/connection/client-context'
-import { mobileSubagentForkAvailable } from '../mobile-structured-chat-worktree-fork'
 import type { MobileNativeChatFork } from '../native-chat/history/use-mobile-native-chat-fork'
 import type { MobileSessionController } from '../use-mobile-session-controller'
 import { useOpenMobileSession } from '../use-open-mobile-session'
 import { chatForkCopy } from './chat-fork-copy'
 import { runChatFork, type ChatForkRunDeps, type ChatForkRunTarget } from './chat-fork-run'
 import type { ChatForkPreset } from './chat-fork-selection'
-import { MobileChatForkSheet, type MobileChatForkSheetSource } from './MobileChatForkSheet'
+import { chatForkRecapOf, chatForkSheetSource } from './chat-fork-sheet-source'
+import { useChatForkShellHandoff } from './use-chat-fork-shell-handoff'
+import { MobileChatForkSheet } from './MobileChatForkSheet'
 
 type SheetRequest = { message: NativeChatMessage; preset: ChatForkPreset; visible: boolean }
 
@@ -36,11 +38,6 @@ export function useMobileChatForkSheet(input: {
   const busyRef = useRef(false)
   const ctx = useRpcClientContext()
   const openMobileSession = useOpenMobileSession()
-  const open = useCallback((message: NativeChatMessage, preset: ChatForkPreset = null) => {
-    if (!busyRef.current) {
-      setRequest({ message, preset, visible: true })
-    }
-  }, [])
   const close = useCallback(
     () => setRequest((current) => (current ? { ...current, visible: false } : null)),
     []
@@ -53,6 +50,75 @@ export function useMobileChatForkSheet(input: {
     },
     [ctx]
   )
+  /** Runs a fork the sheet chose on this chat's host; the caller holds the fork gate. */
+  const runHere = useCallback(
+    async (
+      agent: TuiAgent,
+      target: ChatForkRunTarget,
+      forkFrom: StructuredAgentSessionForkSource
+    ): Promise<void> => {
+      const current = latestController.current
+      // The sheet's own paths beside this chat, and a new worktree's prompts, close it first; a fork
+      // copied or launched through this sheet keeps it open to show progress.
+      const ownPath =
+        target.path === 'same' || (target.path === 'recap' && target.openAs === 'chat')
+      const keepOpen =
+        target.workspace.kind === 'existing' || (target.workspace.kind === 'this' && !ownPath)
+      busyRef.current = true
+      setBusy(keepOpen)
+      if (!keepOpen) {
+        close()
+      }
+      try {
+        await runChatFork(
+          {
+            client: current.client,
+            hostId: current.hostId,
+            worktreeId: current.worktreeId,
+            agent,
+            terminal: current.activeSessionTab?.type === 'terminal',
+            recap: chatForkRecapOf(current, agent)
+          },
+          {
+            createFork,
+            createWorktreeFork,
+            acquireHost,
+            openSession: (hostId, worktreeId, name) =>
+              openMobileSession({ hostId, worktreeId, name }),
+            onProgress: setProgress,
+            showToast: current.showToast
+          },
+          target,
+          forkFrom
+        )
+      } catch (error) {
+        // runChatFork reports its own launch outcomes; a throw past it is a plain failure.
+        const detail = error instanceof Error ? error.message.trim() : ''
+        current.showToast(chatForkCopy.failed(TUI_AGENT_DISPLAY_NAMES[target.agent], detail), 4000)
+      } finally {
+        busyRef.current = false
+        setBusy(false)
+        setProgress(null)
+        close()
+      }
+    },
+    [acquireHost, close, createFork, createWorktreeFork, latestController, openMobileSession]
+  )
+  const shellSheet = useChatForkShellHandoff({ fork, latestController, executionHost, runHere })
+  const open = useCallback(
+    (message: NativeChatMessage, preset: ChatForkPreset = null) => {
+      if (busyRef.current) {
+        return
+      }
+      // In the served page the app's own sheet lists every paired host; this one knows only its own.
+      if (shellSheet) {
+        shellSheet(message, preset)
+        return
+      }
+      setRequest({ message, preset, visible: true })
+    },
+    [shellSheet]
+  )
   const confirm = useCallback(
     (target: ChatForkRunTarget) => {
       const current = latestController.current
@@ -61,58 +127,10 @@ export function useMobileChatForkSheet(input: {
       if (!message || busyRef.current || !agent || !isTuiAgent(agent)) {
         return
       }
-      // The sheet's own paths beside this chat, and a new worktree's prompts, close it first; a fork
-      // copied or launched through this sheet keeps it open to show progress.
-      const ownPath =
-        target.path === 'same' || (target.path === 'recap' && target.openAs === 'chat')
-      const keepOpen =
-        target.workspace.kind === 'existing' || (target.workspace.kind === 'this' && !ownPath)
       const kind = target.path === 'recap' ? 'recap' : 'copy'
       const started = fork.forkWith(
         message,
-        async (_agent, forkFrom) => {
-          busyRef.current = true
-          setBusy(keepOpen)
-          if (!keepOpen) {
-            close()
-          }
-          try {
-            await runChatFork(
-              {
-                client: current.client,
-                hostId: current.hostId,
-                worktreeId: current.worktreeId,
-                agent,
-                terminal: current.activeSessionTab?.type === 'terminal',
-                title: current.activeSessionTab?.title || undefined,
-                messages: current.nativeChatController.nativeChatSession.messages
-              },
-              {
-                createFork,
-                createWorktreeFork,
-                acquireHost,
-                openSession: (hostId, worktreeId, name) =>
-                  openMobileSession({ hostId, worktreeId, name }),
-                onProgress: setProgress,
-                showToast: current.showToast
-              },
-              target,
-              forkFrom
-            )
-          } catch (error) {
-            // runChatFork reports its own launch outcomes; a throw past it is a plain failure.
-            const detail = error instanceof Error ? error.message.trim() : ''
-            current.showToast(
-              chatForkCopy.failed(TUI_AGENT_DISPLAY_NAMES[target.agent], detail),
-              4000
-            )
-          } finally {
-            busyRef.current = false
-            setBusy(false)
-            setProgress(null)
-            close()
-          }
-        },
+        (_agent, forkFrom) => runHere(agent, target, forkFrom),
         kind
       )
       if (!started) {
@@ -120,40 +138,11 @@ export function useMobileChatForkSheet(input: {
         current.showToast(chatForkCopy.notNow(), 3000)
       }
     },
-    [
-      acquireHost,
-      close,
-      createFork,
-      createWorktreeFork,
-      fork,
-      latestController,
-      openMobileSession,
-      request
-    ]
+    [close, fork, latestController, request, runHere]
   )
-  const { controller } = input
-  const agent = controller.nativeChatController.nativeChatAgent
-  if (!request || !agent || !isTuiAgent(agent)) {
+  const source = request ? chatForkSheetSource(input.controller, fork, executionHost) : null
+  if (!request || !source) {
     return { open, sheet: null }
-  }
-  const capabilities = controller.hostCapabilities
-  const terminal = controller.activeSessionTab?.type === 'terminal'
-  const source: MobileChatForkSheetSource = {
-    hostId: controller.hostId,
-    worktreeId: controller.worktreeId,
-    client: controller.client,
-    capabilities,
-    agent,
-    surface: terminal ? 'terminal' : 'chat',
-    usageLimited: controller.nativeChatController.nativeChatUsageLimit !== null,
-    // A workspace routed to another server exports from there; this phone can't reach it directly.
-    canExport:
-      !executionHost &&
-      agent === 'claude' &&
-      capabilities?.includes(AI_VAULT_CHAT_FORK_EXPORT_CAPABILITY) === true,
-    canCopy: fork.copyOffered(),
-    canNewWorktree: fork.worktreeForkOffered(),
-    canSubagent: !terminal && mobileSubagentForkAvailable(capabilities)
   }
   return {
     open,
