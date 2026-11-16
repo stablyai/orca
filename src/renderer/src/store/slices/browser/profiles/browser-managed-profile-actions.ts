@@ -1,6 +1,6 @@
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import type { BrowserSlice, BrowserSliceGet, BrowserSliceSet } from '../browser-slice-contract'
-import type { BrowserSessionProfile } from '../../../../../../shared/browser-workspace-types'
+import type { BrowserSessionProfile } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
 import {
   isManagedBrowserProfileOf,
@@ -8,7 +8,7 @@ import {
   unadmittedBrowserPartition,
   type ManagedBrowserProfileOwner
 } from '../../../../../../shared/browser/profiles/browser-profile-scope'
-import { withoutKey } from '../../../../../../shared/workspace-layout/stored-record-fields'
+import { withoutKey } from '../../../../../../shared/workspace-layout/persistence/stored-record-fields'
 import type { AppState } from '../../../types'
 
 // Use an inadmissible placeholder partition: failed/quit creations must never fall back to shared Default jar.

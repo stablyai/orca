@@ -1,4 +1,4 @@
-import { BROWSER_WAIT_DEFAULT_TIMEOUT_MS } from '../../../../shared/browser-wait-timeout'
+import { BROWSER_WAIT_DEFAULT_TIMEOUT_MS } from '../../../../shared/browser/automation/browser-wait-timeout'
 
 // Lets agent-browser report its own wait timeout before Orca kills the process.
 const WAIT_PROCESS_TIMEOUT_GRACE_MS = 5_000

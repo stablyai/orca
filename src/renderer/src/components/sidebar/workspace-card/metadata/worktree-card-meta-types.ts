@@ -1,4 +1,4 @@
-import type { IssueInfo } from '../../../../../../shared/github/pull-request-types'
+import type { IssueInfo } from '../../../../../../shared/github/pull-requests/pull-request-types'
 import type {
   Worktree,
   WorkspaceAttachment,

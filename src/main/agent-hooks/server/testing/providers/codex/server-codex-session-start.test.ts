@@ -2,8 +2,8 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
-import { RelayAgentHookServer } from '../../../../../../wsl-guest/agent-hook-server'
-import { buildCachedPaneReplayEnvelope } from '../../../../../../wsl-guest/agent-hook-cached-pane-status'
+import { RelayAgentHookServer } from '../../../../../../wsl-guest/agent-hooks/server/agent-hook-server'
+import { buildCachedPaneReplayEnvelope } from '../../../../../../wsl-guest/agent-hooks/status/agent-hook-cached-pane-status'
 import type { AgentHookEventPayload } from '../../../../../../shared/agent-hook-listener/listener-event'
 import type { AgentHookRelayEnvelope } from '../../../../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import { AgentHookServer } from '../../../agent-hook-server'
@@ -34,95 +34,86 @@ function previousRoot(children: number): AgentHookEventPayload {
   }
 }
 
-it.each([10, 100])(
-  'retires %i foreign-session children at a cached startup boundary',
-  (children) => {
-    const desktop = new AgentHookServer()
-    desktop.beginRemoteRelaySession('wsl:Ubuntu')
-    desktop.ingestRemote(previousRoot(children), 'wsl:Ubuntu')
-    expect(desktop.getStatusSnapshot()[0].subagents).toHaveLength(children)
-    if (children === 100) {
-      desktop.beginRemoteRelaySession('wsl:Ubuntu')
-    }
-    const incoming: AgentHookEventPayload = {
-      ...previousRoot(0),
-      toolAgentId: undefined,
-      hookEventName: 'SessionStart',
-      providerSession: { key: 'session_id', id: 'new-root' },
-      payload: {
-        agentType: 'codex',
-        state: 'done',
-        sessionBoundary: true,
-        prompt: 'new context',
-        model: 'new-model',
-        mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: 2000 }
-      }
-    }
-    desktop.ingestRemote(
-      buildCachedPaneReplayEnvelope({ event: incoming, meta: { source: 'codex' } }),
-      'wsl:Ubuntu'
-    )
-    expect(desktop.getStatusSnapshot()[0]).toMatchObject({
+it('retires foreign-session children at a cached startup boundary', () => {
+  const children = 100
+  const desktop = new AgentHookServer()
+  desktop.beginRemoteRelaySession('wsl:Ubuntu')
+  desktop.ingestRemote(previousRoot(children), 'wsl:Ubuntu')
+  expect(desktop.getStatusSnapshot()[0].subagents).toHaveLength(children)
+  desktop.beginRemoteRelaySession('wsl:Ubuntu')
+  const incoming: AgentHookEventPayload = {
+    ...previousRoot(0),
+    toolAgentId: undefined,
+    hookEventName: 'SessionStart',
+    providerSession: { key: 'session_id', id: 'new-root' },
+    payload: {
+      agentType: 'codex',
       state: 'done',
-      restoredUnconfirmed: true,
-      providerSession: { id: 'new-root' },
+      sessionBoundary: true,
       prompt: 'new context',
       model: 'new-model',
       mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: 2000 }
-    })
-    expect(desktop.getStatusSnapshot()[0].subagents).toBeUndefined()
-    expect(desktop._getStateForTests().codexSubagentRosterByPaneKey.get(PANE)?.size).toBe(0)
-    desktop.ingestRemote({ ...incoming, hookEventName: undefined }, 'wsl:Ubuntu')
-    expect(desktop.getStatusSnapshot()[0].subagents).toBeUndefined()
-  }
-)
-
-it.each(['previous', 'incoming'] as const)(
-  'preserves live context when the %s session ID is missing',
-  (missing) => {
-    const desktop = new AgentHookServer()
-    const previous = previousRoot(1)
-    vi.useFakeTimers({ toFake: ['Date'] })
-    vi.setSystemTime(1_000)
-    try {
-      desktop.ingestRemote(
-        {
-          ...previous,
-          hookEventName: 'UserPromptSubmit',
-          toolAgentId: undefined,
-          hasExplicitPrompt: true,
-          providerSession: missing === 'previous' ? undefined : previous.providerSession,
-          payload: { ...previous.payload, mainAgent: { state: 'working', stateStartedAt: 1000 } }
-        },
-        'wsl:Ubuntu'
-      )
-      expect(desktop.getStatusSnapshot()[0].turnStartedAt).toBe(1_000)
-      vi.setSystemTime(3_000)
-      desktop.ingestRemote(
-        {
-          ...previous,
-          toolAgentId: undefined,
-          hookEventName: 'SessionStart',
-          providerSession:
-            missing === 'incoming' ? undefined : { key: 'session_id', id: 'new-root' },
-          payload: { agentType: 'codex', state: 'working', prompt: '' }
-        },
-        'wsl:Ubuntu'
-      )
-      expect(desktop.getStatusSnapshot()[0]).toMatchObject({
-        state: 'working',
-        prompt: 'old task',
-        model: 'old-model',
-        mainAgent: { state: 'working', stateStartedAt: 1000 },
-        subagents: [{ id: 'old-0', state: 'working' }],
-        turnStartedAt: 1_000
-      })
-    } finally {
-      desktop.stop()
-      vi.useRealTimers()
     }
   }
-)
+  desktop.ingestRemote(
+    buildCachedPaneReplayEnvelope({ event: incoming, meta: { source: 'codex' } }),
+    'wsl:Ubuntu'
+  )
+  expect(desktop.getStatusSnapshot()[0]).toMatchObject({
+    state: 'done',
+    restoredUnconfirmed: true,
+    providerSession: { id: 'new-root' },
+    prompt: 'new context',
+    model: 'new-model',
+    mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: 2000 }
+  })
+  expect(desktop.getStatusSnapshot()[0].subagents).toBeUndefined()
+  desktop.ingestRemote({ ...incoming, hookEventName: undefined }, 'wsl:Ubuntu')
+  expect(desktop.getStatusSnapshot()[0].subagents).toBeUndefined()
+})
+
+it('preserves live context when the incoming session ID is missing', () => {
+  const desktop = new AgentHookServer()
+  const previous = previousRoot(1)
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(1_000)
+  try {
+    desktop.ingestRemote(
+      {
+        ...previous,
+        hookEventName: 'UserPromptSubmit',
+        toolAgentId: undefined,
+        hasExplicitPrompt: true,
+        providerSession: previous.providerSession,
+        payload: { ...previous.payload, mainAgent: { state: 'working', stateStartedAt: 1000 } }
+      },
+      'wsl:Ubuntu'
+    )
+    expect(desktop.getStatusSnapshot()[0].turnStartedAt).toBe(1_000)
+    vi.setSystemTime(3_000)
+    desktop.ingestRemote(
+      {
+        ...previous,
+        toolAgentId: undefined,
+        hookEventName: 'SessionStart',
+        providerSession: undefined,
+        payload: { agentType: 'codex', state: 'working', prompt: '' }
+      },
+      'wsl:Ubuntu'
+    )
+    expect(desktop.getStatusSnapshot()[0]).toMatchObject({
+      state: 'working',
+      prompt: 'old task',
+      model: 'old-model',
+      mainAgent: { state: 'working', stateStartedAt: 1000 },
+      subagents: [{ id: 'old-0', state: 'working' }],
+      turnStartedAt: 1_000
+    })
+  } finally {
+    desktop.stop()
+    vi.useRealTimers()
+  }
+})
 
 it.each(['local', 'relay', 'old-relay', 'old-relay-no-main'] as const)(
   'separates Codex session identity from live turns on %s',

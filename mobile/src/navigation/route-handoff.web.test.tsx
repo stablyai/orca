@@ -1,10 +1,10 @@
 import type { ReactElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { BRIDGE_MAX_ROUTE_HREF_CHARS } from '../mobile-web-shell/bridge/bridge-caps'
-import { BRIDGE_PROTOCOL_VERSION } from '../mobile-web-shell/bridge/bridge-envelope'
-import { createShellPageClient } from '../mobile-web-shell/bridge/page-bootstrap'
-import type { BridgeRpcClient } from '../mobile-web-shell/bridge/bridge-rpc-client'
+import { BRIDGE_MAX_ROUTE_HREF_CHARS } from '../mobile-web-shell/bridge/protocol/bridge-caps'
+import { BRIDGE_PROTOCOL_VERSION } from '../mobile-web-shell/bridge/protocol/bridge-frame-fields'
+import { createShellPageClient } from '../mobile-web-shell/bridge/page-lifecycle/page-bootstrap'
+import type { BridgeRpcClient } from '../mobile-web-shell/bridge/client-state/bridge-rpc-client-contract'
 import type { RouteHandoff } from './route-handoff'
 
 const router = vi.hoisted(() => ({

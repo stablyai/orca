@@ -4,8 +4,8 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { runProcess } from '@orca/process-host'
 import type * as ProcessHost from '@orca/process-host'
-import type { Repo } from '../../shared/repo-types'
-import { DEFAULT_FORMATTER_INCLUDE } from '../../shared/editor-formatter'
+import type { Repo } from '../../shared/repository/repo-types'
+import { DEFAULT_FORMATTER_INCLUDE } from '../../shared/editor/formatting/editor-formatter'
 import { formatEditorText } from './format-editor-text'
 
 vi.mock('@orca/process-host', async (importOriginal) => {

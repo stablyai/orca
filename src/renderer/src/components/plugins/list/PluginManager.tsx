@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import type { PluginHostListEntry } from '../../../../../preload/api-types'
+import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
@@ -16,6 +16,7 @@ import { usePluginCatalog } from '../state/use-plugin-catalog'
 import { usePluginHoverPrefetch } from '../state/use-plugin-hover-prefetch'
 import { usePluginInstallAction } from '../state/use-plugin-install-action'
 import { usePluginUpdateDialog } from '../state/use-plugin-update-dialog'
+import { PluginCatalogHighlights } from '../catalog/PluginCatalogHighlights'
 import {
   CatalogCard,
   CatalogNotice,
@@ -139,6 +140,7 @@ export function PluginManager({
     orcaVersion,
     t
   )
+  const allEntries = [...entries.installed, ...entries.available]
   const query = search.trim()
   const filterSize = pluginFilterSize(listFilter)
   const narrowed = Boolean(query) || filterSize > 0
@@ -159,13 +161,7 @@ export function PluginManager({
   // Why: dev folders, local installs and bundled plugins have no catalog card to carry their switch.
   const uncataloged = catalog.loading ? [] : installed.filter((entry) => !listedInCatalog(entry))
   const catalogInstalled = filter === 'available' ? [] : entries.installed
-  const updateDialog = usePluginUpdateDialog({
-    ready: !pluginsLoading && !catalog.loading,
-    updates,
-    page,
-    showUpdates: () => setTab('updates'),
-    reloadCatalogs: catalog.loadMarketplaceData
-  })
+  const updateDialog = usePluginUpdateDialog()
   const rowHandlers: InstalledRowHandlers = {
     ...handlers,
     onOpen: openEntry,
@@ -326,11 +322,7 @@ export function PluginManager({
         installedCount={plugins.length}
         updateCount={updates.length}
         filters={
-          <PluginCategoryChips
-            entries={[...entries.installed, ...entries.available]}
-            filter={listFilter}
-            onChange={setListFilter}
-          />
+          <PluginCategoryChips entries={allEntries} filter={listFilter} onChange={setListFilter} />
         }
         toolbar={
           <PluginListToolbar
@@ -374,6 +366,13 @@ export function PluginManager({
           <PluginAllInstalled onShowInstalled={() => setTab('installed')} />
         ) : filter === 'all' || filter === 'available' ? (
           <div className="@container/plugin-catalog space-y-8">
+            {!narrowed && !catalog.loading && !pluginsLoading && !pluginsError ? (
+              <PluginCatalogHighlights
+                entries={allEntries}
+                orcaVersion={orcaVersion}
+                cardHandlers={cardHandlers}
+              />
+            ) : null}
             {/* Why the error and loading too: until installed plugins are read, Not installed can't tell what you have. */}
             {filter === 'all' || pluginsError || pluginsLoading ? installedGroup : null}
             {filter === 'available' && (pluginsLoading || pluginsError) ? null : (

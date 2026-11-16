@@ -1,11 +1,11 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
-import type { Repo } from '../../../../shared/repo-types'
-import { applyManualRepoOrder } from '../../../../shared/manual-repo-order'
-import { reconcileCatalogRows } from '../../../../shared/catalog-row-reconcile'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import { applyManualRepoOrder } from '../../../../shared/repository/manual-repo-order'
+import { reconcileCatalogRows } from '../../../../shared/collections/catalog-row-reconcile'
 import { retainValidFilterRepoIds } from './repo-filter-selection'
 import { mergeSshRepoReadoptions, reconcileReadoptedSshRepoRows } from './superseded-ssh-repo-rows'
-import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
+import { getRepoHostIdentity } from '../../../../shared/repository/repo-host-identity'
 import { runtimeTargetForOwnerEnvironment } from '../../runtime/rpc/targets/runtime-client-target'
 import { filterSetupScriptPromptDismissalsToValidRepos } from '@/runtime/repo-hooks/setup-script-prompt'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
@@ -33,8 +33,8 @@ import {
   getProjectHostSetupOwnerKey,
   mergeProjectHostSetupCompatibility,
   projectCompatibilityFromRepos
-} from '../../../../shared/project-compatibility-merge'
-import { mergeFetchedHostProjectCatalog } from '../../../../shared/project-compatibility-host-merge'
+} from '../../../../shared/project/catalog/project-compatibility-merge'
+import { mergeFetchedHostProjectCatalog } from '../../../../shared/project/catalog/project-compatibility-host-merge'
 import { scheduleSafeAutoForkSync } from './safe-auto-fork-sync'
 import {
   withWslMovedRepoIds,

@@ -1,5 +1,5 @@
 import { encodeBase64Bytes } from '@/lib/base64-bytes'
-import { normalizeRelativePath } from '../../../../../shared/cross-platform-path'
+import { normalizeRelativePath } from '../../../../../shared/file-access/cross-platform-path'
 import {
   FILE_BYTES_SAVE_UPDATE_REQUIRED_MESSAGE,
   FILE_BYTES_WRITE_CHUNK_BYTES,

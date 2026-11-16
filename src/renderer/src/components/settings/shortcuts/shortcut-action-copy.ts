@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import { translateUnassignedLabel } from '@/i18n/unassigned-label'
-import type { KeybindingActionId } from '../../../../../shared/keybindings'
+import type { KeybindingActionId } from '../../../../../shared/keybindings/types'
 import { tuiAgentDisplayName } from '../../../../../shared/agent-launch/catalog/tui-agent-display-names'
 import type { ShortcutFilter } from './ShortcutFilterRail'
 

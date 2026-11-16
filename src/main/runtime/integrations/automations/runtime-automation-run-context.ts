@@ -7,7 +7,7 @@ import type {
   AutomationCreateInput,
   AutomationWorkspaceMode
 } from '../../../../shared/automations/automation-definition'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 
 export function assertAutomationRunContextMatchesTarget(
   runContext:

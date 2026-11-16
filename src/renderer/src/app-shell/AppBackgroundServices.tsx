@@ -2,7 +2,6 @@ import { Suspense } from 'react'
 import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { AgentHibernationGate } from '../components/AgentHibernationGate'
 import { AiVaultTabTitleSyncGate } from '../components/AiVaultTabTitleSyncGate'
-import RetainedAgentsSyncGate from '../components/dashboard/RetainedAgentsSyncGate'
 import { WorkspacePortScanner } from '../components/ports/WorkspacePortScanner'
 import { SavedHostScopeWidenGate } from '../components/sidebar/worktree-list/listing/SavedHostScopeWidenGate'
 import { MacosTccPromptNoticeHost } from '../hooks/MacosTccPromptNoticeHost'
@@ -14,7 +13,9 @@ import { StructuredAgentSessionStatusBridge } from '../components/native-chat/se
 import { NativeChatVisualGuestThemePublisher } from '../components/native-chat/media/visuals/NativeChatVisualGuestThemePublisher'
 import { usePairedMobileDevices } from '../components/mobile/paired-mobile-devices'
 
-const DashboardPopoutBridge = lazy(() => import('../components/dashboard/DashboardPopoutBridge'))
+const DashboardPopoutBridge = lazy(
+  () => import('../components/dashboard/popout-bridge/DashboardPopoutBridge')
+)
 const AgentListVerdictPublisher = lazy(
   () => import('../components/activity/agent-list-verdict-publisher')
 )
@@ -38,7 +39,6 @@ export function AppBackgroundServices(): React.JSX.Element {
       <MacosTccPromptNoticeHost />
       <RemoteHostBrowserControlNoticeHost />
       {/* Keep agent-status retention subscriptions out of the App render tree. */}
-      <RetainedAgentsSyncGate />
       <AiVaultTabTitleSyncGate />
       <SavedHostScopeWidenGate />
       {dashboardPopoutEnabled ? (

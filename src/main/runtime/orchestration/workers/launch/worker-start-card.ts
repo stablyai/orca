@@ -21,11 +21,17 @@ export function prepareAgentCreationCard(
     if (!host || !destination) {
       return null
     }
+    const captured = Promise.resolve(destination).catch((error: unknown) => {
+      logStartCardFailure(error)
+      return null
+    })
     return (card) => {
       const observedAt = Date.now()
-      void Promise.resolve()
-        .then(async () => {
-          await host.appendAgentStart(destination, card(), observedAt)
+      void captured
+        .then(async (destination) => {
+          if (destination) {
+            await host.appendAgentStart(destination, card(), observedAt)
+          }
         })
         .catch(logStartCardFailure)
     }
@@ -55,6 +61,7 @@ export function prepareWorkerStartCard(
   task: string
   /** What this start launched; the only kind known for a worker on another host. */
   agent: AgentType | null
+  followUp?: AgentJournalAgentStartItem['followUp']
 }) => void {
   // A paired Orca has no chat here to show the card in.
   const publish = prepareAgentCreationCard(
@@ -68,7 +75,8 @@ export function prepareWorkerStartCard(
       kind: 'agent-start',
       dispatchId: args.dispatchId,
       worker: startedAgentSender(runtime, args.workerAddress, args.agent, args.dispatchId),
-      task: args.task
+      task: args.task,
+      ...(args.followUp ? { followUp: args.followUp } : {})
     }))
 }
 

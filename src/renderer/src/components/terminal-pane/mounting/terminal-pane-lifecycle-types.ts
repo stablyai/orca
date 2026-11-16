@@ -1,6 +1,6 @@
 import type { HttpLinkRoutingPreferenceRequester as TerminalLinkRoutingPreferenceRequester } from '@/lib/browser/navigation/http-link-destinations'
 import type { WorkspaceAttentionSlice } from '@/store/slices/workspace-attention/workspace-attention-contract'
-import type { NotificationWorkspaceOwner } from '../../../../../shared/notification-source'
+import type { NotificationWorkspaceOwner } from '../../../../../shared/notifications/notification-source'
 import type { PanePtyBinding } from '../pty-connection/pane-pty-binding'
 import type { IDisposable } from '@xterm/xterm'
 import type { ParsedAgentStatusPayload } from '../../../../../shared/agent-status/contracts/agent-status-types'
@@ -37,6 +37,7 @@ export type UseTerminalPaneLifecycleDeps = {
   startup?: TerminalPaneStartup | null
   /** Split pane runs the repo's issue-automation command with the issue number interpolated. */
   issueCommandSplit?: TerminalPaneIssueCommandSplit | null
+  consumeTabIssueCommandSplit: (tabId: string) => void
   isActive: boolean
   isVisible: boolean
   systemPrefersDark: boolean
@@ -48,6 +49,7 @@ export type UseTerminalPaneLifecycleDeps = {
   effectiveMacOptionAsAlt: EffectiveMacOptionAsAlt
   effectiveMacOptionAsAltRef: React.RefObject<EffectiveMacOptionAsAlt>
   initialLayoutRef: React.RefObject<TerminalLayoutSnapshot>
+  clearedScrollbackLeafIdsRef?: React.RefObject<Set<string>>
   managerRef: React.RefObject<PaneManager | null>
   getTabWideAgentHintLeafId: () => string | null
   containerRef: React.RefObject<HTMLDivElement | null>
@@ -120,4 +122,8 @@ export type UseTerminalPaneLifecycleDeps = {
   resolveExternalPaneDropTarget?: PaneExternalDropResolver
   onExternalPaneDrop?: PaneExternalDropHandler
   detachPaneToNewTab?: DetachTerminalPaneToNewTab
+}
+
+export type MountedTerminalPaneLifecycleDeps = UseTerminalPaneLifecycleDeps & {
+  mountedManager: PaneManager | null
 }

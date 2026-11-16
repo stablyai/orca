@@ -15,7 +15,7 @@ import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import { removeWorktreeMetaRow } from '../../persistence/host-qualified-worktree-meta'
-import { RUNTIME_PARTITION_TOPOLOGY_FENCE_MS } from '../../persistence/loading-store/runtime-partition-topology-fence'
+import { RUNTIME_PARTITION_TOPOLOGY_FENCE_MS } from '../../persistence/loading-store/workspace-sessions/runtime-partition-topology-fence'
 import { TEST_LEAF_1 } from '../../persistence/persistence-session-fixtures'
 
 let hasCreatedStoreInCase = false
@@ -162,6 +162,40 @@ describe('worktree removal across host session partitions', () => {
     )
 
     expect(store.getWorkspaceSession(ENV_A).tabsByWorktree[STALE]).toEqual([])
+  })
+
+  it('forgets a removed worktree once a late window save that still listed it is followed by one that does not', async () => {
+    const store = await createStore()
+    const liveTab = makeTerminalTab({ id: 'live-tab', worktreeId: LIVE })
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [STALE]: [makeTerminalTab({ id: 'stale-tab', worktreeId: STALE })],
+        [LIVE]: [liveTab]
+      }
+    })
+    removeWorktreeMetaRow(store, STALE, undefined)
+
+    // A save queued before the window purged the worktree lands after main removed it.
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [STALE]: [makeTerminalTab({ id: 'stale-tab', worktreeId: STALE })],
+        [LIVE]: [liveTab]
+      },
+      unifiedTabs: {}
+    })
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: { [LIVE]: [liveTab] },
+      unifiedTabs: {}
+    })
+
+    const session = store.getWorkspaceSession()
+    expect(Object.keys(session.tabsByWorktree)).toEqual([LIVE])
+    expect(session.unifiedTabs?.[STALE]).toBeUndefined()
+    expect(session.tabGroups?.[STALE]).toBeUndefined()
+    expect(session.activeTabIdByWorktree).not.toHaveProperty(STALE)
   })
 
   // omarchy: one removal left a repo revision that froze every sibling at [] across restarts.

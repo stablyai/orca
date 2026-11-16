@@ -8,13 +8,13 @@ import {
   waitForActiveWorktree,
   waitForSessionReady
 } from './helpers/store'
-import { RuntimeClient } from '../../src/cli/runtime-client'
+import { RuntimeClient } from '../../src/cli/runtime/client'
+import type { RuntimeTerminalCreate } from '../../src/shared/terminal/runtime/runtime-terminal-create-contract'
 import type {
-  RuntimeTerminalCreate,
   RuntimeTerminalListResult,
   RuntimeTerminalSummary,
   RuntimeTerminalWait
-} from '../../src/shared/runtime-types'
+} from '../../src/shared/terminal/runtime/runtime-terminal-contracts'
 import {
   CODEX_IDLE_TITLE,
   CODEX_WORKING_TITLE,

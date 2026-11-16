@@ -1,29 +1,35 @@
-import type { BrowserWindow } from 'electron'
-import { ipcMain } from 'electron'
+import { type BrowserWindow, ipcMain } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
-import type { Repo } from '../../../shared/repo-types'
-import type { RepoHostTarget } from '../../../shared/repo-host-identity'
-import { isFolderRepo } from '../../../shared/repo-kind'
-import type { ExecutionHostId } from '../../../shared/execution-host'
-import { getRepoExecutionHostId, normalizeExecutionHostId } from '../../../shared/execution-host'
-import { normalizeRepoBadgeColor } from '../../../shared/repo-badge-color'
-import { sanitizeRepoIcon } from '../../../shared/repo-icon'
-import { normalizeGhAccountBinding } from '../../../shared/github/account-binding'
-import type { GhAccountBinding } from '../../../shared/github/account-binding'
+import type { Repo } from '../../../shared/repository/repo-types'
+import type { RepoHostTarget } from '../../../shared/repository/repo-host-identity'
+import { isFolderRepo } from '../../../shared/repository/repo-kind'
+
+import {
+  type ExecutionHostId,
+  getRepoExecutionHostId,
+  normalizeExecutionHostId
+} from '../../../shared/execution-host'
+import { normalizeRepoBadgeColor } from '../../../shared/repository/appearance/repo-badge-color'
+import { sanitizeRepoIcon } from '../../../shared/repository/appearance/repo-icon'
+import {
+  normalizeGhAccountBinding,
+  type GhAccountBinding
+} from '../../../shared/github/accounts/account-binding'
+
 import { normalizeRepoSourceControlAiOverrides } from '../../../shared/source-control/ai/settings/source-control-ai-repo-settings'
 import {
   normalizeCustomWorktreeVisibilitySources,
   normalizeWorktreeVisibilitySourcePreferences
-} from '../../../shared/worktree/visibility-sources'
+} from '../../../shared/worktree/visibility/visibility-sources'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
 import { commitProvenRepoKindChange } from '../../workspaces/catalog/folder-repo-git-conversion'
-import { normalizeDictationTerms } from '../../../shared/dictation-dictionary'
+import { normalizeDictationTerms } from '../../../shared/speech/dictation/dictation-dictionary'
 import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
 import { notifyReposChanged } from './repos-changed-notification'
 import {
   assertWslMoveProjectWritable,
   isWslMoveSourceHost
-} from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 
 export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Store): void {
   ipcMain.handle(
@@ -62,10 +68,13 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
           externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
           agentWorktreeVisibility?: Repo['agentWorktreeVisibility'] | null
           sourceControlAi?: Repo['sourceControlAi'] | null
+          workspaceCleanupPolicy?: Repo['workspaceCleanupPolicy'] | null
           externalWorktreeDiscoverySuppressedAt?:
             | Repo['externalWorktreeDiscoverySuppressedAt']
             | null
+          hiddenAt?: Repo['hiddenAt'] | null
           ghAccount?: GhAccountBinding | null
+          browserProfileId?: string | null
         }
       }
     ): Promise<Repo | null> => {
@@ -204,6 +213,15 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
           !Number.isFinite(updates.externalWorktreeDiscoverySuppressedAt))
       ) {
         delete updates.externalWorktreeDiscoverySuppressedAt
+      }
+      if ('hiddenAt' in updates && updates.hiddenAt === null) {
+        updates.hiddenAt = undefined
+      } else if (
+        'hiddenAt' in updates &&
+        updates.hiddenAt !== undefined &&
+        (typeof updates.hiddenAt !== 'number' || !Number.isFinite(updates.hiddenAt))
+      ) {
+        delete updates.hiddenAt
       }
       if (
         'externalWorktreeInboxBaselinePaths' in updates &&

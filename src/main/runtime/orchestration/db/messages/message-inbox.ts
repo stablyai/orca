@@ -2,6 +2,8 @@ import type { MessageType, MessageRow } from '../orchestration-records'
 import { exposeMessageTimestamps, exposeMessageListTimestamps } from '../utc-timestamp'
 import { addLifecycleRejectionMarker } from '../lifecycle-rejection-marker'
 import type { OrchestrationDb } from '../orchestration-db'
+import { MESSAGE_COLUMN_LIST } from '../row-column-lists'
+import { runOwnsDirectMessageSql } from '../runs/run-coordinator-mail-routing'
 
 const MESSAGE_ID_UPDATE_BATCH_SIZE = 500
 const MESSAGE_MUTATION_SAVEPOINT = 'message_id_mutation'
@@ -33,28 +35,22 @@ function runBatchedMessageMutation(
 export function getUnreadMessages(
   this: OrchestrationDb,
   toHandle: string,
-  types?: MessageType[]
+  types?: MessageType[],
+  options?: { excludeRunOwnedDirect?: boolean }
 ): MessageRow[] {
-  if (types && types.length > 0) {
-    const placeholders = types.map(() => '?').join(',')
-    return exposeMessageListTimestamps(
-      this.db
-        .prepare(
-          `SELECT * FROM messages
-           WHERE to_handle = ? AND read = 0 AND delivery_contract = 'current_delivery'
-             AND type IN (${placeholders}) ORDER BY sequence`
-        )
-        .all(toHandle, ...types) as MessageRow[]
-    )
-  }
+  const typeSql = types?.length ? ` AND type IN (${types.map(() => '?').join(',')})` : ''
+  const runOwnedSql = options?.excludeRunOwnedDirect
+    ? ` AND NOT ${runOwnsDirectMessageSql('messages')}`
+    : ''
   return exposeMessageListTimestamps(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over messages returns the row shape its schema and MessageRow define, like every row cast in db/.
     this.db
       .prepare(
         `SELECT * FROM messages
-         WHERE to_handle = ? AND read = 0 AND delivery_contract = 'current_delivery'
+         WHERE to_handle = ? AND read = 0 AND delivery_contract = 'current_delivery'${typeSql}${runOwnedSql}
          ORDER BY sequence`
       )
-      .all(toHandle) as MessageRow[]
+      .all(toHandle, ...(types ?? [])) as MessageRow[]
   )
 }
 
@@ -92,14 +88,20 @@ export function getUndeliveredUnreadMessages(
   this: OrchestrationDb,
   toHandle: string,
   types?: MessageType[],
-  options?: { excludeTypes?: readonly string[]; excludeIds?: readonly string[]; limit?: number }
+  options?: {
+    excludeTypes?: readonly string[]
+    excludeIds?: readonly string[]
+    excludeRunOwnedDirect?: boolean
+    limit?: number
+  }
 ): MessageRow[] {
   const conditions = [
     'to_handle = ?',
     'read = 0',
     'delivered_at IS NULL',
     'pointer_enter_pending = 0',
-    "delivery_contract = 'current_delivery'"
+    "delivery_contract = 'current_delivery'",
+    ...(options?.excludeRunOwnedDirect ? [`NOT ${runOwnsDirectMessageSql('messages')}`] : [])
   ]
   const params: (string | number)[] = [toHandle]
   if (types?.length) {
@@ -151,9 +153,10 @@ export function getAllMessages(this: OrchestrationDb, toHandle: string, limit = 
 }
 
 export function getMessageById(this: OrchestrationDb, id: string): MessageRow | undefined {
-  const message = this.db.prepare('SELECT * FROM messages WHERE id = ?').get(id) as
-    | MessageRow
-    | undefined
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the column list names every column of the row type, and a missing one fails compilation.
+  const message = this.db
+    .prepare(`SELECT ${MESSAGE_COLUMN_LIST} FROM messages WHERE id = ?`)
+    .get(id) as MessageRow | undefined
   return message ? exposeMessageTimestamps(message) : undefined
 }
 

@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { DEFAULT_WORKSPACE_STATUSES } from '../../../../shared/workspace-statuses'
+import { DEFAULT_WORKSPACE_STATUSES } from '../../../../shared/workspace/status/workspace-status-defaults'
 import WorkspaceStatusPicker from './WorkspaceStatusPicker'
 
 const mocks = vi.hoisted(() => {

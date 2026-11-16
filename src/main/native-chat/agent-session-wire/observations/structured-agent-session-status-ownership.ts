@@ -15,6 +15,11 @@ import {
   StructuredAgentSessionOpenChildWork,
   type ChildWorkLifetimeToken
 } from './structured-agent-session-open-child-work'
+import type { StructuredAgentSessionChildWorkProducer } from './structured-agent-session-subagent-rows'
+import type {
+  StatusFeedSession,
+  StructuredAgentSessionStatusFeedDeps
+} from './structured-agent-session-status-feed-deps'
 
 export type StructuredAgentSessionStatusPublisher = {
   publish: (
@@ -100,12 +105,108 @@ export class StructuredAgentSessionStatusOwnership {
     evidence: AgentChildWorkEvidence[],
     provider: AgentSessionRecord['provider']
   ): void {
+    this.observeChildWork(sessionId, evidence)
+    this.deliverChildWork(sessionId, evidence, provider)
+  }
+
+  establish(
+    sessionId: string,
+    location: AgentSessionExecutionLocation,
+    provider: AgentSessionRecord['provider'],
+    now: number
+  ): void {
+    if (!this.matchesLocation(sessionId, location)) {
+      this.publish(
+        {
+          sessionId,
+          workspaceId: location.workspaceId,
+          agent: provider,
+          status: null,
+          latestPrompt: '',
+          runtimePermission: null,
+          updatedAt: now
+        },
+        location
+      )
+    }
+  }
+
+  publishChildWorkAfterWrites(
+    deps: StructuredAgentSessionStatusFeedDeps,
+    sessionId: string,
+    evidence: AgentChildWorkEvidence[],
+    producer: StructuredAgentSessionChildWorkProducer | undefined,
+    publish: (session: StatusFeedSession) => void
+  ): void {
+    const session = deps.sessions.get(sessionId)
+    if (!session) {
+      return
+    }
+    this.observeChildWork(sessionId, evidence)
+    const apply = () => {
+      if (deps.sessions.get(sessionId) === session && !deps.rowRetired?.(sessionId)) {
+        try {
+          this.establish(sessionId, session.params.location, session.params.provider, deps.now())
+        } catch (error) {
+          deps.logger.warn('status sink publish failed', {
+            scope: 'status-sink-publish',
+            sessionId,
+            error
+          })
+        }
+        publish(session)
+      }
+    }
+    if (producer?.publishChildWork) {
+      producer.publishChildWork(evidence, apply)
+    } else {
+      apply()
+    }
+  }
+
+  observeChildWork(sessionId: string, evidence: readonly AgentChildWorkEvidence[]): void {
     this.open.observe(sessionId, evidence)
+  }
+
+  deliverChildWork(
+    sessionId: string,
+    evidence: AgentChildWorkEvidence[],
+    provider: AgentSessionRecord['provider']
+  ): void {
     const subject = this.subjects.get(sessionId)
     if (!subject || !this.landed.has(sessionId)) {
       return
     }
     this.sink()?.publishChildWork?.(subject, evidence, provider)
+  }
+
+  admitChildWork(
+    deps: StructuredAgentSessionStatusFeedDeps,
+    sessionId: string,
+    session: StatusFeedSession,
+    evidence: AgentChildWorkEvidence[],
+    producer?: StructuredAgentSessionChildWorkProducer
+  ): boolean {
+    try {
+      this.deliverChildWork(sessionId, evidence, session.params.provider)
+    } catch (error) {
+      deps.logger.warn('child work publish failed', {
+        scope: 'child-work-publish',
+        sessionId,
+        error
+      })
+      return false
+    }
+    try {
+      deps.onChildWorkChanged?.(sessionId, producer)
+    } catch (error) {
+      deps.logger.warn('child work observer failed', {
+        scope: 'child-work-observer',
+        sessionId,
+        error
+      })
+    }
+    return true
   }
 
   /** Capture lifetimes before provider awaits so Stop cannot close replacement runs. */

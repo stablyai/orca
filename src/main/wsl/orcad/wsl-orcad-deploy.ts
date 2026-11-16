@@ -1,14 +1,14 @@
-import type { WslHostDeferredUpdate } from '../../../shared/wsl-host-types'
+import type { WslHostDeferredUpdate } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import type { WslOrcadLaunch, WslOrcadDeployOptions } from './wsl-orcad-launch-contract'
 /** D1/D2b/D8 reuse SSH installation, activation journals/fences and admission over wsl.exe. C5 pairs through the reported loopback port. */
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 
-import { ORCAD_MANAGED_REMOTE_PORT } from '../../../shared/orcad-managed-runtime'
+import { ORCAD_MANAGED_REMOTE_PORT } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import type { ServeReadiness } from '../../server/serve-readiness'
 
 import { recoverInterruptedOrcadActivation } from '../../managed-server/activation/orcad-activation-recovery'
 import { readOrcadActivationRecord } from '../../managed-server/activation/orcad-activation-record-store'
-import { materializeOrcadArtifact } from '../../orcad/orcad-artifact-materializer'
+import { materializeOrcadArtifact } from '../../orcad/artifact-slots/orcad-artifact-materializer'
 import type { OrcadHostTransport } from '../../managed-server/install/orcad-host-transport'
 import { ORCAD_ACTIVATION_POLICY_REFUSED_CODE } from '../../managed-server/activation/orcad-installed-activation'
 import { orcadBoundPort } from '../../managed-server/lifecycle/orcad-managed-bound-port'
@@ -21,7 +21,7 @@ import { isWaitingOrcadUpdateDeferral } from '../../managed-server/lifecycle/orc
 import { clearOrcadUpdateFailedThisLaunch } from '../../managed-server/lifecycle/orcad-managed-update-failure-memory'
 import type { OrcadUpdateIntent } from '../../managed-server/lifecycle/orcad-managed-update-decision'
 import type { OrcadActivationRecord } from '../../managed-server/activation/orcad-activation-record'
-import { errorMessage } from '../../../shared/error-message'
+import { errorMessage } from '../../../shared/errors/error-message'
 import { pruneWslOrcadVersionsUntilClean } from './wsl-orcad-version-gc-memo'
 import { pruneSupersededOrcadCandidates } from '../../managed-server/lifecycle/orcad-managed-version-gc'
 import { wakeAlreadyActiveOrcad } from '../../managed-server/lifecycle/orcad-already-active-wake'
@@ -31,7 +31,7 @@ import {
   deployOrcad,
   type OrcadDeployOptions
 } from '../../managed-server/install/orcad-remote-deploy'
-import { isWslMoveUnderwayOnHost } from '../../persistence/moving-wsl-projects/wsl-move-running-moves'
+import { isWslMoveUnderwayOnHost } from '../../persistence/moving-wsl-projects/orchestration/wsl-move-running-moves'
 import { readLocalFullVersion } from '../../managed-server/install/remote-versioned-install'
 import { createWslDistroHolder } from '../discovery/wsl-distro-holder'
 

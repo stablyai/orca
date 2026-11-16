@@ -1,7 +1,7 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import { useAppStore } from '../../store'
-import { armFloatingPanelReclaimIntent } from '@/components/floating-terminal/floating-workspace-focus-reclaim'
-import { isFloatingWorkspacePanelFocused } from '@/components/floating-terminal/floating-workspace-terminal-actions'
+import { useAppStore } from '../../store/index'
+import { armFloatingPanelReclaimIntent } from '@/components/floating-terminal/focus/floating-workspace-focus-reclaim'
+import { isFloatingWorkspacePanelFocused } from '@/components/floating-terminal/workspace/floating-workspace-terminal-actions'
 import { selectFloatingVisibleTabCount } from '@/store/workspaces/floating/floating-workspace-panel-selector'
 import { hasSplitLandingGroup } from '@/store/slices/tabs/split-landing-groups'
 

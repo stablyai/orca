@@ -1,7 +1,7 @@
 import {
   textGenerationFailure,
   textGenerationFailureCodeFields
-} from '../../../shared/text-generation-failure-copy'
+} from '../../../shared/text-generation/text-generation-failure-copy'
 import { ipcMain } from 'electron'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { ResolvedSourceControlAiGenerationParams } from '../../../shared/source-control/ai/source-control-ai-operation-resolution'
@@ -13,12 +13,12 @@ import {
   type GeneratePullRequestFieldsResult
 } from '../../text-generation/commit-message-text-generation'
 import { getCommitMessageModelDiscoveryHostKey } from '../../../shared/source-control/ai/generation/commit-message-host-key'
-import { getPullRequestDraftContext } from '../../text-generation/pull-request-context'
-import { prepareLocalCommitMessageAgentEnv } from '../../text-generation/commit-message-agent-environment'
+import { getPullRequestDraftContext } from '../../text-generation/pull-request-context/pull-request-context'
+import { prepareLocalCommitMessageAgentEnv } from '../../text-generation/execution/commit-message-agent-environment'
 import { SSH_HOST_NOT_SERVED_MESSAGE } from '../../providers/ssh-host-not-served-error'
 import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-worktree-roots-cache'
 import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'
-import { gitExecFileAsync } from '../../git/runner'
+import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
 import { withLinkedIssueDraftContext } from '../../../shared/source-control/ai/recipes/source-control-ai-action-variables'
 import { resolveSourceControlAiLinkedIssueMeta } from '../source-control/source-control-ai-linked-issue'
 import { resolveHostedReviewBodyForGeneration } from '../../source-control/pull-request-template'

@@ -2,13 +2,13 @@ import { defineMethod } from '../../core'
 import {
   DELEGATED_MOBILE_DEVICE_SYNC_METHOD,
   DelegatedMobileDeviceSyncParamsSchema
-} from '../../../../../shared/delegated-mobile-device-contract'
+} from '../../../../../shared/remote-runtime/pairing/delegated-mobile-device-contract'
 import {
   ORCAD_DECLARE_CLIENT_METHOD,
   ORCAD_PEER_DESKTOPS_METHOD,
   OrcadDeclareClientParamsSchema,
   OrcadPeerDesktopsParamsSchema
-} from '../../../../../shared/orcad-peer-desktops-contract'
+} from '../../../../../shared/remote-runtime/orcad-lifecycle/orcad-peer-desktops-contract'
 import { RegisterDeviceKeyParamsSchema } from '../../../../../shared/remote-runtime/pairing/device-key-registration-contract'
 import { REGISTER_DEVICE_KEY_METHOD } from '../../../../../shared/remote-runtime/pairing/device-key-capability'
 import { EXCHANGE_PAIRING_TICKET_METHOD } from '../../../../../shared/remote-runtime/pairing/ticket-exchange-capability'

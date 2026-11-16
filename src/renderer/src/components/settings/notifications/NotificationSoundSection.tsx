@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import { usesCustomNotificationSound } from '../../../../../shared/notifications/notification-settings-types'
 import { Label } from '../../ui/label'
 import { Slider } from '../../ui/slider'
 import {
@@ -52,7 +53,7 @@ export function NotificationSoundSection({
   const previewSound = async (
     customSoundId: GlobalSettings['notifications']['customSoundId']
   ): Promise<void> => {
-    if (customSoundId === 'system') {
+    if (!usesCustomNotificationSound(customSoundId)) {
       return
     }
     const result = await window.api.notifications.playSound({
@@ -97,7 +98,7 @@ export function NotificationSoundSection({
   const soundOptions = getNotificationSoundOptions(notificationSettings.customSoundPath)
 
   return (
-    <div className="space-y-2 py-2">
+    <div data-settings-row="" className="space-y-2 py-2">
       <div className="space-y-0.5">
         <div className="flex items-center gap-2">
           <FileAudio className="size-4" />
@@ -155,7 +156,7 @@ export function NotificationSoundSection({
           {notificationSettings.customSoundPath}
         </p>
       ) : null}
-      {selectedSoundId !== 'system' ? (
+      {usesCustomNotificationSound(selectedSoundId) ? (
         <div className="flex items-center gap-3 pt-1">
           <Volume2 className="size-4 text-muted-foreground" />
           <Slider

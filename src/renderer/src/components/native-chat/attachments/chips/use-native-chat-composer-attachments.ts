@@ -24,7 +24,7 @@ import {
 } from './native-chat-pending-attachment-cache'
 import { nativeChatPendingAttachmentScope } from './native-chat-pending-attachment-scopes'
 import { useNativeChatComposerImageChips } from './use-native-chat-composer-image-chips'
-import { createNonSecureContextUuid as createUuidV4 } from '../../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createUuidV4 } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import {
   insertImageReferences,
   nativeChatImageRowIds,
@@ -32,7 +32,7 @@ import {
   settlePendingImageReferences,
   takePendingImageWithReferences
 } from '../../composer/editor/native-chat-composer-image-references'
-import { isImageDropPath } from '../../../../../../shared/image-path-paste'
+import { isAgentInlineImagePath } from '../../../../../../shared/native-chat/input/composer/agent-inline-image-types'
 import { useNativeChatPastedTextAdmission } from '../../composer/editor/native-chat-pasted-text-state'
 
 export function useNativeChatComposerAttachments({
@@ -169,7 +169,11 @@ export function useNativeChatComposerAttachments({
       })
       setPreview(id, previewUrl)
       // A dropped file's kind shows in its name; a clipboard paste is always an image.
-      if (imageReferences && acceptsImages && (!pendingName || isImageDropPath(pendingName))) {
+      if (
+        imageReferences &&
+        acceptsImages &&
+        (!pendingName || isAgentInlineImagePath(pendingName))
+      ) {
         insertImageReferences(destinationScope(), scopeEditor(), [id])
       }
       return id

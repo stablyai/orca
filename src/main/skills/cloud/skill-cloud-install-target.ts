@@ -1,4 +1,4 @@
-import type { SkillInstallDestination } from '../../../shared/skill-install-contract'
+import type { SkillInstallDestination } from '../../../shared/skills/installation/skill-install-contract'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 
 export async function classifySkillCloudInstallTarget(

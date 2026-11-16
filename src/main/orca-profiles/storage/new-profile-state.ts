@@ -2,12 +2,12 @@ import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { getDefaultPersistedState } from '../../../shared/constants'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import { createInitialHomeWorkspaceState } from '../../persistence/loading-store/initial-home-workspace'
-import { LoadedCohortMigrationOperations } from '../../persistence/loading-store/loaded-cohort-migrations'
-import { acquireProfileStateRuntimeAdmission } from '../../persistence/profile-state/profile-state-access'
-import '../../persistence/profile-state/profile-state-database'
+import { createInitialHomeWorkspaceState } from '../../persistence/loading-store/profile-loading/initial-home-workspace'
+import { LoadedCohortMigrationOperations } from '../../persistence/loading-store/profile-loading/loaded-cohort-migrations'
+import { acquireProfileStateRuntimeAdmission } from '../../persistence/profile-state/access/profile-state-access'
+import '../../persistence/profile-state/database/profile-state-database'
 import { isSqliteAvailable } from '../../sqlite/sync-database'
-import { migrateProfileStateToSqlite } from '../../persistence/profile-state/profile-state-migration'
+import { migrateProfileStateToSqlite } from '../../persistence/profile-state/startup/profile-state-migration'
 import {
   getOrcaProfileDataFile,
   getOrcaProfileStateDatabaseFile,

@@ -1,4 +1,4 @@
-import type { RateLimitWindow } from '../../../../shared/rate-limit-types'
+import type { RateLimitWindow } from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 
 export type ClaudeUsageWindowInput = {
   utilization?: number

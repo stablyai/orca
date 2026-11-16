@@ -1,4 +1,4 @@
-import type { ClassifiedError } from '../classified-error'
+import type { ClassifiedError } from '../errors/classified-error'
 
 export type EmptyPageOutcome = {
   reason: 'window-unreachable' | 'load-failed' | 'end-of-data'

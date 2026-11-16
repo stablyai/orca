@@ -1,4 +1,4 @@
-import type { RuntimeTerminalDriverState } from '../../../../../shared/runtime-session-contracts'
+import type { RuntimeTerminalDriverState } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { useCallback, useEffect, useId, useRef, useState, type ReactElement } from 'react'
 import { Minimize2, Smartphone } from 'lucide-react'
 import { Button } from '@/components/ui/button'

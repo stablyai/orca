@@ -9,7 +9,7 @@ import {
   CommandItem,
   CommandList
 } from '@/components/ui/command'
-import { FooterKey } from '@/components/worktree-jump/worktree-jump-palette-primitives'
+import { FooterKey } from '@/components/worktree-jump/rows/worktree-jump-palette-row-content'
 import { getWorkspaceStatusVisualMeta } from '@/components/sidebar/workspace-status/presentation/workspace-status'
 import { useModalReturnFocus } from '@/hooks/useModalReturnFocus'
 import { translate } from '@/i18n/i18n'
@@ -17,7 +17,7 @@ import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store'
 import { selectWorkspaceStatusesForHost } from '@/store/workspaces/status/host-workspace-status-columns'
 import { useActiveWorktree } from '@/store/workspaces/selection/use-selected-worktree'
-import { getWorkspaceStatus } from '../../../../shared/workspace-statuses'
+import { getWorkspaceStatus } from '../../../../shared/workspace/status/workspace-statuses'
 
 const CLOSE_LINGER_MS = 300
 

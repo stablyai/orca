@@ -1,12 +1,12 @@
 import type { AgentSessionUnavailable } from '../../shared/agent-session/agent-session-availability'
 import type { spawnProcess } from '@orca/process-host'
-import type { AgentGenerationFailureOutput } from './agent-failure-output'
+import type { AgentGenerationFailureOutput } from './failures/agent-failure-output'
 import type {
   CommitMessageAgentCapability,
   CommitMessageModelCapability
 } from '../../shared/source-control/ai/generation/commit-message-agent-spec'
 import type { CommitMessagePlan } from '../../shared/source-control/ai/generation/commit-message-plan'
-import type { TextGenerationFailureFields } from '../../shared/text-generation-failure-copy'
+import type { TextGenerationFailureFields } from '../../shared/text-generation/text-generation-failure-copy'
 
 export type GenerateCommitMessageResult =
   | { success: true; message: string; agentLabel?: string }
@@ -50,9 +50,10 @@ export type TextGenerationOperation =
   | 'branch-name'
   | 'jira-issue-summary'
   | 'conversation-name'
+  | 'dictation-cleanup'
 
 export type CommitMessageGenerationTarget =
-  | { kind: 'local'; cwd: string; env?: NodeJS.ProcessEnv; wslDistro?: string }
+  | { kind: 'local'; cwd: string; env?: NodeJS.ProcessEnv; wslDistro?: string; laneId?: string }
   | {
       kind: 'remote'
       cwd: string
@@ -126,6 +127,7 @@ export type LocalSourceControlPlanInput = {
   cwd: string
   env: NodeJS.ProcessEnv | undefined
   operation: TextGenerationOperation
+  laneId?: string
   wslDistro?: string
   spawnAgent: SpawnSourceControlAgent
   timeoutMs?: number

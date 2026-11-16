@@ -8,7 +8,7 @@ import { getPreferredPairingOffer } from '../../../shared/remote-runtime/host-ca
 import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { sendSupportedMigrationRequest } from '../../managed-server/migration/catalog/orcad-migration-request'
 import { getWslHostService } from './wsl-host-service-instance'
-import type { WslMoveMovedAutomation } from '../../persistence/moving-wsl-projects/wsl-move-host-automations-rewrite'
+import type { WslMoveMovedAutomation } from '../../persistence/moving-wsl-projects/desktop-state/wsl-move-host-automations-rewrite'
 
 // The host's automation service message for an id it does not hold.
 export const AUTOMATION_NOT_FOUND = 'Automation not found'
@@ -28,11 +28,11 @@ export async function openWslHostAutomationApi(
   environmentId: string
 ): Promise<WslHostAutomationApi> {
   const service = getWslHostService()
-  if (!service?.recordForEnvironment(environmentId)) {
+  if (!service || !(await service.recordForEnvironment(environmentId))) {
     throw new Error('wsl_move_host_unavailable')
   }
   await service.ensureForRuntimeCall(environmentId)
-  const environment = resolveEnvironment(userDataPath, environmentId)
+  const environment = await resolveEnvironment(userDataPath, environmentId)
   const pairing = parsePairingCode(encodePairingOffer(getPreferredPairingOffer(environment)))
   if (!pairing) {
     throw new Error('orcad_migration_pairing_code_invalid')

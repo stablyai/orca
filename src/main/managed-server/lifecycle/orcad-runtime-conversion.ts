@@ -1,7 +1,7 @@
 // Resume journaled migrations after lost contact; source rows stay authoritative until proven commit.
 // Retain source rows afterwards for downgrade compatibility.
 import { randomUUID } from 'node:crypto'
-import type { OrcadManagedConversionResult } from '../../../shared/orcad-managed-runtime'
+import type { OrcadManagedConversionResult } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import type { OrcadMigrationSourceCutover } from '../../../shared/orcad-migration/orcad-migration-source-cutover'
 import { recordManagedOrcadMigration } from '../../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
 import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
@@ -21,8 +21,8 @@ import {
 import {
   findOrcadMigrationSourceCutoverForTarget,
   removeOrcadMigrationJournalsForDestination
-} from '../../persistence/migrating-orcad-catalog/orcad-migration-cutover-journal'
-import type { SshTarget } from '../../../shared/ssh-types'
+} from '../../persistence/migrating-orcad-catalog/cutover-journals/orcad-migration-cutover-journal'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { CensusHostRelayTerminals } from '../../ssh/migration-source/orcad-migration-terminal-gate'
 import { createManagedOrcadEnvironment } from './orcad-runtime-deployment'
 import { createSshRelayMigrationSource } from '../../ssh/migration-source/orcad-migration-ssh-relay-source'
@@ -32,11 +32,11 @@ import {
 } from '../../ssh/targets/ssh-target-orcad-preflight'
 import { ORCAD_MIGRATION_LEAVE_BEHIND_TERMINALS_REASON } from '../../ssh/migration-source/orcad-migration-source-fence'
 import type { OrcadMigrationPaneLeasePredicate } from '../../ssh/migration-source/orcad-migration-bridged-panes'
-import { retainOrcadMigrationSource } from '../../persistence/migrating-orcad-catalog/orcad-migration-source-retention'
+import { retainOrcadMigrationSource } from '../../persistence/migrating-orcad-catalog/retained-source/orcad-migration-source-retention'
 import {
   enableMovedOrcadAutomations,
   type EnableServerAutomation
-} from '../../persistence/migrating-orcad-catalog/orcad-migration-moved-automations'
+} from '../../persistence/migrating-orcad-catalog/retained-source/orcad-migration-moved-automations'
 import {
   linkedOrcadMigrationCutoverPort,
   linkedOrcadMigrationProjects,
@@ -81,14 +81,14 @@ export async function convertSshTargetToManagedOrcad(
   if (deployed.outcome === 'deferred') {
     return deployed // Retain fence and journal for a later resume.
   }
-  const environment = listEnvironments(userDataPath).find(
+  const environment = (await listEnvironments(userDataPath)).find(
     (entry) => entry.id === fenced.destinationEnvironmentId
   )
   if (!environment || !environmentMatchesManagedOrcadCutover(environment, fenced)) {
     throw new Error('orcad_migration_destination_environment_mismatch')
   }
   // Record before commit so crashes cannot allow rollback across migrated state.
-  recordManagedOrcadMigration(
+  await recordManagedOrcadMigration(
     userDataPath,
     environment.id,
     (args.now ?? (() => new Date()))().toISOString()
@@ -186,14 +186,14 @@ async function fenceOrResume(
     return existing.cutover
   }
   const stale = existing.state === 'stale-journal' ? existing.cutover : null
-  if (stale && !isRegistered(userDataPath, stale.destinationEnvironmentId)) {
+  if (stale && !(await isRegistered(userDataPath, stale.destinationEnvironmentId))) {
     removeOrcadMigrationJournalsForDestination(
       userDataPath,
       target.id,
       stale.destinationEnvironmentId
     )
   }
-  const converted = listEnvironments(userDataPath).some(
+  const converted = (await listEnvironments(userDataPath)).some(
     (environment) => getOrcadSshDeployment(environment)?.sshTargetId === target.id
   )
   if (converted) {
@@ -269,8 +269,10 @@ function requireJournaledCutover(
   return journaled
 }
 
-function isRegistered(userDataPath: string, environmentId: string): boolean {
-  return listEnvironments(userDataPath).some((environment) => environment.id === environmentId)
+async function isRegistered(userDataPath: string, environmentId: string): Promise<boolean> {
+  return (await listEnvironments(userDataPath)).some(
+    (environment) => environment.id === environmentId
+  )
 }
 
 function refuse(

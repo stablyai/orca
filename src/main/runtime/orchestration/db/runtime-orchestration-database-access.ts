@@ -6,7 +6,10 @@ import { closeOrphanedTerminalApprovals } from '../workers/approvals/terminal-ap
 import { OrcaRuntimeWithAutomationApiOperations } from '../../workspaces/persisted-surfaces/automation-api-operations'
 
 export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWithAutomationApiOperations {
-  abstract ensureOrchestrationFederationRelay(runId?: string): void
+  abstract ensureOrchestrationFederationRelay(
+    runId?: string,
+    options?: { keepAwake?: boolean }
+  ): void
 
   protected abstract scheduleRestoredMessageRepoints(): void
 

@@ -1,4 +1,5 @@
-import type { IPtyProvider, PtyDataEvent } from '../../../providers/pty-provider-contract'
+import type { IPtyProvider } from '../../../providers/pty/provider-contract'
+import type { PtyDataEvent } from '../../../providers/pty/events'
 
 type ExitListener = Parameters<IPtyProvider['onExit']>[0]
 type ExitEvent = Parameters<ExitListener>[0]

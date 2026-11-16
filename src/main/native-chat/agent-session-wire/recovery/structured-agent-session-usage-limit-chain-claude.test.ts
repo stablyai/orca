@@ -1,3 +1,5 @@
+import { followTestSinkSnapshots } from '../host/testing/structured-agent-session-direct-sink.test-fixture'
+import { readTestJournalSnapshot } from '../../agent-session-journal/journal-observation.test-support'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
@@ -5,7 +7,7 @@ import { agentSessionFailureFact } from '../../../../shared/agent-session/failur
 import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { ClaudeStructuredSessionAdapter } from '../../../claude/structured/claude-structured-session-adapter'
 import {
   fakeClaude,
@@ -85,6 +87,7 @@ it('counts a host continue whose recorded Claude echo opens the turn under its p
     sessionId: identity.sessionId,
     logger: { warn: () => {}, error: () => {} }
   })
+  await followTestSinkSnapshots(sink, journal)
   sink.bind({ journal, fence: 7, publish: () => {} })
   const settlements: Promise<unknown>[] = []
   const adapter = new ClaudeStructuredSessionAdapter({
@@ -159,7 +162,7 @@ it('counts a host continue whose recorded Claude echo opens the turn under its p
     }
     await Promise.all(settlements)
     expect(await sink.drained()).toEqual({ ok: true })
-    const echoed = journal.snapshot()
+    const echoed = await readTestJournalSnapshot(journal)
     const turnItem = echoed.items.findLast((item) => readAgentJournalTurn(item.body))
     const submission = echoed.submissions.find((input) => input.clientMessageId === clientMessageId)
     if (!turnItem || !submission?.providerItemId) {
@@ -173,7 +176,7 @@ it('counts a host continue whose recorded Claude echo opens the turn under its p
       limitBody(at + 1_000),
       { fence: 7, turnScope: { kind: 'turn', turnItemId: turnItem.itemId } }
     )
-    const snapshot = journal.snapshot()
+    const snapshot = await readTestJournalSnapshot(journal)
     expect(
       usageLimitContinueChain(snapshot.items, snapshot.submissions, { turnItemId: turnItem.itemId })
     ).toBe(1)

@@ -64,9 +64,7 @@ function makeHostCandidate(
     displayName: 'shared-workspace',
     branch: 'old-branch',
     path: workspacePath,
-    tier: 'ready',
-    selectedByDefault: true,
-    reasons: ['idle-clean'],
+    reasons: ['inactive'],
     blockers: force ? ['dirty-files'] : [],
     lastActivityAt: NOW - 30 * 24 * 60 * 60 * 1000,
     localContext: {
@@ -75,7 +73,7 @@ function makeHostCandidate(
       browserTabCount: 0,
       diffCommentCount: 0,
       newestDiffCommentAt: null,
-      retainedDoneAgentCount: 0
+      finishedAgentCount: 0
     },
     git: { clean: !force, upstreamAhead: 0, upstreamBehind: 0, checkedAt: NOW },
     fingerprint: `fingerprint-${executionHostId ?? 'unqualified'}${force ? '-force' : ''}`

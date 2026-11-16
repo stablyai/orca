@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import '../../../../../shared/rpc-contract/structured-agent-session-params'
+import '../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
 import { getStructuredAgentSessionLaunchLifecycle } from './structured-agent-session-launch-registry'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import {
