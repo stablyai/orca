@@ -1,8 +1,8 @@
 import type { AgentJournalRenderItem } from '../agent-session/journal/agent-session-journal-types'
 import { isRootAgentJournalItem } from '../agent-session/journal/agent-session-journal-producer'
-import { agentSessionPromptQuestions } from '../agent-session/agent-session-question-answer'
+import { agentSessionPromptQuestions } from '../agent-session/requests/prompts/agent-session-question-answer'
 import type { AgentReadEntry } from './agent-conversation-contracts'
-import { isAgentSessionContextClear } from '../agent-session/agent-session-context-clear'
+import { isAgentSessionContextClear } from '../agent-session/conversation-context/agent-session-context-clear'
 
 /** Whether a chat item can become an `orca agent read` entry by its kind alone: its own
  *  messages, failures, tool calls, approvals and questions, and the `/clear` divider the chat

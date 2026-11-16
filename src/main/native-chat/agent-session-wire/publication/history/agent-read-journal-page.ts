@@ -4,7 +4,7 @@ import {
   AGENT_SESSION_HISTORY_MAX_LIMIT,
   type AgentSessionLatestTurn
 } from '../../../../../shared/agent-session/agent-session-wire'
-import { isAgentSessionContextClear } from '../../../../../shared/agent-session/agent-session-context-clear'
+import { isAgentSessionContextClear } from '../../../../../shared/agent-session/conversation-context/agent-session-context-clear'
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentStatusState } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import { readAgentJournalTurnOutcome } from '../../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
