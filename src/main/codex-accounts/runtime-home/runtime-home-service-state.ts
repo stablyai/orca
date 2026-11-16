@@ -132,9 +132,10 @@ export abstract class CodexRuntimeHomeState {
   protected abstract getWslManagedHomeIdentity(
     account: CodexManagedAccount | null
   ): { distro: string; linuxHomePath: string } | null
-  protected abstract getPreparedWslRateLimitHomePath(
-    target: CodexAccountSelectionTarget
-  ): string | null
+  protected abstract getPreparedWslRateLimitHome(
+    target: CodexAccountSelectionTarget,
+    pinnedWslDistro?: string
+  ): CodexRateLimitHomeResolution
   protected abstract getWslCodexHomePathForSelection(
     target: CodexAccountSelectionTarget
   ): string | null

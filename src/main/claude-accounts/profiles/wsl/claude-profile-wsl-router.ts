@@ -221,7 +221,10 @@ export class ClaudeWslProfileRouter {
           ? { CLAUDE_CONFIG_DIR: profile.home, [CLAUDE_INJECTED_CONFIG_DIR_ENV]: profile.home }
           : {})
       },
-      provenance: profile ? `profile:${profile.accountId}:wsl:${distro}` : `wsl:${distro}:system`
+      provenance: profile ? `profile:${profile.accountId}:wsl:${distro}` : `wsl:${distro}:system`,
+      ...(profile
+        ? { readingAccount: { accountId: profile.accountId, runtime: 'wsl', wslDistro: distro } }
+        : {})
     }
   }
 

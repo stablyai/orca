@@ -1,3 +1,4 @@
+import type { ObservedAccountPlans } from '@/lib/provider-accounts/observed-account-plans'
 import type { Dispatch, ReactNode, SetStateAction } from 'react'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import type {
@@ -118,6 +119,9 @@ export type AccountsPaneSectionModel = {
     | null
   codexRateLimits: ProviderRateLimits | null
   codexRateLimitTarget: RateLimitRuntimeTarget
+  /** Plans by the saved account each reading names; see `getObservedAccountPlan`. */
+  claudeAccountPlans: ObservedAccountPlans
+  codexAccountPlans: ObservedAccountPlans
   setRemoveCodexTarget: Dispatch<SetStateAction<RemoveAccountTarget | null>>
   runCodexAccountAction: CodexAccountActionRunner
   recordOpenCodeSettingEdit: (field: 'cookie' | 'workspaceId' | 'apiKey') => void
