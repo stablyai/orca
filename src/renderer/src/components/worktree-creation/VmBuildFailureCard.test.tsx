@@ -105,9 +105,7 @@ it.each(['plan', 'hoursUsed', 'spendCap', 'payment'] as const)(
   (kind) => {
     const handlers = actions()
     render(<Sheet failure={{ kind }} canManageBilling={false} handlers={handlers} />)
-    expect(
-      screen.queryByRole('button', { name: /Compare plans|Raise spend cap|Turn on overage/ })
-    ).toBeNull()
+    expect(screen.queryByRole('button', { name: /Compare plans|in browser/ })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: /Use this computer instead/ }))
     expect(handlers.onCreateLocally).toHaveBeenCalledOnce()
   }
@@ -117,7 +115,7 @@ it("keeps Use this computer instead beside an owner's billing fix", () => {
   const handlers = actions()
   render(<Sheet failure={{ kind: 'spendCap' }} handlers={handlers} />)
   const buttons = screen.getAllByRole('button').map((button) => button.textContent?.trim())
-  expect(buttons.slice(0, 2)).toEqual(['Raise spend cap', 'Use this computer instead'])
+  expect(buttons.slice(0, 2)).toEqual(['Raise in browser', 'Use this computer instead'])
 })
 
 // The card counts down from the real clock; pin it so the minutes read the same every run.

@@ -56,7 +56,6 @@ const SETTINGS_NAV_TARGETS = [
   'cloud-local-commands',
   'cloud-skills',
   'cloud-api-keys',
-  'cloud-routines',
   'linear',
   'setup-guide',
   'servers',

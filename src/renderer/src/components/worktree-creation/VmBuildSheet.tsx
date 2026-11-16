@@ -6,13 +6,13 @@ import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 import { useOrcaBillingStatus } from '@/components/billing/use-orca-billing-status'
 import { cn } from '@/lib/class-names'
 import { useAppStore } from '@/store'
+import { openCloudConsole } from '@/lib/orca-cloud/open-cloud-console'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import {
   isAwaitingVmEnvironmentCheckDecision,
   resolveVmEnvironmentCheckDecision
 } from '@/runtime/ephemeral-vm/ephemeral-vm-environment-check-decision'
 import { openPlansDialog } from '@/components/billing/plans/plans-dialog-store'
-import { ORCA_BILLING_OVERAGE_SECTION_ID } from '@/components/new-workspace/orca-cloud-run-target-access'
 import type { PendingWorktreeCreation } from '@/lib/workspace/creation/pending-worktree-creation'
 import { toast } from 'sonner'
 import type { EnvironmentSetupFailureContext } from '../../../../shared/workspace-setup/environment-doctor/environment-setup-agent-prompt'
@@ -360,19 +360,7 @@ export function VmBuildSheet({
                     : onDismiss,
                 onSeePlans: () => openPlansDialog(),
                 onCreateLocally: () => onReturnToComposer({ local: true }),
-                onOpenBilling: () => {
-                  const store = useAppStore.getState()
-                  store.openSettingsTarget({
-                    pane: 'cloud-billing',
-                    repoId: null,
-                    // "Turn on overage" / "Raise spend cap" land on the overage card itself; the
-                    // payment notice is at the top of the section already.
-                    ...(failure?.kind === 'payment'
-                      ? {}
-                      : { sectionId: ORCA_BILLING_OVERAGE_SECTION_ID })
-                  })
-                  store.openSettingsPage()
-                },
+                onOpenBilling: () => void openCloudConsole('billing'),
                 onSignIn: signIn,
                 // Your running workspaces, where you can put one to sleep or delete it.
                 onShowWorkspaces: () => openCloudWorkspacePicker({ kind: 'running' }),
