@@ -1,0 +1,13 @@
+diff --git a/out/windowsExecutableCodeSignatureVerifier.js b/out/windowsExecutableCodeSignatureVerifier.js
+index c9a579eb3a7a21504ad89e663afc0f97399ac169..d32caaea688f8d8330e56c4e416721090f4cd898 100644
+--- a/out/windowsExecutableCodeSignatureVerifier.js
++++ b/out/windowsExecutableCodeSignatureVerifier.js
+@@ -44,7 +44,7 @@ function verifySignature(publisherNames, unescapedTempUpdateFile, logger) {
+         // https://docs.microsoft.com/en-us/windows/win32/fileio/naming-a-file
+         const tempUpdateFile = unescapedTempUpdateFile.replace(/'/g, "''");
+         logger.info(`Verifying signature ${tempUpdateFile}`);
+-        (0, child_process_1.execFile)(...preparePowerShellExec(`"Get-AuthenticodeSignature -LiteralPath '${tempUpdateFile}' | ConvertTo-Json -Compress"`, 20 * 1000), (error, stdout, stderr) => {
++        (0, child_process_1.execFile)(...preparePowerShellExec(`"Get-AuthenticodeSignature -LiteralPath '${tempUpdateFile}' | ConvertTo-Json -Compress"`, 120 * 1000), (error, stdout, stderr) => {
+             var _a;
+             try {
+                 if (error != null || stderr) {
