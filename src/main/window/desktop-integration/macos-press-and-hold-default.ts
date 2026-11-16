@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path'
 import { runProcessSync } from '@orca/process-host'
 import type { ProcessResult } from '@orca/process-host/process-spec'
 import { writeFileAtomically } from '../../filesystem/atomic-file-publication'
+import { ZOTZ_APP_ID } from '../../../shared/zotz/zotz-app-identity'
 
 // Opt out of the accent picker once so terminal keys repeat (#14746); later user choices win.
 // The separate defaults process may affect only the next launch. Reverting this also requires deleting the key.
@@ -18,7 +19,7 @@ const DEFAULTS_TIMEOUT_MS = 5_000
 // defaults uses exit 1 for an absent key; other failures leave its presence unknown.
 const DEFAULTS_MISSING_STATUS = 1
 
-const ORCA_BUNDLE_ID = 'com.stablyai.orca'
+const ORCA_BUNDLE_ID = ZOTZ_APP_ID
 
 export type PressAndHoldDecision =
   | 'not-macos'

@@ -15,7 +15,7 @@ import { isPathInsideOrEqual, samePathEntry } from '../command-paths/cli-install
 import { extractLegacyAppImageCliWrapperTarget } from '../appimage/legacy-appimage-cli-wrapper'
 
 // Match after-install.sh's electron-builder name variants when reclaiming packaged launchers.
-const PACKAGED_LINUX_LAUNCHER_DIRECTORIES = ['/opt/Orca', '/opt/orca-ide', '/opt/orca']
+const PACKAGED_LINUX_LAUNCHER_DIRECTORIES = ['/opt/Zotz', '/opt/Orca', '/opt/orca-ide', '/opt/orca']
 
 export class CliCommandInspection extends CliInstallLocation {
   protected async inspectSymlink(

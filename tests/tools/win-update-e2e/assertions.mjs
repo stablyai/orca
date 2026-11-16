@@ -11,7 +11,7 @@ const CONSOLE_HOST_PROCESSES = new Set([
 ])
 
 // The app's own windows are expected on relaunch and never count as a flash.
-const APP_OWNER_PROCESSES = new Set(['orca', 'electron'])
+const APP_OWNER_PROCESSES = new Set(['zotz', 'orca', 'electron'])
 
 // Count canary-titled or new non-app console/terminal-host windows as flashes; attribute only by title/owner, not conhost command-line guesses.
 export function classifyWindowEvents(events, { canary }) {

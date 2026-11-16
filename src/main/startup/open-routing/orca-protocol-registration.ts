@@ -1,7 +1,8 @@
 import type { App } from 'electron'
+import { ZOTZ_PROTOCOL_SCHEME } from '../../../shared/zotz/zotz-app-identity'
 
 /**
- * Registers `orca://` with Windows, which NSIS installs leave unregistered; macOS reads it from
+ * Registers `zotz://` with Windows, which NSIS installs leave unregistered; macOS reads it from
  * Info.plist and Linux packages from the desktop entry. Only packaged desktop launches register,
  * so dev, test and serve runs never take over the machine's handler.
  */
@@ -12,13 +13,13 @@ export function registerOrcaProtocolClient(
   if (options.platform !== 'win32' || !app.isPackaged || !options.desktopLaunch) {
     return false
   }
-  if (app.isDefaultProtocolClient('orca')) {
+  if (app.isDefaultProtocolClient(ZOTZ_PROTOCOL_SCHEME)) {
     return false
   }
   try {
-    return app.setAsDefaultProtocolClient('orca')
+    return app.setAsDefaultProtocolClient(ZOTZ_PROTOCOL_SCHEME)
   } catch (error) {
-    console.warn('[protocol] Failed to register orca:// links:', error)
+    console.warn('[protocol] Failed to register zotz:// links:', error)
     return false
   }
 }

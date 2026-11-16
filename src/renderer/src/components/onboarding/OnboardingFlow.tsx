@@ -141,7 +141,7 @@ export default function OnboardingFlow({
                   aria-hidden="true"
                   className="h-7 w-auto shrink-0 invert dark:invert-0"
                 />
-                <span>{t('auto.components.onboarding.OnboardingFlow.a249f81538', 'Orca')}</span>
+                <span>{t('auto.components.onboarding.OnboardingFlow.a249f81538', 'Zotz')}</span>
               </div>
               <OnboardingLanguageSwitcher
                 open={languagePickerOpen}

@@ -7,6 +7,7 @@ import {
   type RuntimeMetadata
 } from '../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
 import { RuntimeClientError } from '../connection/types'
+import { ZOTZ_USER_DATA_DIR_NAME } from '../../../shared/zotz/zotz-app-identity'
 
 export function readMetadata(userDataPath: string): RuntimeMetadata {
   const metadataPath = getRuntimeMetadataPath(userDataPath)
@@ -25,7 +26,7 @@ export function readMetadata(userDataPath: string): RuntimeMetadata {
     }
     throw new RuntimeClientError(
       'runtime_unavailable',
-      `Could not read Orca runtime metadata at ${metadataPath}. Start the Orca app first.`
+      `Could not read Orca runtime metadata at ${metadataPath}. Start the Zotz app first.`
     )
   }
 }
@@ -55,18 +56,18 @@ export function getPlatformUserDataPath(
   homeDir = homedir()
 ): string {
   if (platform === 'darwin') {
-    return join(homeDir, 'Library', 'Application Support', 'orca')
+    return join(homeDir, 'Library', 'Application Support', ZOTZ_USER_DATA_DIR_NAME)
   }
   if (platform === 'win32') {
     const appData = process.env.APPDATA
     if (!appData) {
       throw new RuntimeClientError(
         'runtime_unavailable',
-        'APPDATA is not set, so the Orca runtime metadata path cannot be resolved.'
+        'APPDATA is not set, so the Zotz runtime metadata path cannot be resolved.'
       )
     }
-    return join(appData, 'orca')
+    return join(appData, ZOTZ_USER_DATA_DIR_NAME)
   }
   // Match Electron’s packaged userData path.
-  return join(process.env.XDG_CONFIG_HOME || join(homeDir, '.config'), 'orca')
+  return join(process.env.XDG_CONFIG_HOME || join(homeDir, '.config'), ZOTZ_USER_DATA_DIR_NAME)
 }
