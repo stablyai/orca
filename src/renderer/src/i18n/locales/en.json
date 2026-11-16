@@ -82,6 +82,7 @@
       "exampleChildren": "1 child",
       "statusCaption": "Title flags agents that need you",
       "childrenCaption": "Parents sum up child worktrees",
+      "unreadCaption": "<label>Blue dot:</label> unread",
       "dismiss": "Dismiss"
     },
     "revealFiltered": {
@@ -873,7 +874,7 @@
         "profile": "Browser profile",
         "empty": "No sites have been allowed or blocked yet.",
         "title": "Site permissions",
-        "description": "Sites ask before using your camera, microphone, location and more. Change what you allowed or blocked for each site.",
+        "description": "Sites ask before using your camera, microphone, location, opening other apps and more. Change what you allowed or blocked for each site.",
         "search": {
           "permissions": "permissions",
           "camera": "camera",
@@ -881,7 +882,8 @@
           "location": "location",
           "notifications": "notifications",
           "clipboard": "clipboard",
-          "localNetwork": "local network"
+          "localNetwork": "local network",
+          "apps": "apps"
         }
       },
       "profileScope": {
@@ -1138,7 +1140,8 @@
     "followSymlinkedDirectories": "Follow symlinked directories",
     "followSymlinkedDirectoriesDescription": "Search linked folders in Quick Open and expand local linked folders in File Explorer.",
     "accounts": {
-      "claudeRemoveFolder": "Orca deletes this account's Claude folder and its sign-in from this computer. Chat history shared with System default stays. If it is selected, the next Claude you start uses System default."
+      "codexRemoveHome": "Orca deletes this account's Codex folder on {{host}}, including its sign-in, MCP logins and any Codex history stored only in that folder. This cannot be undone. If it is selected, the next Codex you start uses System default.",
+      "claudeRemoveProfile": "Orca deletes this account's own Claude folder and the sign-in saved in it on {{host}}. Your System default login and chat history shared with it stay. If it is selected, the next Claude you start uses System default."
     },
     "sourceControl": {
       "gitOperationInAnotherWorkspace": "Git operation running elsewhere",
@@ -5596,7 +5599,8 @@
             "detailedTooltip": "Full usage with bars, labels, and percentages",
             "compactTooltip": "Condensed usage: one summary per provider",
             "footerDetailAria": "Usage footer detail",
-            "notChecked": "Not checked"
+            "notChecked": "Not checked",
+            "modelWeeklyLimit": "{{model}} weekly limit: {{usage}}"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "Updating {{value0}}/{{value1}}",
@@ -8194,7 +8198,6 @@
           "locationSaveFailed": "Account location could not be saved. Try again.",
           "dbb9626ed1": "Cancel",
           "63843e37e2": "Remove Claude Account?",
-          "380a7736cc": "Removing this account permanently deletes its managed Codex home, including all Codex session history and MCP logins stored inside. This cannot be undone. If the account is currently active, Orca falls back to the system default Codex login.",
           "0d47394635": "Remove Codex Account?",
           "ae3b21eb6c": "opencode.ai/workspace/wrk_…/go",
           "51c9104e13": "Find this in the URL after logging into opencode.ai (e.g.",
@@ -14049,7 +14052,7 @@
           "catalog": "Catalog",
           "clear": "Clear filters",
           "themes": "Themes",
-          "codeLanguages": "Code languages",
+          "codeLanguages": "Languages",
           "translations": "Translations",
           "icons": "Icons",
           "commands": "Commands & panels",
@@ -19852,7 +19855,11 @@
           "confirm": "Open {{app}}",
           "confirmLink": "Open link",
           "cancel": "Cancel",
-          "launchFailed": "Couldn't open an app for this {{scheme}} link. It may not be installed."
+          "launchFailed": "Couldn't open an app for this {{scheme}} link. It may not be installed.",
+          "localFileDescription": "A local file wants to open another application.",
+          "tabSiteDescription": "A page on {{site}} wants to open another application.",
+          "alwaysAllowLocalFiles": "Always allow local files to open {{scheme}} links",
+          "alwaysAllow": "Always allow {{site}} to open {{scheme}} links"
         },
         "httpAuth": {
           "title": "Sign in",
@@ -19881,7 +19888,8 @@
             "midi": "MIDI devices",
             "windowManagement": "Window management",
             "idleDetection": "Device use",
-            "localNetwork": "Local network"
+            "localNetwork": "Local network",
+            "externalApp": "Open {{scheme}} links"
           },
           "ask": {
             "camera": "Use your camera",
@@ -20866,6 +20874,7 @@
           "xhigh": "XHigh"
         },
         "imageUnavailable": "Preview unavailable",
+        "permissionAppliesNextMessage": "{{saved}} applies to your next message; running {{active}}",
         "modelAndEffortValue": "{{model}} · {{effort}}",
         "modelAndEffort": "Model and effort"
       },
@@ -23945,7 +23954,17 @@
         "failed": "Sign-in failed. Try again."
       }
     },
-    "remoteScopeAccountsAddHere": "Showing accounts managed by {{value0}}. New accounts sign in there; you finish in this device’s browser."
+    "remoteScopeAccountsAddHere": "Showing accounts managed by {{value0}}. New accounts sign in there; you finish in this device’s browser.",
+    "rename": {
+      "action": "Rename",
+      "title": "Rename account",
+      "description": "Only the name Orca shows changes. Leave it blank to show {{email}}.",
+      "label": "Display name",
+      "reset": "Reset to default",
+      "cancel": "Cancel",
+      "save": "Save",
+      "unsupportedHost": "Update Orca on {{host}} to change this setting there."
+    }
   },
   "fileSearch": {
     "failed": "Search failed. Try again.",

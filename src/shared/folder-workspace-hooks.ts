@@ -1,4 +1,4 @@
-import type { OrcaHooks } from './orca-yaml-hook-types'
+import type { OrcaHooks } from './workspace-setup/orca-yaml-hook-types'
 import type { Repo } from './repository/repo-types'
 import { isFolderRepo } from './repository/repo-kind'
 

@@ -165,6 +165,7 @@ export async function performPreparedWorktreeFinalization(
       }
       // Advisory refresh may settle after finalization; it does not determine checkout contents.
       const localBaseRefRefresh = await baseContext.pendingLocalBaseRefRefresh
+      baseContext.updateCheckedOutLocalBase?.()
       return {
         preparedHeadReset,
         ...(localBaseRefRefresh ? { localBaseRefRefresh } : {}),

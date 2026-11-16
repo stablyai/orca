@@ -1,7 +1,7 @@
 import type {
   DiffComment,
   MobileDiffReviewState
-} from '../../../../../src/shared/diff-comment-types'
+} from '../../../../../src/shared/file-review/diff-comment-types'
 import type {
   MobileGitBranchCompareReply as MobileGitBranchCompareResult,
   MobileGitChangedFile

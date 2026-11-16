@@ -1,5 +1,5 @@
 import { posix as pathPosix } from 'node:path'
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { runWslProcess } from '../../../wsl/execution/wsl-runner'
 import { assertWslUncPathRunning } from '../../../wsl/filesystem/wsl-unc-access-gate'

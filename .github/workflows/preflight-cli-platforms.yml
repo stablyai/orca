@@ -46,7 +46,6 @@ jobs:
           pnpm exec vitest run --config config/vitest.config.ts --maxWorkers=2
           src/main/ipc/preflight-runnable-local-cli.test.ts
           src/main/ipc/preflight-wsl-agent-detection.test.ts
-          src/main/ipc/preflight-windows-path-refresh.repro.test.ts
           src/main/startup/shell-environment/login-shell-environment.test.ts
           src/packages/process-host/src/process-tree-termination.test.ts
           src/packages/process-host/src/run-process.test.ts

@@ -36,6 +36,20 @@ export function browserSitePermissionLabel(
   }
 }
 
+/** A remembered external-app answer's name, e.g. in Settings → Browser → Site permissions. */
+export function browserExternalAppPermissionLabel(
+  scheme: string,
+  t: Translate = translate
+): string {
+  return t(
+    'auto.components.browserPane.sitePermission.label.externalApp',
+    'Open {{scheme}} links',
+    {
+      scheme
+    }
+  )
+}
+
 /** What the site asks to do, finishing "{site} wants to". */
 export function browserSitePermissionRequestLine(permission: BrowserSitePermission): string {
   switch (permission) {

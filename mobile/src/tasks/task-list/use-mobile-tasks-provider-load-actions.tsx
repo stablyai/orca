@@ -1,4 +1,4 @@
-import type { ClassifiedError } from '../../../../src/shared/classified-error'
+import type { ClassifiedError } from '../../../../src/shared/errors/classified-error'
 import { getWorkItemPageErrorTypes } from '../../../../src/shared/github/work-items/work-item-page-errors'
 import type { RuntimeHydrationModel } from '../screen-state/use-mobile-tasks-runtime-hydration'
 import {

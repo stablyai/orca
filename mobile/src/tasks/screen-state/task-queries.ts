@@ -1,5 +1,5 @@
 import { hashKey, type QueryClient } from '@tanstack/react-query'
-import type { PersistedTrustedOrcaHooks } from '../../../../src/shared/orca-yaml-hook-types'
+import type { PersistedTrustedOrcaHooks } from '../../../../src/shared/workspace-setup/orca-yaml-hook-types'
 import { defineHostQuery, readHostQueryLive } from '../../query/host-query'
 import { hostQueryKey, type HostQueryParams } from '../../query/host-query-key'
 import { holdsRestoredHostQueryData } from '../../query/host-query-persistence'

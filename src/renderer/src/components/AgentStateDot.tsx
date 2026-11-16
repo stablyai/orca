@@ -59,6 +59,8 @@ type Props = {
   progress?: number
   /** Unread completion swaps the check for the workspace unread dot; live and needs-you glyphs keep precedence. */
   unread?: boolean
+  /** 'label' keeps the check and only speaks unread, for rows whose card already draws the one dot. */
+  unreadDisplay?: 'dot' | 'label'
 }
 
 type ProgressRing = { tone: AgentProgressRingTone; percent: number }
@@ -97,15 +99,17 @@ export const AgentStateDot = React.memo(function AgentStateDot({
   title,
   tooltipSide,
   progress,
-  unread = false
+  unread = false,
+  unreadDisplay = 'dot'
 }: Props): React.JSX.Element {
   const t = useTranslate()
   const box = size === 'md' ? 'h-3 w-3' : 'h-2.5 w-2.5'
   const inner = size === 'md' ? 'size-2' : 'size-1.5'
   const icon = size === 'md' ? 'size-3' : 'size-2.5'
   const ring = progressRing(state, progress)
-  const showUnreadDot = unread && state === 'done'
-  const label = showUnreadDot
+  const announceUnread = unread && state === 'done'
+  const showUnreadDot = announceUnread && unreadDisplay === 'dot'
+  const label = announceUnread
     ? t('workspace.activity.unreadLabel', '{{status}} · Unread', {
         status: agentStateLabel(state)
       })
@@ -154,7 +158,7 @@ export const AgentStateDot = React.memo(function AgentStateDot({
     indicator = (
       <span
         className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
-        aria-label={agentStateLabel(state)}
+        aria-label={label}
       >
         <CircleCheck className={cn('text-emerald-500', icon)} aria-hidden="true" />
       </span>

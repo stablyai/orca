@@ -168,7 +168,8 @@ describe('CodexRuntimeHomeService per-account takeover composition', () => {
     expect(service.prepareForCodexLaunch()).toBe(account.managedHomePath)
     expect(service.prepareForRateLimitFetch()).toEqual({
       kind: 'ready',
-      codexHomePath: account.managedHomePath
+      codexHomePath: account.managedHomePath,
+      readingAccount: { accountId: 'account-1', runtime: 'host', wslDistro: null }
     })
     expect(existsSync(accountAuthPath)).toBe(false)
     expect(settings.activeCodexManagedAccountId).toBe(account.id)

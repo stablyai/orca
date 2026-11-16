@@ -6,7 +6,7 @@ export type { RuntimeProjectGroupDependencies } from './runtime-project-group-co
 import { projectGroupHookOwner } from '../../../shared/workspace-setup/hooks/workspace-hook-owner'
 import { RuntimeRepositoryHooksCommands } from './runtime-repository-hooks-commands'
 import { getEffectiveSetupRunPolicy } from '../../workspace-hooks/effective-hook-config'
-import { getSetupConfig } from '../../../shared/orca-hook-setup-config'
+import { getSetupConfig } from '../../../shared/workspace-setup/hooks/orca-hook-setup-config'
 import type { FolderWorkspaceCreateResult } from '../../../shared/folder-workspaces/folder-workspace-create'
 import type { RuntimeGroupFolderCreateInput } from '../workspaces/creation/runtime-group-folder-setup'
 import { refuseWslHostWindowsDrivePath } from '../terminal/launch/wsl-host-windows-drive-guard'

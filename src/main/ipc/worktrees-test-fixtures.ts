@@ -1,5 +1,5 @@
 import type { DetectedWorktreeListResult, GitWorktreeInfo } from '../../shared/worktree/types'
-import { reviewHeadRemoteRefComponent } from '../../shared/review-head-tracking-ref'
+import { reviewHeadRemoteRefComponent } from '../../shared/worktree/hosted-review/review-head-tracking-ref'
 import { listWorktreesMock, setPlatform } from './worktrees-test-module-mocks'
 import { store } from './worktrees-test-ipc-surface'
 
