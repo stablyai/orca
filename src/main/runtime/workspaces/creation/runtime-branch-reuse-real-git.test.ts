@@ -438,3 +438,31 @@ describe('derived slash branches with real Git', () => {
     )
   })
 })
+
+describe('derived branch namespace conflicts with real Git', () => {
+  it.each(['create-new', 'create-exact'] as const)(
+    'refuses an occupied parent without changing the requested hierarchy (%s)',
+    async (branchIntent) => {
+      const f = await fixture()
+      await git(f.repoPath, 'branch', 'feature')
+      await expect(
+        f.candidate({ name: 'feature/x', branchNameOverride: undefined, branchIntent })
+      ).rejects.toThrow()
+      expect(await git(f.repoPath, 'for-each-ref', '--format=%(refname)', 'refs/heads/')).toBe(
+        'refs/heads/feature\nrefs/heads/main'
+      )
+    }
+  )
+
+  it('suffixes a name occupied by descendants while keeping the checkout flat', async () => {
+    const f = await fixture()
+    await git(f.repoPath, 'branch', 'feature/x')
+    const picked = await f.create({
+      name: 'feature',
+      branchNameOverride: undefined,
+      branchIntent: 'create-new'
+    })
+    expect(picked.worktreePath).toBe(join(f.workspaceRoot, 'feature-2'))
+    expect(await git(picked.worktreePath, 'symbolic-ref', 'HEAD')).toBe('refs/heads/feature-2')
+  })
+})

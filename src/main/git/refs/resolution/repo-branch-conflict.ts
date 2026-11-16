@@ -15,6 +15,8 @@ export type BranchConflictKind = 'local' | 'remote'
 /** Exact-name creates must refuse when a probe could not decide. */
 export type StrictBranchConflictKind = BranchConflictKind | 'unknown'
 
+class BranchNamespaceConflictError extends Error {}
+
 function runGit(
   exec: ExactRefProbeExec,
   args: string[],
@@ -67,7 +69,7 @@ async function listRemoteNamesViaExec(
   return (await readRemoteNames(exec, options)) ?? []
 }
 
-async function hasCaseFoldedLocalConflict(
+async function hasLocalNamespaceConflict(
   exec: ExactRefProbeExec,
   ref: string,
   options: ExactRefProbeExecOptions
@@ -83,7 +85,13 @@ async function hasCaseFoldedLocalConflict(
     if (!existingRef.startsWith('refs/heads/') || !isSafeGitRefName(existingRef)) {
       throw new Error('Cannot verify branch-name case conflicts.')
     }
-    if (foldGitRefNameCase(existingRef) === foldedRef) {
+    const foldedExistingRef = foldGitRefNameCase(existingRef)
+    if (foldedRef.startsWith(`${foldedExistingRef}/`)) {
+      throw new BranchNamespaceConflictError(
+        `Branch "${ref.slice('refs/heads/'.length)}" is blocked by existing branch "${existingRef.slice('refs/heads/'.length)}". Pick a different branch name.`
+      )
+    }
+    if (foldedExistingRef === foldedRef || foldedExistingRef.startsWith(`${foldedRef}/`)) {
       return true
     }
   }
@@ -165,7 +173,7 @@ export async function getBranchConflictKindViaExec(
   if (presence === 'present') {
     return 'local'
   }
-  if (await hasCaseFoldedLocalConflict(exec, localRef, probeOptions)) {
+  if (await hasLocalNamespaceConflict(exec, localRef, probeOptions)) {
     return 'local'
   }
 
@@ -209,10 +217,13 @@ export async function getBranchConflictKindStrictViaExec(
     }
     let unknown = presence === 'unknown'
     try {
-      if (await hasCaseFoldedLocalConflict(exec, localRef, options)) {
+      if (await hasLocalNamespaceConflict(exec, localRef, options)) {
         return 'local'
       }
-    } catch {
+    } catch (error) {
+      if (error instanceof BranchNamespaceConflictError) {
+        throw error
+      }
       unknown = true
     }
     const remoteNames = await readRemoteNames(exec, options)
@@ -228,7 +239,10 @@ export async function getBranchConflictKindStrictViaExec(
       unknown ||= remote.unknown
     }
     return unknown ? 'unknown' : null
-  } catch {
+  } catch (error) {
+    if (error instanceof BranchNamespaceConflictError) {
+      throw error
+    }
     return 'unknown'
   }
 }
