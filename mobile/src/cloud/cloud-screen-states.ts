@@ -2,7 +2,7 @@ import type { CloudWorkspaceStatus } from './cloud-control-plane-client'
 
 // Which state a cloud screen shows while its workspace isn't in hand. Pure, so each branch is tested.
 
-export type CloudMissingState = 'signin' | 'loading' | 'unreachable' | 'gone'
+type CloudMissingState = 'signin' | 'loading' | 'unreachable' | 'gone'
 
 /**
  * The workspace screen without its workspace. Not connected (enrollment null) means the list query
@@ -24,7 +24,7 @@ export function cloudMissingState(args: {
   return args.isError ? 'unreachable' : 'gone'
 }
 
-export type CloudHostGate = 'wait' | 'pass' | 'asleep'
+type CloudHostGate = 'wait' | 'pass' | 'asleep'
 
 /**
  * Before a paired host's page loads: `wait` while it isn't known yet whether this host is an asleep
@@ -51,7 +51,7 @@ export function cloudHostGate(args: {
   return args.status === 'sleeping' ? 'asleep' : 'pass'
 }
 
-export type CloudNumberLinkState = 'signin' | 'found' | 'missing'
+type CloudNumberLinkState = 'signin' | 'found' | 'missing'
 
 /**
  * A W-number link (orca://cloud/<org>/W-123). Only the control plane can say which workspace it

@@ -49,7 +49,7 @@ function denialOf(reason: string | undefined): Denial {
   return DENIALS[classifyEntitlementDenial(reason)]
 }
 
-export function isEntitlementDenied(error: unknown): error is CloudRequestError {
+function isEntitlementDenied(error: unknown): error is CloudRequestError {
   return error instanceof CloudRequestError && error.code === 'entitlement_denied'
 }
 

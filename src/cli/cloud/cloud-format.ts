@@ -3,7 +3,7 @@
 // states and problems in words; raw API statuses and codes appear only under --json.
 import { ORCA_CLOUD_SANDBOX_SPEC } from '../../shared/hosted-sandbox/hosted-sandbox-wire'
 
-export const CLOUD_CLI_SCHEMA_VERSION = 1
+const CLOUD_CLI_SCHEMA_VERSION = 1
 
 export type CloudWorkspace = {
   id: string

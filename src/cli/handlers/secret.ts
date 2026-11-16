@@ -18,9 +18,9 @@ const DEFAULT_WAIT_SEC = 900
 const MAX_WAIT_SEC = 3600
 const POLL_MS = 2000
 
-export type SecretRequestOutcome = SecretRequestStatus | 'already-set'
+type SecretRequestOutcome = SecretRequestStatus | 'already-set'
 
-export type SecretRequestCliDeps = {
+type SecretRequestCliDeps = {
   call: <T>(method: string, params: unknown) => Promise<T>
   sleep: (ms: number) => Promise<void>
   now: () => number
@@ -87,9 +87,7 @@ function finish(
           requestId: result.requestId,
           name: input.name,
           status: result.status,
-          ...(result.status === 'provided' || result.status === 'already-set'
-            ? { hint: secretReloadHint(input.name) }
-            : {})
+          ...(answered ? { hint: secretReloadHint(input.name) } : {})
         },
         null,
         2
@@ -101,7 +99,7 @@ function finish(
   return exitCode
 }
 
-export function formatSecretRequestOutcome(
+function formatSecretRequestOutcome(
   name: string,
   requestId: string | null,
   status: SecretRequestOutcome,

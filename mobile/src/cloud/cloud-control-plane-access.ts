@@ -8,7 +8,7 @@ import { cloudRequest as request, type CloudControlPlane } from './cloud-control
 
 // Access: a VM's sealed per-device grant, and this user's device sessions.
 
-export type CloudSealedGrant = z.infer<typeof SealedGrantSchema>
+type CloudSealedGrant = z.infer<typeof SealedGrantSchema>
 
 /** Asks the VM for this phone's own orcad device, sealed to a one-time key only this phone holds. */
 export async function requestCloudWorkspaceGrant(

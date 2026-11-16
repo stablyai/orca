@@ -2,8 +2,8 @@ import nacl from 'tweetnacl'
 import { encodeBase64Bytes } from '../transport/encryption/base64-byte-codec'
 
 /** Must match cloud/apps/sandbox-control/src/device-sessions.ts. */
-export const CLOUD_DEVICE_TOKEN_ISSUER = 'orca-device'
-export const CLOUD_DEVICE_TOKEN_AUDIENCE = 'orca-sandbox'
+const CLOUD_DEVICE_TOKEN_ISSUER = 'orca-device'
+const CLOUD_DEVICE_TOKEN_AUDIENCE = 'orca-sandbox'
 const TOKEN_TTL_SECONDS = 120
 
 function base64Url(bytes: Uint8Array): string {

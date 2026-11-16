@@ -26,7 +26,7 @@ import { homeListStyles as styles } from './home-list-styles'
 import { MobileHomeSectionHeading } from './MobileHomeSectionHeading'
 import { ORCA_CLOUD_IDLE_SLEEP_MINUTES } from '../../../src/shared/hosted-sandbox/hosted-sandbox-wire'
 
-export type CloudEnrollDesktop = { name: string; client: RpcClient }
+type CloudEnrollDesktop = { name: string; client: RpcClient }
 
 /** Home's Cloud section: this phone's own Orca Cloud workspaces, reached with no desktop in the path. */
 export function MobileHomeCloudSection(props: {

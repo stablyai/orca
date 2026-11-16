@@ -80,7 +80,7 @@ export async function resolveCloudWorkspaceLink(
   }
 }
 
-export const cloudWorkspacePrefsQueryKey = (sessionId: string | null) =>
+const cloudWorkspacePrefsQueryKey = (sessionId: string | null) =>
   ['orca-cloud', 'prefs', sessionId] as const
 
 /** This member's synced prefs and an edit that saves them (shown at once, rolled back on failure). */

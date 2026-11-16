@@ -41,7 +41,6 @@ export function cloudStatusColor(status: CloudWorkspaceStatus): string {
       // Glossary: "Not responding" uses the status-warning ink.
       return colors.statusAmber
     case 'deleting':
-      return colors.textMuted
     case 'sleeping':
     case 'archived':
       return colors.textMuted
