@@ -238,7 +238,8 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         promptDelivery,
         quickTelemetry: quickStartup.telemetry,
         suppressTerminalFocusOnCompletion: createMultiple,
-        setupOnly: options?.setupOnly === true
+        setupOnly: options?.setupOnly === true,
+        ...(options?.accountPins ? { accountPins: options.accountPins } : {})
       })
 
       if (isSubmissionCancelled()) {

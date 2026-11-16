@@ -1,4 +1,5 @@
 import type { LaunchAgentStartupPromptPlan } from '@/lib/agent-session/launch/prompt/launch-agent-startup-prompt-plan'
+import type { WorktreeAccountPins } from '../../../../../shared/worktree-account-pin-settings'
 import type { agentPickerLaunchInputs } from '../../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { worktreeIdsEqual } from '../../../../../shared/worktree/id'
@@ -142,6 +143,8 @@ export type WorktreeCreationRequest = {
   suppressTerminalFocusOnCompletion?: boolean
   /** "None" in the composer: when setup runs, open only its tab instead of an extra shell. */
   setupOnly?: boolean
+  /** Accounts chosen in the composer (#9496), pinned by the host before the agent starts. */
+  accountPins?: WorktreeAccountPins
 }
 
 export type PendingVmEnvironmentCheck = {

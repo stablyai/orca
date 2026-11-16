@@ -4,6 +4,7 @@ import { getEffectiveHooks } from '../../../workspace-hooks/hooks'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
+import { pinCreatedWorktreeAccounts } from '../../../workspaces/creation/created-worktree-account-pins'
 import {
   getLocalProjectGitExecOptions,
   getLocalProjectWorktreeGitOptions,
@@ -219,6 +220,8 @@ async function performRuntimeLocalWorktreeCreate<T>(
       localWorktreeGitOptions: worktreeGitOptions,
       onMetadataPersisted: (worktree) => {
         releaseInFlightHold()
+        // Before the startup terminal spawns, so the agent starts on the account chosen at creation.
+        pinCreatedWorktreeAccounts(store, worktree.id, request.accountPins)
         return args.onWorktreeMetadataPersisted(worktree)
       },
       timing: args.timing

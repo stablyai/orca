@@ -5,6 +5,7 @@ import type { WorkspaceSource } from '../workspace/creation/workspace-source'
 import type { TaskSourceContext } from '../work-items/task-source-context'
 import type { WorkspaceKey } from '../workspace/identity/workspace-scope'
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
+import type { WorktreeAccountPins } from '../worktree-account-pin-settings'
 import type {
   GitPushTarget,
   GitWorktreeInfo,
@@ -138,6 +139,8 @@ export type CreateWorktreeArgs = {
   parentWorkspace?: WorkspaceKey
   /** The workspace note; a task id in it names the parent the same way it does for a CLI create. */
   comment?: string
+  /** Accounts chosen at creation (#9496): pinned before the startup agent launches. */
+  accountPins?: WorktreeAccountPins
   /** A parent in another Orca store, named by that store's verified installationId (buildCrossStoreParentRef). */
   crossStoreParent?: CrossStoreParentRef
   /** Agent selected in the create surface. Omitted for blank-shell creates. */

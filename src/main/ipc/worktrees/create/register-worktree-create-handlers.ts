@@ -34,6 +34,7 @@ import { assertWslMoveRepoWritable } from '../../../persistence/moving-wsl-proje
 import { applyWorkspaceCreatePluginHook } from '../../../plugins/hooks/workspace-create-plugin-hook'
 import { withProjectWorktreeCreate } from '../../../workspaces/creation/worktree-create-in-flight'
 import { createdWorktreeLifecycleIdentity } from '../../../runtime/workspaces/lifecycle/worktree-lifecycle-event'
+import { pinCreatedWorktreeAccounts } from '../../../workspaces/creation/created-worktree-account-pins'
 
 export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): void {
   const { mainWindow, store, runtime, options } = context
@@ -71,6 +72,8 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
             if (isFolderRepo(repo)) {
               // Folder creation registers metadata; its setup prep checks ownership itself.
               result = await createFolderWorkspace(createArgs, repo, store)
+              // The renderer launches a folder's agent after this returns, so pinning here is in time.
+              pinCreatedWorktreeAccounts(store, result.worktree.id, args.accountPins)
             } else {
               // Resolve executionHostId-only SSH ownership before any local Git operation.
               const createRoute = requireWorktreeCreateRoute(repo)
@@ -86,7 +89,11 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
                 mainWindow,
                 runtime,
                 telemetry.timing,
-                creation?.named
+                (worktreeId) => {
+                  // Before the startup terminal spawns, so the agent starts on the chosen account.
+                  pinCreatedWorktreeAccounts(store, worktreeId, args.accountPins)
+                  creation?.named(worktreeId)
+                }
               )
             }
           } catch (error) {

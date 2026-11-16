@@ -74,6 +74,6 @@ describe('CodexRuntimeHomeService worktree pins (#9496)', () => {
     expect(service.prepareForCodexLaunch(undefined, undefined, { worktreeId: 'repo::wt-2' })).toBe(
       one.managedHomePath
     )
-    expect(settings.activeCodexManagedAccountIdsByRuntime.host).toBe('account-1')
+    expect(settings.activeCodexManagedAccountIdsByRuntime?.host).toBe('account-1')
   })
 })

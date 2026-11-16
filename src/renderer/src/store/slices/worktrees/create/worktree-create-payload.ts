@@ -16,6 +16,7 @@ import type {
 } from '../../../../../../shared/worktree/lineage-types'
 import type { TaskSourceContext } from '../../../../../../shared/work-items/task-source-context'
 import type { WorkspaceLinkedItem } from '../../../../../../shared/worktree/types'
+import type { WorktreeAccountPins } from '../../../../../../shared/worktree-account-pin-settings'
 
 /** Trailing bag for `createWorktree` args that outgrew its positional list. */
 export type CreateWorktreeCallOptions = {
@@ -44,6 +45,8 @@ export type CreateWorktreeCallOptions = {
   parentWorktreeId?: string
   /** Saved with the workspace, so a task id in it nests the workspace at creation. */
   note?: string
+  /** Accounts chosen in the composer (#9496); the host pins them before the agent starts. */
+  accountPins?: WorktreeAccountPins
   provisionedRoot?: {
     runtimeId: string
     executionHostId: ExecutionHostId
@@ -122,6 +125,7 @@ function sharedCreateFields(
     ...(attempt.parentWorkspace ? { parentWorkspace: attempt.parentWorkspace } : {}),
     ...(attempt.crossStoreParent ? { crossStoreParent: attempt.crossStoreParent } : {}),
     ...(options?.note ? { comment: options.note } : {}),
+    ...(options?.accountPins ? { accountPins: options.accountPins } : {}),
     ...(request.workspaceStatus !== undefined ? { workspaceStatus: request.workspaceStatus } : {}),
     ...(request.linkedGitLabMR !== undefined ? { linkedGitLabMR: request.linkedGitLabMR } : {}),
     ...(request.linkedGitLabIssue !== undefined
