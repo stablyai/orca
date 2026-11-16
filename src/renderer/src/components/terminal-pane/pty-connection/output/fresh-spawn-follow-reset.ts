@@ -8,7 +8,7 @@ import {
   POST_REPLAY_REATTACH_RESET_KEEP_MOUSE,
   buildKittyKeyboardRestore
 } from '../../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
-import { buildFreshShellViewportBlankingSequence } from '../../../../../../shared/terminal/viewport/terminal-fresh-shell-viewport'
+import { buildFreshShellViewportSequence } from '../../../../../../shared/terminal/viewport/terminal-fresh-shell-viewport'
 import { flushTerminalOutput } from '@/lib/pane-manager/terminal-output/pane-terminal-output-scheduler'
 import {
   getTerminalScrollIntentKind,
@@ -22,7 +22,7 @@ import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
 const TERMINAL_RENDERER_RISK_SCAN_TAIL_CHARS = 256
 
-/** Follow-output reset, replay writes, and fresh-shell viewport blanking. */
+/** Follow-output reset, replay writes, and the fresh-shell viewport. */
 export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void {
   session.resetFreshSpawnFollowOutput = (): void => {
     session.cancelFreshSpawnFollowReset()
@@ -177,8 +177,11 @@ export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void 
     return session.deps.restoredViewportBlankingPanesRef?.current.delete(session.pane.id) ?? false
   }
 
-  session.writeFreshShellViewportBlanking = (rows = session.pane.terminal.rows): void => {
-    session.writeReplayData(buildFreshShellViewportBlankingSequence(rows))
+  const ownerIsConpty = (): boolean =>
+    session.pane.terminal.options.windowsPty?.backend === 'conpty'
+
+  session.writeFreshShellViewport = (rows = session.pane.terminal.rows): void => {
+    session.writeReplayData(buildFreshShellViewportSequence(rows, ownerIsConpty()))
   }
 
   session.prepareFreshShellViewportForSpawn = (options: FreshSpawnOptions): void => {
@@ -186,7 +189,14 @@ export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void 
     if (!options.forceBlankRestoredViewport && !hadRestoredViewport) {
       return
     }
-    // Move restored rows into scrollback before coordinate-based Windows ConPTY prompt output.
-    session.writeFreshShellViewportBlanking()
+    // A normal-buffer restore already ended on a fresh line, so only ConPTY needs its rows moved up.
+    if (
+      hadRestoredViewport &&
+      !ownerIsConpty() &&
+      session.pane.terminal.buffer.active.type === 'normal'
+    ) {
+      return
+    }
+    session.writeFreshShellViewport()
   }
 }

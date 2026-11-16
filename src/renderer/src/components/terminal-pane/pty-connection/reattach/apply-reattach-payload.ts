@@ -305,7 +305,7 @@ export function createReattachPayloadHandlers(
       session.writeInputModeGround(POST_REPLAY_MODE_RESET)
       session.consumeRestoredViewportBlankingMarker()
       // Why: a taller destination fit must not pull recovered rows back into the fresh shell's viewport after source-grid replay.
-      session.writeFreshShellViewportBlanking(Math.max(destinationRows, session.pane.terminal.rows))
+      session.writeFreshShellViewport(Math.max(destinationRows, session.pane.terminal.rows))
       ackPaintedColdRestore(session, ctx.ptyId)
       if (didPrepareResume && !ctx.coldRestoreStartup) {
         session.schedulePendingStartupCommandDelivery()

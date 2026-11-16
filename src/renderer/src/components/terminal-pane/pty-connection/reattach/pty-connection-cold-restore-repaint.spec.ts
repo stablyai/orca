@@ -1,5 +1,5 @@
 import { bindPtyConnectionTestMocks } from '../test-fixtures/pty-connection-mocks.spec'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import {
   POST_REPLAY_MODE_RESET,
   RESET_GRAPHIC_RENDITION,
@@ -9,6 +9,7 @@ import { Terminal } from '@xterm/headless'
 import { buildFreshShellViewportBlankingSequence } from '../../../../../../shared/terminal/viewport/terminal-fresh-shell-viewport'
 import { flushAsyncTicks, writeHeadlessTerminal } from '../test-fixtures/pty-connection-test-async'
 import { NORMAL_BUFFER_PROLOGUE } from '../test-fixtures/pty-connection-test-constants'
+import { temporarilySetNavigatorUserAgent } from '../test-fixtures/pty-connection-test-dom'
 import {
   terminalWriteText,
   LEAF_1,
@@ -63,7 +64,26 @@ export function registerPtyConnectionColdRestoreRepaintTests(): void {
       await restoreTerminalTestGlobals()
     })
 
-    it('cold-restores at the recovered grid and clears only the dirty viewport before blanking', async () => {
+    it.each([
+      {
+        owner: 'Windows',
+        userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        prompt: 'PS >',
+        // ConPTY repaints the viewport over restored rows, so its prompt starts on a blank one.
+        visible: ['PS >', '', '', '', '']
+      },
+      {
+        owner: 'macOS',
+        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
+        prompt: '% ',
+        visible: ['__FILL__']
+      }
+    ])('cold-restores a $owner pane at the recovered grid and clears only the dirty viewport', async ({
+      userAgent,
+      prompt,
+      visible
+    }) => {
+      onTestFinished(temporarilySetNavigatorUserAgent(userAgent))
       const { connectPanePty } = await import('../connect-pane-pty')
       const agentTitleMocks4 = await vi.importMock<PtyConnectionAgentTitleMocks>(
         '@/lib/agent-status/aggregation/worktree-agent-status'
@@ -151,7 +171,8 @@ export function registerPtyConnectionColdRestoreRepaintTests(): void {
       preResizeBarrier.release?.()
       await flushAsyncTicks(20)
 
-      const blankViewport = buildFreshShellViewportBlankingSequence(destinationRows)
+      const freshShellViewport =
+        prompt === 'PS >' ? buildFreshShellViewportBlankingSequence(destinationRows) : '\r\n'
       expect(pane.terminal.resize).toHaveBeenCalledWith(recoveredCols, recoveredRows)
       expect(transport.resize).not.toHaveBeenCalledWith(recoveredCols, recoveredRows)
       expect(transport.resize).toHaveBeenCalledWith(destinationCols, destinationRows)
@@ -161,10 +182,12 @@ export function registerPtyConnectionColdRestoreRepaintTests(): void {
       expect(written).toContain(viewportClear)
       expect(written).not.toContain(NORMAL_BUFFER_PROLOGUE)
       expect(written).toEqual(
-        expect.arrayContaining([groundedColdScrollback, POST_REPLAY_MODE_RESET, blankViewport])
+        expect.arrayContaining([groundedColdScrollback, POST_REPLAY_MODE_RESET, freshShellViewport])
       )
       expect(written.indexOf(viewportClear)).toBeLessThan(written.indexOf(groundedColdScrollback))
-      expect(written.indexOf(groundedColdScrollback)).toBeLessThan(written.indexOf(blankViewport))
+      expect(written.indexOf(groundedColdScrollback)).toBeLessThan(
+        written.lastIndexOf(freshShellViewport)
+      )
       const viewportClearOperation = operations.findIndex(
         (operation) => operation.kind === 'write' && operation.data === viewportClear
       )
@@ -226,7 +249,7 @@ export function registerPtyConnectionColdRestoreRepaintTests(): void {
         if (rendered.cols !== destinationCols || rendered.rows !== destinationRows) {
           rendered.resize(destinationCols, destinationRows)
         }
-        await writeHeadlessTerminal(rendered, 'PS >')
+        await writeHeadlessTerminal(rendered, prompt)
         const buffer = rendered.buffer.active
         const lines = Array.from({ length: buffer.length }, (_, lineIndex) =>
           buffer.getLine(lineIndex)?.translateToString(true)
@@ -250,7 +273,7 @@ export function registerPtyConnectionColdRestoreRepaintTests(): void {
         expect(lines.some((line) => line?.includes('KEEP_2'))).toBe(true)
         expect(logicalLines.some((line) => /COLD\s+END/.test(line))).toBe(true)
         expect(logicalLines.some((line) => line.includes('COLD_SOURCE_ROW_02'))).toBe(true)
-        expect(visibleLines).toEqual(['PS >', '', '', '', ''])
+        expect(visibleLines).toEqual(visible)
       } finally {
         rendered.dispose()
       }
