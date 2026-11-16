@@ -7,6 +7,7 @@ import {
 } from './orcad-activation-record'
 import { isSnapshotCaptureCommand } from './testing/orcad-snapshot-capture-command'
 import { sshCommandExitError } from '../../ssh/remote-exec/remote-exec-command'
+import { answerActiveProbe } from './testing/orcad-active-probe-answer'
 
 export const OLD = '0.1.0+aa01'
 export const NEW = '0.2.0+bb01'
@@ -127,7 +128,7 @@ export class FakeOrcadHost {
 
   exec(command: string): string {
     this.commands.push(command)
-    return this.execInner(command)
+    return answerActiveProbe(command, (part) => this.execInner(part)) ?? this.execInner(command)
   }
 
   private execInner(command: string): string {

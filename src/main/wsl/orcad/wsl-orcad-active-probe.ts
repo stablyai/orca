@@ -1,18 +1,18 @@
 /**
- * WSL reads an active slot's liveness, readiness and pid in one guest command; SSH keeps
- * `probeActiveOrcadReadiness`'s separate reads. The answers are judged exactly as those are.
+ * WSL reads an active slot's liveness, readiness and pid in one guest command: the POSIX active
+ * probe plus the pid. The answers are judged exactly as `probeActiveOrcadReadiness` judges them.
  */
 import type { OrcadHostTarget } from '../../managed-server/install/orcad-host-transport'
 import type { OrcadRemoteContext } from '../../managed-server/install/orcad-remote-context'
-import { orcadLivenessProbeCommand } from '../../managed-server/install/orcad-remote-launch'
-import { readOrcadReadinessNowCommand } from '../../managed-server/install/orcad-remote-readiness-wait'
 import { execOrcadRemote } from '../../managed-server/install/orcad-remote-runtime-control'
 import { ORCAD_PID_FILENAME } from '../../managed-server/install/orcad-remote-host-support'
 import { managedOrcadInstallDir } from '../../managed-server/lifecycle/orcad-managed-runtime-context'
 import {
   activeOrcadReadinessFromOutput,
   assertActiveOrcadLive,
-  OrcadActiveReadinessError
+  orcadActiveProbeCommand,
+  OrcadActiveReadinessError,
+  ORCAD_ACTIVE_PROBE_SECTION_END
 } from '../../managed-server/activation/orcad-active-readiness'
 import { computeLocalOrcadBuildHash } from '../../managed-server/install/orcad-local-build-hash'
 import type { ServeReadiness } from '../../server/serve-readiness'
@@ -20,7 +20,7 @@ import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quo
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import { joinRemotePath } from '../../ssh/remote-host/ssh-remote-platform'
 
-const SECTION_END = '__ORCA_WSL_ACTIVE_PROBE_END__'
+const SECTION_END = ORCAD_ACTIVE_PROBE_SECTION_END
 
 type WslContext = OrcadRemoteContext<OrcadHostTarget>
 
@@ -50,13 +50,9 @@ export async function readWslOrcadPid(
 
 /** Each section ends with a marker on its own line; the newline before it is the probe's own. */
 export function wslOrcadActiveProbeCommand(context: WslContext, fullVersion: string): string {
-  const installDir = managedOrcadInstallDir(context, fullVersion)
-  const end = `printf '\\n%s\\n' ${SECTION_END}`
   return [
-    orcadLivenessProbeCommand(context.host, installDir),
-    end,
-    readOrcadReadinessNowCommand(context.host, installDir),
-    end,
+    orcadActiveProbeCommand(context.host, managedOrcadInstallDir(context, fullVersion)),
+    `printf '\\n%s\\n' ${SECTION_END}`,
     pidCommand(context, fullVersion)
   ].join('\n')
 }

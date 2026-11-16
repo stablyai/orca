@@ -22,10 +22,15 @@ import {
   startOrcadManagedTunnel
 } from './orcad-managed-tunnel'
 import { recoverInterruptedOrcadActivation } from '../activation/orcad-activation-recovery'
+import {
+  createOrcadConnectStateReader,
+  ORCAD_CONNECT_STATE_READ,
+  orcadConnectStateHints
+} from '../activation/orcad-connect-state-snapshot'
 import { wakeAlreadyActiveOrcad } from './orcad-already-active-wake'
 import { readOrcadActivationRecord } from '../activation/orcad-activation-record-store'
 import { resolveOrcadRemoteContext, type OrcadRemoteContext } from '../install/orcad-remote-context'
-import { deployOrcad } from '../install/orcad-remote-deploy'
+import { deployOrcad, type OrcadDeployOptions } from '../install/orcad-remote-deploy'
 import {
   adoptRunningOrcadVersion,
   type OrcadRunningAdoption
@@ -97,9 +102,14 @@ export async function createManagedOrcadEnvironment(
     let environmentRegistered = false
     try {
       const connection = await connectionManager.connect(claimed)
-      let context = await resolveOrcadRemoteContext(claimed, connection, args.signal)
+      const connectState = createOrcadConnectStateReader(ORCAD_CONNECT_STATE_READ)
+      let context = await resolveOrcadRemoteContext(claimed, connection, args.signal, undefined, {
+        readActivationRecord: connectState.readActivationRecord
+      })
+      const snapshot = connectState.snapshot()
+      const hints = orcadConnectStateHints(snapshot, context.activationRecord)
       const slot = managedOrcadSlot(context, ORCAD_MANAGED_REMOTE_PORT, args.signal)
-      const recovery = await recoverInterruptedOrcadActivation(slot)
+      const recovery = await recoverInterruptedOrcadActivation(slot, snapshot ?? undefined)
       if (recovery.outcome === 'pending' || recovery.outcome === 'refused') {
         throw new Error(recovery.reason)
       }
@@ -134,7 +144,10 @@ export async function createManagedOrcadEnvironment(
       }
       const serving: DeployedOrcad | OrcadManagedDeferral =
         adopted ??
-        (await deployOwnOrcad(context, { ...slot, conn: connection }, localOrcadDir, args))
+        (await deployOwnOrcad(context, { ...slot, conn: connection }, localOrcadDir, {
+          ...args,
+          ...hints.deployPreRead(context.activationRecord)
+        }))
       if ('outcome' in serving) {
         return serving
       }
@@ -178,7 +191,7 @@ async function deployOwnOrcad(
   context: OrcadRemoteContext<SshTarget>,
   slot: ReturnType<typeof managedOrcadSlot>,
   localOrcadDir: string,
-  args: { force?: boolean; signal?: AbortSignal }
+  args: { force?: boolean; signal?: AbortSignal } & Pick<OrcadDeployOptions, 'preRead'>
 ): Promise<DeployedOrcad | OrcadManagedDeferral> {
   const appVersion = getAppEnvironment().getVersion()
   const deployResult = await deployOrcad({
@@ -186,6 +199,7 @@ async function deployOwnOrcad(
     localOrcadDir,
     target: context.serverTarget,
     ...managedOrcadDeployPolicy(context, appVersion, args.force ? 'force' : 'connect'),
+    ...(args.preRead ? { preRead: args.preRead } : {}),
     force: args.force,
     appVersion
   })
