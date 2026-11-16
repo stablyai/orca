@@ -31,7 +31,7 @@ export const JOURNAL_LEGACY_CONVERTED_BY = 'journal.legacy-converted-by.v1'
  * The original as this store copied it. Unlike the reconcile's receipt it is never rewritten, so
  * an original that still matches it was never written after the copy.
  */
-export const JOURNAL_LEGACY_COPIED_SOURCE = 'journal.legacy-copied-source.v1'
+export const JOURNAL_LEGACY_COPIED_SOURCE = 'journal.legacy-copied-source.v2'
 
 /** This host's own release: the desktop's, or the bundle orcad stamps for itself at start. */
 export function journalRunningOrcaVersion(): string | null {

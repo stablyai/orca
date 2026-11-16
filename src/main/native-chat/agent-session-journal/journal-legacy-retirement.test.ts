@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, statSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, statSync, utimesSync, writeFileSync } from 'node:fs'
 import { expect, it, vi } from 'vitest'
 import type Database from '../../sqlite/sync-database'
 import { journalDomainImportState } from './journal-domain-import-rows'
@@ -114,7 +114,7 @@ it('after a downgrade to an older Orca, the re-upgrade shows its new chat and ke
 it('keeps the original of a store copied before the copy record existed', async () => {
   // Every store v1.4.260/261 copied: file times can't prove nothing wrote the original since.
   const { filename, db, launch, errors } = await profile()
-  db.exec("DELETE FROM agent_session_store_meta WHERE key='journal.legacy-copied-source.v1'")
+  db.exec("DELETE FROM agent_session_store_meta WHERE key='journal.legacy-copied-source.v2'")
   await launch().run()
   expect(errors).toEqual([])
   expect(companions(filename)).toContain(filename)
@@ -146,12 +146,21 @@ it('reopens the source to conversions when the lock helper fails', async () => {
   expect(existsSync(filename)).toBe(true)
 })
 
-it('still retires after a metadata-only change, with a marker for an epoch a /clear replaced', async () => {
-  const { root, filename, launch, errors } = await profile({
+it('keeps an original whose identity changed at all, even with its mtime put back', async () => {
+  // A write followed by restoring the old mtime leaves only ctime moved; that still counts.
+  const { root, filename, launch } = await profile()
+  const before = statSync(filename)
+  chmodSync(filename, 0o600)
+  utimesSync(filename, before.atime, before.mtime)
+  await initializeJournalDomainDatabase(root)
+  await launch().run()
+  expect(companions(filename)).toContain(filename)
+})
+
+it('accepts an import marker for an epoch a /clear replaced', async () => {
+  const { filename, launch, errors } = await profile({
     seed: (legacy) => legacy.exec("INSERT INTO journal_imports VALUES('unopened','replaced',9)")
   })
-  chmodSync(filename, 0o600)
-  await initializeJournalDomainDatabase(root)
   await launch().run()
   expect(errors).toEqual([])
   expect(companions(filename)).toEqual([])

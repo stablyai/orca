@@ -18,8 +18,7 @@ import {
 import type { LegacySourceRetiring } from './journal-legacy-retirement-state'
 import {
   readJournalLegacySourceReceipt,
-  sameJournalLegacySource,
-  type JournalLegacySourceReceipt
+  sameJournalLegacySource
 } from './database/journal-legacy-source-receipt'
 import {
   acquireJournalLegacyFileLock,
@@ -32,7 +31,6 @@ import { JournalLegacyProof, type LegacyProofObservation } from './journal-legac
 import type { JournalSqlMaintenanceResult } from './journal-sql-maintenance'
 
 type RetirementState = Extract<JournalSqlMaintenanceResult, { kind: 'legacy-retirement-state' }>
-type CopiedSource = Extract<JournalLegacySourceReceipt, { disposition: 'copied-source' }>
 
 /**
  * Absent means a release before this record copied the profile, which is always earlier; a copy
@@ -45,29 +43,6 @@ function laterVersion(running: string, convertedBy: string | null): boolean {
       !isValidAppVersion(convertedBy) ||
       compareAppVersions(running, convertedBy) > 0)
   )
-}
-
-/**
- * Written since the copy means its bytes or its WAL changed, or it was replaced; a metadata-only
- * change (permissions, a backup's archive bit) moves ctime and nothing else.
- */
-function unwrittenSinceCopy(copied: string, current: CopiedSource): boolean {
-  let saved: unknown
-  try {
-    saved = JSON.parse(copied)
-  } catch {
-    return false
-  }
-  const written = projectWrites(saved)
-  return written !== null && written === projectWrites(current)
-}
-
-function projectWrites(receipt: unknown): string | null {
-  if (!isRecord(receipt) || receipt.disposition !== 'copied-source' || !isRecord(receipt.main)) {
-    return null
-  }
-  const { dev, ino, size, mtimeNs } = receipt.main
-  return JSON.stringify([dev, ino, size, mtimeNs, receipt.wal])
 }
 
 /** The WAL a saved retirement proved absorbed, so a removal cut short after the main file can finish. */
@@ -268,7 +243,8 @@ export class JournalLegacyRetirement {
     // A store copied before the copy record existed can't show the original was never written
     // after its copy: file times can't prove it, so its original is kept.
     const domain = journalDomainDatabasePath(this.directory)
-    if (saved.copiedSource === null || !unwrittenSinceCopy(saved.copiedSource, current)) {
+    // Every identity field counts, ctime included: a write can put mtime back, never ctime.
+    if (saved.copiedSource === null || !sameJournalLegacySource(saved.copiedSource, current)) {
       return null
     }
     if (await legacyFilePresent(`${this.filename}-journal`)) {
