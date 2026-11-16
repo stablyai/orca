@@ -22,7 +22,11 @@ import type {
   PinnedWorktreeDisplayPolicy,
   WorktreeGroupBy
 } from '../../../../../../shared/sidebar-list/row-types'
-import { getFolderWorkspaceRevealGroupKeys, sidebarWorkspaceStillExists } from './folder-reveal'
+import {
+  getFolderWorkspaceRevealGroupKeys,
+  getKnownSidebarWorktreeById,
+  sidebarWorkspaceStillExists
+} from './folder-reveal'
 import {
   findPreferredRenderRowIndexForWorktree,
   findPreferredRenderRowIndexForWorktreeIdentity,
@@ -74,18 +78,15 @@ export function expandGroupsForWorktreeReveal(
   const hostScopedGroups = args.renderRows.some(
     (row) => row.type === 'host-header' || (row.type === 'header' && row.collapseKey !== undefined)
   )
-  const folderGroupKeys = getFolderWorkspaceRevealGroupKeys(
-    worktreeId,
-    args.folderWorkspaces,
-    args.projectGroups,
-    {
-      groupBy: args.groupBy,
-      workspaceStatuses: args.workspaceStatuses,
-      defaultHostId: args.defaultHostId,
-      hostScopedGroups,
-      executionHostId
-    }
-  )
+  const folderGroupKeys = args.occurrencePlan
+    ? []
+    : getFolderWorkspaceRevealGroupKeys(worktreeId, args.folderWorkspaces, args.projectGroups, {
+        groupBy: args.groupBy,
+        workspaceStatuses: args.workspaceStatuses,
+        defaultHostId: args.defaultHostId,
+        hostScopedGroups,
+        executionHostId
+      })
   if (folderGroupKeys.length > 0) {
     for (const groupKey of folderGroupKeys) {
       if (args.collapsedGroups.has(groupKey)) {
@@ -94,11 +95,19 @@ export function expandGroupsForWorktreeReveal(
     }
     return
   }
-  const targetWorktree = args.worktrees.find(
-    (worktree) =>
-      worktree.id === worktreeId &&
-      (!executionHostId || !worktree.hostId || worktree.hostId === executionHostId)
-  )
+  const targetWorktree =
+    args.worktrees.find(
+      (worktree) =>
+        worktree.id === worktreeId &&
+        (!executionHostId || !worktree.hostId || worktree.hostId === executionHostId)
+    ) ??
+    getKnownSidebarWorktreeById(
+      worktreeId,
+      args.worktreeMap,
+      selectFolderWorkspaces(args),
+      args.worktrees,
+      executionHostId
+    )
   if (!targetWorktree) {
     return
   }

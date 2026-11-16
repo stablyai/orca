@@ -1,8 +1,5 @@
 import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
-import {
-  folderWorkspaceToWorktree,
-  getFolderWorkspaceHostIdentity
-} from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
+import { getFolderWorkspaceHostIdentity } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import {
   getWorktreeExecutionHostId,
   type ExecutionHostId
@@ -15,7 +12,12 @@ import {
 } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { RenderRow } from '../listing/render-row'
 import type { PinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
-import { isPinnedWorktreeRow, type WorktreeItemRow } from '../listing/renderable-rows'
+import {
+  getWorkspaceItemRowWorktree,
+  isPinnedWorktreeRow,
+  isWorkspaceItemRow,
+  type WorktreeItemRow
+} from '../listing/renderable-rows'
 
 export function getRenderRowSidebarKey(row: RenderRow): string | null {
   if (row.type === 'header') {
@@ -25,7 +27,7 @@ export function getRenderRowSidebarKey(row: RenderRow): string | null {
     return row.rowKey
   }
   if (row.type === 'folder-workspace') {
-    return getFolderWorkspaceHostIdentity(row.folderWorkspace)
+    return row.key
   }
   if (row.type === 'pending-creation') {
     return `pending:${row.creationId}`
@@ -40,7 +42,11 @@ export function getRenderRowSidebarKey(row: RenderRow): string | null {
 }
 
 export function rowKeyMatchesRenderRow(row: RenderRow, rowKey: string): boolean {
-  if (row.type === 'folder-workspace' && rowKey === folderWorkspaceKey(row.folderWorkspace.id)) {
+  if (
+    row.type === 'folder-workspace' &&
+    (rowKey === folderWorkspaceKey(row.folderWorkspace.id) ||
+      rowKey === getFolderWorkspaceHostIdentity(row.folderWorkspace))
+  ) {
     return true
   }
   return getRenderRowSidebarKey(row) === rowKey
@@ -78,14 +84,6 @@ export function renderRowContainsWorktree(
   return row.type === 'item' && itemMatchesWorktree(row, worktreeId, executionHostId)
 }
 
-export function getRenderRowWorktreeItem(
-  row: RenderRow,
-  worktreeId: string,
-  executionHostId?: ExecutionHostId
-): WorktreeItemRow | null {
-  return row.type === 'item' && itemMatchesWorktree(row, worktreeId, executionHostId) ? row : null
-}
-
 // Prefer the worktree's natural group row over its pinned duplicate when both are rendered.
 export function findPreferredRenderRowIndexForWorktree(
   renderRows: readonly RenderRow[],
@@ -101,8 +99,11 @@ export function findPreferredRenderRowIndexForWorktree(
     if (fallbackIndex === -1) {
       fallbackIndex = index
     }
-    const itemRow = getRenderRowWorktreeItem(row, worktreeId)
-    if (pinnedDisplayPolicy === 'duplicate-in-groups' && itemRow && !isPinnedWorktreeRow(itemRow)) {
+    if (
+      pinnedDisplayPolicy === 'duplicate-in-groups' &&
+      isWorkspaceItemRow(row) &&
+      !isPinnedWorktreeRow(row)
+    ) {
       return index
     }
   }
@@ -118,30 +119,21 @@ export function findPreferredRenderRowIndexForWorktreeIdentity(
   let fallbackIndex = -1
   for (let index = 0; index < renderRows.length; index++) {
     const row = renderRows[index]
-    // Host-qualified reveals include folder rows, not just worktree item rows.
-    const folderRow = row.type === 'folder-workspace' ? row : undefined
-    if (
-      folderRow &&
-      folderWorkspaceKey(folderRow.folderWorkspace.id) === worktree.id &&
-      (!worktree.hostId ||
-        getWorktreeHostIdentity(folderWorkspaceToWorktree(folderRow.folderWorkspace)) === identity)
-    ) {
-      return index
-    }
-    if (row.type === 'folder-workspace') {
+    if (!isWorkspaceItemRow(row)) {
       continue
     }
-    const itemRows = row.type === 'item' ? [row] : []
-    const itemRow = itemRows.find(
-      (candidate) => getWorktreeHostIdentity(candidate.worktree) === identity
-    )
-    if (!itemRow) {
+    const candidate = getWorkspaceItemRowWorktree(row)
+    const matches =
+      row.type === 'folder-workspace' && !worktree.hostId
+        ? candidate.id === worktree.id
+        : getWorktreeHostIdentity(candidate) === identity
+    if (!matches) {
       continue
     }
     if (fallbackIndex === -1) {
       fallbackIndex = index
     }
-    if (pinnedDisplayPolicy === 'duplicate-in-groups' && !isPinnedWorktreeRow(itemRow)) {
+    if (pinnedDisplayPolicy === 'duplicate-in-groups' && !isPinnedWorktreeRow(row)) {
       return index
     }
   }

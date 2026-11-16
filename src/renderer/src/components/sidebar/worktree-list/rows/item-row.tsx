@@ -12,7 +12,7 @@ import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/sections
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
 import type { LineageToggleHandler } from '../../workspace-card/identity/worktree-lineage-toggle-handler-cache'
 import type { LineageRowFrame } from '../listing/lineage-row-projection'
-import type { WorktreeItemRow } from '../listing/renderable-rows'
+import type { WorkspaceItemRow, WorktreeItemRow } from '../listing/renderable-rows'
 import { forwardOptionPressToCardSurface, getWorktreeOptionId } from './option-dom'
 import type { WorktreeRowDragState } from '../drag/row-state'
 
@@ -30,7 +30,7 @@ export type WorktreeItemRowContext = {
   highlightedRevealRowKey: string | null
   selectedWorktreeIds: ReadonlySet<string>
   selectedWorktrees: readonly Worktree[]
-  getActiveSurfaceVariant: (row: WorktreeItemRow) => ActiveSurfaceVariant
+  getActiveSurfaceVariant: (row: WorkspaceItemRow) => ActiveSurfaceVariant
   getLineageToggleHandler: (groupKey: string) => LineageToggleHandler
   onSelectionGesture: (event: React.MouseEvent<HTMLElement>, worktree: Worktree) => boolean
   onWorktreeCardClick?: () => void

@@ -17,6 +17,7 @@ import {
 import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import WorktreeCard from '../../workspace-card/surface/WorktreeCard'
 import type { WorktreeGroupBy } from '../../../../../../shared/sidebar-list/row-types'
+import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/sections/group-keys'
 import { getVirtualRowTransform } from '../viewport/virtual-rows'
 import {
   getFolderWorkspaceRowGeometry,
@@ -62,7 +63,10 @@ export type FolderWorkspaceRowContext = {
     worktree: Worktree,
     rowKey: string
   ) => void
-} & Pick<WorktreeItemRowContext, 'worktreeDragState' | 'nativeLineageDropTargetIdentity'>
+} & Pick<
+  WorktreeItemRowContext,
+  'worktreeDragState' | 'nativeLineageDropTargetIdentity' | 'getActiveSurfaceVariant'
+>
 
 /** The folder's own nested workspaces: its disclosure, and their cards when shown inline. */
 export type FolderRowLineage = {
@@ -128,13 +132,14 @@ export function renderFolderWorkspaceOption(args: {
   return (
     <div
       key={vItem?.key ?? row.key}
-      id={getWorktreeOptionId(folderWorktreeIdentity)}
+      id={getWorktreeOptionId(row.key)}
       role="option"
       aria-selected={ctx.selectedWorktreeIds.has(folderWorktreeIdentity)}
       aria-current={isActiveWorktree ? 'page' : undefined}
       data-worktree-id={folderWorktree.id}
       data-worktree-host-identity={folderWorktreeIdentity}
-      data-worktree-row-key={folderWorktreeIdentity}
+      data-worktree-row-key={row.key}
+      data-worktree-section-key={row.sectionKey}
       data-worktree-lineage-drop-row=""
       {...(vItem
         ? {
@@ -149,7 +154,7 @@ export function renderFolderWorkspaceOption(args: {
         : { className: 'relative' })}
       onClick={forwardOptionPressToCardSurface}
       onClickCapture={ctx.onRowClickCapture}
-      onPointerDown={(event) => ctx.onRowPointerDown(event, folderWorktree, folderWorktreeIdentity)}
+      onPointerDown={(event) => ctx.onRowPointerDown(event, folderWorktree, row.key)}
     >
       <div className="relative" style={{ paddingLeft: surfaceInset, paddingRight: frame?.right }}>
         <WorktreeCard
@@ -159,16 +164,19 @@ export function renderFolderWorkspaceOption(args: {
           isMultiSelected={ctx.selectedWorktreeIds.has(folderWorktreeIdentity)}
           // A child-active folder looks active without the active card's side effects.
           isActiveSurface={lineage?.childIsActive === true || isActiveWorktree}
+          activeSurfaceVariant={isActiveWorktree ? ctx.getActiveSurfaceVariant(row) : 'primary'}
           isCurrentWorktree={ctx.currentWorktreeId === folderWorktree.id}
           contentIndent={cardContentIndent}
           flushSurface
           nativeDragEnabled={false}
           onImmediateActivate={activationDisabled ? undefined : ctx.onImmediateActivate}
-          activationRowKey={folderWorktreeIdentity}
+          activationRowKey={row.key}
           onSelectionGesture={(event) => ctx.onSelectionGesture(event, folderWorktree)}
           onContextMenuSelect={ctx.onContextMenuSelect}
           statusPrDisplay={folderPrDisplay}
           hostContextLabel={row.hostContextLabel}
+          inPinnedSection={row.sectionKey === PINNED_GROUP_KEY}
+          renameRowKey={row.key}
           lineageChildCount={row.lineageChildCount}
           lineageChildWorktreeIds={row.lineageChildWorktreeIds}
           lineageDescendantIdentities={row.lineageDescendantIdentities}

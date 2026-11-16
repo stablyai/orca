@@ -1,20 +1,15 @@
-import type { WorktreeOccurrencePlan } from '../lineage/worktree-occurrence-plan'
 import type { Worktree } from '../../worktree/types'
 import { getWorktreeExecutionHostId } from '../../execution-host'
 import type { ExecutionHostId } from '../../execution-host'
 import { PINNED_GROUP_KEY } from './group-keys'
 import { appendWorktreeRows } from './row-builders'
-import type { RepoOfWorktree, Row } from '../row-types'
+import type { SectionAppendContext } from './group-sections'
 
 export function emitPinnedGroup(
-  pinnedSectionWorktrees: Worktree[],
-  repoOf: RepoOfWorktree,
-  defaultHostId: ExecutionHostId,
-  collapsedGroups: Set<string>,
-  result: Row[],
-  occurrencePlan: WorktreeOccurrencePlan<Worktree>,
-  hostContextLabelByWorktreeIdentity?: ReadonlyMap<string, string>
+  ctx: SectionAppendContext,
+  pinnedSectionWorktrees: Worktree[]
 ): void {
+  const { result, repoOf, defaultHostId, collapsedGroups, occurrencePlan } = ctx
   if (pinnedSectionWorktrees.length === 0) {
     return
   }
@@ -45,6 +40,7 @@ export function emitPinnedGroup(
     collapsedGroups,
     groupDepth: 0,
     sectionKey: PINNED_GROUP_KEY,
-    hostContextLabelByWorktreeIdentity
+    hostContextLabelByWorktreeIdentity: ctx.mixedWorktreeHostContextLabels,
+    folderPairByIdentity: ctx.folderPairByIdentity
   })
 }

@@ -119,6 +119,7 @@ export type FolderWorkspaceRow = {
   lineageDescendantIdentities?: WorktreeLineageSource
   type: 'folder-workspace'
   key: string
+  sectionKey?: string
   folderWorkspace: FolderWorkspace
   projectGroup: ProjectGroup
   depth: number

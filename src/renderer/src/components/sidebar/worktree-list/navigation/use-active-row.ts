@@ -1,10 +1,19 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import type { ActiveSurfaceVariant } from '../../workspace-card/controller/worktree-card-model'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
+import {
+  composeWorktreeHostIdentity,
+  getWorktreeHostIdentity
+} from '../../../../../../shared/worktree/host-qualified-identity'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
 import type { PinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
-import { isPinnedWorktreeRow, type WorktreeItemRow } from '../listing/renderable-rows'
+import {
+  getWorkspaceItemRowKey,
+  getWorkspaceItemRowWorktree,
+  isPinnedWorktreeRow,
+  isWorkspaceItemRow,
+  type WorkspaceItemRow
+} from '../listing/renderable-rows'
 
 // The clicked occurrence owns the primary active surface; other rendered copies stay secondary.
 export function usePrimaryActiveWorktreeRow(args: {
@@ -43,10 +52,9 @@ export function usePrimaryActiveWorktreeRow(args: {
       current.worktreeIdentity === activeIdentity &&
       rows.some(
         (row) =>
-          row.type === 'item' &&
-          composeWorktreeHostIdentity(row.worktree.hostId, row.worktree.id) ===
-            current.worktreeIdentity &&
-          row.rowKey === current.rowKey
+          isWorkspaceItemRow(row) &&
+          getWorktreeHostIdentity(getWorkspaceItemRowWorktree(row)) === current.worktreeIdentity &&
+          getWorkspaceItemRowKey(row) === current.rowKey
       )
     if (current !== null && !stillPrimary) {
       setPrimaryActiveWorktreeRow(null)
@@ -54,14 +62,17 @@ export function usePrimaryActiveWorktreeRow(args: {
   }
 
   const getActiveSurfaceVariant = useCallback(
-    (row: WorktreeItemRow): ActiveSurfaceVariant => {
-      const rowIdentity = composeWorktreeHostIdentity(row.worktree.hostId, row.worktree.id)
+    (row: WorkspaceItemRow): ActiveSurfaceVariant => {
+      const worktree = getWorkspaceItemRowWorktree(row)
+      const rowIdentity = getWorktreeHostIdentity(worktree)
       if (primaryActiveWorktreeRow?.worktreeIdentity === rowIdentity) {
-        return primaryActiveWorktreeRow.rowKey === row.rowKey ? 'primary' : 'secondary'
+        return primaryActiveWorktreeRow.rowKey === getWorkspaceItemRowKey(row)
+          ? 'primary'
+          : 'secondary'
       }
       if (
         pinnedDisplayPolicy === 'duplicate-in-groups' &&
-        activeWorktreeId === row.worktree.id &&
+        activeWorktreeId === worktree.id &&
         isPinnedWorktreeRow(row)
       ) {
         return 'secondary'
@@ -75,14 +86,14 @@ export function usePrimaryActiveWorktreeRow(args: {
     (worktreeId: string, rowKey: string | undefined): void => {
       const row = rowsRef.current.find(
         (candidate) =>
-          candidate.type === 'item' &&
-          candidate.worktree.id === worktreeId &&
-          candidate.rowKey === rowKey
+          isWorkspaceItemRow(candidate) &&
+          getWorkspaceItemRowWorktree(candidate).id === worktreeId &&
+          getWorkspaceItemRowKey(candidate) === rowKey
       )
       setPrimaryActiveWorktreeRow(
-        rowKey && row?.type === 'item'
+        rowKey && row && isWorkspaceItemRow(row)
           ? {
-              worktreeIdentity: composeWorktreeHostIdentity(row.worktree.hostId, worktreeId),
+              worktreeIdentity: getWorktreeHostIdentity(getWorkspaceItemRowWorktree(row)),
               rowKey
             }
           : null

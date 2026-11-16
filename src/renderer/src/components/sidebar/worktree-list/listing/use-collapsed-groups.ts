@@ -11,7 +11,10 @@ import type {
   WorktreeGroupBy
 } from '../../../../../../shared/sidebar-list/row-types'
 import type { ProjectGroupingModel } from '../../../../../../shared/sidebar-list/sections/project-section-grouping'
-import { getFolderWorkspaceRevealGroupKeys } from '../navigation/folder-reveal'
+import {
+  getFolderWorkspaceRevealGroupKeys,
+  getKnownSidebarWorktreeById
+} from '../navigation/folder-reveal'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 
@@ -60,7 +63,16 @@ export function useEffectiveCollapsedGroups(args: {
     if (!agentSendTargetWorktreeId) {
       return collapsedGroups
     }
-    const targetWorktree = worktreeMap.get(agentSendTargetWorktreeId)
+    const targetWorktree =
+      worktreeMap.get(agentSendTargetWorktreeId) ??
+      (occurrencePlan
+        ? getKnownSidebarWorktreeById(
+            agentSendTargetWorktreeId,
+            worktreeMap,
+            folderWorkspaces,
+            worktrees
+          )
+        : null)
     if (!targetWorktree) {
       // Folder workspaces are absent from worktreeMap but still need picker-driven section reveal.
       const folderKeys = getFolderWorkspaceRevealGroupKeys(

@@ -153,7 +153,8 @@ export function buildFolderWorkspaceRow(
   return {
     type: 'folder-workspace',
     lineageDescendantIdentities: options?.descendantIdentities,
-    key: `folder-workspace:${getFolderWorkspaceHostIdentity(pair.folderWorkspace)}`,
+    key: `folder-workspace:${occurrence?.key ?? getFolderWorkspaceHostIdentity(pair.folderWorkspace)}`,
+    sectionKey: occurrence?.sectionKey,
     folderWorkspace: pair.folderWorkspace,
     projectGroup: pair.projectGroup,
     depth: occurrence?.depth ?? 0,

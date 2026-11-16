@@ -1,7 +1,3 @@
-import {
-  getFolderWorkspaceHostIdentity,
-  getFolderWorkspaceWorktree
-} from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
@@ -10,11 +6,16 @@ import type {
   PinnedWorktreeDisplayPolicy,
   WorktreeRow
 } from '../../../../../../shared/sidebar-list/row-types'
+import {
+  getWorkspaceItemRowKey,
+  getWorkspaceItemRowWorktree,
+  isWorkspaceItemRow
+} from '../listing/renderable-rows'
 
-export function getPreferredWorktreeRows(
-  rows: readonly WorktreeRow[],
+export function getPreferredWorktreeRows<Row extends { worktree: Worktree; sectionKey?: string }>(
+  rows: readonly Row[],
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
-): WorktreeRow[] {
+): Row[] {
   // Navigation/selection treat pinned duplicates as one workspace, preferring a visible natural-group occurrence.
   if (pinnedDisplayPolicy === 'single-location') {
     const seen = new Set<string>()
@@ -28,7 +29,7 @@ export function getPreferredWorktreeRows(
     })
   }
 
-  const preferredRows: WorktreeRow[] = []
+  const preferredRows: Row[] = []
   const seen = new Set<string>()
   for (const row of rows) {
     const identity = getWorktreeHostIdentity(row.worktree)
@@ -55,24 +56,16 @@ export function getRenderedWorkspaceRowsInSidebarOrder(
   rows: readonly HostSectionRow[],
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
 ): RenderedWorkspaceRow[] {
-  const itemRows = rows.filter((row): row is WorktreeRow => row.type === 'item')
+  const itemRows = rows.filter(isWorkspaceItemRow).map((row) => ({
+    worktree: getWorkspaceItemRowWorktree(row),
+    repo: row.type === 'item' ? row.repo : undefined,
+    rowKey: getWorkspaceItemRowKey(row),
+    sectionKey: row.sectionKey
+  }))
   const preferredRowKeys = new Set(
     getPreferredWorktreeRows(itemRows, pinnedDisplayPolicy).map((row) => row.rowKey)
   )
-  const renderedRows: RenderedWorkspaceRow[] = []
-
-  for (const row of rows) {
-    if (row.type === 'item' && preferredRowKeys.has(row.rowKey)) {
-      renderedRows.push({ worktree: row.worktree, repo: row.repo, rowKey: row.rowKey })
-    } else if (row.type === 'folder-workspace') {
-      renderedRows.push({
-        worktree: getFolderWorkspaceWorktree(row.folderWorkspace),
-        repo: undefined,
-        rowKey: getFolderWorkspaceHostIdentity(row.folderWorkspace)
-      })
-    }
-  }
-  return renderedRows
+  return itemRows.filter((row) => preferredRowKeys.has(row.rowKey))
 }
 
 export function getRenderedWorktreesInSidebarOrder(

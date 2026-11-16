@@ -131,6 +131,7 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
       onCardDragEnd: runtime.clearWorktreeDrag
     },
     folderWorkspace: {
+      getActiveSurfaceVariant: primaryActive.getActiveSurfaceVariant,
       groupBy: props.groupBy,
       newCardStyle: args.newCardStyle,
       settings: args.settings,

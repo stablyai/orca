@@ -1,7 +1,10 @@
 import { getFolderWorkspaceWorktree } from '../../folder-workspaces/folder-workspace-worktree'
 import { getWorktreeHostIdentity } from '../../worktree/host-qualified-identity'
 import type { Worktree } from '../../worktree/types'
-import type { OccurrenceSectionPath } from '../lineage/worktree-occurrence-plan'
+import type {
+  OccurrenceSectionPath,
+  WorktreeOccurrencePlan
+} from '../lineage/worktree-occurrence-plan'
 import {
   compareFolderWorkspacesForDisplay,
   type RenderableFolderWorkspace
@@ -66,11 +69,21 @@ export function getSidebarFolderOccurrences(renderable: readonly RenderableFolde
     groupIdByIdentity.set(identity, pair.projectGroup.id)
   }
   const isFolder = (row: Worktree): boolean => pairByIdentity.has(getWorktreeHostIdentity(row))
+  const pairsOf = (rows: readonly Worktree[]): RenderableFolderWorkspace[] =>
+    rows.flatMap((row) => pairByIdentity.get(getWorktreeHostIdentity(row)) ?? [])
   return {
+    pairs: sorted,
     /** Every folder row, in display order. */
     rows: sorted.map(rowOf),
     pairByIdentity,
     isFolder,
+    pairsOf,
+    naturalPairsOf: (plan: WorktreeOccurrencePlan<Worktree>): RenderableFolderWorkspace[] =>
+      pairsOf(
+        [...plan.preferredByIdentity.values()]
+          .filter((occurrence) => occurrence.placement === 'natural')
+          .map((occurrence) => occurrence.row)
+      ),
     /** A lane's folder rows, already in display order. */
     rowsOf: (pairs: readonly RenderableFolderWorkspace[] | undefined): Worktree[] =>
       (pairs ?? []).map(rowOf),
