@@ -24,6 +24,7 @@ import {
 } from './acp-structured-session-adapter-deps'
 import { readAcpLiveOptions } from '../options/acp-live-options'
 import {
+  acpPermissionWritesSettled,
   acpRunningPermission,
   applyAcpLivePermissionMode
 } from '../options/acp-live-permission-mode'
@@ -134,6 +135,8 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
         return rejectedAcpDispatch(session)
       }
       await acpControlsSettled(session, signal)
+      // A mode picked before this send must reach the agent before the prompt does.
+      await acpPermissionWritesSettled(session)
       input.signal?.throwIfAborted()
       await input.beforeDispatch?.()
       input.signal?.throwIfAborted()

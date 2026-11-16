@@ -3,6 +3,7 @@ import {
   type AgentChatPermissionChoice
 } from '../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { AcpStructuredSession } from '../session/acp-structured-session-contract'
+import { AcpAgentError } from '../transport/acp-errors'
 import type { AcpOptionWriteBound } from './acp-session-option-write'
 
 type LivePermissionSession = Pick<
@@ -12,17 +13,30 @@ type LivePermissionSession = Pick<
 
 // Mode writes per running chat, in pick order, so an earlier pick never lands after a later one.
 const modeWrites = new WeakMap<LivePermissionSession, Promise<void>>()
+// Chats whose last mode write went unanswered: it may still land, so their mode is unknown.
+const unansweredModes = new WeakSet<object>()
 
 /** The choice the agent runs under now: Orca's own for requests it answers, else the agent's
  *  reported session mode; null when that mode is none of Orca's. */
 export function acpRunningPermission(
   session: Pick<LivePermissionSession, 'spec' | 'options' | 'permissionModes' | 'permission'>
 ): AgentChatPermissionChoice | null {
-  if (!session.spec.permissionModeConfig || session.permission === 'own') {
+  if (!session.spec.permissionModeConfig) {
     return session.permission
+  }
+  if (unansweredModes.has(session)) {
+    return null
+  }
+  if (session.permission === 'own') {
+    return 'own'
   }
   const reported = session.options.reportedPermissionMode(session.permissionModes)
   return isAgentChatPermissionMode(reported) ? reported : null
+}
+
+/** Settles once every mode write already asked of this chat has been answered or given up. */
+export function acpPermissionWritesSettled(session: LivePermissionSession): Promise<void> {
+  return modeWrites.get(session) ?? Promise.resolve()
 }
 
 /** Moves a running chat to `mode` where the agent allows it; otherwise the next send restarts it. */
@@ -60,14 +74,16 @@ async function writeAcpSessionMode(
     return
   }
   // Not the shared option writer: its revision would supersede a send's model or effort write.
-  // An unanswered write leaves the reported mode unchanged, so the next send restarts the agent.
-  const reply = await session.connection.setConfigOption(
-    session.options.modeConfigId(),
-    value,
-    undefined,
-    undefined,
-    timeoutMs
-  )
+  const reply = await session.connection
+    .setConfigOption(session.options.modeConfigId(), value, undefined, undefined, timeoutMs)
+    .catch((error: unknown) => {
+      // Only the agent's refusal proves the mode held; otherwise the next send restarts the agent.
+      if (!(error instanceof AcpAgentError)) {
+        unansweredModes.add(session)
+      }
+      throw error
+    })
+  unansweredModes.delete(session)
   session.options.adoptConfigOptions(reply.configOptions)
   session.permission = mode
 }
