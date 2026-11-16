@@ -1,6 +1,6 @@
-import type { ExecutionHostKind } from '../../../../shared/execution-host'
+import type { ExecutionHostKind } from '../../../../shared/execution-host/execution-host'
 import type { ExecutionHostHealth } from '../../../../shared/execution-host/execution-host-health'
-import type { RuntimeCompatVerdict } from '../../../../shared/protocol-compat'
+import type { RuntimeCompatVerdict } from '../../../../shared/remote-runtime/protocol/protocol-compat'
 import type { RuntimeHostBlockedReason } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 
 // Host scoping belongs to the scope strip; this menu manages lifecycle and section collapse.

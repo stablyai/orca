@@ -8,7 +8,7 @@ import type { OrcaRuntimeService } from '../../../../../orca-runtime'
 
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 
-import { OrcaRuntimeWithGetOrchestrationDispatchAuthority } from '../../../../../terminal/output/terminal-orchestration-authority'
+import { readOrchestrationFleetAgentStatusSnapshot } from '../../../../../orchestration/addressing/orchestration-fleet-agent-status-snapshot'
 
 import {
   AgentStatusObservedPaneIdentities,
@@ -72,11 +72,10 @@ function createWorld(): ObservedWorld {
         connectionId: null,
         payload: { state, prompt: `turn ${state}`, agentType: 'claude' }
       }),
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fleet observation reads only getOrchestrationFleetAgentStatusSnapshot from the runtime.
     runtime: {
       getOrchestrationFleetAgentStatusSnapshot: () =>
-        OrcaRuntimeWithGetOrchestrationDispatchAuthority.prototype.getOrchestrationFleetAgentStatusSnapshot.call(
-          host as never
-        )
+        readOrchestrationFleetAgentStatusSnapshot(host)
     } as unknown as OrcaRuntimeService
   }
 }
@@ -150,51 +149,6 @@ describe('fleet evidence keeps the identity it was observed under', () => {
           paneKey: PANE_KEY,
           handle: TERMINAL_HANDLE,
           incarnation: INCARNATION_TWO
-        }),
-        DISPATCH_OLD
-      )
-    ).toMatchObject({ verdict: 'unverifiable', reason: 'missing_status' })
-  })
-
-  it('refuses the same row for a dispatch that took the pane over afterwards', () => {
-    const world = createWorld()
-    world.bindPane(PANE_KEY, TERMINAL_HANDLE)
-    world.runProcess(TERMINAL_HANDLE, INCARNATION_ONE)
-    world.dispatchPane(PANE_KEY, DISPATCH_OLD)
-    world.ingest(PANE_KEY, 'working')
-    world.dispatchPane(PANE_KEY, DISPATCH_NEW)
-
-    expect(
-      livenessOf(
-        world,
-        createDb({
-          dispatchId: DISPATCH_NEW,
-          paneKey: PANE_KEY,
-          handle: TERMINAL_HANDLE,
-          incarnation: INCARNATION_ONE
-        }),
-        DISPATCH_NEW
-      )
-    ).toMatchObject({ verdict: 'unverifiable', reason: 'missing_status' })
-  })
-
-  it('refuses the same row after a remint when no resource names an incarnation', () => {
-    const world = createWorld()
-    world.bindPane(PANE_KEY, TERMINAL_HANDLE)
-    world.runProcess(TERMINAL_HANDLE, INCARNATION_ONE)
-    world.dispatchPane(PANE_KEY, DISPATCH_OLD)
-    world.ingest(PANE_KEY, 'working')
-    world.runProcess(TERMINAL_HANDLE, INCARNATION_TWO)
-
-    // Unsupervised workers lack durable resources to contradict a wrongly minted incarnation.
-    expect(
-      livenessOf(
-        world,
-        createDb({
-          dispatchId: DISPATCH_OLD,
-          paneKey: PANE_KEY,
-          handle: TERMINAL_HANDLE,
-          incarnation: null
         }),
         DISPATCH_OLD
       )

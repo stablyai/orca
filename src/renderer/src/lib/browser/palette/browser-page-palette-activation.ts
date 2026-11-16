@@ -1,15 +1,15 @@
 import {
   floatingWorkspaceToWorktree,
   isFloatingWorkspaceId
-} from '../../../../../shared/floating-workspace-worktree'
+} from '../../../../../shared/workspace/identity/floating-workspace-worktree'
 import { workspaceBrowserTabs } from '@/store/slices/browser/tabs/workspace-browser-tabs'
-import { revealFloatingWorkspacePanel } from '@/components/floating-terminal/floating-workspace-panel-reveal'
+import { revealFloatingWorkspacePanel } from '@/components/floating-terminal/workspace/floating-workspace-panel-reveal'
 import { useAppStore } from '@/store/index'
 import {
   activateBrowserWorkspaceTab,
   getActivatableBrowserWorkspaceTab
 } from '@/lib/browser/workspace/browser-workspace-tab-activation'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { isBlankBrowserUrl } from './browser-palette-search'
 import { activateAndRevealWorkspace } from '../../workspace/activation/worktree-activation'
 
@@ -78,9 +78,9 @@ export function activateBrowserPagePaletteResult({
   ) {
     return { status: 'failed', reason: 'missing-tab' }
   }
-  const activated =
-    floating ||
-    activateAndRevealWorkspace(worktree.id, targetHostId ? { executionHostId: targetHostId } : {})
+  const activated = floating
+    ? revealFloatingWorkspacePanel(initialState)
+    : activateAndRevealWorkspace(worktree.id, targetHostId ? { executionHostId: targetHostId } : {})
   if (!activated) {
     return { status: 'blocked' }
   }
@@ -95,9 +95,6 @@ export function activateBrowserPagePaletteResult({
     })
   ) {
     return { status: 'failed', reason: 'missing-tab' }
-  }
-  if (floating) {
-    revealFloatingWorkspacePanel(useAppStore.getState())
   }
   return { status: 'activated', pageId, focusTarget }
 }

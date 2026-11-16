@@ -3,7 +3,7 @@ import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-ses
 import type { PaneForegroundAgentEntry } from '../../../store/slices/agent-status/pane-foreground-agent'
 
 export type PaneAgentSessionIdState = {
-  agentStatusByPaneKey: Record<string, AgentStatusEntry | undefined>
+  agentStatusByPaneKey: ReadonlyMap<string, AgentStatusEntry | undefined>
   sleepingAgentSessionsByPaneKey: Record<string, SleepingAgentSessionRecord | undefined>
   paneForegroundAgentByPaneKey: Record<string, PaneForegroundAgentEntry | undefined>
 }
@@ -17,14 +17,14 @@ export function resolvePaneAgentSessionId(
   if (state.paneForegroundAgentByPaneKey[paneKey]?.shellForeground === true) {
     return null
   }
-  const live = state.agentStatusByPaneKey[paneKey]
+  const live = state.agentStatusByPaneKey.get(paneKey)
   if (live && live.restoredUnconfirmed !== true) {
     return live.providerSession?.id ?? null
   }
   return state.sleepingAgentSessionsByPaneKey[paneKey]?.providerSession.id ?? null
 }
 
-/** Copy Agent ID's gate. A trusted live row offers it only when its host stamped the field (an id,
+/** Copy Orca Session ID's gate. A trusted live row offers it only when its host stamped the field (an id,
  *  or null while unresolved), which older hosts never do; a sleeping record only when this app owns the pane on a non-Windows
  *  host, the one place its saved provider key resolves. */
 export function canPaneOfferAgentId(
@@ -36,7 +36,7 @@ export function canPaneOfferAgentId(
   if (state.paneForegroundAgentByPaneKey[paneKey]?.shellForeground === true) {
     return false
   }
-  const live = state.agentStatusByPaneKey[paneKey]
+  const live = state.agentStatusByPaneKey.get(paneKey)
   if (live && live.restoredUnconfirmed !== true) {
     // Null: the host can name it but its first link failed; the click retries there.
     return live.orcaSessionId !== undefined

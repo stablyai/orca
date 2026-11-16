@@ -1,12 +1,12 @@
 import type { RuntimeFileOpenPosition } from '../../../../shared/file-access/runtime-editor-file-open'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/workspace/identity/floating-workspace-id'
 import { scheduleEditorLineReveal } from '@/store/slices/editor/focus/editor-focus-reveal'
 import { selectFloatingWorkspacePanelVisible } from '@/store/workspaces/floating/floating-workspace-panel-selector'
 import {
   isEventTargetInsideFloatingWorkspacePanel,
   isFloatingWorkspacePanelFocused
-} from '@/components/floating-terminal/floating-workspace-terminal-actions'
-import { useAppStore } from '../../store'
+} from '@/components/floating-terminal/workspace/floating-workspace-terminal-actions'
+import { useAppStore } from '../../store/index'
 import type { AppState } from '../../store/types'
 
 function selectedEditorTab(state: AppState, worktreeId = state.activeWorktreeId) {

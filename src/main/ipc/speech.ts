@@ -6,8 +6,8 @@ import {
   type MessagePortMain
 } from 'electron'
 import { abortWhenRendererGone } from './renderer-lifetime-abort'
-import { dictationTermsFor } from '../../shared/dictation-dictionary'
-import { dictationTextSettingsFor } from '../../shared/dictation-cleanup'
+import { dictationTermsFor } from '../../shared/speech/dictation/dictation-dictionary'
+import { dictationTextSettingsFor } from '../../shared/speech/dictation/dictation-cleanup'
 import { SPEECH_MODEL_CATALOG } from '../speech/model-catalog'
 import { deleteLocalSpeechModel } from '../speech/speech-model-deletion'
 import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
@@ -24,11 +24,14 @@ import {
   clearOpenAiCompatibleSpeechProvider,
   summarizeOpenAiCompatibleSpeechProvider
 } from '../speech/openai-compatible-speech-provider-store'
-import type { DictationContext, OpenAiCompatibleSpeechProvider } from '../../shared/speech-types'
+import type {
+  DictationContext,
+  OpenAiCompatibleSpeechProvider
+} from '../../shared/speech/speech-types'
 import type { Store } from '../persistence/loading-store/store'
-import type { DictationCleanupResult } from '../../shared/dictation-cleanup'
+import type { DictationCleanupResult } from '../../shared/speech/dictation/dictation-cleanup'
 import { cancelDictationCleanup, cleanUpDictatedText } from '../speech/dictation-cleanup-service'
-import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/commit-message-agent-environment'
+import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/execution/commit-message-agent-environment'
 
 // Ten minutes of fast speech is under 20,000 characters; anything far past it isn't dictation.
 const MAX_CLEANUP_TEXT_LENGTH = 100_000

@@ -135,7 +135,17 @@ export function findHttpLinkAtTerminalMouseEvent(
     : null
 }
 
-/** Resolve HTTP targets under eligible clicks when the native linkifier has not activated them. */
+export function isTerminalLinkAtMouseEvent(terminal: Terminal, event: MouseEvent): boolean {
+  if (isTerminalLinkifierHoverActive(terminal)) {
+    return true
+  }
+  const position = getTerminalBufferPositionForMouseEvent(terminal, event)
+  return Boolean(
+    position &&
+    findTerminalHttpLinkAtBufferPosition(terminal.buffer.active, position, terminal.cols)
+  )
+}
+
 export function installHttpLinkClickFallback(
   terminal: Terminal,
   deps: UrlLinkClickFallbackDeps

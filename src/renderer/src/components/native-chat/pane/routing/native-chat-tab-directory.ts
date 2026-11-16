@@ -1,8 +1,8 @@
-import { isFloatingWorkspaceId } from '../../../../../../shared/floating-workspace-worktree'
+import { isFloatingWorkspaceId } from '../../../../../../shared/workspace/identity/floating-workspace-worktree'
 import { resolveWorkspaceDirectory } from '@/lib/workspace/paths/workspace-directory'
 import type { WorkspaceDirectoryState } from '@/lib/workspace/paths/workspace-directory'
 import { firstRegisteredStructuredChatTab } from '@/lib/agent-session/tab-identity/structured-chat-tab-index'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { StructuredSessionLaunchDirectory } from '@/store/slices/agent-status/structured-session-launch-directories'
 
 type NativeChatDirectoryTab = {

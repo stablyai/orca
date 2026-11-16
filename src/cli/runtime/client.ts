@@ -1,5 +1,9 @@
+import { reenterPackagedElectron } from './app-launch/packaged-cli-interpreter'
 import { randomUUID } from 'node:crypto'
-import type { CliStatusResult, RuntimeStatus } from '../../shared/runtime-types'
+import type {
+  CliStatusResult,
+  RuntimeStatus
+} from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { runtimeHostConnectionState } from '../../shared/remote-runtime/host-status/runtime-host-connection-state'
 import {
   isDurableMutation,
@@ -8,44 +12,41 @@ import {
   orchestrationMigrationData
 } from '../../shared/orchestration/orchestration-rpc-contract'
 import type { PairedRuntimeConnection } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
-import { openLocalOrca } from './open-local-orca'
-import { getDefaultUserDataPath, readMetadata } from './metadata'
-import {
-  getCliStatus,
-  getOfflineRuntimeAdmission,
-  type OfflineRuntimeAdmission,
-  projectRemoteAppStatus
-} from './status'
-import { sendRequest } from './transport'
-import { attachMutationRecovery, isRequestUnsent } from './client-error-recovery'
-import {
-  RuntimeClientError,
-  RuntimeRpcFailureError,
-  type RuntimeRpcSuccess,
-  type RuntimeCallOptions
-} from './types'
+import { openLocalOrca } from './app-launch/open-local-orca'
+import { getDefaultUserDataPath, readMetadata } from './profile/metadata'
+import { getCliStatus, getOfflineRuntimeAdmission } from './status/status'
+import type { OfflineRuntimeAdmission } from './status/status'
+import { projectRemoteAppStatus } from '../../shared/remote-runtime/session-graph/cli-app-status-projection'
+import { sendRequest } from './connection/transport'
+import { attachMutationRecovery, isRequestUnsent } from './connection/client-error-recovery'
+import { RuntimeClientError, RuntimeRpcFailureError } from './connection/types'
+import type { RuntimeCallOptions } from './connection/types'
+import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import {
   attachDurableMutationRecovery,
   attachLegacyTerminalPromptRecovery,
   attachUnverifiedTerminalPromptRecovery,
   didAnotherRuntimeHandleTerminalPrompt
-} from './terminal-prompt-mutation-recovery'
+} from './connection/terminal-prompt-mutation-recovery'
 import { recordRuntimeEnvironmentUsage } from '../../shared/remote-runtime/host-store/runtime-environment-usage-record'
-import { createRuntimeSourceFence, type RuntimeSourceFence } from './runtime-source-fence'
-import { resolveRemoteConnection } from './runtime-remote-pairing'
+import {
+  createRuntimeSourceFence,
+  type RuntimeSourceFence
+} from './connection/runtime-source-fence'
+import { resolveRemoteConnection } from './pairing/runtime-remote-pairing'
 import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
   ORCHESTRATION_CONTRACT_VERSION
 } from '../../shared/orchestration/orchestration-runtime-capabilities'
-import { RemoteRuntimeCompatGate } from './remote-runtime-compat-gate'
+import { RemoteRuntimeCompatGate } from './connection/remote-runtime-compat-gate'
 import { OrchestrationRequestEvidence } from '../orchestration/identity/orchestration-compatibility-envelope'
-import { getTimeoutMsParam, isWaitingCheck } from './runtime-request-timeout'
+import { getTimeoutMsParam, isWaitingCheck } from './connection/runtime-request-timeout'
 import {
   isWorkerStartTimeoutWithinTimerLimit,
   resolveWorkerStartClientTimeoutMs,
   resolveWorkerStartReadinessTimeoutMs
 } from '../../shared/orchestration/orchestration-timing-budgets'
-import { MAX_TIMER_DELAY_MS } from '../../shared/timer-delay'
+import { MAX_TIMER_DELAY_MS } from '../../shared/concurrency/timer-delay'
 import {
   buildOrchestrationRecoveryCommand,
   resolveOrchestrationCliExecutable
@@ -54,13 +55,14 @@ import {
 const LONG_POLL_CLIENT_GRACE_MS = 10_000
 // The host records the launched agent in the caller's chat; older hosts ignore the evidence.
 
-const loadWebSocketTransport = async () => await import('./websocket-transport.js')
+const loadWebSocketTransport = async () => await import('./connection/websocket-transport.js')
 
 export class RuntimeClient {
   readonly userDataPath: string
-  private readonly remote: PairedRuntimeConnection | null
+  private remote: Promise<PairedRuntimeConnection | null> | undefined
+  private readonly resolveRemote: () => Promise<PairedRuntimeConnection | null>
+  private readonly remoteSelected: boolean
   readonly environmentSelector: string | null
-  private readonly cliExecutable: string
   private readonly originalArgs: readonly string[] | undefined
   private readonly remoteCompat: RemoteRuntimeCompatGate
   private orchestrationContractCheck: Promise<void> | null = null
@@ -73,20 +75,21 @@ export class RuntimeClient {
     private readonly requestTimeoutMs = 60_000,
     remotePairingCode = process.env.ORCA_PAIRING_CODE ?? process.env.ORCA_REMOTE_PAIRING ?? null,
     environmentSelector = process.env.ORCA_ENVIRONMENT ?? null,
-    cliExecutable = resolveOrchestrationCliExecutable(),
+    private readonly cliExecutable = resolveOrchestrationCliExecutable(),
     originalArgs?: readonly string[]
   ) {
     this.userDataPath = userDataPath
     this.environmentSelector = environmentSelector
-    this.cliExecutable = cliExecutable
     this.originalArgs = originalArgs ? [...originalArgs] : undefined
-    this.remote = resolveRemoteConnection(userDataPath, remotePairingCode, environmentSelector)
+    this.remoteSelected = Boolean(remotePairingCode || environmentSelector)
+    this.resolveRemote = async () =>
+      await resolveRemoteConnection(userDataPath, remotePairingCode, environmentSelector)
     this.remoteCompat = new RemoteRuntimeCompatGate(userDataPath, environmentSelector)
     this.runtimeSourceFence = createRuntimeSourceFence(process.env, userDataPath, requestTimeoutMs)
   }
 
   get isRemote(): boolean {
-    return this.remote !== null
+    return this.remoteSelected
   }
 
   async call<TResult>(
@@ -133,7 +136,7 @@ export class RuntimeClient {
       }
     }
     const compatibilityEnvelope = this.requestEvidence.envelopeFor(method, {
-      remote: this.remote !== null,
+      remote: this.remoteSelected,
       mutation: orchestrationMutation,
       requestId: orchestrationRequestId
     })
@@ -145,13 +148,13 @@ export class RuntimeClient {
       orchestrationRequestId,
       ...compatibilityEnvelope
     }
-    if (this.remote) {
+    if (this.remoteSelected) {
       const transport = await loadWebSocketTransport()
       let response
       try {
         response = await this.remoteCompat.send<TResult>({
           transport,
-          connection: this.remote,
+          connection: (await (this.remote ??= this.resolveRemote()))!,
           method,
           params,
           timeoutMs: effectiveTimeoutMs,
@@ -226,7 +229,7 @@ export class RuntimeClient {
   }
 
   async getCliStatus(): Promise<RuntimeRpcSuccess<CliStatusResult>> {
-    if (this.remote) {
+    if (this.remoteSelected) {
       const response = await this.call<RuntimeStatus>('status.get')
       this.remoteCompat.noteVerifiedStatus(response.result)
       const graphState = response.result.graphStatus
@@ -265,7 +268,7 @@ export class RuntimeClient {
   }
 
   async getOfflineRuntimeAdmission(): Promise<OfflineRuntimeAdmission> {
-    if (this.remote) {
+    if (this.remoteSelected) {
       const status = await this.getCliStatus()
       return {
         reachable: status.result.runtime.reachable,
@@ -291,7 +294,7 @@ export class RuntimeClient {
 
   private async checkOrchestrationContractCompatibility(timeoutMs: number): Promise<void> {
     const response = await this.call<RuntimeStatus>('status.get', undefined, { timeoutMs })
-    if (this.remote) {
+    if (this.remoteSelected) {
       this.remoteCompat.noteVerifiedStatus(response.result)
     }
     if (!response.result.capabilities?.includes(ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY)) {
@@ -304,6 +307,14 @@ export class RuntimeClient {
   }
 
   async openOrca(timeoutMs = 15_000): Promise<RuntimeRpcSuccess<CliStatusResult>> {
-    return this.remote ? this.getCliStatus() : openLocalOrca(() => this.getCliStatus(), timeoutMs)
+    if (this.remoteSelected) {
+      return this.getCliStatus()
+    }
+    reenterPackagedElectron()
+    return openLocalOrca(
+      () => this.getCliStatus(),
+      (options) => this.call<{ requested: boolean }>('desktop.openWindowInBackground', {}, options),
+      timeoutMs
+    )
   }
 }

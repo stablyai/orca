@@ -1,6 +1,7 @@
+import { workspaceBrowserTabs } from '../browser/tabs/workspace-browser-tabs'
 import { structuredLaunchSlotIds } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 import type { AppState } from '../../types'
-import type { Tab } from '../../../../../shared/tab-types'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { dedupeTabOrder } from '../../../../../shared/workspace-layout/tab-groups/tab-order'
 import { ensureWorktreeGroup, updateGroup } from './tab-group-state'
 import { sanitizeRecentTabIds } from './tab-selection-history'
@@ -9,7 +10,7 @@ import {
   buildOrphanTerminalCleanupPatch,
   getOrphanTerminalIds,
   terminalTabHasReconnectablePty
-} from '../../terminals/terminal-orphan-cleanup'
+} from '../../terminals/retirement/terminal-orphan-cleanup'
 import {
   createReconciliationDrafts,
   finishReconciliationDrafts,
@@ -115,7 +116,9 @@ export function projectWorktreeTabModelReconciliation(
   // Batch index avoids O(workspaces × openFiles) rescanning.
   const liveEditorIds = batch?.liveEditorIds ?? new Set(state.openFiles.map((file) => file.id))
   const liveBrowserIds = new Set(
-    (state.browserTabsByWorktree[worktreeId] ?? []).map((browserTab) => browserTab.id)
+    workspaceBrowserTabs(state.browserTabsByWorktree, worktreeId, reconciledUnifiedTabs).map(
+      (browserTab) => browserTab.id
+    )
   )
 
   const isRenderableTab = (tab: Tab): boolean => {

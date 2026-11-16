@@ -2,7 +2,7 @@ import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent
 import type { QuickSubmitOptions } from './quick-creation-request'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import type { SetupDecision } from '../../../../shared/worktree/create-types'
-import type { WorkspaceIntentName } from '../../../../shared/workspace-name'
+import type { WorkspaceIntentName } from '../../../../shared/workspace/naming/workspace-name'
 import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
 import type { ComposerCreateHandoff } from '@/lib/workspace/creation/composer-create-handoff'

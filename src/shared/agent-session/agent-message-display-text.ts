@@ -1,8 +1,8 @@
 import type { AgentMessageSource } from './agent-session-message-source'
 import { orchestrationMailDisplayText } from './orchestration-mail-display-text'
 import type { NativeChatBlock } from '../native-chat/native-chat-types'
-import { nativeChatProseToMarkdown } from '../native-chat/transcript/native-chat-prose'
-import { orcaDispatchTaskBodyOffset } from '../orca-dispatch-status-prompt'
+import { nativeChatProseToMarkdown } from '../native-chat/transcript/row-content/native-chat-prose'
+import { orcaDispatchTaskBodyOffset } from '../orchestration/workers/orca-dispatch-status-prompt'
 
 const taskBodies = new WeakMap<readonly NativeChatBlock[], string | undefined>()
 const mailBodies = new WeakMap<

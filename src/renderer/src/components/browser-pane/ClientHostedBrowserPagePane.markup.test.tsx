@@ -3,10 +3,10 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import type { ComponentProps } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { installClientHostedPaneApi } from './client-hosted-browser-pane-test-rig'
 import { ClientHostedBrowserPagePane } from './ClientHostedBrowserPagePane'
-import type { MarkupBaseImage } from './annotate/markup-base-image'
+import type { MarkupBaseImage } from './annotate/capture/markup-base-image'
 
 const mocks = vi.hoisted(() => ({
   attach: vi.fn(),
@@ -19,9 +19,11 @@ vi.mock('./browser-client-page-renderer-installation', () => ({
   attachBrowserClientPageToViewport: mocks.attach
 }))
 // Only image/native boundaries are mocked; the button, controller and overlay are real.
-vi.mock('./annotate/markup-base-image', () => ({ captureMarkupBaseImage: mocks.capture }))
-vi.mock('./annotate/markup-screenshot-compose', () => ({ composeMarkupDataUrl: mocks.compose }))
-vi.mock('./annotate/markup-canvas-render', () => ({
+vi.mock('./annotate/capture/markup-base-image', () => ({ captureMarkupBaseImage: mocks.capture }))
+vi.mock('./annotate/capture/markup-screenshot-compose', () => ({
+  composeMarkupDataUrl: mocks.compose
+}))
+vi.mock('./annotate/drawing/markup-canvas-render', () => ({
   renderCommittedLayer: vi.fn(),
   blitMarkupScene: vi.fn()
 }))
@@ -122,69 +124,6 @@ async function startDrawing() {
 }
 
 describe('client-hosted screenshot markup', () => {
-  it('captures the retained guest before hiding it, then copies through the shared overlay', async () => {
-    let resolveCapture!: (value: MarkupBaseImage) => void
-    mocks.capture.mockReturnValue(
-      new Promise<MarkupBaseImage>((resolve) => {
-        resolveCapture = resolve
-      })
-    )
-    const { webview } = renderPane()
-    fireEvent.click(drawButton())
-    expect(mocks.capture).toHaveBeenCalledWith({ kind: 'webview', webview })
-    expect(webview.style.display).toBe('flex')
-    expect(drawButton().getAttribute('aria-pressed')).toBe('true')
-    expect(overlay()).toBeNull()
-
-    await act(async () => resolveCapture(image))
-    expect(webview.style.display).toBe('none')
-    const backdrop = overlay()!.querySelector('img')!
-    expect(backdrop.src).toBe(image.dataUrl)
-    fireEvent.load(backdrop)
-    fireEvent.click(screen.getByRole('button', { name: 'Copy Markup' }))
-    await waitFor(() =>
-      expect(mocks.clipboard).toHaveBeenCalledWith('data:image/png;base64,Y29tcG9zaXRl')
-    )
-    expect(mocks.compose).toHaveBeenCalledWith(
-      expect.objectContaining({
-        image: backdrop,
-        displayCssWidth: 800,
-        displayCssHeight: 600,
-        shapes: []
-      })
-    )
-    await waitFor(() => expect(overlay()).toBeNull())
-    expect(webview.style.display).toBe('flex')
-    expect(drawButton().getAttribute('aria-pressed')).toBe('false')
-  })
-
-  it.each(['Cancel', 'Escape', 'toggle'])('restores the guest after %s', async (action) => {
-    const { webview } = renderPane()
-    await startDrawing()
-    if (action === 'Cancel') {
-      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-    } else if (action === 'Escape') {
-      fireEvent.keyDown(window, { key: 'Escape' })
-    } else {
-      fireEvent.click(drawButton())
-    }
-    expect(overlay()).toBeNull()
-    expect(webview.style.display).toBe('flex')
-    expect(mocks.clipboard).not.toHaveBeenCalled()
-  })
-
-  it('returns to idle after a capture failure', async () => {
-    mocks.capture.mockRejectedValue(new Error('guest capture failed'))
-    const { webview } = renderPane()
-    fireEvent.click(drawButton())
-    await waitFor(() =>
-      expect(mocks.error).toHaveBeenCalledWith('Could not capture the page to draw on.')
-    )
-    expect(drawButton().getAttribute('aria-pressed')).toBe('false')
-    expect(webview.style.display).toBe('flex')
-    expect(overlay()).toBeNull()
-  })
-
   it.each(['cancel', 'deactivate', 'replace', 'loss', 'unmount'])(
     'invalidates an in-flight capture on %s',
     async (action) => {

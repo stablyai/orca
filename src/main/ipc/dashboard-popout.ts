@@ -1,7 +1,7 @@
 import { app, ipcMain } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
 import type { KeybindingService } from '../keybindings/keybinding-service'
-import type { DashboardSnapshot } from '../../shared/dashboard-snapshot'
+import type { DashboardSnapshot } from '../../shared/agent-status/presentation/dashboard-snapshot'
 import {
   createOrFocusDashboardPopout,
   closeDashboardPopout,

@@ -1,7 +1,5 @@
-import {
-  agentProviderSessionsEqual,
-  type AgentProviderSessionMetadata
-} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 
 export type ResumedAgentSession = {

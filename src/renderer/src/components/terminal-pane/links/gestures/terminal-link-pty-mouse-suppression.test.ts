@@ -69,6 +69,27 @@ describe('terminal link PTY mouse suppression', () => {
     expect(forwarded).toEqual([])
   })
 
+  it('lets a middle-click link action claim the gesture and drop its mouse input', async () => {
+    const { element, suppression } = createSuppression()
+    const forwarded: string[] = []
+    const forward = (data: string): void => {
+      forwarded.push(data)
+    }
+    let claimed = false
+    element.addEventListener('mousedown', () => suppression.handlePtyInput('\x1b[<1;1;1M', forward))
+    element.addEventListener('mouseup', () => {
+      suppression.handlePtyInput('\x1b[<1;1;1m', forward)
+      claimed = suppression.claimAction()
+    })
+
+    element.dispatchEvent(mouseEvent('mousedown', { button: 1 }))
+    element.dispatchEvent(mouseEvent('mouseup', { button: 1 }))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(claimed).toBe(true)
+    expect(forwarded).toEqual([])
+  })
+
   it('flushes deferred mouse input when the completed gesture stays child-owned', async () => {
     const { element, suppression } = createSuppression()
     const forwarded: string[] = []

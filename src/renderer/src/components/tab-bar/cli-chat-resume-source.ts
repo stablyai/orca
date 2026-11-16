@@ -4,11 +4,11 @@ import {
   collectAgentPaneConversations,
   resolvePaneLastAgentConversation
 } from '../../lib/agent-session/identity/pane-agent-conversations'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   adoptsCliConversations,
   type CliConversationRowAgent
-} from '../../../../shared/structured-agent-cli-conversation-adoption'
+} from '../../../../shared/agent-session/view/structured-agent-cli-conversation-adoption'
 import { resolvePaneResumeInNewChatOffer } from './tab-session-history-switch'
 
 export type CliChatResumeSource = {

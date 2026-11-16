@@ -1,5 +1,5 @@
-import { resolveHookCommandSourcePolicy } from '../../../../shared/hook-command-source-policy'
-import type { Repo } from '../../../../shared/repo-types'
+import { resolveHookCommandSourcePolicy } from '../../../../shared/workspace-setup/hooks/hook-command-source-policy'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { HookCheckResult } from '@/runtime/repo-hooks/runtime-hooks-client'
 
 export function hasEffectiveSetupCommand(repo: Repo, hooksResult: HookCheckResult): boolean {

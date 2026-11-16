@@ -1,10 +1,16 @@
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
-import { floatingWorkspaceToWorktree } from '../../../../../shared/floating-workspace-worktree'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
+import { floatingWorkspaceToWorktree } from '../../../../../shared/workspace/identity/floating-workspace-worktree'
 import { workspaceBrowserTabs } from '@/store/slices/browser/tabs/workspace-browser-tabs'
-import type { BrowserPage, BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
-import type { Tab, WorkspaceVisibleTabType } from '../../../../../shared/tab-types'
+import type {
+  BrowserPage,
+  BrowserWorkspace
+} from '../../../../../shared/browser/workspaces/browser-workspace-types'
+import type {
+  Tab,
+  WorkspaceVisibleTabType
+} from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import {
   getPaletteWorktreeIdentity,
   isPaletteCurrentWorktree,

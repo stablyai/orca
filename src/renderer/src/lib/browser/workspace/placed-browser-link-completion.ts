@@ -1,7 +1,7 @@
 import { afterPendingEntityTabs } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import { focusHttpLinkPage } from '../navigation/http-link-browser-placement'
-import { revealFloatingWorkspacePanel } from '@/components/floating-terminal/floating-workspace-panel-reveal'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
+import { revealFloatingWorkspacePanel } from '@/components/floating-terminal/workspace/floating-workspace-panel-reveal'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import { useAppStore } from '@/store/index'
 import type { OpenWorkspaceBrowserTabRequest } from './workspace-browser-tab-open'
 
@@ -9,10 +9,16 @@ import type { OpenWorkspaceBrowserTabRequest } from './workspace-browser-tab-ope
 export async function completePlacedBrowserLink(
   request: OpenWorkspaceBrowserTabRequest,
   pageId: string,
-  environmentId: string | null | undefined = request.expectedRuntimeEnvironmentId
+  environmentId: string | null | undefined = request.expectedRuntimeEnvironmentId,
+  browserWorkspaceId?: string
 ): Promise<void> {
   if (!request.placementWorkspaceId) {
     return
+  }
+  if (browserWorkspaceId) {
+    await new Promise<void>((resolve) =>
+      afterPendingEntityTabs(request.placementWorkspaceId!, browserWorkspaceId, resolve)
+    )
   }
   const state = useAppStore.getState()
   const page = Object.values(state.browserPagesByWorkspace)

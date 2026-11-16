@@ -1,6 +1,6 @@
-import { openDocumentInFloatingWorkspace } from '@/components/floating-terminal/open-document-in-floating-workspace'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
-import { revealFloatingWorkspacePanel } from '@/components/floating-terminal/floating-workspace-panel-reveal'
+import { openDocumentInFloatingWorkspace } from '@/components/floating-terminal/workspace/open-document-in-floating-workspace'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/workspace/identity/floating-workspace-id'
+import { revealFloatingWorkspacePanel } from '@/components/floating-terminal/workspace/floating-workspace-panel-reveal'
 import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
 import { useAppStore } from '@/store/index'
 import { scheduleEditorLineReveal } from '@/store/slices/editor/focus/editor-focus-reveal'
@@ -12,7 +12,7 @@ import type {
   EditorOpenLinkIntent,
   EditorOpenResult
 } from '@/store/slices/editor/types/editor-open-link-intent'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 
 /** An explicit group request may only end in an editor in the scope it was captured from. */
 export function isExplicitEditorScopeKept(
@@ -86,7 +86,9 @@ export function openLinkedFileInEditor(
   if (floatingHostId) {
     let opened: EditorOpenResult | null = null
     const state = useAppStore.getState()
-    revealFloatingWorkspacePanel(state)
+    if (!revealFloatingWorkspacePanel(state)) {
+      return null
+    }
     openDocumentInFloatingWorkspace(
       (document, options) => {
         opened = state.openFileForLink(

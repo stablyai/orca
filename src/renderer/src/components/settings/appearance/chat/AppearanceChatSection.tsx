@@ -1,4 +1,5 @@
 import {
+  DEFAULT_NATIVE_CHAT_FONT_SIZE,
   normalizeNativeChatAppearanceSettings,
   resetNativeChatAppearanceSettings,
   resolveNativeChatAppearanceSettings,
@@ -23,7 +24,7 @@ import {
   getChatWidthOptions
 } from './chat-appearance-search'
 import { writeNativeChatAppearance } from '../../../native-chat/appearance/native-chat-appearance-write'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 
 export type AppearanceChatSectionProps = {
   settings: GlobalSettings
@@ -76,7 +77,7 @@ export function AppearanceChatSection({
           label={entries.textSize.title}
           description={matching ? chatTerminalControlledHint(t) : entries.textSize.description}
           value={appearance.fontSize}
-          defaultValue={matching ? undefined : 14}
+          defaultValue={matching ? undefined : DEFAULT_NATIVE_CHAT_FONT_SIZE}
           disabled={matching}
           disabledReason={chatTerminalControlledTooltip(t)}
           min={12}

@@ -9,7 +9,7 @@ import { resolveStructuredWorkerIdentityForSession } from '../../../../orchestra
 import {
   OrchestrationWorkerKeepOpenParams,
   OrchestrationWorkerSubjectParams
-} from '../../../../../../shared/rpc-contract/orchestration-worker-release-params'
+} from '../../../../../../shared/rpc-contract/orchestration/orchestration-worker-release-params'
 
 export const ORCHESTRATION_WORKER_KEEP_OPEN_METHODS = [
   defineOrchestrationMethod({

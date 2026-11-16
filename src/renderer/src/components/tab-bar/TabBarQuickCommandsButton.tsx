@@ -12,7 +12,7 @@ import {
   isTerminalQuickCommandComplete
 } from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/workspace/identity/floating-workspace-id'
 import { runQuickCommandInNewTab } from '@/lib/terminal/quick-commands/run-quick-command-in-new-tab'
 import type { TerminalQuickCommand } from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
@@ -23,7 +23,10 @@ import {
   type HostedTerminalQuickCommand,
   useTerminalQuickCommandHosts
 } from '@/hooks/use-terminal-quick-command-hosts'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import { useProjectHostSetupProjection } from '@/store/projects/use-project-host-setup-projection'
 import { terminalQuickCommandMatchesWorkspaceProject } from '@/lib/terminal/quick-commands/terminal-quick-command-project-scope'
 
@@ -122,15 +125,14 @@ export function TabBarQuickCommandsButton({
   const handleDeleteCommand = async (entry: HostedTerminalQuickCommand): Promise<void> => {
     const { command } = entry
     const confirmed = await confirm({
-      title: t(
-        'auto.components.tab.bar.TabBarQuickCommandsButton.e8e1a52edb',
-        'Delete "{{value0}}"?',
-        { value0: command.label }
-      ),
-      description: t(
-        'auto.components.tab.bar.TabBarQuickCommandsButton.3220e2da27',
-        'This quick command will be removed from your saved list.'
-      ),
+      title: t('common.delete', 'Delete'),
+      description: [
+        command.label,
+        t(
+          'auto.components.tab.bar.TabBarQuickCommandsButton.3220e2da27',
+          'This quick command will be removed from your saved list.'
+        )
+      ].join('\n'),
       confirmLabel: t('auto.components.tab.bar.TabBarQuickCommandsButton.be8f0ff166', 'Delete'),
       confirmVariant: 'destructive'
     })

@@ -72,7 +72,7 @@ describe('Bitbucket hosted review integration', () => {
           return
         }
 
-        if (url.pathname === '/2.0/repositories/team/repo/commit/abc123/statuses/build') {
+        if (url.pathname === '/2.0/repositories/team/repo/commit/abc123/statuses') {
           sendJson(res, {
             values: [{ state: 'SUCCESSFUL' }, { state: 'STOPPED' }],
             ...(next ? { next: 'https://api.bitbucket.org/next' } : {})
@@ -131,7 +131,7 @@ describe('Bitbucket hosted review integration', () => {
 
         expect(seen.map((request) => request.pathname)).toEqual([
           '/2.0/repositories/team/repo/pullrequests',
-          '/2.0/repositories/team/repo/commit/abc123/statuses/build'
+          '/2.0/repositories/team/repo/commit/abc123/statuses'
         ])
         expect(seen.every((request) => request.authorization === 'Bearer local-token')).toBe(true)
         const query = new URLSearchParams(seen[0].search)
@@ -174,7 +174,7 @@ describe('Bitbucket hosted review integration', () => {
         return
       }
 
-      if (url.pathname === '/2.0/repositories/team/repo/commit/def456/statuses/build') {
+      if (url.pathname === '/2.0/repositories/team/repo/commit/def456/statuses') {
         buildStatusCalls += 1
         sendJson(res, { values: [{ state: 'SUCCESSFUL' }] })
         return

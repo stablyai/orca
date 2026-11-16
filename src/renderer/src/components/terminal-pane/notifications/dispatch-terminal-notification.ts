@@ -6,10 +6,11 @@ import {
   notificationExecutionHostForOwner,
   notificationWorkspaceExecutionHostForOwner,
   notificationSourceForOwner
-} from '../../../../../shared/notification-source'
+} from '../../../../../shared/notifications/notification-source'
 import { useAppStore } from '../../../store/index'
+import { isWorktreeNotificationDeliveryMuted } from '@/attention/worktree-notification-mute'
 import { resolveExplicitTerminalTitleAgentType as resolveCommittedTitleAgentType } from '../../../../../shared/agent-status/title/terminal-title-agent-type'
-import { buildAgentNotificationId } from '../../../../../shared/agent-notification-id'
+import { buildAgentNotificationId } from '../../../../../shared/agent-status/presentation/agent-notification-id'
 import { agentMainAgentVerdict } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import { shareCompatibleTitleIdentityGroup } from '../../../../../shared/agent-status/title/agent-title-owner'
 import { isFreshNonDoneAgentStatus } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
@@ -28,7 +29,7 @@ import type {
   AgentCompletionDispatchMeta,
   AgentCompletionStatusSnapshot
 } from '../agent-completion/agent-completion-coordinator-types'
-import type { NotificationDispatchResult } from '../../../../../shared/notification-settings-types'
+import type { NotificationDispatchResult } from '../../../../../shared/notifications/notification-settings-types'
 import { getNotificationWorkspaceLabels } from '../../../attention/notification-workspace-labels'
 import { createTerminalAttentionSurface } from './terminal-attention-surface'
 import {
@@ -95,7 +96,7 @@ export function dispatchTerminalNotification(
       : null
   const storedAgentStatus =
     event.source === 'agent-task-complete' && event.paneKey
-      ? state.agentStatusByPaneKey[event.paneKey]
+      ? state.agentStatusByPaneKey.get(event.paneKey)
       : undefined
   const eventAgentStatusSnapshot =
     event.source === 'agent-task-complete' &&
@@ -224,9 +225,12 @@ export function dispatchTerminalNotification(
     )
   }
 
+  // Why: per-worktree mute stops at the interruptions (OS banner, sound, mobile
+  // push, tray dot); the unread writes above the delivery still run.
+  const deliveryMuted = isWorktreeNotificationDeliveryMuted(state, worktreeId)
   applyAgentAttention(attentionDecision, {
     unread: state.markAgentAttentionUnread,
-    requestDelivery
+    requestDelivery: deliveryMuted ? () => {} : requestDelivery
   })
   return requested
 }

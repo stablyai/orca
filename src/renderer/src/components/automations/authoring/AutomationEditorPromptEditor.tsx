@@ -1,9 +1,12 @@
 import React, { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import Editor, { type OnMount } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
-import { installMonacoEditorFindShortcut } from '@/components/editor/editor-shortcuts'
-import { syncContentOnMount, syncContentUpdate } from '@/components/editor/monaco-content-sync'
-import { isMonacoFindWidgetOpen } from '@/components/editor/monaco-find-widget'
+import { installMonacoEditorFindShortcut } from '@/components/editor/commands/editor-shortcuts'
+import {
+  syncContentOnMount,
+  syncContentUpdate
+} from '@/components/editor/model-lifetime/buffer-text/monaco-content-sync'
+import { isMonacoFindWidgetOpen } from '@/components/editor/monaco/monaco-find-widget'
 import { monacoTypographyOptions } from '@/lib/editor/appearance/editor-typography'
 import { useEditorTypography } from '@/hooks/use-editor-typography'
 import '@/lib/editor/monaco/monaco-setup'

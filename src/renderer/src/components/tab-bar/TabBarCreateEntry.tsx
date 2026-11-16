@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Input } from '@/components/ui/input'
+import { cn } from '@/lib/class-names'
 import { useRuntimeFileListForWorktree } from '../quick-open-file-list'
 import {
   createTabEntryAllowAbsolutePathsSelector,
@@ -26,7 +27,7 @@ import { useOmniboxBrowserHistory } from './use-omnibox-browser-history'
 import { useTabEntryMenuReturnFocus } from './use-tab-entry-menu-return-focus'
 import { activateOpenTabSearchResult } from './open-tab-selection-routing'
 import { useTabCreateEntrySearchResults } from './use-tab-create-entry-search-results'
-import { DEFAULT_SEARCH_ENGINE } from '../../../../shared/browser-url'
+import { DEFAULT_SEARCH_ENGINE } from '../../../../shared/browser/navigation/browser-url'
 import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
 import { useAppStore } from '@/store/index'
 import { useFileListWorktree } from '@/store/workspaces/selection/use-selected-worktree'
@@ -275,9 +276,15 @@ function TabBarCreateEntrySession({
       })
   }
 
+  const hasStatusRows = Boolean(
+    error || switchError || selectionGuidance || (activeOptions.length > 0 && statusOption)
+  )
+  const hasResultRows = !error && (activeOptions.length > 0 || hasQuery)
+  const hasBodyRows = hasStatusRows || hasResultRows
+
   return (
     <form
-      className="pb-1"
+      className={hasBodyRows ? 'pb-1' : undefined}
       onSubmit={(event) => {
         event.preventDefault()
         submitOption()
@@ -316,7 +323,7 @@ function TabBarCreateEntrySession({
       }}
       onPointerDown={(event) => event.stopPropagation()}
     >
-      <div className="tab-entry-omnibox relative -mx-1 flex items-center px-3 text-xs text-foreground">
+      <div className="tab-entry-omnibox relative -mx-1 -mt-1 flex items-center px-3 text-xs text-foreground">
         <Input
           ref={inputRef}
           value={query}
@@ -351,31 +358,21 @@ function TabBarCreateEntrySession({
         />
       </div>
       {/* Keep a mounted live region above usable rows so stale-target failures announce without removing other choices. */}
-      <div role="status">
+      <div role="status" className={hasStatusRows ? 'space-y-1 px-1' : undefined}>
         {error ? (
-          <div className="mt-1 px-1" id="tab-create-entry-error">
+          <div id="tab-create-entry-error">
             <EntryStatusRow message={error} />
           </div>
         ) : null}
-        {switchError ? (
-          <div className="mt-1 px-1">
-            <EntryStatusRow message={switchError} />
-          </div>
-        ) : null}
-        {selectionGuidance ? (
-          <div className="mt-1 px-1">
-            <EntryStatusRow message={selectionGuidance} />
-          </div>
-        ) : null}
+        {switchError ? <EntryStatusRow message={switchError} /> : null}
+        {selectionGuidance ? <EntryStatusRow message={selectionGuidance} /> : null}
         {activeOptions.length > 0 && statusOption ? (
-          <div className="mt-1 px-1">
-            <EntryStatusRow loading={fileList.loading} message={statusMessage} />
-          </div>
+          <EntryStatusRow loading={fileList.loading} message={statusMessage} />
         ) : null}
       </div>
-      {!error && (activeOptions.length > 0 || hasQuery) ? (
+      {hasResultRows ? (
         <div
-          className="mt-1 space-y-0.5 px-1"
+          className={cn('space-y-0.5 px-1', hasStatusRows && 'mt-1')}
           id={RESULT_LISTBOX_ID}
           role={activeOptions.length > 0 ? 'listbox' : undefined}
         >

@@ -5,12 +5,12 @@ import {
   type StructuredAgentLaunchPersistedRecord
 } from './structured-agent-session-launch-record'
 
-import { parseStructuredLaunchSeedOptions } from '../../../../../shared/native-chat/input/native-chat-session-option-defaults'
+import { parseStructuredLaunchSeedOptions } from '../../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 
 const LAUNCH_STORAGE_KEY = 'orca:structuredAgentLaunches:v1'
 const TOMBSTONE_STORAGE_KEY = 'orca:structuredAgentLaunchCancelledSessions:v1'

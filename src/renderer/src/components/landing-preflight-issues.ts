@@ -1,7 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
-import type { Repo } from '../../../shared/repo-types'
+import { projectHostSetupProjectionFromRepos } from '../../../shared/project/host-setup/project-host-setup-projection'
+import type { Repo } from '../../../shared/repository/repo-types'
 
 export type PreflightIssue = {
   id: string

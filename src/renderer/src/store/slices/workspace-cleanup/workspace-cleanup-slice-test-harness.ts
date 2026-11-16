@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { create } from 'zustand'
 import { vi } from 'vitest'
 import type { AppState } from '../../types'
@@ -29,7 +30,7 @@ export function makeCandidate(
       browserTabCount: 0,
       diffCommentCount: 0,
       newestDiffCommentAt: null,
-      retainedDoneAgentCount: 0
+      finishedAgentCount: 0
     },
     git: {
       clean: true,
@@ -43,16 +44,16 @@ export function makeCandidate(
 }
 
 export function makeState(overrides: Partial<AppState> = {}): AppState {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture supplies only the slices cleanup reads
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: cleanup selectors read only these snapshot fields and the supplied overrides.
   return {
     tabsByWorktree: {},
     ptyIdsByTabId: {},
     openFiles: [],
     editorDrafts: {},
     browserTabsByWorktree: {},
-    retainedAgentsByPaneKey: {},
+
     activeWorktreeId: null,
-    agentStatusByPaneKey: {},
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
     runtimePaneTitlesByTabId: {},
     lastVisitedAtByWorktreeId: {},
     workspaceCleanupDismissals: {},
@@ -66,16 +67,16 @@ export function makeState(overrides: Partial<AppState> = {}): AppState {
 export function createCleanupTestStore(removeWorktree: ReturnType<typeof vi.fn> = vi.fn()) {
   return create<AppState>()(
     (...a) =>
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture supplies only the slices cleanup reads
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this slice fixture supplies the cleanup actions and every snapshot field they read.
       ({
         tabsByWorktree: {},
         ptyIdsByTabId: {},
         openFiles: [],
         editorDrafts: {},
         browserTabsByWorktree: {},
-        retainedAgentsByPaneKey: {},
+
         activeWorktreeId: null,
-        agentStatusByPaneKey: {},
+        agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
         runtimePaneTitlesByTabId: {},
         lastVisitedAtByWorktreeId: {},
         repos: [],

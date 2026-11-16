@@ -3,7 +3,7 @@ import type { Translate } from '@/i18n/use-translate'
 import {
   findWslDistroHoldInText,
   type WslDistroHoldState
-} from '../../../../../shared/wsl-distro-stopped-hold'
+} from '../../../../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
 
 export function localizedWslDistroHoldMessage(
   hold: {

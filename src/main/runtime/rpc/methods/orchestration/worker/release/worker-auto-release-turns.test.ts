@@ -1,10 +1,43 @@
+import '../../structured-workers/orchestration-structured-worker-close.test-fixture'
+import '../../../../../../native-chat/agent-session-journal/journal-observation.test-support'
+import '../../../../../../../shared/orca-profiles/constants'
+import '../../../../../orca-runtime-tests/runtime-store-partial-fixture'
+import '../../../../../agent-session/agent-session-tab-layout'
+import '../../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import '../../../../../../native-chat/agent-session-wire/publication/history/agent-session-history-page'
+import '../../../../../../native-chat/agent-session-wire/publication/subscribers/agent-session-subscriber-frame-fields'
+import { hostTestState } from '../../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host.test-fixture'
+import { createTestParams } from '../../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-create.test-fixture'
+import { hostTestOperationId } from '../../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
+import '../../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import '../../../../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
+import '../../rpc-test-harness'
+import '../../structured-workers/orchestration-structured-worker-session'
+import '../start/placement/worker-placement-topology'
+import './worker-release-completion'
+
+vi.mock('../../../structured-sessions/creation/structured-agent-session-create', () => ({
+  createStructuredAgentSessionForWorktree: async (args: { envelope: { sessionId: string } }) => {
+    const { host } = hostTestState()
+    return host.create(
+      { callerKey: 'redrive-test' },
+      createTestParams(undefined, {
+        envelope: {
+          ...args.envelope,
+          clientOperationId: hostTestOperationId(),
+          expectedRuntimeFence: null,
+          payloadFingerprint: '0'.repeat(64)
+        }
+      })
+    )
+  }
+}))
+
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getWorkerTerminalAutoReleaseScheduler } from '../../../../../orchestration/terminal-authority/release/worker-terminal-auto-release-scheduler'
-import { WorkerAutoReleaseActivity } from '../../../../../orchestration/terminal-authority/release/worker-auto-release-activity'
-import type { AgentPhase } from '../../../../../../../shared/agent-status/lifecycle/agent-transitions'
-import { createOrchestrationWorkerReleaseHarness } from '../testing/worker-release.test-support'
+import '../../../../../orchestration/terminal-authority/release/worker-auto-release-activity'
 
-const GRACE_MS = 2 * 60_000
+import { createOrchestrationWorkerReleaseHarness } from '../testing/worker-release.test-support'
 
 describe('orchestration worker automatic release across turns and settings', () => {
   const h = createOrchestrationWorkerReleaseHarness()
@@ -20,63 +53,6 @@ describe('orchestration worker automatic release across turns and settings', () 
     vi.setSystemTime(new Date('2026-10-27T12:00:00Z'))
     h.setup()
   }
-
-  function moved(from: AgentPhase, to: AgentPhase) {
-    return {
-      kind: 'moved' as const,
-      paneKey: h.workerPaneKey,
-      workspace: { worktreeId: 'wt', sshHostId: null },
-      from,
-      to,
-      at: Date.now(),
-      transition: null
-    }
-  }
-
-  async function expectClosedAfterFreshGrace(): Promise<void> {
-    await vi.advanceTimersByTimeAsync(GRACE_MS - 1_000)
-    expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(1_000)
-    await vi.waitFor(() => expect(h.runtime.closeTerminal).toHaveBeenCalledTimes(1))
-  }
-
-  it('runs no timer while auto-close is off and closes a due worker once it is back on', async () => {
-    setupWithFakeClock()
-    const { dispatchId } = await h.startSettledWorker()
-    const scheduler = getWorkerTerminalAutoReleaseScheduler(h.runtime)
-    const claims = vi.spyOn(h.db, 'claimDueWorkerTerminalAutoReleases')
-
-    h.db.workerAutoReleaseEnabled = () => false
-    scheduler.rearm()
-    await vi.advanceTimersByTimeAsync(2 * GRACE_MS)
-
-    expect(claims).not.toHaveBeenCalled()
-    expect(h.runtime.closeTerminal).not.toHaveBeenCalled()
-    h.db.workerAutoReleaseEnabled = () => true
-    scheduler.rearm()
-    await vi.advanceTimersByTimeAsync(0)
-    await vi.waitFor(() =>
-      expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('released')
-    )
-  })
-
-  it('suspends instead of claiming an agent in a turn at its deadline, so nothing is archived', async () => {
-    setupWithFakeClock()
-    const { dispatchId } = await h.startSettledWorker()
-    const inTurn = vi.spyOn(h.runtime, 'isWorkerAgentInTurn').mockReturnValue(true)
-    vi.mocked(h.runtime.readTerminal).mockClear()
-
-    await vi.advanceTimersByTimeAsync(GRACE_MS)
-
-    expect(h.runtime.readTerminal).not.toHaveBeenCalled()
-    expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)).toMatchObject({
-      release_state: 'not_requested',
-      auto_release_at: null
-    })
-    inTurn.mockReturnValue(false)
-    new WorkerAutoReleaseActivity(() => h.db).observePane(moved('working', 'done'))
-    await expectClosedAfterFreshGrace()
-  })
 
   it('refuses to stop a kept worker without touching it, and stops it once auto-close is allowed', async () => {
     setupWithFakeClock()

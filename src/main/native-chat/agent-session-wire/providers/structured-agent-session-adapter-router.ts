@@ -96,9 +96,6 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
     }
   }
 
-  captureConversationTitleOwner: NonNullable<Adapter['captureConversationTitleOwner']> = (record) =>
-    this.liveOwnerOrNull(record.sessionId)?.captureConversationTitleOwner?.(record) ?? null
-
   renameProviderSession: NonNullable<Adapter['renameProviderSession']> = (input) =>
     this.capabilityOwner(
       input.record.sessionId,
@@ -204,8 +201,10 @@ export class StructuredAgentSessionAdapterRouter implements Adapter {
 
   canSetOptionWhileIdle: Adapter['canSetOptionWhileIdle'] = (input) =>
     this.liveOwnerOrNull(input.sessionId)?.canSetOptionWhileIdle?.(input) === true
-  readAppliedInputOptions: Adapter['readAppliedInputOptions'] = (input) =>
-    this.liveOwnerOrNull(input.sessionId)?.readAppliedInputOptions?.(input) ?? null
+  captureMessageSteeringInputs: Adapter['captureMessageSteeringInputs'] = (input) =>
+    this.liveOwnerOrNull(input.sessionId)?.captureMessageSteeringInputs?.(input) ?? {
+      kind: 'codex-unavailable'
+    }
 
   projectOptions: Adapter['projectOptions'] = (sessionId, options) =>
     this.liveOwnerOrNull(sessionId)?.projectOptions?.(sessionId, options)

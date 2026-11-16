@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { stat } from 'node:fs/promises'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../../../shared/worktree/id'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { isENOENT } from '../../../ipc/filesystem/access/filesystem-path-containment'
 import {
@@ -9,7 +9,7 @@ import {
   toLocalWorktreeRuntimePath
 } from '../../../workspaces/removal/local-worktree-filesystem'
 import { isWorktreePathMissing } from '../../../workspaces/removal/worktree-removal-safety'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { getRepoOwnedWorktreeMeta } from '../../../workspaces/catalog/worktree-metadata-ownership'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import {

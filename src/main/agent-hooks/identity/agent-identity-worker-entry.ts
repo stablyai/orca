@@ -3,8 +3,11 @@ import { parentPort } from 'node:worker_threads'
 
 import SyncDatabase from '../../sqlite/sync-database'
 import { hardenSqliteDatabaseFiles } from '../../sqlite/harden-database-files'
-import { createStructuredAgentSessionId } from '../../../shared/agent-session/structured-agent-session-create'
-import { isOrcaSessionId, type OrcaSessionId } from '../../../shared/orca-session-address'
+import {
+  createOrcaSessionId,
+  isOrcaSessionId,
+  type OrcaSessionId
+} from '../../../shared/agent-session/identity/orca-session-address'
 import type { AgentProviderKey } from './agent-provider-key'
 import type {
   AgentIdentityWorkerRequest,
@@ -60,7 +63,7 @@ export class AgentIdentityStore {
     if (existing || this.readOnly) {
       return existing
     }
-    const minted = createStructuredAgentSessionId(key.agent, randomUUID)
+    const minted = createOrcaSessionId(randomUUID)
     this.db.exec('BEGIN IMMEDIATE')
     try {
       this.db

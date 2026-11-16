@@ -7,7 +7,7 @@ import { translate } from '@/i18n/i18n'
 import { taskProviderErrorText } from '@/lib/work-items/task-provider-error-copy'
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/identifiers/non-secure-context-uuid'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { linearIssueComments } from '@/runtime/linear/runtime-linear-issue-client'
 import type { RowLessSource as RuntimeLinearSettings } from '@/runtime/hosts/selection/default-creation-host'

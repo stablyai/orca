@@ -4,7 +4,7 @@ import type {
   SpeechModelManifest,
   SpeechModelState,
   VoiceSettings
-} from '../../../../../shared/speech-types'
+} from '../../../../../shared/speech/speech-types'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
@@ -20,6 +20,7 @@ import {
   VoiceSpeechModelRow
 } from './VoiceSpeechModelRow'
 import { VoiceDictationLanguageSetting } from './VoiceDictationLanguageSetting'
+import { VOICE_SETTING_ANCHORS } from './voice-pane-search'
 import { cancelSpeechModelDownload, startSpeechModelDownload } from './speech-model-download'
 
 type VoiceSpeechModelSectionProps = {
@@ -91,6 +92,7 @@ export function VoiceSpeechModelSection({
   const title = t('auto.components.settings.VoicePane.c5ea32143e', 'Speech model')
   return (
     <SettingsGroup
+      id={VOICE_SETTING_ANCHORS.speechModel}
       title={title}
       action={
         <SettingsSegmentedControl

@@ -11,18 +11,18 @@ import {
 import { mobileWebAppDependenciesPresent } from '../mobile-web-app-bundle-dependencies.mjs'
 import { createBundleServer, readShellCsp } from '../preview/mobile-web-app-render-harness.mjs'
 
-// The phone's web pages must pan the transcript by touch and give a pinch to its text-size detector, not page zoom.
+// The phone's web pages must pan the transcript by touch, give a pinch to its text-size detector (not page zoom) and keep the Copy menu.
 const mobileDir = fileURLToPath(new URL('../../../../mobile', import.meta.url))
 
 const entry = `
 import { createRoot } from 'react-dom/client'
 import { Text, View } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
-import { MobileNativeChatPageScroll } from './src/session/native-chat/transcript/MobileNativeChatPageScroll'
+import { MobileNativeChatPageScroll } from './src/session/native-chat/transcript/viewport/MobileNativeChatPageScroll'
 import {
   MobileNativeChatPinchZoom,
   useMobileNativeChatPinchGesture
-} from './src/session/native-chat/transcript/mobile-native-chat-pinch-zoom'
+} from './src/session/native-chat/transcript/viewport/mobile-native-chat-pinch-zoom'
 
 function Transcript() {
   const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture('chat')
@@ -136,6 +136,19 @@ describeRender('native chat transcript in the phone web pages', () => {
     )
     await expect.poll(() => page.getByTestId('font-scale').textContent()).not.toBe('1')
     expect(await page.evaluate(() => window.visualViewport.scale)).toBe(1)
+    await page.context().close()
+  })
+
+  // Android WebView shows the selection's Copy menu through contextmenu; cancelling it leaves bare handles.
+  it('leaves the long-press context menu to the browser', async () => {
+    const page = await openTranscript()
+    const cancelled = await page
+      .getByText('message 3', { exact: true })
+      .evaluate(
+        (element) =>
+          !element.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }))
+      )
+    expect(cancelled).toBe(false)
     await page.context().close()
   })
 })

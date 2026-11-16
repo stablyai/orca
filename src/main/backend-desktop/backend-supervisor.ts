@@ -1,13 +1,13 @@
 import { app, ipcMain, MessageChannelMain, utilityProcess, type WebContents } from 'electron'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
-import { BackendPortRpc } from '../../shared/backend-port-rpc'
+import { BackendPortRpc } from '../../shared/backend/backend-port-rpc'
 import {
   BACKEND_CONNECTION_CHANGED,
   BACKEND_PORT_DELIVERY,
   BACKEND_PORT_REQUEST,
   BACKEND_UTILITY_PROCESS_NAME,
   type AutomationUsageClient
-} from '../../shared/backend-service-contract'
+} from '../../shared/backend/backend-service-contract'
 import { backendMessagePort } from '../backend/backend-message-port'
 import {
   currentWorkerEntryLayout,

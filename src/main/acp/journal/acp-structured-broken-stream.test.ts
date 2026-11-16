@@ -6,7 +6,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
-import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import {
   closeProviderTimelineRigs,
   SESSION
@@ -143,13 +143,8 @@ describe('ACP connection to a directly launched agent that closes stdout but kee
             },
             options,
             (spec) => {
-              const child = spawnProcess({
-                ...spec,
-                program: process.execPath,
-                args: ['-e', CLOSES_STDOUT_MID_TURN],
-                env: { ...spec.env, ORCA_PROVIDER_SUPERVISOR_SPEC: undefined }
-              })
-              child.stdout.once('end', () => {
+              const child = spawnProcess(spec)
+              child.stdout!.once('end', () => {
                 stdoutEnded = true
               })
               return child

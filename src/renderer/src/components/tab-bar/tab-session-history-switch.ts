@@ -18,13 +18,13 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostScope
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import {
   adoptsCliConversations,
   CLI_CONVERSATION_ADOPTING_AGENTS,
   cliConversationRowsShareAgent,
   type CliConversationRowAgent
-} from '../../../../shared/structured-agent-cli-conversation-adoption'
+} from '../../../../shared/agent-session/view/structured-agent-cli-conversation-adoption'
 import { agentForksConversations } from '../../../../shared/agent-launch/startup/agent-resume-argv'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'

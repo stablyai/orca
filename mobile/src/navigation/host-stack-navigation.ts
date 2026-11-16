@@ -1,6 +1,6 @@
-import { BRIDGE_MAX_ROUTE_PARAM_CHARS } from '../mobile-web-shell/bridge/bridge-caps'
-import { BRIDGE_OPEN_ROUTE_PARAM } from '../mobile-web-shell/bridge/bridge-route-update'
-import { focusedIndex } from '../mobile-web-shell/native-stack-return'
+import { BRIDGE_MAX_ROUTE_PARAM_CHARS } from '../mobile-web-shell/bridge/protocol/bridge-caps'
+import { BRIDGE_OPEN_ROUTE_PARAM } from '../mobile-web-shell/bridge/page-lifecycle/bridge-route-update'
+import { focusedIndex } from '../mobile-web-shell/routing/native-stack-return'
 
 export type HostStackNavigationState = Readonly<{
   key?: string
@@ -124,7 +124,7 @@ function focusedRouteOf(state: HostStackNavigationState): HostStackNavigationRou
 }
 
 // Match decoded and encoded ids so slash/hash/percent host ids recognize their own push.
-function hostParamMatches(param: unknown, expectedHostId: string): boolean {
+export function hostParamMatches(param: unknown, expectedHostId: string): boolean {
   if (typeof param !== 'string') {
     return false
   }

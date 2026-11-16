@@ -1,3 +1,4 @@
+import { resolveBrowserLinkSession } from '../navigation/browser-link-session'
 import { completePlacedBrowserLink } from './placed-browser-link-completion'
 import { createBrowserLinkHostMatcher } from '../navigation/browser-link-owner'
 import {
@@ -15,8 +16,12 @@ import { createWebRuntimeSessionBrowserTab } from '@/runtime/browser/creation/we
 import { resolveWebRuntimeBrowserClientTargetGroup } from '@/runtime/browser/creation/web-runtime-browser-client-target-group'
 import { useAppStore } from '@/store/index'
 import { resolveNewBrowserTabProfile } from '@/store/slices/browser/profiles/browser-new-tab-profile'
-import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../../../shared/execution-host'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId,
+  toRuntimeExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { getClientCreationActionPolicy } from '../../workspace/creation/surface-policy/client-creation-action-policy'
 import type { ClientCreationActionAvailability } from '../../workspace/creation/surface-policy/client-creation-action-policy'
 import {
@@ -33,7 +38,7 @@ import type {
   BrowserOpenOutcome
 } from '../navigation/browser-link-destination'
 import type { AppState } from '@/store/types'
-import type { SearchEngine } from '../../../../../shared/browser-url'
+import type { SearchEngine } from '../../../../../shared/browser/navigation/browser-url'
 import type { BrowserClientHostPlacementPreference } from '../../../../../shared/browser/client-hosting/browser-client-host-placement'
 import type { TabSplitTarget } from '@/store/slices/tabs/tabs-slice-contract'
 
@@ -60,6 +65,8 @@ export type OpenWorkspaceBrowserTabRequest = {
   expectedSshConnectionId?: string
   /** Keep an existing desktop provider, only after matching the asserted source owner. */
   allowClientBrowserFallback?: boolean
+  /** Let an SSH-owned link open a desktop tab when its host browses from this device. */
+  allowSshDeviceBrowser?: boolean
   /** Override placement for links whose pane explicitly requires server ownership. */
   placementPreference?: BrowserClientHostPlacementPreference
 }
@@ -82,7 +89,7 @@ async function createClientBrowserTab(
   try {
     const created = state.createBrowserTab(request.workspaceId, request.url, {
       placementWorkspaceId: request.placementWorkspaceId,
-      activate: request.focusOnCreate !== false,
+      activate: request.focusOnCreate !== false && request.linkContext?.canReveal?.() !== false,
       browserRuntimeEnvironmentId: null,
       focusAddressBar: false,
       executionHostId: ownerHostId,
@@ -93,7 +100,7 @@ async function createClientBrowserTab(
       title: presentation.title
     })
     if (created.activePageId) {
-      await completePlacedBrowserLink(request, created.activePageId)
+      await completePlacedBrowserLink(request, created.activePageId, undefined, created.id)
     }
     return created.activePageId ?? null
   } catch (error) {
@@ -145,12 +152,8 @@ export async function openWorkspaceBrowserTab(
     return null
   }
   const environmentId = route.runtimeEnvironmentId?.trim() || null
-  const expectedEnvironmentId =
-    request.expectedRuntimeEnvironmentId === undefined
-      ? null
-      : request.expectedRuntimeEnvironmentId.trim()
-  const expectedSshConnectionId =
-    request.expectedSshConnectionId === undefined ? null : request.expectedSshConnectionId.trim()
+  const expectedEnvironmentId = request.expectedRuntimeEnvironmentId?.trim() ?? null
+  const expectedSshConnectionId = request.expectedSshConnectionId?.trim() ?? null
   if (expectedEnvironmentId !== null && expectedSshConnectionId !== null) {
     throw openFailure(presentation.error, 'browser owner assertion is ambiguous')
   }
@@ -172,7 +175,8 @@ export async function openWorkspaceBrowserTab(
       availability,
       route,
       request.workspaceId,
-      expectedEnvironmentId
+      expectedEnvironmentId,
+      request.allowSshDeviceBrowser
     )
   if (expectedEnvironmentId !== null && !runtimeOwnerRoute && !sshDeploymentClientRoute) {
     throw openFailure(presentation.error, 'asserted runtime cannot provide this managed browser')
@@ -185,7 +189,7 @@ export async function openWorkspaceBrowserTab(
       route,
       request.workspaceId,
       expectedSshConnectionId,
-      request.allowClientBrowserFallback
+      request.allowClientBrowserFallback || request.allowSshDeviceBrowser
     )
   ) {
     throw openFailure(presentation.error, 'asserted SSH connection cannot provide this browser')
@@ -234,8 +238,11 @@ export async function openWorkspaceBrowserTab(
     request.onLinkOutcome?.(placement)
     return placement.status === 'opened' ? placement.result.browserPageId : null
   }
-  const targetGroupId = placement.groupId
+  const session = request.placementWorkspaceId
+    ? resolveBrowserLinkSession(state, request.workspaceId, toRuntimeExecutionHostId(environmentId))
+    : destination
   let placedPageId: string | undefined
+  let placedBrowserWorkspaceId: string | undefined
   let created = false
   try {
     created = await createWebRuntimeSessionBrowserTab({
@@ -248,17 +255,18 @@ export async function openWorkspaceBrowserTab(
         {
           ...request,
           workspaceId: request.placementWorkspaceId ?? request.workspaceId,
-          targetGroupId,
+          targetGroupId: placement.groupId,
           ...(destination ? { split: placement.split } : {})
         },
         environmentId
       ),
-      ...(destination ? { profileId: destination.sessionProfileId } : {}),
+      ...(session ? { profileId: session.sessionProfileId } : {}),
       ...(request.linkContext ? { isCurrentRequest: request.linkContext.isCurrentRequest } : {}),
       ...(request.placementWorkspaceId
         ? {
-            onMaterialized: (pageId: string) => {
+            onMaterialized: (pageId: string, browserWorkspaceId?: string) => {
               placedPageId = pageId
+              placedBrowserWorkspaceId = browserWorkspaceId
             }
           }
         : destination
@@ -289,7 +297,7 @@ export async function openWorkspaceBrowserTab(
     throw openFailure(presentation.error, 'runtime browser tab creation was unavailable')
   }
   if (placedPageId) {
-    await completePlacedBrowserLink(request, placedPageId, environmentId)
+    await completePlacedBrowserLink(request, placedPageId, environmentId, placedBrowserWorkspaceId)
   }
   return null
 }

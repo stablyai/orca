@@ -26,7 +26,7 @@ import {
   RipgrepLaunchFailureError,
   RipgrepUnavailableError
 } from '../../../shared/ripgrep/ripgrep-process-availability'
-import { toWindowsWslPath } from '../../../shared/wsl-paths'
+import { toWindowsWslPath } from '../../../shared/file-access/wsl-paths'
 import { resolveBundledRipgrepWslRouting } from '../../ripgrep/bundled-ripgrep-wsl-routing'
 import { resolveAuthorizedPath } from './access/filesystem-auth'
 import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'

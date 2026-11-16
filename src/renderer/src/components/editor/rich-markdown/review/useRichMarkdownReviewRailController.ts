@@ -13,7 +13,7 @@ import {
 } from './rich-markdown-review-annotations'
 import type { RichMarkdownReviewNotePosition } from './rich-markdown-review-note-layout'
 import { measureRichMarkdownReviewNotePositions } from './rich-markdown-review-note-positioning'
-import type { DiffComment } from '../../../../../../shared/diff-comment-types'
+import type { DiffComment } from '../../../../../../shared/file-review/diff-comment-types'
 import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
 
 type UseRichMarkdownReviewRailControllerOptions = {

@@ -5,14 +5,14 @@ import { Command, CommandInput, CommandList } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { useAppStore } from '@/store/index'
-import { isGitRepoKind } from '../../../../../shared/repo-kind'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { isGitRepoKind } from '../../../../../shared/repository/repo-kind'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { isRepoSearchQueryTooLarge, searchRepos } from '@/lib/workspace/catalog/repo-search'
 import { cn } from '@/lib/class-names'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useTranslate } from '@/i18n/use-translate'
 import { projectHostCountLabel } from '@/components/project-host-count-label'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import {
   getAutomationProjectGroupForRepo,
   getAutomationProjectGroups,

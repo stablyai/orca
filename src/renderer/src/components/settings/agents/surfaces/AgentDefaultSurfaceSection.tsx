@@ -1,7 +1,8 @@
+import { cancelSettingsListReveal } from '../../section-layout/settings-list-scroll'
 import { useEffect, useId, type JSX, type ReactNode } from 'react'
 import { Check, ChevronRight } from 'lucide-react'
 import { toast } from 'sonner'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import type { AgentDefaultSurface } from '../../../../../../shared/native-chat/native-chat-appearance-settings'
 import { normalizeAgentDefaultSurface } from '../../../../../../shared/native-chat/native-chat-providers'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
@@ -196,9 +197,17 @@ export function AgentDefaultSurfaceSection({
     })
   }
   const showInstalledList = (): void => {
+    cancelSettingsListReveal()
     const list = document.getElementById(AGENTS_INSTALLED_SECTION_ID)
     list?.scrollIntoView({ behavior: motionSafeScrollBehavior(), block: 'start' })
-    list?.focus({ preventScroll: true })
+    const row = list
+      ?.querySelector('[data-settings-scroll-list]')
+      ?.querySelector<HTMLElement>('[data-agent-opens-as]')
+    row?.scrollIntoView({ behavior: motionSafeScrollBehavior(), block: 'nearest' })
+    const choice =
+      row?.querySelector<HTMLElement>('[role="radiogroup"] [aria-checked="true"]') ??
+      row?.querySelector<HTMLElement>('[role="radiogroup"] [role="radio"]')
+    ;(choice ?? list)?.focus({ preventScroll: true })
   }
   if (presentation === 'switch') {
     return (

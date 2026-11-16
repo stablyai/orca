@@ -3,14 +3,10 @@ import type {
   HttpLinkRoutingPreferenceRequester as TerminalLinkRoutingPreferenceRequester
 } from '@/lib/browser/navigation/http-link-destinations'
 import { resolveFileLinkPath } from './files/terminal-file-link-target'
-import { isWindowsAbsolutePathLike } from '../../../../../shared/cross-platform-path'
+import { isWindowsAbsolutePathLike } from '../../../../../shared/file-access/cross-platform-path'
 import type { LinkHandlerDeps } from './files/terminal-link-handlers'
 import { classifyTerminalOscLinkTarget } from '../../../../../shared/terminal/links/terminal-osc-link-target'
-import {
-  isTerminalLinkActionActivation,
-  isTerminalLinkFloatingActivation,
-  isTerminalLinkDirectActivation
-} from './gestures/terminal-link-activation'
+import { isTerminalOwnedLinkGesture } from './gestures/terminal-link-activation'
 import { handleTerminalHttpLink } from './http/terminal-url-link-hit-testing'
 import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 import type { TerminalLinkActionContext } from './terminal-link-action-request'
@@ -30,23 +26,6 @@ type TerminalLinkEvent = Pick<MouseEvent, 'metaKey' | 'ctrlKey'> &
     >
   >
 
-/** Accept desktop link actions while leaving unrelated OSC8 gestures to xterm. */
-function isDesktopOscLinkActivation(event: TerminalLinkEvent | undefined): boolean {
-  if (!event) {
-    return false
-  }
-  if ('button' in event && event.button !== undefined && event.button !== 0) {
-    return false
-  }
-  // Desktop links require an intentional gesture; ordinary clicks/selecting must not open them. Mobile taps use WebView routing.
-  return (
-    isTerminalLinkFloatingActivation(event) ||
-    isTerminalLinkDirectActivation(event) ||
-    isTerminalLinkActionActivation(event)
-  )
-}
-
-/** Validate an OSC8 target and route file or HTTP actions with the terminal’s source ownership. */
 export function handleOscLink(
   rawText: string,
   event: TerminalLinkEvent | undefined,
@@ -64,7 +43,8 @@ export function handleOscLink(
       actionDestinations?: TerminalHttpLinkActionDestinations
     }
 ): boolean {
-  if (!isDesktopOscLinkActivation(event)) {
+  // Desktop links require an intentional gesture; ordinary clicks/selecting must not open them. Mobile taps use WebView routing.
+  if (!isTerminalOwnedLinkGesture(event)) {
     return false
   }
   const finish = (handled: boolean): boolean => {

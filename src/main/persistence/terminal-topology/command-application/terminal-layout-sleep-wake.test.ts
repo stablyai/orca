@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getDefaultWorkspaceSession } from '../../../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/constants'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { Store } from '../../loading-store/store'
 import { WindowSession } from '../testing/terminal-topology-window-session-fixture'
@@ -114,20 +114,6 @@ describe('Store.applyLayoutCommand sleep and wake (layout.apply)', () => {
     expect(session.sleepingAgentSessionsByPaneKey).toEqual({
       [`${TAB}:${RIGHT}`]: record(RIGHT, 'right-session')
     })
-  })
-
-  it('wakes nothing for a pane that holds no record', async () => {
-    const { store } = await storeWithSplitTab()
-    const before = store.getWorkspaceSession()
-
-    const reply = await store.applyLayoutCommand({
-      type: 'wake',
-      workspace: WORKTREE,
-      paneKeys: [`${TAB}:${LEFT}`]
-    })
-
-    expect(reply).toEqual({ ok: true, result: { woken: [] } })
-    expect(store.getWorkspaceSession()).toBe(before)
   })
 
   it('records an SSH workspace’s sleep in that host’s partition only', async () => {

@@ -26,7 +26,7 @@ const {
   normalizeRuntimePathForComparison,
   isPathInsideOrEqual,
   createNormalizedPathInsideOrEqualMatcher
-} = await jiti.import('../../../../src/shared/cross-platform-path.ts')
+} = await jiti.import('../../../../src/shared/file-access/cross-platform-path.ts')
 
 // Historical per-pair normalization model.
 function routeBefore(roots, events, sink) {

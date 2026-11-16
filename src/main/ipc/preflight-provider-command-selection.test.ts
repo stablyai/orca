@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { removeTree } from '../../shared/windows-transient-lock-removal'
+import { removeTree } from '../../shared/file-write/windows-transient-lock-removal'
 import { ghExecFileAsync } from '../git/command-runner/hosted-cli/gh-exec-file'
 import { glabExecFileAsync } from '../git/command-runner/hosted-cli/glab-exec-file'
 import { execFileCaptureToTermination } from '../git/command-runner/process-capture/exec-file-capture'
@@ -12,7 +12,7 @@ import {
 } from './preflight-command-exec'
 import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 
-vi.mock('../../shared/system-cli-install-dirs', () => ({
+vi.mock('../../shared/shell/command-resolution/system-cli-install-dirs', () => ({
   getSystemCliInstallDirectories: (_platform: NodeJS.Platform, home: string) => [
     path.join(home, '.nix-profile', 'bin')
   ]

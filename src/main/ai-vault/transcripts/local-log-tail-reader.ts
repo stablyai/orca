@@ -3,7 +3,7 @@ import { LOCAL_READ_OPEN_FLAGS } from '../../ipc/filesystem/local-regular-file-r
 import {
   LOCAL_LOG_TAIL_CHUNK_BYTES,
   type LocalLogTailReadResult
-} from '../../../shared/local-log-tail-types'
+} from '../../../shared/file-content/local-log-tail-types'
 
 export function localLogFileIdentity(stats: {
   dev: number

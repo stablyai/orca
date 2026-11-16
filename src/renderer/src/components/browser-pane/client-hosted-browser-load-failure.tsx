@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import type { BrowserPage as BrowserPageState } from '../../../../shared/browser-workspace-types'
+import type { BrowserPage as BrowserPageState } from '../../../../shared/browser/workspaces/browser-workspace-types'
 import { BrowserLoadFailureOverlay } from './navigate/browser-load-failure-overlay'
 import { getOpenableExternalUrl, toDisplayUrl } from './describe-page/browser-page-url-display'
 

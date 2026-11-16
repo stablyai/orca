@@ -1,3 +1,4 @@
+import type { AgentSessionForkedFromMark } from '../agent-session-fork-name'
 import type {
   AgentJournalApprovalMatchedAskRule,
   AgentJournalApprovalSubject
@@ -16,7 +17,7 @@ import type { NativeChatToolMetadata } from '../../native-chat/tools/native-chat
 import type { AgentSessionContextUsage } from '../agent-session-context-usage'
 import type { NativeChatBlock, NativeChatRole } from '../../native-chat/native-chat-types'
 import type { AgentMessageSource } from '../agent-session-message-source'
-import type { AgentSessionExecutionOptions } from '../options/agent-session-execution-options'
+import type { AgentSessionExecutionOptions } from '../options/protocol/agent-session-execution-options'
 import type {
   AgentJournalAgentHandoffItem,
   AgentJournalAgentStartItem
@@ -182,6 +183,7 @@ export type {
   AgentJournalApprovalMatchedAskRule,
   AgentJournalApprovalSubject,
   AgentJournalPlanApprovalSubject,
+  AgentJournalUrlApprovalSubject,
   AgentJournalUnknownApprovalSubject,
   AgentJournalUnknownKind
 } from './agent-session-journal-approval-subject'
@@ -296,7 +298,7 @@ type AgentJournalStatusItemFields = {
    *  host may name one this build does not know), so read it with `readAgentSessionOrcaStop`. */
   orcaStop?: { cause: string }
   /** On the derived "Forked from" row: the chat this one was forked from. */
-  forkedFrom?: { sessionId: string }
+  forkedFrom?: AgentSessionForkedFromMark
 }
 
 /** A status row that reports no failure; its text is its writer's own. */

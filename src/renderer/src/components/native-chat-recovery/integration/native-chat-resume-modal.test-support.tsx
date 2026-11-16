@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, vi, type Mock } from 'vitest'
 import { useAppStore } from '../../../store/index'
-import { getDefaultSettings } from '../../../../../shared/constants'
+import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary

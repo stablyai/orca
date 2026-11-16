@@ -5,7 +5,7 @@ import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-rec
 import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
-} from '../../../../shared/cross-platform-path'
+} from '../../../../shared/file-access/cross-platform-path'
 import type { WslMoveRowRef } from '../../../../shared/wsl-move/wsl-move-driver-types'
 import { openWslMoveDialogFor } from '../wsl-move/wsl-move-entry'
 import type { WslHostOffer } from './wsl-host-offer-actions'

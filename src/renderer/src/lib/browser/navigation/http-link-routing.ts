@@ -1,4 +1,4 @@
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import {
   localhostLabelRouteForHttpLink,
   resolveLabeledLocalhostDisplayUrl,
@@ -15,7 +15,7 @@ import {
 } from '../../links/placement/link-open-intent'
 import type { LinkOpenIntent, LinkSourceState } from '../../links/placement/link-open-intent'
 import { translate } from '@/i18n/i18n'
-import { isFloatingWorkspaceId } from '../../../../../shared/floating-workspace-worktree'
+import { isFloatingWorkspaceId } from '../../../../../shared/workspace/identity/floating-workspace-worktree'
 import { toast } from 'sonner'
 import { reselectWorkspaceKeepingHost } from '../../workspace/ownership/active-workspace-host'
 import { captureBrowserLinkReveal } from './browser-link-reveal'
@@ -27,10 +27,10 @@ import {
 } from './http-link-browser-placement'
 import type { HttpLinkBrowserTabState } from './http-link-browser-placement'
 import { resolveModifierRouting } from './http-link-modifier-routing'
-import type { WorkspacePortScanResult } from '../../../../../shared/workspace-ports'
+import type { WorkspacePortScanResult } from '../../../../../shared/workspace/ports/workspace-ports'
 import type { AppState } from '@/store/types'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type { OpenHttpLinkOptions, WorkspaceHttpLinkBrowserOpener } from './http-link-destinations'
 
 function settleHttpLinkBrowserOpen(
@@ -232,6 +232,8 @@ function executeHttpLink(
           canReveal: reveal.canReveal
         },
         ...(opts.allowClientBrowserFallback ? { allowClientBrowserFallback: true } : {}),
+        // Why: only links that already open in Orca may use a "This device" SSH host's desktop tab.
+        ...(openLinksInApp ? { allowSshDeviceBrowser: true } : {}),
         ...(sourceOwner?.kind === 'runtime'
           ? { expectedRuntimeEnvironmentId: sourceOwner.runtimeEnvironmentId }
           : sourceOwner?.kind === 'ssh'
@@ -259,7 +261,7 @@ function executeHttpLink(
       }
       if (workspaceHttpLinkBrowserOpener) {
         const opening = workspaceHttpLinkBrowserOpener({
-          workspaceId: worktreeId,
+          workspaceId: sourceWorktreeId ?? worktreeId,
           ...(opts.floatingWorkspace
             ? { placementWorkspaceId: FLOATING_TERMINAL_WORKTREE_ID }
             : {}),

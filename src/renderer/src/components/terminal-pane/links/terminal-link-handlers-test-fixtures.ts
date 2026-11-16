@@ -1,8 +1,8 @@
 import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { OpenFileOptions } from '@/store/slices/editor/types/editor-files-slice'
 import { vi, type Mock } from 'vitest'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
-import type { Tab, TabGroup } from '../../../../../shared/tab-types'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import type { Tab, TabGroup } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 
 export type TerminalLinkStoreSettings = {
   openLinksInApp?: boolean

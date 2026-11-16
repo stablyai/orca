@@ -1,5 +1,5 @@
-import type { BrowserWorkspace } from '../../../../../../shared/browser-workspace-types'
-import type { Tab } from '../../../../../../shared/tab-types'
+import type { BrowserWorkspace } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
+import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 
 /** Browser records keep their source host/workspace when their view is placed elsewhere. */
 export function workspaceBrowserTabs(
@@ -11,8 +11,8 @@ export function workspaceBrowserTabs(
     tabs?.filter((tab) => tab.contentType === 'browser').map((tab) => tab.entityId)
   )
   return Object.values(records).flatMap((workspaces) =>
-    (workspaces ?? []).filter(
-      (workspace) => workspace.worktreeId === workspaceId || ids.has(workspace.id)
+    (workspaces ?? []).filter((workspace) =>
+      tabs === undefined ? workspace.worktreeId === workspaceId : ids.has(workspace.id)
     )
   )
 }

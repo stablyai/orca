@@ -5,14 +5,14 @@ import type {
   RuntimeMobileSessionTabMove,
   RuntimeMobileSessionTabMoveResult,
   RuntimeMobileSessionTabsSnapshot
-} from '../../../shared/runtime-session-contracts'
+} from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   buildHeadlessTabGroupMove,
   buildHeadlessTabGroupSplit
 } from '../../../shared/workspace-layout/tab-groups/tab-group-moves'
 import { randomUUID } from 'node:crypto'
 import { withSelectedTabs } from './headless-tab-group-selection'
-import type { TabGroupLayoutNode } from '../../../shared/tab-types'
+import type { TabGroupLayoutNode } from '../../../shared/workspace-layout/tab-groups/tab-types'
 import type { RuntimeMobileSessionTabOrder } from './mobile-session-tab-order'
 import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout } from '../session-lifecycle/projection/prune-mobile-session-tab-group-layout'
 

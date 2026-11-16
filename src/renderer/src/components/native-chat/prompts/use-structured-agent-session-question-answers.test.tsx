@@ -1,7 +1,10 @@
 // @vitest-environment happy-dom
+import { Activity } from 'react'
+import { NativeChatPaneLifetime } from '../pane/ownership/native-chat-pane-lifetime'
+import { useNativeChatQuestionAutoAdvance } from './use-native-chat-question-auto-advance'
 
-import { renderHook } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, fireEvent, render, renderHook } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   call: vi.fn(),
@@ -159,4 +162,58 @@ describe('desktop structured prompt answers', () => {
     })
     expect(mocks.toast).not.toHaveBeenCalled()
   })
+})
+
+afterEach(() => vi.useRealTimers())
+
+it('submits a delayed final question answer while its chat is hidden', async () => {
+  vi.useFakeTimers()
+  mocks.call.mockResolvedValue({ ok: true, value: { itemId: 'question-1', revision: 3 } })
+  mocks.questionAnswersSupported.mockResolvedValue(true)
+  function Question() {
+    const session = useStructuredAgentSession({
+      sessionId: 'session-1',
+      target: { kind: 'local' },
+      agent: 'claude',
+      isVisible: true
+    })
+    const advance = useNativeChatQuestionAutoAdvance()
+    return (
+      <button
+        onClick={() =>
+          advance.schedule(() => {
+            void session.respond(question, { kind: 'answers', answers })
+          })
+        }
+      >
+        Choose final answer
+      </button>
+    )
+  }
+  const pane = (visible: boolean) => (
+    <NativeChatPaneLifetime isVisible={visible}>
+      <Activity mode={visible ? 'visible' : 'hidden'}>
+        <Question />
+      </Activity>
+    </NativeChatPaneLifetime>
+  )
+  const view = render(pane(true))
+  fireEvent.click(view.getByRole('button', { name: 'Choose final answer' }))
+  view.rerender(pane(false))
+  await act(async () => vi.runOnlyPendingTimersAsync())
+  expect(
+    mocks.call.mock.calls.filter(([, method]) => method === 'agentSession.respondToQuestion')
+  ).toEqual([
+    [
+      { kind: 'local' },
+      'agentSession.respondToQuestion',
+      expect.objectContaining({
+        itemId: 'question-1',
+        expectedRevision: 2,
+        answers
+      })
+    ]
+  ])
+  view.unmount()
+  await act(async () => {})
 })

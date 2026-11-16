@@ -1,11 +1,10 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from 'vitest'
-// Use the registry entry point called by the shipping drag lifecycle.
 import {
-  acquireWebviewsDragPassthrough,
   registerPersistentWebview,
   unregisterPersistentWebview
 } from './host-guest/webview-registry'
+import { acquireWebviewsDragPassthrough } from './host-guest/drag/webview-drag-passthrough'
 import {
   createRetainedHostFixture,
   disposeRetainedHostFixtures

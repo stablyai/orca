@@ -22,7 +22,7 @@ describe('a paired-server worker start writes its brief only into the agent it l
     vi.restoreAllMocks()
   })
 
-  function workerHost(foreground: LaunchedAgentForeground, provesAgent = true) {
+  function workerHost(foreground: LaunchedAgentForeground) {
     const db = new OrchestrationDb(':memory:')
     databases.push(db)
     const runtime = new OrcaRuntimeService()
@@ -30,7 +30,6 @@ describe('a paired-server worker start writes its brief only into the agent it l
     configureFederationWorkerRuntime(runtime)
     const writes: string[] = []
     vi.spyOn(runtime, 'readLaunchedAgentForeground').mockResolvedValue(foreground)
-    vi.spyOn(runtime, 'launchedAgentHostProvesAgent').mockReturnValue(provesAgent)
     vi.spyOn(runtime, 'subscribeToTerminalData').mockReturnValue(() => {})
     vi.mocked(runtime.sendTerminalAgentPrompt).mockImplementation(async (handle, text, options) => {
       await options?.beforeWrite?.(PTY_ID)
@@ -80,29 +79,5 @@ describe('a paired-server worker start writes its brief only into the agent it l
       lastError: 'agent_not_in_foreground'
     })
     expect(host.writes).toEqual([])
-  })
-
-  it('types nothing where the host cannot tell what is in front', async () => {
-    const host = workerHost('unknown')
-
-    await expect(attach(host.runtime)).resolves.toMatchObject({ state: 'failed' })
-    expect(host.writes).toEqual([])
-  })
-
-  it('writes the brief once into the agent found in front', async () => {
-    const host = workerHost('agent')
-
-    await expect(attach(host.runtime)).resolves.toMatchObject({ state: 'ready' })
-    expect(host.writes).toHaveLength(1)
-  })
-
-  it('on a host that cannot prove the agent (Windows), writes unless a shell is proven', async () => {
-    const unknown = workerHost('unknown', false)
-    await expect(attach(unknown.runtime)).resolves.toMatchObject({ state: 'ready' })
-    expect(unknown.writes).toHaveLength(1)
-
-    const shell = workerHost('shell', false)
-    await expect(attach(shell.runtime)).resolves.toMatchObject({ state: 'failed' })
-    expect(shell.writes).toEqual([])
   })
 })

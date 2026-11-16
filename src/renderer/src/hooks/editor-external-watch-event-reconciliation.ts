@@ -7,8 +7,8 @@ import { getRecentSelfWrite } from '@/components/editor/external-changes/editor-
 import {
   hasActiveEditorPathMoves,
   isActiveMoveSourcePath
-} from '@/components/editor/editor-path-move-inflight'
-import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
+} from '@/components/editor/file-ownership/editor-path-move-inflight'
+import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
 import type { FsChangedPayload } from '../../../shared/file-watch/filesystem-change-event'
 import {
   ORCA_WORKTREE_FILE_CHANGE_EVENT,

@@ -23,7 +23,10 @@ export function logProviderChildExit(
     sessionId,
     generation: child.generation,
     // A close Orca made after its own failure still reads as unexpected to the turn.
-    endedBy: end.expected || close || end.exit.closedByOrca ? 'orca' : 'agent',
+    endedBy:
+      end.expected || close || end.exit.closedByOrca || end.failure?.kind === 'hostFault'
+        ? 'orca'
+        : 'agent',
     // The reason can carry the agent's stderr tail; the console line is not redacted downstream.
     reason: redactString(end.exit.reason),
     duringStartup: end.duringStartup,

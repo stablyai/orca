@@ -4,7 +4,7 @@ import { FileText } from 'lucide-react'
 import type {
   DiagnosticsBundlePayload,
   DiagnosticsStatusPayload
-} from '../../../../../preload/api/telemetry-api'
+} from '../../../../../preload/api/diagnostics/telemetry-api'
 import { Label } from '../../ui/label'
 import {
   getDiagnosticBundleDescription,
@@ -13,6 +13,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { diagnosticsErrorText } from './diagnostics-bundle-error-copy'
+import { PRIVACY_SETTING_ANCHORS } from './privacy-search'
 
 export function PrivacyDiagnosticsSection(): React.JSX.Element {
   const t = useTranslate()
@@ -352,7 +353,11 @@ function PrivacyDiagnosticsRow({
   children: React.ReactNode
 }): React.JSX.Element {
   return (
-    <div data-settings-row="" className="flex items-center justify-between gap-4 py-2">
+    <div
+      id={PRIVACY_SETTING_ANCHORS.diagnostics}
+      data-settings-row=""
+      className="flex items-center justify-between gap-4 py-2"
+    >
       <div className="flex min-w-0 flex-1 items-start gap-2.5">
         <div className="mt-0.5 text-muted-foreground">{icon}</div>
         <div className="min-w-0 space-y-0.5">

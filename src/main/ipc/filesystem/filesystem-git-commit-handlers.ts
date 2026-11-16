@@ -2,12 +2,12 @@ import type { GitCommitAction } from '../../../shared/git/commands/git-commit-ac
 import { applyCommit, recoverSequencer } from '../../git/worktrees/checkout/commit-actions'
 import { createBranch } from '../../git/worktrees/checkout/create-branch'
 import { ipcMain } from 'electron'
-import { commitChanges, completeMerge } from '../../git/source-control/commit-changes'
+import { commitChanges, completeMerge } from '../../git/source-control/mutations/commit-changes'
 import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-worktree-roots-cache'
 import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
 import { requireReachableGitRoute } from '../../providers/execution-host-provider-dispatch'
-import { getConnectionExecutionHostId } from '../../../shared/execution-host'
+import { getConnectionExecutionHostId } from '../../../shared/execution-host/execution-host'
 
 export function registerFilesystemGitCommitHandlers(context: FilesystemHandlerContext): void {
   const { store } = context

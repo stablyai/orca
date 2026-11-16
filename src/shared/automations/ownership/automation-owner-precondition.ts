@@ -15,7 +15,7 @@ import {
   AUTOMATION_CAPTURED_HOST_REFUSALS,
   AutomationOwnerConflictError
 } from './automation-owner-conflict'
-import { sanitizeSshTargetGeneration } from '../../ssh-target-generation'
+import { sanitizeSshTargetGeneration } from '../../remote-runtime/ssh/ssh-target-generation'
 
 export type AutomationOwnerPreconditionSelector =
   | { kind: 'self' }
