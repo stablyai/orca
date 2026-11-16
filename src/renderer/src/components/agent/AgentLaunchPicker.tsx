@@ -272,6 +272,7 @@ export const AgentLaunchPicker = memo(
           <DropdownMenuContent
             portalContainer={portalContainer}
             align="start"
+            collisionPadding={tabbed ? 8 : undefined}
             variant={tabbed ? 'picker' : 'default'}
             onOpenAutoFocus={(event) => {
               popupFocusReady.current = true
@@ -282,7 +283,8 @@ export const AgentLaunchPicker = memo(
             }}
             className={
               tabbed
-                ? 'w-(--radix-dropdown-menu-trigger-width) min-w-72 overflow-hidden'
+                ? // Why 26rem: Codex's widest effort row plus Fast measures 404px; narrow windows cap it.
+                  'w-(--radix-dropdown-menu-trigger-width) max-w-(--radix-dropdown-menu-content-available-width) min-w-[min(26rem,var(--radix-dropdown-menu-content-available-width))] overflow-hidden'
                 : 'min-w-64'
             }
           >

@@ -244,3 +244,46 @@ export const newTabSubmenuCodex = defineFixture({
     await settle()
   }
 })
+
+// Codex's widest effort row: every level it can advertise, then Fast.
+const CODEX_ALL_EFFORTS = [level('minimal', 'Minimal'), ...CLAUDE_EFFORTS, level('ultra', 'Ultra')]
+const WIDEST_ENTRIES = ENTRIES.map((row) =>
+  row.agent === 'codex'
+    ? entry(
+        'codex',
+        'Codex',
+        ['chat', 'terminal'],
+        [
+          model('gpt-6.1-sol', 'GPT-6.1-Sol', CODEX_ALL_EFFORTS, {
+            isDefault: true,
+            serviceTiers: fastTier
+          })
+        ]
+      )
+    : row
+)
+
+/** The Settings › Source control recipe column: a 220px trigger. */
+export const dropdownSettingsRecipeCodex = defineFixture({
+  width: 460,
+  render: () => (
+    <div className="min-h-[360px] bg-background p-4">
+      <div className="w-[220px]">
+        <AgentLaunchPicker
+          model={MODEL}
+          entries={WIDEST_ENTRIES}
+          agent="codex"
+          value={{
+            agent: 'codex',
+            surface: 'terminal',
+            choices: { model: 'gpt-6.1-sol', options: { effort: 'xhigh' } }
+          }}
+          onPick={() => {}}
+        />
+      </div>
+    </div>
+  ),
+  interact: async () => {
+    await openDropdown()
+  }
+})
