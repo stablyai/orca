@@ -24,6 +24,7 @@ import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams,
+  hostTestChildReady,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data.test-fixture'
 import {
@@ -140,12 +141,9 @@ beforeEach(async () => {
     accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: join(root, 'claude-home') },
     providerHandle: { kind: 'claude', sessionId: PROVIDER_SESSION_ID, leafUuid: null }
   })
+  const ready = hostTestChildReady(host)
   expect(await host.attach(CALLER, params)).toMatchObject({ ok: true })
-  // Why 10s, as the actions fixture waits: under a loaded CI runner attach outlasts the 1s default.
-  await vi.waitFor(
-    () => expect(host.readStatusSummary(SESSION)?.hostExecutionPhase).toBe('ready'),
-    { timeout: 10_000 }
-  )
+  await ready
   await Promise.all(lifecycle)
 })
 

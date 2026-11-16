@@ -23,6 +23,7 @@ import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams,
+  hostTestChildReady,
   hostTestMessage,
   hostTestOperationId,
   resetHostTestOperationIds
@@ -84,8 +85,9 @@ beforeEach(async () => {
     accountHome: { variable: 'CLAUDE_CONFIG_DIR', path: join(root, 'claude-home') },
     providerHandle: { kind: 'claude', sessionId: PROVIDER_SESSION_ID, leafUuid: null }
   })
+  const ready = hostTestChildReady(host)
   expect(await host.attach(CALLER, params)).toMatchObject({ ok: true })
-  await vi.waitFor(() => expect(host.readStatusSummary(SESSION)?.hostExecutionPhase).toBe('ready'))
+  await ready
   await Promise.all(lifecycle)
 })
 

@@ -225,3 +225,18 @@ export function hostTestCatalogReadOperation() {
     current: () => !controller.signal.aborted
   }
 }
+
+/** Resolves on the status event of a started child's readiness, which lands after attach returns. */
+export function hostTestChildReady(host: StructuredAgentSessionHost): Promise<void> {
+  return new Promise((resolve) => {
+    const unsubscribe = host.subscribeStatus({
+      id: 'host-test-child-ready',
+      emit: (event) => {
+        if (event.type === 'status' && event.session.hostExecutionPhase === 'ready') {
+          unsubscribe()
+          resolve()
+        }
+      }
+    })
+  })
+}
