@@ -52,8 +52,11 @@ it('stays closed when focus is restored after a pointer interaction', () => {
   expect(tooltipOpen()).toBe(false)
 })
 
-it('opens when assistive tech moves focus after a pointer interaction', () => {
-  for (const type of ['pointerdown', 'mousedown', 'pointerup']) {
+it.each([
+  ['a click', ['pointerdown', 'mousedown', 'pointerup']],
+  ['a touch that became a scroll', ['pointerdown', 'pointercancel']]
+])('opens when assistive tech moves focus after %s', (_, events) => {
+  for (const type of events) {
     document.body.dispatchEvent(new PointerEvent(type, { bubbles: true }))
   }
   vi.runAllTimers()

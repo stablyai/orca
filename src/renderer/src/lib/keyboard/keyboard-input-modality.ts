@@ -60,6 +60,8 @@ function startTracking(target: Window & typeof globalThis): () => void {
   target.addEventListener('pointerdown', onPointerDown, true)
   target.addEventListener('mousedown', onPointerDown, true)
   target.addEventListener('pointerup', onPointerUp, true)
+  // A touch that turns into a scroll ends with pointercancel instead of pointerup.
+  target.addEventListener('pointercancel', onPointerUp, true)
   target.addEventListener('focusin', onFocusIn, true)
   target.addEventListener('blur', onWindowBlur, true)
   return () => {
@@ -67,6 +69,7 @@ function startTracking(target: Window & typeof globalThis): () => void {
     target.removeEventListener('pointerdown', onPointerDown, true)
     target.removeEventListener('mousedown', onPointerDown, true)
     target.removeEventListener('pointerup', onPointerUp, true)
+    target.removeEventListener('pointercancel', onPointerUp, true)
     target.removeEventListener('focusin', onFocusIn, true)
     target.removeEventListener('blur', onWindowBlur, true)
     if (prototype.focus === trackedFocus) {
