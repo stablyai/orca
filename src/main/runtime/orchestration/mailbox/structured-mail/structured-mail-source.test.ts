@@ -42,7 +42,8 @@ it('snapshots immediate relations across completion/reload and keeps unknown evi
           from_handle: address,
           run_id: run.id,
           type: report ? 'worker_done' : 'status',
-          payload: report ? JSON.stringify({ dispatchId: report }) : null
+          payload: report ? JSON.stringify({ dispatchId: report }) : null,
+          created_at: '2026-11-16 18:00:00'
         }))
       })
     expect(mail('term_coord', ['term_worker']).senders[0].relation).toBe('worker')
@@ -74,7 +75,8 @@ it('snapshots immediate relations across completion/reload and keeps unknown evi
       from_handle: 'term_worker',
       run_id: run.id,
       type: 'worker_done',
-      payload: JSON.stringify({ dispatchId: worker.id })
+      payload: JSON.stringify({ dispatchId: worker.id }),
+      created_at: '2026-11-16 18:00:00'
     }
     for (const bad of [
       { ...good, id: 'foreign', run_id: 'missing' },

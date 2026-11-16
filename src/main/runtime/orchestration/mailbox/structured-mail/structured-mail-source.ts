@@ -22,7 +22,7 @@ import { structuredAgentSessionBlocksTooLarge } from '../../../../../shared/rpc-
 
 export type MailSourceMessage = Pick<
   MessageRow,
-  'id' | 'from_handle' | 'run_id' | 'type' | 'payload' | 'answer_sender_snapshot'
+  'id' | 'from_handle' | 'run_id' | 'type' | 'payload' | 'answer_sender_snapshot' | 'created_at'
 > & { thread_id?: string | null }
 
 export function structuredMailSource(input: {
@@ -58,7 +58,8 @@ export function structuredMailSource(input: {
         address,
         input.db,
         input.senderSnapshot,
-        reported?.kind === 'valid' ? reported.dispatchId : undefined
+        reported?.kind === 'valid' ? reported.dispatchId : undefined,
+        group[0]!.message.created_at
       )
     const relations = new Map<string, AgentMessageSender['relation']>()
     const values = group.map(({ message, report }) => {
