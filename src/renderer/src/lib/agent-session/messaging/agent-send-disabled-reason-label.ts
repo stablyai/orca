@@ -6,6 +6,11 @@ export function agentSendDisabledReasonLabel(reason: string, t: Translate = tran
   switch (reason) {
     case 'Agent needs permission':
       return t('agentSendTargets.disabledReason.needsPermission', 'Agent needs permission')
+    case 'Agent may be waiting for approval':
+      return t(
+        'agentSendTargets.disabledReason.approvalUnseen',
+        'Agent may be waiting for approval'
+      )
     case 'Terminal is no longer available':
       return t(
         'auto.components.editor.ReviewNotesSendMenu.terminalGone',

@@ -23727,7 +23727,8 @@
   },
   "agentSendTargets": {
     "disabledReason": {
-      "needsPermission": "Ajan için izin gerekiyor"
+      "needsPermission": "Ajan için izin gerekiyor",
+      "approvalUnseen": "Ajan onay bekliyor olabilir"
     }
   },
   "wslDistroHold": {

@@ -22854,6 +22854,7 @@
       "selectedAgentNeedsPermission": "The selected agent needs permission.",
       "activeAgentNeedsPermission": "The active agent needs permission.",
       "statusUnverified": "The {{target}} agent status could not be verified.",
+      "approvalUnseen": "The {{target}} agent may be waiting for approval. Send the notes when its turn ends.",
       "notReady": "The {{target}} agent was not ready for input yet.",
       "notWritable": "The {{target}} agent did not accept the notes.",
       "selectedSubmitFailed": "The notes may already be pasted in the selected terminal, but Orca could not submit them.",
@@ -25708,7 +25709,8 @@
   },
   "agentSendTargets": {
     "disabledReason": {
-      "needsPermission": "Agent needs permission"
+      "needsPermission": "Agent needs permission",
+      "approvalUnseen": "Agent may be waiting for approval"
     }
   },
   "wslDistroHold": {

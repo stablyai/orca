@@ -1,4 +1,9 @@
-import { selectFreshExplicitAgentStatus } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
+import {
+  selectFreshExplicitAgentStatus,
+  selectLatestAgentStatusRow
+} from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
+import { agentHidesApprovalsFromHooks } from '../../../../shared/agent-status/approval/hook-silent-approval-agents'
+import { agentHasBlockedTextAnchors } from '../../agent-state-rules/agent-state-text-anchors'
 import { OrcaRuntimeWithPluginHookedTerminalInput } from './terminal-plugin-hooked-input'
 import type { RuntimeTerminalAgentStatus } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { RuntimeTerminalAgentStatusSnapshot } from '../query/runtime-terminal-agent-status-query'
@@ -43,6 +48,22 @@ export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends Orca
     // A restored permission wait reads its screen first, so a dialog answered after the restart lifts it (#35962).
     await this.refreshRestoredWait(handle, this.getTerminalAgentStatusPtyId(handle))
     return this.terminalAgentStatus.getStatus(handle)
+  }
+
+  /** Mid-turn, an agent whose hooks hide approvals is sendable only when its screen rules would see the menu. */
+  isTerminalAgentApprovalUnseen(handle: string): boolean {
+    const paneKey = this.getPaneKeyForTerminalHandle(handle)
+    const row = selectLatestAgentStatusRow({
+      handles: [handle],
+      paneKeys: paneKey ? [paneKey] : [],
+      hookRows: this.publicPaneStatusFn?.(paneKey ?? '') ?? []
+    })
+    return (
+      row !== null &&
+      row.state !== 'done' &&
+      agentHidesApprovalsFromHooks(row.agentType) &&
+      !agentHasBlockedTextAnchors(row.agentType)
+    )
   }
 
   protected getTerminalAgentStatusPtyId(handle: string): string {

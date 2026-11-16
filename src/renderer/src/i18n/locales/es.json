@@ -24051,7 +24051,8 @@
   },
   "agentSendTargets": {
     "disabledReason": {
-      "needsPermission": "El agente necesita permiso"
+      "needsPermission": "El agente necesita permiso",
+      "approvalUnseen": "Puede que el agente esté esperando aprobación"
     }
   },
   "wslDistroHold": {

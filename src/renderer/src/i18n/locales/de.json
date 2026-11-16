@@ -23587,7 +23587,8 @@
   },
   "agentSendTargets": {
     "disabledReason": {
-      "needsPermission": "Agent benötigt eine Genehmigung"
+      "needsPermission": "Agent benötigt eine Genehmigung",
+      "approvalUnseen": "Agent wartet möglicherweise auf eine Genehmigung"
     }
   },
   "wslDistroHold": {

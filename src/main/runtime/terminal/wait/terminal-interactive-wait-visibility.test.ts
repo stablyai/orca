@@ -41,8 +41,8 @@ describe('Interactive wait visibility and terminal admission', () => {
     '  2. No, exit\n'
   ].join('')
 
-  function agentStatusOsc(state: string): string {
-    return `]9999;${JSON.stringify({ state, prompt: 'ship it', agentType: 'claude' })}`
+  function agentStatusOsc(state: string, agentType = 'claude'): string {
+    return `]9999;${JSON.stringify({ state, prompt: 'ship it', agentType })}`
   }
 
   async function createPane(
@@ -108,6 +108,64 @@ describe('Interactive wait visibility and terminal admission', () => {
         )
 
         await expect(runtime.getTerminalInteractiveWait(handle)).resolves.toBeNull()
+      })
+    })
+
+    describe('agents whose hooks report working through an approval', () => {
+      // Kiro's menu as the common pattern's Kiro screen rules describe it; no Kiro sign-in was available to capture one.
+      const KIRO_APPROVAL = [
+        '\n● I will run the test suite.\n',
+        'Tool requires approval\n',
+        '❯ Yes, single permission\n',
+        '  Trust, always allow in this session\n',
+        '  No (tab to edit)\n',
+        'Esc to close · ↑/↓ to navigate · Enter to select'
+      ].join('')
+
+      it('refuses a guarded send while a Kiro approval menu is up, then sends once answered', async () => {
+        const { runtime, handle } = await createPane({
+          paneTitle: 'kiro-cli',
+          foregroundProcess: 'kiro-cli',
+          data: agentStatusOsc('working', 'kiro') + KIRO_APPROVAL
+        })
+
+        await expect(
+          assertTerminalAgentSendable({ runtime, handle, assertWritable: () => {} })
+        ).rejects.toThrow('terminal_guard_permission')
+
+        runtime.onPtyData(PTY_ID, '\n● Tests passed: 42\n', Date.now())
+
+        await expect(
+          assertTerminalAgentSendable({ runtime, handle, assertWritable: () => {} })
+        ).resolves.toBeUndefined()
+      })
+
+      it('refuses a mid-turn agent whose approval menus no rule can see, but not an idle one', async () => {
+        const working = await createPane({
+          paneTitle: 'amp',
+          foregroundProcess: 'amp',
+          data: agentStatusOsc('working', 'amp')
+        })
+        await expect(
+          assertTerminalAgentSendable({
+            runtime: working.runtime,
+            handle: working.handle,
+            assertWritable: () => {}
+          })
+        ).rejects.toThrow('terminal_guard_approval_unseen')
+
+        const idle = await createPane({
+          paneTitle: 'amp',
+          foregroundProcess: 'amp',
+          data: agentStatusOsc('done', 'amp')
+        })
+        await expect(
+          assertTerminalAgentSendable({
+            runtime: idle.runtime,
+            handle: idle.handle,
+            assertWritable: () => {}
+          })
+        ).resolves.toBeUndefined()
       })
     })
 

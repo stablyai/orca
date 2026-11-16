@@ -24324,7 +24324,8 @@
   },
   "agentSendTargets": {
     "disabledReason": {
-      "needsPermission": "Агенту требуется разрешение"
+      "needsPermission": "Агенту требуется разрешение",
+      "approvalUnseen": "Возможно, агент ждёт подтверждения"
     }
   },
   "wslDistroHold": {

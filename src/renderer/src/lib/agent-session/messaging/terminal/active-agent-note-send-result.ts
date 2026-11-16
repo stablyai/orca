@@ -7,6 +7,8 @@ export type ActiveAgentNotesSendStatus =
   | 'no-active-terminal'
   | 'no-agent'
   | 'permission'
+  /** Mid-turn, and the host cannot see this agent's approval menus. */
+  | 'approval-unseen'
   | 'status-unavailable'
   | 'not-ready'
   | 'not-writable'
@@ -30,6 +32,7 @@ export type ActiveAgentNotesSendFailureCode =
   | 'agent-permission'
   | 'status-unavailable'
   | 'terminal-send-permission'
+  | 'terminal-send-approval-unseen'
   | 'terminal-send-refused'
   | 'terminal_not_writable'
   | 'submit-readiness-lost'
@@ -90,6 +93,13 @@ export function activeAgentNotesSendFailureMessage(
             'components.agentNotes.activeAgentNeedsPermission',
             'The active agent needs permission.'
           )
+      break
+    case 'approval-unseen':
+      message = translate(
+        'components.agentNotes.approvalUnseen',
+        'The {{target}} agent may be waiting for approval. Send the notes when its turn ends.',
+        { target }
+      )
       break
     case 'status-unavailable':
       message = translate(

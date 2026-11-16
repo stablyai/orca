@@ -70,6 +70,8 @@ function codeForStatus(
       return 'no-agent'
     case 'permission':
       return 'agent-permission'
+    case 'approval-unseen':
+      return 'terminal-send-approval-unseen'
     case 'status-unavailable':
       return 'status-unavailable'
     case 'not-ready':

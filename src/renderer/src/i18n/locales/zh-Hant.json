@@ -23253,7 +23253,8 @@
   },
   "agentSendTargets": {
     "disabledReason": {
-      "needsPermission": "代理程式需要權限"
+      "needsPermission": "代理程式需要權限",
+      "approvalUnseen": "代理程式可能正在等待核准"
     }
   },
   "wslDistroHold": {

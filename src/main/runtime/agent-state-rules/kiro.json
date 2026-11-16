@@ -1,0 +1,75 @@
+{
+  "id": "kiro",
+  "engineVersion": 1,
+  "anchors": [
+    {
+      "id": "tool_approval",
+      "why": "Kiro's hooks keep reporting working through a tool approval, so its key-bound menu is the only authority, and a pasted Enter answers it. The menu owns the bottom of the screen: choice rows above an `esc to close` key row that ends the output, because an answered menu stays in scrollback. Keyed on the rare `always allow` choice so retained history rarely wakes the blocked scan.",
+      "when": {
+        "region": "text",
+        "find": { "lastOf": "always allow" },
+        "withinLastLines": 8,
+        "after": {
+          "all": [{ "regex": "\\n\\s*esc\\s+to\\s+close\\b[^\\n]*(?:\\n[^\\n]*)?$" }],
+          "any": [{ "contains": "to navigate" }, { "contains": "to see more options" }]
+        },
+        "lines": {
+          "atLeast": 2,
+          "includingLast": false,
+          "test": {
+            "regex": "^\\s*(?:[>❯›]\\s*)?(?:allow|always allow|deny|always deny|yes, single permission|trust, always allow in this session|no \\(tab to edit\\))$"
+          }
+        }
+      },
+      "answer": { "state": "blocked", "reason": "agent-approval-prompt" }
+    },
+    {
+      "id": "tool_scope_approval",
+      "why": "Kiro's wider approval offers trusting the entire tool, under the same `esc to close` key row that must end the output.",
+      "when": {
+        "region": "text",
+        "find": { "lastOf": "entire tool" },
+        "withinLastLines": 8,
+        "after": {
+          "all": [{ "regex": "\\n\\s*esc\\s+to\\s+close\\b[^\\n]*(?:\\n[^\\n]*)?$" }],
+          "any": [{ "contains": "to navigate" }, { "contains": "to see more options" }]
+        },
+        "lines": {
+          "atLeast": 2,
+          "includingLast": false,
+          "test": { "regex": "^\\s*(?:[>❯›]\\s*)?(?:trust\\b.*|(?:trust )?entire tool\\b.*|deny|no \\(tab to edit\\))$" }
+        }
+      },
+      "answer": { "state": "blocked", "reason": "agent-approval-prompt" }
+    },
+    {
+      "id": "edit_approval",
+      "why": "Editing a pending tool call keeps the approval open under a `requires approval · modify request` header, with the edited request on a `>` row, until `esc to close` ends the output.",
+      "when": {
+        "region": "text",
+        "find": { "lastOf": "modify request" },
+        "after": {
+          "all": [{ "regex": "\\n\\s*[>›❯]\\s*\\S" }, { "regex": "\\n\\s*esc\\s+to\\s+close\\s*$" }]
+        }
+      },
+      "answer": { "state": "blocked", "reason": "agent-approval-prompt" }
+    },
+    {
+      "id": "subagent_approval",
+      "why": "With subagents running, Kiro gathers their tool approvals into one panel that waits for a choice while its hooks still report working.",
+      "when": {
+        "region": "text",
+        "find": { "lastOf": "approve all pending" },
+        "withinLastLines": 8,
+        "after": {
+          "all": [
+            { "contains": "configure individually (agent monitor)" },
+            { "contains": "exit (cancel subagents)" }
+          ]
+        }
+      },
+      "answer": { "state": "blocked", "reason": "agent-approval-prompt" }
+    }
+  ],
+  "rules": []
+}

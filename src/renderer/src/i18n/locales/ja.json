@@ -21638,6 +21638,7 @@
       "selectedAgentNeedsPermission": "選択中の Agent には許可が必要です。",
       "activeAgentNeedsPermission": "アクティブな Agent には許可が必要です。",
       "statusUnverified": "{{target}} Agent の状態を確認できませんでした。",
+      "approvalUnseen": "{{target}} Agent が承認を待っている可能性があります。ターンが終わってからメモを送信してください。",
       "notReady": "{{target}} Agent は、まだ入力を受け付けられる状態ではありませんでした。",
       "notWritable": "{{target}} Agent はメモを受け付けませんでした。",
       "selectedSubmitFailed": "メモは選択中のターミナルにすでに貼り付けられている可能性がありますが、送信できませんでした。",
@@ -24952,7 +24953,8 @@
   },
   "agentSendTargets": {
     "disabledReason": {
-      "needsPermission": "Agent に許可が必要です"
+      "needsPermission": "Agent に許可が必要です",
+      "approvalUnseen": "Agent が承認を待っている可能性があります"
     }
   },
   "wslDistroHold": {

@@ -88,6 +88,28 @@ export function selectFreshExplicitAgentStatusRow(args: HookRowJoin): AgentStatu
   return best
 }
 
+/** The terminal's latest hook row of any age: a turn end stays true until the agent's next report. */
+export function selectLatestAgentStatusRow(
+  args: Pick<HookRowJoin, 'handles' | 'paneKeys' | 'hookRows'>
+): AgentStatusIpcPayload | null {
+  const handles = new Set(args.handles)
+  const paneKeys = new Set(args.paneKeys)
+  let latest: AgentStatusIpcPayload | null = null
+  for (const row of args.hookRows) {
+    if (
+      (!(row.terminalHandle && handles.has(row.terminalHandle)) && !paneKeys.has(row.paneKey)) ||
+      !row.state ||
+      row.providerSessionOnly === true
+    ) {
+      continue
+    }
+    if (!latest || row.receivedAt > latest.receivedAt) {
+      latest = row
+    }
+  }
+  return latest
+}
+
 /** The freshest explicit state for a terminal, matched on its handle or its pane key. */
 export function selectFreshExplicitAgentStatus(args: {
   handle: string

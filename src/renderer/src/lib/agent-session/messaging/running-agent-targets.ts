@@ -10,6 +10,9 @@ import { isStructuredTab } from '../../../../../shared/agent-session/view/struct
 import type { AgentMessageTarget } from './agent-message-target'
 import { detectAgentSendTitleStatus } from './agent-send-title-status'
 import { resolveRuntimePaneTitleLeafResolution } from '../../../../../shared/workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
+import { agentHidesApprovalsFromHooks } from '../../../../../shared/agent-status/approval/hook-silent-approval-agents'
+import { TERMINAL_SEND_APPROVAL_GUARD_RUNTIME_CAPABILITY } from '../../../../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
+import { ptyHostAdvertisesCapability } from '@/runtime/hosts/capabilities/pty-host-capability'
 
 export type RunningAgentTargetState = Pick<
   AppState,
@@ -18,6 +21,7 @@ export type RunningAgentTargetState = Pick<
   | 'unifiedTabsByWorktree'
   | 'terminalLayoutsByTabId'
   | 'ptyIdsByTabId'
+  | 'runtimeStatusByEnvironmentId'
 > &
   Partial<Pick<AppState, 'runtimePaneTitlesByTabId'>>
 
@@ -122,6 +126,17 @@ function deriveTerminalAgentSendTargets(
       liveTitleStatus === 'permission'
     ) {
       disabledReason = 'Agent needs permission'
+    } else if (
+      entry.state !== 'done' &&
+      agentHidesApprovalsFromHooks(entry.agentType) &&
+      !ptyHostAdvertisesCapability(
+        state.runtimeStatusByEnvironmentId,
+        ptyId,
+        TERMINAL_SEND_APPROVAL_GUARD_RUNTIME_CAPABILITY
+      )
+    ) {
+      // An older host would call this agent's approval menu sendable; the newer host's guard refuses it itself.
+      disabledReason = 'Agent may be waiting for approval'
     }
 
     targets.push({
