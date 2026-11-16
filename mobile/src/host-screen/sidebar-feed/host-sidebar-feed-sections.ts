@@ -29,7 +29,7 @@ import {
   rowFiltersForView,
   type MobileViewState
 } from '../../worktree/workspace-list/workspace-view-settings'
-import type { HiddenProjects } from '../../../../src/shared/hidden-projects'
+import type { HiddenProjects } from '../../../../src/shared/project/catalog/hidden-projects'
 
 export type HostFeedListSources = {
   rows: readonly HostSectionRow[]

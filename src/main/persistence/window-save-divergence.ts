@@ -14,7 +14,7 @@ import type {
   WorkspaceLayout,
   WorkspaceLayoutModel
 } from '../../shared/workspace-layout/workspace-layout-model'
-import type { TabGroupLayoutNode } from '../../shared/tab-types'
+import type { TabGroupLayoutNode } from '../../shared/workspace-layout/tab-groups/tab-types'
 import type { TerminalPaneLayoutNode } from '../../shared/workspace-layout/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import { droppedTabBarEntries, terminalTabBarEntries } from './window-save-raw-session-divergence'

@@ -1,5 +1,5 @@
 import type { Repo } from '../../../../../../shared/repository/repo-types'
-import type { HiddenProjects } from '../../../../../../shared/hidden-projects'
+import type { HiddenProjects } from '../../../../../../shared/project/catalog/hidden-projects'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'

@@ -1,7 +1,7 @@
 import parser, { type Token } from 'stream-json/core/parser.js'
 import exec from 'stream-chain/exec.js'
 import { none } from 'stream-chain/defs.js'
-import { isKnownHarnessInjectedUserTurnText } from '../../../../harness-injected-user-turns'
+import { isKnownHarnessInjectedUserTurnText } from '../../../../agent-session/journal/harness-injected-user-turns'
 import { isClaudeToolResultContent } from './claude-tool-content'
 
 type Scope = 'root' | 'message' | 'content' | 'block' | 'result' | 'discard'

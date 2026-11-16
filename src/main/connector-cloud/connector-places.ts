@@ -5,7 +5,7 @@ import {
   CONNECTOR_CLIENT_LIMITS,
   type ConnectorConversation,
   type ConnectorProject
-} from '../../shared/connector-cloud-contract'
+} from '../../shared/connectors/connector-cloud-contract'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId,

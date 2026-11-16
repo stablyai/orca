@@ -1,5 +1,5 @@
 import type { PairedRuntimeConnection } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
-import { withReconnectJitter } from '../../../shared/reconnect-jitter'
+import { withReconnectJitter } from '../../../shared/network/reconnect-jitter'
 import { WebRuntimeConnectionHeartbeat } from './web-runtime-connection-heartbeat'
 import {
   routeWebRuntimeConnectionFrame,

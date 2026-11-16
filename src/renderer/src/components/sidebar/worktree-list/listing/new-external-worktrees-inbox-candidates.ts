@@ -8,7 +8,7 @@ import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../../../shared/worktree/types'
 import { getNewExternalWorktreeInboxWorktrees } from '../../../../../../shared/worktree/visibility/external-worktree-inbox'
 import { isGitRepoKind } from '../../../../../../shared/repository/repo-kind'
-import { isRepoHidden } from '../../../../../../shared/hidden-projects'
+import { isRepoHidden } from '../../../../../../shared/project/catalog/hidden-projects'
 import type { NewExternalWorktreesInboxCandidate } from '../../../../../../shared/sidebar-list/row-types'
 
 export function buildNewExternalWorktreesInboxCandidates(args: {

@@ -23,6 +23,29 @@ describe('hosted PR snapshots', () => {
     expect(await read('shared', 'manual')).toMatchObject({ kind: 'found', pr: { title: 'manual' } })
   })
 
+  it('reports the found PR from fresh, snapshot and reused phone reads for the host stats', async () => {
+    const phoneRead = () =>
+      commands.getRepoPRForBranch(
+        'repo',
+        'counted',
+        null,
+        null,
+        false,
+        'head-a',
+        undefined,
+        undefined,
+        'mobile'
+      )
+    await read('counted', 'visible')
+    await read('counted')
+    await phoneRead()
+    await phoneRead()
+    // Only the visible read fetches; the snapshot and both phone reads reuse its result.
+    expect(mocks.resolve).toHaveBeenCalledTimes(1)
+    const counted = ['repo', 12, 'https://github.com/acme/repo/pull/12']
+    expect(mocks.recordCreated.mock.calls).toEqual([counted, counted, counted, counted])
+  })
+
   it('keeps a confirmed unchanged quiet result, but a different request head reads again', async () => {
     await read('quiet', 'active')
     await vi.advanceTimersByTimeAsync(60_000)

@@ -1,5 +1,5 @@
-import type { QueuedEditLeaseLoss } from '../../../../../../shared/queued-message-edit-lease'
-import { queuedEditPublicationKey } from '../../../../../../shared/queued-message-edit-publication'
+import type { QueuedEditLeaseLoss } from '../../../../../../shared/native-chat/input/queued-messages/queued-message-edit-lease'
+import { queuedEditPublicationKey } from '../../../../../../shared/native-chat/input/queued-messages/queued-message-edit-publication'
 // Edit inside the card while prompts own the composer; host owns durable content, this pane owns typing, a delivery hold lease and compare-and-set Save.
 
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
@@ -12,7 +12,7 @@ import {
   queuedEditChangedNotice,
   queuedMessageEditableText,
   queuedMessageWithEdit
-} from '../../../../../../shared/queued-message-edit'
+} from '../../../../../../shared/native-chat/input/queued-messages/queued-message-edit'
 import { queuedEditNotice } from './queued-message-edit-notices'
 import {
   createNativeChatQueuedEditDraft,

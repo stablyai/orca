@@ -4,7 +4,7 @@ import {
   type SmartClass,
   type TabPaneInputSources
 } from '../../../../../../shared/sidebar-list/sorting/smart-attention'
-import { tabHasLivePty } from '../../../../../../shared/tab-has-live-pty'
+import { tabHasLivePty } from '../../../../../../shared/workspace-layout/terminal-surfaces/tab-has-live-pty'
 import { agentVerdictDisplayMark } from '../../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import {
   isAgentStatusFresh,

@@ -32,10 +32,14 @@ export const BRIDGE_HOST_CATALOGS_GRANT = 'hostCatalogs'
 // This shell answers a session hand-off carrying a paneKey by returning to the session's existing entry; older shells push a second one.
 export const BRIDGE_SESSION_PANE_RETURN_GRANT = 'sessionPaneReturn'
 
+// This shell serves the chat visual frame, so visuals run their scripts in it; older shells keep them sealed.
+export const BRIDGE_CHAT_VISUAL_FRAME_GRANT = 'chatVisualFrame'
+
 // Granted to every page this shell opens, whatever its route declares.
 export const BRIDGE_SHELL_GRANTS: readonly string[] = [
   BRIDGE_FAULT_GRANT,
   BRIDGE_RPC_ENVELOPE_GRANT,
   BRIDGE_HOST_CATALOGS_GRANT,
-  BRIDGE_SESSION_PANE_RETURN_GRANT
+  BRIDGE_SESSION_PANE_RETURN_GRANT,
+  BRIDGE_CHAT_VISUAL_FRAME_GRANT
 ]

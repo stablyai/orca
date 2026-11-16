@@ -1,4 +1,4 @@
-import { MARINE_CREATURES } from '../../../marine-creatures'
+import { MARINE_CREATURES } from '../../../worktree/naming/marine-creatures'
 
 // Bound generated leaves after generation; leave prompts general so user naming instructions own style.
 export const MAX_BRANCH_NAME_WORDS = 4
