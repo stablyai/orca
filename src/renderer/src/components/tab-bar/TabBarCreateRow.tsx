@@ -1,4 +1,4 @@
-import React, { useId, useRef, useState } from 'react'
+import React, { useRef, useState } from 'react'
 import { Settings } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
@@ -64,7 +64,6 @@ export function TabBarCreateRow({
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
   const pointerInside = useRef(false)
   const { scrollerRef, attachScroller, overflow, revealIcon } = useCreateRowScroller()
-  const idPrefix = useId()
   const [recordingActionId, setRecordingActionId] = useState<KeybindingActionId | null>(null)
   const customizeIndex = visible.length
   const active = Math.min(activeIndex, customizeIndex)
@@ -131,7 +130,6 @@ export function TabBarCreateRow({
             'tabBar.createRow.label',
             'New tab actions. Left and Right choose; the last one customizes this row.'
           )}
-          aria-activedescendant={keyboardActive ? `${idPrefix}-${active}` : undefined}
           onPointerEnter={() => {
             pointerInside.current = true
             setKeyboardNav(false)
@@ -170,7 +168,6 @@ export function TabBarCreateRow({
             overflow={overflow}
             scrollerRef={scrollerRef}
             attachScroller={attachScroller}
-            idPrefix={idPrefix}
             onEscape={closeMenu}
             onHover={(index) => {
               if (index !== null) {
@@ -182,12 +179,12 @@ export function TabBarCreateRow({
           />
           <Tooltip open={keyboardActive && active === customizeIndex}>
             <TooltipTrigger asChild>
-              <span className="flex h-7 shrink-0 items-center gap-1 self-start pl-1">
-                <span className="h-4 w-px bg-border" aria-hidden="true" />
+              <span
+                className="flex h-7 shrink-0 items-center gap-1 self-start pl-1"
+                aria-hidden="true"
+              >
+                <span className="h-4 w-px bg-border" />
                 <span
-                  id={`${idPrefix}-${customizeIndex}`}
-                  role="img"
-                  aria-label={customizeLabel}
                   className={cn(
                     'flex size-7 items-center justify-center rounded-[7px] text-muted-foreground/70 hover:bg-black/8 hover:text-foreground dark:hover:bg-white/14',
                     'group-data-[state=open]/create-row:bg-black/8 group-data-[state=open]/create-row:text-foreground dark:group-data-[state=open]/create-row:bg-white/14',
@@ -204,6 +201,7 @@ export function TabBarCreateRow({
           </Tooltip>
         </DropdownMenuSubTrigger>
         <DropdownMenuSubContent
+          scrollable
           collisionPadding={8}
           className="w-[19rem]"
           // A focused recorder takes Escape and keeps the menu open; once focus leaves it, recording ends.
@@ -252,6 +250,10 @@ export function TabBarCreateRow({
           />
         </DropdownMenuSubContent>
       </DropdownMenuSub>
+      {/* The row is one menu item; announce which icon ←/→ landed on. */}
+      <span className="sr-only" aria-live="polite">
+        {keyboardActive ? (activeItem?.label ?? customizeLabel) : ''}
+      </span>
       {below}
     </>
   )

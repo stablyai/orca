@@ -25907,7 +25907,8 @@
     "tabIntro": {
       "hiddenFromMenu": "Mobile Emulator removed from the + menu",
       "hiddenFromMenuHint": "Bring it back from the gear at the end of the icon row.",
-      "undoHide": "Undo"
+      "undoHide": "Undo",
+      "saveFailed": "Could not update the + menu."
     }
   }
 }

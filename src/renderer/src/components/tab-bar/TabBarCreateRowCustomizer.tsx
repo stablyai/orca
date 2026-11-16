@@ -20,12 +20,17 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { ShortcutRecorderButton } from '../settings/shortcuts/ShortcutRecorderButton'
 import { useKeybindingActionEditor } from '../settings/shortcuts/use-keybinding-action-editor'
-import type { KeybindingActionId } from '../../../../shared/keybindings/types'
+import type { KeybindingActionId, KeybindingInput } from '../../../../shared/keybindings/types'
 import type { TabBarCreateRowItem } from './tab-bar-create-row-item'
 
 const HIDDEN_DIVIDER_ID = 'create-row:hidden'
 
 type Editor = ReturnType<typeof useKeybindingActionEditor>
+type Recorder = {
+  start: (actionId: KeybindingActionId) => void
+  cancel: () => void
+  capture: (actionId: KeybindingActionId, input: KeybindingInput) => void
+}
 
 export function TabBarCreateRowCustomizer({
   visible,
@@ -46,6 +51,27 @@ export function TabBarCreateRowCustomizer({
 }): React.JSX.Element {
   const t = useTranslate()
   const editor = useKeybindingActionEditor()
+  // Why: a save that lands after the user restarted or cancelled recording must not end the new session.
+  const recordingSession = useRef(0)
+  const recorder: Recorder = {
+    start: (actionId) => {
+      recordingSession.current += 1
+      editor.clearErrors()
+      onRecordingChange(actionId)
+    },
+    cancel: () => {
+      recordingSession.current += 1
+      onRecordingChange(null)
+    },
+    capture: (actionId, input) => {
+      const session = recordingSession.current
+      void editor.captureBinding(actionId, input, 0).then((saved) => {
+        if (saved && recordingSession.current === session) {
+          onRecordingChange(null)
+        }
+      })
+    }
+  }
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
   // Why: reordering moves the focused row's DOM node, which drops focus; restore it after commit.
   const focusAfterMove = useRef<string | null>(null)
@@ -102,7 +128,7 @@ export function TabBarCreateRowCustomizer({
       isVisible={isVisible}
       editor={editor}
       recordingActionId={recordingActionId}
-      onRecordingChange={onRecordingChange}
+      recorder={recorder}
       onToggle={() => toggle(item.id, isVisible)}
       onMove={(delta) => move(item.id, delta)}
       refFor={focusRestoringRef}
@@ -190,7 +216,7 @@ function CustomizerRow({
   isVisible,
   editor,
   recordingActionId,
-  onRecordingChange,
+  recorder,
   onToggle,
   onMove,
   refFor
@@ -199,7 +225,7 @@ function CustomizerRow({
   isVisible: boolean
   editor: Editor
   recordingActionId: KeybindingActionId | null
-  onRecordingChange: (actionId: KeybindingActionId | null) => void
+  recorder: Recorder
   onToggle: () => void
   onMove: (delta: number) => void
   refFor: (
@@ -290,18 +316,9 @@ function CustomizerRow({
               bindingIndex={0}
               bindingCount={bindings.length}
               recording={recordingActionId === actionId}
-              onStartRecording={(id) => {
-                editor.clearErrors()
-                onRecordingChange(id)
-              }}
-              onCancelRecording={() => onRecordingChange(null)}
-              onCapture={(id, input) => {
-                void editor.captureBinding(id, input, 0).then((saved) => {
-                  if (saved) {
-                    onRecordingChange(null)
-                  }
-                })
-              }}
+              onStartRecording={recorder.start}
+              onCancelRecording={recorder.cancel}
+              onCapture={recorder.capture}
               onClearError={editor.clearError}
             />
           </div>

@@ -1,8 +1,5 @@
 import React, { useEffect, useEffectEvent, useRef } from 'react'
-import {
-  formatKeybinding,
-  formatKeybindingList
-} from '../../../../../shared/keybindings/formatting'
+import { formatKeybinding } from '../../../../../shared/keybindings/formatting'
 import { isDoubleTapBinding } from '../../../../../shared/keybindings/normalization'
 import type { KeybindingActionId, KeybindingInput } from '../../../../../shared/keybindings/types'
 import {
@@ -239,7 +236,14 @@ export function ShortcutRecorderButton({
                 : t('auto.components.settings.ShortcutRecorderButton.152e0bcd64', 'Add shortcut')}
             </span>
           ) : compact ? (
-            <span className="whitespace-nowrap">{formatKeybindingList([binding], platform)}</span>
+            // Menu-row size: same key combo, drawn as inline glyphs instead of key caps.
+            <ShortcutKeyCombo
+              keys={keys}
+              doubleTap={isDoubleTapBinding(binding)}
+              className="gap-0 whitespace-nowrap"
+              keyCapClassName="min-w-0 border-0 bg-transparent p-0 text-2xs font-medium text-current shadow-none"
+              separatorClassName="text-2xs"
+            />
           ) : (
             <span className="flex flex-wrap items-center justify-end gap-1.5 overflow-hidden">
               <ShortcutKeyCombo

@@ -28,15 +28,33 @@ describe('arrangeNewTabMenuItems', () => {
 })
 
 describe('buildNewTabMenuLayout', () => {
-  it('keeps unavailable items so they return where the user left them', () => {
-    expect(
-      buildNewTabMenuLayout(['terminal', 'markdown'], ['browser'], {
-        order: ['terminal', 'mobile-emulator', 'browser', 'markdown'],
-        hidden: ['mobile-emulator', 'browser']
-      })
-    ).toEqual({
-      order: ['terminal', 'markdown', 'browser', 'mobile-emulator'],
+  it('keeps unavailable items hidden and at their saved place', () => {
+    const saved = buildNewTabMenuLayout(['terminal', 'markdown'], ['browser'], {
+      order: ['terminal', 'mobile-emulator', 'browser', 'markdown'],
+      hidden: ['mobile-emulator', 'browser']
+    })
+    expect(saved).toEqual({
+      order: ['terminal', 'mobile-emulator', 'markdown', 'browser'],
       hidden: ['browser', 'mobile-emulator']
     })
+  })
+
+  it('returns a temporarily unavailable plugin item to its old slot', () => {
+    const items = [
+      { id: 'terminal', locked: true },
+      { id: 'browser' },
+      { id: 'markdown' },
+      { id: 'plugin-file:x' }
+    ]
+    const whileDisabled = buildNewTabMenuLayout(['terminal', 'markdown', 'browser'], [], {
+      order: ['terminal', 'plugin-file:x', 'browser', 'markdown'],
+      hidden: []
+    })
+    expect(ids(arrangeNewTabMenuItems(items, whileDisabled).visible)).toEqual([
+      'terminal',
+      'plugin-file:x',
+      'markdown',
+      'browser'
+    ])
   })
 })

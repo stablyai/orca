@@ -88,13 +88,21 @@ export function buildNewTabMenuLayout(
   hiddenIds: readonly string[],
   previous: NewTabMenuLayout | undefined
 ): NewTabMenuLayout {
-  const arrangedIds = [...visibleIds, ...hiddenIds]
-  const arranged = new Set(arrangedIds)
-  const unavailable = (ids: readonly string[] | undefined) =>
-    (ids ?? []).filter((id) => !arranged.has(id))
+  const arranged = new Set([...visibleIds, ...hiddenIds])
+  const order = [...visibleIds, ...hiddenIds]
+  const previousOrder = previous?.order ?? []
+  previousOrder.forEach((id, index) => {
+    if (arranged.has(id)) {
+      return
+    }
+    // Keep an unavailable item right after whatever preceded it in the saved order.
+    const anchor = previousOrder.slice(0, index).findLast((other) => order.includes(other))
+    order.splice(anchor === undefined ? 0 : order.indexOf(anchor) + 1, 0, id)
+  })
+  const unavailableHidden = (previous?.hidden ?? []).filter((id) => !arranged.has(id))
   return {
-    order: normalizeIds([...arrangedIds, ...unavailable(previous?.order)]),
-    hidden: normalizeIds([...hiddenIds, ...unavailable(previous?.hidden)])
+    order: normalizeIds(order),
+    hidden: normalizeIds([...hiddenIds, ...unavailableHidden])
   }
 }
 

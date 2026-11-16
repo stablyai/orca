@@ -20,7 +20,6 @@ export function TabBarCreateRowIcons({
   overflow,
   scrollerRef,
   attachScroller,
-  idPrefix,
   onEscape,
   onHover,
   onRun
@@ -30,8 +29,6 @@ export function TabBarCreateRowIcons({
   overflow: CreateRowScroller['overflow']
   scrollerRef: CreateRowScroller['scrollerRef']
   attachScroller: CreateRowScroller['attachScroller']
-  /** Icon ids are `${idPrefix}-${index}` so the row can point aria-activedescendant at them. */
-  idPrefix: string
   /** Controlled tooltips sit above the menu and take Escape first; it must still close the menu. */
   onEscape: () => void
   onHover: (index: number | null) => void
@@ -66,7 +63,6 @@ export function TabBarCreateRowIcons({
               <TooltipTrigger asChild>
                 <button
                   type="button"
-                  id={`${idPrefix}-${index}`}
                   tabIndex={-1}
                   aria-label={item.label}
                   className={cn(
