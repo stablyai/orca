@@ -7,7 +7,7 @@ import { areLocalWindowsWslPathAliases } from '../../../../../../shared/file-acc
 import { getConnectionIdForFileFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { isLocalWindowsDesktopClient } from '@/app-shell/chrome/desktop-window-chrome'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
 
 export function runtimeOwnerKey(runtimeEnvironmentId: string | null | undefined): string | null {
   return runtimeEnvironmentId?.trim() || null

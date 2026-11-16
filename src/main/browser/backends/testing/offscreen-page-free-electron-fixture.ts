@@ -49,6 +49,10 @@ async function run(): Promise<void> {
   const unsaved = await backend.createTab({ url: `${origin}/first`, worktreeId: 'unsaved' })
   const saved = await backend.createTab({ url: `${origin}/first`, worktreeId: SAVED_WORKTREE })
   const savedGuest = pageOf(saved.browserPageId)
+  // Electron destroys a window's WebContents after destroy() returns, so wait for its event.
+  const savedDestroyed = new Promise<void>((resolve) =>
+    savedGuest.once('destroyed', () => resolve())
+  )
   // Navigating under a command's lease; the idle time only starts once the lease ends.
   const releaseNavigation = rendererPublicationThrottle.acquire(savedGuest)
   await waitUntil(
@@ -60,8 +64,7 @@ async function run(): Promise<void> {
   await savedGuest.loadURL(`${origin}/second`)
   releaseNavigation()
 
-  // Electron destroys a closed window's WebContents in a later task, after ownership is dropped.
-  await waitUntil(() => savedGuest.isDestroyed())
+  await savedDestroyed
   const unsavedKept = backend.ownsTab(unsaved.browserPageId)
   const savedFreed = !backend.ownsTab(saved.browserPageId)
 

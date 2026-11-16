@@ -19,6 +19,7 @@ import {
   structuredSendAnswer
 } from '../delivery/structured-agent-session-queued-send-answer'
 import type { JournalMailAttempt } from '../../agent-session-journal/journal-mail-observation'
+import { compareAgentJournalItems } from '../../../../shared/agent-session/journal/agent-session-journal-position'
 
 type ReadContext = {
   deps: StructuredAgentSessionHostDeps
@@ -27,6 +28,7 @@ type ReadContext = {
   seal: (id: string) => void
   readCommands: StructuredAgentSessionClientDelivery['readCommandsSettled']
   conversation: (id: string) => Promise<StructuredAgentSessionHostSession>
+  publishStatus: (id: string) => void
 }
 
 /** Readers share the conversation owner; inventory never founds a journal or prepares a provider. */
@@ -105,6 +107,29 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
     regenerateConversationName: (sessionId: string): boolean =>
       context().deps.conversationNaming?.regenerate(sessionId) ?? false,
     setUserConversationName,
+    /** Skip on an async question card: saved on the chat, so every device and the status agree.
+     *  Only moves forward: a device that has not loaded the newest question cannot bring it back. */
+    skipAsyncQuestions: async (sessionId: string, itemId: string) => {
+      // Opening serializes on this chat too, so it runs before the write takes the slot.
+      await context().conversation(sessionId)
+      return context().serialize(sessionId, async () => {
+        const { deps, sessions, publishStatus } = context()
+        const reads = sessions.get(sessionId)?.journal.reads
+        if (!reads) {
+          return
+        }
+        const saved = deps.store.getRecord(sessionId)?.asyncQuestionsSkippedThrough
+        const [previous, next] = await Promise.all([
+          saved === undefined ? undefined : reads.item(saved),
+          reads.item(itemId)
+        ])
+        if (!next || (previous && compareAgentJournalItems(previous, next) >= 0)) {
+          return
+        }
+        await deps.store.skipAsyncQuestions(sessionId, itemId)
+        publishStatus(sessionId)
+      })
+    },
     holdMailSources: (attempts: readonly JournalMailAttempt[], signal: AbortSignal) => {
       const { serialize, sessions, deps, conversation, seal } = context()
       return holdStructuredMailSources(
@@ -129,7 +154,6 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
     supportsCreate: (location: AgentSessionExecutionLocation, agent: string) =>
       providerSupport.adapterSupportsCreate(context().deps.adapter, location, agent),
     knownAgentIds: () => providerSupport.knownAgentIds(context().deps),
-    agentDefinitions: () => context().deps.agents.definitions(),
     revealSession: (id: string) => {
       const { deps, conversation } = context()
       return revealStructuredAgentSession(deps, id, conversation)

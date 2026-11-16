@@ -3,7 +3,7 @@ import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 
 const switchState = vi.hoisted(() => ({ on: true }))
-vi.mock('../../../../shared/layout-owner-switch', () => ({
+vi.mock('../../../../shared/workspace-layout/layout-owner-switch', () => ({
   get ORCA_LAYOUT_OWNER_IS_MAIN() {
     return switchState.on
   }

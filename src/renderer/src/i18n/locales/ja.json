@@ -23683,21 +23683,13 @@
     "language": {
       "back": "言語",
       "requestPrompt": "Orcaに対応してほしい言語は何ですか？",
-      "requestSuccess": "言語のリクエストを記録しました。設定を続けられます。",
       "requestError": "リクエストを記録できませんでした。再試行してください。",
       "retry": "再試行",
       "requestAction": "言語をリクエスト",
       "title": "表示言語",
-      "device": "システム言語：{{language}}",
-      "unsupported": "システム言語：{{language}}。この言語はまだサポートされていません。",
-      "unknown": "システム言語を検出できませんでした。以下から選択してください。",
-      "loadError": "この言語を読み込めませんでした。再試行してください。",
-      "saveError": "言語設定を保存できませんでした。再試行してください。",
-      "other": "その他の言語…",
       "settingsError": "設定を読み込めませんでした。",
       "loadingSettings": "設定を読み込み中…",
-      "loading": "言語を読み込み中…",
-      "saving": "言語を保存中…"
+      "loading": "言語を読み込み中…"
     }
   },
   "resourceManager": {

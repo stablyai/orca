@@ -1,4 +1,4 @@
-import '../../../shared/layout-owner-switch'
+import '../../../shared/workspace-layout/layout-owner-switch'
 import { describe, expect, it, vi } from 'vitest'
 import { committingSpawn } from './bind-first-pane.test-fixture'
 import './runtime-test-module-registration.spec'
