@@ -151,14 +151,31 @@ function normalizedStyles(nodes: PhrasingContent[]): PhrasingContent[] {
   return result
 }
 
+// Split text with identical marks must be scanned whole, or a URL across the split loses its tail.
+function joinedTextRuns(children: unknown[]): Record<string, unknown>[] {
+  const runs: Record<string, unknown>[] = []
+  let previousMarks = ''
+  for (const child of children) {
+    const node = adfRecord(child)
+    const previous = runs.at(-1)
+    const marks = typeof node.text === 'string' ? JSON.stringify(node.marks ?? []) : ''
+    if (marks && typeof previous?.text === 'string' && marks === previousMarks) {
+      runs[runs.length - 1] = { ...previous, text: previous.text + node.text }
+    } else {
+      runs.push(node)
+    }
+    previousMarks = marks
+  }
+  return runs
+}
+
 export function adfInlineNodes(
   value: unknown,
   renderMedia: MediaRenderer,
   inTable = false
 ): PhrasingContent[] {
   const result: PhrasingContent[] = []
-  for (const child of adfChildren(value)) {
-    const node = adfRecord(child)
+  for (const node of joinedTextRuns(adfChildren(value))) {
     if (typeof node.text === 'string') {
       const marks = adfChildren(node.marks).map(adfRecord)
       const types = new Set(marks.map((mark) => mark.type))

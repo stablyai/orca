@@ -785,11 +785,24 @@ it('keeps ambiguous URL authorities active through real Markdown read-back', asy
       markdown: '[www.foo_bar.com/](http://www.foo_bar.com/)',
       href: 'http://www.foo_bar.com/'
     },
-    { text: 'http://-foo.com/', markdown: '<http://-foo.com/>', href: 'http://-foo.com/' }
+    { text: 'http://-foo.com/', markdown: '<http://-foo.com/>', href: 'http://-foo.com/' },
+    {
+      text: '*foo*@example.com',
+      markdown: '[\\*foo\\*@example.com](mailto:*foo*@example.com)',
+      href: 'mailto:*foo*@example.com'
+    },
+    {
+      text: ['https://example.com', '/docs'],
+      markdown: 'https://example.com/docs',
+      href: 'https://example.com/docs'
+    }
   ]) {
+    const fragments = [text].flat()
     const actual = adfToMarkdownText({
       type: 'doc',
-      content: [{ type: 'paragraph', content: [{ type: 'text', text }] }]
+      content: [
+        { type: 'paragraph', content: fragments.map((value) => ({ type: 'text', text: value })) }
+      ]
     })
     expect(actual).toBe(markdown)
     const result = await markdownToAdf(actual)
@@ -798,7 +811,11 @@ it('keeps ambiguous URL authorities active through real Markdown read-back', asy
         {
           type: 'paragraph',
           content: expect.arrayContaining([
-            { type: 'text', text: text.trim(), marks: [{ type: 'link', attrs: { href } }] }
+            {
+              type: 'text',
+              text: fragments.join('').trim(),
+              marks: [{ type: 'link', attrs: { href } }]
+            }
           ])
         }
       ]
