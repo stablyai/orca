@@ -56,7 +56,7 @@ async function setup() {
     body: { accountId: 'org:acme', userId: 'alice', repoUrl: REPO, login: 'alice-gh', githubUserId: 11, name: 'alice' }
   })
   const placeholder = await memberPlaceholder(id, 'alice')
-  async function api(path: string, method: string, body?: unknown) {
+  async function api(path: string, method: string, body?: unknown, authorization = `token ${placeholder}`) {
     const oidc = await new SignJWT({ team_id: 'team_orca', project_id: 'prj_orca', sandbox_name: `orca-test-${id}` })
       .setProtectedHeader({ alg: 'RS256', kid: 'v1' })
       .setIssuer(ISSUER)
@@ -74,7 +74,7 @@ async function setup() {
           'vercel-forwarded-port': '443',
           'vercel-forwarded-path': path,
           'vercel-sandbox-oidc-token': oidc,
-          authorization: `token ${placeholder}`
+          authorization
         }
       })
     )
@@ -129,9 +129,10 @@ const sentBy = (t: Awaited<ReturnType<typeof setup>>, user: string, at: number) 
 const MERGE = { query: 'mutation { mergePullRequest(input: { pullRequestId: "PR_in" }) { clientMutationId } }' }
 const COMMENT = { query: 'mutation { addComment(input: { subjectId: "PR_in", body: "x" }) { clientMutationId } }' }
 
-describe('review M2: approvals never as the owner; merges are theirs', () => {
-  it('an approval goes out on the installation token even when the owner is alone; comments and other reviews are the member', async () => {
+describe('APPROVALS-REFUSED: no approval leaves a workspace; merges are the owner’s', () => {
+  it('an approval through the owner’s gh is refused (403, never sent); comments and other reviews are the owner', async () => {
     const t = await setup()
+    const before = t.upstream.length
     for (const body of [
       { query: 'mutation { addPullRequestReview(input: { pullRequestId: "PR_in", event: APPROVE }) { clientMutationId } }' },
       { query: 'mutation { submitPullRequestReview(input: { pullRequestReviewId: "PRR_in", event: APPROVE }) { clientMutationId } }' },
@@ -140,23 +141,42 @@ describe('review M2: approvals never as the owner; merges are theirs', () => {
         variables: { input: { pullRequestId: 'PR_in', event: 'approve' } }
       }
     ]) {
-      await t.api('/graphql', 'POST', body)
-      expect(t.upstream.at(-1)!.authorization).toBe(APP)
+      const refused = await t.api('/graphql', 'POST', body)
+      expect(refused.status).toBe(403)
+      expect(JSON.parse(refused.body).errors[0].message).toContain('Approvals have to be done by a person on GitHub')
     }
     for (const event of ['APPROVE', 'approve', 'Approve']) {
-      await t.api('/repos/acme/app/pulls/7/reviews', 'POST', { event })
-      expect(t.upstream.at(-1)!.authorization).toBe(APP)
-      await t.api('/repos/acme/app/pulls/7/reviews/3/events', 'POST', { event })
-      expect(t.upstream.at(-1)!.authorization).toBe(APP)
+      expect((await t.api('/repos/acme/app/pulls/7/reviews', 'POST', { event })).status).toBe(403)
+      expect((await t.api('/repos/acme/app/pulls/7/reviews/3/events', 'POST', { event })).status).toBe(403)
     }
-    await t.api('/repos/acme/app/Pulls/7/Reviews/', 'POST', { event: 'APPROVE' })
-    expect(t.upstream.at(-1)!.authorization).toBe(APP)
+    const rest = await t.api('/repos/acme/app/Pulls/7/Reviews/', 'POST', { event: 'APPROVE' })
+    expect([rest.status, JSON.parse(rest.body).message]).toEqual([403, expect.stringContaining('person on GitHub')])
+    // Nothing of those reached GitHub.
+    expect(t.upstream.length).toBe(before)
     await t.api('/repos/acme/app/pulls/7/reviews', 'POST', { event: 'REQUEST_CHANGES', body: 'x' })
     expect(t.upstream.at(-1)!.authorization).toBe(`Bearer ${MEMBER_TOKEN}`)
-    await t.api('/repos/acme/app/pulls/7/reviews', 'POST', { event: 'COMMENT', body: 'x' })
+    await t.api('/repos/acme/app/pulls/7/reviews', 'POST', { event: 'COMMENT', body: 'I approve of the idea' })
     expect(t.upstream.at(-1)!.authorization).toBe(`Bearer ${MEMBER_TOKEN}`)
     await t.api('/graphql', 'POST', { query: 'mutation { addPullRequestReview(input: { pullRequestId: "PR_in", event: REQUEST_CHANGES, body: "x" }) { clientMutationId } }' })
     expect(t.upstream.at(-1)!.authorization).toBe(`Bearer ${MEMBER_TOKEN}`)
+  })
+
+  it('the workspace’s own App placeholder can’t approve either; other App calls go out as before', async () => {
+    const t = await setup()
+    const before = t.upstream.length
+    const app = (path: string, body: unknown) => t.api(path, 'POST', body, `Bearer orca-ph-${t.id}`)
+    expect((await app('/repos/acme/app/pulls/7/reviews', { event: 'APPROVE' })).status).toBe(403)
+    expect((await app('/graphql', { query: 'mutation { addPullRequestReview(input: { pullRequestId: "PR_x", event: APPROVE }) { clientMutationId } }' })).status).toBe(403)
+    expect(t.upstream.length).toBe(before)
+    // Review G2/G4: an escaped path or a dismissal is refused too.
+    expect((await app('/repos/acme/app/pulls/7/%72eviews', { event: 'APPROVE' })).status).toBe(403)
+    expect((await t.api('/repos/acme/app/pulls/7/reviews/3/dismissals', 'PUT', { message: 'x' }, `Bearer orca-ph-${t.id}`)).status).toBe(403)
+    expect((await t.api('/repos/acme/app/pulls/7/%72eviews', 'POST', { event: 'APPROVE' })).status).toBe(403)
+    expect(t.upstream.length).toBe(before)
+    expect((await app('/repos/acme/app/issues/7/comments', { body: 'x' })).status).toBe(200)
+    expect(t.upstream.at(-1)!.authorization).toBe(APP)
+    expect((await app('/repos/acme/app/pulls/7/reviews', { event: 'COMMENT', body: 'x' })).status).toBe(200)
+    expect(t.upstream.at(-1)!.authorization).toBe(APP)
   })
 
   it('merges (GraphQL, PR merge, branch merge) are the owner’s; a stray grant or send changes nothing', async () => {

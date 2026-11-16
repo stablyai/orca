@@ -40,6 +40,7 @@
 // Public share links (src/share-gateway.ts): /s/<token>/*, plus the root-path cookie fallback
 // Vercel network-policy forwardURL target (Vercel sandbox OIDC):  /v1/egress/proxy
 import { devOnly } from './dev-only'
+import { UNNORMALIZED_WRITE_REFUSAL, approvalCheckReadsBody, approvalRefusal, requestApproves, unnormalizedWrite } from './github-approval-guard'
 import { purgeTeamSecrets, teamDeleteRoute, teamWorkspaceCount } from './team-delete'
 import { ReadSnapshotRouteError, getReadSnapshot, handleReaderKeysRoute, pruneReadSnapshotToOwner, revokeDeviceSessionReaderKeys } from './read-snapshots'
 import { refreshEnvironment, refreshStaleEnvironments, type GoldenRefreshOptions } from './environment-golden-refresh'
@@ -596,7 +597,18 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
       return [
         // Members first: a member placeholder must never fall through to the app's token.
         ...(await members.routes(row, host)),
-        { header: 'authorization', placeholders: githubPlaceholderHeaders(row), credential: () => broker.authorizationFor(row, host) },
+        {
+          header: 'authorization',
+          placeholders: githubPlaceholderHeaders(row),
+          // APPROVALS-REFUSED: the App's token never approves a pull request (it would count as a review).
+          readsBody: approvalCheckReadsBody,
+          credential: async (request) =>
+            unnormalizedWrite(request.method, request.path)
+              ? UNNORMALIZED_WRITE_REFUSAL
+              : requestApproves(request)
+                ? approvalRefusal(request.path)
+                : broker.authorizationFor(row, host)
+        },
         // A user's own GitHub token for Copilot CLI (COPILOT_GITHUB_TOKEN), on its own placeholder.
         ...secretRoutes(row, host)
       ]

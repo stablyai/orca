@@ -3,12 +3,13 @@
 // (orca-git-identity hands it to every process, no sender attestation: there is no one else to tell apart), and
 // the egress proxy swaps it for their GitHub user token, only for the workspace repository (git smart HTTP on
 // github.com; on api.github.com REST under /repos/<owner>/<repo> and allowlisted GraphQL mutations pinned to it).
-// Tokens never enter the VM. Approvals always go out as the App (review M2).
+// Tokens never enter the VM. Approvals are refused outright (github-approval-guard.ts).
 import type { ProxiedRoute } from './egress-proxy'
 import { parseGitHubRepo } from './github-app'
 import { getUserTokenRow, memberPlaceholder, type MemberGitIdentity } from './github-user-tokens'
 import { gitBasicAuthorization } from './network-policy'
-import { MEMBER_OUT_OF_REPO_BODY, NODE_REPOSITORY_QUERY, approves, classifyGraphqlRequest, repositoryIdOfNode, type MemberTarget } from './github-graphql-pin'
+import { UNNORMALIZED_WRITE_REFUSAL, approvalCheckReadsBody, approvalRefusal, requestApproves, unnormalizedWrite } from './github-approval-guard'
+import { MEMBER_OUT_OF_REPO_BODY, NODE_REPOSITORY_QUERY, classifyGraphqlRequest, repositoryIdOfNode, type MemberTarget } from './github-graphql-pin'
 import { settledCache } from './settled-cache'
 import type { SandboxRow } from './store'
 
@@ -87,8 +88,7 @@ export function memberGitRoutes(deps: MemberGitDeps) {
             : {
                 header: 'authorization',
                 placeholders: [`Bearer ${placeholder}`, `token ${placeholder}`],
-                readsBody: (method, path) =>
-                  (method.toUpperCase() === 'POST' && path.split('?')[0] === '/graphql') || REVIEW_PATH.test(path.split('?')[0] ?? ''),
+                readsBody: (method, path) => (method.toUpperCase() === 'POST' && (path.split('?')[0] ?? '').toLowerCase() === '/graphql') || approvalCheckReadsBody(method, path),
                 credential: async (request) => memberApiCredential(deps, row, identity, allowed, request)
               }
         )
@@ -171,15 +171,19 @@ async function memberApiCredential(
   allowed: (method: string, path: string) => boolean,
   request: { method: string; path: string; body: string | null }
 ): ReturnType<ProxiedRoute['credential']> {
+  // APPROVALS-REFUSED (github-approval-guard.ts): never from a workspace, on any identity. A write whose path GitHub
+  // would normalize differently than this check reads it is refused first (review G2).
+  if (unnormalizedWrite(request.method, request.path)) {
+    return UNNORMALIZED_WRITE_REFUSAL
+  }
+  if (requestApproves(request)) {
+    return approvalRefusal(request.path)
+  }
   const app = () => (deps.appAuthorization ? deps.appAuthorization(row) : Promise.resolve(null))
   const pathname = request.path.split('?')[0] ?? ''
   const isGraphql = request.method.toUpperCase() === 'POST' && pathname === '/graphql'
   if (!isGraphql) {
     if (allowed(request.method, request.path)) {
-      // Review M2: a REST approval never carries the owner's identity (it goes out as the App).
-      if (restApproves(request)) {
-        return app()
-      }
       const id = await identity()
       return id ? `Bearer ${id.token}` : app()
     }
@@ -187,9 +191,6 @@ async function memberApiCredential(
   }
   const verdict = classifyGraphqlRequest(request.body ?? '')
   if (!verdict.member) {
-    return app()
-  }
-  if (approves(verdict.fields)) {
     return app()
   }
   const id = await identity()
@@ -259,22 +260,3 @@ async function targetsInWorkspaceRepo(deps: MemberGitDeps, row: SandboxRow, appT
 }
 
 /** A pull request review, or a pending review's submission (case-insensitive, optional trailing slash). */
-const REVIEW_PATH = /\/pulls\/\d+\/reviews(\/\d+\/events)?\/?$/i
-
-/** REST approval: a review, or a pending review's submission, with event APPROVE (any case). */
-function restApproves(request: { method: string; path: string; body: string | null }): boolean {
-  const pathname = request.path.split('?')[0] ?? ''
-  if (request.method.toUpperCase() !== 'POST' || !REVIEW_PATH.test(pathname)) {
-    return false
-  }
-  if (request.body === null) {
-    return true
-  }
-  try {
-    const event = (JSON.parse(request.body) as { event?: unknown } | null)?.event
-    return String(event ?? '').toUpperCase() === 'APPROVE'
-  } catch {
-    // Unreadable: treat as an approval (fails toward the installation token).
-    return true
-  }
-}

@@ -61,8 +61,13 @@ describe('EGRESS firewall mode', () => {
     const git = gitBasicAuthorization(githubPlaceholderToken(row))
     expect(claims(rules('github.com'), git)[0]).toMatchObject({ transform: [{ headers: { authorization: gitBasicAuthorization(APP_TOKEN) } }] })
     const [bearer, token] = githubPlaceholderHeaders(row)
-    expect(claims(rules('api.github.com'), bearer!)[0]).toMatchObject({ transform: [{ headers: { authorization: `Bearer ${APP_TOKEN}` } }] })
-    expect(claims(rules('api.github.com'), token!)[0]).toMatchObject({ transform: [{ headers: { authorization: `token ${APP_TOKEN}` } }] })
+    // APPROVALS-REFUSED: the firewall swaps reads only (GET/HEAD); anything else, any method, goes to the proxy.
+    for (const [placeholder, scheme] of [[bearer!, 'Bearer'], [token!, 'token']] as const) {
+      const [swap, forward] = claims(rules('api.github.com'), placeholder)
+      expect(swap).toMatchObject({ match: { path: { startsWith: '/' }, method: ['GET', 'HEAD'] }, transform: [{ headers: { authorization: `${scheme} ${APP_TOKEN}` } }] })
+      expect(forward).toMatchObject({ forwardURL: expect.any(String) })
+      expect((forward as { match: { method?: unknown } }).match.method).toBeUndefined()
+    }
   })
 
   it('W1: Cursor’s key exchange stays on the egress proxy (its reply is filtered), never in the policy', async () => {
@@ -95,6 +100,26 @@ describe('EGRESS firewall mode', () => {
     const { rules, box } = await create()
     expect(rules('api.anthropic.com').some((rule) => 'forwardURL' in rule)).toBe(true)
     expect(JSON.stringify(box().policy.allow['api.anthropic.com'])).not.toContain(ANTHROPIC_KEY)
+  })
+
+  it('APPROVALS-REFUSED: with the App token on the firewall, only GET/HEAD are swapped; every other method goes to the proxy', async () => {
+    const { egressPolicy } = await import('../src/lifecycle')
+    const { h } = await setup()
+    const life = (await lifecycleDeps(h.env, h.deps))!
+    const row = { id: 'sbx_x', repo_url: 'https://github.com/acme/app', egress_secret_hosts: null, egress_allow_hosts: null, egress_user_hosts: null } as never
+    const policy = egressPolicy(life, row, 'ghs_app_token', [], { classes: new Set(['github_app']), full: true, accounts: [], secrets: new Map() })
+    const api = policy.allow['api.github.com']!
+    const transforms = api.filter((rule) => 'transform' in rule) as { match: { path: unknown; method?: unknown } }[]
+    expect(transforms.length).toBeGreaterThan(0)
+    for (const rule of transforms) {
+      expect([rule.match.path, rule.match.method]).toEqual([{ startsWith: '/' }, ['GET', 'HEAD']])
+    }
+    const forwards = api.filter((rule) => 'forwardURL' in rule) as { match: { method?: unknown; path?: unknown } }[]
+    expect(forwards.length).toBeGreaterThan(0)
+    expect(forwards.every((rule) => rule.match.method === undefined && rule.match.path === undefined)).toBe(true)
+    // The swaps come first (reads), then the catch-all forward; the token is only in the swaps.
+    expect(api.findIndex((rule) => 'transform' in rule)).toBeLessThan(api.findIndex((rule) => 'forwardURL' in rule))
+    expect(JSON.stringify(forwards)).not.toContain('ghs_app_token')
   })
 
   it('a key that is no longer usable is answered by the firewall, never sent upstream as a placeholder', async () => {

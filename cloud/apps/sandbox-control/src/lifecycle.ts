@@ -515,16 +515,29 @@ export function egressPolicy(
             ]
           : []),
         ...(appOnFirewall && gitToken
-          ? githubPlaceholderHeaders(row).map(
-              (placeholder): CredentialRoute => ({
+          ? [
+              // APPROVALS-REFUSED: the firewall swaps the App token only for reads (GET/HEAD); every other request
+              // with the App placeholder, whatever its method or path, goes to the proxy, which reads it and refuses
+              // approvals (review G1 and its low: an unexpected method is inspected, not swapped).
+              ...githubPlaceholderHeaders(row).map(
+                (placeholder): CredentialRoute => ({
+                  host: 'api.github.com',
+                  header: 'authorization',
+                  placeholders: [placeholder],
+                  paths: [{ startsWith: '/', methods: ['GET', 'HEAD'] }],
+                  via: 'transform',
+                  // `Bearer <placeholder>` / `token <placeholder>`: the same scheme with the real token.
+                  value: `${placeholder.slice(0, placeholder.indexOf(' '))} ${gitToken}`
+                })
+              ),
+              {
                 host: 'api.github.com',
                 header: 'authorization',
-                placeholders: [placeholder],
-                via: 'transform',
-                // `Bearer <placeholder>` / `token <placeholder>`: the same scheme with the real token.
-                value: `${placeholder.slice(0, placeholder.indexOf(' '))} ${gitToken}`
-              })
-            )
+                placeholders: githubPlaceholderHeaders(row),
+                via: 'forward' as const,
+                forwardURL: proxyUrl
+              }
+            ]
           : [
               {
                 host: 'api.github.com',
