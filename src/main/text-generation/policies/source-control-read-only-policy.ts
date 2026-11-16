@@ -98,9 +98,10 @@ async function antigravityPolicy(
 ) {
   let settings: Record<string, unknown> = {}
   let cursor = 0
+  const optionTokens = generationOptionTokens(plan.args)
   for (;;) {
     const option = findOptionOccurrence(
-      generationOptionTokens(plan.args),
+      optionTokens,
       ['--settings'],
       true,
       settingsOptions,
