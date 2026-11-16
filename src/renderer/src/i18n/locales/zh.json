@@ -21063,7 +21063,6 @@
           "reopen": "重新打开",
           "reopenFailed": "部分文件无法重新打开。请打开工作区，然后再次尝试“重新打开”"
         },
-        "ignoredFilesLost": "Git 忽略的文件将丢失：{{names}}",
         "ignoredFilesUnchecked": "无法完整检查 Git 忽略的文件"
       },
       "atRiskLocalFiles": {
