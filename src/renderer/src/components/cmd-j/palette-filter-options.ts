@@ -11,7 +11,7 @@ import {
 } from '../../../../shared/execution-host'
 import type { Project, ProjectHostSetup } from '../../../../shared/project/project-types'
 import type { Repo } from '../../../../shared/repository/repo-types'
-import { withoutHiddenRepos } from '../../../../shared/hidden-projects'
+import { withoutHiddenRepos } from '../../../../shared/project/catalog/hidden-projects'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getProjectHeaderRevealTarget } from '../../../../shared/sidebar-list/sections/project-section-grouping'
 import type { ProjectGroupingModel } from '../../../../shared/sidebar-list/sections/project-section-grouping'

@@ -3,8 +3,11 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../execution-host'
-import { adoptEndpointProjectCatalog, adoptEndpointRepo } from '../../endpoint-catalog-adoption'
-import { applyManualRepoOrder } from '../../manual-repo-order'
+import {
+  adoptEndpointProjectCatalog,
+  adoptEndpointRepo
+} from '../../project/catalog/endpoint-catalog-adoption'
+import { applyManualRepoOrder } from '../../repository/manual-repo-order'
 import { applyInheritedProjectGroups } from '../../project/groups/project-group-inheritance'
 import {
   buildMobileProjectSectionCatalog,

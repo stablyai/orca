@@ -1,4 +1,4 @@
-import { TEXT_GENERATION_FAILURE_COPY } from '../../shared/text-generation-failure-copy'
+import { TEXT_GENERATION_FAILURE_COPY } from '../../shared/text-generation/text-generation-failure-copy'
 import { codexForkHistory } from './codex-fork-history'
 import {
   AgentConversationCopyError,

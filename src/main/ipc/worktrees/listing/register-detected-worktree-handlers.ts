@@ -4,7 +4,7 @@ import type {
   HostQualifiedDetectedWorktreeResult,
   DirectSshDetectedWorktreeRequest,
   ProviderRequestId
-} from '../../../../shared/detected-worktree-provider-contract'
+} from '../../../../shared/worktree/catalog/detected-worktree-provider-contract'
 import { parseExecutionHostId, getRepoDialableSshTargetId } from '../../../../shared/execution-host'
 import {
   registerSshProviderRequestAbort,

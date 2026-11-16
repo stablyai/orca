@@ -1,7 +1,7 @@
 import {
   textGenerationFailure,
   type TextGenerationFailureFields
-} from '../../../text-generation-failure-copy'
+} from '../../../text-generation/text-generation-failure-copy'
 import { findOptionOccurrence } from '../../../cli/command-option-occurrence'
 import { planAgentBinary } from '../../../agent-launch/startup/agent-command-plan'
 

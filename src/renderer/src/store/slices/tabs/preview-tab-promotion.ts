@@ -1,6 +1,6 @@
 // Main-owned previews end in main’s frame; paired-server layouts and host_not_owned twins promote in the window copy.
 
-import type { Tab } from '../../../../../shared/tab-types'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'
 import { sendLayoutApply } from '@/runtime/workspace-layout/commands/layout-apply-send'

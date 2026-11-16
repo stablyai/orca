@@ -52,7 +52,7 @@ import type {
   RuntimeEnsureAgentSessionResult
 } from '../../../../../../shared/agent-session/agent-session-host-authority'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import type { TabActivationIntent } from '../../../../../../shared/tab-activation-intent'
+import type { TabActivationIntent } from '../../../../../../shared/workspace-layout/tab-groups/tab-activation-intent'
 import type { RuntimeMobileSessionTerminalClientTab } from '../../../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type {
   RuntimeMobileSessionTabsResult,

@@ -25,7 +25,7 @@ import {
 import type {
   ActivityGroupBy,
   ThreadReadFilter
-} from '../../../../shared/agents-view-thread-filters'
+} from '../../../../shared/agent-status/presentation/agents-view-thread-filters'
 import type { ActivityThreadGroup, AgentPaneThread } from './activity-thread-types'
 
 const EMPTY_PANE_KEYS: ReadonlySet<string> = new Set()

@@ -1,6 +1,9 @@
 import { z } from 'zod'
 import { toRuntimeExecutionHostId } from '../../execution-host'
-import { adoptEndpointProjectCatalog, adoptEndpointRepo } from '../../endpoint-catalog-adoption'
+import {
+  adoptEndpointProjectCatalog,
+  adoptEndpointRepo
+} from '../../project/catalog/endpoint-catalog-adoption'
 import { ProjectGroupSchema } from './project-section-catalog-schema'
 import type { ProjectGroup } from '../../project/groups/project-group-types'
 import { projectHostSetupProjectionFromRepos } from '../../project/host-setup/project-host-setup-projection'

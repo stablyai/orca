@@ -1,4 +1,4 @@
-import type { DashboardBucket } from '../../../../../shared/dashboard-snapshot'
+import type { DashboardBucket } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
 import type { WorktreeAgentActivitySummary } from '@/components/sidebar/workspace-card/activity/worktree-agent-activity-summary'
 import type { WorktreeAttention } from '../../../../../shared/sidebar-list/sorting/smart-attention'
