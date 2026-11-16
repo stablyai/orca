@@ -4,7 +4,7 @@ import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktre
 import { getAiVaultResumeWorkspacePath } from '@/lib/agent-session/resume/history/ai-vault-resume-shell'
 import { resolveWorktreeExecutionHostPlatform } from '@/runtime/hosts/platform/execution-host-facts'
 import { parseExecutionHostId } from '../../../../../../shared/execution-host'
-import { parseWslUncPath } from '../../../../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../../../../shared/file-access/wsl-paths'
 
 export type AiVaultResumePlatformState = Parameters<typeof resolveWorktreeExecutionHostPlatform>[0]
 

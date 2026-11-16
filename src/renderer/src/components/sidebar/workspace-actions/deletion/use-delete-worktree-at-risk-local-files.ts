@@ -2,7 +2,7 @@ import { useEffect, useEffectEvent, useState } from 'react'
 import { useAppStore } from '@/store'
 import { getRuntimeWorktreeAtRiskLocalFiles } from '@/runtime/source-control/git/runtime-git-status-client'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import {
   hasWorktreeAtRiskLocalFiles,

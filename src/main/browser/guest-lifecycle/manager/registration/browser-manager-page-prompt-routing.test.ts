@@ -72,6 +72,7 @@ describe('browserManager page prompt routing', () => {
       ...guestNavigationMethods(),
       id: 107,
       isDestroyed: vi.fn(() => false),
+      isCrashed: vi.fn(() => false),
       isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
       getURL: vi.fn(() => 'https://trusted.example/home'),
@@ -114,7 +115,7 @@ describe('browserManager page prompt routing', () => {
     // Cancel quiets prompts until fresh input arrives.
     const clickInPage = (): void => {
       for (const [event, listener] of guestOnMock.mock.calls) {
-        if (event === 'input-event') {
+        if (event === 'before-mouse-event') {
           listener({}, { type: 'mouseDown' })
         }
       }

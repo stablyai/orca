@@ -19,7 +19,7 @@ import {
 } from '../../../../../../shared/sidebar-list/row-types'
 import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/sections/group-keys'
 import '../../workspace-status/presentation/workspace-status'
-import { getWorkspaceStatusFromGroupKey } from '../../../../../../shared/workspace-statuses'
+import { getWorkspaceStatusFromGroupKey } from '../../../../../../shared/workspace/status/workspace-statuses'
 import { translateWorkspaceStatusHeaderLabel } from '../../workspace-board-status-label'
 import { getVirtualRowTransform } from '../viewport/virtual-rows'
 import { getSidebarHeaderVisual } from './header-visuals'

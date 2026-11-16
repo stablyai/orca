@@ -3,7 +3,7 @@ import {
   agentJournalItemKey,
   parseAgentJournalItemKey
 } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { spelledProviderTimelineItemKey } from '../../../../shared/provider-timeline-item-key'
+import { spelledProviderTimelineItemKey } from '../../../../shared/agent-session/journal/provider-timeline-item-key'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,

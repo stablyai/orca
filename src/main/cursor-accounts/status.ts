@@ -1,4 +1,4 @@
-import type { CursorAccountStatus } from '../../shared/rate-limit-types'
+import type { CursorAccountStatus } from '../../shared/agent-usage/rate-limits/rate-limit-types'
 import { readCursorAuthSession } from '../rate-limits/providers/cursor/cursor-auth'
 import { isCursorSessionTokenExpired } from '../rate-limits/providers/cursor/cursor-session-token'
 

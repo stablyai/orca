@@ -7,7 +7,7 @@ import {
   FILE_WRITE_OK,
   type FileWriteResult
 } from '../../../shared/file-write/file-write-disk-precondition'
-import { renameFileWithWindowsRetryAsync } from '../../../shared/windows-retry-file-operations'
+import { renameFileWithWindowsRetryAsync } from '../../../shared/file-write/windows-retry-file-operations'
 import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
 import { isENOENT } from './access/filesystem-path-containment'
 import { runLocalEditorWrite } from './local-disk-write-precondition'

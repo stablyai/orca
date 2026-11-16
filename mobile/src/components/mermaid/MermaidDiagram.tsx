@@ -4,13 +4,13 @@ import { Maximize2 } from 'lucide-react-native'
 import { colors, radii, spacing, typography, pressedStyle } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { themedStyleSheet } from '../../theme/themed-styles'
-import { readableMermaidFlowchartSvg } from '../../../../src/shared/mermaid-flowchart-contrast'
+import { readableMermaidFlowchartSvg } from '../../../../src/shared/document-preview/mermaid-flowchart-contrast'
 import {
   readSvgIntrinsicSize,
   svgMarkupDataUri
 } from '../../../../src/shared/file-preview/svg-document'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { MobileNativeChatImageViewer } from '../../session/native-chat/visual/MobileNativeChatImageViewer'
+import { MobileImageViewer } from '../../files/media/presentation/MobileImageViewer'
 import { mermaidDiagramConfig } from './mermaid-diagram-config'
 import { loadPageMermaid } from './mermaid-page-engine'
 
@@ -112,7 +112,7 @@ function ExpandedDiagram({ svg, onClose }: { svg: string; onClose: () => void })
   const uri = useMemo(() => svgMarkupDataUri(svg), [svg])
   const size = useMemo(() => readSvgIntrinsicSize(svg), [svg])
   return (
-    <MobileNativeChatImageViewer
+    <MobileImageViewer
       uri={uri}
       size={size}
       upscale

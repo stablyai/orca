@@ -1,4 +1,4 @@
-import { isClaudeToolResultContent } from '../../../../claude-tool-content'
+import { isClaudeToolResultContent } from './claude-tool-content'
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
 import type {
   ClaudeTranscriptCursor,

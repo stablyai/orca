@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
-import { formatBytes } from '../../../../../shared/format-bytes'
+import { formatBytes } from '../../../../../shared/text/format-bytes'
 import {
   WORKSPACE_ARCHIVE_SUPPORTED,
   WORKSPACE_CLEANUP_POLICY_MAX_DAYS,

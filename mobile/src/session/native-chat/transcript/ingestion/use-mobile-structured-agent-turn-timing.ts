@@ -11,7 +11,7 @@ import { selectStructuredAgentTurnBars } from '../../../../../../src/shared/agen
 import {
   stepStructuredAgentTurnClock,
   type StructuredAgentTurnClockLatch
-} from '../../../../../../src/shared/structured-agent-turn-clock-anchor'
+} from '../../../../../../src/shared/native-chat/transcript/turns/structured-agent-turn-clock-anchor'
 
 // Use journal durations and latch the host-to-phone start conversion once per turn so counters remain skew-free.
 export function useMobileStructuredAgentTurnTiming(

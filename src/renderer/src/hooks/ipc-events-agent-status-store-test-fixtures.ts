@@ -1,3 +1,7 @@
+import {
+  acceptedAgentStatuses,
+  type AcceptedAgentStatuses
+} from '@/store/slices/agent-status/accepted-agent-statuses'
 import { expect, vi } from 'vitest'
 import type {
   AgentStatusBatchTransaction,
@@ -20,6 +24,8 @@ export function expectWorktreeRouting(worktreeId: string): unknown {
 }
 
 export type AgentStatusSetData = {
+  paneSleep?: { ptyId: string; incarnationId?: string }
+  isReplay?: boolean
   paneKey: string
   tabId?: string
   worktreeId?: string
@@ -49,7 +55,7 @@ export type AgentStatusSetData = {
   stateStartedAt: number
   turnStartedAt?: number
 }
-export type StoreLike = Record<string, unknown>
+export type StoreLike = Record<string, unknown> & { agentStatusByPaneKey: AcceptedAgentStatuses }
 export type StoreSubscribeListener = (state: StoreLike, previousState: StoreLike) => void
 export type MobileFitEvent = {
   ptyId: string
@@ -71,23 +77,20 @@ export function applyMockAgentStatusUpdate(
   state: StoreLike,
   update: AgentStatusBatchUpdate
 ): boolean {
-  const statuses = state.agentStatusByPaneKey as Record<
-    string,
-    | ({ agentType?: string; state?: string; updatedAt?: number } & Record<string, unknown>)
-    | undefined
-  >
-  const existing = statuses[update.paneKey]
+  const statuses = state.agentStatusByPaneKey
+  const existing = statuses.get(update.paneKey)
   if (update.kind === 'programStatus') {
     if (!existing) {
       return false
     }
     const { programStatus: _previous, ...rest } = existing
-    state.agentStatusByPaneKey = {
+    state.agentStatusByPaneKey = acceptedAgentStatuses([
       ...statuses,
-      [update.paneKey]: update.programStatus
-        ? { ...rest, programStatus: update.programStatus }
-        : rest
-    }
+      [
+        update.paneKey,
+        update.programStatus ? { ...rest, programStatus: update.programStatus } : rest
+      ]
+    ])
     return true
   }
   const updatedAt = update.timing?.updatedAt
@@ -98,18 +101,23 @@ export function applyMockAgentStatusUpdate(
   ) {
     return false
   }
-  const next = { ...statuses }
+  const next = new Map(statuses)
   if (update.kind === 'providerSession') {
-    delete next[update.paneKey]
+    next.delete(update.paneKey)
   } else {
-    next[update.paneKey] = {
+    next.set(update.paneKey, {
+      paneKey: update.paneKey,
+      stateHistory: [],
+      stateStartedAt: updatedAt ?? Date.now(),
       ...existing,
       ...update.payload,
-      updatedAt,
-      providerSession: update.metadata?.providerSession
-    }
+      updatedAt: updatedAt ?? Date.now(),
+      providerSession: update.metadata?.providerSession,
+      programStatus: update.payload.programStatus ?? undefined
+    })
   }
-  state.agentStatusByPaneKey = next
+  state.agentStatusByPaneKey = acceptedAgentStatuses(next)
+
   return true
 }
 
@@ -119,9 +127,7 @@ export function installMockAgentStatusTransaction(state: StoreLike): void {
   ): Result => {
     const stagedState = {
       ...state,
-      agentStatusByPaneKey: {
-        ...(state.agentStatusByPaneKey as Record<string, unknown>)
-      }
+      agentStatusByPaneKey: state.agentStatusByPaneKey.capture()
     }
     const attemptedUpdates: AgentStatusBatchUpdate[] = []
     const effects: (() => void)[] = []
@@ -144,7 +150,7 @@ export function installMockAgentStatusTransaction(state: StoreLike): void {
   }
 }
 
-export function buildStoreState(overrides: StoreLike): StoreLike {
+export function buildStoreState(overrides: Record<string, unknown>): StoreLike {
   // Seed the hook’s full mount surface so suites override only readiness, tabs and agent status.
   const state: StoreLike = {
     setUpdateStatus: vi.fn(),
@@ -183,7 +189,7 @@ export function buildStoreState(overrides: StoreLike): StoreLike {
     ptyIdsByTabId: {},
     suppressedPtyExitIds: {},
     markAgentAttentionUnread: vi.fn(),
-    agentStatusByPaneKey: {},
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
     agentLaunchConfigByPaneKey: {},
     setAgentStatuses: vi.fn(() => []),
     recordAgentProviderSession: vi.fn(),

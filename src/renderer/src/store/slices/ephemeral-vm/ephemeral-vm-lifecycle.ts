@@ -1,12 +1,12 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
-import type { EphemeralVmRuntimeRecord } from '../../../../../shared/ephemeral-vm-runtimes'
+import type { EphemeralVmRuntimeRecord } from '../../../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import {
   getEphemeralVmHostState,
   type EphemeralVmHostLifecycle,
   type ExecutionHostVmState
 } from '../../../../../shared/execution-host/execution-host-health'
-import type { EphemeralVmFailure } from '../../../../../shared/ephemeral-vm-failure-copy'
+import type { EphemeralVmFailure } from '../../../../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-failure-copy'
 
 /** The lifecycle facts the UI reads; recipe results (pairing codes, keys) never enter the store. */
 export type EphemeralVmWorkspaceRuntime = Pick<

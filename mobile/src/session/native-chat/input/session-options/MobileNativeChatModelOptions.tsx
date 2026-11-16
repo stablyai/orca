@@ -8,7 +8,10 @@ import {
 } from '../../../../../../src/shared/native-chat/input/native-chat-session-options'
 import { nativeChatSessionOptionLabel } from '../../../../../../src/shared/native-chat/input/session-options/native-chat-session-option-labels'
 import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
-import { mobileSessionOptionSummaryValue } from './mobile-native-chat-session-option-labels'
+import {
+  mobileDeferredPermissionSummary,
+  mobileSessionOptionSummaryValue
+} from './mobile-native-chat-session-option-labels'
 import {
   descriptorRowElements,
   SessionOptionSummaryRow,
@@ -89,6 +92,7 @@ function OptionRows({
       <ListGroup>
         {descriptors.flatMap((descriptor) => {
           const isPermission = descriptor === permission
+          const deferred = isPermission ? mobileDeferredPermissionSummary(descriptor) : null
           const disabled = locked(descriptor) || !descriptor.settable
           if (showsSessionOptionAsSwitch(descriptor)) {
             return descriptorRowElements(
@@ -109,7 +113,9 @@ function OptionRows({
                   ? t('chat.sessionOptionPickers.permissions', 'Permissions')
                   : nativeChatSessionOptionLabel(descriptor, say)
               }
-              value={mobileSessionOptionSummaryValue(descriptor)}
+              value={deferred?.saved ?? mobileSessionOptionSummaryValue(descriptor)}
+              subtitle={deferred?.timing}
+              accessibleValue={deferred?.full}
               valueColor={isPermission ? permissionColor : undefined}
               disabled={disabled}
               onPress={

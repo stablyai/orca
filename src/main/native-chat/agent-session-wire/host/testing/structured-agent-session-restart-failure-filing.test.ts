@@ -1,7 +1,5 @@
-import {
-  withTestAgentSessionDatabase,
-  openTestAgentSessionRecordStore
-} from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { withTestAgentSessionDatabase } from '../../../../runtime/agent-session/records/agent-session-record-store-persistence.test-fixture'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import { afterEach, expect, it, vi } from 'vitest'
 import { AgentSessionRecoveryCapsule } from '../../../../runtime/agent-session/records/agent-session-recovery-capsule'

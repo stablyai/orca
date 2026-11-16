@@ -2,7 +2,7 @@ import {
   getTerminalQuickCommandBody,
   isTerminalAgentQuickCommand
 } from '../../../../../shared/terminal/quick-commands/terminal-quick-commands'
-import { isClipboardTextByteLengthOverLimit } from '../../../../../shared/clipboard-text'
+import { isClipboardTextByteLengthOverLimit } from '../../../../../shared/clipboard/clipboard-text'
 import type { TerminalQuickCommand } from '../../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 
 type RankedCommand = {

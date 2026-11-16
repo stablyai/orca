@@ -2,7 +2,7 @@ import { resolve as resolvePath } from 'node:path'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'
 import { projectGroupIdFromRepoId } from '../../shared/folder-workspaces/folder-workspace-worktree'
 import { isFloatingWorkspaceId } from '../../shared/floating-workspace-worktree'
-import { parseWorkspaceKey } from '../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
@@ -10,7 +10,7 @@ import {
   type ExecutionHostId
 } from '../../shared/execution-host'
 import { readOrchestrationCompatibilityEvidence } from '../../shared/orchestration/orchestration-compatibility-evidence'
-import type { RuntimeWorktreeListResult } from '../../shared/runtime-worktree-contracts'
+import type { RuntimeWorktreeListResult } from '../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { RuntimeClient } from '../runtime/client'
 import { RuntimeClientError } from '../runtime/connection/types'
 import { refuseUnresolvedOwner, type CatalogRow } from './workspace-catalog-row'

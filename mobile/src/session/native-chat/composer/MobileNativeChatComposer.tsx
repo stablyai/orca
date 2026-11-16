@@ -46,6 +46,7 @@ import { MobileNativeChatDictationLeading } from './dictation/MobileNativeChatDi
 import type { MobileNativeChatStructuredComposer } from './commands/mobile-native-chat-structured-composer'
 import { useMobileNativeChatComposerGoalMode } from './commands/use-mobile-native-chat-composer-goal-mode'
 import { MobileNativeChatComposerPlanChip } from './commands/MobileNativeChatComposerPlanChip'
+import { MobileNativeChatMcpTray } from '../mcp/MobileNativeChatMcpTray'
 
 const NO_FILE_PATHS: string[] = []
 const NO_ATTACHMENTS: PendingNativeChatImage[] = []
@@ -288,6 +289,7 @@ export function MobileNativeChatComposer({
         nestedScrollEnabled={editSession ? true : undefined}
       />
       <View style={styles.composerInset} testID="native-chat-composer-inset">
+        {editSession ? null : <MobileNativeChatMcpTray panel={structured?.mcpPanel} />}
         {goal.strip}
         <View {...contextRing.barProps} style={styles.bar} testID="native-chat-composer">
           <MobileNativeChatComposerAttachments

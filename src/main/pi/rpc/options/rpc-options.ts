@@ -9,7 +9,7 @@ import {
 import { withLiveCatalogListing } from '../../../native-chat/agent-model-catalog/agent-model-catalog-entry'
 import { z } from 'zod'
 import { PI_THINKING_LEVELS } from '../../../../shared/agent-session/options/reconciliation/structured-agent-session-effective-effort'
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import type { AgentSessionCommandsResult } from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/protocol/agent-session-options-result'
 import { piRpcStateSchema } from '../rpc-protocol'

@@ -21,7 +21,7 @@ import {
   preserveDeleteSiblingPosition
 } from './worktree-context-menu-policy'
 import type { useAppStore } from '@/store/index'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
 
 function resolveChildWorktreeRepository(repos: readonly Repo[], worktree: Worktree): Repo | null {

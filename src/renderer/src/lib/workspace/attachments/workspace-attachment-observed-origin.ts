@@ -1,6 +1,6 @@
 import type { AppState } from '@/store/types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
-import type { NotificationWorkspaceOwner } from '../../../../../shared/notification-source'
+import type { NotificationWorkspaceOwner } from '../../../../../shared/notifications/notification-source'
 import {
   resolveNotificationTabOwner,
   resolveTerminalNotificationOwner
@@ -94,7 +94,7 @@ export function getWorkspaceAttachmentTerminalOrigin(
   if (!context.ptyId || context.ptyId !== ptyId) {
     return undefined
   }
-  const entry = state.agentStatusByPaneKey?.[context.paneKey]
+  const entry = state.agentStatusByPaneKey.get(context.paneKey)
   const matchingEntry =
     (entry?.worktreeId && entry.worktreeId !== worktreeId) ||
     (entry?.terminalHandle && entry.terminalHandle !== ptyId)

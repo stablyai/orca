@@ -1,6 +1,6 @@
 import type { PostHog } from 'posthog-node'
 import { vi } from 'vitest'
-import type { CommonProps } from '../../shared/telemetry-events'
+import type { CommonProps } from '../../shared/telemetry/telemetry-event-classification'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { Store } from '../persistence/loading-store/store'
 import {

@@ -1,4 +1,4 @@
-import { getRepoHostIdentityForParts } from '../../../../shared/repo-host-identity'
+import { getRepoHostIdentityForParts } from '../../../../shared/repository/repo-host-identity'
 import { createRepoRowExecutionHostLookup } from '../../../../shared/execution-host/worktree-execution-host-resolution'
 import { resolveWorktreeHostRouting } from '../catalog/worktree-launch-host-repo'
 import { resolveHostStructuredAgentLaunchEnvironment } from '../../agent-session/launch/structured-agent-launch-support'
@@ -6,7 +6,7 @@ import { getStructuredAgentSessionHost } from '../../../native-chat/agent-sessio
 import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sources'
 import { RuntimeChatWorkerEvents } from '../../orchestration/workers/turn-stops/chat-worker-runtime-events'
 
-import type { RuntimeWorktreePsResult } from '../../../../shared/runtime-worktree-contracts'
+import type { RuntimeWorktreePsResult } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { ResolvedWorktreeSnapshot } from '../catalog/runtime-resolved-worktree-cache'
 import { buildRuntimeWorktreePsSummaries } from './runtime-worktree-ps-summaries'
 import {
@@ -21,7 +21,7 @@ import { applyRuntimeWorktreePsUnverifiableTerminals } from './runtime-worktree-
 import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
 import { attachRuntimeWorktreeAgentRowWaits } from './runtime-worktree-agent-row-waits'
 import { compareWorktreePs } from './runtime-worktree-status-projection'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { enrichMissingRepoGitRemoteIdentities } from '../../../workspaces/catalog/repo-git-remote-identity-enrichment'
 import { ensureStructuredAgentSessionHost as installStructuredAgentSessionHost } from '../../agent-session/structured-agent-session-runtime'
 import {

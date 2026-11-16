@@ -1,9 +1,8 @@
+import { feedReply, readDomain } from './sidebar-inputs-feed-domain-read'
 import { randomUUID } from 'node:crypto'
 import {
   SIDEBAR_INPUTS_PAGE_MAX_BYTES,
   SIDEBAR_INPUTS_PAGE_MIN_BYTES,
-  SIDEBAR_INPUTS_SCHEMA_VERSION,
-  SIDEBAR_INPUTS_SEMANTICS_VERSION,
   type SidebarInputsChangedEvent,
   type SidebarInputsReadParams,
   type SidebarInputsReadResult
@@ -28,6 +27,8 @@ export type SidebarInputsFeedDomain = {
   watch: (changed: (change?: SidebarInputsFeedChange) => void) => () => void
   /** Settles once `read` has a first snapshot; only a phone read waits on it. */
   ready?: () => Promise<void>
+  /** Shared preparation owns the complete synchronous flush that consumes its inputs. */
+  prepare?: (consume: () => void) => Promise<void>
 }
 
 // A change after a quiet spell publishes at once; the rest of its burst at most this often.
@@ -81,26 +82,6 @@ export class SidebarInputsFeed {
   }
 }
 
-function feedReply(
-  generation: string,
-  kind: SidebarInputsReadResult['kind'],
-  revision: number,
-  from: number | null,
-  domains: SidebarInputsReadResult['domains'],
-  next: string | null
-): SidebarInputsReadResult {
-  return {
-    generation,
-    revision,
-    schemaVersion: SIDEBAR_INPUTS_SCHEMA_VERSION,
-    semanticsVersion: SIDEBAR_INPUTS_SEMANTICS_VERSION,
-    kind,
-    from,
-    domains,
-    next
-  }
-}
-
 class FeedSession {
   private readonly published = new Map<string, Map<string, FeedEntity>>()
   private readonly dirty = new Set<string>()
@@ -111,6 +92,7 @@ class FeedSession {
   private urgentQueued = false
   private lastFlushAt = Number.NEGATIVE_INFINITY
   private disposed = false
+  private flushing: Promise<void> | null = null
 
   constructor(
     private readonly domains: readonly SidebarInputsFeedDomain[],
@@ -153,7 +135,10 @@ class FeedSession {
       return reset()
     }
     // A failed or not-yet-ready read left its domain dirty; this retries it.
-    this.flush()
+    await this.flush()
+    if (this.disposed) {
+      return reset()
+    }
     const budget = Math.min(
       SIDEBAR_INPUTS_PAGE_MAX_BYTES,
       Math.max(SIDEBAR_INPUTS_PAGE_MIN_BYTES, params.maxBytes)
@@ -181,7 +166,7 @@ class FeedSession {
         this.urgentQueued = true
         queueMicrotask(() => {
           this.urgentQueued = false
-          this.flush()
+          this.scheduleFlush()
         })
       }
       return
@@ -189,14 +174,65 @@ class FeedSession {
     this.timer ??= setTimeout(
       () => {
         this.timer = null
-        this.flush()
+        this.scheduleFlush()
       },
       Math.max(0, this.lastFlushAt + FLUSH_COALESCE_MS - performance.now())
     )
   }
 
+  private scheduleFlush(): void {
+    void this.flush().catch((error: unknown) => {
+      console.warn('[sidebar-inputs-feed] could not prepare inputs', error)
+    })
+  }
+
+  private flush(): Promise<void> {
+    if (this.flushing) {
+      return this.flushing
+    }
+    const flush = Promise.resolve().then(async () => {
+      if (this.disposed) {
+        return
+      }
+      const prepares = [
+        ...new Set(
+          this.domains
+            .filter((domain) => this.dirty.has(domain.name))
+            .flatMap((domain) => (domain.prepare ? [domain.prepare] : []))
+        )
+      ]
+      const prepare = prepares[0]
+      if (prepares.length > 1) {
+        throw new Error('sidebar input preparation groups cannot overlap')
+      }
+      if (prepare) {
+        try {
+          await prepare(() => this.commit())
+        } catch (error) {
+          const dependent = this.domains.filter(
+            (domain) => domain.prepare === prepare && this.dirty.has(domain.name)
+          )
+          if (dependent.some((domain) => !this.published.has(domain.name))) {
+            throw error
+          }
+          console.warn('[sidebar-inputs-feed] could not prepare inputs', error)
+          this.commit(prepare)
+        }
+      } else {
+        this.commit()
+      }
+    })
+    const owned = flush.finally(() => {
+      if (this.flushing === owned) {
+        this.flushing = null
+      }
+    })
+    this.flushing = owned
+    return owned
+  }
+
   /** Publishes every dirty domain's cached snapshot as one revision; reads nothing asynchronous. */
-  private flush(): void {
+  private commit(unavailable?: SidebarInputsFeedDomain['prepare']): void {
     if (this.timer) {
       clearTimeout(this.timer)
       this.timer = null
@@ -205,8 +241,12 @@ class FeedSession {
       return
     }
     this.lastFlushAt = performance.now()
-    const due = this.domains.filter((domain) => this.dirty.has(domain.name))
-    this.dirty.clear()
+    const due = this.domains.filter(
+      (domain) => this.dirty.has(domain.name) && (!unavailable || domain.prepare !== unavailable)
+    )
+    for (const domain of due) {
+      this.dirty.delete(domain.name)
+    }
     const changes: FeedRevisionChanges = new Map()
     for (const domain of due) {
       const read = readDomain(domain)
@@ -295,28 +335,5 @@ class FeedSession {
       )
     }
     return pages[0]
-  }
-}
-
-/** Each entity's JSON; null when the read failed or the producer has no snapshot yet. */
-function readDomain(domain: SidebarInputsFeedDomain): Map<string, string> | null {
-  try {
-    const snapshot = domain.read()
-    if (!snapshot) {
-      return null
-    }
-    const entities = new Map<string, string>()
-    for (const [key, value] of Object.entries(snapshot)) {
-      // What JSON cannot hold (undefined, a function) is absent, as it would be on the wire.
-      const json: string | undefined = JSON.stringify(value)
-      if (json !== undefined) {
-        entities.set(key, json)
-      }
-    }
-    return entities
-  } catch (error) {
-    // The domain keeps what it last published; the next flush or phone read tries again.
-    console.warn(`[sidebar-inputs-feed] could not read ${domain.name}`, error)
-    return null
   }
 }

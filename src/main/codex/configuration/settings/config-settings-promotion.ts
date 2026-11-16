@@ -4,7 +4,7 @@ import { observeAgentStateFile } from '../codex-path-observation'
 import { resolvePromotionWriteTarget } from './config-settings-promotion-write-target'
 import { writeFileAtomically } from '../../../filesystem/atomic-file-publication'
 import { observeFilePublication } from '../../../filesystem/file-content-observation'
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../homes/codex-home-paths'
 import { upsertPromotedSettingsInContent } from './codex-config-settings-upsert'
 import {

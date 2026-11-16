@@ -1,7 +1,7 @@
 import { getFolderWorkspaceWorktree } from '../../folder-workspaces/folder-workspace-worktree'
 import { getWorktreeHostIdentity } from '../../worktree/host-qualified-identity'
 import type { Worktree } from '../../worktree/types'
-import type { OccurrenceSectionPath } from '../../worktree-occurrence-plan'
+import type { OccurrenceSectionPath } from '../lineage/worktree-occurrence-plan'
 import {
   compareFolderWorkspacesForDisplay,
   type RenderableFolderWorkspace
@@ -16,6 +16,38 @@ export function getFolderLaneSectionKey(projectGroupId: string): string {
 
 export function isFolderLaneSectionKey(key: string): boolean {
   return key.startsWith(FOLDER_LANE_SECTION_PREFIX)
+}
+
+/** Each folder-bound row's grouping root: its top listed ancestor below the folder. Hidden rows
+ * (archived, filtered) pass through, so a row under one groups by its own repo, as it would without
+ * the folder. The paired phone binds its rows the same way. */
+export function getFolderBoundGroupingRoots<Row>(args: {
+  folderIdentities: Iterable<string>
+  childrenByParentIdentity: ReadonlyMap<string, readonly Row[]>
+  identityOf: (row: Row) => string
+  listed: ReadonlySet<Row>
+  bound: ReadonlySet<Row>
+}): Map<string, Row> {
+  const roots = new Map<string, Row>()
+  const visited = new Set<string>()
+  const pending: { row: Row; top?: Row }[] = [...args.folderIdentities].flatMap((folder) =>
+    (args.childrenByParentIdentity.get(folder) ?? []).map((row) => ({ row }))
+  )
+  for (let next = pending.pop(); next; next = pending.pop()) {
+    const identity = args.identityOf(next.row)
+    if (visited.has(identity)) {
+      continue
+    }
+    visited.add(identity)
+    const top = next.top ?? (args.listed.has(next.row) ? next.row : undefined)
+    if (top && args.bound.has(next.row)) {
+      roots.set(identity, top)
+    }
+    for (const child of args.childrenByParentIdentity.get(identity) ?? []) {
+      pending.push({ row: child, top })
+    }
+  }
+  return roots
 }
 
 /** Folder workspaces as occurrence rows: each keeps its own lane and order, and rows nested under one
@@ -66,26 +98,15 @@ export function getSidebarFolderOccurrences(renderable: readonly RenderableFolde
         bound.add(row)
         sectionItemsByGroupId.get(groupId)?.push(row)
       }
-      // A bound row groups by its top listed ancestor below the folder; hidden rows (archived, filtered)
-      // pass through, so a row under one groups by its own repo, as it would without the folder.
-      const listed = new Set(natural)
-      const visited = new Set<string>()
-      const pending: { row: Worktree; top?: Worktree }[] = [...pairByIdentity.keys()].flatMap(
-        (folder) => (childrenByParentIdentity.get(folder) ?? []).map((row) => ({ row }))
-      )
-      for (let next = pending.pop(); next; next = pending.pop()) {
-        const identity = getWorktreeHostIdentity(next.row)
-        if (visited.has(identity)) {
-          continue
-        }
-        visited.add(identity)
-        const top = next.top ?? (listed.has(next.row) ? next.row : undefined)
-        if (top && bound.has(next.row)) {
-          groupingRootByIdentity.set(identity, top)
-        }
-        for (const child of childrenByParentIdentity.get(identity) ?? []) {
-          pending.push({ row: child, top })
-        }
+      const roots = getFolderBoundGroupingRoots({
+        folderIdentities: pairByIdentity.keys(),
+        childrenByParentIdentity,
+        identityOf: getWorktreeHostIdentity,
+        listed: new Set(natural),
+        bound
+      })
+      for (const [identity, top] of roots) {
+        groupingRootByIdentity.set(identity, top)
       }
       return { bound, sectionItemsByGroupId, groupingRootByIdentity }
     }

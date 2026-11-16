@@ -1,4 +1,4 @@
-import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
 import { withObservedProviderExit } from '../../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 import type {
   AgentSessionStartEndings,

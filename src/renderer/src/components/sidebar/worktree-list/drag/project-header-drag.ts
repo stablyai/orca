@@ -22,7 +22,7 @@ import { createProjectHeaderDragSession } from './project-header-drag-start'
 import { getWorktreeSidebarDragAutoscroll } from './worktree-sidebar-drag-autoscroll'
 import { hasPointerBeenReleased } from './header-drag-pointer-release'
 import { swallowNextClickOnDragHandle } from './header-drag-click-swallow'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 
 // Virtualized rows can unmount during drag; pointer events and cached header geometry avoid stale drop targets.
 

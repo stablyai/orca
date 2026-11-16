@@ -1,4 +1,4 @@
-import { sharedPromiseSettlementWaiters } from '../../../../shared/promise-settlement-waiters'
+import { sharedPromiseSettlementWaiters } from '../../../../shared/concurrency/promise-settlement-waiters'
 import { useAppStore } from '@/store'
 import type { Tab } from '../../../../shared/tab-types'
 import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
@@ -55,8 +55,9 @@ export function admitStructuredAgentSession(
     ).every((value, index) => value === captured[index])
   const localBusy = (): boolean | undefined => {
     const state = useAppStore.getState()
-    const status =
-      state.agentStatusByPaneKey[structuredAgentSessionPaneKey(tab.id, tab.entityId)]?.state
+    const status = state.agentStatusByPaneKey.get(
+      structuredAgentSessionPaneKey(tab.id, tab.entityId)
+    )?.state
     const launch = getStructuredAgentSessionLaunchLifecycle(workspaceId, tab.entityId)
     const feed = target && getStructuredAgentSessionStatusFeed(target)
     const summary = feed?.getSnapshot().get(tab.entityId)

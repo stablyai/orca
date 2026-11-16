@@ -25,7 +25,7 @@ describe('orchestration mailbox filtered waiters', () => {
 
   it('drains persisted Run pages before installing a filtered waiter', async () => {
     const db = createDatabase('orca-mailbox-filtered-run-backlog-')
-    const harness = createRuntime(db)
+    const harness = await createRuntime(db)
     const run = createBoundRun(db, 'Filtered Run backlog')
     for (let index = 0; index < 50; index += 1) {
       insertDirectRunMessage(db, run.id, `Status ${index}`)
@@ -54,7 +54,7 @@ describe('orchestration mailbox filtered waiters', () => {
 
   it('wakes a filtered waiter when reconciliation moves its type on a later page', async () => {
     const db = createDatabase('orca-mailbox-filtered-reconciliation-wake-')
-    const harness = createRuntime(db)
+    const harness = await createRuntime(db)
     const run = createBoundRun(db, 'Filtered reconciliation wake')
     const waiting = checkBoundMailbox(harness.runtime, { wait: true, types: 'question' })
     const internals = harness.runtime as unknown as {
@@ -92,7 +92,7 @@ describe('orchestration mailbox filtered waiters', () => {
 
   it('drains persisted Dispatch pages before installing a filtered waiter', async () => {
     const db = createDatabase('orca-mailbox-filtered-dispatch-backlog-')
-    const harness = createRuntime(db)
+    const harness = await createRuntime(db)
     const run = db.createRun({
       objective: 'Filtered Dispatch backlog',
       coordinatorHandle: 'term_coordinator',

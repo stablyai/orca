@@ -11,7 +11,7 @@ import { CrewChanges } from '../../orchestration/crew/crew-changes'
 import { OrcaRuntimeWithOrchestrationDatabaseBinding } from './orchestration-database-binding'
 import { subscribeWorkerApprovals } from '../../orchestration/crew/worker-approval-stream'
 import { readCrewApprovals } from '../../orchestration/crew/crew-query'
-import { parseOrcaSessionAddress } from '../../../../shared/orca-session-address'
+import { parseOrcaSessionAddress } from '../../../../shared/agent-session/identity/orca-session-address'
 import type { OrchestrationWorkerApprovalsFrame } from '../../../../shared/orchestration/orchestration-crew'
 
 export abstract class OrcaRuntimeWithCrewOperations extends OrcaRuntimeWithOrchestrationDatabaseBinding {

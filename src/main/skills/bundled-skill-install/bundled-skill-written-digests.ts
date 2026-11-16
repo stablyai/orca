@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import type { BundledSkillObserved } from '../../../shared/bundled-skill-plan'
+import type { BundledSkillObserved } from '../../../shared/skills/bundled/bundled-skill-plan'
 import type { BundledSkillFilesystem } from './bundled-skill-filesystem'
 
 const SHA256_HEX = /^[0-9a-f]{64}$/u

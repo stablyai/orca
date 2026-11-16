@@ -1,4 +1,3 @@
-import '../native-chat-reasoning-order.spec'
 import { describe, expect, it } from 'vitest'
 import type {
   AgentJournalItemBody,

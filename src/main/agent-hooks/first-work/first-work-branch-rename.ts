@@ -1,8 +1,8 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { Repo } from '../../../shared/repo-types'
-import { isFolderRepo } from '../../../shared/repo-kind'
+import type { Repo } from '../../../shared/repository/repo-types'
+import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import { getRepoIdFromWorktreeId, splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import {
   humanizeBranchSlug,
