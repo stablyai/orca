@@ -1,6 +1,6 @@
 import { removeRetiredBrowserExtensionProfileStorage } from './profile-storage/browser-extension-retired-profile-storage'
 import { app, webContents } from 'electron'
-import { isBrowserExtensionNativePage } from './api-runtime/browser-extension-native-page'
+import { isHiddenHelperContents } from '../hidden-helper-window'
 import { BROWSER_EXTENSIONS_CHANGED_CHANNEL } from '../../../shared/browser/extensions/browser-extension-types'
 import {
   installBrowserExtensionApiHost,
@@ -11,10 +11,7 @@ import {
   setBrowserExtensionSupportEnabled
 } from './browser-extension-support'
 import { browserSessionRegistry } from '../sessions/profiles/browser-session-registry'
-import {
-  attachBrowserExtensionsToProfileSession,
-  detachBrowserExtensionsFromAllProfileSessions
-} from './profile-sessions/browser-extension-session-loader'
+import { detachBrowserExtensionsFromAllProfileSessions } from './profile-sessions/browser-extension-session-loader'
 import { notifyBrowserExtensionActionsChanged } from './actions/browser-extension-action-registry'
 import { registerBrowserExtensionNamespaces } from './register-browser-extension-namespaces'
 import { observeBrowserExtensionTabLifecycle } from './tabs-and-windows/browser-extension-tab-lifecycle'
@@ -57,7 +54,7 @@ export function initializeBrowserExtensionSupport(options: {
 
 /**
  * The extensions setting changed while Orca runs. Off unloads every profile's extensions and
- * keeps their data; on loads them into every open profile, as a launch would.
+ * keeps their data; on loads them into each profile that has a page open.
  */
 export function switchBrowserExtensionSupport(enabled: boolean): Promise<void> {
   // Why chained: an unload still in flight must finish before a load reuses the same sessions.
@@ -69,14 +66,15 @@ export function switchBrowserExtensionSupport(enabled: boolean): Promise<void> {
       setBrowserExtensionSupportEnabled(enabled)
       if (enabled) {
         installBrowserExtensionSupport()
-        for (const profile of browserSessionRegistry.listProfiles()) {
-          attachBrowserExtensionsToProfileSession(
-            profile,
-            browserSessionRegistry.getEnabledExtensionIds(profile.id)
-          )
+        // Why: pages already open, server pages included, were created before extensions ran.
+        for (const contents of webContents.getAllWebContents()) {
+          const profileId = browserSessionRegistry.profileIdForSession(contents.session)
+          // A hidden helper, such as a cookie save's CDP target, is not a page.
+          if (profileId && !isHiddenHelperContents(contents)) {
+            browserSessionRegistry.attachExtensions(profileId)
+          }
+          observeExtensionContents(contents)
         }
-        // Why: tabs already open were created before their session ran extensions.
-        webContents.getAllWebContents().forEach(observeExtensionContents)
       } else {
         await detachBrowserExtensionsFromAllProfileSessions()
       }
@@ -97,7 +95,9 @@ function installBrowserExtensionSupport(): void {
     return
   }
   initialized = true
-  setSavedBrowserTabsSource(savedBrowserTabs)
+  setSavedBrowserTabsSource(savedBrowserTabs, (profileId) =>
+    browserSessionRegistry.resolveKnownPartition(profileId)
+  )
   registerBrowserExtensionNamespaces()
   installBrowserExtensionApiHost()
   installBrowserExtensionSessionServices()
@@ -116,12 +116,12 @@ function installBrowserExtensionSupport(): void {
 
 const observedContents = new WeakSet<Electron.WebContents>()
 
-/** Tabs (webview guests) and extension popouts in a session that runs extensions. */
+/** Tabs (webview guests and serve's offscreen pages) and extension popouts in a session that runs extensions. */
 function observeExtensionContents(contents: Electron.WebContents): void {
   const type = contents.getType()
   if (
-    (type !== 'webview' && type !== 'window') ||
-    isBrowserExtensionNativePage(contents) ||
+    (type !== 'webview' && type !== 'window' && type !== 'offscreen') ||
+    isHiddenHelperContents(contents) ||
     observedContents.has(contents) ||
     !getBrowserExtensionProfileIdForSession(contents.session)
   ) {

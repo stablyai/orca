@@ -2,7 +2,7 @@ import { materializeOmpFreshConfig } from '../../../shared/agent-launch/startup/
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 import { createHash } from 'node:crypto'
 import {
   ORCA_PI_AGENT_STATUS_EXTENSION_FILE,
@@ -15,7 +15,7 @@ import {
 import { ORCA_PI_EXTENSION_FILE, getPiTitlebarExtensionSource } from './titlebar-extension-source'
 import { safeRemoveOverlay } from '../../pty/scrollback/overlay-mirror'
 import { migrateLegacyOmpOverlayState } from './legacy-omp-overlay-migration'
-import type { PiAgentKind } from '../../../shared/pi-agent-kind'
+import type { PiAgentKind } from '../../../shared/agent-launch/catalog/pi-agent-kind'
 
 const PI_AGENT_SUBDIR = 'agent'
 const ORCA_MANAGED_EXTENSION_MARKER = '@orca-managed-pi-extension'

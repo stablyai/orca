@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { openEnum } from '../../zod-salvage'
+import { openEnum } from '../../validation/zod-salvage'
 
 /** The reply's shape; an added optional field keeps it. */
 export const SIDEBAR_INPUTS_SCHEMA_VERSION = 1

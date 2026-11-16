@@ -1,4 +1,4 @@
-import type { BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
+import type { BrowserWorkspace } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import type { TabGroup } from '../../../../../shared/tab-types'
 import '../../../../../shared/constants'
 import { ORCA_BROWSER_PARTITION } from '../../../../../shared/browser/browser-session-partition'

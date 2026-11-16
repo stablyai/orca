@@ -1,5 +1,6 @@
+import { hasPendingBrowserPageAttach } from '../../guest-lifecycle/browser-page-memory'
 import type { Session, WebContents } from 'electron'
-import { normalizeBrowserNavigationUrl } from '../../../../shared/browser-url'
+import { normalizeBrowserNavigationUrl } from '../../../../shared/browser/navigation/browser-url'
 import '../../../../shared/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/browser/browser-blank-page'
 import {
@@ -23,7 +24,10 @@ export function isValidBlankRouteGuest(guest: WebContents): boolean {
 
 export function isBlankRouteGuest(guest: WebContents): boolean {
   try {
-    return normalizeBrowserNavigationUrl(guest.getURL()) === ORCA_BROWSER_BLANK_URL
+    return (
+      normalizeBrowserNavigationUrl(guest.getURL()) === ORCA_BROWSER_BLANK_URL ||
+      (guest.getURL() === '' && hasPendingBrowserPageAttach(guest))
+    )
   } catch {
     return false
   }

@@ -3,7 +3,7 @@ import type {
   BrowserPermissionDeniedEvent,
   BrowserPopupEvent
 } from '../../../../../shared/browser/guest-lifecycle/browser-guest-events'
-import type { BrowserLoadError } from '../../../../../shared/browser-workspace-types'
+import type { BrowserLoadError } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import { isChromiumCertificateErrorCode } from '../../../../../shared/browser/certificate-trust/browser-certificate-errors'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
@@ -13,7 +13,7 @@ import {
   formatBrowserLoadFailureText,
   type BrowserLoadFailureCopyId,
   type BrowserLoadFailureDescription
-} from '../../../../../shared/browser-load-failure'
+} from '../../../../../shared/browser/navigation/browser-load-failure'
 
 type BrowserLoadErrorLike = BrowserLoadError | null
 

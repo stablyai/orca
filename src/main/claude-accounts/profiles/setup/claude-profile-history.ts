@@ -9,7 +9,7 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 import '../../../filesystem/atomic-file-publication'
-import { renameFileWithWindowsRetry } from '../../../../shared/windows-retry-file-operations'
+import { renameFileWithWindowsRetry } from '../../../../shared/file-write/windows-retry-file-operations'
 import { resolveClaudeDefaultHome } from '../claude-profile-paths'
 import {
   ClaudeProfileSurfaceError,

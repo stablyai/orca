@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
-import { DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY } from '../../../shared/delegated-mobile-device-contract'
-import { RUNTIME_PROTOCOL_VERSION } from '../../../shared/protocol-version'
+import { DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY } from '../../../shared/remote-runtime/pairing/delegated-mobile-device-contract'
+import { RUNTIME_PROTOCOL_VERSION } from '../../../shared/remote-runtime/protocol/protocol-version'
 import {
   runtimeEnvironmentStatusFromSnapshot,
   type RuntimeHostStatusSnapshot
 } from '../../../shared/remote-runtime/host-status/runtime-host-status'
-import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
-import type { RuntimeStatus } from '../../../shared/runtime-session-contracts'
-import type { SshConnectionState } from '../../../shared/ssh-types'
+import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { RuntimeStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { SshConnectionState } from '../../../shared/remote-runtime/ssh/ssh-types'
 
 import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
 import { MobileRelayHostCatalog } from './mobile-relay-host-catalog'
@@ -162,9 +162,7 @@ describe('mobile relay host catalog', () => {
     })
     await expect(next).resolves.toMatchObject({ worktrees: [{ worktreeId: 'new-server-row' }] })
     answerOldFetch(psReply([{ worktreeId: 'old-server-row', hostId: 'local' }]))
-    await expect(rows).resolves.toEqual({
-      worktrees: [{ worktreeId: 'new-server-row', hostId: 'runtime:env' }]
-    })
+    await expect(rows).resolves.toEqual({ worktrees: null })
     await expect(hostCatalog.worktrees('runtime:env')).resolves.toMatchObject({
       worktrees: [{ worktreeId: 'new-server-row' }]
     })
@@ -184,7 +182,7 @@ describe('mobile relay host catalog', () => {
     state.retire('env')
     answerFetch(psReply([{ worktreeId: 'w', hostId: 'local' }]))
     await expect(rows).resolves.toEqual({ worktrees: null })
-    expect(hostCatalog.list().hosts).toEqual([])
+    expect((await hostCatalog.list()).hosts).toEqual([])
     state.environments = [{ ...removed[0]!, snapshot: snapshot('env', 'unreachable') }]
     await expect(hostCatalog.worktrees('runtime:env')).resolves.toEqual({ worktrees: null })
   })

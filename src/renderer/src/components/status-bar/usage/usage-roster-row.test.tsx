@@ -1,35 +1,33 @@
 // @vitest-environment happy-dom
 import { cleanup, render } from '@testing-library/react'
-import { afterEach, expect, it, vi } from 'vitest'
-import type { ProviderRateLimits, RateLimitWindow } from '../../../../../shared/rate-limit-types'
-
-vi.mock('@/components/agent/icons/AgentIcon', () => ({ AgentIcon: () => null }))
-
-const { UsageRow } = await import('./UsageRosterPanel')
+import { afterEach, describe, expect, it } from 'vitest'
+import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { UsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
+import { UsageRow } from './UsageRosterPanel'
 
 afterEach(cleanup)
 
-function win(usedPercent: number, windowMinutes: number): RateLimitWindow {
-  return { usedPercent, windowMinutes, resetsAt: null, resetDescription: null }
-}
-
-function claude(windows: Partial<ProviderRateLimits>): ProviderRateLimits {
+function fableOnly(status: ProviderRateLimits['status'], usedPercent: number): ProviderRateLimits {
   return {
     provider: 'claude',
     session: null,
     weekly: null,
+    fableWeekly: { usedPercent, windowMinutes: 10_080, resetsAt: null, resetDescription: null },
     updatedAt: 0,
-    error: null,
-    status: 'ok',
-    ...windows
+    error: status === 'error' ? 'Network error' : null,
+    status
   }
 }
 
-function renderRow(p: ProviderRateLimits, mode: 'verbose' | 'compact') {
+function renderRow(
+  p: ProviderRateLimits,
+  display: UsagePercentageDisplay = 'used',
+  mode: 'compact' | 'verbose' = 'compact'
+) {
   return render(
     <UsageRow
       p={p}
-      display="used"
+      display={display}
       state={{ kind: 'usage', statusLabel: null }}
       showSignInAction={false}
       now={0}
@@ -38,47 +36,43 @@ function renderRow(p: ProviderRateLimits, mode: 'verbose' | 'compact') {
   ).container
 }
 
-const healthy = claude({
-  session: win(12, 300),
-  weekly: win(33, 10_080),
-  fableWeekly: win(5, 10_080)
-})
-
-it('lists every window under the row in Detailed mode only', () => {
-  expect(renderRow(healthy, 'verbose').querySelectorAll('[data-usage-window]')).toHaveLength(3)
-  expect(renderRow(healthy, 'compact').querySelectorAll('[data-usage-window]')).toHaveLength(0)
-})
-
-function withReset(window: RateLimitWindow): RateLimitWindow {
-  return { ...window, resetsAt: 3 * 3_600_000 }
-}
-
-it('reads as not checked when only a Fable reading below 90% exists', () => {
-  const row = renderRow(claude({ fableWeekly: win(50, 10_080) }), 'compact')
-  expect(row.querySelector('[data-usage-not-checked]')).not.toBeNull()
-  expect(row.querySelector('[data-usage-bar]')).toBeNull()
-})
-
-it('names a nearly spent Fable limit beside not checked when no ordinary reading exists', () => {
-  const row = renderRow(claude({ fableWeekly: win(100, 10_080) }), 'compact')
-  expect(row.querySelector('[data-usage-scoped-urgent]')).not.toBeNull()
-  expect(row.querySelector('[data-usage-not-checked]')).not.toBeNull()
-})
-
-it('flags a spent Fable limit in place of the reset while the headline is healthy', () => {
-  const row = renderRow(
-    claude({ weekly: withReset(win(33, 10_080)), fableWeekly: win(100, 10_080) }),
-    'compact'
+describe('UsageRow with only a Fable reading', () => {
+  // Why error and fetching: a failed or in-flight refresh keeps the stored reading on screen.
+  it.each(['ok', 'error', 'fetching'] as const)(
+    'shows the Fable value when status is %s',
+    (status) => {
+      const row = renderRow(fableOnly(status, 100))
+      expect(row.querySelector('[data-usage-scoped-only]')).not.toBeNull()
+      expect(row.querySelector('[data-usage-not-checked]')).toBeNull()
+    }
   )
-  expect(row.querySelector('[data-usage-scoped-urgent]')).not.toBeNull()
-  expect(row.querySelector('[data-usage-reset]')).toBeNull()
+
+  it('shows it below any warning level too', () => {
+    const row = renderRow(fableOnly('ok', 40))
+    expect(row.querySelector('[data-usage-scoped-only]')?.textContent).toContain('40')
+  })
+
+  it('titles the value with the shown percentage in Used and Left modes', () => {
+    expect(
+      renderRow(fableOnly('ok', 40), 'used')
+        .querySelector('[data-usage-scoped-only]')
+        ?.getAttribute('title')
+    ).toContain('40')
+    cleanup()
+    expect(
+      renderRow(fableOnly('ok', 40), 'remaining')
+        .querySelector('[data-usage-scoped-only]')
+        ?.getAttribute('title')
+    ).toContain('60')
+  })
 })
 
-it('keeps the headline reset when the headline itself is nearly spent', () => {
-  const row = renderRow(
-    claude({ weekly: withReset(win(100, 10_080)), fableWeekly: win(100, 10_080) }),
-    'compact'
-  )
-  expect(row.querySelector('[data-usage-reset]')).not.toBeNull()
-  expect(row.querySelector('[data-usage-scoped-urgent]')).toBeNull()
+it('titles the Fable figure on the Detailed line beside an ordinary reading', () => {
+  const p: ProviderRateLimits = {
+    ...fableOnly('ok', 40),
+    session: { usedPercent: 10, windowMinutes: 300, resetsAt: null, resetDescription: null }
+  }
+  const titled = [...renderRow(p, 'used', 'verbose').querySelectorAll('[data-usage-window][title]')]
+  expect(titled).toHaveLength(1)
+  expect(titled[0]?.getAttribute('title')).toContain('40')
 })

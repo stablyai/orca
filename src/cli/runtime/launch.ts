@@ -4,35 +4,41 @@ import type { ProcessSpec } from '@orca/process-host/process-spec'
 import {
   SERVE_UPDATE_HANDOFF_PATH_ENV,
   getServeUpdateHandoffPath
-} from '../../shared/serve-update-handoff'
+} from '../../shared/remote-runtime/serve-supervisor/serve-update-handoff'
 import {
   pinLaunchUserDataPath,
   pinServeUserDataPath,
   resolveLaunchUserDataPath
 } from './profile/launch-user-data-path'
-import { foregroundServeIsolatedProfileSwitches } from '../../shared/electron-isolated-profile-switches'
-import { headlessServeOzonePlatformSwitches } from '../../shared/headless-serve-ozone-platform'
+import { foregroundServeIsolatedProfileSwitches } from '../../shared/app-lifecycle/launch/electron-isolated-profile-switches'
+import { headlessServeOzonePlatformSwitches } from '../../shared/app-lifecycle/launch/headless-serve-ozone-platform'
 import { getMacAppBundlePath } from './serve/updates/mac-app-update-bundle'
 import { getPlatformUserDataPath } from './profile/metadata'
-import { isSameUserDataPath } from '../../shared/serve-user-data-path'
+import { isSameUserDataPath } from '../../shared/remote-runtime/serve-supervisor/serve-user-data-path'
 import {
   readServeUpdateHandoffSync,
   resumeInterruptedServeUpdate,
   superviseForegroundServe
 } from './serve/updates/serve-update-supervisor'
 import { RuntimeClientError } from './connection/types'
-import { BACKGROUND_OPEN_ARG } from '../../shared/background-open-argv'
+import { BACKGROUND_OPEN_ARG } from '../../shared/app-lifecycle/launch/background-open-argv'
 import {
   getExecutableAppArgs,
   resolveAppRoot,
   resolveForegroundOrcaExecutable,
   stripElectronRunAsNode
 } from './orca-app-executable'
-import { SERVE_RUNTIME_ELECTRON, SERVE_RUNTIME_ENV } from '../../shared/orcad-local-serve-selection'
-import { findBundledWebClientRoot } from '../../shared/bundled-web-client-root'
+import {
+  SERVE_RUNTIME_ELECTRON,
+  SERVE_RUNTIME_ENV
+} from '../../shared/remote-runtime/serve-supervisor/orcad-local-serve-selection'
+import { findBundledWebClientRoot } from '../../shared/web-client/bundled-web-client-root'
 import { resolveLocalServeRuntime, serveWithOrcad } from './serve/startup/serve-orcad-launch'
 import { findAppSpeechRecognizerDir } from './app-launch/serve-speech-recognizer'
-import { serveOptionArgs, type ServeOrcaAppArgs } from '../../shared/orcad-serve-argv'
+import {
+  serveOptionArgs,
+  type ServeOrcaAppArgs
+} from '../../shared/remote-runtime/serve-supervisor/orcad-serve-argv'
 import { waitForRecipeJson } from './serve/startup/serve-recipe-json'
 import {
   preflightElectronServe,
@@ -49,7 +55,7 @@ import {
   restartThisServeSupervisorIfReplaced
 } from './serve/updates/serve-replaced-app-restart'
 import { isSupervisedSpawnHeld } from './serve/supervision/serve-supervised-stop'
-import { openServeBundlePark } from '../../shared/serve-bundle-park'
+import { openServeBundlePark } from '../../shared/remote-runtime/serve-supervisor/serve-bundle-park'
 import {
   redactingSpawn,
   shouldRedactSupervisedStdout,

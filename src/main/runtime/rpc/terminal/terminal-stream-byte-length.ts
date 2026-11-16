@@ -1,4 +1,4 @@
-import { measureUtf8ByteLength } from '../../../../shared/utf8-byte-limits'
+import { measureUtf8ByteLength } from '../../../../shared/text/utf8-byte-limits'
 
 export type TerminalStreamByteLengthMeasurement = {
   byteLength: number

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Editor } from '@tiptap/react'
-import type { RichMarkdownContextMenuTableTarget } from '../../../../../../shared/rich-markdown-context-menu'
+import type { RichMarkdownContextMenuTableTarget } from '../../../../../../shared/editor/markdown/rich-markdown-context-menu'
 import { isRichMarkdownTableContextCommand } from '../commands/rich-markdown-context-command-routing'
 import {
   richMarkdownTableCellPositionAtElement,

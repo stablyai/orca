@@ -1,5 +1,5 @@
 import { useEffect, type RefObject } from 'react'
-import type { RuntimeBrowserClientPlacement } from '../../../../../../shared/runtime-browser-placement'
+import type { RuntimeBrowserClientPlacement } from '../../../../../../shared/browser/client-hosting/runtime-browser-placement'
 import { MarkupDrawButton } from '../markup-tools/MarkupDrawButton'
 import { MarkupOverlay } from '../MarkupOverlay'
 import { useBrowserPageMarkupCapture } from './use-browser-page-markup-capture'

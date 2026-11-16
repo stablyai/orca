@@ -15,7 +15,7 @@ import {
   automationRunFailure,
   type AutomationRunFailure
 } from '../../../shared/automations/history/automation-run-failure-copy'
-import { parseWslDistroHold } from '../../../shared/wsl-distro-stopped-hold'
+import { parseWslDistroHold } from '../../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
 
 export type AutomationLaunchContext = {
   automation: Automation

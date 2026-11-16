@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { RUNTIME_NAVIGATION_TARGETS } from '../../runtime-navigation'
+import { RUNTIME_NAVIGATION_TARGETS } from '../../remote-runtime/session-graph/runtime-navigation'
 import { TAB_ACTIVATION_INTENTS } from '../../tab-activation-intent'
 import { OptionalBoolean } from '../rpc-param-primitives'
 import { sleepingAgentLaunchConfigSchema } from '../../workspace-session/workspace-session-sleeping-agents'

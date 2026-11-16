@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { BROWSER_PASSWORDS_GUEST_CHANNELS as channels } from '../../shared/browser-passwords-types'
+import { BROWSER_PASSWORDS_GUEST_CHANNELS as channels } from '../../shared/browser/passwords/browser-passwords-types'
 
 const { handlers, renderer, injecting } = vi.hoisted(() => ({
   handlers: new Map<string, (...args: unknown[]) => void>(),

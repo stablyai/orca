@@ -4,6 +4,7 @@ import type { LegacyComposedGesture } from 'react-native-gesture-handler'
 import { MobileNativeChatPinchZoom } from './viewport/mobile-native-chat-pinch-zoom'
 import type { MobileNativeChatRowKeys } from './projection/mobile-native-chat-row-keys'
 import { MobileNativeChatPageList } from './viewport/MobileNativeChatPageList'
+import { MobileNativeChatScrollRowToTopContext } from './viewport/mobile-native-chat-scroll-row-to-top-context'
 import {
   mobileNativeChatRowAnchor,
   type MobileNativeChatTailFollow
@@ -39,11 +40,14 @@ export function MobileNativeChatRowList(props: Props): ReactElement {
     const { roots, runs, layoutKey, onNearTop } = props
     return (
       <MobileNativeChatPinchZoom gesture={props.pinchGesture}>
-        <MobileNativeChatPageList
-          {...tail.pageListProps}
-          {...{ rows, rowKeys, roots, renderItem, runs, contentContainerStyle, layoutKey }}
-          {...{ header, footer, emptyStateView, onScroll, onNearTop }}
-        />
+        {/* Only the page list draws row keys to scroll to. */}
+        <MobileNativeChatScrollRowToTopContext value={tail.scrollRowToTop}>
+          <MobileNativeChatPageList
+            {...tail.pageListProps}
+            {...{ rows, rowKeys, roots, renderItem, runs, contentContainerStyle, layoutKey }}
+            {...{ header, footer, emptyStateView, onScroll, onNearTop }}
+          />
+        </MobileNativeChatScrollRowToTopContext>
       </MobileNativeChatPinchZoom>
     )
   }

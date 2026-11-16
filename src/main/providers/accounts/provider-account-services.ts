@@ -9,7 +9,7 @@ import { ClaudeAccountService } from '../../claude-accounts/service'
 import { getInitialCodexRateLimitTarget } from '../../rate-limits/providers/codex/codex-rate-limit-target'
 import { getInitialClaudeRateLimitTarget } from '../../rate-limits/providers/claude/claude-rate-limit-target'
 import { resolveKimiHome } from '../../kimi/kimi-runtime-home'
-import { resolveLocalAccountUsageTarget } from '../../../shared/local-account-runtime'
+import { resolveLocalAccountUsageTarget } from '../../../shared/agent-accounts/local-account-runtime'
 import { resolveCodexRateLimitHomeUnlessStopped } from '../../rate-limits/providers/codex/codex-rate-limit-wsl-home-gate'
 import { inactiveCodexHomeUnlessStopped } from '../../rate-limits/inactive-codex-home'
 import { readMiniMaxSessionCookie } from '../../minimax/minimax-cookie-store'
@@ -23,7 +23,7 @@ import {
 import { createAccountRuntimeTargetSettingsSync } from '../../rate-limits/service/account-runtime-target-sync'
 import { normalizeCodexRuntimeSelection } from '../../codex-accounts/account-management/runtime-selection'
 import { normalizeClaudeRuntimeSelection } from '../../claude-accounts/selection/runtime-selection'
-import type { ClaudeStatusLineRateLimits } from '../../../shared/claude-statusline-rate-limits'
+import type { ClaudeStatusLineRateLimits } from '../../../shared/agent-usage/rate-limits/claude-statusline-rate-limits'
 
 export type ProviderAccountServices = {
   rateLimits: RateLimitService
@@ -195,6 +195,19 @@ export function createProviderAccountServices(
       .filter((account) => !activeIds.has(account.id))
       .map((account) => ({
         id: account.id,
+        ...(account.managedHomeRuntime === 'wsl'
+          ? account.wslDistro
+            ? {
+                readingAccount: {
+                  accountId: account.id,
+                  runtime: 'wsl' as const,
+                  wslDistro: account.wslDistro
+                }
+              }
+            : {}
+          : {
+              readingAccount: { accountId: account.id, runtime: 'host' as const, wslDistro: null }
+            }),
         resolveHome: () =>
           inactiveCodexHomeUnlessStopped(
             codexRuntimeHome.resolveCodexManagedAccountHomeForInactiveFetch(account)

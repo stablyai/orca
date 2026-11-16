@@ -5,7 +5,7 @@ import { pairedRuntimeConnectionFromOffer } from '../../../src/shared/remote-run
 import { decodePairingOffer } from '../../../src/shared/remote-runtime/pairing/pairing'
 import '../../../src/shared/remote-runtime/requests/remote-runtime-request-socket'
 import { subscribeRemoteRuntimeTransport } from '../../../src/shared/remote-runtime/requests/remote-runtime-subscription-transport'
-import type { RuntimeRpcResponse } from '../../../src/shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse } from '../../../src/shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { LiveLayoutFeed } from './workspace-layout-oracle-feed'
 
 declare global {

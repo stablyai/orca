@@ -6,7 +6,7 @@ import {
   getRepoIdFromWorktreeId,
   getWorktreePathBasenameFromId
 } from '../../../../shared/worktree/id'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { GitWorktreeInfo, DetectedWorktree, Worktree } from '../../../../shared/worktree/types'
 import type { Store } from '../../../persistence/loading-store/store'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
@@ -17,7 +17,7 @@ import {
   buildKnownOrcaWorkspaceLayouts,
   toDetectedWorktree
 } from '../../../../shared/worktree/visibility/ownership'
-import { isLegacyRepoForExternalWorktreeVisibility } from '../../../../shared/external-worktree-visibility'
+import { isLegacyRepoForExternalWorktreeVisibility } from '../../../../shared/worktree/visibility/external-worktree-visibility'
 import {
   areWorktreePathsEqual,
   dedupeWorktreesByPath

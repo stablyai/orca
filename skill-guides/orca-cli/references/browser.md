@@ -32,6 +32,7 @@ ORCA full-screenshot --page <browserPageId>
 ORCA pdf --page <browserPageId> --json
 ORCA click --page <browserPageId> --element <ref> --json
 ORCA fill --page <browserPageId> --element <ref> --value <text> --json
+<secret reader> | ORCA fill --page <browserPageId> --element <ref> --value-stdin --json
 ORCA type --page <browserPageId> --input <text> --json
 ORCA select --page <browserPageId> --element <ref> --value <value> --json
 ORCA check --page <browserPageId> --element <ref> --json
@@ -83,6 +84,7 @@ Browser rules:
 - Anything not listed above goes through `ORCA exec --page <browserPageId> --command "<agent-browser command>"`, which takes agent-browser's own command syntax (for example `"get text @e3"` or `"is visible @e3"`) and prints JSON. It has no `help` command.
 - `upload` takes the file input itself or the button that opens a file picker, in any frame, including cross-origin iframes; Orca catches the picker and sets the files on its input. Use `ORCA upload`, not `ORCA exec --command "upload ..."`. On server-hosted pages pass the file input's ref.
 - `fill` sets a field's whole value in one step, at any size. `type` presses real keys into the focused element, so `minlength`/`maxlength`, key handlers, Enter and Tab act as they would for a person; `ORCA focus` the element first. Use `type` when the page reacts to keystrokes.
+- Fill passwords and other secrets with `--value-stdin`, not `--value`: argv is visible to `ps` and shell history. One trailing newline is dropped.
 - On server-hosted pages `fill` and `type` still insert text the engine's own way. If either does nothing on a custom input there, try `ORCA focus --page <browserPageId> --element @e1 --json` then `ORCA inserttext --page <browserPageId> --text "text" --json`.
 - A client-hosted page renders in the paired desktop's browser engine, so every command against it needs that desktop online and returns `browser_host_unavailable` while it is closed, asleep, or disconnected. Server-hosted pages run with no desktop attached; prefer them for long or unattended automation.
 

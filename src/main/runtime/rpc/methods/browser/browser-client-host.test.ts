@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import '../../../../../shared/protocol-version'
+import '../../../../../shared/remote-runtime/protocol/protocol-version'
 import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../../../shared/browser/runtime/browser-runtime-capabilities'
 import { getBrowserHostLeaseRegistry } from '../../../browser-host/leases/browser-host-lease-registry-instance'
 import type { OrcaRuntimeService } from '../../../orca-runtime'

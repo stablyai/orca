@@ -4,9 +4,9 @@ import {
   type OrcadMigrationImportReceipt,
   type OrcadMigrationManifest
 } from '../../../../shared/orcad-migration/orcad-migration-manifest'
-import type { ProjectGroup } from '../../../../shared/project-group-types'
-import type { Repo } from '../../../../shared/repo-types'
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
+import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { isRepoOnCatalogHost } from '../../../../shared/execution-host'
 import { assertOrcadMigrationStagedCatalogClaims } from './orcad-staged-catalog-claims'
 import {

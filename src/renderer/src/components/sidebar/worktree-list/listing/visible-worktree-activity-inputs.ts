@@ -1,4 +1,4 @@
-import type { BrowserWorkspace } from '../../../../../../shared/browser-workspace-types'
+import type { BrowserWorkspace } from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { Tab } from '../../../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'

@@ -7,7 +7,7 @@ import type { AntigravityChatSignInPrompt } from '@/components/provider-accounts
 import { chatSignInLine } from '@/components/provider-accounts/use-antigravity-chat-sign-in'
 import { openAntigravitySignInSettings } from '@/components/provider-accounts/open-antigravity-sign-in-settings'
 import type { AgentType } from '../../../../../shared/agent-status/contracts/agent-status-types'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { NativeChatInstallTile } from './NativeChatInstallTile'
 
 export type NativeChatSignInStripState = {

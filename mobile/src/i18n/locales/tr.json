@@ -249,6 +249,7 @@
     "message": {
       "copyMessage": "Mesajı kopyala",
       "forkFromResponse": "Bu yanıttan çatalla",
+      "scrollMessageToTop": "Bu mesajı yukarı kaydır",
       "forkFromResponseHint": "Bu yanıtın tamamını turun sonuna kadar içeren yeni bir sohbet"
     },
     "messageActionsSheet": {
@@ -2828,12 +2829,14 @@
       "title": "Görünüm"
     },
     "browserSettingsScreen": {
+      "askEachTime": "Her seferinde sor",
+      "askEachTimeDescription": "Her seferinde Orca tarayıcısı, telefon tarayıcısı veya bağlantıyı kopyalama arasında seçim yapın.",
       "desktopBrowser": "Masaüstündeki Orca tarayıcısı",
       "desktopBrowserDescription": "Eşleştirdiğiniz masaüstü bilgisayardan aktarılan tarayıcıda açın.",
-      "linksDescription": "Terminal çıktısında dokunduğunuz HTTP(S) bağlantılarının nerede açılacağını seçin.",
+      "terminalAndChatLinksDescription": "Terminal çıktısında ve sohbette dokunduğunuz web bağlantılarının nerede açılacağını seçin.",
       "linksHeading": "BAĞLANTILAR",
       "loadFailed": "Tarayıcı tercihleri yüklenemedi. Yeniden deneyin.",
-      "openTerminalLinks": "Terminal bağlantılarını aç",
+      "openLinks": "Bağlantıları aç",
       "phoneBrowser": "Telefon tarayıcısı",
       "phoneBrowserDescription": "Bu telefondaki Safari, Chrome veya başka bir tarayıcıda açın.",
       "saveFailed": "Tarayıcı tercihleri kaydedilemedi. Yeniden deneyin.",

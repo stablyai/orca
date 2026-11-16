@@ -17,7 +17,7 @@ import {
 } from '../permissions/tui-agent-permission-choice'
 import type { TuiAgent } from '../catalog/tui-agent'
 import type { AgentPickerEntry, AgentPickerModel, AgentPickerSurface } from './agent-launch-picker'
-import { classifyAgentModels } from '../../legacy-agent-models'
+import { classifyAgentModels } from '../../agent-session/options/model-catalog/legacy-agent-models'
 
 type ModelMenuEntry = Pick<AgentPickerEntry, 'agent' | 'catalog'> &
   Partial<

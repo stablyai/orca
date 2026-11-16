@@ -12,11 +12,11 @@ import {
   subscribeAntigravityChatSignIns,
   type AntigravityChatSignInView
 } from '../../runtime/provider-accounts/sign-in/antigravity-chat-sign-in-status'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type {
   AntigravityChatAuth,
   AntigravityChatSignInState
-} from '../../../../shared/antigravity-account-types'
+} from '../../../../shared/agent-accounts/antigravity/antigravity-account-types'
 
 /** A running flow another client started: the host tells only its starter the id. */
 const otherClients = (flow: AntigravityChatSignInState | null): boolean =>

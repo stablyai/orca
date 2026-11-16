@@ -1,6 +1,6 @@
 // C3: window draws immediately for synchronous callers; main records the same IDs before later pane commands. Main-created tabs retain main’s facts so window saves do not mutate them.
 
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import { afterLayoutFrame } from '@/runtime/workspace-layout/frames/layout-frame-position'
 import { expectTabRowFields } from '@/runtime/workspace-layout/intents/layout-owner-pane-intents'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'

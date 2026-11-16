@@ -4,7 +4,7 @@ import { resolveSetupAgentSequenceLaunchCommand } from '../../../../shared/agent
 import {
   detectExplicitPiAgentKindFromCommand,
   isPiCompatibleAgentType
-} from '../../../../shared/pi-agent-kind'
+} from '../../../../shared/agent-launch/catalog/pi-agent-kind'
 import { applyTerminalGitCredentialPromptGuard } from '../../../../shared/shell/launch/terminal-git-credential-guard'
 import { ensureOpenCodeStartupPromptForLaunch } from '../../../opencode/startup-prompts/opencode-startup-prompt-installer'
 import { mimoCodeHookService } from '../../../mimo/hook-service'

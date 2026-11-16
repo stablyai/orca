@@ -50,7 +50,8 @@ export function MobileHomeTabBar(props: {
   }
   return (
     <View
-      style={[styles.bar, { paddingBottom: Math.max(props.bottomInset, spacing.sm) }]}
+      // Why lg: some Android tablets report a gesture inset smaller than the visible pill (#41969).
+      style={[styles.bar, { paddingBottom: Math.max(props.bottomInset, spacing.lg) }]}
       // Android has no 'tabbar' role and crashes on mount; iOS keeps its tab-bar trait.
       accessibilityRole={Platform.OS === 'ios' ? 'tabbar' : 'tablist'}
     >

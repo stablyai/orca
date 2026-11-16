@@ -1,3 +1,4 @@
+import type { AcceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import { parseAgentStatusPaneIdentity } from '../../../../shared/agent-status/identity/agent-status-worktree-attribution'
 import { tabHasLivePty } from '../../../../shared/tab-has-live-pty'
@@ -9,7 +10,7 @@ import type {
 import type { MigrationUnsupportedPtyEntry } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { StructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-tab-name'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -31,7 +32,7 @@ import type { Translate } from '@/i18n/use-translate'
 
 export type BuildActivityEventsArgs = {
   chatNames: StructuredChatTabNames
-  agentStatusByPaneKey: Record<string, AgentStatusEntry>
+  agentStatusByPaneKey: AcceptedAgentStatuses
   runtimeAgentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
   migrationUnsupportedByPtyId?: Record<string, MigrationUnsupportedPtyEntry>
   tabsByWorktree: Record<string, TerminalTab[]>
@@ -76,7 +77,7 @@ export function buildActivityEvents(
     }
   }
 
-  for (const [paneKey, entry] of Object.entries(args.agentStatusByPaneKey)) {
+  for (const [paneKey, entry] of Array.from(args.agentStatusByPaneKey.entries())) {
     const parsed = parseAgentStatusPaneIdentity(
       paneKey,
       args.unifiedTabsByWorktree

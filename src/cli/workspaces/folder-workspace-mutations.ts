@@ -1,26 +1,29 @@
-import type { RuntimeStatus } from '../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
   RuntimeWorktreeRecord,
   RuntimeWorktreeRemoveResult,
   RuntimeWorktreeSetResult
-} from '../../shared/runtime-worktree-contracts'
+} from '../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
 import {
   FOLDER_WORKSPACE_UNIQUE_ID_MUTATION_RUNTIME_CAPABILITY,
   PROJECT_GROUP_FOLDER_ARCHIVE_RUNTIME_CAPABILITY
-} from '../../shared/worktree-runtime-capabilities'
+} from '../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import {
   worktreeRemovalReplyTimeoutMs,
   type ArchiveHookOverride
 } from '../../shared/worktree/removal/archive-hook-removal-gate'
-import { folderIdOfSelector, folderWorkspaceKey } from '../../shared/workspace-scope'
+import {
+  folderIdOfSelector,
+  folderWorkspaceKey
+} from '../../shared/workspace/identity/workspace-scope'
 import { formatWorktreeShow } from './workspace-format'
 import { printHookWarning } from './worktree-removal-warnings'
 import { printResult } from '../output/command-result-output'
 import { getOptionalStringFlag, getOptionalStringFlagAllowingEmpty } from '../arguments/flags'
 import { RuntimeClientError } from '../runtime/connection/types'
 import type { RuntimeClient } from '../runtime/client'
-import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { getWorktreeReadFlags } from './worktree-unread-flag'
 
 type Flags = Map<string, string | boolean>

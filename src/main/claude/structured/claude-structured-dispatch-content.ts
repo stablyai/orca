@@ -18,7 +18,7 @@ import {
   AGENT_SESSION_MESSAGE_IMAGE_MAX_COUNT,
   AGENT_SESSION_MESSAGE_IMAGE_MAX_TOTAL_BYTES
 } from '../../../shared/agent-session/agent-session-attachments'
-import { agentInlineImageMimeType } from '../../../shared/agent-inline-image-types'
+import { agentInlineImageMimeType } from '../../../shared/native-chat/input/composer/agent-inline-image-types'
 import { claudeRecord } from './journal/claude-structured-item-translation'
 
 export class ClaudeDispatchContentError extends Error {

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, type RefObject } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { MATCH_TERMINAL_APP_THEME } from '../../../../shared/plugin-theme-settings'
+import { MATCH_TERMINAL_APP_THEME } from '../../../../shared/plugins/appearance/plugin-theme-settings'
 import type { PluginThemeRegistration } from '../../../../shared/plugins/artifacts/plugin-theme-artifact'
 import { useAppStore } from '../../store'
 import { usePluginThemeStore, usePluginThemes } from '../../store/plugins/appearance/plugin-themes'

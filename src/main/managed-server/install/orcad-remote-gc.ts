@@ -25,7 +25,7 @@ import {
 import { RELAY_REMOTE_DIR } from './remote-install-root'
 import { orcadWindowsHomeOpCommand } from './orcad-remote-windows-node'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
-import { ORCAD_INSTALL_COMPLETE_FILENAME } from '../../../shared/orcad-artifacts'
+import { ORCAD_INSTALL_COMPLETE_FILENAME } from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import { ORCAD_WINDOWS_LIVENESS_MANY_MARKER } from '../host-state/orcad-windows-host-script'
 
 type OrcadGcOptions = {

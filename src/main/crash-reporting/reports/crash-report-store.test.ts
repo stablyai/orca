@@ -13,7 +13,7 @@ vi.mock('../../windows/windows-directory-acl', async (importOriginal) => {
 })
 
 import { CrashReportStore } from './crash-report-store'
-import type { CrashReportCreateInput } from '../../../shared/crash-reporting'
+import type { CrashReportCreateInput } from '../../../shared/crash-reporting/crash-reporting'
 
 const tempDirs: string[] = []
 

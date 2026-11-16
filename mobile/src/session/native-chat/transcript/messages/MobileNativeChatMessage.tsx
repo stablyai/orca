@@ -11,6 +11,7 @@ import {
   withoutSubagentGroupTwins
 } from '../../../../../../src/shared/native-chat/transcript/subagents/native-chat-subagent-summary'
 import { deriveNativeChatRowContent } from '../../../../../../src/shared/native-chat/transcript/row-content/native-chat-row-content'
+import { isNativeChatProviderTurnStart } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-provider-turn-start'
 import { MobileNativeChatReasoningRow } from '../message-content/MobileNativeChatReasoningRow'
 import { MobileNativeChatWorkRunAside } from './MobileNativeChatWorkRunAside'
 import { mobileNativeChatRowId } from '../viewport/mobile-native-chat-reading-place'
@@ -200,8 +201,8 @@ function MobileNativeChatMessageImpl({
       onToggleExpanded={turnKey && onToggleTurn ? () => onToggleTurn(turnKey) : undefined}
     />
   ) : null
-  // Keep answered receipts visible even when their tool run folds away.
-  if (joinsWorkRun || (foldedAway && !receipt)) {
+  // Keep answered receipts visible even when their tool run folds away; a provider turn mark draws only its bar.
+  if (joinsWorkRun || (foldedAway && !receipt) || isNativeChatProviderTurnStart(message)) {
     return <>{statusRow}</>
   }
   if (receipt) {
@@ -244,10 +245,9 @@ function MobileNativeChatMessageImpl({
     )
   }
   const isChatTurn = message.role === 'user' || message.role === 'assistant'
-  let proseOffset = 0
+  // Paced prose calls this from its own renders too, so the key must not depend on earlier calls.
   const proseRow = (block: Chat.NativeChatBlock, key: number, text: string, revealing = false) => {
-    const textKey = `${message.id}:text:${proseOffset}`
-    proseOffset += text.length + 1
+    const textKey = `${message.id}:text:${key}`
     return Chat.isSubagentGroupBlock(block) && isRenderableSubagentGroup(block) ? (
       <MobileNativeChatSubagentGroup
         key={`subagent-group:${block.groupId}`}
@@ -388,6 +388,7 @@ function MobileNativeChatMessageImpl({
         {isChatTurn && !agentFrom ? (
           <MobileNativeChatMessageMeta
             message={message}
+            rowKey={rowKey ?? message.id}
             fontScale={fontScale}
             rewindable={rewindable}
           />

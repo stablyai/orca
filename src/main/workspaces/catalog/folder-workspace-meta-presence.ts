@@ -1,6 +1,6 @@
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import { isFolderRepo } from '../../../shared/repo-kind'
-import type { Repo } from '../../../shared/repo-types'
+import { isFolderRepo } from '../../../shared/repository/repo-kind'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import {
   FOLDER_WORKSPACE_INSTANCE_SEPARATOR,

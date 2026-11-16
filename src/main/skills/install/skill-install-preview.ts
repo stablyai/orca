@@ -5,12 +5,12 @@ import { join } from 'node:path'
 import type {
   SkillInstallPreview,
   SkillInstallPreviewRequest
-} from '../../../shared/skill-install-contract'
+} from '../../../shared/skills/installation/skill-install-contract'
 import {
   SkillBundleInstallPreviewSchema,
   type SkillBundleInstallPreview,
   type SkillBundleInstallPreviewRequest
-} from '../../../shared/skill-bundle-install-contract'
+} from '../../../shared/skills/installation/skill-bundle-install-contract'
 import type { SkillInstallDestinationAuthority } from './skill-install-destinations'
 import { resolveSkillInstallDestination } from './skill-install-destinations'
 import { inspectSkillCanonicalState } from './skill-canonical-install-state'
