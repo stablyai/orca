@@ -443,50 +443,81 @@ describe('automatic cleanup announcements', () => {
   function statusLine(): string {
     return document.querySelector('[data-settings-group-description]')?.textContent ?? ''
   }
+  // The page's live regions; no rule check is running in these tests.
+  function regions(): string[] {
+    return screen.getAllByRole('status').map((region) => region.textContent ?? '')
+  }
   // A finished-run event makes the page read the report again, as the host's event does.
-  async function rereadReport(): Promise<void> {
-    const before = statusLine()
+  async function rereadReport(changed: () => boolean): Promise<void> {
     await act(async () => {
       const { rows: _rows, ...run } = reportRuns[0]!
       emitWorkspaceCleanupRunFinishedWindowEvent({ environmentId: null, run })
     })
-    await waitFor(() => expect(statusLine()).not.toBe(before))
+    await waitFor(() => expect(changed()).toBe(true))
+  }
+  // Only the relative times change; nothing should be announced.
+  async function refreshTimes(advance: () => void): Promise<void> {
+    const line = statusLine()
+    const before = regions()
+    advance()
+    await rereadReport(() => statusLine() !== line)
+    expect(regions()).toEqual(before)
   }
 
-  it('announces a run starting and its result once, not each refresh of the relative times', async () => {
+  it('announces a run starting and its result, not a refresh of the relative times', async () => {
     let now = Date.UTC(2026, 10, 15, 12)
     const clock = vi.spyOn(Date, 'now').mockImplementation(() => now)
     try {
       reportRuns = [finishedRun('run-1', now - 60 * 60_000)]
       mount(true)
       await waitFor(() => expect(statusLine()).not.toBe(''))
-      const region = screen.getByRole('status')
-      expect(region.textContent).toBe('')
-
-      now += 2 * 60 * 60_000
-      await rereadReport()
-      expect(region.textContent).toBe('')
+      expect(regions()).toEqual(['', ''])
+      await refreshTimes(() => (now += 2 * 60 * 60_000))
 
       let finishRun = (): void => {}
       runNowGate = new Promise((resolve) => (finishRun = resolve))
       await act(async () => {
         fireEvent.click(screen.getByRole('button', { name: 'Run rules now' }))
       })
-      const started = region.textContent
-      expect(started).not.toBe('')
+      const started = regions()
+      expect(started.filter(Boolean)).toHaveLength(1)
 
       reportRuns = [finishedRun('run-2', now), ...reportRuns]
       await act(async () => {
         finishRun()
       })
-      await rereadReport()
-      const finished = region.textContent
-      expect(finished).not.toBe('')
-      expect(finished).not.toBe(started)
+      await rereadReport(() => regions().join() !== started.join())
+      const finished = regions()
+      // The result goes into the region that was empty, not over the start text.
+      expect(finished.findIndex(Boolean)).toBe(started.indexOf(''))
+      expect(finished.filter(Boolean)).toHaveLength(1)
 
-      now += 60 * 60_000
-      await rereadReport()
-      expect(region.textContent).toBe(finished)
+      await refreshTimes(() => (now += 60 * 60_000))
+    } finally {
+      clock.mockRestore()
+    }
+  })
+
+  it('announces each scheduled run, including two worded the same', async () => {
+    const now = Date.UTC(2026, 10, 15, 12)
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => now)
+    try {
+      reportRuns = [finishedRun('run-1', now - 60 * 60_000)]
+      mount(true)
+      await waitFor(() => expect(statusLine()).not.toBe(''))
+
+      reportRuns = [finishedRun('run-2', now), ...reportRuns]
+      await rereadReport(() => regions().some(Boolean))
+      const first = regions()
+      const firstSlot = first.findIndex(Boolean)
+      expect(first.filter(Boolean)).toHaveLength(1)
+
+      reportRuns = [finishedRun('run-3', now), ...reportRuns]
+      await rereadReport(() => regions().join() !== first.join())
+      const second = regions()
+      // Same words, so the text moves to the region that was empty and is announced again.
+      expect(second[firstSlot]).toBe('')
+      expect(second[1 - firstSlot]).toBe(first[firstSlot])
     } finally {
       clock.mockRestore()
     }

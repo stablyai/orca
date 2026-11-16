@@ -113,32 +113,37 @@ export function WorkspaceCleanupAutomaticSection({
     'Removing what your rules match…'
   )
   // Screen readers hear a run start and each new run's result once; the visible line's relative
-  // times re-render on every report read and would be read out again.
+  // times re-render on every report read and would be read out again. Each announcement goes into
+  // whichever of two regions is empty, so a result worded like the last one still changes the DOM.
   // Undefined until the report is read, so the first read's newest run is not news.
   const runId = report ? (lastRun?.id ?? null) : undefined
   const [announcement, setAnnouncement] = useState<{
     running: boolean
     runId: string | null | undefined
     text: string
+    slot: 0 | 1
   }>({
     running,
     runId,
-    text: ''
+    text: '',
+    slot: 0
   })
   if (running !== announcement.running || runId !== announcement.runId) {
     const newRun =
       announcement.runId !== undefined && lastRun && lastRun.id !== announcement.runId
         ? lastRun
         : null
+    const text =
+      running && !announcement.running
+        ? runningText
+        : newRun
+          ? formatLastRun(newRun, readAt, t)
+          : null
     setAnnouncement({
       running,
       runId,
-      text:
-        running && !announcement.running
-          ? runningText
-          : newRun
-            ? formatLastRun(newRun, readAt, t)
-            : announcement.text
+      text: text ?? announcement.text,
+      slot: text === null ? announcement.slot : announcement.slot === 0 ? 1 : 0
     })
   }
   const details: string[] = []
@@ -199,9 +204,14 @@ export function WorkspaceCleanupAutomaticSection({
   ) : null
 
   const announcer = (
-    <span role="status" className="sr-only">
-      {announcement.text}
-    </span>
+    <>
+      <span role="status" className="sr-only">
+        {announcement.slot === 0 ? announcement.text : ''}
+      </span>
+      <span role="status" className="sr-only">
+        {announcement.slot === 1 ? announcement.text : ''}
+      </span>
+    </>
   )
   const showHeading = showRules || matchesSettingsSearch(query, [search.status])
   return (
