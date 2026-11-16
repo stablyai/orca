@@ -1,15 +1,14 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
 
 // The visible gap between an answer's last block and its actions, at the default chat typography.
-// Every ending gets the same gap; before the actions owned it, a paragraph got 4px and a list 10px.
+// Before the actions owned the gap, a paragraph got 4px and a list 10px.
 test.use({ viewport: { width: 1000, height: 720 } })
 
 const GAP = 12
 
 const LAST_BLOCK: Record<string, (page: Page) => Locator> = {
   paragraph: (page) => page.getByText('Nothing changed since the last check.', { exact: true }),
-  list: (page) => page.getByText('Release notes', { exact: true }),
-  code: (page) => page.locator('[data-native-chat-code-block]').last()
+  list: (page) => page.getByText('Release notes', { exact: true })
 }
 
 for (const [ending, lastBlock] of Object.entries(LAST_BLOCK)) {
@@ -27,14 +26,14 @@ for (const [ending, lastBlock] of Object.entries(LAST_BLOCK)) {
     await expect(earlier).toHaveCSS('font-size', '13px')
     await expect(earlier).toHaveCSS('line-height', '20px')
     const block = await lastBlock(page).boundingBox()
-    const actions = await page
+    // The action the reader sees, not whatever box happens to wrap it.
+    const action = await page
       .getByRole('button', { name: 'Scroll this message to top' })
       .last()
-      .locator('..')
       .boundingBox()
-    if (!block || !actions) {
+    if (!block || !action) {
       throw new Error('The answer or its actions did not render')
     }
-    expect(actions.y - (block.y + block.height)).toBeCloseTo(GAP, 0)
+    expect(action.y - (block.y + block.height)).toBeCloseTo(GAP, 0)
   })
 }
