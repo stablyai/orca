@@ -70,14 +70,13 @@ export function AgentLaunchDefaultsFields({
   const defaultsPending =
     draft.surface === 'chat' ? entry.structuredDefaultsPending : entry.defaultsPending
   // As the picker did: edit the current draft, then accept what its Arguments now say.
-  const apply = (edit: AgentPickerEdit) =>
-    acceptAgentPickerArguments(
+  const edit = (base: AgentPickerDraft, change: AgentPickerEdit) =>
+    currentAgentPickerDraft(
       entry,
-      currentAgentPickerDraft(
-        entry,
-        applyAgentPickerEdit(entry, currentAgentPickerDraft(entry, draft), edit)
-      )
+      applyAgentPickerEdit(entry, currentAgentPickerDraft(entry, base), change)
     )
+  const apply = (change: AgentPickerEdit, base = draft) =>
+    acceptAgentPickerArguments(entry, edit(base, change))
   const note = agentLaunchArgumentsNote(
     entry.label,
     agentPickerEntryOptions(entry, currentModel, draft.surface),
@@ -87,14 +86,19 @@ export function AgentLaunchDefaultsFields({
     entry.agent,
     entry.label,
     argumentsView.choices,
-    (patch) => {
+    (patch, text) => {
+      // The chip edits the text in the field, typed but not yet saved, as the picker's field did.
+      const typed =
+        text === argumentsView.text
+          ? draft
+          : edit(draft, { kind: 'arguments', text, model: currentModel })
       const key =
         patch.model !== undefined
           ? 'model'
           : patch.permissionMode !== undefined
             ? 'permissionMode'
             : Object.keys(patch.options ?? {})[0]
-      const next = apply({ kind: 'remove-chip', key })
+      const next = apply({ kind: 'remove-chip', key }, typed)
       onCommit(next, next.surface)
       return agentPickerPanelArguments(entry, next).text
     },

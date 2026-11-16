@@ -48,7 +48,6 @@ import {
 } from '../../../../../../shared/agent-launch/picker/agent-launch-picker'
 import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
 import { getAgentCatalogForAction } from '../source-control-action-recipe-options'
-import { DropdownMenuItem } from '../../../ui/dropdown-menu'
 
 export function SourceControlTextActionAgentPicker(props: TextActionPickerProps) {
   const current = useRef(props)
@@ -361,20 +360,19 @@ const TextActionPicker = memo(
             })
             props.onChange?.(saved.choice, saved.agentArgs, saved.edits)
           },
-          children: (
-            <>
-              <DropdownMenuItem onSelect={() => props.onAgentChange('__default_agent__')}>
-                {props.defaultAgentLabel ??
-                  t(
-                    'auto.components.settings.SourceControlAiActionRecipeDefaults.ee0e5c2a48',
-                    'Use default agent'
-                  )}
-              </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => props.onAgentChange('custom')}>
-                {customLabel}
-              </DropdownMenuItem>
-            </>
-          )
+          choices: [
+            {
+              id: 'default',
+              label:
+                props.defaultAgentLabel ??
+                t(
+                  'auto.components.settings.SourceControlAiActionRecipeDefaults.ee0e5c2a48',
+                  'Use default agent'
+                ),
+              onSelect: () => props.onAgentChange('__default_agent__')
+            },
+            { id: 'custom', label: customLabel, onSelect: () => props.onAgentChange('custom') }
+          ]
         }}
       />
     )

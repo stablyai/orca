@@ -3,7 +3,6 @@ import { sameAgentLaunchPickerModel } from '../../tab-bar/new-tab-agent-menu-mod
 import { memo, useCallback, useLayoutEffect, useRef, type ComponentProps } from 'react'
 import { pickSourceControlLaunchAgent } from '../../../../../shared/source-control/ai/source-control-launch-agent-selection'
 import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
-import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import {
   sourceControlPickerDraft,
   applySourceControlPickerDraft,
@@ -180,14 +179,17 @@ const SelectedSourceControlActionAgentPicker = memo(
         launchDefaults
         launchDefaultsContainer={props.launchDefaultsContainer}
         onPick={onSelection}
-      >
-        <DropdownMenuItem onSelect={onDefault}>
-          {t(
-            'auto.components.settings.SourceControlAiActionRecipeDefaults.ee0e5c2a48',
-            'Use default agent'
-          )}
-        </DropdownMenuItem>
-      </AgentLaunchPicker>
+        choices={[
+          {
+            id: 'default',
+            label: t(
+              'auto.components.settings.SourceControlAiActionRecipeDefaults.ee0e5c2a48',
+              'Use default agent'
+            ),
+            onSelect: onDefault
+          }
+        ]}
+      />
     )
   },
   (a, b) =>

@@ -5,6 +5,7 @@ import {
   memo,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ComponentProps,
@@ -28,8 +29,9 @@ import { useAgentPickerDraftScope } from './AgentLaunchSetupButton'
 import { AgentLaunchPickerMenu } from './AgentLaunchPickerMenu'
 import { AgentLaunchPickerDropdown } from './AgentLaunchPickerDropdown'
 import { AgentLaunchDefaultsFields } from './AgentLaunchDefaultsFields'
+import type { AgentPickerChoice } from './agent-picker-search-rows'
+import { agentPickerBlankTerminalMatches } from '@/lib/agent-catalog/agent-picker-search'
 import { agentLaunchSetupSummary } from './agent-launch-setup-state'
-import { AgentDefaultContextMenu } from './agent-combobox-items'
 import { useAgentLaunchPickerInventory } from './use-agent-launch-picker-inventory'
 import {
   agentPickerDraft,
@@ -56,7 +58,7 @@ export const AgentLaunchPicker = memo(
     portalContainer,
     emptyLabel,
     cli,
-    children,
+    choices,
     onSelectBlankTerminal,
     onTriggerEnter,
     onOpenChange,
@@ -82,8 +84,8 @@ export const AgentLaunchPicker = memo(
     emptyLabel?: string
     /** True when this launch is the terminal, so the closed field says "(CLI)". */
     cli?: boolean
-    /** Non-agent choices, shown as full-width rows under the agents. */
-    children?: ReactNode
+    /** Non-agent choices, shown as full-width rows under the agents and listed by search. */
+    choices?: readonly AgentPickerChoice[]
     onSelectBlankTerminal?: () => void
     onTriggerEnter?: () => void
     onOpenChange?: (open: boolean) => void
@@ -170,8 +172,17 @@ export const AgentLaunchPicker = memo(
         draftForEntry?.(entry) ??
         agentPickerDraft(entry))
       : undefined
-    const summary =
-      entry && draft && !setupDisabled ? agentLaunchSetupSummary(entry, draft).join(' · ') : ''
+    // Why keyed on the draft's content: forms re-derive an equal draft on every render, and the
+    // summary rebuilds the agent's model catalog.
+    const summaryDraft =
+      entry && draft && !setupDisabled && triggerLabel === undefined ? JSON.stringify(draft) : null
+    const summary = useMemo(() => {
+      if (!entry || !summaryDraft) {
+        return ''
+      }
+      const parsed: AgentPickerDraft = JSON.parse(summaryDraft)
+      return agentLaunchSetupSummary(entry, parsed).join(' · ')
+    }, [entry, summaryDraft])
     // Only a dropdown with Open in names where the agent runs, as Open in does.
     const surface =
       entry && !setupDisabled && !entry.textGeneration
@@ -190,17 +201,27 @@ export const AgentLaunchPicker = memo(
       : (emptyLabel ?? t('agentPicker.select', 'Select agent'))
     const close = useCallback(() => setOpen(false), [setOpen])
     const tabbed = model.state === 'settled' && !setupDisabled
-    const blankTerminal = onSelectBlankTerminal ? (
-      <AgentDefaultContextMenu
-        isDefault={defaultAgent === 'blank'}
-        onSetDefault={onSetDefault ? () => onSetDefault('blank') : undefined}
-      >
-        <DropdownMenuItem disabled={disabled} onSelect={onSelectBlankTerminal}>
-          <Terminal className="size-4" />
-          {t('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal')}
-        </DropdownMenuItem>
-      </AgentDefaultContextMenu>
-    ) : null
+    const blankTerminal: AgentPickerChoice | null = onSelectBlankTerminal
+      ? {
+          id: 'blank',
+          label: t('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal'),
+          icon: <Terminal className="size-4" />,
+          matches: agentPickerBlankTerminalMatches,
+          isDefault: defaultAgent === 'blank',
+          onSetDefault: onSetDefault ? () => onSetDefault('blank') : undefined,
+          onSelect: onSelectBlankTerminal
+        }
+      : null
+    // A search result is a cmdk row, which does not close the menu as a menu item does.
+    const extraChoices = [...(blankTerminal ? [blankTerminal] : []), ...(choices ?? [])].map(
+      (choice) => ({
+        ...choice,
+        onSelect: () => {
+          choice.onSelect()
+          setOpen(false)
+        }
+      })
+    )
     return (
       <div className="space-y-2">
         <DropdownMenu open={open} onOpenChange={setOpen}>
@@ -265,29 +286,22 @@ export const AgentLaunchPicker = memo(
             }
           >
             {tabbed ? (
-              <>
-                <AgentLaunchPickerDropdown
-                  entries={entries}
-                  agent={agent}
-                  value={value}
-                  draftForEntry={draftForEntry}
-                  draftScope={draftScope ?? ownDraftScope}
-                  disabled={disabled}
-                  initialQuery={initialQuery}
-                  searchInputRef={setSearchInput}
-                  defaultAgent={defaultAgent}
-                  onSetDefault={onSetDefault}
-                  onPaneChange={selectAgent}
-                  onPick={onPick}
-                  onClose={close}
-                />
-                {children || blankTerminal ? (
-                  <div className="border-t border-border p-1">
-                    {blankTerminal}
-                    {children}
-                  </div>
-                ) : null}
-              </>
+              <AgentLaunchPickerDropdown
+                entries={entries}
+                agent={agent}
+                value={value}
+                draftForEntry={draftForEntry}
+                draftScope={draftScope ?? ownDraftScope}
+                disabled={disabled}
+                initialQuery={initialQuery}
+                searchInputRef={setSearchInput}
+                defaultAgent={defaultAgent}
+                onSetDefault={onSetDefault}
+                onPaneChange={selectAgent}
+                onPick={onPick}
+                onClose={close}
+                choices={extraChoices}
+              />
             ) : model.state === 'settled' ? (
               <AgentLaunchPickerMenu
                 draftScope={draftScope ?? ownDraftScope}
@@ -295,7 +309,12 @@ export const AgentLaunchPicker = memo(
                 entries={entries}
                 initialQuery={initialQuery}
                 searchInputRef={setSearchInput}
-                leadingItems={children}
+                leadingItems={choices?.map((choice) => (
+                  <DropdownMenuItem key={choice.id} onSelect={choice.onSelect}>
+                    {choice.icon}
+                    {choice.label}
+                  </DropdownMenuItem>
+                ))}
                 onSelectBlankTerminal={onSelectBlankTerminal}
                 value={value}
                 draftForEntry={draftForEntry}

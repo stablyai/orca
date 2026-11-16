@@ -103,12 +103,12 @@ it('keeps continuous trigger typing in the search inside a dialog', async () => 
   expect(search()?.value).toBe('co')
   expect(search()?.selectionStart).toBe(2)
   expect(launch).not.toHaveBeenCalled()
-  // Search covers every agent; Enter picks the highlighted model.
-  expect(document.querySelector('[cmdk-item][data-selected="true"]')?.textContent).toBe('Astra')
+  // A query naming an agent lists the agent first; Enter picks it without choosing a model.
+  expect(document.querySelector('[cmdk-item][data-selected="true"]')?.textContent).toBe('Codex')
   await user.keyboard('{Enter}')
   expect(launch).toHaveBeenCalledOnce()
   expect(launch.mock.calls[0][0]).toBe('codex')
-  expect(launch.mock.calls[0][1]?.choices.model).toBe('astra')
+  expect(launch.mock.calls[0][1]).toBeUndefined()
   await waitFor(() => expect(document.activeElement).toBe(trigger))
   await user.click(trigger)
   expect(document.activeElement).toBe(search())

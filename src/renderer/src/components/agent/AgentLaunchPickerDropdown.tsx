@@ -7,6 +7,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { AgentDefaultContextMenu } from './agent-combobox-items'
 import { AgentLaunchSetupPanel } from './AgentLaunchSetupPanel'
+import type { AgentPickerChoice } from './agent-picker-search-rows'
 import { useAgentPickerSetup } from './agent-launch-picker-drafts'
 import { useRetiredAgentPickerDrafts } from './AgentLaunchPickerMenu'
 import { chatUnavailableLabel } from '../tab-bar/tab-agent-row-presentation'
@@ -27,8 +28,9 @@ type Agent = AgentPickerEntry['agent']
 
 export type AgentLaunchPickerDropdownPick = (
   agent: Agent,
-  draft: AgentPickerDraft,
-  entry: AgentPickerEntry,
+  /** Absent when the user picked the agent itself, which keeps the form's own setup. */
+  draft?: AgentPickerDraft,
+  entry?: AgentPickerEntry,
   /** Set when the user named where the agent opens. */
   surface?: AgentPickerSurface
 ) => void
@@ -49,7 +51,15 @@ type AgentLaunchPickerDropdownProps = {
   onPaneChange: (agent: Agent) => void
   onPick: AgentLaunchPickerDropdownPick
   onClose: () => void
+  /** Rows under the card that are not agents. */
+  choices?: readonly AgentPickerChoice[]
 }
+
+const focusSearch = (from: Element) =>
+  from
+    .closest('[data-agent-launch-picker]')
+    ?.querySelector<HTMLInputElement>('[cmdk-input]')
+    ?.focus({ preventScroll: true })
 
 /** A form's agent dropdown: agent tabs over the shared setup card, then where the agent opens. */
 export function AgentLaunchPickerDropdown(props: AgentLaunchPickerDropdownProps) {
@@ -67,7 +77,25 @@ export function AgentLaunchPickerDropdown(props: AgentLaunchPickerDropdownProps)
     return null
   }
   return (
-    <div className="flex flex-col" data-agent-launch-picker="true">
+    <div
+      className="flex flex-col"
+      data-agent-launch-picker="true"
+      onKeyDownCapture={(event) => {
+        // Shift+Tab from the search goes back to the agent tabs.
+        if (
+          event.key === 'Tab' &&
+          event.shiftKey &&
+          event.target instanceof HTMLElement &&
+          event.target.matches('[cmdk-input]')
+        ) {
+          event.preventDefault()
+          event.stopPropagation()
+          event.currentTarget
+            .querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')
+            ?.focus()
+        }
+      }}
+    >
       <AgentPickerAgentTabs
         entries={entries}
         pane={pane.agent}
@@ -109,6 +137,31 @@ function AgentPickerAgentTabs({
       role="tablist"
       aria-label={t('agentPicker.agents', 'Agents')}
       className="flex shrink-0 items-center overflow-x-auto border-b border-border px-1.5 scrollbar-none"
+      onKeyDown={(event) => {
+        if (event.key === 'Escape') {
+          return
+        }
+        // The menu would read these keys as typeahead and item moves.
+        event.stopPropagation()
+        const tabs = [...event.currentTarget.querySelectorAll<HTMLElement>('[role="tab"]')]
+        const index = event.target instanceof HTMLElement ? tabs.indexOf(event.target) : -1
+        const move = (next: number) => {
+          event.preventDefault()
+          tabs[(next + tabs.length) % tabs.length]?.focus()
+        }
+        if (event.key === 'ArrowRight') {
+          move(index + 1)
+        } else if (event.key === 'ArrowLeft') {
+          move(index - 1)
+        } else if (event.key === 'Home') {
+          move(0)
+        } else if (event.key === 'End') {
+          move(tabs.length - 1)
+        } else if ((event.key === 'Tab' && !event.shiftKey) || event.key === 'ArrowDown') {
+          event.preventDefault()
+          focusSearch(event.currentTarget)
+        }
+      }}
     >
       {entries.map((entry) => {
         const missing = entry.surfaces.length === 0
@@ -124,14 +177,14 @@ function AgentPickerAgentTabs({
                 <button
                   type="button"
                   role="tab"
-                  tabIndex={-1}
+                  tabIndex={selected ? 0 : -1}
                   aria-selected={selected}
                   aria-label={entry.label}
-                  // Why: keep focus, and typing, in the search field.
+                  // Why: a click keeps focus, and typing, in the search field.
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={() => onSelect(entry.agent)}
                   className={cn(
-                    'grid h-9 w-[34px] shrink-0 place-items-center border-b-2 outline-none transition-[color,opacity]',
+                    'grid h-9 w-[34px] shrink-0 place-items-center border-b-2 outline-none transition-[color,opacity] focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset',
                     selected
                       ? 'border-foreground text-foreground'
                       : 'border-transparent text-muted-foreground hover:text-foreground',
@@ -162,6 +215,7 @@ function AgentLaunchPickerPane({
   disabled,
   initialQuery,
   searchInputRef,
+  choices,
   onPick,
   onClose
 }: AgentLaunchPickerDropdownProps & { entry: AgentPickerEntry }) {
@@ -211,6 +265,26 @@ function AgentLaunchPickerPane({
     onPick(other.agent, applyAgentPickerEdit(other, base, edit), other)
     onClose()
   }
+  // As the agent rows did: the form's setup for the agent in use, else only the agent and how it opens.
+  const pickAgent = (picked: AgentPickerEntry) => {
+    const held = value?.agent === picked.agent ? value : undefined
+    if (held) {
+      onPick(picked.agent, held, picked)
+    } else {
+      const row = picked.rows.find((candidate) =>
+        picked.defaultSurface === 'chat'
+          ? candidate.kind === 'chat'
+          : candidate.kind === 'terminal' || candidate.kind === 'cli'
+      )
+      onPick(
+        picked.agent,
+        undefined,
+        undefined,
+        picked.agent !== agent && row?.kind === 'chat' ? 'chat' : undefined
+      )
+    }
+    onClose()
+  }
   if (!setup.ready) {
     return null
   }
@@ -228,7 +302,9 @@ function AgentLaunchPickerPane({
       search={{
         entries,
         current: agent ? { agent, model: currentModel } : undefined,
-        onPick: pickSearchResult
+        onPick: pickSearchResult,
+        onPickAgent: pickAgent,
+        choices
       }}
       onDraftChange={(draft, edit) => {
         setup.change(draft)

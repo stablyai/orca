@@ -7,7 +7,13 @@ import { useSetupModelHighlight } from './use-setup-model-highlight'
 import { AgentPickerLegacyModelsToggle } from './AgentPickerLegacyModelsToggle'
 import { useLegacyModelsExpanded } from './use-legacy-models-expanded'
 import { AgentLaunchInstallPrompt } from './AgentLaunchInstallPrompt'
-import { AgentVariantIcon } from '@/components/agent/icons/AgentVariantIcon'
+import {
+  AgentPickerChoiceRows,
+  AgentPickerSearchResults,
+  choiceMatches,
+  setupRowKey,
+  type AgentLaunchSetupSearch
+} from './agent-picker-search-rows'
 import {
   Command,
   CommandInput,
@@ -28,21 +34,14 @@ import {
 } from '../../../../shared/agent-launch/picker/agent-launch-picker-edits'
 import { agentPickerCatalogAuthoritative } from '../../../../shared/agent-launch/picker/agent-launch-picker-authority'
 import {
-  searchAgentPickerModels,
-  type AgentPickerSetup
+  filterAgentPickerEntries,
+  searchAgentPickerModels
 } from '../../../../shared/agent-launch/picker/agent-launch-picker-search'
 import type {
   AgentPickerDraft,
   AgentPickerEntry,
   AgentPickerSurface
 } from '../../../../shared/agent-launch/picker/agent-launch-picker'
-
-export type AgentLaunchSetupSearch = {
-  entries: readonly AgentPickerEntry[]
-  /** The agent and model the form holds now, checked among the results. */
-  current?: { agent: AgentPickerEntry['agent']; model?: string }
-  onPick: (setup: AgentPickerSetup) => void
-}
 
 export type AgentLaunchSetupPanelProps = {
   entry: AgentPickerEntry
@@ -64,9 +63,6 @@ export type AgentLaunchSetupPanelProps = {
   /** Select mode's bottom section, under the effort row. */
   children?: ReactNode
 }
-
-const setupRowKey = (setup: AgentPickerSetup) =>
-  `${setup.entry.agent}\u0000${setup.model.id}\u0000${setup.choices.options?.effort ?? ''}`
 
 /** The agent picker's card body: search, the agent's models, then its effort and speed on one row. */
 export function AgentLaunchSetupPanel({
@@ -108,6 +104,18 @@ export function AgentLaunchSetupPanel({
   const installed = entry.surfaces.length > 0
   const searching = Boolean(search && modelQuery.trim())
   const results = searching && search ? searchAgentPickerModels(search.entries, modelQuery) : []
+  // A query naming an agent lists that agent first; picking it keeps the form's own setup.
+  const agentResults =
+    searching && search
+      ? filterAgentPickerEntries(search.entries, modelQuery).filter(
+          (candidate) => candidate.surfaces.length > 0
+        )
+      : []
+  const choices = search?.choices ?? []
+  const choiceResults = searching
+    ? choices.filter((choice) => choiceMatches(choice, modelQuery))
+    : []
+  const choiceList = useRef<HTMLDivElement>(null)
   const [legacyExpanded, toggleLegacy] = useLegacyModelsExpanded(
     models.some((model) => model.id === currentModel && model.isLegacy)
   )
@@ -126,7 +134,11 @@ export function AgentLaunchSetupPanel({
   // A search over every agent starts on the form's current model when it is listed, else on the first result.
   const highlight = useSetupModelHighlight(
     modelList,
-    searching ? resultStart && setupRowKey(resultStart) : modelRows.start,
+    searching
+      ? !agentResults.length && resultStart
+        ? setupRowKey(resultStart)
+        : undefined
+      : modelRows.start,
     searching ? '' : modelQuery
   )
   const handleUse = (surface: AgentPickerSurface) => {
@@ -158,33 +170,10 @@ export function AgentLaunchSetupPanel({
       </CommandItem>
     )
   }
-  const renderResult = (setup: AgentPickerSetup) => {
-    const current =
-      setup.entry.agent === search?.current?.agent &&
-      setup.model.id === search.current.model &&
-      !setup.choices.options?.effort
-    const effort = setup.model.efforts.find(
-      (choice) => choice.value === setup.choices.options?.effort
-    )
-    return (
-      <CommandItem
-        key={setupRowKey(setup)}
-        value={setupRowKey(setup)}
-        selection="palette"
-        disabled={disabled}
-        data-current={current}
-        onSelect={() => search?.onPick(setup)}
-      >
-        <AgentVariantIcon agent={setup.entry.agent} size={14} />
-        <span className="min-w-0 flex-1 truncate">
-          {[setup.model.label, effort?.label].filter(Boolean).join(' · ')}
-        </span>
-        <span className="flex size-3.5 shrink-0 items-center justify-center">
-          {current ? <Check className="size-3.5 text-muted-foreground" /> : null}
-        </span>
-      </CommandItem>
-    )
-  }
+  const focusSearch = () =>
+    modelList.current
+      ?.querySelector<HTMLInputElement>('[cmdk-input]')
+      ?.focus({ preventScroll: true })
   // Levels lead the row; speed and the rest sit at its end.
   const isLevel = (row: (typeof state.optionRows)[number]) =>
     row.category === 'thought_level' && row.kind.type === 'select'
@@ -244,6 +233,18 @@ export function AgentLaunchSetupPanel({
           }
         }}
         onKeyDown={(event) => {
+          // ArrowDown past the last model moves on to the rows under the card.
+          if (event.key === 'ArrowDown' && !searching && choices.length) {
+            const items = event.currentTarget.querySelectorAll(
+              '[cmdk-item]:not([data-disabled="true"])'
+            )
+            const selected = event.currentTarget.querySelector('[cmdk-item][data-selected="true"]')
+            if (!items.length || selected === [...items].at(-1)) {
+              event.preventDefault()
+              choiceList.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus()
+              return
+            }
+          }
           highlight.onKeyDown(event)
           if (event.key === 'Enter') {
             event.stopPropagation()
@@ -271,7 +272,7 @@ export function AgentLaunchSetupPanel({
                 {catalogMessage}
               </div>
             ) : null}
-            {searching && results.length === 0 ? (
+            {searching && !results.length && !agentResults.length && !choiceResults.length ? (
               <div className="flex h-9 items-center px-2.5 text-xs text-muted-foreground">
                 {t('agentPicker.noModels', 'No models match your search.')}
               </div>
@@ -283,7 +284,15 @@ export function AgentLaunchSetupPanel({
             ) : null}
             <CommandGroup>
               {searching ? (
-                results.map(renderResult)
+                <AgentPickerSearchResults
+                  agents={agentResults}
+                  results={results}
+                  choices={choiceResults}
+                  current={search?.current}
+                  disabled={disabled}
+                  onPick={(setup) => search?.onPick(setup)}
+                  onPickAgent={(candidate) => search?.onPickAgent(candidate)}
+                />
               ) : (
                 <>
                   <AgentLaunchTextModelDefault
@@ -336,9 +345,17 @@ export function AgentLaunchSetupPanel({
         </div>
       ) : null}
       {mode === 'select' ? (
-        installed || searching ? (
-          children
-        ) : null
+        <>
+          {installed || searching ? children : null}
+          {choices.length && !searching ? (
+            <AgentPickerChoiceRows
+              ref={choiceList}
+              choices={choices}
+              disabled={disabled}
+              onLeaveUp={focusSearch}
+            />
+          ) : null}
+        </>
       ) : (
         <AgentLaunchSetupFooter
           ref={footer}
