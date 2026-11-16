@@ -218,7 +218,6 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
     homePath: string | null
   ): void {
     this.syncWslConfigAndGlobalInstructionsForLaunch(target, homePath)
-    this.startWslSessionBridgeForLaunch(target, homePath)
   }
 
   protected syncWslConfigAndGlobalInstructionsForLaunch(

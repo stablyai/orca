@@ -23,20 +23,15 @@ vi.mock('node:os', async () => {
   const actual = await vi.importActual<typeof NodeOs>('node:os')
   return { ...actual, homedir: () => testState.home }
 })
-// Prevent the selection-triggered history bridge from spawning a real app-server.
-vi.mock('../../../codex/history/index/codex-account-session-index-heal', () => {
-  const upToDate = async () => ({
+// Prevent the selection-triggered history indexing from spawning a real app-server.
+vi.mock('../../../codex/history/index/codex-account-session-index-heal', () => ({
+  healPendingCodexAccountThreads: async () => ({
     outcome: 'up-to-date',
     healedThreads: 0,
     missingThreads: 0,
     failedThreads: 0
   })
-  return {
-    createCodexAccountStateDb: async () => false,
-    healCodexAccountSessionIndex: upToDate,
-    healPendingCodexAccountThreads: upToDate
-  }
-})
+}))
 
 beforeEach(() => {
   vi.resetModules()

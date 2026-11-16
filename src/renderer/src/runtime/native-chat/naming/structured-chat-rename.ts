@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import type { AppState } from '@/store/types'
-import type { Tab } from '../../../../../shared/tab-types'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { normalizeAgentSessionConversationName } from '../../../../../shared/agent-session/agent-session-conversation-name'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { supportsStructuredAgentSessionRename } from '../host-capabilities/structured-agent-session-host-support'

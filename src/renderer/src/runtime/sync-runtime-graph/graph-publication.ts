@@ -24,6 +24,7 @@ import {
 import {
   collectAmbiguousTerminalTabIds,
   graphState,
+  indexTerminalTabsByWorktree,
   mobilePublicationEpoch,
   NO_TRANSPORT_GRACE_MS
 } from './graph-state'
@@ -40,7 +41,6 @@ import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeRendererSyncWindowGraph
 } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 
 export async function syncRuntimeGraph(): Promise<void> {
   if (!graphState.syncEnabled || !graphState.getStoreState) {
@@ -50,19 +50,7 @@ export async function syncRuntimeGraph(): Promise<void> {
   const state = graphState.getStoreState()
   const systemPrefersDark = getSystemPrefersDark()
   const ambiguousTerminalTabIds = collectAmbiguousTerminalTabIds(state.tabsByWorktree)
-  const terminalTabsByWorktree = new Map<string, Map<string, TerminalTab>>()
-  for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
-    const tabsById = new Map<string, TerminalTab>()
-    for (const tab of tabs) {
-      // Duplicate persisted tab IDs cannot prove mounted PTY ownership.
-      if (tabsById.has(tab.id)) {
-        tabsById.delete(tab.id)
-        continue
-      }
-      tabsById.set(tab.id, tab)
-    }
-    terminalTabsByWorktree.set(worktreeId, tabsById)
-  }
+  const terminalTabsByWorktree = indexTerminalTabsByWorktree(state.tabsByWorktree)
   const generatedTitlesEnabled = state.settings?.tabAutoGenerateTitle === true
   const mobileSessionTabs = buildMobileSessionTabSnapshots(
     state,

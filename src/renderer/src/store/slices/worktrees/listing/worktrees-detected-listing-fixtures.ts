@@ -7,7 +7,7 @@ import type {
 import type {
   HostQualifiedDetectedWorktreeResult,
   ListDetectedWorktreesArgs
-} from '../../../../../../shared/detected-worktree-provider-contract'
+} from '../../../../../../shared/worktree/catalog/detected-worktree-provider-contract'
 
 export function makeDetectedResult(
   repoId: string,

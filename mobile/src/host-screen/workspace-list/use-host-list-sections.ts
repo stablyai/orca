@@ -28,7 +28,7 @@ import {
 import { useHostRepoIconDataUrls } from '../catalog/use-host-repo-icon-data-urls'
 import type { HostSidebarFeed } from '../sidebar-feed/use-host-sidebar-feed'
 import type { HostScreenState } from '../use-host-screen-state'
-import { indexHiddenProjects } from '../../../../src/shared/hidden-projects'
+import { indexHiddenProjects } from '../../../../src/shared/project/catalog/hidden-projects'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../src/shared/execution-host'
 
 export type HostListSectionsInputs = {

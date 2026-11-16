@@ -30,7 +30,7 @@ import {
 } from './render-row-lookup'
 import { getWorktreeRevealCollapsedGroupKeys } from './worktree-reveal-group-keys'
 import { useAppStore } from '@/store'
-import { indexHiddenProjects } from '../../../../../../shared/hidden-projects'
+import { indexHiddenProjects } from '../../../../../../shared/project/catalog/hidden-projects'
 
 export const MAX_REVEAL_RETRIES = 8
 

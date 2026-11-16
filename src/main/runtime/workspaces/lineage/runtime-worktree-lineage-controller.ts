@@ -14,7 +14,7 @@ import {
   parseWorkspaceKey,
   worktreeWorkspaceKey
 } from '../../../../shared/workspace/identity/workspace-scope'
-import { sharesResolvedWorktreeLineageBoundary } from '../../../../shared/resolved-worktree-lineage'
+import { sharesResolvedWorktreeLineageBoundary } from '../../../../shared/worktree/lineage/resolved-worktree-lineage'
 import { crossStoreParentRefOfRow } from '../../../../shared/worktree/lineage/lineage-row-identity'
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'

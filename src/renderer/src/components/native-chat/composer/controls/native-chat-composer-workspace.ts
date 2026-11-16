@@ -23,7 +23,7 @@ import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   floatingWorkspaceToWorktree,
   isFloatingWorkspaceId
-} from '../../../../../../shared/floating-workspace-worktree'
+} from '../../../../../../shared/workspace/identity/floating-workspace-worktree'
 import { createNativeChatTabOwnerSelector } from '../../pane/ownership/native-chat-tab-owner'
 import { FILE_LINK_CONTEXT_INPUT_KEYS } from '../../links/actions/native-chat-file-link-context'
 import { resolveNativeChatTabDirectory } from '../../pane/routing/native-chat-tab-directory'
