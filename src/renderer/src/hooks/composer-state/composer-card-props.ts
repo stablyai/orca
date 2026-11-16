@@ -39,6 +39,7 @@ export function buildComposerCardProps(state: ComposerModel) {
     ephemeralVmRecipes,
     ephemeralVmsEnabled,
     orcaCloudAvailability,
+    orcaCloudDropped,
     filteredLinkItems,
     folderDetectedAgentIds,
     folderSourceRepos,
@@ -163,6 +164,7 @@ export function buildComposerCardProps(state: ComposerModel) {
       isProjectGroupTarget || !ephemeralVmsEnabled ? null : selectedEphemeralVmRecipeId,
     onEphemeralVmRecipeChange: setSelectedEphemeralVmRecipeId,
     orcaCloudAvailability,
+    orcaCloudDropped,
     ephemeralVmRecipeError:
       isProjectGroupTarget || !ephemeralVmsEnabled ? null : ephemeralVmRecipeError,
     repoBackedSearchRepos: isProjectGroupTarget ? folderSourceRepos : undefined,

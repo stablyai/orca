@@ -1,3 +1,4 @@
+import type { OrcaCloudDropReason } from '@/hooks/useEphemeralVmRecipeOptions'
 import { useState } from 'react'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import type { NewWorkspaceProjectOption } from '@/lib/workspace/creation/new-workspace-project-options'
@@ -113,9 +114,12 @@ const handoffCloudStart = (githubHandoff: 'waiting' | 'timed-out'): CloudStartVi
 function ProjectAndHostPreview({
   folderOnly = false,
   orcaCloud,
-  githubHandoff
+  githubHandoff,
+  cloudDropped
 }: {
   folderOnly?: boolean
+  /** RUNON-STICKY: a picked Orca Cloud didn't carry over to this project. */
+  cloudDropped?: OrcaCloudDropReason
   /** Back from GitHub's access page (REPO-ACCESS-REFRESH). */
   githubHandoff?: 'waiting' | 'timed-out'
   /** Offers Orca Cloud with this entitlement. */
@@ -155,6 +159,7 @@ function ProjectAndHostPreview({
         selectedEphemeralVmRecipeId={recipe}
         onEphemeralVmRecipeChange={setRecipe}
         {...(orcaCloud ? { orcaCloudAccess: orcaCloud } : {})}
+        {...(cloudDropped ? { orcaCloudDropped: cloudDropped } : {})}
         {...(githubHandoff ? { cloudStart: handoffCloudStart(githubHandoff) } : {})}
         handleAddSshHost={() => {}}
         handleAddRemoteServer={() => {}}
@@ -250,4 +255,14 @@ export const waitingForGitHub = defineFixture({
 export const githubHandoffTimedOut = defineFixture({
   ...closed,
   render: () => <ProjectAndHostPreview orcaCloud={entitled} githubHandoff="timed-out" />
+})
+
+// RUNON-STICKY: Orca Cloud was picked, then a project that can't run on it.
+export const cloudDroppedElsewhere = defineFixture({
+  ...closed,
+  render: () => <ProjectAndHostPreview orcaCloud={entitled} cloudDropped="elsewhere" />
+})
+export const cloudDroppedUnavailable = defineFixture({
+  ...closed,
+  render: () => <ProjectAndHostPreview orcaCloud={entitled} cloudDropped="unavailable" />
 })
