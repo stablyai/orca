@@ -8,6 +8,8 @@ type OscTerminator = {
 }
 
 const OSC_133_PREFIX = '\x1b]133;'
+// 128 + SIGSTOP/SIGTSTP/SIGTTIN/SIGTTOU, as numbered on macOS (17, 18, 21, 22) and Linux (19, 20, 21, 22).
+const JOB_STOP_STATUSES: ReadonlySet<number> = new Set([145, 146, 147, 148, 149, 150])
 const MAX_OSC_CARRY_LENGTH = 4096
 
 function findOscTerminator(data: string, startIndex: number): OscTerminator | null {
@@ -137,4 +139,9 @@ export function createOsc133CommandFinishedScanner(
       adjacentMarkers = ''
     }
   }
+}
+
+/** A suspended job (Ctrl-Z) finishes its command with a stop status while its process lives on. */
+export function isJobStopStatus(exitCode: number | null): boolean {
+  return exitCode !== null && JOB_STOP_STATUSES.has(exitCode)
 }
