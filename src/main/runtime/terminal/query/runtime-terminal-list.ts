@@ -1,3 +1,4 @@
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type {
   RuntimeTerminalListResult,
@@ -42,6 +43,7 @@ type RuntimeTerminalListDependencies = {
     worktrees: Map<string, ResolvedWorktree>
   ): RuntimeTerminalSummary
   getSnapshots(): ReadonlyMap<string, RuntimeMobileSessionTabsSnapshot>
+  getSavedTabs(worktreeId: string): readonly TerminalTab[]
   getTabTitle(tabId: string): string | null
   getTopologyRevision(worktreeId: string): number
   buildHostScope(
@@ -175,6 +177,13 @@ export class RuntimeTerminalList {
           })
     return {
       terminals: listed,
+      ...(targetId &&
+        !requestedHandles && {
+          tabs: this.deps
+            .getSavedTabs(targetId)
+            .filter((tab) => !matching.some((terminal) => terminal.tabId === tab.id))
+            .map((tab) => ({ worktreeId: targetId, tabId: tab.id, title: tab.title ?? null }))
+        }),
       hostScope: this.deps.buildHostScope(
         targetId,
         matching,

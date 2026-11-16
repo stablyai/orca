@@ -222,6 +222,7 @@ export const EXECUTION_HOST_METHODS = [
   'terminal.close',
   'terminal.closeAll',
   'terminal.closeTab',
+  'terminal.closeTabById',
   'terminal.create',
   'terminal.createAgentSession',
   'terminal.ensureAgentSession',

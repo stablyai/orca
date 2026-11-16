@@ -1,3 +1,4 @@
+import { TerminalCloseTabById } from '../../../../../shared/rpc-contract/terminal-close-tab-params'
 import { terminalCreateFeatureRequirement } from '../../startup/agent-launch-feature-requirement'
 import { terminalImageViewerSupported } from '../../../terminal/launch/terminal-image-viewer-env'
 import { TERMINAL_WORKSPACE_STOP_METHODS } from './terminal-workspace-stop-methods'
@@ -259,6 +260,17 @@ export const TERMINAL_LIFECYCLE_METHODS = [
         () => context.runtime.closeTerminalTab(params.terminal)
       )
     })
+  }),
+  defineMethod({
+    name: 'terminal.closeTabById',
+    permission: 'workspace',
+    params: TerminalCloseTabById,
+    handler: async (params, { runtime }) =>
+      runtime.closeMobileSessionTab(params.worktree, params.tabId, {
+        reason: 'user',
+        requireStoppedTerminalTab: true,
+        localPtyTeardownOwnedExternally: true
+      })
   }),
   defineMethod({
     name: 'agentTeams.tmuxCompat',

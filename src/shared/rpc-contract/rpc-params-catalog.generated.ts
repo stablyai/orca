@@ -699,6 +699,7 @@ import { RenameParams } from './structured-agent-session/structured-agent-sessio
 import { SendRecordedParams } from './structured-agent-session/structured-agent-session-send-recorded-params'
 import { SubscribeParams } from './structured-agent-session/structured-agent-session-subscribe-params'
 import { CancelUsageLimitContinueParams } from './structured-agent-session/usage-limit-continue-params'
+import { TerminalCloseTabById } from './terminal-close-tab-params'
 import { CreateAgentSessionParams, EnsureAgentSessionParams } from './terminal/agent-session-params'
 import { TerminalInferCodexQuestionSkip } from './terminal/terminal-codex-question-params'
 import { TerminalDaemonRestartSeveredParams } from './terminal/terminal-daemon-params'
@@ -1622,6 +1623,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'terminal.close': TerminalHandle,
   'terminal.closeAll': TerminalCloseAll,
   'terminal.closeTab': TerminalHandle,
+  'terminal.closeTabById': TerminalCloseTabById,
   'terminal.create': TerminalCreateParams,
   'terminal.createAgentSession': CreateAgentSessionParams,
   'terminal.ensureAgentSession': EnsureAgentSessionParams,

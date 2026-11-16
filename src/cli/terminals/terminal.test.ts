@@ -34,6 +34,53 @@ describe('terminal send CLI', () => {
     process.exitCode = ORIGINAL_EXIT_CODE
   })
 
+  it('closes a stopped tab in the cwd workspace when --worktree is omitted', async () => {
+    const call = vi.fn().mockImplementation(async (method: string) => {
+      if (method === 'worktree.list') {
+        return { result: { worktrees: [{ id: 'repo::/tmp/worktree', path: '/tmp/worktree' }] } }
+      }
+      if (method === 'folderWorkspace.list') {
+        return { result: { folderWorkspaces: [] } }
+      }
+      return { result: { closed: true, retirementConfirmed: true } }
+    })
+    const client = terminalClient(call)
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    await TERMINAL_HANDLERS['terminal close']({
+      flags: new Map([['tab-id', 'tab-1']]),
+      client,
+      cwd: '/tmp/worktree',
+      json: true
+    })
+    expect(call).toHaveBeenCalledWith('terminal.closeTabById', {
+      tabId: 'tab-1',
+      worktree: 'id:repo::/tmp/worktree'
+    })
+  })
+
+  it.each([
+    { closed: false },
+    { closed: true },
+    { closed: true, refused: true, refusalReason: 'unknown-liveness' }
+  ])('rejects an unconfirmed tab close receipt %j', async (receipt) => {
+    const client = terminalClient(vi.fn().mockResolvedValue({ result: receipt }))
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    await TERMINAL_HANDLERS['terminal close']({
+      flags: new Map<string, string | true>([
+        ['tab-id', 'tab-1'],
+        ['worktree', 'id:repo::/workspace']
+      ]),
+      client,
+      cwd: '/tmp/worktree',
+      json: true
+    })
+    expect(process.exitCode).toBe(1)
+    expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toMatchObject({
+      ok: false,
+      error: { code: 'terminal_tab_close_unconfirmed', data: { close: receipt } }
+    })
+  })
+
   it('fails closed when the host downgrades after the prompt capability preflight', async () => {
     const response = {
       result: { send: { handle: 'term-1', accepted: true, bytesWritten: 8 } },

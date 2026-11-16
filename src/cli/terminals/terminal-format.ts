@@ -29,7 +29,10 @@ export function formatTerminalList(
   result: WithAnnotatedHostScope<RuntimeTerminalListResult>
 ): string {
   const scope = formatListingHostScope(result.hostScope)
-  if (result.terminals.length === 0) {
+  const tabs = result.tabs
+    ?.map((tab) => `tab=${tab.tabId}  ${tab.title ?? '(untitled)'}  worktree=id:${tab.worktreeId}`)
+    .join('\n')
+  if (result.terminals.length === 0 && !tabs) {
     return `No terminals listed.\n${scope}`
   }
   const body = result.terminals
@@ -40,7 +43,7 @@ export function formatTerminalList(
     .join('\n\n')
   const visualLayout = formatTerminalVisualLayouts(result.visualLayouts)
   const bodyWithLayout = visualLayout ? `${body}\n\nvisual layout:\n${visualLayout}` : body
-  const bodyWithScope = `${bodyWithLayout}\n\n${scope}`
+  const bodyWithScope = [bodyWithLayout, tabs, scope].filter(Boolean).join('\n\n')
   return result.truncated
     ? `${bodyWithScope}\ntruncated: showing ${result.terminals.length} of ${result.totalCount}`
     : bodyWithScope

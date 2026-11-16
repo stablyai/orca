@@ -12,6 +12,7 @@ export type MobileSessionTabCloseOptions = {
   clientNavigationId?: string
   localPtyTeardownOwnedExternally?: boolean
   expectedPtyCloseAuthority?: RuntimePtyTabCloseAuthority
+  requireStoppedTerminalTab?: boolean
   force?: boolean
 }
 

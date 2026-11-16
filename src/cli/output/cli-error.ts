@@ -272,6 +272,9 @@ function mergeContextRecovery(
 }
 
 function nextStepsFromData(data: unknown): string[] {
+  if (data && typeof data === 'object' && 'nextStep' in data && typeof data.nextStep === 'string') {
+    return [data.nextStep]
+  }
   if (
     data &&
     typeof data === 'object' &&
