@@ -5,6 +5,8 @@ export type MobileDiffChange = Pick<ArrayChange<string>, 'count' | 'added' | 're
 
 // Limit edit-search cost for large rewrites.
 const MAX_EDIT_LENGTH = 250
+// Why: a failed section search costs about as much as a failed whole-file one, so sections share a budget.
+const MAX_ANCHORED_EDIT_LENGTH = 10 * MAX_EDIT_LENGTH
 
 export function* buildMobileDiffChanges(
   originalKeys: string[],
@@ -23,14 +25,18 @@ export function* buildMobileDiffChanges(
   anchors.push({ originalIndex: originalKeys.length, modifiedIndex: modifiedKeys.length })
   let originalStart = 0
   let modifiedStart = 0
+  let editBudget = MAX_ANCHORED_EDIT_LENGTH
   for (const { originalIndex, modifiedIndex } of anchors) {
     if (originalStart < originalIndex || modifiedStart < modifiedIndex) {
       const originalSection = originalKeys.slice(originalStart, originalIndex)
       const modifiedSection = modifiedKeys.slice(modifiedStart, modifiedIndex)
-      yield* (
-        diffArrays(originalSection, modifiedSection, { maxEditLength: MAX_EDIT_LENGTH }) ??
-          buildPrefixSuffixChanges(originalSection, modifiedSection)
-      )
+      const maxEditLength = Math.min(MAX_EDIT_LENGTH, editBudget)
+      const sectionChanges =
+        maxEditLength > 0
+          ? diffArrays(originalSection, modifiedSection, { maxEditLength })
+          : undefined
+      editBudget -= sectionChanges ? countEdits(sectionChanges) : maxEditLength
+      yield* sectionChanges ?? buildPrefixSuffixChanges(originalSection, modifiedSection)
     }
     if (originalIndex < originalKeys.length) {
       yield { count: 1, added: false, removed: false }
@@ -38,6 +44,16 @@ export function* buildMobileDiffChanges(
     originalStart = originalIndex + 1
     modifiedStart = modifiedIndex + 1
   }
+}
+
+function countEdits(changes: readonly MobileDiffChange[]): number {
+  let edits = 0
+  for (const change of changes) {
+    if (change.added || change.removed) {
+      edits += change.count
+    }
+  }
+  return edits
 }
 
 function* buildPrefixSuffixChanges(
