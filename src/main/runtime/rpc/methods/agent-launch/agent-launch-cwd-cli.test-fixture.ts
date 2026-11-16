@@ -1,5 +1,5 @@
 import type { Mock } from 'vitest'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import type {
   RuntimeClientError,
   RuntimeRpcFailureError

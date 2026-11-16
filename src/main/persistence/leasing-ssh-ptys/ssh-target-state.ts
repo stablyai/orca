@@ -1,5 +1,5 @@
 import type { ProfileSaveDomains } from '../profile-save-domains'
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import type {
   RemovedSshTargetTombstone,
   SshTarget
@@ -12,7 +12,7 @@ import {
   collectSshTargetRemovalEvidenceDependencies
 } from '../../ssh/targets/removed-ssh-target-tombstone-retention'
 import { normalizeSshTarget } from './ssh-normalization'
-import { isRuntimeOwnedSshTargetId } from '../../../shared/execution-host'
+import { isRuntimeOwnedSshTargetId } from '../../../shared/execution-host/execution-host'
 import {
   migrateRetirementNamespaceHostIdentity,
   sshHostIdentity

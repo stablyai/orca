@@ -12,7 +12,7 @@ import { requestTerminalTabRename } from '@/components/tab-bar/terminal-tab-rena
 import { resolveTerminalAgentTabShortcut } from '@/components/terminal-agent-tab-shortcut'
 import { launchFloatingWorkspaceAgentShortcut } from '@/components/agent-tab-shortcut-launch'
 import { useAppStore } from '@/store/index'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import { keybindingMatchesAction } from '../../../../../shared/keybindings/matching'
 import type {
   KeybindingContext,

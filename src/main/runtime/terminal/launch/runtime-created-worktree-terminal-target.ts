@@ -8,7 +8,10 @@ import { isWorktreeMetaOwnedByRepo } from '../../../workspaces/catalog/worktree-
 import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { Repo } from '../../../../shared/repository/repo-types'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import { mergeWorktree } from '../../../ipc/worktree-metadata-merge'
 import { projectResolvedWorktreeLineage } from '../../../../shared/worktree/lineage/resolved-worktree-lineage'
 

@@ -1,6 +1,6 @@
 import { crewWorkspaceNames } from '../../orchestration/crew/crew-workspace-names'
 import { isDeepStrictEqual } from 'node:util'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { TerminalListHostScope } from '../../terminal/query/terminal-list-host-scope'
 

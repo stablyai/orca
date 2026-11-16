@@ -1,5 +1,5 @@
 import type { Repo } from '../../../../shared/repository/repo-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import { assertRemovalHostMatchesRepoRow } from '../repo-host-ownership'
 import { isFolderRepo } from '../../../../shared/repository/repo-kind'

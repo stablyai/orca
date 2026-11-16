@@ -1,5 +1,5 @@
-import type { GlobalSettings } from '../global-settings-types'
-import type { PersistedUIState } from '../persisted-ui-state-types'
+import type { GlobalSettings } from '../settings/global-settings-types'
+import type { PersistedUIState } from '../orca-profiles/persisted-ui-state-types'
 import {
   moveDisposition,
   notApplicableDisposition,

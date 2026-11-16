@@ -1,8 +1,8 @@
 import '../../orca-runtime-tests/runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
-import { getDefaultWorkspaceSession } from '../../../../shared/constants'
-import '../../../../shared/execution-host'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/constants'
+import '../../../../shared/execution-host/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import '../../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
 
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'

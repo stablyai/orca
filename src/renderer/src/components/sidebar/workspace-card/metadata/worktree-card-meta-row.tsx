@@ -4,7 +4,7 @@ import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
 import CacheTimer from '../activity/CacheTimer'
 import { WorktreeHostContextBadge } from '../host/WorktreeHostContextBadge'
 import { useWslHostDistro, WslHostMark } from '@/components/wsl-host-mark/WslHostMark'
-import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host'
+import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { TruncatedSidebarLabel } from '../../truncated-sidebar-label'
 import {
   WorktreeCardConflictBadge,

@@ -1,5 +1,5 @@
-import { parseExecutionHostId } from '../../../../../shared/execution-host'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import '../../../../../shared/remote-runtime/protocol/protocol-version'
 import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../../../shared/browser/runtime/browser-runtime-capabilities'
 import {

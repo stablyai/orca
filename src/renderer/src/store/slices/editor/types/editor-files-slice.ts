@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 import type { CheckRunDetailsTabPatch } from '@/components/editor/check-details/actions/check-run-details-tab'
 import type {

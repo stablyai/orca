@@ -16,7 +16,7 @@ import {
   resolveGitHubWorkItemTarget
 } from '../../../../../src/shared/github/work-items/work-item-target'
 import type { GitHubWorkItemDetails } from '../../../../../src/shared/github/work-items/work-item-types'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../src/shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../src/shared/execution-host/execution-host'
 import { worktreeIdsEqual } from '../../../../../src/shared/worktree/id'
 import {
   defineHostQuery,

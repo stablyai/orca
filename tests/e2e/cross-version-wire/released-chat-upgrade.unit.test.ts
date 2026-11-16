@@ -31,11 +31,11 @@ import {
 } from './released-chat-continuation'
 import {
   identityOf,
-  releasedJournalOpener,
+  releasedJournalReader,
   writeReleasedChat,
   type Agent
 } from './released-chat-writers'
-import type { ReleasedCard, ReleasedJournal, ReleasedOpener } from './released-chat-journal'
+import type { ReleasedCard, ReleasedReader } from './released-chat-journal'
 
 // The two releases before outcome storage, and the oldest release whose chat database this build still
 // reads, writes a Claude and a Codex chat through its own writers. This build admits every row as
@@ -90,12 +90,6 @@ const view = async (journal: AgentSessionJournal, now: () => number) => {
   }
 }
 
-/** A release's chat and its live cards, as that release reads them. */
-const releasedView = (journal: ReleasedJournal) => ({
-  snapshot: journal.snapshot(),
-  cards: byPosition(journal.queuedMessages.list()).filter((card) => card.state !== 'withdrawn')
-})
-
 /** What the release wrote: its items, sends and live cards, in order. Fields a later build adds to
  * them are not compared (`toMatchObject`), so main may add one; a changed value or order still fails. */
 const releaseWritten = ({
@@ -114,11 +108,15 @@ const kept = (items: AgentJournalSnapshot['items']) =>
   items.map(({ itemId, body }) => ({ itemId, body }))
 
 /** The chat as a release opens it, over a copy so the original stays as the release left it. */
-async function openedBy(opener: ReleasedOpener, agent: Agent, stateDirectory: string) {
-  return opener
+async function openedBy(reader: ReleasedReader, agent: Agent, stateDirectory: string) {
+  return reader
     .open({ identity: identityOf(agent), stateDirectory })
-    .then(releasedView)
-    .finally(() => opener.closeAll())
+    .then(reader.read)
+    .then(({ snapshot, cards }) => ({
+      snapshot,
+      cards: byPosition(cards).filter((card) => card.state !== 'withdrawn')
+    }))
+    .finally(() => reader.closeAll())
 }
 
 /** Opens the chat, edits, sends and rewinds it, then reopens it; checks what the user sees. */
@@ -243,7 +241,7 @@ describe('a chat a shipped release wrote, carried on by this build', () => {
           expect(releaseWritten(ours.opened)).toMatchObject(releaseWritten(written))
         }
         // This build opens the chat as the newest release does.
-        const newest = await releasedJournalOpener(resolveBaselineReleaseRef())
+        const newest = await releasedJournalReader(resolveBaselineReleaseRef())
         expect(releaseWritten(ours.opened)).toMatchObject(
           releaseWritten(await openedBy(newest, agent, shipped))
         )

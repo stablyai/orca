@@ -12,7 +12,7 @@ import {
   toSshExecutionHostId,
   parseExecutionHostId,
   toRuntimeExecutionHostId
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import {
   resolveQualifiedFolderWorkspaceResult,
   type QualifiedFolderHostState

@@ -4,7 +4,7 @@ import { useAppStore } from '@/store'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { clearRuntimeCompatibilityCache } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
-import { getDefaultSettings } from '../../../../shared/constants'
+import { getDefaultSettings } from '../../../../shared/orca-profiles/constants'
 import { projectAgentLaunchSettings } from '../../../../shared/agent-launch/choices/agent-launch-settings'
 import type { RuntimeEnvironmentStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
 import {

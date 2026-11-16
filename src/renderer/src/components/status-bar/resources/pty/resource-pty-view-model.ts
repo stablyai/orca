@@ -8,7 +8,7 @@ import type { ProjectGroup } from '../../../../../../shared/project/groups/proje
 import {
   getRepoExecutionHostId,
   getWorktreeExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { projectGroupIdFromRepoId } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import {
   makePaneKey,

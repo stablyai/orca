@@ -1,6 +1,6 @@
 import { getFolderWorkspaceHostIdentity } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import type { RenderRow } from '../listing/render-row'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { PinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
 import { isPinnedWorktreeRow } from '../listing/renderable-rows'
 import { getRenderRowWorktreeItem, renderRowContainsWorktree } from './render-row-lookup'

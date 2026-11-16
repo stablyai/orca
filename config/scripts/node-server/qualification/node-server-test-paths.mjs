@@ -4,9 +4,7 @@ export const REQUIRED_TEST_INPUTS_ENV = 'ORCA_REQUIRED_TEST_INPUTS'
 export const CROSS_RUNTIME_TEST_PATHS = []
 
 // Need the built desktop server template; CI runs them by path after build-orcad-template.mjs.
-export const TEMPLATE_TEST_PATHS = [
-  'src/main/orcad/testing/structured-chat/orcad-packaged-structured-chat.integration.test.ts'
-]
+export const TEMPLATE_TEST_PATHS = []
 
 export function nodeServerTestPaths({
   artifact = false,

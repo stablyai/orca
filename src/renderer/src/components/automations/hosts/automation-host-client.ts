@@ -8,8 +8,8 @@ import type {
 } from '../../../../../shared/automations/automation-definition'
 import type { AutomationRun } from '../../../../../shared/automations/history/automation-run'
 import type { StableAutomationAuthorityRef } from '../../../../../shared/automations/ownership/automation-owner-ref'
-import { parseExecutionHostId } from '../../../../../shared/execution-host'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 
 type RuntimeAutomationCreateInput = Omit<
   AutomationCreateInput,

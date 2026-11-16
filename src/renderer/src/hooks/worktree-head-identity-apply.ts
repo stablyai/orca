@@ -1,5 +1,8 @@
 import type { Worktree, WorktreeHeadIdentity } from '../../../shared/worktree/types'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../shared/execution-host/execution-host'
 import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
 
 export type WorktreeHeadIdentityApplyDeps = {

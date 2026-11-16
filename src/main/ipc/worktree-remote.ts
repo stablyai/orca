@@ -100,7 +100,7 @@ import {
   getConnectionExecutionHostId,
   getRepoExecutionHostId,
   type ExecutionHostId
-} from '../../shared/execution-host'
+} from '../../shared/execution-host/execution-host'
 import type { BranchPrefixSettings } from '../../shared/git/branches/branch-prefix'
 import {
   parseWorkspaceKey,

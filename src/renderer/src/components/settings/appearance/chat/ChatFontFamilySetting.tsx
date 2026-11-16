@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import { resolveNativeChatAppearanceSettings } from '../../../../../../shared/native-chat/native-chat-appearance-settings'
 import { useTranslate } from '@/i18n/use-translate'
 import {
