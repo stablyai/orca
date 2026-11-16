@@ -4386,7 +4386,6 @@
       "src/shared/native-chat/transcript/native-chat-transcript-contracts.test.ts": 715,
       "src/shared/native-chat/transcript/native-chat-transcript-projection.test.ts": 182,
       "src/shared/native-chat/transcript/native-chat-turn-fold.test.ts": 192,
-      "src/shared/native-chat/transcript/native-chat-turn-status.test.ts": 69,
       "src/shared/native-file-drop.test.ts": 59,
       "src/shared/ndjson-retained-chunk-memory.test.ts": 327,
       "src/shared/network/network-proxy.test.ts": 44,
