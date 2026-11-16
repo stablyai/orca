@@ -203,7 +203,7 @@ export function CloudWorkspaceConfirmDialog({
             {pending.kind === 'private'
               ? t('auto.components.cloudWorkspaces.makePrivate', 'Make private')
               : pending.kind === 'delete'
-                ? t('auto.components.sidebar.DeleteCloudWorkspace.delete', 'Delete workspace')
+                ? t('auto.components.sidebar.DeleteCloudWorkspace.delete', 'Delete')
                 : pending.kind === 'archive'
                   ? t('auto.components.cloudWorkspaces.archive', 'Archive')
                   : busy

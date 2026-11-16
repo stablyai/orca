@@ -166,18 +166,18 @@ export function DeleteCloudWorkspaceFooter({
       <ArchiveSnapshotTooltip>
         <Button variant="outline" size="sm" onClick={onArchive} disabled={isDeleting}>
           <Archive />
-          {t('auto.components.sidebar.DeleteCloudWorkspace.archiveInstead', 'Archive instead')}
+          {t('auto.components.sidebar.DeleteCloudWorkspace.archiveInstead', 'Archive')}
         </Button>
       </ArchiveSnapshotTooltip>
       <Button variant="destructive" size="sm" onClick={onDelete} disabled={isDeleting}>
         {isDeleting ? <Loader2 className="animate-spin" /> : <Trash2 />}
-        {t('auto.components.sidebar.DeleteCloudWorkspace.delete', 'Delete workspace')}
+        {t('auto.components.sidebar.DeleteCloudWorkspace.delete', 'Delete')}
       </Button>
     </>
   )
 }
 
-/** "Archive instead": close the dialog and run the ordinary archive (Sleep, snapshot, Undo toast). */
+/** "Archive": close the dialog and run the ordinary archive (Sleep, snapshot, Undo toast). */
 export function archiveInsteadOfDelete(
   worktree: { id: string; displayName?: string },
   closeModal: () => void

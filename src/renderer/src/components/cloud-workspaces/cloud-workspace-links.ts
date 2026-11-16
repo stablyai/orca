@@ -53,7 +53,7 @@ type Front = {
 let front: Front = null
 
 /**
- * ⌘⌥⇧L: the workspace's own link (its W-number), like the tab-bar chip and the cloud workspace
+ * ⌘⌥⇧L: the workspace's own link (its W-number), like the cloud workspace
  * list's "Copy link to W-n". A link to the focused chat or terminal is a separate menu item, never the shortcut.
  */
 export function copyShortcutLink(sandboxId: string): Promise<boolean> {
