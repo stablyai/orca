@@ -7,6 +7,7 @@ import {
 import { isTranscriptSourceFailure } from '../../ai-vault/parsing/session-scanner-jsonl-reader'
 import {
   physicalSessionCandidates,
+  type SessionFileCandidate,
   type SessionFileChoice
 } from '../../ai-vault/session-scanner-types'
 import { fileIdentity } from '../storage/session-search-file-cursor'
@@ -44,7 +45,8 @@ export async function runSessionSearchIndexPass(
     let deferred = false
     let due = false
     let admitted = false
-    for (const candidate of physicalSessionCandidates(choice)) {
+    const aliases = physicalSessionCandidates(choice)
+    for (const [position, candidate] of aliases.entries()) {
       throwIfAiVaultScanCancelled(options.signal)
       if (!acceptsReads()) {
         break
@@ -60,6 +62,7 @@ export async function runSessionSearchIndexPass(
           cursor !== null
         ) {
           deferred = false
+          retireOutrankedAliases(store, options.rows, aliases.slice(position + 1))
           break
         }
         continue
@@ -117,4 +120,17 @@ export async function runSessionSearchIndexPass(
     }
   }
   return { stats, outOfTime, left }
+}
+
+/** A rollout keeps one row: a current preferred copy retires older rows from copies it outranks. */
+function retireOutrankedAliases(
+  store: SessionSearchIndexStore,
+  rows: ReadonlyMap<string, SessionSearchFileRow>,
+  outranked: readonly SessionFileCandidate[]
+): void {
+  for (const alias of outranked) {
+    if (rows.has(alias.file.path)) {
+      store.removeFile(alias.file.path)
+    }
+  }
 }
