@@ -165,6 +165,10 @@ export async function deleteChangelistWithFiles(
       cwd
     }
   )
+  // Why: a failed listing would let the revert below leave this changelist's adds on disk.
+  if (opened.code !== 0 && !/not opened|no such file/i.test(opened.stderr)) {
+    return toResult(opened)
+  }
   const added = parseTaggedOutput(opened.stdout)
     .filter((record) => record.action === 'add' || record.action === 'branch')
     .map((record) => toRelativePath(cwd, record.clientFile))

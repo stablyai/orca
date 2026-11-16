@@ -23,4 +23,11 @@ describe('deleteChangelistWithFiles', () => {
     await expect(deleteChangelistWithFiles('/ws', 7)).rejects.toThrow('escapes')
     expect(runP4.mock.calls.map(([args]) => args[0])).toEqual(['-ztag'])
   })
+
+  it('changes nothing when the opened files cannot be listed', async () => {
+    runP4.mockResolvedValue({ code: 1, stdout: '', stderr: 'Perforce password (P4PASSWD) invalid' })
+    const result = await deleteChangelistWithFiles('/ws', 7)
+    expect(result.success).toBe(false)
+    expect(runP4.mock.calls.map(([args]) => args[0])).toEqual(['-ztag'])
+  })
 })
