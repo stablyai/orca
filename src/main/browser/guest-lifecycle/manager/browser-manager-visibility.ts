@@ -228,9 +228,6 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
     if (!renderer) {
       return Promise.reject(focusGuardUnavailableError('missing_renderer'))
     }
-    if (renderer.isDestroyed()) {
-      return Promise.reject(focusGuardUnavailableError('renderer_destroyed'))
-    }
     return guardPaneFocusForAgentInput(renderer, browserPageId)
   }
 }

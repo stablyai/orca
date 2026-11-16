@@ -16,11 +16,7 @@ const PANE_READY_TIMEOUT_MS = 2000
 
 // The CDP helper keeps only the message, so it names the phase too. No "timeout" in names:
 // agent-browser swaps such messages for its own "Operation timed out".
-export type FocusGuardUnavailablePhase =
-  | 'missing_page'
-  | 'missing_renderer'
-  | 'renderer_destroyed'
-  | 'no_pane_answer'
+export type FocusGuardUnavailablePhase = 'missing_page' | 'missing_renderer' | 'no_pane_answer'
 
 export function focusGuardUnavailableError(
   phase: FocusGuardUnavailablePhase,
