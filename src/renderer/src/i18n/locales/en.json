@@ -13991,7 +13991,7 @@
           },
           "github": {
             "disconnectTitle": "Disconnect GitHub?",
-            "disconnectBody": "Commits in cloud workspaces will use Orca Cloud's name again.",
+            "disconnectBody": "Commits, pull requests and comments from cloud workspaces will show as Orca Cloud again.",
             "disconnectConfirm": "Disconnect",
             "disconnectCancel": "Cancel",
             "pending": "Finish in your browser",
@@ -14000,7 +14000,7 @@
             "disconnect": "Disconnect",
             "error": "Couldn't connect GitHub.",
             "tryAgain": "Try again",
-            "description": "Connect your GitHub so commits and pushes in cloud workspaces show your name. Until then they use Orca Cloud's.",
+            "description": "Connect your GitHub so commits, pull requests and comments from cloud workspaces show as you. Until then they show as Orca Cloud.",
             "connect": "Connect GitHub",
             "title": "GitHub",
             "disconnectError": "Couldn't disconnect GitHub."

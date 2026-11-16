@@ -18,7 +18,7 @@ export function disconnectGitHubConfirmOptions(t: Translate): ConfirmationDialog
     title: t('auto.components.settings.orcaAccount.github.disconnectTitle', 'Disconnect GitHub?'),
     description: t(
       'auto.components.settings.orcaAccount.github.disconnectBody',
-      "Commits in cloud workspaces will use Orca Cloud's name again."
+      "Commits, pull requests and comments from cloud workspaces will show as Orca Cloud again."
     ),
     confirmLabel: t('auto.components.settings.orcaAccount.github.disconnectConfirm', 'Disconnect'),
     cancelLabel: t('auto.components.settings.orcaAccount.github.disconnectCancel', 'Cancel'),
@@ -132,7 +132,7 @@ export function GitHubIdentityRowView({
   } else {
     detail = t(
       'auto.components.settings.orcaAccount.github.description',
-      "Connect your GitHub so commits and pushes in cloud workspaces show your name. Until then they use Orca Cloud's."
+      "Connect your GitHub so commits, pull requests and comments from cloud workspaces show as you. Until then they show as Orca Cloud."
     )
     action = connectButton(
       t('auto.components.settings.orcaAccount.github.connect', 'Connect GitHub')
