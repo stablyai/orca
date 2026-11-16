@@ -113,7 +113,9 @@ export function CompactAgentSummaryButton({
           subject: subjectLabel,
           states: groups.map((group) => formatStateCount(group.state, group.count, t)).join(', ')
         })
-  const unreadCount = agents.filter((agent) => isUnreadDoneAgent(agent, isUnread)).length
+  const unreadCount = isUnread
+    ? agents.reduce((count, agent) => count + (isUnreadDoneAgent(agent, isUnread) ? 1 : 0), 0)
+    : 0
   const unreadSummary =
     unreadCount > 0
       ? t('auto.components.activity.ActivityTitlebarControls.unreadCount', '{{count}} unread', {
