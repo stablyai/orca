@@ -210,7 +210,7 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
 
   const persistSetupHookTrust = useCallback(
     async (
-      prompt: Pick<OrcaHookTrustPrompt, 'repoId' | 'contentHash'>,
+      prompt: Pick<OrcaHookTrustPrompt, 'repoId' | 'contentHash' | 'pinnable'>,
       alwaysTrust: boolean
     ): Promise<CreateSetupApproval | null> => {
       if (!client) {
@@ -226,7 +226,7 @@ export function useMobileTasksClientSettingsActions(model: ProjectRepositoryReso
       })
       setTrustedOrcaHooks(trusted)
       keepUi({ trustedOrcaHooks: trusted })
-      return approvedCreateSetup(repos, prompt.repoId, prompt.contentHash, alwaysTrust)
+      return approvedCreateSetup(repos, prompt, alwaysTrust)
     },
     [client, keepUi, repos, trustedOrcaHooks]
   )

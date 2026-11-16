@@ -271,13 +271,13 @@ export function useNewWorkspaceCreateSubmit(args: {
     setupTrustActionInFlightRef.current = true
     setCreating(true)
     try {
-      const { repoId, contentHash } = setupTrustPrompt
+      const prompt = setupTrustPrompt
       const nextTrust = await persistSetupHookTrustApproval({
         client: args.client,
         trust: args.trustedOrcaHooks,
         repos: args.repos,
-        repoId,
-        contentHash,
+        repoId: prompt.repoId,
+        contentHash: prompt.contentHash,
         alwaysTrust
       })
       args.setTrustedOrcaHooks(nextTrust)
@@ -285,7 +285,7 @@ export function useNewWorkspaceCreateSubmit(args: {
       args.transitionDrawer('form')
       await create({
         setupOverride: 'run',
-        setupApproval: approvedCreateSetup(args.repos, repoId, contentHash, alwaysTrust)
+        setupApproval: approvedCreateSetup(args.repos, prompt, alwaysTrust)
       })
     } catch (error) {
       args.setError(error instanceof Error ? error.message : 'Failed to trust setup script.')

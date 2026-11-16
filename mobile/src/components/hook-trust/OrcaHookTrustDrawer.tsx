@@ -16,6 +16,8 @@ export type OrcaHookTrustPrompt = {
   previouslyApproved: boolean
   /** Same-id repos on several hosts: approvals stay per version and Always trust can't cover them. */
   versionOnly: boolean
+  /** Read from the create's branch, so a run may be pinned to this hash; older hosts read the checkout. */
+  pinnable?: true
 }
 
 type Props = {

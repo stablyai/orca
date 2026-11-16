@@ -73,8 +73,9 @@ export async function resolveCreateSetupApproval(args: {
   if (!setupTrust) {
     return { approved: {} }
   }
+  const pinnable = reply.createSourceRead === true
   if (isOrcaHookContentApproved(args.trust, repoId, 'setup', setupTrust.contentHash)) {
-    return { approved: { approvedSetupHash: setupTrust.contentHash } }
+    return { approved: pinnable ? { approvedSetupHash: setupTrust.contentHash } : {} }
   }
   return {
     ask: {
@@ -84,21 +85,22 @@ export async function resolveCreateSetupApproval(args: {
       scriptContent: setupTrust.scriptContent,
       contentHash: setupTrust.contentHash,
       previouslyApproved: wasOrcaHookPreviouslyApproved(args.trust, repoId, 'setup'),
-      versionOnly: usesVersionedOrcaHookTrust(args.repos, repoId)
+      versionOnly: usesVersionedOrcaHookTrust(args.repos, repoId),
+      ...(pinnable ? { pinnable } : {})
     }
   }
 }
 
-/** Repo trust runs any content; otherwise the host runs only the approved content. */
+/** Repo trust runs any content; otherwise the host runs only the approved content when the hash came from the created branch. */
 export function approvedCreateSetup(
   repos: readonly { id: string }[] | null,
-  repoId: string,
-  contentHash: string,
+  prompt: Pick<OrcaHookTrustPrompt, 'repoId' | 'contentHash' | 'pinnable'>,
   alwaysTrust: boolean
 ): CreateSetupApproval {
-  return alwaysTrust && !usesVersionedOrcaHookTrust(repos, repoId)
+  // Without a branch read, a hash could make the host skip setup silently; send none, as before.
+  return !prompt.pinnable || (alwaysTrust && !usesVersionedOrcaHookTrust(repos, prompt.repoId))
     ? {}
-    : { approvedSetupHash: contentHash }
+    : { approvedSetupHash: prompt.contentHash }
 }
 
 type HookTrustApproval = {

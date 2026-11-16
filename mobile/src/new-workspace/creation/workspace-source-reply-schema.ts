@@ -69,7 +69,8 @@ export const repoSetupHooksSchema = z.looseObject({
         scriptContent: sourceText('scriptContent')
       })
       .nullable()
-  )
+  ),
+  createSourceRead: salvagedOptional('createSourceRead', z.boolean())
 })
 
 // Preset id/name/directories are read unguarded; optional metadata must not invalidate older rows.
