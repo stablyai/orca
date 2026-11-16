@@ -52,6 +52,8 @@ export function createPaneWindowsPtyModel(
   }
   const applyKnown = (): boolean => {
     const { terminal, owner, transport } = readContext()
+    // A re-resolved owner must not keep the previous owner's answer.
+    ownerUsesConpty = null
     const isLocal = isLocalPtyOwner(owner)
     const machine = isLocal ? null : resolveRemotePtyOwnerMachine(owner, transport)
     if (!isLocal && !machine) {

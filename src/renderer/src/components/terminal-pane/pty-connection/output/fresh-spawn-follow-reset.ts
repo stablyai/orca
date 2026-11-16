@@ -188,11 +188,23 @@ export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void 
     if (!options.forceBlankRestoredViewport && !hadRestoredViewport) {
       return
     }
-    const buffer = session.pane.terminal.buffer.active
-    // Nothing on screen to keep or move.
-    if (!hadRestoredViewport && buffer.baseY === 0 && buffer.cursorY === 0 && buffer.cursorX === 0) {
+    if (!hadRestoredViewport && isTerminalBlank(session.pane.terminal)) {
       return
     }
     session.writeFreshShellViewport()
   }
+}
+
+/** Nothing on screen or in scrollback to keep or move. */
+function isTerminalBlank(terminal: ConnectPanePtySession['pane']['terminal']): boolean {
+  const buffer = terminal.buffer.active
+  if (buffer.baseY > 0) {
+    return false
+  }
+  for (let row = 0; row < terminal.rows; row += 1) {
+    if (buffer.getLine(row)?.translateToString(true)) {
+      return false
+    }
+  }
+  return true
 }
