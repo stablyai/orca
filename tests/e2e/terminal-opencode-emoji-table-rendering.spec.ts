@@ -1,3 +1,4 @@
+import type { XtermWithRenderDimensions } from './helpers/xterm-render-dimensions'
 import { randomUUID } from 'node:crypto'
 import { rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
@@ -193,7 +194,9 @@ async function readActiveTerminalRasterTarget(page: Page): Promise<TerminalRaste
       throw new Error('No active terminal pane')
     }
     const screen = pane.container.querySelector<HTMLElement>('.xterm-screen')
-    const dimensions = pane.terminal._core?._renderService?.dimensions?.css?.cell
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: xterm has no public cell-size API; the private render service is read through all-optional fields.
+    const dimensions = (pane.terminal as XtermWithRenderDimensions)._core?._renderService
+      ?.dimensions?.css?.cell
     if (!screen || !dimensions) {
       throw new Error('Active terminal has no measurable xterm screen')
     }
@@ -297,49 +300,6 @@ test.describe('OpenCode emoji table terminal rendering', () => {
       expect(blinkSamples.some((sample) => sample.paintedCursorCellCount === 0)).toBe(true)
     } finally {
       rmSync(scriptPath, { force: true })
-    }
-  })
-
-  test('local real OpenCode demo keeps table rendering and cursor visible', async ({
-    orcaPage
-  }, testInfo) => {
-    test.skip(
-      process.env.ORCA_E2E_REAL_OPENCODE !== '1',
-      'Set ORCA_E2E_REAL_OPENCODE=1 to exercise the locally installed OpenCode TUI'
-    )
-
-    await waitForSessionReady(orcaPage)
-    await waitForActiveWorktree(orcaPage)
-    await ensureTerminalVisible(orcaPage)
-    await waitForActiveTerminalManager(orcaPage, 30_000)
-    await enableRiskyTerminalRendererPath(orcaPage)
-
-    const ptyId = await waitForActivePanePtyId(orcaPage)
-    await sendToTerminal(
-      orcaPage,
-      ptyId,
-      'opencode run --demo --interactive "Give me markdown table dummy data a long table with emojis in it"\r'
-    )
-    try {
-      await waitForTerminalOutput(orcaPage, 'Give me markdown table', 15_000)
-      await waitForTerminalOutput(orcaPage, 'Emoji', 60_000)
-      await waitForTerminalOutput(orcaPage, 'Alice', 60_000)
-      await orcaPage.waitForTimeout(1_500)
-
-      await testInfo.attach('real-opencode-demo-table', {
-        body: await orcaPage.screenshot({ fullPage: true }),
-        contentType: 'image/png'
-      })
-
-      const renderState = await readActiveTerminalRenderState(orcaPage)
-      testInfo.annotations.push({
-        type: 'real-opencode-demo-rendering',
-        description: JSON.stringify(renderState)
-      })
-      expect(renderState.coreCursorHidden).toBe(false)
-      expect(renderState.cursorVisibleElementCount).toBeGreaterThan(0)
-    } finally {
-      await sendToTerminal(orcaPage, ptyId, '\x03').catch(() => undefined)
     }
   })
 })

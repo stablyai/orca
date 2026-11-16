@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   closeProviderTimelineRigs,
   openProviderTimelineRig,
@@ -30,7 +30,7 @@ describe('what the journal already holds stands', () => {
     if (!identity) {
       throw new Error('item key did not parse')
     }
-    // Another writer settled one row in the turn; the session end settles only what is still open.
+    // Simulate another writer settling the row before session end.
     await rig.journal.appendItem(
       identity,
       { ...runningTool('grep'), state: 'completed' },
@@ -65,6 +65,34 @@ describe('what the journal already holds stands', () => {
     expect((await rig.row(providerItemId('item', 'tool')))?.body).toMatchObject({
       state: 'completed'
     })
+  })
+
+  it('retains a writer-refused reopen as closed before accepting trailing text', async () => {
+    const rig = await openProviderTimelineRig()
+    rig.assembler.apply({ type: 'turn.open', turn: 't1', at: 1_000 })
+    rig.assembler.apply({
+      type: 'item.close',
+      item: 'tool',
+      body: { ...runningTool('read'), state: 'completed' }
+    })
+    await rig.rows()
+    const blind = rig.assemble({ sink: rig.sink })
+    blind.apply({ type: 'item.open', item: 'tool', body: runningTool('read') })
+    await rig.rows()
+    expect(
+      blind.apply({
+        type: 'text.delta',
+        item: { id: 'tool' },
+        channel: 'assistant',
+        text: 'Late text'
+      }).dropped
+    ).toBe('item-settled')
+    blind.flush()
+    expect((await rig.row(providerItemId('item', 'tool')))?.body).toMatchObject({
+      kind: 'tool-call',
+      state: 'completed'
+    })
+    blind.dispose()
   })
 })
 
@@ -104,7 +132,6 @@ describe('requests', () => {
     expect(
       rig.assembler.apply({ type: 'request.open', request: 'p1', body: pendingApproval }).dropped
     ).toBeUndefined()
-    // The answered prompt keeps its answer; withdrawing reaches only the new one.
     rig.assembler.apply({ type: 'request.withdrawn', request: 'p1' })
     expect((await rig.row(providerItemId('request', 'p1')))?.body).toMatchObject({
       resolution: { state: 'resolved' }
@@ -124,7 +151,7 @@ describe('requests', () => {
     if (!identity) {
       throw new Error('request key did not parse')
     }
-    // Memory still holds it pending; only the journal knows a client answered.
+    // Only the journal knows the client answered; assembler memory still says pending.
     await rig.journal.appendItem(identity, answered, {
       fence: 1,
       turnScope: { kind: 'turn', turnItemId: providerTurnItemId('t1') }
@@ -147,8 +174,7 @@ describe('requests', () => {
       fence: 1,
       turnScope: { kind: 'turn', turnItemId: providerTurnItemId('t1') }
     })
-    // Another assembler of the same generation, blind to the journal, opens `p1` again.
-    const blind = rig.assemble({ sink: { ...rig.sink, journalItems: () => null } })
+    const blind = rig.assemble({ sink: rig.sink })
     blind.apply({ type: 'request.open', request: 'p1', body: pendingApproval })
     expect((await rig.row(providerItemId('request', 'p1')))?.body).toMatchObject({
       resolution: { state: 'resolved', selectedOptionId: 'allow' }

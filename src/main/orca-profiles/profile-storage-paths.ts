@@ -1,9 +1,9 @@
-import { getAppEnvironment } from '../../shared/app-environment'
+import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import {
   getOrcaProfileDataFile as getSharedOrcaProfileDataFile,
   getOrcaProfileStateDatabaseFile as getSharedOrcaProfileStateDatabaseFile
-} from '../../shared/profile-state-storage-paths'
-import { hasProfileStateDatabaseFiles } from '../persistence/profile-state/profile-state-storage-classification'
+} from '../../shared/orca-profiles/profile-state-storage-paths'
+import { hasProfileStateDatabaseFiles } from '../persistence/profile-state/database/profile-state-storage-classification'
 import { join } from 'node:path'
 
 const LEGACY_DATA_FILE_NAME = 'orca-data.json'
@@ -55,10 +55,6 @@ export function getOrcaProfileDataFile(
   return getSharedOrcaProfileDataFile(profileId, userDataPath)
 }
 
-/**
- * Return the future profile-state database path without changing the legacy
- * JSON path used by the current Store and its sidecars.
- */
 export function getOrcaProfileStateDatabaseFile(
   profileId: string,
   userDataPath = getProfileUserDataPath()

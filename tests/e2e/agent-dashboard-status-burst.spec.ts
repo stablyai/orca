@@ -37,12 +37,16 @@ test('keeps the visible Agent Dashboard interactive during a 100-pane status rep
           activate: false,
           id: 'agent-dashboard-burst-tab'
         })
+      const settings = store.getState().settings
+      if (!settings) {
+        throw new Error('Settings are not loaded')
+      }
       store.setState({
         agentDashboardDrawerOpen: false,
         settings: {
-          ...store.getState().settings,
+          ...settings,
           experimentalAgentDashboardPopout: true,
-          experimentalAgentDashboardMode: 'drawer',
+          experimentalAgentDashboardMode: 'in-window',
           experimentalAgentDashboardShowIdle: true,
           tabAutoGenerateTitle: false
         }
@@ -121,8 +125,8 @@ test('keeps the visible Agent Dashboard interactive during a 100-pane status rep
       () =>
         orcaPage.evaluate(
           (paneKeys) => {
-            const statuses = window.__store?.getState().agentStatusByPaneKey ?? {}
-            return paneKeys.every((paneKey) => statuses[paneKey]?.state === 'done')
+            const statuses = window.__store?.getState().agentStatusByPaneKey
+            return paneKeys.every((paneKey) => statuses?.get(paneKey)?.state === 'done')
           },
           panes.map(({ paneKey }) => paneKey)
         ),
@@ -139,12 +143,12 @@ test('keeps the visible Agent Dashboard interactive during a 100-pane status rep
       if (!state || !probe) {
         throw new Error('Agent Dashboard burst evidence is unavailable')
       }
-      const first = state.agentStatusByPaneKey[paneKeys[0]]
+      const first = state.agentStatusByPaneKey.get(paneKeys[0])
       return {
         statusPublications: probe.statusPublications,
         statusPublicationsAtVisible,
         finalStates: paneKeys.map(
-          (paneKey) => state.agentStatusByPaneKey[paneKey]?.state ?? 'missing'
+          (paneKey) => state.agentStatusByPaneKey.get(paneKey)?.state ?? 'missing'
         ),
         firstHistory: first?.stateHistory.map(({ state: historyState }) => historyState) ?? []
       }

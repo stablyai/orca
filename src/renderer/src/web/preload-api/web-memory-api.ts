@@ -1,4 +1,4 @@
-import type { MemorySnapshot } from '../../../../shared/process-stats-types'
+import type { MemorySnapshot } from '../../../../shared/diagnostics/process-stats-types'
 import { getBrowserPlatform } from './web-storage'
 
 export function createEmptyMemorySnapshot(): MemorySnapshot {

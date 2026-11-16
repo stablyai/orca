@@ -2,11 +2,7 @@ import type * as Monaco from 'monaco-editor'
 
 type MonacoModule = typeof Monaco
 
-// Why: Monaco resolves Markdown fences by alias (never extension) and its shell
-// language declares `bash` only as an extension, so ```bash rendered plain while
-// ```sh highlighted. Re-registering id 'shell' merges the alias and keeps the
-// built-in tokenizer; `Shell` stays first because Monaco uses the first alias as
-// the language's display name.
+// Markdown resolves fence aliases, not extensions: merge bash into shell without replacing its tokenizer; retain Shell first as the display name.
 export function registerShellMarkdownAliases(monaco: {
   languages: Pick<MonacoModule['languages'], 'getLanguages' | 'register'>
 }): void {

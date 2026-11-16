@@ -1,9 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { WebRuntimeConnectionHeartbeat } from './web-runtime-connection-heartbeat'
 
-// A probe that cannot be written is the strongest evidence the link is gone. Gating the deadline on
-// a successful send disarms the only branch that can declare the socket dead, so a saturated or
-// half-open socket is never judged at all — the wedge fixed on the SSH transport in #17817.
+// Unsendable probes still need deadlines; gating on successful send leaves saturated/half-open sockets unwatched (#17817).
 describe('WebRuntimeConnectionHeartbeat when the probe cannot be sent', () => {
   it('still declares the socket dead instead of watching it forever', () => {
     let now = 0

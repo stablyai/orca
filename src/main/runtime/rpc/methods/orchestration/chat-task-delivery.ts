@@ -1,26 +1,23 @@
-/**
- * A chat assignee's task, sent as any agent's message into a chat is: the composer's queued send,
- * held as a card while the chat is busy, recording the Dispatch it is from. The operation id is
- * derived from the Dispatch, so a second send for one Dispatch replays instead of queueing twice.
- */
+import { conversationRecordReader } from '../../../orchestration/addressing/session-lineage/structured-session-lineage'
+/** Queue the chat assignee's task as a composer card while busy; derive operation id from Dispatch so repeat sends replay instead of duplicating cards. */
 
 import { createHash } from 'node:crypto'
-import type { AgentJournalMessageItem } from '../../../../../shared/agent-session-journal-types'
-import type { AgentMessageSource } from '../../../../../shared/agent-session-message-source'
-import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import { chatAssigneeSessionId, observeChatAssignee } from '../../../orchestration/chat-assignee'
-import type { OrchestrationDb } from '../../../orchestration/db'
+import type { AgentJournalMessageItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentMessageSource } from '../../../../../shared/agent-session/agent-session-message-source'
+import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+import { observeChatAssignee } from '../../../orchestration/workers/lifecycle/chat-assignee'
+import type { OrchestrationDb } from '../../../orchestration/db/orchestration-db'
 import { exposeUtcTimestamp } from '../../../orchestration/db/utc-timestamp'
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
-import { sendAgentTurn } from '../../../orchestration/send-agent-turn'
-import { structuredPointerCallerKey } from '../../../orchestration/structured-mailbox-pointer-host'
-import type { DispatchContextRow } from '../../../orchestration/types'
-import { preambleDispatchState } from '../orchestration-structured-worker-session'
+import { sendAgentTurn } from '../../../orchestration/turn-delivery/send-agent-turn'
+import { structuredPointerCallerKey } from '../../../orchestration/mailbox/structured-pointer/structured-mailbox-pointer-host'
+import type { DispatchContextRow } from '../../../orchestration/db/orchestration-records'
+import { preambleDispatchState } from './structured-workers/orchestration-structured-worker-session'
 
 /** Handed over in every case: started, still starting its agent, or held as a card. */
 export type ChatTaskDelivery = 'accepted' | 'pending' | 'queued'
 
-type ChatTaskDispatch = Pick<DispatchContextRow, 'id' | 'assignee_handle' | 'created_at'>
+type ChatTaskDispatch = Pick<DispatchContextRow, 'id' | 'assignee_orca_session_id' | 'created_at'>
 
 /** The host's `<13-digit ms>-<32 hex>` shape, stamped at the Dispatch's creation. */
 export function chatTaskOperationId(
@@ -42,10 +39,12 @@ export async function sendChatTask(args: {
   from: AgentMessageSource
   preamble: string
 }): Promise<ChatTaskDelivery> {
-  const sessionId = chatAssigneeSessionId(args.dispatch.assignee_handle)
+  const sessionId = args.dispatch.assignee_orca_session_id
   const host = getStructuredAgentSessionHost()
   const observed =
-    sessionId && host ? observeChatAssignee(sessionId, args.db, host.deps.store) : null
+    sessionId && host
+      ? observeChatAssignee(sessionId, args.db, conversationRecordReader(host.deps.store))
+      : null
   if (!host || observed?.status !== 'live') {
     throw new OrchestrationError(
       'dispatch_preamble_undelivered',
@@ -68,7 +67,7 @@ export async function sendChatTask(args: {
       // As a person's message is: a busy chat queues it as a card, sent when the queue reaches it.
       delivery: 'queue',
       operationId: chatTaskOperationId(args.dispatch),
-      expectedRuntimeFence: observed.session.lease.runtimeFence
+      expectedRuntimeFence: observed.session.currentFence
     }
   })
   switch (outcome.kind) {

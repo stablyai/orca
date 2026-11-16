@@ -1,4 +1,4 @@
-import { useAnyBrowserGuestNeedsPaint } from './browser-pane/host-guest/browser-guest-paint-retention'
+import { useAnyBrowserGuestNeedsPaint } from './browser-pane/host-guest/retention/browser-guest-paint-retention'
 import { WorktreeSplitSurface } from './TerminalWorktreeSplitSurface'
 import { selectParkedEquivalentMountTabIds } from './terminal/startup-terminal-tab-hold'
 import type { TerminalController } from './use-terminal-controller'
@@ -19,15 +19,14 @@ export function TerminalSplitWorkspaceSurfaces({
     effectiveParkedTerminalWorktreeIds,
     forceParkedTerminalWorktreeIds,
     getEffectiveLayoutForWorktree,
+    prewarmLeasesRef,
     measurableBackgroundWorktreeIdsRef,
     mountedWorktreeIdsRef,
     renderedActiveWorktreeId,
     startupTerminalTabHold,
     workspaceSurfaces
   } = controller
-  // Why: this and TerminalSurface are both strict ancestors of every browser <webview>, so a
-  // remote controller needs each to drop `hidden` — the per-worktree surface hatch below cannot
-  // override an ancestor that stopped compositing.
+  // Every browser guest has this and TerminalSurface as ancestors; both must allow compositing for remote control to receive frames.
   const retainBrowserGuestPaint = useAnyBrowserGuestNeedsPaint(!effectiveActiveLayout)
   if (!anyMountedWorktreeHasLayout) {
     return null
@@ -65,6 +64,11 @@ export function TerminalSplitWorkspaceSurfaces({
               focusedGroupId={activeGroupIdByWorktree[workspace.id]}
               isVisible={isVisible}
               shouldMeasureHiddenWorktree={shouldMeasureHiddenWorktree}
+              prewarmStage={
+                shouldMeasureHiddenWorktree
+                  ? (prewarmLeasesRef.current.get(workspace.id) ?? null)
+                  : null
+              }
               shouldColdParkTerminalPanes={shouldColdParkTerminalPanes}
               isForceParked={forceParkedTerminalWorktreeIds.has(workspace.id)}
               activityTerminalPortals={activityTerminalPortals}

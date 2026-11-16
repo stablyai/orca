@@ -1,11 +1,13 @@
 import { OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory } from './pty-controller-inventory-refresh'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import { indexFloatingSnapshotPtyBindings } from '../../floating-snapshot-pty-bindings'
+import { indexFloatingSnapshotPtyBindings } from './floating-snapshot-pty-bindings'
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
-} from '../../runtime-terminal-state-records'
-import { DISCONNECTED_PTY_RECORD_MAX } from '../../orca-runtime-postlude'
+} from '../records/runtime-terminal-state-records'
+
+import { questionAnswerWaitPrefix } from '../../orchestration/mailbox/questions/question-answer-delivery'
+const DISCONNECTED_PTY_RECORD_MAX = 128
 
 export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory {
   protected refreshFloatingWorkspacePtyLiveness(): Set<string> | null {
@@ -49,7 +51,7 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
         livePtyIds.add(ptyId)
         const binding = persistedBindingByPtyId.get(ptyId)
         if (!pty && binding) {
-          // Why: a live daemon PTY restored from disk needs its pane identity before mobile can issue a safe handle.
+          // Restored daemon PTYs need pane identity before mobile can issue safe handles.
           pty = this.recordPtyWorktree(ptyId, FLOATING_TERMINAL_WORKTREE_ID, {
             connected: true,
             tabId: binding.tabId,
@@ -57,13 +59,13 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
           })
         }
         if (pty) {
-          pty.connected = true
+          this.terminalIdentity.setPtyConnected(pty, true)
           pty.disconnectedAt = null
           this.markPtyLivenessLive(ptyId)
           this.refreshPtyForegroundAgent(ptyId)
         }
       } else if (pty && !this.leafExistsForPty(ptyId)) {
-        pty.connected = false
+        this.terminalIdentity.setPtyConnected(pty, false)
         pty.disconnectedAt ??= Date.now()
       }
     }
@@ -75,7 +77,7 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
     if (pty.connected) {
       return
     }
-    // Why: disconnected PTY records stay addressable for status/exit reads, but their transcripts must not accumulate after the process dies.
+    // Keep disconnected records addressable for status/exit, but release their transcripts.
     pty.tailBuffer = []
     pty.tailTranscriptBuffer = []
     pty.tailTranscriptChars = 0
@@ -85,7 +87,7 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
     pty.tailTruncated = false
     pty.tailLinesTotal = 0
     pty.waitBlockedAt = null
-    // Why: tail is now empty, so clear the memoized wait scan; onPtyData must recompute from the reset tail if this record resumes output.
+    // Empty tails invalidate cached wait scans before resumed output.
     pty.tailWaitState = undefined
   }
 
@@ -95,7 +97,7 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
       .sort((a, b) => (a.disconnectedAt ?? 0) - (b.disconnectedAt ?? 0))
     const staleCount = Math.max(0, retained.length - DISCONNECTED_PTY_RECORD_MAX)
     for (const stale of retained.slice(0, staleCount)) {
-      // Why: exited runtime-owned PTYs stay readable, but long-lived runtimes churn through many sessions; bound the archive.
+      // Bound retained exited-terminal archives in long-lived runtimes.
       this.dropDisconnectedPtyRecord(stale.ptyId)
     }
   }
@@ -108,16 +110,18 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
       pty?.connectionId === null ||
       this.ptyLivenessVerdictByPtyId.get(ptyId)?.verdict.status === 'exited'
     if (processDeathCertified) {
+      this.clearLiveProgramStatusFacet(ptyId)
       this.reconcileAgentStatusForEndedProcessFn?.(this.collectAgentStatusPaneKeysForPty(ptyId))
     }
     this.advancePtyLifecycleGeneration(ptyId)
     this.pairedRendererSessionOwnedPtyIds.delete(ptyId)
-    this.ptysById.delete(ptyId)
+    this.terminalIdentity.removePty(ptyId)
     this.pendingPtyHandleReplacementFences.delete(ptyId)
     this.recentPtyOutputById.delete(ptyId)
+    this.launchComposerReadyByPtyId.delete(ptyId)
     this.setupCompletionTokenByPtyId.delete(ptyId)
     this.clearWaitBlockedCheckState(ptyId)
-    this.recentPtyPathCandidatesById.delete(ptyId)
+    this.trustDialogStatus.forget(ptyId)
     this.ptyOutputSequenceById.delete(ptyId)
     this.providerSequenceInitializedPtys.delete(ptyId)
     this.providerSequenceOffsetByPtyId.delete(ptyId)
@@ -125,13 +129,14 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
     this.providerModeTrackersByPtyId.delete(ptyId)
     this.providerModeSnapshotScansByPtyId.delete(ptyId)
     this.providerBufferAcquisitionsByPtyId.delete(ptyId)
-    this.providerVisibleStateByPtyId.delete(ptyId)
-    this.providerVisibleRetryAtByPtyId.delete(ptyId)
+    this.forgetProviderVisibleState(ptyId)
     this.agentStatusOscProcessorsByPtyId.delete(ptyId)
+    this.liveProgramStatusFacetPtyIds.delete(ptyId)
     this.terminalSpawnCommandsByPtyId.delete(ptyId)
     this.terminalRunFacts.delete(ptyId)
     this.disposePtyTitleTracker(ptyId)
     this.invalidatePtyIncarnationHandle(ptyId)
+    this.terminalWaiters.rejectPty(ptyId, 'terminal_handle_stale')
     this.oscTitleScanTailByPtyId.delete(ptyId)
     this.osc7ScanTailByPtyId.delete(ptyId)
     this.terminalCwdByPtyId.delete(ptyId)
@@ -139,13 +144,13 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
     this.wslDistroByPtyId.delete(ptyId)
     const handle = this.handleByPtyId.get(ptyId)
     if (handle) {
-      // Why: pruning can remove a PTY without onPtyExit firing; release this leader's agent team so it doesn't leak.
+      // Pruning can bypass onPtyExit; release leader teams here too.
       this.claudeAgentTeams.removeTeamForLeaderHandle(handle)
-      this.handleByPtyId.delete(ptyId)
-      this.syntheticTerminalHandles.delete(handle)
+      this.terminalIdentity.unbindPty(ptyId)
+      this.terminalIdentity.removeSynthetic(handle)
       const record = this.handles.get(handle)
       if (record?.tabId.startsWith('pty:')) {
-        this.handles.delete(handle)
+        this.terminalIdentity.removeHandle(handle)
       }
     }
   }
@@ -170,15 +175,22 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
     this.leavesByPtyId = next
   }
 
-  protected getLeavesForPty(ptyId: string): RuntimeLeafRecord[] {
+  protected getLeavesForPty(ptyId: string): readonly RuntimeLeafRecord[] {
     return this.leavesByPtyId.get(ptyId) ?? []
   }
 
   // Keep the notification hook on the runtime as well as on the installed
   // command surface: exit escalation can wake an in-flight --wait directly.
   notifyMessageArrived(handle: string, messageType?: string): void {
+    // Heartbeats are stored handled and only record liveness; they never wake a mailbox.
+    if (messageType === 'heartbeat') {
+      return
+    }
     if (!handle.startsWith('dispatch:')) {
       this.mailPointerRepointScheduler.schedule(handle)
+    } else {
+      // A waiting ask rechecks its question, which a settled Dispatch has closed.
+      this.messageWaiters.notifyPrefix(questionAnswerWaitPrefix(handle.slice('dispatch:'.length)))
     }
     this.orchestrationMailboxNotifications.notifyMessageArrived(handle, messageType)
   }

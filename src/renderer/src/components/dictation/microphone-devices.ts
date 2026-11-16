@@ -31,8 +31,7 @@ export type EnumeratedDevice = Pick<MediaDeviceInfo, 'deviceId' | 'kind' | 'labe
 
 export const SYSTEM_DEFAULT_MICROPHONE_SELECT_VALUE = 'system-default'
 
-// Why: Chromium synthesizes these ids as aliases for whatever the OS default is,
-// so pinning one behaves exactly like "system default" and defeats the setting.
+// Chromium default/communications IDs alias the OS default; pinning them would defeat microphone selection.
 const AGGREGATE_DEVICE_IDS = new Set(['default', 'communications'])
 
 const BASE_AUDIO_CONSTRAINTS: MediaTrackConstraints = {
@@ -117,16 +116,14 @@ export function resolveMicrophoneDevice(args: {
   if (!preferredDeviceId) {
     return { deviceId: null, kind: 'system-default' }
   }
-  // Why: before mic permission, enumeration returns only blank placeholders, so an
-  // empty list means "cannot tell yet" rather than "unplugged".
+  // Pre-permission enumeration yields blank placeholders; empty does not prove the device was unplugged.
   if (!args.devices || args.devices.length === 0) {
     return { deviceId: preferredDeviceId, kind: 'unknown' }
   }
   if (args.devices.some((device) => device.deviceId === preferredDeviceId)) {
     return { deviceId: preferredDeviceId, kind: 'exact' }
   }
-  // Why: Chromium re-salts device ids per profile+origin, so a surviving label match
-  // heals a preference whose id rotated instead of stranding it forever.
+  // Chromium rotates device IDs per profile/origin; a unique surviving label can repair the preference.
   const relabeled = findSoleDeviceByLabel(args.devices, args.preferredDeviceLabel)
   if (relabeled) {
     return { deviceId: relabeled.deviceId, kind: 'relabeled' }
@@ -168,8 +165,7 @@ export async function openMicrophoneCaptureStream(args: {
     preferredDeviceLabel: args.preferredDeviceLabel
   })
 
-  // Why: enumeration is a cheap cached lookup, so a known-missing device skips the
-  // failed getUserMedia round trip that would otherwise clip the first words.
+  // Skip known-missing devices before getUserMedia so its failure round-trip cannot clip speech.
   if (resolution.kind === 'missing') {
     return {
       stream: await args.getUserMedia(buildAudioCaptureConstraints(null)),
@@ -241,8 +237,7 @@ export function buildVoiceMicrophoneSelectOptions(args: {
   }
   const cachedLabel = args.preferredDeviceLabel?.trim()
   const baseLabel = cachedLabel && cachedLabel.length > 0 ? cachedLabel : preferredDeviceId
-  // Why: only call it unavailable once we have actually seen the device list —
-  // an un-enumerated list would otherwise flag every mic as missing.
+  // Only an observed device list can justify an unavailable label.
   options.push(
     resolution.kind === 'missing'
       ? {

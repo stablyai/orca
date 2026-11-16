@@ -1,16 +1,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 
-/**
- * Shared file walk for the ratchet guards.
- *
- * Why one copy: four guards had grown their own `collectSourceFiles` /
- * `isTestFile` / allowlist reader, and they had already drifted -- one skipped
- * dot-directories and three did not, which is how the WSL separator guard came
- * to scan `tests/e2e/.cross-version-checkouts/` and report 21 offenders that
- * were copies of shipped releases. A guard that can be wrong about what it
- * scanned is worse than no guard, because its count is the goalpost.
- */
+/** Share ratchet walks so file selection cannot drift; scanning vendored cross-version checkouts once reported 21 shipped-release offenders. */
 
 const IGNORED_DIRECTORIES = new Set(['node_modules', 'dist', 'out', 'build', '.git'])
 
@@ -18,8 +9,7 @@ const IGNORED_DIRECTORIES = new Set(['node_modules', 'dist', 'out', 'build', '.g
 export function isTestFile(relativePath: string): boolean {
   return (
     /\.(?:test|spec)\.tsx?$/.test(relativePath) ||
-    // `repro` must be a whole token: a bare substring exempted the shipped
-    // windows-terminal-capability-reprobe.ts from every guard using this walk.
+    // Require a whole repro token; substring matching exempted shipped windows-terminal-capability-reprobe.ts.
     /(?:test-harness|test-utils|test-setup|test-fixture|\brepro\b|reproduction)/.test(
       relativePath
     ) ||
@@ -29,32 +19,18 @@ export function isTestFile(relativePath: string): boolean {
 
 export type ScannedFile = { path: string; relativePath: string; source: string }
 
-/** The three readdir type predicates the walk consults. */
 type DirentTypeProbe = {
   isSymbolicLink(): boolean
   isFile(): boolean
   isDirectory(): boolean
 }
 
-/**
- * Links need a stat to follow them, and so does DT_UNKNOWN (every predicate
- * false) -- filesystems that do not report d_type would otherwise have a real
- * directory silently dropped from the scan.
- */
+/** Symlinks and DT_UNKNOWN (all type predicates false) need stat or whole real subtrees disappear from guards. */
 export function directoryEntryNeedsStat(entry: DirentTypeProbe): boolean {
   return entry.isSymbolicLink() || (!entry.isFile() && !entry.isDirectory())
 }
 
-/**
- * Every `.ts`/`.tsx` file under `root`, with its text.
- *
- * Dot-directories are skipped: they hold generated and vendored trees (the
- * cross-version e2e checkouts among them), which are not ours to fix.
- *
- * `extensions` widens or narrows which filenames are read -- a guard over CI
- * config also has to see `.mjs`, and one that only wants test files pays for
- * reading nothing else.
- */
+/** Skip dot-directories containing generated/vendor trees, including cross-version checkouts; extensions controls file selection. */
 export function scanSourceTree(
   root: string,
   options: { includeTests?: boolean; extensions?: RegExp } = {}
@@ -68,7 +44,6 @@ export function scanSourceTree(
         continue
       }
       const path = join(directory, name)
-      // Ordinary entries carry their type from readdir.
       if (directoryEntryNeedsStat(entry) ? statSync(path).isDirectory() : entry.isDirectory()) {
         visit(path)
         continue
@@ -87,24 +62,7 @@ export function scanSourceTree(
   return found
 }
 
-/** Read a ratchet allowlist, dropping comments and blanks. */
-export function readAllowlist(fixturePath: string): string[] {
-  return readFileSync(fixturePath, 'utf8')
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0 && !line.startsWith('#'))
-}
-
-/**
- * Comments blanked out, so a construct documented in prose is not counted as code.
- *
- * Why a scanner and not two regexes: a POSIX glob inside a shell script written
- * as a template literal contains a slash-star sequence, and the naive version
- * read that as a comment opener, blanking everything to the next star-slash --
- * 24,000 characters of live code in one file. A guard then read straight past a
- * real unguarded spawn and reported the file clean, which is worse than no
- * guard. Quote state is the difference, so it has to be tracked.
- */
+/** Track quotes when blanking comments: a glob inside a template once looked like slash-star and hid 24,000 live-code characters. */
 export function stripComments(source: string): string {
   let out = ''
   let index = 0
@@ -113,9 +71,7 @@ export function stripComments(source: string): string {
     const char = source[index]!
     const next = source[index + 1]
     if (quote) {
-      // Only a template literal may span lines. Resetting at a newline stops an
-      // apostrophe in prose, or a quote inside a regex literal, from swallowing
-      // the rest of the file and disabling comment stripping from there on.
+      // Only templates span lines; reset stray prose/regex quotes so later comments still strip.
       if (char === '\n' && quote !== '`') {
         quote = null
         out += char
@@ -143,7 +99,7 @@ export function stripComments(source: string): string {
     if (char === '/' && next === '*') {
       const end = source.indexOf('*/', index + 2)
       const stop = end === -1 ? source.length : end + 2
-      // Keep newlines so reported line numbers stay honest.
+      // Preserve source line numbers.
       out += source.slice(index, stop).replace(/[^\n]/g, ' ')
       index = stop
       continue
@@ -161,42 +117,13 @@ export function stripComments(source: string): string {
   return out
 }
 
-/**
- * String contents replaced by spaces, quotes kept.
- *
- * Why: a brace matcher that counts parentheses inside a shell script embedded
- * as a string closes the call early, so the options object -- and any flag in
- * it -- falls outside the matched range and reads as absent.
- */
-/**
- * True when the lexer could not keep its bearings through the file.
- *
- * Why callers must check this: three separate attempts to make the blanker
- * exact all shipped with a desync that silently hid real calls, and each time
- * the offender count went DOWN, which read as progress. A scanner that cannot
- * say "I lost track here" will keep under-reporting. Treat a desync as an
- * offender -- over-reporting is a nuisance, under-reporting is a false clean.
- */
+/** Callers must count desync as an offender; lost lexer state has repeatedly hidden live calls and falsely lowered guard counts. */
 export function blankStringContentsDesynced(source: string): boolean {
   return blankStringContents(source, true) !== ''
 }
 
-/**
- * After a value `/` is division; after an opener or a binary operator it opens
- * a regex.
- *
- * The set is deliberately narrow, because the two errors are not symmetric. A
- * false negative leaves a pattern unblanked, which at worst desyncs the lexer
- * -- and every caller treats desync as an offender, so it fails closed. A
- * false positive blanks live code, and a scan that cannot see a call reports
- * it clean. A wider set cost 13 real JSX spans (`<Icon size={14} /> : <Icon`)
- * and swallowed a whole `execFile(...)` after `n-- / 2`, with no desync to
- * show for it.
- *
- * So the postfix and value-terminating characters are excluded even though
- * each also has a prefix reading: `!` (non-null assertion vs `!/re/.test(x)`),
- * `+` `-` `*` `%` `^` `~` (postfix `--`/`++`), and `>` `}` (JSX close).
- */
+/** Keep regex openers narrow: a missed regex can desync and fail closed, but a false positive silently blanks live calls.
+ * Exclude postfix/value endings (! + - * % ^ ~ > }) even with possible prefix readings; wider sets swallowed JSX and execFile after n-- / 2. */
 function startsRegexLiteral(prev: string | undefined): boolean {
   return prev === undefined || '(,=:[&|?;'.includes(prev)
 }
@@ -210,7 +137,6 @@ function findRegexLiteralEnd(source: string, start: number): number {
       index += 1
       continue
     }
-    // A `/` inside `[...]` is literal, so it must not close the pattern.
     if (char === '[') {
       inClass = true
     } else if (char === ']') {
@@ -229,8 +155,7 @@ export function blankStringContents(source: string, reportDesync = false): strin
   let lastSignificantChar: string | undefined
   let index = 0
   let quote: string | null = null
-  // Brace depth per interpolation, so a `}` inside `${ { a: 1 } }` does not
-  // close it. A plain counter mistook the first `}` for the closer.
+  // Track nested braces per template interpolation; an object’s closing brace must not end the interpolation.
   const templates: number[] = []
   while (index < source.length) {
     const char = source[index]!
@@ -259,9 +184,7 @@ export function blankStringContents(source: string, reportDesync = false): strin
       }
     }
     if (quote) {
-      // Same rule stripComments uses: only a template may span lines, so an
-      // apostrophe in a regex literal cannot invert the rest of the file. That
-      // desync dropped a real unguarded spawn out of the ratchet.
+      // Reset non-template quotes on newline so regex apostrophes cannot hide subsequent calls.
       if (char === '\n' && quote !== '`') {
         quote = null
         out += char
@@ -283,13 +206,8 @@ export function blankStringContents(source: string, reportDesync = false): strin
       index += 1
       continue
     }
-    // A regex literal can carry a lone apostrophe (`/'/g` in a shell quoter),
-    // which reads as a string opener and desyncs the rest of the file. The
-    // classic prev-token test disambiguates it from division: after a value a
-    // `/` divides, after an operator or opener it starts a pattern.
-    // `/*` and `//` open comments, never patterns. Callers normally strip
-    // comments first, but this runs standalone too, and at index 0 a file
-    // starting with a banner comment read as one giant regex.
+    // Regex apostrophes must not open strings; use the narrow prior-token heuristic.
+    // Comments are never regexes, including at index zero when this blanker runs without stripComments.
     const next = source[index + 1]
     if (char === '/' && next !== '/' && next !== '*' && startsRegexLiteral(lastSignificantChar)) {
       const end = findRegexLiteralEnd(source, index)

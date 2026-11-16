@@ -3,7 +3,7 @@ import { join, resolve } from 'node:path'
 import {
   makeTreeReadOnlyAsync,
   shareTreeAsync
-} from '../../../config/scripts/space-sharing-copy.mjs'
+} from '../../../config/scripts/artifact-storage/reflink-copy/space-sharing-copy.mjs'
 import { extractReleaseCheckoutTree } from './release-checkout-tree.ts'
 import { installMissingPackageStandIns, type PackageImports } from './release-missing-packages.ts'
 import { publishReleaseCheckout } from './release-checkout-publication.ts'

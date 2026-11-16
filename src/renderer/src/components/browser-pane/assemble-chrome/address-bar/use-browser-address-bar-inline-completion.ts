@@ -1,0 +1,104 @@
+import {
+  useCallback,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type MutableRefObject,
+  type RefObject,
+  type SyntheticEvent
+} from 'react'
+import type { BrowserAddressBarSuggestion } from './browser-address-bar-suggestions'
+
+/** Select the completed suffix so Enter accepts it and the next keystroke replaces it. */
+export function useBrowserAddressBarInlineCompletion({
+  inputRef,
+  value,
+  buildSuggestions,
+  prePreviewValueRef
+}: {
+  inputRef: RefObject<HTMLInputElement | null>
+  value: string
+  buildSuggestions: (query: string, inline: true | string | null) => BrowserAddressBarSuggestion[]
+  /** Holds the typed text while a completion shows; cleared once the completion is accepted. */
+  prePreviewValueRef: MutableRefObject<string | null>
+}): {
+  /** The bar text while an inline completion shows. */
+  inlineText: string | null
+  /** The bar text for this edit when it completes inline; null keeps what was typed. */
+  completeTyping: (event: ChangeEvent<HTMLInputElement>, typed: string) => string | null
+  clearInline: () => void
+  /** Shows `text` with the part past `typed` selected, as arrowing back to its row does. */
+  showInline: (typed: string, text: string) => void
+  /** Moving the caret off the completion (ArrowRight, End, a click) accepts it as typed text. */
+  acceptOnCaretMove: (event: SyntheticEvent<HTMLInputElement>) => void
+} {
+  // Use fresh object identity to restore selection even when consecutive keystrokes produce the same completed text.
+  const [inline, setInline] = useState<{ text: string } | null>(null)
+  const inlineText = inline?.text ?? null
+  const pendingSelectionRef = useRef<{ start: number; end: number } | null>(null)
+
+  useLayoutEffect(() => {
+    const range = pendingSelectionRef.current
+    const input = inputRef.current
+    if (!range || !input || input.value !== inline?.text) {
+      return
+    }
+    pendingSelectionRef.current = null
+    input.setSelectionRange(range.start, range.end)
+  }, [inline, inputRef, value])
+
+  const showInline = useCallback((typed: string, text: string): void => {
+    pendingSelectionRef.current = { start: typed.length, end: text.length }
+    setInline({ text })
+  }, [])
+
+  const completeTyping = useCallback(
+    (event: ChangeEvent<HTMLInputElement>, typed: string): string | null => {
+      const text = isTypingAtEnd(event, typed)
+        ? (buildSuggestions(typed, true)[0]?.inlineText ?? null)
+        : null
+      const completed = text !== null && text.length > typed.length ? text : null
+      if (completed === null) {
+        setInline(null)
+      } else {
+        showInline(typed, completed)
+      }
+      return completed
+    },
+    [buildSuggestions, showInline]
+  )
+
+  const clearInline = useCallback(() => setInline(null), [])
+
+  const acceptOnCaretMove = useCallback(
+    (event: SyntheticEvent<HTMLInputElement>): void => {
+      const input = event.currentTarget
+      const typed = prePreviewValueRef.current
+      if (
+        inlineText === null ||
+        typed === null ||
+        input.value !== inlineText ||
+        (input.selectionStart === typed.length && input.selectionEnd === inlineText.length)
+      ) {
+        return
+      }
+      // Why: otherwise a later blur or Escape would put the bar back to the typed prefix.
+      prePreviewValueRef.current = null
+      setInline(null)
+    },
+    [inlineText, prePreviewValueRef]
+  )
+
+  return { inlineText, completeTyping, clearInline, showInline, acceptOnCaretMove }
+}
+
+// Complete only typing; paste, IME and deletion must not restore the suffix Backspace just removed.
+function isTypingAtEnd(event: ChangeEvent<HTMLInputElement>, typed: string): boolean {
+  const native = event.nativeEvent
+  return (
+    native instanceof InputEvent &&
+    native.inputType === 'insertText' &&
+    event.target.selectionStart === typed.length
+  )
+}

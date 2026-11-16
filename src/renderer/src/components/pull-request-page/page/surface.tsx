@@ -1,3 +1,4 @@
+import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   CircleDot,
@@ -7,47 +8,56 @@ import {
   GitPullRequestDraft
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { useAppStore } from '@/store'
-import { useAllWorktrees } from '@/store/selectors'
-import { canUseGitHubRepoContext } from '@/lib/github-source-runtime-context'
-import { findGithubPrWorkspaceAttachment } from '@/lib/github-work-item-workspace-attachment'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import { getWorktreeAttachmentLabel } from '@/lib/worktree-attachment-label'
+import { useAppStore } from '@/store/index'
+import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
+import { findGithubPrWorkspaceAttachment } from '@/lib/work-items/github/github-work-item-workspace-attachment'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
+import { getWorktreeAttachmentLabel } from '@/lib/workspace/display/worktree-attachment-label'
 import {
   clearGitHubLinkCopied,
   createGitHubLinkCopyState,
   markGitHubLinkCopied,
   resolveGitHubLinkCopyState
 } from '@/components/github-link-copy-state'
-import { normalizeItemDialogTab } from '@/components/github/github-work-item-identity'
 import { translate } from '@/i18n/i18n'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import { useTranslate } from '@/i18n/use-translate'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import type { PullRequestPageProps } from '../page-types'
-import {
-  invalidateWorkItemDetailsCacheByMatch,
-  invalidateWorkItemDetailsCacheForKey
-} from '../cache/work-item-details'
+import { GitHubWorkItemTargetContext } from '@/components/github-item-dialog/load-item-details/github-work-item-target-context'
+import { useGitHubWorkItemDetails } from '@/components/github-item-dialog/load-item-details/use-github-work-item-details'
 import { GHEditSection } from '../edit/section'
-import { usePullRequestDetails } from './use-details'
 import { PullRequestPageHeader } from './header'
 import { PullRequestPageTabs } from './tabs-shell'
-import { syncPullRequestFileViewed } from './viewed-sync'
 
-export default function PullRequestPage({
+export default function PullRequestPage(props: PullRequestPageProps): React.JSX.Element {
+  const { workItem, sourceContext } = props
+  const key = [
+    props.repoId ?? workItem?.repoId,
+    props.repoPath,
+    workItem?.url,
+    workItem?.type,
+    workItem?.number,
+    sourceContext ? getTaskSourceCacheScope(sourceContext) : ''
+  ].join('\0')
+  return <PullRequestPageItem key={key} {...props} />
+}
+
+function PullRequestPageItem({
   workItem,
   repoPath,
   repoId,
   sourceContext,
   initialTab,
-  backLabel = 'Pull requests',
+  backLabel: backLabelOverride,
   projectOrigin,
   onUse,
   onReviewRequestsChange,
   onClose
 }: PullRequestPageProps): React.JSX.Element {
-  // Why: this component is page-only — the sheet variant lives in GitHubItemDialog.
+  const t = useTranslate()
+  const backLabel =
+    backLabelOverride ?? t('auto.components.TaskPage.backToPullRequests', 'Pull requests')
   const workItemId = workItem?.id
-  const [tab, setTab] = useState(() => normalizeItemDialogTab(workItem, initialTab))
   const [localState, setLocalState] = useState<GitHubWorkItem['state']>(workItem?.state ?? 'open')
   const [localLabels, setLocalLabels] = useState<string[]>(workItem?.labels ?? [])
   const [linkCopyState, setLinkCopyState] = useState(() => createGitHubLinkCopyState(workItemId))
@@ -59,7 +69,6 @@ export default function PullRequestPage({
   const linkCopied = resolvedLinkCopyState.copied
   const workItemState = workItem?.state
   const workItemLabels = workItem?.labels
-  const workItemType = workItem?.type
   const effectiveRepoId = repoId ?? workItem?.repoId ?? null
   const allWorktrees = useAllWorktrees()
   const attachedWorkspace = useMemo(
@@ -78,37 +87,59 @@ export default function PullRequestPage({
     ? getWorktreeAttachmentLabel(attachedWorkspace)
     : null
 
-  // Why: key must include issue source preference so origin/upstream toggles for the same issue number don't read back the wrong repo's details.
-  const issueSourcePreference = useAppStore((s) => {
-    if (!repoPath && !effectiveRepoId) {
-      return undefined
-    }
-    return s.repos.find((r) => (effectiveRepoId ? r.id === effectiveRepoId : r.path === repoPath))
-      ?.issueSourcePreference
+  const {
+    targetContext,
+    tab,
+    setTab,
+    details,
+    loading,
+    error,
+    detailsLoaded,
+    detailsCacheKey,
+    appendOptimisticComment,
+    canUseDetailsRepoContext,
+    displayWorkItem,
+    pendingViewedPaths,
+    invalidateCurrentDetailsCache,
+    handlePRFileViewedChange
+  } = useGitHubWorkItemDetails({
+    workItem,
+    repoPath,
+    effectiveRepoId,
+    sourceContext,
+    initialTab,
+    projectOrigin,
+    onReviewRequestsChange
   })
-  const canUseDetailsRepoContext = canUseGitHubRepoContext(repoPath, sourceContext)
-  const { details, loading, error, detailsLoaded, detailsCacheKey, appendOptimisticComment } =
-    usePullRequestDetails({
-      workItem,
-      repoPath,
-      effectiveRepoId,
-      sourceContext,
-      issueSourcePreference,
-      canUseDetailsRepoContext
-    })
 
-  // Why: reset lifted edit state on item switch or when the same item gets an optimistic cache patch from the table.
-  useEffect(() => {
-    if (workItemState && workItemLabels) {
+  const detailsState = details?.item.state
+  // Sync lifted edit state during render so each refresh commits once instead of twice.
+  const [syncedFrom, setSyncedFrom] = useState<{
+    workItemId: typeof workItemId
+    workItemState: typeof workItemState
+    workItemLabels: typeof workItemLabels
+    detailsState: typeof detailsState
+  } | null>(null)
+  const itemChanged = syncedFrom === null || syncedFrom.workItemId !== workItemId
+  const workItemChanged =
+    syncedFrom === null ||
+    itemChanged ||
+    syncedFrom.workItemState !== workItemState ||
+    syncedFrom.workItemLabels !== workItemLabels
+  const detailsChanged =
+    syncedFrom === null || itemChanged || syncedFrom.detailsState !== detailsState
+  if (workItemChanged || detailsChanged) {
+    setSyncedFrom({ workItemId, workItemState, workItemLabels, detailsState })
+    // Why: reset on item switch or when the same item gets an optimistic cache patch from the table.
+    if (workItemChanged && workItemState && workItemLabels) {
       setLocalState(workItemState)
       setLocalLabels(workItemLabels)
     }
-  }, [workItemId, workItemState, workItemLabels])
-
-  useEffect(() => {
-    const nextTab = workItemType === 'pr' ? (initialTab ?? 'conversation') : 'conversation'
-    setTab(nextTab)
-  }, [workItemId, workItemType, initialTab])
+    // Why: post-write rereads land in details, not the workItem prop; follow a changed details state so actions and header show what the host has (even after a failed write).
+    if (detailsChanged && detailsState) {
+      setLocalState(detailsState)
+    }
+  }
 
   const handleUseWorkItem = useCallback((): void => {
     if (!workItem) {
@@ -180,7 +211,6 @@ export default function PullRequestPage({
     }
   }, [workItem])
 
-  // Why: icon must track resolved state so a merged PR reads as merged, not as the open-PR glyph.
   const Icon =
     workItem?.type === 'pr'
       ? localState === 'merged'
@@ -191,39 +221,11 @@ export default function PullRequestPage({
             ? GitPullRequestDraft
             : GitPullRequest
       : CircleDot
-  const displayWorkItem = useMemo<GitHubWorkItem | null>(() => {
-    if (!workItem) {
-      return null
-    }
-    if (!details?.item) {
-      return workItem
-    }
-    return { ...workItem, ...details.item, repoId: workItem.repoId }
-  }, [details?.item, workItem])
-
-  const workItemRepoId = workItem?.repoId
-  useEffect(() => {
-    if (
-      workItemId === undefined ||
-      workItemRepoId === undefined ||
-      details?.item.reviewRequests === undefined
-    ) {
-      return
-    }
-    // Why: PR details can carry fresher reviewer metadata than the list row; push it back so the Tasks review chip isn't stale.
-    // Why: keyed on identity, not the whole item, so replacing the same PR object doesn't repush unchanged reviewers.
-    onReviewRequestsChange?.(
-      { id: workItemId, repoId: workItemRepoId },
-      details.item.reviewRequests
-    )
-  }, [details?.item.reviewRequests, onReviewRequestsChange, workItemId, workItemRepoId])
-
   const body = details?.body ?? ''
   const comments = details?.comments ?? []
   const files = details?.files ?? []
   const filesUnavailable = details?.filesUnavailable ?? false
   const checks = details?.checks ?? []
-  const [pendingViewedPaths, setPendingViewedPaths] = useState<Set<string>>(() => new Set())
   // Why: clipboard IPC can resolve after unmount; skip copied-state feedback rather than start a reset timer on a stale surface.
   const linkCopyMountedRef = useRef(false)
   const linkCopiedResetTimerRef = useRef<number | null>(null)
@@ -238,7 +240,6 @@ export default function PullRequestPage({
     (node: HTMLButtonElement | null) => {
       linkCopyMountedRef.current = node !== null
       if (node === null) {
-        // Why: clear the copied-state timer on ref detach instead of via a passive cleanup Effect.
         clearLinkCopiedResetTimer()
       }
     },
@@ -270,52 +271,6 @@ export default function PullRequestPage({
     }
   }, [clearLinkCopiedResetTimer, workItem])
 
-  const invalidateCurrentDetailsCache = useCallback((): void => {
-    if (!workItem) {
-      return
-    }
-    // Why: local repos invalidate all source-preference variants; runtime-only entries need their exact source-scoped key (no local path).
-    if (repoPath) {
-      invalidateWorkItemDetailsCacheByMatch({
-        repoPath,
-        repoId: effectiveRepoId ?? undefined,
-        type: workItem.type,
-        number: workItem.number
-      })
-      return
-    }
-    if (detailsCacheKey) {
-      invalidateWorkItemDetailsCacheForKey(detailsCacheKey)
-    }
-  }, [detailsCacheKey, effectiveRepoId, repoPath, workItem])
-
-  const handlePRFileViewedChange = useCallback(
-    async (path: string, viewed: boolean): Promise<boolean> =>
-      syncPullRequestFileViewed({
-        canUseDetailsRepoContext,
-        pullRequestId: details?.pullRequestId,
-        workItem,
-        effectiveRepoId,
-        path,
-        viewed,
-        detailsCacheKey,
-        repoPath,
-        sourceContext,
-        projectOrigin,
-        setPendingViewedPaths
-      }),
-    [
-      canUseDetailsRepoContext,
-      details?.pullRequestId,
-      detailsCacheKey,
-      effectiveRepoId,
-      projectOrigin,
-      repoPath,
-      sourceContext,
-      workItem
-    ]
-  )
-
   const content = workItem ? (
     <div className="flex h-full min-h-0 flex-col">
       <PullRequestPageHeader
@@ -338,7 +293,7 @@ export default function PullRequestPage({
 
       {(canUseDetailsRepoContext || projectOrigin) && (
         <GHEditSection
-          item={workItem}
+          item={displayWorkItem ?? workItem}
           repoPath={repoPath}
           repoId={effectiveRepoId}
           sourceContext={sourceContext}
@@ -360,13 +315,14 @@ export default function PullRequestPage({
           <PullRequestPageTabs
             tab={tab}
             onTabChange={setTab}
-            workItem={workItem}
+            workItem={displayWorkItem ?? workItem}
             displayWorkItem={displayWorkItem}
             repoPath={repoPath}
             effectiveRepoId={effectiveRepoId}
             sourceContext={sourceContext}
             projectOrigin={projectOrigin}
             body={body}
+            bodyImageUrls={details?.bodyImageUrls}
             comments={comments}
             files={files}
             filesUnavailable={filesUnavailable}
@@ -388,5 +344,9 @@ export default function PullRequestPage({
     </div>
   ) : null
 
-  return <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background">{content}</div>
+  return (
+    <GitHubWorkItemTargetContext.Provider value={targetContext}>
+      <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background">{content}</div>
+    </GitHubWorkItemTargetContext.Provider>
+  )
 }

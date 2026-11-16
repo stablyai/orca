@@ -7,10 +7,7 @@ const IME_ENGAGEMENT_RECEIPT_ENV = 'ORCA_E2E_IME_ENGAGEMENT_RECEIPT'
 
 const HANGUL_SYLLABLE = /[\uac00-\ud7af]/
 
-/**
- * Records that a real input method composed text during this test. Only the session runner sets
- * the receipt path, so a spec run by hand or by the generic changed-spec lane writes nothing.
- */
+// Record native IME engagement only when the session runner supplies a receipt path; manual/generic changed-spec runs write nothing.
 export function appendImeEngagementReceipt(
   testTitle: string,
   trace: TerminalImeBoundaryTrace

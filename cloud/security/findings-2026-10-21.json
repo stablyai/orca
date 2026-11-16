@@ -1,0 +1,656 @@
+{
+  "scanDate": "2026-10-21",
+  "scanner": "Trivy 0.76.1",
+  "vulnerabilityDatabaseUpdatedAt": "2026-10-21T19:18:22Z",
+  "scope": "Locally built linux/amd64 runtime images and installed provider binaries; not deployed resources",
+  "results": [
+    {
+      "component": "relay",
+      "findings": []
+    },
+    {
+      "component": "push",
+      "findings": []
+    },
+    {
+      "component": "relay-fence-broker",
+      "findings": [
+        {
+          "target": "usr/local/bin/terraform",
+          "id": "GO-2026-5932",
+          "package": "golang.org/x/crypto",
+          "installedVersion": "v0.57.0",
+          "fixedVersion": null,
+          "severity": "UNKNOWN",
+          "goAdvisoryIds": [
+            "GO-2026-5932"
+          ],
+          "binaryReachability": "symbol"
+        }
+      ]
+    },
+    {
+      "component": "cloud-sql-proxy",
+      "findings": [
+        {
+          "target": "gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.26.2@sha256:e8c76356fb586300c63f0d29c8c75cfeeba33c29736f9d4afa2df2d78cd0fa19 (debian 13.7)",
+          "id": "DSA-6572-1",
+          "package": "ca-certificates",
+          "installedVersion": "20250419",
+          "fixedVersion": "20250419+deb13u1",
+          "severity": "UNKNOWN"
+        },
+        {
+          "target": "cloud-sql-proxy",
+          "id": "GO-2026-5932",
+          "package": "golang.org/x/crypto",
+          "installedVersion": "v0.58.0",
+          "fixedVersion": null,
+          "severity": "UNKNOWN",
+          "goAdvisoryIds": [
+            "GO-2026-5932"
+          ],
+          "binaryReachability": "module"
+        },
+        {
+          "target": "cloud-sql-proxy",
+          "id": "CVE-2026-111943",
+          "package": "stdlib",
+          "installedVersion": "v1.27.2",
+          "fixedVersion": "1.26.10, 1.27.3",
+          "severity": "HIGH",
+          "goAdvisoryIds": [
+            "GO-2026-6809"
+          ],
+          "binaryReachability": "symbol"
+        }
+      ]
+    },
+    {
+      "component": "terraform-providers",
+      "findings": [
+        {
+          "target": "external/2.4.2/linux_amd64/terraform-provider-external_v2.4.2_x5",
+          "id": "CVE-2026-78669",
+          "package": "golang.org/x/net",
+          "installedVersion": "v0.58.0",
+          "fixedVersion": "0.60.0",
+          "severity": "HIGH",
+          "goAdvisoryIds": [
+            "GO-2026-6611"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "external/2.4.2/linux_amd64/terraform-provider-external_v2.4.2_x5",
+          "id": "CVE-2026-78659",
+          "package": "golang.org/x/net",
+          "installedVersion": "v0.58.0",
+          "fixedVersion": "0.60.0",
+          "severity": "MEDIUM",
+          "goAdvisoryIds": [
+            "GO-2026-6603"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "external/2.4.2/linux_amd64/terraform-provider-external_v2.4.2_x5",
+          "id": "CVE-2026-78660",
+          "package": "golang.org/x/net",
+          "installedVersion": "v0.58.0",
+          "fixedVersion": "0.60.0",
+          "severity": "MEDIUM",
+          "goAdvisoryIds": [
+            "GO-2026-6610"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "external/2.4.2/linux_amd64/terraform-provider-external_v2.4.2_x5",
+          "id": "CVE-2026-78663",
+          "package": "golang.org/x/net",
+          "installedVersion": "v0.58.0",
+          "fixedVersion": "0.60.0",
+          "severity": "MEDIUM",
+          "goAdvisoryIds": [
+            "GO-2026-6612"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "external/2.4.2/linux_amd64/terraform-provider-external_v2.4.2_x5",
+          "id": "CVE-2026-97032",
+          "package": "golang.org/x/net",
+          "installedVersion": "v0.58.0",
+          "fixedVersion": "0.60.0",
+          "severity": "MEDIUM",
+          "goAdvisoryIds": [
+            "GO-2026-6617"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "external/2.4.2/linux_amd64/terraform-provider-external_v2.4.2_x5",
+          "id": "CVE-2026-111943",
+          "package": "stdlib",
+          "installedVersion": "v1.26.8",
+          "fixedVersion": "1.26.10, 1.27.3",
+          "severity": "HIGH",
+          "goAdvisoryIds": [
+            "GO-2026-6809"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "external/2.4.2/linux_amd64/terraform-provider-external_v2.4.2_x5",
+          "id": "CVE-2026-78667",
+          "package": "stdlib",
+          "installedVersion": "v1.26.8",
+          "fixedVersion": "1.26.9, 1.27.2",
+          "severity": "HIGH",
+          "goAdvisoryIds": [
+            "GO-2026-6609"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "external/2.4.2/linux_amd64/terraform-provider-external_v2.4.2_x5",
+          "id": "CVE-2026-78669",
+          "package": "stdlib",
+          "installedVersion": "v1.26.8",
+          "fixedVersion": "1.26.9, 1.27.2",
+          "severity": "HIGH",
+          "goAdvisoryIds": [
+            "GO-2026-6611"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "external/2.4.2/linux_amd64/terraform-provider-external_v2.4.2_x5",
+          "id": "CVE-2026-97031",
+          "package": "stdlib",
+          "installedVersion": "v1.26.8",
+          "fixedVersion": "1.26.9, 1.27.2",
+          "severity": "HIGH",
+          "goAdvisoryIds": [
+            "GO-2026-6607"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "external/2.4.2/linux_amd64/terraform-provider-external_v2.4.2_x5",
+          "id": "CVE-2026-56866",
+          "package": "stdlib",
+          "installedVersion": "v1.26.8",
+          "fixedVersion": "1.26.9, 1.27.2",
+          "severity": "MEDIUM",
+          "goAdvisoryIds": [
+            "GO-2026-6605"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "external/2.4.2/linux_amd64/terraform-provider-external_v2.4.2_x5",
+          "id": "CVE-2026-78659",
+          "package": "stdlib",
+          "installedVersion": "v1.26.8",
+          "fixedVersion": "1.26.9, 1.27.2",
+          "severity": "MEDIUM",
+          "goAdvisoryIds": [
+            "GO-2026-6603"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "external/2.4.2/linux_amd64/terraform-provider-external_v2.4.2_x5",
+          "id": "CVE-2026-78660",
+          "package": "stdlib",
+          "installedVersion": "v1.26.8",
+          "fixedVersion": "1.26.9, 1.27.2",
+          "severity": "MEDIUM",
+          "goAdvisoryIds": [
+            "GO-2026-6610"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "external/2.4.2/linux_amd64/terraform-provider-external_v2.4.2_x5",
+          "id": "CVE-2026-78663",
+          "package": "stdlib",
+          "installedVersion": "v1.26.8",
+          "fixedVersion": "1.26.9, 1.27.2",
+          "severity": "MEDIUM",
+          "goAdvisoryIds": [
+            "GO-2026-6612"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "external/2.4.2/linux_amd64/terraform-provider-external_v2.4.2_x5",
+          "id": "CVE-2026-94439",
+          "package": "stdlib",
+          "installedVersion": "v1.26.8",
+          "fixedVersion": "1.26.9, 1.27.2",
+          "severity": "MEDIUM",
+          "goAdvisoryIds": [
+            "GO-2026-6613"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "external/2.4.2/linux_amd64/terraform-provider-external_v2.4.2_x5",
+          "id": "CVE-2026-94440",
+          "package": "stdlib",
+          "installedVersion": "v1.26.8",
+          "fixedVersion": "1.26.9, 1.27.2",
+          "severity": "MEDIUM",
+          "goAdvisoryIds": [
+            "GO-2026-6608"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "external/2.4.2/linux_amd64/terraform-provider-external_v2.4.2_x5",
+          "id": "CVE-2026-94448",
+          "package": "stdlib",
+          "installedVersion": "v1.26.8",
+          "fixedVersion": "1.26.9, 1.27.2",
+          "severity": "MEDIUM",
+          "goAdvisoryIds": [
+            "GO-2026-6599"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "external/2.4.2/linux_amd64/terraform-provider-external_v2.4.2_x5",
+          "id": "CVE-2026-97030",
+          "package": "stdlib",
+          "installedVersion": "v1.26.8",
+          "fixedVersion": "1.26.9, 1.27.2",
+          "severity": "MEDIUM",
+          "goAdvisoryIds": [
+            "GO-2026-6600"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "external/2.4.2/linux_amd64/terraform-provider-external_v2.4.2_x5",
+          "id": "CVE-2026-97032",
+          "package": "stdlib",
+          "installedVersion": "v1.26.8",
+          "fixedVersion": "1.26.9, 1.27.2",
+          "severity": "MEDIUM",
+          "goAdvisoryIds": [
+            "GO-2026-6617"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "external/2.4.2/linux_amd64/terraform-provider-external_v2.4.2_x5",
+          "id": "CVE-2026-56857",
+          "package": "stdlib",
+          "installedVersion": "v1.26.8",
+          "fixedVersion": "1.26.9, 1.27.2",
+          "severity": "LOW"
+        },
+        {
+          "target": "google/8.8.0/linux_amd64/terraform-provider-google_v8.8.0_x5",
+          "id": "CVE-2026-81870",
+          "package": "go.opentelemetry.io/otel/sdk",
+          "installedVersion": "v1.44.0",
+          "fixedVersion": "1.45.0",
+          "severity": "LOW",
+          "goAdvisoryIds": [
+            "GO-2026-6505"
+          ],
+          "binaryReachability": "module"
+        },
+        {
+          "target": "google/8.8.0/linux_amd64/terraform-provider-google_v8.8.0_x5",
+          "id": "CVE-2026-56855",
+          "package": "golang.org/x/crypto",
+          "installedVersion": "v0.55.0",
+          "fixedVersion": "0.56.0",
+          "severity": "MEDIUM",
+          "goAdvisoryIds": [
+            "GO-2026-6355"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "google/8.8.0/linux_amd64/terraform-provider-google_v8.8.0_x5",
+          "id": "CVE-2026-78662",
+          "package": "golang.org/x/crypto",
+          "installedVersion": "v0.55.0",
+          "fixedVersion": "0.56.0",
+          "severity": "MEDIUM",
+          "goAdvisoryIds": [
+            "GO-2026-6354"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "google/8.8.0/linux_amd64/terraform-provider-google_v8.8.0_x5",
+          "id": "GO-2026-5932",
+          "package": "golang.org/x/crypto",
+          "installedVersion": "v0.55.0",
+          "fixedVersion": null,
+          "severity": "UNKNOWN",
+          "goAdvisoryIds": [
+            "GO-2026-5932"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "google/8.8.0/linux_amd64/terraform-provider-google_v8.8.0_x5",
+          "id": "CVE-2026-78669",
+          "package": "golang.org/x/net",
+          "installedVersion": "v0.58.0",
+          "fixedVersion": "0.60.0",
+          "severity": "HIGH",
+          "goAdvisoryIds": [
+            "GO-2026-6611"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "google/8.8.0/linux_amd64/terraform-provider-google_v8.8.0_x5",
+          "id": "CVE-2026-78659",
+          "package": "golang.org/x/net",
+          "installedVersion": "v0.58.0",
+          "fixedVersion": "0.60.0",
+          "severity": "MEDIUM",
+          "goAdvisoryIds": [
+            "GO-2026-6603"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "google/8.8.0/linux_amd64/terraform-provider-google_v8.8.0_x5",
+          "id": "CVE-2026-78660",
+          "package": "golang.org/x/net",
+          "installedVersion": "v0.58.0",
+          "fixedVersion": "0.60.0",
+          "severity": "MEDIUM",
+          "goAdvisoryIds": [
+            "GO-2026-6610"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "google/8.8.0/linux_amd64/terraform-provider-google_v8.8.0_x5",
+          "id": "CVE-2026-78663",
+          "package": "golang.org/x/net",
+          "installedVersion": "v0.58.0",
+          "fixedVersion": "0.60.0",
+          "severity": "MEDIUM",
+          "goAdvisoryIds": [
+            "GO-2026-6612"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "google/8.8.0/linux_amd64/terraform-provider-google_v8.8.0_x5",
+          "id": "CVE-2026-97032",
+          "package": "golang.org/x/net",
+          "installedVersion": "v0.58.0",
+          "fixedVersion": "0.60.0",
+          "severity": "MEDIUM",
+          "goAdvisoryIds": [
+            "GO-2026-6617"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "google/8.8.0/linux_amd64/terraform-provider-google_v8.8.0_x5",
+          "id": "CVE-2026-111943",
+          "package": "stdlib",
+          "installedVersion": "v1.26.9",
+          "fixedVersion": "1.26.10, 1.27.3",
+          "severity": "HIGH",
+          "goAdvisoryIds": [
+            "GO-2026-6809"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "random/3.9.1/linux_amd64/terraform-provider-random_v3.9.1_x5",
+          "id": "GO-2026-5932",
+          "package": "golang.org/x/crypto",
+          "installedVersion": "v0.56.0",
+          "fixedVersion": null,
+          "severity": "UNKNOWN",
+          "goAdvisoryIds": [
+            "GO-2026-5932"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "random/3.9.1/linux_amd64/terraform-provider-random_v3.9.1_x5",
+          "id": "CVE-2026-78669",
+          "package": "golang.org/x/net",
+          "installedVersion": "v0.58.0",
+          "fixedVersion": "0.60.0",
+          "severity": "HIGH",
+          "goAdvisoryIds": [
+            "GO-2026-6611"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "random/3.9.1/linux_amd64/terraform-provider-random_v3.9.1_x5",
+          "id": "CVE-2026-78659",
+          "package": "golang.org/x/net",
+          "installedVersion": "v0.58.0",
+          "fixedVersion": "0.60.0",
+          "severity": "MEDIUM",
+          "goAdvisoryIds": [
+            "GO-2026-6603"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "random/3.9.1/linux_amd64/terraform-provider-random_v3.9.1_x5",
+          "id": "CVE-2026-78660",
+          "package": "golang.org/x/net",
+          "installedVersion": "v0.58.0",
+          "fixedVersion": "0.60.0",
+          "severity": "MEDIUM",
+          "goAdvisoryIds": [
+            "GO-2026-6610"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "random/3.9.1/linux_amd64/terraform-provider-random_v3.9.1_x5",
+          "id": "CVE-2026-78663",
+          "package": "golang.org/x/net",
+          "installedVersion": "v0.58.0",
+          "fixedVersion": "0.60.0",
+          "severity": "MEDIUM",
+          "goAdvisoryIds": [
+            "GO-2026-6612"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "random/3.9.1/linux_amd64/terraform-provider-random_v3.9.1_x5",
+          "id": "CVE-2026-97032",
+          "package": "golang.org/x/net",
+          "installedVersion": "v0.58.0",
+          "fixedVersion": "0.60.0",
+          "severity": "MEDIUM",
+          "goAdvisoryIds": [
+            "GO-2026-6617"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "random/3.9.1/linux_amd64/terraform-provider-random_v3.9.1_x5",
+          "id": "CVE-2026-111943",
+          "package": "stdlib",
+          "installedVersion": "v1.26.8",
+          "fixedVersion": "1.26.10, 1.27.3",
+          "severity": "HIGH",
+          "goAdvisoryIds": [
+            "GO-2026-6809"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "random/3.9.1/linux_amd64/terraform-provider-random_v3.9.1_x5",
+          "id": "CVE-2026-78667",
+          "package": "stdlib",
+          "installedVersion": "v1.26.8",
+          "fixedVersion": "1.26.9, 1.27.2",
+          "severity": "HIGH",
+          "goAdvisoryIds": [
+            "GO-2026-6609"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "random/3.9.1/linux_amd64/terraform-provider-random_v3.9.1_x5",
+          "id": "CVE-2026-78669",
+          "package": "stdlib",
+          "installedVersion": "v1.26.8",
+          "fixedVersion": "1.26.9, 1.27.2",
+          "severity": "HIGH",
+          "goAdvisoryIds": [
+            "GO-2026-6611"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "random/3.9.1/linux_amd64/terraform-provider-random_v3.9.1_x5",
+          "id": "CVE-2026-97031",
+          "package": "stdlib",
+          "installedVersion": "v1.26.8",
+          "fixedVersion": "1.26.9, 1.27.2",
+          "severity": "HIGH",
+          "goAdvisoryIds": [
+            "GO-2026-6607"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "random/3.9.1/linux_amd64/terraform-provider-random_v3.9.1_x5",
+          "id": "CVE-2026-56866",
+          "package": "stdlib",
+          "installedVersion": "v1.26.8",
+          "fixedVersion": "1.26.9, 1.27.2",
+          "severity": "MEDIUM",
+          "goAdvisoryIds": [
+            "GO-2026-6605"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "random/3.9.1/linux_amd64/terraform-provider-random_v3.9.1_x5",
+          "id": "CVE-2026-78659",
+          "package": "stdlib",
+          "installedVersion": "v1.26.8",
+          "fixedVersion": "1.26.9, 1.27.2",
+          "severity": "MEDIUM",
+          "goAdvisoryIds": [
+            "GO-2026-6603"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "random/3.9.1/linux_amd64/terraform-provider-random_v3.9.1_x5",
+          "id": "CVE-2026-78660",
+          "package": "stdlib",
+          "installedVersion": "v1.26.8",
+          "fixedVersion": "1.26.9, 1.27.2",
+          "severity": "MEDIUM",
+          "goAdvisoryIds": [
+            "GO-2026-6610"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "random/3.9.1/linux_amd64/terraform-provider-random_v3.9.1_x5",
+          "id": "CVE-2026-78663",
+          "package": "stdlib",
+          "installedVersion": "v1.26.8",
+          "fixedVersion": "1.26.9, 1.27.2",
+          "severity": "MEDIUM",
+          "goAdvisoryIds": [
+            "GO-2026-6612"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "random/3.9.1/linux_amd64/terraform-provider-random_v3.9.1_x5",
+          "id": "CVE-2026-94439",
+          "package": "stdlib",
+          "installedVersion": "v1.26.8",
+          "fixedVersion": "1.26.9, 1.27.2",
+          "severity": "MEDIUM",
+          "goAdvisoryIds": [
+            "GO-2026-6613"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "random/3.9.1/linux_amd64/terraform-provider-random_v3.9.1_x5",
+          "id": "CVE-2026-94440",
+          "package": "stdlib",
+          "installedVersion": "v1.26.8",
+          "fixedVersion": "1.26.9, 1.27.2",
+          "severity": "MEDIUM",
+          "goAdvisoryIds": [
+            "GO-2026-6608"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "random/3.9.1/linux_amd64/terraform-provider-random_v3.9.1_x5",
+          "id": "CVE-2026-94448",
+          "package": "stdlib",
+          "installedVersion": "v1.26.8",
+          "fixedVersion": "1.26.9, 1.27.2",
+          "severity": "MEDIUM",
+          "goAdvisoryIds": [
+            "GO-2026-6599"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "random/3.9.1/linux_amd64/terraform-provider-random_v3.9.1_x5",
+          "id": "CVE-2026-97030",
+          "package": "stdlib",
+          "installedVersion": "v1.26.8",
+          "fixedVersion": "1.26.9, 1.27.2",
+          "severity": "MEDIUM",
+          "goAdvisoryIds": [
+            "GO-2026-6600"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "random/3.9.1/linux_amd64/terraform-provider-random_v3.9.1_x5",
+          "id": "CVE-2026-97032",
+          "package": "stdlib",
+          "installedVersion": "v1.26.8",
+          "fixedVersion": "1.26.9, 1.27.2",
+          "severity": "MEDIUM",
+          "goAdvisoryIds": [
+            "GO-2026-6617"
+          ],
+          "binaryReachability": "symbol"
+        },
+        {
+          "target": "random/3.9.1/linux_amd64/terraform-provider-random_v3.9.1_x5",
+          "id": "CVE-2026-56857",
+          "package": "stdlib",
+          "installedVersion": "v1.26.8",
+          "fixedVersion": "1.26.9, 1.27.2",
+          "severity": "LOW"
+        }
+      ]
+    }
+  ],
+  "binaryScanner": "govulncheck v1.9.0, binary symbol mode; symbol linkage is not a runtime call trace"
+}

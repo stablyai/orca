@@ -28,7 +28,6 @@ function requestSignal(options: RequestInit | undefined): AbortSignal {
   return options.signal
 }
 
-/** A body that delivers its first half, then fails as Chromium does when the network drops. */
 function droppedMidway(): Response {
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -80,35 +79,18 @@ describe('downloading a pinned runtime archive over a flaky network', () => {
     expect(signals[1]?.aborted).toBe(false)
   })
 
-  it('gives up after its bounded attempts with the last error', async () => {
-    const signals: AbortSignal[] = []
-    const failure = new Error('net::ERR_NETWORK_CHANGED')
-    const fetcher = vi.fn<typeof fetch>(async (_url, options) => {
-      signals.push(requestSignal(options))
-      throw failure
-    })
+  it('gives up at once, without retrying, when no response arrives within its connect budget', async () => {
+    const fetcher = vi.fn<typeof fetch>(
+      (_url, options) =>
+        new Promise<Response>((_resolve, reject) => {
+          // A firewall that drops packets: nothing comes back until the request is aborted.
+          requestSignal(options).addEventListener('abort', () => reject(new Error('aborted')))
+        })
+    )
     await expect(
-      downloadVerifiedArchive(archive(), destination, fetcher, undefined, NO_DELAY)
-    ).rejects.toBe(failure)
-    expect(fetcher).toHaveBeenCalledTimes(NO_DELAY.length + 1)
-    expect(signals).toHaveLength(NO_DELAY.length + 1)
-    expect(signals.every((signal) => signal.aborted)).toBe(true)
-  })
-
-  it.each([
-    ['a missing asset', () => new Response('gone', { status: 404 })],
-    ['a checksum mismatch', () => ok(new Uint8Array([9, 9]))]
-  ])('never retries %s', async (_name, response) => {
-    const signals: AbortSignal[] = []
-    const fetcher = vi.fn<typeof fetch>(async (_url, options) => {
-      signals.push(requestSignal(options))
-      return response()
-    })
-    await expect(
-      downloadVerifiedArchive(archive(), destination, fetcher, undefined, NO_DELAY)
-    ).rejects.toThrow()
+      downloadVerifiedArchive(archive(), destination, fetcher, undefined, NO_DELAY, undefined, 20)
+    ).rejects.toThrow('Node runtime download got no response within 0.02 s')
     expect(fetcher).toHaveBeenCalledTimes(1)
-    expect(signals[0]?.aborted).toBe(true)
   })
 
   it('stops waiting to retry once the caller cancels', async () => {

@@ -27,12 +27,8 @@ async function setCustomGenerator(page: Page, scriptPath: string): Promise<void>
   }, scriptPath)
 }
 
-/**
- * Writes a generator that echoes back whichever issue number reached the prompt, so the
- * assertion covers the whole chain (renderer → IPC → worktree meta → template render →
- * agent stdin) rather than any single hop. `emitPayload` lines run with a captured `issue`
- * const in scope and must write the payload the caller's generation path expects.
- */
+// Echo the prompt’s linked issue to test renderer → IPC → metadata → template → agent stdin.
+// emitPayload runs with the captured issue and must write the caller’s expected reply.
 export function writeLinkedIssueEchoGenerator(scriptPath: string, emitPayload: string[]): void {
   writeFileSync(
     scriptPath,
@@ -41,8 +37,7 @@ export function writeLinkedIssueEchoGenerator(scriptPath: string, emitPayload: s
       "process.stdin.on('data', (chunk) => chunks.push(chunk))",
       "process.stdin.on('end', () => {",
       "  const prompt = Buffer.concat(chunks).toString('utf8')",
-      // Why: capture the whole line, not `\d*` — a `\d*` capture matches zero digits before
-      // an unexpanded `{linkedIssue}` and reports it as `empty`, hiding a literal token.
+      // Capture the whole line: a zero-digit match would hide an unexpanded {linkedIssue} token as empty.
       '  const match = prompt.match(/ORCA_E2E_ISSUE=([^\\r\\n]*)/)',
       "  const issue = match ? match[1] || 'empty' : 'missing'",
       ...emitPayload,

@@ -1,8 +1,7 @@
-import { WorktreeSidebarDropIndicator } from '../../WorktreeSidebarDropIndicator'
+import { WorktreeSidebarDropIndicator } from '../drag/WorktreeSidebarDropIndicator'
 import type { useWorktreeDragRuntime } from '../drag/use-runtime'
 import type { useWorktreeSidebarHeaderDrag } from '../drag/use-header-drag'
 
-/** Header and worktree drop lines float above the virtual rows, so they render as siblings. */
 export function renderWorktreeSidebarDropIndicators(args: {
   headerDrag: ReturnType<typeof useWorktreeSidebarHeaderDrag>
   worktreeDragState: ReturnType<typeof useWorktreeDragRuntime>['worktreeDragState']

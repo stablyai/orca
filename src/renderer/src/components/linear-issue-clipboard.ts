@@ -1,20 +1,16 @@
 import { toast } from 'sonner'
 
-import { translate } from '@/i18n/i18n'
+import {
+  issueCopiedMessage,
+  issueCopyFailedMessage,
+  type IssueCopyTarget
+} from './issue-copy-target-messages'
 
-export async function copyLinearIssueText(text: string, label: string): Promise<void> {
+export async function copyLinearIssueText(text: string, target: IssueCopyTarget): Promise<void> {
   try {
     await window.api.ui.writeClipboardText(text)
-    toast.success(
-      translate('auto.components.LinearIssueWorkspace.7835483c43', '{{value0}} copied', {
-        value0: label
-      })
-    )
+    toast.success(issueCopiedMessage(target))
   } catch {
-    toast.error(
-      translate('auto.components.LinearIssueWorkspace.9bcbaa2737', 'Failed to copy {{value0}}', {
-        value0: label.toLowerCase()
-      })
-    )
+    toast.error(issueCopyFailedMessage(target))
   }
 }

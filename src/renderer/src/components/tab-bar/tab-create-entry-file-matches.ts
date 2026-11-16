@@ -1,8 +1,9 @@
 import {
+  composeQuickOpenText,
   QuickOpenPathRanker,
   rankQuickOpenFiles,
   type QuickOpenIndexedFile
-} from '../quick-open-search'
+} from '../../../../shared/quick-open/quick-open-path-search'
 
 export type ExistingFileMatch = {
   kind: 'existing-file'
@@ -22,8 +23,7 @@ function hasFilenameExtension(query: string): boolean {
   return /(?:^|[\\/])[^\\/]+\.[^\\/]+$/.test(query.trim())
 }
 
-// Why: multi-word text without path or filename syntax cannot overtake ranking
-// as a file match, so callers may treat its search ranking as already final.
+// Without path/extension syntax, multi-word queries have settled search precedence over file matches.
 export function isUnambiguousSearchQuery(query: string): boolean {
   const trimmed = query.trim()
   return /\s/.test(trimmed) && !hasPathSeparator(trimmed) && !hasFilenameExtension(trimmed)
@@ -81,7 +81,7 @@ export function findExistingFileMatches(
   if (!normalizedQuery || limit <= 0) {
     return []
   }
-  const lowerQuery = normalizedQuery.toLowerCase()
+  const lowerQuery = composeQuickOpenText(normalizedQuery.toLowerCase())
   const exactPathMatches = indexedFiles
     .filter((file) => file.lowerPath === lowerQuery)
     .map((file) => ({

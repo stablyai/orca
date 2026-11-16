@@ -10,6 +10,7 @@ type WorkItemSourceActionsInput = Pick<
   | 'setBaseBranch'
   | 'setBaseBranchNamesWorkspace'
   | 'setBranchNameOverride'
+  | 'setBranchIntent'
   | 'setBranchNameOverridePreservesNameEdits'
   | 'setCompareBaseRef'
   | 'setForkPushWarning'
@@ -38,6 +39,7 @@ export function useWorkItemSourceActions(input: WorkItemSourceActionsInput) {
     setBaseBranch,
     setBaseBranchNamesWorkspace,
     setBranchNameOverride,
+    setBranchIntent,
     setBranchNameOverridePreservesNameEdits,
     setCompareBaseRef,
     setForkPushWarning,
@@ -66,8 +68,6 @@ export function useWorkItemSourceActions(input: WorkItemSourceActionsInput) {
       setPushTarget(undefined)
       setStartFromResetHint(null)
       setForkPushWarning(null)
-      // Why (#5181): reuse (check out) an existing branch instead of branching off it; git allows a branch in only one worktree, so gate eligibility on that.
-      // Note: worktreesByRepo covers only visible worktrees; a branch busy in a hidden external worktree falls through to the backend "already exists locally" check.
       const { reuseEligibleBranch: nextReuseEligibleBranch, defaultReuse } = selection
       setReuseEligibleBranch(nextReuseEligibleBranch)
       setReuseSelectedBranch(defaultReuse)
@@ -76,11 +76,12 @@ export function useWorkItemSourceActions(input: WorkItemSourceActionsInput) {
         setName(selection.name)
         lastAutoNameRef.current = selection.lastAutoName
         branchAutoNameRef.current = selection.branchNameOverride ? selection.branchAutoName : ''
-        setBranchNameOverride(selection.branchNameOverride)
+        setBranchNameOverride(defaultReuse ? (nextReuseEligibleBranch ?? undefined) : undefined)
       } else {
-        setBranchNameOverride(selection.branchNameOverride)
+        setBranchNameOverride(defaultReuse ? (nextReuseEligibleBranch ?? undefined) : undefined)
         branchAutoNameRef.current = selection.branchNameOverride ? selection.branchAutoName : ''
       }
+      setBranchIntent(defaultReuse ? 'open-existing-v2' : 'create-new')
     },
     [
       name,
@@ -91,6 +92,7 @@ export function useWorkItemSourceActions(input: WorkItemSourceActionsInput) {
       setBaseBranch,
       setBaseBranchNamesWorkspace,
       setBranchNameOverride,
+      setBranchIntent,
       setBranchNameOverridePreservesNameEdits,
       setCompareBaseRef,
       setForkPushWarning,
@@ -109,9 +111,10 @@ export function useWorkItemSourceActions(input: WorkItemSourceActionsInput) {
         return
       }
       setReuseSelectedBranch(next)
-      // Why (#5181): reuse pins the existing branch as override (preserved across name edits); opting out drops it so a fresh branch is created from the ref.
+      // Reuse pins the branch across name edits; opting out restores fresh-branch creation from the ref (#5181).
       setBranchNameOverridePreservesNameEdits(next)
       setBranchNameOverride(next ? reuseEligibleBranch : undefined)
+      setBranchIntent(next ? 'open-existing-v2' : 'create-new')
       if (next) {
         branchAutoNameRef.current = reuseEligibleBranch
       }
@@ -120,6 +123,7 @@ export function useWorkItemSourceActions(input: WorkItemSourceActionsInput) {
       reuseEligibleBranch,
       branchAutoNameRef,
       setBranchNameOverride,
+      setBranchIntent,
       setBranchNameOverridePreservesNameEdits,
       setReuseSelectedBranch
     ]

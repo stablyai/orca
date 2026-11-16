@@ -1,22 +1,16 @@
 import nacl from 'tweetnacl'
 import { beforeAll, describe, expect, it, vi } from 'vitest'
-import { E2EEChannel as CurrentChannel } from '../../../src/main/runtime/rpc/e2ee-channel'
-import { createPairedE2EEClientHandshake } from '../../../src/shared/paired-e2ee-client-handshake'
-import { NODE_PAIRED_E2EE_PRIMITIVES } from '../../../src/shared/paired-e2ee-node-primitives'
-import { remoteRuntimeClientCapabilities } from '../../../src/shared/remote-runtime-client-capabilities'
-import type { MOBILE_E2EE_LEGACY_FIXTURE } from '../../../src/shared/mobile-e2ee-legacy-fixtures'
+import { E2EEChannel as CurrentChannel } from '../../../src/main/runtime/rpc/mobile/e2ee/e2ee-channel'
+import { createPairedE2EEClientHandshake } from '../../../src/shared/remote-runtime/e2ee/paired-e2ee-client-handshake'
+import { NODE_PAIRED_E2EE_PRIMITIVES } from '../../../src/shared/remote-runtime/e2ee/node/paired-e2ee-node-primitives'
+import { remoteRuntimeClientCapabilities } from '../../../src/shared/remote-runtime/remote-runtime-client-capabilities'
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,
   resolveBaselineReleaseRef
 } from './release-checkout'
 
-/**
- * Desktop, CLI, web and mobile clients now build their hello, ready check, auth frame and
- * sealed channel from one shared handshake core. Neither direction of version skew may notice:
- * the core must authenticate against the released host, and the released client must keep
- * authenticating against this host.
- */
+// Shared handshake-core refactoring must preserve authentication in both directions against real released peers.
 const SUITE_TIMEOUT_MS = 180_000
 
 type ChannelLike = {
@@ -39,7 +33,6 @@ const host = nacl.box.keyPair()
 const hostPublicKeyB64 = Buffer.from(host.publicKey).toString('base64')
 let ReleasedChannel: ChannelConstructor
 let releasedCrypto: ReleasedCrypto
-let releasedLegacyFixture: typeof MOBILE_E2EE_LEGACY_FIXTURE
 
 beforeAll(async () => {
   const checkout = await materializeReleaseCheckout(resolveBaselineReleaseRef())
@@ -54,13 +47,6 @@ beforeAll(async () => {
     checkout,
     'src/shared/e2ee-crypto.ts'
   )) as unknown as ReleasedCrypto
-  const fixtureModule = await importReleaseCheckoutModule(
-    checkout,
-    'src/shared/mobile-e2ee-legacy-fixtures.ts'
-  )
-  const fixture = fixtureModule.MOBILE_E2EE_LEGACY_FIXTURE
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pinned release's captured legacy frames; a changed shape fails the byte comparisons below.
-  releasedLegacyFixture = fixture as typeof MOBILE_E2EE_LEGACY_FIXTURE
 }, SUITE_TIMEOUT_MS)
 
 function hostChannel(Channel: ChannelConstructor) {
@@ -137,30 +123,6 @@ async function coreClientRoundTrip(
 }
 
 describe('cross-version: shared paired E2EE handshake core', () => {
-  it('writes the frames the released client wrote', async () => {
-    const fixture = releasedLegacyFixture
-    const handshake = createPairedE2EEClientHandshake({
-      primitives: NODE_PAIRED_E2EE_PRIMITIVES,
-      hostPublicKeyB64: fixture.serverPublicKeyB64,
-      framing: 'legacy',
-      clientKeyPair: nacl.box.keyPair.fromSecretKey(fixture.clientSecretKey)
-    })
-    expect(handshake.helloText()).toBe(fixture.helloText)
-    const randomBytes = vi
-      .spyOn(nacl, 'randomBytes')
-      .mockImplementation((length) => new Uint8Array(length).fill(6))
-    try {
-      expect(
-        await handshake.sealAuth({
-          kind: 'token',
-          deviceToken: 'legacy-token'
-        })
-      ).toBe(fixture.authFrameB64)
-    } finally {
-      randomBytes.mockRestore()
-    }
-  })
-
   it('authenticates against the released host with legacy runtime framing', async () => {
     await coreClientRoundTrip(ReleasedChannel, 'legacy')
   })

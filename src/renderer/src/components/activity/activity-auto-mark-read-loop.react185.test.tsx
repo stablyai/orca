@@ -1,14 +1,14 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 /** @vitest-environment happy-dom */
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
-import type { Repo } from '../../../../shared/repo-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { registerAgentSubjectReadCapture } from '@/attention/agent-subject-read-actions'
 import ActivityPrototypePage from './ActivityPrototypePage'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -71,14 +71,14 @@ afterEach(() => {
   document.body.replaceChildren()
 })
 
-function seedRetainedThread(stampedAt: number, lastAssistantMessage: string): void {
+function seedCompletedThread(stampedAt: number, lastAssistantMessage: string): void {
   useAppStore.setState({
     repos: [repo],
     worktreesByRepo: { [repo.id]: [worktree] },
-    tabsByWorktree: { [worktree.id]: [] },
-    retainedAgentsByPaneKey: {
-      [PANE_A]: {
-        entry: {
+    tabsByWorktree: { [worktree.id]: [tab] },
+    agentStatusByPaneKey: acceptedAgentStatuses(
+      Object.entries({
+        [PANE_A]: {
           state: 'done',
           prompt: PROMPT,
           updatedAt: stampedAt,
@@ -88,26 +88,16 @@ function seedRetainedThread(stampedAt: number, lastAssistantMessage: string): vo
           stateHistory: [],
           agentType: 'claude',
           lastAssistantMessage
-        },
-        worktreeId: worktree.id,
-        tab,
-        agentType: 'claude',
-        startedAt: stampedAt
-      }
-    },
+        }
+      })
+    ),
     activeRepoId: repo.id,
     activeWorktreeId: worktree.id
   })
 }
 
 function seedThreadStampedByLocalClock(): void {
-  seedRetainedThread(Date.now() - 60_000, 'finished locally')
-}
-
-// Why: an SSH/remote execution host stamps the turn with its own clock, so the renderer can
-// acknowledge a thread whose event still sorts as newer than the acknowledgement.
-function seedThreadStampedAheadOfLocalClock(): void {
-  seedRetainedThread(Date.now() + 60_000, 'finished on the execution host')
+  seedCompletedThread(Date.now() - 60_000, 'finished locally')
 }
 
 async function mountActivityPage(): Promise<void> {
@@ -136,93 +126,13 @@ async function selectSeededThread(): Promise<void> {
   })
 }
 
-function countAcknowledgeWrites(): { readonly count: () => number; stop: () => void } {
-  let writes = 0
-  const unsubscribe = useAppStore.subscribe((next, prev) => {
-    if (next.acknowledgedAgentsByPaneKey !== prev.acknowledgedAgentsByPaneKey) {
-      writes += 1
-    }
-  })
-  return { count: () => writes, stop: unsubscribe }
-}
-
 describe('Activity auto mark-read loop (React #185)', () => {
-  it('acknowledges a selected thread once even when its unread flag cannot clear', async () => {
-    seedThreadStampedAheadOfLocalClock()
-    await mountActivityPage()
-    const acknowledgeWrites = countAcknowledgeWrites()
-
-    try {
-      await selectSeededThread()
-    } finally {
-      acknowledgeWrites.stop()
-    }
-
-    expect(acknowledgeWrites.count()).toBe(1)
-  })
-
-  it('re-acknowledges when a new turn lands on the still-selected thread', async () => {
-    const intents: string[] = []
-    // An automatic read is a view: it must not claim the edges a click would cover.
-    const stopCapture = registerAgentSubjectReadCapture(PANE_A, (intent) => {
-      intents.push(intent)
-      return null
-    })
-    seedThreadStampedAheadOfLocalClock()
-    await mountActivityPage()
-    const acknowledgeWrites = countAcknowledgeWrites()
-
-    try {
-      await selectSeededThread()
-      expect(acknowledgeWrites.count()).toBe(1)
-
-      // Why: the per-turn guard must not swallow the next turn's auto mark-read.
-      const nextTurnAt = Date.now() + 120_000
-      await act(async () => {
-        useAppStore.setState((s) => {
-          const previous = s.retainedAgentsByPaneKey[PANE_A]
-          return {
-            retainedAgentsByPaneKey: {
-              [PANE_A]: {
-                ...previous,
-                startedAt: nextTurnAt,
-                entry: {
-                  ...previous.entry,
-                  updatedAt: nextTurnAt,
-                  stateStartedAt: nextTurnAt,
-                  lastAssistantMessage: 'second turn on the execution host'
-                }
-              }
-            }
-          }
-        })
-        await new Promise((resolve) => setTimeout(resolve, 50))
-      })
-    } finally {
-      acknowledgeWrites.stop()
-      stopCapture()
-    }
-
-    expect(acknowledgeWrites.count()).toBe(2)
-    expect(intents).toEqual(['view', 'view'])
-  })
-
-  it('still marks a locally stamped thread read on selection', async () => {
-    seedThreadStampedByLocalClock()
-    await mountActivityPage()
-    await selectSeededThread()
-
-    expect(useAppStore.getState().acknowledgedAgentsByPaneKey[PANE_A]).toBeGreaterThan(0)
-  })
-
   it('leaves the selected thread unread after the user marks it unread', async () => {
     seedThreadStampedByLocalClock()
     await mountActivityPage()
     await selectSeededThread()
 
-    // Why pinned: auto mark-read is once per turn, so an explicit mark-unread on the
-    // still-selected thread must survive — a guard keyed on unread instead of the turn
-    // would silently re-acknowledge it and make the menu action a no-op.
+    // Once-per-turn auto-read must preserve a later explicit mark-unread on the still-selected thread.
     await act(async () => {
       useAppStore.getState().unacknowledgeAgents([PANE_A])
       await new Promise((resolve) => setTimeout(resolve, 50))

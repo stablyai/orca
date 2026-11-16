@@ -1,4 +1,4 @@
-import type { JiraConnectionStatus, JiraUser } from '../../../shared/jira-types'
+import type { JiraConnectionStatus, JiraUser } from '../../../shared/jira/jira-types'
 
 // Site identities take precedence over the active site's viewer.
 export function getJiraSelfUser(

@@ -1,6 +1,6 @@
 import { createContext, useContext, useMemo } from 'react'
-import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import { jiraImageReference } from '../../../shared/jira-attachment-image'
+import type { RuntimeClientTarget } from '../../../shared/remote-runtime/host-catalog/runtime-client-target'
+import { jiraImageReference } from '../../../shared/jira/jira-attachment-image'
 import CommentMarkdown from './sidebar/CommentMarkdown'
 import { selectCommentMarkdownComponents } from './sidebar/comment-markdown-element-renderers'
 import { JiraAttachmentImage } from './jira-attachment-image'

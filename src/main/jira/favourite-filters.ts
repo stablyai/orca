@@ -1,8 +1,8 @@
 import {
   normalizeJiraFavouriteFilters,
   type JiraFavouriteFilterList
-} from '../../shared/jira-favourite-filters'
-import { JiraFavouriteFilterParams } from '../../shared/rpc-contract/jira-favourite-filter-params'
+} from '../../shared/jira/jira-favourite-filters'
+import { JiraFavouriteFilterParams } from '../../shared/rpc-contract/jira/jira-favourite-filter-params'
 import { apiBasePath, jiraRequest } from './authenticated-request'
 import { getClients } from './client'
 import { requireStrictJiraSite, withJiraDeadline } from './jira-read-failure'

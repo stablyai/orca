@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import type { JiraUser } from '../../../shared/jira-types'
+import type { JiraUser } from '../../../shared/jira/jira-types'
 
 export function useJiraCreateAssignee(providerKey: string, projectKey: string) {
   const scope = JSON.stringify([providerKey, projectKey])

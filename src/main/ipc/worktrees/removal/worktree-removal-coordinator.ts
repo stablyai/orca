@@ -20,11 +20,9 @@ export function getWorktreeRemovalOptionsKey(
 ): string {
   const forceKey = args.force === true ? 'force' : 'normal'
   const archiveKey = args.skipArchive === true ? 'skip-archive' : 'run-archive'
-  // Why: a Force Delete retry must not coalesce onto the in-flight attempt that
-  // just failed the PTY gate — it would inherit that failure instead of retrying.
+  // Explicit PTY-stop waivers must retry instead of joining the strict attempt that just refused.
   const ptyKey = args.allowUnverifiedPtyStop === true ? 'allow-unverified-pty' : 'require-pty-stop'
-  // Same reason for the archive waiver: a retry that waives the failed hook must not coalesce
-  // onto the in-flight attempt that is about to refuse on it.
+  // Failed-hook waivers likewise require a separate attempt from strict removal.
   const archiveFailureKey =
     args.allowFailedArchiveHook === true ? 'allow-failed-archive' : 'require-archive'
   const checkoutKey =

@@ -1,10 +1,11 @@
 import { ipcMain } from 'electron'
 import { readLocalFileRange } from './local-file-range-read'
-import { validateFileRangeRequest } from '../../../shared/file-range-read'
+import { validateFileRangeRequest } from '../../../shared/file-content/file-range-read'
 import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
-import { resolveLocalFileRequestPath } from '../local-file-access-resolution'
-import type { LocalFileAccess } from '../../../shared/local-file-access'
+import { resolveLocalFileRequestPath } from './access/local-file-access-resolution'
+import type { LocalFileAccess } from '../../../shared/file-access/local-file-access'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
+import { guardWslUncPathAccess } from '../../wsl/filesystem/wsl-unc-access-gate'
 
 export function registerFilesystemChunkReadHandler({ store }: FilesystemHandlerContext): void {
   ipcMain.handle(
@@ -17,14 +18,23 @@ export function registerFilesystemChunkReadHandler({ store }: FilesystemHandlerC
         access?: LocalFileAccess
         offset: number
         length: number
+        wakeWslDistro?: boolean
       }
     ) => {
       validateFileRangeRequest(args.offset, args.length)
       if (args.connectionId) {
         throw new SshHostNotServedError(args.connectionId)
       }
-      const filePath = await resolveLocalFileRequestPath(args.filePath, args.access, store)
-      return readLocalFileRange(filePath, args.offset, args.length)
+      return guardWslUncPathAccess(
+        args.filePath,
+        async () =>
+          readLocalFileRange(
+            await resolveLocalFileRequestPath(args.filePath, args.access, store),
+            args.offset,
+            args.length
+          ),
+        { wake: args.wakeWslDistro === true }
+      )
     }
   )
 }

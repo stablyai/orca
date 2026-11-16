@@ -8,7 +8,9 @@ test.describe('Worktree notification mute', () => {
     const worktreeId = await waitForActiveWorktree(orcaPage)
 
     await worktreeRow(orcaPage, worktreeId).click({ button: 'right' })
-    const muteItem = orcaPage.getByRole('menuitem', { name: 'Mute Notifications' })
+    const muteItem = orcaPage.getByRole('menuitem', {
+      name: 'Mute Notifications'
+    })
     await expect(muteItem).toBeVisible()
     await muteItem.click()
 
@@ -27,7 +29,9 @@ test.describe('Worktree notification mute', () => {
     ).toBeVisible()
 
     await worktreeRow(orcaPage, worktreeId).click({ button: 'right' })
-    const unmuteItem = orcaPage.getByRole('menuitem', { name: 'Unmute Notifications' })
+    const unmuteItem = orcaPage.getByRole('menuitem', {
+      name: 'Unmute Notifications'
+    })
     await expect(unmuteItem).toBeVisible()
     await unmuteItem.click()
 

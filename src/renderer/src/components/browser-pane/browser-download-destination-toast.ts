@@ -1,5 +1,5 @@
 import { toast } from 'sonner'
-import type { BrowserDownloadFinishedEvent } from '../../../../shared/browser-guest-events'
+import type { BrowserDownloadFinishedEvent } from '../../../../shared/browser/guest-lifecycle/browser-guest-events'
 import { translate } from '@/i18n/i18n'
 
 export function formatBrowserRemoteDownloadMessage(destination: {
@@ -16,8 +16,7 @@ export function formatBrowserRemoteDownloadMessage(destination: {
   )
 }
 
-// Why: a client-hosted download never lands in this desktop's Downloads folder, so the completion
-// notice must name the remote path and host instead of implying a local save.
+// Name the remote path and host; client-hosted downloads never land in this desktop’s Downloads folder.
 export function emitBrowserRemoteDownloadToast(event: BrowserDownloadFinishedEvent): boolean {
   if (event.status !== 'completed' || !event.remoteDestination) {
     return false

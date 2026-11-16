@@ -22,7 +22,11 @@ test('account switch actions return keyboard input to the terminal', async ({
     const ptyId = await waitForActivePanePtyId(orcaPage)
     await orcaPage.evaluate(
       ({ ptyId, action }) => {
-        window.__store.getState().markCodexRestartNotices([
+        const store = window.__store
+        if (!store) {
+          throw new Error('window.__store is unavailable')
+        }
+        store.getState().markCodexRestartNotices([
           {
             ptyId,
             previousAccountLabel: 'Previous account',
@@ -41,13 +45,15 @@ test('account switch actions return keyboard input to the terminal', async ({
       if (!cardText || !backdrop) {
         throw new Error('Account prompt has no rendered bounds')
       }
+      // Why centered: the sidebar seam's resize and scrollbar strips overlap the pane's left edge.
+      const outside = { x: backdrop.width / 2, y: 8 }
       await orcaPage.mouse.move(cardText.x + 8, cardText.y + 8)
       await orcaPage.mouse.down()
-      await orcaPage.mouse.move(backdrop.x + 8, backdrop.y + 8)
+      await orcaPage.mouse.move(backdrop.x + outside.x, backdrop.y + outside.y)
       await orcaPage.mouse.up()
       await expect(dialog).toBeVisible()
       await orcaPage.screenshot({ path: testInfo.outputPath('account-switched.png') })
-      await dialog.click({ position: { x: 8, y: 8 } })
+      await dialog.click({ position: outside })
     } else if (action === 'escape') {
       await orcaPage.keyboard.press('Escape')
     } else {

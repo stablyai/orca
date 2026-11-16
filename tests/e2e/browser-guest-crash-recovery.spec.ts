@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { ensureTerminalVisible, getActiveWorktreeId, waitForActiveWorktree } from './helpers/store'
-import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from '../../src/renderer/src/components/browser-pane/host-guest/browser-page-guest-recovery'
+import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from '../../src/renderer/src/components/browser-pane/host-guest/recovery/browser-page-guest-recovery'
 import {
   crashGuestRenderer,
   listRegisteredBrowserPages,

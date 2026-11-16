@@ -4,39 +4,38 @@ import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
-  type AgentSessionJournalIdentity,
-  type AgentSessionJournalProviderHandle
-} from '../../../src/shared/agent-session-journal-types'
-import { codexProviderHandle } from '../../../src/shared/agent-session-provider-handle-encoding'
-import type { AgentSessionRefusalReference } from '../../../src/shared/agent-session-wire-refusals'
+  AGENT_SESSION_JOURNAL_TURN_ITEM_SCHEMA_VERSION
+} from '../../../src/shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentSessionJournalIdentity,
+  AgentSessionJournalProviderHandle
+} from '../../../src/shared/agent-session/journal/agent-session-journal-identity'
+import { agentJournalItemKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
+import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
+import type { AgentSessionRefusalReference } from '../../../src/shared/agent-session/failures/agent-session-wire-refusals'
 import {
   closeTestJournalHostDatabase,
   createTrackedJournalOpener,
   insertTestJournalRowJson,
   liveTestJournalRows,
   openTestJournalHostDatabase,
-  SAVED_BY_NEWER_ORCA
-} from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
-import { journalOpenRefusal } from '../../../src/main/native-chat/agent-session-journal/journal-open-failure'
+  SAVED_BY_NEWER_ORCA,
+  seedLegacyTestJournal
+} from '../../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { journalOpenRefusal } from '../../../src/main/native-chat/agent-session-journal/replay/journal-open-failure'
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,
-  resolveBaselineReleaseRef
+  resolveBaselineReleaseRef,
+  releaseModuleExport
 } from './release-checkout'
 
-/**
- * A chat a newer Orca saved now fails its load here with the newer-Orca reason, where this host used
- * to serve it read-only (Rule 3: an existing read answers differently). An older client gets that
- * refusal instead of pages: it must word it with what it has and never call it damage. And this
- * build keeps a body of a kind it does not know (or a plan subject of one), writable, instead of
- * deleting from it, which an older host meets when it opens a journal holding such a body.
- */
+// Newer journals must yield the newer-Orca refusal to old clients, never damage wording.
+// Unknown bodies refuse as a newer Orca's here; also probe the older host’s handling of those rows.
 const SUITE_TIMEOUT_MS = 180_000
 // The last release that does not know the newer-Orca reason: its words fall back to the code's.
 const BEFORE_NEWER_REASON_REF = 'v1.4.218'
-// A main build that shares this one's host database and schema version, so a downgrade to it opens
-// the journal writable. No release tag has that database yet; move to the first one that does.
+// Pin a main build sharing this database/schema for writable downgrade; move to the first release that ships it.
 const WRITABLE_BASELINE_REF = '3727100cc9dbcea6201f8a3e506676a3c4b53b18'
 const JOURNAL = 'src/main/native-chat/agent-session-journal'
 
@@ -74,16 +73,6 @@ afterAll(async () => {
   rmSync(directory, { recursive: true, force: true })
 })
 
-/** A function the checked-out build exports, typed as the caller calls it. */
-function releaseExport<T>(module: Record<string, unknown>, name: string): T {
-  const value = module[name]
-  if (value === undefined) {
-    throw new Error(`the checked-out build exports no ${name}`)
-  }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an export the checked-out build defines; each caller names the shape it uses, and a changed one fails the test.
-  return value as T
-}
-
 const NEWER_BODY_KIND = { kind: 'plan-card', steps: [{ text: 'by a newer build' }] }
 const NEWER_NESTED_LITERAL = {
   kind: 'approval',
@@ -97,45 +86,49 @@ const NEWER_NESTED_LITERAL = {
 /** A row of a kind this build does not know: the journal's open is refused as a newer Orca's. */
 const NEWER_ROW_KIND = { kind: 'future-mark' }
 
-/** This build's journal of two items, then a row as a newer build wrote it: an item holding
- *  `body`, or `row` itself: closed. */
+const EPOCH = 'epoch-newer-chat'
+
+// A saved chat of two items, then a newer body or an unknown closed row, all before this build
+// first opens it: this build reads saved rows only when it first converts the chat.
 async function journalWithNewerRow(
   row: Record<string, unknown> = NEWER_ROW_KIND
 ): Promise<{ rows: string[]; newer: string }> {
-  const journal = await journals.open({ identity: IDENTITY, stateDirectory: directory })
-  await journal.appendItem(
-    { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal: 0 },
-    { kind: 'status', text: 'before' },
-    { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+  const database = openTestJournalHostDatabase(directory)
+  seedLegacyTestJournal(database, { identity: IDENTITY, mintEpoch: () => EPOCH, now: () => 1_000 })
+  const stored = (seq: number, fields: Record<string, unknown>) =>
+    JSON.stringify({
+      // A version the older build reads, so it meets the kind rather than a newer version.
+      v: AGENT_SESSION_JOURNAL_TURN_ITEM_SCHEMA_VERSION,
+      epoch: EPOCH,
+      seq,
+      fence: 1,
+      ts: 1_000 + seq,
+      ...fields
+    })
+  const before = ['before', 'also before'].map((text, index) => ({
+    kind: 'item',
+    itemId: agentJournalItemKey({
+      provider: 'codex',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      ordinal: index * 2
+    }),
+    revision: 1,
+    turnScope: AGENT_JOURNAL_THREAD_SCOPE,
+    body: { kind: 'status', text }
+  }))
+  before.forEach((fields, index) =>
+    insertTestJournalRowJson(database.db, IDENTITY.sessionId, index + 2, stored(index + 2, fields))
   )
-  await journal.appendItem(
-    { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal: 2 },
-    { kind: 'status', text: 'also before' },
-    { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-  )
-  const seq = journal.cursor().sequence + 1
-  const newer = JSON.stringify({
-    v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
-    epoch: journal.epoch,
-    seq,
-    fence: 1,
-    ts: 2_000,
-    ...row
-  })
-  await journals.closeAll()
-  insertTestJournalRowJson(
-    openTestJournalHostDatabase(directory).db,
-    IDENTITY.sessionId,
-    seq,
-    newer,
-    2_000
-  )
-  return { rows: storedRows(), newer }
+  const seq = before.length + 2
+  const newer = stored(seq, row)
+  insertTestJournalRowJson(database.db, IDENTITY.sessionId, seq, newer, 2_000)
+  return { rows: await storedRows(), newer }
 }
 
-function storedRows(): string[] {
+async function storedRows(): Promise<string[]> {
   const rows = liveTestJournalRows(openTestJournalHostDatabase(directory).db, IDENTITY.sessionId)
-  closeTestJournalHostDatabase(directory)
+  await closeTestJournalHostDatabase(directory)
   return rows.map((row) => row.rowJson)
 }
 
@@ -162,11 +155,11 @@ async function releasedReader(ref: string) {
     checkout,
     'src/shared/structured-agent-session-read-refusal.ts'
   )
-  const parts = releaseExport<ReadHistoryParts>(notice, 'agentSessionReadHistoryRefusalParts')
-  const english = releaseExport<NoticeEnglish>(notice, 'agentSessionWriteNoticeEnglish')
-  const isFinal = releaseExport<IsFinal>(readRefusal, 'isFinalAgentSessionReadRefusal')
+  const parts = releaseModuleExport<ReadHistoryParts>(notice, 'agentSessionReadHistoryRefusalParts')
+  const english = releaseModuleExport<NoticeEnglish>(notice, 'agentSessionWriteNoticeEnglish')
+  const isFinal = releaseModuleExport<IsFinal>(readRefusal, 'isFinalAgentSessionReadRefusal')
   // The pane's own Retry stands beside the words, as on desktop.
-  const words = (refusal: Pick<AgentSessionRefusalReference, 'code' | 'details'>) =>
+  const words = (refusal: { code: string; details?: unknown }) =>
     english(parts(refusal.code, refusal.details, { retryControl: true }))
   return { words, isFinal }
 }
@@ -200,14 +193,13 @@ describe('a chat a newer Orca saved, across versions', () => {
     SUITE_TIMEOUT_MS
   )
 
-  // Why a new body kind ships its reader first, or rides a bumped `v`: this build keeps one and
-  // stays writable, but a build from before deletes the journal from it. Move the pinned build to
-  // the first release with this rule, and the older build keeps the row too.
+  // Older hosts delete unknown row kinds: ship their reader first or bump v before writing them.
+  // Move this baseline only to a release that preserves unknown bodies.
   it.each([
     ['body kind', NEWER_BODY_KIND],
     ['plan subject kind', NEWER_NESTED_LITERAL]
   ])(
-    "this build keeps a newer build's %s and stays writable; a build before it deletes it",
+    "this build refuses a newer build's %s as a newer Orca's and keeps it; a build before it deletes it",
     async (_value, body) => {
       rmSync(directory, { recursive: true, force: true })
       directory = mkdtempSync(join(tmpdir(), 'orca-newer-chat-xv-'))
@@ -217,17 +209,18 @@ describe('a chat a newer Orca saved, across versions', () => {
         revision: 1,
         body
       })
-      const reopened = await journals.open({ identity: IDENTITY, stateDirectory: directory })
-      expect(reopened.snapshot().items).toHaveLength(3)
+      await expect(
+        journals.open({ identity: IDENTITY, stateDirectory: directory })
+      ).rejects.toMatchObject(SAVED_BY_NEWER_ORCA)
       await journals.closeAll()
-      expect(storedRows()).toEqual(rows)
+      expect(await storedRows()).toEqual(rows)
 
       const checkout = await materializeReleaseCheckout(WRITABLE_BASELINE_REF)
       const support = await importReleaseCheckoutModule(
         checkout,
         `${JOURNAL}/journal-host-database-test-support.ts`
       )
-      const older = releaseExport<
+      const older = releaseModuleExport<
         () => {
           open: (options: {
             identity: OlderJournalIdentity
@@ -241,7 +234,7 @@ describe('a chat a newer Orca saved, across versions', () => {
       } finally {
         await older.closeAll()
       }
-      expect(storedRows()).not.toContain(newer)
+      expect(await storedRows()).not.toContain(newer)
     },
     SUITE_TIMEOUT_MS
   )

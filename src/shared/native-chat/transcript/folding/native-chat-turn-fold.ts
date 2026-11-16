@@ -1,0 +1,222 @@
+// Derive settled-turn answers from the last assistant prose or system failure, plus prose before a steer, Stop-hook send-back or another reply; the journal has no answer marker.
+// Earlier work/recovered errors fold behind that answer, while failed turns end visibly on their error.
+// Failed hooks never fail the turn: those that end it stay visible below the answer, earlier ones fold as work.
+
+import { AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION } from '../../../agent-session/agent-session-compaction'
+import { AGENT_SESSION_HOOK_SENT_BACK_PRESENTATION } from '../../../agent-session/journal/agent-session-hook-outcome'
+import { AGENT_SESSION_ORCA_STOP_PRESENTATION } from '../../../agent-session/lifecycle/stopping/agent-session-orca-stop'
+import { AGENT_SESSION_TURN_NOTICE_PRESENTATION } from '../../../agent-session/journal/agent-session-turn-notice'
+import {
+  deriveNativeChatRowContent,
+  nativeChatRowRendersContent
+} from '../row-content/native-chat-row-content'
+import { isStoppedBeforeStartBlock } from '../../native-chat-stopped-before-start'
+import { nativeChatRowRendersProse } from '../../native-chat-trailing-run'
+import { isGeneratedImageOperation, isImageOperation } from '../../native-chat-generated-image'
+import {
+  isBackgroundTaskBlock,
+  isSubagentGroupBlock,
+  type NativeChatBlock,
+  type NativeChatMessage,
+  type NativeChatRole
+} from '../../native-chat-types'
+
+/** Each surface supplies its own row-content results so folding sees exactly the prose it renders. */
+export type NativeChatTurnFoldRow = {
+  /** The turn this row belongs to; undefined before the first user message. */
+  turnKey: string | undefined
+  role: NativeChatRole
+  /** Whether the row draws prose — the only thing that can be an answer. */
+  rendersProse: boolean
+  /** Invisible rows cannot justify a disclosure: they hide nothing. */
+  draws: boolean
+  /** Spawn/task rows outlive their turn and may be the only outcome report; never fold them. */
+  outlivesTurn: boolean
+  /** System failures compete as final answers so failed turns end on visible errors. */
+  reportsFailure: boolean
+  /** Plans and turn notices remain visible independently of the agent's answer. */
+  explainsTurn: boolean
+  /** A person's steer or a Stop hook's send-back interrupts the turn, so the prose before this row is an answer too. */
+  endsAnswer: boolean
+  /** How an agent's spoken reply ends; a row draws its tool calls after its words, so `work` means work followed them. */
+  replyEnd: 'words' | 'work' | undefined
+  /** A hook failed; it reports on the turn without ending it. */
+  failedHook: boolean
+}
+
+const rowFacts = new WeakMap<NativeChatMessage, NativeChatTurnFoldRow>()
+
+/** Hosts store a failed hook as a red row carrying the hook's frame; the turn itself completed. */
+function isFailedHookBlock(block: NativeChatBlock): boolean {
+  const frame = block.type === 'text' && block.tone === 'error' ? block.providerFrame : undefined
+  return (
+    (frame?.provider === 'codex' && frame.kind === 'notification:hook/completed') ||
+    (frame?.provider === 'claude' && frame.kind === 'message:system:hook_response')
+  )
+}
+
+/** How the fold reads a transcript row, with the same derivation the row renders from. */
+export function nativeChatTurnFoldRow(
+  message: NativeChatMessage,
+  turnKey: string | undefined,
+  hasReceipt: boolean
+): NativeChatTurnFoldRow {
+  let facts = rowFacts.get(message)
+  if (!facts) {
+    facts = deriveTurnFoldRow(message, undefined, false)
+    rowFacts.set(message, facts)
+  }
+  return { ...facts, turnKey, draws: hasReceipt || facts.draws }
+}
+
+function deriveTurnFoldRow(
+  message: NativeChatMessage,
+  turnKey: string | undefined,
+  hasReceipt: boolean
+): NativeChatTurnFoldRow {
+  const content = deriveNativeChatRowContent(message.blocks)
+  const facts = {
+    turnKey,
+    role: message.role,
+    rendersProse: nativeChatRowRendersProse(message) && !message.blocks.some(isImageOperation),
+    draws: hasReceipt || message.agentStart === true || nativeChatRowRendersContent(message.blocks),
+    // Use raw roster blocks: empty rosters render no block, making their plain-text twin the sole spawn record.
+    outlivesTurn:
+      message.agentStart === true ||
+      message.blocks.some(
+        (block) =>
+          isSubagentGroupBlock(block) ||
+          isBackgroundTaskBlock(block) ||
+          isStoppedBeforeStartBlock(block)
+      ),
+    // A row about Orca's own stop is stored red for clients that predate it; it reports no failure.
+    reportsFailure: message.blocks.some(
+      (block) =>
+        block.type === 'text' &&
+        (block.tone === 'error' || block.failure?.kind === 'usageLimitReached') &&
+        block.presentation !== AGENT_SESSION_ORCA_STOP_PRESENTATION &&
+        !isFailedHookBlock(block)
+    ),
+    explainsTurn:
+      message.blocks.some(
+        (block) =>
+          block.type === 'text' &&
+          (block.presentation === 'plan-document' ||
+            block.presentation === 'compaction' ||
+            block.presentation === AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION ||
+            block.presentation === AGENT_SESSION_ORCA_STOP_PRESENTATION ||
+            block.presentation === AGENT_SESSION_TURN_NOTICE_PRESENTATION ||
+            block.presentation === AGENT_SESSION_HOOK_SENT_BACK_PRESENTATION)
+      ) ||
+      (message.blocks.some(isGeneratedImageOperation) &&
+        message.blocks.some((block) => block.type === 'image-ref')),
+    // Another agent's message and an orphaned tool result are work inside the turn, not a person's boundary.
+    endsAnswer:
+      (message.role === 'user' && message.from === undefined && content.tools.length === 0) ||
+      message.blocks.some(
+        (block) =>
+          block.type === 'text' && block.presentation === AGENT_SESSION_HOOK_SENT_BACK_PRESENTATION
+      ),
+    failedHook: message.blocks.some(isFailedHookBlock)
+  }
+  const speaks =
+    message.role === 'assistant' &&
+    facts.rendersProse &&
+    content.hasText &&
+    !facts.outlivesTurn &&
+    !facts.explainsTurn
+  return { ...facts, replyEnd: speaks ? (content.tools.length > 0 ? 'work' : 'words') : undefined }
+}
+
+export type NativeChatTurnFold = {
+  /** Rows a folded turn must not draw, by index. */
+  foldedRows: ReadonlySet<number>
+  /** Offer disclosure only for turns that actually hide rows. */
+  foldableTurnKeys: ReadonlySet<string>
+}
+
+export const NATIVE_CHAT_EMPTY_TURN_FOLD: NativeChatTurnFold = {
+  foldedRows: new Set(),
+  foldableTurnKeys: new Set()
+}
+
+/** Last assistant prose/system failure per turn, before each steer or send-back, and before another reply; no answer means fold all work. */
+export function nativeChatTurnAnswerRows(
+  rows: readonly NativeChatTurnFoldRow[]
+): ReadonlySet<number> {
+  const answers = new Set<number>()
+  const latest = new Map<string, number>()
+  const previousDrawn = new Map<string, number>()
+  for (const [index, row] of rows.entries()) {
+    if (row.turnKey === undefined) {
+      continue
+    }
+    const answer = latest.get(row.turnKey)
+    if (row.endsAnswer && answer !== undefined) {
+      answers.add(answer)
+      latest.delete(row.turnKey)
+    }
+    if (row.draws) {
+      // Back-to-back replies within a turn all stay visible; a reply that work follows folds.
+      const previous = previousDrawn.get(row.turnKey)
+      if (previous !== undefined && rows[previous]?.replyEnd === 'words' && row.replyEnd) {
+        answers.add(previous)
+      }
+      previousDrawn.set(row.turnKey, index)
+    }
+    const isCandidate =
+      row.rendersProse &&
+      (row.role === 'assistant' || (row.role === 'system' && row.reportsFailure))
+    if (isCandidate) {
+      latest.set(row.turnKey, index)
+    }
+  }
+  for (const index of latest.values()) {
+    answers.add(index)
+  }
+  return answers
+}
+
+/** Fold settled, unexpanded turns when they gain a duration/status row. Running turns stay open; newly settled turns start collapsed without separate disclosure cleanup. */
+export function nativeChatTurnFold({
+  rows,
+  settledTurnKeys,
+  expandedTurnKeys
+}: {
+  rows: readonly NativeChatTurnFoldRow[]
+  settledTurnKeys: ReadonlySet<string>
+  expandedTurnKeys: ReadonlySet<string>
+}): NativeChatTurnFold {
+  const answers = nativeChatTurnAnswerRows(rows)
+  const lastWorkByTurn = new Map<string, number>()
+  for (const [index, row] of rows.entries()) {
+    if (row.turnKey !== undefined && row.draws && !row.failedHook) {
+      lastWorkByTurn.set(row.turnKey, index)
+    }
+  }
+  const foldedRows = new Set<number>()
+  const foldableTurnKeys = new Set<string>()
+  for (const [index, row] of rows.entries()) {
+    const { turnKey } = row
+    // User anchors, durable task/roster reports and turn explanations remain outside the fold.
+    if (
+      turnKey === undefined ||
+      row.role === 'user' ||
+      !row.draws ||
+      row.outlivesTurn ||
+      row.explainsTurn ||
+      !settledTurnKeys.has(turnKey)
+    ) {
+      continue
+    }
+    // No-prose turns fold wholly behind the status anchor instead of leaving every command expanded.
+    if (answers.has(index) || (row.failedHook && index > (lastWorkByTurn.get(turnKey) ?? -1))) {
+      continue
+    }
+    foldableTurnKeys.add(turnKey)
+    if (!expandedTurnKeys.has(turnKey)) {
+      foldedRows.add(index)
+    }
+  }
+  return { foldedRows, foldableTurnKeys }
+}

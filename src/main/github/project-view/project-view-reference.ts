@@ -1,20 +1,23 @@
-import type { ResolveProjectRefArgs } from '../../../shared/github/project-request-types'
-import { GITHUB_OWNER_NUMBER_SHORTHAND_RE } from '../../../shared/github/owner-slug'
+import type { ResolveProjectRefArgs } from '../../../shared/github/projects/project-request-types'
+import {
+  GITHUB_OWNER_NUMBER_SHORTHAND_RE,
+  isGitHubOwnerSlug as isValidOwnerSlug
+} from '../../../shared/github/repositories/owner-slug'
 import type {
   GitHubProjectViewError,
   ResolveProjectRefResult
-} from '../../../shared/github/project-result-types'
-import type { GitHubProjectOwnerType } from '../../../shared/github/project-types'
+} from '../../../shared/github/projects/project-result-types'
+import type { GitHubProjectOwnerType } from '../../../shared/github/projects/project-types'
 import {
   GITHUB_PROJECT_REF_INPUT_TOO_LARGE_ERROR,
   isGitHubProjectRefInputTooLarge
-} from '../../../shared/github/project-ref-input'
-import { githubProjectHost } from '../../../shared/github/project-identity'
-import { isValidOwnerSlug, projectGhExecOptions, runGraphql, type GraphqlVars } from './internals'
+} from '../../../shared/github/projects/project-ref-input'
+import { githubProjectHost } from '../../../shared/github/projects/project-identity'
+
+import { projectGhExecOptions } from './project-host-execution'
+import { runGraphql, type GraphqlVars } from './project-graphql'
 import { getCachedOwnerType, rememberOwnerType } from './project-view-cache'
 import { ownerQueryRoot } from './project-view-config'
-
-// ─── resolveProjectRef ─────────────────────────────────────────────────
 
 type ParsedPaste =
   | { kind: 'org'; owner: string; number: number; host: string; viewNumber?: number }
@@ -29,8 +32,7 @@ export function parseProjectPaste(input: string, host?: string): ParsedPaste | n
   if (isGitHubProjectRefInputTooLarge(trimmed)) {
     return null
   }
-  // Why: URL parsing enforces an exact Project path and rejects credentials;
-  // a prefix regex could silently turn `/projects/1evil` into Project 1.
+  // Parse exact project URLs and reject credentials; prefix matching could accept projects/1evil.
   try {
     const url = new URL(trimmed)
     const allowedHosts = new Set(['github.com', ...(host ? [host.trim().toLowerCase()] : [])])
@@ -65,7 +67,7 @@ export function parseProjectPaste(input: string, host?: string): ParsedPaste | n
       ...(viewNumber !== undefined ? { viewNumber } : {})
     }
   } catch {
-    // Shorthand parsing below remains available for non-URL input.
+    // Non-URL input may still match shorthand.
   }
   const sm = trimmed.match(GITHUB_OWNER_NUMBER_SHORTHAND_RE)
   if (sm) {
@@ -91,7 +93,6 @@ async function resolveOwnerType(
     num: number | null
   ): Promise<{ ok: true; title: string } | { ok: false; error: GitHubProjectViewError }> => {
     const root = ownerQueryRoot(ot)
-    // If number is provided, fetch the project title; else just confirm owner exists.
     const query = num
       ? `
         query($owner:String!, $num:Int!) {
@@ -115,12 +116,18 @@ async function resolveOwnerType(
     }
     const top = res.data[root]
     if (!top) {
-      return { ok: false, error: { type: 'not_found', message: 'Owner not found.' } }
+      return {
+        ok: false,
+        error: { type: 'not_found', message: 'Owner not found.', reason: 'owner_not_found' }
+      }
     }
     if (num) {
       const p = top.projectV2
       if (!p || typeof p.id !== 'string') {
-        return { ok: false, error: { type: 'not_found', message: 'Project not found.' } }
+        return {
+          ok: false,
+          error: { type: 'not_found', message: 'Project not found.', reason: 'project_not_found' }
+        }
       }
       return { ok: true, title: p.title ?? '' }
     }
@@ -157,7 +164,11 @@ async function resolveOwnerType(
   rememberOwnerType(owner, null, host)
   return {
     ok: false,
-    error: lastError ?? { type: 'not_found', message: 'Owner not found.' }
+    error: lastError ?? {
+      type: 'not_found',
+      message: 'Owner not found.',
+      reason: 'owner_not_found'
+    }
   }
 }
 
@@ -168,13 +179,17 @@ export async function resolveProjectRef(
   if (!input) {
     return {
       ok: false,
-      error: { type: 'validation_error', message: 'Input required.' }
+      error: { type: 'validation_error', message: 'Input required.', reason: 'input_required' }
     }
   }
   if (isGitHubProjectRefInputTooLarge(input)) {
     return {
       ok: false,
-      error: { type: 'validation_error', message: GITHUB_PROJECT_REF_INPUT_TOO_LARGE_ERROR }
+      error: {
+        type: 'validation_error',
+        message: GITHUB_PROJECT_REF_INPUT_TOO_LARGE_ERROR,
+        reason: 'input_too_large'
+      }
     }
   }
   const parsed = parseProjectPaste(input, args.host)
@@ -183,16 +198,15 @@ export async function resolveProjectRef(
       ok: false,
       error: {
         type: 'validation_error',
-        message: 'Could not parse input. Expected a GitHub project URL or `owner/number`.'
+        message: 'Could not parse input. Expected a GitHub project URL or `owner/number`.',
+        reason: 'input_unparseable'
       }
     }
   }
   const preferred: GitHubProjectOwnerType | null =
     parsed.kind === 'org' ? 'organization' : parsed.kind === 'user' ? 'user' : null
-  // Why: a pasted URL is authoritative. The ambient host only applies to
-  // owner/number shorthand; otherwise same-number Projects can cross hosts.
+  // URL hosts are authoritative; ambient host applies only to owner/number shorthand.
   const executionHost = parsed.kind === 'bare' ? githubProjectHost(args.host) : parsed.host
-  // Verify by fetching project title.
   const ownerRes = await resolveOwnerType(parsed.owner, preferred, executionHost)
   if (!ownerRes.ok) {
     return { ok: false, error: ownerRes.error }
@@ -212,7 +226,10 @@ export async function resolveProjectRef(
   }
   const p = res.data[root]?.projectV2
   if (!p || typeof p.id !== 'string') {
-    return { ok: false, error: { type: 'not_found', message: 'Project not found.' } }
+    return {
+      ok: false,
+      error: { type: 'not_found', message: 'Project not found.', reason: 'project_not_found' }
+    }
   }
   return {
     ok: true,
@@ -221,7 +238,6 @@ export async function resolveProjectRef(
     number: parsed.number,
     title: p.title ?? '',
     host: executionHost,
-    // Why: forward URL view numbers so the renderer can skip view selection; bare shorthand has none.
     ...(parsed.kind !== 'bare' && parsed.viewNumber !== undefined
       ? { viewNumber: parsed.viewNumber }
       : {})

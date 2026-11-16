@@ -1,13 +1,5 @@
-/**
- * Two machines sharing one `$HOME` (an NFS home across a cluster) each run their own managed
- * server (#29059), on real Docker SSH hosts that mount one volume as `/root`:
- *
- * Host A connects first and keeps the login home's install. Host B then connects and gets a
- * server of its own instead of judging A's PID on the wrong machine. A's server keeps running
- * with its records untouched, and both reconnect to their own server.
- *
- * Docker only. `ORCA_E2E_ORCAD_CONVERT_TEMPLATE` names the linux-x64-glibc orcad build.
- */
+// #29059: two Docker machines sharing /root must keep independent managed servers and records across reconnect.
+// Host B must not judge A’s recorded PID in its own namespace; use ORCA_E2E_ORCAD_CONVERT_TEMPLATE for linux-x64-glibc.
 import { execFileSync, spawnSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
@@ -28,12 +20,14 @@ const TEMPLATE_SOURCE = process.env.ORCA_E2E_ORCAD_CONVERT_TEMPLATE
 const LOGIN_HOME_SLOTS = '/root/.orca-remote/orcad-*/.orcad-pid'
 const MACHINE_HOME_SLOTS = '/root/.orca-remote/hosts/*/.orca-remote/orcad-*/.orcad-pid'
 
-/** PIDs recorded under `pattern` that are running in this container. */
+// Require recorded PID command lines to match the slot in this container; another namespace can reuse that PID.
 function runningPids(target: DockerSshHostTarget, pattern: string): string[] {
   return execDockerSshHostTargetCommand(
     target,
     `for f in ${pattern}; do pid=$(cat "$f" 2>/dev/null) && ` +
-      'kill -0 "$pid" 2>/dev/null && echo "$pid"; done; true'
+      'kill -0 "$pid" 2>/dev/null && ' +
+      `tr '\\0' ' ' < "/proc/$pid/cmdline" | grep -qF "$(dirname "$f")/" && ` +
+      'echo "$pid"; done; true'
   )
     .split('\n')
     .map((line) => line.trim())

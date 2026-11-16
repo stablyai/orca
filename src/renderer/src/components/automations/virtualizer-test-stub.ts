@@ -1,13 +1,4 @@
-/**
- * happy-dom reports a zero-height scroll element, and `observeElementRect` hands
- * that measurement straight to the virtualizer — so the real `useVirtualizer`
- * renders no rows at all under test. This stub renders a bounded window instead,
- * which is what the virtualization assertions are actually about.
- *
- * The window starts at index 0 and only moves when `scrollToIndex` names an index
- * outside it, so a row below the fold stays unmounted until the component scrolls
- * to it — the sequence a deferred-focus path depends on.
- */
+/** happy-dom measures zero height; render a bounded window that moves only on scrollToIndex so deferred-focus tests require scrolling to mount offscreen rows. */
 
 import { useState } from 'react'
 

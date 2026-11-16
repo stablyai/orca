@@ -1,0 +1,57 @@
+import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
+import { parseExecutionHostId, toSshExecutionHostId } from '../../shared/execution-host'
+import { getManagedOrcadFenceEnvironmentId } from '../../shared/remote-runtime/ssh/managed-orcad-ssh-owner'
+import { listEnvironments } from '../../shared/remote-runtime/host-store/runtime-environment-store'
+import {
+  getOrcadSshDeployment,
+  getRuntimeSshAccess,
+  type KnownRuntimeEnvironment
+} from '../../shared/remote-runtime/host-catalog/runtime-environments'
+import type { SshTarget } from '../../shared/remote-runtime/ssh/ssh-types'
+import { fingerprintRuntimeSshTarget } from '../ssh/runtime-access/runtime-ssh-target-fingerprint'
+
+export type ListRuntimeEnvironments = () => Promise<
+  readonly Pick<KnownRuntimeEnvironment, 'id' | 'orcadDeployment' | 'sshAccess'>[]
+>
+
+export const listAppRuntimeEnvironments: ListRuntimeEnvironments = async () =>
+  await listEnvironments(getAppEnvironment().getPath('userData'))
+
+/** Whether `target` is the SSH host that owns the path: that host, or the one its server runs on. */
+export async function isEditorSshHostForOwner(
+  target: SshTarget,
+  ownerHostId: unknown,
+  listRuntimeEnvironments: ListRuntimeEnvironments
+): Promise<boolean> {
+  if (ownerHostId === toSshExecutionHostId(target.id)) {
+    return true
+  }
+  const owner = typeof ownerHostId === 'string' ? parseExecutionHostId(ownerHostId) : null
+  if (owner?.kind !== 'runtime') {
+    return false
+  }
+  let environments: Awaited<ReturnType<ListRuntimeEnvironments>>
+  try {
+    environments = await listRuntimeEnvironments()
+  } catch {
+    return false
+  }
+  // Re-derive ownership in main so renderer claims cannot redirect editing to another host.
+  const environment = environments.find((entry) => entry.id === owner.environmentId)
+  const link = environment ? getRuntimeSshAccess(environment) : undefined
+  if (!environment || link?.sshTargetId !== target.id) {
+    return false
+  }
+  // A stale link can name a different host that reused the registration ID.
+  if (target.generation !== link.sshTargetGeneration) {
+    return false
+  }
+  if (getOrcadSshDeployment(environment)) {
+    return getManagedOrcadFenceEnvironmentId(target) === environment.id
+  }
+  // Edits retain generation, so also pin the settings used to verify SSH access.
+  const access = environment.sshAccess
+  return (
+    !!access?.targetFingerprint && fingerprintRuntimeSshTarget(target) === access.targetFingerprint
+  )
+}

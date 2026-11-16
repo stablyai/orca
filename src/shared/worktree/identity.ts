@@ -13,10 +13,7 @@ export type WorktreeIdentity = Omit<WorktreeIdentityRef, 'worktreeId'> & {
   key: string
 }
 
-/**
- * Canonical exact identity for one worktree occupant.
- * The locator is deliberately excluded so a folder rename preserves identity.
- */
+/** Exclude the mutable locator so folder renames preserve occupant identity. */
 export function canonicalWorktreeIdentity(ref: WorktreeIdentityRef): string {
   return `wt2:${encodeURIComponent(ref.executionHostId)}:${encodeURIComponent(ref.instanceId)}`
 }
@@ -26,4 +23,18 @@ export function createWorktreeIdentity(ref: WorktreeIdentityRef): WorktreeIdenti
     executionHostId: ref.executionHostId,
     instanceId: ref.instanceId
   }
+}
+
+/** The identity key a worktree's metadata gives it, as `mergeWorktree` derives `identity.key`. */
+export function worktreeMetaIdentityKey(
+  worktreeId: string,
+  meta: { instanceId?: string; hostId?: ExecutionHostId } | undefined
+): string | undefined {
+  return meta?.instanceId && meta.hostId
+    ? canonicalWorktreeIdentity({
+        worktreeId,
+        executionHostId: meta.hostId,
+        instanceId: meta.instanceId
+      })
+    : undefined
 }

@@ -4,10 +4,15 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import { waitForActivePaneHookDescriptor, waitForActiveTerminalManager } from './helpers/terminal'
+import {
+  waitForActivePaneHookDescriptor,
+  waitForActivePanePtyId,
+  waitForActiveTerminalManager,
+  waitForPaneIdentitySnapshot
+} from './helpers/terminal'
+import { waitForPtyShellEcho } from './terminal-pty-readiness'
 import {
   claudeTranscriptLines,
-  enableNativeChatSetting,
   seedClaudeProviderSession,
   toggleTerminalTabToChatView
 } from './helpers/native-chat-transcript-fixture'
@@ -21,7 +26,11 @@ test('renders a larger transcript rewrite during snapshot publication, then ordi
   await waitForActiveWorktree(orcaPage)
   await ensureTerminalVisible(orcaPage)
   await waitForActiveTerminalManager(orcaPage, 30_000)
+  const boundPane = await waitForPaneIdentitySnapshot(orcaPage, 1)
+  const ptyId = await waitForActivePanePtyId(orcaPage)
+  await waitForPtyShellEcho(orcaPage, ptyId, 15_000)
   const descriptor = await waitForActivePaneHookDescriptor(orcaPage)
+  expect(descriptor.paneKey).toBe(`${boundPane.tabId}:${boundPane.activeLeafId}`)
   const [tabId] = descriptor.paneKey.split(':')
   const sessionId = `drain-race-${randomUUID()}`
   const root = mkdtempSync(join(tmpdir(), 'orca-native-chat-drain-proof-'))
@@ -103,7 +112,6 @@ test('renders a larger transcript rewrite during snapshot publication, then ordi
     })
   }
   try {
-    await enableNativeChatSetting(orcaPage)
     await seedClaudeProviderSession(orcaPage, { ...descriptor, sessionId, transcriptPath })
     await toggleTerminalTabToChatView(orcaPage, { tabId, worktreeId: descriptor.worktreeId })
     await expect(transcript).toBeVisible()
@@ -126,6 +134,11 @@ test('renders a larger transcript rewrite during snapshot publication, then ordi
     await expect(transcript.getByText(followup)).toBeVisible()
     await expect(transcript.getByText(followup)).toHaveCount(1)
     await capture('after-followup.png')
+    const finalPane = await waitForPaneIdentitySnapshot(orcaPage, 1)
+    expect(finalPane.tabId).toBe(boundPane.tabId)
+    expect(finalPane.activeLeafId).toBe(boundPane.activeLeafId)
+    expect(finalPane.ptyIdsByLeafId).toEqual(boundPane.ptyIdsByLeafId)
+    await expect(transcript).toBeVisible()
   } finally {
     await electronApp.evaluate(({ ipcMain }, channel) => {
       ipcMain.emit(channel)

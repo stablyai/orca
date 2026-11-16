@@ -1,4 +1,4 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import GitLabItemDialog from '@/components/GitLabItemDialog'
 export function TaskPageGitLabDialog({
   model
@@ -15,7 +15,7 @@ export function TaskPageGitLabDialog({
   return (
     <GitLabItemDialog
       item={gitlabDialogItem}
-      // Why: repoPath comes from the clicked item's own repo, not primaryRepo — the GitLab fetch is now multi-repo.
+      // Use the clicked item’s repo because GitLab results can span multiple repos.
       repoPath={gitlabDialogRepo?.path ?? null}
       repoId={gitlabDialogItem?.repoId ?? null}
       sourceContext={gitlabDialogSourceContext}

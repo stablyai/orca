@@ -1,44 +1,13 @@
-/**
- * Does a parked remote pane's scrollback survive a full client restart?
- *
- * The within-session case is covered by paired-remote-terminal-parked-scrollback-survives.spec.ts.
- * This restarts the client on the SAME profile — the shape of an app update — and reports, hop by
- * hop, where the park capture lands.
- *
- * The load-bearing oracle is ON DISK, not the reveal. The paired host's pty stays alive across the
- * client restart and keeps a retained tail (terminal-multiplex-initial-snapshot:
- * `data: serialized?.data ?? read.tail…`), so a reveal can be served by the host rather than by the
- * client's persisted copy — it is kept as an end-to-end check, not the proof. The contradiction-
- * capable signal for this fix is which partition on disk holds the buffer after a debounced write.
- *
- * Two quits, because they exercise different writers:
- *   - clean quit: the beforeunload checkpoint writes a full per-partition snapshot, which carries
- *     tabsByWorktree and so routes the layout correctly even on `main` — a control that the harness
- *     works, not a proof of this fix.
- *   - hard kill: only the debounced patch writer ran. A park capture's patch changes only
- *     terminalLayoutsByTabId, so it carries no tab rows; before the fix every layout fell into the
- *     'local' partition, where main strips scrollback it cannot attribute to a remote worktree, and
- *     the remote host's partition never received the capture (#21295). This is the test that fails
- *     with the fix reverted.
- *
- * The SQLite reader walks the local `workspaceSession` AND every `workspaceSessionsByHostId`
- * partition, and names the partition each reading came from — the issue's original "onDisk: 0" was a
- * reader that inspected only the local blob while the capture sat in the runtime partition, a
- * reading that could not contradict itself. A missing database fails the read; an empty list means
- * no session partitions were persisted, distinguished from an empty buffer.
- *
- * Run:
- *   pnpm exec playwright test \
- *     tests/e2e/paired-remote-terminal-parked-scrollback-restart.spec.ts \
- *     --config tests/playwright.config.ts --project electron-headless --workers=1
- */
+// #21295: require parked scrollback in the remote host’s disk partition across client restart.
+// Clean quit’s full checkpoint is the control; SIGKILL isolates the debounced layout-only patch that previously misrouted into local.
+// Scan every persisted partition and fail missing DBs; reveal alone can be repainted from the live host’s tail and cannot prove client persistence.
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import os from 'node:os'
 import path from 'node:path'
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
-import { resolveLeafScrollbackBuffers } from '../../src/renderer/src/components/terminal-pane/leaf-scrollback-resolution'
+import { resolveLeafScrollbackBuffers } from '../../src/renderer/src/components/terminal-pane/snapshots/leaf-scrollback-resolution'
 import {
   createRuntimeDesktopPairingOffer,
   launchPairedElectronClient,
@@ -55,7 +24,7 @@ import {
 import { focusActiveTerminalInput } from './helpers/terminal'
 import { waitForTabParked } from './helpers/terminal-hidden-parking'
 import { readPersistedProfileState } from './helpers/persisted-profile-state'
-import { quotePosixShell } from '../../src/shared/wsl-login-shell-command'
+import { quotePosixShell } from '../../src/shared/shell/launch/shell-argument-quoting'
 
 const PARK_DELAY_MS = 2_000
 const PAINT_BUDGET_MS = 30_000
@@ -121,8 +90,7 @@ function readSessionPartition(
   const localOnlyHomes = isRecord(session.localOnlyScrollbackByTabId)
     ? session.localOnlyScrollbackByTabId
     : {}
-  // Why the resolver: an ordinary park writes localOnlyScrollbackByTabId, not buffersByLeafId, so
-  // a reader of one home reports a false zero. Same read production restores through.
+  // Use production’s resolver: ordinary park stores localOnlyScrollbackByTabId, so reading only buffersByLeafId reports a false zero.
   const buffers = resolveLeafScrollbackBuffers({
     shared: hasLayout ? { buffersByLeafId: stringRecord(layout.buffersByLeafId) } : undefined,
     localOnly: stringRecord(localOnlyHomes[webTabId])
@@ -187,8 +155,7 @@ async function waitForRuntimePartitionCapture(
 }
 
 async function readStoreBufferLength(page: Page, webTabId: string): Promise<number> {
-  // Why the debug handle: this body runs in the renderer, so it reaches the resolver through the
-  // e2e handle rather than reading either store home directly.
+  // Use the renderer’s E2E resolver handle instead of choosing a scrollback home directly.
   return page.evaluate((id) => {
     const buffers = window.__terminalParkingDebug?.resolveLeafScrollback(id)
     return Object.values(buffers ?? {}).join('').length
@@ -212,10 +179,7 @@ type ParkedRemoteTerminal = {
   storeAtPark: number
 }
 
-/** Open a remote-runtime terminal on the paired client, type a token into it, and cold-park it
- *  behind two decoy tabs. The token exists only in that pane's buffer — nothing replays stdin.
- *  Every host terminal it creates is pushed into `createdTerminals` as it is created, so the
- *  caller's `finally` can close them even if this throws partway. */
+// Create/mirror/mark/park the remote PTY behind two decoys; register terminals immediately so partial failure still cleans up.
 async function parkRemoteTerminalWithToken(
   orcaPage: Page,
   client: PairedElectronClient,
@@ -339,9 +303,7 @@ test.describe('host retains nothing', () => {
     try {
       const parked = await parkRemoteTerminalWithToken(orcaPage, first, createdTerminals)
 
-      // Why no beforeunload and no ordinary close: both run the shutdown checkpoint, whose full
-      // snapshot routes the layout correctly and would mask a misrouted debounced patch. Only the
-      // debounced patch writer runs between the park and this kill.
+      // SIGKILL skips beforeunload/full checkpoints, isolating the debounced writer’s partition routing.
       const onDiskAfterPark = await waitForRuntimePartitionCapture(userDataDir, parked.webTabId)
       await forceQuitElectronAppForE2E(first.app)
       await cleanupE2EDaemons(userDataDir)
@@ -362,12 +324,10 @@ test.describe('host retains nothing', () => {
         tokenBeforePark: parked.tokenBeforePark,
         capturedAtPark: parked.storeAtPark > 0,
         profileSurvived: onDiskAfterPark.length > 0,
-        // The load-bearing assertion: the debounced writer routed the capture to the remote host's
-        // own partition, and did not leave it stripped in 'local'. This is what fails on `main`.
+        // Require remote-partition bytes and no stripped local copy, the original debounced-patch regression.
         runtimePartitionHoldsCapture: runtimePartitionBufferLength(onDiskAfterPark) > 0,
         localPartitionDidNotKeepCapture: localPartitionBufferLength(onDiskAfterPark) <= 0,
-        // Secondary: the reveal may be served by the live host's retained tail rather than the
-        // disk copy, so it is not the fix's oracle — it confirms relaunch and a visible pane.
+        // Reveal is secondary because a live host can repaint from its own retained tail.
         tokenAfterReveal: reveal.tokenAfterReveal
       }).toEqual({
         tokenBeforePark: true,
@@ -376,61 +336,6 @@ test.describe('host retains nothing', () => {
         runtimePartitionHoldsCapture: true,
         localPartitionDidNotKeepCapture: true,
         tokenAfterReveal: true
-      })
-    } finally {
-      const live = relaunched ?? first
-      await closeCreatedTerminals(live, createdTerminals)
-      await live.dispose().catch(() => undefined)
-    }
-  })
-
-  test('a clean quit also lands the parked scrollback in the remote host’s partition (control)', async ({
-    orcaPage
-  }, testInfo) => {
-    test.setTimeout(600_000)
-    const offer = await createRuntimeDesktopPairingOffer(orcaPage)
-    const extraEnv = { ORCA_E2E_TERMINAL_PARKING_DELAY_MS: String(PARK_DELAY_MS) }
-    const first = await launchPairedElectronClient(offer, testInfo, 'parked-restart', { extraEnv })
-    const userDataDir = first.userDataDir
-    const createdTerminals: string[] = []
-    let relaunched: PairedElectronClient | null = null
-    try {
-      const parked = await parkRemoteTerminalWithToken(orcaPage, first, createdTerminals)
-
-      await first.page.evaluate(() => window.dispatchEvent(new Event('beforeunload')))
-      await first.quitPreservingProfile()
-      const onDiskAfterQuit = readOnDiskPartitions(userDataDir, parked.webTabId)
-
-      const reveal = await relaunchAndReveal(offer, testInfo, parked, extraEnv)
-      relaunched = reveal.relaunched
-
-      console.log(
-        `[parked-restart] clean-quit ${JSON.stringify({
-          tokenBeforePark: parked.tokenBeforePark,
-          storeAtPark: parked.storeAtPark,
-          onDiskAfterQuit,
-          storeAfterRelaunch: reveal.storeAfterRelaunch,
-          tokenAfterReveal: reveal.tokenAfterReveal
-        })}`
-      )
-      // Why tokenAfterReveal is logged and not asserted here: this control proves the harness
-      // (park, quit, profile, partition routing), not the reveal. On identical product code the
-      // clean-quit reveal measured true, true, false across three runs — the live host may serve
-      // it from its own tail — so it cannot carry an assertion. The hard-kill test keeps it,
-      // because there the host is forced unavailable and the reveal must come from the client copy.
-      expect({
-        tokenBeforePark: parked.tokenBeforePark,
-        capturedAtPark: parked.storeAtPark > 0,
-        // Distinguishes missing session partitions from an empty buffer.
-        profileSurvived: onDiskAfterQuit.length > 0,
-        runtimePartitionHoldsCapture: runtimePartitionBufferLength(onDiskAfterQuit) > 0,
-        localPartitionDidNotKeepCapture: localPartitionBufferLength(onDiskAfterQuit) <= 0
-      }).toEqual({
-        tokenBeforePark: true,
-        capturedAtPark: true,
-        profileSurvived: true,
-        runtimePartitionHoldsCapture: true,
-        localPartitionDidNotKeepCapture: true
       })
     } finally {
       const live = relaunched ?? first

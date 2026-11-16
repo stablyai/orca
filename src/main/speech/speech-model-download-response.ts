@@ -1,8 +1,25 @@
-export type DownloadIncomingMessage = Electron.IncomingMessage &
-  NodeJS.ReadableStream & {
-    headers: Record<string, string | string[] | undefined>
-    destroy?: () => void
-  }
+/** Shared response shape for Electron net and Node https. */
+export type DownloadIncomingMessage = NodeJS.ReadableStream & {
+  statusCode?: number
+  headers: Record<string, string | string[] | undefined>
+  destroy?: () => void
+}
+
+/** Host adapter for Electron net or Node https requests. */
+export type SpeechDownloadRequest = {
+  setHeader(name: string, value: string): void
+  /** Returns detach; the Node adapter retains an error listener for abort after detach. */
+  listen(listeners: {
+    error: (error: Error) => void
+    response: (response: DownloadIncomingMessage) => void
+    redirect: (statusCode: number, method: string, redirectUrl: string) => void
+  }): () => void
+  abort(): void
+  end(): void
+}
+
+/** Opens one GET; the host decides the network stack (Chromium on the desktop, Node on orcad). */
+export type OpenSpeechDownloadRequest = (url: string) => SpeechDownloadRequest
 export type DownloadTotals = {
   totalBytes: number
   completedBytes: number
@@ -11,13 +28,13 @@ export type DownloadTotals = {
 export type ContentRange = { start: number; end: number; totalBytes?: number }
 
 export const DOWNLOAD_IDLE_TIMEOUT_MS = 120_000
-// Why: flaky networks/proxies often kill long CDN transfers near the end; Range-resume lets them finish.
+// Range-resume tolerates proxies that cut long CDN transfers.
 export const DOWNLOAD_RETRY_DELAYS_MS = [1_000, 2_000, 4_000]
-// Why: count only CONSECUTIVE no-progress attempts, so a download still advancing across drops is never abandoned.
+// Count consecutive stalls; progressing retries remain subject to the absolute request ceiling.
 export const MAX_NO_PROGRESS_ATTEMPTS = DOWNLOAD_RETRY_DELAYS_MS.length + 1
-// Why: absolute backstop against a tiny-segment server; 4096 covers the ~1GB model even at a proxy's ~256KB min range.
+// Bound tiny segments absolutely; 4096 covers ~1GB at ~256KB per range.
 export const MAX_TOTAL_DOWNLOAD_REQUESTS = 4_096
-// Why: cap honored Retry-After; a longer server window is surfaced for manual retry, not a multi-minute stall.
+// Surface longer Retry-After windows for manual retry instead of stalling indefinitely.
 export const MAX_RETRY_AFTER_MS = 120_000
 export function getHeaderValue(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value

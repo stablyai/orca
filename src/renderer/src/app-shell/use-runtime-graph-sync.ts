@@ -1,14 +1,18 @@
+import { startRendererStatusPublication } from '../runtime/agent-status/renderer-status-publication'
 import { useEffect } from 'react'
-import { getSystemPrefersDarkSnapshot } from '../components/terminal-pane/use-system-prefers-dark'
+import { getSystemPrefersDarkSnapshot } from '../hooks/theme/use-system-prefers-dark'
 import {
   canSkipRuntimeMobileSessionSyncKeyBuild,
   getRuntimeMobileSessionSyncKey,
-  runtimeMobileSessionSyncKeysEqual,
+  runtimeMobileSessionSyncKeysEqual
+} from '../runtime/sync-runtime-graph/sync-key'
+import {
   scheduleRuntimeGraphSync,
   setRuntimeGraphStoreStateGetter,
   setRuntimeGraphSyncEnabled
-} from '../runtime/sync-runtime-graph'
+} from '../runtime/sync-runtime-graph/graph-sync-scheduler'
 import { useAppStore } from '../store'
+import { isPairedWebClientWindow } from './chrome/desktop-window-chrome'
 
 /** Keeps the mobile runtime graph republished as the store's session-visible state changes. */
 export function useRuntimeGraphSync(): void {
@@ -24,9 +28,9 @@ export function useRuntimeGraphSync(): void {
   useEffect(() => {
     let previousKey = getRuntimeMobileSessionSyncKey(useAppStore.getState())
     return useAppStore.subscribe((state, previousState) => {
-      // Why: this fires on every store mutation; read the cached prefers-dark snapshot instead of allocating a throwaway MediaQueryList via matchMedia each tick.
+      // Read cached dark-mode state; allocating matchMedia on every store mutation creates garbage.
       const systemPrefersDark = getSystemPrefersDarkSnapshot()
-      // Why: skip the key build when every input is reference-unchanged; the gate mirrors every field getRuntimeMobileSessionSyncKey uses.
+      // Skip key construction when every input reference is unchanged; mirror getRuntimeMobileSessionSyncKey’s fields.
       if (
         canSkipRuntimeMobileSessionSyncKeyBuild(
           state,
@@ -54,12 +58,13 @@ export function useRuntimeGraphSync(): void {
   useEffect(
     () =>
       useAppStore.subscribe((state, previousState) => {
-        // Why: the graph carries the sidebar's Project catalog to paired phones; republish on change.
+        // Publish project-catalog changes to paired phones.
         if (
           state.repos !== previousState.repos ||
           state.projects !== previousState.projects ||
           state.projectHostSetups !== previousState.projectHostSetups ||
-          state.projectOrderBy !== previousState.projectOrderBy
+          state.projectOrderBy !== previousState.projectOrderBy ||
+          state.projectGroups !== previousState.projectGroups
         ) {
           scheduleRuntimeGraphSync()
         }
@@ -68,8 +73,14 @@ export function useRuntimeGraphSync(): void {
   )
 
   useEffect(() => {
+    // Why: a paired web client has no local main to publish status to.
+    const stopStatusPublication =
+      workspaceSessionReady && !isPairedWebClientWindow()
+        ? startRendererStatusPublication(useAppStore, scheduleRuntimeGraphSync)
+        : undefined
     setRuntimeGraphSyncEnabled(workspaceSessionReady)
     return () => {
+      stopStatusPublication?.()
       setRuntimeGraphSyncEnabled(false)
     }
   }, [workspaceSessionReady])

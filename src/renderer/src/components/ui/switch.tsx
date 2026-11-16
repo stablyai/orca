@@ -1,7 +1,7 @@
 import * as React from 'react'
 import * as SwitchPrimitive from 'radix-ui/switch'
 
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 const trackClassName =
   'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border border-transparent p-0.5 transition-colors data-[state=checked]:bg-foreground data-[state=unchecked]:bg-muted-foreground/30'
@@ -11,15 +11,22 @@ const compactTrackClassName = 'h-3.5 w-6 border-0 p-0.5'
 const compactThumbClassName = 'size-2.5 data-[state=checked]:translate-x-2.5'
 
 type SwitchProps = React.ComponentProps<typeof SwitchPrimitive.Root> & {
+  size?: 'default' | 'compact'
   thumbClassName?: string
 }
 
-function Switch({ className, thumbClassName: thumbClasses, ...props }: SwitchProps) {
+function Switch({
+  className,
+  size = 'default',
+  thumbClassName: thumbClasses,
+  ...props
+}: SwitchProps) {
   return (
     <SwitchPrimitive.Root
       data-slot="switch"
       className={cn(
         trackClassName,
+        size === 'compact' && compactTrackClassName,
         'cursor-pointer outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50',
         className
       )}
@@ -27,7 +34,7 @@ function Switch({ className, thumbClassName: thumbClasses, ...props }: SwitchPro
     >
       <SwitchPrimitive.Thumb
         data-slot="switch-thumb"
-        className={cn(thumbClassName, thumbClasses)}
+        className={cn(thumbClassName, size === 'compact' && compactThumbClassName, thumbClasses)}
       />
     </SwitchPrimitive.Root>
   )

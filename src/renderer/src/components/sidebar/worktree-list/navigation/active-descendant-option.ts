@@ -1,33 +1,18 @@
-import { getFolderWorkspaceHostIdentity } from '../../../../../../shared/folder-workspace-worktree'
+import { getFolderWorkspaceHostIdentity } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import type { RenderRow } from '../listing/render-row'
-import {
-  getWorktreeExecutionHostId,
-  type ExecutionHostId
-} from '../../../../../../shared/execution-host'
-import type { PinnedWorktreeDisplayPolicy } from '../grouping/row-types'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { PinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
 import { isPinnedWorktreeRow } from '../listing/renderable-rows'
 import { getRenderRowWorktreeItem, renderRowContainsWorktree } from './render-row-lookup'
 import { getWorktreeOptionId } from '../rows/option-dom'
 
 export function getRenderRowOptionId(
   row: RenderRow | undefined,
-  worktreeId?: string | null,
-  executionHostId?: ExecutionHostId
+  _worktreeId?: string | null,
+  _executionHostId?: ExecutionHostId
 ): string | undefined {
   if (!row) {
     return undefined
-  }
-  if (row.type === 'lineage-group') {
-    // Hostless legacy state cannot disambiguate, but an aria pointer should still target a row.
-    const targetRow = worktreeId
-      ? row.rows.find(
-          (item) =>
-            item.worktree.id === worktreeId &&
-            (executionHostId === undefined ||
-              getWorktreeExecutionHostId(item.worktree, item.repo) === executionHostId)
-        )
-      : null
-    return getWorktreeOptionId((targetRow ?? row.rows[0])?.rowKey ?? row.key)
   }
   if (row.type === 'item') {
     return getWorktreeOptionId(row.rowKey)
@@ -55,6 +40,11 @@ export function getActiveDescendantOptionId(args: {
       const row = args.renderRows[item.index]
       if (
         row &&
+        renderRowContainsWorktree(
+          row,
+          args.activeWorktreeId,
+          args.activeWorkspaceExecutionHostId ?? undefined
+        ) &&
         getRenderRowOptionId(
           row,
           args.activeWorktreeId,

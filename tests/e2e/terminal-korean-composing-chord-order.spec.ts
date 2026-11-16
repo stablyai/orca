@@ -1,13 +1,5 @@
-/**
- * #12871: a cursor chord pressed while a syllable is still composing reached the pty ahead of the
- * text it was typed after. With `가나` on the line, typing `가나다` and pressing Cmd+Left left
- * `다가다` — the composing `다` landed at the cursor's destination.
- *
- * The unit coverage in `keyboard-handlers-ime-composing-chord.test.tsx` pins the handler's
- * ordering against a synthetic transport. This asserts the same ordering at the pty, where the
- * committed glyph and the chord arrive by two different routes — the composition session-end
- * handler and the transport — and only their merged order is observable.
- */
+// #12871: Cmd+Left overtook composing 다, turning 가나다 into 다가다.
+// Units pin the synthetic handler; assert merged PTY ordering across composition-end and chord-transport routes.
 import { expect, test } from './helpers/orca-app'
 import { closeTerminalImePaneArena, openTerminalImePaneArena } from './terminal-ime-pane-arena'
 import {
@@ -43,10 +35,7 @@ test.describe('Terminal 2-Set Korean composing-chord order', () => {
     orcaPage,
     testRepoPath
   }, testInfo) => {
-    // Cmd+Left resolves to \x01 only under the macOS branch of the shortcut policy, so a Linux
-    // runner produces no chord byte at all and the spec would pass by measuring nothing. Pinning
-    // the renderer's platform is what lets the reported chord run on any shard; the assertion
-    // below fails loudly if the override did not take.
+    // Pin macOS policy so Cmd+Left emits Ctrl+A even on Linux; otherwise the missing chord byte makes this arm vacuous.
     await applyImePlatformPolicy(orcaPage, 'mac')
     await expectImePlatformPolicy(orcaPage, 'mac')
 
@@ -58,8 +47,7 @@ test.describe('Terminal 2-Set Korean composing-chord order', () => {
 
       await composeHangulSyllable(arena.session, orcaPage, DA_FRAMES)
 
-      // Pressed while the syllable is still in preedit. Before the fix this reached the pty
-      // immediately, ahead of the 다 that had been typed first.
+      // Press during preedit; before the fix the chord overtook the earlier-typed 다.
       await arena.session.send('Input.dispatchKeyEvent', {
         type: 'rawKeyDown',
         key: 'ArrowLeft',
@@ -70,9 +58,7 @@ test.describe('Terminal 2-Set Korean composing-chord order', () => {
       })
 
       await commitImeText(arena.session, '다')
-      // The held chord flushes a macrotask after the composition session ends. Enter is only here
-      // to terminate the line for the reader, so let the chord land before adding it — otherwise
-      // the newline overtakes it and the assertion measures the wrong pair.
+      // Let the held chord’s post-composition macrotask land before Enter terminates the reader line, preserving the measured pair.
       await orcaPage.waitForTimeout(250)
       await dispatchPlainEnter(arena.session)
 

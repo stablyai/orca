@@ -1,13 +1,4 @@
-/**
- * Reading the field shape of a published frame from the frame itself, so a
- * cross-version expectation can be stated against the build that produced it.
- *
- * The baseline this suite pairs against is whichever release tag is newest, and
- * that moves on every cut. An expectation written as a literal list of fields the
- * old side does or does not have therefore expires by itself: the first release
- * containing an already-merged optional field turns the assertion red on whatever
- * pull request happens to be in flight, with no code change anywhere.
- */
+// Read fields from actual paired frames; literal old-field lists expire when the rolling release baseline gains a field.
 
 export type PublishedFieldSkew = {
   /** Names only the newer side publishes — additive, and safe under Rule 1. */
@@ -16,15 +7,10 @@ export type PublishedFieldSkew = {
   removed: string[]
 }
 
-/** Sorted keys from one published frame occurrence. */
 export function publishedFieldNames(payload: Record<string, unknown>): string[] {
   return Object.keys(payload).sort()
 }
 
-/**
- * Which field names the two sides disagree on, by direction. Both sides are read
- * from a real pairing; neither is a list this file knows.
- */
 export function comparePublishedFields(args: {
   older: string[]
   newer: string[]

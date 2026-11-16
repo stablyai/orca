@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef } from 'react'
+import { useCallback, useMemo, useReducer, useRef } from 'react'
 import type React from 'react'
 import {
   measureElement as measureVirtualElementSize,
@@ -13,23 +13,22 @@ import {
   WORKTREE_SIDEBAR_VIRTUAL_ROW_GAP
 } from './virtual-rows'
 import { getRenderRowKey } from '../listing/render-row'
+import type { LineageRowProjection } from '../listing/lineage-row-projection'
 import type { RenderRow } from '../listing/render-row'
-import { WORKTREE_SIDEBAR_REVEAL_TOP_INSET } from '../../worktree-sidebar-reveal'
-import {
-  shouldAdjustWorktreeSidebarMeasuredRowScroll,
-  USER_SCROLL_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS
-} from './use-scroll-suppression'
+import { WORKTREE_SIDEBAR_REVEAL_TOP_INSET } from '../navigation/worktree-sidebar-reveal'
+import type { ProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
+import { createSidebarSmoothReveal } from './sidebar-smooth-reveal'
 
 export type WorktreeListVirtualizer = ReturnType<typeof useWorktreeListVirtualizer>
 
-// The TanStack virtualizer plus the row-identity guards that stop a recycled DOM node
-// from writing a stale height into the wrong slot.
+// Guard virtual row identity so recycled DOM nodes cannot overwrite another slot’s measured height.
 export function useWorktreeListVirtualizer(args: {
+  projection: LineageRowProjection
   renderRows: RenderRow[]
   firstHeaderIndex: number
   scrollRef: React.RefObject<HTMLDivElement | null>
   scrollOffsetRef: React.MutableRefObject<number>
-  suppressMeasurementAdjustmentUntilRef: React.MutableRefObject<number>
+  programmaticScrollMarks: ProgrammaticScrollMarks
 }) {
   const { renderRows, firstHeaderIndex, scrollRef, scrollOffsetRef } = args
   const stickyHeaderIndexes = useMemo(() => getStickyHeaderIndexes(renderRows), [renderRows])
@@ -98,21 +97,39 @@ export function useWorktreeListVirtualizer(args: {
           activeStickyHeaderIndexRef.current
         )
       }
-      return measureVirtualElementSize(element, entry, instance)
+      const row = index === null ? undefined : renderRows[index]
+      if (row?.type === 'item' || row?.type === 'folder-workspace') {
+        return measureVirtualElementSize(element, entry, instance)
+      }
+      // Why: TanStack returns the cached slot size for entry-less measures, so the gap must be added to the DOM box or it compounds on every remeasure.
+      const box = entry?.borderBoxSize?.[0]
+      return Math.round(box ? box.blockSize : element.offsetHeight) + 6
     },
     [firstHeaderIndex, isCurrentVirtualRowElement, renderRows]
   )
 
+  const [smoothScrollRevision, onRetired] = useReducer((revision: number) => revision + 1, 0)
+  const smoothReveal = useMemo(
+    () => createSidebarSmoothReveal({ marks: args.programmaticScrollMarks, onRetired }),
+    [args.programmaticScrollMarks, onRetired]
+  )
   const virtualizer = useVirtualizer({
     count: renderRows.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: (index) =>
-      estimateRenderRowSize(
-        renderRows,
-        index,
-        firstHeaderIndex,
-        activeStickyHeaderIndexRef.current
-      ),
+    estimateSize: (index) => {
+      const frame = args.projection.frames[index]
+      return (
+        estimateRenderRowSize(
+          renderRows,
+          index,
+          firstHeaderIndex,
+          activeStickyHeaderIndexRef.current
+        ) +
+        (renderRows[index]?.type === 'item' || renderRows[index]?.type === 'folder-workspace'
+          ? frame.before + frame.closing + frame.after
+          : 0)
+      )
+    },
     measureElement: measureCurrentVirtualRowElement,
     // Why: TanStack memoizes rangeExtractor by identity; header indexes must be deps or sticky slots go stale.
     rangeExtractor: useCallback(
@@ -130,29 +147,19 @@ export function useWorktreeListVirtualizer(args: {
     gap: WORKTREE_SIDEBAR_VIRTUAL_ROW_GAP,
     // Why: the sticky group header lives inside the virtual list, so scroll math needs the same top inset as the DOM reveal.
     scrollPaddingStart: WORKTREE_SIDEBAR_REVEAL_TOP_INSET,
-    isScrollingResetDelay: USER_SCROLL_MEASUREMENT_ADJUSTMENT_SUPPRESS_MS,
-    // Why: sync-flushing rich card renders in the scroll listener stalls wheel input; async + overscan keeps rows filled.
-    useFlushSync: false,
     // Why: seed scrollOffset from the ref (not 0) so the first getVirtualItems() after remount picks the right rows.
     initialOffset: () => scrollOffsetRef.current,
+    scrollToFn: smoothReveal.scrollTo,
+    observeElementOffset: smoothReveal.observeOffset,
     getItemKey: getVirtualItemKey
   })
-  // Why: TanStack's default correction writes scrollTop while cards remeasure mid-wheel, which feels like rubber-banding.
-  // TODO(scroll-origin-migration): wall-clock suppression misclassifies under jank; migrate to programmaticScrollMarks + restoreSignal (see CombinedDiffViewer).
-  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item, _delta, instance) =>
-    shouldAdjustWorktreeSidebarMeasuredRowScroll({
-      isScrolling: instance.isScrolling,
-      now: window.performance.now(),
-      suppressUntil: args.suppressMeasurementAdjustmentUntilRef.current,
-      itemStart: item.start,
-      itemEnd: item.end,
-      scrollOffset: (instance.scrollOffset ?? scrollOffsetRef.current) + instance.scrollAdjustments,
-      isFirstMeasurement: !instance.itemSizeCache.has(item.key),
-      scrollDirection: instance.scrollDirection
-    })
 
   return {
     virtualizer,
+    smoothScrollRevision,
+    programmaticScrollMarks: args.programmaticScrollMarks,
+    rowIndexByKey: args.projection.rowIndexByKey,
+    restoreSignal: args.projection.restoreSignal,
     isCurrentVirtualRowElement,
     stickyHeaderIndexes,
     activeStickyHeaderIndexRef,

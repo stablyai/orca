@@ -1,36 +1,35 @@
-import { normalizeExplorerDisplayRootByWorktree } from '../../../shared/file-explorer-display-root'
+import { normalizeGitGraphFilters } from '../../../shared/git/history/git-graph-filters'
+import { normalizeExplorerDisplayRootByWorktree } from '../../../shared/file-listing/file-explorer-display-root'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import {
-  getDefaultUIState,
-  normalizeAgentActivityDisplayMode,
-  normalizeWorktreeCardProperties
-} from '../../../shared/constants'
+import { getDefaultUIState, normalizeAgentActivityDisplayMode } from '../../../shared/constants'
+import { normalizeWorktreeCardProperties } from '../../../shared/worktree/row-display/card-properties'
 import {
   normalizeWorkspaceStatuses,
   clampWorkspaceBoardColumnWidth,
   clampWorkspaceBoardOpacity
-} from '../../../shared/workspace-statuses'
-import { normalizeUsagePercentageDisplay } from '../../../shared/usage-percentage-display'
-import { normalizeStatusBarUsageMode } from '../../../shared/status-bar-usage-mode'
-import { clampMarkdownTocPanelWidth } from '../../../shared/markdown-toc-panel-width'
-import { clampCombinedDiffFileTreeWidth } from '../../../shared/combined-diff-file-tree-width'
+} from '../../../shared/workspace/status/workspace-statuses'
+import { normalizeUsagePercentageDisplay } from '../../../shared/agent-usage/display/usage-percentage-display'
+import { normalizeStatusBarUsageMode } from '../../../shared/status-bar/status-bar-usage-mode'
+import { normalizeStatusBarUsageFormat } from '../../../shared/status-bar/status-bar-usage-format'
+import { clampMarkdownTocPanelWidth } from '../../../shared/editor/markdown/markdown-toc-panel-width'
+import { clampCombinedDiffFileTreeWidth } from '../../../shared/source-control/diff/combined-diff-file-tree-width'
 import {
   normalizeExecutionHostScope,
   normalizeVisibleExecutionHostIds,
   normalizeExecutionHostOrder
 } from '../../../shared/execution-host'
 import { workspaceHostScopeForVisibleHosts } from '../../../shared/workspace-view/workspace-host-visibility'
-import { normalizeManualRepoOrder } from '../../../shared/manual-repo-order'
-import { normalizeBrowserPageZoomLevel } from '../../../shared/browser-page-zoom'
-import { normalizeFeatureTipIds } from '../../../shared/feature-tips'
-import { normalizeContextualTourIds } from '../../../shared/contextual-tours'
-import { normalizeFeatureInteractions } from '../../../shared/feature-interactions'
-import { mergeWorkspaceCleanupUIState } from '../../../shared/workspace-cleanup-ui-state'
-import { persistedUIValuesEqual } from '../../../shared/persisted-ui-equality'
+import { normalizeManualRepoOrder } from '../../../shared/repository/manual-repo-order'
+import { normalizeBrowserPageZoomLevel } from '../../../shared/browser/site-settings/browser-page-zoom'
+import { normalizeFeatureTipIds } from '../../../shared/feature-education/feature-tips'
+import { normalizeContextualTourIds } from '../../../shared/feature-education/contextual-tours/contextual-tours'
+import { normalizeFeatureInteractions } from '../../../shared/feature-education/interactions/feature-interactions'
+import { mergeWorkspaceCleanupUIState } from '../../../shared/workspace-cleanup/workspace-cleanup-ui-state'
+import { persistedUIValuesEqual } from '../../../shared/collections/persisted-ui-equality'
 import {
   PROTECTED_SECRET_SLOT,
   type ProtectedSecretPersistence
-} from '../../protected-secret-persistence'
+} from '../../credentials/protected-secret-persistence'
 import {
   normalizeGroupBy,
   normalizeProjectOrderBy,
@@ -58,7 +57,6 @@ export type UIUpdateOperations = {
   notifyUIChanged: () => void
 }
 
-/** Applies a sanitized partial update while keeping active-view persistence separate from durable UI fields. */
 export function updatePersistedUI(
   operations: UIUpdateOperations,
   updates: Partial<PersistedState['ui']>
@@ -83,8 +81,7 @@ export function updatePersistedUI(
   }
   const previousUI = {
     ...operations.getUI(),
-    // Why: the legacy field stays unchanged as a migration/downgrade
-    // fallback; the profile sidecar is authoritative in current builds.
+    // Keep the legacy activeView for downgrade compatibility; the profile sidecar is authoritative.
     activeView: currentUI.activeView
   }
   const nextRightSidebarTab =
@@ -155,6 +152,9 @@ export function updatePersistedUI(
     statusBarUsageMode: normalizeStatusBarUsageMode(
       sanitizedUpdates.statusBarUsageMode ?? operations.state.ui?.statusBarUsageMode
     ),
+    statusBarUsageFormat: normalizeStatusBarUsageFormat(
+      sanitizedUpdates.statusBarUsageFormat ?? operations.state.ui?.statusBarUsageFormat
+    ),
     markdownTocPanelWidth: clampMarkdownTocPanelWidth(
       sanitizedUpdates.markdownTocPanelWidth ?? operations.state.ui?.markdownTocPanelWidth
     ),
@@ -162,7 +162,7 @@ export function updatePersistedUI(
       sanitizedUpdates.combinedDiffFileTreeWidth ?? operations.state.ui?.combinedDiffFileTreeWidth
     ),
     visibleWorkspaceHostIds: nextVisibleWorkspaceHostIds,
-    // A paired client writes only the list; the scope must follow, or "all hosts" revives it.
+    // Paired clients may write only visible hosts; derive scope so all-hosts cannot override them.
     ...(sanitizedUpdates.visibleWorkspaceHostIds !== undefined &&
     sanitizedUpdates.workspaceHostScope === undefined
       ? {
@@ -193,6 +193,10 @@ export function updatePersistedUI(
         : normalizeExplorerDisplayRootByWorktree(
             operations.state.ui?.explorerDisplayRootByWorktree
           ),
+    gitGraphFiltersByWorktree:
+      sanitizedUpdates.gitGraphFiltersByWorktree !== undefined
+        ? normalizeGitGraphFilters(sanitizedUpdates.gitGraphFiltersByWorktree)
+        : operations.state.ui?.gitGraphFiltersByWorktree,
     showDotfilesByWorktree:
       sanitizedUpdates.showDotfilesByWorktree !== undefined
         ? normalizeShowDotfilesByWorktree(sanitizedUpdates.showDotfilesByWorktree)
@@ -201,7 +205,7 @@ export function updatePersistedUI(
       sanitizedUpdates.notificationsMutedByWorktree !== undefined
         ? normalizeNotificationsMutedByWorktree(sanitizedUpdates.notificationsMutedByWorktree)
         : normalizeNotificationsMutedByWorktree(operations.state.ui?.notificationsMutedByWorktree),
-    // Why: a stale renderer or paired client must not erase a dismissal, or a one-time tip replays.
+    // Union dismissals so stale clients cannot revive one-time tips.
     featureTipsSeenIds:
       sanitizedUpdates.featureTipsSeenIds !== undefined
         ? mergeFeatureTipSeenIds(
@@ -209,7 +213,7 @@ export function updatePersistedUI(
             sanitizedUpdates.featureTipsSeenIds
           )
         : normalizeFeatureTipIds(operations.state.ui?.featureTipsSeenIds),
-    // Why: renderer and paired clients can mark different tours seen from stale snapshots; union so completed tours stay suppressed.
+    // Union seen tours across stale renderer and paired-client snapshots.
     contextualToursSeenIds:
       sanitizedUpdates.contextualToursSeenIds !== undefined
         ? mergeContextualTourSeenIds(
@@ -217,7 +221,7 @@ export function updatePersistedUI(
             sanitizedUpdates.contextualToursSeenIds
           )
         : normalizeContextualTourIds(operations.state.ui?.contextualToursSeenIds),
-    // Why: runtime RPCs and the renderer both record education state; merge so a stale renderer snapshot can't erase runtime-only interactions.
+    // Merge runtime interactions so stale renderer saves cannot erase them.
     featureInteractions:
       sanitizedUpdates.featureInteractions !== undefined
         ? mergeFeatureInteractions(

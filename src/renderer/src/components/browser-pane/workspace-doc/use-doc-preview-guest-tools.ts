@@ -1,22 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
-import { syncGuestAnnotationViewportBridge } from '@/components/browser-pane/annotate/guest-annotation-viewport-bridge'
-import { consumeBrowserAnnotationViewportMessage } from '@/components/browser-pane/annotate/browser-annotation-viewport-message'
-import { useBrowserPageAnnotationSend } from '@/components/browser-pane/annotate/use-browser-page-annotation-send'
-import { useBrowserPageGrabAnnotations } from '@/components/browser-pane/annotate/use-browser-page-grab-annotations'
-import { useBrowserPageMarkupCapture } from '@/components/browser-pane/annotate/use-browser-page-markup-capture'
-import { useGrabMode } from '@/components/browser-pane/annotate/useGrabMode'
+import { syncGuestAnnotationViewportBridge } from '@/components/browser-pane/annotate/viewport/guest-annotation-viewport-bridge'
+import { consumeBrowserAnnotationViewportMessage } from '@/components/browser-pane/annotate/viewport/browser-annotation-viewport-message'
+import { useBrowserPageAnnotationSend } from '@/components/browser-pane/annotate/delivery/use-browser-page-annotation-send'
+import { useBrowserPageGrabAnnotations } from '@/components/browser-pane/annotate/grab/use-browser-page-grab-annotations'
+import { useBrowserPageMarkupCapture } from '@/components/browser-pane/annotate/capture/use-browser-page-markup-capture'
+import { useGrabMode } from '@/components/browser-pane/annotate/grab/useGrabMode'
 import type { BrowserOverlayViewport } from '@/components/browser-pane/describe-page/browser-annotation-geometry'
-import type { BrowserChromeElementTools } from '@/components/browser-pane/assemble-chrome/browser-chrome-toolbar'
+import type { BrowserChromeElementTools } from '@/components/browser-pane/assemble-chrome/toolbar/browser-annotate-split-button'
 
-/**
- * The preview's half of the browser tool cluster: the in-guest element picker, the annotation
- * store and the markup canvas, wired exactly as the browsing pane wires them — including the id,
- * which is the browser page for both the stored annotations and the tool target. A re-mint
- * replaces the guest under that page rather than renaming the surface, so nothing here has to
- * track which grant is currently on screen.
- */
+/** Use the stable browser page ID for annotations and tools so replacing the guest grant preserves both. */
 export function useDocPreviewGuestTools({
   previewId,
   worktreeId,
@@ -41,8 +35,7 @@ export function useDocPreviewGuestTools({
   resetBrowserOverlayViewport: () => void
   elementTools: BrowserChromeElementTools
 } {
-  // Why still empty before the first grant: the page is only a tool target once a document is on
-  // screen, and useGrabMode needs a stable identity every render rather than one to guess with.
+  // No tool target exists before the first grant commits; do not queue requests for a page without a document.
   const toolTargetId = grantId === null ? '' : previewId
   const annotationViewportBridgeTokenRef = useRef<string>(undefined!)
   annotationViewportBridgeTokenRef.current ??= createBrowserUuid().replaceAll('-', '')

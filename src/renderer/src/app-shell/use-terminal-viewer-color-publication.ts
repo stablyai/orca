@@ -1,16 +1,15 @@
 import { useEffect } from 'react'
-import { getSystemPrefersDark } from '@/lib/terminal-theme'
-import { publishTerminalViewAttributesAtAppStart } from '../components/terminal-pane/terminal-appearance'
-import { subscribeToPublishedTerminalViewColors } from '../components/terminal-pane/terminal-view-attributes-publisher'
-import { remoteRuntimeTerminalColorPush } from '../runtime/remote-runtime-terminal-color-push'
-import { useAppStore } from '../store'
+import { getSystemPrefersDark } from '@/lib/terminal/appearance/terminal-theme'
+import { publishTerminalViewAttributesAtAppStart } from '../components/terminal-pane/appearance/terminal-appearance'
+import { subscribeToPublishedTerminalViewAttributes } from '../components/terminal-pane/appearance/terminal-view-attributes-publisher'
+import { remoteRuntimeTerminalColorPush } from '../runtime/hosted-terminals/streams/remote-runtime-terminal-color-push'
+import { useAppStore } from '../store/index'
 
 /** Reports this window's terminal theme to its own host and to every paired host. */
 export function useTerminalViewerColorPublication(): void {
   const settings = useAppStore((s) => s.settings)
 
-  // Why: panes publish only when they apply appearance, so with none open a theme change
-  // would never reach the hosts. The publisher dedupes, so an unrelated settings edit is free.
+  // Publish without open panes so hosts receive theme changes; deduplication makes unrelated preference edits free.
   useEffect(() => {
     if (!settings) {
       return
@@ -25,8 +24,8 @@ export function useTerminalViewerColorPublication(): void {
   }, [settings])
 
   useEffect(() => {
-    const unsubscribe = subscribeToPublishedTerminalViewColors(
-      remoteRuntimeTerminalColorPush.setColors
+    const unsubscribe = subscribeToPublishedTerminalViewAttributes(
+      remoteRuntimeTerminalColorPush.setAttributes
     )
     window.addEventListener('focus', remoteRuntimeTerminalColorPush.pushToAllHosts)
     return () => {

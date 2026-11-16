@@ -1,0 +1,99 @@
+// Limit byte-identity checks to ranges outside intentional serializer changes.
+import type { Terminal } from '@xterm/headless'
+
+type Buffer = Terminal['buffer']['active']
+
+export function serializedNormalStart(terminal: Terminal, scrollback: number | undefined): number {
+  const length = terminal.buffer.normal.length
+  return scrollback === undefined ? 0 : length - Math.min(length, scrollback + terminal.rows)
+}
+
+function hasOverlongLine(buffer: Buffer, start: number, end: number, cols: number): boolean {
+  for (let y = start; y < end; y++) {
+    if ((buffer.getLine(y)?.length ?? 0) > cols) {
+      return true
+    }
+  }
+  return false
+}
+
+export function variantOverlong(
+  source: Terminal,
+  scrollback: number | undefined,
+  rangeRow: number
+): boolean[] {
+  const { cols } = source
+  const normal = source.buffer.normal
+  const alt = source.buffer.active.type === 'alternate'
+  const altOverlong =
+    alt && hasOverlongLine(source.buffer.alternate, 0, source.buffer.alternate.length, cols)
+  const normalStart = serializedNormalStart(source, scrollback)
+  const allNormalOverlong = altOverlong || hasOverlongLine(normal, 0, normal.length, cols)
+  return [
+    normalStart === 0
+      ? allNormalOverlong
+      : altOverlong || hasOverlongLine(normal, normalStart, normal.length, cols),
+    allNormalOverlong,
+    hasOverlongLine(normal, rangeRow, Math.min(rangeRow + 2, normal.length - 1) + 1, cols)
+  ]
+}
+
+// Trailing backgrounds change bytes only when trimming without scrollback or a wrap-pending cursor.
+function hasTrailingBackgroundRow(
+  buffer: Buffer,
+  start: number,
+  end: number,
+  { cols, rows }: { cols: number; rows: number }
+): boolean {
+  if (buffer.length - start > rows || buffer.cursorX >= cols) {
+    return false
+  }
+  const scratch = buffer.getNullCell()
+  // Match serializer text detection: width-zero cells do not count as text.
+  let lastTextRow = start - 1
+  for (let y = start; y < end; y++) {
+    const line = buffer.getLine(y)
+    for (let x = 0; x < cols; x++) {
+      const cell = line?.getCell(x, scratch)
+      if (cell && cell.getWidth() > 0 && cell.getChars() !== '') {
+        lastTextRow = y
+        break
+      }
+    }
+  }
+  for (let y = lastTextRow + 1; y < end; y++) {
+    const line = buffer.getLine(y)
+    for (let x = 0; x < cols; x++) {
+      if (line?.getCell(x, scratch)?.isBgDefault() === false) {
+        return true
+      }
+    }
+  }
+  return false
+}
+
+export function variantTrailingBackgroundRows(
+  source: Terminal,
+  scrollback: number | undefined,
+  rangeRow: number
+): boolean[] {
+  const normal = source.buffer.normal
+  const altTrailing =
+    source.buffer.active.type === 'alternate' &&
+    hasTrailingBackgroundRow(source.buffer.alternate, 0, source.buffer.alternate.length, source)
+  const normalStart = serializedNormalStart(source, scrollback)
+  const allNormalTrailing =
+    altTrailing || hasTrailingBackgroundRow(normal, 0, normal.length, source)
+  return [
+    normalStart === 0
+      ? allNormalTrailing
+      : altTrailing || hasTrailingBackgroundRow(normal, normalStart, normal.length, source),
+    allNormalTrailing,
+    hasTrailingBackgroundRow(
+      normal,
+      rangeRow,
+      Math.min(rangeRow + 2, normal.length - 1) + 1,
+      source
+    )
+  ]
+}

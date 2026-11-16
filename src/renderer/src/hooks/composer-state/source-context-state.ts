@@ -7,6 +7,7 @@ type ComposerSourceContextStateInput = Pick<
   | 'initialLinkedWorkItem'
   | 'initialName'
   | 'initialPrompt'
+  | 'initialNote'
   | 'initialTaskSourceContext'
   | 'isProjectGroupTarget'
   | 'newWorkspaceDraft'
@@ -25,14 +26,15 @@ type ComposerSourceContextStateInput = Pick<
 >
 
 import { useCallback, useMemo, useState } from 'react'
-import { getLinkedWorkItemProvider, type LinkedWorkItemSummary } from '@/lib/new-workspace'
-import { getLinearLinkedWorkItemBranchName } from '@/lib/linear-linked-work-item'
+import { getWorkspaceSourceProvider } from '../../../../shared/new-workspace/workspace-source'
+import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
+import { getLinearLinkedWorkItemBranchName } from '@/lib/work-items/linear/linear-linked-work-item'
 import {
   type TaskSourceContext,
   buildTaskSourceContextFromRepo,
   normalizeTaskSourceContext
-} from '../../../../shared/task-source-context'
-import { resolveJiraSourceHostId } from '@/lib/jira-source-host'
+} from '../../../../shared/work-items/task-source-context'
+import { resolveJiraSourceHostId } from '../../../../shared/jira/jira-source-host'
 import {
   normalizeGitHubLinkedWorkItem,
   getGitHubLinkedWorkItemIdentity
@@ -45,6 +47,7 @@ export function useComposerSourceContextState(input: ComposerSourceContextStateI
     initialLinkedWorkItem,
     initialName,
     initialPrompt,
+    initialNote,
     initialTaskSourceContext,
     isProjectGroupTarget,
     newWorkspaceDraft,
@@ -82,7 +85,9 @@ export function useComposerSourceContextState(input: ComposerSourceContextStateI
     persistDraft ? (newWorkspaceDraft?.prompt ?? initialPrompt) : initialPrompt
   )
 
-  const [note, setNote] = useState<string>(persistDraft ? (newWorkspaceDraft?.note ?? '') : '')
+  const [note, setNote] = useState<string>(
+    persistDraft ? (newWorkspaceDraft?.note ?? initialNote ?? '') : (initialNote ?? '')
+  )
 
   const [attachmentPaths, setAttachmentPaths] = useState<string[]>(
     persistDraft ? (newWorkspaceDraft?.attachments ?? []) : []
@@ -108,14 +113,14 @@ export function useComposerSourceContextState(input: ComposerSourceContextStateI
 
   const initialLinkedWorkItemSeed =
     normalizedInitialLinkedWorkItem &&
-    getLinkedWorkItemProvider(normalizedInitialLinkedWorkItem) === 'jira' &&
+    getWorkspaceSourceProvider(normalizedInitialLinkedWorkItem) === 'jira' &&
     !initialLinkedTaskSourceContext
       ? null
       : normalizedInitialLinkedWorkItem
 
   const draftLinkedWorkItemSeed =
     normalizedDraftLinkedWorkItem &&
-    getLinkedWorkItemProvider(normalizedDraftLinkedWorkItem) === 'jira' &&
+    getWorkspaceSourceProvider(normalizedDraftLinkedWorkItem) === 'jira' &&
     !draftLinkedTaskSourceContext
       ? null
       : normalizedDraftLinkedWorkItem
@@ -139,7 +144,7 @@ export function useComposerSourceContextState(input: ComposerSourceContextStateI
   const derivedGitHubTaskSourceContext = useMemo(() => {
     if (
       !linkedWorkItem ||
-      getLinkedWorkItemProvider(linkedWorkItem) !== 'github' ||
+      getWorkspaceSourceProvider(linkedWorkItem) !== 'github' ||
       !selectedRepo ||
       selectedWorkspaceTarget.status !== 'ready'
     ) {

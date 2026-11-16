@@ -2,6 +2,7 @@ import type { SpawnOptions as NodeSpawnOptions } from 'node:child_process'
 import { buildWindowsCmdShimCommandLine, isCmdInterpretedProgram } from './windows-command-line'
 import { resolveWindowsCmdShim } from './windows-cmd-shim-resolution'
 import type { ProcessSpec } from './process-spec'
+import { assertWslDistroAllowed } from './wsl-distro-allowlist'
 
 export type ResolvedSpawn = {
   file: string
@@ -9,34 +10,20 @@ export type ResolvedSpawn = {
   options: NodeSpawnOptions
 }
 
-/**
- * Translate a spec into the exact `child_process.spawn` call to make.
- *
- * Exported so the Windows branch is testable from macOS/Linux: the decisions
- * below are the whole point of the spawn chokepoint, and they must not be
- * observable only on the platform that breaks.
- *
- * Pure except on the win32 `.cmd` branch, where shim resolution does a `stat`
- * and (on a cache miss) one bounded read of the shim itself. Both are inside
- * try/catch and any failure falls back to the cmd.exe path, so the function
- * still cannot throw or reach anything but the program path it was handed.
- */
+/** Host-independent for Windows tests; recognized shim I/O failures fall back to cmd.exe. */
 export function resolveSpawn(spec: ProcessSpec, platform: NodeJS.Platform): ResolvedSpawn {
   const args = spec.args ?? []
+  assertWslDistroAllowed(spec.program, args)
   const base: NodeSpawnOptions = {
     cwd: spec.cwd,
     env: spec.env,
     stdio: spec.stdio ?? ['pipe', 'pipe', 'pipe'],
     serialization: spec.serialization,
-    // Why unconditional: Orca's main process is GUI-subsystem and owns no
-    // console, so every console-subsystem child it starts gets a fresh visible
-    // conhost that takes foreground — keystrokes typed into an Orca terminal at
-    // that moment land in the black box instead.
+    // GUI-subsystem parents otherwise spawn visible consoles that steal foreground input.
     windowsHide: true,
     detached: spec.detached,
     windowsVerbatimArguments: spec.windowsVerbatimArguments,
-    // Why never `shell: true`: it concatenates arguments without escaping (Node
-    // itself warns DEP0190) and it silently makes windowsHide a no-op.
+    // shell:true loses argument escaping and disables windowsHide.
     shell: false,
     ...(spec.terminationBarrier && platform !== 'win32' ? { detached: true } : {})
   }
@@ -45,12 +32,7 @@ export function resolveSpawn(spec: ProcessSpec, platform: NodeJS.Platform): Reso
     return { file: spec.program, args, options: base }
   }
 
-  // An npm/pnpm shim is a generated file that only locates node and runs a
-  // script, so reading it lets us spawn that program directly. That drops
-  // cmd.exe from the tree — which is what Defender scores as obfuscation once
-  // the caret-escaped payload is agent prompt text — and lifts cmd's ban on
-  // arguments containing a line break. Unrecognised shims resolve to null and
-  // keep the cmd.exe path below.
+  // Direct shim resolution avoids cmd escaping, EDR obfuscation flags, and multiline-argument limits.
   const shim = resolveWindowsCmdShim(spec.program, spec.env ?? process.env)
   if (shim) {
     return {
@@ -59,19 +41,13 @@ export function resolveSpawn(spec: ProcessSpec, platform: NodeJS.Platform): Reso
       options: {
         ...base,
         ...(shim.env ? { env: shim.env } : {}),
-        // Why cleared rather than inherited: the flag exists for callers that
-        // hand us a whole pre-built command line, and there is no such line
-        // here — Node would join `[script, ...args]` unquoted and shred any
-        // argument containing a space.
+        // Node must quote argv normally after replacing the caller-owned cmd line.
         windowsVerbatimArguments: undefined
       }
     }
   }
 
-  // Node refuses to spawn `.cmd`/`.bat` without a shell (EINVAL, the
-  // CVE-2024-27980 mitigation), so cmd.exe has to be the program. Building the
-  // line ourselves — rather than handing Node `shell: true` — is what keeps the
-  // arguments intact and the console hidden.
+  // Node rejects direct .cmd/.bat spawns; build the cmd line ourselves to preserve quoting and hiding.
   const comSpec = spec.env?.ComSpec ?? process.env.ComSpec ?? 'cmd.exe'
   return {
     file: comSpec,

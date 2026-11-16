@@ -1,13 +1,11 @@
 import type { Worktree } from '../../../shared/worktree/types'
-import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
+import { isWindowsAbsolutePathLike } from '../../../shared/file-access/cross-platform-path'
 
 export function isNestedWorktreePath(parentPath: string, childPath: string): boolean {
   const windowsPath = isWindowsAbsolutePathLike(parentPath)
   const parent = parentPath.replace(/[\\/]+$/, '').replace(/\\/g, '/')
   const child = childPath.replace(/\\/g, '/')
-  // Why: Windows paths are case-insensitive and can arrive with mixed slash
-  // styles from git/Electron. Normalize before deciding whether to exclude a
-  // nested linked worktree from file scans.
+  // Normalize mixed-slash, case-insensitive Windows paths before excluding nested worktrees.
   const comparableParent = windowsPath ? parent.toLowerCase() : parent
   const comparableChild = windowsPath ? child.toLowerCase() : child
   return comparableChild.startsWith(`${comparableParent}/`)

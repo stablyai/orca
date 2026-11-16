@@ -1,8 +1,4 @@
-/**
- * Terminal layout parity scenarios: each test drives a fixed terminal-layout journey and writes the
- * raw renderer layout and saved session to disk. `config/scripts/run-terminal-layout-parity.mjs` runs
- * this file against two builds and diffs the outputs; see tests/e2e/AGENTS.md.
- */
+// Capture settled renderer topology and saved sessions for fixed journeys; run-terminal-layout-parity.mjs diffs two builds (see tests/e2e/AGENTS.md).
 
 import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
@@ -29,7 +25,7 @@ import {
   waitForBoundPanes
 } from './helpers/terminal-layout-journeys'
 import { RuntimeClient } from '../../src/cli/runtime/client'
-import type { RuntimeTerminalListResult } from '../../src/shared/runtime-types'
+import type { RuntimeTerminalListResult } from '../../src/shared/terminal/runtime/runtime-terminal-contracts'
 import {
   TERMINAL_LAYOUT_PARITY_OUT_ENV,
   type RawParityCheckpoint,

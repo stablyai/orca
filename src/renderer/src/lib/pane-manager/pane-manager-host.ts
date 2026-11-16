@@ -1,14 +1,13 @@
 import type {
   ManagedPaneInternal,
+  PaneActivationOptions,
   PaneManagerOptions,
   PaneStyleOptions
 } from './pane-manager-types'
-import type { DragReorderCallbacks, DragReorderState } from './pane-drag-reorder'
+import type { DragReorderCallbacks, DragReorderState } from './pane-layout/pane-drag-reorder'
 import type { PaneIdentityRegistry } from './pane-identity-registry'
 
-/** Accessor bundle the extracted PaneManager collaborators call back into.
- *  Why getters for activePaneId/styleOptions: both are reassigned during the
- *  manager's life, so capturing their values here would freeze stale state. */
+/** Collaborator callbacks use getters for mutable activePaneId/styleOptions so they never capture stale manager state. */
 export type PaneManagerHost = {
   panes: Map<number, ManagedPaneInternal>
   root: HTMLElement
@@ -27,7 +26,7 @@ export type PaneManagerHost = {
     spawnHints?: Parameters<NonNullable<PaneManagerOptions['onPaneCreated']>>[1]
   ) => void
   getDragCallbacks: () => DragReorderCallbacks
-  setActivePane: (paneId: number, opts?: { focus?: boolean }) => void
+  setActivePane: (paneId: number, opts?: PaneActivationOptions) => void
   setActivePaneId: (paneId: number | null) => void
   requestPaneReparentFrame: (callback: FrameRequestCallback) => void
 }

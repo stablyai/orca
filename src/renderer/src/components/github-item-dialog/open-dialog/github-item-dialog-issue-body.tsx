@@ -1,11 +1,11 @@
 import React from 'react'
-import type { PRComment } from '../../../../../shared/github/comment-types'
-import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
+import type { PRComment } from '../../../../../shared/github/comments/comment-types'
+import type { GitHubAssignableUser } from '../../../../../shared/github/pull-requests/pull-request-types'
 import type {
   GitHubWorkItem,
   GitHubWorkItemDetails
-} from '../../../../../shared/github/work-item-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+} from '../../../../../shared/github/work-items/work-item-types'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import { ConversationTab } from '../discuss-item/conversation-tab'
 import { GHEditSection } from '../edit-item-fields/gh-edit-section'
 import type { GitHubItemDialogProjectOrigin } from '../load-item-details/github-item-dialog-types'
@@ -17,6 +17,7 @@ import {
 
 export function GitHubItemDialogIssueBody({
   workItem,
+  acceptedRefresh,
   displayWorkItem,
   repoPath,
   effectiveRepoId,
@@ -38,6 +39,7 @@ export function GitHubItemDialogIssueBody({
   onReviewRequestsChange,
   canUseDetailsRepoContext
 }: {
+  acceptedRefresh?: number
   workItem: GitHubWorkItem
   displayWorkItem: GitHubWorkItem | null
   repoPath: string | null
@@ -71,12 +73,13 @@ export function GitHubItemDialogIssueBody({
 
   return (
     <div className="h-full min-h-0 overflow-y-auto scrollbar-sleek bg-background">
-      {/* Why: full content width so the description isn't squeezed by a right rail; px-2 + ConversationTab px-4 = header px-6. */}
+      {/* Match header padding: this px-2 plus ConversationTab’s px-4 equals px-6. */}
       <div className="w-full px-2 py-6">
         {(canUseDetailsRepoContext || projectOrigin) && (
           <div className="mb-5 border-b border-border/60 px-4 pb-5">
             <GHEditSection
-              item={workItem}
+              item={displayWorkItem ?? workItem}
+              acceptedRefresh={acceptedRefresh}
               repoPath={repoPath}
               repoId={effectiveRepoId}
               sourceContext={sourceContext}
@@ -86,7 +89,11 @@ export function GitHubItemDialogIssueBody({
               onStateChange={onStateChange}
               onLabelsChange={onLabelsChange}
               onMutated={onMutated}
-              assignees={details?.assignees ?? []}
+              assignees={
+                details
+                  ? (details.item.assignees?.map((user) => user.login) ?? details.assignees ?? [])
+                  : displayWorkItem?.assignees?.map((user) => user.login)
+              }
               onUse={onUse}
               onOpenOrUse={onOpenOrUse}
               attachedWorkspaceLabel={attachedWorkspaceLabel}
@@ -101,6 +108,7 @@ export function GitHubItemDialogIssueBody({
             repoId={effectiveRepoId}
             sourceContext={sourceContext}
             body={body}
+            bodyImageUrls={details?.bodyImageUrls}
             comments={comments}
             timelineItems={timelineItems}
             files={files}
@@ -118,9 +126,9 @@ export function GitHubItemDialogIssueBody({
                 patchCachedPRChecks(detailsCacheKey, nextChecks)
               }
             }}
-            onBodyUpdated={(nextBody) => {
+            onBodyUpdated={(nextBody, representation) => {
               if (detailsCacheKey) {
-                patchCachedWorkItemBody(detailsCacheKey, nextBody)
+                patchCachedWorkItemBody(detailsCacheKey, nextBody, representation)
               }
             }}
             onCommentAdded={onCommentAdded}

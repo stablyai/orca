@@ -1,5 +1,5 @@
-import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
-import type { GhAccountBinding } from '../../shared/github/account-binding'
+import type { GitAdmissionTier } from '../../shared/rpc-contract/source-control/git-admission-tier-params'
+import type { GhAccountBinding } from '../../shared/github/accounts/account-binding'
 
 export type HostedReviewLocalGitOptions = {
   wslDistro?: string
@@ -9,9 +9,7 @@ export type HostedReviewLocalGitOptions = {
 
 export type HostedReviewExecutionOptions = {
   localGitExecOptions?: HostedReviewLocalGitOptions
-  /** Paths Orca may have symlinked into this worktree. An untracked entry that
-   *  is one of these is Orca's own artifact, not work the user can commit, so it
-   *  must not read as "dirty" and block review creation. */
+  /** Configured Orca shared links are clean only when untracked real symlinks, never user files. */
   sharedLinkPaths?: readonly string[]
 }
 

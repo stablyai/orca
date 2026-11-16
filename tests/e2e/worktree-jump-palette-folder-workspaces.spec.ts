@@ -1,7 +1,7 @@
 import { mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { encodePaletteIdentity } from '../../src/renderer/src/lib/palette-match/palette-ranking'
+import { encodePaletteIdentity } from '../../src/shared/palette-match/palette-ranking'
 import { expect, test } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
 
@@ -39,9 +39,11 @@ for (const theme of ['light', 'dark'] as const) {
         if (!folder) {
           throw new Error('Could not create folder workspace')
         }
-        await store.getState().updateFolderWorkspace(folder.id, { comment: 'Research synthesis' })
+        await store
+          .getState()
+          .updateFolderWorkspace(folder.folderWorkspace.id, { comment: 'Research synthesis' })
         store.setState({ showSleepingWorkspaces: false })
-        return `folder:${folder.id}`
+        return `folder:${folder.folderWorkspace.id}`
       },
       { folderPath, theme }
     )

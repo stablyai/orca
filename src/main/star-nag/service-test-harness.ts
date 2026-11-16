@@ -2,7 +2,7 @@ import { vi } from 'vitest'
 import type { Mock } from 'vitest'
 import { STAR_NAG_INITIAL_THRESHOLD } from '../../shared/constants'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import type { StatsCollector } from '../stats/collector'
 import { StarNagService } from './service'
 
@@ -11,8 +11,7 @@ export type TestWindow = {
   webContents: { send: ReturnType<typeof vi.fn> }
 }
 
-// Why: the `vi.mock` factories must live in each test file, so files build this
-// shape inside `vi.hoisted` and hand it back for the shared reset.
+// Each test owns vi.mock factories, so pass hoisted mocks into the shared reset.
 export type StarNagMocks = {
   appMock: { getVersion: Mock }
   browserWindowMock: { getAllWindows: Mock<() => TestWindow[]> }

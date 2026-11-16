@@ -30,9 +30,7 @@ export function buildJiraCreateTextAdf(text: string): JiraAdfDocument {
         ? index - 1
         : index
     const line = text.slice(lineStart, lineEnd)
-    // Why: Jira ADF represents each visible text line as its own paragraph;
-    // scan line boundaries directly so large pasted textarea values avoid a
-    // duplicate full line array before the RPC payload is built.
+    // Emit a paragraph per visible line without allocating a second full line array for large pasted text.
     content.push({
       type: 'paragraph',
       content: line ? [{ type: 'text', text: line }] : []

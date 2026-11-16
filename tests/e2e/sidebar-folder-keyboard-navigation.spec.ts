@@ -37,18 +37,15 @@ test('cycles visible folder workspaces with shortcuts and focused list arrows', 
     if (!folder || !repo || !first || !last) {
       throw new Error('Expected two git worktrees and one folder workspace')
     }
-    await store.getState().updateFolderWorkspace(folder.id, { workspaceStatus: 'in-progress' })
+    await store
+      .getState()
+      .updateFolderWorkspace(folder.folderWorkspace.id, { workspaceStatus: 'in-progress' })
+    // Through the metadata writes, so main's copy of the catalog agrees with the window's.
+    await store.getState().updateWorktreeMeta(first.id, { workspaceStatus: 'todo' })
+    await store.getState().updateWorktreeMeta(last.id, { workspaceStatus: 'completed' })
     store.getState().setGroupBy('workspace-status')
-    store.setState({
-      collapsedGroups: new Set(),
-      worktreesByRepo: {
-        [repo.id]: [
-          { ...first, hostId: 'local', displayName: 'Git workspace A', workspaceStatus: 'todo' },
-          { ...last, hostId: 'local', displayName: 'Git workspace B', workspaceStatus: 'completed' }
-        ]
-      }
-    })
-    return [first.id, `folder:${folder.id}`, last.id]
+    store.setState({ collapsedGroups: new Set() })
+    return [first.id, `folder:${folder.folderWorkspace.id}`, last.id]
   }, folderPath)
 
   expect(

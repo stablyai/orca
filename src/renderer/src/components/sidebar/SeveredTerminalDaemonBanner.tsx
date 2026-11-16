@@ -11,10 +11,11 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type {
   PtyManagementSeveredDaemon,
   PtyManagementSeveredDaemonRestartResult
-} from '../../../../preload/api-types'
+} from '../../../../preload/api/terminal/pty-management-api'
 
 const POLL_INTERVAL_MS = 60_000
 const DISMISSED_KEY = 'orca.severedTerminalDaemonBanner.dismissed'
@@ -39,10 +40,13 @@ function writeDismissed(key: string): void {
   }
 }
 
-function sessionsLabel(count: number | null): string {
+function sessionsLabel(count: number | null, t: Translate = translate): string {
   return count === null
-    ? translate('terminal.severedDaemonBanner.unknownCount', 'its running terminals')
-    : translate('terminal.severedDaemonBanner.count', '{{count}} running terminals', { count })
+    ? t('terminal.severedDaemonBanner.unknownCount', 'its running terminals')
+    : t('terminal.severedDaemonBanner.count', '{{count}} running terminals', {
+        count,
+        defaultValue_one: '{{count}} running terminal'
+      })
 }
 
 function refusalMessage(
@@ -59,8 +63,8 @@ function refusalMessage(
       )
 }
 
-/** Persistent notice for a Linux AppImage terminal daemon kept although its files are gone. */
 export function SeveredTerminalDaemonBanner(): React.JSX.Element | null {
+  const t = useTranslate()
   const [daemon, setDaemon] = React.useState<PtyManagementSeveredDaemon | null>(null)
   const [dismissed, setDismissed] = React.useState<string | null>(() => readDismissed())
   const [confirming, setConfirming] = React.useState(false)
@@ -134,16 +138,16 @@ export function SeveredTerminalDaemonBanner(): React.JSX.Element | null {
         <TriangleAlert className="mt-px size-3.5 shrink-0 text-destructive" aria-hidden="true" />
         <div className="min-w-0 flex-1 space-y-1.5">
           <p className="text-xs font-semibold leading-snug">
-            {translate(
+            {t(
               'terminal.severedDaemonBanner.title',
               'Terminal service is running without its program files'
             )}
           </p>
           <p className="text-xs leading-snug text-muted-foreground">
-            {translate(
+            {t(
               'terminal.severedDaemonBanner.body',
               'The terminal service on this computer started from an AppImage that is no longer mounted. It still runs {{sessions}}, but it can crash at any moment. Until you restart it, new terminals are not kept when Orca quits.',
-              { sessions: sessionsLabel(daemon.liveSessionCount) }
+              { sessions: sessionsLabel(daemon.liveSessionCount, t) }
             )}
           </p>
           <div className="flex items-center gap-1.5 pt-0.5">
@@ -155,7 +159,7 @@ export function SeveredTerminalDaemonBanner(): React.JSX.Element | null {
               onClick={() => setConfirming(true)}
             >
               <RotateCw aria-hidden="true" />
-              {translate('terminal.severedDaemonBanner.restart', 'Restart terminal daemon')}
+              {t('terminal.severedDaemonBanner.restart', 'Restart terminal daemon')}
             </Button>
             <Button
               type="button"
@@ -168,7 +172,7 @@ export function SeveredTerminalDaemonBanner(): React.JSX.Element | null {
               }}
             >
               <X aria-hidden="true" />
-              {translate('terminal.severedDaemonBanner.dismiss', 'Dismiss')}
+              {t('terminal.severedDaemonBanner.dismiss', 'Dismiss')}
             </Button>
           </div>
         </div>
@@ -184,26 +188,23 @@ export function SeveredTerminalDaemonBanner(): React.JSX.Element | null {
         <DialogContent className="max-w-md" showCloseButton={!restarting}>
           <DialogHeader>
             <DialogTitle>
-              {translate(
-                'terminal.severedDaemonBanner.confirmTitle',
-                'Restart the terminal daemon?'
-              )}
+              {t('terminal.severedDaemonBanner.confirmTitle', 'Restart the terminal daemon?')}
             </DialogTitle>
             <DialogDescription>
-              {translate(
+              {t(
                 'terminal.severedDaemonBanner.confirmBody',
                 'Restarting ends every process running in {{sessions}}. Agents that support resume can be resumed afterwards; shells and other jobs cannot and must be started again. Do this when your agents are idle.',
-                { sessions: sessionsLabel(daemon.liveSessionCount) }
+                { sessions: sessionsLabel(daemon.liveSessionCount, t) }
               )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" disabled={restarting} onClick={() => setConfirming(false)}>
-              {translate('terminal.severedDaemonBanner.cancel', 'Cancel')}
+              {t('terminal.severedDaemonBanner.cancel', 'Cancel')}
             </Button>
             <Button variant="destructive" disabled={restarting} onClick={() => void restart()}>
               {restarting ? <LoaderCircle className="size-4 animate-spin" /> : null}
-              {translate('terminal.severedDaemonBanner.confirm', 'Restart and end processes')}
+              {t('terminal.severedDaemonBanner.confirm', 'Restart and end processes')}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,23 +1,29 @@
 import { ipcMain } from 'electron'
 import { readFile, stat } from 'node:fs/promises'
 import { extname, normalize } from 'node:path'
-import type { Store } from '../persistence'
-import type { NotificationSoundDataResult } from '../../shared/notification-settings-types'
+import type { Store } from '../persistence/loading-store/store'
+import type {
+  NotificationSoundDataResult,
+  NotificationSoundPathResult
+} from '../../shared/notifications/notification-settings-types'
 import {
   getSelectedNotificationSoundPath,
   NOTIFICATION_SOUND_MIME_BY_EXTENSION
 } from './notification-sound-selection'
+import { isNotificationFocusActive } from '../notifications/notification-focus-state'
 
 const MAX_NOTIFICATION_SOUND_BYTES = 10 * 1024 * 1024
 
 export function registerNotificationSoundHandlers(store: Store): void {
-  // Why: return the path so the preload's path-keyed cache skips the 10MB IPC round-trip on repeat dispatches.
+  // Return paths so preload caching avoids repeat 10MB sound transfers.
   ipcMain.removeHandler('notifications:resolveSoundPath')
   ipcMain.handle(
     'notifications:resolveSoundPath',
-    ():
-      | { ok: true; path: string }
-      | { ok: false; reason: 'missing-path' | 'invalid-path' | 'unsupported-type' } => {
+    async (_event, options?: { force?: boolean }): Promise<NotificationSoundPathResult> => {
+      // Custom audio bypasses OS notification muting; explicit previews bypass this gate.
+      if (options?.force !== true && (await isNotificationFocusActive())) {
+        return { ok: false, reason: 'focus-active' }
+      }
       const selectedSound = getSelectedNotificationSoundPath(store.getSettings().notifications)
       if (!selectedSound.path) {
         return { ok: false, reason: selectedSound.reason ?? 'missing-path' }

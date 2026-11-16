@@ -1,17 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { AppState, Text } from 'react-native'
+import { AppState } from 'react-native'
 import { useFocusEffect } from 'expo-router'
-import { NotificationDeliverySection } from '../notifications/NotificationDeliverySection'
+import { NotificationDeliverySection } from '../notifications/delivery-policy/NotificationDeliverySection'
 import {
   DEFAULT_NOTIFICATION_DELIVERY,
   loadNotificationDeliveryPreferences,
   type NotificationDeliveryPreferences
-} from '../notifications/notification-delivery-preferences'
+} from '../notifications/delivery-policy/notification-delivery-preferences'
 import { setNotificationDeliveryPreferences } from '../notifications/push-registration'
-import { useRemotePushCapableHosts } from '../notifications/use-remote-push-capable-hosts'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { useRemotePushCapableHosts } from '../notifications/push-registration/use-remote-push-capable-hosts'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { SettingsNote } from './settings-screen-frame'
 
 export function NativeNotificationDeliverySettings({ enabled }: { enabled: boolean }) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const [delivery, setDelivery] = useState(DEFAULT_NOTIFICATION_DELIVERY)
   const [loaded, setLoaded] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -36,9 +40,14 @@ export function NativeNotificationDeliverySettings({ enabled }: { enabled: boole
       if (revision !== refreshRevision.current) {
         return
       }
-      setError('Could not load delivery settings. Reopen this screen to retry.')
+      setError(
+        t(
+          'settings.nativeNotificationDeliverySettings.loadFailed',
+          'Could not load delivery settings. Reopen this screen to retry.'
+        )
+      )
     }
-  }, [])
+  }, [t])
   useFocusEffect(
     useCallback(() => {
       void refresh()
@@ -64,16 +73,16 @@ export function NativeNotificationDeliverySettings({ enabled }: { enabled: boole
       await setNotificationDeliveryPreferences(value)
       setDelivery(value)
     } catch {
-      setError('Could not save delivery settings. Try again.')
+      setError(
+        t(
+          'settings.nativeNotificationDeliverySettings.saveFailed',
+          'Could not save delivery settings. Try again.'
+        )
+      )
     } finally {
       saveInProgress.current = false
       setSaving(false)
     }
-  }
-  const hintStyle = {
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
-    marginTop: spacing.md
   }
   return (
     <>
@@ -82,16 +91,15 @@ export function NativeNotificationDeliverySettings({ enabled }: { enabled: boole
         disabled={!enabled || !loaded || saving}
         onChange={(value) => void change(value)}
       />
-      {error && (
-        <Text accessibilityRole="alert" style={hintStyle}>
-          {error}
-        </Text>
-      )}
-      {support.resolved && !support.supported && (
-        <Text style={hintStyle}>
-          Pair an updated desktop to receive notifications on this phone.
-        </Text>
-      )}
+      {error ? <SettingsNote error>{error}</SettingsNote> : null}
+      {support.resolved && !support.supported ? (
+        <SettingsNote>
+          {t(
+            'settings.nativeNotificationDeliverySettings.updateDesktopHint',
+            'Pair an updated desktop to receive notifications on this phone.'
+          )}
+        </SettingsNote>
+      ) : null}
     </>
   )
 }

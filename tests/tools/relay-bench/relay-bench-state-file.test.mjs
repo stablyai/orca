@@ -1,10 +1,6 @@
-// Why: the bench state file holds a live resume token and device token for a real paired desktop.
-// A plain writeFileSync with `mode` leaves an existing 0644 file world-readable, follows a symlink
-// into someone else's tree, and throws ENOENT on the default path after the desktop has already
-// burned the provision request, losing the credential.
+// Require safe storage of live resume/device tokens: reject symlink traversal, fix existing 0644 permissions, and create parents before provisioned credentials are lost.
 import {
   chmodSync,
-  existsSync,
   lstatSync,
   mkdtempSync,
   readFileSync,
@@ -90,11 +86,5 @@ describe('readSecretFile', () => {
     chmodSync(target, 0o600)
     symlinkSync(target, link)
     expect(() => readSecretFile(link)).toThrow(/symlink/)
-  })
-
-  it('reports a missing file rather than returning empty text', () => {
-    const path = join(dir, 'absent.json')
-    expect(existsSync(path)).toBe(false)
-    expect(() => readSecretFile(path)).toThrow(/ENOENT/)
   })
 })

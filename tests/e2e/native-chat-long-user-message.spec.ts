@@ -5,13 +5,22 @@ import path from 'node:path'
 import type { Locator, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import { waitForActivePaneHookDescriptor, waitForActiveTerminalManager } from './helpers/terminal'
+import {
+  waitForActivePaneHookDescriptor,
+  waitForActivePanePtyId,
+  waitForActiveTerminalManager,
+  waitForPaneIdentitySnapshot,
+  type PaneIdentitySnapshot
+} from './helpers/terminal'
+import { waitForPtyShellEcho } from './terminal-pty-readiness'
 
 const LONG_PROMPT_LINES = 80
 
 async function enableNativeChatSetting(page: Page): Promise<void> {
   await page.evaluate(async () => {
-    const nextSettings = await window.api.settings.set({ experimentalNativeChat: true })
+    const nextSettings = await window.api.settings.set({
+      nativeChatProviders: { claude: true, codex: true }
+    })
     window.__store?.setState({ settings: nextSettings })
   })
 }
@@ -79,13 +88,17 @@ function transcriptLine(
 }
 
 /** Opens a native chat on a transcript of alternating user and assistant turns. */
-async function openChat(page: Page, turns: readonly string[]): Promise<void> {
+async function openChat(page: Page, turns: readonly string[]): Promise<PaneIdentitySnapshot> {
   await waitForSessionReady(page)
   await waitForActiveWorktree(page)
   await ensureTerminalVisible(page)
   await waitForActiveTerminalManager(page, 30_000)
 
+  const boundPane = await waitForPaneIdentitySnapshot(page, 1)
+  const ptyId = await waitForActivePanePtyId(page)
+  await waitForPtyShellEcho(page, ptyId, 15_000)
   const descriptor = await waitForActivePaneHookDescriptor(page)
+  expect(descriptor.paneKey).toBe(`${boundPane.tabId}:${boundPane.activeLeafId}`)
   const [tabId] = descriptor.paneKey.split(':')
   const sessionId = `e2e-long-prompt-${randomUUID()}`
   const scratchDir = mkdtempSync(path.join(os.tmpdir(), 'orca-e2e-native-chat-long-prompt-'))
@@ -116,6 +129,7 @@ async function openChat(page: Page, turns: readonly string[]): Promise<void> {
   })
   await toggleTerminalTabToChatView(page, { tabId, worktreeId: descriptor.worktreeId })
   await expect(page.locator('[data-native-chat-window]')).toBeVisible({ timeout: 30_000 })
+  return boundPane
 }
 
 // Retried: a windowed row can be replaced between resolving it and scrolling to it.
@@ -133,7 +147,13 @@ test.describe('Native chat long user message', () => {
     ).join('\n\n')
     // Enough after the long prompt that refolding it cannot be rescued by the scroll clamp.
     const middle = Array.from({ length: 6 }, () => ['Another short prompt.', reply]).flat()
-    await openChat(orcaPage, ['A short prompt.', reply, longPrompt('Early'), reply, ...middle])
+    const boundPane = await openChat(orcaPage, [
+      'A short prompt.',
+      reply,
+      longPrompt('Early'),
+      reply,
+      ...middle
+    ])
     const transcriptWindow = orcaPage.locator('[data-native-chat-window]')
     const scroller = orcaPage.locator('[data-native-chat-scroll]')
     const promptRow = (name: string) => {
@@ -178,16 +198,29 @@ test.describe('Native chat long user message', () => {
     await expect(early.folded).toHaveCount(1)
     await early.showFull.focus()
     await expect(early.line(1)).toBeInViewport()
+    const finalPane = await waitForPaneIdentitySnapshot(orcaPage, 1)
+    expect(finalPane.tabId).toBe(boundPane.tabId)
+    expect(finalPane.activeLeafId).toBe(boundPane.activeLeafId)
+    expect(finalPane.ptyIdsByLeafId).toEqual(boundPane.ptyIdsByLeafId)
+    await expect(orcaPage.locator('[data-native-chat-root="true"]')).toBeVisible()
   })
 
   test('leaves a prompt alone when its long text already fits the preview', async ({
     orcaPage
   }) => {
     // Nine source lines, so the text rule picks it, yet it renders shorter than the clip.
-    await openChat(orcaPage, [['One.', 'Two.', 'Three.', 'Four.', 'Five.'].join('\n\n'), 'Done.'])
+    const boundPane = await openChat(orcaPage, [
+      ['One.', 'Two.', 'Three.', 'Four.', 'Five.'].join('\n\n'),
+      'Done.'
+    ])
     const transcriptWindow = orcaPage.locator('[data-native-chat-window]')
     await expect(transcriptWindow.getByText('Five.')).toBeVisible()
     await expect(transcriptWindow.getByRole('button', { name: 'Show full message' })).toHaveCount(0)
     await expect(transcriptWindow.locator('[data-native-chat-user-message-folded]')).toHaveCount(0)
+    const finalPane = await waitForPaneIdentitySnapshot(orcaPage, 1)
+    expect(finalPane.tabId).toBe(boundPane.tabId)
+    expect(finalPane.activeLeafId).toBe(boundPane.activeLeafId)
+    expect(finalPane.ptyIdsByLeafId).toEqual(boundPane.ptyIdsByLeafId)
+    await expect(orcaPage.locator('[data-native-chat-root="true"]')).toBeVisible()
   })
 })

@@ -1,18 +1,17 @@
 import { useEffect } from 'react'
-import {
-  keybindingMatchesAction,
-  type KeybindingContext,
-  type KeybindingInput
-} from '../../../../shared/keybindings'
+import { keybindingMatchesAction } from '../../../../shared/keybindings/matching'
+import type { KeybindingContext, KeybindingInput } from '../../../../shared/keybindings/types'
 import {
   ModifierDoubleTapDetector,
   toModifierDoubleTapEvent
-} from '../../../../shared/modifier-double-tap-detector'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
-import { TOGGLE_QUICK_COMMANDS_MENU_EVENT } from '@/lib/quick-commands-menu-events'
-import { useAppStore } from '@/store'
+} from '../../../../shared/keybindings/modifier-double-tap-detector'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
+import { TOGGLE_QUICK_COMMANDS_MENU_EVENT } from '@/lib/terminal/quick-commands/quick-commands-menu-events'
+import { useAppStore } from '@/store/index'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 
 type UseTabBarQuickCommandsShortcutParams = {
+  isFocused: boolean
   menuOpen: boolean
   onOpenChange: (next: boolean) => void
 }
@@ -33,6 +32,7 @@ function getQuickCommandsShortcutContext(target: EventTarget | null): Keybinding
 }
 
 export function useTabBarQuickCommandsShortcut({
+  isFocused,
   menuOpen,
   onOpenChange
 }: UseTabBarQuickCommandsShortcutParams): void {
@@ -42,10 +42,9 @@ export function useTabBarQuickCommandsShortcut({
   )
   const activeView = useAppStore((s) => s.activeView)
 
-  // Why: this hook only runs in the focused tab group's menu component, so the
-  // listener naturally scopes to the active group with no extra coordination.
+  // Why: every strip stays mounted for stable layout, but only the visible focused group owns shortcuts.
   useEffect(() => {
-    if (activeView !== 'terminal') {
+    if (!isFocused || activeView !== 'terminal') {
       return
     }
     const platform = getShortcutPlatform()
@@ -125,18 +124,18 @@ export function useTabBarQuickCommandsShortcut({
       )
     }
     const onBlur = (): void => doubleTapDetector.reset()
-    window.addEventListener('keydown', onKeyDown, { capture: true })
-    window.addEventListener('keyup', onKeyUp, { capture: true })
+    addAppKeyListener('keydown', onKeyDown)
+    addAppKeyListener('keyup', onKeyUp)
     window.addEventListener('blur', onBlur)
     return () => {
-      window.removeEventListener('keydown', onKeyDown, { capture: true })
-      window.removeEventListener('keyup', onKeyUp, { capture: true })
+      removeAppKeyListener('keydown', onKeyDown)
+      removeAppKeyListener('keyup', onKeyUp)
       window.removeEventListener('blur', onBlur)
     }
-  }, [activeView, keybindings, menuOpen, onOpenChange, terminalShortcutPolicy])
+  }, [activeView, isFocused, keybindings, menuOpen, onOpenChange, terminalShortcutPolicy])
 
   useEffect(() => {
-    if (activeView !== 'terminal') {
+    if (!isFocused || activeView !== 'terminal') {
       return
     }
     const onToggleQuickCommandsMenu = (): void => {
@@ -146,5 +145,12 @@ export function useTabBarQuickCommandsShortcut({
     return () => {
       window.removeEventListener(TOGGLE_QUICK_COMMANDS_MENU_EVENT, onToggleQuickCommandsMenu)
     }
-  }, [activeView, menuOpen, onOpenChange])
+  }, [activeView, isFocused, menuOpen, onOpenChange])
+
+  // Why: the menu stays mounted after its group loses focus or its workspace hides, so it must not keep targeting that group.
+  useEffect(() => {
+    if (!isFocused && menuOpen) {
+      onOpenChange(false)
+    }
+  }, [isFocused, menuOpen, onOpenChange])
 }

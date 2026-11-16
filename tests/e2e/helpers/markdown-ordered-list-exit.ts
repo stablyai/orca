@@ -211,8 +211,7 @@ export async function placeCaretInLoadedThirdEmptyItem(page: Page): Promise<void
         throw new Error('Cannot place caret in the loaded empty ordered-list item')
       }
 
-      // Why: headless Electron can click an empty paragraph without committing
-      // ProseMirror's state selection before Enter; set the same caret explicitly.
+      // Set the caret explicitly: a headless click may precede ProseMirror’s selection commit.
       editor.editor.commands.setTextSelection?.(selectionPosition)
       editor.editor.commands.focus?.()
     })

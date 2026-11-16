@@ -1,4 +1,4 @@
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { DetectedWorktreeListResult } from '../../../../shared/worktree/types'
 import {
   getRepoExecutionHostId,
@@ -8,7 +8,7 @@ import {
 import {
   classifyWorktreeScanFailure,
   type WorktreeScanFailureKind
-} from '../../../../shared/worktree-scan-failure'
+} from '../../../../shared/worktree/catalog/worktree-scan-failure'
 
 export type RepoScanFailure = {
   kind: WorktreeScanFailureKind
@@ -54,7 +54,6 @@ export function findLocalToolchainBlock(
     const failure = resolveRepoScanFailure(repo, detectedByRepo[repo.id])
     return failure && isLocalToolchainFailure(failure) ? [{ repo, kind: failure.kind }] : []
   })
-  // Why: every local repo shares one Git binary, so all blocked repos report the same kind.
   return blocked.length > 0
     ? { kind: blocked[0].kind, repos: blocked.map(({ repo }) => repo) }
     : null

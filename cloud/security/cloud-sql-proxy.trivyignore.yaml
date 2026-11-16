@@ -1,0 +1,13 @@
+vulnerabilities:
+  - id: CVE-2026-111943
+    statement: >-
+      The latest official Cloud SQL Auth Proxy v2.26.2 (2026-10-14) embeds
+      Go 1.27.2. Upstream has not published a proxy built with Go 1.27.3.
+      Recheck the official release before rollout; the full report retains this HIGH finding.
+    expired_at: 2026-11-04
+  - id: DSA-6572-1
+    statement: >-
+      The latest official v2.26.2 distroless image predates Debian's
+      ca-certificates 20250419+deb13u1 rebuild. Await the official patched image;
+      the complete report retains this UNKNOWN finding.
+    expired_at: 2026-11-04

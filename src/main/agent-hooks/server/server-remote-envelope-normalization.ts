@@ -1,9 +1,12 @@
-import { normalizeAgentProviderSession } from '../../../shared/agent-session-resume'
+import { normalizeAgentProviderSession } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
   normalizeClaudePromptId,
   normalizeGrokPromptId
 } from '../../../shared/agent-hook-listener/listener-limits'
-import { isAgentHookSource, type AgentHookSource } from '../../../shared/agent-hook-relay'
+import {
+  isAgentHookSource,
+  type AgentHookSource
+} from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import {
   readClaudeSettledRequests,
   type ClaudeSettledRequest
@@ -33,10 +36,12 @@ export type RemoteAgentStatusEnvelope = {
   providerSession?: unknown
   providerSessionOnly?: unknown
   isReplay?: boolean
-  /** Payload fields the relay dropped to fit an oversized frame; validated below. */
+  turnEndedAt?: unknown
+  turnEndDisposition?: unknown
+  /** Fields shed to fit the relay frame; validate before restoration. */
   shedFields?: unknown
   claudeRunningNonAgentTask?: unknown
-  /** The producing peer's advertised run-capability set — a property of the peer/connection that built this envelope, not an orthogonal call parameter. Absent (older relay/HTTP paths) defaults to the unadvertised-legacy-peer set. */
+  /** Producing peer capabilities; absent on older peers, which use legacy defaults. */
   advertisedAgentStatusCapabilities?: readonly string[]
   statusUnavailable?: unknown
   evidenceAgeMs?: unknown
@@ -108,11 +113,15 @@ export function normalizeRemoteEnvelopeFields(envelope: {
       typeof envelope.toolUseId === 'string' && envelope.toolUseId.trim().length > 0
         ? envelope.toolUseId.trim()
         : undefined,
-    // Why replay only: a live hook carries its own settlement, so the list matters only after a gap.
+    // Live hooks settle their own requests, except a batch end, which lists the requests it resolved; retained settlements repair replay gaps.
     claudeSettledRequests:
-      source === 'claude' && envelope.isReplay === true
-        ? readClaudeSettledRequests(envelope.claudeSettledRequests)
-        : undefined,
+      source !== 'claude'
+        ? undefined
+        : envelope.isReplay === true
+          ? readClaudeSettledRequests(envelope.claudeSettledRequests)
+          : envelope.hookEventName === 'PostToolBatch'
+            ? readClaudeSettledRequests(envelope.claudeSettledRequests, Number.POSITIVE_INFINITY)
+            : undefined,
     toolAgentId:
       typeof envelope.toolAgentId === 'string' && envelope.toolAgentId.trim().length > 0
         ? envelope.toolAgentId.trim()

@@ -1,8 +1,6 @@
 import { useEffect, type RefObject } from 'react'
 
-// Why: once ArrowDown moves focus into the static menu list, ArrowUp on the
-// first item should return to the search box so the keyboard trip isn't
-// one-way. Capture phase beats Radix's roving-focus handler.
+// Capture ArrowUp before Radix to return the first static item’s focus to search.
 export function useTabEntryMenuReturnFocus(
   inputRef: RefObject<HTMLInputElement | null>,
   menuOpen: boolean

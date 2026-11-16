@@ -1,16 +1,20 @@
 import { spawn, type ChildProcess, type SpawnOptions } from 'node:child_process'
+import { spawnNativeProcess } from '@orca/process-host/native-process-spawn'
+import { createPosixGroupTermination } from '@orca/process-host/posix-group-termination'
 import { StringDecoder } from 'node:string_decoder'
 import { withGitSpan } from '../../observability/instrumentation'
 import { recordSubprocessSpawn } from '../../diagnostics/main-thread-churn-probe'
-import { createAbortError } from './abort-error'
-import { killSpawnedCommandTree } from './spawned-command-tree-kill'
-import { pendingWslDriveCheckoutGitRouting } from '../wsl-drive-checkout-git-routing'
-import type { ResolvedCommand } from './wsl-command-resolution'
+import { createAbortError } from './process-capture/abort-error'
+import { killSpawnedCommandTree } from './process-capture/spawned-command-tree-kill'
+import { pendingWslDriveCheckoutGitRouting } from './host-routing/wsl-drive-checkout-git-routing'
+import type { ResolvedCommand } from './host-routing/wsl-command-resolution'
 import {
   DEFAULT_GIT_MAX_BUFFER,
-  type GitAdmissionTier,
-  type GitExecOptions
+  type GitExecOptions,
+  type GitStreamOptions,
+  type GitStreamResult
 } from './git-exec-options'
+
 import {
   pendingWslDirectGitReadEnvironment,
   directWslGitExitCode,
@@ -18,50 +22,39 @@ import {
   invalidateMissingDirectWslGit,
   resolveGitCommand,
   resolveGitCommandWithoutProbe
-} from './git-command-resolution'
-import { prepareWindowsHostGitEnvironment } from './windows-host-git-environment'
-import { nonInteractiveGitEnv, untranslatedGitOutputEnv } from './git-process-env'
+} from './host-routing/git-command-resolution'
+import { prepareWindowsHostGitEnvironment } from './host-routing/windows-host-git-environment'
+import { nonInteractiveGitEnv, untranslatedGitOutputEnv } from './git-environment/git-process-env'
 import { gitSpawn } from './git-spawn'
-import { acquireGitAdmission } from './git-subprocess-admission'
-import { GitCommandTimeoutError, gitCommandTimeoutMs } from './git-command-timeout'
+import { acquireGitAdmission } from './admission/git-subprocess-admission'
+import {
+  GitCommandTimeoutError,
+  gitCommandTimeoutMs
+} from '../../../shared/git/commands/git-command-timeout'
+import { routeLocalGitOptions, runAdmittedWslGit } from './host-routing/local-git-runtime-route'
+import { gitRunsIn } from './host-routing/git-runs-in'
 
-/** Result of a streamed git command; `stoppedEarly` is true when onStdout asked to stop before the child exited. */
-export type GitStreamResult = { stoppedEarly: boolean }
+export type { GitStreamResult, GitStreamOptions } from './git-exec-options'
 
-export type GitStreamOptions = {
-  cwd: string
-  env?: NodeJS.ProcessEnv
-  wslDistro?: string
-  preferWslDirectGit?: boolean
-  signal?: AbortSignal
-  /** Byte backstop; defaults to DEFAULT_GIT_MAX_BUFFER. */
-  maxBuffer?: number
-  /** Explicit wall-clock deadline; read commands default to the production backstop. */
-  timeoutMs?: number
-  /** Overrides only the default read deadline in tests. */
-  timeoutMsForTest?: number
-  admissionTier?: GitAdmissionTier
-  /**
-   * Called for each decoded stdout chunk. Return true to stop: the child is
-   * killed and the promise resolves with stoppedEarly=true.
-   */
-  onStdout: (chunk: string) => boolean | void
-}
-
-/**
- * Stream a git command's stdout incrementally instead of buffering it whole.
- *
- * Why: output larger than V8's max string (e.g. status on a repo with a huge
- * un-ignored folder) crashes the process when buffered; streaming keeps memory
- * bounded and lets the parser stop git early. Built on gitSpawn for WSL routing.
- */
+/** Stream bounded stdout so large repositories cannot overflow V8 and parsers can stop early. */
 export async function gitStreamStdout(
   args: string[],
-  options: GitStreamOptions
+  callerOptions: GitStreamOptions
 ): Promise<GitStreamResult> {
+  const options = routeLocalGitOptions(callerOptions)
   const maxBuffer = options.maxBuffer ?? DEFAULT_GIT_MAX_BUFFER
   const timeoutMs = gitCommandTimeoutMs(args, options.timeoutMs, options.timeoutMsForTest)
-  return withGitSpan({ args, cwd: options.cwd }, async (span) => {
+  return runAdmittedWslGit(options, () => streamInSpan(args, options, maxBuffer, timeoutMs))
+}
+
+function streamInSpan(
+  args: string[],
+  options: GitStreamOptions,
+  maxBuffer: number,
+  timeoutMs: number | undefined
+): Promise<GitStreamResult> {
+  const meta = { args, cwd: options.cwd, admissionTier: options.admissionTier }
+  return withGitSpan(meta, async (span) => {
     const checkoutRoutingReady = pendingWslDriveCheckoutGitRouting(args, options)
     if (checkoutRoutingReady) {
       await checkoutRoutingReady
@@ -96,6 +89,7 @@ export async function gitStreamStdout(
       signal: options.signal
     })
     span?.setAttribute('git.queue_wait_ms', grant.queueWaitMs)
+    span?.setAttribute('git.runs_in', gitRunsIn(resolved))
     const terminationState: { current: Promise<void> | null } = { current: null }
     const stream = (command: ResolvedCommand): Promise<GitStreamResult> =>
       new Promise<GitStreamResult>((resolve, reject) => {
@@ -111,8 +105,23 @@ export async function gitStreamStdout(
           wslDistro: options.wslDistro,
           windowsHide: true
         }
+        const ownedPosixGroup = process.platform !== 'win32' && !command.wsl
         let child: ChildProcess
-        if (command.wslMode === 'direct-git') {
+        if (ownedPosixGroup) {
+          child = spawnNativeProcess(
+            command.binary,
+            command.args,
+            {
+              cwd: command.cwd,
+              env: untranslatedGitOutputEnv(spawnOptions.env),
+              stdio,
+              windowsHide: true,
+              detached: true
+            },
+            undefined,
+            recordSubprocessSpawn
+          )
+        } else if (command.wslMode === 'direct-git') {
           const spawnStartedAt = performance.now()
           child = spawn(command.binary, command.args, {
             cwd: command.cwd,
@@ -124,6 +133,8 @@ export async function gitStreamStdout(
         } else {
           child = gitSpawn(args, spawnOptions)
         }
+        let stopping = false
+        let groupTermination: ReturnType<typeof createPosixGroupTermination> | undefined
         let terminationReported = false
         terminationState.current = new Promise<void>((resolveTermination) => {
           const reportTermination = (): void => {
@@ -133,7 +144,12 @@ export async function gitStreamStdout(
             terminationReported = true
             resolveTermination()
           }
-          child.once('close', reportTermination)
+          if (ownedPosixGroup) {
+            groupTermination = createPosixGroupTermination(child, reportTermination)
+            child.once('close', groupTermination.close)
+          } else {
+            child.once('close', reportTermination)
+          }
           child.once('error', () => {
             if (!child.pid) {
               reportTermination()
@@ -141,13 +157,29 @@ export async function gitStreamStdout(
           })
         })
 
+        // Retain an error observer after parser cleanup, including failed-spawn races.
+        child.on('error', () => {})
+        child.stdout?.on('error', () => {})
+        child.stderr?.on('error', () => {})
+        const stopChild = (): void => {
+          if (stopping) {
+            return
+          }
+          stopping = true
+          if (groupTermination) {
+            void groupTermination.stop()
+          } else {
+            void killSpawnedCommandTree(child)
+          }
+        }
+
         let settled = false
         let timeoutTimer: ReturnType<typeof setTimeout> | null = null
         let stoppedEarly = false
         let stdoutBytes = 0
         let stderr = ''
         let stderrBytes = 0
-        // Why: decode statefully so a multibyte UTF-8 char split across chunks isn't corrupted into replacement chars.
+        // Decode across chunk boundaries to preserve split UTF-8 characters.
         const stdoutDecoder = new StringDecoder('utf8')
         const stderrDecoder = new StringDecoder('utf8')
 
@@ -161,7 +193,6 @@ export async function gitStreamStdout(
           child.off('error', onError)
           child.off('close', onClose)
           options.signal?.removeEventListener('abort', onAbort)
-          // Flush any bytes the decoders were holding for an incomplete sequence.
           stdoutDecoder.end()
           stderrDecoder.end()
         }
@@ -181,7 +212,7 @@ export async function gitStreamStdout(
         function onStdoutData(chunk: Buffer): void {
           stdoutBytes += chunk.byteLength
           if (stdoutBytes > maxBuffer) {
-            void killSpawnedCommandTree(child)
+            stopChild()
             finish(new Error('git stdout exceeded maxBuffer.'))
             return
           }
@@ -189,32 +220,34 @@ export async function gitStreamStdout(
           if (decoded.length === 0) {
             return
           }
-          // Why: a throw from the caller's parser would escape this event handler and crash main; convert to a rejection.
+          // Reject parser failures rather than letting stream callbacks crash main.
           let shouldStop: boolean | void
           try {
             shouldStop = options.onStdout(decoded)
           } catch (error) {
-            void killSpawnedCommandTree(child)
+            stopChild()
             finish(error instanceof Error ? error : new Error(String(error)))
             return
           }
           if (shouldStop === true) {
-            // Parser hit its limit: kill git and resolve cleanly with the partial output.
             stoppedEarly = true
-            void killSpawnedCommandTree(child)
+            stopChild()
             finish(null)
           }
         }
         function onStderrData(chunk: Buffer): void {
           stderrBytes += chunk.byteLength
-          if (stderrBytes > maxBuffer) {
-            void killSpawnedCommandTree(child)
+          if (stderrBytes > (options.maxStderrBuffer ?? maxBuffer)) {
+            stopChild()
             finish(new Error('git stderr exceeded maxBuffer.'))
             return
           }
           stderr += stderrDecoder.write(chunk)
         }
         function onError(error: Error): void {
+          if (groupTermination && child.pid) {
+            stopChild()
+          }
           finish(error)
         }
         function onClose(code: number | null): void {
@@ -225,16 +258,12 @@ export async function gitStreamStdout(
           finish(Object.assign(new Error(`git exited with ${code}: ${stderr}`), { code }))
         }
         function onAbort(): void {
-          if (!child.pid) {
-            // Why: failed spawn reports ENOENT after abort cleanup; retain a listener so it cannot crash main.
-            child.once('error', () => {})
-          }
-          void killSpawnedCommandTree(child)
+          stopChild()
           finish(createAbortError())
         }
 
         function onTimeout(): void {
-          void killSpawnedCommandTree(child)
+          stopChild()
           finish(new GitCommandTimeoutError(timeoutMs as number))
         }
 

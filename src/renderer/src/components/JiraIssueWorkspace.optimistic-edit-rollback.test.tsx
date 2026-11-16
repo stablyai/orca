@@ -12,7 +12,7 @@ import {
 } from './__mocks__/jira-issue-workspace-edit-fixture'
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import type { JiraIssue } from '../../../shared/jira-types'
+import type { JiraIssue } from '../../../shared/jira/jira-types'
 
 describe('JiraIssueWorkspace rollback baselines', () => {
   it.each([

@@ -2,8 +2,8 @@ import { useEffect, useId, useRef } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '../store'
-import { translate } from '@/i18n/i18n'
-import { shouldFocusMobileDriverAction } from './terminal-pane/mobile-driver-overlay-focus'
+import { useTranslate } from '@/i18n/use-translate'
+import { shouldFocusMobileDriverAction } from './terminal-pane/mobile-driver/mobile-driver-overlay-focus'
 import { awaitsCodexRestartAnswer } from './codex-restart-notice-state'
 
 function isInsideHiddenTree(element: HTMLElement): boolean {
@@ -26,23 +26,21 @@ export default function CodexRestartChip({
   onReturnFocus: () => void
   shouldFocus?: boolean
 }): React.JSX.Element | null {
-  // Why: one O(1) selector per mounted pane stays idle when unrelated PTY maps
-  // churn and prevents a worktree-wide scan for every split pane.
+  // Select by PTY in O(1) so split panes ignore unrelated map churn without per-pane workspace scans.
   const restartNotice = useAppStore((state) => state.codexRestartNoticeByPtyId[ptyId])
   if (!restartNotice || !awaitsCodexRestartAnswer(restartNotice)) {
     return null
   }
 
   const handleRestart = (): void => {
-    useAppStore.getState().queueCodexPaneRestarts([ptyId])
+    useAppStore.getState().queuePaneAccountRestarts([ptyId], 'codex')
     onReturnFocus()
   }
 
   const handleDismiss = (): void => {
     useAppStore.getState().dismissCodexRestartNotices([ptyId])
     onReturnFocus()
-    // Why: notices are renderer-only, so the persisted launch record must be
-    // cleared for this pane or the startup sweep re-raises its answered prompt.
+    // Clear the persisted launch record too, or startup recreates this answered renderer notice.
     void window.api.codexAccounts.forgetStalePanes({ ptyIds: [ptyId] }).catch((err: unknown) => {
       console.warn('Failed to forget dismissed Codex pane account:', err)
     })
@@ -75,15 +73,12 @@ function LoudRestartOverlay({
   onDismiss: () => void
   onRestart: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const titleId = useId()
   const bodyId = useId()
   const rootRef = useRef<HTMLDivElement>(null)
 
-  // Why: move focus to the card only when the user isn't typing elsewhere;
-  // unconditional autoFocus would steal keys from an active composer.
-  //
-  // The target is the dialog itself, never Restart, so the next Space/Enter
-  // cannot destroy a session the user did not explicitly choose. See #10863.
+  // Focus only if the user is not typing elsewhere. Focus the dialog, never Restart, so Space/Enter cannot destroy an unchosen session (#10863).
   useEffect(() => {
     if (!isVisible || !shouldFocus) {
       return
@@ -108,8 +103,8 @@ function LoudRestartOverlay({
     <div
       ref={rootRef}
       role="dialog"
-      // Why: programmatically focusable so the card can take focus itself, but
-      // out of the Tab order — Tab from here still reaches Restart/Keep.
+      data-overlay-focus-scope="parent"
+      // Allow programmatic focus while keeping Tab navigation on Restart/Keep.
       tabIndex={-1}
       aria-live="assertive"
       aria-labelledby={titleId}
@@ -135,10 +130,10 @@ function LoudRestartOverlay({
           </div>
           <div className="flex min-w-0 flex-1 flex-col gap-1">
             <div className="text-xs font-medium uppercase tracking-wide text-foreground">
-              {translate('auto.components.CodexRestartChip.d3e8a1f4b2', 'Account switched')}
+              {t('auto.components.CodexRestartChip.d3e8a1f4b2', 'Account switched')}
             </div>
             <div id={titleId} className="text-base font-semibold leading-tight">
-              {translate(
+              {t(
                 'auto.components.CodexRestartChip.a4c8e1b2f7',
                 'Codex is still signed in as {{value0}}',
                 { value0: restartNotice.previousAccountLabel }
@@ -147,7 +142,7 @@ function LoudRestartOverlay({
           </div>
         </div>
         <div id={bodyId} className="text-sm leading-relaxed text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.CodexRestartChip.9375620cc3',
             'Restart this session to use {{value0}}. It stays on the previous account until you do.',
             { value0: restartNotice.nextAccountLabel }
@@ -155,11 +150,11 @@ function LoudRestartOverlay({
         </div>
         <div className="mt-1 flex flex-wrap justify-end gap-2">
           <Button type="button" variant="outline" size="sm" onClick={onDismiss}>
-            {translate('auto.components.CodexRestartChip.6133594b12', 'Keep old account')}
+            {t('auto.components.CodexRestartChip.6133594b12', 'Keep old account')}
           </Button>
           <Button type="button" variant="default" size="sm" onClick={onRestart}>
             <RefreshCw />
-            {translate('auto.components.CodexRestartChip.c72a5fb234', 'Restart')}
+            {t('auto.components.CodexRestartChip.c72a5fb234', 'Restart')}
           </Button>
         </div>
       </div>

@@ -110,11 +110,7 @@ export async function measureActiveTerminalWheelScroll(page: Page): Promise<Scro
   }
 
   const eventLoop = await page.evaluateHandle((sampleMs) => {
-    // Why: on shared two-worker CI shards a single OS-scheduler starvation can
-    // spike one tick's drift without any real event-loop regression. Report the
-    // second-worst drift so a lone spike is tolerated, while sustained blocking
-    // (two or more over-budget ticks — the actual regression) still trips the
-    // gate. A plain Math.max makes this a CPU lottery on loaded runners.
+    // Report second-worst drift so one shared-runner starvation spike cannot fail the gate; repeated blocking still does.
     let worstDriftMs = 0
     let secondWorstDriftMs = 0
     let lastTick = performance.now()

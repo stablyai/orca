@@ -5,6 +5,7 @@ export type HangWatchdogDetectionLoopConfig = {
   onHangDetected: (unresponsiveMs: number) => void
   /** Heartbeats resumed after a detected hang — the main thread was stalled, not deadlocked. */
   onHangResolved: (unresponsiveMs: number) => void
+  onWatchdogGap?: (gapMs: number, startedAt: number) => void
 }
 
 export type HangWatchdogDetectionLoop = {
@@ -30,15 +31,19 @@ export function createHangWatchdogDetectionLoop(
     tick: () => {
       const now = config.now()
       const tickGap = now - lastTickAt
-      // Why: advance the tick clock even while a hang is outstanding, or the first tick after the
-      // stall clears reads as a huge gap and gets misread as system sleep.
+      // Advance while hung so recovery cannot be misclassified as a long system-sleep gap.
       lastTickAt = now
-      if (detected) {
+      // Sleep, process suspension and observer starvation are indistinguishable here.
+      if (tickGap > config.checkIntervalMs * 3) {
+        if (tickGap > config.timeoutMs) {
+          config.onWatchdogGap?.(tickGap, now - tickGap)
+        }
+        if (!detected) {
+          lastHeartbeatAt = now
+        }
         return
       }
-      // Why: system sleep suspends this process too; a huge tick gap means suspension, not a parent hang, so restart the wait from scratch.
-      if (tickGap > config.checkIntervalMs * 3) {
-        lastHeartbeatAt = now
+      if (detected) {
         return
       }
       const unresponsiveMs = now - lastHeartbeatAt

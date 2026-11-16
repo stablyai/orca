@@ -32,16 +32,17 @@ type GitHubProviderSelectionInput = Pick<
 >
 
 import { useCallback } from 'react'
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
-import { resolveGitHubWorkItemIdentity } from '@/lib/github-work-item-identity'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
+import { resolveGitHubWorkItemIdentity } from '../../../../shared/new-workspace/github-work-item-identity'
+import '@/components/sidebar/workspace-creation/folder/folder-workspace-source-repos'
 import {
-  toGitHubLinkedWorkItem,
-  getLinkedItemDisplayName
-} from '@/components/sidebar/folder-workspace-composer-helpers'
-import { shouldApplyWorkspaceSourceAutoName } from '../../../../shared/new-workspace/workspace-source'
-import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
+  buildGitHubWorkspaceSource as toGitHubLinkedWorkItem,
+  shouldApplyWorkspaceSourceAutoName
+} from '../../../../shared/new-workspace/workspace-source'
+import { getLinkedItemDisplayName } from '@/components/sidebar/workspace-creation/folder/folder-workspace-source-selection'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import { resolveGitHubPrStartPointForRepo } from '@/lib/github-pr-start-point'
+import { resolveGitHubPrStartPointForRepo } from '@/lib/source-control/review/github-pr-start-point'
 import { getForkPushWarning } from '../fork-push-warning'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
@@ -113,7 +114,7 @@ export function useGitHubProviderSelection(input: GitHubProviderSelectionInput) 
       setBranchNameOverridePreservesNameEdits(false)
       setForkPushWarning(null)
       branchAutoNameRef.current = ''
-      // Why: provider items can come from a different source host than the run host — resolve refs against the run repo, keep item metadata for provider identity.
+      // Resolve checkout refs against the run repo while preserving provider metadata from its possibly different source host.
       const runRepo = selectedRepo ?? eligibleRepos.find((repo) => repo.id === item.repoId)
       applyLinkedWorkItem(normalizedItem)
       if (identity.type !== 'pr' || !runRepo) {
@@ -157,7 +158,7 @@ export function useGitHubProviderSelection(input: GitHubProviderSelectionInput) 
             result.compareBaseRef,
             { sourceAlreadyLinked: true }
           )
-          // Why: a fork PR push lands on the contributor's fork; without maintainer-edits allowed GitHub rejects it, so warn up front.
+          // Fork pushes require maintainer edits; warn before GitHub rejects them.
           setForkPushWarning(getForkPushWarning(result))
         })
         .catch((error: unknown) => {

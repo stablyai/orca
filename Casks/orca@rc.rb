@@ -8,7 +8,7 @@ cask "orca@rc" do
   url "https://github.com/stablyai/orca/releases/download/v#{version}/orca-macos-#{arch}.dmg"
   name "Orca RC"
   desc "IDE for orchestrating AI coding agents across terminals and worktrees"
-  homepage "https://onorca.dev/"
+  homepage "https://orca.dev/"
 
   livecheck do
     url "https://github.com/stablyai/orca"
@@ -26,24 +26,26 @@ cask "orca@rc" do
     end
   end
 
-  # Why: RC installs should follow Orca's prerelease-aware updater instead of
-  # waiting for Homebrew metadata churn between frequent release candidates.
+  # Use Orca’s prerelease-aware updater between frequent RCs.
   auto_updates true
   conflicts_with cask: "orca"
-  depends_on macos: :big_sur
+  depends_on macos: :ventura
 
   app "Orca.app"
 
-  # Why: expose the bundled `orca` CLI on PATH at install time (Homebrew symlinks
-  # this into its already-on-PATH bin dir). Without it, the CLI is only registered
-  # by the in-app "Install CLI" action, which a headless host can never trigger —
-  # so `orca serve` on a server would be unreachable from the shell. The shim
-  # resolves the real app by walking symlinks, so the Homebrew symlink works.
+  # Expose the symlink-resolving bundled CLI on PATH so headless hosts can use orca serve without the in-app installer.
   binary "#{appdir}/Orca.app/Contents/Resources/bin/orca"
 
-  # Why: Orca writes user data under ~/.orca (worktrees, agent state) and
-  # Electron's standard userData directories. Zap removes everything the app
-  # creates during normal use so `brew uninstall --zap` is a clean slate.
+  # depends_on can't say 13.4, and Homebrew upgrades auto_updates casks past the in-app updater's macOS gate.
+  preflight_steps do
+    run "/bin/sh", args: [
+      "-c",
+      'case "$(/usr/bin/sw_vers -productVersion)" in 13|13.[0-3]|13.[0-3].*) ' \
+      'echo "Orca needs macOS 13.4 or later. Update macOS to upgrade Orca." >&2; exit 1;; esac',
+    ]
+  end
+
+  # Zap app-created ~/.orca and Electron userData for a clean uninstall.
   zap trash: [
     "~/.orca",
     "~/Library/Application Support/Orca",

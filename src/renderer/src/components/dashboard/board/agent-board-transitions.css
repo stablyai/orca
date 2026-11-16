@@ -1,0 +1,41 @@
+/* Popout-only document-global card transitions; unique agentcard-* names animate moves without affecting main. */
+
+::view-transition-group(*) {
+  animation-duration: 260ms;
+  animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* Columns stay fixed; suppress the root cross-fade to avoid doubled lane heights. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0s;
+}
+
+/* Moving cards have old/new images; :only-child identifies entering/leaving cards for fade/scale. */
+@keyframes agent-card-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+@keyframes agent-card-exit {
+  to {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+::view-transition-new(*):only-child {
+  animation: 240ms cubic-bezier(0.2, 0, 0, 1) both agent-card-enter;
+}
+::view-transition-old(*):only-child {
+  animation: 180ms cubic-bezier(0.4, 0, 1, 1) both agent-card-exit;
+}
+
+/* Guard pseudo animations as well as JS startViewTransition for reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
