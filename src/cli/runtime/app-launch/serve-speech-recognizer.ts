@@ -1,5 +1,5 @@
 import { dirname, join } from 'node:path'
-import { hasSpeechEnginePackage } from '../../../shared/speech-recognizer-package'
+import { hasSpeechEnginePackage } from '../../../shared/speech/native-recognizer/speech-recognizer-package'
 
 /**
  * The installed app's node_modules holding transcribe-cpp, for orcad's on-device dictation

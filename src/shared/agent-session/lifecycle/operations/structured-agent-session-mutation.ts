@@ -1,4 +1,4 @@
-import { sha256 } from '../../../sha256'
+import { sha256 } from '../../../hashing/sha256'
 import type {
   StructuredAgentSessionFirstMessage,
   StructuredAgentSessionForkSource,

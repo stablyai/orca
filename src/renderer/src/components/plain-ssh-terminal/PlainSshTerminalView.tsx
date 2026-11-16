@@ -21,7 +21,7 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type {
   PlainSshTerminalEvent,
   PlainSshTerminalOpenResult
-} from '../../../../shared/plain-ssh-terminal'
+} from '../../../../shared/terminal/runtime/plain-ssh-terminal'
 
 export type PlainSshTerminalPhase =
   | { kind: 'opening' }

@@ -57,8 +57,8 @@ export function createAgentStatusProviderSessionActions(
       let removedLiveStatus = false
       settleAttentionRemovedBy(set, get, () =>
         set((s, changedPaneKeys) => {
-          const existingStatus = s.agentStatusByPaneKey[paneKey]
           const existingRecord = s.sleepingAgentSessionsByPaneKey[paneKey]
+          const existingStatus = s.agentStatusByPaneKey.get(paneKey)
           if (
             (existingStatus && updatedAt < existingStatus.updatedAt) ||
             (existingRecord && updatedAt < existingRecord.updatedAt)
@@ -130,18 +130,10 @@ export function createAgentStatusProviderSessionActions(
           }
           removedLiveStatus = existingStatus !== undefined
           const nextLive = removedLiveStatus
-            ? { ...s.agentStatusByPaneKey }
+            ? s.agentStatusByPaneKey.replace([[paneKey, null]])
             : s.agentStatusByPaneKey
           if (removedLiveStatus) {
             changedPaneKeys.add(paneKey)
-            delete nextLive[paneKey]
-          }
-          const nextRetained =
-            paneKey in s.retainedAgentsByPaneKey
-              ? { ...s.retainedAgentsByPaneKey }
-              : s.retainedAgentsByPaneKey
-          if (nextRetained !== s.retainedAgentsByPaneKey) {
-            delete nextRetained[paneKey]
           }
           const retiredPaneKeys = new Set([paneKey])
           // Identity mismatch clears sleeping launch config; clear registry too or returning old identity reuses stale args/env.
@@ -159,16 +151,22 @@ export function createAgentStatusProviderSessionActions(
             nextLaunchConfigs = { ...nextLaunchConfigs }
             delete nextLaunchConfigs[paneKey]
           }
-          const nextConversations = projectConversation(s, { ...record, agentType: agent })
+          const nextConversations = projectConversation(
+            s,
+            { ...record, agentType: agent },
+            undefined,
+            undefined,
+            { identityOnly: true, providerSession }
+          )
           return {
             agentStatusByPaneKey: nextLive,
             ...(nextConversations !== s.agentConversationsByPaneKey
               ? { agentConversationsByPaneKey: nextConversations }
               : {}),
-            retainedAgentsByPaneKey: nextRetained,
-            sleepingAgentSessionsByPaneKey: replaceRecordEntries(s.sleepingAgentSessionsByPaneKey, [
-              [paneKey, record]
-            ]),
+            sleepingAgentSessionsByPaneKey: replaceRecordEntries<SleepingAgentSessionRecord>(
+              s.sleepingAgentSessionsByPaneKey,
+              [[paneKey, record]]
+            ),
             agentLaunchConfigByPaneKey: nextLaunchConfigs,
             acknowledgedAgentsByPaneKey: removePaneKeys(
               s.acknowledgedAgentsByPaneKey,

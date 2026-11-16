@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getEffectiveKeybindingsForAction } from '../../../shared/keybindings'
+import { getEffectiveKeybindingsForAction } from '../../../shared/keybindings/effective'
 import { installApi } from './web-preload-api-test-harness'
 
 describe('web keybindings preload API', () => {

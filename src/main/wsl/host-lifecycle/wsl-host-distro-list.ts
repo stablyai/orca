@@ -1,5 +1,5 @@
 /** List user distros from Lxss (including WSL version), then probe running state without booting any. Exclude Docker internals. */
-import type { WslHostDistro } from '../../../shared/wsl-host-types'
+import type { WslHostDistro } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import { filterUserWslDistros } from '../discovery/wsl-distro-list-output'
 import {
   readConfirmedRunningWslDistros,

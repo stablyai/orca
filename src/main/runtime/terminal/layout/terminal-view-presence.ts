@@ -5,10 +5,10 @@ import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-
 import type { RuntimeTerminalWriteOptions } from '../input/runtime-terminal-writer'
 import type { WriteSettlement } from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 
-import type { RuntimeTerminalDriverState } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeTerminalDriverState } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { addListenerToMap } from './terminal-listener-map'
 import { notifyRuntimeListeners } from '../../events/runtime-listener-delivery'
-import type { RuntimeTerminalAttention } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalAttention } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { RuntimeTerminalBufferSnapshot } from '../records/runtime-terminal-state-records'
 import { AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS } from '../output/provider-snapshot-budget'
 import { assertTerminalInputWithinLimitWithYield } from '../input/terminal-send-payload'

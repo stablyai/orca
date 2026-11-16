@@ -16,9 +16,9 @@ import {
   type Stats
 } from 'node:fs'
 import { join } from 'node:path'
-import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../../../shared/errors/definitive-filesystem-absence'
 import { writeFileAtomically } from '../../../filesystem/atomic-file-publication'
-import { renameFileWithWindowsRetry } from '../../../../shared/windows-retry-file-operations'
+import { renameFileWithWindowsRetry } from '../../../../shared/file-write/windows-retry-file-operations'
 import {
   ClaudeProfileSurfaceError,
   warnClaudeProfile,

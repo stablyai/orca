@@ -11,7 +11,7 @@ import type {
   GitLabPipelineJob,
   GitLabWorkItem,
   MRComment
-} from '../../../shared/gitlab-types'
+} from '../../../shared/gitlab/gitlab-types'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export type JobTraceState = {

@@ -21,7 +21,7 @@ import {
   readTerminals,
   sessionTabsBaseline
 } from './helpers/layout-compat-baseline'
-import type { RuntimeTerminalCreate } from '../../src/shared/runtime-terminal-contracts'
+import type { RuntimeTerminalCreate } from '../../src/shared/terminal/runtime/runtime-terminal-create-contract'
 
 // Panes of the shown tab; other tabs keep theirs mounted but hidden.
 const PANE = '.pane[data-leaf-id]:visible'

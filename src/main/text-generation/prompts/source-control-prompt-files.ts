@@ -2,9 +2,9 @@ import { randomUUID } from 'node:crypto'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { getUtf8ChunkEndIndex } from '../../../shared/utf8-byte-limits'
-import { encodePosixPrintfRecords } from '../../../shared/posix-printf-encoding'
-import { toWindowsWslUncPath } from '../../../shared/wsl-paths'
+import { getUtf8ChunkEndIndex } from '../../../shared/text/utf8-byte-limits'
+import { encodePosixPrintfRecords } from '../../../shared/shell/launch/posix-printf-encoding'
+import { toWindowsWslUncPath } from '../../../shared/file-access/wsl-paths'
 import type { CommitMessagePlan } from '../../../shared/source-control/ai/generation/commit-message-plan'
 
 // Reserve the transport signature under the native text attachment cap.

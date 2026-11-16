@@ -1,4 +1,4 @@
-import type { CodeEditorThemeChoice } from '../../../../../shared/plugin-appearance-settings-types'
+import type { CodeEditorThemeChoice } from '../../../../../shared/plugins/appearance/plugin-appearance-settings-types'
 import type { PluginThemeRegistration } from '../../../../../shared/plugins/artifacts/plugin-theme-artifact'
 import { pluginAppThemeCssFallback } from '../../../../../shared/plugins/artifacts/plugin-theme-css-fallbacks'
 import { derivePluginMonacoTheme, type PluginMonacoTheme } from './plugin-monaco-theme'

@@ -3,7 +3,7 @@ import { resolveClientEnvironmentInfo } from '@/app-shell/platform/client-enviro
 import {
   appendClientEnvironmentFooter,
   type ClientEnvironmentInfo
-} from '../../../../../shared/client-environment-info'
+} from '../../../../../shared/feedback/client-environment-info'
 
 type FeedbackSelection = {
   feedback: string

@@ -1,4 +1,4 @@
-import type { LocalLogTailReadResult } from '../../../../../../shared/local-log-tail-types'
+import type { LocalLogTailReadResult } from '../../../../../../shared/file-content/local-log-tail-types'
 import { decodeBase64Bytes } from '@/lib/base64-bytes'
 
 export const LOCAL_LOG_TAIL_MAX_BYTES = 50 * 1024 * 1024

@@ -1,6 +1,6 @@
 // Emit only error-class enums, never interpolated paths or branch names; keep reviewed matches narrow and unknown otherwise.
 
-import type { WorkspaceCreateErrorClass } from '../../shared/telemetry-events'
+import type { WorkspaceCreateErrorClass } from '../../shared/telemetry/schemas/telemetry-property-schemas'
 
 export function classifyWorkspaceCreateError(error: unknown): WorkspaceCreateErrorClass {
   const text = (error instanceof Error ? error.message : '').toLowerCase()

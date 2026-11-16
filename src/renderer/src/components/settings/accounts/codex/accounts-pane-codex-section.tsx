@@ -5,7 +5,7 @@ import { selectCodexProviderAccount } from '@/runtime/provider-accounts/observat
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
 import { Label } from '../../../ui/label'
-import { OpenAIIcon } from '../../../status-bar/icons'
+import { OpenAIIcon } from '../../../status-bar/accounts/provider-icons'
 import { CodexLoginLinkNotice } from './CodexLoginLinkNotice'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { ACCOUNTS_SECTION_IDS, getAccountsCodexSearchEntries } from '../accounts-search'

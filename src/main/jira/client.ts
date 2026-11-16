@@ -1,7 +1,6 @@
 import { taskProviderFailure } from '../../shared/work-items/task-provider-failure'
 import { CredentialDecryptionError } from '../credentials/integration-credential-file'
 import type {
-  JiraAuthType,
   JiraConnectArgs,
   JiraConnectionStatus,
   JiraSite,
@@ -27,7 +26,13 @@ import {
   jiraRequest,
   type JiraClientForSite
 } from './authenticated-request'
-import { getSiteId, normalizeJiraSiteUrl, siteToViewer, toViewer } from './site-identity'
+import {
+  getSiteId,
+  normalizeJiraSiteUrl,
+  resolveJiraAuthType,
+  siteToViewer,
+  toViewer
+} from './site-identity'
 import { verifyJiraCredentials } from './credential-verification'
 
 export function getClients(selection?: JiraSiteSelection | null): JiraClientForSite[] {
@@ -86,7 +91,7 @@ export async function connect(
     return taskProviderFailure('jira.invalidSiteUrl', 'Enter a valid Jira site URL.')
   }
 
-  const authType: JiraAuthType = args.authType === 'server' ? 'server' : 'cloud'
+  const authType = resolveJiraAuthType(siteUrl, args.authType)
   const email = args.email.trim()
   const apiToken = args.apiToken.trim()
   if (authType === 'server') {

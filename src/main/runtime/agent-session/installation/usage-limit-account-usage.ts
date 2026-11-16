@@ -2,7 +2,7 @@ import { agentSessionAccountHomePath } from '../../../../shared/agent-session/li
 import { realpath } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { nativeChatShellEnvironmentPolicy } from '../../../../shared/native-chat/native-chat-shell-environment'
 import { createStructuredAgentEnvironmentResolvers } from '../environment/structured-agent-shell-environment'

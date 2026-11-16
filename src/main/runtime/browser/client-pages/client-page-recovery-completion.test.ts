@@ -15,7 +15,7 @@ it.each([false, true])(
   'clears legacy held snapshots before its pending navigation, with modern peer=%s',
   async (withModern) => {
     const h = createRecoveryLoop(withModern ? [] : ['slow'])
-    publishRecoveryTabsGraph(h.hostRuntime)
+    await publishRecoveryTabsGraph(h.hostRuntime)
     const stream = openRecoveryTabsStream(h.hostRuntime, 'legacy-consumer')
     const peer = createRecoveryPeer(h.hostRuntime, 'modern-peer')
     try {
@@ -57,7 +57,7 @@ it.each([false, true])(
         })
       }
       expect(
-        h.hostRuntime.snapshotForClient(WORKSPACE, 'device-a').clientHostedPagesUnreconciled
+        (await h.hostRuntime.snapshotForClient(WORKSPACE, 'device-a')).clientHostedPagesUnreconciled
       ).toBe(true)
       const started = h.hold('slow')
       const attached = h.attach({ modern: false })
@@ -70,9 +70,10 @@ it.each([false, true])(
         peer.release('peer')
         await vi.waitFor(() => expect(h.authority.getPlacement('peer')?.kind).toBe('client'))
       }
-      await vi.waitFor(() =>
+      await vi.waitFor(async () =>
         expect(
-          h.hostRuntime.snapshotForClient(WORKSPACE, 'device-a').clientHostedPagesUnreconciled
+          (await h.hostRuntime.snapshotForClient(WORKSPACE, 'device-a'))
+            .clientHostedPagesUnreconciled
         ).toBeUndefined()
       )
       await vi.waitFor(() =>
@@ -111,7 +112,7 @@ it.each(['session.tabs.subscribe', 'session.tabs.subscribeAll'])(
     const replies: string[] = []
     try {
       runtime.attachWindow(1)
-      runtime.syncWindowGraph(1, {
+      await runtime.syncWindowGraph(1, {
         tabs: [],
         leaves: [],
         mobileSessionTabs: [
@@ -159,16 +160,18 @@ it.each(['session.tabs.subscribe', 'session.tabs.subscribeAll'])(
       ).toBe(true)
       vi.setSystemTime(Date.now() + 46_000)
       runtime.notifyMobileSessionTabsChanged(WORKSPACE)
-      expect(
-        replies.some(
-          (reply) =>
-            JSON.parse(reply).result?.type === 'updated' &&
-            JSON.parse(reply).result?.clientHostedPagesUnreconciled === undefined
-        )
-      ).toBe(true)
+      await vi.waitFor(() =>
+        expect(
+          replies.some(
+            (reply) =>
+              JSON.parse(reply).result?.type === 'updated' &&
+              JSON.parse(reply).result?.clientHostedPagesUnreconciled === undefined
+          )
+        ).toBe(true)
+      )
       runtime.projectedFrames = 0
       const delivered = replies.length
-      runtime.markClientHostedPagesReconciled('device-a')
+      await runtime.markClientHostedPagesReconciled('device-a')
       expect(runtime.projectedFrames).toBe(0)
       expect(replies).toHaveLength(delivered)
       stopped.abort()

@@ -5,7 +5,7 @@ import type {
   PRInfo
 } from '../../../../../../shared/github/pull-requests/pull-request-types'
 import type { GitHubRepositoryIdentity } from '../../../../../../shared/github/repositories/repository-identity'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { AppState } from '@/store/types'

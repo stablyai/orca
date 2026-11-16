@@ -3,7 +3,7 @@ import { spawnManagedProviderProcess } from '../../provider-process/managed-prov
 import { resolveProviderChildEnv } from '../../provider-process/provider-process-launch'
 import { processEnvWithoutAgentSession } from '../../../shared/agent-launch/startup/parent-agent-session-env'
 import { stderrIndicatesMissingAppServer } from './codex-app-server-capability-signal'
-import { withCliRuntimeOnPath } from '../../../shared/node-cli-command-resolution'
+import { withCliRuntimeOnPath } from '../../../shared/shell/command-resolution/node-cli-command-resolution'
 import {
   providerStderrForDisplay,
   supervisedProviderSpawnFailure

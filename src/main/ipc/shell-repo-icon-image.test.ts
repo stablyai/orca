@@ -26,7 +26,7 @@ beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'orca-repo-icon-'))
   handlers.clear()
   showOpenDialog.mockReset()
-  registerShellHandlers({ getSshTarget: () => undefined, getSettings: () => ({}) }, () => [])
+  registerShellHandlers({ getSshTarget: () => undefined, getSettings: () => ({}) }, async () => [])
 })
 
 afterEach(async () => {

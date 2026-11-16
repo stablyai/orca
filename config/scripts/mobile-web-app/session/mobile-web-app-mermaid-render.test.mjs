@@ -13,7 +13,7 @@ import {
 } from '../preview/mobile-web-app-render-harness.mjs'
 
 const mobileDir = fileURLToPath(new URL('../../../../mobile', import.meta.url))
-const diagramDir = join(mobileDir, 'src/components/pr-sidebar')
+const diagramDir = join(mobileDir, 'src/components/mermaid')
 
 const FIXTURE =
   'graph TD\n  A[Start] --> B{Choice}\n  B -->|yes| C[Ship it]\n  B -->|no| D[Fix it]\n  D --> A'

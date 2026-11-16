@@ -12,7 +12,8 @@ import { observedPRCheckRollup } from '../client/lookup/pr-refresh-outcome-assem
 import * as refresh from '../pull-requests/refresh/pr-refresh-coordinator'
 import {
   prWatchSettled,
-  prWatchNextDueAt,
+  prWatchPlanDueAt,
+  prWatchReadPlan,
   type PRWatchJob
 } from '../pull-requests/refresh/pr-refresh-watch-jobs'
 import { PREarlierHeadJobs } from './pr-earlier-head-jobs'
@@ -262,9 +263,10 @@ export class PRWatchService {
       await this.endChatWatch(prKey)
       return
     }
-    const nextDueAt = prWatchNextDueAt(outcome)
-    if (nextDueAt !== null) {
-      refresh.schedulePRWatchRead({ prKey }, active, nextDueAt, { defer: true })
+    const plan = prWatchReadPlan(outcome)
+    const nextDueAt = plan && prWatchPlanDueAt(plan)
+    if (plan && nextDueAt !== null) {
+      refresh.schedulePRWatchRead({ prKey }, active, nextDueAt, { defer: true, plan })
     }
   }
 
@@ -310,9 +312,8 @@ export class PRWatchService {
       (key) => this.endChatWatch(key)
     )
   }
-  private readonly failed = (error: unknown): void => {
+  private readonly failed = (error: unknown): void =>
     this.deps.logger.warn('updating CI-line watches failed', { scope: 'pr-watch', error })
-  }
 
   private inOrder<T>(prKey: string, run: () => Promise<T>): Promise<T> {
     return orderPRWatchOutcome(this.outcomes, prKey, run)

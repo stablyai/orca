@@ -12,19 +12,22 @@ import { isShellProcess } from '../../../shared/agent-status/process/shell-proce
 import {
   getCommandTokenPathBasename,
   getFirstCommandToken
-} from '../../../shared/command-token-scanner'
+} from '../../../shared/shell/command-resolution/command-token-scanner'
 import {
   collectDescendantsFromIndex,
   getProcessTableIndex
-} from '../../../shared/process-table-index'
-import { hasControllingTty } from '../../../shared/posix-controlling-terminal'
-import { unreadableArgvName, type ProcessTableRow } from '../../../shared/process-table-snapshot'
+} from '../../../shared/process-observation/tables/process-table-index'
+import { hasControllingTty } from '../../../shared/terminal/pty/native-process/posix-controlling-terminal'
+import {
+  unreadableArgvName,
+  type ProcessTableRow
+} from '../../../shared/process-observation/tables/process-table-snapshot'
 import {
   getFreshProcessTableSnapshot,
   getProcessTableSnapshot
-} from '../../../shared/process-table-snapshot-reader'
-import { selectForegroundProcessCandidate } from '../../../shared/foreground-process-selection'
-import { resolveOuterWrapperForegroundProcess } from '../../../shared/foreground-wrapper-agent'
+} from '../../../shared/process-observation/tables/process-table-snapshot-reader'
+import { selectForegroundProcessCandidate } from '../../../shared/agent-status/process/foreground-process-selection'
+import { resolveOuterWrapperForegroundProcess } from '../../../shared/agent-status/process/foreground-wrapper-agent'
 import { recognizeAgentProcess } from '../../../shared/agent-status/process/agent-process-recognition'
 import {
   resolveAgentForegroundProcessWithAvailability,

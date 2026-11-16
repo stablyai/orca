@@ -1,7 +1,7 @@
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
-import { selectHostBalancedPage } from '../../../../shared/host-balanced-listing-page'
-import type { RuntimeListingHostScope } from '../../../../shared/runtime-listing-host-scope'
+import { selectHostBalancedPage } from '../../../../shared/execution-host/host-balanced-listing-page'
+import type { RuntimeListingHostScope } from '../../../../shared/execution-host/runtime-listing-host-scope'
 
 /** Balance capped pages across hosts; otherwise late-sorting SSH rows vanish and absence looks like an empty host (#18104; ssh-execution-boundary.md). */
 export function buildWorktreeListingPage<TRow extends { hostId?: ExecutionHostId }>(

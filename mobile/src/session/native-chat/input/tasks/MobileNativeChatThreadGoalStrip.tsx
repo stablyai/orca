@@ -3,7 +3,7 @@ import { Pressable, ScrollView, Text, View } from 'react-native'
 import { ChevronDown, Goal, Pause, Play, Trash2 } from 'lucide-react-native'
 import {
   agentSessionThreadGoalElapsedSeconds,
-  agentSessionThreadGoalStatusChange
+  agentSessionThreadGoalOfferedStatusChange
 } from '../../../../../../src/shared/agent-session/agent-session-thread-goal'
 import {
   agentSessionThreadGoalStatusLabel,
@@ -15,7 +15,6 @@ import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
-import { COMPOSER_TUCK } from '../../composer/field/mobile-native-chat-composer-styles'
 import { queuedMessageStyles } from '../queued-messages/mobile-native-chat-queued-message-styles'
 import type { MobileStructuredThreadGoal } from './use-mobile-structured-thread-goal'
 
@@ -56,7 +55,13 @@ export function MobileNativeChatThreadGoalStrip({
   const elapsed = formatAgentSessionThreadGoalElapsed(
     agentSessionThreadGoalElapsedSeconds(goal, now - threadGoal.hostClockOffsetMs, runningTurn)
   )
-  const statusChange = changes === 'host' ? agentSessionThreadGoalStatusChange(goal.status) : null
+  const statusChange =
+    changes === null
+      ? null
+      : agentSessionThreadGoalOfferedStatusChange(goal.status, {
+          hostChanges: changes === 'host',
+          agentResumes: threadGoal.agentResumes
+        })
   const toggleLabel = expanded
     ? t('chat.goal.collapse', 'Hide full goal')
     : t('chat.goal.expand', 'Show full goal')
@@ -67,7 +72,10 @@ export function MobileNativeChatThreadGoalStrip({
     </View>
   )
   return (
-    <View style={[queuedMessageStyles.box, styles.tab]} testID="thread-goal-strip">
+    <View
+      style={[queuedMessageStyles.box, queuedMessageStyles.composerTab]}
+      testID="thread-goal-strip"
+    >
       {expanded ? (
         <>
           <View style={styles.openLine}>
@@ -100,7 +108,7 @@ export function MobileNativeChatThreadGoalStrip({
                       ? t('chat.goal.pause', 'Pause')
                       : t('chat.goal.resume', 'Resume')
                   }
-                  disabled={locked}
+                  disabled={changes === 'agent' ? threadGoal.clearLocked : locked}
                   onPress={() => void threadGoal.change({ kind: 'status', status: statusChange })}
                   icon={
                     statusChange === 'paused' ? (
@@ -177,11 +185,6 @@ const LINE_MIN_HEIGHT = 34
 const CHEVRON_SIZE = 32
 
 const styles = themedStyleSheet(() => ({
-  // The queued-message box, docked on the composer's top edge and tucked under it.
-  tab: {
-    marginHorizontal: spacing.xs,
-    marginBottom: -COMPOSER_TUCK
-  },
   line: {
     minHeight: LINE_MIN_HEIGHT,
     flexDirection: 'row',

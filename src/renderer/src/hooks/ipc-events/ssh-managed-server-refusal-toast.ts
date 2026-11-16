@@ -1,5 +1,5 @@
 import { toast } from 'sonner'
-import type { SshManagedServerStatus } from '../../../../shared/ssh-types'
+import type { SshManagedServerStatus } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { translate } from '@/i18n/i18n'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { leaveBehindLine, REFUSAL_INLINE_CHARS } from '@/ssh/ssh-host-refused-move-copy'

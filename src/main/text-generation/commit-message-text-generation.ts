@@ -8,7 +8,7 @@ import type {
   GeneratedPullRequestFields,
   PullRequestDraftContext
 } from '../../shared/source-control/ai/generation/pull-request-generation'
-import type { Repo } from '../../shared/repo-types'
+import type { Repo } from '../../shared/repository/repo-types'
 import {
   resolveSourceControlAiForOperation,
   type ResolvedSourceControlAiGenerationParams

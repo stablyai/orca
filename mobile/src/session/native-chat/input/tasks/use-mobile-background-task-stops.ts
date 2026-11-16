@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import {
   structuredSessionConfirmedStopsStillListed,
   structuredSessionListedTaskRun
-} from '../../../../../../src/shared/structured-session-background-tasks-view'
+} from '../../../../../../src/shared/agent-session/view/structured-session-background-tasks-view'
 import type { MobileStructuredBackgroundTasks } from './use-mobile-structured-background-tasks'
 
 export type MobileBackgroundTaskStopping = { taskIds: ReadonlySet<string>; all: boolean }

@@ -1,5 +1,5 @@
 import { getConnectionExecutionHostId } from '../../../shared/execution-host'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import {
   worktreeHostIdentity,
   type WorktreeMetaIdentitySource

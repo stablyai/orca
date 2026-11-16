@@ -1,6 +1,7 @@
 // Per-event refill caps runaway producers; non-refilling session/consent ceilings bound aggregate volume. Reset per telemetry session and warn once per bucket so overflow cannot flood stderr.
 
-import { eventSchemas, type EventName } from '../../shared/telemetry-events'
+import { eventSchemas } from '../../shared/telemetry/telemetry-event-registry'
+import type { EventName } from '../../shared/telemetry/telemetry-event-classification'
 import { isProtectedMilestoneEvent } from './event-sampling'
 
 const PER_EVENT_DEFAULT_CAPACITY = 30

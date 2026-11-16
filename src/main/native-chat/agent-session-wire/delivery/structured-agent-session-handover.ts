@@ -13,7 +13,7 @@ import {
   providerDiagnosticOf
 } from '../../../../shared/agent-session/failures/agent-session-failure'
 import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/protocol/agent-session-execution-options'
-import { isAbortSignalReason } from '../../../../shared/abort-signal-reason'
+import { isAbortSignalReason } from '../../../../shared/concurrency/abort-signal-reason'
 import { isAgentSessionOptionRejectedError } from '../options/structured-agent-session-option-error'
 import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import { resolveHandover } from '../operations/structured-agent-session-operation-settlement'

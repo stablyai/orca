@@ -6,7 +6,10 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import * as i18n from '@/i18n/i18n'
 import * as imageEncoding from '@/lib/clipboard/images/image-blob-png'
-import { sanitizeRepoIcon, type RepoIcon } from '../../../../../../shared/repo-icon'
+import {
+  sanitizeRepoIcon,
+  type RepoIcon
+} from '../../../../../../shared/repository/appearance/repo-icon'
 import { RepositoryIconTabs } from './RepositoryIconTabs'
 import { RepositoryIconPicker } from './RepositoryIconPicker'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../../../../shared/constants'

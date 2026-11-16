@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Writable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
-import type { SshTarget } from '../../../../shared/ssh-types'
+import type { SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { quotePosixShell } from '../../../../shared/shell/launch/shell-argument-quoting'
 import {
   getSystemSshBuildArgsFromOperationOptions,
@@ -13,7 +13,7 @@ import {
 import { spawnSystemSshCommand } from '../system-ssh-command'
 import { isWindowsRemoteHost, type RemoteHostPlatform } from '../../remote-host/ssh-remote-platform'
 import { powerShellCommand } from '../../remote-exec/ssh-remote-powershell'
-import { quotePowerShellLiteral as powerShellLiteral } from '../../../../shared/powershell-native-argument'
+import { quotePowerShellLiteral as powerShellLiteral } from '../../../../shared/shell/launch/powershell-native-argument'
 import {
   awaitWithSystemSshAbort,
   throwIfAborted,

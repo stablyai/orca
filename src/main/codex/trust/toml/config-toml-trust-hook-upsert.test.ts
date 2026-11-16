@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { lstatSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { escapeRegex } from '../../../../shared/string-utils'
+import { escapeRegex } from '../../../../shared/text/regex-escaping'
 import { upsertHookTrustEntries, type CodexTrustEntry } from './config-toml-trust'
 import { escapeTomlBasicString as escapeTomlString } from '../../configuration/toml/config-toml-syntax'
 import {

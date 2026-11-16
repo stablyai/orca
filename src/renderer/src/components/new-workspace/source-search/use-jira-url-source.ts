@@ -15,7 +15,7 @@ import {
   type TaskSourceContext
 } from '../../../../../shared/work-items/task-source-context'
 import { parseExecutionHostId } from '../../../../../shared/execution-host'
-import { WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY } from '../../../../../shared/worktree-runtime-capabilities'
+import { WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import type { JiraIssue, JiraSite } from '../../../../../shared/jira/jira-types'
 import { canReuseLoadedJiraStatus, type JiraSourceConnection } from './use-jira-source-connection'
 

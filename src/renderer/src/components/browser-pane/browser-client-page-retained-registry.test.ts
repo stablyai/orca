@@ -7,7 +7,7 @@ import {
   clearBrowserGuestMetadata,
   issueBrowserGuestNavigation,
   subscribeBrowserGuestMetadata
-} from './host-guest/browser-guest-metadata-cache'
+} from './host-guest/metadata/browser-guest-metadata-cache'
 
 const PAGE: BrowserClientPageRendererIdentity = {
   partition: 'persist:route-a',

@@ -1,12 +1,12 @@
 import { Suspense, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { Github, Image, Link2 } from 'lucide-react'
-import type { RepoIcon } from '../../../../../../shared/repo-icon'
-import { CLIPBOARD_IMAGE_TOO_LARGE_ERROR } from '../../../../../../shared/clipboard-image'
+import type { RepoIcon } from '../../../../../../shared/repository/appearance/repo-icon'
+import { CLIPBOARD_IMAGE_TOO_LARGE_ERROR } from '../../../../../../shared/clipboard/clipboard-image'
 import {
   faviconUrlFromWebsite,
   MAX_REPO_ICON_UPLOAD_BYTES
-} from '../../../../../../shared/repo-icon'
+} from '../../../../../../shared/repository/appearance/repo-icon'
 import { blobToBase64, convertImageBlobToPng } from '@/lib/clipboard/images/image-blob-png'
 import { Button } from '../../../ui/button'
 import { LoadingSpinner } from '../../../LoadingSpinner'

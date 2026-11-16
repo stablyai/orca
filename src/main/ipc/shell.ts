@@ -9,12 +9,13 @@ import type {
   ShellOpenFileResult,
   ShellOpenLocalPathResult
 } from '../../shared/shell/opening/shell-open-types'
-import { MAX_REPO_ICON_SOURCE_BYTES } from '../../shared/repo-icon'
+import type { RuntimeFileOpenPosition } from '../../shared/file-access/runtime-editor-file-open'
+import { MAX_REPO_ICON_SOURCE_BYTES } from '../../shared/repository/appearance/repo-icon'
 import { IMAGE_FILE_MIME_TYPES } from '../../shared/file-preview/image-mime-types'
 import {
   repoIconPickFailure,
   type RepoIconPickResult
-} from '../../shared/repo-icon-pick-failure-copy'
+} from '../../shared/repository/appearance/repo-icon-pick-failure-copy'
 import type { Store } from '../persistence/loading-store/store'
 import {
   EXTERNAL_EDITOR_CLI_COMMAND,
@@ -23,6 +24,7 @@ import {
 } from '../external-editors/external-editor-launch'
 import { resolveRemoteSshEditorLaunchSpec } from '../external-editors/remote-ssh-editor-launch'
 import { resolveOpenInEditorCommand } from '../external-editors/open-in-editor-command'
+import { openPathInDefaultApp } from '../external-editors/default-app-location-open'
 import { toSshExecutionHostId } from '../../shared/execution-host'
 import {
   isEditorSshHostForOwner,
@@ -77,7 +79,7 @@ async function openInExternalEditor(
         ? { ok: false, reason: 'ssh-target-not-found' }
         : { ok: false, reason: 'remote-runtime-unsupported' }
     }
-    if (!isEditorSshHostForOwner(sshTarget, request.ownerHostId, listRuntimeEnvironments)) {
+    if (!(await isEditorSshHostForOwner(sshTarget, request.ownerHostId, listRuntimeEnvironments))) {
       return { ok: false, reason: 'remote-runtime-unsupported' }
     }
     if (sshTarget.owner?.type === 'on-demand-runtime') {
@@ -119,7 +121,8 @@ async function openInExternalEditor(
 async function openWithSystemDefault(
   pathValue: string,
   ownerHostId: unknown,
-  textInEditor: boolean
+  textInEditor: boolean,
+  location?: RuntimeFileOpenPosition
 ): Promise<ShellOpenFileResult> {
   if (!isLocallyOwned(ownerHostId)) {
     return 'failed'
@@ -137,7 +140,7 @@ async function openWithSystemDefault(
       shell.showItemInFolder(target.path)
       return 'revealed'
     }
-    const errorMessage = await shell.openPath(target.path)
+    const errorMessage = await openPathInDefaultApp(target.path, location)
     return errorMessage.length === 0 ? 'opened' : 'failed'
   } catch {
     return 'failed'
@@ -185,8 +188,13 @@ export function registerShellHandlers(
 
   ipcMain.handle(
     'shell:openFilePath',
-    async (_event, filePath: string, ownerHostId: unknown): Promise<boolean> =>
-      (await openWithSystemDefault(filePath, ownerHostId, false)) !== 'failed'
+    async (
+      _event,
+      filePath: string,
+      ownerHostId: unknown,
+      location?: RuntimeFileOpenPosition
+    ): Promise<boolean> =>
+      (await openWithSystemDefault(filePath, ownerHostId, false, location)) !== 'failed'
   )
 
   ipcMain.handle(
