@@ -8,7 +8,6 @@ import {
   type NativeChatLineDecoder
 } from '../../../../native-chat/transcript-tail-reader'
 import { decodeClaudeTranscriptLine } from '../../../../native-chat/transcript-decoding/transcript-line-decoders-claude'
-
 import {
   boundWorkerTranscriptMessages,
   clampWorkerTranscriptLimit

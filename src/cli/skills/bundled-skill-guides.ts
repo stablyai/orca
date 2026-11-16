@@ -304,7 +304,7 @@ const ORCA_CLI_MARKDOWN = [
   "- `ORCA agent show <id> --json` shows where one agent is (none if closed, two if resumed in two panes). A listed sleeping terminal agent shows its last state and where it wakes when its workspace is reopened.",
   "- `ORCA agent read <id> --json` reads what the agent said: a chat's history or a terminal agent's transcript, never its screen. It needs no running agent and never starts one. `state` describes the latest turn in this read's own history: `working` means that history shows an unfinished turn and the reply may not be there yet; a missing `state` means unknown, never done. A terminal agent that exited mid-turn may keep reading `working`; check `ORCA agent show`. `agent list`/`show` report the last state known to Orca, which may differ. A terminal agent is readable while Orca knows its transcript (open, or asleep in a workspace; on Windows, a sleeping WSL agent only once its tab is reopened).",
   "",
-  "A chat keeps its ID across `/clear`; a terminal agent gets a new one. A provider's own conversation id or a `term_…` handle is refused with the ID to use. To message an agent, use `terminal send` or `orchestration send` as below; messages to a sleeping agent are not delivered until its workspace is reopened.",
+  "A chat keeps its ID across `/clear`; a terminal agent gets a new one. A provider's own conversation id or a `term_…` handle is refused with the ID to use. To message an agent, use `terminal send` or `orchestration send` as below; a sleeping terminal agent can't be messaged, so reopen its workspace first.",
   "",
   "## Worktrees",
   "",

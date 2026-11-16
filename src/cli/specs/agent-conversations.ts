@@ -12,7 +12,7 @@ export const AGENT_CONVERSATION_COMMAND_SPECS: CommandSpec[] = [
       'A chat keeps its ID across /clear; a terminal agent gets a new one when /clear starts a new conversation.',
       '--state keeps agents in one state: working, blocked, waiting or done.',
       'Agents on other hosts are not listed here; the output names those hosts and the `--environment` that lists them.',
-      'A finished terminal agent stays listed as done while asleep, even after Orca restarts, unless it was reopened and slept again before doing anything new. An agent put to sleep mid-turn is not listed. After reopening, a terminal agent reappears only once it reports to Orca (for Codex, on its next turn). `orca agent read <id>` still reads it in all these cases.'
+      'A finished terminal agent stays listed as done while asleep, even after Orca restarts, unless it was reopened and slept again before doing anything new. An agent put to sleep mid-turn is not listed. After reopening, a terminal agent reappears only once it reports to Orca (for Codex, on its next turn). `orca agent read <id>` still reads it, except a sleeping WSL agent on Windows.'
     ],
     examples: ['orca agent list --json', 'orca agent list --worktree active --state working']
   },
