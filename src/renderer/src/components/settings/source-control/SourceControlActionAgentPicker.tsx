@@ -1,5 +1,5 @@
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import { sameAgentLaunchPickerModel } from '../../tab-bar/new-tab-agent-menu-model'
+import { sameAgentLaunchPickerModel } from '../../agent/launch-menu/new-tab-agent-menu-model'
 import { memo, useCallback, useLayoutEffect, useRef, type ComponentProps } from 'react'
 import { pickSourceControlLaunchAgent } from '../../../../../shared/source-control/ai/source-control-launch-agent-selection'
 import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
@@ -14,7 +14,7 @@ import {
   pickSourceControlActionAgent,
   type CurrentActionSelection
 } from '../../../../../shared/source-control/ai/recipes/source-control-action-selection'
-import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
+import { useAgentMenuObservation } from '@/components/agent/launch-menu/use-new-tab-agent-menu-rows'
 import { useAppStore } from '@/store/index'
 import {
   sourceControlRepoAgentRows,

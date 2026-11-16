@@ -25,7 +25,7 @@ vi.mock('@/runtime/hosted-terminals/creation/web-runtime-terminal-creation', () 
 vi.mock('@/components/terminal-pane/input/focus/focus-terminal-tab-surface', () => ({
   focusTerminalTabSurface: vi.fn()
 }))
-vi.mock('@/components/tab-bar/request-active-terminal-pane-split', () => ({
+vi.mock('@/components/tab-bar/pane-actions/request-active-terminal-pane-split', () => ({
   requestActiveTerminalPaneSplit: requestSplit
 }))
 vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', async (original) => ({
