@@ -183,6 +183,9 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
         session('not-a-workspace.jsonl', join(root, 'repos', 'sibling', 'old-tool')),
         session('flat-workspace-subfolder.jsonl', join(workspaces, 'docs', 'packages', 'old')),
         session('gone-physical.jsonl', physical(join(appWorkspaces, 'gone-two'))),
+        // Archived right after its first chat is removed: the second must still be kept.
+        session('archived-between-1.jsonl', join(appWorkspaces, 'gone-six')),
+        session('archived-between-2.jsonl', join(appWorkspaces, 'gone-six')),
         session('checkout-subfolder.jsonl', physical(join(root, 'repos', 'sibling', 'website'))),
         session('unrelated-clone.jsonl', join(workspaces, 'api', 'old-package')),
         session('symlinked-folder-project.jsonl', join(workspaces, 'tools', 'old')),
@@ -211,6 +214,9 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
           for (const target of targets) {
             if (await shouldDelete(target)) {
               removed.push(target)
+              if (basename(target.filePath) === 'archived-between-1.jsonl') {
+                archivedDuringScan[`app::${join(appWorkspaces, 'gone-six')}`] = {}
+              }
             }
           }
           deleted.push(...removed)
@@ -221,9 +227,59 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
       expect(deleted.map((target) => basename(target.filePath))).toEqual([
         'gone.jsonl',
         'gone-subfolder.jsonl',
-        'gone-physical.jsonl'
+        'gone-physical.jsonl',
+        'archived-between-1.jsonl'
       ])
-      expect(result).toEqual({ deleted: 3, failed: 0, freedBytes: 63 })
+      expect(result).toEqual({ deleted: 4, failed: 0, freedBytes: 84 })
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'deletes nothing while a listed path has a symlink chain too long to follow',
+    async () => {
+      root = mkdtempSync(join(tmpdir(), 'orca-chat-history-'))
+      const workspaces = join(root, 'workspaces')
+      mkdirSync(join(workspaces, 'app'), { recursive: true })
+      mkdirSync(join(root, 'repos', 'app'), { recursive: true })
+      // Nine links in a row; the last points into the gone workspace.
+      for (let hop = 0; hop < 9; hop += 1) {
+        const target = hop === 8 ? join(workspaces, 'app', 'gone') : join(root, `link-${hop + 1}`)
+        symlinkSync(target, join(root, `link-${hop}`))
+      }
+      const deleted: ChatHistoryTarget[] = []
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the sweep reads only these store methods
+      const store = {
+        getSettings: () => ({
+          workspaceDir: workspaces,
+          nestWorkspaces: true,
+          workspaceDirHistory: []
+        }),
+        getRepos: () => [
+          {
+            id: 'app',
+            path: join(root, 'repos', 'app'),
+            displayName: 'app',
+            badgeColor: '',
+            addedAt: 0
+          }
+        ],
+        getAllWorktreeMeta: () => ({}),
+        getFolderWorkspaces: () => [{ folderPath: join(root, 'link-0') }]
+      } as unknown as RuntimeStore
+
+      const result = await sweepDeletedWorkspaceChatHistory({
+        store,
+        now: NOW,
+        listSessions: async () => [session('gone.jsonl', join(workspaces, 'app', 'gone'))],
+        isEnabled: () => true,
+        deleteSessions: async (targets) => {
+          deleted.push(...targets)
+          return { deleted: targets.length, failed: 0, freedBytes: 0 }
+        }
+      })
+
+      expect(deleted).toEqual([])
+      expect(result).toEqual({ deleted: 0, failed: 0, freedBytes: 0 })
     }
   )
 })

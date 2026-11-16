@@ -100,33 +100,46 @@ export function listedCatalogFingerprint(store: RuntimeStore): string {
 export type ListedFolders = {
   /** Existing listed folders, by identity. */
   present: Set<Identity>
-  /** Missing listed paths, as the gone folder that holds them (an archived workspace keeps its row). */
-  gone: Set<string>
+  /**
+   * Every (existing folder, child name) a listed path passes through. A gone folder holding a
+   * listed path stays protected whether that path's own folders exist at the moment or not.
+   */
+  claims: Set<string>
+  /** False when a listed path's symlinks couldn't be followed to the end: then nothing is proven. */
+  complete: boolean
 }
+
+const MAX_LINK_HOPS = 8
 
 /**
  * Follows symlinks anywhere along a listed path, dangling ones included, keeping the rest of the
  * path: a listed `/link/nested` whose `/link` points into a gone workspace still protects it.
  */
-async function linkTargets(path: string): Promise<string[]> {
+async function linkTargets(path: string): Promise<{ targets: string[]; complete: boolean }> {
   const targets = [path]
   let current = path
-  // A few hops covers real setups; a loop just stops protecting further, never deletes more.
-  for (let hop = 0; hop < 8; hop += 1) {
+  for (let hop = 0; hop < MAX_LINK_HOPS; hop += 1) {
     let existing = current
     const rest: string[] = []
-    while ((await presence(existing)) !== 'present') {
+    for (
+      let state = await presence(existing);
+      state !== 'present';
+      state = await presence(existing)
+    ) {
       const parent = dirname(existing)
-      if (parent === existing) {
-        return targets
+      if (state === 'unknown' || parent === existing) {
+        return { targets, complete: state !== 'unknown' }
       }
       rest.unshift(basename(existing))
       existing = parent
     }
     const stats = await lstat(existing).catch(() => null)
-    const link = stats?.isSymbolicLink() ? await readlink(existing).catch(() => null) : null
+    if (!stats?.isSymbolicLink()) {
+      return { targets, complete: stats !== null }
+    }
+    const link = await readlink(existing).catch(() => null)
     if (link === null) {
-      break
+      return { targets, complete: false }
     }
     // A relative link resolves from its real folder. Joined unnormalized: `..` after a symlink
     // in the target is the OS's to resolve, not a string operation's.
@@ -134,21 +147,39 @@ async function linkTargets(path: string): Promise<string[]> {
     current = [isAbsolute(link) ? link : `${linkFolder}${sep}${link}`, ...rest].join(sep)
     targets.push(current)
   }
-  return targets
+  // A longer chain was not followed to its end, so where it points is unknown.
+  return { targets, complete: false }
 }
 
 export async function readListedFolders(store: RuntimeStore): Promise<ListedFolders> {
-  const listed: ListedFolders = { present: new Set(), gone: new Set() }
+  const listed: ListedFolders = { present: new Set(), claims: new Set(), complete: true }
+  const identities = new Map<string, Promise<Identity | null>>()
+  const cachedIdentity = (path: string): Promise<Identity | null> => {
+    let id = identities.get(path)
+    if (!id) {
+      id = identityOf(path)
+      identities.set(path, id)
+    }
+    return id
+  }
   for (const listedPath of new Set(listedPaths(store))) {
-    for (const path of await linkTargets(listedPath)) {
-      const id = await identityOf(path)
+    const { targets, complete } = await linkTargets(listedPath)
+    listed.complete &&= complete
+    for (const path of targets) {
+      const id = await cachedIdentity(path)
       if (id) {
         listed.present.add(id)
-        continue
       }
-      const gone = await goneFolderOf(path)
-      if (gone) {
-        listed.gone.add(goneFolderKey(gone))
+      // Byte-exact walk up: each existing ancestor claims the name the path continues with.
+      for (
+        let child = path, parent = dirname(path);
+        parent !== child;
+        child = parent, parent = dirname(parent)
+      ) {
+        const parentId = await cachedIdentity(parent)
+        if (parentId) {
+          listed.claims.add(`${parentId}/${foldName(basename(child))}`)
+        }
       }
     }
   }

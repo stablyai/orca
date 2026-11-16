@@ -80,6 +80,10 @@ export async function sweepDeletedWorkspaceChatHistory(
 ): Promise<ChatHistorySweepResult> {
   const result: ChatHistorySweepResult = { deleted: 0, failed: 0, freedBytes: 0 }
   const listed = await readListedFolders(deps.store)
+  // A listed path whose symlinks couldn't be followed could protect any folder: prove nothing.
+  if (!listed.complete) {
+    return result
+  }
   const parents = await readWorkspaceParents(deps.store, listed)
   if (parents.ids.size === 0) {
     return result
@@ -109,7 +113,7 @@ export async function sweepDeletedWorkspaceChatHistory(
       continue
     }
     const key = goneFolderKey(folder)
-    if (listed.gone.has(key)) {
+    if (listed.claims.has(key)) {
       continue
     }
     const group = byFolder.get(key) ?? { folder, targets: [] }
@@ -130,14 +134,21 @@ export async function sweepDeletedWorkspaceChatHistory(
     current = { fingerprint, listed: listedNow, parentIds: parentsNow.ids }
     return current
   }
-  for (const [key, { folder, targets }] of byFolder) {
-    if (deps.signal?.aborted || !deps.isEnabled() || !(await isStillGone(folder))) {
-      continue
-    }
-    // A workspace archived or renamed during the scan, the grouping or earlier deletions keeps its
-    // row, and that row protects its chats.
+  // A workspace archived or renamed during the scan or earlier deletions keeps its row, and that
+  // row protects its chats; claims don't depend on whether the row's folder exists right now.
+  const isUnclaimed = async (key: string, folder: GoneFolder): Promise<boolean> => {
     const now = await readCurrent()
-    if (now.listed.gone.has(key) || !now.parentIds.has(folder.ancestorId)) {
+    return (
+      now.listed.complete && !now.listed.claims.has(key) && now.parentIds.has(folder.ancestorId)
+    )
+  }
+  for (const [key, { folder, targets }] of byFolder) {
+    if (
+      deps.signal?.aborted ||
+      !deps.isEnabled() ||
+      !(await isStillGone(folder)) ||
+      !(await isUnclaimed(key, folder))
+    ) {
       continue
     }
     // Reading one transcript can take a while, so each is checked right before its own removal.
@@ -147,6 +158,7 @@ export async function sweepDeletedWorkspaceChatHistory(
         !deps.signal?.aborted &&
         deps.isEnabled() &&
         (await isStillGone(folder)) &&
+        (await isUnclaimed(key, folder)) &&
         (await isChatStillIdleInGoneFolder(target.filePath, key, Date.now()))
     )
     result.deleted += deleted.deleted
