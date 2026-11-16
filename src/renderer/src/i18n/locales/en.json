@@ -29824,6 +29824,7 @@
   "cloudGitActing": {
     "member": "Pushes and PRs go out as @{{login}}",
     "bot": "Pushes and PRs go out as Orca bot",
+    "transferred": "Pushes and PRs go out as Orca bot (this workspace changed owners)",
     "caveat": "Approve pull requests on GitHub. Workspaces can’t approve.",
     "connect": "Connect GitHub"
   },

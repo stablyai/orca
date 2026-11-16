@@ -67,15 +67,6 @@ describe('who pushes and PRs go out as, in source control', () => {
     }
   })
 
-  it('a transferred workspace: the bot, never Connect GitHub', async () => {
-    const c = await show({
-      githubActing: { actingAs: 'bot', reason: 'transferred' },
-      you: { connected: false }
-    })
-    expect(c.textContent).toBe('Pushes and PRs go out as Orca bot')
-    expect(connectButton(c)).toBeNull()
-  })
-
   it('reconnect (the owner’s token expired) and not connected: bot with Connect GitHub', async () => {
     const c = await show({
       githubActing: { actingAs: 'bot', reason: 'reconnect' },
@@ -95,5 +86,16 @@ describe('who pushes and PRs go out as, in source control', () => {
     }
     expect((await show({ you: { connected: false } })).textContent).toBe('')
     expect((await show(null)).textContent).toBe('')
+  })
+
+  it('a workspace that changed owners: the bot for good, with no Connect GitHub', async () => {
+    const c = await show({
+      githubActing: { actingAs: 'bot', reason: 'transferred' },
+      you: { connected: false }
+    })
+    expect(c.textContent).toContain(
+      'Pushes and PRs go out as Orca bot (this workspace changed owners)'
+    )
+    expect(connectButton(c)).toBeNull()
   })
 })

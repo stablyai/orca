@@ -27,5 +27,5 @@ export const botConnect = fixture({
 })
 export const transferred = fixture({
   githubActing: { actingAs: 'bot', reason: 'transferred' },
-  you: { connected: true }
+  you: { connected: false }
 })

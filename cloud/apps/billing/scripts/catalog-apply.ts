@@ -18,21 +18,24 @@ function arg(name: string): string | undefined {
   return index >= 0 ? process.argv[index + 1] : undefined
 }
 
-const config = arg('--config')
+// workers-types declares process.exit as returning void, so it doesn't narrow `config` on its own. A desktop
+// checkout hid that: its Electron types reached this program through the root node_modules.
+function usage(): never {
+  console.error('usage: tsx scripts/catalog-apply.ts --config wrangler.dev.jsonc [--local] [--file catalog/catalog.json] [--dry-run]')
+  return process.exit(2) as never
+}
+
+const config = arg('--config') ?? usage()
 const file = arg('--file') ?? 'catalog/catalog.json'
 const target = process.argv.includes('--local') ? '--local' : '--remote'
 const dryRun = process.argv.includes('--dry-run')
-if (!config) {
-  console.error('usage: tsx scripts/catalog-apply.ts --config wrangler.dev.jsonc [--local] [--file catalog/catalog.json] [--dry-run]')
-  process.exit(2)
-}
 if (/prod/i.test(config) && process.env.CATALOG_APPLY_ALLOW_PROD !== '1') {
   console.error('Refusing a production config (set CATALOG_APPLY_ALLOW_PROD=1 for the launch step).')
   process.exit(2)
 }
 
 function wrangler(args: string[]): string {
-  return execFileSync('npx', ['wrangler', 'd1', 'execute', 'BILLING_DB', target, '-c', config!, ...args], {
+  return execFileSync('npx', ['wrangler', 'd1', 'execute', 'BILLING_DB', target, '-c', config, ...args], {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'inherit']
   })

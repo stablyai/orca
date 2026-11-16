@@ -33,7 +33,13 @@ export function gitActingLine(answer: CloudGitActing | null, t: Translate): GitA
       return null
     case 'transferred':
       // A workspace that changed owners is the App's on GitHub for good: connecting wouldn't change it.
-      return { text: bot, connect: false }
+      return {
+        text: t(
+          'cloudGitActing.transferred',
+          'Pushes and PRs go out as Orca bot (this workspace changed owners)'
+        ),
+        connect: false
+      }
     // `no_sender_yet`, `sender_not_connected` and `window_expired` come only from control planes
     // that still had team sharing; they read as the plain bot line.
     case 'no_sender_yet':
