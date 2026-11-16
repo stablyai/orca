@@ -10,6 +10,8 @@ type SettingsGroupDisclosureProps = {
   label?: string
   /** A muted hint after the label naming what the disclosure holds. */
   description?: string
+  /** A muted line under the label, for a disclosure that stands as a card row of its own. */
+  summary?: React.ReactNode
   forceOpen?: boolean
   /** Owns the open state when set; a click or a settings jump reports through onOpenChange. */
   open?: boolean
@@ -23,6 +25,7 @@ type SettingsGroupDisclosureProps = {
 export function SettingsGroupDisclosure({
   label,
   description,
+  summary,
   forceOpen = false,
   open: controlledOpen,
   onOpenChange,
@@ -49,7 +52,10 @@ export function SettingsGroupDisclosure({
         onClick={() => setOpen(!open)}
         // Unsaved edits must remain reachable.
         disabled={forceOpen}
-        className="flex min-h-11 w-full items-center gap-2 text-left text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50 disabled:cursor-default"
+        className={cn(
+          'flex min-h-11 w-full items-center gap-2 text-left text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50 disabled:cursor-default',
+          summary ? 'py-[9px]' : 'font-semibold'
+        )}
       >
         <ChevronRight
           className={cn(
@@ -57,16 +63,25 @@ export function SettingsGroupDisclosure({
             expanded && 'rotate-90'
           )}
         />
-        {/* A description too long for the line wraps under the label instead of being cut off. */}
-        <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 py-1.5">
-          <span>
-            {label ??
-              t('auto.components.settings.AppearanceAdvancedDisclosure.advanced', 'Advanced')}
+        {summary ? (
+          <span className="min-w-0 flex-1">
+            <span className="block">{label}</span>
+            <span className="mt-0.5 block text-settings-detail text-muted-foreground">
+              {summary}
+            </span>
           </span>
-          {description ? (
-            <span className="text-xs font-normal text-muted-foreground">{description}</span>
-          ) : null}
-        </span>
+        ) : (
+          // A description too long for the line wraps under the label instead of being cut off.
+          <span className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 py-1.5">
+            <span>
+              {label ??
+                t('auto.components.settings.AppearanceAdvancedDisclosure.advanced', 'Advanced')}
+            </span>
+            {description ? (
+              <span className="text-xs font-normal text-muted-foreground">{description}</span>
+            ) : null}
+          </span>
+        )}
       </button>
       {/* Stays mounted while collapsed so a settings jump can find and reveal its rows. */}
       <div hidden={!expanded} className={flush ? undefined : SETTINGS_GROUP_NESTED_INSET_CLASS}>

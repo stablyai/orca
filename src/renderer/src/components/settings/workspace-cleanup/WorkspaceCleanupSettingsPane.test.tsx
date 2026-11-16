@@ -498,6 +498,36 @@ describe('automatic cleanup announcements', () => {
     }
   })
 
+  it('announces a result and a run start that arrive together in one update, once', async () => {
+    let now = Date.UTC(2026, 10, 15, 12)
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => now)
+    try {
+      reportRuns = [finishedRun('run-1', now - 60 * 60_000)]
+      mount(true)
+      await waitFor(() => expect(statusLine()).not.toBe(''))
+
+      // One report read brings both a new finished run and a run already under way.
+      reportRunning = true
+      reportRuns = [finishedRun('run-2', now), ...reportRuns]
+      await rereadReport(() => regions().some(Boolean))
+      const both = regions().filter(Boolean)
+      expect(both).toHaveLength(1)
+      // The visible line shows only the run under way; the announcement leads with the result.
+      expect(both[0]).not.toBe(statusLine())
+      expect(both[0]!.endsWith(statusLine())).toBe(true)
+      const announced = regions()
+
+      // The run finishing without a new result, and later time-only refreshes, say nothing.
+      const runningLine = statusLine()
+      reportRunning = false
+      await rereadReport(() => statusLine() !== runningLine)
+      expect(regions()).toEqual(announced)
+      await refreshTimes(() => (now += 60 * 60_000))
+    } finally {
+      clock.mockRestore()
+    }
+  })
+
   it('announces each scheduled run, including two worded the same', async () => {
     const now = Date.UTC(2026, 10, 15, 12)
     const clock = vi.spyOn(Date, 'now').mockImplementation(() => now)

@@ -133,12 +133,13 @@ export function WorkspaceCleanupAutomaticSection({
       announcement.runId !== undefined && lastRun && lastRun.id !== announcement.runId
         ? lastRun
         : null
-    const text =
-      running && !announcement.running
-        ? runningText
-        : newRun
-          ? formatLastRun(newRun, readAt, t)
-          : null
+    // A run can start in the same update that brings a new result; say the result first, then the
+    // start, so neither is lost. The new run's id is only recorded alongside its announcement.
+    const parts = [
+      newRun ? formatLastRun(newRun, readAt, t) : null,
+      running && !announcement.running ? runningText : null
+    ].filter((part): part is string => part !== null)
+    const text = parts.length > 0 ? parts.join(' ') : null
     setAnnouncement({
       running,
       runId,
