@@ -53,7 +53,7 @@ it.each([false, true])(
       runnerScriptPath: runner,
       platform: windows ? 'windows' : 'posix',
       nonce: 'closed-attempt',
-      deadline: Date.now() + 3000
+      deadline: Number.MAX_SAFE_INTEGER
     })
     registry.begin('setup', 'handle', 'closed-attempt', 'workspace')
     // A dead writer may have acquired publication before it could commit its complete result.
@@ -108,7 +108,7 @@ it.each(['confirmed-stop', 'physical-negative-exit'] as const)(
       runnerScriptPath: runner,
       platform: windows ? 'windows' : 'posix',
       nonce: 'late-confirmed-close',
-      deadline: Date.now() + 3000
+      deadline: Number.MAX_SAFE_INTEGER
     })
     await runtime.onPtyExit('setup', -1)
     expect(existsSync(join(root, 'setup-completions', 'late-confirmed-close.done'))).toBe(false)

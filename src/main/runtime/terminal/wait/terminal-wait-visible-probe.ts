@@ -190,8 +190,8 @@ export abstract class OrcaRuntimeWithStartTuiIdleVisibleReadProbe extends OrcaRu
     this.setupTerminalCompletions.refuseWorkspace(workspaceId)
   }
 
-  preparedWorkspaceSetup(workspaceId: string, required: boolean): void {
-    this.setupTerminalCompletions.preparedWorkspace(workspaceId, required)
+  preparedWorkspaceSetup(workspaceId: string, required: boolean): (success: boolean) => void {
+    return this.setupTerminalCompletions.preparedWorkspace(workspaceId, required)
   }
 
   async waitForWorkspaceSetup(

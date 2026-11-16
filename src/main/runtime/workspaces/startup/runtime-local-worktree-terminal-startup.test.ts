@@ -90,3 +90,52 @@ it.each([true, false])(
     })
   }
 )
+
+it.each(['replacement', 'removal'] as const)(
+  'ignores a late in-process result after workspace %s',
+  async (change) => {
+    const hook = Promise.withResolvers<boolean>()
+    const completion = new SetupTerminalCompletions()
+    await startRuntimeLocalWorktreeTerminals({
+      request: { activate: false, promisedAgentChat: true },
+      repo: { id: 'repo' },
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this headless startup reads only workspace id and path.
+      worktree: { id: 'repo::/task', path: '/task' } as Worktree,
+      requiredSetup: true,
+      inProcessSetup: hook.promise,
+      ports: {
+        canSpawn: false,
+        setupPrepared: (id, required) => completion.preparedWorkspace(id, required),
+        waitForSetupTerminalCompletion: async () => ({ exitCode: null }),
+        createTerminal: async () => {
+          throw new Error('No terminal controller')
+        },
+        provision: async () => {
+          throw new Error('No terminal controller')
+        },
+        pasteDraft() {},
+        sendFollowup() {},
+        activate() {}
+      }
+    })
+    const replacement = change === 'replacement' ? completion.beginWorkspace('repo::/task') : null
+    if (!replacement) {
+      completion.forgetWorkspace('repo::/task')
+    }
+    let released = false
+    void replacement?.completion.then(() => {
+      released = true
+    })
+    hook.resolve(true)
+    await hook.promise
+    await Promise.resolve()
+    expect(released).toBe(false)
+    if (replacement) {
+      replacement.finish(0)
+      await expect(replacement.completion).resolves.toEqual({ exitCode: 0 })
+    } else {
+      expect(completion.forWorkspace('repo::/task')).toBeUndefined()
+    }
+    completion.forgetWorkspace('repo::/task')
+  }
+)

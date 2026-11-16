@@ -47,7 +47,15 @@ function createHarness() {
         return Promise.resolve()
       }
       const setup = Promise.withResolvers<unknown>()
-      subscriptionIds.push((args as Args).subscriptionId!)
+      if (
+        typeof args !== 'object' ||
+        args === null ||
+        !('subscriptionId' in args) ||
+        typeof args.subscriptionId !== 'string'
+      ) {
+        throw new Error('Expected subscription identity')
+      }
+      subscriptionIds.push(args.subscriptionId)
       pending.push(setup)
       return setup.promise
     }),

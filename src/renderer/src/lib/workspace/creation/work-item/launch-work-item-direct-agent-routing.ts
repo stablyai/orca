@@ -1,3 +1,4 @@
+import { createPasteReadinessTimeoutNotice } from '@/lib/agent-session/launch/prompt/launch-agent-paste-timeout-notice'
 import type { ActivateAndRevealResult } from '@/lib/workspace/activation/worktree-activation-outcome'
 import { readAgentLaunchPreferencesForWorkspace } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
@@ -7,10 +8,7 @@ import {
   deliverLaunchPromptToAgentTab,
   seedNativeChatLaunchDraftForAgentTab
 } from '@/lib/agent-session/launch/prompt/agent-launch-prompt-delivery'
-import {
-  buildDirectWorkItemAgentStartupPlan,
-  notifyDirectWorkItemAgentStartTimeout
-} from '@/lib/workspace/creation/work-item/launch-work-item-direct-agent'
+import { buildDirectWorkItemAgentStartupPlan } from '@/lib/workspace/creation/work-item/launch-work-item-direct-agent'
 import { acquireAgentLaunchChoices } from '../../../agent-session/launch/inventory/host-chat-program-acquisition'
 import { useAppStore } from '@/store/index'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
@@ -205,7 +203,13 @@ export function finishDirectWorkItemPrompt(args: {
       content: draftContent,
       submit,
       forcePaste: submit,
-      onTimeout: () => notifyDirectWorkItemAgentStartTimeout(agent, submit)
+      onTimeout: createPasteReadinessTimeoutNotice({
+        worktreeId: args.worktreeId,
+        tabId: primaryTabId,
+        agent,
+        submitted: submit,
+        droppedText: draftContent
+      }).onTimeout
     })
   }
   return true

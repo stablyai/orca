@@ -37,8 +37,7 @@ export function bindTerminalPasteStartupDelivery(session: ConnectPanePtySession)
   }
   session.schedulePendingStartupCommandDelivery = (): void => {
     setupAbort?.abort()
-    const abort = new AbortController()
-    setupAbort = abort
+    setupAbort = undefined
     const startup = session.pendingStartupCommand
     if (!startup || startup.resumeSource?.cancelled) {
       return
@@ -69,6 +68,8 @@ export function bindTerminalPasteStartupDelivery(session: ConnectPanePtySession)
         if (!ptyId) {
           return
         }
+        const abort = new AbortController()
+        setupAbort = abort
         try {
           await waitForRuntimeTerminalSetup(ptyId, abort.signal)
         } catch {

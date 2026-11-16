@@ -173,10 +173,15 @@ export class SetupTerminalCompletions extends SetupTerminalDependents {
     return workspace
   }
 
-  preparedWorkspace(workspaceId: string, required: boolean): void {
+  preparedWorkspace(workspaceId: string, required: boolean): (success: boolean) => void {
     const workspace = this.requiredByWorkspace.get(workspaceId) ?? this.beginWorkspace(workspaceId)
     if (!required) {
       workspace.finish(0)
+    }
+    return (success) => {
+      if (!workspace.cancelled) {
+        workspace.finish(success ? 0 : null)
+      }
     }
   }
 

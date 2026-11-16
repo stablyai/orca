@@ -3,9 +3,6 @@ import type {
   AgentStartedTelemetry,
   FreshWorkspaceAgentLaunch
 } from '@/lib/workspace/creation/worktree-startup-payload'
-import { toast } from 'sonner'
-import { track } from '@/diagnostics/telemetry/telemetry'
-import { tuiAgentToAgentKind } from '../../../../../../shared/agent-status/identity/agent-kind'
 import {
   buildAgentDraftLaunchPlan,
   buildAgentStartupPlan,
@@ -18,7 +15,6 @@ import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui
 import type { AgentStartupShell } from '../../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import type { AgentLaunchProfileSettings } from '../../../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import { resolveAgentStartupPlanInputs } from '../../../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
-import { translate } from '@/i18n/i18n'
 
 export function buildDirectWorkItemAgentStartupPlan(args: {
   agent: TuiAgent | null
@@ -144,17 +140,4 @@ export function buildDirectWorkItemStartupOpts(
       ...(telemetry ? { telemetry } : {})
     }
   }
-}
-
-/** Timeout notice for the post-launch paste; the workspace itself is ready. */
-export function notifyDirectWorkItemAgentStartTimeout(agent: TuiAgent, submit: boolean): void {
-  toast.message(
-    translate(
-      'auto.lib.launch.work.item.direct.agent.ceeeb509b5',
-      'Agent took too long to start. The workspace is ready — paste the {{value0}} when the agent is idle.',
-      { value0: submit ? 'prompt' : 'work item context' }
-    )
-  )
-  // Process-startup timeout has no v1 telemetry slot; unknown counts signal when to add one.
-  track('agent_error', { error_class: 'unknown', agent_kind: tuiAgentToAgentKind(agent) })
 }
