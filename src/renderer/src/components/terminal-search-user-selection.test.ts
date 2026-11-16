@@ -55,14 +55,22 @@ describe('terminal search refresh after output', () => {
     expect(terminal.getSelection()).toBe('plain')
   })
 
-  it('counts matches that arrived during the user selection on the next find', async () => {
-    terminal.select(0, 1, 5)
-    await writeAndFlush(terminal, 'needle two\r\n')
+  it('counts matches that arrive while the user holds a selection', async () => {
     const resultCounts: number[] = []
     search.onDidChangeResults(({ resultCount }) => resultCounts.push(resultCount))
+    terminal.select(0, 1, 5)
 
-    search.findNext('needle', { decorations: SEARCH_DECORATIONS })
+    await writeAndFlush(terminal, 'needle two\r\n')
 
     expect(resultCounts).toEqual([2])
+    expect(terminal.getSelection()).toBe('plain')
+  })
+
+  it('leaves the selection empty after the user clears it', async () => {
+    terminal.clearSelection()
+
+    await writeAndFlush(terminal, 'needle two\r\n')
+
+    expect(terminal.getSelection()).toBe('')
   })
 })
