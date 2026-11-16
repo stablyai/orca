@@ -41,7 +41,7 @@ export function classifyAgentLaunchReplayRefusal(
     return replayed ? 'unknown' : 'failed'
   }
   if (error.code === 'invalid_argument') {
-    // Schema refusal precedes the ledger read, so it says nothing of what the first send did.
+    // Schema refusal precedes ledger reads and carries only issue text; callers preserve it alongside uncertainty.
     return replayed ? 'unknown' : 'failed'
   }
   return 'failed'

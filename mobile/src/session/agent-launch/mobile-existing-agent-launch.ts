@@ -140,8 +140,15 @@ function classifyLaunchRefusal(
   switch (classifyAgentLaunchReplayRefusal(error, replayed)) {
     case 'unsupported':
       return { kind: 'unsupported' }
-    case 'unknown':
-      return { kind: 'unknown', message: AGENT_LAUNCH_UNCONFIRMED_MESSAGE }
+    case 'unknown': {
+      const refusal = error.code === 'invalid_argument' ? error.message?.trim() : undefined
+      return {
+        kind: 'unknown',
+        message: refusal
+          ? `${AGENT_LAUNCH_UNCONFIRMED_MESSAGE} ${refusal}`
+          : AGENT_LAUNCH_UNCONFIRMED_MESSAGE
+      }
+    }
     case 'failed': {
       if (isAgentLaunchReservationTakenRefusal(error)) {
         return { kind: 'failed', message: AGENT_LAUNCH_RESERVATION_TAKEN_MESSAGE }
