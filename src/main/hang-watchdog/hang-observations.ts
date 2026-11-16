@@ -1,6 +1,8 @@
 import {
   MACHINE_FIELDS,
+  MAX_HANG_WORKER_SENDS,
   SNAPSHOT_FIELDS,
+  type HangWorkerSend,
   type HangPowerReceipt,
   type CompletedHangContext,
   type HangObservation,
@@ -117,6 +119,7 @@ function parseObservation(value: unknown): HangObservation | null {
     }
   }
   const gap = object(data.watchdogGap)
+  const workerSends = parseWorkerSends(data.workerSends)
   return {
     id: data.id,
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixed observation-kind allowlist above validates this string union.
@@ -146,8 +149,38 @@ function parseObservation(value: unknown): HangObservation | null {
             snapshot: numericFields(gap.snapshot, SNAPSHOT_FIELDS)
           }
         }
-      : {})
+      : {}),
+    ...(workerSends ? { workerSends } : {})
   }
+}
+
+function parseWorkerSends(value: unknown): HangWorkerSend[] | null {
+  if (!Array.isArray(value) || value.length > MAX_HANG_WORKER_SENDS) {
+    return null
+  }
+  const sends: HangWorkerSend[] = []
+  for (const item of value) {
+    const send = object(item)
+    if (
+      send &&
+      typeof send.role === 'string' &&
+      send.role.length <= 40 &&
+      typeof send.kind === 'string' &&
+      send.kind.length <= 40 &&
+      [send.items, send.bytes, send.depth, send.agoMs, send.heapUsedMB].every(finite)
+    ) {
+      sends.push({
+        role: send.role,
+        kind: send.kind,
+        items: Number(send.items),
+        bytes: Number(send.bytes),
+        depth: Number(send.depth),
+        agoMs: Number(send.agoMs),
+        heapUsedMB: Number(send.heapUsedMB)
+      })
+    }
+  }
+  return sends
 }
 export function emptyHangObservations(): HangObservationCollection {
   return { version: 1, observations: [], omitted: 0 }
@@ -221,6 +254,7 @@ export function retainHangObservation(
       resolution: old.resolution ?? record.resolution,
       machine: old.machine ?? record.machine,
       completedSpans: old.completedSpans ?? record.completedSpans,
+      workerSends: old.workerSends ?? record.workerSends,
       mainJs: record.mainJs
         ? {
             ...record.mainJs,

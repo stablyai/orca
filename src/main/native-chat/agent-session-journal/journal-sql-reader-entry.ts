@@ -13,6 +13,9 @@ import {
   journalLegacyChatRevision,
   openJournalLegacySource
 } from './database/journal-legacy-source'
+import { installWorkerSendLedger } from '../../worker-threads/worker-send-ledger'
+
+installWorkerSendLedger('orca-journal-sql-reader')
 
 if (
   !parentPort ||
