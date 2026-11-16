@@ -1,3 +1,4 @@
+import type { OrcaCloudDropReason } from '@/hooks/useEphemeralVmRecipeOptions'
 import type { CloudStartView } from './run-on/use-cloud-start-composer'
 import type {
   AgentPickerDraft,
@@ -79,6 +80,8 @@ export type NewWorkspaceComposerCardProps = {
   ephemeralVmRecipeError?: string | null
   /** Orca Cloud for the selected project, from main; drives the picker's sign-in/upsell row. */
   orcaCloudAvailability?: OrcaCloudAvailability
+  /** RUNON-STICKY: a picked Orca Cloud didn't carry over to this project; Run on says why. */
+  orcaCloudDropped?: OrcaCloudDropReason | null
   repoBackedSearchRepos?: readonly RepoOption[]
   repoBackedSourcesDisabled?: boolean
   allowSmartNameAddProject?: boolean

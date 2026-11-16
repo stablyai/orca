@@ -257,7 +257,8 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
     setSelectedRecipeId: setSelectedEphemeralVmRecipeId,
     error: ephemeralVmRecipeError,
     offered: ephemeralVmsEnabled,
-    orcaCloud: orcaCloudAvailability
+    orcaCloud: orcaCloudAvailability,
+    orcaCloudDropped
   } = useEphemeralVmRecipeOptions({
     // Only probe enabled experiments or hidden features can raise setup errors.
     customRecipesEnabled: settings?.experimentalEphemeralVms === true,
@@ -277,9 +278,7 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
       )
     : null
   const selectedRepoConnectionId = selectedRepoSshGateInput?.connectionId ?? null
-  const selectedRepoSshState = selectedRepoConnectionId
-    ? (sshConnectionStates.get(selectedRepoConnectionId) ?? null)
-    : null
+  const selectedRepoSshState = sshConnectionStates.get(selectedRepoConnectionId ?? '') ?? null
 
   const { selectedRepoSshStatus, selectedRepoRequiresConnection, selectedRepoConnectInProgress } =
     getSelectedRepoSshGate({
@@ -329,6 +328,7 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
     selectedRecipeRepoConnectionId,
     ephemeralVmsEnabled,
     orcaCloudAvailability,
+    orcaCloudDropped,
     ephemeralVmRecipes,
     selectedEphemeralVmRecipeId,
     setSelectedEphemeralVmRecipeId,

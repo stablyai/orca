@@ -23690,7 +23690,10 @@
       },
       "runOn": {
         "thisComputer": "This computer",
-        "orcaCloud": "Orca Cloud"
+        "orcaCloud": "Orca Cloud",
+        "cloudDroppedElsewhere": "Orca Cloud can’t run this project: it lives on another machine. Running it there instead.",
+        "cloudDroppedUnreachable": "Couldn’t reach Orca Cloud for this project, so Run on switched back. Pick Orca Cloud again to retry.",
+        "cloudDroppedUnavailable": "Orca Cloud isn’t available for this project, so Run on switched back."
       },
       "cloudHours": {
         "trialChip_one": "Trial · {{hours}} sandbox hour left",

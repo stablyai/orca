@@ -1,4 +1,5 @@
 import { OrcaCloudNeedsRepoLine } from './run-on/OrcaCloudNeedsRepoLine'
+import { OrcaCloudDroppedLine } from './run-on/OrcaCloudDroppedLine'
 import { GitHubHandoffLine } from './run-on/GitHubHandoffLine'
 import { ORCA_CLOUD_NEEDS_REPO_ID } from './run-on/cloud-start-view'
 import React, { useMemo } from 'react'
@@ -46,6 +47,7 @@ type NewWorkspaceComposerProjectSectionProps = Pick<
   | 'selectedEphemeralVmRecipeId'
   | 'ephemeralVmRecipeError'
   | 'orcaCloudAvailability'
+  | 'orcaCloudDropped'
   | 'cloudStart'
 > & {
   disabled?: boolean
@@ -98,6 +100,7 @@ export function NewWorkspaceComposerProjectSection({
   handleSetLocation,
   ephemeralVmRecipeError,
   orcaCloudAvailability = 'unavailable',
+  orcaCloudDropped = null,
   selectedRepoRequiresConnection,
   selectedRepoConnectionId,
   selectedRepoConnectInProgress,
@@ -303,6 +306,8 @@ export function NewWorkspaceComposerProjectSection({
               <p className="whitespace-pre-line text-[11px] text-destructive">
                 {ephemeralVmRecipeError}
               </p>
+            ) : orcaCloudDropped ? (
+              <OrcaCloudDroppedLine reason={orcaCloudDropped} />
             ) : null}
           </div>
         ) : null}

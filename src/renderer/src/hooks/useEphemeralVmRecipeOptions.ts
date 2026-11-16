@@ -58,6 +58,13 @@ export function withOrcaCloudSetupRecipe(
   return [ORCA_CLOUD_SETUP_RECIPE, ...recipes]
 }
 
+/**
+ * RUNON-STICKY: why a picked Orca Cloud didn't carry over to a newly picked project. `elsewhere`:
+ * the project lives on another machine (SSH or a remote server's own target) or is a project group;
+ * `unreachable`: Orca Cloud didn't answer; `unavailable`: it isn't offered for this project.
+ */
+export type OrcaCloudDropReason = 'elsewhere' | 'unreachable' | 'unavailable'
+
 export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs): {
   recipes: OrcaVmRecipe[]
   selectedRecipeId: string | null
@@ -67,9 +74,22 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
   offered: boolean
   /** Orca Cloud for this target as main reports it; `unavailable` where recipe VMs can't run. */
   orcaCloud: OrcaCloudAvailability
+  /** Set when a project change had to drop a picked Orca Cloud; cleared by the next pick. */
+  orcaCloudDropped: OrcaCloudDropReason | null
 } {
   const [recipes, setRecipes] = useState<OrcaVmRecipe[]>([])
-  const [selectedRecipeId, setSelectedRecipeId] = useState<string | null>(null)
+  const [selectedRecipeId, setSelectedRecipeIdState] = useState<string | null>(null)
+  const [orcaCloudDropped, setOrcaCloudDropped] = useState<OrcaCloudDropReason | null>(null)
+  // The pick as of the last render: a project change carries Orca Cloud over (RUNON-STICKY).
+  const selectedRef = useRef<string | null>(null)
+  // Declared before the load effect, so a project change's load sees the pick it replaces.
+  useEffect(() => {
+    selectedRef.current = selectedRecipeId
+  }, [selectedRecipeId])
+  const setSelectedRecipeId = useCallback((recipeId: string | null) => {
+    setOrcaCloudDropped(null)
+    setSelectedRecipeIdState(recipeId)
+  }, [])
   // Failures stay coded until render so a language switch relocalizes them.
   const [errors, setErrors] = useState<EphemeralVmFailure[]>([])
   const [orcaCloud, setOrcaCloud] = useState<OrcaCloudAvailability>('unavailable')
@@ -90,12 +110,25 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
   const load = useCallback(
     (resetSelection: boolean): void => {
       const generation = ++requestGeneration.current
+      // RUNON-STICKY: Orca Cloud isn't tied to a project, so a project change keeps it picked while
+      // the new project's options load, and only drops it (saying why) when that project can't use it.
+      const carryCloud = resetSelection && selectedRef.current === ORCA_CLOUD_RECIPE_ID
       if (resetSelection) {
-        setRecipes([])
-        setSelectedRecipeId(null)
+        setRecipes((current) =>
+          carryCloud ? current.filter((r) => r.id === ORCA_CLOUD_RECIPE_ID) : []
+        )
+        if (!carryCloud) {
+          setSelectedRecipeIdState(null)
+        }
+        setOrcaCloudDropped(null)
         setErrors([])
       }
       if (!canLoad || !args.repoId) {
+        if (carryCloud && args.repoId) {
+          setRecipes([])
+          setSelectedRecipeIdState(null)
+          setOrcaCloudDropped(args.enabled === false ? 'unavailable' : 'elsewhere')
+        }
         return
       }
       const repoId = args.repoId
@@ -128,8 +161,20 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
           // says what's missing instead of the pick silently falling back to this computer.
           const keeps = (recipeId: string): boolean =>
             nextRecipes.some((recipe) => recipe.id === recipeId)
-          setSelectedRecipeId((current) => {
+          if (carryCloud && !keeps(ORCA_CLOUD_RECIPE_ID)) {
+            setOrcaCloudDropped(
+              result.orcaCloud === 'unreachable'
+                ? 'unreachable'
+                : remoteServer
+                  ? 'elsewhere'
+                  : 'unavailable'
+            )
+          }
+          setSelectedRecipeIdState((current) => {
             if (resetSelection) {
+              if (carryCloud && keeps(ORCA_CLOUD_RECIPE_ID)) {
+                return ORCA_CLOUD_RECIPE_ID
+              }
               return args.initialRecipeId && keeps(args.initialRecipeId)
                 ? args.initialRecipeId
                 : null
@@ -166,7 +211,10 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
             return
           }
           setRecipes([])
-          setSelectedRecipeId(null)
+          if (carryCloud) {
+            setOrcaCloudDropped('unreachable')
+          }
+          setSelectedRecipeIdState(null)
           setErrors(
             args.customRecipesEnabled
               ? [{ error: cause instanceof Error ? cause.message : String(cause) }]
@@ -176,6 +224,7 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
     },
     [
       args.customRecipesEnabled,
+      args.enabled,
       args.initialRecipeId,
       args.repoId,
       args.repoIsGit,
@@ -224,6 +273,7 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
     setSelectedRecipeId,
     error,
     offered: (args.customRecipesEnabled && args.repoIsGit) || recipes.length > 0,
-    orcaCloud: canLoad ? orcaCloud : 'unavailable'
+    orcaCloud: canLoad ? orcaCloud : 'unavailable',
+    orcaCloudDropped
   }
 }

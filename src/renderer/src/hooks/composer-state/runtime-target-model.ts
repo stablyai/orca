@@ -5,6 +5,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { SshConnectionState, SshConnectionStatus } from '../../../../shared/ssh-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { OrcaCloudAvailability, OrcaVmRecipe } from '../../../../shared/orca-yaml-hook-types'
+import type { OrcaCloudDropReason } from '@/hooks/useEphemeralVmRecipeOptions'
 import type { AgentStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import type { ExecutionHostPlatformFact } from '@/runtime/hosts/platform/execution-host-platform-fact'
 import type { NewWorkspaceProjectOption } from '@/lib/workspace/creation/new-workspace-project-options'
@@ -54,6 +55,8 @@ export type ComposerRuntimeTargetModel = {
   ephemeralVmsEnabled: boolean
   /** Orca Cloud for this project, from main; drives the picker's sign-in/upsell row. */
   orcaCloudAvailability: OrcaCloudAvailability
+  /** RUNON-STICKY: why a picked Orca Cloud didn't carry over to the newly picked project. */
+  orcaCloudDropped: OrcaCloudDropReason | null
   ephemeralVmRecipes: OrcaVmRecipe[]
   selectedEphemeralVmRecipeId: string | null
   setSelectedEphemeralVmRecipeId: (recipeId: string | null) => void

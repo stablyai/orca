@@ -4,6 +4,7 @@ import { StrictMode, act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useEphemeralVmRecipeOptions } from './useEphemeralVmRecipeOptions'
+import { ORCA_CLOUD_RECIPE_ID } from '../../../shared/hosted-sandbox/orca-cloud-recipe-id'
 import { useAppStore } from '@/store'
 import { requestOrcaCloudSelectionAfterSignIn } from '@/lib/orca-cloud-select-after-sign-in'
 
@@ -63,20 +64,22 @@ function Harness({
   initialRecipeId,
   enabled = true,
   customRecipesEnabled = true,
-  repoExecutionHostId = 'local'
+  repoExecutionHostId = 'local',
+  repoConnectionId = null
 }: {
   repoId: string
   initialRecipeId?: string
   enabled?: boolean
   customRecipesEnabled?: boolean
   repoExecutionHostId?: 'local' | `runtime:${string}`
+  repoConnectionId?: string | null
 }): React.JSX.Element {
   const state = useEphemeralVmRecipeOptions({
     enabled,
     customRecipesEnabled,
     repoId,
     repoIsGit: true,
-    repoConnectionId: null,
+    repoConnectionId,
     repoExecutionHostId,
     projectGroupTarget: false,
     initialRecipeId
@@ -87,6 +90,17 @@ function Harness({
       <span data-testid="recipes">{state.recipes.map((recipe) => recipe.id).join(',')}</span>
       <span data-testid="selected">{state.selectedRecipeId ?? 'none'}</span>
       <span data-testid="error">{state.error ?? 'none'}</span>
+      <span data-testid="dropped">{state.orcaCloudDropped ?? 'none'}</span>
+      <button
+        type="button"
+        data-testid="pick-cloud"
+        onClick={() => state.setSelectedRecipeId(ORCA_CLOUD_RECIPE_ID)}
+      />
+      <button
+        type="button"
+        data-testid="pick-devbox"
+        onClick={() => state.setSelectedRecipeId('devbox')}
+      />
     </div>
   )
 }
@@ -296,5 +310,106 @@ describe('useEphemeralVmRecipeOptions', () => {
       expect(container.querySelector('[data-testid="selected"]')?.textContent).toBe('none')
     )
     expect(container.querySelector('[data-testid="recipes"]')?.textContent).toBe('')
+  })
+
+  // RUNON-STICKY (Neil): picking Orca Cloud, then another project, reset Run on to this computer.
+  describe('a picked Orca Cloud across project changes', () => {
+    const CLOUD = {
+      id: ORCA_CLOUD_RECIPE_ID,
+      name: 'Orca Cloud',
+      provider: 'orca-cloud' as const,
+      create: 'orca-cloud create'
+    }
+    const withCloud = (ids: string[] = []): RecipeListResult => ({
+      ...result(ids),
+      recipes: [CLOUD, ...ids.map((id) => ({ id, name: id, create: `create-${id}` }))],
+      orcaCloud: 'offered'
+    })
+    const text = (container: HTMLElement, id: string) =>
+      container.querySelector(`[data-testid="${id}"]`)?.textContent
+    const pick = async (container: HTMLElement, id: string) =>
+      act(async () =>
+        (container.querySelector(`[data-testid="${id}"]`) as HTMLButtonElement).click()
+      )
+
+    it('stays picked when the new project can use it, without flashing back to this computer', async () => {
+      const next = deferred<RecipeListResult>()
+      installApi(
+        vi
+          .fn()
+          .mockResolvedValueOnce(withCloud(['devbox']))
+          .mockReturnValueOnce(next.promise)
+      )
+      const { root, container } = await render(<Harness repoId="repo-1" />)
+      await vi.waitFor(() => expect(text(container, 'recipes')).toContain(ORCA_CLOUD_RECIPE_ID))
+      await pick(container, 'pick-cloud')
+      expect(text(container, 'selected')).toBe(ORCA_CLOUD_RECIPE_ID)
+
+      await act(async () => root.render(<Harness repoId="repo-2" />))
+      // While the new project's options load, Run on still reads Orca Cloud.
+      expect(text(container, 'selected')).toBe(ORCA_CLOUD_RECIPE_ID)
+      await act(async () => next.resolve(withCloud()))
+      expect(text(container, 'selected')).toBe(ORCA_CLOUD_RECIPE_ID)
+      expect(text(container, 'dropped')).toBe('none')
+    })
+
+    it('falls back only when the new project can’t use it, and says why', async () => {
+      installApi(
+        vi
+          .fn()
+          .mockResolvedValueOnce(withCloud())
+          .mockResolvedValueOnce({ ...result([]), orcaCloud: 'unavailable' })
+      )
+      const { root, container } = await render(<Harness repoId="repo-1" />)
+      await vi.waitFor(() => expect(text(container, 'recipes')).toContain(ORCA_CLOUD_RECIPE_ID))
+      await pick(container, 'pick-cloud')
+      await act(async () => root.render(<Harness repoId="repo-2" />))
+      await vi.waitFor(() => expect(text(container, 'selected')).toBe('none'))
+      expect(text(container, 'dropped')).toBe('unavailable')
+
+      // The next pick clears the reason.
+      await pick(container, 'pick-cloud')
+      expect(text(container, 'dropped')).toBe('none')
+    })
+
+    it('a project on another machine (SSH): falls back and says it lives elsewhere', async () => {
+      installApi(vi.fn().mockResolvedValueOnce(withCloud()))
+      const { root, container } = await render(<Harness repoId="repo-1" />)
+      await vi.waitFor(() => expect(text(container, 'recipes')).toContain(ORCA_CLOUD_RECIPE_ID))
+      await pick(container, 'pick-cloud')
+      await act(async () => root.render(<Harness repoId="repo-ssh" repoConnectionId="ssh-1" />))
+      expect(text(container, 'selected')).toBe('none')
+      expect(text(container, 'dropped')).toBe('elsewhere')
+    })
+
+    it('Orca Cloud not answering for the new project: falls back with unreachable', async () => {
+      installApi(
+        vi.fn().mockResolvedValueOnce(withCloud()).mockRejectedValueOnce(new Error('offline'))
+      )
+      const { root, container } = await render(
+        <Harness repoId="repo-1" customRecipesEnabled={false} />
+      )
+      await vi.waitFor(() => expect(text(container, 'recipes')).toContain(ORCA_CLOUD_RECIPE_ID))
+      await pick(container, 'pick-cloud')
+      await act(async () => root.render(<Harness repoId="repo-2" customRecipesEnabled={false} />))
+      await vi.waitFor(() => expect(text(container, 'dropped')).toBe('unreachable'))
+      expect(text(container, 'selected')).toBe('none')
+    })
+
+    it('a project’s own recipe still doesn’t carry to another project', async () => {
+      installApi(
+        vi
+          .fn()
+          .mockResolvedValueOnce(withCloud(['devbox']))
+          .mockResolvedValueOnce(withCloud(['devbox']))
+      )
+      const { root, container } = await render(<Harness repoId="repo-1" />)
+      await vi.waitFor(() => expect(text(container, 'recipes')).toContain('devbox'))
+      await pick(container, 'pick-devbox')
+      await act(async () => root.render(<Harness repoId="repo-2" />))
+      await vi.waitFor(() => expect(text(container, 'recipes')).toContain('devbox'))
+      expect(text(container, 'selected')).toBe('none')
+      expect(text(container, 'dropped')).toBe('none')
+    })
   })
 })
