@@ -58,24 +58,38 @@ export async function forgetHostNativeChats(
       return result
     }
     const { sessionId, location } = chat
+    let forgotten = false
     try {
-      const forgotten = await host.serialize(
-        sessionId,
-        async () =>
-          // Any history read opens the conversation, so an open one may be on screen.
-          !host.hasSession(sessionId) &&
-          host.deps.store.forgetIdleChat(
-            { sessionId, location, idleBefore: Date.now() - WORKSPACE_CLEANUP_RULE_GRACE_MS },
-            () => shouldForget(chat)
-          )
-      )
-      if (forgotten) {
-        result.deleted += 1
-      }
+      forgotten = await host.serialize(sessionId, async () => {
+        // Any history read opens the conversation, so an open one may be on screen.
+        if (host.hasSession(sessionId)) {
+          return false
+        }
+        const tabShown = host.isSessionTabVisible(sessionId)
+        const deleted = await host.deps.store.forgetIdleChat(
+          { sessionId, location, idleBefore: Date.now() - WORKSPACE_CLEANUP_RULE_GRACE_MS },
+          () => shouldForget(chat)
+        )
+        if (deleted && tabShown) {
+          await closeForgottenChatTab(host, sessionId)
+        }
+        return deleted
+      })
     } catch (error) {
       console.warn('[workspace-cleanup] Deleting a chat of a deleted workspace failed', error)
       result.failed += 1
     }
+    result.deleted += forgotten ? 1 : 0
   }
   return result
+}
+
+/** A shown tab was seeded into status lists and may hold orchestration work: close it the usual way. */
+async function closeForgottenChatTab(
+  host: NonNullable<ReturnType<typeof getStructuredAgentSessionHost>>,
+  sessionId: string
+): Promise<void> {
+  await host.setSessionTabVisibility(sessionId, false).catch((error: unknown) => {
+    console.warn('[workspace-cleanup] Closing a deleted chat tab failed', error)
+  })
 }

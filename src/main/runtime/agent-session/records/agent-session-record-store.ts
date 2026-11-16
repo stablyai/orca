@@ -327,13 +327,14 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
     this.updateRecord(args.sessionId, { kind: 'options', args })
 
   /** Deletes a chat at rest for good, with its tab, when `stillWanted` agrees after any conversion
-   *  of it; its journal rows follow in background pages. The caller holds the chat's conversation
-   *  lane, so nothing opens it meanwhile. */
-  forgetIdleChat = async (
+   *  of it. Its journal rows follow in background pages on the next maintenance tick, so a batch
+   *  of deletions shares one pass. The caller holds the chat's conversation lane, so nothing opens
+   *  it meanwhile. */
+  forgetIdleChat = (
     forget: AgentSessionIdleForget,
     stillWanted: () => Promise<boolean>
-  ): Promise<boolean> => {
-    const forgotten = await this.journalDatabase.forgetChat(
+  ): Promise<boolean> =>
+    this.journalDatabase.forgetChat(
       forget.sessionId,
       async () =>
         (await stillWanted()) &&
@@ -343,9 +344,4 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
           legacyTabIds: this.transactions.legacySessionTabIds
         })
     )
-    if (forgotten) {
-      this.journalDatabase.requestSweep()
-    }
-    return forgotten
-  }
 }
