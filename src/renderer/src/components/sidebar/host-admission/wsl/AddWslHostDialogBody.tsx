@@ -23,7 +23,8 @@ export function AddWslHostDialogBody({
   const distros = list.distros
   const [chosenDistro, setChosenDistro] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [wait, setWait] = useState<{ distro: string; text: string } | null>(null)
+  const [addingDistro, setAddingDistro] = useState<string | null>(null)
+  const [wait, setWait] = useState<string | null>(null)
   // Keep an addable pick or the sole addable distro; never silently choose among several.
   const addable = distros.filter(canAddWslDistro)
   const selectedDistro = addable.some((distro) => distro.name === chosenDistro)
@@ -33,17 +34,17 @@ export function AddWslHostDialogBody({
       : ''
 
   // Main names what a long Add waits for (e.g. another install's lock) instead of a bare spinner.
+  // Every window hears every Add's progress; only this dialog's distro may change its text.
   useEffect(() => {
-    if (!adding) {
+    if (!adding || addingDistro === null) {
       return
     }
     return window.api.runtimeEnvironments?.wslHosts?.onAddProgress?.((progress) => {
-      const text = wslHostStatusDetailMessage(progress)
-      setWait(text === null ? null : { distro: progress.distro, text })
+      if (progress.distro.toLowerCase() === addingDistro.toLowerCase()) {
+        setWait(wslHostStatusDetailMessage(progress))
+      }
     })
-  }, [adding])
-  const addingDetail =
-    wait && wait.distro.toLowerCase() === selectedDistro.toLowerCase() ? wait.text : null
+  }, [adding, addingDistro])
 
   const add = async (): Promise<void> => {
     const selected = distros.find((distro) => distro.name === selectedDistro)
@@ -52,6 +53,7 @@ export function AddWslHostDialogBody({
     }
     setError(null)
     setWait(null)
+    setAddingDistro(selected.name)
     onAddingChange(true)
     try {
       const result = await addWslHostDistro(wslHostAddRequest(selected))
@@ -79,7 +81,7 @@ export function AddWslHostDialogBody({
       selectedDistro={selectedDistro}
       error={error ?? list.error}
       adding={adding}
-      addingDetail={adding ? addingDetail : null}
+      addingDetail={adding ? wait : null}
       serverFilesMissing={serverFilesMissing}
       onSelectDistro={(name) => {
         setChosenDistro(name)
