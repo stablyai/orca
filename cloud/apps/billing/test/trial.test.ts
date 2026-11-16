@@ -143,6 +143,32 @@ describe('trial abuse limits', () => {
     const otherIp = await as(h, { sub: 'ux', org: 'ox', email: 'px@acme.dev' }, '198.51.100.1')
     expect((await h.call('POST', '/v1/billing/trial', { headers: otherIp })).status).toBe(200)
   })
+
+  it('counts the browser address auth vouched for (console), not the address billing sees', async () => {
+    const h = await createHarness()
+    // Every console call comes from auth's address; the token names the browser's.
+    const AUTH_EGRESS = '34.1.2.3'
+    for (let i = 0; i < TRIAL_GRANTS_PER_IP_PER_DAY; i++) {
+      const browser = await as(h, { sub: `u${i}`, org: `o${i}`, email: `p${i}@acme.dev`, clientIp: `198.51.100.${i + 10}` }, AUTH_EGRESS)
+      expect((await h.call('POST', '/v1/billing/trial', { headers: browser })).status).toBe(200)
+    }
+    // Auth's address was never counted: one more browser still gets a trial.
+    const fresh = await as(h, { sub: 'uy', org: 'oy', email: 'py@acme.dev', clientIp: '198.51.100.200' }, AUTH_EGRESS)
+    expect((await h.call('POST', '/v1/billing/trial', { headers: fresh })).status).toBe(200)
+    // The browser's address is: the same browser on yet another team hits its limit.
+    for (let i = 0; i < TRIAL_GRANTS_PER_IP_PER_DAY - 1; i++) {
+      const again = await as(h, { sub: `v${i}`, org: `q${i}`, email: `v${i}@acme.dev`, clientIp: '198.51.100.200' }, AUTH_EGRESS)
+      expect((await h.call('POST', '/v1/billing/trial', { headers: again })).status).toBe(200)
+    }
+    const over = await as(h, { sub: 'vz', org: 'qz', email: 'vz@acme.dev', clientIp: '198.51.100.200' }, AUTH_EGRESS)
+    expect((await h.call('POST', '/v1/billing/trial', { headers: over })).body).toEqual({ error: 'trial_unavailable' })
+  })
+
+  it('ignores a clientIp claim that is not an address, and still accepts the token', async () => {
+    const h = await createHarness()
+    const odd = await as(h, { sub: 'u1', org: 'o1', orgRole: 'owner', email: 'a@acme.dev', clientIp: 'not-an-ip' })
+    expect((await h.call('POST', '/v1/billing/trial', { headers: odd })).status).toBe(200)
+  })
 })
 
 describe('trial metering and limits', () => {
