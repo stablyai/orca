@@ -126,6 +126,34 @@ export function TerminalRenderingSection({
           }
         />
       </SearchableSetting>
+
+      <SearchableSetting
+        title={t(
+          'auto.components.settings.TerminalRenderingSection.6df64a8e5d',
+          'Smooth Claude Code scrolling'
+        )}
+        description={t(
+          'auto.components.settings.TerminalRenderingSection.e06a7c261a',
+          'Scroll Claude Code’s fullscreen mode with scroll regions instead of redrawing the screen on every step. Applies to new Claude panes.'
+        )}
+        keywords={['terminal', 'claude', 'scroll', 'scrolling', 'fullscreen', 'lag', 'stutter']}
+        className="py-2"
+      >
+        <SettingsSwitchRow
+          label={t(
+            'auto.components.settings.TerminalRenderingSection.6df64a8e5d',
+            'Smooth Claude Code scrolling'
+          )}
+          description={t(
+            'auto.components.settings.TerminalRenderingSection.e06a7c261a',
+            'Scroll Claude Code’s fullscreen mode with scroll regions instead of redrawing the screen on every step. Applies to new Claude panes.'
+          )}
+          checked={settings.claudeCodeScrollRegions !== false}
+          onChange={() =>
+            updateSettings({ claudeCodeScrollRegions: settings.claudeCodeScrollRegions === false })
+          }
+        />
+      </SearchableSetting>
     </SettingsGroup>
   )
 }
