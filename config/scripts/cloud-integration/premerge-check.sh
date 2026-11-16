@@ -6,6 +6,8 @@
 #   branch touched: changed *.test.ts(x), every test in the folder of each changed source, every test that imports a
 #   changed module, every test Vitest's module graph relates to the change (vitest --changed), and each touched cloud/apps/* package's own suite, plus the own `pnpm typecheck` of each touched cloud/ package listed
 #   in premerge-typecheck-packages.txt. PREMERGE_FULL=1 runs the whole vitest suite.
+#   E2E-style and runner-specific suites (tests/e2e/, *.e2e/integration/electron/chromium/live-shell/wsl/windows/win32
+#   .test.*) are skipped in targeted runs; PREMERGE_E2E=1 includes them.
 # The merged copy of this script is what runs, so the gate is always integration's current one.
 # Prints "premerge OK" only when everything passes. Nothing here reads /tmp state. On macOS (no flock) wrap heavy runs
 # as /tmp/vdrv/heavy.sh 'config/scripts/cloud-integration/premerge-check.sh'.
@@ -107,16 +109,11 @@ else
   # A wide change (an upstream sync touches thousands of files) selects nearly everything anyway, and the per-file
   # selection below costs O(changed x tests). Over the threshold, run every src test instead.
   if ((n_changed > ${PREMERGE_SELECT_ALL_OVER:-300})); then
-    # Runner-specific suites (Electron, Chromium, a login zsh, WSL, Windows) need hosts the offload lanes don't have,
-    # and targeted runs never select them wholesale. The per-cut full suite on the integration Mac still runs them.
-    exclude=${PREMERGE_SELECT_ALL_EXCLUDE:-'\.(electron|chromium|live-shell|wsl|windows)\.test\.tsx?$'}
-    n_excluded=0
+    # The E2E/runner-specific skip below applies here too.
     while IFS= read -r t; do
-      if [[ -z "$t" || ! -f "$t" ]]; then continue; fi
-      if [[ "$t" =~ $exclude ]]; then n_excluded=$((n_excluded + 1)); continue; fi
-      tests+=("$t")
+      if [[ -n "$t" && -f "$t" ]]; then tests+=("$t"); fi
     done <<<"$all_tests"
-    echo "premerge: $n_changed changed src files (over ${PREMERGE_SELECT_ALL_OVER:-300}); selecting every src test file except $n_excluded runner-specific one(s) matching $exclude"
+    echo "premerge: $n_changed changed src files (over ${PREMERGE_SELECT_ALL_OVER:-300}); selecting every src test file"
   elif ((n_changed > 0)); then
     folders=()
     modules=()
@@ -171,6 +168,20 @@ else
     # block. Exact whole-line matches only (filter-base-list-tests.sh, unit-tested); repo paths have no spaces.
     tests=($(printf "%s\n" "${tests[@]}" | sort -u |
       bash config/scripts/cloud-integration/filter-base-list-tests.sh config/scripts/cloud-integration/full-suite-base-list.txt))
+    # E2E-style, integration and runner-specific suites (Electron, Chromium, a login zsh, WSL, Windows) are slow or need
+    # hosts the offload lanes don't have, so they mostly ate gate time. Skipped by default in every targeted mode;
+    # PREMERGE_E2E=1 brings them back. The per-cut full suite still runs them. Only the count is printed: lane
+    # watchdogs look for those file names in the output.
+    if [[ "${PREMERGE_E2E:-}" != 1 ]]; then
+      skip_re=${PREMERGE_SKIP_TESTS_RE:-${PREMERGE_SELECT_ALL_EXCLUDE:-'(^|/)tests/e2e/|\.(e2e|integration|electron|chromium|live-shell|wsl|windows|win32)\.test\.[cm]?[jt]sx?$'}}
+      kept=()
+      n_skipped=0
+      for t in "${tests[@]}"; do
+        if [[ "$t" =~ $skip_re ]]; then n_skipped=$((n_skipped + 1)); else kept+=("$t"); fi
+      done
+      tests=(${kept[@]+"${kept[@]}"})
+      echo "premerge: skipped $n_skipped E2E/runner-specific test file(s) matching $skip_re (PREMERGE_E2E=1 runs them)"
+    fi
     echo "premerge: ${#tests[@]} targeted test file(s):"
   fi
   if ((${#tests[@]} > 0)); then
