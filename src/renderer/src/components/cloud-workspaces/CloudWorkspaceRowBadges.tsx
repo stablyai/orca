@@ -1,5 +1,6 @@
 // The small marks after a cloud workspace's title in Open cloud workspace…: private, started by a
 // routine, and its W-number (shown on hover or focus; its space is held so nothing shifts).
+import { useCloudTeamSharingEnabled } from '@/lib/orca-cloud/cloud-team-sharing-flag'
 import React from 'react'
 import { CalendarClock, Lock } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -23,9 +24,11 @@ export function CloudWorkspaceRowBadges({
 }): React.JSX.Element {
   const t = useTranslate()
   const revealOpen = revealNumber
+  // TEAM-SHARING-HOLD: every workspace is private while sharing is held; no badge says so.
+  const teamSharing = useCloudTeamSharingEnabled()
   return (
     <>
-      {w.visibility === 'private' && (
+      {teamSharing && w.visibility === 'private' && (
         <Tooltip>
           <TooltipTrigger asChild>
             <Lock
