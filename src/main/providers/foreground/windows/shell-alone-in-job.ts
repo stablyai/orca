@@ -2,14 +2,16 @@ import { isGitForWindowsBashLauncherPath } from '../../../pty/shell-startup/git-
 import type { WindowsProcessIdentityRow } from '../../../windows/windows-process-table'
 import {
   buildProcessTableIndex,
-  collectDescendantsFromIndex
+  collectDescendantsFromIndex,
+  getProcessTableIndex
 } from '../../../../shared/process-observation/tables/process-table-index'
 
 const MSYS_BASH_IMAGE = 'bash.exe'
 
 /** Git Bash launcher/MSYS exec stubs form a live unbranched bash chain; commands add a non-bash leaf or branch.
  * Builtin-only/nested bash remains indistinguishable from idle. Optional console proof excludes detached orphans;
- * ancestry alone cannot distinguish them from live MSYS children with exited Win32 parents. */
+ * ancestry alone cannot distinguish them from live MSYS children with exited Win32 parents.
+ * A shell-only job still needs the parent tree: a Store (MSIX) shell's children start outside its job. */
 export async function isWindowsShellAloneInJob(
   shellPid: number,
   spawnedShellPath: string,
@@ -21,7 +23,7 @@ export async function isWindowsShellAloneInJob(
     return false
   }
   if (jobProcessIds.size === 1) {
-    return true
+    return !hasLiveDescendant(shellPid, await readIdentityTable())
   }
   const isLauncher = isGitForWindowsBashLauncherPath(spawnedShellPath)
   if (!isLauncher && !readConsoleAttachedProcessIds) {
@@ -56,6 +58,19 @@ export async function isWindowsShellAloneInJob(
     parentPid = child.pid
   }
   return true
+}
+
+/** Fails closed when the table cannot show the shell; a child older than its parent carries a reused ppid. */
+function hasLiveDescendant(shellPid: number, rows: readonly WindowsProcessIdentityRow[]): boolean {
+  const index = getProcessTableIndex(rows)
+  if (!index.byPid.get(shellPid)?.name) {
+    return true
+  }
+  return (
+    collectDescendantsFromIndex(index, shellPid, (row) =>
+      startedBefore(row.creationTimeMs, index.byPid.get(row.ppid)?.creationTimeMs)
+    ).length > 0
+  )
 }
 
 /** Drops members that are neither linked to the shell through live parents nor on its console. */
