@@ -116,7 +116,9 @@ async function linkTargets(path: string): Promise<string[]> {
     if (link === null) {
       break
     }
-    current = join(resolve(dirname(existing), link), ...rest)
+    // A relative link resolves from its real folder, which an earlier link may have moved.
+    const linkFolder = await realpath(dirname(existing)).catch(() => dirname(existing))
+    current = join(resolve(linkFolder, link), ...rest)
     targets.push(current)
   }
   return targets

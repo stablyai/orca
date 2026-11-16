@@ -31,7 +31,11 @@ export type ChatHistorySweepDeps = {
   signal?: AbortSignal
   /** Sessions whose cwd is inside one of `scopePaths`, at most AI_VAULT_SCOPE_PATHS_MAX_COUNT of them. */
   listSessions: (scopePaths: string[], signal?: AbortSignal) => Promise<AiVaultSession[]>
-  deleteSessions: (targets: ChatHistoryTarget[]) => Promise<ChatHistorySweepResult>
+  /** `shouldDelete` runs right before each removal, after any earlier removal in the batch. */
+  deleteSessions: (
+    targets: ChatHistoryTarget[],
+    shouldDelete: (target: ChatHistoryTarget) => Promise<boolean>
+  ) => Promise<ChatHistorySweepResult>
   /** Read before each deletion: the user may turn the setting off while a long scan runs. */
   isEnabled: () => boolean
 }
@@ -119,16 +123,16 @@ export async function sweepDeletedWorkspaceChatHistory(
     if (deps.signal?.aborted || !deps.isEnabled() || !(await isStillGone(folder))) {
       continue
     }
-    const idle: ChatHistoryTarget[] = []
-    for (const target of targets) {
-      if (await isStillIdleInGoneFolder(target.filePath, goneFolderKey(folder), Date.now())) {
-        idle.push(target)
-      }
-    }
-    if (idle.length === 0) {
-      continue
-    }
-    const deleted = await deps.deleteSessions(idle)
+    const key = goneFolderKey(folder)
+    // Reading one transcript can take a while, so each is checked right before its own removal.
+    const deleted = await deps.deleteSessions(
+      targets,
+      async (target) =>
+        !deps.signal?.aborted &&
+        deps.isEnabled() &&
+        (await isStillGone(folder)) &&
+        (await isStillIdleInGoneFolder(target.filePath, key, Date.now()))
+    )
     result.deleted += deleted.deleted
     result.failed += deleted.failed
     result.freedBytes += deleted.freedBytes

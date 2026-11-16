@@ -3,33 +3,52 @@ import { WORKSPACE_CLEANUP_RULE_GRACE_MS } from '../../../../shared/workspace-cl
 import { goneFolderKey, goneFolderOf } from './deleted-workspace-folders'
 
 const CHUNK_BYTES = 256 * 1024
-// A cwd value is short; chunks overlap by this much so a match split across a boundary is still read.
-const OVERLAP_BYTES = 8 * 1024
 const MAX_SCAN_BYTES = 16 * 1024 * 1024
-const CWD_FIELD = /"cwd"\s*:\s*("(?:[^"\\]|\\.)*")/g
+const NEWLINE = 0x0a
 
-function lastCwdIn(text: string): string | null {
-  let last: string | null = null
-  for (const match of text.matchAll(CWD_FIELD)) {
-    last = match[1]
+/** The record's own top-level cwd; tool arguments nested inside can carry other folders. */
+function topLevelCwd(line: Buffer): string | null {
+  if (!line.includes('"cwd"')) {
+    return null
   }
-  const parsed: unknown = last === null ? null : JSON.parse(last)
-  return typeof parsed === 'string' ? parsed : null
+  try {
+    const record: unknown = JSON.parse(line.toString('utf8'))
+    const cwd =
+      typeof record === 'object' && record !== null ? (record as { cwd?: unknown }).cwd : null
+    return typeof cwd === 'string' ? cwd : null
+  } catch {
+    return null
+  }
 }
 
-/** The last `"cwd"` a transcript recorded, read backwards from its end; null when none is found. */
+/** The last top-level `cwd` a JSONL transcript recorded, reading whole records back from its end. */
 async function readLastRecordedCwd(filePath: string): Promise<string | null> {
   const handle = await open(filePath, 'r')
   try {
     const { size } = await handle.stat()
-    // Long API blobs carry no cwd, so keep reading back until one appears.
+    // Pieces of the record that straddles chunk boundaries, oldest first; joined once it is whole.
+    let pieces: Buffer[] = []
     for (let end = size; end > 0 && size - end < MAX_SCAN_BYTES; end -= CHUNK_BYTES) {
       const start = Math.max(0, end - CHUNK_BYTES)
-      const length = Math.min(size, end + OVERLAP_BYTES) - start
-      const { buffer } = await handle.read(Buffer.alloc(length), 0, length, start)
-      const cwd = lastCwdIn(buffer.toString('utf8'))
-      if (cwd !== null) {
-        return cwd
+      const chunk = Buffer.alloc(end - start)
+      await handle.read(chunk, 0, chunk.length, start)
+      // Long API blobs carry no cwd, so keep reading back until a record with one appears.
+      let lineEnd = chunk.length
+      for (let index = chunk.length - 1; index >= 0; index -= 1) {
+        if (chunk[index] !== NEWLINE) {
+          continue
+        }
+        const head = chunk.subarray(index + 1, lineEnd)
+        const cwd = topLevelCwd(pieces.length > 0 ? Buffer.concat([head, ...pieces]) : head)
+        if (cwd !== null) {
+          return cwd
+        }
+        pieces = []
+        lineEnd = index
+      }
+      pieces.unshift(chunk.subarray(0, lineEnd))
+      if (start === 0) {
+        return topLevelCwd(Buffer.concat(pieces))
       }
     }
     return null

@@ -92,7 +92,12 @@ async function measurePathBytes(path: string): Promise<number> {
 
 /** Cleanup deletes for good: the Trash would keep the space it is meant to free. Caches clear once. */
 export async function deleteHostAiVaultSessionsPermanently(
-  targets: readonly { agent: AiVaultAgent; filePath: string }[]
+  targets: readonly { agent: AiVaultAgent; filePath: string }[],
+  /** Asked right before each removal; false keeps that session (neither deleted nor failed). */
+  shouldDelete: (target: {
+    agent: AiVaultAgent
+    filePath: string
+  }) => Promise<boolean> = async () => true
 ): Promise<{ deleted: number; failed: number; freedBytes: number }> {
   const wslHomeDirs = await getAiVaultWslHomeDirs()
   const deletedPaths: string[] = []
@@ -105,6 +110,9 @@ export async function deleteHostAiVaultSessionsPermanently(
     freedBytes += sizeBytes
   }
   for (const target of targets) {
+    if (!(await shouldDelete(target))) {
+      continue
+    }
     const result = await deleteAiVaultSessionFile(
       { ...target, executionHostId: LOCAL_EXECUTION_HOST_ID, wslHomeDirs },
       removeAndMeasure

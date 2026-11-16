@@ -40,7 +40,8 @@ function session(
   const blob = JSON.stringify({ type: 'api-request-blob', body: 'x'.repeat(300 * 1024) })
   writeFileSync(
     filePath,
-    `${JSON.stringify({ cwd })}\n${JSON.stringify({ cwd: lastCwd })}\n${blob}\n`
+    // The last record's tool call names the start folder too; only the record's own cwd counts.
+    `${JSON.stringify({ cwd })}\n${JSON.stringify({ cwd: lastCwd, input: { cwd } })}\n${blob}\n`
   )
   utimesSync(filePath, new Date(DAY_AGO), new Date(DAY_AGO))
   return {
@@ -190,9 +191,15 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
         return sessionsToList
       },
       isEnabled: () => true,
-      deleteSessions: async (targets) => {
-        deleted.push(...targets)
-        return { deleted: targets.length, failed: 0, freedBytes: 21 * targets.length }
+      deleteSessions: async (targets, shouldDelete) => {
+        const removed: ChatHistoryTarget[] = []
+        for (const target of targets) {
+          if (await shouldDelete(target)) {
+            removed.push(target)
+          }
+        }
+        deleted.push(...removed)
+        return { deleted: removed.length, failed: 0, freedBytes: 21 * removed.length }
       }
     })
 
