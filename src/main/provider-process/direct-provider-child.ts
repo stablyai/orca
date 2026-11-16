@@ -17,16 +17,7 @@ import { drainDirectProviderOutput, pipeDirectProviderOutput } from './direct-pr
 import { pipeDirectProviderInput } from './direct-provider-input'
 import { providerExecFailure, reportProviderLaunchFailure } from './provider-launch-failure'
 import { ProviderFaultOwnership } from './provider-fault-ownership'
-import {
-  joinCurrentProviderReap,
-  isProviderProbeOrPause,
-  isProviderReapSignal,
-  isProviderTermSignal,
-  reapDirectProviderGroup,
-  signalDirectProviderGroup,
-  signalLiveDirectProviderRoot,
-  signalDirectProviderRoot
-} from './direct-provider-group-reap'
+import * as group from './direct-provider-group-reap'
 
 type Ownership = Awaited<ReturnType<typeof publishProviderOwnership>>
 
@@ -52,6 +43,7 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
   private canceled = false
   private released = false
   private outcome?: ProviderLeaderOutcome | null
+  private readonly leaderOutcome: Promise<ProviderLeaderOutcome | null>
   private settled = false
   private failure?: Promise<Error>
   private readonly faultOwnership = new ProviderFaultOwnership()
@@ -101,7 +93,8 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
       this.input.release()
       releaseOutput()
     }
-    void observeProviderLeaderOutcome(raw).then((outcome) => {
+    this.leaderOutcome = observeProviderLeaderOutcome(raw)
+    void this.leaderOutcome.then((outcome) => {
       this.outcome = outcome
       if (outcome !== null) {
         // P's outcome ends input ownership even while H is still retiring adopted children.
@@ -183,16 +176,16 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
     if (this.settled || this.groupVerdict === 'exited') {
       return false
     }
-    if (!this.released && !isProviderProbeOrPause(signal)) {
+    if (!this.released && !group.isProviderProbeOrPause(signal)) {
       return this.cancelLaunch()
     }
-    if (isProviderReapSignal(signal)) {
+    if (group.isProviderReapSignal(signal)) {
       return this.forceReap()
     }
-    if (isProviderTermSignal(signal)) {
+    if (group.isProviderTermSignal(signal)) {
       return this.startTerm()
     }
-    return signalLiveDirectProviderRoot(this, signal)
+    return group.signalLiveDirectProviderRoot(this, signal)
   }
 
   private cancelLaunch(): boolean {
@@ -221,7 +214,7 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
     }
     const watcherConnected = this.connected && this.control?.writable && !this.control.destroyed
     // The watcher sends TERM once; queueing control is not proof of signal delivery.
-    return watcherConnected ? false : signalDirectProviderGroup(this, 'SIGTERM')
+    return watcherConnected ? false : group.signalDirectProviderGroup(this, 'SIGTERM')
   }
 
   private transportEnded(completion?: ProviderControlCompletion): void {
@@ -229,14 +222,18 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
       this.forceReap(completion)
       return
     }
-    this.faultOwnership.stopAfterCapture(this.publication, () => {
-      if (completion || this.stop.reaping || this.leaderExited) {
-        this.forceReap(completion)
-      } else if (!this.settled) {
-        this.input.end()
-        this.stop.ownerLost(this.connected, () => this.startTerm(true))
-      }
-    })
+    this.faultOwnership.stopAfterCapture(
+      this.publication,
+      () => {
+        if (completion || this.stop.reaping || this.leaderExited) {
+          this.forceReap(completion)
+        } else if (!this.settled) {
+          this.input.end()
+          this.stop.ownerLost(this.connected, () => this.startTerm(true))
+        }
+      },
+      completion ? this.leaderOutcome.then((outcome) => outcome !== null) : undefined
+    )
   }
 
   private forceReap(completion = this.nativeCompletion): boolean {
@@ -253,7 +250,7 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
       this.gate?.destroy()
       // A held bootstrap must run its gate-cancellation path to reap its unpublished watcher.
       if (this.writerPid && this.outcome === undefined && !this.control?.destroyed) {
-        signalDirectProviderRoot(this.writerPid, 'SIGCONT')
+        group.signalDirectProviderRoot(this.writerPid, 'SIGCONT')
       }
     }
     if (completion || gated) {
@@ -263,8 +260,8 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
       this.stop.reap()
     }
     this.reapAbort = new AbortController()
-    const delivered = completion || gated ? false : signalDirectProviderGroup(this, 'SIGKILL')
-    this.reapTask = reapDirectProviderGroup(
+    const delivered = completion || gated ? false : group.signalDirectProviderGroup(this, 'SIGKILL')
+    this.reapTask = group.reapDirectProviderGroup(
       delivered,
       () => this.writerPid,
       () => this.publication,
@@ -292,7 +289,7 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
       this.outcome === null &&
       this.connected &&
       withTimeout(this.watcherEnded.promise, this.stop.maxStopMs, undefined)
-    await joinCurrentProviderReap(() => this.reapTask)
+    await group.joinCurrentProviderReap(() => this.reapTask)
     if (this.raw.pid !== undefined && this.groupVerdict !== 'exited') {
       const ladder = this.outcome === null ? this.reapRequested : this.watcherEnded
       await withTimeout(ladder.promise, this.stop.maxStopMs, undefined)
@@ -302,9 +299,9 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
       this.forceReap()
     }
     await watcherRetirement
-    await joinCurrentProviderReap(() => this.reapTask)
+    await group.joinCurrentProviderReap(() => this.reapTask)
     await drainDirectProviderOutput(this.raw.stdout, this.raw.stderr, this.stdout, this.stderr)
-    await joinCurrentProviderReap(() => this.reapTask)
+    await group.joinCurrentProviderReap(() => this.reapTask)
     this.settled = true
     this.releaseRaw()
     this.stdin.destroy()

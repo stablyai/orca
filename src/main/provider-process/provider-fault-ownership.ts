@@ -20,18 +20,24 @@ import {
   type ProcessRowRead
 } from './provider-process-row-read'
 import type { publishProviderOwnership } from './provider-ownership-journal'
+import { withTimeout } from '../../shared/concurrency/promise-timeout-fallback'
+import { PROVIDER_OUTPUT_DRAIN_TIMEOUT_MS } from './provider-process-supervisor'
 
 export class ProviderFaultOwnership {
   task?: Promise<DescendantTreeVerdict | undefined>
   private pending = false
+  private normalOutcome?: Promise<boolean>
   private readonly deferred = new Map<'stdin' | 'term' | 'reap' | 'owner-loss', () => void>()
 
   stopAfterCapture(
     ownership: Promise<Awaited<ReturnType<typeof publishProviderOwnership>>> | undefined,
-    stop: () => void
+    stop: () => void,
+    normalOutcome?: Promise<boolean>
   ): void {
     if (!this.task) {
       this.pending = true
+      // Only completion-first capture can be superseded by a later valid outcome.
+      this.normalOutcome = normalOutcome
       this.task = Promise.resolve(ownership)
         .then((registered) =>
           registered ? terminateProviderFaultDescendants(registered.identity) : undefined
@@ -52,7 +58,12 @@ export class ProviderFaultOwnership {
   /** Only an attempted capture can fail; normal exit never claims detached tools. */
   async descendantsCleaned(): Promise<boolean> {
     const verdict = await this.task
-    return verdict === undefined || verdict === 'exited'
+    return (
+      verdict === undefined ||
+      verdict === 'exited' ||
+      (this.normalOutcome !== undefined &&
+        (await withTimeout(this.normalOutcome, PROVIDER_OUTPUT_DRAIN_TIMEOUT_MS, false)))
+    )
   }
 
   /** Coalesce destructive requests while the one bounded fault task owns the last anchor. */
