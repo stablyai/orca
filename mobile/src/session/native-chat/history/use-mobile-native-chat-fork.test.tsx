@@ -262,7 +262,7 @@ it('offers Fork on each finished terminal reply, past the tool and hook rows tha
   })
   const text = (value: string) => [{ type: 'text' as const, text: value }]
   const call = [{ type: 'tool-call' as const, toolCallId: 't', name: 'TodoWrite', input: {} }]
-  const result = [{ type: 'tool-result' as const, toolCallId: 't', content: 'ok' }]
+  const result = [{ type: 'tool-result' as const, callId: 't', output: 'ok' }]
   const messages: NativeChatMessage[] = [
     row('u1', 'user', text('fix it')),
     row('a1', 'assistant', text('Checking.')),
