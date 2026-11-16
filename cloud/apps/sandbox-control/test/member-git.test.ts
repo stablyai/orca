@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest'
 import { generateGrantRecipientKey } from '../../../../src/main/cloud-workspaces/sealed-grant-node'
 import { memberPlaceholder } from '../src/github-user-tokens'
 import { MEMBERS_COMMAND } from '../src/lifecycle'
+import { memberCoauthors } from '../src/member-git'
+import { getSandbox } from '../src/store'
 import { gitBasicAuthorization } from '../src/network-policy'
 import { createHarness } from './harness'
 
@@ -135,6 +137,28 @@ describe('git as the sender', () => {
     await t.h.call('DELETE', `/v1/team/workspaces/${t.id}/grants/${issued.body.grant.id}`, { bearer: bob })
     expect(JSON.stringify(box.policy.allow['github.com'])).not.toContain(bobPh)
     expect(await t.proxied('github.com', '/acme/app.git/info/refs', bobPh)).toEqual({ status: 403, body: 'placeholder_missing' })
+  })
+
+  it('GIT-COAUTHOR: a connected member whose identity cannot be used is sent as a co-author only, never a token', async () => {
+    const t = await setup()
+    await t.seed('alice', 'alice-gh', 11)
+    t.h.advance(1_000)
+    await t.seed('bob', 'bob-gh', 22)
+    const bob = await t.as('bob')
+    const issued = await t.h.call('POST', `/v1/team/workspaces/${t.id}/grants`, {
+      bearer: bob,
+      body: { recipientPublicKeyB64: generateGrantRecipientKey().publicKeyB64, deviceLabel: 'b', deviceKind: 'desktop' }
+    })
+    expect(issued.status).toBe(200)
+    const sync = t.h.vercel.commands.filter((c) => c.command === MEMBERS_COMMAND).at(-1)!
+    // Both usable: no co-authors.
+    expect(JSON.parse(Buffer.from(sync.env.ORCA_COAUTHORS_B64!, 'base64').toString())).toEqual([])
+    const row = (await getSandbox(t.h.env.SANDBOX_DB, t.id))!
+    const coauthors = await memberCoauthors(t.h.env.SANDBOX_DB, row, new Set(['alice']))
+    expect(coauthors).toEqual([
+      { userId: 'bob', coauthor: 'bob-gh name <22+bob-gh@users.noreply.github.com>', deviceIds: [[...t.h.vercel.boxes.values()][0]!.devices.at(-1)] }
+    ])
+    expect(JSON.stringify(coauthors)).not.toContain('ghs_')
   })
 
   it('MEMBER_GIT_IDENTITY=off turns it off: member placeholders get no credential, the VM no member configs', async () => {

@@ -25,7 +25,7 @@ import { applyQueuedRevokes } from './grant-revokes'
 import { ENTRY_POINTS_PROBE, ensureEntryPoints, entryPointsBehind, installEntryPoints, parseEntryPointsProbe } from './golden-images'
 import { RUNTIME_REFRESH_SCRIPT, type RuntimeBundle } from './runtime-bundles'
 import { memberPlaceholder, type MemberGitIdentity } from './github-user-tokens'
-import { connectedMembers, memberGitConfigs } from './member-git'
+import { connectedMembers, memberCoauthors, memberGitConfigs } from './member-git'
 import type { RetentionConfig } from './retention'
 import { ProviderError, type ProviderSandboxState, type SandboxProviderApi } from './sandbox-provider'
 import { egressAccountRoutes, egressSecretHosts, placeholderValues, secretPlaceholder, type SecretEgressHost } from './secret-egress'
@@ -1250,10 +1250,12 @@ async function installMemberGit(deps: LifecycleDeps, row: SandboxRow, sessionId:
   await ensureEntryPoints(deps, sessionId)
   await refreshGitCredentials(deps, row, sessionId)
   const configs = await memberGitConfigs({ db: deps.db, identity: deps.memberIdentity! }, row)
-  const encoded = btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify(configs))))
+  const coauthors = await memberCoauthors(deps.db, row, new Set(configs.map((config) => config.userId)))
+  const encode = (value: unknown) => btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify(value))))
   const result = await deps.provider.runCommand(sessionId, {
     command: MEMBERS_COMMAND,
-    env: { ORCA_MEMBERS_B64: encoded },
+    // GIT-COAUTHOR: a separate variable, which an image's older members script simply ignores.
+    env: { ORCA_MEMBERS_B64: encode(configs), ORCA_COAUTHORS_B64: encode(coauthors) },
     sudo: true,
     timeoutMs: 30_000
   })

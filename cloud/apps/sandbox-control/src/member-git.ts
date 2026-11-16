@@ -8,7 +8,7 @@
 // risk: members share the VM user, so a member with a shell could subvert orcad itself.
 import type { ProxiedRoute } from './egress-proxy'
 import { parseGitHubRepo } from './github-app'
-import { memberPlaceholder, type MemberGitIdentity } from './github-user-tokens'
+import { getUserTokenRow, memberPlaceholder, type MemberGitIdentity } from './github-user-tokens'
 import { gitBasicAuthorization } from './network-policy'
 import { MEMBER_OUT_OF_REPO_BODY, NODE_REPOSITORY_QUERY, approves, classifyGraphqlRequest, merges, repositoryIdOfNode, type MemberTarget } from './github-graphql-pin'
 import { settledCache } from './settled-cache'
@@ -162,6 +162,36 @@ export async function memberGitConfigs(deps: MemberGitDeps, row: SandboxRow) {
     }
   }
   return out
+}
+
+/**
+ * GIT-COAUTHOR: members who connected GitHub but whose identity can't be used right now (token expired and
+ * not refreshable, or member git off for the account). Their commits fall back to the workspace identity, so
+ * the VM adds a `Co-authored-by` trailer with their GitHub noreply address: attribution survives, no token.
+ */
+export async function memberCoauthors(db: D1Database, row: SandboxRow, installed: ReadonlySet<string>) {
+  const out: { userId: string; coauthor: string; deviceIds: string[] }[] = []
+  for (const userId of await connectedMembers(db, row)) {
+    if (installed.has(userId)) {
+      continue
+    }
+    const token = await getUserTokenRow(db, row.account_id, userId)
+    const coauthor = token ? coauthorTrailer(token.github_login, token.github_user_id, token.github_name) : null
+    const deviceIds = coauthor ? await memberDeviceIds(db, row.id, userId) : []
+    if (coauthor && deviceIds.length > 0) {
+      out.push({ userId, coauthor, deviceIds })
+    }
+  }
+  return out
+}
+
+/** `Name <id+login@users.noreply.github.com>` (GitHub attributes by that address), or null if the parts are odd. */
+export function coauthorTrailer(login: string, githubUserId: number, name: string | null): string | null {
+  if (!/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/.test(login) || !Number.isSafeInteger(githubUserId) || githubUserId <= 0) {
+    return null
+  }
+  const display = name && /^[\p{L}\p{N} .'_-]{1,80}$/u.test(name.trim()) ? name.trim() : login
+  return `${display} <${githubUserId}+${login}@users.noreply.github.com>`
 }
 
 async function memberDeviceIds(db: D1Database, sandboxId: string, userId: string): Promise<string[]> {
