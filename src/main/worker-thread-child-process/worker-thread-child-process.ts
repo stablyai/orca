@@ -155,6 +155,11 @@ export class WorkerThreadChildProcessHost {
     })
   }
 
+  /** Starts or reuses the worker; false while it cannot run, including during an idle retirement. */
+  available(): boolean {
+    return this.host.ensure() !== null
+  }
+
   spawn(spec: WorkerThreadChildSpec): WorkerThreadChildProcess {
     const id = this.nextId++
     const child = new WorkerThreadChildProcess(id, (request) => this.post(request))
@@ -242,4 +247,10 @@ let sharedHost: WorkerThreadChildProcessHost | null = null
 export function spawnProcessOnWorkerThread(spec: WorkerThreadChildSpec): WorkerThreadChildProcess {
   sharedHost ??= new WorkerThreadChildProcessHost(defaultWorkerFactory)
   return sharedHost.spawn(spec)
+}
+
+/** True when a spawn now would reach a live worker; callers that must not fail can spawn locally instead. */
+export function canSpawnOnWorkerThread(): boolean {
+  sharedHost ??= new WorkerThreadChildProcessHost(defaultWorkerFactory)
+  return sharedHost.available()
 }

@@ -11,7 +11,10 @@ import { DEFAULT_GIT_MAX_BUFFER } from '../git-exec-options'
 import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-control/git-admission-tier-params'
 
 import { spawnedExecFile, workerExecFile } from './worker-exec-file'
-import type { WorkerThreadChildProcess } from '../../../worker-thread-child-process/worker-thread-child-process'
+import {
+  canSpawnOnWorkerThread,
+  type WorkerThreadChildProcess
+} from '../../../worker-thread-child-process/worker-thread-child-process'
 
 export type ExecFileCaptureOptions = Omit<ExecFileOptions, 'timeout'> & {
   timeout?: number
@@ -81,7 +84,11 @@ export function execFileCapture(
     let child: ChildProcess | WorkerThreadChildProcess | null = null
     let groupTermination: ReturnType<typeof createPosixGroupTermination> | undefined
     const ownedPosixGroup = options.ownedPosixGroup === true && process.platform !== 'win32'
-    const useWorker = options.spawnOnWorkerThread === true && process.platform === 'darwin'
+    // Windows CreateProcessW can stall the calling loop for seconds under endpoint security (#11161, #27362).
+    const useWorker =
+      process.platform === 'win32'
+        ? options.spawnOnWorkerThread !== false && canSpawnOnWorkerThread()
+        : options.spawnOnWorkerThread === true && process.platform === 'darwin'
     const deadline =
       options.timeout && options.timeout > 0 ? performance.now() + options.timeout : null
     let timer: NodeJS.Timeout | null = null
@@ -228,7 +235,15 @@ export function execFileCapture(
           )
         } else {
           child = useWorker
-            ? workerExecFile(command, args, captureOptions, complete)
+            ? workerExecFile(
+                command,
+                args,
+                // Keep execFile's error text so callers matching it see no difference.
+                process.platform === 'win32'
+                  ? { ...captureOptions, errorCommand: [command, ...args].join(' ') }
+                  : captureOptions,
+                complete
+              )
             : ownedPosixGroup
               ? spawnedExecFile(command, captureOptions, complete, () =>
                   spawnNativeProcess(

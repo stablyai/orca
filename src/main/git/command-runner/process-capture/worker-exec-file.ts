@@ -33,7 +33,8 @@ export function workerExecFile(
       program: command,
       args,
       cwd: options.cwd instanceof URL ? fileURLToPath(options.cwd) : options.cwd,
-      env: options.env,
+      // The worker's env is a copy from its start; send main's current one (PATH refreshes after launch).
+      env: options.env ?? process.env,
       ...(options.ownedPosixGroup ? { terminationBarrier: true as const } : {})
     })
   )

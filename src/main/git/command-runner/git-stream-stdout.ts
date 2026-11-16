@@ -26,6 +26,11 @@ import {
 import { prepareWindowsHostGitEnvironment } from './host-routing/windows-host-git-environment'
 import { nonInteractiveGitEnv, untranslatedGitOutputEnv } from './git-environment/git-process-env'
 import { gitSpawn } from './git-spawn'
+import {
+  canSpawnOnWorkerThread,
+  spawnProcessOnWorkerThread,
+  type WorkerThreadChildProcess
+} from '../../worker-thread-child-process/worker-thread-child-process'
 import { acquireGitAdmission } from './admission/git-subprocess-admission'
 import {
   GitCommandTimeoutError,
@@ -106,9 +111,10 @@ function streamInSpan(
           windowsHide: true
         }
         const ownedPosixGroup = process.platform !== 'win32' && !command.wsl
-        let child: ChildProcess
+        let child: ChildProcess | WorkerThreadChildProcess
+        let ownedGroupChild: ChildProcess | null = null
         if (ownedPosixGroup) {
-          child = spawnNativeProcess(
+          child = ownedGroupChild = spawnNativeProcess(
             command.binary,
             command.args,
             {
@@ -130,6 +136,18 @@ function streamInSpan(
             windowsHide: true
           })
           recordSubprocessSpawn(command.binary, command.args, performance.now() - spawnStartedAt)
+        } else if (process.platform === 'win32' && !command.wsl && canSpawnOnWorkerThread()) {
+          // Windows CreateProcessW can stall the calling loop for seconds under endpoint security (#11161, #27362).
+          const spawnStartedAt = performance.now()
+          const workerChild = spawnProcessOnWorkerThread({
+            program: command.binary,
+            args: command.args,
+            cwd: command.cwd,
+            env: untranslatedGitOutputEnv(spawnOptions.env ?? process.env)
+          })
+          workerChild.stdin.end()
+          child = workerChild
+          recordSubprocessSpawn(command.binary, command.args, performance.now() - spawnStartedAt)
         } else {
           child = gitSpawn(args, spawnOptions)
         }
@@ -144,9 +162,9 @@ function streamInSpan(
             terminationReported = true
             resolveTermination()
           }
-          if (ownedPosixGroup) {
-            groupTermination = createPosixGroupTermination(child, reportTermination)
-            child.once('close', groupTermination.close)
+          if (ownedGroupChild) {
+            groupTermination = createPosixGroupTermination(ownedGroupChild, reportTermination)
+            ownedGroupChild.once('close', groupTermination.close)
           } else {
             child.once('close', reportTermination)
           }
