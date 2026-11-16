@@ -1,4 +1,4 @@
-import { compareBaseSensitivityLocaleText } from '../../../../../../shared/locale-text-collators'
+import { compareBaseSensitivityLocaleText } from '../../../../../../shared/i18n/locale-text-collators'
 import {
   comparePaletteTabResults,
   isOmniboxPaletteTabFieldAllowed,

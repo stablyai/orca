@@ -48,6 +48,7 @@ export type RuntimeRepositoryCommandSurface = {
   listFolderWorkspaces: RuntimeProjectGroupController['listFolderWorkspaces']
   listVisibleProjectGroups: RuntimeProjectGroupController['listVisibleGroups']
   listVisibleFolderWorkspaces: RuntimeProjectGroupController['listVisibleFolderWorkspaces']
+  checkProjectGroupHooks: RuntimeProjectGroupController['checkGroupHooks']
   createProjectGroup: RuntimeProjectGroupController['createGroup']
   updateProjectGroup: RuntimeProjectGroupController['updateGroup']
   updateProjectGroups: RuntimeProjectGroupController['updateGroups']
@@ -70,6 +71,7 @@ export type RuntimeRepositoryCommandSurface = {
   showRepo: RuntimeRepositorySettingsController['show']
   setRepoBaseRef: RuntimeRepositorySettingsController['setBaseRef']
   updateRepo: RuntimeRepositorySettingsController['update']
+  setRepoHidden: RuntimeRepositorySettingsController['setHidden']
   removeProject: RuntimeRepositorySettingsController['remove']
   reorderRepos: RuntimeRepositorySettingsController['reorder']
   getRepoBaseRefDefault: RuntimeRepositoryRefQueries['getDefault']
@@ -130,6 +132,7 @@ export function installRuntimeRepositoryCommandSurface(
     listFolderWorkspaces: groups.listFolderWorkspaces.bind(groups),
     listVisibleProjectGroups: groups.listVisibleGroups.bind(groups),
     listVisibleFolderWorkspaces: groups.listVisibleFolderWorkspaces.bind(groups),
+    checkProjectGroupHooks: groups.checkGroupHooks.bind(groups),
     createProjectGroup: groups.createGroup.bind(groups),
     updateProjectGroup: groups.updateGroup.bind(groups),
     updateProjectGroups: groups.updateGroups.bind(groups),
@@ -166,6 +169,7 @@ export function installRuntimeRepositoryCommandSurface(
     showRepo: settings.show.bind(settings),
     setRepoBaseRef: settings.setBaseRef.bind(settings),
     updateRepo: settings.update.bind(settings),
+    setRepoHidden: settings.setHidden.bind(settings),
     removeProject: settings.remove.bind(settings),
     reorderRepos: settings.reorder.bind(settings),
     getRepoBaseRefDefault: refs.getDefault.bind(refs),

@@ -1,5 +1,5 @@
 export {
+  nativeChatImageItemBody as codexImageItemBody,
   imagePath,
-  generatedImageUrl,
-  nativeChatImageItemBody as codexImageItemBody
+  generatedImageUrl
 } from '../../../native-chat/agent-session-timeline/provider-image-item'

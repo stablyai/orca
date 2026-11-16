@@ -8,14 +8,16 @@ import {
   emptySession,
   GIT_KEY,
   leaf
-} from '../../shared/workspace-layout/workspace-layout-session.test-fixture'
+} from '../../shared/workspace-layout/persistence/workspace-layout-session.test-fixture'
 import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 
 const { handlers } = vi.hoisted(() => ({
   handlers: new Map<string, (event: unknown, ...args: unknown[]) => unknown>()
 }))
 
-vi.mock('../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
+vi.mock('../../shared/workspace-layout/layout-owner-switch', () => ({
+  ORCA_LAYOUT_OWNER_IS_MAIN: true
+}))
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
   safeStorage: { isEncryptionAvailable: () => false },

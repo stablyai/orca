@@ -11,7 +11,7 @@ import { TraexTimeline } from './traex-timeline'
 import { TraexPromptRegistry } from './traex-prompt-registry'
 import { isTraexTerminalActivity } from './traex-child-work'
 import { refreshTraexBackgroundTerminals } from './traex-background-task-stops'
-import { isAgentSessionInteractionMode } from '../../shared/agent-session/options/agent-session-interaction-mode'
+import { isAgentSessionInteractionMode } from '../../shared/agent-session/options/permissions/agent-session-interaction-mode'
 import { clearTraexModelQueue, observeTraexModelQueue } from './traex-model-queue'
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/structured-agent-session-logger'
 
@@ -54,7 +54,9 @@ export function observeTraexSessionNotification(
     return
   }
   if (method === 'queue/status') {
-    observeTraexModelQueue(session, params)
+    void observeTraexModelQueue(session, params).catch((error: unknown) =>
+      session.fail(error instanceof Error ? error : new Error(String(error)))
+    )
     return
   }
   if (method === 'mode/changeRequested' && typeof params.requestId === 'string') {
@@ -125,6 +127,7 @@ export function observeTraexSessionNotification(
       {
         type: 'turn.end',
         turn: turnId,
+        providerTurnId: turnId,
         at: traexTimestampMs(turn.completedAt) ?? Date.now(),
         durationMs: traexNonnegativeNumber(turn.durationMs),
         state: turn.status === 'interrupted' ? 'interrupted' : 'completed',

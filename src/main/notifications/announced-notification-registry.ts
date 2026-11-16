@@ -5,11 +5,11 @@ import type {
   NotificationAttentionAcknowledgement,
   NotificationDispatchRequest,
   StructuredNotificationRead
-} from '../../shared/notification-settings-types'
+} from '../../shared/notifications/notification-settings-types'
 import {
   NotificationAttentionReadFrontiers,
   notificationWasAcknowledged
-} from '../../shared/notification-attention-acknowledgement'
+} from '../../shared/notifications/notification-attention-acknowledgement'
 const DEFAULT_MAX_SUBJECTS = 256
 const DEFAULT_MAX_IDS_PER_SUBJECT = 20
 

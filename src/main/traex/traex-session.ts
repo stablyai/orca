@@ -18,7 +18,7 @@ import type {
   AgentSessionModelOption,
   AgentSessionSlashCommand
 } from '../../shared/agent-session/agent-session-wire'
-import type { AgentSessionOptionsResult } from '../../shared/agent-session/options/agent-session-options-result'
+import type { AgentSessionOptionsResult } from '../../shared/agent-session/options/protocol/agent-session-options-result'
 import { openTraexSession } from './traex-session-start'
 import { readTraexSessionCommands } from './traex-session-commands'
 import { TraexChildWork } from './traex-child-work'
@@ -39,6 +39,7 @@ export class TraexSession {
   commandsRead: Promise<void> | null = null
   activeTurn: string | null = null
   queuedModelTurn: string | null = null
+  modelQueueRevision = 0
   compacting = false
   ranOptions: Record<string, string> = {}
   reportedPermissionMode: string | null = null

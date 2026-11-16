@@ -5,7 +5,7 @@ import type {
   PRCheckAnnotation,
   PRCheckDetail,
   PRCheckJob
-} from '../../../../shared/github/check-types'
+} from '../../../../shared/github/checks/check-types'
 
 export function getCheckStatusLabel(check: PRCheckDetail, t: Translate = translate): string {
   if (check.gitlabAllowedFailure === true && check.conclusion === 'neutral') {

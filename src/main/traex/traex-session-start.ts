@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
-import { agentSessionProviderHandleKey } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { waitForPromiseWithSignal } from '../../shared/concurrency/abort-signal-reason'
+import { agentSessionProviderHandleKey } from '../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { AgentSessionAcquisitionRefusal } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/startup/structured-agent-session-provider-open-contract'
 import { traexPermissionSettings } from './traex-launch-resolution'

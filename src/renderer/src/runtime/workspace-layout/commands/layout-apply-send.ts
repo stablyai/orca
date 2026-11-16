@@ -22,12 +22,12 @@ import {
   LOCAL_LAYOUT_APPLY_ORIGIN,
   type LayoutApplyOrigin
 } from '@/runtime/workspace-layout/server/server-layout-apply-routes'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { SplitRatioIntent } from '../../../../../shared/workspace-layout/split-ratio-intents'
-import type { PaneSide } from '../../../../../shared/workspace-layout/terminal-pane-tree'
+import type { SplitRatioIntent } from '../../../../../shared/workspace-layout/tab-groups/split-ratio-intents'
+import type { PaneSide } from '../../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 import type { LayoutEditorFile } from '../../../../../shared/workspace-layout/workspace-layout-model'
-import type { LayoutEditorView } from '../../../../../shared/workspace-layout/layout-editor-view'
+import type { LayoutEditorView } from '../../../../../shared/workspace-layout/editor-tabs/layout-editor-view'
 import type { EditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
 import type {
   CommandOf,

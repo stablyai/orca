@@ -1,5 +1,5 @@
 import type { AiVaultAgent, AiVaultSession } from '../contracts/ai-vault-types'
-import { getRuntimePathBasename } from '../../cross-platform-path'
+import { getRuntimePathBasename } from '../../file-access/cross-platform-path'
 
 export function clineMessagesPathForMetadata(filePath: string): string {
   return filePath.endsWith('.json') ? `${filePath.slice(0, -'.json'.length)}.messages.json` : ''

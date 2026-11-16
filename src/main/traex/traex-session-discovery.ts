@@ -1,5 +1,5 @@
 import { basename, join } from 'node:path'
-import type { AiVaultAgentSource } from '../ai-vault/session-scanner-agent-sources'
+import type { AiVaultAgentSource } from '../ai-vault/discovery/session-scanner-agent-sources'
 import { traexPrivateHome } from './traex-launch-resolution'
 
 export const TRAEX_AI_VAULT_SOURCE: AiVaultAgentSource = {

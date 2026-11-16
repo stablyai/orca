@@ -215,8 +215,7 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
             <Button
               type="button"
               variant="menu-launch"
-              size="menu"
-              className="h-9"
+              size="menu-launch"
               aria-disabled={launchBlocked || undefined}
               aria-describedby={launchBlocked ? reasonId : undefined}
             >

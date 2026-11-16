@@ -1,12 +1,12 @@
 import { join } from 'node:path'
-import { sessionIdFromFileName } from '../ai-vault/session-scanner-accumulator'
-import { walkSessionFiles } from '../ai-vault/session-scanner-discovery'
+import { sessionIdFromFileName } from '../ai-vault/parsing/session-scanner-accumulator'
+import { walkSessionFiles } from '../ai-vault/discovery/session-scanner-discovery'
 import {
   directoryTranscriptImport,
   resumeInvocationAfterMarker,
   resumeInvocationFromOptions,
   type StructuredAgentCliConversations
-} from '../native-chat/structured-agent-cli-conversations'
+} from '../native-chat/conversation-adoption/structured-agent-cli-conversations'
 import { traexPrivateHome } from './traex-launch-resolution'
 
 export const TRAEX_CLI_CONVERSATIONS: StructuredAgentCliConversations = {

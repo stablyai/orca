@@ -113,7 +113,7 @@ export function queuedMessageCardSendNow(
     label: t('components.native-chat.queuedMessages.steer', 'Steer'),
     hint: t(
       'components.native-chat.queuedMessages.steerHint',
-      'Submit without interrupting the model'
+      'Send now, while the agent keeps working'
     )
   }
 }
@@ -268,7 +268,7 @@ export function NativeChatQueuedMessageCard({
                 <TooltipTrigger asChild>
                   <Button
                     type="button"
-                    variant="ghost"
+                    variant={showsSteerShortcut ? 'queued-head-steer' : 'ghost'}
                     size="xs"
                     onClick={onSteer}
                     disabled={steerHeld || busy}

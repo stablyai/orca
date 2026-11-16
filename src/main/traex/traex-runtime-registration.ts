@@ -19,8 +19,7 @@ import {
   providerTimelineTurnKeyPart,
   isProviderTimelineTurnInNamespace
 } from '../native-chat/agent-session-timeline/provider-timeline-identity'
-import { restoreJournal } from '../native-chat/agent-session-journal/replay/journal-open'
-import { pickAgentSessionOption } from '../runtime/agent-session/records/agent-session-record-options'
+import { journalSqlReads } from '../native-chat/agent-session-journal/journal-sql-reads'
 
 export const TRAEX_RUNTIME_REGISTRATION: StructuredAgentRuntimeRegistration = Object.assign(
   TRAEX_RUNTIME_METADATA,
@@ -29,7 +28,10 @@ export const TRAEX_RUNTIME_REGISTRATION: StructuredAgentRuntimeRegistration = Ob
       const sources = structuredAgentLaunchSources(context)
       const part = traexLaunchPart({
         resolveLaunchArgs: () => context.deps.resolveLaunchArgs('trae'),
-        readJournal: (sessionId) => restoreJournal(context.journalDatabase.db, sessionId)
+        savedSessionReads: {
+          hasProviderTurn: (sessionId, nativeId) =>
+            journalSqlReads(context.journalDatabase.readers, sessionId).hasProviderTurn(nativeId)
+        }
       })
       const readLaunch = composeStructuredLaunchRead(TRAEX_STRUCTURED_AGENT, sources, part)
       const naming = createTraexTextGeneration(context)
@@ -62,12 +64,10 @@ export const TRAEX_RUNTIME_REGISTRATION: StructuredAgentRuntimeRegistration = Ob
         onChildWorkEvidence: (sessionId, evidence, producer) =>
           context.host()?.publishChildWorkEvidence(sessionId, evidence, producer),
         onModeChanged: async (sessionId, fence, mode) => {
-          await context.store.reviseSessionOptions(pickAgentSessionOption, {
+          await context.store.replaceSessionOptions({
             sessionId,
             fence,
-            key: 'interactionMode',
-            value: mode,
-            models: undefined,
+            options: { ...context.store.getRecord(sessionId)?.options, interactionMode: mode },
             now: Date.now()
           })
         },

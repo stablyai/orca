@@ -1,4 +1,4 @@
-import { agentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
+import { agentSessionAccountHome } from '../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { TRAEX_CLI_CONVERSATIONS } from './traex-cli-conversations'
 import { supportsSupervisedProviderChildLocation } from '../provider-process/supervised-provider-child-location'
 import type { StructuredAgentRuntimeMetadata } from '../runtime/agent-session/installation/structured-agent-runtime-registration-types'

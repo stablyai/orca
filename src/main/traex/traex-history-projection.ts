@@ -2,12 +2,13 @@ import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-se
 import {
   agentJournalTurnBody,
   readAgentJournalTurn
-} from '../../shared/agent-session/lifecycle/agent-session-turn-record'
+} from '../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { createProviderTimelineAssembler } from '../native-chat/agent-session-timeline/provider-timeline-assembler'
 import {
   ProviderTimelineHistoryOverlay,
   type ProviderTimelineHistoryItem
 } from '../native-chat/agent-session-timeline/provider-timeline-history-overlay'
+import { traexTimelineItemKey } from './traex-timeline-item-key'
 import { traexItemEvents } from './traex-item-translation'
 import type { TraexTurn } from './traex-protocol'
 import { traexTimestampMs, traexNonnegativeNumber } from './traex-protocol'
@@ -19,12 +20,11 @@ export function projectTraexHistoryTurn(input: {
   turn: TraexTurn
   epoch: string
   representedClientId?: string
-  itemKey?: (turnId: string, itemId: string) => string
   primaryThreadId?: string
   producer?: AgentJournalProducerLinkage
 }): ProviderTimelineHistoryItem[] {
   const { turn } = input
-  const overlay = new ProviderTimelineHistoryOverlay(input.epoch)
+  const overlay = new ProviderTimelineHistoryOverlay()
   const assembler = createProviderTimelineAssembler({
     sink: overlay.sink,
     sessionId: input.sessionId,
@@ -55,7 +55,10 @@ export function projectTraexHistoryTurn(input: {
         input.threadId,
         turn.id,
         true,
-        input.itemKey?.(turn.id, item.type === 'contextCompaction' ? 'contextCompaction' : item.id)
+        traexTimelineItemKey(
+          turn.id,
+          item.type === 'contextCompaction' ? 'contextCompaction' : item.id
+        )
       )) {
         assembler.apply(
           input.producer && (event.type === 'item.open' || event.type === 'item.close')

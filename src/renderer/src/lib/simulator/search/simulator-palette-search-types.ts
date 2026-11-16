@@ -1,5 +1,9 @@
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
-import type { Tab, TabGroup, WorkspaceVisibleTabType } from '../../../../../shared/tab-types'
+import type {
+  Tab,
+  TabGroup,
+  WorkspaceVisibleTabType
+} from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import type { MatchRange } from '../../../../../shared/palette-match/normalized-text'
 import type {

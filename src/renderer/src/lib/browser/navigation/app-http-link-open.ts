@@ -1,7 +1,5 @@
-import {
-  canNativeChatOpenOwnedBrowser,
-  resolveNativeChatHttpLinkSourceOwner
-} from '@/components/native-chat/links/actions/native-chat-http-link-source-owner'
+import { resolveNativeChatHttpLinkSourceOwner } from '@/components/native-chat/links/actions/native-chat-http-link-source-owner'
+import { canOpenRemoteLinkInWorkspaceBrowser } from '../workspace/workspace-browser-route-eligibility'
 import { getWorkspaceClientCreationActionPolicy } from '../../workspace/creation/surface-policy/client-creation-action-policy'
 import { openOwnedHttpLink } from './http-link-routing'
 import type { HttpLinkDestination, HttpLinkSourceOwner } from './http-link-routing'
@@ -22,6 +20,8 @@ export type OpenAppHttpLinkOptions = {
   worktreeId?: string | null
   /** The click, so the setting's Shift escape modifier applies. */
   event?: AppHttpLinkClick
+  /** Explicit destination override when a surface bypasses the link setting. */
+  destination?: 'orca' | 'system'
 }
 
 function isEscapeModifierClick(event: AppHttpLinkClick | undefined): boolean {
@@ -42,6 +42,22 @@ export function openAppHttpLink(
   const state = appStateAccessor?.()
   const hostWorktreeId = options.worktreeId || state?.activeWorktreeId
   const host = state && hostWorktreeId ? resolveBrowserHost(state, hostWorktreeId) : null
+  if (options.destination === 'system') {
+    return openOwnedHttpLink(url, {
+      worktreeId: host?.worktreeId ?? null,
+      sourceOwner: host?.owner ?? LOCAL_OWNER,
+      forceSystemBrowser: true
+    })
+  }
+  if (options.destination === 'orca') {
+    return openOwnedHttpLink(url, {
+      worktreeId: host?.worktreeId ?? null,
+      sourceOwner: host?.owner ?? LOCAL_OWNER,
+      allowRemoteInApp: Boolean(host),
+      forceInApp: Boolean(host),
+      forceSystemBrowser: !host
+    })
+  }
   return openOwnedHttpLink(url, {
     worktreeId: host?.worktreeId ?? null,
     sourceOwner: host?.owner ?? LOCAL_OWNER,
@@ -62,7 +78,7 @@ function resolveBrowserHost(
     owner.kind === 'local'
       ? getWorkspaceClientCreationActionPolicy(state, worktreeId)['managed-browser'].state ===
         'enabled'
-      : canNativeChatOpenOwnedBrowser(state, worktreeId, owner)
+      : canOpenRemoteLinkInWorkspaceBrowser(state, worktreeId, owner)
   return canHost ? { worktreeId, owner } : null
 }
 

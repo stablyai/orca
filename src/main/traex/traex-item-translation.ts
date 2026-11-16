@@ -9,12 +9,12 @@ import {
 } from '../../shared/native-chat/tools/native-chat-tool-identity'
 import { commandActionFacts } from '../../shared/native-chat/tools/native-chat-command-actions'
 import { nativeChatImageItemBody } from '../native-chat/agent-session-timeline/provider-image-item'
-import { CODEX_ASYNC_QUESTION_TOOL } from '../../shared/codex-async-question-input'
+import { CODEX_ASYNC_QUESTION_TOOL } from '../../shared/native-chat/input/questions/codex-async-question-input'
 import { nativeChatAgentToolResultText } from '../../shared/native-chat/tools/native-chat-agent-tool-result'
 import {
   CODEX_COLLAB_ROW_AGENTS_KEY,
   codexCollabToolRowName
-} from '../../shared/codex-collab-agent-tools'
+} from '../../shared/agent-hook-listener/providers/codex/codex-collab-agent-tools'
 import type { NativeChatBlock } from '../../shared/native-chat/native-chat-types'
 import { traexContentText, traexRecord, traexText, type TraexItem } from './traex-protocol'
 import { traexTimelineItemKey } from './traex-timeline-item-key'

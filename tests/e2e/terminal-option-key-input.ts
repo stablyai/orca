@@ -10,7 +10,7 @@ import {
   installTerminalPtyWriteSpy as installMainProcessPtyWriteSpy,
   readTerminalPtyWrites as getPtyWrites
 } from './helpers/terminal-pty-write-spy'
-import type { KeyboardLayoutSnapshot } from '../../src/shared/keyboard-layout-snapshot'
+import type { KeyboardLayoutSnapshot } from '../../src/shared/keybindings/keyboard-layout-snapshot'
 
 type MacOptionAsAltSetting = 'auto' | 'true' | 'false' | 'left' | 'right'
 

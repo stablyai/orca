@@ -1,9 +1,9 @@
 import { splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
-import { isWslShellName } from '../../../shared/local-windows-terminal-runtime'
+import { isWslShellName } from '../../../shared/shell/launch/local-windows-terminal-runtime'
 import { getDefaultWslDistro } from '../../wsl/discovery/distro-catalog'
 import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
 import { parsePtySessionId } from '../../../shared/terminal/pty/lifecycle/pty-session-id-format'
-import { parseWslUncPath } from '../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 
 export type WslSessionContext = {
   distro: string

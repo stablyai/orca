@@ -6,8 +6,8 @@ import {
 } from './mobile-session-tab-selection'
 import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as StoredMobileSnapshotHasStalePreservedTabMethods } from './mobile-session-publication-preservation'
 import { OrcaRuntimeWithSyncMobileSessionTabs } from './mobile-session-reconciliation'
-import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-session-contracts'
-import type { RuntimeMobileSessionTerminalTab } from '../../../shared/runtime-mobile-session-tab-contracts'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeMobileSessionTerminalTab } from '../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import {
   appendChatTabOrder,
   getMobileSessionSnapshotTabIdentityKeys,
@@ -15,7 +15,7 @@ import {
   mergeMobileSessionTabGroups
 } from '../session-lifecycle/projection/mobile-session-tab-merge'
 import { terminalLayoutContainsLeaf } from '../../../shared/workspace-session/workspace-session-pane-ownership'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 import { terminalIsOfTab } from '../session-lifecycle/close/closed-tab-terminal'
 import { getHeadlessMobileSessionGroupId } from '../terminal/surface/mobile-session-layout-projection'
 import {
@@ -220,6 +220,7 @@ export abstract class OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs ext
       : existing
     return normalizeMobileSessionTabSelection({
       ...existing,
+      browserPageInventory: undefined,
       publicationEpoch: this.getMergedMobileSessionPublicationEpoch(publicationBase, tabs),
       // Bump version or clients discard same-epoch prune frames.
       snapshotVersion: existing.snapshotVersion + 1,

@@ -1,7 +1,7 @@
 // Main-owned layout changes must reach subscribed phones without a window to republish rows.
 import { describe, expect, it, vi } from 'vitest'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
-import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { TEST_WORKTREE_ID } from '../orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import {
   SURFACE_TAB_ID,
@@ -15,14 +15,16 @@ import {
   threeTabSurfaceRuntime
 } from './session-tabs-layout-moves.test-fixture'
 
-vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
+vi.mock('../../../shared/workspace-layout/layout-owner-switch', () => ({
+  ORCA_LAYOUT_OWNER_IS_MAIN: true
+}))
 
 describe('session.tabs on a windowless server (switch on)', () => {
   it("a tab main renames reaches a subscribed phone's rows", async () => {
     vi.useFakeTimers()
     try {
       const { runtime } = surfaceRuntime()
-      runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
+      await runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
       await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
       const seen: RuntimeMobileSessionTabsResult[] = []
       runtime.onMobileSessionTabsChanged((snapshot) => {
@@ -51,7 +53,7 @@ describe('session.tabs on a windowless server (switch on)', () => {
     vi.useFakeTimers()
     try {
       const { runtime } = threeTabSurfaceRuntime()
-      runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
+      await runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
       expect(tabStrip(await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`))).toEqual(
         SAVED_STRIP
       )

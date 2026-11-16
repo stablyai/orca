@@ -20,6 +20,13 @@ const darkColors = {
   composerSurface: '#1f1f1f',
   composerBorder: 'rgba(250, 250, 250, 0.09)',
   composerControl: '#262626',
+  // A floating card's hairline edge (the answer card), a step stronger than the composer's.
+  floatingCardBorder: 'rgba(250, 250, 250, 0.16)',
+  // An unfilled choice's edge on a card, 3:1 against it (WCAG 1.4.11), and the faint fill of the picked one.
+  choiceBorder: 'rgba(255, 255, 255, 0.34)',
+  choiceSelectedFill: 'rgba(134, 239, 172, 0.08)',
+  // A small filled pill on a card (a queued row's Steer): light needs more than bgRaised to read on white.
+  cardPillFill: '#262626',
   // A text field's edge, 3:1 on the screen, a sheet and a sheet group (WCAG 1.4.11): desktop's dark --ring.
   inputBorder: '#737373',
   skillToken: '#8ab4f8',
@@ -103,6 +110,10 @@ const lightColors: MobilePalette = {
   composerSurface: '#ffffff',
   composerBorder: 'rgba(10, 10, 10, 0.11)',
   composerControl: '#f5f5f5',
+  floatingCardBorder: 'rgba(10, 10, 10, 0.14)',
+  choiceBorder: 'rgba(0, 0, 0, 0.44)',
+  choiceSelectedFill: 'rgba(20, 118, 56, 0.06)',
+  cardPillFill: 'rgba(120, 120, 128, 0.16)',
   // Desktop's light --ring (#a1a1a1) is under 3:1 on white, so both schemes share the dark one.
   inputBorder: '#737373',
   skillToken: '#1d4ed8',

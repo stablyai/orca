@@ -3,7 +3,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../journal/agent-session-journal-types'
-import { agentSessionRewindTargetIds } from './agent-session-rewind-targets'
+import { agentSessionRewindTargetIds } from './rewind/agent-session-rewind-targets'
 
 it('offers accepted provider turn openers while excluding steers and unconfirmed inputs', () => {
   const root = 'legacy:trae:session:turn-lifecycle%3Ap%3Athread%3Aturn'

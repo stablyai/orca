@@ -1,3 +1,5 @@
+import { openTestAgentSessionDatabase } from '../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { readTestJournalItems } from '../native-chat/agent-session-journal/journal-observation.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -5,15 +7,12 @@ import { randomUUID } from 'node:crypto'
 import { afterEach, expect, it } from 'vitest'
 import { TraexSessionAdapter } from './traex-session-adapter'
 import { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
-import {
-  openTestJournalHostDatabase,
-  closeTestJournalHostDatabases
-} from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { closeTestJournalHostDatabases } from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { stopAgentSessionProviderRoot } from '../native-chat/agent-session-wire/termination/structured-agent-session-provider-exit-proof'
-import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 import { AgentSessionPromptUnavailableError } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
-import { agentJournalTurnBody } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { agentJournalTurnBody } from '../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { providerTurnOptionsDiffer } from '../native-chat/agent-session-wire/options/structured-agent-session-message-options'
 
 let directory: string | undefined
@@ -38,8 +37,10 @@ it('commits one answer to each prompt, rejects unknown callbacks, and interrupts
     agent: 'trae' as const,
     providerHandle: null
   }
-  journal = new AgentSessionJournal({ identity, database: openTestJournalHostDatabase(directory) })
-  await journal.open()
+  journal = await AgentSessionJournal.open({
+    identity,
+    database: await openTestAgentSessionDatabase(directory)
+  })
   const { logger } = recordingStructuredAgentSessionLogger()
   const sink = createDeferredStructuredAgentSessionEventSink({
     sessionId: identity.sessionId,
@@ -87,10 +88,12 @@ it('commits one answer to each prompt, rejects unknown callbacks, and interrupts
       clientMessageId: randomUUID(),
       body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text }] }
     })
-  const rows = () => journal!.currentRead().items
+  const rows = async () => await readTestJournalItems(journal!)
   expect((await send('approval-and-question')).state).toBe('accepted')
-  await expect.poll(() => rows().some((row) => row.body.kind === 'approval')).toBe(true)
-  const approval = rows().find((row) => row.body.kind === 'approval')!
+  await expect
+    .poll(async () => (await rows()).some((row) => row.body.kind === 'approval'))
+    .toBe(true)
+  const approval = (await rows()).find((row) => row.body.kind === 'approval')!
   const commit = () =>
     journal!
       .appendItem(
@@ -123,8 +126,10 @@ it('commits one answer to each prompt, rejects unknown callbacks, and interrupts
     })
   ).rejects.toBeInstanceOf(AgentSessionPromptUnavailableError)
   await answering
-  await expect.poll(() => rows().some((row) => row.body.kind === 'question')).toBe(true)
-  const question = rows().find((row) => row.body.kind === 'question')!
+  await expect
+    .poll(async () => (await rows()).some((row) => row.body.kind === 'question'))
+    .toBe(true)
+  const question = (await rows()).find((row) => row.body.kind === 'question')!
   await adapter.answerPrompt({
     sessionId: identity.sessionId,
     fence: 1,
@@ -139,8 +144,8 @@ it('commits one answer to each prompt, rejects unknown callbacks, and interrupts
     },
     commit
   })
-  const answerText = () =>
-    rows()
+  const answerText = async () =>
+    (await rows())
       .flatMap((row) =>
         row.body.kind === 'message' && row.body.role === 'assistant'
           ? row.body.blocks.flatMap((block) => (block.type === 'text' ? block.text : []))
@@ -148,16 +153,16 @@ it('commits one answer to each prompt, rejects unknown callbacks, and interrupts
       )
       .join('\n')
   await expect.poll(answerText).toBe('Blue:Orca')
-  await expect.poll(() => journal!.newestTurn()?.state).toBe('completed')
+  await expect.poll(async () => (await journal!.reads.newestTurn())?.state).toBe('completed')
   expect((await send('file-approval')).state).toBe('accepted')
   await expect
-    .poll(() =>
-      rows().some(
+    .poll(async () =>
+      (await rows()).some(
         (row) => row.body.kind === 'approval' && row.body.decisionReason === 'Write outside sandbox'
       )
     )
     .toBe(true)
-  const fileApproval = rows().find(
+  const fileApproval = (await rows()).find(
     (row) => row.body.kind === 'approval' && row.body.decisionReason === 'Write outside sandbox'
   )!
   expect(fileApproval.body).toMatchObject({
@@ -173,20 +178,12 @@ it('commits one answer to each prompt, rejects unknown callbacks, and interrupts
     response: { kind: 'option', optionId: 'decline' },
     commit
   })
-  await expect.poll(() => journal!.newestTurn()?.state).toBe('completed')
+  await expect.poll(async () => (await journal!.reads.newestTurn())?.state).toBe('completed')
   expect((await send('unknown-request')).state).toBe('accepted')
   await expect.poll(answerText).toBe('Blue:Orca\nfile denied\nunrecognized request rejected')
-  await expect.poll(() => journal!.newestTurn()?.state).toBe('completed')
+  await expect.poll(async () => (await journal!.reads.newestTurn())?.state).toBe('completed')
   expect((await send('wait-for-interrupt')).state).toBe('accepted')
   await adapter.setOption({ sessionId: identity.sessionId, fence: 1, key: 'effort', value: 'high' })
-  expect(
-    adapter.readAppliedInputOptions({
-      sessionId: identity.sessionId,
-      fence: 1,
-      acquisitionGeneration: acquired.acquisitionGeneration,
-      next: undefined
-    })
-  ).toMatchObject({ active: { effort: 'medium' }, next: { effort: 'high' } })
   expect(
     providerTurnOptionsDiffer(
       { provider: 'trae', sessionId: identity.sessionId },
@@ -198,7 +195,7 @@ it('commits one answer to each prompt, rejects unknown callbacks, and interrupts
   expect((await adapter.cancelTurn({ sessionId: identity.sessionId, fence: 1 })).cancelled).toBe(
     true
   )
-  await expect.poll(() => journal!.newestTurn()?.state).toBe('interrupted')
+  await expect.poll(async () => (await journal!.reads.newestTurn())?.state).toBe('interrupted')
   const commandIdentity = {
     provider: 'legacy' as const,
     agent: 'trae' as const,
@@ -218,11 +215,13 @@ it('commits one answer to each prompt, rejects unknown callbacks, and interrupts
       running
     }
   })
-  await expect.poll(() => journal!.newestTurn()?.state).toBe('completed')
+  await expect.poll(async () => (await journal!.reads.newestTurn())?.state).toBe('completed')
   expect(
-    rows().some((row) => row.body.kind === 'status' && row.body.presentation === 'compaction')
+    (await rows()).some(
+      (row) => row.body.kind === 'status' && row.body.presentation === 'compaction'
+    )
   ).toBe(true)
-  expect(journal.newestTurn()?.durationMs).toBe(2500)
+  expect((await journal.reads.newestTurn())?.durationMs).toBe(2500)
   const failedIdentity = { ...commandIdentity, recordId: 'failed-compact-command' }
   const failedRunning = agentJournalTurnBody({ turnId: 'failed-compact-command', state: 'running' })
   await journal.appendItem(failedIdentity, failedRunning, {
@@ -242,8 +241,8 @@ it('commits one answer to each prompt, rejects unknown callbacks, and interrupts
     }
   })
   await expect
-    .poll(() =>
-      rows().some(
+    .poll(async () =>
+      (await rows()).some(
         (row) => row.body.kind === 'status' && row.body.failure?.kind === 'usageLimitReached'
       )
     )

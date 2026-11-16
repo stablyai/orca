@@ -1,15 +1,13 @@
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
 import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
-import type { StructuredAgentSessionTransitionJournal } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-transition'
+import type { JournalThreadGoalSource } from '../native-chat/agent-session-journal/projection/journal-thread-goal-source'
 import {
   AGENT_JOURNAL_THREAD_GOAL_STATUSES,
   type AgentJournalThreadGoalState,
   type AgentJournalItemBody
 } from '../../shared/agent-session/journal/agent-session-journal-types'
-import { isRootAgentJournalItem } from '../../shared/agent-session/journal/agent-session-journal-producer'
-import { parseAgentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
-import { spelledProviderTimelineItemKey } from '../../shared/provider-timeline-item-key'
+import { spelledProviderTimelineItemKey } from '../../shared/agent-session/journal/provider-timeline-item-key'
 import { journalPayload } from '../native-chat/agent-session-journal/item-lifecycle/journal-payload-bounds'
 import { traexRecord } from './traex-protocol'
 
@@ -42,7 +40,7 @@ export class TraexGoalTimeline {
   constructor(
     private readonly deps: {
       threadId: string
-      journal: () => StructuredAgentSessionTransitionJournal | null | undefined
+      journal: () => JournalThreadGoalSource | null | undefined
       apply: (event: ProviderTimelineEvent) => void
     }
   ) {}
@@ -80,25 +78,16 @@ export class TraexGoalTimeline {
         }
       : { state: 'cleared' }
     const current = signature(state)
-    let latest: { id: string; sequence: number; state: AgentJournalThreadGoalState } | undefined
-    this.deps.journal()?.visitItemsWithLinkage((id, sequence, body, linkage) => {
-      if (
-        body.kind === 'status' &&
-        body.threadGoal &&
-        isRootAgentJournalItem(linkage) &&
-        (!latest || sequence > latest.sequence)
-      ) {
-        latest = { id, sequence, state: body.threadGoal }
-      }
-    })
-    if (
-      state.state === 'cleared' &&
-      (this.last ? this.last.signature === 'cleared' : !latest || latest.state.state === 'cleared')
-    ) {
+    const source = this.deps.journal()
+    const latest =
+      source?.goal && source.row
+        ? { id: source.row.identity, state: { state: 'set' as const, goal: source.goal } }
+        : undefined
+    if (state.state === 'cleared' && (this.last ? this.last.signature === 'cleared' : !latest)) {
       return
     }
     if (!this.last && latest && signature(latest.state) === current) {
-      const identity = parseAgentJournalItemKey(latest.id)
+      const identity = latest.id
       const part =
         identity?.provider === 'legacy' ? spelledProviderTimelineItemKey(identity.recordId) : null
       if (part && !part.includes('#')) {

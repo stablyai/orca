@@ -1,7 +1,8 @@
+import { createTestUsageStoreHost } from '../usage/usage-store-host-test-fixture'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { vi, type Mock } from 'vitest'
+import { vi } from 'vitest'
 import type { ClaudeUsagePersistedFile, ClaudeUsagePersistedState } from './types'
 import { readClaudeUsageScanFile } from './transcript-record-parser'
 import { projectClaudeUsageScanFile } from './transcript-usage-projection'
@@ -14,14 +15,14 @@ import {
 import { normalizeClaudeUsageSourceFiles } from './persisted-projection-validation'
 import { usageSourceCachePath } from '../usage/cache/usage-source-cache-file'
 
-import { ClaudeUsageStore, initClaudeUsagePath } from './store'
+import { ClaudeUsageStore } from './store'
 import { listClaudeTranscriptFiles } from './transcript-file-discovery'
 import {
   scanClaudeUsageFilesViaWorker,
   splitUsageCacheFileViaWorker
 } from '../usage/scan-worker/usage-scan-worker-spawn'
 
-export async function createPersistedUsageTestFixture(getPath: Mock<() => string>) {
+export async function createPersistedUsageTestFixture() {
   const directory = await mkdtemp(join(tmpdir(), 'orca-claude-persisted-usage-'))
   const transcript = join(directory, 'session.jsonl')
   const reportPath = join(directory, 'orca-claude-usage.json')
@@ -32,25 +33,25 @@ export async function createPersistedUsageTestFixture(getPath: Mock<() => string
     reuse: true
   }
   const transcripts = [transcript]
-  getPath.mockReturnValue(directory)
-  initClaudeUsagePath()
   vi.mocked(listClaudeTranscriptFiles).mockReset()
   vi.mocked(listClaudeTranscriptFiles).mockImplementation(async () => [...transcripts].sort())
   vi.mocked(splitUsageCacheFileViaWorker).mockReset()
   vi.mocked(splitUsageCacheFileViaWorker).mockImplementation(splitClaudeUsageCacheFile)
   vi.mocked(scanClaudeUsageFilesViaWorker).mockReset()
-  vi.mocked(scanClaudeUsageFilesViaWorker).mockImplementation(async (worktrees, ref) => {
-    const previous = await readClaudeUsageSourceCache(ref)
-    const result = await scanClaudeUsageFiles(
-      worktrees,
-      previous.sources,
-      undefined,
-      [],
-      previous.verifiedSources
-    )
-    await persistClaudeUsageSourceCache(ref, result.processedFiles, previous)
-    return { sessions: result.sessions, dailyAggregates: result.dailyAggregates }
-  })
+  vi.mocked(scanClaudeUsageFilesViaWorker).mockImplementation(
+    async (worktrees, ref, profileDirs) => {
+      const previous = await readClaudeUsageSourceCache(ref)
+      const result = await scanClaudeUsageFiles(
+        worktrees,
+        previous.sources,
+        undefined,
+        profileDirs,
+        previous.verifiedSources
+      )
+      await persistClaudeUsageSourceCache(ref, result.processedFiles, previous)
+      return { sessions: result.sessions, dailyAggregates: result.dailyAggregates }
+    }
+  )
 
   function row(index: number, duplicate = false): string {
     return `${JSON.stringify({
@@ -118,7 +119,7 @@ export async function createPersistedUsageTestFixture(getPath: Mock<() => string
     project,
     state,
     writeResumable,
-    createStore: () => new ClaudeUsageStore({ getRepos: () => [], getAllWorktreeMeta: () => ({}) }),
+    createStore: () => new ClaudeUsageStore(createTestUsageStoreHost({ userDataPath: directory })),
     decodedSources: async () => {
       const read = await readClaudeUsageSourceCache(sourceRef)
       return normalizeClaudeUsageSourceFiles(read.sources, read.verifiedSources).processedFiles

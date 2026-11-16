@@ -1,7 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
-import type { LargeDiffRenderLimit } from '../../../../../../shared/large-diff-render-limit'
+import type { LargeDiffRenderLimit } from '../../../../../../shared/source-control/diff/large-diff-render-limit'
 import { uiNumberFormat } from '@/i18n/ui-intl-formatters'
 
 type LargeDiffFallbackProps = {

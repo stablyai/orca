@@ -3,7 +3,7 @@ import { create } from 'zustand'
 import { createGitHubSlice } from './github'
 import { createHostedReviewSlice } from '../slices/hosted-review/hosted-review'
 import type { AppState } from '../types'
-import type { PRInfo } from '../../../../shared/github/pull-request-types'
+import type { PRInfo } from '../../../../shared/github/pull-requests/pull-request-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
@@ -11,10 +11,11 @@ import {
 } from '../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../runtime/rpc/compatibility/runtime-compatibility-cache'
 import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
+import type { GitHubRepositoryIdentity } from '../../../../shared/github/repositories/repository-identity'
 import type {
   GitHubPRRefreshCandidate,
   GitHubPRRefreshReason
-} from '../../../../shared/github/pull-request-refresh-types'
+} from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 
 /** Bare `vi.fn()` infers @vitest/spy's un-nameable `Procedure`, which breaks declaration emit. */
 export type StubMock<TArgs extends unknown[] = never[]> = Mock<(...args: TArgs) => unknown>
@@ -40,14 +41,23 @@ export const runtimeEnvironmentSubscribe: Mock<
 export const mockApi = {
   gh: {
     prForBranch: stubMock().mockResolvedValue(null),
-    refreshPRNow:
-      stubMock<[{ candidate: GitHubPRRefreshCandidate; reason?: GitHubPRRefreshReason }]>(),
+    refreshPRNow: stubMock<
+      [
+        {
+          candidate: GitHubPRRefreshCandidate
+          reason?: GitHubPRRefreshReason
+          userRefresh?: boolean
+        }
+      ]
+    >(),
     enqueuePRRefresh:
       stubMock<
         [{ candidate: GitHubPRRefreshCandidate; reason: GitHubPRRefreshReason; priority?: number }]
       >().mockResolvedValue(undefined),
     issue:
-      stubMock<[{ repoPath: string; repoId: string; number: number }]>().mockResolvedValue(null),
+      stubMock<
+        [{ repoPath: string; repoId: string; number: number; ownerRepo?: GitHubRepositoryIdentity }]
+      >().mockResolvedValue(null),
     prChecks: stubMock().mockResolvedValue([]),
     prCheckDetails: stubMock().mockResolvedValue(null),
     prComments: stubMock().mockResolvedValue([]),

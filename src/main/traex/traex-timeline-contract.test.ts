@@ -1,20 +1,20 @@
+import { openTestAgentSessionDatabase } from '../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { readTestJournalItems } from '../native-chat/agent-session-journal/journal-observation.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
-import {
-  openTestJournalHostDatabase,
-  closeTestJournalHostDatabases
-} from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { closeTestJournalHostDatabases } from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
-import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 import { TraexTimeline } from './traex-timeline'
 import { projectTraexHistoryTurn } from './traex-history-projection'
 
 let directory: string
 let journal: AgentSessionJournal
 let timeline: TraexTimeline
+let written: () => Promise<unknown>
 
 beforeEach(async () => {
   directory = await mkdtemp(join(tmpdir(), 'orca-trae-stream-'))
@@ -25,14 +25,17 @@ beforeEach(async () => {
     agent: 'trae' as const,
     providerHandle: null
   }
-  journal = new AgentSessionJournal({ identity, database: openTestJournalHostDatabase(directory) })
-  await journal.open()
+  journal = await AgentSessionJournal.open({
+    identity,
+    database: await openTestAgentSessionDatabase(directory)
+  })
   const { logger } = recordingStructuredAgentSessionLogger()
   const sink = createDeferredStructuredAgentSessionEventSink({
     sessionId: identity.sessionId,
     logger
   })
   sink.bind({ journal, fence: 1, publish: () => {} })
+  written = sink.drained
   timeline = new TraexTimeline({
     sessionId: identity.sessionId,
     threadId: 'thread-stream',
@@ -57,7 +60,7 @@ function notify(method: string, params: Record<string, unknown>): void {
   timeline.flush()
 }
 
-it('keeps persistent command output live after its initiating turn finishes', () => {
+it('keeps persistent command output live after its initiating turn finishes', async () => {
   notify('item/started', {
     item: {
       id: 'background-command',
@@ -76,28 +79,29 @@ it('keeps persistent command output live after its initiating turn finishes', ()
     state: 'completed',
     outcome: 'success'
   })
-  const command = () =>
-    journal
-      .currentRead()
-      .items.find(
-        (row) => row.body.kind === 'tool-call' && row.body.callId === 'background-command'
-      )!.body
-  expect(command()).toMatchObject({ state: 'running', output: { head: 'BEFORE\n' } })
+  const command = async () => {
+    await written()
+    return (await readTestJournalItems(journal)).find(
+      (row) => row.body.kind === 'tool-call' && row.body.callId === 'background-command'
+    )!.body
+  }
+  expect(await command()).toMatchObject({ state: 'running', output: { head: 'BEFORE\n' } })
   notify('item/commandExecution/outputDelta', { itemId: 'background-command', delta: 'AFTER\n' })
   notify('item/completed', {
     item: { id: 'background-command', type: 'commandExecution', status: 'completed', exitCode: 0 }
   })
-  expect(command()).toMatchObject({ state: 'completed', output: { head: 'BEFORE\nAFTER\n' } })
+  expect(await command()).toMatchObject({ state: 'completed', output: { head: 'BEFORE\nAFTER\n' } })
 })
 
-it('separates streamed reasoning parts before the final snapshot arrives', () => {
+it('separates streamed reasoning parts before the final snapshot arrives', async () => {
   notify('item/reasoning/summaryTextDelta', { itemId: 'reasoning', delta: 'First' })
   notify('item/reasoning/summaryPartAdded', { itemId: 'reasoning', summaryIndex: 1 })
   notify('item/reasoning/summaryTextDelta', { itemId: 'reasoning', delta: 'Second' })
+  await written()
   expect(
-    journal
-      .currentRead()
-      .items.find((row) => row.body.kind === 'message' && row.body.role === 'reasoning')?.body
+    (await readTestJournalItems(journal)).find(
+      (row) => row.body.kind === 'message' && row.body.role === 'reasoning'
+    )?.body
   ).toMatchObject({ blocks: [{ type: 'text', text: 'First\nSecond' }] })
 })
 

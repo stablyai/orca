@@ -7,9 +7,9 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fakeAppEnvironment } from '../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
-import { setAppEnvironment } from '../../../shared/app-environment'
-import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../../shared/wsl-host-internal-gate'
-import { ORCAD_UPDATE_WSL_MOVE_RUNNING_CODE } from '../../../shared/wsl-host-types'
+import { setAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
+import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-internal-gate'
+import { ORCAD_UPDATE_WSL_MOVE_RUNNING_CODE } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import type { WslMoveResult } from '../../../shared/wsl-move/wsl-move-driver-types'
 import type { OrcadActivationRecord } from '../../managed-server/activation/orcad-activation-record'
 import { resetOrcadUpdateFailuresForTests } from '../../managed-server/lifecycle/orcad-managed-update-failure-memory'
@@ -25,13 +25,13 @@ import {
   wslMoveRigOutcome,
   type WslMoveRig
 } from '../../persistence/__fixtures__/wsl-mover/wsl-move-kill-rig'
-import { resetWslMoveDesktopRewriteStoresForTests } from '../../persistence/moving-wsl-projects/wsl-move-desktop-rewrite-stores'
+import { resetWslMoveDesktopRewriteStoresForTests } from '../../persistence/moving-wsl-projects/desktop-state/wsl-move-desktop-rewrite-stores'
 import { moveProjectsToWslHost } from '../../persistence/moving-wsl-projects/wsl-move-driver'
 import {
   cancelWslMove,
   isWslMoveRunning,
   isWslMoveUnderwayOnHost
-} from '../../persistence/moving-wsl-projects/wsl-move-running-moves'
+} from '../../persistence/moving-wsl-projects/orchestration/wsl-move-running-moves'
 import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 import type { OrcadHostTransport } from '../../managed-server/install/orcad-host-transport'
 import type { WslDistroHolder } from '../discovery/wsl-distro-holder-types'
@@ -83,7 +83,7 @@ vi.mock('../../managed-server/install/orcad-remote-context', () => ({
 vi.mock('../../managed-server/activation/orcad-activation-recovery', () => ({
   recoverInterruptedOrcadActivation: async () => ({ outcome: 'none' })
 }))
-vi.mock('../../orcad/orcad-artifact-materializer', () => ({
+vi.mock('../../orcad/artifact-slots/orcad-artifact-materializer', () => ({
   materializeOrcadArtifact: async () => '/local/orcad'
 }))
 vi.mock('../../managed-server/install/orcad-remote-deploy', () => ({ deployOrcad: host.deploy }))

@@ -16,7 +16,7 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
       44,
       'Chats stay local on the desktop (owner decision C), so their launch records stay as written.'
     ),
-  'src/renderer/src/components/editor/file-view-preference-storage.ts': {
+  'src/renderer/src/components/editor/view-mode/file-view-preference-storage.ts': {
     disposition: 'rewrite-desktop',
     item: 72,
     note: 'CSV column widths and PDF scale, keyed by worktree id, runtime and file path.'
@@ -49,14 +49,14 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
     ),
   ...Object.fromEntries(
     [
-      'src/renderer/src/components/browser-pane/annotate/use-markup-draw-hint.ts',
+      'src/renderer/src/components/browser-pane/annotate/markup-tools/use-markup-draw-hint.ts',
       'src/renderer/src/components/feature-tips/FeatureTipsModal.tsx',
-      'src/renderer/src/components/feature-wall/BrowserUseSkillSetupCard.tsx',
-      'src/renderer/src/components/feature-wall/feature-wall-completion-persistence.ts',
-      'src/renderer/src/components/floating-terminal/floating-terminal-panel-bounds.ts',
-      'src/renderer/src/components/floating-terminal/floating-terminal-panel-view-state.ts',
-      'src/renderer/src/components/floating-terminal/floating-terminal-trigger-position.ts',
-      'src/renderer/src/components/floating-terminal/use-floating-terminal-orchestration-dismissal.ts',
+      'src/renderer/src/components/feature-wall/setup/agent-capabilities/BrowserUseSkillSetupCard.tsx',
+      'src/renderer/src/components/feature-wall/completion/feature-wall-completion-persistence.ts',
+      'src/renderer/src/components/floating-terminal/geometry/floating-terminal-panel-bounds.ts',
+      'src/renderer/src/components/floating-terminal/state/floating-terminal-panel-view-state.ts',
+      'src/renderer/src/components/floating-terminal/trigger/floating-terminal-trigger-position.ts',
+      'src/renderer/src/components/floating-terminal/orchestration/use-floating-terminal-orchestration-dismissal.ts',
       'src/renderer/src/components/github-project/column-widths.ts',
       'src/renderer/src/components/github-project/columns.ts',
       'src/renderer/src/components/github-project/roadmap-zoom-preference.ts',
@@ -78,6 +78,7 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
       'src/renderer/src/components/sidebar/mobile-sidebar-onboarding-badge.ts',
       'src/renderer/src/components/sidebar/SeveredTerminalDaemonBanner.tsx',
       'src/renderer/src/components/sidebar/SidebarToolbar.tsx',
+      'src/renderer/src/components/task-page/jira/boards/task-page-jira-board-column-order.ts',
       'src/renderer/src/components/terminal-pane/render-health/diagnostics/terminal-freeze-breadcrumbs.ts',
       'src/renderer/src/components/terminal-pane/render-health/terminal-render-desync-trigger.ts',
       'src/renderer/src/components/terminal-pane/diagnostics/startup/terminal-startup-timing.ts',
@@ -105,9 +106,9 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
 
 /** The database each schema file creates tables in; a new schema file fails the census. */
 export const SQLITE_SCHEMA_FILE_DATABASES: Record<string, string> = {
-  'src/main/ai-vault-search/session-search-query-schema.ts': 'ai-vault-search',
-  'src/main/ai-vault-search/session-search-schema.ts': 'ai-vault-search',
-  'src/main/ai-vault-search/session-search-write-buffer.ts': 'ai-vault-search-staging',
+  'src/main/ai-vault-search/storage/session-search-query-schema.ts': 'ai-vault-search',
+  'src/main/ai-vault-search/storage/session-search-schema.ts': 'ai-vault-search',
+  'src/main/ai-vault-search/storage/session-search-write-buffer.ts': 'ai-vault-search-staging',
   'src/main/ai-vault/parse-cache/session-parse-cache-database.ts': 'ai-vault-parse-cache',
   'src/main/ai-vault/parse-cache/session-scope-cwds-table.ts': 'ai-vault-parse-cache',
   'src/main/browser/cookies/staging/browser-cookie-staged-import.ts': 'browser-cookie-import',
@@ -123,7 +124,7 @@ export const SQLITE_SCHEMA_FILE_DATABASES: Record<string, string> = {
     'pi-branch-import',
   'src/main/native-chat/agent-session-journal/queued-messages/queued-message-schema.ts':
     'agent-session-journal',
-  'src/main/persistence/profile-state/profile-state-database-schema.ts': 'profile-state',
+  'src/main/persistence/profile-state/database/profile-state-database-schema.ts': 'profile-state',
   'src/main/runtime/orchestration/db/schema/create-core-tables-sql.ts': 'orchestration',
   'src/main/runtime/orchestration/db/schema/create-graph-tables-sql.ts': 'orchestration',
   'src/main/runtime/orchestration/db/schema/migrate-legacy-contract-storage.ts': 'orchestration',
@@ -139,7 +140,7 @@ export const SQLITE_SCHEMA_FILE_DATABASES: Record<string, string> = {
   // Test fixtures that mirror third-party agent and browser databases.
   'src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-fixture.ts':
     'test-fixture',
-  'src/main/ai-vault/session-scanner-test-fixtures.ts': 'test-fixture',
+  'src/main/ai-vault/scanner-fixtures/session-scanner-test-fixtures.ts': 'test-fixture',
   'src/main/browser/cookies/browser-cookie-import-test-database.ts': 'test-fixture',
   'src/main/codex/history/index/codex-state-db-test-fixture.ts': 'test-fixture',
   'src/main/opencode-usage/opencode-usage-sqlite-fixture.ts': 'test-fixture'
@@ -236,11 +237,12 @@ export const SQLITE_TABLE_DISPOSITIONS: Record<string, WslMoveFieldDisposition> 
         'legacy_mail_receipts',
         'legacy_operation_receipts',
         'removed_orchestration_work',
-        'removed_orchestration_work_coverage'
+        'removed_orchestration_work_coverage',
+        'orchestration_maintenance'
       ],
       notApplicableDisposition(
         53,
-        'Idempotency receipts: a replay returns the bytes first answered.'
+        'Idempotency receipts (a replay returns the bytes first answered) and when maintenance last ran.'
       )
     ),
     ...tables(

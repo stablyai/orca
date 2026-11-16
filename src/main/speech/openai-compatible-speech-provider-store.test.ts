@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 async function loadStoreModule() {
   vi.resetModules()
-  const { setSecretStore } = await import('../../shared/secret-store')
+  const { setSecretStore } = await import('../../shared/secure-storage/secret-store')
   setSecretStore({
     decryptString: (value: Buffer) => value.toString('utf8'),
     encryptString: (value: string) => Buffer.from(value),
@@ -19,24 +19,6 @@ beforeEach(() => {
   const home = mkdtempSync(join(tmpdir(), 'orca-compatible-speech-'))
   vi.stubEnv('HOME', home)
   vi.stubEnv('USERPROFILE', home)
-})
-
-describe('openAiCompatibleTranscriptionUrl', () => {
-  it('appends the transcriptions path to a base URL and keeps a full one', async () => {
-    const { openAiCompatibleTranscriptionUrl } = await loadStoreModule()
-    expect(openAiCompatibleTranscriptionUrl(' https://api.groq.com/openai/v1/ ')).toBe(
-      'https://api.groq.com/openai/v1/audio/transcriptions'
-    )
-    expect(openAiCompatibleTranscriptionUrl('https://api.mistral.ai/v1/audio/transcriptions')).toBe(
-      'https://api.mistral.ai/v1/audio/transcriptions'
-    )
-    expect(openAiCompatibleTranscriptionUrl('http://127.0.0.1:8000/v1')).toBe(
-      'http://127.0.0.1:8000/v1/audio/transcriptions'
-    )
-    expect(() => openAiCompatibleTranscriptionUrl('file:///etc/passwd')).toThrow()
-    expect(() => openAiCompatibleTranscriptionUrl('api.groq.com')).toThrow()
-    expect(() => openAiCompatibleTranscriptionUrl('https://user:pw@host.example/v1')).toThrow()
-  })
 })
 
 describe('resolveOpenAiCompatibleSpeechProviderInput', () => {

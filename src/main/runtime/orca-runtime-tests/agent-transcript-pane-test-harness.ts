@@ -1,10 +1,10 @@
-import type { RuntimeTerminalCreate } from '../../../shared/runtime-terminal-create-contract'
+import type { RuntimeTerminalCreate } from '../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import { vi } from 'vitest'
 import { OrcaRuntimeService } from '../orca-runtime'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalProcessInspection as PtyProcessInspection } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 import { committingSpawn, registerBoundPty } from './bind-first-pane.test-fixture'
 
 const TRANSCRIPT_PANE_LEAF_ID = '11111111-1111-4111-8111-111111111111'
@@ -31,6 +31,7 @@ export type TranscriptPaneOptions = {
   shellForegroundProven?: boolean
   paneRootPid?: number
   onShellForegroundProof?: () => void
+  onWrite?: (data: string) => void
 }
 
 function transcriptLayoutStore(): RuntimeStore {
@@ -87,7 +88,10 @@ export async function createTranscriptPane(
         ...(options.isReattach ? { isReattach: true as const } : {})
       }))
     ),
-    write: () => true,
+    write: (_id: string, data: string) => {
+      options.onWrite?.(data)
+      return true
+    },
     kill: () => true,
     getSize: () => options.size ?? null,
     getForegroundProcess: (): Promise<string | null> => {
@@ -139,7 +143,7 @@ export async function createTranscriptPane(
     title: 'Terminal'
   })
   runtime.attachWindow(1)
-  runtime.syncWindowGraph(
+  await runtime.syncWindowGraph(
     1,
     ORCA_LAYOUT_OWNER_IS_MAIN
       ? {

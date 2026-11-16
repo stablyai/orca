@@ -1,6 +1,7 @@
-import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
+import { awaitProviderChildSpawn } from '../provider-process/provider-child'
+import type { ProviderProcessSpawner } from '../provider-process/provider-process-spawn'
 import { spawnManagedProviderProcess } from '../provider-process/managed-provider-process'
-import { createClaudeChildTreeReaper } from '../claude/claude-agent-sdk-exit-proof'
+import { createClaudeChildTreeReaper } from '../claude/child-process/claude-agent-sdk-exit-proof'
 import { createProviderRecordReader } from '../provider-process/provider-record-reader'
 import { afterProviderOutputDrains } from '../provider-process/provider-exit-output-drain'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
@@ -45,7 +46,7 @@ export class TraexAppServerConnection {
   constructor(
     launch: ProviderProcessLaunch,
     private readonly handlers: TraexConnectionHandlers = {},
-    spawnImpl?: PipedProcessSpawner
+    spawnImpl?: ProviderProcessSpawner
   ) {
     this.managed = spawnManagedProviderProcess(launch, {
       site: 'traex-app-server-teardown',
@@ -90,6 +91,10 @@ export class TraexAppServerConnection {
         child
       )
     })
+  }
+
+  get spawned(): Promise<void> {
+    return awaitProviderChildSpawn(this.managed.child)
   }
 
   get pid(): number | undefined {

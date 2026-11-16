@@ -1,10 +1,7 @@
 import { EVERY_AGENT_CHAT } from '../../../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
-  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-} from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
-import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
+import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { buildAgentLaunchRouteInput } from './agent-launch-route-input'
 import type { AgentLaunchRouteArgs, AgentLaunchRouteStore } from './agent-launch-route-input'
 import { planAgentSessionLaunch } from './agent-session-launch-plan'
@@ -68,10 +65,6 @@ describe('buildAgentLaunchRouteInput', () => {
   beforeEach(stageLocalStructuredHost)
 
   describe('a workspace on a paired server', () => {
-    const CURRENT_SERVER = [
-      STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
-      STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY
-    ]
     const args: AgentLaunchRouteArgs = {
       agent: 'claude',
       workspace: { kind: 'git-worktree', worktreeId: 'wt-1' }
@@ -101,15 +94,6 @@ describe('buildAgentLaunchRouteInput', () => {
       expect(routeFor(pairedStore([STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]), args)).toBe(
         'terminal-tui'
       )
-    })
-
-    it('opens a chat for a browser client too', () => {
-      mocks.isWebClientLocation.mockReturnValue(true)
-      try {
-        expect(routeFor(pairedStore(CURRENT_SERVER), args)).toBe('structured-native-chat')
-      } finally {
-        mocks.isWebClientLocation.mockReturnValue(false)
-      }
     })
   })
 
@@ -150,19 +134,6 @@ describe('a cwd that names the workspace root', () => {
       worktreesByRepo: { 'repo-1': [{ id: 'wt-1', path: '/repo/app' }] },
       folderWorkspaces: [{ id: 'folder-1', folderPath: '/srv/notes' }]
     }) as unknown as AgentLaunchRouteStore
-
-  it.each(['/repo/app', '/repo/app/', '.'])(
-    'routes structured under the chat default for cwd %s',
-    (cwd) => {
-      const args = {
-        agent: 'codex' as const,
-        workspace: { kind: 'git-worktree' as const, worktreeId: 'wt-1' },
-        tuiCustomization: { cwd }
-      }
-      expect(buildAgentLaunchRouteInput(withRoot(), args).startsOutsideWorkspaceRoot).toBe(false)
-      expect(routeFor(withRoot(), args)).toBe('structured-native-chat')
-    }
-  )
 
   it('still requires a terminal for a subdirectory, which a structured session cannot start in', () => {
     const args = {

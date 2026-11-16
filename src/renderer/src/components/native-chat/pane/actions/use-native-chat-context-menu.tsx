@@ -7,7 +7,7 @@ import {
   type RefObject
 } from 'react'
 import { flushSync } from 'react-dom'
-import { markdownMathSelectionText } from '../../../../../../shared/markdown-math-selection'
+import { markdownMathSelectionText } from '../../../../../../shared/markdown/markdown-math-selection'
 import { Clipboard, Copy, Image as ImageIcon, SquareTerminal } from 'lucide-react'
 import {
   DropdownMenu,

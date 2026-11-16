@@ -18,7 +18,7 @@ import {
 import type {
   TerminalTabCloseReason,
   TerminalTabRetirementPlan
-} from '@/store/terminals/terminal-tab-retirement'
+} from '@/store/terminals/retirement/terminal-tab-retirement'
 import {
   guardRunningTerminalClose,
   shouldConfirmRunningTerminalClose
@@ -126,7 +126,6 @@ export function closeTerminalTab(tabId: string, options: CloseTerminalTabOptions
   if (shouldConfirmRunningTerminalClose(options)) {
     guardRunningTerminalClose({
       terminalTabId,
-      tabLabel: resolvePinnedTabLabel(state, owningWorktreeId, terminalTabId),
       ...(options?.consentedPtyId ? { consentedPtyId: options.consentedPtyId } : {}),
       // Re-enter after consent to revalidate pinned, route, and precomputed state against the latest store.
       onClose: () => closeTerminalTab(tabId, { ...options, skipRunningProcessConfirm: true }),

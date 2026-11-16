@@ -1,5 +1,5 @@
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
-import type { AgentSessionRewindReason } from '../../shared/agent-session/lifecycle/agent-session-rewind'
+import type { AgentSessionRewindReason } from '../../shared/agent-session/lifecycle/rewind/agent-session-rewind-reasons'
 import type { TraexSession } from './traex-session'
 import { readTraexTurns } from './traex-thread-history'
 import { traexRecord, traexThreadResponseSchema, TraexRequestError } from './traex-protocol'

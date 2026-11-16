@@ -5,8 +5,8 @@ import {
   parseNumstat,
   type GitLineStats
 } from './git-uncommitted-line-stats'
-import { isGeneratedCodePath } from '../../generated-code-path'
-import { isTestCodePath } from '../../test-code-path'
+import { isGeneratedCodePath } from './generated-code-path'
+import { isTestCodePath } from './test-code-path'
 
 // Bound large base-to-worktree diffs over SSH; failures invalidate totals instead of publishing partial values.
 export const GIT_BRANCH_LINE_TOTAL_TIMEOUT_MS = 15_000

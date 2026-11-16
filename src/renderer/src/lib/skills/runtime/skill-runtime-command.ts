@@ -5,10 +5,10 @@ import { normalizeGlobalWindowsRuntimeDefault } from '../../../../../shared/exec
 import {
   quotePowerShellLiteral,
   quotePowerShellNativeArgument
-} from '../../../../../shared/powershell-native-argument'
-import { buildWslLoginShellCommand } from '../../../../../shared/wsl-login-shell-command'
-import { isWslShellName } from '../../../../../shared/local-windows-terminal-runtime'
-import { resolveWindowsShellStartupFamily } from '../../../../../shared/windows-terminal-shell'
+} from '../../../../../shared/shell/launch/powershell-native-argument'
+import { buildWslLoginShellCommand } from '../../../../../shared/shell/wsl/wsl-login-shell-command'
+import { isWslShellName } from '../../../../../shared/shell/launch/local-windows-terminal-runtime'
+import { resolveWindowsShellStartupFamily } from '../../../../../shared/shell/launch/windows-terminal-shell'
 import { useAppStore } from '@/store/index'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'

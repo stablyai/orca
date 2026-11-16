@@ -8,18 +8,18 @@ import type { StructuredAgentSessionEventSink } from '../native-chat/agent-sessi
 import type { StructuredAgentSessionCommandRun } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { traexItemSchema, traexRecord, traexText } from './traex-protocol'
 import { traexItemBody } from './traex-item-translation'
-import { createTraexTimelineItemKeyResolver } from './traex-timeline-item-key'
+import { traexTimelineItemKey } from './traex-timeline-item-key'
 import { TraexStreamItems } from './traex-stream-items'
 import { TraexGoalTimeline } from './traex-goal-timeline'
 import { readTraexContextUsage } from './traex-context-usage'
-import { normalizeNativeChatTaskList } from '../../shared/native-chat/input/native-chat-task-list'
+import { normalizeNativeChatTaskList } from '../../shared/native-chat/input/task-lists/native-chat-task-list'
 import { traexFailureNotice, traexNotificationNotice } from './traex-turn-notices'
 
 export class TraexTimeline {
   private readonly assembler
   private readonly backlog: { event: ProviderTimelineEvent; admitted?: () => void }[] = []
   private readonly identity
-  private readonly itemKey
+  private readonly itemKey = traexTimelineItemKey
   private readonly goals
   private readonly streams
   private retryTimer: ReturnType<typeof setTimeout> | null = null
@@ -45,18 +45,13 @@ export class TraexTimeline {
     if (deps.producer) {
       delete sink.setActivity
     }
-    this.itemKey = createTraexTimelineItemKeyResolver({
-      sessionId: deps.sessionId,
-      threadId: deps.threadId,
-      journal: () => sink.journalItems?.()
-    })
     this.identity = createLegacyProviderTimelineIdentityScheme({
       agent: 'trae',
       sessionId: deps.sessionId
     })
     this.goals = new TraexGoalTimeline({
       threadId: deps.threadId,
-      journal: () => sink.journalItems(),
+      journal: () => deps.sink.journalSnapshot?.()?.threadGoal,
       apply: (event) => this.apply(event)
     })
     this.assembler = createProviderTimelineAssembler({

@@ -76,8 +76,8 @@ export async function dispatchTraexMessage(
         userMessageId: input.clientMessageId,
         ...nativeSettings
       }
+  let response: Promise<unknown> | undefined
   try {
-    let response: Promise<unknown> | undefined
     await admitStructuredAgentSessionInput(input.admitFreshInput, () => {
       input.signal?.throwIfAborted()
       if (input.isCurrent?.() === false || session.connection.closed) {
@@ -85,6 +85,7 @@ export async function dispatchTraexMessage(
       }
       session.pending.set(input.clientMessageId, send)
       response = session.connection.request(steer ? 'turn/steer' : 'turn/start', params, {
+        timeoutMs: null,
         onReply: (value) => {
           const result = traexRecord(value)
           const turnId = steer ? traexText(result.turnId) : traexTurnSchema.parse(result.turn).id
@@ -99,6 +100,10 @@ export async function dispatchTraexMessage(
     })
     await response
   } catch (error) {
+    if (!response) {
+      session.pending.delete(input.clientMessageId)
+      throw error
+    }
     if (!send.turnId) {
       if (error instanceof TraexRequestError) {
         session.pending.delete(input.clientMessageId)

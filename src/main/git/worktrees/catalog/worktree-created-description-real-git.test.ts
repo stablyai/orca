@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   clearGitCapabilityStateForTests,
   getLocalGitCapabilityCache
-} from '../../command-runner/git-capability-state'
+} from '../../command-runner/host-routing/git-capability-state'
 import { describeCreatedWorktree } from './worktree-listing'
 
 const execFileAsync = promisify(execFile)

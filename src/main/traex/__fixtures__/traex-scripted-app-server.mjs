@@ -4,6 +4,7 @@ const threadId = 'thread-trae-contract'
 let turnId
 let serial = 0
 let backgroundCommand = false
+let delayedStartReply = null
 const send = (frame) => process.stdout.write(`${JSON.stringify(frame)}\n`)
 const reply = (id, result) => send({ id, result })
 const notify = (method, params) => send({ method, params: { threadId, ...params } })
@@ -96,6 +97,10 @@ createInterface({ input: process.stdin })
           position: text === 'model-queue-unknown' ? null : text === 'model-queue-zero' ? 0 : 12,
           message: null
         })
+      }
+      if (text === 'model-queue-before-ack') {
+        delayedStartReply = id
+        return
       }
       reply(id, { turn: { id: turnId, status: 'inProgress', items: [] } })
       notify('turn/started', { turn: { id: turnId, status: 'inProgress', items: [] } })
@@ -431,6 +436,10 @@ createInterface({ input: process.stdin })
         }
       })
     } else if (method === 'turn/interrupt') {
+      if (delayedStartReply !== null) {
+        reply(delayedStartReply, { turn: { id: turnId, status: 'interrupted', items: [] } })
+        delayedStartReply = null
+      }
       reply(id, {})
       notify('turn/completed', {
         threadId: params.threadId,

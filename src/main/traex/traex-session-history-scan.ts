@@ -1,3 +1,5 @@
+import { parseJsonObject } from '../ai-vault/parsing/session-json-object'
+import { extractString } from '../../shared/text/trimmed-string'
 import { createInterface } from 'node:readline'
 import { basename, dirname } from 'node:path'
 import {
@@ -7,22 +9,17 @@ import {
   finalizeSession,
   sessionIdFromFileName,
   updateTimeline
-} from '../ai-vault/session-scanner-accumulator'
-import { addSessionContent } from '../ai-vault/session-scanner-messages'
-import { extractContentText } from '../ai-vault/session-scanner-text-normalization'
-import {
-  parseJsonObject,
-  extractString,
-  extractGitBranch,
-  extractModel
-} from '../ai-vault/session-scanner-values'
+} from '../ai-vault/parsing/session-scanner-accumulator'
+import { addSessionContent } from '../ai-vault/parsing/session-scanner-messages'
+import { extractContentText } from '../ai-vault/parsing/session-scanner-text-normalization'
+import { extractGitBranch, extractModel } from '../ai-vault/parsing/session-record-fields'
 import type {
   FileWithMtime,
   ResumableSessionParseState,
   SessionAccumulator
 } from '../ai-vault/session-scanner-types'
 import type { TranscriptMessageSink } from '../ai-vault/transcripts/session-transcript-consumers'
-import { openTranscriptReadStream } from '../native-chat/wsl-transcript-fs-access'
+import { openTranscriptReadStream } from '../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import { traexRecord } from './traex-protocol'
 
 type TraexHistoryScanState = {

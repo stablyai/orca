@@ -12,7 +12,7 @@ import React, { useCallback } from 'react'
 import { toast } from 'sonner'
 import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
 
-import { createNonSecureContextUuid } from '../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
 import { captureNativeChatComposerFocusIntent } from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
 import {
   agentLaunchPromptOwnership,
@@ -32,7 +32,7 @@ import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useAgentMenuShortcutLabels } from './agent-menu-shortcut-labels'
 import type { AgentPickerInventorySource } from '../agent/use-agent-launch-picker-inventory'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type { LaunchSource } from '../../../../shared/telemetry-events'
+import type { LaunchSource } from '../../../../shared/telemetry/schemas/telemetry-property-schemas'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
@@ -240,23 +240,22 @@ export function ProjectedAgentMenuItems({
   return (
     <>
       {(detectedIds === null && (detectionFailed || needsServerUpdate)) || rows.length === 0 ? (
-        <DropdownMenuItem
-          disabled
-          className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 text-muted-foreground"
-        >
-          {needsServerUpdate
-            ? t(
-                'auto.components.tab.bar.QuickLaunchButton.terminalListNeedsServerUpdate',
-                'Update Orca on this server to list terminal agents'
-              )
-            : detectionFailed
+        <DropdownMenuItem variant="launch" disabled>
+          <span className="font-normal text-muted-foreground">
+            {needsServerUpdate
               ? t(
-                  'auto.components.tab.bar.QuickLaunchButton.terminalListFailed',
-                  'Couldn’t list terminal agents for this workspace'
+                  'auto.components.tab.bar.QuickLaunchButton.terminalListNeedsServerUpdate',
+                  'Update Orca on this server to list terminal agents'
                 )
-              : detectedIds && detectedIds.length > 0
-                ? t('auto.components.tab.bar.QuickLaunchButton.8dea9b5cdf', 'No enabled agents')
-                : t('auto.components.tab.bar.QuickLaunchButton.e518f544b1', 'No agents detected')}
+              : detectionFailed
+                ? t(
+                    'auto.components.tab.bar.QuickLaunchButton.terminalListFailed',
+                    'Couldn’t list terminal agents for this workspace'
+                  )
+                : detectedIds && detectedIds.length > 0
+                  ? t('auto.components.tab.bar.QuickLaunchButton.8dea9b5cdf', 'No enabled agents')
+                  : t('auto.components.tab.bar.QuickLaunchButton.e518f544b1', 'No agents detected')}
+          </span>
         </DropdownMenuItem>
       ) : null}
       {pickerInventory ? (

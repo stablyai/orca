@@ -1,14 +1,17 @@
 import {
   claudeBackgroundArgs,
   claudeTextGenerationToolArgs
-} from '../../../claude-background-run-isolation'
+} from '../../../text-generation/launch/claude-background-run-isolation'
 import type { TuiAgent } from '../../../agent-launch/catalog/tui-agent'
 import type {
   CommitMessageAgentSpec,
   CommitMessageModel,
   ThinkingLevel
 } from './commit-message-agent-spec'
-import { CLAUDE_MODEL_LIST_ARGS, CLAUDE_MODEL_LIST_STDIN } from '../../../claude-model-list-probe'
+import {
+  CLAUDE_MODEL_LIST_ARGS,
+  CLAUDE_MODEL_LIST_STDIN
+} from '../../../agent-session/options/model-catalog/claude-model-list-probe'
 
 type PrimaryAgentSpecDeps = {
   CLAUDE_THINKING_LEVELS: ThinkingLevel[]
@@ -38,13 +41,13 @@ export function buildPrimaryCommitMessageAgentSpecs({
       binary: 'claude',
       // Claude -p accepts large prompts on stdin when no positional prompt is supplied.
       promptDelivery: 'stdin',
-      buildArgs: ({ model, thinkingLevel, strictMcp, legacyToolPolicy, userArgs }) => [
+      buildArgs: ({ model, thinkingLevel, strictMcp, legacyToolPolicy, toolFree, userArgs }) => [
         '-p',
         '--output-format',
         'text',
         '--model',
         model,
-        ...claudeTextGenerationToolArgs({ strictMcp, legacyToolPolicy }),
+        ...claudeTextGenerationToolArgs({ strictMcp, legacyToolPolicy, toolFree }),
         ...(thinkingLevel ? ['--effort', thinkingLevel] : []),
         ...claudeBackgroundArgs(strictMcp, userArgs)
       ],

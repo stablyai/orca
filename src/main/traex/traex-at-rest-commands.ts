@@ -1,6 +1,6 @@
 import type { StructuredAgentRuntimeRegistration } from '../runtime/agent-session/installation/structured-agent-runtime-registration-types'
 import { AtRestCommandCatalog } from '../native-chat/agent-session-wire/options/at-rest-command-catalog'
-import { isLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
+import { isLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { supportsSupervisedProviderChildLocation } from '../provider-process/supervised-provider-child-location'
 import { runAgentModelCatalogSession } from '../native-chat/agent-model-catalog/agent-model-catalog-probe-runner'
 import { resolveTraexReadLaunch } from './traex-launch-resolution'

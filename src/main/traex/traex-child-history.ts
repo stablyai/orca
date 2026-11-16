@@ -1,8 +1,8 @@
 import type { AgentJournalProducerLinkage } from '../../shared/agent-session/journal/agent-session-journal-types'
+import { isSubagentBlock } from '../../shared/native-chat/native-chat-types'
 import type { NativeChatSubagentBlock } from '../../shared/native-chat/native-chat-types'
 import {
   boundSubagentLabel,
-  journaledSubagent,
   subagentJournalBody,
   subagentJournalItemIdentity
 } from '../native-chat/agent-session-journal/item-lifecycle/journal-subagent-item'
@@ -155,7 +155,10 @@ export async function restoreTraexChildWork(
       turns: child.turns,
       producer: child.producer
     })
-    const saved = journaledSubagent(session.input.events!.journalItems!()!, child.threadId)
+    const savedBody = await session.input
+      .events!.journalHistory?.()
+      ?.reads.itemBody(agentJournalItemKey(subagentJournalItemIdentity(child.threadId)))
+    const saved = savedBody?.kind === 'message' ? savedBody.blocks.find(isSubagentBlock) : undefined
     const block = traexChildHistoryBlock(child, session.input.identity.sessionId)
     if (saved) {
       block.groupId = saved.groupId

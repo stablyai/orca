@@ -1,23 +1,23 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
-import { agentSessionProviderHandleChainHead } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { requireLegacyAgentSessionAccountHome } from '../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import { agentSessionProviderHandleChainHead } from '../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { AgentChatPermissionChoice } from '../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { checkAgentCliVersion } from '../agent-launch/preflight/agent-cli-version-probe'
-import { AgentCliInstallationError } from '../native-chat/agent-cli-installation-error'
-import { StructuredAgentArgumentsError } from '../native-chat/structured-agent-arguments-error'
+import { AgentCliInstallationError } from '../native-chat/agent-launch/agent-cli-installation-error'
+import { StructuredAgentArgumentsError } from '../native-chat/agent-launch/structured-agent-arguments-error'
 import {
   resolveAgainAfterRefreshOnMissingProgram,
   resolveStructuredAgentCommand,
   type StructuredAgentCommandSettings,
   type StructuredAgentResolutionOperation
-} from '../native-chat/structured-agent-command-resolution'
+} from '../native-chat/agent-launch/structured-agent-command-resolution'
 import type { StructuredAgentLaunchPartResolver } from '../runtime/agent-session/launch/structured-agent-launch-composition'
 import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../runtime/agent-session/environment/structured-session-child-env'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
 import type { StructuredAgentModelCatalogContext } from '../runtime/agent-session/installation/structured-agent-runtime-registration-types'
-import type { AgentSessionAccountHome } from '../../shared/agent-session/lifecycle/agent-session-account-home'
-import type { JournalLoad } from '../native-chat/agent-session-journal/replay/journal-open'
+import type { AgentSessionAccountHome } from '../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import type { ProviderSavedSessionReads } from '../native-chat/agent-session-timeline/provider-timeline-unused-conversation'
 import { providerConversationHasNoTurns } from '../native-chat/agent-session-timeline/provider-timeline-unused-conversation'
 
 export const TRAEX_MINIMUM_VERSIONS = ['0.214.1'] as const
@@ -173,7 +173,7 @@ export function traexPermissionSettings(mode: AgentChatPermissionChoice): Record
 
 export function traexLaunchPart(deps: {
   resolveLaunchArgs: () => Promise<string[]> | string[]
-  readJournal: (sessionId: string) => JournalLoad | null
+  savedSessionReads: ProviderSavedSessionReads
 }): StructuredAgentLaunchPartResolver<TraexLaunch> {
   return async (basis) => {
     const account = requireLegacyAgentSessionAccountHome(basis.record.accountHome)
@@ -200,11 +200,11 @@ export function traexLaunchPart(deps: {
         previousThreadId: previous?.handle.nativeId ?? null,
         mayBeUnsaved:
           previous?.origin === 'created' &&
-          providerConversationHasNoTurns(
-            deps.readJournal,
+          (await providerConversationHasNoTurns(
+            deps.savedSessionReads,
             basis.record.sessionId,
             previous.handle.nativeId
-          ),
+          )),
         options: basis.record.options ?? {},
         permissionMode: basis.permissionMode ?? 'ask'
       },

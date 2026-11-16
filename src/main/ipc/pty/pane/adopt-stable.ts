@@ -1,6 +1,6 @@
 import type { PtySpawnOutcome } from '../spawn-outcome'
-import { isClosedPaneFenced } from '../../../persistence/terminal-topology/closed-pane-binding-fence'
-import { hasClosedTerminalTabRecord } from '../../../../shared/workspace-layout/closed-terminal-tab-tombstones'
+import { isClosedPaneFenced } from '../../../persistence/terminal-topology/pane-ownership/closed-pane-binding-fence'
+import { hasClosedTerminalTabRecord } from '../../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
 import {
   toSshExecutionHostId,
   getConnectionExecutionHostId

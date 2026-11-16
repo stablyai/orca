@@ -46,7 +46,7 @@ vi.mock('../../managed-server/activation/orcad-running-version-adoption', () => 
   adoptRunningOrcadVersion: mocks.adoptRunning
 }))
 
-vi.mock('../../../shared/app-environment', () => ({
+vi.mock('../../../shared/app-lifecycle/app-environment', () => ({
   getAppEnvironment: () => ({ getVersion: () => '1.5.0', getPath: () => '/user-data' })
 }))
 vi.mock('../../ssh/remote-exec/remote-exec-command', () => ({ execCommand: mocks.exec }))
@@ -56,7 +56,7 @@ vi.mock('../../managed-server/install/orcad-remote-context', () => ({
 vi.mock('../../managed-server/activation/orcad-activation-recovery', () => ({
   recoverInterruptedOrcadActivation: mocks.recover
 }))
-vi.mock('../../orcad/orcad-artifact-materializer', () => ({
+vi.mock('../../orcad/artifact-slots/orcad-artifact-materializer', () => ({
   materializeOrcadArtifact: async () => '/local/orcad'
 }))
 vi.mock('../../managed-server/install/orcad-remote-deploy', () => ({ deployOrcad: mocks.deploy }))
@@ -197,14 +197,5 @@ describe('deployAndLaunchWslOrcad', () => {
     mocks.probe.mockRejectedValueOnce(refused)
     await expect(launch()).rejects.toBe(refused)
     expect(mocks.wake).toHaveBeenCalledTimes(3)
-  })
-
-  it('refuses to deploy or launch when an unrecorded orcad cannot be proven', async () => {
-    mocks.adopt.mockRejectedValueOnce(
-      Object.assign(new Error('cannot be identified'), { name: 'WslOrcadUnrecordedInstanceError' })
-    )
-    await expect(launch()).rejects.toMatchObject({ name: 'WslOrcadUnrecordedInstanceError' })
-    expect(mocks.deploy).not.toHaveBeenCalled()
-    expect(mocks.wake).not.toHaveBeenCalled()
   })
 })

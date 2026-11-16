@@ -88,17 +88,3 @@ export async function readStructuredLineageJournalPage(
   }
   return { items, sessionIds, hasOlder: false }
 }
-
-/** For retired unreadable tails, return the latest readable history and count every skipped session. */
-export async function readRetiredLineageJournalPage(
-  lineage: readonly string[],
-  filled?: (items: readonly AgentJournalRenderItem[]) => boolean
-): Promise<{ page: StructuredLineageJournalPage | null; unreadable: number }> {
-  for (let unreadable = 1; unreadable < lineage.length; unreadable += 1) {
-    const page = await readStructuredLineageJournalPage(lineage.slice(0, -unreadable), filled)
-    if (page) {
-      return { page, unreadable }
-    }
-  }
-  return { page: null, unreadable: lineage.length }
-}

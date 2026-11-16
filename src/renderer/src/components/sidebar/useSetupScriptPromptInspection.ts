@@ -5,9 +5,9 @@ import {
   inspectRuntimeSetupScriptImports
 } from '@/runtime/repo-hooks/runtime-hooks-client'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { isGitRepoKind } from '../../../../shared/repo-kind'
-import type { Repo } from '../../../../shared/repo-types'
-import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
+import { isGitRepoKind } from '../../../../shared/repository/repo-kind'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import { getRepoHostIdentity } from '../../../../shared/repository/repo-host-identity'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { SetupScriptPromptState } from './setup-script-prompt-render-state'
 

@@ -1,4 +1,4 @@
-import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
+import { waitForPromiseWithSignal } from '../../shared/concurrency/abort-signal-reason'
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { supportsSupervisedProviderChildLocation } from '../provider-process/supervised-provider-child-location'
 import { ProviderAcquisitionStarts } from '../provider-process/provider-acquisition-starts'
@@ -26,7 +26,7 @@ import { prepareTraexRewind, recoverTraexRewind, rewindTraexSession } from './tr
 import { changeTraexThreadGoal } from './traex-thread-goal'
 import { cancelTraexTurn } from './traex-turn-cancel'
 import { stopTraexBackgroundTasks } from './traex-background-task-stops'
-import { readTraexAppliedInputOptions } from './traex-session-options'
+import { captureTraexMessageSteeringInputs } from './traex-session-options'
 
 export class TraexSessionAdapter implements StructuredAgentSessionAdapter {
   private readonly sessions = new Map<string, TraexSession>()
@@ -90,6 +90,7 @@ export class TraexSessionAdapter implements StructuredAgentSessionAdapter {
         'TRAE CLI app-server',
         this.deps.readProcessStartTime
       )
+      await waitForPromiseWithSignal(session.connection.spawned, attempt.signal)
       if (session.connection.pid !== undefined) {
         await identity.onSpawned(session.connection.pid)
       }
@@ -151,9 +152,9 @@ export class TraexSessionAdapter implements StructuredAgentSessionAdapter {
     this.session(input.sessionId, input.fence).setOption(input.key, input.value, input.signal)
   readOptions: NonNullable<StructuredAgentSessionAdapter['readOptions']> = async (input) =>
     this.session(input.sessionId, input.fence).readOptions()
-  readAppliedInputOptions: NonNullable<StructuredAgentSessionAdapter['readAppliedInputOptions']> = (
-    input
-  ) => readTraexAppliedInputOptions(this.sessions.get(input.sessionId), input)
+  captureMessageSteeringInputs: NonNullable<
+    StructuredAgentSessionAdapter['captureMessageSteeringInputs']
+  > = (input) => captureTraexMessageSteeringInputs(this.sessions.get(input.sessionId), input)
   readCommands: NonNullable<StructuredAgentSessionAdapter['readCommands']> = (id) =>
     this.sessions.get(id)?.commands
   changeThreadGoal: NonNullable<StructuredAgentSessionAdapter['changeThreadGoal']> = (input) =>

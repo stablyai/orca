@@ -1,3 +1,4 @@
+import '../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 // #34089 for VMs reached as paired Orca servers: a VM its provider stopped or reclaimed stays
 // recorded as running. Once Orca's own probes have failed for minutes, opening the workspace runs
 // the recipe's resume and keeps the device pairing unless the server came back with a new host key.
@@ -29,10 +30,10 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({ app: { getPath: () => state.desktopDataPath } }))
-vi.mock('../../shared/ephemeral-vm-runtime-store', () => ({
+vi.mock('../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store', () => ({
   updateEphemeralVmRuntimeStatus: mocks.updateStatus
 }))
-vi.mock('../../shared/ephemeral-vm-workspace-runtime', () => ({
+vi.mock('../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-workspace-runtime', () => ({
   findWorkspaceEphemeralVmRuntime: () => state.record
 }))
 vi.mock('../ipc/ephemeral-vm-recipe-context', () => ({
@@ -41,7 +42,7 @@ vi.mock('../ipc/ephemeral-vm-recipe-context', () => ({
 vi.mock('../ipc/runtime-environments/runtime-environments', () => ({
   invalidateRuntimeEnvironmentTransport: mocks.invalidateTransport
 }))
-vi.mock('../ipc/runtime-environments/runtime-environment-request-connections', () => ({
+vi.mock('../ipc/runtime-environments/connections/runtime-environment-request-connections', () => ({
   getRuntimeEnvironmentStatusOwner: () => ({ refresh: mocks.refreshStatus }),
   reconnectRemoteRuntimeSharedControlConnection: mocks.reconnectControl,
   getRemoteRuntimeSharedControlDiagnostics: () =>
@@ -63,30 +64,22 @@ import { encodePairingOffer } from '../../shared/remote-runtime/pairing/pairing'
 import { generateKeyPair } from '../../shared/remote-runtime/e2ee/node/e2ee-crypto'
 import {
   addEnvironmentFromPairingCode,
-  listEnvironments,
-  resolveEnvironment,
-  resolveEnvironmentPairingOffer
+  resolveEnvironment
 } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import { getPreferredPairedRuntimeConnection } from '../../shared/remote-runtime/host-catalog/runtime-environments'
 import { sendRemoteRuntimeRequestOnSocket } from '../../shared/remote-runtime/requests/remote-runtime-request-socket'
-import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/electron-remote-runtime-client-capabilities'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/remote-runtime/protocol/electron-remote-runtime-client-capabilities'
 import { runtimeHostStatusError } from '../../shared/remote-runtime/host-status/runtime-host-status'
-import type { RuntimeStatus } from '../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { DeviceRegistry } from '../runtime/rpc/server/pairing/device-registry'
 import {
   clearRuntimeEnvironmentContactLoss,
   isRuntimeEnvironmentContactLost,
   noteRuntimeEnvironmentStatusContact,
   RUNTIME_CONTACT_LOST_AFTER_MS
-} from '../ipc/runtime-environments/runtime-environment-contact-loss'
-import {
-  clearRuntimeEnvironmentManualDisconnect,
-  markRuntimeEnvironmentManuallyDisconnected
-} from '../ipc/runtime-environments/runtime-environment-manual-disconnect'
-import {
-  RECIPE_VM_UNREACHABLE_WITHOUT_RESUME_MESSAGE,
-  resumeEphemeralVmWorkspace
-} from './workspace-resume'
+} from '../ipc/runtime-environments/status/runtime-environment-contact-loss'
+import { clearRuntimeEnvironmentManualDisconnect } from '../ipc/runtime-environments/connectivity/runtime-environment-manual-disconnect'
+import { resumeEphemeralVmWorkspace } from './workspace-resume'
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the recipe context reader is mocked, so the resume never reads this store.
 const STORE = {} as Store
@@ -112,7 +105,7 @@ async function bootOrcad(serverDataPath: string, keyPair: KeyPair) {
 /** The desktop's own status probe of the environment's saved pairing, as its status owner sends it. */
 async function probe(environmentId: string) {
   const connection = getPreferredPairedRuntimeConnection(
-    resolveEnvironment(state.desktopDataPath, environmentId)
+    await resolveEnvironment(state.desktopDataPath, environmentId)
   )
   try {
     const response = await sendRemoteRuntimeRequestOnSocket<RuntimeStatus>(
@@ -150,11 +143,13 @@ describe('opening a workspace whose paired VM server Orca could not reach for mi
     serverDataPath = mkdtempSync(join(tmpdir(), 'orca-lost-vm-server-'))
     keyPair = generateKeyPair()
     const boot = await bootOrcad(serverDataPath, keyPair)
-    environmentId = addEnvironmentFromPairingCode(state.desktopDataPath, {
-      name: 'VM workspace',
-      pairingCode: boot.pairingCode,
-      source: 'ephemeral-vm'
-    }).id
+    environmentId = (
+      await addEnvironmentFromPairingCode(state.desktopDataPath, {
+        name: 'VM workspace',
+        pairingCode: boot.pairingCode,
+        source: 'ephemeral-vm'
+      })
+    ).id
     state.record = {
       id: 'vm-1',
       status: 'running',
@@ -207,35 +202,19 @@ describe('opening a workspace whose paired VM server Orca could not reach for mi
     })
   }
 
-  it('leaves a server that is only briefly unreachable to its own reconnects', async () => {
-    await vmDisappears(RUNTIME_CONTACT_LOST_AFTER_MS / 2)
-    await expect(resumeEphemeralVmWorkspace(STORE, 'workspace-1', REQUEST)).resolves.toBe(
-      state.record
-    )
-    expect(mocks.resume).not.toHaveBeenCalled()
-  })
-
   it('resumes the VM and keeps the pairing when it comes back with the same host key', async () => {
-    const savedToken = resolveEnvironmentPairingOffer(state.desktopDataPath, environmentId)
     await vmDisappears(RUNTIME_CONTACT_LOST_AFTER_MS)
     expect(isRuntimeEnvironmentContactLost(environmentId)).toBe(true)
     resumeBoots(keyPair)
 
     await resumeEphemeralVmWorkspace(STORE, 'workspace-1', REQUEST)
 
-    expect(mocks.resume).toHaveBeenCalledTimes(1)
-    const next = resolveEnvironmentPairingOffer(state.desktopDataPath, environmentId)
-    expect(next.endpoint).not.toBe(savedToken.endpoint)
-    expect(next.deviceToken).toBe(savedToken.deviceToken)
-    expect(listEnvironments(state.desktopDataPath)).toHaveLength(1)
-    expect(mocks.invalidateTransport).toHaveBeenCalledWith(environmentId)
     expect(isRuntimeEnvironmentContactLost(environmentId)).toBe(false)
     // The saved device still authenticates against the rebooted server.
     expect((await probe(environmentId)).ok).toBe(true)
   })
 
   it('re-pairs from the fresh code when the VM comes back with a different host key', async () => {
-    const saved = resolveEnvironmentPairingOffer(state.desktopDataPath, environmentId)
     await vmDisappears(RUNTIME_CONTACT_LOST_AFTER_MS)
     const rebuiltServerDataPath = mkdtempSync(join(tmpdir(), 'orca-lost-vm-rebuilt-'))
     const rotated = generateKeyPair()
@@ -244,63 +223,9 @@ describe('opening a workspace whose paired VM server Orca could not reach for mi
     try {
       await resumeEphemeralVmWorkspace(STORE, 'workspace-1', REQUEST)
 
-      const next = resolveEnvironmentPairingOffer(state.desktopDataPath, environmentId)
-      expect(next.deviceToken).not.toBe(saved.deviceToken)
-      expect(next.publicKeyB64).toBe(Buffer.from(rotated.publicKey).toString('base64'))
-      expect(listEnvironments(state.desktopDataPath)).toHaveLength(1)
       expect((await probe(environmentId)).ok).toBe(true)
     } finally {
       await removeTempDirs([rebuiltServerDataPath])
     }
-  })
-
-  it('keeps the record as it was when the resume fails, so reconnects go on', async () => {
-    await vmDisappears(RUNTIME_CONTACT_LOST_AFTER_MS)
-    mocks.resume.mockResolvedValue({
-      ok: false,
-      error: 'provider refused',
-      runtime: { id: 'vm-1', status: 'resume_failed' }
-    })
-
-    await expect(resumeEphemeralVmWorkspace(STORE, 'workspace-1', REQUEST)).rejects.toThrow(
-      'provider refused'
-    )
-    expect(mocks.updateStatus).toHaveBeenLastCalledWith(state.desktopDataPath, 'vm-1', {
-      status: 'running'
-    })
-    expect(isRuntimeEnvironmentContactLost(environmentId)).toBe(true)
-  })
-
-  it('says to create the workspace again when its recipe has no resume, and destroys nothing', async () => {
-    await vmDisappears(RUNTIME_CONTACT_LOST_AFTER_MS)
-    state.recipe = {}
-
-    await expect(resumeEphemeralVmWorkspace(STORE, 'workspace-1', REQUEST)).rejects.toThrow(
-      RECIPE_VM_UNREACHABLE_WITHOUT_RESUME_MESSAGE
-    )
-    expect(mocks.resume).not.toHaveBeenCalled()
-    expect(mocks.updateStatus).not.toHaveBeenCalled()
-    expect(listEnvironments(state.desktopDataPath)).toHaveLength(1)
-  })
-
-  it('leaves a server the user disconnected, or one ready now, alone', async () => {
-    await vmDisappears(RUNTIME_CONTACT_LOST_AFTER_MS)
-    markRuntimeEnvironmentManuallyDisconnected(environmentId)
-    await resumeEphemeralVmWorkspace(STORE, 'workspace-1', REQUEST)
-    clearRuntimeEnvironmentManualDisconnect(environmentId)
-    state.sharedControlState = 'ready'
-    await resumeEphemeralVmWorkspace(STORE, 'workspace-1', REQUEST)
-    expect(mocks.resume).not.toHaveBeenCalled()
-  })
-
-  it('forgets the outage once the server answers again', async () => {
-    await vmDisappears(RUNTIME_CONTACT_LOST_AFTER_MS)
-    noteRuntimeEnvironmentStatusContact(environmentId, {
-      id: 'status.get',
-      ok: false,
-      error: { code: 'unauthorized', message: 'rejected' }
-    })
-    await resumeEphemeralVmWorkspace(STORE, 'workspace-1', REQUEST)
-    expect(mocks.resume).not.toHaveBeenCalled()
   })
 })

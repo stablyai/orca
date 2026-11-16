@@ -4,10 +4,10 @@ import {
   type AgentProviderSessionMetadata,
   type ResumableTuiAgent
 } from './lifecycle/agent-session-resume'
-import type { RuntimeTerminalCreate } from '../runtime-terminal-create-contract'
-import type { RuntimeTerminalPresentation } from '../runtime-terminal-contracts'
+import type { RuntimeTerminalCreate } from '../terminal/runtime/runtime-terminal-create-contract'
+import type { RuntimeTerminalPresentation } from '../terminal/runtime/runtime-terminal-contracts'
 import { isTerminalLeafId } from '../workspace-layout/stable-pane-id'
-import { isValidTerminalTabId } from '../workspace-layout/terminal-tab-id'
+import { isValidTerminalTabId } from '../workspace-layout/terminal-surfaces/terminal-tab-id'
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 import type { SpawnIntent } from '../terminal/pty/admission/spawn-admission-contract'
 

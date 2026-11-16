@@ -1,3 +1,5 @@
+import { openTestAgentSessionDatabase } from '../runtime/agent-session/records/agent-session-record-store-test-harness'
+import { readTestJournalItems } from '../native-chat/agent-session-journal/journal-observation.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -5,12 +7,9 @@ import { randomUUID } from 'node:crypto'
 import { expect, it } from 'vitest'
 import { TraexSessionAdapter } from './traex-session-adapter'
 import { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
-import {
-  openTestJournalHostDatabase,
-  closeTestJournalHostDatabases
-} from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { closeTestJournalHostDatabases } from '../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
-import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 import type { AgentChildWorkEvidence } from '../../shared/agent-status/child-work/agent-status-child-work-evidence'
 
 it('keeps nested child activity out of root turns and stops only the named child work', async () => {
@@ -22,11 +21,10 @@ it('keeps nested child activity out of root turns and stops only the named child
     agent: 'trae' as const,
     providerHandle: null
   }
-  const journal = new AgentSessionJournal({
+  const journal = await AgentSessionJournal.open({
     identity,
-    database: openTestJournalHostDatabase(directory)
+    database: await openTestAgentSessionDatabase(directory)
   })
-  await journal.open()
   const { logger } = recordingStructuredAgentSessionLogger()
   const sink = createDeferredStructuredAgentSessionEventSink({
     sessionId: identity.sessionId,
@@ -69,39 +67,39 @@ it('keeps nested child activity out of root turns and stops only the named child
       clientMessageId: 'child-work-input',
       body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'child-work' }] }
     })
-    const messages = () =>
-      journal.currentRead().items.filter((item) => item.body.kind === 'message')
+    const messages = async () =>
+      (await readTestJournalItems(journal)).filter((item) => item.body.kind === 'message')
     await expect
-      .poll(() =>
-        messages().some((item) => JSON.stringify(item.body).includes('ROOT_CONTRACT_DONE'))
+      .poll(async () =>
+        (await messages()).some((item) => JSON.stringify(item.body).includes('ROOT_CONTRACT_DONE'))
       )
       .toBe(true)
-    const child = messages().find(
+    const child = (await messages()).find(
       (item) =>
         JSON.stringify(item.body).includes('CHILD_CONTRACT_TEXT') &&
         !JSON.stringify(item.body).includes('GRANDCHILD')
     )!
-    const grandchild = messages().find((item) =>
+    const grandchild = (await messages()).find((item) =>
       JSON.stringify(item.body).includes('GRANDCHILD_CONTRACT_TEXT')
     )!
     expect(child.agentId).toBe('child-contract')
     expect(grandchild.agentId).toBe('grandchild-contract')
     expect(grandchild.parentAgentId).toBe('child-contract')
     expect(
-      journal
-        .currentRead()
-        .items.find((item) => item.body.kind === 'tool-call' && item.body.name === 'spawn_agent')
-        ?.body
+      (await readTestJournalItems(journal)).find(
+        (item) => item.body.kind === 'tool-call' && item.body.name === 'spawn_agent'
+      )?.body
     ).toMatchObject({ input: { agents: ['child-contract'] } })
-    expect(messages().some((item) => JSON.stringify(item.body).includes('STRAY_TEXT'))).toBe(false)
     expect(
-      journal
-        .currentRead()
-        .items.filter((item) => item.body.kind === 'turn')
+      (await messages()).some((item) => JSON.stringify(item.body).includes('STRAY_TEXT'))
+    ).toBe(false)
+    expect(
+      (await readTestJournalItems(journal))
+        .filter((item) => item.body.kind === 'turn')
         .map((item) => (item.body.kind === 'turn' ? item.body.state : null))
     ).toEqual(['completed'])
     await expect
-      .poll(() =>
+      .poll(async () =>
         evidence.some(
           (event) =>
             event.type === 'live' &&
@@ -121,7 +119,7 @@ it('keeps nested child activity out of root turns and stops only the named child
     ).toEqual({ cancelled: true })
     expect(acknowledgements).toEqual(['child-contract', 'grandchild-contract'])
     await expect
-      .poll(() =>
+      .poll(async () =>
         evidence.some(
           (event) =>
             event.type === 'ended' &&
@@ -131,7 +129,7 @@ it('keeps nested child activity out of root turns and stops only the named child
       )
       .toBe(true)
     await expect
-      .poll(() =>
+      .poll(async () =>
         evidence.some(
           (event) =>
             event.type === 'live' &&
@@ -165,11 +163,10 @@ it('projects plans, measured context, rich messages and native approval callback
     agent: 'trae' as const,
     providerHandle: null
   }
-  const journal = new AgentSessionJournal({
+  const journal = await AgentSessionJournal.open({
     identity,
-    database: openTestJournalHostDatabase(directory)
+    database: await openTestAgentSessionDatabase(directory)
   })
-  await journal.open()
   const { logger } = recordingStructuredAgentSessionLogger()
   const sink = createDeferredStructuredAgentSessionEventSink({
     sessionId: identity.sessionId,
@@ -218,10 +215,13 @@ it('projects plans, measured context, rich messages and native approval callback
       clientMessageId: 'audit-input',
       body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'parity-audit' }] }
     })
-    const rows = () => journal.currentRead().items
-    await expect.poll(() => rows().some((row) => row.body.kind === 'approval')).toBe(true)
+    const rows = async () => await readTestJournalItems(journal)
+    await expect
+      .poll(async () => (await rows()).some((row) => row.body.kind === 'approval'))
+      .toBe(true)
     expect(
-      rows().find((row) => row.body.kind === 'tool-call' && row.body.name === 'update_plan')?.body
+      (await rows()).find((row) => row.body.kind === 'tool-call' && row.body.name === 'update_plan')
+        ?.body
     ).toMatchObject({
       input: {
         plan: [
@@ -230,7 +230,7 @@ it('projects plans, measured context, rich messages and native approval callback
         ]
       }
     })
-    expect(rows().find((row) => row.body.kind === 'turn')?.body).toMatchObject({
+    expect((await rows()).find((row) => row.body.kind === 'turn')?.body).toMatchObject({
       contextUsage: {
         used: {
           kind: 'report',
@@ -243,7 +243,7 @@ it('projects plans, measured context, rich messages and native approval callback
       }
     })
     expect(
-      rows().find(
+      (await rows()).find(
         (row) =>
           row.body.kind === 'message' && row.body.blocks.some((block) => block.type === 'image-ref')
       )?.body
@@ -251,10 +251,11 @@ it('projects plans, measured context, rich messages and native approval callback
       blocks: [{ type: 'text' }, { type: 'image-ref', path: '/tmp/view-audit.png' }]
     })
     expect(
-      rows().find((row) => row.body.kind === 'tool-call' && row.body.name === 'web_search')?.body
+      (await rows()).find((row) => row.body.kind === 'tool-call' && row.body.name === 'web_search')
+        ?.body
     ).toMatchObject({ webSearchResults: [{ title: 'Example', url: 'https://example.com' }] })
     expect(
-      rows().find(
+      (await rows()).find(
         (row) =>
           row.body.kind === 'message' &&
           row.body.blocks.some(
@@ -267,7 +268,7 @@ it('projects plans, measured context, rich messages and native approval callback
         { type: 'tool-call', input: { questions: [{ title: 'Route?', options: ['A', 'B'] }] } }
       ]
     })
-    const mode = rows().find((row) => row.body.kind === 'approval')!
+    const mode = (await rows()).find((row) => row.body.kind === 'approval')!
     const commit = async () => {}
     await adapter.answerPrompt({
       sessionId: identity.sessionId,
@@ -281,9 +282,13 @@ it('projects plans, measured context, rich messages and native approval callback
       current: { interactionMode: 'default', reportedModel: 'fallback-model' }
     })
     await expect
-      .poll(() => rows().some((row) => row.body.kind === 'approval' && row.itemId !== mode.itemId))
+      .poll(async () =>
+        (await rows()).some((row) => row.body.kind === 'approval' && row.itemId !== mode.itemId)
+      )
       .toBe(true)
-    const mcp = rows().find((row) => row.body.kind === 'approval' && row.itemId !== mode.itemId)!
+    const mcp = (await rows()).find(
+      (row) => row.body.kind === 'approval' && row.itemId !== mode.itemId
+    )!
     expect(mcp.body).toMatchObject({ detail: 'Audit MCP\n\n{"path":"/workspace/report.txt"}' })
     await adapter.answerPrompt({
       sessionId: identity.sessionId,
@@ -294,20 +299,20 @@ it('projects plans, measured context, rich messages and native approval callback
       commit
     })
     await expect
-      .poll(() =>
-        rows().some(
+      .poll(async () =>
+        (await rows()).some(
           (row) => row.body.kind === 'status' && row.body.failure?.kind === 'providerUnavailable'
         )
       )
       .toBe(true)
     expect(
-      rows().filter(
+      (await rows()).filter(
         (row) => row.body.kind === 'status' && row.body.failure?.kind === 'providerUnavailable'
       )
     ).toHaveLength(1)
-    expect(rows().some((row) => row.body.kind === 'question')).toBe(false)
+    expect((await rows()).some((row) => row.body.kind === 'question')).toBe(false)
     expect(
-      rows().find(
+      (await rows()).find(
         (row) =>
           row.body.kind === 'message' &&
           row.body.blocks.some(

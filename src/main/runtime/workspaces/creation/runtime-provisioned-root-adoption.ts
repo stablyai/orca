@@ -1,9 +1,9 @@
 /** Use the host-run recipe root as main workspace, as for direct SSH adoption; create no linked worktree. */
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { CreateWorktreeResult } from '../../../../shared/worktree/create-types'
 import type { GitWorktreeInfo, Worktree } from '../../../../shared/worktree/types'
 import { getRepoSshConnectionId } from '../../../../shared/execution-host'
-import { isFolderRepo } from '../../../../shared/repo-kind'
+import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import {
   buildProvisionedRootMeta,
   provisionedRootPathsEqual,
@@ -13,7 +13,7 @@ import {
 } from '../../../workspaces/catalog/provisioned-root-checkout'
 import { gitExecFileAsync } from '../../../git/command-runner/git-exec-file'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
-import { assertWslMoveRepoWritable } from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+import { assertWslMoveRepoWritable } from '../../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { hostWorktreeTargetForRepo } from '../../../persistence/host-qualified-worktree-meta'
 
 export type RuntimeProvisionedRootRequest = ProvisionedRootRequest & { expectedPath: string }

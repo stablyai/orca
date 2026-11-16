@@ -9,7 +9,7 @@ const outputPath = path.join(
   mobileRoot,
   'src',
   'components',
-  'pr-sidebar',
+  'mermaid',
   'mermaid-page-engine.generated.ts'
 )
 

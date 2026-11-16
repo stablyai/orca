@@ -7,13 +7,14 @@ import {
 import {
   agentJournalTurnBody,
   readAgentJournalTurn
-} from '../../shared/agent-session/lifecycle/agent-session-turn-record'
+} from '../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type {
   AgentJournalProducerLinkage,
   AgentJournalRenderItem
 } from '../../shared/agent-session/journal/agent-session-journal-types'
 import {
   createHistoryCatchUpBatch,
+  captureHistoryCatchUpView,
   runHistoryCatchUp
 } from '../native-chat/agent-session-wire/acquisition/structured-agent-session-history-catch-up'
 import { nativeCopyCoverage } from '../native-chat/agent-session-journal/context-epochs/journal-history-origin'
@@ -21,7 +22,6 @@ import type { StructuredAgentSessionEventSink } from '../native-chat/agent-sessi
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import type { TraexAppServerConnection } from './traex-app-server-connection'
 import { projectTraexHistoryTurn } from './traex-history-projection'
-import { createTraexTimelineItemKeyResolver } from './traex-timeline-item-key'
 import {
   traexRecord,
   traexText,
@@ -32,7 +32,7 @@ import {
 } from './traex-protocol'
 
 export async function readTraexTurns(
-  connection: TraexAppServerConnection,
+  connection: Pick<TraexAppServerConnection, 'request'>,
   threadId: string,
   check: () => void
 ): Promise<TraexTurn[]> {
@@ -85,7 +85,7 @@ export async function readTraexTurns(
 }
 
 export async function catchUpTraexHistory(input: {
-  connection: TraexAppServerConnection
+  connection: Pick<TraexAppServerConnection, 'request'>
   threadId: string
   sessionId: string
   sink: StructuredAgentSessionEventSink
@@ -95,6 +95,7 @@ export async function catchUpTraexHistory(input: {
   primaryThreadId?: string
   producer?: AgentJournalProducerLinkage
 }): Promise<void> {
+  let turns: TraexTurn[] = []
   await runHistoryCatchUp({
     agentName: 'TRAE CLI',
     scope: 'traex-history',
@@ -103,14 +104,36 @@ export async function catchUpTraexHistory(input: {
     signal: input.signal,
     timeoutMs: 30_000,
     logger: input.logger,
-    readView: (history) => {
-      const items = new Map<string, AgentJournalRenderItem>()
-      const commandTurns = new Set<string>()
-      history.visitItems((key) => {
-        const item = history.item(key)
-        if (item) {
-          items.set(key, item)
-          const turn = readAgentJournalTurn(item.body)
+    readView: (history, signal) =>
+      captureHistoryCatchUpView(history, async () => {
+        const keys = new Set<string>()
+        for (const turn of turns) {
+          signal.throwIfAborted()
+          const user = turn.items?.find((item) => item.type === 'userMessage')
+          const clientId = user && (traexText(user.clientId) ?? user.id)
+          if (clientId) {
+            keys.add(agentJournalSubmissionKey(clientId))
+          }
+          for (const mutation of projectTraexHistoryTurn({
+            threadId: input.threadId,
+            sessionId: input.sessionId,
+            turn,
+            epoch: history.cursor().epoch,
+            primaryThreadId: input.primaryThreadId,
+            producer: input.producer
+          })) {
+            keys.add(agentJournalItemKey(mutation.identity))
+          }
+        }
+        const items = new Map<string, AgentJournalRenderItem>()
+        for (const entry of await history.reads.historyItems([...keys])) {
+          if (entry.item) {
+            items.set(entry.key, entry.item)
+          }
+        }
+        const commandTurns = new Set<string>()
+        await history.reads.visitItems({ kinds: ['turn'] }, (key, _sequence, body) => {
+          const turn = readAgentJournalTurn(body)
           if (
             parseAgentJournalItemKey(key)?.provider === 'orca' &&
             turn?.state === 'completed' &&
@@ -118,29 +141,22 @@ export async function catchUpTraexHistory(input: {
           ) {
             commandTurns.add(turn.providerTurnId)
           }
-        }
-      })
-      return {
-        items,
-        commandTurns,
-        token: JSON.stringify(history.cursor()),
-        covered: nativeCopyCoverage(history.historyOrigin(), 'trae', 'traex-turn', {
-          kind: 'opaque',
-          agent: 'trae',
-          value: input.threadId
         })
-      }
-    },
-    sameView: (a, b) => a.token === b.token,
-    prepare: async ({ view, check, yieldTurn, history }) => {
-      const baseline = view()
-      const turns = input.turns ?? (await readTraexTurns(input.connection, input.threadId, check))
+        return {
+          items,
+          commandTurns,
+          covered: nativeCopyCoverage(await history.reads.historyOrigin(), 'trae', 'traex-turn', {
+            kind: 'opaque',
+            agent: 'trae',
+            value: input.threadId
+          })
+        }
+      }),
+    prepare: async ({ view, check, yieldTurn }) => {
+      turns = input.turns ?? (await readTraexTurns(input.connection, input.threadId, check))
+      const baseline = await view()
       const batch = createHistoryCatchUpBatch()
-      const itemKey = createTraexTimelineItemKeyResolver({
-        sessionId: input.sessionId,
-        threadId: input.threadId,
-        journal: () => history
-      })
+
       for (const turn of turns) {
         check()
         if (baseline.covered?.has(turn.id) || baseline.commandTurns.has(turn.id)) {
@@ -153,8 +169,7 @@ export async function catchUpTraexHistory(input: {
           threadId: input.threadId,
           sessionId: input.sessionId,
           turn,
-          epoch: history.epoch,
-          itemKey,
+          epoch: baseline.physicalCursor.epoch,
           primaryThreadId: input.primaryThreadId,
           producer: input.producer,
           ...(represented && clientId ? { representedClientId: clientId } : {})
@@ -190,7 +205,7 @@ export async function catchUpTraexHistory(input: {
       }
       return batch.size
         ? batch.finish('traex-history', [
-            history.epoch,
+            baseline.physicalCursor.epoch,
             input.threadId,
             turns.map((turn) => turn.id)
           ])

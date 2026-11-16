@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import type { ThemeLook } from './onboarding-theme-looks'
 import { ThemeLookCardPreview } from './ThemeLookPreview'
 
-export const THEME_PLUGINS_URL = 'https://onorca.dev/plugins?kind=themes'
+export const THEME_PLUGINS_URL = 'https://orca.dev/plugins?kind=themes'
 
 export function openThemePluginDirectory(): void {
   // Why the system browser: onboarding has no workspace browser to host the directory.

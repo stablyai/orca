@@ -11,9 +11,9 @@ import {
   type LocalWindowsRuntimePreference
 } from '../../../shared/execution-host/project-runtime-preference'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { Project } from '../../../shared/project-types'
-import { isFolderRepo } from '../../../shared/repo-kind'
-import type { Repo } from '../../../shared/repo-types'
+import type { Project } from '../../../shared/project/project-types'
+import { isFolderRepo } from '../../../shared/repository/repo-kind'
+import type { Repo } from '../../../shared/repository/repo-types'
 import { isForeignLink } from '../../git/worktrees/removal/worktree-prune-guard'
 import { wslHostsOptedIn } from '../host-lifecycle/wsl-host-gate'
 
