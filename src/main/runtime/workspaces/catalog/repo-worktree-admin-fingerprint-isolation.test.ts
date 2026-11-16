@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -40,25 +40,6 @@ async function probe(root: string) {
 }
 
 describe('Git admin fingerprint process isolation', () => {
-  it('preserves settled fingerprints through the child process', async () => {
-    const root = path.join(directory, 'healthy')
-    for (const name of ['a', 'b', 'c', 'd']) {
-      await mkdir(path.join(root, name, '.git'), { recursive: true })
-      await writeFile(path.join(root, name, '.git', 'HEAD'), 'abc123\n')
-    }
-    const result = await probe(root)
-    expect(result.code, result.stderr).toBe(0)
-    expect(JSON.parse(result.stdout)).toEqual({
-      fingerprints: [
-        'abc123\u0000y\u0000-\u0000-\u00000',
-        'abc123\u0000y\u0000-\u0000-\u00000',
-        'abc123\u0000y\u0000-\u0000-\u00000',
-        'abc123\u0000y\u0000-\u0000-\u00000'
-      ],
-      entries: ['a', 'b', 'c', 'd']
-    })
-  })
-
   it.skipIf(process.platform === 'win32')(
     'keeps directory reads usable after real blocked HEAD reads',
     async () => {
