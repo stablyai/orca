@@ -21,7 +21,7 @@ import type {
   CloudWakeProgressEvent
 } from '../../../../shared/hosted-sandbox/cloud-workspace-api'
 
-export type CloudWorkspaceView = {
+type CloudWorkspaceView = {
   isCloud: boolean
   state: CloudDotState
   entry: CloudStatusEntry | undefined

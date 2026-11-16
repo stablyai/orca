@@ -10,7 +10,7 @@ import {
   type ChangeKind
 } from '@/lib/orca-cloud/orca-cloud-workspace-state'
 
-export type CloudGitChangesData = {
+type CloudGitChangesData = {
   branch: string | null
   upstream?: string | null
   ahead?: number | null

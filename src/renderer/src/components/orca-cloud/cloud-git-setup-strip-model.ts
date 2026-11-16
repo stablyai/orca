@@ -6,7 +6,7 @@ import type { CloudStripModel } from '../agent-sign-in-strip/cloud-agent-strip-m
 
 export type CloudGitSetupStripPhase = 'failed' | 'restarting' | 'failedAgain'
 
-export type CloudGitSetupStripInput = {
+type CloudGitSetupStripInput = {
   gitSetupFailed: boolean
   dismissed: boolean
   restarting: boolean

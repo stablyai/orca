@@ -24,7 +24,7 @@ function openCloudAgentSignInsSettings(): void {
 }
 
 /** The sheet's contents; the host owns the Sheet so fixtures can render it open. */
-export function OrcaCloudSignInSheetView({
+function OrcaCloudSignInSheetView({
   body
 }: {
   /** S0's rows; fixtures pass a fixed view. */

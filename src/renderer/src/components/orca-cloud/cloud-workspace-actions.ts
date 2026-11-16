@@ -110,7 +110,7 @@ export async function runRestartCloudWorkspace(
   }
 }
 
-export const ARCHIVE_UNDO_MS = 5_000
+const ARCHIVE_UNDO_MS = 5_000
 
 /**
  * Archive with a real undo: nothing happens for 5 s while the toast offers Undo; then `commit`

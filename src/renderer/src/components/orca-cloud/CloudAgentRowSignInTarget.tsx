@@ -5,15 +5,10 @@ import { cn } from '@/lib/class-names'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { STATE_INDICATOR_TOOLTIP_DELAY_MS } from '@/components/StateIndicatorTooltip'
-import { openOrcaCloudAgentAccounts } from '@/components/new-workspace/OrcaCloudAgentSetupRow'
+import { openOrcaCloudSignInSheet } from '@/components/settings/agent-accounts/sign-in-sheet/orca-cloud-sign-in-sheet-store'
 
 /** What the status shows: its label, the agent's catalog name, and the tooltip naming the fix. */
 export type CloudAgentRowStatusText = { label: string; agentName: string; tooltip: string | null }
-
-/** The sidebar row's "Set up once": the focused Orca Cloud sign-in sheet (JA-04). */
-export function openCloudAgentAccountsSettings(): void {
-  openOrcaCloudAgentAccounts()
-}
 
 /**
  * A focusable status button: the app tooltip names the fix on hover and on keyboard focus. It
@@ -34,7 +29,8 @@ export function CloudAgentRowSignInTarget({
 }): React.JSX.Element {
   const handleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation()
-    openCloudAgentAccountsSettings()
+    // The sidebar row's "Set up once": the focused Orca Cloud sign-in sheet.
+    openOrcaCloudSignInSheet()
   }, [])
   const button = (
     <button

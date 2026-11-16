@@ -15,7 +15,7 @@ const FAST_POLL_WINDOW_MS = 3 * 60_000
 const SLOW_POLL_MS = 10_000
 const GIVE_UP_MS = 30 * 60_000
 
-export type CloudPushNoticeState = {
+type CloudPushNoticeState = {
   access: CloudPushAccess
   installing: boolean
   install: () => void

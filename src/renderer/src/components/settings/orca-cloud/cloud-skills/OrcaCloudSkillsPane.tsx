@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useState } from 'react'
+import { useId, useState } from 'react'
 import { BookOpenText } from 'lucide-react'
 import { toast } from 'sonner'
 import { InlineError } from '@/components/ui/inline-error'
@@ -14,12 +14,11 @@ import {
   useCloudAgentConfigSyncPreferences,
   useCloudAgentConfigSyncStatus
 } from '@/lib/cloud-agent-config-sync/cloud-agent-config-sync-client'
-import { useAppStore } from '@/store'
 import type { CloudAgentConfigSyncPreferences } from '../../../../../../shared/agent-config-sync/agent-config-sync-contract'
 import { CloudEmptyState } from '../CloudEmptyState'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
 import {
-  runningOrcaCloudMcpWorkspaces,
+  useRunningOrcaCloudWorkspaces,
   type OrcaCloudMcpWorkspace
 } from '../OrcaCloudMcpServersPane'
 import { cloudSkillsEffectiveExcluded } from './cloud-skills-filter'
@@ -207,27 +206,7 @@ export function OrcaCloudSkillsWorkspacesView({
 export function OrcaCloudSkillsPane(): React.JSX.Element {
   const t = useTranslate()
   const preferences = useCloudAgentConfigSyncPreferences()
-  const [workspaces, setWorkspaces] = useState<OrcaCloudMcpWorkspace[] | null | 'failed'>(null)
-  const [attempt, setAttempt] = useState(0)
-  const lifecycle = useAppStore((s) => s.ephemeralVmRuntimesByWorkspaceId)
-  useEffect(() => {
-    const listRuntimes = window.api.ephemeralVm?.listRuntimes
-    if (!listRuntimes) {
-      setWorkspaces([])
-      return
-    }
-    let disposed = false
-    void listRuntimes()
-      .then((records) => !disposed && setWorkspaces(runningOrcaCloudMcpWorkspaces(records)))
-      .catch(() => !disposed && setWorkspaces('failed'))
-    return () => {
-      disposed = true
-    }
-  }, [lifecycle, attempt])
-  const retry = useCallback(() => {
-    setWorkspaces(null)
-    setAttempt((value) => value + 1)
-  }, [])
+  const { workspaces, retry } = useRunningOrcaCloudWorkspaces()
   if (preferences === undefined) {
     return <Skeleton className="h-28 w-full" />
   }

@@ -18,9 +18,9 @@ import { cn } from '@/lib/class-names'
 import { BANNER_BODY_TEXT, BANNER_TONE } from '@/components/ui/banner-tone'
 import { useAppStore } from '@/store'
 
-export type CloudToastPriority = 'action' | 'warning' | 'info'
+type CloudToastPriority = 'action' | 'warning' | 'info'
 
-export type CloudToastAction = {
+type CloudToastAction = {
   label: string
   onClick: () => void
   /** The next required step: a single primary button. Everything else is outline. */
@@ -29,7 +29,7 @@ export type CloudToastAction = {
   pending?: boolean
 }
 
-export type CloudToastLine = {
+type CloudToastLine = {
   /** Stable per line inside one toast (a toast may hold several lines). */
   key: string
   text: string
@@ -47,10 +47,10 @@ export type CloudToastView = {
 }
 
 /** A toast about one workspace shows only while that workspace is on screen (N-03). */
-export type CloudToastScope = { workspaceId: string }
+type CloudToastScope = { workspaceId: string }
 
 /** What decides visibility: the app's view and its active workspace. */
-export type CloudToastContext = { activeView: string; activeWorktreeId: string | null }
+type CloudToastContext = { activeView: string; activeWorktreeId: string | null }
 
 type Entry = {
   view: CloudToastView
@@ -274,14 +274,10 @@ export function hideCloudToast(logicalId: string): void {
 }
 
 /** The user closed it with ×: down, and its owner is told (by logical id). */
-export function dismissCloudToastByUser(logicalId: string): void {
+function dismissCloudToastByUser(logicalId: string): void {
   const onDismiss = entries.get(logicalId)?.onDismiss
   hideCloudToast(logicalId)
   onDismiss?.()
-}
-
-export function isCloudToastShown(logicalId: string): boolean {
-  return entries.has(logicalId)
 }
 
 /** Test seam: the internal sonner id a logical toast currently uses. */

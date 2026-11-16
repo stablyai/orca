@@ -4,7 +4,7 @@
 // grants Orca Cloud to a team that pays for a plan (PAID-TEAM-CHOOSE-PLAN), so asking auth again
 // here lets a paying team move on at once instead of staying on "isn't turned on yet".
 
-export type CloudCapabilityRecheckDeps = {
+type CloudCapabilityRecheckDeps = {
   /** Re-reads the profile's capabilities from auth and stores them with the session. */
   refreshAuth: () => Promise<unknown>
   /** Re-reads billing access (forced). */

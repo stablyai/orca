@@ -10,7 +10,7 @@ import { ownerRequestLabel } from '@/lib/orca-cloud/owner-request'
 import type { EnvironmentDoctorCheck } from '../../../../shared/workspace-setup/environment-doctor/environment-doctor-types'
 import type { CloudSetupNoticeLine } from './CloudSetupNotices'
 
-export type CloudFetchLineHandlers = {
+type CloudFetchLineHandlers = {
   /** What the control plane says about Orca's GitHub app and this repository. */
   access: CloudPushAccess
   install: () => void

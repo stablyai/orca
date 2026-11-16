@@ -3,11 +3,8 @@ import { defineFixture } from '../../component-fixtures/component-fixture'
 import { useTranslate } from '@/i18n/use-translate'
 import type { CloudMoveState } from '@/lib/orca-cloud/orca-cloud-move-store'
 import { CloudWorkspaceStatusPanel } from './CloudWorkspaceStatusPanel'
-import {
-  CloudMoveToComputerView,
-  cloudMoveTitle,
-  type CloudMoveConflicts
-} from './CloudMoveToComputerView'
+import { CloudMoveToComputerView, type CloudMoveConflicts } from './CloudMoveToComputerView'
+import { cloudMoveTitle } from './cloud-move-copy'
 
 const NOW = Date.now()
 const noop = (): void => {}

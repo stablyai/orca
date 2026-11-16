@@ -32,7 +32,7 @@ export type CloudReadViewState =
   | { kind: 'unavailable'; message: string }
   | { kind: 'error'; message: string }
 
-export type CloudReadSnapshotViewProps = {
+type CloudReadSnapshotViewProps = {
   title: string
   state: CloudReadViewState
   now: number

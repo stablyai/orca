@@ -31,7 +31,7 @@ function base(agent: string, t: Translate): CloudStripModel {
 }
 
 /** "Sign in inside this workspace instead": the in-VM login, as a quiet second choice to Set up once. */
-export function signInInsideWorkspaceAlternative(
+function signInInsideWorkspaceAlternative(
   t: Translate
 ): NonNullable<CloudStripModel['alternative']> {
   return {

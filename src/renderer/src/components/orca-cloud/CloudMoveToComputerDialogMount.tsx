@@ -3,10 +3,11 @@ import React from 'react'
 import { useAppStore } from '@/store'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { getWorkingAgentsPerWorktree } from '@/lib/agent-status/aggregation/worktree-agent-status'
-import { CloudMoveToComputerDialogHost, type CloudMoveConflicts } from './CloudMoveToComputerDialog'
+import { CloudMoveToComputerDialogHost } from './CloudMoveToComputerDialog'
+import type { CloudMoveConflicts } from './CloudMoveToComputerView'
 
 /** The cloud branch is already checked out by another workspace here: the move gets a new name. */
-export function cloudMoveConflictsFor(workspaceId: string): CloudMoveConflicts {
+function cloudMoveConflictsFor(workspaceId: string): CloudMoveConflicts {
   const all = Object.values(selectWorktreesByRepo(useAppStore.getState())).flat()
   const branch = all.find((worktree) => worktree.id === workspaceId)?.branch ?? null
   const shortBranch = branch?.replace(/^refs\/heads\//, '') ?? null
@@ -30,7 +31,7 @@ export function cloudMoveConflictsFor(workspaceId: string): CloudMoveConflicts {
 }
 
 /** Agents working in this workspace right now (archiving afterwards would stop them). */
-export function cloudMoveRunningAgentsFor(workspaceId: string): number {
+function cloudMoveRunningAgentsFor(workspaceId: string): number {
   return getWorkingAgentsPerWorktree(useAppStore.getState())[workspaceId]?.agents.length ?? 0
 }
 

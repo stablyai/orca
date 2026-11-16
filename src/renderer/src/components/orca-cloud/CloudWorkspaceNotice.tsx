@@ -18,7 +18,7 @@ import { cn } from '@/lib/class-names'
 import { BANNER_BODY_TEXT, BANNER_TONE } from '@/components/ui/banner-tone'
 import type { CloudOomEvent } from '../../../../shared/hosted-sandbox/cloud-workspace-api'
 
-export type CloudNoticeKind = { kind: 'unresponsive' } | { kind: 'oom'; oom: CloudOomEvent }
+type CloudNoticeKind = { kind: 'unresponsive' } | { kind: 'oom'; oom: CloudOomEvent }
 
 /** Which side runs the older Orca when the two are outside each other's protocol range. */
 export type CloudVersionSkewDirection = 'sandbox-older' | 'desktop-older'

@@ -28,7 +28,7 @@ function formatCount(value: number): string {
 }
 
 /** Round sizes for prose and the status line ("2 GB", "1.4 GB", "38 MB", "640 KB"). */
-export function syncSize(t: T, bytes: number): string {
+function syncSize(t: T, bytes: number): string {
   const format = (value: number, digits: number): string =>
     new Intl.NumberFormat(getIntlLocale(), { maximumFractionDigits: digits }).format(value)
   if (bytes >= 1e9) {
@@ -73,7 +73,7 @@ function ago(t: T, at: number, now: number): string {
 }
 
 /** The status line under the switch. */
-export function cloudSyncStatusLine(view: CloudSyncView, t: T, now: number): string | null {
+function cloudSyncStatusLine(view: CloudSyncView, t: T, now: number): string | null {
   if (view.phase === 'off') {
     return null
   }

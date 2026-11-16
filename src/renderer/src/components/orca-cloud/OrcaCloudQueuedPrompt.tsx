@@ -17,7 +17,7 @@ import { isOrcaCloudAccountAgent } from '../../../../shared/orca-cloud-agents/or
 import { cloudAgentHoldReason } from '@/lib/orca-cloud/cloud-agent-launch-hold'
 import { useOrcaCloudAgentAccounts } from '@/lib/orca-cloud/orca-cloud-agent-accounts-store'
 
-export type OrcaCloudQueuedPromptViewProps = {
+type OrcaCloudQueuedPromptViewProps = {
   agentName: string
   /** The prompt the agent starts with; empty when none is queued. */
   prompt: string

@@ -67,7 +67,7 @@ function resultLabel(entry: LocalCommandAuditEntry, t: Translate): string | null
   return null
 }
 
-export type LocalCommandsPaneProps = {
+type LocalCommandsPaneProps = {
   state: LocalCommandsState | null | 'failed'
   audit: LocalCommandAuditEntry[]
   pendingSandboxId: string | null

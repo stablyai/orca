@@ -9,7 +9,7 @@ import { SettingsGroupHeader } from '../section-layout/SettingsGroup'
 import { PlanBillingConsoleLink } from './OrcaCloudConsoleLinks'
 
 /** The two parts of Account & billing under their headers; with no billing, just the account. */
-export function AccountBillingLayout({
+function AccountBillingLayout({
   account,
   billing
 }: {

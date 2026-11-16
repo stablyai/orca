@@ -3,7 +3,7 @@
 import type { CloudSetupStep } from '@/components/new-workspace/run-on/cloud-start-model'
 
 /** What the current step's primary button does. */
-export type CloudSetupPageAction =
+type CloudSetupPageAction =
   /** Sign in (and whatever the browser trip covers next): one browser hop. */
   | 'sign-in'
   /** The team's trial, claimed in the app: no browser, no card. */

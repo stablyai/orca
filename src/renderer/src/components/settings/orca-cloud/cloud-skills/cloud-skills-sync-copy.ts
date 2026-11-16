@@ -14,8 +14,6 @@ import {
   cloudSkillsSettingsNote
 } from './cloud-skills-labels'
 
-export { AGENT_LABEL, cloudSkillsDisplayName, cloudSkillsKindLabel } from './cloud-skills-labels'
-
 /** Rows the user's switches apply to: a copy for the other agent follows its original. */
 export function cloudSkillsRowIncluded(
   row: AgentConfigSyncRow,
@@ -24,7 +22,7 @@ export function cloudSkillsRowIncluded(
   return !excluded.has(row.convertedFrom ?? row.key)
 }
 
-export function cloudSkillsCounts(status: AgentConfigSyncStatus): {
+function cloudSkillsCounts(status: AgentConfigSyncStatus): {
   synced: number
   skipped: number
 } {
