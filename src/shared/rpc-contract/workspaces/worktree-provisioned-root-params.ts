@@ -8,6 +8,7 @@ const create = WorktreeCreate.shape
 export const WorktreeAdoptProvisionedRoot = z.object({
   repo: create.repo,
   nameWasGenerated: create.nameWasGenerated,
+  pinOnCreate: create.pinOnCreate,
   displayName: create.displayName,
   displayNameKind: create.displayNameKind,
   baseBranch: create.baseBranch,

@@ -82,6 +82,9 @@ export async function materializeRuntimeLocalWorktree<T>(args: {
       createdAt: now,
       orcaCreatedAt: now,
       orcaCreationSource: 'runtime',
+      ...(request.pinOnCreate && !request.cliProvenance && !request.automationProvenance
+        ? { isPinned: true }
+        : {}),
       orcaCreationWorkspaceLayout: getWorktreeCreationLayout(repo, settings),
       ...displayNameMeta,
       baseRef: metadataBaseRef,

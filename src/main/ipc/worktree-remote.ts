@@ -1703,6 +1703,9 @@ async function performLocalWorktreeCreate(
     createdAt: now,
     orcaCreatedAt: now,
     orcaCreationSource: 'desktop',
+    ...(args.pinOnCreate && !args.cliProvenance && !args.automationProvenance
+      ? { isPinned: true }
+      : {}),
     creatorProvenance: { kind: 'host' },
     orcaCreationWorkspaceLayout: getWorktreeCreationLayout(repo, settings),
     ...(args.automationProvenance ? { automationProvenance: args.automationProvenance } : {}),

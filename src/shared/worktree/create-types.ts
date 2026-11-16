@@ -96,6 +96,7 @@ export type SparsePreset = {
 export type CreateWorktreeArgs = {
   repoId: string
   name: string
+  pinOnCreate?: boolean
   /** Retire only generator-chosen names. User-typed pool names remain reusable; omitted callers retain legacy behavior. */
   nameWasGenerated?: boolean
   /** Readable label stored separately from the git-safe branch/path seed, e.g. a linked artifact’s title. */

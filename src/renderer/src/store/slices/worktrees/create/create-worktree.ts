@@ -1,4 +1,5 @@
 import { showWorktreeCreateWarningToast } from './worktree-create-warning-toast'
+import { pinCreatedWorktree } from './pin-created-worktree'
 import { reviewSetupTrustMismatch } from './created-worktree-setup-trust'
 import { createWorktreeOnRuntimeHost } from './host-planned-agent-launch'
 import { runtimeRpcTargetForAuthorityKey } from '@/runtime/rpc/targets/runtime-client-target'
@@ -166,6 +167,8 @@ export function createCreateWorktree(
     try {
       // Why: manual sort is user-authored order; stamp new workspaces at the top rather than relying on sortOrder fallback.
       const manualOrder = get().sortBy === 'manual' ? Date.now() : undefined
+      const pinNewWorkspace = get().settings?.pinNewWorkspaces === true
+      request.pinOnCreate = pinNewWorkspace
       if (isUnresolvedOwnerHostId(options?.executionHostId)) {
         // Why: the direct-SSH fallback below would otherwise create it on this machine.
         throw new Error('The workspace host is unresolved. Choose a host and retry.')
@@ -262,6 +265,9 @@ export function createCreateWorktree(
             warnParentDroppedOnce()
           }
           applyCreatedWorktree(set, repoId, outcome.result, creationHostId)
+          const pinned = pinNewWorkspace
+            ? await pinCreatedWorktree(outcome.result.worktree, creationHostId, get)
+            : outcome.result.worktree.isPinned
           const created = get().getKnownWorktreeById(outcome.result.worktree.id, creationHostId)
           if (created) {
             holdCreatedSidebarWorkspace({ worktree: created })
@@ -282,7 +288,7 @@ export function createCreateWorktree(
             openSettingsPage: get().openSettingsPage,
             openSettingsTarget: get().openSettingsTarget
           })
-          return result
+          return pinned ? { ...result, worktree: { ...result.worktree, isPinned: true } } : result
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error)
           const shouldRetry =

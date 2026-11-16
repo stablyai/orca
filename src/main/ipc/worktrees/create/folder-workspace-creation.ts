@@ -41,6 +41,9 @@ export async function createFolderWorkspace(
     createdAt: now,
     orcaCreatedAt: now,
     orcaCreationSource: 'desktop',
+    ...(args.pinOnCreate && !args.cliProvenance && !args.automationProvenance
+      ? { isPinned: true }
+      : {}),
     creatorProvenance: { kind: 'host' },
     ...(args.automationProvenance ? { automationProvenance: args.automationProvenance } : {}),
     ...(args.cliProvenance ? { cliProvenance: args.cliProvenance } : {}),

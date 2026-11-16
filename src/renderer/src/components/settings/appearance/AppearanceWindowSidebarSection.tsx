@@ -18,6 +18,7 @@ import {
   getSidebarEntries,
   getLeftSidebarAppearanceEntry,
   getShowPinnedWorktreesInGroupsEntry,
+  getPinNewWorkspacesEntry,
   getWorkspaceCardLayoutEntry
 } from './appearance-sidebar-search'
 import { getStatusBarToggles } from './appearance-status-bar-search'
@@ -316,6 +317,21 @@ export function AppearanceWindowSidebarSection({
                   checked={settings.showMobileButton !== false}
                   onChange={() =>
                     updateSettings({ showMobileButton: !(settings.showMobileButton !== false) })
+                  }
+                />
+              </SearchableSetting>
+
+              <SearchableSetting
+                title={getPinNewWorkspacesEntry().title}
+                description={getPinNewWorkspacesEntry().description}
+                keywords={getPinNewWorkspacesEntry().keywords}
+              >
+                <SettingsSwitchRow
+                  label={getPinNewWorkspacesEntry().title}
+                  description={getPinNewWorkspacesEntry().description}
+                  checked={settings.pinNewWorkspaces === true}
+                  onChange={() =>
+                    updateSettings({ pinNewWorkspaces: settings.pinNewWorkspaces !== true })
                   }
                 />
               </SearchableSetting>

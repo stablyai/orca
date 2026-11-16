@@ -263,6 +263,7 @@ export type GlobalSettings = GlobalSettingsBase & {
   showMobileButton?: boolean
   /** Pinned workspaces show in one sidebar location by default; opt in to also show them in their natural groups. */
   showPinnedWorktreesInGroups?: boolean
+  pinNewWorkspaces?: boolean
   /** How Ctrl+Tab picks the next visible tab; optional (older profiles), readers default to MRU. */
   ctrlTabOrderMode?: CtrlTabOrderMode
   /** Floating Workspace: global surface for terminal/browser/markdown tabs outside repo/worktree context. */
