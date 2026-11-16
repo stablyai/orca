@@ -6,6 +6,12 @@ import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesystem-absence'
 import { AGENT_SESSION_ATTACHMENT_PART_FILE } from './agent-session-attachment-references'
 import { removeQuietly, type AgentSessionAttachmentStore } from './agent-session-attachment-store'
+import {
+  forgetKeptAgentSessionAttachment,
+  keepMissingAgentSessionAttachmentFiles,
+  listKeptAgentSessionAttachments,
+  restoreKeptAgentSessionAttachment
+} from './agent-session-attachment-kept-links'
 
 export const ABANDONED_PART_MAX_AGE_MS = 60 * 60 * 1000
 export const UNCLAIMED_ATTACHMENT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
@@ -26,35 +32,85 @@ export async function sweepAgentSessionAttachments(
   now = Date.now()
 ): Promise<AgentSessionAttachmentSweepResult> {
   const removed: string[] = []
-  const remove = async (uploadDir: string): Promise<void> => {
+  const remove = async (uploadId: string, kept: 'forget' | 'keep' = 'forget'): Promise<void> => {
+    const uploadDir = join(store.rootDir, uploadId)
     await removeQuietly(uploadDir)
+    if (kept === 'forget') {
+      await forgetKeptAgentSessionAttachment(store.rootDir, uploadId)
+    }
     facts.onUploadRemoved?.(uploadDir)
   }
   for (const uploadId of await facts.listBeingSwept()) {
-    await remove(join(store.rootDir, uploadId))
+    await remove(uploadId)
     await facts.finishSweep(uploadId)
   }
-  for (const uploadId of await listDirectories(store.rootDir)) {
+  // Only after this build's own removals finish, so what is left to put back an older Orca removed.
+  // Never in the way of sweeping: a filesystem without hard links just keeps nothing.
+  const kept = await listKeptAgentSessionAttachments(store.rootDir).catch(() => new Set<string>())
+  const listed = await listDirectories(store.rootDir)
+  const onDisk = new Set(listed)
+  // Put back whole: swept below like any other upload, with the kept files the restore just read.
+  const putBack = new Map<string, string[]>()
+  for (const uploadId of kept) {
+    if (!onDisk.has(uploadId)) {
+      const restored = await restoreKeptAgentSessionAttachment(store.rootDir, uploadId, []).catch(
+        () => undefined
+      )
+      if (restored && restored.present.length > 0) {
+        listed.push(uploadId)
+        putBack.set(uploadId, restored.kept)
+      }
+    }
+  }
+  for (const uploadId of listed) {
     if (store.isUploadInFlight(uploadId)) {
       continue
     }
     const uploadDir = join(store.rootDir, uploadId)
-    const stored = (await readdir(uploadDir)).some(
-      (entry) => entry !== AGENT_SESSION_ATTACHMENT_PART_FILE
-    )
+    // Listed before any restore: one removed since then is just gone.
+    let present = await readdir(uploadDir).catch((error: unknown) => {
+      if (isDefinitiveAbsence(error)) {
+        return null
+      }
+      throw error
+    })
+    if (present === null) {
+      continue
+    }
+    const listing = present
+    const keptNow = putBack.get(uploadId)
+    let keptFiles = keptNow ?? []
+    // A file gone again since its restore is put back again.
+    if (kept.has(uploadId) && (!keptNow || keptNow.some((name) => !listing.includes(name)))) {
+      const restored = await restoreKeptAgentSessionAttachment(
+        store.rootDir,
+        uploadId,
+        present
+      ).catch(() => undefined)
+      present = restored?.present ?? present
+      keptFiles = restored?.kept ?? []
+    }
+    const stored = present.some((entry) => entry !== AGENT_SESSION_ATTACHMENT_PART_FILE)
     const ageMs = now - (await modifiedAt(uploadDir))
     if (!stored) {
       if (ageMs > ABANDONED_PART_MAX_AGE_MS) {
-        await remove(uploadDir)
+        // A kept copy here is one this sweep couldn't put back yet; it stays for the next.
+        await remove(uploadId, 'keep')
         removed.push(uploadDir)
       }
       continue
     }
     // Whichever lands first wins: claims retain uploads, sweep marks reject later claims.
     if (ageMs <= UNCLAIMED_ATTACHMENT_MAX_AGE_MS || !(await facts.markForSweep(uploadId, now))) {
+      await keepMissingAgentSessionAttachmentFiles(
+        store.rootDir,
+        uploadId,
+        present,
+        keptFiles
+      ).catch(() => {})
       continue
     }
-    await remove(uploadDir)
+    await remove(uploadId)
     await facts.finishSweep(uploadId)
     removed.push(uploadDir)
   }

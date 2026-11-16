@@ -3,6 +3,7 @@
 import { lstatSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesystem-absence'
+import { agentSessionAttachmentKeptRoot } from './agent-session-attachment-kept-links'
 import type Database from '../../sqlite/sync-database'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import {
@@ -208,20 +209,26 @@ export function pruneAgentSessionAttachmentClaims(
   let removed = 0
   for (const { uploadId, sessionId } of rows) {
     const chatGone = facts.recordedSessionIds !== null && !facts.recordedSessionIds.has(sessionId)
-    let uploadGone = chatGone
-    try {
-      if (!chatGone) {
-        lstatSync(join(facts.root, uploadId))
-      }
-    } catch (error) {
-      if (!isDefinitiveAbsence(error)) {
-        throw error
-      }
-      uploadGone = true
-    }
+    // A kept copy outlives an older Orca's removal; the sweep puts it back with its claim intact.
+    const uploadGone =
+      chatGone ||
+      (!pathExists(join(facts.root, uploadId)) &&
+        !pathExists(join(agentSessionAttachmentKeptRoot(facts.root), uploadId)))
     if (uploadGone) {
       removed += Number(remove.run(uploadId, sessionId).changes)
     }
   }
   return removed
+}
+
+function pathExists(path: string): boolean {
+  try {
+    lstatSync(path)
+    return true
+  } catch (error) {
+    if (!isDefinitiveAbsence(error)) {
+      throw error
+    }
+    return false
+  }
 }

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readdir, rm, utimes, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -180,6 +180,27 @@ describe('sweepAgentSessionAttachments', () => {
     }
     expect(isAgentSessionAttachmentExpiredError(refused)).toBe(true)
     expect(claimedSessions()).toEqual([])
+  })
+
+  it('puts back claimed uploads an older Orca swept by its own claims, never one swept here', async () => {
+    const path = await seedUpload(SENT, OLD)
+    claim('session-1', path)
+    const carried = await seedUpload(CARRIED, OLD)
+    claim('session-2', carried)
+    await seedUpload(UNSENT, 0)
+    await sweepAgentSessionAttachments(store, facts(), NOW)
+    // An older Orca, which never sees claims saved here, removes one folder and stops partway
+    // through another, leaving it empty for over an hour.
+    await rm(join(store.rootDir, SENT), { recursive: true })
+    await rm(carried)
+    const old = new Date(NOW - OLD)
+    await utimes(join(store.rootDir, CARRIED), old, old)
+    await utimes(join(store.rootDir, UNSENT), old, old)
+    await sweepAgentSessionAttachments(store, facts(), NOW)
+    await sweepAgentSessionAttachments(store, facts(), NOW)
+    expect(await readFile(path, 'utf8')).toBe('bytes')
+    expect(await readFile(carried, 'utf8')).toBe('bytes')
+    expect(await remaining()).toEqual([CARRIED, SENT].sort())
   })
 
   it('judges no claim orphaned while the record list is incomplete', async () => {

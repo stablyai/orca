@@ -19,6 +19,7 @@ import {
   previewableBinaryByteLimit
 } from '../../runtime/files/file-preview-budget'
 import { ChunkedUploadRegistry, nextChunkedUploadLength } from './chunked-upload-registry'
+import { keepAgentSessionAttachmentUpload } from './agent-session-attachment-kept-links'
 import {
   AGENT_SESSION_ATTACHMENT_PART_FILE,
   parseAgentSessionAttachmentStorePath
@@ -141,6 +142,7 @@ export class AgentSessionAttachmentStore {
         join(upload.uploadDir, AGENT_SESSION_ATTACHMENT_PART_FILE),
         finalPath
       )
+      await this.keep(args.uploadId)
       return { path: finalPath, name: upload.name, byteLength: upload.receivedLength }
     } catch (error) {
       await removeQuietly(upload.uploadDir)
@@ -158,7 +160,8 @@ export class AgentSessionAttachmentStore {
   /** One committed upload whose hidden part file `write` fills, renamed into place; returns its
    *  path. Not in flight meanwhile: the sweep leaves a folder this new alone for an hour. */
   async storeWith(name: string, write: (partPath: string) => Promise<void>): Promise<string> {
-    const uploadDir = join(this.rootDir, randomUUID())
+    const uploadId = randomUUID()
+    const uploadDir = join(this.rootDir, uploadId)
     const finalPath = join(uploadDir, sanitizeAgentSessionAttachmentName(name))
     try {
       await mkdir(uploadDir, { recursive: true })
@@ -170,7 +173,13 @@ export class AgentSessionAttachmentStore {
       await removeQuietly(uploadDir)
       throw error
     }
+    await this.keep(uploadId)
     return finalPath
+  }
+
+  /** Never fails a commit: the next sweep links whatever this missed. */
+  private async keep(uploadId: string): Promise<void> {
+    await keepAgentSessionAttachmentUpload(this.rootDir, uploadId).catch(() => {})
   }
 
   async abortUpload(args: { callerKey: string; uploadId: string }): Promise<{ aborted: true }> {
