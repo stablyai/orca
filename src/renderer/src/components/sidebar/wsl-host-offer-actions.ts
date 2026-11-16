@@ -23,8 +23,9 @@ type WslHostAddRefusal = Extract<WslHostAddResult, { ok: false }>
 // One run per distro, joined by every caller (add-project offer, chat refusals).
 const runningByDistro = new Map<string, Promise<WslHostAddRefusal | null>>()
 const runningListeners = new Set<() => void>()
-// Runs go one at a time so each restores the setting it read, never another run's.
-let runQueue: Promise<unknown> = Promise.resolve()
+// Runs in flight share the setting: the first records it, the last restores it if none added.
+let batch: { active: number; previous: boolean; added: boolean } | null = null
+let restoring: Promise<void> = Promise.resolve()
 
 function notifyRunning(): void {
   for (const listener of runningListeners) {
@@ -46,8 +47,8 @@ export function runningWslDistroAsHost(
 
 /**
  * Turns WSL hosts on and adds the distro as a host; an already-added distro counts as added.
- * Restores the setting and returns the refusal when the add fails. A call while the same
- * distro runs joins that run; other distros wait their turn.
+ * Returns the refusal when the add fails. A call while the same distro runs joins that run;
+ * other distros run alongside it, and the setting goes back only once every run failed.
  */
 export function runWslDistroAsHost(
   distro: string,
@@ -58,13 +59,10 @@ export function runWslDistroAsHost(
   if (running) {
     return running
   }
-  const run = runQueue
-    .then(() => addDistroAsHost(distro, deps))
-    .finally(() => {
-      runningByDistro.delete(key)
-      notifyRunning()
-    })
-  runQueue = run.catch(() => undefined)
+  const run = addDistroAsHost(distro, deps).finally(() => {
+    runningByDistro.delete(key)
+    notifyRunning()
+  })
   runningByDistro.set(key, run)
   notifyRunning()
   return run
@@ -74,23 +72,34 @@ async function addDistroAsHost(
   distro: string,
   deps: Pick<WslHostOfferDeps, 'readWslHostsSetting' | 'updateSettings' | 'addWslHost'>
 ): Promise<WslHostAddRefusal | null> {
-  const previous = deps.readWslHostsSetting()
-  // Left on after a failure, a later "Add on this computer" would still be auto-moved.
-  const restore = (): Promise<void> => deps.updateSettings({ experimentalWslHosts: previous })
-  let result: WslHostAddResult
+  if (!batch) {
+    // Read the setting only after the last batch put it back.
+    await restoring
+  }
+  batch ??= { active: 0, previous: deps.readWslHostsSetting(), added: false }
+  const current = batch
+  current.active += 1
   try {
     await deps.updateSettings({ experimentalWslHosts: true })
     // Accepting is the user's ask to run this distro, so a stopped one may start.
-    result = await deps.addWslHost({ distro, startIfStopped: true })
-  } catch (cause) {
-    await restore()
-    throw cause
-  }
-  if (!result.ok && result.kind !== 'already-added') {
-    await restore()
+    const result = await deps.addWslHost({ distro, startIfStopped: true })
+    if (result.ok || result.kind === 'already-added') {
+      current.added = true
+      return null
+    }
     return result
+  } finally {
+    current.active -= 1
+    if (current.active === 0) {
+      batch = null
+      // Left on after a failure, a later "Add on this computer" would still be auto-moved.
+      if (!current.added) {
+        const restore = deps.updateSettings({ experimentalWslHosts: current.previous })
+        restoring = restore.catch(() => undefined)
+        await restore
+      }
+    }
   }
-  return null
 }
 
 /**

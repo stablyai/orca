@@ -1,14 +1,17 @@
 // @vitest-environment happy-dom
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WslHostAddResult } from '../../../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 
 const mocks = vi.hoisted(() => ({
   settings: { experimentalWslHosts: false },
-  updateSettingsOrThrow: vi.fn(async (updates: { experimentalWslHosts?: boolean }) => {
+  saveSetting: async (updates: { experimentalWslHosts?: boolean }): Promise<void> => {
     if (updates.experimentalWslHosts !== undefined) {
       mocks.settings.experimentalWslHosts = updates.experimentalWslHosts
     }
-  }),
+  },
+  updateSettingsOrThrow: vi.fn<(updates: { experimentalWslHosts?: boolean }) => Promise<void>>(),
+  // Adds a test held open; released after each test so no run outlives it.
+  held: new Set<(result: WslHostAddResult) => void>(),
   addWslHost:
     vi.fn<(args: { distro: string; startIfStopped: boolean }) => Promise<WslHostAddResult>>(),
   openMove: vi.fn(),
@@ -73,8 +76,19 @@ const wslHost = {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mocks.updateSettingsOrThrow.mockImplementation(mocks.saveSetting)
   mocks.settings.experimentalWslHosts = false
   vi.stubGlobal('window', { api: { runtimeEnvironments: { wslHosts: {} } } })
+})
+
+afterEach(async () => {
+  for (const finish of mocks.held) {
+    finish({ ok: false, kind: 'failed', message: 'Released after the test.' })
+  }
+  mocks.held.clear()
+  await vi.waitFor(() =>
+    expect(['Ubuntu', 'Debian'].some((distro) => isWslHostChatOfferSettingUp(distro))).toBe(false)
+  )
 })
 
 describe('readWslHostChatOffer', () => {
@@ -161,6 +175,7 @@ describe('wslHostChatOfferAction', () => {
       () =>
         new Promise((resolve) => {
           finishAdd = resolve
+          mocks.held.add(resolve)
         })
     )
     const first = wslHostChatOfferAction(offer)
@@ -180,51 +195,118 @@ describe('wslHostChatOfferAction', () => {
     expect(mocks.openMove).not.toHaveBeenCalled()
   })
 
-  it('runs setups for different distros one after another', async () => {
-    const order: string[] = []
-    mocks.addWslHost.mockImplementation(async ({ distro }) => {
-      order.push(`start ${distro}`)
-      await Promise.resolve()
-      order.push(`end ${distro}`)
-      return { ok: true, environmentId: distro }
-    })
-    wslHostChatOfferAction(offer).onClick()
-    wslHostChatOfferAction({ ...offer, distro: 'Debian' }).onClick()
-    await vi.waitFor(() => expect(mocks.openMove).toHaveBeenCalledTimes(2))
-    expect(order).toEqual(['start Ubuntu', 'end Ubuntu', 'start Debian', 'end Debian'])
-  })
-
-  it('shares one queue with the add-project offer, so restores never interleave', async () => {
+  function holdAdds(): Record<string, (result: WslHostAddResult) => void> {
     const finishes: Record<string, (result: WslHostAddResult) => void> = {}
     mocks.addWslHost.mockImplementation(
       ({ distro }) =>
         new Promise((resolve) => {
           finishes[distro] = resolve
+          mocks.held.add(resolve)
         })
     )
-    const offerDeps = {
+    return finishes
+  }
+
+  function addProjectOfferDeps() {
+    return {
       readWslHostsSetting: () => mocks.settings.experimentalWslHosts,
       updateSettings: mocks.updateSettingsOrThrow,
       addWslHost: mocks.addWslHost,
       addLocalPath: vi.fn(async () => undefined),
       moveAddedProject: vi.fn()
     }
-    const accepted = acceptWslHostOffer(
-      { path: '\\\\wsl.localhost\\Debian\\repo', distro: 'Debian', source: 'local_folder_picker' },
-      offerDeps
-    )
+  }
+
+  const DEBIAN_OFFER = {
+    path: '\\\\wsl.localhost\\Debian\\repo',
+    distro: 'Debian',
+    source: 'local_folder_picker'
+  } as const
+
+  it('runs setups for different distros side by side', async () => {
+    const finishes = holdAdds()
     wslHostChatOfferAction(offer).onClick()
-    await vi.waitFor(() => expect(finishes.Debian).toBeDefined())
-    // The chat's Ubuntu run waits; it hasn't read the setting the offer just turned on.
-    expect(mocks.addWslHost).toHaveBeenCalledTimes(1)
-    finishes.Debian({ ok: false, kind: 'failed', message: 'Debian could not start.' })
-    expect(await accepted).toMatchObject({ ok: false })
+    wslHostChatOfferAction({ ...offer, distro: 'Debian' }).onClick()
+    await vi.waitFor(() => expect(mocks.addWslHost).toHaveBeenCalledTimes(2))
+    expect(Object.keys(finishes).sort()).toEqual(['Debian', 'Ubuntu'])
+  })
+
+  it('does not hold one distro behind another that hangs', async () => {
+    const finishes = holdAdds()
+    // The add-project offer's Debian add hangs; the chat's Ubuntu setup still finishes.
+    void acceptWslHostOffer(DEBIAN_OFFER, addProjectOfferDeps())
+    wslHostChatOfferAction(offer).onClick()
     await vi.waitFor(() => expect(finishes.Ubuntu).toBeDefined())
     finishes.Ubuntu({ ok: true, environmentId: 'env-ubuntu' })
+    await vi.waitFor(() =>
+      expect(mocks.openMove).toHaveBeenCalledWith('Ubuntu', { kind: 'repo', id: 'repo-1' })
+    )
+    expect(isWslHostChatOfferSettingUp('Debian')).toBe(true)
+    expect(mocks.settings.experimentalWslHosts).toBe(true)
+  })
+
+  it('restores the setting only once every run in flight failed', async () => {
+    const finishes = holdAdds()
+    const accepted = acceptWslHostOffer(DEBIAN_OFFER, addProjectOfferDeps())
+    wslHostChatOfferAction(offer).onClick()
+    await vi.waitFor(() => expect(mocks.addWslHost).toHaveBeenCalledTimes(2))
+    finishes.Debian({ ok: false, kind: 'failed', message: 'Debian could not start.' })
+    expect(await accepted).toMatchObject({ ok: false })
+    // Ubuntu still runs, so the first failure leaves the setting on.
+    expect(mocks.settings.experimentalWslHosts).toBe(true)
+    finishes.Ubuntu({ ok: false, kind: 'failed', message: 'Ubuntu could not start.' })
+    await vi.waitFor(() => expect(isWslHostChatOfferSettingUp('Ubuntu')).toBe(false))
+    expect(mocks.settings.experimentalWslHosts).toBe(false)
+    expect(mocks.openMove).not.toHaveBeenCalled()
+  })
+
+  it('keeps the setting on when any run in flight added its host', async () => {
+    const finishes = holdAdds()
+    const offerDeps = addProjectOfferDeps()
+    const accepted = acceptWslHostOffer(DEBIAN_OFFER, offerDeps)
+    wslHostChatOfferAction(offer).onClick()
+    await vi.waitFor(() => expect(mocks.addWslHost).toHaveBeenCalledTimes(2))
+    finishes.Ubuntu({ ok: true, environmentId: 'env-ubuntu' })
+    finishes.Debian({ ok: false, kind: 'failed', message: 'Debian could not start.' })
+    expect(await accepted).toMatchObject({ ok: false })
     await vi.waitFor(() => expect(mocks.openMove).toHaveBeenCalled())
-    // The failed offer restored "off" before the chat's run read it; the chat's success stays on.
     expect(mocks.settings.experimentalWslHosts).toBe(true)
     expect(offerDeps.addLocalPath).not.toHaveBeenCalled()
+  })
+
+  it('reads the setting for a new run only after the last one put it back', async () => {
+    let finishRestore: () => void = () => undefined
+    let restoreHeld = false
+    mocks.addWslHost.mockResolvedValue({ ok: false, kind: 'failed', message: 'No.' })
+    mocks.updateSettingsOrThrow.mockImplementation(async (updates) => {
+      if (updates.experimentalWslHosts === false && !restoreHeld) {
+        restoreHeld = true
+        await new Promise<void>((resolve) => {
+          finishRestore = resolve
+        })
+      }
+      await mocks.saveSetting(updates)
+    })
+    const failed = acceptWslHostOffer(DEBIAN_OFFER, addProjectOfferDeps())
+    await vi.waitFor(() =>
+      expect(mocks.updateSettingsOrThrow).toHaveBeenCalledWith({ experimentalWslHosts: false })
+    )
+    const reads: boolean[] = []
+    const next = acceptWslHostOffer(
+      { ...DEBIAN_OFFER, distro: 'Ubuntu' },
+      {
+        ...addProjectOfferDeps(),
+        readWslHostsSetting: () => {
+          reads.push(mocks.settings.experimentalWslHosts)
+          return mocks.settings.experimentalWslHosts
+        }
+      }
+    )
+    expect(reads).toEqual([])
+    finishRestore()
+    await failed
+    await next
+    expect(reads).toEqual([false])
   })
 
   it('lets the add-project offer join a chat setup of the same distro', async () => {
@@ -233,6 +315,7 @@ describe('wslHostChatOfferAction', () => {
       () =>
         new Promise((resolve) => {
           finishAdd = resolve
+          mocks.held.add(resolve)
         })
     )
     wslHostChatOfferAction(offer).onClick()
