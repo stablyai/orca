@@ -64,7 +64,6 @@ export async function tarGzipFile(input: { dirs: string[]; path: string; bytes: 
     new Uint8Array(padding),
     new Uint8Array(BLOCK * 2) // end-of-archive marker
   ]
-  // acceptance compiles this file with Node's lib types, which don't take Uint8Array<ArrayBufferLike> as a blob part.
-  const stream = new Blob(parts as ConstructorParameters<typeof Blob>[0]).stream().pipeThrough(new CompressionStream('gzip'))
+  const stream = new Blob(parts).stream().pipeThrough(new CompressionStream('gzip'))
   return new Response(stream).arrayBuffer()
 }
