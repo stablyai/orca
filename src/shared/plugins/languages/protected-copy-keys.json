@@ -516,7 +516,6 @@
     "auto.components.sidebar.HostRemoveDialog.workspacesFailed",
     "auto.components.sidebar.HostRemoveDialog.wslHostEndsTerminalsUnlessShared",
     "auto.components.sidebar.OrcaYamlTrustDialog.43b7bec4cd",
-    "auto.components.sidebar.OrcaYamlTrustDialog.alwaysTrustRepo",
     "auto.components.sidebar.OrcaYamlTrustDialog.archiveChangedBody",
     "auto.components.sidebar.OrcaYamlTrustDialog.archiveChangedTitle",
     "auto.components.sidebar.OrcaYamlTrustDialog.archiveRunBody",
@@ -653,7 +652,6 @@
     "auto.store.pluginAutoUpdates.many",
     "auto.store.pluginAutoUpdates.one",
     "auto.store.pluginInstallLink.invalid",
-    "automations.setupTrust.approve",
     "automations.setupTrust.reviewBody",
     "automations.setupTrust.reviewTitle",
     "browser.extensions.pin",
@@ -1180,9 +1178,12 @@
     "worktree.nestedRemoval.refreshFailed",
     "worktree.nestedRemoval.retry",
     "worktree.nestedRemoval.review",
+    "worktree.setupTrust.alwaysTrust",
+    "worktree.setupTrust.alwaysTrustScope",
     "worktree.setupTrust.branchDiffersBody",
     "worktree.setupTrust.branchDiffersTitle",
-    "worktree.setupTrust.branchSetupScript"
+    "worktree.setupTrust.branchSetupScript",
+    "worktree.setupTrust.runOnce"
   ],
   "prefixes": []
 }
