@@ -49,6 +49,9 @@ vi.mock('./monaco-e2e-probe', () => ({ installMonacoE2EProbe: () => vi.fn() }))
 vi.mock('./monaco-editor-input-bindings', () => ({
   installMonacoEditorInputBindings: () => ({ disposeInputBindings: vi.fn() })
 }))
+vi.mock('./monaco-import-path-navigation', () => ({
+  installMonacoImportPathNavigation: () => ({ dispose: vi.fn() })
+}))
 
 afterEach(() => {
   cleanup()
@@ -163,7 +166,7 @@ it('keeps cursor state on the current file owner after migration', async () => {
       disposeEditor = listener
     }
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Mount and tracking use only the editor methods mocked above; decorations/input/probe integrations are mocked.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Mount and tracking use only the editor methods mocked above; decorations/input/probe/import-navigation integrations are mocked.
   const editorInstance = mockEditor as unknown as editor.IStandaloneCodeEditor
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The mocked mount integrations use only this gutter enum.
   const monaco = {

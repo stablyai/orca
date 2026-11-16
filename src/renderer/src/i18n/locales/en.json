@@ -18058,6 +18058,9 @@
           "open": "Open with default app",
           "downloadOpen": "Download & open with default app",
           "openFailed": "No app on this computer opened this file."
+        },
+        "importPathNavigation": {
+          "notFound": "Cannot find a file for '{{value0}}'"
         }
       },
       "diff": {

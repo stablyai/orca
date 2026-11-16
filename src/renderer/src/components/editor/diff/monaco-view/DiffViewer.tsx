@@ -46,6 +46,7 @@ import {
 import { useMonacoTheme } from '@/hooks/use-monaco-theme'
 import { cn } from '@/lib/class-names'
 import { wholeFileDiffTintClass } from './whole-file-diff-tint'
+import { installDiffImportPathNavigation } from '../../monaco/monaco-import-path-navigation'
 
 export default function DiffViewer({
   modelKey,
@@ -276,6 +277,7 @@ export default function DiffViewer({
 
       setupCopy(originalEditor, monaco, filePath, propsRef)
       setupCopy(modifiedEditor, monaco, filePath, propsRef)
+      installDiffImportPathNavigation(diffEditor, { filePath, worktreeId })
       setModifiedEditor(modifiedEditor)
 
       // Restore cursor and selection across both panes alongside scroll.
@@ -311,7 +313,16 @@ export default function DiffViewer({
         diffEditor.focus()
       }
     },
-    [editable, setupCopy, modelKey, filePath, sideBySide, registerDiffEditor, unregisterDiffEditor]
+    [
+      editable,
+      setupCopy,
+      modelKey,
+      filePath,
+      worktreeId,
+      sideBySide,
+      registerDiffEditor,
+      unregisterDiffEditor
+    ]
   )
 
   // Snapshot on layout cleanup before unmount, avoiding scroll-time writes.
