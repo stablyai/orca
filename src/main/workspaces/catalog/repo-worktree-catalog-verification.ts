@@ -2,8 +2,12 @@ import type {
   WorktreeCatalogObservation,
   WorktreeCatalogVerifier
 } from './repo-worktree-catalog-observation'
+import {
+  GIT_ADMIN_PROBE_UNAVAILABLE,
+  type GitAdminProbeResult
+} from '../../../shared/git/metadata/git-admin-probe-result'
 
-type Verification = { reuse: true } | { reuse: false; probe: Promise<string | null> | null }
+type Verification = { reuse: true } | { reuse: false; probe: Promise<GitAdminProbeResult> | null }
 
 /** Reuse when a probe proves, or cannot yet disprove (#19312), that rows fingerprinted before their scan still hold. */
 export async function verify(
@@ -29,9 +33,9 @@ export async function verify(
     timer = setTimeout(() => resolve('timeout'), verifier.timeoutMs)
   })
   const current = await Promise.race([probe, timeout]).finally(() => clearTimeout(timer))
-  if (current === 'timeout') {
+  if (current === 'timeout' || current === GIT_ADMIN_PROBE_UNAVAILABLE) {
     // Unknown is not proof, but rescanning slow mounts on every read amplifies load (#19312).
-    verifier.onUnknown?.('probe expired')
+    verifier.onUnknown?.(current === 'timeout' ? 'probe expired' : 'probe process unavailable')
     return { reuse: true }
   }
   // A mismatching probe was taken before the rescan, so it becomes that scan's fingerprint.

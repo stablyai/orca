@@ -44,6 +44,9 @@ export const MAIN_BUILD_ENTRY_POINTS: Record<string, string> = {
   'wsl-transcript-fs-process-entry': resolve(
     'src/main/native-chat/transcript-filesystem/process/wsl-transcript-fs-process-entry.ts'
   ),
+  'repo-worktree-admin-fingerprint-process-entry': resolve(
+    'src/main/runtime/workspaces/catalog/repo-worktree-admin-fingerprint-process-entry.ts'
+  ),
   // libuv spawns inline; run port probes on a worker to keep the UI loop free.
   'port-scan-command-worker-entry': resolve('src/main/ports/port-scan-command-worker-entry.ts'),
   'command-path-directory-worker-entry': resolve(

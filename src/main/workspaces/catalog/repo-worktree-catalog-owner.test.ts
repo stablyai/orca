@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../shared/repository/repo-types'
+import {
+  GIT_ADMIN_PROBE_UNAVAILABLE,
+  type GitAdminProbeResult
+} from '../../../shared/git/metadata/git-admin-probe-result'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
 import { bumpWorktreeScanGeneration } from '../../git/worktrees/catalog/worktree-scan-cache'
 import { setWorktreeCatalogRouteResolver } from './repo-worktree-catalog-route'
@@ -68,6 +72,34 @@ describe('repo worktree catalog owner', () => {
     setWorktreeCatalogRouteResolver(null)
     _resetWorktreeCatalogOwnerForTests()
     vi.useRealTimers()
+  })
+
+  it('reuses rows when the probe process is unavailable without extending the full-scan ceiling', async () => {
+    const plan = scanner([rows('/repos/app'), rows('/repos/app', '/repos/app-external')])
+    let fingerprint: GitAdminProbeResult = 'fingerprint-1'
+    const verifier = {
+      ceilingMs: 300_000,
+      timeoutMs: 1_000,
+      probe: async () => fingerprint
+    }
+    await readWorktreeCatalog(repo, 'local:default', { ...runtime, verifier }, plan)
+    fingerprint = GIT_ADMIN_PROBE_UNAVAILABLE
+    vi.advanceTimersByTime(31_000)
+    const degraded = await readWorktreeCatalog(
+      repo,
+      'local:default',
+      { ...runtime, verifier },
+      plan
+    )
+    expect(degraded.observation?.outcome).toEqual(rows('/repos/app'))
+    vi.advanceTimersByTime(300_000)
+    const reconciled = await readWorktreeCatalog(
+      repo,
+      'local:default',
+      { ...runtime, verifier },
+      plan
+    )
+    expect(reconciled.observation?.outcome).toEqual(rows('/repos/app', '/repos/app-external'))
   })
 
   it('serves the sidebar and the runtime from one observation within each reader’s accepted age', async () => {
