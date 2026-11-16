@@ -145,6 +145,7 @@ export function applyLocalStructuredSessionTabSnapshots<
   changedAgentPaneKeys?: Set<string>
 ): State {
   let next = state
+  let registriesGrew = false
   // Received sender scopes apply before any tab check below can drop their frame.
   const received = next.agentSenderPublicationsByHost ?? {}
   const publications = receivedAgentSenderPublications(received, 'local', snapshots)
@@ -175,6 +176,7 @@ export function applyLocalStructuredSessionTabSnapshots<
       )
     ) {
       options.onRetiredEpochDrop?.(snapshot.worktree, snapshot.publicationEpoch)
+      registriesGrew = true
       continue
     }
     if (
@@ -240,6 +242,7 @@ export function applyLocalStructuredSessionTabSnapshots<
       }
       continue
     }
+    registriesGrew ||= !prior
     localStructuredSessionVersionByWorktree.set(snapshot.worktree, {
       publicationEpoch: snapshot.publicationEpoch,
       snapshotVersion: snapshot.snapshotVersion,
@@ -250,8 +253,29 @@ export function applyLocalStructuredSessionTabSnapshots<
       noteRetiredValue(epochHistory, snapshot.publicationEpoch, 8)
     )
   }
-  // Deleted worktrees must release publisher cursors instead of retaining them for renderer lifetime.
-  const isKnown = isKnownStructuredSessionWorktree(next)
+  releaseCursorsOfRemovedWorktrees(next, registriesGrew)
+  return next
+}
+
+let sweptMembership: readonly unknown[] = []
+
+// Deleted worktrees must release publisher cursors instead of retaining them for renderer lifetime.
+// Sweep only when membership or the registries changed: unchanged ones leave nothing to release.
+function releaseCursorsOfRemovedWorktrees(
+  state: WebSessionTabsSyncState & WorktreeRuntimeOwnerState,
+  registriesGrew: boolean
+): void {
+  const membership = [
+    state.unifiedTabsByWorktree,
+    state.worktreesByRepo,
+    state.detectedWorktreesByRepo,
+    state.folderWorkspaces
+  ]
+  if (!registriesGrew && membership.every((input, index) => input === sweptMembership[index])) {
+    return
+  }
+  sweptMembership = membership
+  const isKnown = isKnownStructuredSessionWorktree(state)
   for (const worktreeId of localStructuredSessionVersionByWorktree.keys()) {
     if (!isKnown(worktreeId)) {
       localStructuredSessionVersionByWorktree.delete(worktreeId)
@@ -259,5 +283,4 @@ export function applyLocalStructuredSessionTabSnapshots<
     }
   }
   forgetRetiredEpochRepairsOutside(isKnown)
-  return next
 }
