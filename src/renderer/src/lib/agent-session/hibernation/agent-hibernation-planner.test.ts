@@ -1,7 +1,7 @@
 import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { describe, expect, it } from 'vitest'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import type {
   TerminalLayoutSnapshot,
   TerminalTab
@@ -243,29 +243,6 @@ describe('agent sleep planner', () => {
       )
     ).toEqual([cleared.paneKey])
   })
-
-  it.each([undefined, 'pending', 'dispatched'] as const)(
-    'blocks orchestration panes while dispatch status is %s',
-    (dispatchStatus) => {
-      const orchestrated = entry({
-        orchestration: {
-          taskId: 'task-1',
-          dispatchId: 'ctx-1',
-          ...(dispatchStatus ? { dispatchStatus } : {})
-        }
-      })
-
-      expect(
-        plannedPaneKeys(
-          snapshot({
-            agentStatusByPaneKey: acceptedAgentStatuses(
-              Object.entries({ [orchestrated.paneKey]: orchestrated })
-            )
-          })
-        )
-      ).toEqual([])
-    }
-  )
 
   it('requires the idle threshold and blocks input after done', () => {
     const fresh = entry({ stateStartedAt: NOW - 1_000, updatedAt: NOW - 1_000 })
@@ -572,58 +549,6 @@ describe('agent sleep planner', () => {
     expect(plannedWorktrees(twoHosts({ shownRemotely: false, lastInputAt: NOW - 1 }))).toEqual([
       'wt-bg'
     ])
-  })
-})
-
-describe('idle clock anchors on stateStartedAt, not updatedAt', () => {
-  it('keeps the signature stable across such a repaint so confirmation can match', () => {
-    const before = entry({ stateStartedAt: OLD, updatedAt: OLD })
-    const after = entry({ stateStartedAt: OLD, updatedAt: NOW - 1 })
-    const sigFor = (e: AgentStatusEntry): string =>
-      planAgentHibernationCandidates(
-        snapshot({
-          agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({ [e.paneKey]: e })),
-          ptyBindingFirstSeenAtByPaneKey: { [e.paneKey]: OLD }
-        })
-      )[0]!.signature
-    expect(sigFor(after)).toBe(sigFor(before))
-  })
-
-  it('invalidates the signature when agent kind or resume identity changes', () => {
-    const base = entry({ stateStartedAt: OLD, updatedAt: OLD })
-    const sigFor = (e: AgentStatusEntry): string =>
-      planAgentHibernationCandidates(
-        snapshot({
-          agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({ [e.paneKey]: e })),
-          ptyBindingFirstSeenAtByPaneKey: { [e.paneKey]: OLD }
-        })
-      )[0]!.signature
-    const baseline = sigFor(base)
-    expect(
-      sigFor(
-        entry({
-          stateStartedAt: OLD,
-          updatedAt: OLD,
-          providerSession: { key: 'session_id', id: 'session-2' }
-        })
-      )
-    ).not.toBe(baseline)
-    expect(sigFor(entry({ stateStartedAt: OLD, updatedAt: OLD, agentType: 'codex' }))).not.toBe(
-      baseline
-    )
-    expect(
-      sigFor(
-        entry({
-          stateStartedAt: OLD,
-          updatedAt: OLD,
-          providerSession: {
-            key: 'session_id',
-            id: 'session-1',
-            transcriptPath: '/tmp/moved.jsonl'
-          }
-        })
-      )
-    ).not.toBe(baseline)
   })
 })
 

@@ -3142,7 +3142,10 @@
       "chooseInAgentPicker": "Choose in agent picker…",
       "setWhenSessionStarts": "Set when the session starts.",
       "availableAfterSessionStarts": "Available after the session starts.",
-      "sessionOptions": "Session options"
+      "sessionOptions": "Session options",
+      "permissionAppliesNextMessage": "{{saved}} applies to your next message; running {{active}}",
+      "permissionAppliesNextMessageCompact": "{{saved}} · next message",
+      "permissionAppliesNextMessageTiming": "Applies next message · running {{active}}"
     },
     "streamFrame": {
       "streamFailed": "Transcript stream failed",
@@ -3263,6 +3266,12 @@
     "interruptedContinue": {
       "failed": "Couldn't continue this chat. Try again, or send a message.",
       "explanation": "Continue, and the agent first checks whether its last step finished."
+    },
+    "restartNote": {
+      "continued": "Orca asked this agent to continue after a restart. Your own prompt was not re-sent.",
+      "refused": "Orca couldn't continue this chat after the restart. Send a message to continue it.",
+      "unconfirmed": "Orca asked this agent to continue after the restart but couldn't confirm it did. Check its latest reply before sending another message.",
+      "notConnected": "Orca couldn't reconnect this chat after the restart, so it didn't ask the agent to continue."
     },
     "sendError": {
       "dismiss": "Dismiss"

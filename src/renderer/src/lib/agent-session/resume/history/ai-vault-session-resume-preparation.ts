@@ -18,12 +18,12 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   parseRoutableExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { browseRuntimeServerDirectory } from '@/runtime/files/reads/runtime-server-directory-browser'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import type { FilesystemPathFlavor } from '../../../../../../shared/file-access/filesystem-path-flavor'
-import { isWindowsAbsolutePathLike } from '../../../../../../shared/cross-platform-path'
+import { isWindowsAbsolutePathLike } from '../../../../../../shared/file-access/cross-platform-path'
 import { readIpcErrorMessage } from '../../../../runtime/errors/ipc-error'
 import type { AiVaultResumeCommandSession } from '../../../../../../shared/ai-vault/resume/ai-vault-resume-startup'
 import { agentForksThroughChat } from '../../../../../../shared/agent-launch/startup/agent-resume-argv'

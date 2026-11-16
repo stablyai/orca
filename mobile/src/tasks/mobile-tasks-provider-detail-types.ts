@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../src/shared/execution-host'
+import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'
 import type { ProviderCheckSummary } from '../../../src/shared/github/pull-requests/pull-request-types'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../src/shared/github/repositories/repository-identity'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'

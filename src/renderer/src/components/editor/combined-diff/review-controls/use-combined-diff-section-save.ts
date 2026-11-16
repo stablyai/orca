@@ -5,7 +5,7 @@ import { useAppStore } from '@/store'
 import { joinPath } from '@/lib/path'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { DiffSection } from '../../diff/sections/diff-section-types'
-import { getLargeDiffRenderLimit } from '../../../../../../shared/large-diff-render-limit'
+import { getLargeDiffRenderLimit } from '../../../../../../shared/source-control/diff/large-diff-render-limit'
 import {
   getStoredTextDiffContent,
   getStoredTextDiffResult,

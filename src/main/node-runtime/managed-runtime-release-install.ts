@@ -9,7 +9,7 @@ import {
   sanitizeAgentFailureDetail,
   stripAnsiControlSequences
 } from '../../shared/source-control/ai/generation/commit-message-agent-output'
-import type { ManagedRuntimeOperation } from '../../shared/managed-runtime-install'
+import type { ManagedRuntimeOperation } from '../../shared/agent-launch/installation/managed-runtime-install'
 import { getMainHttpClient, type MainHttpClient } from '../network/http-client'
 import { redactString } from '../observability/redactor'
 import {

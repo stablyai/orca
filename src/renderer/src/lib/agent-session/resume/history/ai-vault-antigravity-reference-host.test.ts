@@ -5,8 +5,8 @@ import { resolveAiVaultSessionLaunchTarget } from '@/components/right-sidebar/ai
 import type { buildAiVaultResumeStartupForWorktree } from './ai-vault-resume-command'
 import { getAiVaultResumeWorkspaceWslDistro } from './ai-vault-resume-shell'
 
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { createGlobalSettingsFixture } from '../../../../../../shared/global-settings-test-fixture'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
+import { createGlobalSettingsFixture } from '../../../../../../shared/settings/global-settings-test-fixture'
 
 vi.mock('@/lib/workspace/creation/new-workspace', () => ({ CLIENT_PLATFORM: 'win32' }))
 vi.mock('@/app-shell/platform/renderer-app-platform', () => ({

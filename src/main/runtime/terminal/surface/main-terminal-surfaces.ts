@@ -3,7 +3,7 @@ import { captureMainTerminalPaneLookup, findMainTerminalPane } from './pty-pane-
 
 import type { MainTerminalSurfacesHost } from './main-terminal-surfaces-host'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { MainPaneBinding } from './main-pane-verdict'
 import type {
   RuntimeSyncWindowGraph,

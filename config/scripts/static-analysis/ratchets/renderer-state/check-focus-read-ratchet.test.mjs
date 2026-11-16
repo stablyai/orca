@@ -10,13 +10,13 @@ describe('countFocusSettingReads', () => {
     const readers = discoverFocusReaders(
       new Map([
         [
-          'src/shared/execution-host.ts',
+          'src/shared/execution-host/execution-host.ts',
           'export function getSettingsFocusedExecutionHostId(settings) {\n  return settings?.activeRuntimeEnvironmentId\n}\n'
         ],
         [
           'src/renderer/src/a.ts',
           [
-            "import { getSettingsFocusedExecutionHostId } from '../../shared/execution-host'",
+            "import { getSettingsFocusedExecutionHostId } from '../../shared/execution-host/execution-host'",
             'export function getAutomationListTarget(settings) {',
             '  const id = settings?.activeRuntimeEnvironmentId?.trim()',
             "  return id ? { kind: 'environment', environmentId: id } : { kind: 'local' }",

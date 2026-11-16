@@ -4,7 +4,7 @@ import {
   webSessionIntentOwnerKey,
   type WebSessionIntentOwner
 } from '../identity/web-session-intent-owner'
-import { toVisibleTabType } from '../../../../../shared/tab-types'
+import { toVisibleTabType } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { AppState } from '../../../store/types'
 
 export type WebSessionFocusIntent = {

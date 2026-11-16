@@ -35,7 +35,9 @@ import {
 } from '../../../../../../shared/workspace-view/workspace-view-options'
 import { useTranslate } from '@/i18n/use-translate'
 import { SidebarGroupByToggle } from './SidebarGroupByToggle'
-import { withoutHiddenRepos } from '../../../../../../shared/hidden-projects'
+import { withoutHiddenRepos } from '../../../../../../shared/project/catalog/hidden-projects'
+import { selectDrawsNewWorktreeCards } from '@/store/appearance/worktree-card-style'
+import { trackWorktreeCardStyleChanged } from '../../worktree-card-style-telemetry'
 
 export function useWorkspaceOptionsFilterBadge(): {
   hasAnyFilter: boolean
@@ -93,9 +95,19 @@ function CardStyleOption({ preserveWorkspaceBoardOpen }: OptionItemProps): JSX.E
       >
         <DropdownMenuRadioGroup
           value={experimental ? 'experimental' : 'classic'}
-          onValueChange={(value) =>
-            void updateSettings({ experimentalNewWorktreeCardStyle: value === 'experimental' })
-          }
+          onValueChange={(value) => {
+            const next = value === 'experimental'
+            void updateSettings({ experimentalNewWorktreeCardStyle: next }).then(() => {
+              const state = useAppStore.getState()
+              if ((state.settings?.experimentalNewWorktreeCardStyle === true) !== next) {
+                return
+              }
+              state.setWorktreeCardsIntroChoice(null)
+              if (next !== experimental) {
+                trackWorktreeCardStyleChanged(next, 'options_menu')
+              }
+            })
+          }}
         >
           <DropdownMenuRadioItem value="classic">{classicLabel}</DropdownMenuRadioItem>
           <DropdownMenuRadioItem value="experimental">{experimentalLabel}</DropdownMenuRadioItem>
@@ -310,7 +322,7 @@ export function WorkspaceOptionsMenuItems({
   const groupBy = useAppStore((s) => s.groupBy)
   const showSleepingWorkspaces = useAppStore((s) => s.showSleepingWorkspaces)
   const hideWorkspacesFromOtherDevices = useAppStore((s) => s.hideWorkspacesFromOtherDevices)
-  const newCardStyle = useAppStore((s) => s.settings?.experimentalNewWorktreeCardStyle === true)
+  const newCardStyle = useAppStore(selectDrawsNewWorktreeCards)
   const runtimeEnvironmentCount = useAppStore((s) => s.runtimeEnvironments.length)
   const runtimeEnvironmentCatalogHydrated = useAppStore((s) => s.runtimeEnvironmentCatalogHydrated)
   const { hostOptions } = useSidebarHostScopeOptions()

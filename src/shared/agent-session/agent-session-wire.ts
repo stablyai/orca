@@ -29,6 +29,7 @@ import type { AgentTurnOutcome } from '../agent-status/lifecycle/agent-turn-outc
 import type { AgentSessionRecord } from './lifecycle/agent-session-record'
 import type { AgentProviderSessionMetadata } from './lifecycle/agent-session-resume'
 import type { NativeChatSubagentEntry } from '../native-chat/native-chat-types'
+import type { AgentSessionStatusPermissionFields } from './options/permissions/agent-session-status-permission-fields'
 import type { StructuredAgentSessionProjectedStatus } from './view/structured-agent-session-projection'
 
 export type AgentSessionTurnActivity = {
@@ -214,9 +215,6 @@ export type AgentSessionStatusSummary = {
   model?: string
   /** Legacy host execution report; clients use the saved model for option invalidation. */
   reportedModel?: string
-  /** The chat's saved permission mode; a client re-reads options when it or `model` moves. */
-  permissionMode?: string
-  runtimePermission?: { fence: number; mode: string | null } | null
   /** The chat's saved effort, Fast and speed picks, encoded; another device's pick moves them so a
    *  client re-reads options. Absent from older hosts. */
   effort?: string
@@ -237,6 +235,9 @@ export type AgentSessionStatusSummary = {
   /** The agent asked a question its turn does not wait on (Codex's async question), and the person
    *  has not answered it yet. Turn status is unchanged; only the lead state shows it. Older hosts omit it. */
   awaitsAnswer?: true
+  /** The newest async question row the person skipped: clients hide it and every earlier question.
+   *  Older hosts omit it, and their clients hide a skipped card on that screen only. */
+  asyncQuestionsSkippedThrough?: string
   /** Optional live provider tasks let lists show children without journal subscriptions; derive from children when published. */
   backgroundTasks?: AgentSessionBackgroundTask[]
   /** Running/monitoring child views (decodeAgentChildWorkViews); finished children use background tasks only. Omit usage and per-tick freshness here; the background-task channel carries those ticks. Older hosts omit this. */
@@ -264,7 +265,7 @@ export type AgentSessionStatusSummary = {
   updatedAt: number
   /** Date the lead status by its own lifecycle edge, never updatedAt (child rows change it). Missing/older-host dates leave readers tracking time themselves. */
   statusStartedAt?: number
-}
+} & AgentSessionStatusPermissionFields
 
 /** `failedAt` dates the run, so a repeat failure with the same message still republishes. */
 export type AgentSessionNamingError = {

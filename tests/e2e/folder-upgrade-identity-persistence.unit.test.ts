@@ -1,5 +1,5 @@
 import { hostWorktreeTarget } from '../../src/shared/worktree/host-qualified-identity'
-import { getDefaultWorkspaceSession } from '../../src/shared/constants'
+import { getDefaultWorkspaceSession } from '../../src/shared/orca-profiles/constants'
 import type { AppState } from '../../src/renderer/src/store/types'
 import { getRemovedWorktreeIdsAfterAuthoritativeScan } from '../../src/renderer/src/store/slices/worktrees/listing/worktree-host-ownership'
 import { mergeWorktree } from '../../src/main/ipc/worktree-metadata-merge'

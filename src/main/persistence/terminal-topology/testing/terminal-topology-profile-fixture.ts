@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { getDefaultWorkspaceSession } from '../../../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/constants'
 import { DelayedAuthority } from '../../loading-store/profile-writing/profile-state-delayed-authority-fixture'
 import { Store } from '../../loading-store/store'
 import { buildProfileStateCutoverFixture } from '../../profile-state-cutover-fixture'

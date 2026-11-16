@@ -23,7 +23,7 @@ import {
   assertPreviewWithinTransportBudget,
   previewableBinaryByteLimit
 } from './file-preview-budget'
-import { readLocalFileRange } from '../../ipc/filesystem/local-file-range-read'
+import { readLocalFileRange } from '../../filesystem/local-file-io/local-file-range-read'
 import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
 import { guardWslUncPathAccess } from '../../wsl/filesystem/wsl-unc-access-gate'
 import { resolveLocalFileRequestPath } from '../../ipc/filesystem/access/local-file-access-resolution'
@@ -32,7 +32,7 @@ import {
   filePreviewExtension,
   filePreviewForPath
 } from '../../../shared/file-preview/file-preview-kind'
-import { detectImageFileSignature } from '../../../shared/image-file-signature'
+import { detectImageFileSignature } from '../../../shared/file-content/image-file-signature'
 import { resolveRuntimeAuthorizedPath } from './chat-scratch-file-root'
 import {
   NodeFileReadTooLargeError,

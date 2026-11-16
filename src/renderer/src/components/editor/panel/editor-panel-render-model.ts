@@ -2,7 +2,7 @@ import { detectLanguage } from '../../../../../shared/editor-language/editor-lan
 import { canPreviewLanguage } from '@/lib/browser/documents/file-preview'
 import type { useAppStore } from '@/store/index'
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor/types/open-file'
-import type { MarkdownDefaultViewMode } from '../../../../../shared/markdown-default-view-mode'
+import type { MarkdownDefaultViewMode } from '../../../../../shared/editor/markdown/markdown-default-view-mode'
 import {
   canOpenMarkdownPreview,
   getDefaultMarkdownViewMode,

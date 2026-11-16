@@ -13,7 +13,7 @@ import {
 } from '@/lib/clipboard/images/clipboard-image-copy'
 import { IMAGE_VIEWER_ZOOM_STEP } from '../viewer-viewport/image-viewer-zoom'
 import { imageClipboardPngDataUrl } from './image-png-export'
-import type { PanZoomSize } from '../../../../../shared/pan-zoom-view'
+import type { PanZoomSize } from '../../../../../shared/document-preview/pan-zoom-view'
 import { PanZoomImageSurface } from './PanZoomImageSurface'
 import { usePanZoomViewport } from '../viewer-viewport/use-pan-zoom-viewport'
 import { useViewerZoomCommands } from '../viewer-viewport/use-viewer-zoom-commands'

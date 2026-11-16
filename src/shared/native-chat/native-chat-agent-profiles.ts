@@ -22,6 +22,8 @@ export type NativeChatAgentProfile = {
   /** Catalog commands the model acts on when they arrive as prose, even though
    *  the runtime has no slash parser of its own. */
   textDrivenCommands?: readonly string[]
+  /** The agent's own /goal resumes a paused goal with `/goal resume`. */
+  resumesOwnGoal?: true
 }
 
 // Both lines read `.claude/skills` beside their own folders, and 2.x reports no skill as a command.
@@ -60,7 +62,8 @@ const NATIVE_CHAT_AGENT_PROFILES: Partial<Record<AgentType, NativeChatAgentProfi
   },
   grok: {
     skillPrefix: '/',
-    skillSourceOwner: 'grok'
+    skillSourceOwner: 'grok',
+    resumesOwnGoal: true
   },
   // Pi expands only `/skill:<name>`; a bare `/<name>` reaches the model as text.
   pi: {

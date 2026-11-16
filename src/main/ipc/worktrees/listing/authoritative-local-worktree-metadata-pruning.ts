@@ -1,5 +1,8 @@
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../../shared/execution-host/execution-host'
+import { isWindowsAbsolutePathLike } from '../../../../shared/file-access/cross-platform-path'
 import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import {

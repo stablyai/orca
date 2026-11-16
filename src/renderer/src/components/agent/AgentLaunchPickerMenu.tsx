@@ -4,7 +4,7 @@ import {
 } from '@/store/workspaces/catalog/workspace-record-fields'
 import { useEffect, useRef, useState, type ComponentProps, type ReactNode, type Ref } from 'react'
 import { useAppStore } from '@/store/index'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { Input } from '@/components/ui/input'
 import { Terminal } from 'lucide-react'
 import { agentPickerBlankTerminalMatches } from '@/lib/agent-catalog/agent-picker-search'

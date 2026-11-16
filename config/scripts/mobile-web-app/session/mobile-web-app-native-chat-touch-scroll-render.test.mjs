@@ -11,7 +11,7 @@ import {
 import { mobileWebAppDependenciesPresent } from '../mobile-web-app-bundle-dependencies.mjs'
 import { createBundleServer, readShellCsp } from '../preview/mobile-web-app-render-harness.mjs'
 
-// The phone's web pages must pan the transcript by touch and give a pinch to its text-size detector, not page zoom.
+// The phone's web pages must pan the transcript by touch, give a pinch to its text-size detector (not page zoom) and keep the Copy menu.
 const mobileDir = fileURLToPath(new URL('../../../../mobile', import.meta.url))
 
 const entry = `

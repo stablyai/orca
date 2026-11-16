@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useGlobalSearchParams, useSegments } from 'expo-router'
-import { normalizeExecutionHostId } from '../../../src/shared/execution-host'
+import { normalizeExecutionHostId } from '../../../src/shared/execution-host/execution-host'
 import { usePageBridgeClient } from '../transport/connection/client-context.web'
 import { firstParam } from './route-param-reader'
 import { workspaceRouteHref } from './workspace-execution-host'

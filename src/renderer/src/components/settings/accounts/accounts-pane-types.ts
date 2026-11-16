@@ -1,5 +1,6 @@
+import type { ObservedAccountPlans } from '@/lib/provider-accounts/observed-account-plans'
 import type { Dispatch, ReactNode, SetStateAction } from 'react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
@@ -40,6 +41,14 @@ export type ProviderAccountAction =
 
 export type RemoveAccountTarget = {
   id: string
+  runtime: ProviderAccountRuntimeView
+}
+
+export type RenameAccountTarget = {
+  provider: 'claude' | 'codex'
+  id: string
+  email: string
+  displayName: string | null
   runtime: ProviderAccountRuntimeView
 }
 
@@ -87,6 +96,10 @@ export type AccountsPaneSectionModel = {
   visibleClaudeAccounts: ClaudeRateLimitAccountsState['accounts']
   systemClaudeActive: boolean
   setRemoveClaudeTarget: Dispatch<SetStateAction<RemoveAccountTarget | null>>
+  setRenameTarget: Dispatch<SetStateAction<RenameAccountTarget | null>>
+  renameAccount: (target: RenameAccountTarget, displayName: string) => Promise<void>
+  /** `provider:id` of accounts with a rename in flight. */
+  renamingAccountKeys: ReadonlySet<string>
   runClaudeAccountAction: ClaudeAccountActionRunner
   codexAccounts: CodexRateLimitAccountsState
   codexAction: ProviderAccountAction
@@ -106,6 +119,9 @@ export type AccountsPaneSectionModel = {
     | null
   codexRateLimits: ProviderRateLimits | null
   codexRateLimitTarget: RateLimitRuntimeTarget
+  /** Plans by the saved account each reading names; see `getObservedAccountPlan`. */
+  claudeAccountPlans: ObservedAccountPlans
+  codexAccountPlans: ObservedAccountPlans
   setRemoveCodexTarget: Dispatch<SetStateAction<RemoveAccountTarget | null>>
   runCodexAccountAction: CodexAccountActionRunner
   recordOpenCodeSettingEdit: (field: 'cookie' | 'workspaceId' | 'apiKey') => void

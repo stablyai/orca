@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { textGenerationFailure } from '../../text-generation-failure-copy'
+import { textGenerationFailure } from '../text-generation-failure-copy'
 import type { GenerationOutputParse } from './opencode-generation-output'
 
 export function buildAntigravityGenerationInput(prompt: string): string {

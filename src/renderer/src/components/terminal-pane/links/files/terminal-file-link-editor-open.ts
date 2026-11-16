@@ -9,7 +9,7 @@ import type {
   EditorOpenLinkIntent,
   EditorOpenResult
 } from '@/store/slices/editor/types/editor-open-link-intent'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 
 /** An explicit group request may only end in an editor in the scope it was captured from. */
 export function isExplicitEditorScopeKept(

@@ -1,4 +1,4 @@
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { captureOrchestrationTerminalCandidates } from './orchestration-terminal-candidates'
 import {
   mintAgentStatusFleetEvidence,

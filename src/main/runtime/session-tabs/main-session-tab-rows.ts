@@ -72,6 +72,9 @@ function withWindowFacts(
       ...(!isNamed(row) && !isNamed(windowRow) ? { title: windowRow.title } : {}),
       ...(windowRow.terminalTheme ? { terminalTheme: windowRow.terminalTheme } : {}),
       ...(windowRow.agentStatus !== undefined ? { agentStatus: windowRow.agentStatus } : {}),
+      ...(windowRow.statusSuppressionTitle !== undefined
+        ? { statusSuppressionTitle: windowRow.statusSuppressionTitle }
+        : {}),
       ...(keepsWindowPtyId(row.ptyId, windowRow.ptyId, rules) ? { ptyId: windowRow.ptyId } : {}),
       ...(windowRow.launchDraft !== undefined ? { launchDraft: windowRow.launchDraft } : {}),
       // Main's row holds the saved name; only the window resolves it.

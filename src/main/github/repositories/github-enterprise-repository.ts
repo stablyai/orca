@@ -22,7 +22,7 @@ import { resolveSshConfigHostname } from './github-ssh-host-alias-resolution'
 import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
 import { isStableMissingGitRemoteError } from '../../git/remotes/stable-missing-git-remote-error'
 import { requireReachableGitRoute } from '../../providers/execution-host-provider-dispatch'
-import { getConnectionExecutionHostId } from '../../../shared/execution-host'
+import { getConnectionExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { getPublicForgeProviderForHost } from '../../../shared/git/remotes/public-forge-host'
 
 export type GitHubEnterpriseRepoSlug = GitHubOwnerRepo & { host: string }

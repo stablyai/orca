@@ -1,7 +1,7 @@
 import {
   CODEX_REMOTE_VIEWER_SSH_CONNECTION,
   REMOTE_VIEWER_CLIPBOARD_ENV
-} from '../../../remote-viewer-clipboard-env'
+} from '../../../clipboard/remote-viewer-clipboard-env'
 
 // Embed launch-prep/--no-daemon wrappers on all hosts. Codex 0.156+ otherwise shares CODEX_HOME servers with the first tab’s Orca hooks/env and lifetime (#22873). agents/queue/--remote require sharing; any -c opts out.
 const CODEX_SHARED_SERVER_ARGS = ['agents', 'queue', '--remote'] as const

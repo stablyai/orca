@@ -3,7 +3,7 @@ import type { RuntimeTerminalClose } from '../../../../../shared/terminal/runtim
 import { unwrapRuntimeRpcResult } from '../../rpc/calls/runtime-rpc-result'
 import { parseRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { isWebRuntimeSessionActive } from '../../web-session-tabs-sync/identity/web-runtime-session-environment'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import { redrawServerLayoutWorkspace } from '../../workspace-layout/server/server-layout-apply-routes'
 
 /** `worktreeId`: the pane's workspace, whose server frames redraw a pane the server kept. */
