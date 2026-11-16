@@ -9,8 +9,9 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 let root: Root | null = null
 let container: HTMLDivElement
-const api = {
-  user: { connected: false } as { connected: boolean; login?: string; githubUserId?: number },
+type User = { connected: boolean; login?: string; githubUserId?: number }
+const api: { user: User; connect: ReturnType<typeof vi.fn> } = {
+  user: { connected: false },
   connect: vi.fn(async () => ({ ok: true, value: null }))
 }
 
