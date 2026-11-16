@@ -46,8 +46,10 @@ while IFS= read -r row; do
   [[ "$line" =~ ^[^\<\>[:cntrl:]]{1,80}\ \<[0-9]{1,20}\+[A-Za-z0-9-]{1,39}@users\.noreply\.github\.com\>$ ]] || continue
   git config -f "$file" orca.coauthor "$line"
 done < <(jq -c '.[]' <<<"$coauthors")
-jq -c -s 'add | [.[] | select(.userId | test("^[A-Za-z0-9_.:-]+$")) | .userId as $u | (.deviceIds // [])[] | select(test("^[A-Za-z0-9_-]{1,128}$")) | {key: ., value: $u}] | from_entries' \
-  <(printf '%s' "$json") <(printf '%s' "$coauthors") >"$tmp/devices.json"
+# A device id claimed by more than one member maps to nobody (never "last wins": one member's device must
+# never attest as another's). Both lists.
+DEVICES_JQ='add | [.[] | select(.userId | test("^[A-Za-z0-9_.:-]+$")) | .userId as $u | (.deviceIds // [])[] | select(test("^[A-Za-z0-9_-]{1,128}$")) | {key: ., value: $u}] | group_by(.key) | map(select((map(.value) | unique | length) == 1) | .[0]) | from_entries'
+jq -c -s "$DEVICES_JQ" <(printf '%s' "$json") <(printf '%s' "$coauthors") >"$tmp/devices.json"
 devices="$(jq 'length' "$tmp/devices.json")"
 chmod 0700 "$tmp" && chmod 0600 "$tmp"/*
 rm -rf "$DIR.old"

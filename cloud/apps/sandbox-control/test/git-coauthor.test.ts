@@ -1,7 +1,7 @@
 // GIT-COAUTHOR: a commit that falls back to the workspace identity while a known member drove it carries a
 // Co-authored-by trailer for them (their GitHub noreply address), so attribution survives. No token involved.
 import { execFileSync, spawnSync } from 'node:child_process'
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { coauthorTrailer } from '../src/member-git'
 
 const GIT_AS = fileURLToPath(new URL('../image/vm/orca-git-as', import.meta.url).href)
+const MEMBERS = fileURLToPath(new URL('../image/vm/orca-sandbox-members', import.meta.url).href)
 const CO = 'Ada Lovelace <11+ada-gh@users.noreply.github.com>'
 const dirs: string[] = []
 afterEach(() => dirs.splice(0).forEach((dir) => rmSync(dir, { recursive: true, force: true })))
@@ -80,3 +81,22 @@ describe('coauthorTrailer', () => {
     expect(coauthorTrailer('ada', 0, 'x')).toBeNull()
   })
 })
+
+describe('orca-sandbox-members devices map', () => {
+  // The script's own jq program (DEVICES_JQ), run on its two inputs: members, then co-authors.
+  const program = /^DEVICES_JQ='(.*)'$/m.exec(readFileSync(MEMBERS, 'utf8'))![1]!
+  const devices = (members: unknown, coauthors: unknown) =>
+    JSON.parse(execFileSync('jq', ['-c', '-s', program], { input: `${JSON.stringify(members)}\n${JSON.stringify(coauthors)}`, encoding: 'utf8' }))
+
+  it('maps each device to its member, across both lists', () => {
+    expect(devices([{ userId: 'alice', deviceIds: ['d1'] }], [{ userId: 'bob', deviceIds: ['d2', 'bad id'] }])).toEqual({ d1: 'alice', d2: 'bob' })
+  })
+
+  it('a device id claimed by two people maps to nobody (members, or member and co-author)', () => {
+    expect(devices([{ userId: 'alice', deviceIds: ['d1', 'd2'] }, { userId: 'bob', deviceIds: ['d1'] }], [])).toEqual({ d2: 'alice' })
+    expect(devices([{ userId: 'alice', deviceIds: ['d1'] }], [{ userId: 'bob', deviceIds: ['d1'] }])).toEqual({})
+    // The same person listing a device twice is still theirs.
+    expect(devices([{ userId: 'alice', deviceIds: ['d1', 'd1'] }], [])).toEqual({ d1: 'alice' })
+  })
+})
+
