@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RuntimeClient } from '../runtime/client'
-import { RuntimeRpcFailureError } from '../runtime/types'
+import { RuntimeRpcFailureError } from '../runtime/connection/types'
 import type { HandlerContext } from '../dispatch/dispatch'
 import { SKILL_SHARING_HANDLERS } from './skill-sharing'
 

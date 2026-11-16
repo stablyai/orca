@@ -14,7 +14,7 @@ import {
   getOpenFilesForExternalFileChange,
   type EditorPathMutationTarget
 } from '../../autosave/editor-autosave'
-import type { FileContent } from '../../editor-panel-content-types'
+import type { FileContent } from '../../loading/editor-panel-content-types'
 
 /** Apply rich/notebook/CSV commits to hidden retained models as one undo step; visible code models follow their own content sync. */
 export function applyEditorBufferText(

@@ -3,6 +3,7 @@ import {
   type RetiredPtyIncarnation
 } from '../../../shared/retired-pty-incarnations'
 import type { Session } from '../sessions/session'
+import { sessionExitCauseLogFields } from '../observability/session-exit-log-fields'
 
 const REMOTE_FOREGROUND_TOMBSTONE_RETENTION_MS = 2_000
 
@@ -10,7 +11,7 @@ const REMOTE_FOREGROUND_TOMBSTONE_RETENTION_MS = 2_000
 export function recordTerminalHostSessionExit(
   sessionId: string,
   session:
-    | Pick<Session, 'hasAttachedClients' | 'exitCode' | 'incarnationId' | 'wslDistro'>
+    | Pick<Session, 'hasAttachedClients' | 'exitCode' | 'exitCause' | 'incarnationId' | 'wslDistro'>
     | undefined,
   retiredIncarnations: Map<string, RetiredPtyIncarnation>,
   log: ((event: string, details: Record<string, unknown>) => void) | undefined
@@ -24,6 +25,7 @@ export function recordTerminalHostSessionExit(
     log?.('session-exited', {
       sessionId,
       code: session.exitCode ?? 0,
+      ...sessionExitCauseLogFields(session.exitCause),
       attached: false,
       ...(session.wslDistro ? { wslBridge: true } : {})
     })

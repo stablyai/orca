@@ -1,5 +1,5 @@
-import { pathEnvRelativeTo } from '../../../../shared/node-cli-command-resolution'
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import { pathEnvRelativeTo } from '../../../../shared/shell/command-resolution/node-cli-command-resolution'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
 import {
   assertStructuredAgentResolutionCurrent,
   resolveAgainAfterRefreshOnMissingProgram,
@@ -19,15 +19,15 @@ import {
   agentSessionAccountHomesEqual,
   requireLegacyAgentSessionAccountHome,
   type AgentSessionAccountHome
-} from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
+} from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { moveCodexThreadIntoAccountHome } from '../../history/resume/codex-thread-account-move'
-import { agentSessionProviderHandleChainHead } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { agentSessionProviderHandleChainHead } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import { resolveCodexCommand } from '../../../codex-cli/command'
 import { CODEX_STRUCTURED_AGENT } from './codex-structured-agent-definition'
 import type { StructuredAgentLaunchPartResolver } from '../../../runtime/agent-session/launch/structured-agent-launch-composition'
 import type { CodexStructuredLaunch } from '../session-lifecycle/codex-structured-session-state'
-import { codexStructuredPermissionPolicy } from '../../../../shared/codex-permission-policy'
+import { codexStructuredPermissionPolicy } from '../../../../shared/agent-launch/permissions/codex-permission-policy'
 import { codexStructuredLaunchArgs } from './codex-structured-launch-args'
 import { codexOrcaHooksOffArgs } from './codex-structured-orca-hooks-off'
 import { getSystemCodexHomePath } from '../../configuration/homes/codex-home-paths'

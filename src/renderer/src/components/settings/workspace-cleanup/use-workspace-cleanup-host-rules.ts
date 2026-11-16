@@ -3,13 +3,13 @@ import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   getDefaultWorkspaceCleanupRules,
   normalizeWorkspaceCleanupRules,
   type WorkspaceCleanupRules
 } from '../../../../../shared/workspace-cleanup/workspace-cleanup-policy'
-import { errorMessage } from '../../../../../shared/error-message'
+import { errorMessage } from '../../../../../shared/errors/error-message'
 
 /** `unsupported`: a host from before automatic cleanup, which neither reports nor accepts the rules. */
 export type WorkspaceCleanupHostRules =

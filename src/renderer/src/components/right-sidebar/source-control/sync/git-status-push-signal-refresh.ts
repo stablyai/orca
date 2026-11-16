@@ -7,7 +7,7 @@ import {
   type TerminalCommandFinishedEventDetail
 } from '@/hooks/terminal-command-finished-event'
 import type { GitStatusMetadataChangedEvent } from '../../../../../../shared/worktree/types'
-import { normalizeRuntimePathForComparison } from '../../../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../../../shared/file-access/cross-platform-path'
 import { gitStatusSignalRecipientTest } from './git-status-signal-attribution'
 
 type UseGitStatusPushSignalRefreshParams = {

@@ -6,7 +6,7 @@ import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
-import { errorMessage } from '../../../../../shared/error-message'
+import { errorMessage } from '../../../../../shared/errors/error-message'
 import {
   WORKSPACE_CLEANUP_RULE_KEYS,
   hasEnabledWorkspaceCleanupRule,
@@ -200,7 +200,7 @@ export function WorkspaceCleanupSettingsPane({
       finishChange(false)
       return
     }
-    if (request && checked.rows.length > 0) {
+    if (request && (checked.rows.length > 0 || request.kind === 'disable-ignored-files')) {
       setPendingRule(null)
       setPendingChange({ ...request, rows: checked.rows, change })
       return
@@ -272,7 +272,10 @@ export function WorkspaceCleanupSettingsPane({
       return
     }
     const nextRules = change.change(latest)
-    const checked = await previewNewRemovals(latest, nextRules)
+    const checked =
+      change.kind === 'disable-ignored-files' && !hasEnabledWorkspaceCleanupRule(nextRules)
+        ? { rows: [], nextPreview: null }
+        : await previewNewRemovals(latest, nextRules)
     if (!checked || !mountedRef.current) {
       return
     }
@@ -385,7 +388,9 @@ export function WorkspaceCleanupSettingsPane({
                     keepWhen: keepIgnored ? 'any-local-files' : 'uncommitted'
                   }),
                   // Keeping more can only delete less; letting ignored files go asks first.
-                  keepIgnored ? null : { kind: 'change', ruleTitle: search.keepIgnoredFiles.title }
+                  keepIgnored
+                    ? null
+                    : { kind: 'disable-ignored-files', ruleTitle: search.keepIgnoredFiles.title }
                 )
               }}
             />

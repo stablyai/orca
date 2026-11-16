@@ -1,6 +1,6 @@
 import { posix, win32 } from 'node:path'
 import { normalizeGitHubPRMergeMethodSettings } from '../../../../shared/github/pull-requests/merge/pull-request-merge-methods'
-import { mergeCommandEnvironment } from '../../../../shared/command-environment'
+import { mergeCommandEnvironment } from '../../../../shared/shell/launch/command-environment'
 import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
 import { githubHostExecOptions } from '../../repositories/github-repository-host'
 import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
@@ -8,7 +8,7 @@ import { githubRepoIdentityKey } from '../../../../shared/github/repositories/re
 import { noteRepositoryRateLimitSpend, repositoryRateLimitGuard } from '../../api/rate-limit'
 import { codeHostReadExecutionScope as githubReadExecutionScope } from '../../../source-control/code-host-read-execution-scope'
 import { runCoalescedProbe } from '../../../git/remotes/coalesced-probe'
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import type { GhExecOptions } from './../github-exec-scope'
 import {
   MERGE_QUEUE_CACHE_TTL_MS,

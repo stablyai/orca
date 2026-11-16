@@ -9,7 +9,7 @@ import type {
   GitLabMRInvolvement,
   GitLabWorkItem,
   GitLabTodo
-} from '../../../../shared/gitlab-types'
+} from '../../../../shared/gitlab/gitlab-types'
 import { getRepoBackedTaskEmptyState } from './task-page-empty-state'
 import { isGitLabIssueFilter, isGitLabMRFilter } from './task-page-source-context'
 export function useTaskPageProviderState(model: TaskPageSourceAvailabilityModel) {

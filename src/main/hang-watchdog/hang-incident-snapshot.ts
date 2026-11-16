@@ -1,6 +1,6 @@
 import { closeSync, fstatSync, openSync, readSync } from 'node:fs'
 import { freemem, loadavg, totalmem } from 'node:os'
-import { sanitizeCrashReportString } from '../../shared/crash-report-redaction'
+import { sanitizeCrashReportString } from '../../shared/crash-reporting/crash-report-redaction'
 import { redactString } from '../observability/redactor'
 import type { CompletedHangContext, HangMachineSnapshot } from './hang-observations'
 

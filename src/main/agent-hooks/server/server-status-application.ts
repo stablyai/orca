@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto'
 
 import { getCohortAtEmit } from '../../telemetry/cohort-classifier'
 import { track } from '../../telemetry/client'
-import { isCommandCodeNewTurnWhileWorking } from '../../../shared/command-code-turn-boundary'
+import { isCommandCodeNewTurnWhileWorking } from '../../../shared/agent-status/output/command-code-turn-boundary'
 import { isNewTurnEvent } from '../../../shared/agent-hook-listener/provider-event-routing'
 import { reduceHostTurnEnd } from '../../../shared/agent-hook-listener/state/agent-hook-turn-end-timing'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'

@@ -2,7 +2,10 @@ import { createHash, type Hash } from 'node:crypto'
 import { createReadStream } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { ORCAD_VERSION, ORCAD_VERSION_FILENAME } from '../../../shared/orcad-artifacts'
+import {
+  ORCAD_VERSION,
+  ORCAD_VERSION_FILENAME
+} from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import {
   fileSignature,
   writeOrcadArtifactVerificationRecord,

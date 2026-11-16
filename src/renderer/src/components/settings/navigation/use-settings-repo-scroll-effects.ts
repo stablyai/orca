@@ -1,9 +1,15 @@
+import {
+  AGENT_SETTINGS_TARGET_WAIT_MS,
+  agentSettingsInventoryState,
+  isAgentSettingsRowId
+} from '../agents/agent-settings-navigation'
+import { cancelSettingsListReveal } from '../section-layout/settings-list-scroll'
 import { resolveGeneralSubPage } from '../general/general-sub-pages'
 import { useEffect, useRef, useState } from 'react'
-import type { OrcaHooks } from '../../../../../shared/orca-yaml-hook-types'
+import type { OrcaHooks } from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
 import { checkRuntimeHooks } from '@/runtime/repo-hooks/runtime-hooks-client'
-import { getRepoHostIdentity } from '../../../../../shared/repo-host-identity'
+import { getRepoHostIdentity } from '../../../../../shared/repository/repo-host-identity'
 import type { SettingsStoreModel } from '../page/use-settings-store-model'
 import type { SettingsInteractionController } from '../page/use-settings-interaction-controller'
 import type { SettingsNavigationModel } from './use-settings-navigation-model'
@@ -154,9 +160,13 @@ export function useSettingsRepoScrollEffects(
     }
   }, [neededRepos, repoHooksRequestSeqRef, repos, setRepoHooksMap, unreadHooksRetryTick])
 
+  const agentTargetDeadlineRef = useRef<{ id: string; expires: number } | null>(null)
   useEffect(() => {
     const scrollTargetId = pendingScrollTargetRef.current
     const pendingNavSectionId = pendingNavSectionRef.current
+    if (!scrollTargetId || !isAgentSettingsRowId(scrollTargetId)) {
+      agentTargetDeadlineRef.current = null
+    }
     // This pass re-evaluates the pending target; cancel the previous watch first.
     cancelPendingSettingsDeepLinkTargetWatch(pendingScrollTargetWatchRef)
 
@@ -184,11 +194,50 @@ export function useSettingsRepoScrollEffects(
         setActiveSectionId(pendingNavSectionId)
         return
       }
+      cancelSettingsListReveal()
       const container = contentScrollRef.current
       if (container) {
         container.scrollTo({ top: 0 })
       }
       if (scrollTargetId !== pendingNavSectionId) {
+        if (isAgentSettingsRowId(scrollTargetId)) {
+          const root = container ?? document.body
+          if (agentTargetDeadlineRef.current?.id !== scrollTargetId) {
+            agentTargetDeadlineRef.current = {
+              id: scrollTargetId,
+              expires: Date.now() + AGENT_SETTINGS_TARGET_WAIT_MS
+            }
+          }
+          const remaining = Math.max(0, agentTargetDeadlineRef.current.expires - Date.now())
+          const dropTarget = (): void => {
+            if (pendingScrollTargetRef.current === scrollTargetId) {
+              pendingNavSectionRef.current = null
+              pendingScrollTargetRef.current = null
+              agentTargetDeadlineRef.current = null
+            }
+          }
+          pendingScrollTargetWatchRef.current = watchForSettingsDeepLinkTarget({
+            root,
+            timeoutMs: remaining,
+            cancelOnInteraction: true,
+            waitForLayout: true,
+            isTargetPresent: () =>
+              agentSettingsInventoryState(root) !== 'failed' &&
+              getSettingsScrollTarget(scrollTargetId, container) !== null,
+            isTargetUnavailable: () => agentSettingsInventoryState(root) !== 'pending',
+            onTargetPresent: () => {
+              if (pendingScrollTargetRef.current !== scrollTargetId) {
+                return
+              }
+              scrollSubsectionIntoView(scrollTargetId, container)
+              setHighlightedSettingsTarget({ id: scrollTargetId })
+              dropTarget()
+            },
+            onTimeout: dropTarget,
+            onCancel: dropTarget
+          })
+          return
+        }
         // Retain pending refs until the lazy subsection mounts.
         if (!getSettingsScrollTarget(scrollTargetId, container)) {
           // Async rows may mount without another effect pass; observe their arrival.

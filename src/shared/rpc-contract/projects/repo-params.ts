@@ -1,4 +1,4 @@
-import { WorkspaceHookSettingsSchema } from '../../workspace-hook-settings-schema'
+import { WorkspaceHookSettingsSchema } from '../../workspace-setup/hooks/workspace-hook-settings-schema'
 import { z } from 'zod'
 
 // Opt-in: a caller holding afterSnapshotId's repos gets `unchanged`; older hosts take no params and ignore it.

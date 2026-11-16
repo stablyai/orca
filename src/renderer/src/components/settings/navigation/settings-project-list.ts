@@ -1,18 +1,18 @@
-import type { Project, ProjectHostSetup } from '../../../../../shared/project-types'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Project, ProjectHostSetup } from '../../../../../shared/project/project-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../../../shared/execution-host'
-import { projectHostSetupProjectionFromRepos } from '../../../../../shared/project-host-setup-projection'
-import { getRepoHostIdentityForParts } from '../../../../../shared/repo-host-identity'
-import { normalizeRuntimePathForComparison } from '../../../../../shared/cross-platform-path'
+import { projectHostSetupProjectionFromRepos } from '../../../../../shared/project/host-setup/project-host-setup-projection'
+import { getRepoHostIdentityForParts } from '../../../../../shared/repository/repo-host-identity'
+import { normalizeRuntimePathForComparison } from '../../../../../shared/file-access/cross-platform-path'
 import {
   buildProjectGroupingIndex,
   isCheckoutScopedProjectSetup,
   type ProjectGroupingModel
-} from '../../../../../shared/project-section-grouping'
+} from '../../../../../shared/sidebar-list/sections/project-section-grouping'
 
 export type SettingsProject = {
   projectId: string

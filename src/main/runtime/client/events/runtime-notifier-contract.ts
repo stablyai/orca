@@ -4,7 +4,7 @@ import type {
   RuntimeEditorTabReveal,
   RuntimeFileOpenPosition
 } from '../../../../shared/file-access/runtime-editor-file-open'
-import type { ClaudeAccountSelectionChange } from '../../../../shared/managed-account-types'
+import type { ClaudeAccountSelectionChange } from '../../../../shared/agent-accounts/managed-account-types'
 import type { AgentLaunchPaneVerdictEvent } from '../../../../shared/agent-launch/contracts/agent-launch-pane-verdict'
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { PaneLaunchRecipe } from '../../../../shared/terminal/pty/lifecycle/terminal-attachment-launch-result'
@@ -13,7 +13,7 @@ import type {
   AgentLaunchTabViewerRule,
   AgentLaunchTabPublishRequest
 } from '../../../../shared/agent-launch/contracts/agent-launch-tab-publication'
-import type { TerminalPaneSplitSource } from '../../../../shared/feature-education-telemetry'
+import type { TerminalPaneSplitSource } from '../../../../shared/feature-education/feature-education-telemetry'
 import type { TerminalRevealIdentity } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-reveal-identity'
 import type { TerminalPaneRevealTarget } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-pane-reveal'
 import type {
@@ -21,9 +21,9 @@ import type {
   TerminalPaneMoveToNewTabRequest
 } from '../../../../shared/workspace-layout/terminal-topology/terminal-leaf-move'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type { WorkspaceSleepNotice } from '../../../../shared/workspace-sleep'
-import type { RuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
-import type { ClientHostedBrowserRowsEvent } from '../../../../shared/client-hosted-browser-rows'
+import type { WorkspaceSleepNotice } from '../../../../shared/workspace/lifecycle/workspace-sleep'
+import type { RuntimeNavigationTarget } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
+import type { ClientHostedBrowserRowsEvent } from '../../../../shared/browser/client-hosting/client-hosted-browser-rows'
 import type {
   WorktreeBaseStatusEvent,
   WorktreeRemoteBranchConflictEvent
@@ -33,8 +33,8 @@ import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation
 import type {
   RuntimeMobileSessionTabMove,
   RuntimeTerminalDriverState
-} from '../../../../shared/runtime-session-contracts'
-import type { RuntimeTerminalPresentation } from '../../../../shared/runtime-terminal-contracts'
+} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeTerminalPresentation } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type {
   AgentListPublication,
   AgentPaneActivityChange

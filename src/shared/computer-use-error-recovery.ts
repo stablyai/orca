@@ -85,6 +85,11 @@ export function computerUseErrorRecoveryData(
         'Run `orca computer permissions --json`, or `orca computer permissions --id accessibility --json` / `--id screenshots --json` when the message names one missing permission.',
         'For remote or SSH targets, verify the command is running inside an active graphical desktop session.'
       )
+    case 'screen_locked':
+      return recoverWith(
+        'Nothing is missing. Ask the user to wake and unlock the Mac.',
+        'Then run `orca computer get-app-state --app <app> --json` and check whether an earlier action already took effect before retrying it.'
+      )
     case 'element_not_found':
       return recoverWith(
         'Run `orca computer get-app-state --app <app> --json` again and use an element index from the fresh tree.',

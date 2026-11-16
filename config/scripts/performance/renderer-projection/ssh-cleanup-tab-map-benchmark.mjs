@@ -18,7 +18,7 @@ assert(
 )
 
 async function load({ source, resolveDir }) {
-  source += `\nexport { toAppSshPtyId } from ${JSON.stringify(path.resolve('src/shared/ssh-pty-id.ts'))};`
+  source += `\nexport { toAppSshPtyId } from ${JSON.stringify(path.resolve('src/shared/remote-runtime/ssh/ssh-pty-id.ts'))};`
   const result = await build({
     stdin: { contents: source, loader: 'ts', resolveDir },
     bundle: true,

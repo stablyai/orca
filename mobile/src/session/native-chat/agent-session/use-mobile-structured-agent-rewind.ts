@@ -1,23 +1,23 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS } from '../../../../../src/shared/agent-session/agent-session-conversation-command'
 import { AGENT_SESSION_PHONE_REWIND_RUNTIME_CAPABILITY } from '../../../../../src/shared/agent-session/agent-session-runtime-capabilities'
-import type { AgentSessionRewindResult } from '../../../../../src/shared/agent-session/lifecycle/agent-session-rewind'
+import type { AgentSessionRewindResult } from '../../../../../src/shared/agent-session/lifecycle/rewind/agent-session-rewind'
 import {
   createAgentSessionRewindHook,
   type AgentSessionRewindInput,
   type AgentSessionRewindSendOutcome
-} from '../../../../../src/shared/agent-session/lifecycle/agent-session-rewind-request'
+} from '../../../../../src/shared/agent-session/lifecycle/rewind/agent-session-rewind-request'
 import type { StructuredAgentSessionState } from '../../../../../src/shared/agent-session/structured-agent-session-reducer'
-import { actionableStructuredPrompts } from '../input/mobile-structured-actionable-prompt'
-import { useRouteRelaysCapability } from '../../../worktree/workspace-server-context'
-import { sayMobileNativeChatRewind } from '../mobile-native-chat-rewind-copy'
-import type { MobileNativeChatSendOutcome } from '../composer/mobile-native-chat-send'
+import { actionableStructuredPrompts } from '../input/prompts/mobile-structured-actionable-prompt'
+import { useRouteRelaysCapability } from '../../../worktree/execution-hosts/workspace-server-context'
+import { sayMobileNativeChatRewind } from '../history/mobile-native-chat-rewind-copy'
+import type { MobileNativeChatSendOutcome } from '../composer/delivery/mobile-native-chat-send'
 import { requestStructuredAgentSessionMutation } from './mobile-structured-agent-session-rpc'
-import { returnMobileNativeChatMessageToComposer } from '../composer/mobile-native-chat-message-hand-back'
-import type { useMobileStructuredAgentOptions } from '../input/use-mobile-structured-agent-options'
+import { returnMobileNativeChatMessageToComposer } from '../composer/delivery/mobile-native-chat-message-hand-back'
+import type { useMobileStructuredAgentOptions } from '../input/session-options/use-mobile-structured-agent-options'
 import type { MobileStructuredAgentSessionArgs } from './mobile-structured-agent-session-contract'
-import type { MobileStructuredBackgroundTasks } from '../input/use-mobile-structured-background-tasks'
-import type { MobileStructuredSendsOut } from '../composer/use-mobile-structured-stop-offer'
+import type { MobileStructuredBackgroundTasks } from '../input/tasks/use-mobile-structured-background-tasks'
+import type { MobileStructuredSendsOut } from '../composer/delivery/use-mobile-structured-stop-offer'
 import { tuiAgentDisplayName } from '../../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 
 const useAgentSessionRewind = createAgentSessionRewindHook(

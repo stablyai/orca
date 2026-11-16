@@ -5,12 +5,12 @@ import { setupPtyIpcSuite } from './pty/pty-ipc-test-harness'
 import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../pty/shell-startup/posix-shell-startup-command'
 import { registerPtyHandlers } from './pty/register-handlers'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
-import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { AgentSessionRecordStore } from '../runtime/agent-session/records/agent-session-record-store'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+} from '../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 
 vi.mock('electron', () => import('./pty/pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty/pty-ipc-mock-registry').then((m) => m.fsModuleMock()))

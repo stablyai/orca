@@ -1,10 +1,10 @@
+import { AgentHookServerPaneSleep } from './server-pane-sleep'
 import type { AgentProcessPresence } from '../../../shared/agent-status/process/agent-process-presence'
 import {
   admitLegacyAgentStatus,
   clearPaneCacheState,
   deleteLegacyAgentStatus
 } from '../../../shared/agent-hook-listener/listener-state'
-import { paneHasStateClaims } from '../../../shared/agent-hook-listener/pane-state-claims'
 import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status/transport/agent-status-legacy-adapter'
 import type { AgentStatusCacheIdentity } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import {
@@ -13,13 +13,19 @@ import {
   type ExecutionHostScope
 } from '../../../shared/execution-host'
 import { worktreeIdsEqual } from '../../../shared/worktree/id'
-import { isLocalHookConnectionId } from '../../../shared/wsl-hook-relay-contract'
+import { isLocalHookConnectionId } from '../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import type { EnrichedAgentHookEventPayload } from './server-types'
-import { AgentHookServerAuthorityFences } from './server-authority-fences'
+
 import { recordAgentExit } from './agent-exit-evidence'
 import { endedRestoredTurn } from './server-ended-restored-turn'
 
-export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFences {
+export type EndedProcessReconciliationOptions = {
+  endedPresence?: AgentProcessPresence
+  /** Keep resume identity when the pane survives the agent. */
+  preserveResumeIdentity?: boolean
+}
+
+export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
   /** Resume identity survives teardown without claiming live work. */
   protected toRetainedProviderSessionRow(
     entry: EnrichedAgentHookEventPayload | null | undefined
@@ -31,7 +37,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
     ) {
       return null
     }
-    const { launchToken: _launchToken, ...resumeIdentity } = entry
+    const { launchToken: _launchToken, paneSleep: _paneSleep, ...resumeIdentity } = entry
     return { ...resumeIdentity, providerSessionOnly: true, retainedForLiveness: true }
   }
 
@@ -59,10 +65,6 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
     this.scheduleStatusPersist()
     this.notifyStatusChangeListeners()
     this.emitStatusDropped(deleted.paneKey)
-  }
-
-  dropPersistedStatusEntry(identity: AgentStatusCacheIdentity): boolean {
-    return this.dropPersistedStatusEntries([identity]).length > 0
   }
 
   /** Persist and notify once for the evicted batch. */
@@ -110,17 +112,19 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
   }
 
   /** Reconcile dead panes whose restored PTYs may never rebuild the spawn-time ptyPaneKey mapping. */
-  reconcileEndedProcessForPaneKeys(
+  protected reconcileEndedProcess(
     paneKeys: Iterable<string>,
-    options?: {
-      endedPresence?: AgentProcessPresence
-      /** Keep resume identity when the pane survives the agent. */
-      preserveResumeIdentity?: boolean
-    }
-  ): number {
+    options: EndedProcessReconciliationOptions | undefined,
+    clearPane: (paneKey: string) => void
+  ): { cleared: number; untouched: string[] } {
+    const untouched: string[] = []
     let cleared = 0
     for (const paneKey of paneKeys) {
       const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
+      if (this.preservesStoppingDone(resolvedPaneKey)) {
+        untouched.push(resolvedPaneKey)
+        continue
+      }
       if (options?.endedPresence) {
         // Cleanup drops aliases, but readers may still hold either key.
         const paneKeys = new Set([resolvedPaneKey, paneKey])
@@ -133,6 +137,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
         this.scheduleStatusPersist()
       }
       if (!this.hasLiveClaimsForPaneKey(resolvedPaneKey)) {
+        untouched.push(resolvedPaneKey)
         continue
       }
       const previous = this.state.lastStatusByPaneKey.get(resolvedPaneKey) as
@@ -145,7 +150,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
         resumeRow && options?.endedPresence
           ? { ...resumeRow, agentPresence: options.endedPresence }
           : resumeRow
-      this.clearPaneState(resolvedPaneKey, { emitStatusRowMutation: false })
+      clearPane(resolvedPaneKey)
       if (retained) {
         admitLegacyAgentStatus(
           this.state,
@@ -162,12 +167,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
       this.commitStatusRowMutation(previous, retained)
       cleared += 1
     }
-    return cleared
-  }
-
-  /** Include latches that can revive work even when the visible row is done. */
-  protected hasLiveClaimsForPaneKey(paneKey: string): boolean {
-    return Boolean(this.getTmuxSelectedStatus(paneKey)) || paneHasStateClaims(this.state, paneKey)
+    return { cleared, untouched }
   }
 
   dropStatusEntriesForRemovedWorktree(worktreeId: string, host?: ExecutionHostScope): void {
@@ -254,7 +254,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
     for (const [paneKey, rawEntry] of this.state.lastStatusByPaneKey) {
       const entry = rawEntry as EnrichedAgentHookEventPayload
       // Why: unstamped rows can't be attributed to one host; leave them for normal pane teardown.
-      if (entry.connectionId !== normalizedConnectionId) {
+      if (entry.paneSleep || entry.connectionId !== normalizedConnectionId) {
         continue
       }
       const deleted = this.deleteStatusEntry(paneKey, { preserveAuthority: true })

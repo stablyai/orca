@@ -1,4 +1,4 @@
-import type { ZCodeInteractiveCapability } from '../../../shared/zcode-missing-tui'
+import type { ZCodeInteractiveCapability } from '../../../shared/agent-launch/installation/zcode-missing-tui'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/execution-host/project-execution-runtime'
 import type {
   PathSource,

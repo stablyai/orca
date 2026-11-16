@@ -3,15 +3,15 @@ import type { GlobalSettings } from '../../../../../shared/global-settings-types
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
-} from '../../../../../shared/managed-account-types'
+} from '../../../../../shared/agent-accounts/managed-account-types'
 import type {
   ProviderRateLimits,
   RateLimitRuntimeTarget
-} from '../../../../../shared/rate-limit-types'
-import type { CodexConfigSyncStatus } from '../../../../../shared/codex-config-sync-types'
-import type { FeatureInteractionId } from '../../../../../shared/feature-interaction-catalog'
+} from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import type { CodexConfigSyncStatus } from '../../../../../shared/agent-accounts/codex/codex-config-sync-types'
+import type { FeatureInteractionId } from '../../../../../shared/feature-education/interactions/feature-interaction-catalog'
 import type { ProviderAccountRuntimeView } from '../../provider-accounts/provider-account-visibility'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { SettingsHostScope } from '../host-scope/settings-host-scope'
 import type { LocalAccountRuntime } from '../../../lib/provider-accounts/account-runtime-label'
 
@@ -40,6 +40,14 @@ export type ProviderAccountAction =
 
 export type RemoveAccountTarget = {
   id: string
+  runtime: ProviderAccountRuntimeView
+}
+
+export type RenameAccountTarget = {
+  provider: 'claude' | 'codex'
+  id: string
+  email: string
+  displayName: string | null
   runtime: ProviderAccountRuntimeView
 }
 
@@ -87,6 +95,10 @@ export type AccountsPaneSectionModel = {
   visibleClaudeAccounts: ClaudeRateLimitAccountsState['accounts']
   systemClaudeActive: boolean
   setRemoveClaudeTarget: Dispatch<SetStateAction<RemoveAccountTarget | null>>
+  setRenameTarget: Dispatch<SetStateAction<RenameAccountTarget | null>>
+  renameAccount: (target: RenameAccountTarget, displayName: string) => Promise<void>
+  /** `provider:id` of accounts with a rename in flight. */
+  renamingAccountKeys: ReadonlySet<string>
   runClaudeAccountAction: ClaudeAccountActionRunner
   codexAccounts: CodexRateLimitAccountsState
   codexAction: ProviderAccountAction

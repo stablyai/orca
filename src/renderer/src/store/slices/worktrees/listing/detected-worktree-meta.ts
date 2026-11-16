@@ -10,7 +10,7 @@ import {
   getRepoExecutionHostId,
   parseExecutionHostId
 } from '../../../../../../shared/execution-host'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
 import {
   floatingWorkspaceToWorktree,

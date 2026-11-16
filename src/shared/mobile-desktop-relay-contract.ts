@@ -1,4 +1,4 @@
-import { DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY } from './delegated-mobile-device-contract'
+import { DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY } from './remote-runtime/pairing/delegated-mobile-device-contract'
 
 // Send executionHost only after capability negotiation: older desktops ignore it and would execute locally.
 export const MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY = 'mobile.desktop-relay.v1' as const

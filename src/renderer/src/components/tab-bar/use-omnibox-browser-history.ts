@@ -1,11 +1,11 @@
 import { useDeferredValue, useMemo } from 'react'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import {
   matchBrowserHistory,
   prepareBrowserHistoryEntries,
   type PreparedBrowserHistoryEntry
 } from '@/lib/browser/history/browser-history-match'
-import { isBrowserAddressBarQueryTooLarge } from '../browser-pane/assemble-chrome/browser-address-bar-suggestions'
+import { isBrowserAddressBarQueryTooLarge } from '../browser-pane/assemble-chrome/address-bar/browser-address-bar-suggestions'
 import { dropHistoryRowsCoveredByBrowserPages } from './open-tab-entry-dedupe'
 import { isTabEntryAbsolutePathLike } from './tab-create-entry-action'
 import { parseForcedSearchQuery } from './tab-create-entry-forced-search'

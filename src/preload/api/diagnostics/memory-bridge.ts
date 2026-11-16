@@ -1,5 +1,5 @@
 import { ipcRenderer } from 'electron'
-import type { MemorySnapshot } from '../../../shared/process-stats-types'
+import type { MemorySnapshot } from '../../../shared/diagnostics/process-stats-types'
 import type { PreloadApi } from '../../api-types'
 
 import type { ResourceViewAdmission } from '../../../shared/resource-view-admission'

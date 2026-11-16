@@ -75,11 +75,14 @@ function DropdownMenuContent({
   portalContainer,
   style,
   density = 'default',
+  variant = 'default',
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Content> & {
   portalContainer?: HTMLElement | null
   /** Row density for every row in this menu; a row's own `density` overrides it. */
   density?: MenuDensity
+  /** `picker`: flush content whose own rows run edge to edge. */
+  variant?: 'default' | 'picker'
   // Radix consumes this at its opening focus scope but omits it from the public Menu props.
   onOpenAutoFocus?: (event: Event) => void
 }) {
@@ -97,6 +100,7 @@ function DropdownMenuContent({
               className={cn(
                 'z-[70] max-h-(--radix-dropdown-menu-content-available-height) min-w-[11rem] origin-(--radix-dropdown-menu-content-transform-origin) overflow-x-hidden overflow-y-auto scrollbar-sleek',
                 MENU_SURFACE_CLASS,
+                dropdownMenuContentVariants({ variant }),
                 'data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none data-[state=open]:fade-in-0 data-[state=open]:duration-150 data-[state=open]:zoom-in-[0.98]',
                 className
               )}
@@ -294,7 +298,7 @@ function DropdownMenuSubTrigger({
   )
 }
 
-const dropdownMenuSubContentVariants = cva('', {
+const dropdownMenuContentVariants = cva('', {
   variants: { variant: { default: '', picker: 'p-0' } },
   defaultVariants: { variant: 'default' }
 })
@@ -333,7 +337,7 @@ function DropdownMenuSubContent({
                 'z-[70] min-w-[11rem] origin-(--radix-dropdown-menu-content-transform-origin) overflow-hidden',
                 MENU_SURFACE_CLASS,
                 'data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none data-[state=open]:fade-in-0 data-[state=open]:duration-150 data-[state=open]:zoom-in-[0.98]',
-                dropdownMenuSubContentVariants({ variant }),
+                dropdownMenuContentVariants({ variant }),
                 scrollable &&
                   'max-h-(--radix-dropdown-menu-content-available-height) overflow-x-hidden overflow-y-auto scrollbar-sleek',
                 className

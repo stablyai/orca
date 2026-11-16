@@ -6,7 +6,7 @@ import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal
 import {
   readAgentJournalTurn,
   readAgentJournalTurnOutcome
-} from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+} from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { readAutomationRunReceipt } from '../launch/automation-run-receipt'
@@ -46,6 +46,7 @@ export async function observeAutomationChatRun(
     let reading = false
     let dirty = false
     let fingerprint = ''
+    let observed = Promise.resolve()
     let source: JournalPublication['source'] = null
     let currentJournal: JournalPublication['journal'] = null
     let cursor: JournalPublication['cursor']
@@ -79,11 +80,17 @@ export async function observeAutomationChatRun(
         }),
       Math.max(1, (run.dispatchedAt ?? run.createdAt) + 6 * 60 * 60 * 1000 - Date.now())
     )
-    const interest = (): string => {
+    // Keys and reads start when called, so a later turn id cannot change an earlier hint's answer.
+    const interest = async (): Promise<string> => {
       const journal = currentJournal
-      const card = journal?.queuedMessages.get(messageId)
-      const entry = journal?.submission(card?.consumedAs ?? submissionId)
-      const root = turnItemId ? journal?.item(journal.canonicalItemId(turnItemId)) : null
+      const card = await journal?.queuedMessages.get(messageId)
+      const turnId = turnItemId
+      const [entry, root] = await Promise.all([
+        journal?.reads.submission(card?.consumedAs ?? submissionId),
+        journal && turnId
+          ? journal.reads.canonicalItemId(turnId).then((id) => journal.reads.item(id))
+          : null
+      ])
       const turn = root ? readAgentJournalTurn(root.body) : null
       return JSON.stringify([
         card?.state,
@@ -111,7 +118,7 @@ export async function observeAutomationChatRun(
           const version = revision
           const readingSource = source
           const current = () => !settled && version === revision && readingSource === source
-          const snapshot = await host.journalCurrentRead(sessionId, [submissionId, messageId])
+          const snapshot = await host.automationRun(sessionId, messageId, [submissionId])
           if (!current()) {
             continue
           }
@@ -130,7 +137,14 @@ export async function observeAutomationChatRun(
             providerItemId = submission.providerItemId
             turnItemId = turnItem?.itemId ?? null
           }
-          fingerprint = interest()
+          const semantic = interest()
+          const recorded = observed
+            .then(() => semantic)
+            .then((value) => {
+              fingerprint = value
+            })
+          observed = recorded.catch(() => {})
+          await recorded
           if (observation) {
             finish(observation)
             return
@@ -162,51 +176,56 @@ export async function observeAutomationChatRun(
           return
         }
         currentJournal = hint.journal
-        const semantic = interest()
-        const rows = hint.rows
+        const commit = hint.commit
+        const publication = commit?.publication
         const currentCursor = cursor
         const contiguous =
           currentCursor &&
+          commit &&
           hint.cursor?.epoch === currentCursor.epoch &&
-          rows?.every(
-            (row, i) =>
-              row.epoch === currentCursor.epoch && row.seq === currentCursor.sequence + i + 1
-          ) &&
-          hint.cursor.sequence === currentCursor.sequence + rows.length
-        const linked = rows?.some((row) => {
-          if (row.kind === 'submission') {
-            return row.queuedMessageId === messageId && row.clientMessageId !== submissionId
-          }
-          const mutations = row.kind === 'lifecycle-batch' ? row.mutations : [row]
-          return mutations.some((item) => {
-            if (item.kind !== 'item') {
-              return false
-            }
+          hint.cursor.sequence >= currentCursor.sequence
+        const linked =
+          publication?.cards.some(
+            (card) =>
+              card.messageId === messageId &&
+              card.consumedAs !== undefined &&
+              card.consumedAs !== submissionId
+          ) ||
+          publication?.items.some((item) => {
             const turn = readAgentJournalTurn(item.body)
             return (
               (item.body.kind === 'message' && item.body.role === 'user') ||
               (turn &&
                 !turnItemId &&
                 !item.agentId &&
-                (turn.userItemId === providerItemId ||
+                (providerItemId === null ||
+                  turn.userItemId === providerItemId ||
                   turn.userItemId === agentJournalSubmissionKey(submissionId)))
             )
           })
-        })
-        const changed =
-          source !== hint.source ||
-          hint.kind !== 'commit' ||
-          !contiguous ||
-          semantic !== fingerprint ||
-          linked
+        const structural = source !== hint.source || hint.kind !== 'commit' || !contiguous || linked
         source = hint.source
         cursor = hint.cursor
-        fingerprint = semantic
-        if (changed) {
+        const reread = (): void => {
           revision++
           dirty = true
           queueMicrotask(() => void read())
         }
+        if (structural) {
+          reread()
+        }
+        // Chained so each hint compares against the fingerprint recorded before it.
+        const semantic = interest()
+        observed = observed
+          .then(() => semantic)
+          .then((value) => {
+            const changed = value !== fingerprint
+            fingerprint = value
+            if (changed && !structural && !settled) {
+              reread()
+            }
+          })
+          .catch((error: unknown) => finish(undefined, error))
       },
       error: (error) => finish(undefined, error)
     })

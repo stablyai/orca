@@ -6,7 +6,7 @@ import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
 import { collectSleepingAgentSessionRecordsForWorktree } from './agent-status-recovery-collection'
 import { removeSleepingRecordsReplacedByManualWorktreeSleep } from './agent-status-sleeping-records'
-import { capturedResumeRecord } from '../../../../../shared/agent-session/lifecycle/agent-resume-record-from-status'
+import { capturedResumeRecord } from '../../../../../shared/agent-session/lifecycle/resume/agent-resume-record-from-status'
 import { getLaunchConfigForEntry } from './agent-status-launch-config'
 import { findAgentPaneWorktreeId, findTabForAgentEntry } from './agent-status-pane-key-tab-binding'
 
@@ -57,7 +57,7 @@ export function createAgentStatusRecoveryActions(
         const capturedAt = Date.now()
         const updates = new Map<string, SleepingAgentSessionRecord>()
         let changed = false
-        for (const entry of Object.values(s.agentStatusByPaneKey)) {
+        for (const entry of Array.from(s.agentStatusByPaneKey.values())) {
           const record = capturedResumeRecord({
             entry,
             existing: updates.get(entry.paneKey) ?? s.sleepingAgentSessionsByPaneKey[entry.paneKey],

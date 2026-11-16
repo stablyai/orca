@@ -9,8 +9,8 @@ import {
   type PluginSettingContribution
 } from '../../../../shared/plugins/contributions/plugin-settings-contribution'
 import { pluginSettingDefaults } from '../../../../shared/plugins/contributions/plugin-settings-values'
-import { PluginSecretsStore, pluginSecretsProtection } from '../../plugin-secrets-store'
-import { PluginKvStore } from '../../plugin-storage-store'
+import { PluginSecretsStore, pluginSecretsProtection } from '../../storage/plugin-secrets-store'
+import { PluginKvStore } from '../../storage/plugin-storage-store'
 import type { TerminalInputKind } from '../../../../shared/terminal/input/terminal-input-kind'
 import { pluginTerminalTitle, type PluginAgentStatusRow } from './plugin-workspace-projection'
 import type { PluginAppearanceService } from '../../appearance/plugin-appearance-service'

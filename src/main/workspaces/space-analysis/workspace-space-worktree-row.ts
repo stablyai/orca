@@ -1,5 +1,5 @@
 import { posix, win32 } from 'node:path'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import type {
   WorkspaceSpaceDirectoryScanResult,

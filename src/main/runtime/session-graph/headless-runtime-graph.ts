@@ -1,4 +1,4 @@
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { OrcaRuntimeService } from '../orca-runtime'
 
 /** Publish readiness without a renderer so status and session-tab inventory do not wait forever. */

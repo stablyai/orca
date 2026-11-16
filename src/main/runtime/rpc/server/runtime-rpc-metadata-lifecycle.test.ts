@@ -11,7 +11,7 @@ import { readRuntimeMetadata, writeRuntimeMetadata } from './runtime-metadata'
 import { shortDaemonSocketDir } from '../../../daemon/endpoint/publication/daemon-socket-endpoint-path'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 
-import type { RuntimeMetadata } from '../../../../shared/runtime-bootstrap'
+import type { RuntimeMetadata } from '../../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
 
 vi.mock('../../../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
   const listings = getWorktreeListingMocks()

@@ -2,7 +2,7 @@ import type { BrowserGuestMetadata } from '../../../../shared/browser/guest-life
 import {
   acceptBrowserGuestMetadata,
   clearBrowserGuestMetadata
-} from './host-guest/browser-guest-metadata-cache'
+} from './host-guest/metadata/browser-guest-metadata-cache'
 import { vi } from 'vitest'
 
 type Listener<T> = (event: T) => void
@@ -51,6 +51,7 @@ export function installClientHostedPaneApi(overrides?: {
         onGuestMetadata: inert,
         onGuestEscape: inert,
         onPopup: inert,
+        unregisterGuest: vi.fn(async () => {}),
         onPermissionDenied: inert,
         onContextMenuRequested: inert,
         onContextMenuDismissed: inert,

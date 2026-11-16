@@ -1,4 +1,4 @@
-import { TERMINAL_AGENT_ID_RUNTIME_CAPABILITY } from '../../../../../shared/session-tabs-runtime-capabilities'
+import { TERMINAL_AGENT_ID_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
 import { isWindowsUserAgent } from '../../../app-shell/platform/user-agent-platform'
 import { readCachedRuntimeEnvironmentCapability } from '../../../runtime/rpc/compatibility/runtime-compatibility-cache'
 import { resolveWorktreeExecutionHostPlatform } from '../../../runtime/hosts/platform/execution-host-facts'

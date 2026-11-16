@@ -5,7 +5,7 @@ import { assertWorktreeUnlockedForRemoval } from '../../../../shared/worktree/re
 import { formatWorktreeRemovalError } from '../../../ipc/worktree-logic'
 import { usesNativeWindowsRemoval } from '../../../git/worktrees/removal/windows-worktree-removal'
 import { isPrunableGitFileWorktree } from '../../../workspaces/removal/worktree-prunable-git-file'
-import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
+import { isWindowsAbsolutePathLike } from '../../../../shared/file-access/cross-platform-path'
 import { isLocalRuntimeWorktreePathMissing } from './runtime-worktree-filesystem'
 
 export async function isStaleLocalWorktreeRegistration(

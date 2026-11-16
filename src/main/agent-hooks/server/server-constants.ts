@@ -1,4 +1,7 @@
-import { AGENT_KIND_VALUES, type AgentKind } from '../../../shared/telemetry-events'
+import {
+  AGENT_KIND_VALUES,
+  type AgentKind
+} from '../../../shared/telemetry/schemas/telemetry-property-schemas'
 
 export const ASSISTANT_MESSAGE_RETRY_ATTEMPTS = 5
 export const ASSISTANT_MESSAGE_RETRY_MS = 50

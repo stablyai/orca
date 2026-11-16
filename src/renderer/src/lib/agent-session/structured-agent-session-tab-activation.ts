@@ -2,7 +2,7 @@ import { runtimeEnvironmentIdOrLocalUnlessTwin } from '../workspace/ownership/wo
 import { requestNativeChatComposerFocus } from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
 import { useAppStore } from '@/store/index'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import {
   executionHostIdForStructuredTarget,

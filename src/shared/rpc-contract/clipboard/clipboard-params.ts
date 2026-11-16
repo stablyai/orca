@@ -2,7 +2,7 @@ import { z } from 'zod'
 import {
   CLIPBOARD_IMAGE_MAX_BASE64_CHARS as MAX_CLIPBOARD_IMAGE_BASE64_CHARS,
   CLIPBOARD_IMAGE_TOO_LARGE_ERROR
-} from '../../clipboard-image'
+} from '../../clipboard/clipboard-image'
 
 export const CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS = 512 * 1024
 

@@ -1,4 +1,4 @@
-import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
+import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
 import type { AgentRowState } from '../../../../../../shared/agent-status/presentation/agent-row-decay-state'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import {
@@ -9,7 +9,7 @@ import {
   agentChildRunStateFor,
   type AgentChildDisplayState
 } from '../../../../../../shared/agent-status/child-work/agent-status-child-work-display'
-import { buildRunningAgentChildRowModels } from '../../../../../../shared/running-agent-child-rows'
+import { buildRunningAgentChildRowModels } from '../../../../../../shared/agent-status/presentation/running-agent-child-rows'
 import { agentChildRowName } from '@/components/agent-child-row-text'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 

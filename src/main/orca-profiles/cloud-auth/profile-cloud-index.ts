@@ -4,7 +4,7 @@ import type {
   OrcaProfileCloudSummary,
   OrcaProfileListState,
   OrcaProfileSummary
-} from '../../../shared/orca-profiles'
+} from '../../../shared/orca-profiles/orca-profiles'
 import { loadOrCreateProfileIndex, writeProfileIndex } from '../profile-index-store'
 import { getOrcaProfileDirectory, getOrcaProfileIndexPath } from '../profile-storage-paths'
 import {

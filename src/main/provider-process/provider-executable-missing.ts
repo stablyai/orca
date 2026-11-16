@@ -1,6 +1,6 @@
 import { existsSync, statSync } from 'node:fs'
 import { isAbsolute } from 'node:path'
-import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
 import { findInErrorChain } from './provider-error-chain'
 
 /** What a spawn's ENOENT proves absent: the provider's executable or the folder it ran in. */

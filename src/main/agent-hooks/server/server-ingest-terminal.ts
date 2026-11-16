@@ -7,7 +7,7 @@ import {
 } from '../../../shared/workspace-layout/stable-pane-id'
 import { terminalStatusPayloadMatchesHook } from '../../../shared/agent-status/lifecycle/agent-terminal-status-equivalence'
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status/contracts/agent-status-types'
-import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import { agentSubagentsEqual } from '../../../shared/agent-status/contracts/agent-status-subagent-snapshot'
@@ -199,6 +199,9 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
         ? this.programStatusFacets.noteState(paneKey, payload, now)
         : undefined
     if (event.removesProgramStatusRow === true) {
+      if (this.preservesStoppingDone(paneKey)) {
+        return
+      }
       this.hookSilenceRechecks.cancel(paneKey)
       if (previous?.observation?.origin === 'osc') {
         // The program row ended; the pane, aliases and caches remain live.
@@ -289,9 +292,7 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       (previous.payload.state !== 'done' ||
         payload.state === 'done' ||
         previous.observation?.origin === 'launch' ||
-        (!newRun &&
-          previous.providerSessionOnly !== true &&
-          previous.agentPresence?.ended !== true))
+        (!newRun && !previous.providerSessionOnly && !previous.agentPresence?.ended))
         ? previous.providerSession
         : undefined
     // Without a new main-agent fact, preserve it only while the row's state and agent still match.

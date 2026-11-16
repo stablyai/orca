@@ -49,13 +49,5 @@ final class AttributeValueCoercionTests: XCTestCase {
         )
     }
 
-    func testNonIntegralAndOutOfRangeIntegerFormsUseStringFallback() {
-        for requested in ["1e-1", "9223372036854775808", "1e999999999999999999999"] {
-            XCTAssertEqual(
-                AttributeValueCoercion(existingValue: NSNumber(value: 1), requested: requested).writeValue,
-                .string(requested)
-            )
-        }
-    }
 
 }

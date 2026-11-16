@@ -8,7 +8,7 @@ import {
   type DictationAudioLevel,
   type DictationMeterAnalyzerState,
   type DictationMeterState
-} from '../../../shared/dictation-audio-meter'
+} from '../../../shared/speech/dictation/dictation-audio-meter'
 
 export type DictationMeterPublisher = (meter: DictationMeterState) => void
 

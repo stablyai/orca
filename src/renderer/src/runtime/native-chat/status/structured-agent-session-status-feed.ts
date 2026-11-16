@@ -17,7 +17,7 @@ import {
 } from '../../../../../shared/agent-session/view/agent-session-status-snapshot-fold'
 import { AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/agent-session-attention-capabilities'
 import { runtimeEnvironmentSupportsCapability } from '../../rpc/compatibility/runtime-capability-proof'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { subscribeStructuredAgentSessionStatus } from '../requests/structured-agent-session-subscriptions'
 import {
   createStructuredAgentSessionStatusDispatch,

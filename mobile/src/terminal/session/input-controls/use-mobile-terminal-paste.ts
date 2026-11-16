@@ -1,4 +1,4 @@
-import { separateImagePasteFromFollowingText } from '../../../../../src/shared/image-paste-following-text'
+import { separateImagePasteFromFollowingText } from '../../../../../src/shared/terminal/input/image-paste-following-text'
 import {
   normalizeTerminalPasteLineEndings,
   wrapTerminalBracketedPasteText

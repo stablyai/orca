@@ -1,4 +1,16 @@
-import { OrcadProfileShutdown } from '../host-runtime/orcad-profile-shutdown'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import {
+  CALLER,
+  hostTestState
+} from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-host.test-fixture'
+import {
+  HOST_TEST_THREAD as THREAD,
+  HOST_TEST_NOW as NOW,
+  hostTestAttachParams,
+  hostTestOperationId
+} from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
+import { AgentSessionRecoveryCapsule } from '../../runtime/agent-session/records/agent-session-recovery-capsule'
+import { BackendCoreProfileShutdown } from '../../backend/core-profile-shutdown'
 import { Store } from '../../persistence/loading-store/store'
 import {
   closeTestStores,
@@ -20,7 +32,11 @@ vi.mock('../browser-providers/orcad-browser-startup', () => ({
 
 import { ORCAD_LOCK_FILE_NAME } from '../instance-lock/orcad-instance-lock'
 import { worktreeRemovalLifetime } from '../../workspaces/removal/worktree-removal-lifetime'
-import { startOrcadWithHost } from './orcad-lifecycle'
+import {
+  startOrcadWithHost,
+  startOrcadWithLifecycle,
+  stopOrcadStructuredAgentSessions
+} from './orcad-lifecycle'
 
 const roots: string[] = []
 afterEach(async () => {
@@ -58,10 +74,67 @@ describe('startOrcadWithHost', () => {
   })
 })
 
+vi.mock('../../runtime/agent-session/structured-agent-session-runtime', () => ({
+  stopStructuredAgentSessionRuntime: async (options: { trigger: 'quit' }) => {
+    await hostTestState().host.flushAllStreamedEvents(options)
+  }
+}))
+
+it('saves working-chat offers before profile cleanup and keeps them after repeated stop', async () => {
+  const { host, acquire, root } = hostTestState()
+  const ids = ['session-first', 'session-second']
+  for (const sessionId of ids) {
+    const params = hostTestAttachParams(null, {
+      envelope: {
+        sessionId,
+        clientOperationId: hostTestOperationId(),
+        expectedRuntimeFence: null,
+        payloadFingerprint: ''
+      }
+    })
+    expect(await host.attach(CALLER, params)).toMatchObject({ ok: true })
+    const events = acquire.mock.calls.at(-1)?.[0].events
+    if (!events) {
+      throw new Error('missing provider event sink')
+    }
+    events.appendItem(
+      { provider: 'codex', threadId: THREAD, turnId: 'working', ordinal: 1 },
+      { kind: 'turn', turnId: 'working', state: 'running' },
+      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+    await host.flushStreamedEvents(sessionId)
+  }
+  const close = vi.fn(async () => true)
+  host.deps.adapter.closeSession = close
+  const server = await startOrcadWithLifecycle(
+    async (register) => {
+      register(async () => {
+        expect(
+          (await new AgentSessionRecoveryCapsule(root).list(NOW)).map((row) => row.sessionId).sort()
+        ).toEqual([...ids].sort())
+      })
+      register(stopOrcadStructuredAgentSessions)
+      return {}
+    },
+    async () => {}
+  )
+  await server.stop()
+  await server.stop()
+  expect(
+    (await host.restartResume.list())
+      .map(({ sessionId, trigger }) => ({ sessionId, trigger }))
+      .sort((left, right) => left.sessionId.localeCompare(right.sessionId))
+  ).toEqual(
+    [...ids]
+      .sort((left, right) => left.localeCompare(right))
+      .map((sessionId) => ({ sessionId, trigger: 'quit' }))
+  )
+})
+
 it('joins successful removal metadata and journal before profile ownership is released', async () => {
   vi.useFakeTimers()
   const root = dataRoot()
-  const profile = new OrcadProfileShutdown()
+  const profile = new BackendCoreProfileShutdown()
   const dataFile = join(root, 'orca-data.json')
   const store = createSqliteTestStore(Store, { dataFile })
   profile.store = store

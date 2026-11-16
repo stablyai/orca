@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router'
 import { ListRow } from '../components/list/ListGroup'
-import { MobileSwitch } from '../components/MobileSwitch'
+import { MobileSwitch } from '../components/controls/MobileSwitch'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileDefaultSessionViewPreference } from '../session/use-mobile-default-session-view-preference'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'

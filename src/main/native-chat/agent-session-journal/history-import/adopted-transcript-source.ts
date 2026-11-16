@@ -1,9 +1,9 @@
 import { dirname, join } from 'node:path'
 import { sessionIdFromFileName } from '../../../ai-vault/parsing/session-scanner-accumulator'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { readNodeFileWithinLimit } from '../../../../shared/file-content/node-bounded-file-reader'
-import { extractString } from '../../../../shared/trimmed-string'
+import { extractString } from '../../../../shared/text/trimmed-string'
 import { parseJsonObject } from '../../../ai-vault/parsing/session-json-object'
 import { asRecord } from '../../../ai-vault/parsing/session-record-fields'
 

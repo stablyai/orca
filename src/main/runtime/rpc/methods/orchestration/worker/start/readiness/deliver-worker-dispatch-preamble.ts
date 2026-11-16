@@ -1,10 +1,10 @@
-import type { RuntimeTerminalSend } from '../../../../../../../../shared/runtime-terminal-send-contract'
+import type { RuntimeTerminalSend } from '../../../../../../../../shared/terminal/runtime/runtime-terminal-send-contract'
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../../../orchestration/db/orchestration-db'
 import {
   formatOrcaSessionAddress,
   isOrcaSessionId
-} from '../../../../../../../../shared/orca-session-address'
+} from '../../../../../../../../shared/agent-session/identity/orca-session-address'
 import { canonicalOrcaSessionId } from '../../../../../../orchestration/addressing/session-lineage/canonical-orca-session-id'
 import {
   orcaSessionIdOrHandle,

@@ -1,6 +1,6 @@
 import { capabilityKinds } from '../../../../shared/plugins/capabilities/plugin-capabilities'
-import type { DiscoveredPlugin, ValidDiscoveredPlugin } from '../../plugin-discovery'
-import { isInvalidDiscoveredPlugin } from '../../plugin-discovery'
+import type { DiscoveredPlugin, ValidDiscoveredPlugin } from '../../discovery/plugin-discovery'
+import { isInvalidDiscoveredPlugin } from '../../discovery/plugin-discovery'
 import type { PluginWorkerSpawnSpec } from '../worker-supervision/plugin-worker-startup'
 import { buildPluginWorkerSpawnSpec, pluginWorkerSpawnSpecsEqual } from './plugin-worker-spawn-spec'
 
