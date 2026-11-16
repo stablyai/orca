@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict'
 import { mkdir, readFile, realpath, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { JournalHostDatabase } from '../../../src/main/native-chat/agent-session-journal/journal-host-database.ts'
+import { JournalHostDatabase } from '../../../src/main/native-chat/agent-session-journal/database/journal-host-database.ts'
 import { openAgentSessionJournal } from '../../../src/main/native-chat/agent-session-journal/journal-store-factory.ts'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../src/shared/agent-session/journal/agent-session-journal-types.ts'
-import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding.ts'
-import { createOrcadSecretStore } from '../../../src/main/orcad/orcad-secret-store.ts'
-import { resolveStructuredAgentCommand } from '../../../src/main/native-chat/structured-agent-command-resolution.ts'
+import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding.ts'
+import { createOrcadSecretStore } from '../../../src/main/orcad/credentials/orcad-secret-store.ts'
+import { resolveStructuredAgentCommand } from '../../../src/main/native-chat/agent-launch/structured-agent-command-resolution.ts'
 import {
   encodePairingOffer,
   parsePairingCode
