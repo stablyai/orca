@@ -18,6 +18,7 @@ const beginSshShutdown = settled()
 const killAllPty = idle()
 const disconnectDaemon = settled()
 const closeAllWatchers = settled()
+const isQuittingForUpdate = vi.fn(() => false)
 
 // Every teardown member settles except the profile store, so only the writer can hold quit.
 const dependencies: Record<string, Record<string, unknown>> = {
@@ -77,7 +78,7 @@ const dependencies: Record<string, Record<string, unknown>> = {
   '../../tray/system-tray': { destroySystemTray: idle() },
   '../../telemetry/client': { shutdownTelemetry: settled() },
   '../../observability/index': { shutdownObservability: settled() },
-  '../../updater/updater-service': { isQuittingForUpdate: vi.fn(() => false) },
+  '../../updater/updater-service': { isQuittingForUpdate },
   '../../updater/updater-lifecycle-diagnostics': { recordUpdaterLifecycle: idle() },
   '../../macos-permissions/macos-tcc-prompt-notice': { stopTccPromptNotice: idle() },
   '../../pty/history/terminal-history-gc': { cancelHistoryGc: idle() },
@@ -210,3 +211,34 @@ it('checkpoints pane state during a held synchronous deletion, then saves later 
     await rm(directory, { recursive: true, force: true })
   }
 })
+
+it.each([false, true])(
+  'runs database maintenance only on a drained macOS update quit (update=%s)',
+  async (update) => {
+    const originalPlatform = process.platform
+    vi.stubGlobal('process', Object.create(process, { platform: { value: 'darwin' } }))
+    isQuittingForUpdate.mockReturnValue(update)
+    const reclaimOrchestrationDbOnUpdateRestart = vi.fn(async () => {})
+    try {
+      const { app } = await startQuit(async () => {}, {
+        runtime: {
+          flushPaneGrids: () => null,
+          getOffscreenBrowserBackend: () => null,
+          getAgentBrowserBridge: () => null,
+          getEmulatorBridge: () => null,
+          disposeSkillUploadSessions: settled(),
+          getRuntimeId: () => undefined,
+          closeNotificationDismissals: settled(),
+          reclaimOrchestrationDbOnUpdateRestart
+        }
+      })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(app.quit).toHaveBeenCalledOnce()
+      expect(reclaimOrchestrationDbOnUpdateRestart).toHaveBeenCalledTimes(update ? 1 : 0)
+    } finally {
+      vi.unstubAllGlobals()
+      isQuittingForUpdate.mockReturnValue(false)
+      expect(process.platform).toBe(originalPlatform)
+    }
+  }
+)

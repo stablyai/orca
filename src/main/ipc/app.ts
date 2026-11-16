@@ -43,8 +43,6 @@ import { getWindowsAdministratorStatus } from '../windows/windows-administrator-
 import { getMacosUpgradeSupport } from '../macos-update-requirement/macos-upgrade-support'
 
 import type { ReconnectFactsFor } from '../persistence/window-save-view'
-import type { OrchestrationDbMaintenance } from '../runtime/orchestration/db/maintenance/orchestration-db-maintenance'
-import type { OrchestrationDbReclaimRequest } from '../../shared/orchestration/orchestration-db-storage'
 
 type RegisterAppHandlersOptions = {
   quitResumeRecordsFor?: QuitResumeRecordsFor
@@ -52,8 +50,6 @@ type RegisterAppHandlersOptions = {
   onBeforeRelaunch?: () => void | Promise<void>
   /** Only for app:relaunch, whose app.exit(0) is committed and skips will-quit. */
   onBeforeRelaunchExit?: () => void | Promise<void>
-  /** Null until this computer has an orchestration database. */
-  orchestrationDbMaintenance?: () => OrchestrationDbMaintenance | null
 }
 
 async function pickFloatingMarkdownDocument(
@@ -205,54 +201,17 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
     }
   })
 
-  const relaunch = async (beforeExit?: () => void): Promise<void> => {
+  ipcMain.handle('app:relaunch', async () => {
     // Delay teardown so the renderer can paint Restarting after cleanup.
     await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
     await runBeforeRelaunchCleanup(options.onBeforeRelaunchExit)
     setTimeout(() => {
       // app.exit skips before-quit; remove the Windows tray to avoid a stale icon.
       destroySystemTray()
-      relaunchApp(beforeExit ? 'orchestration-storage-reclaim' : 'renderer-request')
-      if (!beforeExit) {
-        app.exit(0)
-        return
-      }
-      // Hidden first: the work blocks this thread, so the windows could not repaint meanwhile.
-      for (const window of BrowserWindow.getAllWindows()) {
-        window.hide()
-      }
-      setTimeout(() => {
-        try {
-          beforeExit()
-        } catch (error) {
-          console.warn('[app] work before relaunch failed', error)
-        }
-        app.exit(0)
-      }, 100)
+      relaunchApp('renderer-request')
+      app.exit(0)
     }, 150)
-  }
-
-  ipcMain.handle('app:relaunch', () => relaunch())
-
-  ipcMain.handle('app:getOrchestrationStorage', () => {
-    return options.orchestrationDbMaintenance?.()?.storage() ?? null
   })
-
-  ipcMain.handle(
-    'app:relaunchReclaimingOrchestrationStorage',
-    async (): Promise<OrchestrationDbReclaimRequest> => {
-      const maintenance = options.orchestrationDbMaintenance?.()
-      if (!maintenance) {
-        await relaunch()
-        return { ok: true }
-      }
-      const request = await maintenance.reclaimRequest()
-      if (request.ok) {
-        await relaunch(() => maintenance.reclaimWhileRestarting())
-      }
-      return request
-    }
-  )
 
   ipcMain.handle('app:restart', async () => {
     // Normal quit flushes daemon checkpoints and telemetry.

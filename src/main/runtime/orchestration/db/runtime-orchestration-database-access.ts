@@ -17,6 +17,8 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
     options?: { keepAwake?: boolean }
   ): void
 
+  abstract stopOrchestrationFederationRelay(): void
+
   protected abstract scheduleRestoredMessageRepoints(): void
 
   /** Mail a worker left unread when it reported before a restart still continues it. */
@@ -66,9 +68,34 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
     this.bindWorkerTerminalAutoRelease(db)
   }
 
-  /** Null until a database file exists; injected test databases have none. */
-  getOrchestrationDbMaintenance(): OrchestrationDbMaintenance | null {
-    return this.getExistingOrchestrationDb() ? (this.orchestrationDbMaintenance ?? null) : null
+  async reclaimOrchestrationDbOnUpdateRestart(beforeClose: () => void): Promise<void> {
+    let db = this._orchestrationDb
+    const path = this.orchestrationDbPath()
+    if (!db && !existsSync(path)) {
+      return
+    }
+    // Opening for maintenance must not bind new runtime writers during shutdown.
+    db ??= new OrchestrationDb(path)
+    const maintenance =
+      this.orchestrationDbMaintenance ??
+      new OrchestrationDbMaintenance(db, path, (dispatchId) =>
+        isReleasedChatReadable(db, dispatchId)
+      )
+    let closed = false
+    try {
+      await maintenance.reclaimOnUpdateRestart(() => {
+        beforeClose()
+        this.stopOrchestrationFederationRelay()
+        getWorkerTerminalAutoReleaseScheduler(this).clear()
+        this.mailPointerRepointScheduler.clear()
+        db.close()
+        closed = true
+      })
+    } finally {
+      if (!this._orchestrationDb && !closed) {
+        db.close()
+      }
+    }
   }
 
   private bindMailHandBack(db: OrchestrationDb): void {

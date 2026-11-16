@@ -30,7 +30,6 @@ import {
 } from './nested-worker-depth-copy'
 import { OrchestrationWorkerAutoReleaseSetting } from './OrchestrationWorkerAutoReleaseSetting'
 import { OrchestrationCoordinatorApprovalsSetting } from './OrchestrationCoordinatorApprovalsSetting'
-import { OrchestrationStorageSetting } from './OrchestrationStorageSetting'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 
 const EXAMPLE_ICONS = {
@@ -177,7 +176,6 @@ export function OrchestrationPane({
             updateSettings={updateSettings}
           />
         ) : null}
-        {showLocalRuntimeSettings ? <OrchestrationStorageSetting /> : null}
       </SettingsGroup>
 
       {/* COMPAT(wsl-bridge): removed when WSL runs as an orcad host. */}

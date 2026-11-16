@@ -139,8 +139,7 @@ export async function registerCoreHandlers(
         : {}),
       onBeforeRelaunch: lifecycleOptions.onBeforeRelaunch,
       // Restart/profile switching closes this through will-quit; this callback covers relaunch exit.
-      onBeforeRelaunchExit: () => closeNotificationDismissalsBeforeRelaunch(runtime),
-      orchestrationDbMaintenance: () => runtime.getOrchestrationDbMaintenance()
+      onBeforeRelaunchExit: () => closeNotificationDismissalsBeforeRelaunch(runtime)
     })
     registerCliHandlers()
     registerPreflightHandlers(store)

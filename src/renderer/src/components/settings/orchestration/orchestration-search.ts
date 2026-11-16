@@ -16,11 +16,6 @@ import {
   getCoordinatorApprovalsSearchKeywords,
   getCoordinatorApprovalsTitle
 } from './coordinator-approvals-copy'
-import {
-  getOrchestrationStorageDescription,
-  getOrchestrationStorageSearchKeywords,
-  getOrchestrationStorageTitle
-} from './orchestration-storage-copy'
 
 type OrchestrationPaneSearchOptions = {
   includeLocalRuntimeSettings?: boolean
@@ -29,12 +24,10 @@ type OrchestrationPaneSearchOptions = {
 const NESTED_WORKER_DEPTH_SEARCH_ENTRY_ID = 'nested-worker-depth'
 const WORKER_AUTO_RELEASE_SEARCH_ENTRY_ID = 'worker-auto-release'
 const COORDINATOR_APPROVALS_SEARCH_ENTRY_ID = 'coordinator-approvals'
-const STORAGE_SEARCH_ENTRY_ID = 'orchestration-storage'
 const LOCAL_RUNTIME_SEARCH_ENTRY_IDS: ReadonlySet<string | undefined> = new Set([
   NESTED_WORKER_DEPTH_SEARCH_ENTRY_ID,
   WORKER_AUTO_RELEASE_SEARCH_ENTRY_ID,
-  COORDINATOR_APPROVALS_SEARCH_ENTRY_ID,
-  STORAGE_SEARCH_ENTRY_ID
+  COORDINATOR_APPROVALS_SEARCH_ENTRY_ID
 ])
 
 const getAllOrchestrationPaneSearchEntries = createLocalizedCatalog(() => [
@@ -121,12 +114,6 @@ const getAllOrchestrationPaneSearchEntries = createLocalizedCatalog(() => [
     title: getCoordinatorApprovalsTitle(),
     description: getCoordinatorApprovalsDescription(),
     keywords: getCoordinatorApprovalsSearchKeywords()
-  },
-  {
-    id: STORAGE_SEARCH_ENTRY_ID,
-    title: getOrchestrationStorageTitle(),
-    description: getOrchestrationStorageDescription(),
-    keywords: getOrchestrationStorageSearchKeywords()
   }
 ])
 

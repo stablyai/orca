@@ -3,10 +3,7 @@ import { tmpdir } from 'node:os'
 import { dirname } from 'node:path'
 import { setImmediate, setTimeout as delay } from 'node:timers/promises'
 import type { OrchestrationDb } from '../orchestration-db'
-import type {
-  OrchestrationDbReclaimRequest,
-  OrchestrationDbStorage
-} from '../../../../../shared/orchestration/orchestration-db-storage'
+import Database from '../../../../sqlite/sync-database'
 import { pruneSettledChatOutputCopies } from './settled-chat-output-copy-prune'
 
 const MINUTE = 60_000
@@ -15,7 +12,7 @@ const PRUNE_INTERVAL_MS = 6 * 60 * MINUTE
 const RECLAIM_PAGES_PER_PASS = 1024
 const RECLAIM_PAGES_PER_STEP = 16
 
-export function readOrchestrationDbStorage({ db }: OrchestrationDb): OrchestrationDbStorage {
+function readOrchestrationDbStorage({ db }: OrchestrationDb) {
   const pageSize = Number(db.pragma('page_size', { simple: true }))
   return {
     databaseBytes: Number(db.pragma('page_count', { simple: true })) * pageSize,
@@ -46,18 +43,11 @@ export class OrchestrationDbMaintenance {
     this.timer = undefined
   }
 
-  storage(): OrchestrationDbStorage {
-    const row = this.orchestrationDb.db
-      .prepare('SELECT reclaim_failed FROM orchestration_maintenance WHERE id = 1')
-      .get()
-    return {
-      ...readOrchestrationDbStorage(this.orchestrationDb),
-      lastReclaimFailed: Boolean(row?.reclaim_failed)
-    }
+  private storage() {
+    return readOrchestrationDbStorage(this.orchestrationDb)
   }
 
-  /** VACUUM copies the live pages to a temporary file, then writes them again to the WAL. */
-  async reclaimRequest(): Promise<OrchestrationDbReclaimRequest> {
+  private async hasSpaceForRewrite(): Promise<boolean> {
     const { databaseBytes, reclaimableBytes } = this.storage()
     const copyBytes = Math.ceil((databaseBytes - reclaimableBytes) * 1.1)
     const [databaseDir, tempDir] = [dirname(this.filename), await sqliteTempDirectory()]
@@ -72,16 +62,26 @@ export class OrchestrationDbMaintenance {
         ? databaseFree < 2 * copyBytes && { neededBytes: 2 * copyBytes, freeBytes: databaseFree }
         : (databaseFree < copyBytes && { neededBytes: copyBytes, freeBytes: databaseFree }) ||
           (tempFree < copyBytes && { neededBytes: copyBytes, freeBytes: tempFree })
-    return shortfall ? { ok: false, ...shortfall } : { ok: true }
+    return !shortfall
   }
 
-  /**
-   * Blocks for as long as rewriting the whole file takes, so it runs only while Orca restarts:
-   * done live, every write elsewhere would wait on it and fail after the busy timeout.
-   */
-  reclaimWhileRestarting(): void {
+  /** Called only after update quit has drained writers; no await follows closing their connection. */
+  async reclaimOnUpdateRestart(closeWriters: () => void): Promise<void> {
     this.stop()
     try {
+      const { shrinksItself, reclaimableBytes } = this.storage()
+      const row = this.orchestrationDb.db
+        .prepare('SELECT reclaim_failed FROM orchestration_maintenance WHERE id = 1')
+        .get()
+      if (shrinksItself || reclaimableBytes <= 200_000_000 || row?.reclaim_failed) {
+        return
+      }
+      if (!(await this.hasSpaceForRewrite())) {
+        return
+      }
+      // Commit before work: an interrupted attempt must not repeat at every update.
+      this.orchestrationDb.db.pragma('synchronous = FULL')
+      this.recordReclaim(true)
       const settledRuns = new Map<string, boolean>()
       for (let after: string | null = ''; after !== null;) {
         after = pruneSettledChatOutputCopies(
@@ -92,21 +92,27 @@ export class OrchestrationDbMaintenance {
         ).next
       }
       this.recordPrune()
-      // The copy VACUUM builds is the size of the live data; keep it on disk, not in memory.
-      this.orchestrationDb.db.pragma('temp_store = FILE')
-      // Only VACUUM switches an existing file to incremental auto_vacuum.
-      this.orchestrationDb.db.pragma('auto_vacuum = INCREMENTAL')
-      this.orchestrationDb.db.exec('VACUUM')
-      this.orchestrationDb.db.pragma('wal_checkpoint(TRUNCATE)')
-      this.recordReclaim(false)
-    } catch (error) {
-      // VACUUM rolls back whole; Settings says so after the restart.
+      closeWriters()
+      const db = new Database(this.filename)
       try {
+        // VACUUM's temporary copy stays on disk; SQLite commits or rolls back the whole rewrite.
+        db.pragma('temp_store = FILE')
+        db.pragma('synchronous = FULL')
+        db.pragma('auto_vacuum = INCREMENTAL')
+        db.exec('VACUUM')
+        db.prepare('UPDATE orchestration_maintenance SET reclaim_failed = 0 WHERE id = 1').run()
+        db.pragma('wal_checkpoint(TRUNCATE)')
+      } finally {
+        db.close()
+      }
+    } catch (error) {
+      try {
+        this.orchestrationDb.db.pragma('synchronous = FULL')
         this.recordReclaim(true)
       } catch {
-        // A full disk can refuse this write too; the VACUUM error is the one to report.
+        // After closing the writer, the already committed marker covers failed VACUUMs too.
       }
-      throw error
+      console.warn('[orchestration] update database maintenance failed', error)
     }
   }
 

@@ -241,7 +241,7 @@ CREATE TABLE IF NOT EXISTS worker_terminal_archives (
 );
 
 -- When maintenance last pruned settled history (epoch ms), so a restart waits out the interval,
--- and whether the last Reclaim space rewrite failed, for Settings to say so.
+-- and whether an update rewrite failed or was interrupted, so future updates do not retry.
 CREATE TABLE IF NOT EXISTS orchestration_maintenance (
   id             INTEGER PRIMARY KEY CHECK(id = 1),
   pruned_at      INTEGER,

@@ -15,10 +15,6 @@ import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import type { KeyboardLayoutSnapshot } from '../../shared/keybindings/keyboard-layout-snapshot'
 import type { KeyboardLayoutChangeEvent } from '../../shared/keybindings/keyboard-layout-events'
-import type {
-  OrchestrationDbReclaimRequest,
-  OrchestrationDbStorage
-} from '../../shared/orchestration/orchestration-db-storage'
 
 export type AppApi = {
   getSystemLanguageDetection?: (
@@ -39,10 +35,6 @@ export type AppApi = {
   setWindowMaterialSuppressed: (suppressed: boolean) => Promise<void>
   /** Uses app.exit(0), bypassing normal quit handling. */
   relaunch: () => Promise<void>
-  /** Desktop only: this computer's orchestration database, null before one exists. */
-  getOrchestrationStorage?: () => Promise<OrchestrationDbStorage | null>
-  /** Desktop only: relaunches, rewriting the orchestration database before the new start. */
-  relaunchReclaimingOrchestrationStorage?: () => Promise<OrchestrationDbReclaimRequest>
   /** Uses normal quit handling so daemon terminals survive for reattachment. */
   restart: () => Promise<void>
   /** Main classifies teardown before Electron emits process-gone events. */
