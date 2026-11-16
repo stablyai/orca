@@ -20,6 +20,9 @@ type HeadIdentityWatchHost = {
   disposed: boolean
 }
 
+// Keys stay with the callback: merging into a full scope drops entry names.
+type UnverifiedHeadFallback = { entryKeys: ReadonlySet<string>; run: () => void }
+
 export type WorktreeHeadIdentityRefreshState = {
   /** worktreePath → `${head} ${branch}` from the last metadata-file read. */
   baseline: Map<string, string> | null
@@ -28,8 +31,8 @@ export type WorktreeHeadIdentityRefreshState = {
   inFlight: boolean
   queuedScope: WorktreeHeadIdentityScope | null
   queuedEmit: boolean
-  /** Callers whose freshness depends on the next pass publishing every scoped head. */
-  queuedUnverified: (() => void)[]
+  /** Callers whose freshness depends on the next pass publishing their entries' heads. */
+  queuedUnverified: UnverifiedHeadFallback[]
   /** One-shot catch-up armed only by a scoped pass; see `scheduleRebaseline`. */
   rebaselineTimer: ReturnType<typeof setTimeout> | null
 }
@@ -108,7 +111,7 @@ export async function refreshWorktreeHeadIdentities(
     return
   }
   if (onUnverified) {
-    state.queuedUnverified.push(onUnverified)
+    state.queuedUnverified.push({ entryKeys: scope.entryNames, run: onUnverified })
   }
   if (state.inFlight) {
     state.queuedScope = mergeHeadIdentityScopes(
@@ -127,7 +130,7 @@ export async function refreshWorktreeHeadIdentities(
   state.queuedScope = null
   state.queuedEmit = false
   state.queuedUnverified = []
-  let verified = false
+  let read: { complete: boolean; headlessEntryKeys: ReadonlySet<string> } | null = null
   // Promote before skipping empty scope so structural-only churn cannot starve full rereads.
   const effectiveScope = resolveScope(state, requestedScope)
   // Empty scopes prove no head moved; promoted structural passes stay silent because catalog notification covers every repo.
@@ -171,11 +174,8 @@ export async function refreshWorktreeHeadIdentities(
     }
     // Commit baseline after notification so a partial send failure retries instead of burying the move.
     state.baseline = nextBaseline
-    // Without a prior baseline nothing was diffed; a headless scoped entry (orphan branch) publishes nothing.
-    verified =
-      complete &&
-      baseline !== null &&
-      ![...requestedScope.entryNames].some((key) => headlessEntryKeys.has(key))
+    // Without a prior baseline nothing was diffed, so no move could have been published.
+    read = baseline === null ? null : { complete, headlessEntryKeys }
   } catch (error) {
     console.warn(`[worktree-base-watcher] head identity read failed for ${host.path}:`, error)
     // Failed reads invalidate partial memo state; force a full refresh next time.
@@ -183,9 +183,15 @@ export async function refreshWorktreeHeadIdentities(
     state.lastFullReadAtMs = 0
   } finally {
     state.inFlight = false
-    if (!verified && !host.disposed && !host.mainWindow.isDestroyed()) {
-      for (const callback of unverifiedCallbacks) {
-        callback()
+    if (!host.disposed && !host.mainWindow.isDestroyed()) {
+      for (const fallback of unverifiedCallbacks) {
+        // A headless entry (orphan branch) has no identity to publish.
+        if (
+          !read?.complete ||
+          [...fallback.entryKeys].some((key) => read?.headlessEntryKeys.has(key))
+        ) {
+          fallback.run()
+        }
       }
     }
     if (state.queuedScope && !host.disposed) {

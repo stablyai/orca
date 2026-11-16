@@ -1,9 +1,15 @@
 import { applyLocalWorktreeMetadataSet } from './worktree-metadata-set-events'
-import { applyWorktreeHeadIdentities } from '../worktree-head-identity-apply'
+import {
+  applyWorktreeHeadIdentities,
+  patchDetectedWorktreeHeadIdentities
+} from '../worktree-head-identity-apply'
 import type { WorktreeChangeRefreshQueue } from '../worktree-change-refresh-queue'
 import { useAppStore } from '../../store'
 import { adoptFromEndpoint } from '../../store/host-catalog/endpoint-catalog-adoption'
-import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import {
+  selectDetectedWorktreesByRepo,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 export function registerProjectCatalogIpcBridge(
   unsubs: (() => void)[],
@@ -62,6 +68,14 @@ export function registerProjectCatalogIpcBridge(
         applyWorktreeHeadIdentities(data, {
           getWorktreesForRepo: (repoId) => selectWorktreesByRepo(state)[repoId],
           updateWorktreeGitIdentity: state.updateWorktreeGitIdentity
+        })
+        // Head-only watcher bursts no longer re-list, so hidden checkouts need the same patch.
+        useAppStore.setState((s) => {
+          const detected = selectDetectedWorktreesByRepo(s)[data.repoId]
+          const next = patchDetectedWorktreeHeadIdentities(detected, data.identities)
+          return next === detected || !next
+            ? s
+            : { detectedWorktreesByRepo: { ...s.detectedWorktreesByRepo, [data.repoId]: next } }
         })
       })
     )
