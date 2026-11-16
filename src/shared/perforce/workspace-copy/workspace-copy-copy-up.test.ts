@@ -102,6 +102,7 @@ class CopyUpServer {
         return ok(`Change ${change} created.\n`)
       }
       case 'copy':
+        this.setOpened(client, this.copyFiles.length)
         return ok(
           this.copyFiles.map((depotFile) => tag({ depotFile, action: 'integrate' })).join('')
         )
@@ -114,10 +115,12 @@ class CopyUpServer {
       case 'submit': {
         const change = Number(flag('-c'))
         this.pending.delete(change)
+        this.setOpened(client, 0)
         this.submitted.push({ change, description: input ?? '', client })
         return ok(tag({ submittedChange: change + 1000 }))
       }
       case 'revert':
+        this.setOpened(client, 0)
         return ok()
       default:
         return {
@@ -125,6 +128,13 @@ class CopyUpServer {
           stdout: '',
           stderr: `unexpected p4 ${raw.join(' ')}`
         }
+    }
+  }
+
+  private setOpened(client: string, opened: number): void {
+    const found = this.clients.get(client)
+    if (found) {
+      found.opened = opened
     }
   }
 
@@ -147,6 +157,9 @@ class CopyUpServer {
         opened: 0
       })
       return ok(`Client ${name} saved.\n`)
+    }
+    if ((this.clients.get(rest[1])?.opened ?? 0) > 0) {
+      return { code: 1, stdout: '', stderr: `Client ${rest[1]} has files opened.` }
     }
     this.clients.delete(rest[1])
     return ok(`Client ${rest[1]} deleted.\n`)
