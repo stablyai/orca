@@ -22,6 +22,7 @@ import {
 import type { WorktreeCreateAgentLaunch } from '../../session/agent-launch/agent-launch-request'
 import type { WorktreeCreateIdempotencyProbe } from './worktree-create-idempotency-policy'
 import { getClientWorktreeCreateCandidate } from '../../../../src/shared/new-workspace/worktree-create-retry-policy'
+import type { SetupHooksCreateSource } from '../../../../src/shared/worktree/setup-hooks-create-source'
 
 // Host resolution applies agent permission flags and shell quoting.
 export type WorkspaceCreateAgentBundle = {
@@ -33,6 +34,7 @@ export type CreateWorkspaceFromComposerArgs = {
   selection: MobileComposerCreateSelection
   targetRepoId: string
   setupDecision: WorkspaceCreateSetupDecision
+  approvedSetupHash?: string
   agent: WorkspaceCreateAgentBundle
   workspaceName: string | undefined
   nameIsAutoManaged?: boolean
@@ -55,6 +57,22 @@ export async function createWorkspaceFromComposerSource(
   return createWorkItemWorkspace({ ...args, selection: args.selection })
 }
 
+/** The ref the create checks out, so its setup prompt shows that ref's orca.yaml. */
+export function composerSetupHooksCreateSource(
+  selection: MobileComposerCreateSelection
+): SetupHooksCreateSource {
+  switch (selection.kind) {
+    case 'branch':
+      return selection.reuse
+        ? { kind: 'branch', ref: selection.localBranchName, baseBranch: selection.refName }
+        : { kind: 'base', baseBranch: selection.baseBranch }
+    case 'work-item':
+      return { kind: 'base', baseBranch: selection.baseBranch }
+    case 'new-branch':
+      return { kind: 'base' }
+  }
+}
+
 function resolveComposerAgentLaunch(
   agentId: TuiAgent | undefined,
   supported: WorktreeCreateAgentLaunch['supported']
@@ -67,6 +85,7 @@ async function createWorkItemWorkspace(args: {
   selection: Extract<MobileComposerCreateSelection, { kind: 'work-item' }>
   targetRepoId: string
   setupDecision: WorkspaceCreateSetupDecision
+  approvedSetupHash?: string
   agent: WorkspaceCreateAgentBundle
   workspaceName: string | undefined
   nameIsAutoManaged?: boolean
@@ -115,6 +134,7 @@ async function createWorkItemWorkspace(args: {
   // Keep linked work items on terminals: structured sessions cannot hold their unsent URL draft and would submit it as a turn.
   return createWorktreeWithNameRetry({
     parent: args.parent,
+    approvedSetupHash: args.approvedSetupHash,
     client,
     baseName,
     worktreeCreateIdempotency: args.worktreeCreateIdempotency,
@@ -127,6 +147,7 @@ async function createBranchWorkspace(args: {
   selection: Extract<MobileComposerCreateSelection, { kind: 'branch' }>
   targetRepoId: string
   setupDecision: WorkspaceCreateSetupDecision
+  approvedSetupHash?: string
   agent: WorkspaceCreateAgentBundle
   workspaceName: string | undefined
   nameIsAutoManaged?: boolean
@@ -166,6 +187,7 @@ async function createBranchWorkspace(args: {
     })
     return createWorktreeWithNameRetry({
       parent: args.parent,
+      approvedSetupHash: args.approvedSetupHash,
       client,
       baseName,
       worktreeCreateIdempotency: args.worktreeCreateIdempotency,
@@ -193,6 +215,7 @@ async function createBranchWorkspace(args: {
   })
   return createWorktreeWithNameRetry({
     parent: args.parent,
+    approvedSetupHash: args.approvedSetupHash,
     client,
     baseName,
     worktreeCreateIdempotency: args.worktreeCreateIdempotency,
@@ -225,6 +248,7 @@ async function createNewBranchWorkspace(args: {
   selection: Extract<MobileComposerCreateSelection, { kind: 'new-branch' }>
   targetRepoId: string
   setupDecision: WorkspaceCreateSetupDecision
+  approvedSetupHash?: string
   agent: WorkspaceCreateAgentBundle
   workspaceName: string | undefined
   nameIsAutoManaged?: boolean
@@ -250,6 +274,7 @@ async function createNewBranchWorkspace(args: {
   // Preserve typed git branch names, including slashes; sanitize only the folder, and retry suffixes against the branch name.
   return createWorktreeWithNameRetry({
     parent: args.parent,
+    approvedSetupHash: args.approvedSetupHash,
     client,
     baseName: selection.branchName,
     worktreeCreateIdempotency: args.worktreeCreateIdempotency,

@@ -12,10 +12,11 @@ import {
 import type { OrcaHookTrustPrompt } from '../components/hook-trust/OrcaHookTrustDrawer'
 import { newTabRepoListRead } from '../session/agent-launch/mobile-runtime-repo-operations'
 import {
-  isSetupHookTrusted,
+  isOrcaHookTrusted,
   normalizeSetupHookTrust,
   readRepoHooksSetupCommand,
-  wasSetupHookPreviouslyApproved
+  usesVersionedOrcaHookTrust,
+  wasOrcaHookPreviouslyApproved
 } from '../new-workspace/creation/setup-hook-trust'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { AutomationDraft } from './automation-draft'
@@ -35,7 +36,8 @@ export async function prepareAutomationSetup(args: {
   current: () => boolean
   confirm: (
     prompt: OrcaHookTrustPrompt,
-    trust: PersistedTrustedOrcaHooks
+    trust: PersistedTrustedOrcaHooks,
+    repos: readonly { id: string }[]
   ) => Promise<'run' | 'skip' | null>
 }): Promise<AutomationDraft | null> {
   const { client, draft, original, targets, current } = args
@@ -116,7 +118,7 @@ export async function prepareAutomationSetup(args: {
     if (!current()) {
       return null
     }
-    if (isSetupHookTrusted(trust, repos, setup.repoId, setupTrust.contentHash)) {
+    if (isOrcaHookTrusted(trust, repos, setup.repoId, 'setup', setupTrust.contentHash)) {
       return { ...draft, setupDecision: 'run' }
     }
   }
@@ -126,9 +128,11 @@ export async function prepareAutomationSetup(args: {
       repoId: setup.repoId,
       repoName: setup.displayName,
       ...setupTrust,
-      previouslyApproved: wasSetupHookPreviouslyApproved(trust, setup.repoId)
+      previouslyApproved: wasOrcaHookPreviouslyApproved(trust, setup.repoId, 'setup'),
+      versionOnly: usesVersionedOrcaHookTrust(repos, setup.repoId)
     },
-    trust
+    trust,
+    repos
   )
   return approved && current() ? { ...draft, setupDecision: approved } : null
 }

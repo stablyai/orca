@@ -1,3 +1,4 @@
+import type { OrcaHookTrustPrompt } from '../components/hook-trust/OrcaHookTrustDrawer'
 import type {
   GitHubWorkItem,
   GitLabWorkItem,
@@ -113,13 +114,7 @@ export type WorkspaceCreateArgs = {
   sparseCheckoutOverride?: { directories: string[]; presetId?: string }
 }
 
-export type OrcaYamlTrustPrompt = WorkspaceCreateArgs & {
-  repoId: string
-  repoName: string
-  scriptContent: string
-  contentHash: string
-  previouslyApproved: boolean
-}
+export type OrcaYamlTrustPrompt = WorkspaceCreateArgs & OrcaHookTrustPrompt
 
 export type WorkspaceCreateDraft = {
   item: ActionableTaskItem

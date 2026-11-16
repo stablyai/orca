@@ -3,9 +3,10 @@ import type { PersistedTrustedOrcaHooks } from '../../../../src/shared/workspace
 import { ARCHIVE_HOOK_FAILED_REMOVAL_CODE } from '../../../../src/shared/worktree/removal/archive-hook-removal-gate'
 import type { OrcaHookTrustPrompt } from '../../components/hook-trust/OrcaHookTrustDrawer'
 import { newWorkspaceUiStateRead } from '../../new-workspace/creation/runtime/new-workspace-operations'
-import { canUseRepoWideTrust } from '../../../../src/shared/workspace-setup/hooks/orca-hook-trust-entries'
 import {
+  isOrcaHookTrusted,
   persistOrcaHookTrustApproval,
+  usesVersionedOrcaHookTrust,
   wasOrcaHookPreviouslyApproved
 } from '../../new-workspace/creation/setup-hook-trust'
 import { triggerError, triggerSuccess } from '../../platform/haptics/haptics'
@@ -18,7 +19,12 @@ import type { HostScreenState } from '../use-host-screen-state'
 
 type ArchiveHookDecision =
   | { kind: 'run' | 'skip' }
-  | { kind: 'ask'; prompt: OrcaHookTrustPrompt; trust: PersistedTrustedOrcaHooks }
+  | {
+      kind: 'ask'
+      prompt: OrcaHookTrustPrompt
+      trust: PersistedTrustedOrcaHooks
+      repos: readonly { id: string }[] | null
+    }
 
 // Keep the clients the delete started on, so a host switch cannot redirect a pending approval.
 type RowClients = { rowClient: RpcClient; desktopClient: RpcClient }
@@ -30,6 +36,7 @@ export type ArchiveHookTrustRequest = RowClients & {
   item: Worktree
   prompt: OrcaHookTrustPrompt
   trust: PersistedTrustedOrcaHooks
+  repos: readonly { id: string }[] | null
   waiver: ArchiveHookWaiver
 }
 
@@ -59,22 +66,21 @@ async function decideArchiveHookRun(
       return { kind: 'skip' }
     }
     const trust = ui.value?.trustedOrcaHooks ?? {}
-    if (
-      trust[repoId]?.archive?.contentHash === archiveTrust.contentHash ||
-      (args.repos && canUseRepoWideTrust(trust, args.repos, repoId))
-    ) {
+    if (isOrcaHookTrusted(trust, args.repos, repoId, 'archive', archiveTrust.contentHash)) {
       return { kind: 'run' }
     }
     return {
       kind: 'ask',
       trust,
+      repos: args.repos,
       prompt: {
         kind: 'archive',
         repoId,
         repoName: args.item.repo,
         scriptContent: archiveTrust.scriptContent,
         contentHash: archiveTrust.contentHash,
-        previouslyApproved: wasOrcaHookPreviouslyApproved(trust, repoId, 'archive')
+        previouslyApproved: wasOrcaHookPreviouslyApproved(trust, repoId, 'archive'),
+        versionOnly: usesVersionedOrcaHookTrust(args.repos, repoId)
       }
     }
   } catch {
@@ -192,6 +198,7 @@ export function useHostWorktreeDelete(args: {
         item,
         prompt: decision.prompt,
         trust: decision.trust,
+        repos: decision.repos,
         waiver
       })
     },
@@ -233,6 +240,7 @@ export function useHostWorktreeDelete(args: {
         await persistOrcaHookTrustApproval({
           client: request.desktopClient,
           trust: request.trust,
+          repos: request.repos,
           repoId: request.prompt.repoId,
           contentHash: request.prompt.contentHash,
           alwaysTrust,

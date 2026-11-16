@@ -1,20 +1,13 @@
 import type { WorkspaceSparseActionsModel } from './use-mobile-tasks-workspace-sparse-actions'
 import { taskRepoClient } from '../repositories/task-repo-host-routing'
 import { getDefaultSetupDecision } from '../../../../src/shared/workspace-setup/hooks/orca-hook-setup-config'
-import {
-  normalizeSetupHookTrust,
-  readRepoHooksSetupCommand
-} from '../../new-workspace/creation/setup-hook-trust'
+import { readRepoHooksSetupCommand } from '../../new-workspace/creation/setup-hook-trust'
 import {
   pickWorkspaceAgent,
   resolveWorkspaceAgentSelection
 } from '../../new-workspace/creation/workspace-agent-selection'
 import { useCallback, useEffect, useMemo } from 'react'
-import type {
-  RepoHooksResponse,
-  RepoSummary,
-  SetupDecision
-} from '../mobile-tasks-provider-detail-types'
+import type { RepoSummary, SetupDecision } from '../mobile-tasks-provider-detail-types'
 import {
   localAgentDetectionRead,
   remoteAgentDetectionRead,
@@ -188,13 +181,8 @@ export function useMobileTasksWorkspaceSshState(model: WorkspaceSparseActionsMod
       repo: RepoSummary,
       override?: Exclude<SetupDecision, 'inherit'>
     ): Promise<
-      | { kind: 'decision'; decision: SetupDecision; setupTrust?: RepoHooksResponse['setupTrust'] }
-      | {
-          kind: 'prompt'
-          command: string
-          source: string | null | undefined
-          setupTrust?: RepoHooksResponse['setupTrust']
-        }
+      | { kind: 'decision'; decision: SetupDecision }
+      | { kind: 'prompt'; command: string; source: string | null | undefined }
     > => {
       if (!client || !tasksSupported) {
         return { kind: 'decision', decision: override ?? 'inherit' }
@@ -202,18 +190,17 @@ export function useMobileTasksWorkspaceSshState(model: WorkspaceSparseActionsMod
       const reply = await repoSetupHooksRead.request(client, { repo: `id:${repo.id}` })
       const result = repoSetupHooksRead.interpret(reply)
       const setupCommand = readRepoHooksSetupCommand(result)
-      const setupTrust = normalizeSetupHookTrust(result.setupTrust) ?? undefined
       if (!setupCommand) {
         return { kind: 'decision', decision: 'inherit' }
       }
       if (override) {
-        return { kind: 'decision', decision: override, setupTrust }
+        return { kind: 'decision', decision: override }
       }
       const decision = getDefaultSetupDecision(true, result.setupRunPolicy ?? 'run-by-default')
       if (!decision) {
-        return { kind: 'prompt', command: setupCommand, source: result.source, setupTrust }
+        return { kind: 'prompt', command: setupCommand, source: result.source }
       }
-      return { kind: 'decision', decision, setupTrust }
+      return { kind: 'decision', decision }
     },
     [client, tasksSupported]
   )

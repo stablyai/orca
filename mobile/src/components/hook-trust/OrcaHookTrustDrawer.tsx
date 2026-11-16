@@ -14,6 +14,8 @@ export type OrcaHookTrustPrompt = {
   scriptContent: string
   contentHash: string
   previouslyApproved: boolean
+  /** Same-id repos on several hosts: approvals stay per version and Always trust can't cover them. */
+  versionOnly: boolean
 }
 
 type Props = {
@@ -21,6 +23,9 @@ type Props = {
   prompt: OrcaHookTrustPrompt | null
   busy?: boolean
   allowAlwaysTrust?: boolean
+  // Automations run unattended, so a one-time approval can't cover them.
+  allowRunOnce?: boolean
+  zIndex?: number
   onRunOnce: () => void
   onAlwaysTrust: () => void
   onDontRun: () => void
@@ -33,6 +38,8 @@ export function OrcaHookTrustDrawer({
   prompt,
   busy = false,
   allowAlwaysTrust = true,
+  allowRunOnce = true,
+  zIndex,
   onRunOnce,
   onAlwaysTrust,
   onDontRun,
@@ -42,7 +49,7 @@ export function OrcaHookTrustDrawer({
   const t = useMobileTranslation()
   const copy = prompt ? hookTrustCopy(t, prompt) : null
   return (
-    <BottomDrawer visible={visible && prompt != null} onClose={onClose}>
+    <BottomDrawer visible={visible && prompt != null} onClose={onClose} zIndex={zIndex}>
       {prompt && copy ? (
         <View>
           <View style={styles.trustHeader}>
@@ -55,21 +62,17 @@ export function OrcaHookTrustDrawer({
             <Text style={styles.trustScriptText}>{prompt.scriptContent}</Text>
           </View>
 
+          {allowAlwaysTrust && !prompt.versionOnly ? (
+            <Text style={styles.trustScope}>
+              {t(
+                'components.setupHookTrustDrawer.alwaysTrustScope',
+                'Always trust runs future orca.yaml changes in {{repoName}} without asking.',
+                { repoName: prompt.repoName }
+              )}
+            </Text>
+          ) : null}
+
           <View style={styles.trustActionGroup}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.trustActionRow,
-                pressed && { backgroundColor: colors.translucentFill }
-              ]}
-              disabled={busy}
-              onPress={onRunOnce}
-            >
-              <Check size={16} color={colors.textPrimary} />
-              <Text style={styles.trustActionText}>
-                {t('components.setupHookTrustDrawer.runHooks', 'Run hooks')}
-              </Text>
-            </Pressable>
-            <View style={styles.trustActionSeparator} />
             {allowAlwaysTrust ? (
               <>
                 <Pressable
@@ -81,8 +84,28 @@ export function OrcaHookTrustDrawer({
                   onPress={onAlwaysTrust}
                 >
                   <Check size={16} color={colors.textPrimary} />
+                  <Text style={[styles.trustActionText, styles.trustPrimaryActionText]}>
+                    {t('components.setupHookTrustDrawer.alwaysTrust', 'Always trust')}
+                  </Text>
+                </Pressable>
+                <View style={styles.trustActionSeparator} />
+              </>
+            ) : null}
+            {allowRunOnce || prompt.versionOnly || !allowAlwaysTrust ? (
+              <>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.trustActionRow,
+                    pressed && { backgroundColor: colors.translucentFill }
+                  ]}
+                  disabled={busy}
+                  onPress={onRunOnce}
+                >
+                  <Check size={16} color={colors.textPrimary} />
                   <Text style={styles.trustActionText}>
-                    {t('components.setupHookTrustDrawer.alwaysTrustAndRun', 'Always trust and run')}
+                    {prompt.versionOnly || !allowAlwaysTrust
+                      ? t('components.setupHookTrustDrawer.runHooks', 'Run hooks')
+                      : t('components.setupHookTrustDrawer.runOnce', 'Run once')}
                   </Text>
                 </Pressable>
                 <View style={styles.trustActionSeparator} />
@@ -112,9 +135,10 @@ function hookTrustCopy(
   prompt: OrcaHookTrustPrompt
 ): { title: string; description: string; scriptLabel: string } {
   const repoName = { repoName: prompt.repoName }
+  const changed = prompt.versionOnly && prompt.previouslyApproved
   if (prompt.kind === 'archive') {
     return {
-      title: prompt.previouslyApproved
+      title: changed
         ? t(
             'components.setupHookTrustDrawer.archiveScriptChangedTitle',
             "{{repoName}}'s archive script changed",
@@ -129,13 +153,13 @@ function hookTrustCopy(
         'components.setupHookTrustDrawer.archiveDescription',
         "This repository's orca.yaml runs before the workspace is deleted. Only run it if you trust this repository."
       ),
-      scriptLabel: prompt.previouslyApproved
+      scriptLabel: changed
         ? t('components.setupHookTrustDrawer.newArchiveScriptLabel', 'New archive script')
         : t('components.setupHookTrustDrawer.archiveScriptLabel', 'Archive script')
     }
   }
   return {
-    title: prompt.previouslyApproved
+    title: changed
       ? t(
           'components.setupHookTrustDrawer.scriptChangedTitle',
           "{{repoName}}'s setup script changed",
@@ -150,7 +174,7 @@ function hookTrustCopy(
       'components.setupHookTrustDrawer.description',
       "This repository's orca.yaml runs before the workspace starts. Only run it if you trust this repository."
     ),
-    scriptLabel: prompt.previouslyApproved
+    scriptLabel: changed
       ? t('components.setupHookTrustDrawer.newScriptLabel', 'New setup script')
       : t('components.setupHookTrustDrawer.scriptLabel', 'Setup script')
   }
@@ -190,6 +214,12 @@ const styles = themedStyleSheet(() => ({
     fontFamily: typography.monoFamily,
     color: colors.textPrimary
   },
+  trustScope: {
+    fontSize: 13,
+    color: colors.textMuted,
+    paddingHorizontal: spacing.xs,
+    marginBottom: spacing.md
+  },
   trustActionGroup: {
     backgroundColor: colors.sheetGroup,
     borderRadius: radii.surface,
@@ -207,6 +237,9 @@ const styles = themedStyleSheet(() => ({
     fontSize: typography.bodySize,
     color: colors.textPrimary,
     fontWeight: '500'
+  },
+  trustPrimaryActionText: {
+    fontWeight: '600'
   },
   trustActionSeparator: {
     height: StyleSheet.hairlineWidth,

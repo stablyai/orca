@@ -53,6 +53,8 @@ export type CreateWorktreeWithNameRetryArgs = {
   maxAttempts?: number
   /** The workspace the new worktree is attached to, on every attempt. */
   parent?: WorktreeCreateParent
+  /** Pins setup to the content the user approved; repo trust sends none. */
+  approvedSetupHash?: string
   mintMutationId?: () => string
   mintLaunchOperationId?: () => string
 }
@@ -74,7 +76,11 @@ export async function createWorktreeWithNameRetry(
     const candidateName = args.nameWasGenerated
       ? getGeneratedWorktreeCreateRetryCandidate(baseName, attempt)
       : getClientWorktreeCreateCandidate(baseName, attempt)
-    const candidateParams = { ...buildParams(candidateName, attempt), ...args.parent }
+    const candidateParams = {
+      ...buildParams(candidateName, attempt),
+      ...args.parent,
+      ...(args.approvedSetupHash ? { approvedSetupHash: args.approvedSetupHash } : {})
+    }
     if (attempt === 0 && candidateParams.branchIntent) {
       if ((await args.branchIntentSupported) !== true) {
         return {

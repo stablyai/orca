@@ -3376,8 +3376,7 @@
           "params": {
             "trustedOrcaHooks": {
               "repo-1": {
-                "setup": {
-                  "contentHash": "hash-1",
+                "all": {
                   "approvedAt": 1767225600000
                 }
               }
@@ -3535,8 +3534,7 @@
           "params": {
             "trustedOrcaHooks": {
               "repo-1": {
-                "archive": {
-                  "contentHash": "archive-hash-1",
+                "all": {
                   "approvedAt": 1767225600000
                 }
               }
@@ -3615,8 +3613,7 @@
               "ui": {
                 "trustedOrcaHooks": {
                   "repo-1": {
-                    "archive": {
-                      "contentHash": "archive-hash-1",
+                    "all": {
                       "approvedAt": 1767225600000
                     }
                   }

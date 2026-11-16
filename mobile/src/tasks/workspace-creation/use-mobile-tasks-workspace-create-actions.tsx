@@ -11,9 +11,10 @@ import {
 } from '../../new-workspace/creation/workspace-agent-selection'
 import { buildTaskWorkspaceCreateParams } from '../../new-workspace/creation/workspace-create-params'
 import {
-  isSetupHookTrusted,
-  wasSetupHookPreviouslyApproved
+  resolveCreateSetupApproval,
+  type CreateSetupApproval
 } from '../../new-workspace/creation/setup-hook-trust'
+import { setupHooksCreateSource } from '../../../../src/shared/worktree/setup-hooks-create-source'
 import { shouldResolveHostedReviewStartPoint } from '../../new-workspace/creation/hosted-review-start-point'
 import { useCallback } from 'react'
 import type { ActionableTaskItem } from '../mobile-tasks-project-workspace-types'
@@ -62,7 +63,7 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
       baseBranchOverride?: string,
       branchNameOverride?: string,
       sparseCheckoutOverride?: { directories: string[]; presetId?: string },
-      approvedSetupContentHash?: string
+      setupApproval?: CreateSetupApproval
     ): Promise<void> => {
       if (!client || !tasksSupported || !taskStateHydrated) {
         return
@@ -126,37 +127,6 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
           return
         }
         const setupDecision = setupResolution.decision
-        if (
-          setupDecision === 'run' &&
-          setupResolution.setupTrust &&
-          setupResolution.setupTrust.contentHash !== approvedSetupContentHash &&
-          !isSetupHookTrusted(
-            trustedOrcaHooks,
-            repos,
-            targetRepo.id,
-            setupResolution.setupTrust.contentHash
-          )
-        ) {
-          // Persist the desktop’s trust hash so either surface can approve this repo script version.
-          setSetupPrompt(null)
-          setOrcaYamlTrustPrompt({
-            item,
-            ...(repoIdOverride ? { repoIdOverride } : {}),
-            setupOverride: 'run',
-            ...(agentOverride ? { agentOverride } : {}),
-            ...(workspaceNameOverride ? { workspaceNameOverride } : {}),
-            ...(comment ? { noteOverride: comment } : {}),
-            ...(baseBranchOverride ? { baseBranchOverride } : {}),
-            ...(branchNameOverride ? { branchNameOverride } : {}),
-            ...(sparseCheckoutOverride ? { sparseCheckoutOverride } : {}),
-            repoId: targetRepo.id,
-            repoName: targetRepo.displayName,
-            scriptContent: setupResolution.setupTrust.scriptContent,
-            contentHash: setupResolution.setupTrust.contentHash,
-            previouslyApproved: wasSetupHookPreviouslyApproved(trustedOrcaHooks, targetRepo.id)
-          })
-          return
-        }
         const trimmedWorkspaceName = workspaceNameOverride?.trim() ?? ''
         const nameIsAutoManaged =
           !trimmedWorkspaceName || trimmedWorkspaceName === workspaceLastAutoName
@@ -256,6 +226,36 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
             sparseCheckout: sparseCheckoutOverride,
             nameIsAutoManaged
           })
+        }
+        let approvedSetup = setupApproval
+        if (setupDecision === 'run' && !approvedSetup) {
+          const resolved = await resolveCreateSetupApproval({
+            client,
+            trust: trustedOrcaHooks,
+            repos,
+            repo: targetRepo,
+            createSource: setupHooksCreateSource(params) ?? { kind: 'base' }
+          })
+          if ('ask' in resolved) {
+            setSetupPrompt(null)
+            setOrcaYamlTrustPrompt({
+              item,
+              ...(repoIdOverride ? { repoIdOverride } : {}),
+              setupOverride: 'run',
+              ...(agentOverride ? { agentOverride } : {}),
+              ...(workspaceNameOverride ? { workspaceNameOverride } : {}),
+              ...(comment ? { noteOverride: comment } : {}),
+              ...(baseBranchOverride ? { baseBranchOverride } : {}),
+              ...(branchNameOverride ? { branchNameOverride } : {}),
+              ...(sparseCheckoutOverride ? { sparseCheckoutOverride } : {}),
+              ...resolved.ask
+            })
+            return
+          }
+          approvedSetup = resolved.approved
+        }
+        if (approvedSetup?.approvedSetupHash) {
+          params.approvedSetupHash = approvedSetup.approvedSetupHash
         }
         const createReply = await worktreeCreateRun.request(client, params, {
           timeoutMs: WORKTREE_CREATE_TIMEOUT_MS

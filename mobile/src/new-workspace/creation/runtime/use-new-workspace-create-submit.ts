@@ -9,12 +9,15 @@ import type { WorktreeCreateParent } from '../worktree-create-retry'
 import { createBlankWorkspace } from '../blank-workspace-create'
 import { isMobileTuiAgentEnabled } from '../../../agents/mobile-tui-agents'
 import {
-  isSetupHookTrusted,
+  approvedCreateSetup,
   persistSetupHookTrustApproval,
-  wasSetupHookPreviouslyApproved,
-  type SetupHookTrust
+  resolveCreateSetupApproval,
+  type CreateSetupApproval
 } from '../setup-hook-trust'
-import { createWorkspaceFromComposerSource } from '../source-workspace-create'
+import {
+  composerSetupHooksCreateSource,
+  createWorkspaceFromComposerSource
+} from '../source-workspace-create'
 import { normalizeWorkspaceAgent } from '../workspace-agent-selection'
 import type { SetupDecision as WorkspaceCreateSetupDecision } from '../../../../../src/shared/worktree/create-types'
 import type { AgentLaunchSupport } from '../../../session/agent-launch/agent-launch-request'
@@ -43,7 +46,7 @@ import { suggestCreatureNameForPaths as getSuggestedCreatureName } from '../../.
 
 type CreateOptions = {
   setupOverride?: Exclude<WorkspaceCreateSetupDecision, 'inherit'>
-  approvedSetupContentHash?: string
+  setupApproval?: CreateSetupApproval
 }
 
 type Composer = ReturnType<typeof useMobileComposerSource>
@@ -64,7 +67,6 @@ export function useNewWorkspaceCreateSubmit(args: {
   existingWorktreePaths?: readonly string[]
   retiredWorktreeNames: RetiredNameRegistry
   setupCommand: string | null
-  setupTrust: SetupHookTrust | null
   setupRunPolicy: SetupRunPolicy
   setupDecisionChoice: Exclude<WorkspaceCreateSetupDecision, 'inherit'> | null
   runSetup: boolean
@@ -167,39 +169,33 @@ export function useNewWorkspaceCreateSubmit(args: {
           setupDecision = args.runSetup ? 'run' : 'skip'
         }
       }
-      if (
-        setupDecision === 'run' &&
-        args.setupTrust &&
-        args.setupTrust.contentHash !== options.approvedSetupContentHash &&
-        !isSetupHookTrusted(
-          args.trustedOrcaHooks,
-          args.repos,
-          selectedRepo.id,
-          args.setupTrust.contentHash
-        )
-      ) {
-        setSetupTrustPrompt({
-          kind: 'setup',
-          repoId: selectedRepo.id,
-          repoName: selectedRepo.displayName,
-          scriptContent: args.setupTrust.scriptContent,
-          contentHash: args.setupTrust.contentHash,
-          previouslyApproved: wasSetupHookPreviouslyApproved(args.trustedOrcaHooks, selectedRepo.id)
+      const selection = args.composer.createSelection
+      let setupApproval = options.setupApproval
+      if (setupDecision === 'run' && !setupApproval) {
+        const resolved = await resolveCreateSetupApproval({
+          client,
+          trust: args.trustedOrcaHooks,
+          repos: args.repos,
+          repo: selectedRepo,
+          createSource: selection ? composerSetupHooksCreateSource(selection) : { kind: 'base' }
         })
-        args.transitionDrawer('trust')
-        return
+        if ('ask' in resolved) {
+          setSetupTrustPrompt(resolved.ask)
+          args.transitionDrawer('trust')
+          return
+        }
+        setupApproval = resolved.approved
       }
-
       const createdWithAgentId =
         args.selectedAgent.id !== '__blank__' ? args.selectedAgent.id : undefined
       const trimmedNote = args.note.trim() || undefined
-      const selection = args.composer.createSelection
       const result = selection
         ? await createWorkspaceFromComposerSource({
             client,
             selection,
             targetRepoId: selectedRepo.id,
             setupDecision,
+            approvedSetupHash: setupApproval?.approvedSetupHash,
             agent: { choice: normalizeWorkspaceAgent(args.selectedAgent.id) ?? 'blank' },
             workspaceName: trimmedName || undefined,
             note: trimmedNote,
@@ -219,6 +215,7 @@ export function useNewWorkspaceCreateSubmit(args: {
             createdWithAgentId,
             comment: trimmedNote,
             setupDecision,
+            approvedSetupHash: setupApproval?.approvedSetupHash,
             worktreeCreateIdempotency: args.getWorktreeCreateCutoverSupport(),
             agentLaunchSupported: args.getAgentLaunchSupport(),
             parent: folder?.parent
@@ -274,18 +271,22 @@ export function useNewWorkspaceCreateSubmit(args: {
     setupTrustActionInFlightRef.current = true
     setCreating(true)
     try {
+      const { repoId, contentHash } = setupTrustPrompt
       const nextTrust = await persistSetupHookTrustApproval({
         client: args.client,
         trust: args.trustedOrcaHooks,
-        repoId: setupTrustPrompt.repoId,
-        contentHash: setupTrustPrompt.contentHash,
+        repos: args.repos,
+        repoId,
+        contentHash,
         alwaysTrust
       })
       args.setTrustedOrcaHooks(nextTrust)
-      const approvedHash = setupTrustPrompt.contentHash
       setSetupTrustPrompt(null)
       args.transitionDrawer('form')
-      await create({ setupOverride: 'run', approvedSetupContentHash: approvedHash })
+      await create({
+        setupOverride: 'run',
+        setupApproval: approvedCreateSetup(args.repos, repoId, contentHash, alwaysTrust)
+      })
     } catch (error) {
       args.setError(error instanceof Error ? error.message : 'Failed to trust setup script.')
     } finally {

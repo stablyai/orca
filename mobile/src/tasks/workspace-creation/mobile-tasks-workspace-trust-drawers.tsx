@@ -10,6 +10,9 @@ import { setupSourceLabel } from '../repositories/mobile-tasks-repository-presen
 import { LIST_LEADING_INSET, ListGroup, ListRow } from '../../components/list/ListGroup'
 import { styles } from '../mobile-tasks-legacy-styles'
 import { translate } from '../../i18n/mobile-i18n'
+import { OrcaHookTrustDrawer } from '../../components/hook-trust/OrcaHookTrustDrawer'
+import type { CreateSetupApproval } from '../../new-workspace/creation/setup-hook-trust'
+import type { OrcaYamlTrustPrompt } from '../mobile-tasks-project-workspace-types'
 
 export function renderMobileTasksWorkspaceSparseDrawer(model: ConnectionPresentationModel) {
   const {
@@ -217,153 +220,56 @@ export function renderMobileTasksOrcaYamlTrustDrawer(model: ConnectionPresentati
     setOrcaYamlTrustPrompt,
     taskUiReady
   } = model
+  const createWithSetup = (prompt: OrcaYamlTrustPrompt, setupApproval?: CreateSetupApproval) =>
+    createWorkspace(
+      prompt.item,
+      prompt.repoIdOverride,
+      setupApproval ? 'run' : 'skip',
+      prompt.agentOverride,
+      prompt.workspaceNameOverride,
+      prompt.noteOverride,
+      prompt.baseBranchOverride,
+      prompt.branchNameOverride,
+      prompt.sparseCheckoutOverride,
+      setupApproval
+    )
+  const approve = (alwaysTrust: boolean) => {
+    const prompt = orcaYamlTrustPrompt
+    if (!prompt) {
+      return
+    }
+    void (async () => {
+      try {
+        const setupApproval = await persistSetupHookTrust(prompt, alwaysTrust)
+        setOrcaYamlTrustPrompt(null)
+        if (setupApproval) {
+          await createWithSetup(prompt, setupApproval)
+        }
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : translate('tasks.workspaceTrustDrawers.trustFailed', 'Failed to trust setup script.')
+        )
+      }
+    })()
+  }
   return (
-    <BottomDrawer
+    <OrcaHookTrustDrawer
       visible={taskUiReady && orcaYamlTrustPrompt != null}
-      onClose={() => setOrcaYamlTrustPrompt(null)}
+      prompt={orcaYamlTrustPrompt}
+      busy={orcaYamlTrustPrompt != null && creatingKey === orcaYamlTrustPrompt.item.key}
       zIndex={TASK_SECONDARY_DRAWER_Z_INDEX + 1}
-    >
-      {orcaYamlTrustPrompt ? (
-        <View>
-          <View style={styles.sheetHeader}>
-            <Text style={styles.sheetTitle}>
-              {orcaYamlTrustPrompt.previouslyApproved
-                ? translate(
-                    'tasks.workspaceTrustDrawers.setupChangedTitle',
-                    "{{name}}'s setup script changed",
-                    { name: orcaYamlTrustPrompt.repoName }
-                  )
-                : translate(
-                    'tasks.workspaceTrustDrawers.runSetupTitle',
-                    'Run setup from {{name}}?',
-                    { name: orcaYamlTrustPrompt.repoName }
-                  )}
-            </Text>
-            <Text style={styles.sheetSubtitle}>
-              {translate(
-                'tasks.workspaceTrustDrawers.trustSubtitle',
-                "This repository's orca.yaml runs on your machine before the workspace starts. Only run it if you trust this repository."
-              )}
-            </Text>
-          </View>
-
-          <View style={styles.setupPromptBox}>
-            <View style={styles.detailSectionHeader}>
-              <Text style={styles.detailSectionTitle}>
-                {orcaYamlTrustPrompt.previouslyApproved
-                  ? translate('tasks.workspaceTrustDrawers.newSetupScript', 'New setup script')
-                  : translate('tasks.workspaceTrustDrawers.setupScript', 'Setup script')}
-              </Text>
-            </View>
-            <Text style={styles.setupPromptCommand}>{orcaYamlTrustPrompt.scriptContent}</Text>
-          </View>
-
-          <ListGroup separatorInset={LIST_LEADING_INSET}>
-            <ListRow
-              key="action-3"
-              title={translate('tasks.workspaceTrustDrawers.runHooks', 'Run hooks')}
-              leading={<Check size={16} color={colors.textPrimary} />}
-              disabled={creatingKey === orcaYamlTrustPrompt.item.key}
-              onPress={() =>
-                void (async () => {
-                  try {
-                    await persistSetupHookTrust(
-                      orcaYamlTrustPrompt.repoId,
-                      orcaYamlTrustPrompt.contentHash,
-                      false
-                    )
-                    setOrcaYamlTrustPrompt(null)
-                    await createWorkspace(
-                      orcaYamlTrustPrompt.item,
-                      orcaYamlTrustPrompt.repoIdOverride,
-                      'run',
-                      orcaYamlTrustPrompt.agentOverride,
-                      orcaYamlTrustPrompt.workspaceNameOverride,
-                      orcaYamlTrustPrompt.noteOverride,
-                      orcaYamlTrustPrompt.baseBranchOverride,
-                      orcaYamlTrustPrompt.branchNameOverride,
-                      orcaYamlTrustPrompt.sparseCheckoutOverride,
-                      orcaYamlTrustPrompt.contentHash
-                    )
-                  } catch (err) {
-                    setError(
-                      err instanceof Error
-                        ? err.message
-                        : translate(
-                            'tasks.workspaceTrustDrawers.trustFailed',
-                            'Failed to trust setup script.'
-                          )
-                    )
-                  }
-                })()
-              }
-            />
-            <ListRow
-              key="action-4"
-              title={translate(
-                'tasks.workspaceTrustDrawers.alwaysTrustAndRun',
-                'Always trust and run'
-              )}
-              leading={<Check size={16} color={colors.textPrimary} />}
-              disabled={creatingKey === orcaYamlTrustPrompt.item.key}
-              onPress={() =>
-                void (async () => {
-                  try {
-                    await persistSetupHookTrust(
-                      orcaYamlTrustPrompt.repoId,
-                      orcaYamlTrustPrompt.contentHash,
-                      true
-                    )
-                    setOrcaYamlTrustPrompt(null)
-                    await createWorkspace(
-                      orcaYamlTrustPrompt.item,
-                      orcaYamlTrustPrompt.repoIdOverride,
-                      'run',
-                      orcaYamlTrustPrompt.agentOverride,
-                      orcaYamlTrustPrompt.workspaceNameOverride,
-                      orcaYamlTrustPrompt.noteOverride,
-                      orcaYamlTrustPrompt.baseBranchOverride,
-                      orcaYamlTrustPrompt.branchNameOverride,
-                      orcaYamlTrustPrompt.sparseCheckoutOverride,
-                      orcaYamlTrustPrompt.contentHash
-                    )
-                  } catch (err) {
-                    setError(
-                      err instanceof Error
-                        ? err.message
-                        : translate(
-                            'tasks.workspaceTrustDrawers.trustFailed',
-                            'Failed to trust setup script.'
-                          )
-                    )
-                  }
-                })()
-              }
-            />
-            <ListRow
-              key="action-5"
-              title={translate('tasks.workspaceTrustDrawers.dontRun', "Don't run")}
-              leading={<X size={16} color={colors.textPrimary} />}
-              disabled={creatingKey === orcaYamlTrustPrompt.item.key}
-              onPress={() => {
-                const prompt = orcaYamlTrustPrompt
-                setOrcaYamlTrustPrompt(null)
-                void createWorkspace(
-                  prompt.item,
-                  prompt.repoIdOverride,
-                  'skip',
-                  prompt.agentOverride,
-                  prompt.workspaceNameOverride,
-                  prompt.noteOverride,
-                  prompt.baseBranchOverride,
-                  prompt.branchNameOverride,
-                  prompt.sparseCheckoutOverride
-                )
-              }}
-            />
-          </ListGroup>
-        </View>
-      ) : null}
-    </BottomDrawer>
+      onRunOnce={() => approve(false)}
+      onAlwaysTrust={() => approve(true)}
+      onDontRun={() => {
+        const prompt = orcaYamlTrustPrompt
+        setOrcaYamlTrustPrompt(null)
+        if (prompt) {
+          void createWithSetup(prompt)
+        }
+      }}
+      onClose={() => setOrcaYamlTrustPrompt(null)}
+    />
   )
 }
