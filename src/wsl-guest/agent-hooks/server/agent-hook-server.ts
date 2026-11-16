@@ -170,6 +170,8 @@ export class RelayAgentHookServer extends RelayAgentHookCanonicalStatus {
         this.portFallbackApplied = true
       }
     })
+    // Spool replay stored rows without arming their leases; the listener can publish them now.
+    this.retryScheduler.armLeaseExpiries(this.lastEnvelopeMetaByPaneKey)
     if (isCurrent() && options.publishEndpoint !== false) {
       this.publishEndpointFile()
     }

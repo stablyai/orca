@@ -105,11 +105,7 @@ export type HookListenerState = {
   lastLaunchTokenByPaneKey: Map<string, string>
   /** Hermes turn per pane, so tool hooks from its post-turn background review can be ignored. */
   hermesTurnByPaneKey: Map<string, HermesPaneTurn>
-  /**
-   * Child agent sessions (DSH SubagentStart, Droid Task workers); their hooks carry their own session_id.
-   * For Droid, a pane's set exists only while the root's turn is open: its UserPromptSubmit sets a fresh
-   * one and its done deletes it.
-   */
+  /** DSH child sessions named by SubagentStart; their hooks carry their own session_id. Droid keeps its own roster. */
   childSessionIdsByPaneKey: Map<string, Set<string>>
 }
 

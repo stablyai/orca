@@ -9,15 +9,11 @@ import {
 import { readFirstString } from './interactive-tool'
 import type { HookListenerState } from './listener-state'
 import type { AgentHookEventPayload } from './listener-event'
-import {
-  isDroidWorkerSession,
-  openDroidRootTurn,
-  rememberDroidWorkerSession
-} from './providers/droid/droid-worker-sessions'
 import { isGrokSubagentEvent } from './providers/grok/grok-tool-fields'
 import { isHermesRootSessionEvent, withHermesPaneSessionId } from './providers/hermes/hermes-events'
 import { readString } from './tool-input-preview'
 import { readFirstTranscriptRecord } from './transcript-reader'
+import { providerHookRetainsPaneRoot, readProviderHookPaneSession } from './provider-hook-session'
 
 export function hasSeparateHookSessionAdmission(
   source: string | undefined
@@ -75,26 +71,17 @@ function readPaneProviderSession(
   ) {
     return null
   }
-  const providerSession = extractAgentProviderSession(source, hookPayload)
+  const extractedSession = extractAgentProviderSession(source, hookPayload)
+  const providerSession = extractedSession
+    ? readProviderHookPaneSession(source, {
+        state,
+        paneKey,
+        hookPayload,
+        session: extractedSession
+      })
+    : null
   if (!providerSession) {
     return null
-  }
-  if (source === 'droid') {
-    const previous = state.lastStatusByPaneKey.get(paneKey)
-    const owner = previous?.payload.agentType === 'droid' ? previous.providerSession : undefined
-    if (
-      owner?.id !== providerSession.id &&
-      (isDroidWorkerSession(state, paneKey, providerSession.id) || isDroidSubSession(hookPayload))
-    ) {
-      // Sub-droids inherit the pane, so a worker's hook keeps the orchestrator's session.
-      if (owner) {
-        rememberDroidWorkerSession(state, paneKey, providerSession.id)
-      }
-      return owner ?? null
-    }
-    if (eventName === 'UserPromptSubmit') {
-      openDroidRootTurn(state, paneKey)
-    }
   }
   if (source === 'antigravity') {
     const transcriptPath = readPathFromKeys(hookPayload, ['transcriptPath', 'transcript_path'])
@@ -126,19 +113,6 @@ function readPaneProviderSession(
     ...(effort ? { effort } : {}),
     ...(permissionMode ? { permissionMode } : {})
   }
-}
-
-/** Droid marks a sub-session only in its transcript's first record. */
-function isDroidSubSession(hookPayload: Record<string, unknown>): boolean {
-  const transcriptPath = readPathFromKeys(hookPayload, ['transcriptPath', 'transcript_path'])
-  const origin = transcriptPath ? readFirstTranscriptRecord(transcriptPath) : undefined
-  return (
-    typeof origin === 'object' &&
-    origin !== null &&
-    'callingSessionId' in origin &&
-    typeof origin.callingSessionId === 'string' &&
-    origin.callingSessionId.length > 0
-  )
 }
 
 /** The pane's previous session when this hook continues it; /clear and compact restart Claude in the same process. */
@@ -278,7 +252,8 @@ export function retainHookRootContext(
     previous.payload.agentType === incoming.payload.agentType &&
     ((incoming.payload.agentType === 'codex' && incoming.toolAgentId) ||
       (fromHook &&
-        ['copilot', 'hermes', 'antigravity', 'droid'].includes(incoming.payload.agentType ?? '') &&
+        (['copilot', 'hermes', 'antigravity'].includes(incoming.payload.agentType ?? '') ||
+          providerHookRetainsPaneRoot(incoming.payload.agentType ?? '')) &&
         sameTerminalOwner))
       ? previous
       : undefined

@@ -25,6 +25,7 @@ import {
 import { AgentTranscriptPollScheduler } from '../../../shared/agent-hook-listener/transcripts/agent-transcript-poll-scheduler'
 import { HookLeaseExpiryTimers } from '../../../shared/agent-hook-listener/leases/hook-lease-expiry-timers'
 import { AgentHookStopTranscriptReads } from './agent-hook-stop-transcript-reads'
+import type { CachedPaneEnvelopeMeta } from '../status/agent-hook-cached-pane-status'
 
 const ASSISTANT_MESSAGE_RETRY_ATTEMPTS = 5
 const ASSISTANT_MESSAGE_RETRY_MS = 50
@@ -98,6 +99,10 @@ export class AgentHookResultRetryScheduler {
         this.host.applyEvent(row, source, env, version)
       }
     })
+  }
+
+  armLeaseExpiries(metas: ReadonlyMap<string, CachedPaneEnvelopeMeta>): void {
+    metas.forEach((m, paneKey) => this.armLeaseExpiry(m.source, paneKey, m.env, m.version))
   }
 
   clearAssistantMessageRetry(paneKey: string): void {
