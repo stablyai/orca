@@ -21,7 +21,7 @@ import {
   captureRemoteCliBrowserScope,
   runOutsideRemoteCliBrowserScope
 } from '../../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
-import { captureActiveRpcCall, getActiveRpcCaller } from '../../../runtime/rpc/rpc-active-caller'
+import { captureActiveRpcCall, getActiveRpcCaller } from '../../../runtime/rpc/callers/active-call'
 
 export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeActionEffects {
   // Serialize tab switches behind commands targeting the current tab.

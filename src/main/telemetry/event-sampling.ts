@@ -1,4 +1,4 @@
-import type { EventName } from '../../shared/telemetry-events'
+import type { EventName } from '../../shared/telemetry/telemetry-event-classification'
 
 // Low-volume protected milestones: never sampled and exempt from the shared session ceiling.
 const PROTECTED_MILESTONE_EVENTS: ReadonlySet<string> = new Set<EventName>([

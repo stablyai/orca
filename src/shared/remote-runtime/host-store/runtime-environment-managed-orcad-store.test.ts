@@ -8,12 +8,12 @@ import {
   markEnvironmentUsed,
   removeEnvironment,
   updateEnvironmentFromPairingCode
-} from './runtime-environment-store'
+} from './runtime-environment-store-operations'
 import {
   addManagedOrcadEnvironment,
   moveManagedOrcadLocalPort,
   refreshManagedOrcadPairing
-} from './runtime-environment-managed-orcad-store'
+} from './runtime-environment-managed-orcad-operations'
 import {
   readCurrentRuntimeEnvironmentSidecarEntry,
   writeRuntimeEnvironmentSidecarEntry

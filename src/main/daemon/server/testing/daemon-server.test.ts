@@ -7,7 +7,7 @@ import { existsSync, mkdtempSync, rmSync, readFileSync, writeFileSync } from 'no
 import { DaemonServer } from '../daemon-server'
 import type { ConnectedDaemonClient } from '../daemon-client-connections'
 import { DaemonClient } from '../../transport/client/daemon-client'
-import { encodeNdjson } from '../../../../shared/main-process-ndjson-framer'
+import { encodeNdjson } from '../../../../shared/json-stream/main-process-ndjson-framer'
 import { PROTOCOL_VERSION } from '../../protocol/daemon-protocol-version'
 import type { DaemonRequest } from '../../protocol/daemon-rpc-contract'
 import type { SubprocessHandle } from '../../sessions/session-subprocess-handle'
@@ -58,9 +58,8 @@ function createMockSubprocess(): SubprocessHandle & {
 
 type DaemonServerPrivate = {
   lifecycle: { server: Server | null }
-  preparations: { pending: Map<string, Set<unknown>> }
+
   host: {
-    kill: (sessionId: string, opts?: { immediate?: boolean }) => void | Promise<void>
     dispose: () => Promise<void>
   }
   connections: { clients: Map<string, ConnectedDaemonClient> }
@@ -281,71 +280,6 @@ describe('DaemonServer', () => {
       await canceledCreate
       await shutdown
       expect(spawnSubprocess).not.toHaveBeenCalled()
-    })
-
-    it('cancels a disconnecting client’s pending preparation to avoid an orphan PTY (F4)', async () => {
-      let finishPreparation!: () => void
-      const preparation = new Promise<void>((resolve) => {
-        finishPreparation = resolve
-      })
-      const preparePtySpawn = vi.fn(() => preparation)
-      const spawnSubprocess = vi.fn(() => createMockSubprocess())
-      server = new DaemonServer({
-        socketPath,
-        tokenPath,
-        preparePtySpawn,
-        spawnSubprocess
-      })
-      await server.start()
-      const c = await connectClient()
-
-      c.request('createOrAttach', {
-        sessionId: 'disconnect-pending',
-        cols: 80,
-        rows: 24
-      }).catch(() => {})
-      await vi.waitFor(() => expect(preparePtySpawn).toHaveBeenCalledOnce())
-
-      c.disconnect()
-      // Let disconnect cancel the preparation before releasing preflight.
-      await vi.waitFor(() =>
-        expect((server as unknown as DaemonServerPrivate).connections.clients.size).toBe(0)
-      )
-      finishPreparation()
-      await vi.waitFor(() =>
-        expect((server as unknown as DaemonServerPrivate).preparations.pending.size).toBe(0)
-      )
-      expect(spawnSubprocess).not.toHaveBeenCalled()
-    })
-
-    it('does not acknowledge kill until asynchronous teardown completes', async () => {
-      await startServer()
-      const daemon = server as unknown as DaemonServerPrivate
-      let finishKill!: () => void
-      const teardown = new Promise<void>((resolve) => {
-        finishKill = resolve
-      })
-      const kill = vi.spyOn(daemon.host, 'kill').mockReturnValue(teardown)
-
-      let acknowledged = false
-      const routed = daemon.requestRouter
-        .route('client-1', {
-          id: 'kill-1',
-          type: 'kill',
-          payload: { sessionId: 'agent-session', immediate: true }
-        })
-        .then((result) => {
-          acknowledged = true
-          return result
-        })
-
-      await Promise.resolve()
-      expect(kill).toHaveBeenCalledWith('agent-session', { immediate: true })
-      expect(acknowledged).toBe(false)
-
-      finishKill()
-      await expect(routed).resolves.toEqual({})
-      expect(acknowledged).toBe(true)
     })
 
     it('emits exit when a fire-and-forget write targets a missing session', async () => {

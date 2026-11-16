@@ -1,5 +1,5 @@
 import { workspaceEditorFiles } from '@/store/slices/editor/tabs/workspace-editor-files'
-import type { Tab, TabGroup } from '../../../../shared/tab-types'
+import type { Tab, TabGroup } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { AppState } from '../../store/types'
 import { reconcileTabOrder } from './reconcile-order'
 

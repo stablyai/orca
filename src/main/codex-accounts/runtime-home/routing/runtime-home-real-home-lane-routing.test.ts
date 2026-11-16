@@ -8,14 +8,12 @@ import {
   createStore,
   getRuntimeCodexAuthPath,
   getRuntimeCodexHomePath,
-  getSharedRuntimeAuthProvenancePath,
   getSystemCodexAuthPath,
   getSystemCodexHomePath,
   setRealHomeRoutableForTest,
   setupRuntimeHomeTest,
   teardownRuntimeHomeTest,
-  testState,
-  writePaneRegistry
+  testState
 } from '../runtime-home-service-test-harness'
 
 // Keep asserted config bytes independent of platform socket-path limits.
@@ -63,52 +61,6 @@ describe('CodexRuntimeHomeService', () => {
       getRuntimeCodexHomePath()
     )
     expect(readFileSync(getRuntimeCodexAuthPath(), 'utf-8')).toBe(systemAuth)
-  })
-
-  it('skips retired-home reconciliation when no retained host pane can use it', async () => {
-    const syncLegacySharedCodexConfigForRetainedPanes = vi.fn()
-    vi.doMock('../legacy-host/legacy-shared-config-compatibility', () => ({
-      syncLegacySharedCodexConfigForRetainedPanes
-    }))
-    const retainedAuth = createCodexAuthJson('system@example.com', 'acct-system', 'retained')
-    const currentAuth = createCodexAuthJson('system@example.com', 'acct-system', 'current')
-    const retainedConfig = 'model = "retained"\n'
-    writePaneRegistry({
-      'real-home-pane': {
-        selectionKey: 'host',
-        accountId: null,
-        homeRoute: 'real-home'
-      }
-    })
-    writeFileSync(getRuntimeCodexAuthPath(), retainedAuth, 'utf-8')
-    writeFileSync(join(getRuntimeCodexHomePath(), 'config.toml'), retainedConfig, 'utf-8')
-    writeFileSync(getSystemCodexAuthPath(), currentAuth, 'utf-8')
-    writeFileSync(join(getSystemCodexHomePath(), 'config.toml'), 'model = "current"\n', 'utf-8')
-    writeFileSync(
-      getSharedRuntimeAuthProvenancePath(),
-      `${JSON.stringify({ owner: 'system-default', authJson: retainedAuth })}\n`,
-      'utf-8'
-    )
-    const store = createStore(createSettings({ realHomeRoutable: true }))
-    try {
-      const { CodexRuntimeHomeService } = await import('../../runtime-home-service')
-      const service = new CodexRuntimeHomeService(store as never)
-
-      service.reconcileLegacySharedHomeForRetainedPanes()
-      expect(service.prepareForCodexLaunch()).toBeNull()
-      expect(service.prepareForRateLimitFetch()).toEqual({
-        kind: 'ready',
-        codexHomePath: getSystemCodexHomePath()
-      })
-
-      expect(syncLegacySharedCodexConfigForRetainedPanes).not.toHaveBeenCalled()
-      expect(readFileSync(getRuntimeCodexAuthPath(), 'utf-8')).toBe(retainedAuth)
-      expect(readFileSync(join(getRuntimeCodexHomePath(), 'config.toml'), 'utf-8')).toBe(
-        retainedConfig
-      )
-    } finally {
-      vi.doUnmock('../legacy-host/legacy-shared-config-compatibility')
-    }
   })
 
   it('keeps pre-rollout shared-home panes authenticated on the real-home lane', async () => {

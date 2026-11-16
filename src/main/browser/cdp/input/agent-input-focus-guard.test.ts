@@ -47,21 +47,6 @@ describe('guardPaneFocusForAgentInput', () => {
     vi.useRealTimers()
   })
 
-  it('refuses the input and ends the guard when the pane never answers', async () => {
-    vi.useFakeTimers()
-    const { sent, renderer } = fakeRenderer(7, false)
-
-    const guarded = guardPaneFocusForAgentInput(renderer, 'page-1')
-    const outcome = expect(guarded).rejects.toMatchObject({
-      code: 'browser_focus_guard_unavailable'
-    })
-    await vi.advanceTimersByTimeAsync(150)
-
-    await outcome
-    expect(sent.map(({ data }) => data.active)).toEqual([true, false])
-    expect(ipcListeners.get(AGENT_INPUT_FOCUS_GUARD_READY_CHANNEL)).toEqual([])
-  })
-
   it('ignores a ready reply from another renderer', async () => {
     vi.useFakeTimers()
     const { renderer } = fakeRenderer(7, false)

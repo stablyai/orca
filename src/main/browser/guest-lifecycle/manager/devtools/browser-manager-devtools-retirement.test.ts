@@ -64,6 +64,7 @@ function createGuest(id: number) {
     getURL: () => 'https://example.com/',
     isCurrentlyAudible: () => false,
     isDestroyed: () => destroyed,
+    isCrashed: () => false,
     isDevToolsOpened: () => opened,
     setWindowOpenHandler: vi.fn(),
     setDevToolsWebContents: vi.fn((host: DevToolsHost) => {

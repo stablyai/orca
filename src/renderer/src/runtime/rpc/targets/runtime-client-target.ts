@@ -8,8 +8,8 @@ import {
   parseHostAuthorityKey,
   type HostAuthority,
   type HostAuthorityKey
-} from '../../../../../shared/host-authority'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+} from '../../../../../shared/execution-host/host-authority'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 /** Transport to an owner's runtime environment; `null` is this app (local or direct SSH). */
 export function runtimeTargetForOwnerEnvironment(

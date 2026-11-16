@@ -9,7 +9,7 @@ import {
   recordPtySurface,
   SURFACE_CLAIM_WITHOUT_STANDING
 } from '../../terminal/surface/pty-recorded-surface-topology'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import type { WindowLayoutCommand } from '../../terminal/layout/runtime-layout-apply'
 import {
   placeUnshownLiveTerminals,

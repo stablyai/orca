@@ -4,7 +4,7 @@ import { resolveSetupAgentSequenceLaunchCommand } from '../../../../shared/agent
 import {
   detectExplicitPiAgentKindFromCommand,
   isPiCompatibleAgentType
-} from '../../../../shared/pi-agent-kind'
+} from '../../../../shared/agent-launch/catalog/pi-agent-kind'
 import { applyTerminalGitCredentialPromptGuard } from '../../../../shared/shell/launch/terminal-git-credential-guard'
 import { ensureOpenCodeStartupPromptForLaunch } from '../../../opencode/startup-prompts/opencode-startup-prompt-installer'
 import { mimoCodeHookService } from '../../../mimo/hook-service'
@@ -18,7 +18,7 @@ import { stripLegacyTerminalShimEnv } from '../../../pty/shell-startup/legacy-te
 import { mergePersistedWindowsPath } from '../../../pty/environment/windows-environment-path'
 import { resolveCodexShellLaunchPreflightCommand } from '../../../pty/shell-startup/codex-shell-launch-preflight'
 import { scheduleCodexHookReconcile } from '../../../codex/hooks/reconciliation/codex-hook-reconcile'
-import { buildConfiguredProxyEnv } from '../../../../shared/network-proxy'
+import { buildConfiguredProxyEnv } from '../../../../shared/network/network-proxy'
 import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import type { BuildPtyHostEnvOptions } from './types'
 import { stripInheritedOrcaCodexHomeOverride } from './codex-home'

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { RuntimeCreateAgentSessionRequest } from '../../../../shared/agent-session/agent-session-host-authority'
 import { OrcaRuntimeService } from '../../orca-runtime'
 
-import type { IPtyProvider } from '../../../providers/pty-provider-contract'
+import type { IPtyProvider } from '../../../providers/pty/provider-contract'
 
 function operationId(now = Date.now(), nonce = '0123456789abcdef0123456789abcdef'): string {
   return `${now}-${nonce}`

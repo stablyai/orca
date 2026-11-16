@@ -15,7 +15,7 @@ import {
 } from './task-provider-identity'
 import { isTaskProvider, type TaskProvider } from './task-providers'
 import type { GlobalSettings } from '../global-settings-types'
-import type { Repo } from '../repo-types'
+import type { Repo } from '../repository/repo-types'
 
 export type TaskSourceContext = {
   kind: 'task-source'

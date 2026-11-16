@@ -8,8 +8,8 @@ import type { HostedReviewInfo } from '../../../../../../shared/source-control/h
 import type {
   GitHubPRMergeMethod,
   PRInfo
-} from '../../../../../../shared/github/pull-request-types'
-import type { Repo } from '../../../../../../shared/repo-types'
+} from '../../../../../../shared/github/pull-requests/pull-request-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import {
   mergeGitHubHostedReview,
   setGitHubHostedReviewAutoMerge,

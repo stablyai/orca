@@ -3,8 +3,8 @@ import {
   mergedAgentModelCatalogModels
 } from './agent-model-catalog-models'
 import { configuredCatalogChoice } from './agent-model-catalog-configured-row'
-import * as modelCatalogOwnership from '../../../shared/agent-session/options/agent-model-catalog-ownership'
-import { fillUnknownModelEfforts } from '../../../shared/agent-session/options/agent-session-model-efforts'
+import * as modelCatalogOwnership from '../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
+import { fillUnknownModelEfforts } from '../../../shared/agent-session/options/model-catalog/agent-session-model-efforts'
 import type { AgentSessionUnavailable } from '../../../shared/agent-session/agent-session-availability'
 import type {
   AgentSessionFastModeSupport,

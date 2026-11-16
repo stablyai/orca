@@ -4,7 +4,7 @@ import {
   GitStatusParams,
   GitSubmoduleStatus,
   WorktreeSelector
-} from '../../../../../../shared/rpc-contract/git-params'
+} from '../../../../../../shared/rpc-contract/source-control/git-params'
 import { defineMethod } from '../../../core'
 
 function projectConflictOperation(
@@ -72,6 +72,13 @@ export const GIT_STATUS_METHODS = [
         conflictOperation: projectConflictOperation(status.conflictOperation, clientCapabilities)
       }
     }
+  }),
+  defineMethod({
+    name: 'git.atRiskLocalFiles',
+    permission: 'workspace',
+    params: WorktreeSelector,
+    handler: async (params, { runtime, signal }) =>
+      runtime.readRuntimeWorktreeAtRiskLocalFiles(params.worktree, signal)
   }),
   defineMethod({
     name: 'git.conflictOperation',

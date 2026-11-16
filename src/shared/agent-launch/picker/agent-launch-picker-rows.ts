@@ -3,12 +3,12 @@ import type { GlobalSettings } from '../../global-settings-types'
 import {
   nativeChatPreferenceFor,
   type NativeChatDefaultSettings
-} from '../../structured-native-chat-launch-route'
+} from '../choices/structured-native-chat-launch-route'
 import type { ExecutionHostId } from '../../execution-host'
 import type { TuiAgent } from '../catalog/tui-agent'
 import { filterEnabledTuiAgents, TUI_AGENT_AUTO_PICK_ORDER } from '../catalog/tui-agent-selection'
 import type { AgentSessionChatProgram } from '../../agent-session/agent-session-agent-availability'
-import { agentSessionInstallCommand } from '../../agent-session/lifecycle/agent-session-setup-commands'
+import { agentSessionInstallCommand } from '../../agent-session/lifecycle/launch/agent-session-setup-commands'
 
 export type HostChatAnswer =
   | 'yes'

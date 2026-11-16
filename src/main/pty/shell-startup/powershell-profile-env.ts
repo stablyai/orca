@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { expandWindowsEnvironmentVariables } from '../../../shared/windows-environment-expansion'
+import { expandWindowsEnvironmentVariables } from '../../../shared/shell/launch/windows-environment-expansion'
 import { loadWindowsNativeRegistry } from '../../windows/windows-native-registry'
 import { stripTrailingComment } from './shell-startup-env'
 

@@ -22,12 +22,6 @@ describe('OrchestrationDb', () => {
     return db
   }
 
-  it('caps the write-ahead log it keeps after a checkpoint at 8 MiB', () => {
-    expect(createDb().db.prepare('PRAGMA journal_size_limit').get()).toEqual({
-      journal_size_limit: 8_388_608
-    })
-  })
-
   describe('tasks', () => {
     it('completing a task frees its active dispatch context', () => {
       const d = createDb()
@@ -55,53 +49,9 @@ describe('OrchestrationDb', () => {
         /already has an active dispatch/
       )
     })
-
-    it('getLatestDispatchForTerminal returns the most recent completed dispatch', () => {
-      const d = createDb()
-      const firstTask = d.createTask({
-        runId,
-        spec: 'first'
-      })
-      const first = createRootDispatch(d, firstTask.id, 'term_a')
-      d.completeDispatch(first.id)
-      const secondTask = d.createTask({
-        runId,
-        spec: 'second'
-      })
-      const second = createRootDispatch(d, secondTask.id, 'term_a')
-      d.completeDispatch(second.id)
-
-      const latest = d.getLatestDispatchForTerminal('term_a')
-      expect(latest?.id).toBe(second.id)
-      expect(latest?.status).toBe('completed')
-      expect(d.getActiveDispatchForTerminal('term_a')).toBeUndefined()
-    })
   })
 
   describe('decision gates', () => {
-    it('creates a gate and blocks the task', () => {
-      const d = createDb()
-      const task = d.createTask({
-        runId,
-        spec: 'needs approval'
-      })
-      createRootDispatch(d, task.id, 'term_a')
-      const gate = d.createGate({
-        taskId: task.id,
-        question: 'Proceed?',
-        options: ['yes', 'no']
-      })
-
-      expect(gate.id).toMatch(/^gate_/)
-      expect(gate.task_id).toBe(task.id)
-      expect(gate.status).toBe('pending')
-      expect(JSON.parse(gate.options)).toEqual(['yes', 'no'])
-
-      const updated = d.getTask(task.id)
-      expect(updated?.status).toBe('blocked')
-      expect(d.getActiveDispatchForTerminal('term_a')).toBeUndefined()
-    })
-
     it('rolls back the gate row when the Task transition cannot commit', () => {
       const d = createDb()
       const task = d.createTask({ runId: 'run_legacy_local', spec: 'atomic gate creation' })

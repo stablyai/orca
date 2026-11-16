@@ -2,7 +2,10 @@ import { useRef } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { FileText, Globe, SquareTerminal } from 'lucide-react-native'
 import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent'
-import { ActionSheetContent, type ActionSheetAction } from '../../components/ActionSheetModal'
+import {
+  ActionSheetContent,
+  type ActionSheetAction
+} from '../../components/sheets/ActionSheetModal'
 import { BottomDrawer } from '../../components/bottom-drawer/BottomDrawer'
 import {
   LIST_LEADING_INSET,
@@ -10,7 +13,7 @@ import {
   ListRow,
   SectionHeader
 } from '../../components/list/ListGroup'
-import { MobileAgentIcon } from '../../components/MobileAgentIcon'
+import { MobileAgentIcon } from '../../components/icons/MobileAgentIcon'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { colors, radii, spacing } from '../../theme/mobile-theme'

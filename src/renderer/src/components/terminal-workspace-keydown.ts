@@ -1,21 +1,20 @@
 import { reopenClosedWorkspaceTab } from './reopen-closed-workspace-tab'
 import { toast } from 'sonner'
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace/tabs/workspace-tab-commands'
-import { keybindingMatchesAction } from '../../../shared/keybindings'
-import type { KeybindingActionId } from '../../../shared/keybindings'
-import { matchesRecentTabSwitcherChord } from '../../../shared/window-shortcut-policy'
+import { keybindingMatchesAction } from '../../../shared/keybindings/matching'
+import type { KeybindingActionId } from '../../../shared/keybindings/types'
+import { chordOwnedOutsideWorkspaceTabs } from './terminal-workspace-chord-ownership'
 import { useAppStore } from '../store/index'
-import { agentsScopeShortcutOwnsChord } from '../app-shell/agents-shortcut-handlers'
 import {
   handleEmptyFloatingWorkspacePanelCloseShortcut,
   isEventTargetInsideFloatingWorkspacePanel,
   isFloatingWorkspacePanelFocused
-} from '@/components/floating-terminal/floating-workspace-terminal-actions'
+} from '@/components/floating-terminal/workspace/floating-workspace-terminal-actions'
 import {
   createFloatingWorkspaceBrowserTab,
   createFloatingWorkspaceMarkdownTab,
   createFloatingWorkspaceTerminalTab
-} from '@/components/floating-terminal/floating-workspace-tab-creation'
+} from '@/components/floating-terminal/workspace/floating-workspace-tab-creation'
 import { showTerminalShortcutCaptureNotification } from '@/lib/notifications/terminal-shortcut-capture-notification'
 import {
   ensureClientCreationActionAllowed,
@@ -24,7 +23,7 @@ import {
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { translate } from '@/i18n/i18n'
 import { getKeybindingContext } from './terminal-workspace-model'
-import { isAgentTerminalPreviewTarget } from './dashboard-popout/agent-terminal-preview-target'
+import { isAgentTerminalPreviewTarget } from './dashboard/terminal-preview/agent-terminal-preview-target'
 import { resolveTerminalAgentTabShortcut } from './terminal-agent-tab-shortcut'
 import { getDetectionTargetIdentityForWorktree } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import {
@@ -223,12 +222,8 @@ export function handleTerminalWorkspaceKeyDown(
     handleCloseAllFiles()
     return
   }
-  // Why: while focus is in Agents, its scope chords beat every tab-switching chord, recent-tab included.
-  if (agentsScopeShortcutOwnsChord(matchShortcut)) {
-    return
-  }
   if (
-    matchesRecentTabSwitcherChord(event, shortcutPlatform, keybindings, {
+    chordOwnedOutsideWorkspaceTabs(matchShortcut, event, shortcutPlatform, keybindings, {
       context,
       terminalShortcutPolicy
     })
@@ -291,6 +286,19 @@ export function handleTerminalWorkspaceKeyDown(
       type: 'switch',
       direction: terminalTabDirection,
       scope: 'terminal',
+      floatingPanelOwned: floatingWorkspaceFocused
+    })
+  }
+  const moveTabDirection = matchShortcut('tab.moveRight')
+    ? 1
+    : matchShortcut('tab.moveLeft')
+      ? -1
+      : null
+  if (moveTabDirection !== null && claimTabSwitch()) {
+    notifyTerminalCapture(moveTabDirection === 1 ? 'tab.moveRight' : 'tab.moveLeft')
+    dispatchWorkspaceTabCommand({
+      type: 'move',
+      direction: moveTabDirection,
       floatingPanelOwned: floatingWorkspaceFocused
     })
   }

@@ -1,6 +1,6 @@
 // Rows seeded from a WSL host's saved project list, and the hosts whose live list already applied.
 import type { AppState } from '../types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 
 const savedRows = new WeakSet<Repo>()
 const liveListHostsByStore = new WeakMap<() => AppState, Set<string>>()

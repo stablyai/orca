@@ -10,8 +10,8 @@ import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId
 } from '../../../../../../shared/execution-host'
-import type { DesktopSidebarFacts } from '../../../../../../shared/sidebar-list/desktop-sidebar-facts'
-import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import type { DesktopSidebarFacts } from '../../../../../../shared/sidebar-list/feed-facts/desktop-sidebar-facts'
+import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 
 type WindowFactsState = Pick<
   AppState,

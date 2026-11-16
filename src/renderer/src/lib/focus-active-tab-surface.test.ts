@@ -11,7 +11,7 @@ vi.mock('@/store', () => ({
 vi.mock('@/components/terminal-pane/input/focus/focus-terminal-tab-surface', () => ({
   focusTerminalTabSurface: mocks.focusTerminalTabSurface
 }))
-vi.mock('@/components/browser-pane/host-guest/browser-focus', () => ({
+vi.mock('@/components/browser-pane/host-guest/input/browser-focus', () => ({
   requestBrowserFocus: mocks.requestBrowserFocus
 }))
 

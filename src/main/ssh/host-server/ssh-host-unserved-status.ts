@@ -1,10 +1,10 @@
-import type { NodeDistMirrorAttempt } from '../../../shared/node-dist-mirror'
-import type { SshManagedServerStatus } from '../../../shared/ssh-types'
+import type { NodeDistMirrorAttempt } from '../../../shared/node-runtime/node-dist-mirror'
+import type { SshManagedServerStatus } from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { HostServerOnConnectResult } from './ssh-host-server-on-connect'
 import {
   sshHostServerSetupRemedy,
   type SshHostServerSetupRemedy
-} from '../../../shared/ssh-host-server-setup-remedy'
+} from '../../../shared/remote-runtime/ssh/ssh-host-server-setup-remedy'
 
 type UnservedDecision = Extract<HostServerOnConnectResult, { route: 'unserved' }>
 

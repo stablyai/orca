@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { mulberry32 } from '../../../../shared/agent-tui-ansi-fuzz-stream'
+import { mulberry32 } from '../../../../shared/terminal/testing/agent-tui-ansi-fuzz-stream'
 import type { SerializeFuzzCase, SerializeFuzzStep } from './serialize-grid-fuzz-stream'
 import {
   loadOldSerializer,

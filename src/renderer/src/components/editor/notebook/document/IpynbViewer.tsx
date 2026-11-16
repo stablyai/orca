@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/dialog'
 import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
-import { editorShortcutMatches } from '../../editor-shortcuts'
+import { editorShortcutMatches } from '../../commands/editor-shortcuts'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { IpynbCellToolbar, IpynbToolbarButton } from '../cells/IpynbCellToolbar'

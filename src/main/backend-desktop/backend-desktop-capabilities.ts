@@ -1,13 +1,13 @@
 import { BrowserWindow, type WebContents, type WebFrameMain } from 'electron'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { agentTokenUsageSchema } from '../../shared/telemetry-agent-token-usage-schema'
+import { agentTokenUsageSchema } from '../../shared/telemetry/schemas/telemetry-agent-token-usage-schema'
 import { claudeProfileTranscriptDirs } from '../claude-usage/transcript-file-discovery'
 import { loadKnownUsageWorktreesByRepo } from '../usage/worktree-attribution/usage-worktree-metadata'
 import { isTelemetryEnabled, track } from '../telemetry/client'
 import type { UsageWorktreeSource } from '../usage/worktree-attribution/usage-worktree-metadata'
 import { currentWorkerEntryLayout } from '../worker-threads/worker-thread-entry-path'
-import { isRendererDocumentNavigation } from '../window/renderer-document-navigation'
+import { isRendererDocumentNavigation } from '../window/security/renderer-document-navigation'
 
 export function trustsBackendRenderer(contents: WebContents): boolean {
   if (

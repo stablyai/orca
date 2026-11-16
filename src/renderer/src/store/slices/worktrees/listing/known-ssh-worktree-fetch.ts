@@ -5,7 +5,7 @@ import type { DetectedWorktreeListResult } from '../../../../../../shared/worktr
 import type {
   HostQualifiedKnownWorktreeResult,
   SshExecutionHostId
-} from '../../../../../../shared/detected-worktree-provider-contract'
+} from '../../../../../../shared/worktree/catalog/detected-worktree-provider-contract'
 import { areDetectedWorktreeResultsEqual } from './worktree-catalog-visibility'
 import { catalogRowsEqual } from '../../../../lib/catalog-reconciliation/catalog-row-reconciliation'
 import {

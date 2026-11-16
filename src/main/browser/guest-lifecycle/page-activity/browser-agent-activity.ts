@@ -1,18 +1,18 @@
 import { BrowserWindow, ipcMain, type WebContents } from 'electron'
-import { isResourceWindowVisible } from '../../../window/resource-view-admission'
+import { isResourceWindowVisible } from '../../../window/visibility/resource-view-admission'
 import { sendGuestCdpCommand } from '../../cdp/debugger/guest-cdp-command'
-import { isAgentRpcCaller } from '../../../runtime/rpc/rpc-caller-identity'
+import { isAgentRpcCaller } from '../../../runtime/rpc/callers/rpc-caller-identity'
 import {
   BROWSER_AGENT_ACTIVITY_CHANNEL,
   BROWSER_AGENT_CURSOR_ARRIVED_CHANNEL,
   BROWSER_AGENT_CURSOR_CHANNEL,
   type BrowserAgentActivityEvent,
   type BrowserAgentCursorEvent
-} from '../../../../shared/browser-agent-activity-contract'
+} from '../../../../shared/browser/automation/browser-agent-activity-contract'
 import {
   getActiveRpcAgentSessionId,
   getActiveRpcCaller
-} from '../../../runtime/rpc/rpc-active-caller'
+} from '../../../runtime/rpc/callers/active-call'
 import {
   remoteCliBrowserScopeController,
   type RemoteCliBrowserController
@@ -171,6 +171,10 @@ export class BrowserAgentActivity {
 
   isActive(browserPageId: string): boolean {
     return this.pages.has(browserPageId)
+  }
+
+  activePageIds(): IterableIterator<string> {
+    return this.pages.keys()
   }
 
   end(browserPageId: string): void {

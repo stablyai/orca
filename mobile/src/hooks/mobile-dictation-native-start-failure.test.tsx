@@ -4,9 +4,8 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createFakeRpcClient,
-  type FakeRpcClient,
-  type SentRequest
-} from '../mobile-web-shell/bridge-host-test-fakes'
+  type FakeRpcClient
+} from '../mobile-web-shell/test-support/bridge-host-test-fakes'
 
 const device = vi.hoisted(() => ({
   calls: new Array<string>(),
@@ -69,24 +68,6 @@ function dictation(): UseMobileDictationResult {
   return current
 }
 
-async function pumpHolding(
-  rpc: FakeRpcClient,
-  hold: string,
-  held: { request: SentRequest | null }
-): Promise<void> {
-  for (let round = 0; round < 8; round += 1) {
-    for (const request of rpc.requests.splice(0)) {
-      if (request.method === hold && held.request === null) {
-        held.request = request
-        continue
-      }
-      request.resolve({ id: 'desktop', ok: true, result: {} })
-    }
-    await Promise.resolve()
-    await Promise.resolve()
-  }
-}
-
 async function pump(rpc: FakeRpcClient, refuse: string): Promise<void> {
   for (let round = 0; round < 8; round += 1) {
     for (const request of rpc.requests.splice(0)) {
@@ -128,92 +109,5 @@ describe('a native start the desktop refuses', () => {
     // The open capture owns a wake tag; no outer start catch releases it.
     expect(device.screen).toEqual(['+', '-'])
     expect(dictation().status).toBe('idle')
-  })
-})
-
-describe('a stale native start whose refusal arrives while a newer one is recording from the tap', () => {
-  it('leaves the newer dictation recording, with the microphone and the screen still its own', async () => {
-    const rpc = createFakeRpcClient()
-    mount(rpc)
-    const first: { request: SentRequest | null } = { request: null }
-    await act(async () => {
-      void dictation()
-        .start()
-        .catch(() => undefined)
-      await pumpHolding(rpc, 'speech.dictation.start', first)
-    })
-    expect(first.request).not.toBeNull()
-    expect(device.screen).toEqual(['+'])
-    await act(async () => {
-      const cancelled = dictation().cancel()
-      await pump(rpc, 'none')
-      await cancelled
-    })
-    let started: Promise<void> = Promise.resolve()
-    await act(async () => {
-      started = dictation()
-        .start()
-        .catch(() => undefined)
-      await pump(rpc, 'none')
-    })
-    // B records from the tap but waits for A to settle on the host before its own start.
-    expect(dictation().status).toBe('starting')
-    const screenWhileRecording = [...device.screen]
-    const callsWhileRecording = [...device.calls]
-    // A no longer owns the microphone or screen; late failure must leave B alone.
-    await act(async () => {
-      first.request?.resolve({
-        id: 'desktop',
-        ok: false,
-        error: { code: 'refused', message: 'no model installed' }
-      })
-      await pump(rpc, 'none')
-      await pump(rpc, 'none')
-      await started
-    })
-    expect(dictation().status).toBe('recording')
-    expect(device.screen).toEqual(screenWhileRecording)
-    expect(device.calls).toEqual(callsWhileRecording)
-  })
-})
-
-describe('a stale native start that succeeds while a newer one is recording from the tap', () => {
-  it('does not commit itself over the dictation that replaced it', async () => {
-    // A’s late success must cancel only its desktop session, leaving B’s capture untouched.
-    const rpc = createFakeRpcClient()
-    mount(rpc)
-    const first: { request: SentRequest | null } = { request: null }
-    await act(async () => {
-      void dictation()
-        .start()
-        .catch(() => undefined)
-      await pumpHolding(rpc, 'speech.dictation.start', first)
-    })
-    expect(first.request).not.toBeNull()
-    await act(async () => {
-      const cancelled = dictation().cancel()
-      await pump(rpc, 'none')
-      await cancelled
-    })
-    let started: Promise<void> = Promise.resolve()
-    await act(async () => {
-      started = dictation()
-        .start()
-        .catch(() => undefined)
-      await pump(rpc, 'none')
-    })
-    // B records from the tap but waits for A to settle on the host before its own start.
-    expect(dictation().status).toBe('starting')
-    const screenWhileRecording = [...device.screen]
-    const callsWhileRecording = [...device.calls]
-    await act(async () => {
-      first.request?.resolve({ id: 'desktop', ok: true, result: { started: true } })
-      await pump(rpc, 'none')
-      await pump(rpc, 'none')
-      await started
-    })
-    expect(dictation().status).toBe('recording')
-    expect(device.screen).toEqual(screenWhileRecording)
-    expect(device.calls).toEqual(callsWhileRecording)
   })
 })

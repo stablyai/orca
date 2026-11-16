@@ -1,4 +1,4 @@
-import type { AuthenticatedMobileSocket } from '../mobile-socket-wiring'
+import type { AuthenticatedMobileSocket } from '../mobile/mobile-socket-wiring'
 
 /** Who connected, without credentials: a phone's clientId can be its bearer token, so it is never logged. */
 export function describeClientConnection(

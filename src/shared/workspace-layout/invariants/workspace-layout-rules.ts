@@ -1,7 +1,7 @@
 // Check structural rules on stored runtime partitions; optionally compare previous partitions for ID remounts.
 
 import type { ExecutionHostId } from '../../execution-host'
-import type { Tab, TabGroup } from '../../tab-types'
+import type { Tab, TabGroup } from '../tab-groups/tab-types'
 import { collectLayoutLeafIdsInOrder } from '../terminal-topology/terminal-pane-tree'
 import {
   collectTerminalLeafOwners,
