@@ -1,6 +1,7 @@
 import { buildTerminalSearchOptions } from '../../../../../src/shared/terminal/search/terminal-search-options'
 import { safeFind } from '../../../../../src/shared/terminal/search/terminal-search-safe-find'
 import { notify } from '../host-bridge/host-notify'
+import { cancelSelect } from '../selection/selection-mode'
 import type { TerminalDocumentScope } from '../document-scope'
 import type { TerminalDocumentTerminal } from '../document-terminal-shape'
 
@@ -49,6 +50,10 @@ export function findInTerminal(
     clearTerminalFind(scope)
     return
   }
+  // A search replaces xterm's selection with its match, so a long-press selection must give up its handles first.
+  if (scope.selMode === 'select') {
+    cancelSelect(scope)
+  }
   if (direction === 'next') {
     startFromViewport(scope.term)
   }
@@ -83,8 +88,10 @@ export function clearTerminalFind(scope: TerminalDocumentScope) {
   }
   try {
     addon.clearDecorations()
-    // xterm keeps the active match selected after decorations are cleared.
-    addon.findNext('')
+    // xterm keeps the active match selected after decorations are cleared; a long-press selection made since is the reader's.
+    if (scope.selMode !== 'select') {
+      addon.findNext('')
+    }
   } catch {}
   notify(scope, { type: 'find-results', resultIndex: -1, resultCount: 0 })
 }

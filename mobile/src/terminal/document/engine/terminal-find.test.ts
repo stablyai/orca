@@ -30,7 +30,7 @@ async function searchableDocument(text: string, { attached = true } = {}) {
     attach()
   }
   const lastResults = () => posted.findLast((message) => message.type === 'find-results')
-  return { scope, attach, lastResults }
+  return { scope, attach, posted, lastResults }
 }
 
 describe('terminal document find', () => {
@@ -55,5 +55,21 @@ describe('terminal document find', () => {
     doc.attach()
     rerunTerminalFind(doc.scope)
     expect(doc.lastResults()).toEqual({ type: 'find-results', resultIndex: 0, resultCount: 2 })
+  })
+
+  it('drops a long-press selection and its handles when a search takes the selection', async () => {
+    const doc = await searchableDocument('alpha\r\nbeta alpha\r\n')
+    const overlay = document.createElement('div')
+    overlay.classList.add('active')
+    doc.scope.selectionOverlay = overlay
+    doc.scope.selMode = 'select'
+    doc.scope.sel = { anchor: { col: 0, row: 1 }, focus: { col: 3, row: 1 }, activeHandle: null }
+
+    handleMsg(doc.scope, { type: 'find', query: 'alpha', direction: 'next', incremental: true })
+
+    expect(doc.scope.selMode).toBe('navigate')
+    expect(doc.scope.sel).toBeNull()
+    expect(overlay.classList.contains('active')).toBe(false)
+    expect(doc.posted).toContainEqual({ type: 'set-select-mode', enabled: false })
   })
 })
