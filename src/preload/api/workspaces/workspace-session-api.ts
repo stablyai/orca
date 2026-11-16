@@ -14,6 +14,8 @@ export type WorkspaceSessionApi = {
     listHostIds: () => Promise<ExecutionHostId[]>
     set: (args: WorkspaceSessionState, hostId?: ExecutionHostId) => Promise<void>
     patch: (args: WorkspaceSessionPatch, hostId?: ExecutionHostId) => Promise<void>
+    /** Drops a closed editor file's open-file row from every non-fenced partition, atomically in main (#42761). */
+    pruneClosedOpenFile: (args: { worktreeId: string; filePath: string }) => Promise<void>
     /** Commits a terminal tab or split-pane close into main's membership. */
     closeTerminalSurface: (args: {
       worktreeId: string
