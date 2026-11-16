@@ -33,7 +33,7 @@ export async function waitForRuntimeTerminalSetup(
           if (failure === 'old_host') {
             return null
           }
-          if (failure === 'transport_loss') {
+          if (failure === 'transport_loss' && !readSignal.aborted) {
             terminalSetupObservers.setConnected(owner.target.environmentId, false)
           }
           throw error
