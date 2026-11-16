@@ -167,7 +167,10 @@ export abstract class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends Or
         },
         onCommandFinished: (exitCode: number | null) => {
           void this.recheckHookAgentPresenceForPty(ptyId)
-          this.retirePtyAgentLaunchAuthority(ptyId, !isJobStopStatus(exitCode))
+          // A suspended (Ctrl-Z) agent still holds its launch; only a real finish ends it.
+          if (!isJobStopStatus(exitCode)) {
+            this.retirePtyAgentLaunchAuthority(ptyId, true)
+          }
           this.recordTerminalSideEffectFact(ptyId, { kind: 'command-finished', exitCode })
           this.openCodeRunLifetime.onCommandFinished(ptyId, exitCode)
         },
