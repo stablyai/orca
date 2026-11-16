@@ -306,7 +306,7 @@ export class AiVaultScannerServiceClient {
     const active = [...this.active.values()]
     this.active.clear()
     // A scan that exhausted the heap would exhaust it again; hold it until the exit says why.
-    // Retired children were alive at the fault, so they did not run out of heap.
+    // Retired children were alive at the fault; one that runs out of heap while retiring is not rerun.
     const held =
       this.ranOutOfMemory || retire
         ? []

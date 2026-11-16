@@ -31,10 +31,12 @@ const OPENCODE_SQLITE_PREVIEW_MESSAGE_WINDOW = 100
 const FIRST_USER_PROMPT_PART_LIMIT = 512
 // Previews skip hidden blocks of up to 256K chars; reading more of a part only costs worker heap.
 const OPENCODE_SQLITE_PREVIEW_TEXT_CHARS = 512 * 1024
+// The longest JSON string escape, `\uXXXX`.
+const MAX_JSON_ESCAPE_CHARS = 6
 
 type PreviewRow = {
   role: string | null
-  // JSON-quoted so text containing NUL survives the driver.
+  // Quoted before the cut: substr and the driver both stop at a raw NUL.
   part_text_json: string | null
   time_created: number
   summary_title: string | null
@@ -132,16 +134,21 @@ export function extractPartText(partData: string): string | null {
   }
 }
 
+// The cut can end a long text mid-escape: drop that escape and close the string.
 function previewTextFromJson(json: string | null): string | null {
   if (json === null) {
     return null
   }
-  try {
-    const text: unknown = JSON.parse(json)
-    return typeof text === 'string' ? text : null
-  } catch {
-    return null
+  for (let dropped = -1; dropped <= MAX_JSON_ESCAPE_CHARS; dropped++) {
+    const candidate = dropped === -1 ? json : `${json.slice(0, json.length - dropped)}"`
+    try {
+      const text: unknown = JSON.parse(candidate)
+      return typeof text === 'string' ? text : null
+    } catch {
+      // Try a shorter cut.
+    }
   }
+  return null
 }
 
 function readFirstUserPromptFromOpenCodeDb(
@@ -200,7 +207,7 @@ function buildPreviewQuery(db: SyncDatabase, agent: 'opencode' | 'zcode'): strin
   }
   return `SELECT json_extract(m.data, '$.role') AS role,
                  CASE WHEN json_type(p.data, '$.text') = 'text'
-                   THEN json_quote(substr(json_extract(p.data, '$.text'), 1, ${OPENCODE_SQLITE_PREVIEW_TEXT_CHARS}))
+                   THEN substr(json_quote(json_extract(p.data, '$.text')), 1, ${OPENCODE_SQLITE_PREVIEW_TEXT_CHARS})
                  END AS part_text_json,
                  p.time_created,
                  json_extract(m.data, '$.summary.title') AS summary_title,
