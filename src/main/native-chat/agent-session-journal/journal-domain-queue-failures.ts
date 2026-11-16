@@ -1,3 +1,4 @@
+import { journalFailureAuthoritySql } from './journal-failure-authority'
 import type Database from '../../sqlite/sync-database'
 import { invalidateJournalDomainQueue } from './journal-domain-queue-revision'
 import { isDeepStrictEqual } from 'node:util'
@@ -96,7 +97,7 @@ export function readJournalDomainQueueFailure(db: Database.Database, target: Tar
   }
   const resumed = db
     .prepare(
-      `SELECT 1 FROM journal_failure_resumes WHERE session_id=? AND epoch=? AND source_item_id=? AND failed_at=?`
+      `SELECT 1 FROM journal_failure_resumes AS grant WHERE session_id=? AND epoch=? AND source_item_id=? AND failed_at=? AND ${journalFailureAuthoritySql(db, 'grant')}`
     )
     .get(target.sessionId, target.epoch, source.itemId, source.failedAt)
   return resumed ? 0 : source.boundary

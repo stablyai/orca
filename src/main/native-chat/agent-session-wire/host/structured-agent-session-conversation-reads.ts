@@ -23,6 +23,7 @@ import { compareAgentJournalItems } from '../../../../shared/agent-session/journ
 import { captureHostStructuredAgentSessionWork } from '../observations/structured-agent-session-read-work'
 import { copyJournalCurrentWorkAuthority } from '../../agent-session-journal/journal-observer-read'
 import type { AgentSessionFailureResumeResult } from '../../../../shared/agent-session/agent-session-held-delivery'
+import type { JournalFailureAuthority } from '../../agent-session-journal/journal-failure-authority'
 
 type ReadContext = {
   deps: StructuredAgentSessionHostDeps
@@ -78,6 +79,7 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
         dispatchId: string
         expectedRuntimeFence: number
         hasMessage?: true
+        authorization: JournalFailureAuthority
       },
       authorize: () => void
     ): Promise<AgentSessionFailureResumeResult> =>
@@ -113,20 +115,26 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
         ) {
           throw new Error('Invalid failure recovery result')
         }
+        const remaining = {
+          waiting: value.waiting,
+          ...('stillHeld' in value && typeof value.stillHeld === 'number'
+            ? { stillHeld: value.stillHeld }
+            : {}),
+          ...('heldReason' in value && typeof value.heldReason === 'string'
+            ? { heldReason: value.heldReason }
+            : {})
+        }
         switch (value.status) {
           case 'resumed':
             context().onFailureResumed(id)
-            return { status: value.status, waiting: value.waiting }
+            return { status: value.status, ...remaining }
           case 'not-failed':
           case 'stale-failure':
           case 'already-used':
           case 'blocked':
           case 'not-retryable':
           case 'message-attached':
-            return {
-              status: value.status,
-              waiting: value.waiting
-            }
+            return { status: value.status, ...remaining }
           default:
             throw new Error('Invalid failure recovery status')
         }

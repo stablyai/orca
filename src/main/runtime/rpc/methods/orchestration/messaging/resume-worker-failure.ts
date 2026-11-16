@@ -6,6 +6,7 @@ import { runBoundToCoordinator } from '../../../../orchestration/addressing/orch
 import { structuredMailboxCustody } from '../../../../orchestration/mailbox/routing/structured-session-mail-target'
 import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
+import { workerDeliveryName } from './worker-delivery-name'
 
 export async function resumeWorkerFailure(
   params: z.infer<typeof SendParams>,
@@ -68,6 +69,28 @@ export async function resumeWorkerFailure(
       { effectsApplied: false }
     )
   }
+  const run = db.getRun(dispatch.run_id)!
+  const authorization = {
+    runId: run.id,
+    snapshot: JSON.stringify([
+      run.id,
+      run.consumer_generation,
+      run.coordinator_handle,
+      run.coordinator_pane_key,
+      run.coordinator_orca_session_id_generation === run.consumer_generation
+        ? run.coordinator_orca_session_id
+        : null,
+      dispatch.id,
+      dispatch.status,
+      dispatch.consumer_generation,
+      dispatch.assignee_handle,
+      dispatch.assignee_orca_session_id,
+      dispatch.assignee_pane_key,
+      dispatch.process_incarnation,
+      dispatch.host_scope,
+      dispatch.capability_revoked_at
+    ])
+  }
   const operationId = `${ctx.orchestrationMutation.callerFingerprint}:${ctx.orchestrationMutation.requestId}`
   const result = await host.resumeFailure(
     custody.sessionId,
@@ -77,6 +100,7 @@ export async function resumeWorkerFailure(
       operationId,
       dispatchId,
       coordinatorId: caller.address,
+      authorization,
       ...(params.subject || params.body ? { hasMessage: true as const } : {})
     },
     authorize
@@ -114,7 +138,7 @@ export async function resumeWorkerFailure(
     target: { sessionId: custody.sessionId, dispatchId },
     recoveryMessage:
       result.status === 'resumed'
-        ? `Resuming ${dispatch.assignee_handle ?? dispatchId}.${goingNext ? ` ${goingNext} held ${goingNext === 1 ? 'message goes' : 'messages go'} next.` : ''}${result.stillHeld ? ` ${result.stillHeld} ${result.stillHeld === 1 ? 'message' : 'messages'} still held.` : ''}`
+        ? `Resuming ${workerDeliveryName(runtime, to) ?? to}.${goingNext ? ` ${goingNext} held ${goingNext === 1 ? 'message goes' : 'messages go'} next.` : ''}${result.stillHeld ? ` ${result.stillHeld} ${result.stillHeld === 1 ? 'message' : 'messages'} still held: ${result.heldReason ?? 'held individually'}.` : ''}`
         : ''
   }
 }

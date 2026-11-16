@@ -3,7 +3,10 @@ import { recordReceiptBeforeNudge } from './mutation-replay-nudge'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { structuredMailboxCustody } from '../../../../orchestration/mailbox/routing/structured-session-mail-target'
-import { readStructuredMailAdmitFacts } from '../../../../orchestration/mailbox/structured-pointer/structured-mailbox-pointer-host'
+import {
+  readStructuredMailAdmitFacts,
+  createStructuredMailboxPointerHost
+} from '../../../../orchestration/mailbox/structured-pointer/structured-mailbox-pointer-host'
 import {
   describeMailboxDeliveryHold,
   readMailboxDeliveryHold
@@ -11,6 +14,7 @@ import {
 import type { SendRecipientWarning } from './recipient-routing'
 import {
   heldWorkerDeliveryText,
+  unconfirmedMessageDelivery as unknownStoredDelivery,
   type AgentSessionHeldDelivery
 } from '../../../../../../shared/agent-session/agent-session-held-delivery'
 import type { OrchestrationPartyIdentity } from '../../../../../../shared/orchestration/mailbox/orchestration-party-identity'
@@ -18,6 +22,8 @@ import { runBoundToCoordinator } from '../../../../orchestration/addressing/orch
 import { formatAgentTypeLabel } from '../../../../../../shared/agent-status/presentation/agent-type-label'
 import { currentRunCoordinatorOrcaSessionId } from '../../../../orchestration/db/runs/run-coordinator-orca-session'
 import { formatOrcaSessionAddress } from '../../../../../../shared/agent-session/identity/orca-session-address'
+import { workerDeliveryName } from './worker-delivery-name'
+export { unknownStoredDelivery }
 
 type DeliveryWarning = SendRecipientWarning & { held?: AgentSessionHeldDelivery; busy?: true }
 
@@ -32,7 +38,11 @@ export async function sendDeliveryHoldWarning(
     return await readDeliveryHoldWarning(runtime, db, recipient)
   } catch (error) {
     console.warn('[orchestration] delivery hold read failed', recipient, error)
-    return null
+    return {
+      code: 'recipient_delivery_unknown',
+      recipient,
+      message: 'Message kept. Delivery is unconfirmed.'
+    }
   }
 }
 
@@ -61,7 +71,7 @@ async function readDeliveryHoldWarning(
   })
   return hold
     ? {
-        code: 'recipient_delivery_held',
+        code: hold.kind === 'unreadable' ? 'recipient_delivery_unknown' : 'recipient_delivery_held',
         recipient,
         ...(hold.kind === 'worker-failed' ? { held: hold.delivery } : {}),
         ...(hold.kind === 'busy' ? { busy: true as const } : {}),
@@ -73,47 +83,86 @@ async function readDeliveryHoldWarning(
 /** A stored send's receipt with the hold line added, when the delivery gate would hold it. */
 export async function withDeliveryHoldWarning<T>(
   sent: T,
-  runtime: Pick<OrcaRuntimeService, 'readTerminalMailHold'>,
+  runtime: Pick<OrcaRuntimeService, 'readTerminalMailHold' | 'orchestrationSenderNames'>,
   db: OrchestrationDb,
   recipient: string,
   caller?: OrchestrationPartyIdentity
 ) {
-  const held = await sendDeliveryHoldWarning(runtime, db, recipient)
-  if (!held || typeof sent !== 'object' || sent === null) {
+  try {
+    return await readStoredSendDelivery(sent, runtime, db, recipient, caller)
+  } catch {
+    return unknownStoredDelivery(sent, recipient)
+  }
+}
+
+async function readStoredSendDelivery<T>(
+  sent: T,
+  runtime: Pick<OrcaRuntimeService, 'readTerminalMailHold' | 'orchestrationSenderNames'>,
+  db: OrchestrationDb,
+  recipient: string,
+  caller?: OrchestrationPartyIdentity
+) {
+  if (typeof sent !== 'object' || sent === null) {
     return sent
   }
-  const prior = 'warnings' in sent && Array.isArray(sent.warnings) ? sent.warnings : []
-  if (held.busy) {
-    return { ...sent, delivered: false, state: 'queued', deliveryMessage: held.message }
+  const message =
+    'message' in sent && sent.message && typeof sent.message === 'object' ? sent.message : null
+  const id = message && 'id' in message && typeof message.id === 'string' ? message.id : undefined
+  const dispatch = recipient.startsWith('dispatch:')
+    ? db.getDispatchContextById(recipient.slice('dispatch:'.length))
+    : undefined
+  const custody = structuredMailboxCustody(recipient, db)
+  const target = {
+    address: recipient,
+    ...(typeof custody === 'object' ? { sessionId: custody.sessionId } : {}),
+    ...(dispatch ? { dispatchId: dispatch.id } : {})
   }
-  if (held.held) {
-    const dispatch = recipient.startsWith('dispatch:')
-      ? db.getDispatchContextById(recipient.slice('dispatch:'.length))
+  const base = { ...sent, target }
+  if (id) {
+    const saved = db.getMessageById(id)
+    const attempt = db.getStructuredMailSend(recipient, id)
+    const observed = attempt
+      ? await createStructuredMailboxPointerHost()
+          .observeMail?.(attempt)
+          .catch(() => undefined)
       : undefined
+    if (saved?.read || observed?.state.kind === 'accepted') {
+      return { ...base, delivered: true, state: 'delivered', deliveryMessage: 'Delivered.' }
+    }
+    if (attempt && (!observed || ['unreadable', 'unknown'].includes(observed.state.kind))) {
+      return unknownStoredDelivery(base, recipient)
+    }
+  }
+  const held = await sendDeliveryHoldWarning(runtime, db, recipient)
+  if (custody === 'unverifiable' || held?.code === 'recipient_delivery_unknown') {
+    return unknownStoredDelivery(base, recipient)
+  }
+  if (held?.held) {
     const run = dispatch ? db.getRun(dispatch.run_id) : undefined
     const coordinatorId = run && currentRunCoordinatorOrcaSessionId(run)
+    const coordinatorAddress =
+      run?.coordinator_handle ??
+      (coordinatorId ? formatOrcaSessionAddress(coordinatorId) : undefined)
     const outcome: AgentSessionHeldDelivery = {
       ...held.held,
-      target: { ...held.held.target, ...(dispatch ? { dispatchId: dispatch.id } : {}) }
+      target: { ...held.held.target, ...target }
     }
     const text = heldWorkerDeliveryText(outcome, {
-      worker: outcome.workerName ?? recipient,
+      worker: workerDeliveryName(runtime, recipient) ?? recipient,
       owner: 'the owner',
-      coordinator:
-        run?.coordinator_handle ??
-        (coordinatorId ? formatOrcaSessionAddress(coordinatorId) : undefined),
+      coordinator: coordinatorAddress ? workerDeliveryName(runtime, coordinatorAddress) : undefined,
       provider: formatAgentTypeLabel(outcome.provider),
       canResume: !!(run && caller && runBoundToCoordinator(run, caller))
     })
-    return {
-      ...sent,
-      ...outcome,
-      deliveryMessage: text.message,
-      deliveryHint: text.hint,
-      warnings: prior
-    }
+    return { ...sent, ...outcome, deliveryMessage: text.message, deliveryHint: text.hint }
   }
-  return { ...sent, warnings: [...prior, held] }
+  const worker = workerDeliveryName(runtime, recipient) ?? recipient
+  return {
+    ...base,
+    delivered: false,
+    state: 'queued',
+    deliveryMessage: held?.message ?? `Queued: ${worker} is waiting. Delivers when it's ready.`
+  }
 }
 
 /** A paired server's worker: this Orca sees only that the relay took the mail. */
@@ -121,7 +170,7 @@ export function relayedDeliveryUnknownWarning(recipient: string): SendRecipientW
   return {
     code: 'recipient_delivery_unknown',
     recipient,
-    message: `Accepted for relay to the server running ${recipient}; its delivery state is unknown here.`
+    message: `Message kept for ${recipient}. Delivery is unconfirmed on its host.`
   }
 }
 
@@ -150,10 +199,12 @@ export async function finishStoredSend(
     db,
     type === 'worker_done' ? settledDispatchId(sent) : undefined
   )
-  if (relayed || type === 'worker_done' || type === 'heartbeat') {
+  if (type === 'worker_done' || type === 'heartbeat') {
     return sent
   }
-  const delivery = await withDeliveryHoldWarning(sent, runtime, db, recipient, caller)
+  const delivery = relayed
+    ? unknownStoredDelivery(sent, recipient)
+    : await withDeliveryHoldWarning(sent, runtime, db, recipient, caller)
   recordReceiptBeforeNudge(recordMutationReceipt, delivery, () => undefined)
   return delivery
 }

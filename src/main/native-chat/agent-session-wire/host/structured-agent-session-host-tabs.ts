@@ -141,14 +141,6 @@ export function createStructuredAgentSessionTabSurface(
     isSessionTabVisible: (id: string) => host.deps.store.isSessionTabVisible(id),
     seedSessionTabs: async (ids?: readonly string[]): Promise<void> => {
       watchConversions()
-      const records = host.deps.store.listConversations()
-      for (let offset = 0; offset < records.length; offset += 32) {
-        publishFailures(
-          await Promise.all(
-            records.slice(offset, offset + 32).map((record) => savedFailure(record.sessionId))
-          )
-        )
-      }
       await seedSavedStructuredSessionTabs(
         host.deps,
         ids,
@@ -160,6 +152,18 @@ export function createStructuredAgentSessionTabSurface(
           ),
         recover
       )
+      let after: string | null = null
+      for (;;) {
+        const page = await host.deps.journalDatabase.readers.database({
+          kind: 'failed-candidates',
+          after
+        })
+        if (page.kind !== 'failed-candidates' || page.sessionIds.length === 0) {
+          break
+        }
+        publishFailures(await Promise.all(page.sessionIds.map(savedFailure)))
+        after = page.sessionIds.at(-1)!
+      }
     },
     getPersistedVisibleSessionTabIndex: () => host.deps.store.getVisibleSessionTabIndex(),
     getSessionTabId: (sessionId: string): string | null =>

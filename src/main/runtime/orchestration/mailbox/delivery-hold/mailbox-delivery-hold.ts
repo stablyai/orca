@@ -25,6 +25,7 @@ export type MailboxDeliveryHold =
   /** The chat accepts the mail into its queue behind an open prompt or question. */
   | { kind: 'behind-prompt' }
   | { kind: 'busy' }
+  | { kind: 'unreadable' }
   /** The chat is detached from its agent, or not attached here; the mail waits for it. */
   | { kind: 'detached' }
   /** The chat refuses new messages for now. */
@@ -74,7 +75,7 @@ export async function readMailboxDeliveryHold(
   if (sessionId) {
     // An unreadable chat proves nothing either way.
     const facts = await readers.readChatAdmit(sessionId)
-    return facts ? chatMailHold(facts) : null
+    return facts ? chatMailHold(facts) : { kind: 'unreadable' }
   }
   const terminal = readers.terminalFor(mailbox)
   return terminal ? readers.readTerminalHold(terminal) : null
@@ -82,6 +83,8 @@ export async function readMailboxDeliveryHold(
 
 export function describeMailboxDeliveryHold(recipient: string, hold: MailboxDeliveryHold): string {
   switch (hold.kind) {
+    case 'unreadable':
+      return 'Message kept. Delivery is unconfirmed.'
     case 'busy':
       return `Queued: ${recipient} is busy. Delivers when it's free.`
     case 'worker-failed':

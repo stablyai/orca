@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { journalFailureCustodySql } from './journal-failure-custody'
 import type Database from '../../sqlite/sync-database'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
@@ -26,9 +27,10 @@ export function readJournalDomainHeldDelivery(
     WHERE session_id=? AND epoch=? AND hidden=0 AND queue_failure_report_turn_item_id=?
     ORDER BY ordinal DESC LIMIT 1`)
     .get(target.sessionId, target.epoch, source.itemId)
-  const body: AgentJournalRenderItem['body'] | undefined = report
-    ? JSON.parse(String(report.payload_json)).body
+  const item: AgentJournalRenderItem | undefined = report
+    ? JSON.parse(String(report.payload_json))
     : undefined
+  const body = item?.body
   const fact = body?.kind === 'status' ? readAgentSessionFailureFact(body.failure) : undefined
   let failure: WorkerFailureKind = 'unknown'
   if (fact?.kind === 'notSignedIn') {
@@ -55,8 +57,8 @@ export function readJournalDomainHeldDelivery(
     failure = 'network'
   }
   const waiting = db
-    .prepare(`SELECT COUNT(*) AS count${includeReleased ? ", COUNT(json_extract(payload_json,'$.holdReason')) AS individually_held" : ''} FROM journal_queue_cards
-    WHERE session_id=? AND epoch=? AND state='waiting'`)
+    .prepare(`${journalFailureCustodySql(db)} SELECT (SELECT COUNT(*) FROM sources) AS count,
+      (SELECT COUNT(*) FROM sources WHERE held=1) AS individually_held`)
     .get(target.sessionId, target.epoch)
   const individuallyHeld = Number(waiting?.individually_held ?? 0)
   const failureId = createHash('sha256')
@@ -64,15 +66,16 @@ export function readJournalDomainHeldDelivery(
     .digest('hex')
   const prior = db
     .prepare(
-      `SELECT released_at FROM journal_failure_resumes WHERE session_id=? AND epoch=? ORDER BY released_at DESC LIMIT 1`
+      `SELECT released_at,attempted_message_id,sources_json FROM journal_failure_resumes WHERE session_id=? AND epoch=? ORDER BY released_at DESC LIMIT 1`
     )
     .get(target.sessionId, target.epoch)
   const recoveredAfter = prior ? Number(prior.released_at) : 0
   const personal = recoveredAfter
     ? db
-        .prepare(`SELECT 1 FROM journal_submission_attempts
-    WHERE session_id=? AND epoch=? AND dispatch_state='accepted' AND admitted_personal=1 AND accepted_sequence>? LIMIT 1`)
-        .get(target.sessionId, target.epoch, recoveredAfter)
+        .prepare(`SELECT 1 FROM journal_submission_attempts a
+    WHERE session_id=? AND epoch=? AND dispatch_state='accepted' AND admitted_personal=1 AND accepted_sequence>?
+      AND NOT EXISTS(SELECT 1 FROM json_each(?) source WHERE source.value=json_extract(a.payload_json,'$.queuedMessageId')) LIMIT 1`)
+        .get(target.sessionId, target.epoch, recoveredAfter, String(prior?.sources_json ?? '[]'))
     : undefined
   const success = recoveredAfter
     ? db
@@ -88,8 +91,10 @@ export function readJournalDomainHeldDelivery(
     failureId,
     target: { sessionId: target.sessionId },
     waiting: Number(waiting?.count ?? 0),
+    ...(item && Number.isFinite(item.observedAt) ? { failedAtTime: item.observedAt } : {}),
     ...(individuallyHeld ? { individuallyHeld } : {}),
     ...(recoveredAfter &&
+    prior?.attempted_message_id &&
     source.failedAt > recoveredAfter &&
     !personal &&
     !success &&

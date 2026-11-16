@@ -1,3 +1,9 @@
+import { dirname, join } from 'node:path'
+import { pathToFileURL } from 'node:url'
+import {
+  journalOrchestrationAttached,
+  markJournalOrchestrationAttached
+} from './journal-failure-authority'
 import { JournalForkPreparation } from './journal-fork-preparation'
 import { parentPort, workerData } from 'node:worker_threads'
 import { existsSync } from 'node:fs'
@@ -24,6 +30,7 @@ if (
 const port = parentPort
 let db: Database.Database | undefined
 let original: Database.Database | undefined
+let originalHasOutcomes: boolean | undefined
 let fork: { id: number; preparation: JournalForkPreparation } | undefined
 const conversions = new Map<number, JournalDomainImport['pages']>()
 function reply(message: JournalSqlReaderReply): void {
@@ -45,6 +52,13 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
   try {
     if (!db) {
       throw new Error('journal SQL reader is unavailable')
+    }
+    const authorityPath = join(dirname(workerData.originalFilename), 'orchestration.db')
+    if (!journalOrchestrationAttached(db) && existsSync(authorityPath)) {
+      const authorityUrl = pathToFileURL(authorityPath)
+      authorityUrl.searchParams.set('mode', 'ro')
+      db.prepare('ATTACH DATABASE ? AS orchestration_authority').run(authorityUrl.href)
+      markJournalOrchestrationAttached(db)
     }
     if (fork && !operation.kind.startsWith('fork-')) {
       throw new Error('fork reader is exclusively reserved')
@@ -89,6 +103,38 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
         reply({ type: 'point', id, result: readJournalSqlPoint(db, operation.request) })
         break
       case 'database':
+        if (operation.operation.kind === 'failed-candidates') {
+          const after = operation.operation.after ?? ''
+          const candidates = db
+            .prepare(`SELECT DISTINCT i.session_id FROM journal_items i INDEXED BY journal_failed_session_candidates
+            JOIN journal_chat_state h ON h.session_id=i.session_id AND h.epoch=i.epoch
+            WHERE i.hidden=0 AND i.queue_failed_outcome=1 AND i.queue_failed_at>0
+              AND i.session_id>? ORDER BY i.session_id LIMIT 32`)
+            .all(after)
+          if (!original && existsSync(workerData.originalFilename)) {
+            original = openJournalLegacySource(workerData.originalFilename, { timeout: 5000 })
+          }
+          originalHasOutcomes ??= !!original
+            ?.prepare("SELECT 1 FROM sqlite_schema WHERE name='journal_outcome_epochs'")
+            .get()
+          const legacy =
+            (originalHasOutcomes ? original : undefined)
+              ?.prepare(`SELECT e.session_id FROM journal_outcome_epochs e
+            WHERE e.session_id>? AND EXISTS(SELECT 1 FROM journal_outcomes q INDEXED BY journal_outcome_keys
+              WHERE q.generation=e.generation AND q.field='queue.cards' AND q.deleted=0
+                AND json_extract(q.value_json,'$[1].state')='waiting'
+                AND NOT EXISTS(SELECT 1 FROM journal_outcomes newer INDEXED BY journal_outcome_keys
+                  WHERE newer.generation=q.generation AND newer.field=q.field AND newer.entry_key=q.entry_key AND newer.seq>q.seq))
+            ORDER BY e.session_id LIMIT 32`)
+              .all(after) ?? []
+          const sessionIds = [
+            ...new Set([...candidates, ...legacy].map((row) => String(row.session_id)))
+          ]
+            .sort()
+            .slice(0, 32)
+          reply({ type: 'database', id, result: { kind: 'failed-candidates', sessionIds } })
+          break
+        }
         reply({ type: 'database', id, result: readJournalSqlDatabase(db, operation.operation) })
         break
       case 'conversion-prepare': {

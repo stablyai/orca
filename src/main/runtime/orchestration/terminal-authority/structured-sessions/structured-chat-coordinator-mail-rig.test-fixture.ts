@@ -248,7 +248,7 @@ beforeEach(async () => {
   profile = createStore()
   profile.addRepo(makeRepo({ id: 'workspace-1', path: root, executionHostId: 'local' }))
   codex = fakeCodex()
-  db = new OrchestrationDb(':memory:')
+  db = new OrchestrationDb(join(root, 'orchestration.db'))
   runtime = startRuntime()
   host = await ensureStructuredAgentSessionHost({
     logger: createStructuredAgentSessionLogger(),

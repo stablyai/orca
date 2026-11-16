@@ -1,6 +1,7 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
 import type { AgentSessionHeldDelivery } from '../../../../../shared/agent-session/agent-session-held-delivery'
 import { NativeChatWorkerFailureStatus } from './NativeChatWorkerFailureStatus'
+import { NativeChatQueueHeader } from './NativeChatQueueHeader'
 
 const base: AgentSessionHeldDelivery = {
   delivered: false,
@@ -12,9 +13,21 @@ const base: AgentSessionHeldDelivery = {
   waiting: 2
 }
 
-function row(extra: Partial<AgentSessionHeldDelivery>, sender = false) {
+function row(extra: Partial<AgentSessionHeldDelivery>, sender = false, focus = false) {
   return defineFixture({
     width: 680,
+    interact: focus
+      ? (frame) => {
+          const action = frame.querySelector('button')
+          if (!action) {
+            throw new Error('Missing button action')
+          }
+          action.focus()
+          if (!action.matches(':focus-visible') || getComputedStyle(action).boxShadow === 'none') {
+            throw new Error('Action has no visible keyboard focus')
+          }
+        }
+      : undefined,
     render: () => (
       <div className="native-chat-appearance bg-background p-3">
         <NativeChatWorkerFailureStatus
@@ -49,3 +62,43 @@ export const noneWaiting = row({ waiting: 0 })
 export const senderNetwork = row({}, true)
 export const senderSignIn = row({ reason: { kind: 'worker_failed', failure: 'sign-in' } }, true)
 export const senderUsage = row({ reason: { kind: 'worker_failed', failure: 'usage-limit' } }, true)
+export const senderFailedAgain = row({ recoveryUsed: true }, true)
+export const resumeFocused = row({}, false, true)
+export const signInFocused = row(
+  { reason: { kind: 'worker_failed', failure: 'sign-in' } },
+  false,
+  true
+)
+
+function ownerRecovery(failure: 'sign-in' | 'usage-limit', signInResolved = false) {
+  const delivery = { ...base, reason: { kind: 'worker_failed' as const, failure } }
+  return defineFixture({
+    width: 680,
+    render: () => (
+      <div className="native-chat-appearance bg-background p-3">
+        <NativeChatWorkerFailureStatus
+          delivery={delivery}
+          workerName="Build worker"
+          pending={false}
+          signInResolved={signInResolved}
+          onResume={() => {}}
+          onSignIn={() => {}}
+        />
+        <NativeChatQueueHeader
+          count={2}
+          attentionCaption={null}
+          pause={{ reason: 'failed', delivery }}
+          queuePending={null}
+          clearCapable={true}
+          expanded={false}
+          listId="waiting"
+          onToggle={() => {}}
+          onClearAll={() => {}}
+          onResume={() => {}}
+        />
+      </div>
+    )
+  })
+}
+export const signedOutAfterSignIn = ownerRecovery('sign-in', true)
+export const usageWithoutReset = ownerRecovery('usage-limit')

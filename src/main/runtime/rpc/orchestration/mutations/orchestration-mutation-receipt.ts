@@ -95,6 +95,20 @@ export function shouldObserveCompletedMutation(
   params: unknown,
   receipt: unknown
 ): boolean {
+  if (
+    method === 'orchestration.send' &&
+    receipt &&
+    typeof receipt === 'object' &&
+    ('message' in receipt || 'messages' in receipt) &&
+    !(
+      params &&
+      typeof params === 'object' &&
+      'type' in params &&
+      ['worker_done', 'heartbeat'].includes(String(params.type))
+    )
+  ) {
+    return true
+  }
   if (readMutationReplayNudge(receipt) || readWorkerDoneReplayNudge(method, params, receipt)) {
     return true
   }

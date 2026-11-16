@@ -20,6 +20,7 @@ export type JournalSqlDatabaseRead =
   | { kind: 'receipt'; scope: CommandReceiptScope; operationId: string }
   | { kind: 'epoch'; sessionId: string }
   | { kind: 'sessions'; after: string | null }
+  | { kind: 'failed-candidates'; after: string | null }
   | { kind: 'retired-heads'; after: string | null; through: string | null }
   | { kind: 'attachment-claims'; after: number }
   | { kind: 'attachment-sweeps'; after: string | null }
@@ -30,6 +31,7 @@ export type JournalSqlDatabaseReadResult =
   | { kind: 'receipt'; receipt: ReturnType<typeof readCommandReceipt> }
   | { kind: 'epoch'; epoch: string | null }
   | { kind: 'sessions'; sessionIds: string[] }
+  | { kind: 'failed-candidates'; sessionIds: string[] }
   | {
       kind: 'retired-heads'
       heads: { sessionId: string; epoch: string }[]
@@ -62,6 +64,8 @@ function read(
   operation: JournalSqlDatabaseRead
 ): JournalSqlDatabaseReadResult {
   switch (operation.kind) {
+    case 'failed-candidates':
+      throw new Error('failure candidates require the reader source catalog')
     case 'pr-watch':
       return { kind: 'pr-watch', value: readPRWatchStorage(db, operation.operation) }
     case 'records': {

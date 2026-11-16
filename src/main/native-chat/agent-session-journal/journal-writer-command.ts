@@ -42,6 +42,7 @@ import type { JournalWriterStep } from './writing/journal-writer-step'
 import type { JournalDomainEditLeaseOperation } from './journal-domain-edit-leases'
 import type { AgentSessionRewindRecord } from '../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 import type { JournalRewindCut } from './journal-domain-rewind-cut'
+import type { JournalFailureAuthority } from './journal-failure-authority'
 
 /** The writer chooses the projection epoch; callers identify only their live open handle. */
 export type JournalWriterTarget = { sessionId: string; epoch: string; ownerToken: string }
@@ -65,6 +66,7 @@ export type JournalWriterCoreOperation =
       coordinatorId: string
       dispatchId: string
       hasMessage?: true
+      authorization?: JournalFailureAuthority
     }
   | { kind: 'queue-reopen'; fence: number; since?: number }
 

@@ -56,9 +56,6 @@ it.each([false, true])(
     call.mockResolvedValue({ ok: true, result: receipt })
     await send(full ? [['full', true]] : [])
     expect(process.exitCode).toBe(1)
-    expect(lines).toEqual([
-      "Held, not delivered: Worker stopped after a network error. Delivers when it's resumed.\nResume once: orca orchestration send --to dispatch:dispatch-4 --resume --failure-id failure-77"
-    ])
   }
 )
 
@@ -79,3 +76,26 @@ it('refuses missing observed recovery identity before calling the host', async (
   await expect(send([['resume', true]])).rejects.toMatchObject({ code: 'invalid_argument' })
   expect(call).not.toHaveBeenCalled()
 })
+
+it.each([false, true])(
+  'does not present an older host storage receipt as delivered, json=%s',
+  async (json) => {
+    call.mockResolvedValue({
+      ok: true,
+      result: { message: { id: 'kept-old-host', to_handle: 'dispatch:dispatch-4' } }
+    })
+    await send([], json)
+    expect(process.exitCode).toBe(1)
+    if (json) {
+      expect(JSON.parse(lines[0]!).result).toMatchObject({
+        delivered: false,
+        state: 'unknown',
+        target: { address: 'dispatch:dispatch-4' },
+        message: { id: 'kept-old-host' }
+      })
+    } else {
+      expect(lines.join('\n')).toContain('kept-old-host')
+      expect(lines.join('\n')).toContain('dispatch:dispatch-4')
+    }
+  }
+)

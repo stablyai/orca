@@ -1,7 +1,12 @@
+import {
+  journalOrchestrationAttached,
+  markJournalOrchestrationAttached,
+  forgetJournalOrchestrationAttachment
+} from './journal-failure-authority'
 import { JournalForkStages } from './journal-fork-stages'
 import { JOURNAL_ASYNC_QUESTION_INDEXES } from './database/journal-async-question-index'
-import { mkdirSync } from 'node:fs'
-import { dirname } from 'node:path'
+import { existsSync, mkdirSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { parentPort, workerData } from 'node:worker_threads'
 import type Database from '../../sqlite/sync-database'
 import {
@@ -123,6 +128,19 @@ async function drain(): Promise<void> {
         throw fault
       }
       assertJournalWritable(readOnly, 'database')
+      const authorityPath = join(stateDirectory, 'orchestration.db')
+      const controlsInput = writes.some(
+        ({ command }) =>
+          command.type === 'write' &&
+          (['failure-resume', 'automatic-submission', 'handover', 'send-admission'].includes(
+            command.command.operation.kind
+          ) ||
+            command.command.operation.kind.startsWith('queue-'))
+      )
+      if (controlsInput && !journalOrchestrationAttached(database) && existsSync(authorityPath)) {
+        database.prepare('ATTACH DATABASE ? AS orchestration_authority').run(authorityPath)
+        markJournalOrchestrationAttached(database)
+      }
       const result = await batch.run<WriteRequest, CommitResponse>(
         writes,
         async (request) => {
@@ -186,6 +204,15 @@ async function drain(): Promise<void> {
         fatal: fault !== undefined,
         error: journalSqlFailure(error)
       }))
+    }
+    // Streaming writes never reserve the orchestration writer; only input controls share that lock.
+    if (journalOrchestrationAttached(database)) {
+      try {
+        database.exec('DETACH DATABASE orchestration_authority')
+        forgetJournalOrchestrationAttachment(database)
+      } catch (error) {
+        fault ??= error
+      }
     }
     // A transfer failure after COMMIT must surface as a lost acknowledgement, never a rollback.
     for (const response of responses) {

@@ -12,6 +12,7 @@ import type { SendParams } from '../../rpc/methods/orchestration/messaging/send-
 import { rejectFederatedExplicitTarget } from '../../rpc/methods/orchestration/routing'
 import { WORKER_DONE_RECORDED_NEXT } from '../../rpc/methods/orchestration/receipt-next'
 import { assertWorkerCanReport } from '../workers/reports/worker-report-admission'
+import { unconfirmedMessageDelivery } from '../../../../shared/agent-session/agent-session-held-delivery'
 
 type SendParamsInput = z.infer<typeof SendParams>
 
@@ -103,7 +104,7 @@ export async function sendRemoteMessage(args: {
       'worker_done was queued, but the Run-home runtime did not confirm settlement. Verify the Task and Dispatch before retrying.'
     )
   }
-  return {
+  const receipt = {
     relay: {
       messageId: relay.message_id,
       sequence: relay.sequence,
@@ -114,4 +115,7 @@ export async function sendRemoteMessage(args: {
     ...(lifecycle ? { lifecycle } : {}),
     ...(lifecycle && lifecycle.action !== 'rejected' ? { next: WORKER_DONE_RECORDED_NEXT } : {})
   }
+  return type === 'worker_done' || type === 'heartbeat'
+    ? receipt
+    : unconfirmedMessageDelivery(receipt, params.to ?? `run:${remoteAttachment.home_run_id}`)
 }
