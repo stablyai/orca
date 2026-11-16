@@ -1,6 +1,7 @@
 import { useAppStoreWithHostStatuses } from '@/store/slices/runtime-status/views/use-runtime-status-view'
 import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
+import { useMeasuredWidth } from '@/components/right-sidebar/layout/right-sidebar-measured-width'
 import { createProgrammaticScrollMarks } from '@/lib/list-interaction/virtualized-scrolling/programmatic-scroll-marks'
 import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
 import { useProjectHeaderHostContexts } from './use-project-header-host-contexts'
@@ -69,6 +70,8 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   const scrollRef = useRef<HTMLDivElement>(null)
   // Why: callback-ref only mutates scrollRef; state re-runs the scroll-to-top listener attach.
   const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null)
+  const [guideWidth, setGuideWidth] = useState<number | null>(null)
+  const measureContentWidth = useMeasuredWidth(setGuideWidth)
   const settings = useAppStore((s) => s.settings)
   const worktreeVisibilityDefaultsByHost = useAppStore((s) => s.worktreeVisibilityDefaultsByHost)
   const lineageParentIdentities = useAppStoreWithHostStatuses(selectSidebarLineageParentIdentities)
@@ -131,7 +134,8 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   const renderRows = rows
   const { projection, activeFamilyRoots, firstHeaderIndex } = useLineageRowProjection({
     ...rowProps,
-    newCardStyle
+    newCardStyle,
+    guideWidth
   })
 
   const headerDrag = useWorktreeSidebarHeaderDrag({
@@ -404,6 +408,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
         <div
           role="presentation"
           data-worktree-sidebar-content
+          ref={measureContentWidth}
           className="relative w-full"
           style={{ height: `${virtualization.virtualizer.getTotalSize()}px` }}
         >
