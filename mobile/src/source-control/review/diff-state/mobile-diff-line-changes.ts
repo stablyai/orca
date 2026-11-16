@@ -30,7 +30,11 @@ export function* buildMobileDiffChanges(
     if (originalStart < originalIndex || modifiedStart < modifiedIndex) {
       const originalSection = originalKeys.slice(originalStart, originalIndex)
       const modifiedSection = modifiedKeys.slice(modifiedStart, modifiedIndex)
-      const maxEditLength = Math.min(MAX_EDIT_LENGTH, editBudget)
+      // One-sided sections are already exact as prefix/suffix, so they spend no budget.
+      const maxEditLength =
+        originalSection.length > 0 && modifiedSection.length > 0
+          ? Math.min(MAX_EDIT_LENGTH, editBudget)
+          : 0
       const sectionChanges =
         maxEditLength > 0
           ? diffArrays(originalSection, modifiedSection, { maxEditLength })
