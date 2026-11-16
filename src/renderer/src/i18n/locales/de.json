@@ -519,6 +519,25 @@
         "noContent": "Kein Inhalt zum Exportieren",
         "timedOut": "Zeitüberschreitung beim Export"
       }
+    },
+    "diff": {
+      "search": {
+        "findLabel": "Im Diff suchen",
+        "find": "Suchen",
+        "regex": "Regulären Ausdruck verwenden",
+        "replaceLabel": "Im Diff ersetzen",
+        "errors": {
+          "invalid-regex": "Ungültiger regulärer Ausdruck",
+          "replacement-too-large": "Die Ersetzung ist zu groß",
+          "search-failed": "Diese Datei konnte nicht durchsucht werden",
+          "invalid-result": "Suchergebnisse konnten nicht gelesen werden",
+          "timeout": "Die Suche hat zu lange gedauert. Einen einfacheren Ausdruck versuchen.",
+          "start-failed": "Suche konnte nicht gestartet werden"
+        },
+        "searching": "Suche läuft…"
+      },
+      "renderFailed": "Dieser Diff konnte nicht angezeigt werden",
+      "renderRetry": "Datei erneut öffnen oder neu laden, um es noch einmal zu versuchen."
     }
   },
   "githubChecks": {

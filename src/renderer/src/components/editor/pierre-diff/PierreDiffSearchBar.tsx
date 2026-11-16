@@ -9,7 +9,7 @@ import {
   WholeWord,
   X
 } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -61,6 +61,7 @@ function SearchButton({
 }
 
 export function PierreDiffSearchBar(props: PierreDiffSearchBarProps) {
+  const t = useTranslate()
   const { query, onQuery } = props
   return (
     <div className="sticky top-0 z-20 h-0" data-diff-search>
@@ -71,10 +72,7 @@ export function PierreDiffSearchBar(props: PierreDiffSearchBarProps) {
         <div className="flex items-center gap-1">
           {props.canReplace && (
             <SearchButton
-              label={translate(
-                'auto.components.editor.RichMarkdownSearchBar.9cdc38be33',
-                'Toggle replace'
-              )}
+              label={t('auto.components.editor.RichMarkdownSearchBar.9cdc38be33', 'Toggle replace')}
               aria-expanded={props.replaceOpen}
               onClick={props.onToggleReplace}
             >
@@ -83,8 +81,8 @@ export function PierreDiffSearchBar(props: PierreDiffSearchBarProps) {
           )}
           <Input
             ref={props.inputRef}
-            aria-label={translate('editor.diff.search.findLabel', 'Find in diff')}
-            placeholder={translate('editor.diff.search.find', 'Find')}
+            aria-label={t('editor.diff.search.findLabel', 'Find in diff')}
+            placeholder={t('editor.diff.search.find', 'Find')}
             value={query.text}
             density="compact"
             className="w-40"
@@ -107,18 +105,15 @@ export function PierreDiffSearchBar(props: PierreDiffSearchBarProps) {
             [
               [
                 'matchCase',
-                translate('auto.components.editor.RichMarkdownSearchBar.482b637099', 'Match case'),
+                t('auto.components.editor.RichMarkdownSearchBar.482b637099', 'Match case'),
                 CaseSensitive
               ],
               [
                 'wholeWord',
-                translate(
-                  'auto.components.editor.RichMarkdownSearchBar.68d090241d',
-                  'Match whole word'
-                ),
+                t('auto.components.editor.RichMarkdownSearchBar.68d090241d', 'Match whole word'),
                 WholeWord
               ],
-              ['regex', translate('editor.diff.search.regex', 'Use regular expression'), Regex]
+              ['regex', t('editor.diff.search.regex', 'Use regular expression'), Regex]
             ] as const
           ).map(([key, label, Icon]) => (
             <SearchButton
@@ -132,21 +127,21 @@ export function PierreDiffSearchBar(props: PierreDiffSearchBarProps) {
             </SearchButton>
           ))}
           <SearchButton
-            label={translate('auto.components.editor.MarkdownPreview.1febd97f5c', 'Previous match')}
+            label={t('auto.components.editor.MarkdownPreview.1febd97f5c', 'Previous match')}
             disabled={!props.canNavigate}
             onClick={() => props.onNavigate(-1)}
           >
             <ChevronUp />
           </SearchButton>
           <SearchButton
-            label={translate('auto.components.editor.MarkdownPreview.b42c41bd0d', 'Next match')}
+            label={t('auto.components.editor.MarkdownPreview.b42c41bd0d', 'Next match')}
             disabled={!props.canNavigate}
             onClick={() => props.onNavigate(1)}
           >
             <ChevronDown />
           </SearchButton>
           <SearchButton
-            label={translate('auto.components.editor.MarkdownPreview.12052c639c', 'Close search')}
+            label={t('auto.components.editor.MarkdownPreview.12052c639c', 'Close search')}
             onClick={props.onClose}
           >
             <X />
@@ -155,14 +150,8 @@ export function PierreDiffSearchBar(props: PierreDiffSearchBarProps) {
         <div className="flex items-center gap-1">
           {(
             [
-              [
-                'deletions',
-                translate('auto.components.editor.ImageDiffViewer.57aac3979a', 'Original')
-              ],
-              [
-                'additions',
-                translate('auto.components.editor.ImageDiffViewer.a651be62b0', 'Modified')
-              ]
+              ['deletions', t('auto.components.editor.ImageDiffViewer.57aac3979a', 'Original')],
+              ['additions', t('auto.components.editor.ImageDiffViewer.a651be62b0', 'Modified')]
             ] as const
           ).map(([side, label]) => (
             <Button
@@ -182,11 +171,8 @@ export function PierreDiffSearchBar(props: PierreDiffSearchBarProps) {
         {props.canReplace && props.replaceOpen && (
           <div className="flex items-center gap-1">
             <Input
-              aria-label={translate('editor.diff.search.replaceLabel', 'Replace in diff')}
-              placeholder={translate(
-                'auto.components.editor.RichMarkdownSearchBar.fd97c7e585',
-                'Replace'
-              )}
+              aria-label={t('editor.diff.search.replaceLabel', 'Replace in diff')}
+              placeholder={t('auto.components.editor.RichMarkdownSearchBar.fd97c7e585', 'Replace')}
               value={props.replacement}
               density="compact"
               onChange={(event) => props.onReplacement(event.target.value)}
@@ -205,20 +191,14 @@ export function PierreDiffSearchBar(props: PierreDiffSearchBarProps) {
               }}
             />
             <SearchButton
-              label={translate(
-                'auto.components.editor.RichMarkdownSearchBar.fd97c7e585',
-                'Replace'
-              )}
+              label={t('auto.components.editor.RichMarkdownSearchBar.fd97c7e585', 'Replace')}
               disabled={!props.canNavigate}
               onClick={() => props.onReplace(false)}
             >
               <Replace />
             </SearchButton>
             <SearchButton
-              label={translate(
-                'auto.components.editor.RichMarkdownSearchBar.c2884f5e95',
-                'Replace all'
-              )}
+              label={t('auto.components.editor.RichMarkdownSearchBar.c2884f5e95', 'Replace all')}
               disabled={!props.canReplaceAll}
               onClick={() => props.onReplace(true)}
             >

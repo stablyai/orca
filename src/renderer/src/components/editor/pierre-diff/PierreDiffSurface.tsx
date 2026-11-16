@@ -16,7 +16,7 @@ import type {
   VirtualizedFileDiff
 } from '@pierre/diffs'
 import type { Editor, EditorOptions } from '@pierre/diffs/edit'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { RecoverableRenderErrorBoundary } from '@/components/error-boundaries/RecoverableRenderErrorBoundary'
 import type { DecoratedDiffComment } from '../../diff-comments/decorated-diff-comment'
@@ -119,6 +119,7 @@ export function PierreDiffSurface({
   onSubmitComment,
   className
 }: PierreDiffSurfaceProps): React.JSX.Element {
+  const t = useTranslate()
   const typography = useEditorTypography('diff')
   const documentDark = useDocumentDarkTheme()
   const editorTheme = useCodeEditorThemeStore((s) => s.monaco)
@@ -251,12 +252,13 @@ export function PierreDiffSurface({
         canCommentOnPierreRange(range, commentableLines),
       gutterUtilityLabel:
         addCommentLabel ??
-        translate('auto.components.editor.MarkdownPreview.d737791433', 'Add note for the AI'),
+        t('auto.components.editor.MarkdownPreview.d737791433', 'Add note for the AI'),
       onGutterUtilityClick: onAddComment ? noteSelection.addComment : undefined,
       onLineSelectionEnd: onAddComment ? noteSelection.onLineSelectionEnd : undefined,
       onPostRender: handlePostRender
     }),
     [
+      t,
       diffTheme,
       themeType,
       settings,
@@ -410,11 +412,8 @@ export function PierreDiffSurface({
         // latched through a save, an agent rewrite or a refetch, because the same surface stays
         // mounted while `sameFile` holds. cacheKey is derived from the content.
         resetKey={`${editStateKey ?? fileDiff.name}:${fileDiff.cacheKey ?? fileDiff.name}`}
-        title={translate('editor.diff.renderFailed', 'This diff could not be rendered')}
-        description={translate(
-          'editor.diff.renderRetry',
-          'Reopen the file or reload to try again.'
-        )}
+        title={t('editor.diff.renderFailed', 'This diff could not be rendered')}
+        description={t('editor.diff.renderRetry', 'Reopen the file or reload to try again.')}
       >
         <FileDiff<PierreDiffAnnotationData>
           fileDiff={fileDiff}

@@ -488,6 +488,25 @@
         "noContent": "沒有可匯出的內容",
         "timedOut": "匯出逾時"
       }
+    },
+    "diff": {
+      "search": {
+        "findLabel": "在差異中尋找",
+        "find": "尋找",
+        "regex": "使用正規表示式",
+        "replaceLabel": "在差異中取代",
+        "errors": {
+          "invalid-regex": "正規表示式無效",
+          "replacement-too-large": "取代內容過大",
+          "search-failed": "無法搜尋此檔案",
+          "invalid-result": "無法讀取搜尋結果",
+          "timeout": "搜尋耗時過長。請嘗試更簡單的運算式。",
+          "start-failed": "無法開始搜尋"
+        },
+        "searching": "正在搜尋…"
+      },
+      "renderFailed": "無法顯示此差異",
+      "renderRetry": "請重新開啟檔案或重新載入後再試一次。"
     }
   },
   "githubChecks": {

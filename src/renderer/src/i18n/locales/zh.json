@@ -22239,6 +22239,25 @@
     "diffTooLarge": {
       "title": "文件过大，无法显示差异",
       "detail": "此文件的某个版本超过 10 MB，因此 Orca 不会加载它来显示文本差异"
+    },
+    "diff": {
+      "search": {
+        "findLabel": "在差异中查找",
+        "find": "查找",
+        "regex": "使用正则表达式",
+        "replaceLabel": "在差异中替换",
+        "errors": {
+          "invalid-regex": "正则表达式无效",
+          "replacement-too-large": "替换内容过大",
+          "search-failed": "无法搜索此文件",
+          "invalid-result": "无法读取搜索结果",
+          "timeout": "搜索耗时过长，请尝试更简单的表达式",
+          "start-failed": "无法开始搜索"
+        },
+        "searching": "正在搜索…"
+      },
+      "renderFailed": "无法显示此差异",
+      "renderRetry": "重新打开文件或重新加载后重试"
     }
   },
   "featureTips": {

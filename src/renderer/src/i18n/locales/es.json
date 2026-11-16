@@ -21440,6 +21440,25 @@
         "noContent": "No hay contenido para exportar",
         "timedOut": "Se agotó el tiempo de exportación"
       }
+    },
+    "diff": {
+      "search": {
+        "findLabel": "Buscar en el diff",
+        "find": "Buscar",
+        "regex": "Usar expresión regular",
+        "replaceLabel": "Reemplazar en el diff",
+        "errors": {
+          "invalid-regex": "Expresión regular no válida",
+          "replacement-too-large": "El reemplazo es demasiado grande",
+          "search-failed": "No se pudo buscar en este archivo",
+          "invalid-result": "No se pudieron leer los resultados de la búsqueda",
+          "timeout": "La búsqueda tardó demasiado. Prueba una expresión más simple.",
+          "start-failed": "No se pudo iniciar la búsqueda"
+        },
+        "searching": "Buscando…"
+      },
+      "renderFailed": "No se pudo mostrar este diff",
+      "renderRetry": "Vuelve a abrir el archivo o recarga para intentarlo de nuevo."
     }
   },
   "accounts": {

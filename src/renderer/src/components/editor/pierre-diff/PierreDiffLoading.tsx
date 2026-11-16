@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/class-names'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function PierreDiffLoading({
   error,
@@ -12,6 +12,7 @@ export function PierreDiffLoading({
   /** Pin over a live surface so a height-locked combined-diff row does not grow. */
   overlay?: boolean
 }) {
+  const t = useTranslate()
   return (
     <div
       className={cn(
@@ -24,11 +25,11 @@ export function PierreDiffLoading({
       role={error ? 'alert' : 'status'}
     >
       <span>
-        {error ?? translate('auto.components.editor.DiffSectionBody.f5cf81cec2', 'Loading diff...')}
+        {error ?? t('auto.components.editor.DiffSectionBody.f5cf81cec2', 'Loading diff...')}
       </span>
       {error && (
         <Button variant="ghost" size="xs" onClick={onRetry}>
-          {translate('auto.components.editor.DiffSectionBody.cef4cf0ff5', 'Retry')}
+          {t('auto.components.editor.DiffSectionBody.cef4cf0ff5', 'Retry')}
         </Button>
       )}
     </div>

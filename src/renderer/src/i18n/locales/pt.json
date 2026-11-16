@@ -411,6 +411,25 @@
     "diffTooLarge": {
       "title": "Arquivo muito grande para comparação",
       "detail": "Uma versão deste arquivo tem mais de 10 MB, então o Orca não o carrega para uma comparação de texto."
+    },
+    "diff": {
+      "search": {
+        "findLabel": "Localizar no diff",
+        "find": "Localizar",
+        "regex": "Usar expressão regular",
+        "replaceLabel": "Substituir no diff",
+        "errors": {
+          "invalid-regex": "Expressão regular inválida",
+          "replacement-too-large": "A substituição é grande demais",
+          "search-failed": "Não foi possível pesquisar neste arquivo",
+          "invalid-result": "Não foi possível ler os resultados da pesquisa",
+          "timeout": "A pesquisa demorou demais. Tente uma expressão mais simples.",
+          "start-failed": "Não foi possível iniciar a pesquisa"
+        },
+        "searching": "Buscando…"
+      },
+      "renderFailed": "Não foi possível exibir este diff",
+      "renderRetry": "Reabra o arquivo ou recarregue para tentar novamente."
     }
   },
   "notifications": {

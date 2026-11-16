@@ -515,6 +515,25 @@
         "noContent": "Dışa aktarılacak içerik yok",
         "timedOut": "Dışa aktarma zaman aşımına uğradı"
       }
+    },
+    "diff": {
+      "search": {
+        "findLabel": "Diff içinde bul",
+        "find": "Bul",
+        "regex": "Düzenli İfade Kullan",
+        "replaceLabel": "Diff içinde değiştir",
+        "errors": {
+          "invalid-regex": "Geçersiz düzenli ifade",
+          "replacement-too-large": "Değiştirme metni çok büyük",
+          "search-failed": "Bu dosyada arama yapılamadı",
+          "invalid-result": "Arama sonuçları okunamadı",
+          "timeout": "Arama çok uzun sürdü. Daha basit bir ifade deneyin.",
+          "start-failed": "Arama başlatılamadı"
+        },
+        "searching": "Aranıyor…"
+      },
+      "renderFailed": "Bu diff görüntülenemedi",
+      "renderRetry": "Tekrar denemek için dosyayı yeniden açın veya yeniden yükleyin."
     }
   },
   "githubChecks": {
