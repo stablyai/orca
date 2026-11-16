@@ -73,9 +73,7 @@ export const worktreesApi = {
   getBranchRenameFailureOutput: (args) =>
     ipcRenderer.invoke('worktrees:getBranchRenameFailureOutput', args),
 
-  onChanged: (
-    callback: (data: WorktreesChangedEvent) => void
-  ): (() => void) => {
+  onChanged: (callback: (data: WorktreesChangedEvent) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: WorktreesChangedEvent) =>
       callback(data)
     ipcRenderer.on('worktrees:changed', listener)
