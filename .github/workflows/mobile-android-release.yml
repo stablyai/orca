@@ -119,17 +119,7 @@ jobs:
 
       # GitHub installs only take updates signed by the same key, so a swapped or debug key must not ship.
       - name: Verify GitHub APK signing certificate
-        run: |
-          set -euo pipefail
-          expected="${GITHUB_APK_CERT_SHA256//:/}"
-          expected="${expected,,}"
-          apksigner="$(ls -d "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)"
-          certs="$("$apksigner" verify --print-certs "$GITHUB_APK" | sed -En 's/^(Signer #[0-9]+|V[0-9.]+ Signer):? certificate SHA-256 digest: //p' | sort -u)"
-          if [ "$certs" != "$expected" ]; then
-            echo "::error::The GitHub APK signing certificate ($certs) is not the Orca release key ($GITHUB_APK_CERT_SHA256)."
-            exit 1
-          fi
-          echo "GitHub APK is signed with the Orca release key $GITHUB_APK_CERT_SHA256"
+        run: scripts/verify-android-apk-signer.sh "$GITHUB_APK" "$GITHUB_APK_CERT_SHA256"
 
       - name: Upload AAB artifact
         uses: actions/upload-artifact@v7
@@ -144,6 +134,8 @@ jobs:
           name: orca-mobile-apk
           path: mobile/${{ env.GITHUB_APK }}
           if-no-files-found: error
+          # Only a handoff to github-release; the release keeps the published copy.
+          retention-days: 1
 
   # Its own job so a Play outage can be rerun without rebuilding. Play rejects a versionCode it has
   # seen, so a missed versionCode bump fails here, before anything is published.
@@ -228,6 +220,10 @@ jobs:
         with:
           name: orca-mobile-apk
           path: mobile/build/github
+
+      # Re-check what is about to be published, not just what android-build uploaded.
+      - name: Verify APK signing certificate
+        run: scripts/verify-android-apk-signer.sh "$APK" '${{ needs.android-build.outputs.cert_sha256 }}'
 
       # Publish size/digest to distinguish truncated downloads (missing tail signature block) from bad APK builds.
       - name: Checksum the APK
