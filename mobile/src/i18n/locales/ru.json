@@ -978,7 +978,8 @@
       "copyCode": "Копировать код",
       "openImage": "Открыть изображение",
       "wrapLines": "Переносить строки",
-      "disableLineWrap": "Выключить перенос строк"
+      "disableLineWrap": "Выключить перенос строк",
+      "codeLabel": "Код"
     },
     "markdownCallout": {
       "note": "Заметка",

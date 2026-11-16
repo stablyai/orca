@@ -898,7 +898,8 @@
       "copyCode": "複製程式碼",
       "openImage": "開啟圖片",
       "wrapLines": "自動換行",
-      "disableLineWrap": "停用自動換行"
+      "disableLineWrap": "停用自動換行",
+      "codeLabel": "程式碼"
     },
     "markdownCallout": {
       "note": "備註",
