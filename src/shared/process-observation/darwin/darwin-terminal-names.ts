@@ -15,7 +15,7 @@ const deviceFilesystem: DarwinTerminalNameDeps = {
 }
 
 // Per-capture lstats of every terminal drive millions of libuv pool jobs, which wedge macOS's pool (#31926).
-const VERIFIED_PTY_NAME_TTL_MS = 60_000
+const VERIFIED_PTY_NAME_TTL_MS = 5 * 60_000
 const verifiedPtyNamesByDeps = new WeakMap<DarwinTerminalNameDeps, Map<string, number>>()
 
 function verifiedPtyNames(deps: DarwinTerminalNameDeps, now: number): Map<string, number> {
@@ -64,7 +64,7 @@ async function readDeviceKey(deps: DarwinTerminalNameDeps, name: string): Promis
 }
 
 // XNU gives pty slaves one ttys%03d minor entry; verify rdev so an earlier root-created alias cannot win as devname might.
-// The name follows from the device alone, so a reused minor keeps a verified name; the TTL bounds revoked terminals.
+// The name follows from the device alone and closed ptys stop reporting it, so the TTL is only a safety margin.
 async function readPtyNames(
   devices: ReadonlySet<string>,
   deps: DarwinTerminalNameDeps,
@@ -132,7 +132,7 @@ export async function nameDarwinTerminalDevices(
   return names
 }
 
-/** Reuse verified ttys names for a minute; misses and /dev scan aliases are read from this capture's /dev. */
+/** Reuse verified ttys names for five minutes; misses and /dev scan aliases are read from this capture's /dev. */
 export async function nameDarwinTerminals(
   stdout: string,
   deps: DarwinTerminalNameDeps = deviceFilesystem,
