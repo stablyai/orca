@@ -1,4 +1,5 @@
 import React, { useRef } from 'react'
+import { useCloudShareLinksEnabled } from '@/lib/orca-cloud/cloud-share-links-flag'
 import { ArchiveSnapshotTooltip } from '@/components/orca-cloud/ArchiveSnapshotTooltip'
 import {
   Archive,
@@ -111,6 +112,7 @@ export function CloudWorkspaceRowMenu({
   const t = useTranslate()
   const keybindings = useAppStore((state) => state.keybindings)
   const copyShortcut = formatOptionalPrimaryShortcutLabel('cloudWorkspace.copyLink', keybindings)
+  const shareLinks = useCloudShareLinksEnabled()
   // Read when the menu renders (it re-renders on open), not kept: focus moves between opens.
   const focused = open ? (actions.focusedItem?.(w) ?? null) : null
   const teammatesHere = canOpen
@@ -185,16 +187,19 @@ export function CloudWorkspaceRowMenu({
             <DropdownMenuShortcut>↵</DropdownMenuShortcut>
           </DropdownMenuItem>
         )}
-        <DropdownMenuItem onSelect={() => actions.copyLink(w)}>
-          <Link2 />
-          {w.number
-            ? t('auto.components.cloudWorkspaces.copyLinkTo', 'Copy link to {{number}}', {
-                number: formatWorkspaceNumber(w.number)
-              })
-            : t('auto.components.cloudWorkspaces.copyLink', 'Copy link')}
-          {copyShortcut ? <DropdownMenuShortcut>{copyShortcut}</DropdownMenuShortcut> : null}
-        </DropdownMenuItem>
-        {focused ? (
+        {/* SHARE-LINKS-HOLD: the Copy link items only while share links are on. */}
+        {shareLinks ? (
+          <DropdownMenuItem onSelect={() => actions.copyLink(w)}>
+            <Link2 />
+            {w.number
+              ? t('auto.components.cloudWorkspaces.copyLinkTo', 'Copy link to {{number}}', {
+                  number: formatWorkspaceNumber(w.number)
+                })
+              : t('auto.components.cloudWorkspaces.copyLink', 'Copy link')}
+            {copyShortcut ? <DropdownMenuShortcut>{copyShortcut}</DropdownMenuShortcut> : null}
+          </DropdownMenuItem>
+        ) : null}
+        {shareLinks && focused ? (
           <DropdownMenuItem onSelect={() => actions.copyWorkspaceLink(w)}>
             {focused === 'terminal' ? <SquareTerminal /> : <MessageSquare />}
             {focused === 'terminal'

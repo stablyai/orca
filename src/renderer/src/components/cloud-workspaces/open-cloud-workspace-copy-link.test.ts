@@ -2,6 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }))
 vi.mock('sonner', () => ({ toast }))
+const shareLinks = vi.hoisted(() => ({ on: true }))
+vi.mock('@/lib/orca-cloud/cloud-share-links-flag', () => ({
+  cloudShareLinksEnabled: () => shareLinks.on
+}))
 
 import { copyCloudWorkspaceLink, shareLinkFor } from './open-cloud-workspace'
 import { rememberCloudWorkspaces } from './cloud-workspace-identity'
@@ -85,5 +89,16 @@ describe('copy cloud workspace link', () => {
     await expect(copyCloudWorkspaceLink(w.id, null, { quiet: true })).resolves.toBe(false)
     expect(toast.error).toHaveBeenCalledTimes(1)
     warn.mockRestore()
+  })
+
+  it('SHARE-LINKS-HOLD: with share links held, nothing is copied and no toast shows', async () => {
+    shareLinks.on = false
+    try {
+      await expect(copyCloudWorkspaceLink('sbx_held')).resolves.toBe(false)
+      expect(writeClipboardText).not.toHaveBeenCalled()
+      expect(toast.success).not.toHaveBeenCalled()
+    } finally {
+      shareLinks.on = true
+    }
   })
 })

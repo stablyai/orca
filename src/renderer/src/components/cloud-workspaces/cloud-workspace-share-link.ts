@@ -1,4 +1,5 @@
 // A cloud workspace's share link: the org slug + W-number link when known, else the sandbox-id form.
+import { cloudShareLinksEnabled } from '@/lib/orca-cloud/cloud-share-links-flag'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import {
@@ -47,6 +48,10 @@ export async function copyCloudWorkspaceLink(
   chatId?: string | null,
   options: { quiet?: boolean } = {}
 ): Promise<boolean> {
+  // SHARE-LINKS-HOLD: nothing is copied while share links are held.
+  if (!cloudShareLinksEnabled()) {
+    return false
+  }
   const link = await shareLinkFor(id, chatId)
   try {
     // Why: main-process clipboard, like every other renderer copy. navigator.clipboard needs a

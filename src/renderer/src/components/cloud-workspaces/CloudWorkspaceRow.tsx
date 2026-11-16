@@ -1,4 +1,5 @@
 import { CloudStatusGlyph } from '@/components/orca-cloud/CloudStatusGlyph'
+import { cloudShareLinksEnabled } from '@/lib/orca-cloud/cloud-share-links-flag'
 import React, { useId, useState } from 'react'
 import { GitBranch, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -150,6 +151,7 @@ export function CloudWorkspaceRow({
           return
         }
         if (
+          cloudShareLinksEnabled() &&
           keybindingMatchesAction(
             'cloudWorkspace.copyLink',
             event.nativeEvent,
