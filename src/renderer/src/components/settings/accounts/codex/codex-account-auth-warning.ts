@@ -51,10 +51,12 @@ export function getCodexAccountAuthWarning(args: {
     return null
   }
   // Another window can switch accounts mid-fetch; only the slot the fetch tried failed to sign in.
-  return isSameUsageSlot(args.limits.usageMetadata?.attemptedAccount, {
+  const attempted = args.limits.usageMetadata?.attemptedAccount
+  return isSameUsageSlot(attempted, {
     accountId: args.accountId,
     runtime: args.target.runtime,
-    wslDistro: args.target.wslDistro
+    // An unnamed WSL target reads the default distro, which its own attempt names.
+    wslDistro: args.target.wslDistro ?? attempted?.wslDistro ?? null
   })
     ? 'stale-sign-in'
     : null

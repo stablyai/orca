@@ -50,10 +50,10 @@ describe('getCodexAccountAuthWarning', () => {
         accountId: null
       })
 
-    // An unnamed default distro may no longer be the one that failed.
-    expect(warn(null)).toBeNull()
     expect(warn('ubuntu-24.04')).toBeNull()
     expect(warn('Ubuntu')).toBe('stale-sign-in')
+    // A "WSL default" view shows the poll of whichever distro that default resolved to.
+    expect(warn(null)).toBe('stale-sign-in')
   })
 
   it('makes no claim about a failure that does not say which account it tried', () => {

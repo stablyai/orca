@@ -1,6 +1,7 @@
 import type { UsageReadingAccount } from './rate-limit-types'
+import { hasUsageData } from '../display/usage-provider-windows'
 
-type StampedReading = {
+type StampedReading = Parameters<typeof hasUsageData>[0] & {
   status: string
   updatedAt: number
   usageMetadata?: {
@@ -30,12 +31,13 @@ export function isSameUsageSlot(
   return key !== null && right !== null && right !== undefined && key === slotKey(right)
 }
 
-// A failure with no earlier windows is still that account's state, so it names the attempt.
+// A failure is still the tried account's state, but windows kept from an unnamed reading are not its.
 function readingSlot(reading: StampedReading): UsageReadingAccount | undefined {
   const metadata = reading.usageMetadata
-  return (
-    metadata?.readingAccount ?? (reading.status === 'ok' ? undefined : metadata?.attemptedAccount)
-  )
+  if (metadata?.readingAccount) {
+    return metadata.readingAccount
+  }
+  return reading.status === 'ok' || hasUsageData(reading) ? undefined : metadata?.attemptedAccount
 }
 
 /** Index by the slot each reading names, never by which row a roster marks selected: the

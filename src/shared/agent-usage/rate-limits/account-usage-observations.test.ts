@@ -75,6 +75,19 @@ describe('indexAccountUsageObservations', () => {
     expect(getObservedAccountUsage(observations, { accountId: 'a', ...host })).toBeNull()
   })
 
+  it('never lets a failed attempt claim windows kept from an unnamed reading', () => {
+    // An unattributed reading's windows were kept through b's failure.
+    const kept: ProviderRateLimits = {
+      ...reading(),
+      status: 'error',
+      error: 'Sign in again.',
+      usageMetadata: { attemptedAccount: { accountId: 'b', ...host } }
+    }
+    const observations = indexAccountUsageObservations(kept, [])
+
+    expect(getObservedAccountUsage(observations, { accountId: 'b', ...host })).toBeNull()
+  })
+
   it('ignores a cached entry whose reading names another account', () => {
     // An outgoing reading seeded under a after another window had already switched to b.
     const observations = indexAccountUsageObservations(null, [

@@ -21,6 +21,31 @@ export async function fetchInactiveClaudeAccountUsage(
   account: InactiveClaudeAccount,
   options: ClaudeManagedAccountUsageOptions = {}
 ): Promise<ProviderRateLimits> {
+  const limits = await readInactiveClaudeAccountUsage(account, options)
+  // A failure before any login was read still belongs to the account it was for.
+  return limits.usageMetadata?.attemptedAccount || limits.status === 'ok'
+    ? limits
+    : withAttemptedAccount(limits, account)
+}
+
+function withAttemptedAccount(
+  limits: ProviderRateLimits,
+  account: InactiveClaudeAccount
+): ProviderRateLimits {
+  if (account.managedAuthRuntime === 'wsl' && !account.wslDistro) {
+    return limits
+  }
+  const attemptedAccount =
+    account.managedAuthRuntime === 'wsl'
+      ? { accountId: account.id, runtime: 'wsl' as const, wslDistro: account.wslDistro ?? null }
+      : { accountId: account.id, runtime: 'host' as const, wslDistro: null }
+  return { ...limits, usageMetadata: { ...limits.usageMetadata, attemptedAccount } }
+}
+
+async function readInactiveClaudeAccountUsage(
+  account: InactiveClaudeAccount,
+  options: ClaudeManagedAccountUsageOptions
+): Promise<ProviderRateLimits> {
   if (account.managedAuthRuntime !== 'wsl') {
     // Covered accounts share System Default usage and launch routing.
     const authPreparation = getClaudeProfileRouter()?.accountUsagePreparation(account.id)
