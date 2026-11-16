@@ -58,7 +58,7 @@ export function wslMoveDistroOfPath(path: string): string | null {
 
 /** The added WSL host of a distro, matched as WSL matches names: case-insensitively. */
 export function findWslHostForDistro(
-  environments: readonly PublicKnownRuntimeEnvironment[],
+  environments: readonly Pick<PublicKnownRuntimeEnvironment, 'name' | 'orcadDeployment'>[],
   distro: string
 ): { distro: string; name: string } | null {
   const wanted = distro.toLowerCase()
@@ -196,17 +196,41 @@ export function wslMoveCatalogCandidates(
     wslMoveDistroOfPath(path)?.toLowerCase() === distro.toLowerCase()
   return {
     repoIds: catalog.repos
-      .filter(
-        (repo) => getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID && inDistro(repo.path)
-      )
+      .filter((repo) => isLocalRepo(repo) && inDistro(repo.path))
       .map((repo) => repo.id),
     folderWorkspaceIds: catalog.folders
-      .filter(
-        (folder) =>
-          (folder.executionHostId ?? LOCAL_EXECUTION_HOST_ID) === LOCAL_EXECUTION_HOST_ID &&
-          !folder.connectionId &&
-          inDistro(folder.folderPath)
-      )
+      .filter((folder) => isLocalFolder(folder) && inDistro(folder.folderPath))
       .map((folder) => folder.id)
   }
+}
+
+/** The local project holding a workspace, and the distro whose host it could move to. */
+export function wslMoveProjectOfWorkspace(
+  catalog: {
+    repos: readonly Pick<Repo, 'id' | 'path' | 'connectionId' | 'executionHostId'>[]
+    folders: readonly Pick<
+      FolderWorkspace,
+      'id' | 'folderPath' | 'connectionId' | 'executionHostId'
+    >[]
+  },
+  workspaceKey: string
+): { ref: WslMoveRowRef; distro: string } | null {
+  const ref = projectOfWorkspaceKey(workspaceKey)
+  const path =
+    ref.kind === 'repo'
+      ? catalog.repos.find((repo) => repo.id === ref.id && isLocalRepo(repo))?.path
+      : catalog.folders.find((folder) => folder.id === ref.id && isLocalFolder(folder))?.folderPath
+  const distro = path ? wslMoveDistroOfPath(path) : null
+  return distro ? { ref, distro } : null
+}
+
+function isLocalRepo(repo: Pick<Repo, 'connectionId' | 'executionHostId'>): boolean {
+  return getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID
+}
+
+function isLocalFolder(folder: Pick<FolderWorkspace, 'connectionId' | 'executionHostId'>): boolean {
+  return (
+    (folder.executionHostId ?? LOCAL_EXECUTION_HOST_ID) === LOCAL_EXECUTION_HOST_ID &&
+    !folder.connectionId
+  )
 }

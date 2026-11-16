@@ -23,6 +23,7 @@ import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type { AgentLaunchSurface } from '../../shared/agent-launch/contracts/agent-launch-surface'
 import { formatAgentTypeLabel } from '../../shared/agent-status/presentation/agent-type-label'
 import { AgentLaunchSurfaceUnavailableError } from './agent-launch-surface-refusal'
+import { wslHostChatRecovery } from './agent-launch-wsl-host-recovery'
 
 type AgentLaunchDowngradeReason = Exclude<AgentLaunchModeReason, 'user_default' | 'requested'>
 
@@ -119,7 +120,8 @@ export function decideAgentLaunchMode(args: {
   const blocked = (reason: AgentLaunchDowngradeReason): AgentLaunchModeReceipt =>
     unavailableLaunchMode(reason, vocabulary, surface === 'chat', {
       agent,
-      phase: 'before-effects'
+      phase: 'before-effects',
+      ...(placement.workspacePath ? { workspacePath: placement.workspacePath } : {})
     })
   if (args.terminalOnly || (surface !== 'chat' && !nativeChatPreferenceFor(settings, agent))) {
     return {
@@ -281,8 +283,11 @@ function unavailableLaunchMode(
   conclusive = true
 ): AgentLaunchModeReceipt {
   if (requested && conclusive && context?.phase === 'before-effects') {
+    const recovery =
+      reason === 'wsl_execution_runtime' ? wslHostChatRecovery(context.workspacePath) : null
     throw new AgentLaunchSurfaceUnavailableError(
-      `${formatAgentTypeLabel(context.agent)} can't open as a chat here because ${DOWNGRADE_DETAIL[reason]}. Start it in a terminal instead.`
+      `${formatAgentTypeLabel(context.agent)} can't open as a chat here because ${DOWNGRADE_DETAIL[reason]}. Start it in a terminal instead.`,
+      recovery ?? undefined
     )
   }
   return downgraded(reason, vocabulary, requested)

@@ -19,12 +19,12 @@ export type WslHostOfferDeps = {
 }
 
 /**
- * Turns WSL hosts on, adds the distro, adds the project as before, then moves that one project
- * onto the host. The distro's other bridge projects stay put. Returns the refusal when the add fails.
+ * Turns WSL hosts on and adds the distro as a host; an already-added distro counts as added.
+ * Restores the setting and returns the refusal when the add fails.
  */
-export async function acceptWslHostOffer(
-  offer: WslHostOffer,
-  deps: WslHostOfferDeps
+export async function runWslDistroAsHost(
+  distro: string,
+  deps: Pick<WslHostOfferDeps, 'readWslHostsSetting' | 'updateSettings' | 'addWslHost'>
 ): Promise<Extract<WslHostAddResult, { ok: false }> | null> {
   const previous = deps.readWslHostsSetting()
   // Left on after a failure, a later "Add on this computer" would still be auto-moved.
@@ -33,7 +33,7 @@ export async function acceptWslHostOffer(
   try {
     await deps.updateSettings({ experimentalWslHosts: true })
     // Accepting is the user's ask to run this distro, so a stopped one may start.
-    result = await deps.addWslHost({ distro: offer.distro, startIfStopped: true })
+    result = await deps.addWslHost({ distro, startIfStopped: true })
   } catch (cause) {
     await restore()
     throw cause
@@ -41,6 +41,21 @@ export async function acceptWslHostOffer(
   if (!result.ok && result.kind !== 'already-added') {
     await restore()
     return result
+  }
+  return null
+}
+
+/**
+ * Turns WSL hosts on, adds the distro, adds the project as before, then moves that one project
+ * onto the host. The distro's other bridge projects stay put. Returns the refusal when the add fails.
+ */
+export async function acceptWslHostOffer(
+  offer: WslHostOffer,
+  deps: WslHostOfferDeps
+): Promise<Extract<WslHostAddResult, { ok: false }> | null> {
+  const refusal = await runWslDistroAsHost(offer.distro, deps)
+  if (refusal) {
+    return refusal
   }
   await deps.addLocalPath(offer.path, offer.source)
   deps.moveAddedProject(offer)
