@@ -55,7 +55,6 @@ vi.mock(
 vi.mock('../../session/terminal/send/native-chat-runtime-send', () => ({
   sendNativeChatMessage: vi.fn(),
   sendNativeChatTypedCommand: vi.fn(),
-  sendNativeChatMessageVerified: vi.fn(),
   typeNativeChatCommand: vi.fn(),
   submitNativeChatPrompt: vi.fn()
 }))

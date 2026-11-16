@@ -90,7 +90,7 @@ export function sendNativeChatMessageWithImageAttachments(
             markSubmitted()
           })
         },
-        markSubmitted
+        () => markSubmitted('not-submitted')
       )
     },
     {
