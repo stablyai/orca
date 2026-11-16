@@ -52,7 +52,7 @@ import type {
   TerminalRecoveryRemountResult
 } from '../../terminals/pty/terminal-tab-recovery-ledger'
 import type { RemoveWorktreeOptions } from './teardown/worktree-removal-options'
-import type { HostQualifiedDetectedWorktreeResult } from '../../../../../shared/detected-worktree-provider-contract'
+import type { HostQualifiedDetectedWorktreeResult } from '../../../../../shared/worktree/catalog/detected-worktree-provider-contract'
 
 import type {
   PendingWorktreeCreation,

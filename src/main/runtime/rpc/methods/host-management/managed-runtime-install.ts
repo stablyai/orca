@@ -13,7 +13,7 @@ import { isAgentSessionPreSpawnError } from '../../../../native-chat/agent-sessi
 import { getProfileUserDataPath } from '../../../../orca-profiles/profile-storage-paths'
 import { stopStructuredAgentChats } from '../../../agent-session/lifecycle/structured-agent-chat-stop'
 import { resolveHostStructuredAgentLaunchEnvironment } from '../../../agent-session/launch/structured-agent-launch-support'
-import { isPathInsideOrEqual } from '../../../../../shared/cross-platform-path'
+import { isPathInsideOrEqual } from '../../../../../shared/file-access/cross-platform-path'
 import { defineMethod, defineStreamingMethod } from '../../core'
 import { bindStructuredAgentSessionStream } from '../structured-sessions/subscriptions/structured-agent-session-status-stream'
 

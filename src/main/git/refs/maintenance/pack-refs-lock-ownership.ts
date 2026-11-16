@@ -1,6 +1,6 @@
 import { readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { posix, win32 } from 'node:path'
-import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
+import { isWindowsAbsolutePathLike } from '../../../../shared/file-access/cross-platform-path'
 import {
   PACK_REFS_TIMEOUT_MS,
   PACKED_REFS_LOCK_POLL_MS

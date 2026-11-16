@@ -3,7 +3,7 @@ import {
   isWslUncPathForCallerLinuxPath,
   normalizeRuntimePathForComparison,
   resolveRuntimePath
-} from '../../cross-platform-path'
+} from '../../file-access/cross-platform-path'
 import { parseWorkspaceKey } from '../../workspace/identity/workspace-scope'
 import { parseWslUncPath } from '../../file-access/wsl-paths'
 import { splitWorktreeIdForFilesystem } from '../../worktree/id'

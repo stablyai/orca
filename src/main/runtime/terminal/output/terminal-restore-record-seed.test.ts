@@ -3,7 +3,7 @@ import { OrcaRuntimeService } from '../../orca-runtime'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import '../../../../shared/workspace-layout/stable-pane-id'
-import '../../../../shared/layout-owner-switch'
+import '../../../../shared/workspace-layout/layout-owner-switch'
 import '../../orca-runtime-tests/bind-first-pane.test-fixture'
 
 // Reattach restore arrives as RPC data, not onPtyData; seed preview/tail/title without inventing recency or side-effect facts.

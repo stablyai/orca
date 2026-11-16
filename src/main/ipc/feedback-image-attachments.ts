@@ -1,4 +1,4 @@
-import { readFetchResponseJsonWithinLimit } from '../../shared/fetch-response-body'
+import { readFetchResponseJsonWithinLimit } from '../../shared/network/fetch-response-body'
 import {
   MAX_FEEDBACK_IMAGE_BYTES,
   MAX_FEEDBACK_IMAGE_COUNT,

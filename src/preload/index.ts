@@ -42,6 +42,7 @@ import { keybindingsApi } from './api/preferences/keybindings-bridge'
 import { codexAccountsApi } from './api/agent-accounts/codex-accounts-bridge'
 import { claudeAccountsApi } from './api/agent-accounts/claude-accounts-bridge'
 import { cliApi } from './api/cli-install/cli-bridge'
+import { orcaUninstallApi } from './api/orca-uninstall/orca-uninstall-bridge'
 import { codexConfigSyncApi } from './api/agent-accounts/codex-config-sync-bridge'
 import { preflightApi } from './api/preflight/preflight-bridge'
 import { notificationsApi } from './api/notifications/notifications-bridge'
@@ -151,6 +152,7 @@ const api = {
   codexAccounts: codexAccountsApi,
   claudeAccounts: claudeAccountsApi,
   cli: cliApi,
+  orcaUninstall: orcaUninstallApi,
   codexConfigSync: codexConfigSyncApi,
   preflight: preflightApi,
   notifications: notificationsApi,

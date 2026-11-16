@@ -165,7 +165,6 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/shared/__tests__/process-host/windows-tree-kill-late-taskkill.win32.test.ts',
   'src/shared/agent-launch/startup/omp-fresh-launch-cmd.win32.test.ts',
   'src/shared/shell/launch/windows-batch-spawn.win32.test.ts',
-  'src/main/claude/structured/launch/claude-structured-child-env.test.ts',
   'src/main/jcode/hook-gate-script.test.ts',
   'src/main/agent-hooks/installation/commands/windows-native-hook-exe-hosts.test.ts',
   'src/main/agent-hooks/installation/commands/windows-batch-hook-launcher.test.ts',
@@ -198,7 +197,6 @@ export const WINDOWS_BOUNDARY_TESTS = [
   'src/main/ipc/preflight-provider-command-selection.test.ts',
   'src/main/ipc/preflight-runnable-local-cli.test.ts',
   'src/main/managed-server/install/remote-node-runtime-store-windows.test.ts',
-  'src/main/skills/bundled-skill-install/bundled-skill-local-host.test.ts',
   'src/main/skills/bundled-skill-install/bundled-skill-plan-selection.test.ts'
 ]
 

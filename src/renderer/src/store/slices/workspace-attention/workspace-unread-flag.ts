@@ -18,7 +18,7 @@ import { getFolderWorkspaceHostId } from '../../../../../shared/folder-workspace
 import { persistPassiveWorktreeMetaForOwner } from '../worktrees/listing/worktree-owner-settings'
 import type { WorkspaceAttentionGet, WorkspaceAttentionSet } from './workspace-attention-contract'
 import { workspaceHasLiveMarkerForHost } from './workspace-marker-host'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../shared/sidebar-inputs-switch'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import { ownerHostOwnsSidebarInputs } from '../worktrees/listing/owner-host-sidebar-inputs'
 import { folderRowOnHost, folderRowToMark, isWorkspaceFlagSet } from './workspace-unread-flag-reads'
 

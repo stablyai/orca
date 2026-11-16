@@ -1,10 +1,10 @@
 import { stat } from 'node:fs/promises'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
-import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesystem-absence'
 import { AgentSessionPreSpawnError } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import type { AgentSessionRecordStore } from './records/agent-session-record-store'
 import { agentSessionPinnedLaunchDirectory } from './records/agent-session-record-launch-directory'
-import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
+import { isFloatingWorkspaceId } from '../../../shared/workspace/identity/floating-workspace-worktree'
 
 /** Resuming a missing floating launch directory elsewhere would change the conversation. */
 export function agentSessionLaunchFolderMissing(

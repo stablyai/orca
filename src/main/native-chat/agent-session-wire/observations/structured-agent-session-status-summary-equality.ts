@@ -30,6 +30,7 @@ export function structuredStatusSummariesEqual(
     a.latestPrompt === b.latestPrompt &&
     a.model === b.model &&
     a.permissionMode === b.permissionMode &&
+    a.launchPermissionMode === b.launchPermissionMode &&
     a.runtimePermission?.fence === b.runtimePermission?.fence &&
     a.runtimePermission?.mode === b.runtimePermission?.mode &&
     (a.runtimePermission === undefined) === (b.runtimePermission === undefined) &&
@@ -51,6 +52,7 @@ export function structuredStatusSummariesEqual(
     a.turnOutcome === b.turnOutcome &&
     a.stopping === b.stopping &&
     a.awaitsAnswer === b.awaitsAnswer &&
+    a.asyncQuestionsSkippedThrough === b.asyncQuestionsSkippedThrough &&
     agentSessionBackgroundTasksEqual(a.backgroundTasks, b.backgroundTasks) &&
     structuredStatusChildrenEqual(a.children, b.children) &&
     agentProviderSessionsEqual(undefined, a.providerSession, b.providerSession)

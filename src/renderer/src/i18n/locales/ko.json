@@ -12584,7 +12584,7 @@
           "catalog": "카탈로그",
           "clear": "필터 지우기",
           "themes": "테마",
-          "codeLanguages": "프로그래밍 언어",
+          "codeLanguages": "언어",
           "translations": "번역",
           "icons": "아이콘",
           "commands": "명령 및 패널",
@@ -12597,7 +12597,6 @@
         },
         "PluginUpdateAllDialog": {
           "previewError": "이 업데이트를 읽지 못했습니다",
-          "newAccess": "새로움: {{value0}}",
           "failed": "{{value0}}을(를) 업데이트할 수 없습니다. 나머지는 업데이트되었습니다.",
           "cancel": "취소",
           "updateOne": "플러그인 1개 업데이트",
@@ -12611,13 +12610,20 @@
           "allAccess": "모든 접근 권한 보기",
           "newCommands": "명령",
           "newContributions": "사용자를 대신해 동작하는 기능",
-          "newEvents": "더 많은 이벤트",
-          "newPanels": "패널",
+          "newEvents": "더 많은 Orca 이벤트에 반응합니다",
+          "newPanels": "패널을 추가합니다",
           "newRecipes": "머신 레시피",
           "newShortcuts": "키보드 단축키",
-          "sourceMoved": "새 소스: {{value0}} (이전 {{value1}})",
           "update": "업데이트",
-          "review": "검토"
+          "newFileTypes": "여는 파일이 바뀝니다",
+          "newHooks": "Orca와 에이전트의 동작을 변경하거나 중지할 수 있습니다",
+          "newSettings": "설정 페이지",
+          "newStatusBarItems": "상태 표시줄 항목",
+          "opensFileTypes": "새 파일 형식을 엽니다: {{value0}}",
+          "becomesDefaultEditor": "{{value0}}의 기본 편집기가 됩니다",
+          "needApproval": "승인 필요",
+          "readyToUpdate": "업데이트 준비됨",
+          "movedRepository": "다른 저장소에서 제공됩니다"
         },
         "PluginDetailInfo": {
           "previous": "이전 버전",
@@ -12729,11 +12735,11 @@
         },
         "PluginUpdateReview": {
           "title": "{{value0}} 업데이트 검토",
-          "back": "뒤로",
           "approve": "승인 후 업데이트",
-          "explain": "이 업데이트는 승인한 버전보다 더 많은 권한을 요청합니다. 여기에서 승인해야만 설치됩니다.",
-          "before": "이전",
-          "after": "이후"
+          "uncompared": "Orca가 이 버전을 승인한 버전과 비교하지 못했습니다. 업데이트하기 전에 접근 범위를 확인하세요.",
+          "newInVersion": "이 버전의 새로운 점:",
+          "titleMany": "업데이트 {{value0}}개 검토",
+          "history": "GitHub에서 변경 사항 보기"
         },
         "PluginNotOfficialWarning": {
           "unknownPublisher": "게시자",
@@ -12741,7 +12747,8 @@
           "update": "업데이트하기 전에 {{value0}}을(를) 신뢰할 수 있는지 확인하세요. 이 플러그인은 게시자의 코드를 Orca 안에서 실행합니다.",
           "installed": "{{value0}}을(를) 신뢰할 수 있는지 확인하세요. 이 플러그인은 게시자의 코드를 Orca 안에서 실행합니다.",
           "label": "공식 플러그인이 아닙니다:",
-          "translations": "번역은 Orca의 모든 텍스트를 바꿀 수 있습니다. {{value0}}을(를) 신뢰할 수 있는지 확인하세요."
+          "translations": "번역은 Orca의 모든 텍스트를 바꿀 수 있습니다. {{value0}}을(를) 신뢰할 수 있는지 확인하세요.",
+          "community": "커뮤니티 플러그인"
         },
         "pluginConsentCopy": {
           "addsCommands": "명령을 추가합니다",
@@ -12759,11 +12766,15 @@
           "movedTitle": "{{value0}} {{value1}}이(가) 다른 저장소에서 제공됩니다",
           "accessTitle": "{{value0}} {{value1}}이(가) 더 많은 접근 권한을 요청합니다",
           "manyTitle": "플러그인 업데이트 {{value0}}개가 검토를 기다리고 있습니다",
-          "oneDescription": "게시자: {{value0}}. 검토하기 전까지 업데이트되지 않습니다.",
-          "manyDescription": "검토하기 전까지 업데이트되지 않습니다.",
-          "review": "검토",
           "dismiss": "닫기",
-          "movedInstalled": "검토할 때까지 꺼진 상태로 유지됩니다."
+          "movedInstalled": "검토할 때까지 꺼진 상태로 유지됩니다.",
+          "approveAll": "모두 승인 및 업데이트",
+          "approveOne": "승인 및 업데이트",
+          "details": "세부 정보",
+          "failed": "{{value0}}을(를) 업데이트할 수 없습니다",
+          "morePlugins": "외 플러그인 {{value0}}개",
+          "uncompared": "Orca가 승인한 버전과 비교하지 못했습니다.",
+          "held": "{{value0}}이(가) 검토 후 변경되어 설정 → 플러그인에서 검토를 기다리고 있습니다."
         },
         "PluginInstallTrustDialog": {
           "titleFolder": "이 폴더를 신뢰하는지 확인하세요",
@@ -15347,13 +15358,6 @@
                       "skillNotInstalled": "Orca CLI 스킬이 아직 설치되지 않았습니다."
                     }
                   }
-                },
-                "tab": {
-                  "intro": {
-                    "actions": {
-                      "68a5dc6604": "모바일 에뮬레이터를 숨길 수 없습니다."
-                    }
-                  }
                 }
               }
             }
@@ -15378,17 +15382,6 @@
             "5789936d9a": "agents가 화면을 제어하는 동안 iOS 시뮬레이터를 미리 볼 수 있습니다.",
             "8014b4b80b": "유지",
             "6e051a40b7": "숨기기"
-          },
-          "mobile": {
-            "emulator": {
-              "hidden": {
-                "toast": {
-                  "e8f098a870": "모바일 에뮬레이터가 숨겨졌습니다",
-                  "c46c979c1d": "모바일 에뮬레이터를 언제든지 다시 활성화할 수 있습니다",
-                  "600f9a745a": "설정 › 모바일 에뮬레이터"
-                }
-              }
-            }
           },
           "useEmulatorScreenKeyboard": {
             "pasteTooLarge": "붙여넣을 내용이 에뮬레이터 키보드 입력에 비해 너무 큽니다.",
@@ -22173,21 +22166,13 @@
     "language": {
       "back": "언어",
       "requestPrompt": "Orca에서 어떤 언어를 지원하면 좋을까요?",
-      "requestSuccess": "언어 요청이 기록되었습니다. 설정을 계속할 수 있습니다.",
       "requestError": "요청을 기록하지 못했습니다. 다시 시도하세요.",
       "retry": "다시 시도",
       "requestAction": "언어 지원 요청",
       "title": "표시 언어",
-      "device": "시스템 언어: {{language}}",
-      "unsupported": "시스템 언어: {{language}}. 이 언어는 아직 지원되지 않습니다.",
-      "unknown": "시스템 언어를 감지하지 못했습니다. 아래에서 언어를 선택하세요.",
-      "loadError": "이 언어를 불러오지 못했습니다. 다시 시도하세요.",
-      "saveError": "언어 설정을 저장하지 못했습니다. 다시 시도하세요.",
-      "other": "다른 언어…",
       "settingsError": "설정을 불러오지 못했습니다.",
       "loadingSettings": "설정 불러오는 중…",
-      "loading": "언어 불러오는 중…",
-      "saving": "언어 저장 중…"
+      "loading": "언어 불러오는 중…"
     }
   },
   "resourceManager": {

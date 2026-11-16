@@ -1,4 +1,4 @@
-import type { TabGroup } from '../../../../shared/tab-types'
+import type { TabGroup } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { TabSplitDirection } from '../../store/slices/tabs/tabs-slice-contract'
 

@@ -18,7 +18,7 @@ import { describeToolInput } from '../../../shared/native-chat/tools/native-chat
 import type { JournalSqlStatusContext } from './journal-sql-status-context'
 import { readJournalSqlOrcaStopCut } from './journal-sql-status-cuts'
 import { readJournalSqlRequestStatus } from './journal-sql-status-requests'
-import { readJournalSqlAsyncQuestionOpen } from './journal-sql-status-async-questions'
+import { readJournalSqlOpenAsyncQuestion } from './journal-sql-status-async-questions'
 
 export type { JournalStatusState } from './journal-status-state'
 import type { JournalStatusState } from './journal-status-state'
@@ -102,6 +102,7 @@ export function readJournalSqlStatusState(
     currentFence,
     request
   )
+  const openAsyncQuestion = readJournalSqlOpenAsyncQuestion(state, floor)
   return {
     latestRequest: requests.latestRequest,
     owesWork: status !== 'idle' && owesWork,
@@ -116,7 +117,7 @@ export function readJournalSqlStatusState(
         : {}),
       ...(turnOutcome ? { turnOutcome } : {}),
       ...(statusStartedAt !== undefined ? { statusStartedAt } : {}),
-      ...(readJournalSqlAsyncQuestionOpen(state, floor) ? { awaitsAnswer: true as const } : {})
+      ...(openAsyncQuestion ? { openAsyncQuestion } : {})
     }
   }
 }

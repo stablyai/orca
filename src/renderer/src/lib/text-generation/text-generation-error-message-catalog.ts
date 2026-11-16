@@ -2,7 +2,7 @@ import { translate } from '@/i18n/i18n'
 import {
   TEXT_GENERATION_FAILURE_COPY,
   type TextGenerationFailureCode
-} from '../../../../shared/text-generation-failure-copy'
+} from '../../../../shared/text-generation/text-generation-failure-copy'
 import { AGENT_OUTPUT_ERROR_COPY } from './agent-output-error-copy'
 import { DICTATION_CLEANUP_ERROR_COPY } from './dictation-cleanup-error-copy'
 import { TEXT_ACTION_RECIPE_ERROR_COPY } from '../text-action-recipe-error-copy'

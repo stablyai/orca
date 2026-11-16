@@ -1,13 +1,13 @@
 import type {
   QueuedEditLease,
   QueuedEditLeaseLoss
-} from '../../../../../../shared/queued-message-edit-lease'
+} from '../../../../../../shared/native-chat/input/queued-messages/queued-message-edit-lease'
 import {
   readNativeChatComposerDraft,
   updateNativeChatComposerDraft,
   subscribeToNativeChatComposerDraft
 } from '../../drafts/native-chat-composer-draft-store'
-import { queuedMessageWithEdit } from '../../../../../../shared/queued-message-edit'
+import { queuedMessageWithEdit } from '../../../../../../shared/native-chat/input/queued-messages/queued-message-edit'
 import {
   nativeChatQueuedEditInput,
   nativeChatQueuedEditHeld,

@@ -13,7 +13,7 @@ import {
   threadAgentStateLabel
 } from './activity-thread-presentation'
 import { AGENT_LIST_STATUS_RANK } from '../../../../shared/agent-status/presentation/agent-list-status'
-import type { ActivityGroupBy } from '../../../../shared/agents-view-thread-filters'
+import type { ActivityGroupBy } from '../../../../shared/agent-status/presentation/agents-view-thread-filters'
 import type { ActivityThreadGroup, AgentPaneThread } from './activity-thread-types'
 
 function activityStatusRank(thread: AgentPaneThread): number {

@@ -1,5 +1,5 @@
 import type { TabBarItem } from './tab-bar-item-model'
-import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
+import { resolveTerminalTabTitle } from '../../../../shared/workspace-layout/tab-groups/tab-title-resolution'
 import { getEditorDisplayLabel } from '@/components/editor/panel/header/editor-labels'
 import { getBrowserTabLabel } from './BrowserTab'
 import { formatSimulatorTabLabel } from '@/lib/simulator/tabs/simulator-tab-label'

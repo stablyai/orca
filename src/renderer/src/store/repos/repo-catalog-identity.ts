@@ -1,6 +1,6 @@
 import type { Repo } from '../../../../shared/repository/repo-types'
 import { applyInheritedProjectGroups } from '../../../../shared/project/groups/project-group-inheritance'
-import { reconcileCatalogRows } from '../../../../shared/catalog-row-reconcile'
+import { reconcileCatalogRows } from '../../../../shared/collections/catalog-row-reconcile'
 import { getRepoRowIdentity } from './repo-host-identity'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { RepoSlice } from './repo-state'

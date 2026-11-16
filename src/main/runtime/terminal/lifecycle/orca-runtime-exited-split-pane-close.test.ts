@@ -6,7 +6,9 @@ import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { partialRuntimeStore } from '../../orca-runtime-tests/runtime-store-partial-fixture'
 
-vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
+vi.mock('../../../../shared/workspace-layout/layout-owner-switch', () => ({
+  ORCA_LAYOUT_OWNER_IS_MAIN: true
+}))
 
 const WORKTREE_ID = 'repo::/worktree'
 const LEFT = '11111111-1111-4111-8111-111111111111'

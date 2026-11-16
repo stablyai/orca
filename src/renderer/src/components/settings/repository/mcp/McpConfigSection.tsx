@@ -14,7 +14,7 @@ import {
   inspectMcpConfigContent,
   MCP_CONFIG_CANDIDATES,
   MCP_STARTER_CONFIG
-} from '../../../../../../shared/mcp-config'
+} from '../../../../../../shared/mcp/configuration/mcp-config'
 import { useAppStore } from '../../../../store/index'
 import { selectRuntimeAwareSshStatus } from '../../../../store/slices/ssh/runtime-environment-ssh-selectors'
 import {

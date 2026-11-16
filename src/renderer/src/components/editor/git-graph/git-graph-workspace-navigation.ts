@@ -1,6 +1,6 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { normalizeRuntimePathForComparison } from '../../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../../shared/file-access/cross-platform-path'
 import { getWorktreeExecutionHostId } from '../../../../../shared/execution-host'
 import { findIndexedRepoOwnerForHost } from '@/lib/workspace/ownership/repo-owner-index'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'

@@ -11,7 +11,7 @@ import type {
   GitConflictStatusSource,
   GitStatusEntry
 } from '../../git/status/git-status-types'
-import type { GitLabProjectRef } from '../../gitlab-types'
+import type { GitLabProjectRef } from '../../gitlab/gitlab-types'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../github/checks/check-types'
 import type { GitHubRepositoryIdentity } from '../../github/repositories/repository-identity'
 

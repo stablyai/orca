@@ -2,7 +2,7 @@
 import {
   isWindowsAbsolutePathLike,
   normalizeRuntimePathForComparison
-} from '../../../../shared/cross-platform-path'
+} from '../../../../shared/file-access/cross-platform-path'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { getRendererAppPlatform } from '../../app-shell/platform/renderer-app-platform'
 

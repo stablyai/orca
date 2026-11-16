@@ -66,6 +66,7 @@ function buildTargetPackage(target) {
   const result = runProcessSync({
     program: process.execPath,
     args: [
+      '--disable-warning=MODULE_TYPELESS_PACKAGE_JSON',
       join(root, 'config/scripts/orcad-distribution/prebuilds/build-orcad-node.mjs'),
       '--target',
       target,

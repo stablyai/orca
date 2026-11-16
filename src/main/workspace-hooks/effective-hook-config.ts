@@ -1,10 +1,10 @@
 import { getDefaultRepoHookSettings } from '../../shared/constants'
-import { resolveHookCommandSourcePolicy } from '../../shared/hook-command-source-policy'
+import { resolveHookCommandSourcePolicy } from '../../shared/workspace-setup/hooks/hook-command-source-policy'
 import type {
   HookCommandSourcePolicy,
   OrcaHooks,
   SetupRunPolicy
-} from '../../shared/orca-yaml-hook-types'
+} from '../../shared/workspace-setup/orca-yaml-hook-types'
 import type { WorkspaceHookOwner } from '../../shared/workspace-setup/hooks/workspace-hook-owner'
 import type { SetupDecision } from '../../shared/worktree/create-types'
 import type { WorktreeDefaultTabsLaunch } from '../../shared/worktree/creation/launch-types'

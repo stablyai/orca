@@ -7,7 +7,7 @@ import {
 } from '../../../../shared/source-control/ai/generation/conversation-name-generation'
 import { chatNamingAgentTarget } from './structured-chat-naming-agent-launch'
 import type { AgentLaunchProfileSettings } from '../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
-import { chatNamingFailure } from '../../../../shared/chat-naming-failure-copy'
+import { chatNamingFailure } from '../../../../shared/text-generation/chat-naming-failure-copy'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { CommitMessageAgentEnvironmentResolvers } from '../../../text-generation/execution/commit-message-agent-environment'
 import type { StructuredChatNamingDeps } from '../../../native-chat/conversation-naming/structured-chat-naming-types'

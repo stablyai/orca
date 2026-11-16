@@ -1,4 +1,4 @@
-import type { Tab } from '../../../shared/tab-types'
+import type { Tab } from '../../../shared/workspace-layout/tab-groups/tab-types'
 import type { KeybindingContext } from '../../../shared/keybindings/types'
 import { useAppStore } from '../store'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'

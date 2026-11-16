@@ -1,4 +1,7 @@
-import type { TabGroup, TabGroupLayoutNode } from '../../../../shared/tab-types'
+import type {
+  TabGroup,
+  TabGroupLayoutNode
+} from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import { readRecordChanges } from '@/store/keyed-record-change-reads'
 
 export class MountedTerminalWorktrees extends Set<string> {

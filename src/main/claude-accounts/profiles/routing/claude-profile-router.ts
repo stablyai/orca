@@ -306,7 +306,10 @@ export class ClaudeProfileRouter {
       wslDistro: null,
       wslLinuxConfigDir: null,
       envPatch: this.launchEnv(),
-      provenance: home ? `profile:${profile?.accountId}` : 'system'
+      provenance: home ? `profile:${profile?.accountId}` : 'system',
+      ...(home && profile
+        ? { readingAccount: { accountId: profile.accountId, runtime: 'host', wslDistro: null } }
+        : {})
     }
   }
 
