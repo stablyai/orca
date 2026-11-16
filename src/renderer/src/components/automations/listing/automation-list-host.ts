@@ -1,8 +1,8 @@
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import {
   getExecutionHostLabel,
-  getLocalExecutionHostLabel,
-  getRepoExecutionHostId
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
 } from '../../../../../shared/execution-host'
 import type { AutomationListRow } from './automation-list-row-identity'
 import type { Translate } from '@/i18n/use-translate'
@@ -18,10 +18,10 @@ export function automationRowHostLabel(
   if (row.hostLabel) {
     return row.hostLabel
   }
-  const hostId = row.automation.runContext?.hostId ?? (repo ? getRepoExecutionHostId(repo) : null)
-  return hostId
-    ? (hostLabelById.get(hostId) ?? getExecutionHostLabel(hostId))
-    : getLocalExecutionHostLabel()
+  const hostId =
+    row.automation.runContext?.hostId ??
+    (repo ? getRepoExecutionHostId(repo) : LOCAL_EXECUTION_HOST_ID)
+  return hostLabelById.get(hostId) ?? getExecutionHostLabel(hostId)
 }
 
 /** The machine an external manager's job runs on. */

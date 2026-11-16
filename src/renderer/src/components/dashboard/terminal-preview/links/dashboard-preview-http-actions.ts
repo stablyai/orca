@@ -11,10 +11,7 @@ import { resolveOwner } from '@/lib/workspace/ownership/resolve-owner'
 import { resolveWorktreeOperationRoute } from '@/lib/workspace/ownership/worktree-operation-route'
 import { createBrowserLinkHostMatcher } from '@/lib/browser/navigation/browser-link-owner'
 import { getWorkspaceClientCreationActionPolicy } from '@/lib/workspace/creation/surface-policy/client-creation-action-policy'
-import {
-  canOpenWorkspaceBrowserTabOnRuntime,
-  canOpenWorkspaceBrowserTabOnSsh
-} from '@/lib/browser/workspace/workspace-browser-route-eligibility'
+import { canOpenRemoteLinkInWorkspaceBrowser } from '@/lib/browser/workspace/workspace-browser-route-eligibility'
 import {
   buildHttpLinkActions,
   httpLinkActionDestinationsFor,
@@ -86,10 +83,7 @@ export function dashboardPreviewHttpActions(
     matchesHost(route.executionHostId) &&
     getWorkspaceClientCreationActionPolicy(state, source.worktreeId)['managed-browser'].state ===
       'enabled' &&
-    (owner.kind === 'local' ||
-      (owner.kind === 'runtime'
-        ? canOpenWorkspaceBrowserTabOnRuntime(state, source.worktreeId, owner.runtimeEnvironmentId)
-        : canOpenWorkspaceBrowserTabOnSsh(state, source.worktreeId, owner.connectionId)))
+    (owner.kind === 'local' || canOpenRemoteLinkInWorkspaceBrowser(state, source.worktreeId, owner))
   )
   const destinations = canOpen
     ? httpLinkActionDestinationsFor(state.settings, owner, true)

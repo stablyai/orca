@@ -22145,21 +22145,13 @@
     "language": {
       "back": "語言",
       "requestPrompt": "希望 Orca 支援哪種語言？",
-      "requestSuccess": "已記錄語言支援需求。可以繼續初始設定。",
       "requestError": "無法記錄需求。請重試。",
       "retry": "重試",
       "requestAction": "申請語言支援",
       "title": "顯示語言",
-      "device": "系統語言：{{language}}",
-      "unsupported": "系統語言：{{language}}。尚未支援此語言。",
-      "unknown": "無法偵測系統語言。請在下方選擇語言。",
-      "loadError": "無法載入此語言。請重試。",
-      "saveError": "無法儲存語言偏好設定。請重試。",
-      "other": "其他語言…",
       "settingsError": "無法載入設定。",
       "loadingSettings": "正在載入設定…",
-      "loading": "正在載入語言…",
-      "saving": "正在儲存語言…"
+      "loading": "正在載入語言…"
     }
   },
   "resourceManager": {

@@ -7,7 +7,7 @@ import { executeTerminalStartupCommandPaste } from '../input/paste/terminal-star
 import { resolveTerminalPasteRuntime } from '../input/paste/terminal-paste-runtime'
 import { CLIENT_PLATFORM } from '@/lib/workspace/creation/new-workspace'
 import { recordPaneWakeThroughLayoutOwner } from '@/store/terminals/sleep/terminal-sleep-layout-owner'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 
 import { shouldKeepHiddenStartupRendererQueriesLive } from './output/hidden-startup-renderer-query'
 import { createForegroundImmediateBudget } from './output/foreground-output-budgets'

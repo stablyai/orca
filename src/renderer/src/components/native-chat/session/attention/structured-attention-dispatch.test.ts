@@ -212,4 +212,24 @@ describe('dispatchStructuredTurnCompletionAttention', () => {
       surfaceDot: 'agent-completion'
     })
   })
+
+  it('keeps unread state but sends no notification for a worktree the user muted', () => {
+    store.setState({ notificationsMutedByWorktree: { [WORKSPACE]: true } })
+    dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
+    expect(indicators()).toEqual({
+      workspaceBold: true,
+      paneDot: 'agent-completion',
+      tabDot: 'agent-completion',
+      surfaceDot: 'agent-completion'
+    })
+    expect(dispatched).toEqual([])
+  })
+
+  it('still notifies for worktrees that are not muted', () => {
+    store.setState({
+      notificationsMutedByWorktree: { 'repo1::/tmp/other': true }
+    })
+    dispatchStructuredTurnCompletionAttention(structuredTab(), completion())
+    expect(dispatched).toHaveLength(1)
+  })
 })

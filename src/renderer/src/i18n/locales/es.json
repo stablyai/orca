@@ -6076,7 +6076,8 @@
           "runtimeHostDisconnectedNamed": "{{hostName}} está desconectado",
           "runtimeHostProject": "Proyecto en servidor de Orca",
           "runtimeHostProjectNamed": "Proyecto en {{hostName}}",
-          "ef18787206": "En cola para eliminación"
+          "ef18787206": "En cola para eliminación",
+          "notificationsMuted": "Notificaciones silenciadas"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents",
@@ -6172,7 +6173,9 @@
           "copyPathOption": "Ruta",
           "copyNameOption": "Nombre del worktree",
           "lineageSubmenu": "Padre e hijos",
-          "projectGroupSubmenu": "Grupo de proyecto"
+          "projectGroupSubmenu": "Grupo de proyecto",
+          "muteNotifications": "Silenciar notificaciones",
+          "unmuteNotifications": "Reactivar notificaciones"
         },
         "WorktreeList": {
           "d880ea0744": "Crea un grupo y mueve este proyecto a él.",
@@ -22873,7 +22876,9 @@
       "chooseTransition": "Elige un cambio de estado:",
       "cancel": "Cancelar",
       "noTransition": "No hay ningún cambio de estado a {{column}} disponible para {{key}}.",
-      "queryTooLong": "La consulta de Jira es demasiado larga. Acorta la consulta o borra los filtros."
+      "queryTooLong": "La consulta de Jira es demasiado larga. Acorta la consulta o borra los filtros.",
+      "reorderColumn": "Reordenar {{column}}",
+      "reorderColumnHint": "Incidencias en esta columna: {{count}}. Usa las flechas izquierda y derecha para moverla."
     },
     "favourites": {
       "activeLabel": "Favoritos de Jira: {{name}}",
@@ -22896,21 +22901,13 @@
     "language": {
       "back": "Idiomas",
       "requestPrompt": "¿Qué idioma te gustaría que Orca admitiera?",
-      "requestSuccess": "Solicitud de idioma registrada. Puedes continuar la configuración.",
       "requestError": "No se pudo registrar tu solicitud. Inténtalo de nuevo.",
       "retry": "Reintentar",
       "requestAction": "Solicitar idioma",
       "title": "Idioma de la interfaz",
-      "device": "Idioma del sistema: {{language}}",
-      "unsupported": "Idioma del sistema: {{language}}. Este idioma aún no es compatible.",
-      "unknown": "No se pudo detectar el idioma del sistema. Elige uno a continuación.",
-      "loadError": "No se pudo cargar este idioma. Inténtalo de nuevo.",
-      "saveError": "No se pudo guardar tu preferencia de idioma. Inténtalo de nuevo.",
-      "other": "Otro idioma…",
       "settingsError": "No se pudo cargar tu configuración.",
       "loadingSettings": "Cargando configuración…",
-      "loading": "Cargando idioma…",
-      "saving": "Guardando idioma…"
+      "loading": "Cargando idioma…"
     }
   },
   "workspaceSpace": {

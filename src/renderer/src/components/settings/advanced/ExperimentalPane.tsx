@@ -18,12 +18,13 @@ import {
   MIN_AGENT_HIBERNATION_IDLE_MS,
   getEffectiveAgentHibernationIdleMs
 } from '@/lib/agent-session/hibernation/agent-hibernation-planner'
+import { trackWorktreeCardStyleChanged } from '@/components/sidebar/worktree-card-style-telemetry'
 
 const MS_PER_MINUTE = 60 * 1000
 
 type ExperimentalPaneProps = {
   settings: GlobalSettings
-  updateSettings: (updates: Partial<GlobalSettings>) => void
+  updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
   /** Unlocked by Option-clicking the Experimental title. */
   hiddenExperimentalUnlocked?: boolean
 }
@@ -238,9 +239,24 @@ export function ExperimentalPane({
                 value={
                   settings.experimentalNewWorktreeCardStyle === true ? 'experimental' : 'classic'
                 }
-                onChange={(style) =>
-                  updateSettings({ experimentalNewWorktreeCardStyle: style === 'experimental' })
-                }
+                onChange={(style) => {
+                  const experimental = style === 'experimental'
+                  void Promise.resolve(
+                    updateSettings({ experimentalNewWorktreeCardStyle: experimental })
+                  ).then(() => {
+                    const state = useAppStore.getState()
+                    if (
+                      (state.settings?.experimentalNewWorktreeCardStyle === true) !==
+                      experimental
+                    ) {
+                      return
+                    }
+                    state.setWorktreeCardsIntroChoice(null)
+                    if (experimental !== (settings.experimentalNewWorktreeCardStyle === true)) {
+                      trackWorktreeCardStyleChanged(experimental, 'settings')
+                    }
+                  })
+                }}
                 ariaLabel={t(
                   'auto.components.settings.ExperimentalPane.worktreeCardStyle.ariaLabel',
                   'Card style'

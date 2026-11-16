@@ -1,7 +1,7 @@
 // Keep desktop-created simulator/browser tabs absent from paired-server frames in this desktop’s localStorage, keyed by server/workspace; published tabs follow server frames. Never serialize or send this record.
 
 import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import type { AppState } from '@/store/types'
 import type { HeldDrawnTabs } from '@/store/workspace-layout/frames/workspace-layout-frame-held-tabs'
 

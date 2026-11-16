@@ -4,7 +4,7 @@ import {
   AGENT_STATUS_STALE_AFTER_MS,
   agentStatusEvidenceObservedAt
 } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
-import { KeyedDeadlines } from '../../../../../shared/keyed-deadlines'
+import { KeyedDeadlines } from '../../../../../shared/collections/keyed-deadlines'
 import type { AcceptedAgentStatuses } from './accepted-agent-statuses'
 import type { AgentStatusChange } from './agent-status-contract'
 

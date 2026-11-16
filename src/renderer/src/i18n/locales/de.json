@@ -22635,21 +22635,13 @@
     "language": {
       "back": "Sprachen",
       "requestPrompt": "Welche Sprache soll Orca unterstützen?",
-      "requestSuccess": "Sprachwunsch erfasst. Die Einrichtung kann fortgesetzt werden.",
       "requestError": "Die Anfrage konnte nicht erfasst werden. Erneut versuchen.",
       "retry": "Erneut versuchen",
       "requestAction": "Sprache anfragen",
       "title": "Anzeigesprache",
-      "device": "Systemsprache: {{language}}",
-      "unsupported": "Systemsprache: {{language}}. Diese Sprache wird noch nicht unterstützt.",
-      "unknown": "Die Systemsprache konnte nicht erkannt werden. Unten eine Sprache auswählen.",
-      "loadError": "Diese Sprache konnte nicht geladen werden. Erneut versuchen.",
-      "saveError": "Die Spracheinstellung konnte nicht gespeichert werden. Erneut versuchen.",
-      "other": "Andere Sprache…",
       "settingsError": "Die Einstellungen konnten nicht geladen werden.",
       "loadingSettings": "Einstellungen werden geladen…",
-      "loading": "Sprache wird geladen…",
-      "saving": "Sprache wird gespeichert…"
+      "loading": "Sprache wird geladen…"
     }
   },
   "resourceManager": {

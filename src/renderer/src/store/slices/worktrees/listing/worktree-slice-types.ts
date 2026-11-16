@@ -2,6 +2,7 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../../../types'
 import type { WorktreeSlice } from '../worktree-slice-contract'
 import type {
+  DetectedWorktree,
   DetectedWorktreeListResult,
   GitPushTarget,
   Worktree
@@ -97,6 +98,7 @@ export type FencedWorktreeMergeArgs = {
   ownerWasMissingAtStart: boolean
   missingDirectSshOwnerReposSnapshot?: AppState['repos']
   requestStartedWorktrees: readonly Worktree[] | undefined
+  requestStartedDetectedWorktrees?: readonly DetectedWorktree[]
   setup?: ProjectHostSetup
   refresh: AdmittedDetectedWorktreeRefresh
   purgeRemovedWorktrees?: boolean

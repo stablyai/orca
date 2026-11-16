@@ -1,12 +1,14 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { spawnProcess } from '@orca/process-host'
 import {
   AgentModelCatalogProbeError,
   runAgentModelCatalogListing,
   runAgentModelCatalogSession
 } from './agent-model-catalog-probe-runner'
+import { providerStartupFailureFact } from '../agent-session-wire/startup/structured-agent-session-failure-text'
 
 const folders: string[] = []
 afterEach(() => {
@@ -37,6 +39,24 @@ function isAlive(pid: number): boolean {
 const NODE_ENV = { ELECTRON_RUN_AS_NODE: '1' }
 
 describe('the shared catalog probe runner', () => {
+  it.runIf(process.platform !== 'win32')(
+    'keeps a lost one-shot outcome distinct from a failed CLI result',
+    async () => {
+      const failure = await runAgentModelCatalogListing(
+        {
+          ...node(
+            "process.stdin.resume(); process.stdin.once('end', () => { process.kill(process.ppid, 'SIGKILL'); setInterval(() => {}, 60000) })"
+          ),
+          env: NODE_ENV
+        },
+        { site: 'test-lost-listing-outcome' }
+      ).catch((error: unknown) => error)
+      expect(failure).toBeInstanceOf(AgentModelCatalogProbeError)
+      expect(providerStartupFailureFact(failure)).toEqual({ kind: 'hostFault' })
+      expect(failure).toHaveProperty('failedExit', undefined)
+    }
+  )
+
   it('returns required replies and stops the child when an optional response stalls', async () => {
     const file = pidFile()
     const stdout = await runAgentModelCatalogListing(
@@ -99,8 +119,9 @@ describe('the shared catalog probe runner', () => {
     })
   })
 
-  it('stops a listing that outlives its budget before rejecting', async () => {
+  it('stops a timed-out listing, including a pending launch, before rejecting', async () => {
     const file = pidFile()
+    let spawnedClose: Promise<void> | undefined
     const run = runAgentModelCatalogListing(
       {
         ...node(
@@ -108,11 +129,24 @@ describe('the shared catalog probe runner', () => {
         ),
         env: NODE_ENV
       },
-      { site: 'test-listing', timeoutMs: 1_000 }
+      {
+        site: 'test-listing',
+        timeoutMs: 1_000,
+        spawnImpl: (spec) => {
+          const child = spawnProcess(spec)
+          spawnedClose = new Promise<void>((resolve) => child.once('close', () => resolve()))
+          return child
+        }
+      }
     )
     await expect(run).rejects.toMatchObject({ reason: 'timeout' })
-    const pid = Number(readFileSync(file, 'utf8'))
-    await vi.waitFor(() => expect(isAlive(pid)).toBe(false), { timeout: 5_000 })
+    expect(spawnedClose).toBeDefined()
+    await spawnedClose
+    // A timeout can cancel before GO; when the CLI ran, its writer must also be gone.
+    if (existsSync(file)) {
+      const pid = Number(readFileSync(file, 'utf8'))
+      await vi.waitFor(() => expect(isAlive(pid)).toBe(false), { timeout: 5_000 })
+    }
   }, 20_000)
 
   it('stops a running listing, and starts none, once its host stops it', async () => {

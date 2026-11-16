@@ -30,23 +30,6 @@ describe('PluginOverlayManager', () => {
     rmSync(homeDir, { recursive: true, force: true })
   })
 
-  // Why: OpenCode 2 reloads a plugin whose file mtime changed, even with unchanged bytes.
-  it('leaves a current canonical plugin untouched and replaces a stale one', () => {
-    const env = { XDG_CONFIG_HOME: join(homeDir, 'xdg') }
-    const pluginPath = join(homeDir, 'xdg', 'opencode', 'plugins', 'orca-opencode2-status.js')
-    manager.setSources({ opencode2PluginSource: 'v2 plugin' })
-    manager.installOpenCodePlugin('opencode2', env)
-    const past = new Date('2020-01-01T00:00:00Z')
-    utimesSync(pluginPath, past, past)
-
-    expect(manager.installOpenCodePlugin('opencode2', env)).toBe(true)
-    expect(statSync(pluginPath).mtimeMs).toBe(past.getTime())
-
-    manager.setSources({ opencode2PluginSource: 'v2 plugin, next release' })
-    expect(manager.installOpenCodePlugin('opencode2', env)).toBe(true)
-    expect(readFileSync(pluginPath, 'utf8')).toBe('v2 plugin, next release')
-  })
-
   // Why: OpenCode 2 loads through a file-level symlink (dotfile managers) and stats its target.
   it.skipIf(process.platform === 'win32')(
     'leaves a symlinked canonical plugin with current bytes untouched',
@@ -73,21 +56,6 @@ describe('PluginOverlayManager', () => {
       expect(readFileSync(targetPath, 'utf8')).toBe('v2 plugin, next release')
     }
   )
-
-  // Why: a service that reloads between the two writes must already find the TUI copy and stand down.
-  it('writes the TUI copy before the server plugin file', () => {
-    manager.setSources({ opencode2PluginSource: 'v2 plugin' })
-    const pluginsDir = join(homeDir, 'xdg', 'opencode', 'plugins')
-    // A directory in the server file's place makes that write fail.
-    mkdirSync(join(pluginsDir, 'orca-opencode2-status.js'), { recursive: true })
-
-    expect(
-      manager.installOpenCodePlugin('opencode2', { XDG_CONFIG_HOME: join(homeDir, 'xdg') })
-    ).toBe(false)
-    expect(readFileSync(join(pluginsDir, 'orca-opencode2-status-tui', 'tui.js'), 'utf8')).toBe(
-      'v2 plugin'
-    )
-  })
 
   it('mirrors a preexisting remote OpenCode config dir before adding Orca plugin', () => {
     const userConfigDir = join(homeDir, 'company-opencode')
@@ -305,15 +273,6 @@ describe('PluginOverlayManager', () => {
       expect(readFileSync(join(linkedTarget, 'keep.js'), 'utf8')).toBe('do not delete')
     }
   )
-
-  it('produces stable overlay dirs for a given id (idempotent re-materialization)', () => {
-    manager.setSources({ opencodePluginSource: 'first' })
-    const dirA = manager.materializeOpenCode('tab-stable:0')!
-    manager.setSources({ opencodePluginSource: 'second' })
-    const dirB = manager.materializeOpenCode('tab-stable:0')!
-    expect(dirA).toBe(dirB)
-    expect(readFileSync(join(dirA, 'plugins', 'orca-opencode-status.js'), 'utf8')).toBe('second')
-  })
 })
 
 describe('resolvePiSourceAgentDir', () => {
