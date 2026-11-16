@@ -119,6 +119,9 @@ public static class OrcaDesktopWin32 {
     [DllImport("user32.dll", EntryPoint = "GetWindowTextW", CharSet = CharSet.Unicode)]
     private static extern int GetWindowText(IntPtr hwnd, System.Text.StringBuilder text, int maxCount);
 
+    [DllImport("user32.dll", EntryPoint = "GetWindowTextLengthW")]
+    private static extern int GetWindowTextLength(IntPtr hwnd);
+
     private delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr lParam);
 
     [DllImport("user32.dll")]
@@ -157,7 +160,7 @@ public static class OrcaDesktopWin32 {
 
     // Reads the caption Windows stores, without sending the target a message, so a hung window cannot block it.
     public static string GetWindowTitle(IntPtr hwnd) {
-        var title = new System.Text.StringBuilder(512);
+        var title = new System.Text.StringBuilder(GetWindowTextLength(hwnd) + 1);
         GetWindowText(hwnd, title, title.Capacity);
         return title.ToString();
     }
