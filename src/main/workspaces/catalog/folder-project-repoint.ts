@@ -4,7 +4,7 @@ import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison,
   relativePathInsideRoot
-} from '../../../shared/cross-platform-path'
+} from '../../../shared/file-access/cross-platform-path'
 import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import { repoIdForHostLocalProjectId } from '../../../shared/project/host-setup/project-host-setup-projection'
 import {

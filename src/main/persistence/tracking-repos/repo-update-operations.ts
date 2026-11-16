@@ -2,7 +2,7 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { Repo } from '../../../shared/repository/repo-types'
 import { type ExecutionHostId, getRepoExecutionHostId } from '../../../shared/execution-host'
 import type { RepoHostTarget } from '../../../shared/repository/repo-host-identity'
-import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../shared/file-access/cross-platform-path'
 
 import { isLegacyRepoForExternalWorktreeVisibility } from '../../../shared/worktree/visibility/external-worktree-visibility'
 import { normalizeRepoSourceControlAiOverrides } from '../../../shared/source-control/ai/settings/source-control-ai-repo-settings'
