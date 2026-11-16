@@ -112,7 +112,7 @@ describe('orca host add', () => {
 
     expect(JSON.parse(vi.mocked(console.log).mock.calls[0][0])).toMatchObject({
       ok: false,
-      error: { code: 'invalid_argument' }
+      error: { code: 'invalid_argument', message: expect.stringContaining('--port') }
     })
     expect(mocks.callMock).not.toHaveBeenCalled()
   })
@@ -133,7 +133,7 @@ describe('orca host add', () => {
 
     expect(JSON.parse(vi.mocked(console.log).mock.calls[0][0])).toMatchObject({
       ok: false,
-      error: { code: 'invalid_argument' }
+      error: { code: 'invalid_argument', message: expect.stringContaining('--identity-file') }
     })
     expect(mocks.callMock).not.toHaveBeenCalled()
   })
