@@ -9,6 +9,7 @@
 // Access rule: a workspace is visible to its owner, and to every member of the owning org when
 // visibility is `team`. Org owners/admins additionally see private rows' metadata (scope=all) so a
 // departed member's workspaces can be reassigned or archived — metadata only, never access.
+import { effectiveVisibility, teamSharingEnabled } from './team-sharing'
 import { githubActingViews, type GithubActingOptions, type GithubActingView } from './git-actor'
 import type { TeamMembershipCheck } from './team-membership'
 import { z } from 'zod'
@@ -63,7 +64,7 @@ export function canSee(caller: SandboxCaller, row: SandboxRow): boolean {
   if (row.account_id !== caller.accountId || row.status === 'destroyed') {
     return false
   }
-  return row.user_id === caller.userId || (row.visibility === 'team' && caller.orgId !== undefined)
+  return row.user_id === caller.userId || (effectiveVisibility(row) === 'team' && caller.orgId !== undefined)
 }
 
 /** Can the caller pair a device with it (grant) or keep it awake (lease)? */
@@ -231,7 +232,8 @@ export async function workspaceViews(
       // The link to copy: org slug + number when both exist, else the sandbox id form.
       link: workspaceLink(row, slug),
       repo: repoView(row),
-      visibility: row.visibility,
+      // TEAM-SHARING hold: what access actually follows (stored `team` reads private while held).
+      visibility: effectiveVisibility(row),
       section: row.section,
       archivedAt: row.archived_at,
       createdBy: row.created_by ?? row.user_id,
@@ -315,6 +317,8 @@ export async function listWorkspaces(db: D1Database, caller: SandboxCaller, url:
   ])
   return {
     workspaces: views.map((view, i) => ({ ...view, routineName: routineNames.get(rows[i]!.id) ?? null })),
+    // TEAM-SHARING hold: whether workspaces can be shared with the team on this control plane (older ones omit it).
+    teamSharing: teamSharingEnabled(),
     // Home: offer the Routine runs switch only when the team has routines, and say what it hides
     // (its count and hours still belong in the team's totals).
     routineRuns: {
@@ -392,6 +396,10 @@ export async function patchWorkspace(
   }
   if (patch.archived === true) {
     throw new WorkspaceError('invalid_request', 'archive_via_lifecycle')
+  }
+  if (patch.visibility === 'team' && !teamSharingEnabled()) {
+    // TEAM-SHARING hold (team-sharing.ts): sharing with the team isn't available yet.
+    throw new WorkspaceError('invalid_request', 'team_sharing_unavailable')
   }
   if (patch.visibility === 'team' && !row.account_id.includes('org:')) {
     // A personal account has no team to share with.

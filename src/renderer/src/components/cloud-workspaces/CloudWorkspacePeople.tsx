@@ -1,6 +1,7 @@
 // PARITY-FOLLOW: the people on the cloud workspace in front, beside its W-123 chip: its creator,
 // its followers and who is here now, then Follow. Nothing for a local workspace, a personal
 // account, or a workspace only you are on and nobody else could follow.
+import { useCloudTeamSharingEnabled } from '@/lib/orca-cloud/cloud-team-sharing-flag'
 import React, { useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
@@ -47,7 +48,9 @@ export function CloudWorkspacePeople({
   const { directory } = useMemberDirectory(orgId ?? undefined, workspace ? [workspace] : [])
   // The live list row carries githubActing / you already.
   const actingLine = gitActingLine(workspace, t)
-  if (!workspace) {
+  // TEAM-SHARING-HOLD: followers and who's here only exist on a shared workspace.
+  const teamSharing = useCloudTeamSharingEnabled()
+  if (!workspace || !teamSharing) {
     return null
   }
   const following = followOffer(workspace, selfId)

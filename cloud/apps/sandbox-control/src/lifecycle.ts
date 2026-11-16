@@ -1,5 +1,6 @@
 // Sandbox lifecycle: one persistent provider sandbox per Orca workspace, with an Orca-owned lease,
 // a forced stop before the provider's 24h cap, usage metering and write-ahead rows.
+import { teamSharingEnabled } from './team-sharing'
 import { accountProvider } from './account-providers'
 import { readUsableAgentCredential } from './agent-credentials'
 import { CODEX_FIREWALL_ALL_PATHS, CODEX_FIREWALL_PATHS } from './codex-paths'
@@ -7,7 +8,7 @@ import { codexPlaceholder } from './codex-credentials'
 /** Where Codex refreshes its ChatGPT login. */
 export const CODEX_AUTH_HOST = 'auth.openai.com'
 import { parseStoredCodex } from './codex-credentials'
-import { isSharedWorkspace } from './shared-workspace'
+import { sharedWorkspaceMode } from './shared-workspace'
 import { deleteAgentSourcesForSandbox } from './agent-sources'
 import { signOutAgentsBeforeDelete } from './agent-signout'
 import type { EntitlementClient, MachineSize } from './entitlements'
@@ -428,11 +429,12 @@ export async function firewallInputsFor(deps: LifecycleDeps, row: SandboxRow): P
   }
   const keyring = deps.secrets.keyring
   const accounts: FirewallAccount[] = []
+  const shared = await sharedWorkspaceMode(deps.db, row)
   for (const route of egressAccountRoutes(row)) {
     if (!classes.has(route.agent)) {
       continue
     }
-    const applies = route.owner === row.user_id && !isSharedWorkspace(row) && Boolean(deps.secrets.accountProviders?.[route.agent])
+    const applies = route.owner === row.user_id && !shared && Boolean(deps.secrets.accountProviders?.[route.agent])
     const stored = applies ? await readUsableAgentCredential(deps.db, keyring, row.user_id, route.agent, deps.now()).catch(() => null) : null
     if (route.agent === 'codex') {
       const tokens = stored ? parseStoredCodex(stored) : null
@@ -1456,8 +1458,9 @@ export async function createSandbox(
         source_snapshot_id: bootSnapshotId,
         repo_branch: request.repo?.ref ?? null,
         name: request.title ?? null,
-        // A personal account has no team: its workspaces are always private.
-        visibility: request.visibility === 'team' && caller.accountId.includes('org:') ? 'team' : 'private',
+        // A personal account has no team: its workspaces are always private. So is every one while team sharing
+        // is held (team-sharing.ts).
+        visibility: request.visibility === 'team' && caller.accountId.includes('org:') && teamSharingEnabled() ? 'team' : 'private',
         section: request.section ?? null,
         ownership_transferred_at: request.ownershipTransferredAt ?? null
       },

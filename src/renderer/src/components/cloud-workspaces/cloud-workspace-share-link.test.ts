@@ -5,8 +5,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const toasts = vi.hoisted(() => ({ success: vi.fn(), warning: vi.fn(), error: vi.fn() }))
 vi.mock('sonner', () => ({ toast: toasts }))
 const shareLinks = vi.hoisted(() => ({ on: true }))
-vi.mock('@/lib/orca-cloud/cloud-share-links-flag', () => ({
-  cloudShareLinksEnabled: () => shareLinks.on
+vi.mock('@/lib/orca-cloud/cloud-team-sharing-flag', () => ({
+  cloudTeamSharingEnabled: () => shareLinks.on
 }))
 
 import { copyCloudWorkspaceLink } from './cloud-workspace-share-link'

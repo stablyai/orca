@@ -1,5 +1,8 @@
 import { CloudStatusGlyph } from '@/components/orca-cloud/CloudStatusGlyph'
-import { cloudShareLinksEnabled } from '@/lib/orca-cloud/cloud-share-links-flag'
+import {
+  cloudTeamSharingEnabled,
+  useCloudTeamSharingEnabled
+} from '@/lib/orca-cloud/cloud-team-sharing-flag'
 import React, { useId, useState } from 'react'
 import { GitBranch, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -113,6 +116,7 @@ export function CloudWorkspaceRow({
     hours,
     defaultValue_one: '{{hours}} sandbox hour'
   })
+  const teamSharing = useCloudTeamSharingEnabled()
   const lastActive = formatRelative(w.lastActivityAt, now, t, intlLocale)
   const presence = presenceSummary(
     presentMembers(w.presence, selfId),
@@ -151,7 +155,7 @@ export function CloudWorkspaceRow({
           return
         }
         if (
-          cloudShareLinksEnabled() &&
+          cloudTeamSharingEnabled() &&
           keybindingMatchesAction(
             'cloudWorkspace.copyLink',
             event.nativeEvent,
@@ -272,12 +276,15 @@ export function CloudWorkspaceRow({
         </span>
       </button>
 
-      <PresenceStack
-        presence={w.presence}
-        directory={directory}
-        selfId={selfId}
-        onGoToChat={canOpen ? (member) => actions.goToChat(w, member) : undefined}
-      />
+      {/* TEAM-SHARING-HOLD: who's here only exists on a shared workspace. */}
+      {teamSharing ? (
+        <PresenceStack
+          presence={w.presence}
+          directory={directory}
+          selfId={selfId}
+          onGoToChat={canOpen ? (member) => actions.goToChat(w, member) : undefined}
+        />
+      ) : null}
       <Tooltip>
         <TooltipTrigger asChild>
           <span className="w-28 text-right text-xs tabular-nums text-muted-foreground">

@@ -1,6 +1,7 @@
 // Settings › Workspaces: every cloud workspace on the team, for owners and admins to manage
 // (Neil, HOME-1: the listing comes back only here). Open, Sleep and Archive use the same flows as
 // the sidebar and "Open cloud workspace…"; an action the control plane would refuse is not shown.
+import { useCloudTeamSharingEnabled } from '@/lib/orca-cloud/cloud-team-sharing-flag'
 import React, { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { Lock, RefreshCw, Users } from 'lucide-react'
@@ -49,6 +50,7 @@ const TEAM_QUERY = { scope: 'team', archived: 'include' } as const
 
 export function TeamWorkspacesSettings({ orgId }: { orgId: string | null }): React.JSX.Element {
   const t = useTranslate()
+  const teamSharing = useCloudTeamSharingEnabled()
   const intlLocale = useIntlLocale()
   const cloud = useAppStore((s) => s.orcaProfileAuthStatus?.cloud)
   const signIn = useAppStore((s) => s.connectCurrentOrcaProfile)
@@ -147,7 +149,7 @@ export function TeamWorkspacesSettings({ orgId }: { orgId: string | null }): Rea
               <col className="w-36" />
               <col className="w-32" />
               <col className="w-20" />
-              <col className="w-20" />
+              {teamSharing ? <col className="w-20" /> : null}
               <col className="w-10" />
             </colgroup>
             <thead className="border-b border-border/60 text-left text-muted-foreground">
@@ -167,9 +169,12 @@ export function TeamWorkspacesSettings({ orgId }: { orgId: string | null }): Rea
                 <th className="px-2 py-2 font-medium">
                   {t('settings.teamWorkspaces.colLastActive', 'Last active')}
                 </th>
-                <th className="px-2 py-2 font-medium">
-                  {t('settings.teamWorkspaces.colAccess', 'Access')}
-                </th>
+                {/* TEAM-SHARING-HOLD: no Access column while sharing is held (all private). */}
+                {teamSharing ? (
+                  <th className="px-2 py-2 font-medium">
+                    {t('settings.teamWorkspaces.colAccess', 'Access')}
+                  </th>
+                ) : null}
                 <th className="px-2 py-2">
                   <span className="sr-only">
                     {t('settings.teamWorkspaces.colActions', 'Actions')}
@@ -219,18 +224,20 @@ export function TeamWorkspacesSettings({ orgId }: { orgId: string | null }): Rea
                     <td className="px-2 py-2 text-muted-foreground tabular-nums">
                       {formatRelative(w.lastActivityAt, now, t, intlLocale)}
                     </td>
-                    <td className="px-2 py-2 text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        {w.visibility === 'private' ? (
-                          <Lock className="size-3 shrink-0" aria-hidden />
-                        ) : (
-                          <Users className="size-3 shrink-0" aria-hidden />
-                        )}
-                        {w.visibility === 'private'
-                          ? t('auto.components.cloudWorkspaces.private', 'Private')
-                          : t('settings.teamWorkspaces.shared', 'Shared')}
-                      </span>
-                    </td>
+                    {teamSharing ? (
+                      <td className="px-2 py-2 text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          {w.visibility === 'private' ? (
+                            <Lock className="size-3 shrink-0" aria-hidden />
+                          ) : (
+                            <Users className="size-3 shrink-0" aria-hidden />
+                          )}
+                          {w.visibility === 'private'
+                            ? t('auto.components.cloudWorkspaces.private', 'Private')
+                            : t('settings.teamWorkspaces.shared', 'Shared')}
+                        </span>
+                      </td>
+                    ) : null}
                     <td className="px-2 py-2 text-right">
                       <RowActionsMenu
                         workspace={w}
