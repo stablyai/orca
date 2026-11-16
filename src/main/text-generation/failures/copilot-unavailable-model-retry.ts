@@ -18,7 +18,9 @@ function withoutOption<T extends GenerationArgument>(args: T[], aliases: readonl
     if (!option) {
       return [...result, ...args.slice(cursor)]
     }
-    result.push(...args.slice(cursor, option.index))
+    for (; cursor < option.index; cursor++) {
+      result.push(args[cursor])
+    }
     cursor = option.index + option.consumed
   }
 }
