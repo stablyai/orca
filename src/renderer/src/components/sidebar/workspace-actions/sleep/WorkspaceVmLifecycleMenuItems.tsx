@@ -6,7 +6,12 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { useCloudWorkspace, useIsCloudWorkspace } from '@/lib/orca-cloud/orca-cloud-workspace-store'
-import { isArchivedCloudStatus } from '@/lib/orca-cloud/orca-cloud-workspace-rows'
+import {
+  isArchivedCloudStatus,
+  isPairedCloudStatusRow
+} from '@/lib/orca-cloud/orca-cloud-workspace-rows'
+import { wakeCloudWorkspace } from '@/components/orca-cloud/cloud-workspace-actions'
+import type { HostedWorkspaceStatus } from '../../../../../../shared/hosted-sandbox/hosted-sandbox-wire'
 import { selectEphemeralVmWorkspaceRuntime } from '@/store/slices/ephemeral-vm/ephemeral-vm-lifecycle'
 import {
   resumeEphemeralVmWorkspace,
@@ -42,6 +47,22 @@ export function getWorkspaceVmLifecycleAction(
     case 'cleaned':
       return null
   }
+}
+
+/**
+ * PAIRED-LIFECYCLE: a paired cloud workspace (one this desktop opened or created from a GitHub-only
+ * project) has no VM record here, so its lifecycle item comes from the control plane's status:
+ * asleep offers Wake, waking shows Waking…, anything else keeps the plain Sleep items (which reach
+ * the sandbox). Before this an asleep paired row offered Sleep and never Wake (n79).
+ */
+export function getPairedCloudLifecycleAction(
+  state: HostedWorkspaceStatus['state'] | undefined,
+  wakeInFlight: boolean
+): WorkspaceVmLifecycleAction {
+  if (wakeInFlight || state === 'waking') {
+    return 'waking'
+  }
+  return state === 'sleeping' ? 'resume' : null
 }
 
 /**
@@ -106,9 +127,31 @@ export function WorkspaceVmLifecycleMenuItems({
   const archived = useCloudWorkspace((state) =>
     isArchivedCloudStatus(state.status[worktreeId]?.status)
   )
+  const paired = useCloudWorkspace((state) => isPairedCloudStatusRow(state, worktreeId))
+  const pairedAction = useCloudWorkspace((state) =>
+    paired
+      ? getPairedCloudLifecycleAction(
+          state.status[worktreeId]?.status?.state,
+          state.wake[worktreeId]?.phase === 'waking' || state.wake[worktreeId]?.phase === 'connecting'
+        )
+      : null
+  )
   const action = getWorkspaceVmLifecycleAction(status, waking, canSuspend)
   if (archived) {
     return null
+  }
+  if (!action && pairedAction) {
+    return (
+      <VmLifecycleMenuItem
+        action={pairedAction}
+        cloud
+        retry={false}
+        disabled={disabled}
+        t={t}
+        onResume={() => void wakeCloudWorkspace(worktreeId)}
+        onSuspend={onSleep}
+      />
+    )
   }
   if (!action) {
     // This desktop's own cloud workspace mid-transition has no lifecycle item. (A paired one has no
