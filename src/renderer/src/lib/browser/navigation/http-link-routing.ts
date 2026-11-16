@@ -221,6 +221,8 @@ function executeHttpLink(
         ...fields,
         linkContext: { linkIntent: null, ...opts.linkContext, canReveal: reveal.canReveal },
         ...(opts.allowClientBrowserFallback ? { allowClientBrowserFallback: true } : {}),
+        // Why: only links that already open in Orca may use a "This device" SSH host's desktop tab.
+        ...(openLinksInApp ? { allowSshDeviceBrowser: true } : {}),
         ...(effectiveSourceOwner?.kind === 'runtime'
           ? { expectedRuntimeEnvironmentId: effectiveSourceOwner.runtimeEnvironmentId }
           : effectiveSourceOwner?.kind === 'ssh'
