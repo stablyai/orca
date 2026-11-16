@@ -160,7 +160,6 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
       }
     }
 
-    const scopedCodex = this.applyStalePolicy(fresh, stateBeforeReset.codex)
     const currentCodexHome = await this.resolveCodexHome(target)
     // Skips carry no provenance; never publish them as System Default usage.
     const stillActive =
@@ -168,12 +167,15 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
       this.isSameCodexTarget(this.codexFetchTarget, target) &&
       this.getCodexProvenance(target, currentCodexHome.homePath) ===
         this.getCodexProvenance(target, codexHomePath)
+    // Still the redeemed home, so its account (if it is that account's own home) took this reading.
+    const attributed = stillActive
+      ? withCodexReadingAccount(fresh, currentCodexHome.readingAccount)
+      : fresh
+    const scopedCodex = this.applyStalePolicy(attributed, stateBeforeReset.codex)
     if (stillActive) {
       // Redemption is newer than prior reads; invalidate their generations before publishing.
       this.codexFetchGeneration += 1
       this.trackActiveFailureStreak('codex', fresh)
-      // The same home as the redeemed one, so its account (if it is one's own home) read it.
-      const attributed = withCodexReadingAccount(fresh, currentCodexHome.readingAccount)
       this.updateState({
         ...this.state,
         codex: this.applyStalePolicy(attributed, this.state.codex)

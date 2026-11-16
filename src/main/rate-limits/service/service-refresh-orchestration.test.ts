@@ -365,14 +365,14 @@ describe('RateLimitService', () => {
       ...okProvider('codex', 0),
       planType: 'pro'
     })
-    await service.consumeCodexRateLimitResetCredit({
+    const { state } = await service.consumeCodexRateLimitResetCredit({
       idempotencyKey: 'key',
       target: { runtime: 'host', wslDistro: null },
       codexHomePath: '/codex/a'
     })
-    expect(service.getState().codex).toMatchObject({
-      planType: 'pro',
-      usageMetadata: { readingAccount }
-    })
+    // The reply replaces the renderer's state, so it must name the account as the push does.
+    for (const codex of [service.getState().codex, state.codex]) {
+      expect(codex).toMatchObject({ planType: 'pro', usageMetadata: { readingAccount } })
+    }
   })
 })

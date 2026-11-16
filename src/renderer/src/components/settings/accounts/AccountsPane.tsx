@@ -153,12 +153,17 @@ export function AccountsPane({
     environmentId: string
     rateLimits: RateLimitState | null
   } | null>(null)
-  const { claudeAccountPlans, codexAccountPlans } = useObservedAccountPlans(
+  const claudeSectionShown = matchesSettingsSearch(searchQuery, getAccountsClaudeSearchEntries())
+  const codexSectionShown = matchesSettingsSearch(searchQuery, getAccountsCodexSearchEntries())
+  const { claudeAccountPlans, codexAccountPlans } = useObservedAccountPlans({
     isRemoteAccountScope,
-    scopeEnvironmentId && ownerUsage?.environmentId === scopeEnvironmentId
-      ? ownerUsage.rateLimits
-      : null
-  )
+    ownerUsage:
+      scopeEnvironmentId && ownerUsage?.environmentId === scopeEnvironmentId
+        ? ownerUsage.rateLimits
+        : null,
+    claudeShown: claudeSectionShown,
+    codexShown: codexSectionShown
+  })
   // This desktop's names change with its settings, e.g. a rename in another window.
   const localNames = isRemoteAccountScope ? undefined : settings.managedAccountDisplayNames
   const codexAccounts = useMemo(
@@ -364,12 +369,8 @@ export function AccountsPane({
     matchesSettingsSearch(searchQuery, getAccountsLocationSearchEntries())
       ? renderAccountsLocationSection(model, t)
       : null,
-    matchesSettingsSearch(searchQuery, getAccountsClaudeSearchEntries())
-      ? renderClaudeAccountsSection(model, t, intlLocale)
-      : null,
-    matchesSettingsSearch(searchQuery, getAccountsCodexSearchEntries())
-      ? renderCodexAccountsSection(model, t, intlLocale)
-      : null,
+    claudeSectionShown ? renderClaudeAccountsSection(model, t, intlLocale) : null,
+    codexSectionShown ? renderCodexAccountsSection(model, t, intlLocale) : null,
     matchesSettingsSearch(searchQuery, getAccountsGeminiSearchEntries())
       ? renderGeminiAccountsSection(model, t)
       : null,

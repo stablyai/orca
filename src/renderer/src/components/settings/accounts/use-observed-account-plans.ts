@@ -6,28 +6,33 @@ import {
 } from '@/lib/provider-accounts/observed-account-plans'
 import { useAppStore } from '../../../store/index'
 
-/** Remote rows read only their owner's streamed usage; this desktop's polls describe other logins. */
-export function useObservedAccountPlans(
-  isRemoteAccountScope: boolean,
+/** Remote rows read only their owner's streamed usage; this desktop's polls describe other logins.
+ *  A provider section hidden by search reads nothing, so usage pushes rebuild no index for it. */
+export function useObservedAccountPlans({
+  isRemoteAccountScope,
+  ownerUsage,
+  claudeShown,
+  codexShown
+}: {
+  isRemoteAccountScope: boolean
   ownerUsage: RateLimitState | null
-): { claudeAccountPlans: ObservedAccountPlans; codexAccountPlans: ObservedAccountPlans } {
-  // Remote scope ignores this desktop's usage pushes, so they never re-render it.
-  const localClaude = useAppStore((s) => (isRemoteAccountScope ? null : s.rateLimits.claude))
+  claudeShown: boolean
+  codexShown: boolean
+}): { claudeAccountPlans: ObservedAccountPlans; codexAccountPlans: ObservedAccountPlans } {
+  const readsLocal = !isRemoteAccountScope
+  const usage = isRemoteAccountScope ? ownerUsage : null
+  const localClaude = useAppStore((s) => (readsLocal && claudeShown ? s.rateLimits.claude : null))
   const localInactiveClaude = useAppStore((s) =>
-    isRemoteAccountScope ? null : s.rateLimits.inactiveClaudeAccounts
+    readsLocal && claudeShown ? s.rateLimits.inactiveClaudeAccounts : null
   )
-  const localCodex = useAppStore((s) => (isRemoteAccountScope ? null : s.rateLimits.codex))
+  const localCodex = useAppStore((s) => (readsLocal && codexShown ? s.rateLimits.codex : null))
   const localInactiveCodex = useAppStore((s) =>
-    isRemoteAccountScope ? null : s.rateLimits.inactiveCodexAccounts
+    readsLocal && codexShown ? s.rateLimits.inactiveCodexAccounts : null
   )
-  const claude = isRemoteAccountScope ? ownerUsage?.claude : localClaude
-  const inactiveClaude = isRemoteAccountScope
-    ? ownerUsage?.inactiveClaudeAccounts
-    : localInactiveClaude
-  const codex = isRemoteAccountScope ? ownerUsage?.codex : localCodex
-  const inactiveCodex = isRemoteAccountScope
-    ? ownerUsage?.inactiveCodexAccounts
-    : localInactiveCodex
+  const claude = claudeShown ? (usage?.claude ?? localClaude) : null
+  const inactiveClaude = claudeShown ? (usage?.inactiveClaudeAccounts ?? localInactiveClaude) : null
+  const codex = codexShown ? (usage?.codex ?? localCodex) : null
+  const inactiveCodex = codexShown ? (usage?.inactiveCodexAccounts ?? localInactiveCodex) : null
   const claudeAccountPlans = useMemo(
     () => indexObservedAccountPlans(claude, inactiveClaude),
     [claude, inactiveClaude]
