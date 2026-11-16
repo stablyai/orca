@@ -115,7 +115,7 @@ export function journalStoredItemRow<V>(
   if (!stored) {
     return { payload, values: [...values], blob: null, keep: false }
   }
-  const next = [...values]
+  const next: (V | string | number | null)[] = [...values]
   const wireJson = next[WIRE_JSON]
   next[WIRE_JSON] =
     typeof wireJson === 'string' ? storedWireJson(wireJson, item, stored.item) : null

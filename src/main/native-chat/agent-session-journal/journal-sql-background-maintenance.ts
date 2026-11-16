@@ -4,9 +4,12 @@ import type { JournalSqlReaderPool } from './journal-sql-reader-pool'
 import type { JournalSqlConversions } from './journal-sql-conversions'
 import type { JournalSqlActivity } from './journal-sql-activity'
 import type { JournalSqlMaintenance } from './journal-sql-maintenance'
+import { JOURNAL_STORED_OUTPUT_WRITES } from './journal-stored-output'
 
 const MINUTE = 60_000
 const COMPACTION_INTERVAL = 6 * 60 * MINUTE
+// About 8k saved outputs a minute at the shared 10% duty cycle.
+const STORED_OUTPUT_PAGES_PER_TICK = 256
 
 /** Idle conversion and periodic pruning share one owner; activity never blocks retired cleanup. */
 export class JournalSqlBackgroundMaintenance {
@@ -141,6 +144,9 @@ export class JournalSqlBackgroundMaintenance {
           }
         }
         await this.pages({ kind: 'page-reclaim' }, this.reclaim)
+        if (JOURNAL_STORED_OUTPUT_WRITES) {
+          await this.pages({ kind: 'stored-output-compaction' }, STORED_OUTPUT_PAGES_PER_TICK)
+        }
       } catch (error) {
         this.report(error)
       }
@@ -190,7 +196,13 @@ export class JournalSqlBackgroundMaintenance {
   private async pages(
     operation: Extract<
       JournalSqlMaintenance,
-      { kind: 'event-tail-prune' | 'domain-retired-prune' | 'page-reclaim' }
+      {
+        kind:
+          | 'event-tail-prune'
+          | 'domain-retired-prune'
+          | 'page-reclaim'
+          | 'stored-output-compaction'
+      }
     >,
     limit = Infinity
   ): Promise<void> {

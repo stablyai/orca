@@ -50,7 +50,9 @@ function applyJournalDomainTakenStop(
     WHERE session_id=? AND epoch=? AND turn_id=? AND hidden=0 AND lifecycle_state='running'
     ORDER BY sequence,sequence_index,ordinal`)
     .all(...prefix)
-    .map((row): AgentJournalRenderItem => readJournalStoredItem(db, prefix, row.payload_json))
+    .map((row): AgentJournalRenderItem =>
+      readJournalStoredItem(db, [target.sessionId, target.epoch], row.payload_json)
+    )
   const result = applyJournalDomainLifecycle(
     db,
     target,

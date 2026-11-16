@@ -17,6 +17,7 @@ import {
   type JournalDomainMaintenance,
   type JournalDomainMaintenanceResult
 } from './journal-domain-maintenance'
+import { compactJournalStoredOutputPage } from './journal-stored-output-compaction'
 import { pruneJournalSqlEventTail, type JournalSqlEventTailResult } from './journal-sql-event-tail'
 import {
   discardJournalDomainImportPage,
@@ -94,5 +95,7 @@ export function applyJournalSqlMaintenance(
       return completeJournalDomainCompaction(db, operation.now)
     case 'event-tail-prune':
       return pruneJournalSqlEventTail(db, operation.now)
+    case 'stored-output-compaction':
+      return compactJournalStoredOutputPage(db)
   }
 }
