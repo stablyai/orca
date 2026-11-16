@@ -203,6 +203,83 @@ Los agentes tienen acceso total **a la MSI**; que esa máquina no tenga nada que
 
 ---
 
+## Fase 8 — Gobernador de memoria (que Zotz no funda la máquina)
+
+**Objetivo:** Zotz decide **cuántos agentes pueden correr según la memoria real del equipo**. Antes de lanzar un agente mide si cabe; si no cabe, lo pone **en cola** y lo arranca solo cuando otro termine o se libere memoria. Además, cada agente tiene un tope y, si la máquina entra en presión, Zotz **regula**: primero pausa, nunca mata sin permiso.
+
+### Lo que Orca ya trae (reutilízalo, no lo dupliques)
+
+| Pieza | Dónde | Qué hace hoy | Qué le falta |
+|---|---|---|---|
+| Admisión de spawns | `src/main/daemon/admission/terminal-spawn-gate.ts` + `src/shared/terminal/pty/admission/` | Limita trabajo **automático**: `automaticConcurrency: 3`, `maxLiveAutomatic: 8` (`DEFAULT_SPAWN_ADMISSION_LIMITS`). Ya tiene **cola de espera** (`terminal-spawn-waiters.ts`, `TerminalSpawnDeferredError`). | Cuenta procesos, no memoria. No aplica a agentes lanzados a mano. |
+| Nivel de presión | `HostPressureLevel = 'ok' \| 'elevated' \| 'critical' \| 'unknown'` en `spawn-admission-contract.ts`, alimentado por `daemon-process-growth-monitor.ts` | Detecta "tormentas" de procesos (descendientes/seg). | **No mira la RAM.** |
+| Pausa por presión | `AutomaticWorkMode` `{ kind: 'paused', reason: 'pressure' }` en `daemon-automatic-work-guard.ts` | Pausa trabajo automático cuando hay presión. | Se dispara solo por crecimiento de procesos. |
+| Tope por terminal | `src/main/daemon/process-scopes/terminal-memory-limits.ts` (`ORCA_TERMINAL_MEMORY_MAX`) | Tope duro vía **cgroups**, opt-in, **solo Linux**. | Nada en Windows ni macOS; no hay UI. |
+| Árbol de procesos por terminal | `process-growth-breaker.ts` (scopes por terminal) | Ya agrupa descendientes por terminal. | Solo cuenta procesos, no RSS. |
+
+### 8a. Medir la memoria de verdad
+Nuevo `src/main/daemon/admission/zotz-memory-pressure.ts`:
+- **Memoria disponible real por plataforma** (no uses `os.freemem()` a secas: en macOS subestima porque no cuenta memoria inactiva o purgable):
+  - Windows: `os.freemem()` (equivale a *Available*), y como respaldo `GlobalMemoryStatusEx` si hace falta precisión.
+  - macOS: `sysctl kern.memorystatus_level` (porcentaje disponible según el kernel) o `vm_stat` (free + inactive + purgeable + speculative). Reutiliza la lectura de `vm_stat` que ya existe en `src/main/hang-watchdog/hang-incident-snapshot.ts`.
+  - Linux: `MemAvailable` de `/proc/meminfo`.
+- Leer cada 2 s y solo con agentes vivos o en cola; en reposo, cada 10 s.
+- Convertirlo a `HostPressureLevel` con los umbrales de 8d, y **combinarlo con el nivel de crecimiento existente: gana el peor de los dos**. Engánchalo en `daemon-automatic-work-guard.ts`, donde ya se lee `this.monitor.level`.
+
+### 8b. Costo estimado de cada agente
+Nuevo `zotz-agent-memory-ledger.ts`:
+- Mide el **RSS del árbol completo** de cada terminal de agente (padre + hijos: tests, builds, servidores), reutilizando los scopes por terminal de `process-growth-breaker.ts`.
+- Guarda por tipo de agente (`claude`, `codex`, `antigravity`) el **p90 del pico** de las últimas 20 corridas, persistido en el userData de Zotz.
+- Sin historial, usa el default de configuración (`agentDefaultReserveGb`, 2.5 GB).
+
+### 8c. Admisión por memoria antes de lanzar
+En `terminal-spawn-gate.ts` (y en `openAgentLaunch` de `src/main/agent-launch/agent-launch-executor.ts` para los lanzamientos manuales):
+- Un agente entra solo si `disponible − costo_estimado ≥ reserva_minima` **y** la suma de costos de los agentes vivos no rebasa `agentMemoryBudget`. Además, nunca más de `maxConcurrentAgents`.
+- Si no cabe: **en cola**, usando los waiters existentes. Se arranca **en orden de llegada** cuando un agente termina o la memoria se recupera. Nunca se descarta una tarea.
+- Aplica a **todos los lanzamientos de agentes** (manuales, automatizaciones, orquestación, remotos por `serve`). **No** aplica a terminales normales sin agente.
+- Interruptor "Lanzar de todos modos" por tarea, para cuando Hugo decida forzar.
+
+### 8d. Regulación en caliente
+Si con agentes ya corriendo la presión sube:
+1. **`elevated`** (disponible < 20 % o < `minFreeGb` + 1 GB): no se admiten agentes nuevos y se avisa (notificación y UI).
+2. **`critical`** (disponible < `minFreeGb`), sostenido 30 s: se **pausa el agente más reciente** (macOS/Linux `SIGSTOP` al árbol; Windows `NtSuspendProcess` o suspender el Job Object), se avisa, y se **reanuda solo** cuando el nivel vuelve a `ok` durante 60 s. Un agente a la vez, del más nuevo al más viejo.
+3. **Tope por agente rebasado** (`perAgentMaxGb`): según `onAgentOverLimit` = `notify` | `pause` (default) | `kill`. `kill` solo si Hugo lo elige en Settings.
+- Nunca pausar ni matar el propio Zotz, el daemon, `tailscaled`, ni la sesión del sistema.
+- Ojo: pausar un agente mucho tiempo puede hacer que su sesión con la API expire. Registra en la UI cuánto lleva pausado y, pasados 15 min, avisa para que Hugo decida.
+
+### 8e. Topes duros por plataforma
+- **Linux:** ya existe (`ORCA_TERMINAL_MEMORY_MAX`). Solo conectarlo a la configuración de Zotz.
+- **Windows:** meter cada terminal de agente en un **Job Object** con `JOB_OBJECT_LIMIT_JOB_MEMORY` = `perAgentMaxGb` y `KILL_ON_JOB_CLOSE`. El spawn de ConPTY está en `src/main/daemon/pty-subprocess/` (`native-pty-spawn-windows`); el Job Object va en el módulo nativo (carpeta `native/`, en Rust) o vía `koffi`/FFI si ya se usa en el repo. **Revisa antes qué hay** para no meter dependencias nuevas.
+- **macOS:** no existe un tope duro por proceso para usuarios normales; ahí aplica la regulación suave de 8d (medir, pausar, avisar).
+
+### 8f. Configuración y "al instalar"
+Nueva sección **Settings → Recursos** y claves en `src/shared/default-global-settings.ts`:
+
+| Clave | Default | Qué es |
+|---|---|---|
+| `agentMemoryBudgetPercent` | 70 | Máximo de RAM total que pueden usar los agentes juntos |
+| `minFreeGb` | max(2, 15 % de la RAM) | Memoria que siempre se deja libre para el sistema |
+| `perAgentMaxGb` | min(6, 35 % de la RAM) | Tope por agente (árbol completo) |
+| `maxConcurrentAgents` | según RAM: ≤8 GB → 1, ≤16 GB → 2, ≤32 GB → 4, más → 6 | Agentes simultáneos |
+| `agentDefaultReserveGb` | 2.5 | Costo supuesto de un agente sin historial |
+| `onAgentOverLimit` | `pause` | `notify` / `pause` / `kill` |
+
+- **Primer arranque y `zotz-node-setup.ps1`:** detectar la RAM total, calcular los defaults de la tabla y mostrarlos ("Esta máquina tiene 16 GB: hasta 2 agentes a la vez, 4 GB libres siempre"). Hugo puede ajustarlos ahí mismo.
+- Los defaults se calculan una vez y se guardan; no se recalculan si Hugo ya los cambió.
+
+### 8g. Que se vea
+- En la barra de estado (ya existe `status-bar/resources/popover/resource-usage-metrics.tsx`): memoria disponible, presupuesto usado por agentes y **agentes en cola**.
+- Cada tarea en cola muestra por qué: *"En cola: necesita ~3.1 GB, hay 1.4 GB libres. 2 agentes antes."*
+- Notificación (y push al celular si está activo) cuando: un agente entra en cola, arranca desde la cola, se pausa o rebasa su tope.
+
+### Pruebas
+- Unit tests **solo** para la lógica pura de admisión y regulación (alimentada con muestras falsas): cabe/no cabe, orden FIFO, reanudación con histéresis (no reanudar y pausar en bucle), p90 del ledger y procesos protegidos nunca tocados.
+- Prueba manual documentada en `docs/zotz/MEMORIA.md`: en la MSI, lanzar 6 tareas que corran un script que consuma 3 GB cada una. Resultado esperado: nunca bajan de `minFreeGb`, las que no caben esperan en cola y arrancan solas, y nada se mata.
+
+**Listo cuando:** en la MSI se pueden mandar 10 tareas de golpe por Tailscale y la máquina **no se traba ni entra a swap fuerte**. Las tareas corren por tandas según la memoria y todas terminan.
+
+---
+
 ## Decisiones abiertas (las resuelve Hugo)
 
 1. **Notificaciones push al celular** (`push.onorca.dev`): las manda la infraestructura de StablyAI. Opciones: (a) dejarlas, que es cómodo pero los avisos pasan por sus servidores; (b) apagarlas y usar un bot propio de Telegram para los avisos (sería una Fase 8).
@@ -223,6 +300,7 @@ Los agentes tienen acceso total **a la MSI**; que esa máquina no tenga nada que
 | 5 Nodo 24/7 Windows | 1, 3       | L                                      |
 | 6 Tailscale         | 5          | S                                      |
 | 7 Seguridad         | 5          | S (en su mayoría docs y configuración) |
+| 8 Gobernador de memoria | 4, 5    | L                                      |
 
 Las fases 1, 2 y 3 se pueden trabajar en paralelo en worktrees separados.
 
