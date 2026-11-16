@@ -222,6 +222,7 @@
       "why": "Git, dosyalar ve terminaller Windows dosya paylaşımı yerine doğrudan Linux'ta çalışır.",
       "accept": "Ana makine olarak çalıştır",
       "projectNotFound": "Taşınacak eklenen proje bulunamadı. Kenar çubuğundaki projede \"{{distro}} ana makinesine taşı…\" seçeneğini kullanın.",
+      "savedUnderAnotherPath": "Bu klasör burada zaten {{path}} olarak bir proje ve henüz {{distro}} ana bilgisayarına taşınamıyor. Taşımak için o projeyi kaldırın, ardından klasörü yeniden ekleyin.",
       "existingTitle": "{{distro}} ana makinesine ekle (önerilir)",
       "existingWhy": "{{distro}} zaten ana makine olarak çalışıyor; Git, dosyalar ve terminaller Windows dosya paylaşımı yerine doğrudan Linux'ta çalışır.",
       "existingAccept": "Ana makineye ekle"

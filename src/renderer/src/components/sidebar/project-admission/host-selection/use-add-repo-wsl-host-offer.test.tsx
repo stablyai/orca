@@ -8,7 +8,8 @@ import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/rem
 import { getDefaultSettings } from '../../../../../../shared/constants'
 import {
   LOCAL_EXECUTION_HOST_ID,
-  toRuntimeExecutionHostId
+  toRuntimeExecutionHostId,
+  type ExecutionHostId
 } from '../../../../../../shared/execution-host'
 import { useAddRepoWslHostOffer } from './use-add-repo-wsl-host-offer'
 
@@ -186,6 +187,68 @@ describe('useAddRepoWslHostOffer on a drive mapped to a distro share', () => {
     let held = false
     await act(async () => {
       finish('\\\\wsl.localhost\\Ubuntu\\home\\u\\old')
+      held = await pending
+    })
+    expect(held).toBe(true)
+    expect(result.current.notice(async () => undefined)).toBeNull()
+  })
+
+  it('lets a newer add win over a slower older lookup', async () => {
+    setOfferState()
+    let finishOld: (share: string | null) => void = () => {}
+    resolveMappedDrivePath.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishOld = resolve
+        })
+    )
+    const { result } = renderOffer()
+    let older: Promise<boolean> = Promise.resolve(false)
+    act(() => {
+      older = result.current.offer('W:\\home\\u\\old', 'local_folder_picker')
+    })
+    await act(async () => {
+      await result.current.offer('W:\\home\\u\\new', 'local_folder_picker')
+    })
+    await act(async () => {
+      finishOld('\\\\wsl.localhost\\Ubuntu\\home\\u\\old')
+      await older
+    })
+    const notice = result.current.notice(async () => undefined)
+    expect(isValidElement(notice) ? notice.key : null).toBe('W:\\home\\u\\new')
+  })
+
+  it('shows no offer once the selected host changed mid-lookup', async () => {
+    setOfferState()
+    let finish: (share: string | null) => void = () => {}
+    resolveMappedDrivePath.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        })
+    )
+    const { result, rerender } = renderHook(
+      ({ hostId }: { hostId: ExecutionHostId }) =>
+        useAddRepoWslHostOffer(
+          true,
+          {
+            selectedHostId: hostId,
+            handleSelectAddProjectHost: vi.fn(async () => true),
+            handleConnectAddProjectHost: vi.fn(async () => true)
+          },
+          null
+        ),
+      { initialProps: { hostId: LOCAL_EXECUTION_HOST_ID } }
+    )
+    let pending: Promise<boolean> = Promise.resolve(false)
+    act(() => {
+      pending = result.current.offer('W:\\home\\u\\repo', 'local_folder_picker')
+    })
+    rerender({ hostId: 'runtime:other' })
+    rerender({ hostId: LOCAL_EXECUTION_HOST_ID })
+    let held = false
+    await act(async () => {
+      finish('\\\\wsl.localhost\\Ubuntu\\home\\u\\repo')
       held = await pending
     })
     expect(held).toBe(true)

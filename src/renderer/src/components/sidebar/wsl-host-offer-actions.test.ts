@@ -10,7 +10,7 @@ function deps(): WslHostOfferDeps {
     readWslHostsSetting: () => false,
     updateSettings: vi.fn(async () => undefined),
     addWslHost: vi.fn(async () => ({ ok: true as const, environmentId: 'wsl-ubuntu' })),
-    addLocalPath: vi.fn(async () => undefined),
+    addLocalPath: vi.fn(async () => ({ status: 'completed' })),
     moveAddedProject: vi.fn()
   }
 }
@@ -27,7 +27,7 @@ describe('WSL host offer on a distro-mapped drive', () => {
     const d = deps()
     await expect(acceptWslHostOffer(offer, d)).resolves.toBeNull()
     expect(d.addLocalPath).toHaveBeenCalledWith(offer.sharePath, offer.source)
-    expect(d.moveAddedProject).toHaveBeenCalledWith(offer)
+    expect(d.moveAddedProject).toHaveBeenCalledWith(offer, { status: 'completed' })
   })
 
   it('adds the picked path unchanged on decline', async () => {

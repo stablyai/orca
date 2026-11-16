@@ -17,7 +17,7 @@ export type WslHostOfferDeps = {
   addWslHost: (args: { distro: string; startIfStopped: boolean }) => Promise<WslHostAddResult>
   addLocalPath: (path: string, source: AddRepoExistingWorkspaceSource) => Promise<unknown>
   /** Moves the project just added onto the host, and only it: Stage 1 never moves the others. */
-  moveAddedProject: (offer: WslHostOffer) => void
+  moveAddedProject: (offer: WslHostOffer, added: unknown) => void
 }
 
 /**
@@ -44,8 +44,8 @@ export async function acceptWslHostOffer(
     await restore()
     return result
   }
-  await deps.addLocalPath(offer.sharePath ?? offer.path, offer.source)
-  deps.moveAddedProject(offer)
+  const added = await deps.addLocalPath(offer.sharePath ?? offer.path, offer.source)
+  deps.moveAddedProject(offer, added)
   return null
 }
 

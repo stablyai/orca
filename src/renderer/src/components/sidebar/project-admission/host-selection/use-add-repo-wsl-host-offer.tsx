@@ -1,4 +1,4 @@
-import { useCallback, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useAppStore } from '@/store/index'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -72,12 +72,18 @@ export function useAddRepoWslHostOffer(
     setSeenDrop(droppedHostPath)
     setHostPath(null)
   }
+  // Each offer, close, reopen and host change starts a new request; only the newest may show.
+  const requestRef = useRef(0)
+  useEffect(() => {
+    requestRef.current += 1
+  }, [isOpen, selectedHostId])
   const offer = useCallback(
     async (
       path: string,
       source: AddRepoExistingWorkspaceSource,
       isCurrent: () => boolean = () => true
     ): Promise<boolean> => {
+      const request = ++requestRef.current
       if (selectedHostId !== LOCAL_EXECUTION_HOST_ID) {
         return false
       }
@@ -86,8 +92,8 @@ export function useAddRepoWslHostOffer(
       // Only a path an offer could take asks main; ordinary adds never wait on it.
       const mightOffer = hosts.length > 0 || shouldOfferWslHost(readWslHostOfferGate(before))
       const sharePath = mightOffer ? await resolveWslMappedDrivePath(path) : null
-      if (!isCurrent()) {
-        // Closed or superseded while main resolved the drive: nothing to offer, nothing to add.
+      if (request !== requestRef.current || !isCurrent()) {
+        // Closed, re-hosted or superseded while main resolved the drive: nothing to offer or add.
         return true
       }
       // Already saved at its drive spelling: the add finds that project, never a second copy.
