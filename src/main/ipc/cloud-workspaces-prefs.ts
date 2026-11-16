@@ -23,6 +23,12 @@ export function registerCloudWorkspacePrefsHandlers(
         ? s.putPrefs(parsed.data.document, parsed.data.revision)
         : INVALID
   })
+  // GH-ACTING-LINE: who the workspace's pushes and PRs go out as right now.
+  handle('cloudWorkspaces:gitActor', async (args) => {
+    const parsed = z.object({ id: z.string().regex(/^sbx_[0-9a-f]{24}$/) }).safeParse(args)
+    const s = await getService()
+    return !s ? NOT_CONFIGURED : parsed.success ? s.gitActor(parsed.data.id) : INVALID
+  })
   handle('cloudWorkspaces:getOrgSlug', async (args) => {
     const parsed = z.object({ orgName: z.string().max(200).nullable().optional() }).safeParse(args)
     const s = await getService()

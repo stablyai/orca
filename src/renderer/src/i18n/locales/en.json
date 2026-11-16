@@ -29311,6 +29311,13 @@
     "linkCopied": "Link copied",
     "signInLinkHint": "Open it in any browser on this computer."
   },
+  "cloudGitActing": {
+    "member": "Pushes and PRs go out as @{{login}}",
+    "bot": "Pushes and PRs go out as Orca bot",
+    "stale": "Pushes and PRs go out as Orca bot (no one has sent in the last hour)",
+    "caveat": "Approvals always go out as Orca bot, and so do merges in shared workspaces.",
+    "connect": "Connect GitHub"
+  },
   "cloudFollow": {
     "role": {
       "creator": "Created this workspace",

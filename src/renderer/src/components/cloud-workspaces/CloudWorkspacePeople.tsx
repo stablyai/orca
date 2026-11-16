@@ -13,6 +13,8 @@ import { CloudWorkspaceFollowers, workspaceFollowerEntries } from './CloudWorksp
 import { setCloudWorkspaceFollow, useTeamWorkspacesLive } from './team-workspaces-live'
 import { useMemberDirectory } from './use-cloud-workspace-row-actions'
 import { useCloudWorkspacesAvailable } from './use-cloud-workspaces'
+import { gitActingLine } from './cloud-git-acting-copy'
+import { useCloudGitActor } from './use-cloud-git-actor'
 
 /**
  * Follow is offered on a teammate's team workspace; never on your own (it is yours already), and not
@@ -44,6 +46,9 @@ export function CloudWorkspacePeople({
   const live = useTeamWorkspacesLive(orgId && available && sandboxId ? account : null)
   const workspace = sandboxId ? (live?.find((w) => w.id === sandboxId) ?? null) : null
   const { directory } = useMemberDirectory(orgId ?? undefined, workspace ? [workspace] : [])
+  const gitActor = useCloudGitActor(workspace ? worktreeId : null)
+  const actingLine = gitActingLine(gitActor, t)
+  const actingUserId = gitActor?.gitActor?.kind === 'member' ? gitActor.gitActor.userId : null
   if (!workspace) {
     return null
   }
@@ -80,6 +85,7 @@ export function CloudWorkspacePeople({
       busy={busy}
       onToggleFollow={toggle}
       onOpenMember={(userId) => (userId === selfId ? undefined : openTeammateProfile(userId))}
+      acting={actingLine ? { text: actingLine.text, userId: actingUserId } : null}
     />
   )
 }
