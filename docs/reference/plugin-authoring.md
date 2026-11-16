@@ -352,11 +352,13 @@ orca.document` to support older Orca.
 Orca keeps no undo history for a custom editor: Cmd/Ctrl+Z reaches the frame, and the editor owns
 undo.
 
-Switching tabs unloads the editor's frame. To reopen where the person left off, keep the view
-(scroll, zoom; never document content) with `orca.document.setViewState(view)` once it rests, and
-start from `orca.document.getViewState()`, which is in once the first document is (null on a first
-open). Orca keeps it per tab and pane, in memory while it runs. Values must be JSON: a non-finite
-number throws. Check `'setViewState' in orca.document` to support older Orca.
+Switching tabs unloads the editor's frame at once. To reopen where the person left off, call
+`orca.document.setViewState(view)` (scroll, zoom; never document content) whenever the view changes,
+skipping unchanged views, and start from `orca.document.getViewState()`, which is in once the
+first document is (null on a first open). Don't debounce it: a pending timer dies with the frame.
+View posts have their own lane (120 a second, 64 KiB), so posting every frame of a pan is fine.
+Orca keeps the last one per tab and pane, in memory while it runs. Values must be JSON: a
+non-finite number throws. Check `'setViewState' in orca.document` to support older Orca.
 
 The lower-level calls, for an editor that does its own sync:
 

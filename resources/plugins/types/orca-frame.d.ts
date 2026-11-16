@@ -59,8 +59,9 @@ declare module 'orca/frame' {
      *  older Orca: check `'getViewState' in orca.document`. */
     getViewState(): JsonValue
     /** Keeps this tab's view (scroll, zoom; never document content); null forgets it. Throws for
-     *  values JSON cannot hold, non-finite numbers included. Debounce it: it spends the frame's
-     *  message budget. Absent on older Orca: check `'setViewState' in orca.document`. */
+     *  values JSON cannot hold, non-finite numbers included. Call it on every view change, not
+     *  after a debounce: a tab switch unloads the frame at once. Its own lane takes 120 a second.
+     *  Absent on older Orca: check `'setViewState' in orca.document`. */
     setViewState(state: JsonValue): void
   }
   /** `decode`/`encode` default to plain text; a bytes editor passes both. */
