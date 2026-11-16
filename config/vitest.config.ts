@@ -94,7 +94,12 @@ const testOptions = {
   env: { ...gitEnv, ORCA_VITEST_RUNTIME: 'node' },
   server: { deps: { inline: ['zod'] } },
   // Node's storage globals and V8 retention checks require the existing child flags.
-  execArgv: ['--no-experimental-webstorage', '--expose-gc'],
+  execArgv: [
+    '--no-experimental-webstorage',
+    '--expose-gc',
+    '--require',
+    resolve('config/scripts/test-runtime/node-worker/vitest-worker-parent-exit.cjs')
+  ],
   setupFiles: UNIT_SETUP_FILES.map((file) => resolve(file)),
   include: UNIT_INCLUDE,
   exclude: balancedShards ? UNIT_EXCLUDE : defaultExclude,
