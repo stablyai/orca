@@ -99,7 +99,15 @@ async function observeChatProgram(
       return 'available'
     }
     const path = (env.PATH ?? env.Path ?? '').split(delimiter)
-    if (/[\\/]/.test(command) || path.some((entry) => entry.trim() && !isAbsolute(entry.trim()))) {
+    // A literal `~` entry (e.g. macOS /etc/paths.d/dotnet-cli-tools) practically never names a
+    // workspace dir: execvp/libuv never expand it.
+    if (
+      /[\\/]/.test(command) ||
+      path.some((rawEntry) => {
+        const entry = rawEntry.trim()
+        return entry && !isAbsolute(entry) && !/^~(?:[\\/]|$)/.test(entry)
+      })
+    ) {
       return 'unknown'
     }
   } catch {
