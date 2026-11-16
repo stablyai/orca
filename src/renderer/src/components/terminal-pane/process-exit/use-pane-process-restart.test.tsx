@@ -69,6 +69,7 @@ it('keeps the same conversation tab when its workspace opens during a mounted re
   })
   vi.mocked(connectPanePty).mockImplementation((_pane, _manager, deps) => {
     releaseRestart = deps.releaseResumeInPlace
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this test only exercises binding disposal; the connection is mocked.
     return { dispose: () => releaseRestart?.() } as ReturnType<typeof connectPanePty>
   })
   const { result } = renderHook(() =>
@@ -110,6 +111,7 @@ it('keeps the same conversation tab when its workspace opens during a mounted re
       setCacheTimerStartedAt: () => {},
       setTerminalError: () => {},
       setTerminalErrorsByPaneId: () => {}
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the restart path only reads the pane, transport, and callbacks provided above.
     } as unknown as Parameters<typeof usePaneProcessRestart>[0])
   )
 

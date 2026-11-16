@@ -12,6 +12,7 @@ import { STARTUP_CWD_FALLBACK_NOTICE } from '../../../../../../shared/shell/laun
 import { pendingSpawnByPaneKey, pendingSpawnGenerationByPaneKey } from './pending-pane-spawn'
 import { shouldWritePtyOutputForeground } from '../output/foreground-output-visibility'
 import { toProcessExitStartup } from '../startup/process-exit-startup'
+import { runPaneResumeAttempt } from '../startup/in-place-resume-hold'
 import type {
   PendingStartupCommand,
   FreshSpawnOptions,
@@ -33,7 +34,7 @@ export function releaseDeferredCwdFence(session: ConnectPanePtySession): void {
 }
 
 export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
-  session.startFreshSpawn = (
+  const startFreshSpawn = (
     startupOverride?: PendingStartupCommand | null,
     options: FreshSpawnOptions = {}
   ): Promise<string | null> => {
@@ -46,7 +47,6 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
     ) {
       // Cancelled starts and removed workspaces must release ownership without reconnecting.
       releaseDeferredCwdFence(session)
-      session.deps.releaseResumeInPlace?.()
       return Promise.resolve(null)
     }
     session.authoritativeReattachGeneration += 1
@@ -279,7 +279,6 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
         return null
       })
       .finally(() => {
-        session.deps.releaseResumeInPlace?.()
         if (pendingSpawnByPaneKey.get(session.pendingSpawnKey) === trackedPromise) {
           pendingSpawnByPaneKey.delete(session.pendingSpawnKey)
           pendingSpawnGenerationByPaneKey.delete(session.pendingSpawnKey)
@@ -301,9 +300,8 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
           return
         }
         if (ownerRefused) {
-          armPaneOwnerRetry(session, outputCallbacks.generation, () =>
-            session.startFreshSpawn(startupOverride, options)
-          )
+          const retry = () => session.startFreshSpawn(startupOverride, options)
+          armPaneOwnerRetry(session, outputCallbacks.generation, retry, startupOverride)
           session.settlePaneAttachAttempt?.('failed')
           return
         }
@@ -319,4 +317,6 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
     pendingSpawnGenerationByPaneKey.set(session.pendingSpawnKey, session.tabGeneration)
     return trackedPromise
   }
+  session.startFreshSpawn = (...args: Parameters<typeof startFreshSpawn>) =>
+    runPaneResumeAttempt(session, () => startFreshSpawn(...args))
 }

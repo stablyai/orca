@@ -197,15 +197,21 @@ function connectDeferredSessionReattach(
       }
       if (!result && paneOwnerChanged) {
         await abandonPendingSerializer()
-        armPaneOwnerRetry(session, outputCallbacks.generation, () =>
-          connectDeferredSessionReattach(session, deferredReattachSessionId)
+        armPaneOwnerRetry(
+          session,
+          outputCallbacks.generation,
+          () => connectDeferredSessionReattach(session, deferredReattachSessionId),
+          coldRestoreStartup
         )
         session.settlePaneAttachAttempt('failed')
         return NOT_REOPENED
       }
       if (!result && paneOwnerUnverified) {
-        armPaneOwnerRetry(session, outputCallbacks.generation, () =>
-          connectDeferredSessionReattach(session, deferredReattachSessionId)
+        armPaneOwnerRetry(
+          session,
+          outputCallbacks.generation,
+          () => connectDeferredSessionReattach(session, deferredReattachSessionId),
+          coldRestoreStartup
         )
         await abandonPendingSerializer()
         session.settlePaneAttachAttempt('failed')
@@ -277,8 +283,11 @@ function connectDeferredSessionReattach(
         message.includes(PANE_OWNER_CHANGED_ERROR)
       ) {
         outputCallbacks.callbacks.onError(message)
-        armPaneOwnerRetry(session, outputCallbacks.generation, () =>
-          connectDeferredSessionReattach(session, deferredReattachSessionId)
+        armPaneOwnerRetry(
+          session,
+          outputCallbacks.generation,
+          () => connectDeferredSessionReattach(session, deferredReattachSessionId),
+          coldRestoreStartup
         )
         session.settlePaneAttachAttempt('failed')
         return NOT_REOPENED
@@ -303,7 +312,7 @@ function connectDeferredSessionReattach(
   })
   // Switch point: main clears the gone terminal's binding before this reattach's fresh start.
   if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-    holdInPlaceResumeUntilSettled(() => !session.disposed, coldRestoreStartup, outcome)
+    holdInPlaceResumeUntilSettled(session, coldRestoreStartup, outcome)
   }
   return outcome
 }
