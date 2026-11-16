@@ -48,6 +48,7 @@ export type PtySpawnOperationState = Pick<
     RuntimePtySpawnArgs,
     'spawnIntent' | 'terminalColorQueryReplies' | 'placement' | 'launchToken' | 'resumeOrigin'
   > & {
+    spawnIntent?: unknown
     attachOnlyView?: unknown
     launchToken?: unknown
     resumeOrigin?: unknown
