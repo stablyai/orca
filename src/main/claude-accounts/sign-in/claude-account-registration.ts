@@ -21,6 +21,8 @@ import {
 
 export const CLAUDE_SIGN_IN_NOT_FINISHED_MESSAGE =
   'Claude has not finished signing in to this account yet. Finish the sign-in in the terminal, then try again.'
+// An unfinished sign-in folder holds nothing to delete, and history it gained stays.
+const KEEP_HISTORY = { deleteRetainedHistory: false }
 const CLAUDE_LOGIN_WITHOUT_ACCOUNT_MESSAGE =
   'Claude login completed, but Orca could not resolve the account email.'
 
@@ -75,7 +77,11 @@ export class ClaudeAccountRegistration {
 
   async cancel(signIn: Omit<ClaudeAccountSignIn, 'configDir'>): Promise<void> {
     if (!this.deps.selection.findAccount(signIn.accountId)) {
-      await this.deps.runtimeAuth.removeAccountFolder(signIn.accountId, signInTarget(signIn))
+      await this.deps.runtimeAuth.removeAccountFolder(
+        signIn.accountId,
+        signInTarget(signIn),
+        KEEP_HISTORY
+      )
     }
   }
 
@@ -106,7 +112,7 @@ export class ClaudeAccountRegistration {
         ...scope
       })
     ) {
-      await runtimeAuth.removeAccountFolder(signIn.accountId, target)
+      await runtimeAuth.removeAccountFolder(signIn.accountId, target, KEEP_HISTORY)
       throw new Error('This Claude account is already added.')
     }
     const now = Date.now()

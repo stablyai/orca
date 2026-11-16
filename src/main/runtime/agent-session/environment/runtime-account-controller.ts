@@ -264,8 +264,12 @@ export class RuntimeAccountController {
     return { outcome: result.outcome, scope: result.scope, snapshot }
   }
 
-  removeClaude(accountId: string): Promise<ClaudeRateLimitAccountsState> {
-    return this.requireServices().claudeAccounts.removeAccount(accountId)
+  removeClaude(...args: Parameters<ClaudeAccountService['removeAccount']>) {
+    return this.requireServices().claudeAccounts.removeAccount(...args)
+  }
+
+  measureClaudeRetainedHistory(accountId: string) {
+    return this.requireServices().claudeAccounts.measureRetainedHistory(accountId)
   }
 
   beginClaudeSignIn(request: ClaudeSignInRequest): Promise<ClaudeAccountSignIn> {

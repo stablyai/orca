@@ -6,6 +6,7 @@ import type { Store } from '../persistence/loading-store/store'
 import { isWslDistroRunning } from '../wsl/discovery/wsl-background-distro-gate'
 import { getDefaultWslDistro, getWslHome } from '../wsl/discovery/distro-catalog'
 import { ClaudeProfileRouter } from './profiles/routing/claude-profile-router'
+import { measureClaudeAccountRetainedHistory } from './sign-in/claude-account-folder'
 import { ClaudeWslProfileRouter } from './profiles/wsl/claude-profile-wsl-router'
 import {
   installClaudeObservedConfigDirs,
@@ -24,6 +25,7 @@ export class ClaudeRuntimeAuthService {
   private readonly wslRouter?: ClaudeWslProfileRouter
   private readonly dataRoot = getAppEnvironment().getPath('userData')
   private mutationQueue: Promise<unknown> = Promise.resolve()
+  private readonly measurements = new Map<string, Promise<number>>()
 
   constructor(
     private readonly store: Pick<Store, 'getSettings'>,
@@ -115,20 +117,45 @@ export class ClaudeRuntimeAuthService {
 
   async removeAccountFolder(
     accountId: string,
-    target: ClaudeAccountSelectionTarget
+    target: ClaudeAccountSelectionTarget,
+    options: { deleteRetainedHistory: boolean }
   ): Promise<void> {
     const wsl = this.wslRouteFor(target)
     if (!wsl) {
-      await this.router.removeAccount(accountId)
+      await this.router.removeAccount(accountId, options.deleteRetainedHistory)
       return
     }
     // Deleted distros must not block account removal.
-    await wsl.router.removeAccount(wsl.distro, accountId).catch((error: unknown) => {
+    await wsl.router.removeAccount(wsl.distro, accountId, options).catch((error: unknown) => {
       console.warn(
         `[claude-profile] Could not delete the Claude account folder in WSL ${wsl.distro}:`,
         error
       )
     })
+  }
+
+  /** Bytes of conversations only this account's folder holds; repeated opens share one walk. */
+  measureAccountRetainedHistory(
+    accountId: string,
+    target: ClaudeAccountSelectionTarget
+  ): Promise<number> {
+    const wsl = this.wslRouteFor(target)
+    const key = wsl ? `${wsl.distro}\0${accountId}` : accountId
+    const running = this.measurements.get(key)
+    if (running) {
+      return running
+    }
+    const measurement = (
+      wsl
+        ? wsl.router.measureRetainedHistory(wsl.distro, accountId)
+        : measureClaudeAccountRetainedHistory(
+            this.dataRoot,
+            accountId,
+            this.router.systemDefaultHome()
+          )
+    ).finally(() => this.measurements.delete(key))
+    this.measurements.set(key, measurement)
+    return measurement
   }
 
   /** Install skills and plugins in System default so accounts can share them. */

@@ -252,21 +252,6 @@ export async function selectCodexProviderAccount(
   return window.api.codexAccounts.select(selection)
 }
 
-export async function removeClaudeProviderAccount(
-  target: RuntimeClientTarget,
-  accountId: string
-): Promise<ClaudeRateLimitAccountsState> {
-  if (target.kind === 'environment') {
-    return callRuntimeRpc<ClaudeRateLimitAccountsState>(
-      target,
-      'accounts.removeClaude',
-      { accountId },
-      { timeoutMs: REMOTE_ACCOUNT_MUTATION_TIMEOUT_MS }
-    )
-  }
-  return window.api.claudeAccounts.remove({ accountId })
-}
-
 export async function removeCodexProviderAccount(
   target: RuntimeClientTarget,
   accountId: string

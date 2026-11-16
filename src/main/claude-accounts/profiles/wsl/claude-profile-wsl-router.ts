@@ -24,6 +24,10 @@ import {
   type ClaudeFolderLogin
 } from '../../sign-in/claude-account-folder'
 import { wslClaudeProfile, wslClaudeProfilePointer } from './claude-profile-wsl-paths'
+import {
+  GUEST_MEASURE_HISTORY_SCRIPT,
+  GUEST_REMOVE_KEEPING_HISTORY_SCRIPT
+} from '../claude-profile-retained-history'
 import type { ClaudeRuntimeAuthPreparation } from '../../runtime-auth/runtime-auth-types'
 import {
   findClaudeAccount,
@@ -187,11 +191,41 @@ export class ClaudeWslProfileRouter {
   }
 
   /** Wait for setup so it cannot recreate the folder; guest rm preserves linked history. */
-  async removeAccount(distro: string, accountId: string): Promise<void> {
+  async removeAccount(
+    distro: string,
+    accountId: string,
+    options: { deleteRetainedHistory: boolean }
+  ): Promise<void> {
     await this.setups.get(accountId)?.catch(() => {})
+    await runGuest(distro, {
+      script: GUEST_REMOVE_KEEPING_HISTORY_SCRIPT,
+      args: [
+        await this.accountFolder(distro, accountId),
+        options.deleteRetainedHistory ? 'delete' : 'keep'
+      ],
+      shell: 'bash',
+      loginPath: 'none'
+    })
+  }
+
+  async measureRetainedHistory(distro: string, accountId: string): Promise<number> {
+    const bytes = Number(
+      await runGuest(distro, {
+        script: GUEST_MEASURE_HISTORY_SCRIPT,
+        args: [await this.accountFolder(distro, accountId)],
+        shell: 'bash',
+        loginPath: 'none'
+      })
+    )
+    if (!Number.isSafeInteger(bytes) || bytes < 0) {
+      throw new Error(`WSL ${distro}: unexpected retained history size`)
+    }
+    return bytes
+  }
+
+  private async accountFolder(distro: string, accountId: string): Promise<string> {
     const { home } = await this.resolve(distro)
-    const folder = posix.dirname(wslClaudeProfile(home, distro, accountId).profile.home)
-    await runGuest(distro, { script: 'rm -rf -- "$1"', args: [folder], loginPath: 'none' })
+    return posix.dirname(wslClaudeProfile(home, distro, accountId).profile.home)
   }
 
   /** Falling back would run the wrong account. */

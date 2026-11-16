@@ -578,7 +578,13 @@
     "followSymlinkedDirectoriesDescription": "在快速打开中搜索链接文件夹，并在文件资源管理器中展开本地链接文件夹",
     "accounts": {
       "codexRemoveHome": "Orca 会删除此账户在 {{host}} 上的 Codex 文件夹，包括其中的登录信息、MCP 登录以及仅保存在该文件夹中的 Codex 历史记录，此操作无法撤销。如果此账户被选中，你下次启动的 Codex 将使用系统默认",
-      "claudeRemoveProfile": "Orca 会删除此账户在 {{host}} 上自己的 Claude 文件夹及其中保存的登录信息，你的系统默认登录以及与其共享的聊天记录会保留。如果此账户被选中，你下次启动的 Claude 将使用系统默认"
+      "claudeRemoveSignIn": "Orca 会移除此账户在 {{host}} 上的登录信息和设置，你的系统默认登录以及与其共享的聊天记录会保留。如果此账户被选中，你下次启动的 Claude 将使用系统默认",
+      "claudeRemoveHistoryDelete": "同时删除仅为此账户保留的对话",
+      "claudeRemoveHistoryNone": "没有仅为此账户保留的对话",
+      "claudeRemoveHistoryMeasureFailed": "无法检查仅为此账户保留的对话。除非你删除它们，否则它们会保留",
+      "claudeRemoveHistoryRetry": "重试",
+      "claudeRemoveHistoryDeletedByHost": "{{host}} 上的 Orca 也会删除仅为此账户保留的对话。请在那里更新 Orca 以保留它们",
+      "claudeRemoveWithHistory": "移除账户和对话"
     },
     "sourceControl": {
       "gitOperationInAnotherWorkspace": "其他工作区正在运行 Git 操作",
@@ -23459,6 +23465,9 @@
       "cancel": "取消",
       "save": "保存",
       "unsupportedHost": "请更新 {{host}} 上的 Orca 以在那里更改此设置"
+    },
+    "claudeRemoval": {
+      "unsupportedHost": "请更新 {{host}} 上的 Orca，以移除此账户并保留其对话"
     }
   },
   "osDocumentOpen": {

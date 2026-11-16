@@ -117,7 +117,7 @@ function nextFreePath(base: string): string {
   }
 }
 
-function fileIdentity(stats: BigIntStats): string {
+export function fileIdentity(stats: BigIntStats): string {
   return `${stats.dev}:${stats.ino}`
 }
 

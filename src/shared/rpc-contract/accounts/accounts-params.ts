@@ -50,6 +50,10 @@ export const RemoveAccountParams = z.object({
   accountId: z.string().min(1, 'Missing accountId')
 })
 
+export const RemoveClaudeAccountParams = RemoveAccountParams.extend({
+  deleteRetainedHistory: z.boolean()
+})
+
 // Blank clears the name; the service enforces the length limit with a readable error.
 export const RenameAccountParams = z.object({
   accountId: z.string().min(1, 'Missing accountId'),

@@ -35,7 +35,7 @@ import {
   type ClaudeAccountSelectionTarget
 } from '../../selection/runtime-selection'
 import { wslClaudeProfilePointer } from '../wsl/claude-profile-wsl-paths'
-import { isDirectory, listClaudeProfileHomes } from '../claude-profile-homes'
+import { isDirectory, listClaudeProfileHistoryHomes } from '../claude-profile-homes'
 import {
   claudeStateFile,
   readClaudeFolderLogin,
@@ -206,9 +206,13 @@ export class ClaudeProfileRouter {
   }
 
   /** Wait for setup before deleting so it cannot recreate the folder. */
-  async removeAccount(accountId: string): Promise<void> {
+  async removeAccount(accountId: string, deleteRetainedHistory: boolean): Promise<void> {
     await this.setups.get(accountId)?.catch(() => {})
-    await removeClaudeAccountFolder(this.args.dataRoot, accountId)
+    const sharedHome = this.systemDefaultHome()
+    await removeClaudeAccountFolder(this.args.dataRoot, accountId, {
+      deleteRetainedHistory,
+      sharedHome
+    })
   }
 
   /** A legacy snapshot records copy-based account switching. */
@@ -339,8 +343,8 @@ export class ClaudeProfileRouter {
     return claudeProfileSelectionHomes(this, this.args.getSettings(), this.envReady, launchEnv)
   }
 
-  /** Every account folder on this host, selected or not. */
+  /** Every account folder on this host, selected or not, and history kept from removed ones. */
   accountHomes(): string[] {
-    return listClaudeProfileHomes(this.args.dataRoot)
+    return listClaudeProfileHistoryHomes(this.args.dataRoot)
   }
 }

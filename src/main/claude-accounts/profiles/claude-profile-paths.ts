@@ -108,9 +108,11 @@ function readOwnershipMarker(file: string): string | null {
 }
 
 // Setup writes this marker only after completing successfully.
+export const CLAUDE_PROFILE_MARKER_FILE = 'profile.json'
+
 export function claudeProfileMarkerPath(profile: ClaudeProfileDescriptor): string {
   const path = profile.target.runtime === 'wsl' ? hostPath.posix : hostPath
-  return path.join(path.dirname(profile.home), 'profile.json')
+  return path.join(path.dirname(profile.home), CLAUDE_PROFILE_MARKER_FILE)
 }
 
 /** Validate ownership before creation; the returned marker writer must run last during setup. */

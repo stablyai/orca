@@ -85,7 +85,7 @@
 12 src/main/claude-accounts/profiles/setup/claude-profile-sharing.ts
 2 src/main/claude-accounts/runtime-auth/keychain.ts
 1 src/main/claude-accounts/runtime-auth/runtime-paths.ts
-7 src/main/claude-accounts/sign-in/claude-account-folder.ts
+2 src/main/claude-accounts/sign-in/claude-account-folder.ts
 3 src/main/claude/agent-view/agent-view-install.ts
 1 src/main/claude/configuration/claude-diff-panel-auto-open.ts
 14 src/main/claude/configuration/claude-folder-trust-file.ts

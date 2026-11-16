@@ -68,6 +68,7 @@ function fixture(accounts: ClaudeManagedAccount[] = [account('a'), account('b')]
       return { configDir: home(id), readPath: home(id) }
     }),
     removeAccountFolder: vi.fn(async (id: string) => rmSync(join(root, id), { recursive: true })),
+    measureAccountRetainedHistory: vi.fn(async () => 0),
     getRuntimeConfigDir: () => '/unused'
   }
   const runLogin = vi.fn<
@@ -174,7 +175,11 @@ describe('ClaudeAccountService', () => {
     await expect(adding).rejects.toThrow('Claude sign-in was cancelled.')
     expect(f.service.cancelPendingLogin()).toBe(false)
     expect(f.settings().claudeManagedAccounts).toHaveLength(2)
-    expect(f.runtimeAuth.removeAccountFolder).toHaveBeenCalledWith(newId(f), { runtime: 'host' })
+    expect(f.runtimeAuth.removeAccountFolder).toHaveBeenCalledWith(
+      newId(f),
+      { runtime: 'host' },
+      { deleteRetainedHistory: false }
+    )
     expect(existsSync(join(f.root, newId(f)))).toBe(false)
   })
 

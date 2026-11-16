@@ -69,6 +69,7 @@ describe('managed hook script refresh and owned profile cleanup', () => {
       )
       const mod = join(home, 'skills', 'orca-agent-view', 'hooks', 'register.js')
       await writeFile(mod, 'stale', 'utf8')
+      await writeFile(join(profileRoot, id, 'profile.json'), '{}')
       profileMods.push(mod)
     }
     const absent = join(profileRoot, 'absent', 'home')

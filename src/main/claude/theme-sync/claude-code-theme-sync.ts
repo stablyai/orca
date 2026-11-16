@@ -5,7 +5,10 @@ import { isDefinitiveAbsence } from '../../../shared/errors/definitive-filesyste
 import { readHooksJson } from '../../agent-hooks/installation/configuration/hooks-json-read'
 import { writeHooksJson } from '../../agent-hooks/installation/configuration/hooks-json-write'
 import { defaultClaudeConfigDir } from '../structured/launch/claude-config-dir-pin'
-import { listClaudeProfileHomesAsync } from '../../claude-accounts/profiles/claude-profile-homes'
+import {
+  isConfigurableClaudeHome,
+  listClaudeProfileHomesAsync
+} from '../../claude-accounts/profiles/claude-profile-homes'
 import {
   getClaudeObservedConfigDirs,
   getClaudeProfileRouter
@@ -212,10 +215,14 @@ async function restoreConfigDir(
 /** Where Claude Code runs from Orca: the user's own folder, account homes, and folders hooks reported. */
 async function claudeConfigDirs(userDataPath: string): Promise<string[]> {
   const router = getClaudeProfileRouter()
+  const observed = getClaudeObservedConfigDirs()?.list() ?? []
+  const configurable = await Promise.all(
+    observed.map((dir) => isConfigurableClaudeHome(userDataPath, dir))
+  )
   return [
     defaultClaudeConfigDir(router ? { CLAUDE_CONFIG_DIR: router.userConfigDir() } : process.env),
     ...(await listClaudeProfileHomesAsync(userDataPath)),
-    ...(getClaudeObservedConfigDirs()?.list() ?? [])
+    ...observed.filter((_dir, index) => configurable[index])
   ]
 }
 
@@ -257,7 +264,7 @@ export async function syncClaudeCodeThemeConfigDirs(
   }
   const published = new Set<string>()
   for (const [dir, entry] of owned) {
-    if (entry.owner !== userDataPath) {
+    if (entry.owner !== userDataPath || !(await isConfigurableClaudeHome(userDataPath, dir))) {
       continue
     }
     const restore = await restoreConfigDir(dir, entry, target.terminalBase, published).catch(
