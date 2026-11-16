@@ -35,11 +35,16 @@ export async function sharedWorkspaceMode(
   // (Make private and the hold's sweep alike).
   // Review M1: a revoke closes a teammate's connections, not what they left running in this session's
   // terminals. A grant revoked during the current session keeps it shared until the next boot.
-  // The session start is read here, not from the caller's row (which may be a partial or older copy).
+  // The session start is read here, not from the caller's row (which may be a partial or older copy). A revoke
+  // queued while the workspace slept (no session) counts for nothing: the next boot applies it before orcad
+  // accepts a sign-in, and that boot's processes are all new, so its session can be private. Its revoked_at
+  // is when it was queued (revokeGrants; markRevoked keeps it), so it never reads as "revoked this session".
+  // Unknown (null) falls back to the apply time there.
   const others = await db
     .prepare(
       `SELECT COUNT(*) AS n FROM workspace_grants g JOIN sandboxes s ON s.id = g.sandbox_id WHERE g.sandbox_id = ? AND g.user_id <> ?
-       AND (g.status IN ('issuing', 'active', 'revoking')
+       AND (g.status IN ('issuing', 'active')
+            OR (g.status = 'revoking' AND s.session_started_at IS NOT NULL)
             OR (s.session_started_at IS NOT NULL AND g.revoked_at IS NOT NULL AND g.revoked_at >= s.session_started_at))`
     )
     .bind(row.id, row.user_id)

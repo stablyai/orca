@@ -178,5 +178,34 @@ describe('Make private keeps shared credential mode until the next boot (same ru
     expect((await h.call('POST', `/v1/sandboxes/${id}/restart`, { bearer: alice })).status).toBe(200)
     expect(await sharedWorkspaceMode(db, (await getSandbox(db, id))!)).toBe(false)
   })
+
+  it('a revoke queued while the workspace slept leaves its next session private (no lost sign-in after the deploy sweep)', async () => {
+    const h = await createHarness({ SECRETS_KEK: Buffer.alloc(32, 7).toString('base64') })
+    const alice = await h.token('alice', 'acme', 'sandbox', { org_role: 'member' })
+    const created = await h.call('POST', '/v1/sandboxes', {
+      bearer: alice,
+      body: { workspaceId: 'ws-1', machineSize: 'standard', repo: { url: 'https://github.com/acme/app' }, visibility: 'team' }
+    })
+    const id = created.body.sandbox.id as string
+    const g = await h.call('POST', `/v1/team/workspaces/${id}/grants`, {
+      bearer: await h.token('bob', 'acme', 'sandbox', { org_role: 'member' }),
+      body: { recipientPublicKeyB64: generateGrantRecipientKey().publicKeyB64, deviceLabel: 'b', deviceKind: 'desktop' }
+    })
+    expect(g.status).toBe(200)
+    expect((await h.call('POST', `/v1/sandboxes/${id}/suspend`, { bearer: alice })).status).toBe(200)
+    h.env.TEAM_SHARING = undefined
+    configureTeamSharing(h.env)
+    const life = (await lifecycleDeps(h.env, h.deps))!
+    // Asleep: queued, not applied.
+    expect(await sweepHeldTeamGrants(life)).toEqual({ workspaces: 1, revoked: 0, queued: 1 })
+    const db = h.env.SANDBOX_DB
+    const queuedAt = (h.raw.prepare('SELECT revoked_at FROM workspace_grants WHERE user_id = ?').get('bob') as { revoked_at: number }).revoked_at
+    expect(await sharedWorkspaceMode(db, (await getSandbox(db, id))!)).toBe(false)
+    h.advance(60_000)
+    expect((await h.call('POST', `/v1/sandboxes/${id}/resume`, { bearer: alice })).status).toBe(200)
+    // Applied at boot, still stamped with the queue time; the new session is private.
+    expect(h.raw.prepare('SELECT status, revoked_at FROM workspace_grants WHERE user_id = ?').get('bob')).toEqual({ status: 'revoked', revoked_at: queuedAt })
+    expect(await sharedWorkspaceMode(db, (await getSandbox(db, id))!)).toBe(false)
+  })
 })
 
