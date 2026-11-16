@@ -170,6 +170,8 @@
 6 src/main/runtime/orchestration/db/dispatch-row-writer.ts
 1 src/main/runtime/orchestration/db/federation/federated-stub-home-run-backfill.ts
 9 src/main/runtime/orchestration/db/lifecycle-transition.ts
+# One-time update quit only, after writers drain; reviewed by Opus/Codex and measured at 2.43 s on M4Air.
+4 src/main/runtime/orchestration/db/maintenance/orchestration-db-maintenance.ts
 7 src/main/runtime/orchestration/db/mutation-receipts/mutation-receipt-capacity.ts
 5 src/main/runtime/orchestration/db/orchestration-db.ts
 4 src/main/runtime/orchestration/db/peer-runs/peer-run-queue-sql.ts

@@ -12,15 +12,15 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   return { ...actual, statfs: vi.fn(actual.statfs) }
 })
 
+const realFs = await vi.importActual<typeof fs>('node:fs/promises')
+
 let directory: string
 let db: OrchestrationDb
 let closed = false
 
 afterEach(async () => {
   vi.restoreAllMocks()
-  vi.mocked(fs.statfs).mockImplementation(
-    (await vi.importActual<typeof fs>('node:fs/promises')).statfs
-  )
+  vi.mocked(fs.statfs).mockImplementation(realFs.statfs)
   if (!closed) {
     db?.close()
   }
@@ -64,7 +64,7 @@ it('rewrites a legacy file with over 200 MB unused and room on disk, preserving 
   } finally {
     saved.close()
   }
-}, 30_000)
+})
 
 it('does not retry an admitted rewrite that failed, even at the next update', async () => {
   const { filename, maintenance } = await legacyFile()
@@ -83,7 +83,7 @@ it('does not retry an admitted rewrite that failed, even at the next update', as
   expect(db.db.prepare("SELECT objective FROM runs WHERE id = 'saved'").get()?.objective).toBe(
     'keep me'
   )
-}, 30_000)
+})
 
 it('defers a legacy rewrite when disk is short without recording an attempted rewrite', async () => {
   const { maintenance } = await legacyFile()
@@ -94,7 +94,7 @@ it('defers a legacy rewrite when disk is short without recording an attempted re
   expect(
     db.db.prepare('SELECT reclaim_failed FROM orchestration_maintenance').get()
   ).toBeUndefined()
-}, 30_000)
+})
 
 it('leaves small legacy files and already incremental files alone', async () => {
   const { maintenance } = await legacyFile(1_000_000)
@@ -108,4 +108,4 @@ it('leaves small legacy files and already incremental files alone', async () => 
   expect(
     db.db.prepare('SELECT reclaim_failed FROM orchestration_maintenance').get()
   ).toBeUndefined()
-}, 30_000)
+})
