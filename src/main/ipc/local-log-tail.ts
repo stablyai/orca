@@ -5,7 +5,7 @@ import type {
   LocalLogTailReadArgs,
   LocalLogTailReadResult,
   LocalLogTailWatchArgs
-} from '../../shared/local-log-tail-types'
+} from '../../shared/file-content/local-log-tail-types'
 import { readLocalLogTailRange } from '../ai-vault/transcripts/local-log-tail-reader'
 import type { Store } from '../persistence/loading-store/store'
 import { resolveUserNamedRegularFile } from './filesystem/access/local-file-access-resolution'

@@ -1,5 +1,5 @@
-import type { Repo } from '../repo-types'
-import { DEFAULT_REPO_BADGE_COLOR } from '../repo-badge-color'
+import type { Repo } from '../repository/repo-types'
+import { DEFAULT_REPO_BADGE_COLOR } from '../repository/appearance/repo-badge-color'
 
 /** The fields a sidebar project row needs; the host stamp is re-applied on read. */
 export type HostRepoCatalogSnapshotRepo = Pick<

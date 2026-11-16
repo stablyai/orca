@@ -1,7 +1,7 @@
 import {
   formatClientEnvironmentFooter,
   type ClientEnvironmentInfo
-} from '../../../../shared/client-environment-info'
+} from '../../../../shared/feedback/client-environment-info'
 import { getRendererAppPlatform } from './renderer-app-platform'
 
 export async function resolveClientEnvironmentInfo(): Promise<ClientEnvironmentInfo> {

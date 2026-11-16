@@ -2,7 +2,7 @@ import { webContents } from 'electron'
 import type {
   BrowserViewportOverride,
   BrowserViewportScrollState
-} from '../../../../../shared/browser-workspace-types'
+} from '../../../../../shared/browser/workspaces/browser-workspace-types'
 
 type ViewportPresetState = {
   guestWebContentsId: number

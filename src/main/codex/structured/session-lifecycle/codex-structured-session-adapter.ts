@@ -1,8 +1,9 @@
 import { copyCodexConversation } from '../../codex-conversation-copy'
 import { readCodexSessionAccountUsage } from './codex-session-account-usage'
+import { manageCodexSessionMcp } from './codex-session-mcp'
 import * as permission from '../turns/codex-structured-turn-permission'
 import { projectCodexSessionOptions } from '../catalog/codex-structured-service-tier'
-import type { AgentSessionBackgroundTaskState } from '../../../../shared/agent-session/agent-session-background-task-wire'
+import type { AgentSessionBackgroundTaskState } from '../../../../shared/agent-session/background-tasks/agent-session-background-task-wire'
 import type {
   AgentSessionAcquisition,
   AgentSessionDispatchOutcome,
@@ -10,11 +11,10 @@ import type {
   StructuredAgentSessionAdapter as SessionAdapter,
   StructuredAgentSessionSetOptionInput
 } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
-import type { StructuredAgentSessionProviderOpenInput } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-provider-open-contract'
 import type { CodexJournalTranslationAdmission } from '../journal/codex-structured-journal-contracts'
 import { dispatchCodexTurn } from '../turns/codex-structured-turn-start'
 import { isCodexTurnOptionKey } from '../turns/codex-turn-option-keys'
-import { isNativeLocalLocation as supportsCodexStructuredLocation } from '../../../../shared/execution-host'
+import { isNativeLocalLocation as supportsCodexStructuredLocation } from '../../../../shared/execution-host/execution-host'
 import { CodexStructuredSessionTeardown } from './codex-structured-session-teardown'
 import {
   applyCodexStructuredSessionOption,
@@ -46,6 +46,7 @@ import {
   cancelCodexStructuredTurn
 } from '../prompts/codex-structured-prompt-ownership'
 import { renameCodexProviderSession } from './codex-provider-session-rename'
+import { approveCodexAutoReviewDenial } from './codex-auto-review-approval'
 import * as codexRewind from '../threads/codex-structured-rewind'
 import * as turnEnd from '../turns/codex-structured-turn-end-settlement'
 import { codexAcquireFailure } from '../../app-server/codex-startup-outcome'
@@ -84,6 +85,8 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
   copyConversation: NonNullable<SessionAdapter['copyConversation']> = (input) =>
     copyCodexConversation(input, this.deps.providerInvocation)
   readAccountUsage = readCodexSessionAccountUsage(this.sessions, () => this.deps.providerInvocation)
+  manageMcp = manageCodexSessionMcp(this.sessions, () => this.deps.providerInvocation)
+  approveAutoReviewDenial = approveCodexAutoReviewDenial(this.sessions)
 
   supportsLocation = supportsCodexStructuredLocation
 
@@ -121,8 +124,7 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
       throw codexAcquireFailure(error)
     })
 
-  open = (input: StructuredAgentSessionProviderOpenInput) =>
-    openCodexStart(this.acquisitions, input)
+  open: SessionAdapter['open'] = (input) => openCodexStart(this.acquisitions, input)
 
   /** Buffers pre-publication events and drops events from superseded children. */
   private deliver(

@@ -1,10 +1,10 @@
 import type { RuntimeTerminalAttention } from '../../../shared/terminal/runtime/runtime-terminal-contracts'
-import type { PaintedRestorePane } from '../../../shared/painted-restore-ack'
+import type { PaintedRestorePane } from '../../../shared/terminal/replay/painted-restore-ack'
 import type {
   PtyFencedTerminationRequest,
   PtyFencedTerminationOutcome
 } from '../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
-import type { ResourceViewAdmission } from '../../../shared/resource-view-admission'
+import type { ResourceViewAdmission } from '../../../shared/diagnostics/resource-view-admission'
 import type { SpawnIntent } from '../../../shared/terminal/pty/admission/spawn-admission-contract'
 import { ipcRenderer } from 'electron'
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/execution-host/project-execution-runtime'
@@ -35,7 +35,7 @@ import type {
   AgentKind,
   LaunchSource,
   RequestKind
-} from '../../../shared/telemetry-property-schemas'
+} from '../../../shared/telemetry/schemas/telemetry-property-schemas'
 import type { PreloadApi } from '../../api-types'
 import type { TerminalPanePlacement } from '../../../shared/workspace-layout/terminal-topology/terminal-pane-placement'
 import type { AgentPaneLaunchRequest } from '../../../shared/agent-launch/contracts/agent-pane-launch-request'

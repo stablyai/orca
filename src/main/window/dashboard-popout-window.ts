@@ -9,8 +9,11 @@ import {
 import { rectHasVisibleAreaOnAnyDisplay } from './presentation/window-bounds-validation'
 import { sendToTrustedUIRenderer } from '../ipc/ui'
 import { installPrivilegedWindowNavigationPolicy } from './security/privileged-window-navigation'
-import { stepUIZoomLevel, type UIZoomDirection } from '../../shared/ui-zoom-level'
-import { nativeZoomCommandMatchesKeybindings } from '../../shared/window-shortcut-policy'
+import {
+  stepUIZoomLevel,
+  type UIZoomDirection
+} from '../../shared/app-lifecycle/windows/ui-zoom-level'
+import { nativeZoomCommandMatchesKeybindings } from '../../shared/keybindings/window-shortcut-policy'
 import { keybindingMatchesAction } from '../../shared/keybindings/matching'
 import type {
   KeybindingActionId,

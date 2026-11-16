@@ -6,8 +6,8 @@ import { promisify } from 'node:util'
 import '../../../rpc/dispatch/testing/unused-default-rpc-methods.test-fixture'
 
 import { describe, expect, it, vi } from 'vitest'
-import { formatOrcaSessionAddress } from '../../../../../shared/orca-session-address'
-import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
+import { formatOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
+import { testOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address-test-fixture'
 import { idOf } from '../../../rpc/orchestration/callers/session.test-fixture'
 import { closeStructuredAgentSessionChild } from '../../../agent-session/structured-agent-session-close'
 import { OrcaRuntimeRpcServer } from '../../../rpc/server/runtime-rpc'
@@ -223,7 +223,11 @@ describe("a chat assignee's liveness, stop and close", () => {
 
       const read = await call('orchestration.workerRead', { dispatch: dispatchId })
 
-      expect(read).toMatchObject({ source: 'transcript', status: { liveness: 'live' } })
+      expect(read).toMatchObject({
+        source: 'transcript',
+        status: { liveness: 'live' },
+        projection: { dispatchId }
+      })
       expect(JSON.stringify(read.transcript)).toContain('working on it')
     } finally {
       await server.stop()

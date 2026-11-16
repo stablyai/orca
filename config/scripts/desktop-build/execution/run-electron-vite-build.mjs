@@ -4,6 +4,7 @@ import fs from 'node:fs'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { appendBuildOldSpaceOption } from '../../tool-invocation/node-old-space-limit.mjs'
+import { buildHostProviderExec } from '../../native-build/posix/build-provider-exec.mjs'
 import { withRolldownThreadLimit } from '../../tool-invocation/rolldown-thread-limit.mjs'
 import {
   RENDERER_BUILD_DIR,
@@ -42,6 +43,15 @@ child.on('exit', async (code, signal) => {
   if (!target || target === 'preload') {
     try {
       await verifyPreloadOutput()
+    } catch (error) {
+      console.error(error)
+      process.exit(1)
+    }
+  }
+  // Packaging rebuilds its own target with the release toolchain.
+  if ((!target || target === 'main') && process.platform !== 'win32') {
+    try {
+      buildHostProviderExec()
     } catch (error) {
       console.error(error)
       process.exit(1)

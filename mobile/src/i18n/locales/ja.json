@@ -114,11 +114,7 @@
       "codeNoLongerValid": "このペアリングコードは期限切れ、使用済み、または置き換え済みです。デスクトップで新しいコードを表示して、もう一度スキャンしてください。"
     },
     "terminalSettings": {
-      "defaultText": "標準（100%）",
       "keepPhoneSize": "スマートフォンサイズを維持（デフォルト）",
-      "largeText": "大（125%）",
-      "largerText": "特大（150%）",
-      "largestText": "最大 (200%)",
       "leaveAppDescription": "スマートフォンでターミナルを使用している間、Orca は画面に合わせてターミナルを縮小します。アプリを閉じたり別のアプリに切り替えたりしたときに、スマートフォンサイズを維持して対話型 CLI ツールのレイアウトを保つか、デスクトップのサイズに戻すかを設定します。デスクトップのバナーにある「復元する」で、いつでも手動でサイズを戻せます。",
       "leaveAppHeading": "アプリを離れたとき",
       "noPairedDesktops": "ペアリング済みのデスクトップはまだありません。ペアリングすると、ターミナルの動作を設定できます。",
@@ -127,12 +123,6 @@
       "restoreAfterSeconds_one": "{{count}} 秒後",
       "restoreAfterSeconds_other": "{{count}} 秒後",
       "restoreHost": "「{{name}}」のサイズ復元",
-      "smallerText": "小（75%）",
-      "smallestText": "最小（50%）",
-      "textSize": "テキストサイズ",
-      "textSizeDescription": "ターミナルのテキストサイズを調整します。小さくすると左右に余白を残しながら多くの列を表示でき、大きくすると表示できる列が減ります。横にドラッグして表示範囲を移動できます。ターミナル上でピンチ操作をして拡大・縮小すると、この設定も更新されます。このデバイスの表示にのみ適用され、デスクトップのターミナルは変わりません。",
-      "textSizeHeading": "テキストサイズ",
-      "textSizePickerTitle": "ターミナルのテキストサイズ",
       "title": "ターミナル"
     }
   },
@@ -248,6 +238,7 @@
     "message": {
       "copyMessage": "メッセージをコピーする",
       "forkFromResponse": "この応答から分岐",
+      "scrollMessageToTop": "このメッセージを一番上までスクロールします",
       "forkFromResponseHint": "このターンの終わりまでの応答全体を含む新しいチャット"
     },
     "messageActionsSheet": {
@@ -1676,7 +1667,7 @@
       "pr": "PR",
       "prMrLink": "PR/MR リンク",
       "project": "プロジェクト",
-      "recent": "最近の",
+      "recent": "最近",
       "recentProjectOrderDescription": "最新のワークスペースアクティビティ",
       "searchProjects": "プロジェクトを検索する",
       "searchProjectsPlaceholder": "プロジェクトを検索…",
@@ -2833,12 +2824,14 @@
       "title": "外観"
     },
     "browserSettingsScreen": {
+      "askEachTime": "毎回確認する",
+      "askEachTimeDescription": "Orca ブラウザ、スマートフォンのブラウザ、リンクのコピーから毎回選びます。",
       "desktopBrowser": "デスクトップの Orca ブラウザ",
       "desktopBrowserDescription": "ペアリング済みのデスクトップからストリーミングされるブラウザで開きます。",
-      "linksDescription": "ターミナル出力でタップした HTTP(S) リンクを開く場所を選択してください。",
+      "terminalAndChatLinksDescription": "ターミナル出力とチャットでタップした Web リンクを開く場所を選択してください。",
       "linksHeading": "リンク",
       "loadFailed": "ブラウザ設定を読み込めませんでした。再試行してください。",
-      "openTerminalLinks": "ターミナルのリンクを開く",
+      "openLinks": "リンクを開く",
       "phoneBrowser": "スマートフォンのブラウザ",
       "phoneBrowserDescription": "このスマートフォンの Safari、Chrome などのブラウザで開きます。",
       "saveFailed": "ブラウザ設定を保存できませんでした。再試行してください。",
@@ -3466,7 +3459,7 @@
       "ownerLoadFailed": "{{owner}} のプロジェクトを読み込めませんでした。",
       "pin": "ピン",
       "pinned": "ピン留め済み",
-      "recent": "最近の",
+      "recent": "最近使用した項目",
       "retryHint": "タップして再試行してください。",
       "searchProjects": "プロジェクトを検索する",
       "subtitle": "「タスク」ページで使うプロジェクトビューを選択してください。",

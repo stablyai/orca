@@ -9,7 +9,7 @@ import { randomUUID } from 'node:crypto'
 import {
   CLAUDE_STATUSLINE_PATHNAME,
   parseClaudeStatusLineBody
-} from '../../../shared/claude-statusline-rate-limits'
+} from '../../../shared/agent-usage/rate-limits/claude-statusline-rate-limits'
 import { mergeAgentHookRequestHeaders } from '../../../shared/agent-hook-listener/hook-envelope'
 import { readRequestBody } from '../../../shared/agent-hook-listener/request-body'
 import { resolveHookSource } from '../../../shared/agent-hook-listener/source-routing'
@@ -19,7 +19,7 @@ import { clearAllListenerCaches } from '../../../shared/agent-hook-listener/list
 import { trackEmptyPaneKeyHook } from './server-transport-rules'
 import { AgentHookServerStatusHookLifecycle } from './server-status-hook-lifecycle'
 import { OPENCODE_STARTUP_PROMPT_CLAIM_PATH } from '../../../shared/agent-launch/startup/opencode-startup-prompt'
-import { CLAUDE_AGENT_VIEW_PATH } from '../../../shared/claude-agent-view'
+import { CLAUDE_AGENT_VIEW_PATH } from '../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view'
 
 import type { HookServerStartOptions } from './server-types'
 
@@ -280,8 +280,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
     this.setStatusFilePath(null)
     this.closeStatusSnapshotWriter()
     this.agentIdentities.close()
-    this.runtimeObservedStatusPaneKeys.clear()
-    this.paneKeyByTerminalHandle.clear()
+    this.clearRuntimeStatusQueries()
     this.hydratedAuthorityCommitments = Object.freeze([])
     this.hydratedLaunchTokenHashByPaneKey.clear()
     this.persistedAuthorityCommitmentsByPaneKey.clear()

@@ -3,10 +3,10 @@ import { useAppStore } from '@/store'
 import { getVisibleHostedReviewWorkspaces } from '@/store/slices/hosted-review/refresh/visible-hosted-review-refresh-targets'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review/hosted-review-cache-identity'
 import type { VisibleHostedReviewRefreshTarget } from '@/store/slices/hosted-review/refresh/visible-hosted-review-refresh-scheduler'
-import { reviewRefreshIntervalMs } from '../../../../../../shared/review-refresh-policy'
+import { reviewRefreshIntervalMs } from '../../../../../../shared/source-control/hosted-review/review-refresh-policy'
 import { getPRRefreshOwnerRuntimeEnvironmentId } from '@/store/github/repositories/repository-routing'
 import { hostPRAutoRefreshCadence } from '@/store/github/refresh/remote-host-pr-auto-refresh-cadence'
-import { withTimeout } from '../../../../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../../../../shared/concurrency/promise-timeout-fallback'
 import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
 import {
   getWorkspaceReferenceRequest,

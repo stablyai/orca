@@ -1,5 +1,5 @@
 import WebSocket, { type RawData } from 'ws'
-import { forEachWithConcurrency } from '../../../../shared/map-with-concurrency'
+import { forEachWithConcurrency } from '../../../../shared/concurrency/map-with-concurrency'
 import type { RpcTransport } from '../transport'
 import type {
   MobileSocketTransport,

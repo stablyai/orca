@@ -3,7 +3,7 @@ import { realpathSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import process from 'node:process'
-import type { AppPathName } from '../../../shared/app-environment'
+import type { AppPathName } from '../../../shared/app-lifecycle/app-environment'
 
 // Empty exported paths remain unset.
 function env(name: string): string | null {

@@ -1,5 +1,5 @@
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
-import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
+import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { addAdditionalValidWorkspaceKeys } from '@/lib/workspace/persistence/workspace-session-hydration-keys'
 import {
@@ -13,7 +13,7 @@ import {
   finishReconciliationDrafts
 } from './tabs-reconciliation-batch'
 import type { AppState } from '../../types'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/workspace-layout/layout-owner-switch'
 import { selectFolderWorkspaces } from '../../workspaces/catalog/workspace-record-fields'
 import { markFullResync } from '../../keyed-record-transitions'
 import { markPatchFullResync } from '../../seam-record-fields'

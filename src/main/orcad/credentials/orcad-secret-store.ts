@@ -1,5 +1,5 @@
 // Always report available to prevent plaintext fallback; throw on seal/unseal when the key is unavailable.
-import type { SecretStore } from '../../../shared/secret-store'
+import type { SecretStore } from '../../../shared/secure-storage/secret-store'
 import { sweepStaleRecordStaging } from './orcad-secret-key-record'
 import {
   orcadSecretStatePath,

@@ -98,18 +98,22 @@ test('tells once per version when an automatic update waits for review, and Revi
       hasText: '2 plugin updates need your review'
     })
     await expect(grouped).toBeVisible(GIT_STEP)
-    await expect(grouped).toContainText('They won’t update until you review them.')
+    // Each plugin with its publisher and what it adds, approvable in place.
+    await expect(grouped.locator('[data-plugin-update-toast]')).toHaveCount(2)
+    await expect(grouped).toContainText('Official · stablyai')
+    await expect(grouped.getByRole('button', { name: 'Approve & update all' })).toBeVisible()
     await page.screenshot({
       path: testInfo.outputPath('grouped-toast.png'),
       animations: 'disabled'
     })
-    await grouped.getByRole('button', { name: 'Review', exact: true }).dispatchEvent('click')
-    await expect(page.getByRole('tab', { name: /^Updates/ })).toHaveAttribute(
-      'aria-selected',
-      'true'
-    )
-    await expect(page.getByRole('button', { name: 'Update all…', exact: true })).toBeVisible()
-    await page.screenshot({ path: testInfo.outputPath('grouped-review-updates-list.png') })
+    // Details opens the grouped review over the app, without going to Settings.
+    await grouped.getByRole('button', { name: 'Details', exact: true }).dispatchEvent('click')
+    const groupedReview = page.getByRole('dialog', { name: 'Review 2 updates', exact: true })
+    await expect(groupedReview.locator('[data-plugin-update-review]')).toHaveCount(2, GIT_STEP)
+    await expect(grouped).toBeHidden()
+    await page.screenshot({ path: testInfo.outputPath('grouped-review-dialog.png') })
+    await groupedReview.getByRole('button', { name: 'Cancel', exact: true }).click()
+    await expect(groupedReview).toBeHidden()
     expect(await versions()).toEqual(installedBefore)
 
     // Same versions on a later pass and after a restart: told already, so no toast.
@@ -134,18 +138,27 @@ test('tells once per version when an automatic update waits for review, and Revi
       hasText: 'Review Notes 3.0.0 wants more access'
     })
     await expect(single).toBeVisible(GIT_STEP)
-    await expect(single).toContainText(
-      'Published by stablyai. It won’t update until you review it.'
-    )
+    await expect(single).toContainText('Official · stablyai')
     await page.screenshot({ path: testInfo.outputPath('single-toast.png'), animations: 'disabled' })
-    await single.getByRole('button', { name: 'Review', exact: true }).dispatchEvent('click')
-    const review = page.getByRole('dialog', { name: 'Review update to Review Notes' })
-    await expect(review).toBeVisible(GIT_STEP)
-    await expect(review.getByRole('button', { name: 'Approve & update' })).toBeVisible()
-    await page.screenshot({ path: testInfo.outputPath('single-review-dialog.png') })
     expect(await versions()).toEqual(installedBefore)
-    await review.getByRole('button', { name: 'Cancel', exact: true }).click()
-    expect(await versions()).toEqual(installedBefore)
+    // Approving in the toast installs exactly what it showed, with no trip to Settings.
+    await single
+      .getByRole('button', { name: 'Approve & update', exact: true })
+      .dispatchEvent('click')
+    await expect(single).toBeHidden(GIT_STEP)
+    await expect(
+      page.locator('[data-sonner-toast]', { hasText: 'Review Notes updated to 3.0.0' })
+    ).toBeVisible(GIT_STEP)
+    expect((await versions())[`stablyai.${PLUGINS[0]}`]).toBe('3.0.0')
+    // Approved exactly the reviewed bytes, so nothing waits on the plugin's page.
+    expect(
+      await page.evaluate(
+        async (key) =>
+          (await window.api.plugins.list()).find((plugin) => plugin.pluginKey === key)
+            ?.needsReconsent,
+        `stablyai.${PLUGINS[0]}`
+      )
+    ).toBe(false)
   } finally {
     await session.dispose(launched?.app)
     await rm(root, { recursive: true, force: true })

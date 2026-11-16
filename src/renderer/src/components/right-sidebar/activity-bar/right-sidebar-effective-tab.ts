@@ -1,4 +1,4 @@
-import type { ActiveRightSidebarTab } from '../../../../../shared/ui-chrome-types'
+import type { ActiveRightSidebarTab } from '../../../../../shared/ui-chrome/ui-chrome-types'
 import type { ActivityBarItem } from './activity-bar-buttons'
 
 type ResolveRightSidebarEffectiveTabParams = {

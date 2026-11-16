@@ -2,10 +2,13 @@ import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { app } from 'electron'
 import { z } from 'zod'
-import { SKILL_INSTALL_UPDATE_REQUIRED_MESSAGE } from '../../shared/skill-install-capability'
-import type { SkillDiscoveryResult, SkillDiscoveryTargetSchema } from '../../shared/skills'
-import type { SkillCloudDownloadGrant } from '../../shared/skill-cloud-contract'
-import type { SkillBundleInstallProgress } from '../../shared/skill-bundle-install-contract'
+import { SKILL_INSTALL_UPDATE_REQUIRED_MESSAGE } from '../../shared/skills/capabilities/skill-install-capability'
+import type {
+  SkillDiscoveryResult,
+  SkillDiscoveryTargetSchema
+} from '../../shared/skills/discovery/skills'
+import type { SkillCloudDownloadGrant } from '../../shared/skills/sharing/skill-cloud-contract'
+import type { SkillBundleInstallProgress } from '../../shared/skills/installation/skill-bundle-install-contract'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import {
   installSkillBundleCloudGrant,

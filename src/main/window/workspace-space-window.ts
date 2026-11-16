@@ -8,7 +8,10 @@ import {
 import { installPrivilegedWindowNavigationPolicy } from './security/privileged-window-navigation'
 import { sendToTrustedUIRenderer } from '../ipc/ui'
 import type { Store } from '../persistence/loading-store/store'
-import { stepUIZoomLevel, type UIZoomDirection } from '../../shared/ui-zoom-level'
+import {
+  stepUIZoomLevel,
+  type UIZoomDirection
+} from '../../shared/app-lifecycle/windows/ui-zoom-level'
 import { wslHostsWindowArguments } from '../wsl/host-lifecycle/wsl-host-gate'
 
 let spaceWindow: BrowserWindow | null = null

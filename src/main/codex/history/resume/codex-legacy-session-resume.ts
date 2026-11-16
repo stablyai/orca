@@ -8,8 +8,8 @@ import {
   type AiVaultPrepareSessionResumeResult,
   isPerAccountManagedCodexHome
 } from '../../../../shared/ai-vault/resume/ai-vault-resume-preparation'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import {
   appendCodexSessionHealAuditRecord,

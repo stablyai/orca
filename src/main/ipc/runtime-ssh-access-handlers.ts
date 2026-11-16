@@ -30,7 +30,7 @@ export function registerRuntimeSshAccessHandlers(options: {
   })
   ipcMain.handle('runtimeEnvironments:unlinkSshAccess', async (_event, input: unknown) => {
     const args = RuntimeSshAccessUnlinkRequestSchema.parse(input)
-    return unlinkRuntimeSshAccess(options.getUserDataPath(), args, {
+    return await unlinkRuntimeSshAccess(options.getUserDataPath(), args, {
       invalidateTransport: options.invalidateTransport
     })
   })

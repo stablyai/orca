@@ -4,7 +4,7 @@ import {
   toLinuxPath,
   toWindowsWslUncPath
 } from '../../../../shared/file-access/wsl-paths'
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { getDefaultWslDistro, getWslHome } from '../../../wsl/discovery/distro-catalog'
 import { getCachedWslHome } from '../../../wsl/discovery/wsl-home-cache'
 import { isWslDistroRunning } from '../../../wsl/discovery/wsl-background-distro-gate'
@@ -19,7 +19,7 @@ import { normalizeCodexRuntimeSelection } from '../../account-management/runtime
 import {
   getWslSelectionKey,
   type CodexAccountSelectionTarget
-} from '../../../../shared/codex-selection-lane'
+} from '../../../../shared/agent-accounts/codex/codex-selection-lane'
 import { hasCustomCodexHomeOverrideForLaunch } from '../../../codex/configuration/homes/codex-real-home-path'
 import {
   hasRecordedLegacySharedCodexPane,
@@ -27,7 +27,7 @@ import {
 } from '../../../codex/configuration/homes/codex-pane-account-registry'
 import { ManagedCodexHomeTemporarilyUnavailableError } from '../../managed-homes/host-codex-managed-home-ownership'
 import { syncLegacySharedCodexConfigForRetainedPanes } from '../legacy-host/legacy-shared-config-compatibility'
-import type { CodexManagedAccount } from '../../../../shared/managed-account-types'
+import type { CodexManagedAccount } from '../../../../shared/agent-accounts/managed-account-types'
 import type { CodexRateLimitHomeResolution } from '../runtime-home-service-types'
 import { CodexRuntimeHomeManagedHome } from './runtime-home-service-managed-home'
 
@@ -218,7 +218,6 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
     homePath: string | null
   ): void {
     this.syncWslConfigAndGlobalInstructionsForLaunch(target, homePath)
-    this.startWslSessionBridgeForLaunch(target, homePath)
   }
 
   protected syncWslConfigAndGlobalInstructionsForLaunch(
@@ -255,17 +254,18 @@ export abstract class CodexRuntimeHomeRouting extends CodexRuntimeHomeManagedHom
     pinnedWslDistro?: string
   ): CodexRateLimitHomeResolution {
     if (target?.runtime === 'wsl') {
-      return {
-        kind: 'ready',
-        codexHomePath: this.getPreparedWslRateLimitHomePath(target, pinnedWslDistro)
-      }
+      return this.getPreparedWslRateLimitHome(target, pinnedWslDistro)
     }
     const selfContainedAccount = this.getSelfContainedManagedHostAccount()
     if (selfContainedAccount) {
       const resolved = this.resolveSelfContainedManagedHome(selfContainedAccount)
       if (resolved.kind === 'owned') {
         // Quota probes read account auth in place; resource synchronization belongs to launch prep.
-        return { kind: 'ready', codexHomePath: resolved.homePath }
+        return {
+          kind: 'ready',
+          codexHomePath: resolved.homePath,
+          readingAccount: { accountId: selfContainedAccount.id, runtime: 'host', wslDistro: null }
+        }
       }
       if (resolved.kind === 'indeterminate') {
         return { kind: 'skip' }

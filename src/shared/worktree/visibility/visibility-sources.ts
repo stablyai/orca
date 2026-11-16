@@ -2,7 +2,7 @@ import {
   createNormalizedPathInsideOrEqualMatcher,
   isRuntimePathAbsolute,
   normalizeRuntimePathForComparison
-} from '../../cross-platform-path'
+} from '../../file-access/cross-platform-path'
 import type {
   BuiltInWorktreeVisibilitySourceId,
   CustomWorktreeVisibilitySource,
@@ -10,7 +10,7 @@ import type {
   Repo,
   WorktreeVisibilitySourcePreferences,
   WorktreeVisibilityDefaults
-} from '../../repo-types'
+} from '../../repository/repo-types'
 
 export const MAX_CUSTOM_WORKTREE_VISIBILITY_SOURCES = 32
 const MAX_SOURCE_ID_LENGTH = 128

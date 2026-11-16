@@ -4,7 +4,7 @@ import type { OrchestrationDb } from '../../../../../../orchestration/db/orchest
 import {
   formatOrcaSessionAddress,
   isOrcaSessionId
-} from '../../../../../../../../shared/orca-session-address'
+} from '../../../../../../../../shared/agent-session/identity/orca-session-address'
 import { canonicalOrcaSessionId } from '../../../../../../orchestration/addressing/session-lineage/canonical-orca-session-id'
 import {
   orcaSessionIdOrHandle,
@@ -18,7 +18,7 @@ import { chatAssigneeOf } from '../../../chat-assignee-admission'
 import { OrchestrationError } from '../../../../../../orchestration/orchestration-error'
 import { sendChatTask, type ChatTaskDelivery } from '../../../chat-task-delivery'
 import { dispatchTaskSource } from '../../../../../../orchestration/coordinator/dispatch/dispatch-task-source'
-import type { AgentMessageSource } from '../../../../../../../../shared/agent-session/agent-session-message-source'
+import type { AgentMessageSource } from '../../../../../../../../shared/agent-session/journal/agent-session-message-source'
 import type { WorkerTurnStartObservation } from './worker-start-turn-observation'
 import type { createStructuredWorkerSessionForWorktree } from '../placement/worker-placement-topology'
 

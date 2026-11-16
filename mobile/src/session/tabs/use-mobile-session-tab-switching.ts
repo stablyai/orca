@@ -1,6 +1,6 @@
 import { keepsTerminalPaneVisible } from '../../terminal/session/pane-layout/mobile-terminal-pane-layout'
 import { useCallback } from 'react'
-import { STARTUP_CWD_FALLBACK_SENTENCE } from '../../../../src/shared/startup-cwd-fallback'
+import { STARTUP_CWD_FALLBACK_SENTENCE } from '../../../../src/shared/shell/launch/startup-cwd-fallback'
 import { triggerSelection } from '../../platform/haptics/haptics'
 import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
 import { isCachedActiveDocumentRetap } from '../../files/session-documents/mobile-session-active-document-retap'

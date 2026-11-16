@@ -12,9 +12,10 @@ import {
   addWorktreeCreatePhaseAttributes,
   withWorktreeSpan
 } from '../../../observability/instrumentation'
-import { workspaceSourceSchema, type WorkspaceSource } from '../../../../shared/telemetry-events'
+import { workspaceSourceSchema } from '../../../../shared/telemetry/schemas/telemetry-property-schemas'
+import type { WorkspaceSource } from '../../../../shared/workspace/creation/workspace-source'
 
-import { isFolderRepo } from '../../../../shared/repo-kind'
+import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import { createLocalWorktree, notifyWorktreesChanged } from '../../worktree-remote'
 import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-error'
 import { track } from '../../../telemetry/client'
@@ -25,7 +26,7 @@ import { normalizeLinkedWorkItemFields } from '../ipc-context-schemas'
 import { createFolderWorkspace } from './folder-workspace-creation'
 import { findExactRepoOwner, isCapturedRepoCurrent } from '../listing/worktree-host-ownership'
 import { requireWorktreeCreateRoute } from '../../../workspaces/creation/worktree-create-execution-host-route'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { workspaceLifecycleKey } from '../../../runtime/workspaces/lifecycle/workspace-lifecycle-commands'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
 import { beginWorkspaceCreateTelemetry } from '../../../workspaces/creation/workspace-create-telemetry'

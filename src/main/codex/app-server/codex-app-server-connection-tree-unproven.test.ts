@@ -6,6 +6,10 @@ import type { DescendantTreeVerdict } from '../../pty/process-retirement/pty-des
 
 import { openCodexAppServerConnection } from './codex-app-server-connection'
 
+vi.mock('../../provider-process/provider-process-spawn', () => ({
+  spawnProviderProcess: (_spec: unknown, spawnImpl: () => unknown) => spawnImpl()
+}))
+
 const teardown = vi.hoisted(() => {
   const state: { verdict: DescendantTreeVerdict; rootExits: () => void } = {
     verdict: 'unverifiable',

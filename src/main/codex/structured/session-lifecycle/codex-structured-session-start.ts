@@ -1,9 +1,9 @@
 import { withStructuredHistoryInvocation } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-history-invocation'
-import type { AgentSessionAccountKind } from '../../../../shared/agent-session/agent-session-availability'
+import type { AgentSessionAccountKind } from '../../../../shared/agent-session/failures/agent-session-availability'
 import {
   throwIfSignalAborted,
   waitForPromiseWithSignal
-} from '../../../../shared/abort-signal-reason'
+} from '../../../../shared/concurrency/abort-signal-reason'
 import type { StructuredAgentSessionAcquireInput } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type {
   StructuredAgentSessionProviderOpenInput,

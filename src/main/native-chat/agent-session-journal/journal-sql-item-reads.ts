@@ -12,11 +12,11 @@ import type {
   AgentJournalRenderItem
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { AgentSessionContextUsage } from '../../../shared/agent-session/agent-session-context-usage'
-import { latestStructuredAgentContextFacts } from '../../../shared/agent-session/structured-agent-session-context-usage'
+import type { AgentSessionContextUsage } from '../../../shared/agent-session/conversation-context/agent-session-context-usage'
+import { latestStructuredAgentContextFacts } from '../../../shared/agent-session/conversation-context/structured-agent-session-context-usage'
 import { runningStructuredAgentSessionTurnItemBySequence } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
-import { isAgentSessionContextClear } from '../../../shared/agent-session/agent-session-context-clear'
+import { isAgentSessionContextClear } from '../../../shared/agent-session/conversation-context/agent-session-context-clear'
 import {
   journalThreadGoalSource,
   type JournalThreadGoalSource
@@ -302,13 +302,17 @@ function readContextUsage(db: Database.Database, prefix: Prefix): AgentSessionCo
 }
 
 /** The newest transition wins; on equal sequence the earlier-admitted row, as a fold scan keeps it. */
-function readThreadGoal(db: Database.Database, prefix: Prefix): JournalThreadGoalSource {
+export function readJournalSqlGoalRows(db: Database.Database, prefix: Prefix) {
   const row = db
     .prepare(`SELECT payload_json FROM journal_items INDEXED BY journal_items_goal_transition
     WHERE session_id=? AND epoch=? AND hidden=0 AND goal_transition=1
     ORDER BY sequence DESC, ordinal ASC LIMIT 1`)
     .get(...prefix)
-  return journalThreadGoalSource(row ? [parseItem(row)] : [])
+  return row ? [parseItem(row)] : []
+}
+
+function readThreadGoal(db: Database.Database, prefix: Prefix): JournalThreadGoalSource {
+  return journalThreadGoalSource(readJournalSqlGoalRows(db, prefix))
 }
 
 function parseItem(row: Record<string, unknown>): AgentJournalRenderItem {

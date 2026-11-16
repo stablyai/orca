@@ -114,11 +114,7 @@
       "codeNoLongerValid": "Dieser Kopplungscode ist abgelaufen, wurde bereits verwendet oder wurde ersetzt. Zeige auf deinem Computer einen neuen Code an und scanne erneut."
     },
     "terminalSettings": {
-      "defaultText": "Standard (100 %)",
       "keepPhoneSize": "Smartphone-Größe beibehalten (Standard)",
-      "largeText": "Groß (125 %)",
-      "largerText": "Größer (150 %)",
-      "largestText": "Am größten (200 %)",
       "leaveAppDescription": "Während ein Terminal auf dem Smartphone verwendet wird, verkleinert Orca es auf die Bildschirmgröße des Smartphones. Diese Einstellung legt fest, ob es beim Schließen oder Verlassen der App in Smartphone-Größe bleibt (damit interaktive CLI-Tools ihr Layout beibehalten) oder wieder an den Desktop angepasst wird. Über „Wiederherstellen“ im Desktop-Banner lässt sich die Größe jederzeit manuell anpassen.",
       "leaveAppHeading": "BEIM VERLASSEN DER APP",
       "noPairedDesktops": "Noch keine Desktops gekoppelt. Einen Desktop koppeln, um das Terminalverhalten festzulegen.",
@@ -127,12 +123,6 @@
       "restoreAfterSeconds_one": "Nach {{count}} s",
       "restoreAfterSeconds_other": "Nach {{count}} s",
       "restoreHost": "{{name}} wiederherstellen",
-      "smallerText": "Kleiner (75 %)",
-      "smallestText": "Am kleinsten (50 %)",
-      "textSize": "Textgröße",
-      "textSizeDescription": "Die Textgröße im Terminal anpassen. Bei kleinerer Schrift passen mehr Spalten mit Seitenrändern auf den Bildschirm; größere Schrift zeigt weniger Spalten – zum Verschieben seitlich ziehen. Die Größe lässt sich auch direkt im Terminal durch Zusammenziehen oder Spreizen zweier Finger ändern; dabei wird diese Einstellung aktualisiert. Gilt nur für die Anzeige auf diesem Gerät und ändert das Desktop-Terminal nicht.",
-      "textSizeHeading": "TEXTGRÖSSE",
-      "textSizePickerTitle": "Textgröße im Terminal",
       "title": "Terminal"
     }
   },
@@ -248,6 +238,7 @@
     "message": {
       "copyMessage": "Nachricht kopieren",
       "forkFromResponse": "Ab dieser Antwort abzweigen",
+      "scrollMessageToTop": "Diese Nachricht ganz nach oben scrollen",
       "forkFromResponseHint": "Ein neuer Chat mit dieser vollständigen Antwort bis zum Ende des Durchgangs"
     },
     "messageActionsSheet": {
@@ -2837,12 +2828,14 @@
       "title": "Darstellung"
     },
     "browserSettingsScreen": {
+      "askEachTime": "Jedes Mal fragen",
+      "askEachTimeDescription": "Jedes Mal zwischen Orca-Browser, Smartphone-Browser und Link kopieren wählen.",
       "desktopBrowser": "Orca-Browser auf dem Desktop",
       "desktopBrowserDescription": "Im gestreamten Browser des gekoppelten Desktops öffnen.",
-      "linksDescription": "Auswählen, wo HTTP(S)-Links aus der Terminalausgabe beim Antippen geöffnet werden.",
+      "terminalAndChatLinksDescription": "Auswählen, wo Weblinks aus der Terminalausgabe und dem Chat beim Antippen geöffnet werden.",
       "linksHeading": "LINKS",
       "loadFailed": "Browser-Einstellungen konnten nicht geladen werden. Erneut versuchen.",
-      "openTerminalLinks": "Terminal-Links öffnen",
+      "openLinks": "Links öffnen",
       "phoneBrowser": "Browser auf dem Smartphone",
       "phoneBrowserDescription": "In Safari, Chrome oder einem anderen Browser auf diesem Smartphone öffnen.",
       "saveFailed": "Browser-Einstellungen konnten nicht gespeichert werden. Erneut versuchen.",

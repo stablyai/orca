@@ -1,5 +1,5 @@
 import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import { parseWorkspaceKey } from '../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import type {
   CrossStoreInferredSource,
   CrossStoreParentRef
@@ -162,7 +162,7 @@ export async function resolveSetParentFields(
   parentWorktree?: string
   matchFolderWorkspaces?: true
 }> {
-  const environment = resolveParentEnvironment(flags, client)
+  const environment = await resolveParentEnvironment(flags, client)
   if (environment) {
     return {
       crossStoreParent: await resolveCrossEnvironmentParent(client, { flags, cwd, environment })

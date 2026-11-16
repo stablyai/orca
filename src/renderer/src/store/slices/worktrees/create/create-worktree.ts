@@ -6,7 +6,7 @@ import { repoHostId } from '../listing/worktree-host-ownership'
 import {
   isUnresolvedOwnerHostId,
   toRuntimeExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { adoptFromEndpoint } from '../../../host-catalog/endpoint-catalog-adoption'
 import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
@@ -54,12 +54,10 @@ import {
   type CreateAttemptOutcome
 } from './worktree-create-parent-pick'
 
-type RuntimeTarget = RuntimeClientTarget
-
 async function runCreateAttempt(
   request: WorktreeCreateRequest,
   attempt: WorktreeCreateAttempt,
-  target: RuntimeTarget,
+  target: RuntimeClientTarget,
   clientCreateSettings: ClientWorktreeCreateSettings = {}
 ): Promise<CreateAttemptOutcome> {
   const provisionedRoot = request.options?.provisionedRoot
@@ -268,7 +266,14 @@ export function createCreateWorktree(
           }
           const { result } = outcome
           showWorktreeCreateWarningToast(result.warning)
-          reviewSetupTrustMismatch(get, repoId, creationHostId, result, target)
+          reviewSetupTrustMismatch(
+            get,
+            repoId,
+            creationHostId,
+            result,
+            target,
+            options?.hookTrustContext
+          )
           showLocalBaseRefRefreshToast(result.localBaseRefRefresh, result.worktree, {
             updateSettings: get().updateSettings,
             executionHostId: creationHostId

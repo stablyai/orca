@@ -29,6 +29,10 @@ import {
   isLocalEnvironmentSelector,
   refuseLocalManagementSelector
 } from './hosts/local-environment-selector'
+import {
+  closeAdmittedEnvironmentStore,
+  useInlineEnvironmentStoreForCli
+} from '../shared/remote-runtime/host-store/runtime-environment-store-execution'
 
 const COMMAND_PATHS = COMMAND_SPECS.flatMap((spec) => specPaths(spec))
 
@@ -45,7 +49,8 @@ function resolveInvocationCwd(): string {
 
 export async function main(
   argv = process.argv.slice(2),
-  cwd = resolveInvocationCwd()
+  cwd = resolveInvocationCwd(),
+  configureExecutable?: (commandPath: readonly string[]) => void
 ): Promise<void> {
   // Why: version audits use the bundled launcher; Electron intercepts direct binary version flags.
   if (argv.length === 1 && (argv[0] === '--version' || argv[0] === '-v')) {
@@ -59,6 +64,7 @@ export async function main(
     return
   }
   if (argv[0] === 'agent-teams-tmux') {
+    configureExecutable?.(['agent-teams-tmux'])
     await runAgentTeamsTmuxShim(argv.slice(1))
     return
   }
@@ -70,9 +76,12 @@ export async function main(
     await runClaudeTeams(argv.slice(1), cwd)
     return
   }
+  // Why: tools that use orca as BROWSER run it with the URL as the only argument (#21956).
+  const commandArgv =
+    argv.length === 1 && /^https?:\/\//i.test(argv[0]) ? ['open-url', '--url', argv[0]] : argv
   const parsed = normalizeCommandPositionals(
     COMMAND_SPECS,
-    parseArgs(argv, COMMAND_PATHS, COMMAND_SPECS)
+    parseArgs(commandArgv, COMMAND_PATHS, COMMAND_SPECS)
   )
   const helpPath = resolveHelpPath(parsed)
   if (helpPath !== null) {
@@ -103,6 +112,7 @@ export async function main(
   try {
     // Report invalid commands before runtime lookup can mask them with connection errors.
     validateCommandAndFlags(COMMAND_SPECS, parsed)
+    configureExecutable?.(parsed.commandPath)
     const commandSpec = findCommandSpec(COMMAND_SPECS, parsed.commandPath)
     refuseConflictingSessionCallerFlags(commandSpec, parsed.flags)
     await refuseLocalManagementSelector(parsed.commandPath, parsed.flags)
@@ -263,5 +273,10 @@ async function runAgentTeamsTmuxShim(argv: string[]): Promise<void> {
 }
 
 if (require.main === module) {
-  void main()
+  void main(process.argv.slice(2), resolveInvocationCwd(), (commandPath) => {
+    // Serve supervises a local host; claude-teams supervises its agent child and stays on the worker default.
+    if (commandPath[0] !== 'serve') {
+      useInlineEnvironmentStoreForCli()
+    }
+  }).finally(closeAdmittedEnvironmentStore)
 }

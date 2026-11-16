@@ -1,9 +1,9 @@
 import { spawnProcess } from '@orca/process-host'
-import { withCliRuntimeOnPath } from '../../../shared/node-cli-command-resolution'
+import { withCliRuntimeOnPath } from '../../../shared/shell/command-resolution/node-cli-command-resolution'
 import {
   buildWindowsHostInteractiveLoginSpawn,
   type WindowsHostInteractiveLoginSpawn
-} from '../../../shared/windows-interactive-login-spawn'
+} from '../../providers/shell-launch/windows/windows-interactive-login-spawn'
 import {
   buildWslExecArgs,
   buildWslLoginShellCommand

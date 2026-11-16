@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { useAppStore } from '@/store/index'
 import { confirmStructuredLaunchFirstMessagePublication } from './structured-agent-session-launch-publication-confirmation'
 import { retryStructuredAgentSessionLaunch } from './structured-agent-session-launch'

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import * as z from 'zod'
-import { relativePathInsideRoot } from '../../../../../src/shared/cross-platform-path'
+import { relativePathInsideRoot } from '../../../../../src/shared/file-access/cross-platform-path'
 import {
   githubReferenceRepo,
   type GitHubRepoReference
@@ -9,7 +9,7 @@ import { githubRepoIdentityKey } from '../../../../../src/shared/github/reposito
 import {
   createNativeChatFileLinkChecker,
   type NativeChatFileLinkExistence
-} from '../../../../../src/shared/native-chat/native-chat-file-link-existence'
+} from '../../../../../src/shared/native-chat/file-access/native-chat-file-link-existence'
 import {
   createPathExistenceBatch,
   requirePathExistenceResults

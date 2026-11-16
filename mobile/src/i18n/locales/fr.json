@@ -116,11 +116,7 @@
       "codeNoLongerValid": "Ce code d'appairage a expiré, a déjà été utilisé ou a été remplacé. Affichez un nouveau code sur votre ordinateur et scannez à nouveau."
     },
     "terminalSettings": {
-      "defaultText": "Par défaut (100 %)",
       "keepPhoneSize": "Conserver à la taille téléphone (par défaut)",
-      "largeText": "Grand (125 %)",
-      "largerText": "Plus grand (150 %)",
-      "largestText": "Le plus grand (200 %)",
       "leaveAppDescription": "Lorsque vous utilisez un terminal sur votre téléphone, Orca le réduit pour l'adapter à votre écran. Lorsque vous fermez l'application ou la mettez en arrière-plan, ce paramètre détermine s'il conserve la taille du téléphone (pour éviter que les outils CLI interactifs ne réorganisent leur affichage) ou reprend sa taille sur l'ordinateur. Vous pouvez à tout moment utiliser « Restaurer » dans la bannière sur l'ordinateur pour le redimensionner manuellement.",
       "leaveAppHeading": "LORSQUE VOUS QUITTEZ L'APPLICATION",
       "noPairedDesktops": "Aucun ordinateur appairé pour le moment. Appairez-en un pour régler le comportement du terminal.",
@@ -131,12 +127,6 @@
       "restoreAfterSeconds_one": "Après {{count}} s",
       "restoreAfterSeconds_other": "Après {{count}} s",
       "restoreHost": "Restaurer {{name}}",
-      "smallerText": "Plus petit (75 %)",
-      "smallestText": "Le plus petit (50 %)",
-      "textSize": "Taille du texte",
-      "textSizeDescription": "Réglez la taille du texte du terminal. Une taille plus petite permet d'afficher plus de colonnes avec des marges latérales ; une taille plus grande en affiche moins — faites glisser horizontalement pour faire défiler. Vous pouvez aussi pincer pour zoomer directement dans le terminal, ce qui met à jour ce paramètre. Ce réglage ne concerne que l'affichage sur cet appareil ; il ne modifie pas le terminal sur l'ordinateur.",
-      "textSizeHeading": "TAILLE DU TEXTE",
-      "textSizePickerTitle": "Taille du texte du terminal",
       "title": "Terminal"
     }
   },
@@ -252,6 +242,7 @@
     "message": {
       "copyMessage": "Copier le message",
       "forkFromResponse": "Créer une branche à partir de cette réponse",
+      "scrollMessageToTop": "Revenir au début du message",
       "forkFromResponseHint": "Une nouvelle conversation avec toute cette réponse, jusqu’à la fin de son tour"
     },
     "messageActionsSheet": {
@@ -2910,12 +2901,14 @@
       "title": "Apparence"
     },
     "browserSettingsScreen": {
+      "askEachTime": "Demander à chaque fois",
+      "askEachTimeDescription": "Choisissez à chaque fois le navigateur Orca, celui du téléphone ou la copie du lien.",
       "desktopBrowser": "Navigateur Orca sur l'ordinateur",
       "desktopBrowserDescription": "Ouvrir dans le navigateur diffusé depuis votre ordinateur appairé.",
-      "linksDescription": "Choisissez où ouvrir les liens HTTP(S) que vous touchez dans la sortie du terminal.",
+      "terminalAndChatLinksDescription": "Choisissez où ouvrir les liens web que vous touchez dans la sortie du terminal et dans le chat.",
       "linksHeading": "LIENS",
       "loadFailed": "Impossible de charger les préférences du navigateur. Réessayez.",
-      "openTerminalLinks": "Ouvrir les liens du terminal",
+      "openLinks": "Ouvrir les liens",
       "phoneBrowser": "Navigateur du téléphone",
       "phoneBrowserDescription": "Ouvrir dans Safari, Chrome ou un autre navigateur sur ce téléphone.",
       "saveFailed": "Impossible d'enregistrer les préférences du navigateur. Réessayez.",

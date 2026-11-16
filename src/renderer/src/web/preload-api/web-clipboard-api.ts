@@ -4,7 +4,7 @@ import {
   agentSessionPastedImageName,
   type AgentSessionAttachmentClipboardTarget
 } from '../../../../shared/agent-session/agent-session-attachments'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
 import { saveClipboardImageAsWebAgentSessionAttachment } from './web-agent-session-attachment-upload'
 import { requireActiveEnvironmentOrNull } from './web-runtime-session'
 import {
@@ -16,8 +16,8 @@ import {
   clipboardFormatsIncludeImage,
   clipboardImageThumbnailSize,
   type ClipboardImageThumbnail
-} from '../../../../shared/clipboard-image'
-import { assertClipboardTextWriteWithinLimitWithYield } from '../../../../shared/clipboard-text'
+} from '../../../../shared/clipboard/clipboard-image'
+import { assertClipboardTextWriteWithinLimitWithYield } from '../../../../shared/clipboard/clipboard-text'
 import { blobToBase64, convertImageBlobToPng } from '@/lib/clipboard/images/image-blob-png'
 import { copyClipboardTextViaExecCommand } from '../web-clipboard-copy-fallback'
 import { callRuntimeEnvelope, callRuntimeResult } from './web-runtime-calls'

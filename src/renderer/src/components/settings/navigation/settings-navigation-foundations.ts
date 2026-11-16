@@ -1,9 +1,9 @@
 import type { MutableRefObject } from 'react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { SpeechModelState } from '../../../../../shared/speech-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
+import type { SpeechModelState } from '../../../../../shared/speech/speech-types'
 import type { SourceControlAiSettings } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import { normalizeSourceControlAiSettings } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings'
-import { getDefaultVoiceSettings } from '../../../../../shared/constants'
+import { getDefaultVoiceSettings } from '../../../../../shared/orca-profiles/constants'
 import type {
   SettingsNavSection,
   SettingsNavTarget

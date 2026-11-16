@@ -4,7 +4,7 @@ import { savedCredentialUnreadable } from '../credentials/saved-credential-reada
 import type {
   OpenAiCompatibleSpeechProvider,
   OpenAiCompatibleSpeechProviderSummary
-} from '../../shared/speech-types'
+} from '../../shared/speech/speech-types'
 
 // URL, model and key are sealed together so a key can never be sent to a host it wasn't saved for.
 const store = createEncryptedApiKeyFileStore({

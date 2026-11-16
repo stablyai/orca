@@ -1,9 +1,9 @@
 import type { RuntimeStore } from '../construction/runtime-store-contract'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { Repo } from '../../../shared/repo-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
-import type { Project } from '../../../shared/project-types'
-import type { ProjectGroup } from '../../../shared/project-group-types'
+import type { Project } from '../../../shared/project/project-types'
+import type { ProjectGroup } from '../../../shared/project/groups/project-group-types'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 
 type RuntimeSettings = ReturnType<RuntimeStore['getSettings']>

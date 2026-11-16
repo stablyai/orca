@@ -28,8 +28,14 @@ vi.mock('react-native-gesture-handler', () => {
     runOnJS: () => GestureChain
     onStart: () => GestureChain
     onUpdate: () => GestureChain
+    onFinalize: () => GestureChain
   }
-  const chain: GestureChain = { runOnJS: () => chain, onStart: () => chain, onUpdate: () => chain }
+  const chain: GestureChain = {
+    runOnJS: () => chain,
+    onStart: () => chain,
+    onUpdate: () => chain,
+    onFinalize: () => chain
+  }
   return {
     Gesture: { Simultaneous: () => ({}), Native: () => ({}), Pinch: () => chain },
     GestureDetector: 'GestureDetector',
@@ -78,6 +84,9 @@ vi.mock('../native-chat/input/prompts/MobileNativeChatAsk', () => ({
 }))
 vi.mock('../native-chat/input/session-options/MobileNativeChatSessionOptionPickers', () => ({
   MobileNativeChatSessionOptionPickers: 'SessionOptions'
+}))
+vi.mock('../native-chat/mcp/MobileNativeChatMcpTray', () => ({
+  MobileNativeChatMcpTray: 'McpTray'
 }))
 vi.mock('../native-chat/composer/menus/MobileNativeChatComposerMenu', () => ({
   MobileNativeChatComposerSuggestions: 'Suggestions'

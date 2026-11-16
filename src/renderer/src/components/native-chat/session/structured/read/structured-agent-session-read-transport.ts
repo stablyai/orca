@@ -1,12 +1,12 @@
-import { startStructuredAgentSessionLiveRead } from '../../../../../../../shared/agent-session/structured-agent-session-live-read'
+import { startStructuredAgentSessionLiveRead } from '../../../../../../../shared/agent-session/view/live-read/structured-agent-session-live-read'
 import {
   type AgentSessionTextAppendCapabilities,
   agentSessionTextAppendRequest
-} from '../../../../../../../shared/agent-session/agent-session-text-append'
+} from '../../../../../../../shared/agent-session/view/live-read/agent-session-text-append'
 import {
   AGENT_SESSION_TEXT_APPEND_RUNTIME_CAPABILITY,
   AGENT_SESSION_TOOL_OUTPUT_APPEND_RUNTIME_CAPABILITY
-} from '../../../../../../../shared/agent-session/agent-session-runtime-capabilities'
+} from '../../../../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
 import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import { subscribeStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-subscriptions'

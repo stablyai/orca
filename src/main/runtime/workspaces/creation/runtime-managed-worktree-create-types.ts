@@ -1,6 +1,6 @@
 import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
-import type { AgentLaunchPreferences } from '../../../../shared/agent-session/agent-session-host-authority'
+import type { AgentLaunchPreferences } from '../../../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import type { CreateWorktreeArgs } from '../../../../shared/worktree/create-types'
 import type {
   AutomationWorkspaceProvenance,
@@ -11,7 +11,7 @@ import type {
   Worktree
 } from '../../../../shared/worktree/types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../shared/workspace-source'
+import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../shared/workspace/creation/workspace-source'
 import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation/launch-types'
 import type {
   CrossStoreInferredSource,

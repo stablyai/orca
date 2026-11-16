@@ -17,6 +17,7 @@ import {
   useMobileNativeChatReplyReveals
 } from './transcript/tool-results/mobile-native-chat-reply-reveals'
 import { MobileNativeChatRowOverlaysHost } from './transcript/message-actions/MobileNativeChatRowOverlaysHost'
+import type { MobileLinkOpenMode } from '../../storage/preferences'
 import { nativeChatAskRequiresTerminal } from '../../../../src/shared/native-chat/native-chat-agent-support'
 import { tuiAgentDisplayName } from '../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { MobileNativeChatNoticeContext } from './transcript/notices/mobile-native-chat-notice-context'
@@ -56,8 +57,9 @@ type Props = {
   hostName: string | null
   /** Opens the accounts of the host that runs this chat; absent when the phone can't reach them. */
   onOpenAccounts?: () => void
-  /** Offered for tapped links; absent where the host can't open a browser tab. */
+  /** Opens tapped links in Orca's browser; absent where the host can't open a browser tab. */
   onOpenUrlInOrca?: (url: string) => void
+  linkOpenMode: MobileLinkOpenMode
   /** Opens a host terminal tab in this chat's workspace running `command`. */
   onRunInTerminal: (command: string) => void
   hostOutage?: MobileNativeChatHostOutage | null
@@ -108,6 +110,7 @@ function MobileNativeChatOverlayContent({
   keyboardInset,
   hostName,
   onOpenUrlInOrca,
+  linkOpenMode,
   onRunInTerminal,
   hostOutage = null,
   onOpenAccounts
@@ -270,6 +273,7 @@ function MobileNativeChatOverlayContent({
       conversation={{ surfaceId: sendSurfaceId, sessionId }}
       imageSource={imageSource}
       onOpenUrlInOrca={onOpenUrlInOrca}
+      linkOpenMode={linkOpenMode}
       rewind={controller.nativeChatRewind}
     >
       <MobileMarkdownLinksContext.Provider value={markdownLinks}>

@@ -15,7 +15,7 @@ import { basename, dirname } from 'node:path'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { rovoTranscriptPathForMetadata } from '../../../shared/ai-vault/session-display/ai-vault-session-log-resource'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { withOmpSubagentTranscriptCount } from './omp/session-scanner-omp-subagent-transcripts'
 import type {
   FileWithMtime,
@@ -33,7 +33,7 @@ import {
 } from '../parsing/session-scanner-accumulator'
 import { addSessionContent } from '../parsing/session-scanner-messages'
 import { arrayValue, firstString, asRecord } from '../parsing/session-record-fields'
-import { extractString } from '../../../shared/trimmed-string'
+import { extractString } from '../../../shared/text/trimmed-string'
 import { parseJsonObject } from '../parsing/session-json-object'
 import { readJsonObjectIfExists } from '../discovery/session-json-file'
 import {

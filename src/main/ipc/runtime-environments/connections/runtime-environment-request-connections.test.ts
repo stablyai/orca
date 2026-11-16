@@ -1,3 +1,4 @@
+import '../../../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 import { RemoteRuntimeSharedControlConnection } from '../../../../shared/remote-runtime/control/remote-runtime-shared-control-connection'
 import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { afterEach, describe, expect, it, vi } from 'vitest'

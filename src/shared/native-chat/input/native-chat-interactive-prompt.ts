@@ -9,7 +9,7 @@ import type { AgentJournalApprovalSubject } from '../../agent-session/journal/ag
 import { parseAskFromStatus, resolveNativeChatAsk } from './native-chat-ask'
 import type { AskPrompt } from './questions/native-chat-ask-types'
 import type { NativeChatMessage } from '../native-chat-types'
-import { parseOmpPlanReviewPrompt } from '../../omp-plan-review-prompt'
+import { parseOmpPlanReviewPrompt } from './questions/omp-plan-review-prompt'
 
 export type ChatApproval = {
   title: string

@@ -3,15 +3,15 @@ import {
   agentSessionContextClearOutstanding,
   agentSessionTranscriptRows,
   latestAgentSessionContextClearSequence
-} from '../../../../../../src/shared/agent-session/agent-session-context-clear'
-import type { StructuredAgentSessionState } from '../../../../../../src/shared/agent-session/structured-agent-session-reducer'
+} from '../../../../../../src/shared/agent-session/conversation-context/agent-session-context-clear'
+import type { StructuredAgentSessionState } from '../../../../../../src/shared/agent-session/view/live-read/structured-agent-session-reducer'
 import type { StructuredAgentSessionOptimisticMessage } from '../../../../../../src/shared/agent-session/view/structured-agent-session-message-projection'
 import { createStructuredAgentSessionMessageProjection } from '../../../../../../src/shared/agent-session/view/structured-agent-session-message-stream'
 import { tuiAgentDisplayName } from '../../../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { withNativeChatCutTurnNotices } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-cut-turn-notice'
 import { omitNativeChatThreadGoalRows } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-thread-goal-rows'
-import { createStructuredQuestionProjection } from '../../../../../../src/shared/structured-agent-question-projection'
-import { projectStructuredAgentStartItem } from '../../../../../../src/shared/structured-agent-start-projection'
+import { createStructuredQuestionProjection } from '../../../../../../src/shared/native-chat/transcript/messages/structured-agent-question-projection'
+import { projectStructuredAgentStartItem } from '../../../../../../src/shared/native-chat/transcript/messages/structured-agent-start-projection'
 
 const mobileStructuredTranscript = createStructuredQuestionProjection(
   projectStructuredAgentStartItem

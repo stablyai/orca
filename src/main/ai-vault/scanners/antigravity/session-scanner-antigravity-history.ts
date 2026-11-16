@@ -16,7 +16,7 @@ import { WslTranscriptFsError } from '../../../native-chat/transcript-filesystem
 import { parseJsonObject } from '../../parsing/session-json-object'
 import { timestampMs } from '../../parsing/session-record-time'
 import { antigravityHistoryPromptHash } from './antigravity-history-prompt'
-import { antigravitySessionOrigin } from '../../../../shared/antigravity-session-origin'
+import { antigravitySessionOrigin } from '../../../../shared/agent-session/lifecycle/provider-handles/antigravity-session-origin'
 import { antigravityAcpSessionMetadataPath } from './session-scanner-antigravity-paths'
 
 const HISTORY_MATCH_WINDOW_MS = 2_000

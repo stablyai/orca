@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import {
   fishRequirementViolation,
   resolveFishBinary
-} from '../../../shared/fish-binary-requirement'
+} from '../../../shared/shell/testing/fish-binary-requirement'
 import { fishHistorySessionName, resolveFishHistoryDir } from './fish-history-session'
 
 const FISH = resolveFishBinary(4)

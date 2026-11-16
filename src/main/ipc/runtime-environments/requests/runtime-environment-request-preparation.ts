@@ -29,7 +29,7 @@ export async function prepareFencedRuntimeRequest(
 > {
   // A stale caller is refused before its request can wake (and re-pair) a VM.
   const stale = runtimeEnvironmentRevisionFailure(
-    resolveEnvironment(userDataPath, environmentId),
+    await resolveEnvironment(userDataPath, environmentId),
     expected.pairingRevision,
     method,
     expected.runtimeId

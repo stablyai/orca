@@ -1,7 +1,7 @@
 import {
   MANAGED_RUNTIME_INSTALL_RUNTIME_CAPABILITY,
   MANAGED_RUNTIME_REMOVE_RUNTIME_CAPABILITY
-} from '../../managed-runtime-install'
+} from '../../agent-launch/installation/managed-runtime-install'
 import { REMOTE_SERVER_UPDATE_CAPABILITY } from '../host-catalog/remote-server-update'
 import { SSH_TARGET_MANAGEMENT_RUNTIME_CAPABILITY } from '../ssh/ssh-target-management'
 import { ENVIRONMENT_DOCTOR_RUNTIME_CAPABILITY } from '../../workspace-setup/environment-doctor/environment-doctor-runtime'

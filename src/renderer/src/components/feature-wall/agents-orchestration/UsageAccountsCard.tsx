@@ -11,7 +11,7 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
-} from '../../../../../shared/managed-account-types'
+} from '../../../../../shared/agent-accounts/managed-account-types'
 import { getFeatureWallUsageProviderConnection } from '../completion/feature-wall-usage-tracking'
 import { useTranslate } from '@/i18n/use-translate'
 

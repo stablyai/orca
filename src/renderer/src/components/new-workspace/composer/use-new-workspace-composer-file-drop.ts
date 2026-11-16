@@ -4,7 +4,10 @@ import { createOsFileDropSequence, useOsFileDropOwner } from '@/hooks/use-os-fil
 import { getNativeFileDropRejectionMessage } from '@/lib/files/drop/native-file-drop-rejection-message'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
-import { parseExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
+import {
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../../../shared/execution-host/execution-host'
 
 type Args = {
   projectPath?: string | null

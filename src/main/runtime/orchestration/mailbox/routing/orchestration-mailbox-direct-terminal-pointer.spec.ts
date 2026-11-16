@@ -27,7 +27,7 @@ describe('orchestration direct terminal mailbox pointer', () => {
   it('points and checks an unbound pane at its own direct mail but leaves Run-owned rows for routing', async () => {
     vi.useFakeTimers()
     const db = createDatabase('orca-mailbox-direct-terminal-pointer-')
-    const harness = createRuntime(db)
+    const harness = await createRuntime(db)
     const formerRun = createBoundRun(db, 'Former coordinator Run')
     const runOwned = insertDirectRunMessage(db, formerRun.id, 'Former Run completion')
     db.bindRun({

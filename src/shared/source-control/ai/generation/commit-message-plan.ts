@@ -1,8 +1,8 @@
 import {
   textGenerationFailure,
   type TextGenerationFailureFields
-} from '../../../text-generation-failure-copy'
-import { findOptionOccurrence } from '../../../command-option-occurrence'
+} from '../../../text-generation/text-generation-failure-copy'
+import { findOptionOccurrence } from '../../../cli/command-option-occurrence'
 import { planAgentBinary } from '../../../agent-launch/startup/agent-command-plan'
 
 import type { CommandTemplateBackslash } from './commit-message-prompt'
@@ -28,8 +28,8 @@ import {
   isDirectOpenCodeGenerationCommand,
   openCodeGenerationLauncherBoundary,
   mergeOpenCodeGenerationArgs
-} from '../../../opencode-generation-command'
-import { buildAntigravityGenerationInput } from '../../../antigravity-generation-stream'
+} from '../../../text-generation/launch/opencode-generation-command'
+import { buildAntigravityGenerationInput } from '../../../text-generation/output/antigravity-generation-stream'
 
 // Share pure request/prompt-to-spawn validation and argv planning between local main and SSH JSON-RPC generators.
 
@@ -82,6 +82,8 @@ function insertAdditionalAgentArgs(args: {
   agentArgs: string[]
   promptDelivery: 'argv' | 'stdin' | 'file'
   prompt: string
+  /** Built-in argv, whose `--` before the prompt ends options; a custom `--` may pass args through a wrapper. */
+  builtIn?: boolean
 }): string[] {
   if (!args.agentArgs.length) {
     return args.baseArgs
@@ -97,7 +99,12 @@ function insertAdditionalAgentArgs(args: {
     args.prompt.length > 0 &&
     args.baseArgs.at(-1) === args.prompt
   ) {
-    return [...args.baseArgs.slice(0, -1), ...args.agentArgs, args.prompt]
+    const insertAt = args.builtIn && args.baseArgs.at(-2) === '--' ? -2 : -1
+    return [
+      ...args.baseArgs.slice(0, insertAt),
+      ...args.agentArgs,
+      ...args.baseArgs.slice(insertAt)
+    ]
   }
   return [...args.baseArgs, ...args.agentArgs]
 }
@@ -209,7 +216,8 @@ export function planCommitMessageGeneration(
           baseArgs: merged.generatedArgs,
           agentArgs: merged.recipeArgs,
           promptDelivery: spec.promptDelivery,
-          prompt: argvPrompt
+          prompt: argvPrompt,
+          builtIn: true
         })
   const generationArgs = mergeOpenCodeGenerationArgs(
     input.agentId,

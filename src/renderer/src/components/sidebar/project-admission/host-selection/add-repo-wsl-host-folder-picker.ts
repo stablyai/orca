@@ -2,11 +2,11 @@ import { toast } from 'sonner'
 import {
   classifyRejectedWindowsPath,
   type WindowsPathAccess
-} from '../../../../../../shared/windows-path-access'
+} from '../../../../../../shared/file-access/windows-path-access'
 import {
   normalizeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import {
   wslHostWindowsDriveRefusalForPickedPath,
   type WslHostWindowsDriveRefusal

@@ -12,7 +12,7 @@ import {
   ALL_SURFACES,
   FRAMES_ONLY,
   pluginHostMethodOffered,
-  pluginHostMethodSinceFor,
+  pluginHostMethodNewestMinorFor,
   spec,
   WORKER_ONLY,
   type PluginHostMethodSpec
@@ -311,9 +311,11 @@ export function getPluginHostMethodSpec(name: string): PluginHostMethodSpec | nu
   return isPluginHostMethodName(name) ? PLUGIN_HOST_API[name] : null
 }
 
-/** The minor this host implements: the newest `since` among frozen methods. */
+/** The minor this host implements: the newest `since` or `paramsSince` among frozen methods. */
 export const PLUGIN_HOST_API_MINOR = Math.max(
-  ...PLUGIN_STABLE_HOST_METHOD_NAMES.map((name) => PLUGIN_HOST_API[name].since)
+  ...PLUGIN_STABLE_HOST_METHOD_NAMES.map((name) =>
+    Math.max(PLUGIN_HOST_API[name].since, ...Object.values(PLUGIN_HOST_API[name].paramsSince ?? {}))
+  )
 )
 
 /** Methods a surface may call, for `hello` and `host.has`; proposed ones only when allowed. */
@@ -341,6 +343,6 @@ export function pluginHostApiMinorFor(
 ): number {
   return Math.max(
     0,
-    ...methods.map((name) => pluginHostMethodSinceFor(PLUGIN_HOST_API[name], surface))
+    ...methods.map((name) => pluginHostMethodNewestMinorFor(PLUGIN_HOST_API[name], surface))
   )
 }

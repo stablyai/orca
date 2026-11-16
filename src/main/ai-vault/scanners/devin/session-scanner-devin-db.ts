@@ -9,7 +9,7 @@ import { readOpenCodeDatabase } from '../opencode/sqlite/session-scanner-opencod
 import type { SessionSidecarObservation } from '../../parse-cache/session-sidecar-stat'
 import { asRecord } from '../../parsing/session-record-fields'
 import { numberValue } from '../../parsing/session-scanner-token-values'
-import { extractString } from '../../../../shared/trimmed-string'
+import { extractString } from '../../../../shared/text/trimmed-string'
 
 // Devin stores workspace metadata absent from Windows transcripts in a sibling sessions.db.
 

@@ -12,7 +12,7 @@ import { expect, test, type forwardElectronProcessLogs } from './helpers/orca-ap
 import { RuntimeClient } from '../../src/cli/runtime/client'
 import { createRuntimeDesktopPairingOffer } from './helpers/paired-electron-client'
 import { encodePairingOffer } from '../../src/shared/remote-runtime/pairing/pairing'
-import { addWslHostEnvironment } from '../../src/shared/remote-runtime/host-store/runtime-environment-wsl-host-store'
+import { addWslHostEnvironment } from '../../src/shared/remote-runtime/host-store/runtime-environment-wsl-host-operations'
 import { openSidebarProjectMenu } from './helpers/sidebar-project-dialog'
 import { ensureTerminalVisible, waitForSessionReady } from './helpers/store'
 import {

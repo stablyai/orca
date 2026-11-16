@@ -19,7 +19,7 @@ import type { MobileDesktopRelayHosts } from '../../mobile-desktop-relay/mobile-
 import { MobileRelayHostCatalog } from '../../mobile-desktop-relay/mobile-relay-host-catalog'
 import { OnDemandServerWorktreeRows } from '../../mobile-desktop-relay/on-demand-server-worktree-rows'
 import { getHostDisplayLabelOverrides } from '../../../../shared/execution-host/host-setting-overrides'
-import { DELEGATED_PHONE_NAME_MAX_CHARS } from '../../../../shared/delegated-mobile-device-contract'
+import { DELEGATED_PHONE_NAME_MAX_CHARS } from '../../../../shared/remote-runtime/pairing/delegated-mobile-device-contract'
 import { allocateTerminalSubscriptionStreamId } from '../methods/terminal/terminal-subscription-stream-id'
 import { isStructuredNativeChatDefaultFor } from '../methods/structured-sessions/structured-agent-session-policy'
 import {

@@ -16,7 +16,7 @@ const PSREADLINE_PREDICTION_TRANSCRIPT = readFileSync(
 )
 const PROMPT = 'PS C:\\Users\\user\\orca\\workspaces\\orca\\run-ownership-validation>'
 
-function startConptyRuntime(ptyId: string): InstanceType<typeof OrcaRuntimeService> {
+async function startConptyRuntime(ptyId: string): Promise<InstanceType<typeof OrcaRuntimeService>> {
   const runtime = new OrcaRuntimeService(store)
   runtime.setPtyController({
     write: () => true,
@@ -24,7 +24,7 @@ function startConptyRuntime(ptyId: string): InstanceType<typeof OrcaRuntimeServi
     getForegroundProcess: async () => null,
     getSize: () => ({ cols: 120, rows: 30 })
   })
-  syncSinglePty(runtime, ptyId)
+  await syncSinglePty(runtime, ptyId)
   return runtime
 }
 
@@ -33,7 +33,7 @@ describe('OrcaRuntimeService ConPTY stream reads', () => {
     const ptyId = 'pty-conpty-prediction'
     markNativeWindowsConptyPty(ptyId)
     try {
-      const runtime = startConptyRuntime(ptyId)
+      const runtime = await startConptyRuntime(ptyId)
       const [terminal] = (await runtime.listTerminals()).terminals
       runtime.onPtyData(ptyId, PSREADLINE_PREDICTION_TRANSCRIPT, 100)
 

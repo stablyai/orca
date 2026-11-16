@@ -6,7 +6,7 @@ import {
 } from '@/lib/workspace/activity/worktree-activity-state'
 import { getWorktreeIdsWithStructuredChat } from '../../worktree-list/listing/visible-worktree-activity-inputs'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import type { Tab } from '../../../../../../shared/tab-types'
+import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import {
   hasUnknownStructuredChat,
   type StructuredChatSleptAtByPaneKey
@@ -16,7 +16,7 @@ type TabLike = { id: string }
 
 // Partial store mocks may omit slices; shared predicates treat absence as empty.
 type SleepStateInput = {
-  agentStatusByPaneKey?: Record<string, AgentStatusEntry> | null
+  agentStatusByPaneKey?: ReadonlyMap<string, AgentStatusEntry> | null
   agentStatusEpoch?: number
   tabsByWorktree?: Record<string, readonly TabLike[]> | null
   ptyIdsByTabId?: Record<string, string[]> | null

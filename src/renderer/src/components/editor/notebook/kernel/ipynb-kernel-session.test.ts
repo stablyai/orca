@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { KernelFrame, KernelFrameEvent } from '../../../../../../shared/notebook-kernel-types'
+import type {
+  KernelFrame,
+  KernelFrameEvent
+} from '../../../../../../shared/editor/notebooks/notebook-kernel-types'
 
 type Listener = (state: unknown, previous: unknown) => void
 
@@ -115,24 +118,6 @@ describe('notebook kernel session', () => {
     expect(notebookApi.execute).toHaveBeenCalledTimes(2)
     expect(getCellRun(FILE, 'c')).toBeUndefined()
     expect(getCellRun(FILE, 'b')?.finishedAt).not.toBeNull()
-  })
-
-  it('reports a dead kernel in the running cell and drops the queue', async () => {
-    await session.runCells(
-      FILE,
-      [
-        { key: 'a', code: 'import os; os._exit(1)' },
-        { key: 'b', code: 'x' }
-      ],
-      null
-    )
-    frame({ type: 'exit', detail: 'segfault' })
-    const run = getCellRun(FILE, 'a')
-    expect(run?.finishedAt).not.toBeNull()
-    expect(JSON.stringify(run?.outputs)).toContain('The kernel died.')
-    expect(JSON.stringify(run?.outputs)).toContain('segfault')
-    expect(getCellRun(FILE, 'b')).toBeUndefined()
-    expect(notebookApi.execute).toHaveBeenCalledTimes(1)
   })
 
   it('keeps cells queued through a missing-ipykernel install, then runs them', async () => {

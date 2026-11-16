@@ -1,8 +1,8 @@
 // Worker mail belongs to its Dispatch mailbox; a message the provider may have taken before it died is never handed over again, even after a later turn, a restart or a clear: check keeps it.
 
 import { describe, expect, it, vi } from 'vitest'
-import { formatOrcaSessionAddress } from '../../../../../shared/orca-session-address'
-import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
+import { formatOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
+import { testOrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address-test-fixture'
 import { idOf } from '../../../rpc/orchestration/callers/session.test-fixture'
 import {
   COORDINATOR,
@@ -14,7 +14,7 @@ import {
   coordinatorRunAndTask,
   db,
   host,
-  isWholeMail,
+  isMailPointer,
   observationClock,
   openChat,
   restartRuntime,
@@ -33,7 +33,7 @@ async function idleEdges(sessionId: string): Promise<void> {
   await host.flushStreamedEvents(sessionId)
 }
 
-/** Coordinator mail to the peer chat's Dispatch, handed whole to a provider that died before taking it. */
+/** Coordinator mail to the peer chat's Dispatch, pointed at for a provider that died before taking it. */
 async function heldDispatchMail(): Promise<string> {
   await openChat(COORDINATOR)
   const chat = await openChat(PEER_CHAT)
@@ -46,7 +46,7 @@ async function heldDispatchMail(): Promise<string> {
   const mailbox = `dispatch:${idOf(dispatch)}`
   await call('orchestration.send', { to: mailbox, subject: 'more' }, { sessionId: COORDINATOR })
   await vi.waitFor(() => expect(chat.turns).toHaveLength(1), WAIT)
-  expect(isWholeMail(turnText(chat.turns[0]!))).toBe(true)
+  expect(isMailPointer(turnText(chat.turns[0]!))).toBe(true)
   chat.handlers.onExit?.(new Error('provider died before the echo'))
   await idleEdges(PEER_CHAT)
   expect(chat.turns).toHaveLength(1)

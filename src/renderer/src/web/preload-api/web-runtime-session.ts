@@ -2,8 +2,8 @@ import type {
   RuntimeHostStatusSnapshot,
   RuntimeHostStatusResponse
 } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
-import type { ZcodePlanSite } from '../../../../shared/zcode-plan-sites'
-import type { WorktreeVisibilityDefaults } from '../../../../shared/global-settings-types'
+import type { ZcodePlanSite } from '../../../../shared/agent-accounts/usage-credentials/zcode-plan-sites'
+import type { WorktreeVisibilityDefaults } from '../../../../shared/repository/repo-types'
 import { RuntimeRpcCallQueuePool } from '../../../../shared/remote-runtime/rpc/runtime-rpc-call-queue'
 import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { Worktree } from '../../../../shared/worktree/types'

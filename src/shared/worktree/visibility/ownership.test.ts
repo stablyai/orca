@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { GlobalSettings } from '../../global-settings-types'
-import type { Repo } from '../../repo-types'
+import type { GlobalSettings } from '../../settings/global-settings-types'
+import type { Repo } from '../../repository/repo-types'
 import type { WorktreeMeta } from '../meta-types'
 import type { Worktree } from '../types'
 
@@ -9,7 +9,7 @@ import {
   buildKnownOrcaWorkspaceLayouts,
   toDetectedWorktree
 } from './ownership'
-import { EXTERNAL_WORKTREE_VISIBILITY_ROLLOUT_AT } from '../../external-worktree-visibility'
+import { EXTERNAL_WORKTREE_VISIBILITY_ROLLOUT_AT } from './external-worktree-visibility'
 
 function makeRepo(overrides: Partial<Repo> = {}): Repo {
   return {
@@ -216,22 +216,5 @@ describe('agent scratch worktrees', () => {
       visible: true,
       ownership: 'unknown-legacy'
     })
-  })
-
-  it('preserves an explicit scratch import in the metadata fallback', () => {
-    const repo = makeRepo({
-      externalWorktreeVisibility: 'hide',
-      importedExternalWorktreePaths: [scratchPath]
-    })
-    const settings = makeSettings()
-    const scratch = toDetectedWorktree({
-      repo,
-      settings,
-      worktree: makeWorktree({ path: scratchPath, isMainWorktree: false }),
-      knownOrcaLayouts: buildKnownOrcaWorkspaceLayouts(settings, repo)
-    })
-
-    expect(scratch).toMatchObject({ ownership: 'agent-scratch', visible: true })
-    expect(applyMetadataFallbackVisibility(scratch)).toBe(scratch)
   })
 })

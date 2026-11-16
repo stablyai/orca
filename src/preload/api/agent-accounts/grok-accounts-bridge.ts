@@ -1,5 +1,5 @@
 import { ipcRenderer } from 'electron'
-import type { GrokAccountStatus } from '../../../shared/rate-limit-types'
+import type { GrokAccountStatus } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 import type { PreloadApi } from '../../api-types'
 
 export const grokAccountsApi = {
