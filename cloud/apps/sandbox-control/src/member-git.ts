@@ -55,6 +55,21 @@ export type MemberGitDeps = {
  * merges do only in a one-person workspace (review M2).
  */
 export async function memberMayAct(db: D1Database, row: SandboxRow, userId: string, now: number, sharedMaxMs: number | null): Promise<boolean> {
+  const acting = await actingMember(db, row, now, sharedMaxMs)
+  return 'userId' in acting && acting.userId === userId
+}
+
+/**
+ * Who the identity rule above picks right now, before checking their GitHub connection: the only person, or a
+ * shared workspace's latest sender (`until`: when their window lapses; null = no cap). The one source for
+ * both the egress choice (memberMayAct) and what the UI shows (git-actor.ts).
+ */
+export async function actingMember(
+  db: D1Database,
+  row: SandboxRow,
+  now: number,
+  sharedMaxMs: number | null
+): Promise<{ userId: string; until: number | null } | { none: 'no_send' | 'stale' }> {
   const ownerToo = row.ownership_transferred_at == null
   const { results } = await db
     .prepare(`SELECT DISTINCT user_id FROM workspace_grants WHERE sandbox_id = ? AND status = 'active'`)
@@ -65,13 +80,19 @@ export async function memberMayAct(db: D1Database, row: SandboxRow, userId: stri
     people.add(row.user_id)
   }
   if (people.size === 1) {
-    return people.has(userId)
+    return { userId: [...people][0]!, until: null }
   }
   const latest = await db
     .prepare('SELECT user_id, sent_at FROM workspace_member_sends WHERE sandbox_id = ? ORDER BY sent_at DESC LIMIT 1')
     .bind(row.id)
     .first<{ user_id: string; sent_at: number }>()
-  return latest?.user_id === userId && people.has(userId) && (sharedMaxMs === null || now - latest.sent_at <= sharedMaxMs)
+  if (!latest || !people.has(latest.user_id)) {
+    return { none: 'no_send' }
+  }
+  if (sharedMaxMs !== null && now - latest.sent_at > sharedMaxMs) {
+    return { none: 'stale' }
+  }
+  return { userId: latest.user_id, until: sharedMaxMs === null ? null : latest.sent_at + sharedMaxMs }
 }
 
 /** Members whose GitHub identity this workspace may use: owner + active grantees, connected only. */

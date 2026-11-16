@@ -14,12 +14,12 @@ const KEK = Buffer.alloc(32, 7).toString('base64')
 const OP = 'o'.repeat(40)
 const REPO = 'https://github.com/acme/app'
 
-async function setup(memberGit: string | undefined = undefined) {
+async function setup(memberGit: string | undefined = undefined, extra: Record<string, string> = {}) {
   const { privateKey, publicKey } = await generateKeyPair('RS256')
   const jwks = { keys: [{ ...(await exportJWK(publicKey)), kid: 'v1', alg: 'RS256' }] }
   const upstream: { url: string; authorization: string | null }[] = []
   const h = await createHarness(
-    { EGRESS_PROXY_URL: PROXY_URL, SECRETS_KEK: KEK, OPERATOR_TOKEN: OP, ...(memberGit ? { MEMBER_GIT_IDENTITY: memberGit } : {}) },
+    { EGRESS_PROXY_URL: PROXY_URL, SECRETS_KEK: KEK, OPERATOR_TOKEN: OP, ...(memberGit ? { MEMBER_GIT_IDENTITY: memberGit } : {}), ...extra },
     {
       egressKeysForIssuer: () => createLocalJWKSet(jwks),
       credentials: { authorizationFor: async () => 'Bearer ghs_app' },
@@ -181,3 +181,50 @@ describe('git as the sender', () => {
     expect((await t.proxied('github.com', '/acme/app.git/git-receive-pack', ph)).status).toBe(200)
   })
 })
+
+describe('GIT-ACTOR: who pushes and PRs go out as (owner: GET status; members: GET team workspace)', () => {
+  const status = async (t: Awaited<ReturnType<typeof setup>>, user: string, features = 'git-actor') =>
+    user === 'alice'
+      ? (await t.h.call('GET', `/v1/sandboxes/${t.id}/status`, { bearer: await t.as(user), headers: { 'x-orca-sandbox-features': features } })).body.status
+      : (await t.h.call('GET', `/v1/team/workspaces/${t.id}`, { bearer: await t.as(user), headers: { 'x-orca-sandbox-features': features } })).body
+
+  it('solo: the owner once connected, uncapped; nothing for clients that do not ask, or with GH_AS_MEMBER off', async () => {
+    const t = await setup(undefined, { GH_AS_MEMBER: 'on' })
+    expect(await status(t, 'alice')).toMatchObject({ gitActor: { kind: 'bot', reason: 'no_connected_member' }, viewerConnected: false })
+    await t.seed('alice', 'alice-gh', 11, false)
+    const solo = await status(t, 'alice')
+    expect(solo.gitActor).toEqual({ kind: 'member', userId: 'alice', login: 'alice-gh' })
+    expect(solo.viewerConnected).toBe(true)
+    expect((await status(t, 'alice', '')).gitActor).toBeUndefined()
+    const off = await setup()
+    await off.seed('alice', 'alice-gh', 11, false)
+    expect((await status(off, 'alice')).gitActor).toBeUndefined()
+  })
+
+  it('shared: the latest sender until the 60 min window lapses, then the bot ("stale")', async () => {
+    const t = await setup(undefined, { GH_AS_MEMBER: 'on' })
+    await t.seed('alice', 'alice-gh', 11, false)
+    const bob = await t.as('bob')
+    const issued = await t.h.call('POST', `/v1/team/workspaces/${t.id}/grants`, {
+      bearer: bob,
+      body: { recipientPublicKeyB64: generateGrantRecipientKey().publicKeyB64, deviceLabel: 'b', deviceKind: 'desktop' }
+    })
+    expect(issued.status).toBe(200)
+    expect((await status(t, 'bob')).gitActor).toEqual({ kind: 'bot', reason: 'no_connected_member' })
+    await t.sent('alice')
+    const sentAt = t.h.now()
+    const shared = await status(t, 'bob')
+    expect(shared.gitActor).toEqual({ kind: 'member', userId: 'alice', login: 'alice-gh', until: sentAt + 60 * 60_000 })
+    // Bob isn't connected: only he sees the connect prompt.
+    expect(shared.viewerConnected).toBe(false)
+    // Bob sends but has no GitHub: the bot.
+    t.h.advance(1_000)
+    await t.sent('bob')
+    expect((await status(t, 'alice')).gitActor).toEqual({ kind: 'bot', reason: 'no_connected_member' })
+    t.h.advance(1_000)
+    await t.sent('alice')
+    t.h.advance(61 * 60_000)
+    expect((await status(t, 'alice')).gitActor).toEqual({ kind: 'bot', reason: 'stale' })
+  })
+})
+
