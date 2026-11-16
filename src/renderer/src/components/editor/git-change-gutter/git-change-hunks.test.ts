@@ -43,4 +43,24 @@ describe('computeGitChangeHunks', () => {
       { kind: 'added', startLine: 5, endLine: 5, originalStartLine: 6, originalLineCount: 0 }
     ])
   })
+
+  it('ignores a BOM kept on only one side', () => {
+    expect(computeGitChangeHunks(['a', 'b'], ['\uFEFFa', 'b'])).toEqual([])
+  })
+
+  it('marks a paste larger than the edit budget next to earlier edits', () => {
+    const baseline = Array.from({ length: 3000 }, (_, i) => `line ${i}`)
+    const buffer = [...baseline, ...Array.from({ length: 2500 }, (_, i) => `pasted ${i}`)]
+    buffer[10] = 'edited'
+    expect(computeGitChangeHunks(baseline, buffer)).toEqual([
+      { kind: 'modified', startLine: 11, endLine: 11, originalStartLine: 11, originalLineCount: 1 },
+      {
+        kind: 'added',
+        startLine: 3001,
+        endLine: 5500,
+        originalStartLine: 3001,
+        originalLineCount: 0
+      }
+    ])
+  })
 })

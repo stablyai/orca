@@ -38,9 +38,9 @@ export function getGitHeadBaselineKey(args: {
   return JSON.stringify([worktreeId, relativePath, head, status])
 }
 
-/** Matches Monaco, which drops a BOM and breaks lines on LF, CRLF and CR, so both sides align. */
+/** Matches Monaco, which breaks lines on LF, CRLF and CR, so both sides align. */
 function splitBaselineLines(text: string): string[] {
-  return (text.charCodeAt(0) === 0xfeff ? text.slice(1) : text).split(/\r\n|\r|\n/)
+  return text.split(/\r\n|\r|\n/)
 }
 
 /** Throws when the read cannot be trusted, so the caller neither paints nor caches it. */

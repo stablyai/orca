@@ -10,17 +10,24 @@ export type GitChangeHunk = {
   originalLineCount: number
 }
 
-// Why: past this the file was rewritten wholesale, where per-line marks are noise.
+// Why: past this many edits beyond the size change the file was rewritten wholesale, where per-line marks are noise.
 const MAX_EDIT_LENGTH = 2000
 const DIFF_TIMEOUT_MS = 100
+
+// Why: Monaco may keep or drop a BOM depending on how the model was filled, so neither side keeps one.
+function withoutBom(lines: string[]): string[] {
+  return lines[0]?.charCodeAt(0) === 0xfeff ? [lines[0].slice(1), ...lines.slice(1)] : lines
+}
 
 /** Null when the diff is too large to be worth computing. */
 export function computeGitChangeHunks(
   baselineLines: string[],
   bufferLines: string[]
 ): GitChangeHunk[] | null {
-  const changes = diffArrays(baselineLines, bufferLines, {
-    maxEditLength: MAX_EDIT_LENGTH,
+  // Why: every diff needs at least the size change, so a large paste or deletion stays within budget.
+  const sizeChange = Math.abs(baselineLines.length - bufferLines.length)
+  const changes = diffArrays(withoutBom(baselineLines), withoutBom(bufferLines), {
+    maxEditLength: sizeChange + MAX_EDIT_LENGTH,
     timeout: DIFF_TIMEOUT_MS
   })
   if (!changes) {
