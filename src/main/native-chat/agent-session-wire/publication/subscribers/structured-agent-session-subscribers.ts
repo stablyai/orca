@@ -91,6 +91,11 @@ export class AgentSessionSubscribers {
       snapshotCatchUp: input.snapshotCatchUp !== false
     }
     const session = this.bySession.get(input.sessionId) ?? new Map<string, Subscriber>()
+    subscriber.stopped = this.lane(subscriber).stopped
+    const replaced = session.get(input.id)
+    if (replaced) {
+      this.lanes.get(replaced)?.clear()
+    }
     session.set(input.id, subscriber)
     this.bySession.set(input.sessionId, session)
 
@@ -310,7 +315,13 @@ export class AgentSessionSubscribers {
       const { sessionId } = subscriber
       lane = new SubscriberDeliveryLane({
         catchUp: ({ journal, port, hostNow, activity }) =>
-          deliverToSubscriber(port, { subscriber, journal, hostNow, emitCheckpoint: false, activity }),
+          deliverToSubscriber(port, {
+            subscriber,
+            journal,
+            hostNow,
+            emitCheckpoint: false,
+            activity
+          }),
         backgroundTasks: (fence) =>
           republishSubscriberBackgroundTasks(
             this.deliveryPort(),

@@ -55,6 +55,8 @@ export class SubscriberDeliveryLane {
   private readonly pending: LaneEntry[] = []
   private active: LaneEntry | undefined
   private scheduled = false
+  private readonly stop = new AbortController()
+  readonly stopped = this.stop.signal
 
   constructor(private readonly runners: SubscriberDeliveryLaneRunners) {}
 
@@ -100,9 +102,10 @@ export class SubscriberDeliveryLane {
     this.add({ kind: 'live-text', since, liveText })
   }
 
-  /** Releases waiting work; the active delivery finishes but its subscriber gets no more frames. */
+  /** Releases waiting work and withdraws queued reads; the active delivery gets no more frames. */
   clear(): void {
     this.pending.length = 0
+    this.stop.abort()
   }
 
   retention(now: number): SubscriberDeliveryRetention {

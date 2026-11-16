@@ -18,6 +18,8 @@ import type {
   JournalDomainHistoryRequest,
   JournalDomainHistoryWork
 } from './journal-domain-history-page'
+import { JournalReaderAdmission } from './journal-sql-reader-admission'
+import { trackJournalReaderAdmission } from './journal-sql-reader-retention'
 
 /** Four WAL readers isolate slow pages; each request executes entirely on its assigned connection. */
 export class JournalSqlReaderPool {
@@ -28,6 +30,8 @@ export class JournalSqlReaderPool {
   private conversionSlot?: ReaderSlot
   private forkSlot?: ReaderSlot
   private forkRelease?: PromiseWithResolvers<void>
+  /** Shared by every slot: four workers must not mean unbounded replies waiting on main. */
+  private readonly admission = new JournalReaderAdmission()
 
   constructor(
     private readonly filename: string,
@@ -38,7 +42,9 @@ export class JournalSqlReaderPool {
     ),
     private readonly cacheOutline?: (cache: JournalOutlineCache) => void,
     private readonly assertReadable?: () => void
-  ) {}
+  ) {
+    trackJournalReaderAdmission(this.admission)
+  }
 
   async prepareFork(
     input: JournalForkPreparationInput,
@@ -98,15 +104,20 @@ export class JournalSqlReaderPool {
     return (await this.domainHistoryFrame(request)).result
   }
 
+  /** Aborting withdraws a read still waiting for admission. */
   async domainHistoryFrame(
     request: JournalDomainHistoryRequest,
-    work?: JournalDomainHistoryWork
+    work?: JournalDomainHistoryWork,
+    signal?: AbortSignal
   ): Promise<JournalDomainHistoryFrame> {
-    const response = await this.slot().request({
-      kind: 'domain-history',
-      request,
-      ...(work ? { work } : {})
-    })
+    const response = await this.slot().request(
+      {
+        kind: 'domain-history',
+        request,
+        ...(work ? { work } : {})
+      },
+      signal
+    )
     if (response.type !== 'page') {
       throw new Error('journal reader returned no domain history page')
     }
@@ -173,7 +184,7 @@ export class JournalSqlReaderPool {
       .filter((slot) => slot !== this.forkSlot && (!forFork || slot !== this.conversionSlot))
       .toSorted((a, b) => a.pendingCount - b.pendingCount)[0]
     if ((!slot || slot.pendingCount > 0) && this.slots.length < 4) {
-      slot = new ReaderSlot(this.filename, this.originalFilename, this.workerPath)
+      slot = new ReaderSlot(this.filename, this.originalFilename, this.workerPath, this.admission)
       this.slots.push(slot)
     }
     return slot!

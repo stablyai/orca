@@ -18,6 +18,30 @@ import type {
 } from './journal-sql-reader-protocol'
 
 import type { JournalDomainImportHeader, JournalDomainImportPage } from './journal-domain-import'
+import {
+  JournalReaderAdmission,
+  JOURNAL_READER_DEFAULT_REPLY_BYTES,
+  type JournalReaderTicket
+} from './journal-sql-reader-admission'
+
+/** Row content budget plus the page envelope; undefined for replies admission does not hold. */
+function reservedReplyBytes(operation: JournalSqlReaderOperation): number | undefined {
+  switch (operation.kind) {
+    case 'fork-release':
+    case 'conversion-release':
+      return undefined
+    case 'database':
+      // The record set opens every chat; it is never held behind other reads.
+      return operation.operation.kind === 'records' ? undefined : JOURNAL_READER_DEFAULT_REPLY_BYTES
+    case 'domain-history':
+      return (
+        (operation.request.reader?.budgetBytes ?? JOURNAL_READER_DEFAULT_REPLY_BYTES) +
+        JOURNAL_READER_DEFAULT_REPLY_BYTES
+      )
+    default:
+      return JOURNAL_READER_DEFAULT_REPLY_BYTES
+  }
+}
 
 export class JournalSqlForkReader {
   private closing?: Promise<void>
@@ -95,7 +119,12 @@ export class ReaderSlot {
     return this.pending.size + this.conversions
   }
 
-  constructor(filename: string, originalFilename: string, workerPath: string) {
+  constructor(
+    filename: string,
+    originalFilename: string,
+    workerPath: string,
+    private readonly admission = new JournalReaderAdmission(Infinity, Infinity)
+  ) {
     this.worker = spawnWorkerThread(workerPath, {
       name: 'orca-journal-sql-reader',
       workerData: { filename, originalFilename },
@@ -175,11 +204,17 @@ export class ReaderSlot {
     }
   }
 
-  request(operation: JournalSqlReaderOperation): Promise<JournalSqlReaderResult> {
-    return this.send(operation).result
+  request(
+    operation: JournalSqlReaderOperation,
+    signal?: AbortSignal
+  ): Promise<JournalSqlReaderResult> {
+    return this.send(operation, signal).result
   }
 
-  private send(operation: JournalSqlReaderOperation): {
+  private send(
+    operation: JournalSqlReaderOperation,
+    signal?: AbortSignal
+  ): {
     id: number
     result: Promise<JournalSqlReaderResult>
   } {
@@ -196,9 +231,36 @@ export class ReaderSlot {
       return { id, result: Promise.reject(this.failure ?? new Error('journal SQL reader failed')) }
     }
     this.worker.ref()
+    const bytes = reservedReplyBytes(operation)
     const result = new Promise<JournalSqlReaderResult>((resolve, reject) => {
-      this.pending.set(id, { resolve, reject })
+      let ticket: JournalReaderTicket | undefined
+      this.pending.set(id, {
+        resolve: (reply) => {
+          ticket?.received()
+          resolve(reply)
+          // Credit returns once the awaiting caller has taken the reply.
+          const consumed = ticket?.consumed
+          if (consumed) {
+            queueMicrotask(consumed)
+          }
+        },
+        reject: (error) => {
+          ticket?.consumed()
+          reject(error)
+        }
+      })
       void this.ready.promise
+        .then(async () => {
+          if (bytes === undefined || !this.pending.has(id)) {
+            return
+          }
+          const admitted = await this.admission.admit(bytes, signal)
+          if (!this.pending.has(id)) {
+            admitted.consumed()
+            return
+          }
+          ticket = admitted
+        })
         .then(() => {
           if (this.pending.has(id)) {
             this.worker.postMessage({ id, operation } satisfies JournalSqlReaderRequest)

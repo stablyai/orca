@@ -288,10 +288,11 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
   /** One reader snapshot answers the page and, when asked, current work beside it. */
   history(
     request: Omit<JournalDomainHistoryRequest, 'sessionId'>,
-    work?: JournalDomainHistoryWork
+    work?: JournalDomainHistoryWork,
+    signal?: AbortSignal
   ) {
     const sessionId = this.identity.sessionId
-    return this.database.readers.domainHistoryFrame({ ...request, sessionId }, work)
+    return this.database.readers.domainHistoryFrame({ ...request, sessionId }, work, signal)
   }
 
   readWork<K extends JournalWorkRead['kind']>(
