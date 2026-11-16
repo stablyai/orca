@@ -31,6 +31,7 @@ import { useNativeChatOrcaStopView } from './native-chat-orca-stop-context'
 import { NativeChatInterruptedContinueButton } from '../../usage/NativeChatInterruptedContinue'
 import { nativeChatOrcaStopRowText } from '../../../../../../shared/native-chat/native-chat-orca-stop-words'
 import { sayNativeChatOrcaStopTranslated } from './native-chat-orca-stop-words-text'
+import { agentSessionRestartNoteText } from './agent-session-restart-note-text'
 import {
   NativeChatDetailsDisclosure,
   ProviderFrameRow
@@ -269,7 +270,7 @@ export function NativeChatNoticeRow({
               { agentName, wslDistro },
               sayAgentSessionFailureTranslated
             )
-          : agentSessionGoalControlWords(block.text)
+          : (agentSessionRestartNoteText(block.text, t) ?? agentSessionGoalControlWords(block.text))
   const failureDetail = agentSessionFailureDetailText(failure)
   const detail = failureDetail?.trim() !== text.trim() ? failureDetail : undefined
   const tone = named ? 'notice' : look.kind === 'line' ? look.tone : null

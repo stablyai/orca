@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/class-names'
 import NoticeHostGlyph from '../rows/NoticeHostGlyph'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { useTranslate } from '@/i18n/use-translate'
 
 type NewExternalWorktreesInboxLineProps = {

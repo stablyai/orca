@@ -1,6 +1,6 @@
 import { useAppStore } from '../../../store/index'
 import type { AppState } from '../../../store/types'
-import { parseExecutionHostId } from '../../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 import { workspaceOwnerHostId } from './workspace-row-owner-host'
 
 export function selectWorkspaceRuntimeEnvironmentId(

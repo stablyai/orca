@@ -1,6 +1,6 @@
 import * as viewOptions from '../../../../src/shared/workspace-view/workspace-view-options'
 import type { WorkspaceViewChoice } from '../../../../src/shared/workspace-view/workspace-view-options'
-import type { WorktreeCardProperty } from '../../../../src/shared/ui-chrome-types'
+import type { WorktreeCardProperty } from '../../../../src/shared/ui-chrome/ui-chrome-types'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { phoneCardPropertyChoices } from './phone-card-property-choices'
 import type { HostScreenController } from '../use-host-screen-controller'

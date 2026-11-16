@@ -37,7 +37,7 @@ import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
-} from '../../../../src/shared/execution-host'
+} from '../../../../src/shared/execution-host/execution-host'
 import {
   buildProjectGroupingIndex,
   buildProjectSections,

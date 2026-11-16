@@ -1,5 +1,5 @@
 import { AI_VAULT_SESSION_TITLE_REQUEST_MAX_COUNT } from '../../../../../../shared/ai-vault/contracts/ai-vault-session-title'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { aiVaultTitleRequestKey } from './ai-vault-tab-title-freshness'
 import type { AiVaultTitleRequest } from './ai-vault-tab-title-requests'
 

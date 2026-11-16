@@ -1,4 +1,4 @@
-import { LOCAL_EXECUTION_HOST_ID } from '../../execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../execution-host/execution-host'
 import { applyLayoutCommand } from '../workspace-layout-commands'
 import type { LayoutCommand, LayoutContext } from '../workspace-layout-command-types'
 import type { LayoutTerminalTab, WorkspaceLayoutModel } from '../workspace-layout-model'

@@ -5,11 +5,11 @@ import {
   repo,
   worktree
 } from '../components/sidebar/worktree-list/grouping/worktree-list-groups-test-fixtures'
-import { getDefaultUIState } from '../../../shared/constants'
+import { getDefaultUIState } from '../../../shared/orca-profiles/constants'
 import { mutatePersonalProjectOrder } from '../../../shared/personal-project-order-writes'
 import { RecordProjectOpenParams } from '../../../shared/rpc-contract/personal-project-order-params'
 import type { PendingWorktreeCreation } from './workspace/creation/pending-worktree-creation'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 
 vi.mock('../runtime/hosts/capabilities/local-runtime-capabilities', () => ({
   ensureLocalRuntimeCapabilities: async () => ['ui.personalProjectOrder.v1']

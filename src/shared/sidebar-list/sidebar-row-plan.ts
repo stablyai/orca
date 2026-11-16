@@ -1,11 +1,11 @@
 import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../project/groups/project-group-types'
 import type { Repo } from '../repository/repo-types'
-import type { ProjectOrderBy } from '../ui-chrome-types'
+import type { ProjectOrderBy } from '../ui-chrome/ui-chrome-types'
 import type { WorktreeLineage } from '../worktree/lineage-types'
 import type { SidebarLineageParentIdentities } from './lineage/worktree-lineage-projection'
 import type { WorkspaceStatusDefinition, Worktree } from '../worktree/types'
-import type { ExecutionHostId } from '../execution-host'
+import type { ExecutionHostId } from '../execution-host/execution-host'
 import { ALL_GROUP_KEY, PINNED_GROUP_KEY } from './sections/group-keys'
 import { appendOrderedGroups, type SectionAppendContext } from './sections/group-sections'
 

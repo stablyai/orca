@@ -2,7 +2,7 @@ import {
   terminalLaunchFacts,
   type TerminalLaunchResult
 } from '../../../shared/agent-session/lifecycle/agent-session-resume'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host/execution-host'
 import type { StructuredAgentId } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import { assertCliConversationWritersExited } from '../agent-session/lifecycle/structured-agent-cli-writers'
 import type { EnrichedAgentHookEventPayload } from '../../agent-hooks/server/server-types'

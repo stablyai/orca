@@ -5,7 +5,7 @@ import { NO_WORKSPACE_ROW_FILTERS } from '../../../src/shared/workspace-view/wor
 import { createElement, useEffect } from 'react'
 import { act, type create } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { getDefaultUIState } from '../../../src/shared/constants'
+import { getDefaultUIState } from '../../../src/shared/orca-profiles/constants'
 import { projectHostSetupProjectionFromRepos } from '../../../src/shared/project/host-setup/project-host-setup-projection'
 import { buildMobileProjectSectionCatalog } from '../../../src/shared/sidebar-list/catalog/mobile-project-sections-contract'
 import { mutatePersonalProjectOrder } from '../../../src/shared/personal-project-order-writes'

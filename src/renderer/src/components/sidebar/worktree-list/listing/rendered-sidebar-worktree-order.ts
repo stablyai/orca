@@ -10,7 +10,7 @@ import {
   ALL_EXECUTION_HOSTS_SCOPE,
   getLocalExecutionHostLabel,
   getSettingsFocusedExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
 import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { getProjectHostSetupProjectionFromState } from '@/store/projects/project-host-setup-selector'

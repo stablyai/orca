@@ -1,11 +1,11 @@
-import type { ExecutionHostId } from '../../../../src/shared/execution-host'
+import type { ExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
 import type { RuntimeWorktreePsSummary } from '../../../../src/shared/worktree/catalog/runtime-worktree-contracts'
 import type { ProjectGroup } from '../../../../src/shared/project/groups/project-group-types'
 import type {
   ProjectSectionModel,
   ProjectSectionRepo
 } from '../../../../src/shared/sidebar-list/sections/project-section-grouping'
-import type { ProjectOrderBy } from '../../../../src/shared/ui-chrome-types'
+import type { ProjectOrderBy } from '../../../../src/shared/ui-chrome/ui-chrome-types'
 import type { WorkspaceRowFilters } from '../../../../src/shared/workspace-view/workspace-row-filters'
 
 /** Fields every host the phone pairs with sends; the rest are optional because older hosts omit them. */

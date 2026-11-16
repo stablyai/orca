@@ -1,7 +1,7 @@
 import '@/store/slices/linear/linear-issue-read'
 import { consumeLinearIssueRead } from '@/store/slices/linear/linear-issue-read-lifecycle'
 import { useEffect, useMemo } from 'react'
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import {
   getGitHubIssueUrlRepository,
   getWorktreeGitHubIssueUrl

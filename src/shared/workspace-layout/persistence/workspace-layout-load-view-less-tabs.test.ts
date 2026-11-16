@@ -1,10 +1,10 @@
 // Main’s load must match restoresSavedContentTab so its layout never retains a transient tab no window can draw (L286).
 
 import { describe, expect, it, vi } from 'vitest'
-import { LOCAL_EXECUTION_HOST_ID } from '../../execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../execution-host/execution-host'
 import type { Tab, TabContentType } from '../tab-groups/tab-types'
 import type { WorkspaceSessionState } from '../../workspace-session/workspace-session-state-types'
-import { getDefaultWorkspaceSession } from '../../constants'
+import { getDefaultWorkspaceSession } from '../../orca-profiles/constants'
 import '../old-client/old-client-method-translation'
 import { loadWorkspaceLayout } from './workspace-layout-load'
 import { nameBasedLoadContext } from './workspace-layout-minted-ids'

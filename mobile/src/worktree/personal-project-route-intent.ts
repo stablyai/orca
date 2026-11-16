@@ -4,7 +4,10 @@ import {
 } from '../transport/connection/host-status-probe-operations'
 import { randomUUID } from 'expo-crypto'
 import * as z from 'zod'
-import { normalizeExecutionHostId, type ExecutionHostId } from '../../../src/shared/execution-host'
+import {
+  normalizeExecutionHostId,
+  type ExecutionHostId
+} from '../../../src/shared/execution-host/execution-host'
 import { PERSONAL_PROJECT_ORDER_CAPABILITY } from '../../../src/shared/personal-project-order'
 import { resolveProjectPreferenceKey } from '../../../src/shared/project-preference-identity'
 import { projectOpenWrite } from '../host-screen/host-screen-operations'

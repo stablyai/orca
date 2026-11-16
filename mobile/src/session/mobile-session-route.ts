@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../src/shared/execution-host'
+import type { ExecutionHostId } from '../../../src/shared/execution-host/execution-host'
 import {
   HOST_SESSION_ROUTE,
   STANDALONE_SESSION_PARAM,

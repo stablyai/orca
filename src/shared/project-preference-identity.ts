@@ -1,4 +1,4 @@
-import { toSshExecutionHostId, type ExecutionHostId } from './execution-host'
+import { toSshExecutionHostId, type ExecutionHostId } from './execution-host/execution-host'
 import type { ProjectSectionSetup } from './sidebar-list/sections/project-section-grouping'
 
 export function projectPreferenceKeyForSetup(setup: ProjectSectionSetup): string {

@@ -4,7 +4,7 @@ import {
   ALL_EXECUTION_HOSTS_SCOPE,
   normalizeExecutionHostOrder,
   parseExecutionHostId
-} from '../../execution-host'
+} from '../../execution-host/execution-host'
 import type { ProjectGroup } from '../../project/groups/project-group-types'
 import { getLogicalRepoOrderRankById } from '../sections/project-section-order'
 import type { ProjectSectionModel } from '../sections/project-section-grouping'

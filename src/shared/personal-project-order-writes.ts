@@ -1,4 +1,4 @@
-import type { PersistedUIState } from './persisted-ui-state-types'
+import type { PersistedUIState } from './orca-profiles/persisted-ui-state-types'
 import { normalizePersonalProjectOrder } from './personal-project-order'
 import type {
   RecordProjectOpenRequest,

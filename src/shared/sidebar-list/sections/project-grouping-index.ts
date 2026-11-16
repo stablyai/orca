@@ -1,6 +1,6 @@
 import type { PersonalProjectOrder } from '../../personal-project-order'
 import { projectPreferenceKeyForSetup } from '../../project-preference-identity'
-import { toSshExecutionHostId } from '../../execution-host'
+import { toSshExecutionHostId } from '../../execution-host/execution-host'
 import type { Project, ProjectHostSetup } from '../../project/project-types'
 import { parseWslUncPath } from '../../file-access/wsl-paths'
 import {

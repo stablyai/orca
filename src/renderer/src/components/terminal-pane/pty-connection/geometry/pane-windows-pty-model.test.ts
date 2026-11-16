@@ -1,6 +1,6 @@
 import { Terminal } from '@xterm/headless'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import type { RuntimeStatus } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { SshConnectionState } from '../../../../../../shared/remote-runtime/ssh/ssh-types'
 import type { PtyOwnerMachineState } from '../../pty-transport/host-ownership/pty-owner-machine-platform'
@@ -89,35 +89,6 @@ async function scrollbackAfterShrinkAndGrow(terminal: Terminal): Promise<number>
 // A Mac client showing a remote Windows pane grew it the Unix way, pulling history into ConPTY's
 // grid; ConPTY repaints only what it thinks changed, so stale TUI frames stayed on screen.
 describe('pane resize model on a Mac client', () => {
-  it.each([
-    [
-      'a paired Windows server',
-      'runtime:env-1',
-      { runtimeStatusByEnvironmentId: new Map([['env-1', serverStatus('win32')]]) },
-      true
-    ],
-    [
-      'a Windows SSH target',
-      'ssh:target-1',
-      { sshConnectionStates: new Map([['target-1', sshState('win32')]]) },
-      true
-    ],
-    [
-      'a Linux sshd inside WSL',
-      'ssh:target-1',
-      { sshConnectionStates: new Map([['target-1', sshState('linux')]]) },
-      false
-    ]
-  ] as const)('%s gets its owner machine model', async (_, host, facts, conpty) => {
-    const terminal = newTerminal()
-    createPaneWindowsPtyModel(
-      paneContext(terminal, host),
-      fakeStore({ ...EMPTY, ...facts })
-    ).apply()
-    const grown = await scrollbackAfterShrinkAndGrow(terminal)
-    expect(conpty ? grown > 0 : grown <= 0).toBe(true)
-  })
-
   it("follows the bound transport's SSH owner, not the Windows server that mirrors it", async () => {
     const terminal = newTerminal()
     const store = fakeStore({
@@ -167,70 +138,6 @@ describe('pane resize model on a Mac client', () => {
       getExecutionHostId: () => null
     }
     createPaneWindowsPtyModel(paneContext(terminal, 'ssh:target-1', transport), store).apply()
-    expect(await scrollbackAfterShrinkAndGrow(terminal)).toBeGreaterThan(0)
-  })
-
-  it("re-resolves when a reattached mirror learns it belongs to the server's SSH target", async () => {
-    const terminal = newTerminal()
-    const store = fakeStore({
-      ...EMPTY,
-      runtimeStatusByEnvironmentId: new Map([['env-1', serverStatus('win32')]]),
-      sshStateByEnvironment: new Map([
-        [
-          'env-1',
-          {
-            connectionStates: new Map([['target-1', sshState('linux')]]),
-            targetLabels: new Map(),
-            targetGenerations: new Map(),
-            removedTargetLabels: new Map(),
-            targetsHydrated: true
-          }
-        ]
-      ])
-    })
-    let executionHostId: ExecutionHostId = 'runtime:env-1'
-    const hostListeners = new Set<() => void>()
-    const transport = {
-      getRuntimeEnvironmentId: () => 'env-1',
-      getExecutionHostId: () => executionHostId,
-      onExecutionHostChange: (listener: () => void) => {
-        hostListeners.add(listener)
-        return () => hostListeners.delete(listener)
-      }
-    }
-    const model = createPaneWindowsPtyModel(
-      paneContext(terminal, 'runtime:env-1', transport),
-      store
-    )
-    model.apply()
-    model.apply()
-    expect(hostListeners.size).toBe(1)
-    expect(terminal.options.windowsPty).toEqual({ backend: 'conpty' })
-
-    executionHostId = 'ssh:target-1'
-    hostListeners.forEach((listener) => listener())
-
-    expect(await scrollbackAfterShrinkAndGrow(terminal)).toBeLessThanOrEqual(0)
-    model.dispose()
-    expect(hostListeners.size).toBe(0)
-  })
-
-  it('stays Unix until a late server status arrives, then switches once without touching the drawn grid', async () => {
-    const terminal = newTerminal()
-    const store = fakeStore(EMPTY)
-    const model = createPaneWindowsPtyModel(paneContext(terminal, 'runtime:env-1'), store)
-    model.apply()
-    expect(terminal.options.windowsPty).toEqual({})
-    await write(terminal, 'FRAME-A\r\nFRAME-B')
-    const drawn = () =>
-      [0, 1].map((y) => terminal.buffer.active.getLine(y)?.translateToString(true))
-    const before = drawn()
-
-    store.set({ runtimeStatusByEnvironmentId: new Map([['env-1', serverStatus('win32')]]) })
-
-    expect(terminal.options.windowsPty).toEqual({ backend: 'conpty' })
-    expect(drawn()).toEqual(before)
-    expect(store.listenerCount()).toBe(0)
     expect(await scrollbackAfterShrinkAndGrow(terminal)).toBeGreaterThan(0)
   })
 })

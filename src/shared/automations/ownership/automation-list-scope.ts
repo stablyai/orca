@@ -4,7 +4,7 @@ import type { Automation } from '../automation-definition'
 import type { AutomationUsageSummary } from '../history/automation-usage-summary'
 import type { FolderWorkspaceHost } from '../../folder-workspaces/folder-workspace-execution-host'
 import { getAutomationRunRepoId } from '../history/automation-run-identity'
-import { parseExecutionHostId } from '../../execution-host'
+import { parseExecutionHostId } from '../../execution-host/execution-host'
 import { sanitizeSshTargetGeneration } from '../../remote-runtime/ssh/ssh-target-generation'
 import { isWorkspaceSshPinRepinned } from './automation-workspace-repin'
 

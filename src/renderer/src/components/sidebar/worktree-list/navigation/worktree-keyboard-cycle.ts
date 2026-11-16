@@ -8,7 +8,7 @@ import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/h
 import {
   getWorktreeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import type { PinnedWorktreeDisplayPolicy } from '../../../../../../shared/sidebar-list/row-types'
 import type { RenderedWorkspaceRow } from './worktree-sidebar-row-preference'
 import { getRenderedWorkspaceRowsInSidebarOrder as getCyclableWorktreeRows } from './worktree-sidebar-row-preference'

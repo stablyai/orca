@@ -26,7 +26,7 @@ import {
   hostSnapshotAffirmsWorktreeContents
 } from '../web-session-tabs-sync/hydration/host-session-snapshot-authority'
 import { retireAbsentStructuredAgentSessionLaunchCancellationTombstones } from '../../lib/agent-session/launch/structured-agent-session-launch-registry'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
 import {
   beginStructuredAgentSessionAuthoritativeInventory,
   startStructuredAgentLaunchCancellationCleanup

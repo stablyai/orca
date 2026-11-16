@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, truncateSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { getDefaultWorkspaceSession } from '../../../../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../../../../shared/orca-profiles/constants'
 
 import type { TerminalLayoutSnapshot } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import {

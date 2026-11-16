@@ -1,6 +1,6 @@
 import { app, dialog, type BrowserWindow } from 'electron'
 import { translateMain } from '../i18n/main-i18n'
-import { SCHEMA_VERSION } from '../../shared/constants'
+import { SCHEMA_VERSION } from '../../shared/orca-profiles/constants'
 import { compareAppVersions } from '../../shared/app-lifecycle/identity/app-version'
 import { assertLocalBuildCompatibility } from './local-build-compatibility'
 import { loadLocalBuildCandidate, type LocalBuildCandidate } from './local-build-candidate'

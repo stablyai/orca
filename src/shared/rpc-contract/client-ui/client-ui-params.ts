@@ -179,6 +179,7 @@ export const UiUpdateFields = z
       )
       .optional(),
     showDotfilesByWorktree: z.record(z.string(), z.boolean()).optional(),
+    notificationsMutedByWorktree: z.record(z.string(), z.boolean()).optional(),
     collapsedGroups: StringArray.optional(),
     uiZoomLevel: z.number().finite().optional(),
     editorFontZoomLevel: z.number().finite().optional(),
@@ -284,6 +285,7 @@ export const UiUpdateFields = z
     codexTerminalServerIsolationNoticeSeen: z.boolean().optional(),
     codexSharedSettingsNoticeSeen: z.boolean().optional(),
     worktreeCardsUpdateNoticeSeen: z.boolean().optional(),
+    worktreeCardsIntroNoticeSeen: z.boolean().optional(),
     speechModelUpdateNoticeSeen: z.boolean().optional(),
     claudeDiffPanelNoticeSeen: z.boolean().optional(),
     claudeAccountSignInNoticeSeen: z.boolean().optional(),

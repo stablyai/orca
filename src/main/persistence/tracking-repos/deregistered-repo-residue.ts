@@ -1,9 +1,9 @@
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import {
   getExecutionHostIdFromWorktreeHostIdentity,
   getWorktreeIdFromHostIdentity
 } from '../../../shared/worktree/host-qualified-identity'
-import { parseExecutionHostId } from '../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { addWorkspaceSessionWorktreeOwners } from '../restoring-sessions/session-worktree-ownership'
 import { splitWorktreeId } from '../../../shared/worktree/id'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'

@@ -3,9 +3,9 @@ import {
   projectPreferenceKeyForSetup,
   resolveProjectPreferenceKey
 } from '../../project-preference-identity'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../execution-host'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../execution-host/execution-host'
 import { orderProjectSections, type ActivityItem } from './project-section-order'
-import type { ProjectOrderBy } from '../../ui-chrome-types'
+import type { ProjectOrderBy } from '../../ui-chrome/ui-chrome-types'
 import type { Repo } from '../../repository/repo-types'
 import {
   buildProjectGroupingIndex,

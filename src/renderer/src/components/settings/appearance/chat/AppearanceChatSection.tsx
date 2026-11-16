@@ -24,7 +24,7 @@ import {
   getChatWidthOptions
 } from './chat-appearance-search'
 import { writeNativeChatAppearance } from '../../../native-chat/appearance/native-chat-appearance-write'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 
 export type AppearanceChatSectionProps = {
   settings: GlobalSettings

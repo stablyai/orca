@@ -1,11 +1,11 @@
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/identifiers/non-secure-context-uuid'
 import { useAppStore } from '@/store'
-import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
+import type { PersistedUIState } from '../../../shared/orca-profiles/persisted-ui-state-types'
 import {
   PERSONAL_PROJECT_ORDER_CAPABILITY,
   newerPersonalProjectOrder
 } from '../../../shared/personal-project-order'
-import type { ProjectOrderBy } from '../../../shared/ui-chrome-types'
+import type { ProjectOrderBy } from '../../../shared/ui-chrome/ui-chrome-types'
 import { ensureLocalRuntimeCapabilities } from './hosts/capabilities/local-runtime-capabilities'
 import { callRuntimeRpc } from './rpc/calls/runtime-rpc-call'
 

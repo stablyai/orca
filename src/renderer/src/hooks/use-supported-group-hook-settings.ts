@@ -3,7 +3,10 @@ import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/executi
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ProjectGroup } from '../../../shared/project/groups/project-group-types'
 import { projectGroupHookOwner } from '../../../shared/workspace-setup/hooks/workspace-hook-owner'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId
+} from '../../../shared/execution-host/execution-host'
 import {
   PROJECT_GROUP_FOLDER_SETUP_RUNTIME_CAPABILITY,
   PROJECT_GROUP_FOLDER_ARCHIVE_RUNTIME_CAPABILITY

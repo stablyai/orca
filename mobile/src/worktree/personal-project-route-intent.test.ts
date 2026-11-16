@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { getDefaultUIState } from '../../../src/shared/constants'
+import { getDefaultUIState } from '../../../src/shared/orca-profiles/constants'
 import { mutatePersonalProjectOrder } from '../../../src/shared/personal-project-order-writes'
 import { RecordProjectOpenParams } from '../../../src/shared/rpc-contract/personal-project-order-params'
 import { projectHostSetupProjectionFromRepos } from '../../../src/shared/project/host-setup/project-host-setup-projection'

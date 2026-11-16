@@ -1,4 +1,4 @@
-import { toSshExecutionHostId } from '../../../../shared/execution-host'
+import { toSshExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { PersistPtyBindingArgs } from '../../../persistence/loading-store/terminal-bindings/pty-binding-persistence'

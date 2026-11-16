@@ -5,8 +5,8 @@ import {
   newerPersonalProjectOrder
 } from '../../../src/shared/personal-project-order'
 import { resolveProjectPreferenceKey } from '../../../src/shared/project-preference-identity'
-import { getRepoExecutionHostId } from '../../../src/shared/execution-host'
-import type { ProjectOrderBy } from '../../../src/shared/ui-chrome-types'
+import { getRepoExecutionHostId } from '../../../src/shared/execution-host/execution-host'
+import type { ProjectOrderBy } from '../../../src/shared/ui-chrome/ui-chrome-types'
 import type { SectionRepo } from '../worktree/workspace-list/workspace-list-types'
 import type { ServedProjectSections } from '../worktree/project-sections/project-sections-operations'
 import type { MobileViewState } from '../worktree/workspace-list/workspace-view-settings'

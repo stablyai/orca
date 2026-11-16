@@ -6,7 +6,7 @@ import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { getProjectHostSetupProjectionFromState } from '@/store/projects/project-host-setup-selector'
 import { writePersonalProjectPreference } from '@/runtime/personal-project-order-client'
 import { resolveProjectPreferenceKey } from '../../../../shared/project-preference-identity'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import { useTranslate } from '@/i18n/use-translate'
 

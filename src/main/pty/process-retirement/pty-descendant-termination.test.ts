@@ -22,7 +22,7 @@ beforeEach(() => {
   execFileMock.mockReset()
   execFileMock.mockImplementation((...args: unknown[]) => {
     const callback = args.at(-1) as (error: Error | null, stdout: string) => void
-    callback(null, '10 1 10 Mon Jul 13 12:54:47 2026')
+    callback(null, '10 1 10 -1 S Mon Jul 13 12:54:47 2026')
   })
 })
 
@@ -110,6 +110,14 @@ describe('collectDescendantRows', () => {
 })
 
 describe('captureDescendantSnapshot', () => {
+  it('refuses a partial inventory when a descendant row omits process status', async () => {
+    execFileMock.mockImplementation((...args: unknown[]) => {
+      const callback = args.at(-1) as (error: Error | null, stdout: string) => void
+      callback(null, '10 1 10 -1 S Mon Jul 13 12:54:47 2026\n20 10 20 -1 Mon Jul 13 12:54:47 2026')
+    })
+    await expect(captureDescendantSnapshot(10)).resolves.toBeNull()
+  })
+
   beforeEach(() => {
     vi.useFakeTimers()
   })
@@ -124,7 +132,7 @@ describe('captureDescendantSnapshot', () => {
       vi.setSystemTime(CAPTURED_AT_MS + 1_100)
       callback(
         null,
-        ['10 1 10 0 Tue Jul 14 12:00:00 2026', '20 10 20 0 Tue Jul 14 12:00:00 2026'].join('\n')
+        ['10 1 10 0 S Tue Jul 14 12:00:00 2026', '20 10 20 0 S Tue Jul 14 12:00:00 2026'].join('\n')
       )
     })
 
