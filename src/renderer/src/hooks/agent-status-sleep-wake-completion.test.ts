@@ -22,7 +22,7 @@ vi.mock('./agent-hook-completion-notifications', () => ({
   syncAgentHookCompletionNotificationsForStoreUpdate: () => {}
 }))
 vi.mock('../store/github/refresh/stale-worktree-refresh-actions', () => ({
-  refreshGitHubForWorktreeIfStale: vi.fn()
+  createStaleWorktreeRefreshActions: () => ({ refreshGitHubForWorktreeIfStale: vi.fn() })
 }))
 vi.mock('@/lib/notifications/desktop-notification-sound', () => ({
   playDesktopNotificationSound: vi.fn()
@@ -113,7 +113,7 @@ describe('waking a pane slept mid-turn', () => {
   it.each(['claude', 'codex'] as const)(
     'announces no %s finish until the pane runs a new turn',
     async (agentType) => {
-      const working: AgentStatusIpcPayload = {
+      const working = {
         paneKey: PANE,
         connectionId: null,
         tabId: 'tab-1',
@@ -123,7 +123,7 @@ describe('waking a pane slept mid-turn', () => {
         agentType,
         receivedAt: NOW,
         stateStartedAt: NOW
-      }
+      } satisfies AgentStatusIpcPayload
       send(working)
       const slept = {
         ...working,
@@ -136,7 +136,7 @@ describe('waking a pane slept mid-turn', () => {
       vi.setSystemTime(NOW + 30_000)
       bindPty('pty-2')
       // Main hands the slept turn back to the resumed process.
-      const resumed: AgentStatusIpcPayload = {
+      const resumed = {
         ...slept,
         isReplay: true,
         observation: {
@@ -147,7 +147,7 @@ describe('waking a pane slept mid-turn', () => {
           observedAt: NOW + 30_000,
           kind: 'snapshot'
         }
-      }
+      } satisfies AgentStatusIpcPayload
       send(resumed)
       vi.advanceTimersByTime(40)
 

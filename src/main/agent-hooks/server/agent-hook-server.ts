@@ -6,11 +6,12 @@ import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/
 import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
 import {
   cliWriterTopology,
-  retainTmuxWriterTopology,
+  tmuxCliWriterEvent,
   type CliWriterObservation
 } from './cli-writer-observation'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status/contracts/agent-status-types'
+import type { EnrichedAgentHookEventPayload } from './server-types'
 import {
   ClaudeSessionContinuationTracker,
   resolvePaneClaudeContinuation
@@ -141,7 +142,10 @@ export class AgentHookServer extends AgentHookServerLifecycle {
    *  a sleep or adoption captures the conversation as the pane's own. */
   private async observeTmuxHostedWriter(paneKey: string): Promise<void> {
     const resolved = this.resolvePaneKeyAlias(paneKey)
-    const row = this.state.lastStatusByPaneKey.get(resolved)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: main stores enriched accepted rows in the base-typed cache.
+    const row = this.state.lastStatusByPaneKey.get(resolved) as
+      | EnrichedAgentHookEventPayload
+      | undefined
     const binding = row?.providerSession
     const read = this.readPaneTmuxHost
     if (
@@ -159,8 +163,11 @@ export class AgentHookServer extends AgentHookServerLifecycle {
       worktreeId: row.worktreeId,
       ...(presence?.process && !presence.ended ? { process: presence.process } : {})
     }).catch(() => false)
-    if (hosted && this.state.lastStatusByPaneKey.get(resolved)?.providerSession === binding) {
-      retainTmuxWriterTopology(binding)
+    if (hosted && this.state.lastStatusByPaneKey.get(resolved) === row) {
+      const hostedRow = tmuxCliWriterEvent(row)
+      if (this.writeLegacyStatusRow(hostedRow)) {
+        this.commitStatusRowMutation(row, hostedRow)
+      }
     }
   }
 
