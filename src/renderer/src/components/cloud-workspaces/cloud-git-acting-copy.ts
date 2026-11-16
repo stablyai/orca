@@ -63,10 +63,10 @@ export function gitActingLine(answer: CloudGitActing | null, t: Translate): GitA
   }
 }
 
-/** The caveat that holds whatever the line says. */
+/** The caveat that holds whatever the line says: approvals are refused inside a workspace. */
 export function gitActingCaveat(t: Translate): string {
   return t(
     'cloudGitActing.caveat',
-    'Approvals always go out as Orca bot, and so do merges in shared workspaces.'
+    'Approve pull requests on GitHub. Workspaces can’t approve.'
   )
 }
