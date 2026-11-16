@@ -125,5 +125,58 @@ describe('TEAM_SHARING held (the default)', () => {
       .run(t.id)
     expect(await sweepHeldTeamGrants((await lifecycleDeps(t.h.env, t.h.deps))!)).toEqual({ workspaces: 0, revoked: 0, queued: 0 })
   })
+
+  it('review L2: concurrent sweeps revoke each grant once and agree on the end state', async () => {
+    const h = await createHarness()
+    const alice = await h.token('alice', 'acme', 'sandbox', { org_role: 'member' })
+    const created = await h.call('POST', '/v1/sandboxes', {
+      bearer: alice,
+      body: { workspaceId: 'ws-1', machineSize: 'standard', repo: { url: 'https://github.com/acme/app' }, visibility: 'team' }
+    })
+    const id = created.body.sandbox.id as string
+    for (const who of ['bob', 'dan']) {
+      const g = await h.call('POST', `/v1/team/workspaces/${id}/grants`, {
+        bearer: await h.token(who, 'acme', 'sandbox', { org_role: 'member' }),
+        body: { recipientPublicKeyB64: generateGrantRecipientKey().publicKeyB64, deviceLabel: who, deviceKind: 'desktop' }
+      })
+      expect(g.status).toBe(200)
+    }
+    h.env.TEAM_SHARING = undefined
+    configureTeamSharing(h.env)
+    const life = (await lifecycleDeps(h.env, h.deps))!
+    const [a, b] = await Promise.all([sweepHeldTeamGrants(life), sweepHeldTeamGrants(life)])
+    expect(a.revoked + a.queued + b.revoked + b.queued).toBeGreaterThanOrEqual(2)
+    expect(h.raw.prepare(`SELECT user_id, status, revoke_reason FROM workspace_grants WHERE user_id <> 'alice' ORDER BY user_id`).all()).toEqual([
+      { user_id: 'bob', status: 'revoked', revoke_reason: 'team_sharing_held' },
+      { user_id: 'dan', status: 'revoked', revoke_reason: 'team_sharing_held' }
+    ])
+    expect(await sweepHeldTeamGrants(life)).toEqual({ workspaces: 0, revoked: 0, queued: 0 })
+  })
+})
+
+describe('Make private keeps shared credential mode until the next boot (same rule as the sweep)', () => {
+  it('a teammate revoked by Make private leaves this session shared; a fresh boot is private', async () => {
+    const h = await createHarness({ SECRETS_KEK: Buffer.alloc(32, 7).toString('base64') })
+    const alice = await h.token('alice', 'acme', 'sandbox', { org_role: 'member' })
+    const created = await h.call('POST', '/v1/sandboxes', {
+      bearer: alice,
+      body: { workspaceId: 'ws-1', machineSize: 'standard', repo: { url: 'https://github.com/acme/app' }, visibility: 'team' }
+    })
+    const id = created.body.sandbox.id as string
+    const g = await h.call('POST', `/v1/team/workspaces/${id}/grants`, {
+      bearer: await h.token('bob', 'acme', 'sandbox', { org_role: 'member' }),
+      body: { recipientPublicKeyB64: generateGrantRecipientKey().publicKeyB64, deviceLabel: 'b', deviceKind: 'desktop' }
+    })
+    expect(g.status).toBe(200)
+    expect((await h.call('PATCH', `/v1/team/workspaces/${id}`, { bearer: alice, body: { visibility: 'private' } })).status).toBe(200)
+    const db = h.env.SANDBOX_DB
+    expect(h.raw.prepare('SELECT status FROM workspace_grants WHERE user_id = ?').get('bob')).toEqual({ status: 'revoked' })
+    const row = (await getSandbox(db, id))!
+    expect(row.visibility).toBe('private')
+    expect(await sharedWorkspaceMode(db, row)).toBe(true)
+    h.advance(1_000)
+    expect((await h.call('POST', `/v1/sandboxes/${id}/restart`, { bearer: alice })).status).toBe(200)
+    expect(await sharedWorkspaceMode(db, (await getSandbox(db, id))!)).toBe(false)
+  })
 })
 

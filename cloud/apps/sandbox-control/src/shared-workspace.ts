@@ -25,12 +25,14 @@ export async function sharedWorkspaceMode(
   db: D1Database,
   row: Pick<SandboxRow, 'id' | 'user_id' | 'visibility' | 'ownership_transferred_at'>
 ): Promise<boolean> {
-  if (row.ownership_transferred_at != null || row.visibility === 'private') {
-    return row.ownership_transferred_at != null
-  }
-  if (teamSharingEnabled() || row.visibility !== 'team') {
+  if (row.ownership_transferred_at != null) {
     return true
   }
+  if (row.visibility !== 'private' && (teamSharingEnabled() || row.visibility !== 'team')) {
+    return true
+  }
+  // Private, or `team` while held: shared only while a teammate's grant is live or was revoked this session
+  // (Make private and the hold's sweep alike).
   // Review M1: a revoke closes a teammate's connections, not what they left running in this session's
   // terminals. A grant revoked during the current session keeps it shared until the next boot.
   // The session start is read here, not from the caller's row (which may be a partial or older copy).
