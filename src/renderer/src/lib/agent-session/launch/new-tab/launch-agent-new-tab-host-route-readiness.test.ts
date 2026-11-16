@@ -88,6 +88,7 @@ describe('an AI button whose agent is ready before the host answers', () => {
   beforeEach(() => {
     vi.useFakeTimers({ now: 0 })
     vi.stubGlobal('window', {
+      api: { pty: {} },
       setTimeout: globalThis.setTimeout,
       clearTimeout: globalThis.clearTimeout
     })

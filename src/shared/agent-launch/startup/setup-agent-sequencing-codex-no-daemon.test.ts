@@ -19,7 +19,7 @@ function prepareGate(startupCommand: string) {
   roots.push(root)
   const bin = join(root, 'bin')
   mkdirSync(bin)
-  // macOS login path_helper may demote the fixture bin; prepend again so real codex never runs.
+  // Login profiles may replace PATH; restore the fixture path in every non-interactive bash.
   writeFileSync(join(root, '.bash_profile'), `export PATH=${JSON.stringify(bin)}:"$PATH"\n`)
   const runner = join(root, 'setup-runner.sh')
   const sequenced = createSequencedSetupAgentCommands({
@@ -33,7 +33,13 @@ function prepareGate(startupCommand: string) {
   return {
     sequenced,
     // Why HOME and CODEX_HOME: `bash -l` must read no real profile, and nothing may touch ~/.codex.
-    env: { HOME: root, CODEX_HOME: root, PATH: `${bin}:/usr/bin:/bin`, ...sequenced.startupEnv },
+    env: {
+      HOME: root,
+      CODEX_HOME: root,
+      BASH_ENV: join(root, '.bash_profile'),
+      PATH: `${bin}:/usr/bin:/bin`,
+      ...sequenced.startupEnv
+    },
     finishSetup: (help: string) => {
       const codex = join(bin, 'codex')
       writeFileSync(
@@ -41,7 +47,8 @@ function prepareGate(startupCommand: string) {
         `#!/bin/sh\n[ "$1" = --help ] && { printf '%s\\n' '${help}'; exit 0; }\nprintf 'ARGV:%s\\n' "$*"\n`
       )
       chmodSync(codex, 0o755)
-      writeFileSync(`${runner}.n1.done`, 'n1:0\n')
+      mkdirSync(join(root, 'setup-completions'), { recursive: true })
+      writeFileSync(join(root, 'setup-completions', 'n1.done'), 'n1:0\n')
     }
   }
 }
@@ -49,10 +56,14 @@ function prepareGate(startupCommand: string) {
 function runGate(startupCommand: string, help: string, env: Record<string, string> = {}): string {
   const gate = prepareGate(startupCommand)
   gate.finishSetup(help)
-  return spawnSync('bash', ['-c', gate.sequenced.startupCommand], {
+  const result = spawnSync('bash', ['-c', gate.sequenced.startupCommand], {
     encoding: 'utf8',
     env: { ...gate.env, ...env }
-  }).stdout
+  })
+  if (result.status !== 0) {
+    throw new Error(result.stderr || result.error?.message || 'Setup gate failed')
+  }
+  return result.stdout
 }
 
 describe.skipIf(process.platform === 'win32')('sequenced setup gate runs codex', () => {

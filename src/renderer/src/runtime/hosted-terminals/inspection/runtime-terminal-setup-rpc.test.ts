@@ -83,14 +83,12 @@ describe('Setup status RPC outage recovery', () => {
       await vi.advanceTimersByTimeAsync(0)
       stream.callbacks.onReady()
       await vi.advanceTimersByTimeAsync(0)
-      readers
-        .at(-1)
-        ?.onResponse({
-          id: 'read',
-          _meta: { runtimeId: 'runtime-a' },
-          ok: true,
-          result: { ...pending, state: 'ready' }
-        })
+      readers.at(-1)?.onResponse({
+        id: 'read',
+        _meta: { runtimeId: 'runtime-a' },
+        ok: true,
+        result: { ...pending, state: 'ready' }
+      })
       await expect(result).resolves.toBe('delivered')
     } finally {
       abort.abort()
@@ -204,14 +202,12 @@ it('ignores a late failed subscription from the read aborted by reconnect', asyn
     })
     readers[0].onClose?.()
     await vi.advanceTimersByTimeAsync(0)
-    readers
-      .at(-1)
-      ?.onResponse({
-        id: 'read',
-        _meta: { runtimeId: 'runtime-a' },
-        ok: true,
-        result: { ...pending, state: 'ready' }
-      })
+    readers.at(-1)?.onResponse({
+      id: 'read',
+      _meta: { runtimeId: 'runtime-a' },
+      ok: true,
+      result: { ...pending, state: 'ready' }
+    })
     await expect(result).resolves.toBe('delivered')
   } finally {
     abort.abort()
