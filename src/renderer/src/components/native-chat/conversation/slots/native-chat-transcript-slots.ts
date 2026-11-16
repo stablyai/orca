@@ -236,7 +236,6 @@ export function buildNativeChatTranscript(
             hasReceipt: receipt !== undefined,
             hasStatus: status !== undefined,
             hasTurnDiff: turnDiff !== undefined,
-            turnDiffFileCount: turnDiff?.files.length,
             openedPullRequestCount: openedPullRequests?.length,
             folded
           },

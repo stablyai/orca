@@ -80,6 +80,10 @@ export function MobileNativeChatTurnDiffRollup({
 }): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
+  const [open, setOpen] = useMobileNativeChatDisclosure(
+    `turn-diff-summary:${diff.files[0]?.edits[0]?.target.messageId}`,
+    false
+  )
   const [showAll, setShowAll] = useMobileNativeChatDisclosure(
     `turn-diff-files:${diff.files[0]?.edits[0]?.target.messageId}`,
     false
@@ -89,8 +93,18 @@ export function MobileNativeChatTurnDiffRollup({
   const type = toolType(fontScale)
   return (
     <View style={styles.card}>
-      <View style={styles.header}>
-        <Text style={[styles.label, type.meta]}>
+      <Pressable
+        style={({ pressed }) => [styles.header, pressed && pressedStyle]}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        onPress={() => setOpen(!open)}
+      >
+        <ChevronRight
+          size={14 * fontScale}
+          color={colors.textMuted}
+          style={open ? styles.open : undefined}
+        />
+        <Text style={[styles.label, type.meta]} numberOfLines={1}>
           {t('components.native-chat.turnDiff.changedFiles', '{{count}} changed files', {
             count: diff.files.length,
             defaultValue_one: '{{count}} changed file'
@@ -103,22 +117,26 @@ export function MobileNativeChatTurnDiffRollup({
             {t('components.native-chat.turnDiff.partial', 'Partial diff')}
           </Text>
         ) : null}
-      </View>
-      {files.map((file) => (
-        <FileRow key={file.path} file={file} fontScale={fontScale} />
-      ))}
-      {remaining > 0 ? (
-        <Pressable
-          accessibilityRole="button"
-          style={({ pressed }) => [styles.file, pressed && pressedStyle]}
-          onPress={() => setShowAll(true)}
-        >
-          <Text style={[styles.label, type.meta]}>
-            {t('components.native-chat.turnDiff.showMoreFiles', 'Show {{count}} more', {
-              count: remaining
-            })}
-          </Text>
-        </Pressable>
+      </Pressable>
+      {open ? (
+        <>
+          {files.map((file) => (
+            <FileRow key={file.path} file={file} fontScale={fontScale} />
+          ))}
+          {remaining > 0 ? (
+            <Pressable
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.file, pressed && pressedStyle]}
+              onPress={() => setShowAll(true)}
+            >
+              <Text style={[styles.label, type.meta]}>
+                {t('components.native-chat.turnDiff.showMoreFiles', 'Show {{count}} more', {
+                  count: remaining
+                })}
+              </Text>
+            </Pressable>
+          ) : null}
+        </>
       ) : null}
     </View>
   )
@@ -134,7 +152,13 @@ const styles = themedStyleSheet(() => ({
     marginHorizontal: spacing.lg,
     gap: spacing.xs
   },
-  header: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.sm },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm
+  },
   file: {
     flexDirection: 'row',
     alignItems: 'center',

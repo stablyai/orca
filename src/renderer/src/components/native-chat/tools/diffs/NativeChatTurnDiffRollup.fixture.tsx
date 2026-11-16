@@ -58,6 +58,40 @@ const diff = nativeChatTurnDiffs(
   messages,
   messages.map(() => 'turn')
 ).get('turn')!
+const manyFileMessages: NativeChatMessage[] = Array.from({ length: 23 }, (_, index) => ({
+  id: `file-edit-${index}`,
+  role: 'assistant',
+  source: 'transcript',
+  timestamp: index,
+  blocks: [
+    {
+      type: 'tool-call',
+      name: 'Edit',
+      state: 'completed',
+      input: {
+        file_path: `src/features/feature-${index}.ts`,
+        old_string: 'export const ready = false',
+        new_string: 'export const ready = true'
+      }
+    },
+    { type: 'tool-result', output: 'The file was updated successfully.' }
+  ]
+}))
+const manyFileDiff = nativeChatTurnDiffs(
+  manyFileMessages,
+  manyFileMessages.map(() => 'many-files')
+).get('many-files')!
+export const manyFiles = defineFixture({
+  width: 560,
+  render: () => <NativeChatTurnDiffRollup diff={manyFileDiff} />
+})
+export const manyFilesOpened = defineFixture({
+  width: 560,
+  render: () => <NativeChatTurnDiffRollup diff={manyFileDiff} />,
+  interact: (frame) => {
+    frame.querySelector<HTMLButtonElement>('button')?.click()
+  }
+})
 export const settled = defineFixture({
   width: 560,
   render: () => <NativeChatTurnDiffRollup diff={diff} />
@@ -68,6 +102,18 @@ export const opened = defineFixture({
   interact: (frame) => {
     frame.querySelector<HTMLButtonElement>('button')?.click()
   }
+})
+async function openGreetingDiff(frame: HTMLElement): Promise<void> {
+  Array.from(frame.querySelectorAll<HTMLButtonElement>('button'))
+    .find((button) => button.textContent?.includes('changed files'))
+    ?.click()
+  await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+  frame.querySelector<HTMLButtonElement>('button[title$="greeting.ts"]')?.click()
+}
+export const fileOpened = defineFixture({
+  width: 560,
+  render: () => <NativeChatTurnDiffRollup diff={diff} />,
+  interact: openGreetingDiff
 })
 export const hideShown = defineFixture({
   width: 560,
@@ -106,8 +152,6 @@ export const completedTranscript = defineFixture({ width: 560, render: () => <Tr
 export const completedTranscriptOpened = defineFixture({
   width: 560,
   render: () => <Transcript />,
-  interact: (frame) => {
-    frame.querySelector<HTMLButtonElement>('button[title$="greeting.ts"]')?.click()
-  }
+  interact: openGreetingDiff
 })
 export const liveTranscript = defineFixture({ width: 560, render: () => <Transcript working /> })
