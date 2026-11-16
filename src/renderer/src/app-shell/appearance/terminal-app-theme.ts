@@ -1,7 +1,7 @@
 import { completePluginAppThemeTokens } from '../../../../shared/plugins/artifacts/plugin-theme-artifact'
 import type { PluginThemeTokenColorRule } from '../../../../shared/plugins/artifacts/plugin-theme-artifact'
 import { pluginAppThemeCssFallback } from '../../../../shared/plugins/artifacts/plugin-theme-css-fallbacks'
-import { MATCH_TERMINAL_APP_THEME } from '../../../../shared/plugin-theme-settings'
+import { MATCH_TERMINAL_APP_THEME } from '../../../../shared/plugins/appearance/plugin-theme-settings'
 import { resolveTerminalPalette } from '../../../../shared/terminal-themes/terminal-theme-selection'
 import type { TerminalPaletteSettings as TerminalAppThemeSettings } from '../../../../shared/terminal-themes/terminal-theme-selection'
 import { hashThemeContent } from '../../lib/editor/appearance/plugin-monaco-theme'
@@ -159,6 +159,7 @@ export function synthesizeTerminalAppTheme(
     const color = ansi(key)
     return color ? [[`--chart-${index + 1}`, rgbaToHex(color)] as const] : []
   })
+  const selection = palette.color('selectionBackground')
   const tokens = completePluginAppThemeTokens({
     '--background': rgbaToHex(background),
     '--foreground': rgbaToHex(text),
@@ -171,6 +172,9 @@ export function synthesizeTerminalAppTheme(
     // Why the sidebar equals the terminal: that is what "Match Terminal" looked like before.
     '--sidebar': rgbaToHex(background),
     ...(accentColor ? { '--ring': rgbaToHex(accentColor) } : {}),
+    // Why: code selected in the editor matches text selected in the terminal; the contrast gate
+    // drops it (back to the ring) when the terminal's text would not read on it.
+    ...(selection ? { '--editor-selection': rgbaToHex(selection) } : {}),
     ...(accentColor && primaryText
       ? { '--primary': rgbaToHex(accentColor), '--primary-foreground': rgbaToHex(primaryText) }
       : {}),

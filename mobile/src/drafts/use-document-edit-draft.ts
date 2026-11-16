@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { hashMarkdownContent } from '../../../src/shared/mobile-markdown-document'
+import { hashMarkdownContent } from '../../../src/shared/editor/markdown/mobile-markdown-document'
 import {
   holdDocumentEditDraftOffer,
   loadDocumentEditDraft,

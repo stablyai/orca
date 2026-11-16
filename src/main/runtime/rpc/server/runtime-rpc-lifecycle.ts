@@ -3,7 +3,7 @@ import { basename, join } from 'node:path'
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { placeUnshownLiveTerminalsBestEffort } from '../../terminal/adoption/unshown-live-terminal-placement'
-import type { RuntimeTransportMetadata } from '../../../../shared/runtime-bootstrap'
+import type { RuntimeTransportMetadata } from '../../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
 import { watchRuntimeMetadataOwnership } from './runtime-metadata-ownership-watch'
 import type { RpcTransport } from '../transport'
 import { UnixSocketTransport } from '../transports/unix-socket-transport'
@@ -37,7 +37,7 @@ import {
   daemonSocketDirIsTrusted,
   ensureDaemonSocketDir
 } from '../../../daemon/endpoint/publication/daemon-socket-endpoint-path'
-import { errorMessage } from '../../../../shared/error-message'
+import { errorMessage } from '../../../../shared/errors/error-message'
 import { logClientConnection } from './runtime-rpc-client-connection-log'
 import {
   loadHostDescriptor,

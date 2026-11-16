@@ -3,12 +3,12 @@ import {
   isBrowserInitializationDeliveryCurrent,
   recordBrowserInitializationReceipt
 } from '@/runtime/web-session-tabs-sync/browser-initialization-presentation'
-import { sameRuntimeBrowserPlacement } from '../../../../../shared/runtime-browser-placement'
+import { sameRuntimeBrowserPlacement } from '../../../../../shared/browser/client-hosting/runtime-browser-placement'
 import { useAppStore } from '@/store'
 import type { BrowserPageInitializationAction } from '../../../../../shared/browser/client-hosting/browser-page-initialization-action'
-import type { RuntimeBrowserClientPlacement } from '../../../../../shared/runtime-browser-placement'
-import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
-import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
+import type { RuntimeBrowserClientPlacement } from '../../../../../shared/browser/client-hosting/runtime-browser-placement'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeRpcResponse } from '../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { captureRuntimeEnvironmentCall } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'

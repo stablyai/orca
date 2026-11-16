@@ -2,7 +2,7 @@ import type { AgentSessionOptionResult } from '../../../../shared/agent-session/
 import { structuredAgentSessionOptionSnapshot } from '../../../../shared/agent-session/options/view/structured-agent-session-option-snapshot'
 import { useCallback, type RefObject } from 'react'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
 import {

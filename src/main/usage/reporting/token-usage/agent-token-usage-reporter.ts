@@ -4,7 +4,7 @@ import {
   agentTokenCountsSchema,
   agentTokenUsageSchema,
   type AgentTokenUsage
-} from '../../../../shared/telemetry-agent-token-usage-schema'
+} from '../../../../shared/telemetry/schemas/telemetry-agent-token-usage-schema'
 import type { UsageTelemetryHost } from '../../usage-store-host'
 import { UsageCacheSnapshotWriter } from '../../cache/usage-cache-snapshot-writer'
 import type { AgentTokenSession } from './agent-token-usage'

@@ -116,7 +116,6 @@ export function useWorktreeJumpPaletteStoreState({
   const openFiles = useAppStore((state) => state.openFiles)
   const activeGroupIdByWorktree = useAppStore((state) => state.activeGroupIdByWorktree)
   const groupsByWorktree = useAppStore((state) => state.groupsByWorktree)
-  const retainedAgentsByPaneKey = useAppStore((state) => state.retainedAgentsByPaneKey)
   const sleepingAgentSessionsByPaneKey = useAppStore(
     (state) => state.sleepingAgentSessionsByPaneKey
   )
@@ -204,7 +203,6 @@ export function useWorktreeJumpPaletteStoreState({
     openFiles,
     activeGroupIdByWorktree,
     groupsByWorktree,
-    retainedAgentsByPaneKey,
     sleepingAgentSessionsByPaneKey,
     paneForegroundAgentByPaneKey,
     settings,

@@ -2,7 +2,7 @@ import { expect, vi } from 'vitest'
 import * as shell from './agent-launch/startup/tui-agent-startup-shell'
 import type { GlobalSettings } from './global-settings-types'
 import { getDefaultVoiceSettings } from './constants'
-import { getDefaultNotificationSettings } from './notification-settings-defaults'
+import { getDefaultNotificationSettings } from './notifications/notification-settings-defaults'
 import { buildDefaultSettings } from './default-global-settings'
 
 // Use buildDefaultSettings so adding a setting does not require duplicating it in every test fixture.

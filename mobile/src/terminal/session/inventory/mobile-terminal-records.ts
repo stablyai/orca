@@ -1,10 +1,10 @@
 import type {
   RuntimeMobileSessionTerminalTab,
   RuntimeMobileTerminalTheme
-} from '../../../../../src/shared/runtime-mobile-session-tab-contracts'
+} from '../../../../../src/shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type { AgentStatusEntry } from '../../../../../src/shared/agent-status/contracts/agent-status-types'
-import type { BrowserLoadError } from '../../../../../src/shared/browser-workspace-types'
-import { browserLoadErrorsEqual } from '../../../../../src/shared/browser-load-failure'
+import type { BrowserLoadError } from '../../../../../src/shared/browser/workspaces/browser-workspace-types'
+import { browserLoadErrorsEqual } from '../../../../../src/shared/browser/navigation/browser-load-failure'
 import { translate } from '../../../i18n/mobile-i18n'
 
 export type TerminalRecord = {

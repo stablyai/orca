@@ -1,4 +1,4 @@
-import { PrioritySemaphore } from '../../../shared/priority-semaphore'
+import { PrioritySemaphore } from '../../../shared/concurrency/priority-semaphore'
 import { runAgentModelCatalogSession } from './agent-model-catalog-probe-runner'
 import { expect, it, onTestFinished, vi } from 'vitest'
 import { createAgentModelCatalogService } from './agent-model-catalog-service'

@@ -8,7 +8,7 @@ import {
   endsDollarAmount,
   rejectsSingleDollarClose,
   rejectsSingleDollarOpen
-} from '../../../../../src/shared/markdown-math-rules'
+} from '../../../../../src/shared/markdown/markdown-math-rules'
 
 // Desktop chat's math grammar (src/renderer/src/components/sidebar/chat-markdown-math.ts) for markdown-it.
 

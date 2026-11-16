@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 // @vitest-environment happy-dom
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, renderHook } from '@testing-library/react'
@@ -8,7 +9,7 @@ import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
-import { parseOrcaSessionAddress } from '../../../../../../shared/orca-session-address'
+import { parseOrcaSessionAddress } from '../../../../../../shared/agent-session/identity/orca-session-address'
 import '@/components/sidebar/workspace-card/activity/worktree-agent-row-selectors'
 import { useAgentMessageSenderView } from './native-chat-agent-message-sender-view'
 import { initialStore, status, resetSenderStore } from './native-chat-agent-sender.test-fixture'
@@ -63,10 +64,13 @@ function write(i: number, update: Partial<AgentStatusEntry>) {
   const key = status(i).paneKey
   act(() =>
     useAppStore.setState({
-      agentStatusByPaneKey: {
+      agentStatusByPaneKey: acceptedAgentStatuses([
         ...state.agentStatusByPaneKey,
-        [key]: { ...state.agentStatusByPaneKey[key], ...update }
-      },
+        [key, { ...state.agentStatusByPaneKey.get(key)!, ...update }] satisfies [
+          string,
+          AgentStatusEntry
+        ]
+      ]),
       agentStatusEpoch: state.agentStatusEpoch + 1
     })
   )
@@ -159,7 +163,10 @@ it('shows only a proved Dispatch invocation and withdraws missing proof', () => 
       ...useAppStore.getState().tabsByWorktree,
       remote: [makeTab({ id: 'tab-9', worktreeId: 'remote' })]
     },
-    agentStatusByPaneKey: { ...useAppStore.getState().agentStatusByPaneKey, [other.paneKey]: other }
+    agentStatusByPaneKey: acceptedAgentStatuses([
+      ...useAppStore.getState().agentStatusByPaneKey,
+      [other.paneKey, other] as const
+    ])
   })
   render(
     <>

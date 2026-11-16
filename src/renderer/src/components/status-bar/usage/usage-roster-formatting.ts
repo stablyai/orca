@@ -1,6 +1,7 @@
 export function formatPlanLabel(planType: string | null | undefined): string | null {
   const trimmed = planType?.trim()
-  if (!trimmed) {
+  // Codex reports "unknown" when it cannot tell; that is no plan, not a plan named Unknown.
+  if (!trimmed || trimmed.toLowerCase() === 'unknown') {
     return null
   }
   return trimmed
@@ -12,15 +13,4 @@ export function formatPlanLabel(planType: string | null | undefined): string | n
         : normalized.charAt(0).toUpperCase() + normalized.slice(1)
     })
     .join(' ')
-}
-
-// Match usage-bar 60/80 thresholds while keeping low consumption neutral.
-export function usageTextColorClass(usedPercent: number): string {
-  if (usedPercent >= 80) {
-    return 'text-red-500'
-  }
-  if (usedPercent >= 60) {
-    return 'text-yellow-500'
-  }
-  return 'text-foreground'
 }

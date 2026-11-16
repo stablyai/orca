@@ -1,4 +1,4 @@
-import type { ProviderRateLimits } from '../../../../../shared/rate-limit-types'
+import type { ProviderRateLimits } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { formatResetCreditExpiry } from '../usage/provider-usage-panel'
 import type { Translate } from '../../../i18n/use-translate'
 

@@ -6,15 +6,15 @@ import type {
   OrcadManagedRollbackResult,
   OrcadManagedRuntimeStatus,
   OrcadManagedStopResult
-} from '../../shared/orcad-managed-runtime'
-import { ORCAD_RECOVERY_CHANGED_STATE_CODE } from '../../shared/orcad-managed-runtime'
-import { MANAGED_SERVER_RUNTIME_CAPABILITY } from '../../shared/host-runtime-capabilities'
-import type { RuntimeStatus } from '../../shared/runtime-session-contracts'
+} from '../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
+import { ORCAD_RECOVERY_CHANGED_STATE_CODE } from '../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
+import { MANAGED_SERVER_RUNTIME_CAPABILITY } from '../../shared/remote-runtime/protocol/host-runtime-capabilities'
+import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import { getRequiredStringFlag } from '../arguments/flags'
 import { printResult } from '../output/command-result-output'
 import { RuntimeClientError } from '../runtime/connection/types'
-import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
+import type { RuntimeRpcSuccess } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { formatManagedServerStatus } from './managed-server-format'
 import { reportAfterClosedConnection } from './managed-server-reconnect'
 

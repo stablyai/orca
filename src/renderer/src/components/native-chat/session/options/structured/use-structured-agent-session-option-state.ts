@@ -13,7 +13,7 @@ import { usesInstalledAgentModelCatalog } from '../../../../../../../shared/agen
 import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import type { StructuredAgentSessionOptionState } from '../../../../../../../shared/agent-session/options/structured-agent-session-options'
 import { structuredAgentSessionReportsAtFence } from '../../../../../../../shared/agent-session/options/reconciliation/structured-agent-session-runtime-reports'
-import type { RuntimeClientTarget } from '../../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { structuredAgentSessionOptionView } from '../../../../../../../shared/agent-session/options/view/structured-agent-session-option-view'
 import {
   AGENT_SESSION_SEND_SELECTION_RUNTIME_CAPABILITY,
@@ -65,11 +65,8 @@ export function useStructuredAgentSessionOptionState(args: {
     target,
     worktree
   } = args
-  const { permissionReport, observation } = useStructuredAgentSessionPermissionStatus(
-    sessionId,
-    target,
-    fence
-  )
+  const { permissionReport, launchPermissionMode, observation } =
+    useStructuredAgentSessionPermissionStatus(sessionId, target, fence)
   const [reader] = useState(() =>
     createStructuredAgentSessionOptionsReadOwner(
       firstFrameOptionState(agent, target, {
@@ -230,9 +227,18 @@ export function useStructuredAgentSessionOptionState(args: {
         ),
         permissionReport
       ),
+      ...(launchPermissionMode === undefined ? {} : { launchPermissionMode }),
       permissionOwnSupported
     }),
-    [reader, owner, controller, permissionReport, fence, permissionOwnSupported]
+    [
+      reader,
+      owner,
+      controller,
+      permissionReport,
+      launchPermissionMode,
+      fence,
+      permissionOwnSupported
+    ]
   )
   const takesSendOptions = useStructuredAgentSessionHostCapability(
     target,

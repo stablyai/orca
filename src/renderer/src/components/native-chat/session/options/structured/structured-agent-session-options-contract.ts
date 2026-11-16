@@ -4,7 +4,7 @@ import type {
 } from '../../structured/writes/use-structured-agent-session-mutate'
 import type { StructuredAgentSessionLaunchView } from '../../../host-access/use-native-chat-provisional-launch'
 import type { AgentType } from '../../../../../../../shared/agent-status/contracts/agent-status-types'
-import type { RuntimeClientTarget } from '../../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 export type StructuredAgentSessionOptionsArgs = {
   agent: AgentType

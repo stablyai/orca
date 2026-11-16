@@ -1,5 +1,5 @@
 import type { JiraIssue, JiraTransition } from '../../../../../../shared/jira/jira-types'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { jiraListTransitionsForTarget } from '@/runtime/jira/runtime-jira-detail-client'
 import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { createMetadataRequestStore, loadMetadata } from '@/hooks/metadata-request-cache'

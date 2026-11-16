@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
 import { useActiveWorktree } from '@/store/workspaces/selection/use-selected-worktree'
 import { cn } from '@/lib/class-names'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   killWorkspacePortForTarget,
   openWorkspacePortInBrowser,
@@ -17,7 +17,7 @@ import { resolvePortOpenInOrcaBrowser } from '@/lib/workspace-ports/workspace-po
 import { resolveLocalhostLabelRouteForPort } from '@/lib/workspace-ports/workspace-port-localhost-label-selector'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import type { WorkspacePort } from '../../../../../shared/workspace-ports'
+import type { WorkspacePort } from '../../../../../shared/workspace/ports/workspace-ports'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import {

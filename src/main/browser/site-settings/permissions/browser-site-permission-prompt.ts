@@ -1,22 +1,14 @@
 import {
-  BROWSER_SITE_PERMISSION_LOCAL_FILES_ORIGIN,
   isBrowserSitePermissionDecision,
   type BrowserSitePermission
-} from '../../../../shared/browser-site-permission'
-import { isEligibleLocalCertificateHost } from '../../../../shared/browser-url'
+} from '../../../../shared/browser/site-settings/browser-site-permission'
+import { isEligibleLocalCertificateHost } from '../../../../shared/browser/navigation/browser-url'
 import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
 import {
-  browserPagePromptOrigin,
+  browserSitePermissionOrigin,
   openBrowserPagePrompt
 } from '../../guest-lifecycle/prompts/browser-page-prompts'
 import type { BrowserSitePermissionMemory } from './browser-site-permission-memory'
-
-/** Returns null for opaque sites; local files share one permission origin. */
-export function browserSitePermissionOrigin(rawUrl: string | null): string | null {
-  return rawUrl?.startsWith('file:')
-    ? BROWSER_SITE_PERMISSION_LOCAL_FILES_ORIGIN
-    : browserPagePromptOrigin(rawUrl)
-}
 
 // Opaque frame URLs can inherit origins; refuse ambiguous matches when walking the frames.
 export function browserSitePermissionRequestingOrigin(

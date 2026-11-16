@@ -1,4 +1,4 @@
-import type { OrcadManagedRuntimeStatus } from '../../shared/orcad-managed-runtime'
+import type { OrcadManagedRuntimeStatus } from '../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 
 function count(value: number | null): string {
   return value === null ? 'unverifiable' : String(value)

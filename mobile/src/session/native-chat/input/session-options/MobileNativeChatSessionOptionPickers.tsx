@@ -5,16 +5,7 @@ import type {
 export type * from '../mobile-native-chat-session-option-picker-contract'
 import { useEffect, useRef } from 'react'
 import { AccessibilityInfo, Keyboard, Platform, Text, View } from 'react-native'
-import {
-  ChevronLeft,
-  Clock,
-  FilePenLine,
-  Hand,
-  LockKeyhole,
-  ShieldAlert,
-  ShieldCheck,
-  type LucideIcon
-} from 'lucide-react-native'
+import { ChevronLeft, Clock, LockKeyhole } from 'lucide-react-native'
 import { BottomDrawer } from '../../../../components/bottom-drawer/BottomDrawer'
 import { ListGroup, LIST_LEADING_INSET, SectionHeader } from '../../../../components/list/ListGroup'
 import { NavBarButton } from '../../../../components/nav-bar/NavBarButton'
@@ -37,7 +28,10 @@ import {
   nativeChatSessionOptionLabel
 } from '../../../../../../src/shared/native-chat/input/session-options/native-chat-session-option-labels'
 import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
-import { mobileSessionOptionSummaryValue } from './mobile-native-chat-session-option-labels'
+import {
+  mobileDeferredPermissionSummary,
+  mobileSessionOptionSummaryValue
+} from './mobile-native-chat-session-option-labels'
 import {
   descriptorRowElements,
   ModelPill,
@@ -50,43 +44,13 @@ import {
   showsSessionOptionAsSegments
 } from './MobileNativeChatSessionOptionSegments'
 import { sortNativeChatSessionOptions } from '../../../../../../src/shared/native-chat/input/session-options/native-chat-session-option-snapshot'
-import {
-  AGENT_CHAT_PERMISSION_MODE_ICON_NAMES,
-  isAgentChatPermissionMode
-} from '../../../../../../src/shared/agent-launch/permissions/agent-chat-permission-mode'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../../../src/shared/agent-launch/permissions/agent-chat-permission-mode-option-id'
+import {
+  permissionChoiceColor,
+  permissionChoiceLeading,
+  permissionModeIcon
+} from './mobile-native-chat-permission-mode-icons'
 import { sessionOptionPickerStyles as styles } from './mobile-native-chat-session-option-picker-styles'
-
-function permissionChoiceColor(value: string | undefined): string | undefined {
-  return value === 'full-access' ? colors.statusAmber : undefined
-}
-
-function permissionModeIcon(value: string): LucideIcon | undefined {
-  if (!isAgentChatPermissionMode(value)) {
-    return undefined
-  }
-  switch (AGENT_CHAT_PERMISSION_MODE_ICON_NAMES[value]) {
-    case 'Hand':
-      return Hand
-    case 'FilePenLine':
-      return FilePenLine
-    case 'ShieldCheck':
-      return ShieldCheck
-    case 'ShieldAlert':
-      return ShieldAlert
-  }
-}
-
-function permissionChoiceLeading(value: string): React.JSX.Element | null {
-  const Icon = permissionModeIcon(value)
-  return Icon ? (
-    <Icon
-      size={18}
-      color={permissionChoiceColor(value) ?? colors.textSecondary}
-      strokeWidth={2.2}
-    />
-  ) : null
-}
 
 function selectedChoice(descriptor: SessionOptionDescriptor | undefined) {
   return descriptor?.kind.type === 'select'
@@ -171,7 +135,10 @@ export function MobileNativeChatSessionOptionPickers({
   const primary = model
     ? nativeChatModelPillLabel(model, say)
     : mobileSessionOptionSummaryValue(home)
+  const permissionDeferred = permission ? mobileDeferredPermissionSummary(permission)?.full : null
   const secondary = (model && nativeChatOptionValuesLabel(options, say)) || null
+  // The model pill shows permission only as a warning tint, so its name carries a deferred pick.
+  const modelValue = [primary, secondary, model && permissionDeferred].filter(Boolean).join(' ')
 
   const closePicker = (): void => onNavigate(null)
   const applyOption = (descriptor: SessionOptionDescriptor, value: SessionOptionValue): void => {
@@ -214,19 +181,17 @@ export function MobileNativeChatSessionOptionPickers({
         leading={controller.heldPick ? Clock : undefined}
         accessibleName={
           model
-            ? permissionColor
+            ? permissionColor && !permissionDeferred
               ? t(
                   'chat.sessionOptionPickers.modelFullAccessLabel',
                   'Model, {{value}}, full access',
                   {
-                    value: secondary ? `${primary} ${secondary}` : primary
+                    value: modelValue
                   }
                 )
-              : t('chat.sessionOptionPickers.modelLabel', 'Model, {{value}}', {
-                  value: secondary ? `${primary} ${secondary}` : primary
-                })
+              : t('chat.sessionOptionPickers.modelLabel', 'Model, {{value}}', { value: modelValue })
             : t('chat.sessionOptionPickers.permissionsLabel', 'Permissions, {{value}}', {
-                value: primary
+                value: permissionDeferred ?? primary
               })
         }
         disabled={!canOpen}
@@ -320,6 +285,9 @@ export function MobileNativeChatSessionOptionPickers({
                 )}
               </SessionOptionCaption>
             ) : null}
+            {permissionView && permissionDeferred ? (
+              <SessionOptionCaption>{permissionDeferred}</SessionOptionCaption>
+            ) : null}
             {reason ? <SessionOptionCaption>{reason}</SessionOptionCaption> : null}
             {homeView && model ? (
               <>
@@ -373,6 +341,7 @@ function OptionRows({
       <ListGroup>
         {descriptors.flatMap((descriptor) => {
           const isPermission = descriptor === permission
+          const deferred = isPermission ? mobileDeferredPermissionSummary(descriptor) : null
           const disabled = locked(descriptor) || !descriptor.settable
           if (showsSessionOptionAsSwitch(descriptor)) {
             return descriptorRowElements(
@@ -393,7 +362,9 @@ function OptionRows({
                   ? t('chat.sessionOptionPickers.permissions', 'Permissions')
                   : nativeChatSessionOptionLabel(descriptor, say)
               }
-              value={mobileSessionOptionSummaryValue(descriptor)}
+              value={deferred?.saved ?? mobileSessionOptionSummaryValue(descriptor)}
+              subtitle={deferred?.timing}
+              accessibleValue={deferred?.full}
               valueColor={isPermission ? permissionColor : undefined}
               disabled={disabled}
               onPress={

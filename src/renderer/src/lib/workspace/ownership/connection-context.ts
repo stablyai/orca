@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store/index'
-import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import {
   getConnectionIdForFileFromState,
   getConnectionIdFromState

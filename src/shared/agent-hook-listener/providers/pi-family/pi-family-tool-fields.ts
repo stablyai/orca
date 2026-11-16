@@ -7,7 +7,7 @@ import {
   toolUpdate
 } from '../../tool-input-preview'
 import { clearActiveToolFieldsUpdate, deriveInteractivePrompt } from '../../interactive-tool'
-import { serializeOmpPlanReviewPrompt } from '../../../omp-plan-review-prompt'
+import { serializeOmpPlanReviewPrompt } from '../../../native-chat/input/questions/omp-plan-review-prompt'
 
 /** OMP's `ask` carries the same questions/options payload as Pi's question tool. */
 function serializeQuestionPrompt(toolInput: unknown): string | undefined {

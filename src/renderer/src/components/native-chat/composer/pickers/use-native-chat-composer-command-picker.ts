@@ -40,9 +40,17 @@ export function useNativeChatComposerCommandPicker(
   const hostSetsGoals = structuredTransport?.threadGoal !== undefined
   const hostSetsInteractionMode =
     structuredTransport?.optionSnapshot.some((entry) => entry.id === 'interactionMode') === true
+  const opensMcpPanel = structuredTransport?.mcpPanel !== undefined
   const acceptsText = useMemo(
-    () => prepareQueuedMessageEditText(agent, reported, hostSetsGoals, hostSetsInteractionMode),
-    [agent, reported, hostSetsGoals, hostSetsInteractionMode]
+    () =>
+      prepareQueuedMessageEditText(
+        agent,
+        reported,
+        hostSetsGoals,
+        hostSetsInteractionMode,
+        opensMcpPanel
+      ),
+    [agent, reported, hostSetsGoals, hostSetsInteractionMode, opensMcpPanel]
   )
   const commandAvailable = useCallback(
     (name: string) => mode === undefined || acceptsText(`/${name}`),

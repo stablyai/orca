@@ -6,10 +6,10 @@ import { execFileSync } from 'node:child_process'
 import * as forkMetadata from '../../github/client/fetch/repo-slug-upstream'
 import { join } from 'node:path'
 import { mkdtemp, rm } from 'node:fs/promises'
-import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
+import { projectHostSetupProjectionFromRepos } from '../../../shared/project/host-setup/project-host-setup-projection'
 import { tmpdir } from 'node:os'
 import { store } from './orca-runtime-test-fixtures.spec'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
 
 const parentProbe = vi.spyOn(forkMetadata, 'probeRepoUpstream')

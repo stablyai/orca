@@ -2,7 +2,7 @@ import { toast } from 'sonner'
 import {
   classifyRejectedWindowsPath,
   type WindowsPathAccess
-} from '../../../../../../shared/windows-path-access'
+} from '../../../../../../shared/file-access/windows-path-access'
 import {
   normalizeExecutionHostId,
   type ExecutionHostId
@@ -10,7 +10,7 @@ import {
 import {
   wslHostWindowsDriveRefusalForPickedPath,
   type WslHostWindowsDriveRefusal
-} from '../../../../../../shared/wsl-host-windows-drive-refusal'
+} from '../../../../../../shared/remote-runtime/wsl-hosts/wsl-host-windows-drive-refusal'
 import { translate } from '@/i18n/i18n'
 
 export type DroppedHostPath = { hostId: ExecutionHostId; path: string }

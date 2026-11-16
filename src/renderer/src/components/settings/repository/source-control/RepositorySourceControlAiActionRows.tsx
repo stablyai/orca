@@ -10,7 +10,7 @@ import { selectSourceControlActionRecipe } from '../../../../../../shared/source
 import type { RepositorySourceControlAiActionRowsProps } from './repository-source-control-ai-action-rows-props'
 import { sourceControlActionExecutionArgs } from '../../../../../../shared/source-control/ai/recipes/source-control-action-launch-preferences'
 import type { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
-import type { NativeChatDefaultSettings } from '../../../../../../shared/structured-native-chat-launch-route'
+import type { NativeChatDefaultSettings } from '../../../../../../shared/agent-launch/choices/structured-native-chat-launch-route'
 import {
   SourceControlActionAgentPickerView,
   sourceControlActionAgentPreview

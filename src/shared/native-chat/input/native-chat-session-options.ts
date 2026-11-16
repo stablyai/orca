@@ -48,6 +48,8 @@ export type SessionOptionDescriptor = {
   transport: NativeChatLiveOptionTransport
   settable: boolean
   disabledReason?: SessionOptionDisabledReason
+  /** Active value when a saved selection intentionally waits for a later input. */
+  activeValue?: string
   /** A reset action, separate from catalog model IDs. Absent on older hosts and PTY surfaces. */
   defaultChoice?: { selected: boolean; model?: SessionOptionSelectChoice }
   /** Execution label for Default only; never a picker choice or send option. */

@@ -23,11 +23,7 @@ import {
   refreshManagedScriptIfPresent,
   scriptStillExists
 } from '../agent-hooks/installation/scripts/managed-hook-script-refresh'
-import {
-  ANTIGRAVITY_EVENTS,
-  ANTIGRAVITY_PRE_TOOL_USE_DECISION,
-  type AntigravityEvent
-} from './hook-events'
+import { ANTIGRAVITY_EVENTS, getAntigravityNoOpStdout, type AntigravityEvent } from './hook-events'
 import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 import { HOOK_PARENT_CAPTURE } from '../agent-hooks/installation/scripts/hook-process-capture'
 import { getManagedScript, getWindowsWrapperScript } from './hook-script'
@@ -60,8 +56,12 @@ function getPosixManagedCommand(scriptPath: string, event: AntigravityEvent): st
   const command = wrapPosixHookCommand(
     scriptPath,
     { ORCA_ANTIGRAVITY_EVENT: event.eventName },
-    // Keep tools usable if the managed script disappears: silence denies PreToolUse.
-    event.eventName === 'PreToolUse' ? { fallbackStdout: ANTIGRAVITY_PRE_TOOL_USE_DECISION } : {}
+    // Outside an Orca pane, skip the script's shell and python3 start on every agy event.
+    {
+      fallbackStdout: getAntigravityNoOpStdout(event.eventName),
+      requiredEnvVar: 'ORCA_PANE_KEY',
+      stdinMayStayOpen: true
+    }
   )
   // ACP hosts tokenize the command into argv; the shell must be the executable, not `if`.
   return `/bin/sh -c ${quotePosixShell(`${HOOK_PARENT_CAPTURE}${command}`)}`

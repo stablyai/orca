@@ -8,7 +8,7 @@ import type { StructuredAgentSessionSendRequest } from './structured-agent-sessi
 import { useCallback, useEffect, useEffectEvent, useSyncExternalStore } from 'react'
 import type { AgentJournalCursor } from '../../../../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalSubmission } from '../../../../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { RuntimeClientTarget } from '../../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   structuredAgentSessionQueueRequest,
   type StructuredAgentSessionQueueDelivery

@@ -12,7 +12,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { runProcess, runProcessSync, spawnProcess } from '@orca/process-host'
-import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
+import { removeTreeSync } from '../../shared/file-write/windows-transient-lock-removal'
 import { getCursorHookResponse } from './hook-events'
 import { CursorHookService } from './hook-service'
 

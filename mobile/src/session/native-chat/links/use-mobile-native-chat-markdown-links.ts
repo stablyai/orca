@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import * as z from 'zod'
-import { relativePathInsideRoot } from '../../../../../src/shared/cross-platform-path'
+import { relativePathInsideRoot } from '../../../../../src/shared/file-access/cross-platform-path'
 import {
   githubReferenceRepo,
   type GitHubRepoReference

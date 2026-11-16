@@ -1,5 +1,5 @@
 import { join } from 'node:path'
-import { loadWindowsSecurity } from '../../shared/windows-security-addon'
+import { loadWindowsSecurity } from '../../shared/secure-storage/windows-security-addon'
 import {
   decodeAntigravityWindowsToken,
   parseAntigravityWindowsSnapshot,

@@ -2,7 +2,7 @@ import type {
   RuntimeOrchestrationEnvelope,
   RuntimeRequestSelection,
   RuntimeRpcFailure
-} from '../../../shared/runtime-rpc-envelope'
+} from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import { redactOrchestrationCompatibilitySecrets } from '../../../shared/orchestration/orchestration-compatibility-evidence'
 
 export type RuntimeCallOptions = {

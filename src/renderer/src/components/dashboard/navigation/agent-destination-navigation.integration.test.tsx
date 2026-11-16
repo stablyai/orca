@@ -3,7 +3,7 @@ import type * as RuntimeRpcCallModule from '@/runtime/rpc/calls/runtime-rpc-call
 
 // @vitest-environment happy-dom
 import { cleanup } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 
 import {
@@ -15,7 +15,6 @@ import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-
 
 import type * as WebRuntimeSessionEnvironment from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 
-import { activateRetainedAgentRow } from '../../sidebar/workspace-card/activity/activate-retained-agent-row'
 import { activateWorktreeAgentPane } from '../../sidebar/workspace-card/activity/use-worktree-agent-activation'
 import { structuredAgentSessionPaneKey } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 
@@ -58,38 +57,6 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('Dashboard and retained sidebar destination contract', () => {
-  it('notifies the exact live retained terminal owner instead of the workspace default', async () => {
-    const worktree = { ...makeCreatedAgentWorktree(), hostId: WORKSPACE_HOST }
-    seedAlreadyActiveWorktree(worktree, {
-      worktreesByRepo: { [worktree.repoId]: [worktree, { ...worktree, hostId: TAB_HOST }] },
-      activeWorkspaceExecutionHostId: WORKSPACE_HOST,
-      ptyIdsByTabId: { 'tab-1': ['remote:host-B@@pty-B'] },
-      terminalLayoutsByTabId: {
-        'tab-1': {
-          root: { type: 'leaf', leafId: LEAF },
-          activeLeafId: LEAF,
-          expandedLeafId: null,
-          ptyIdsByLeafId: { [LEAF]: 'remote:host-B@@pty-B' }
-        }
-      }
-    })
-
-    activateRetainedAgentRow(worktree.id, 'tab-1', makePaneKey('tab-1', LEAF))
-    expect(useAppStore.getState().activeWorkspaceExecutionHostId).toBe(TAB_HOST)
-    await vi.waitFor(() =>
-      expect(effects.environmentCall).toHaveBeenCalledWith(
-        'host-B',
-        expect.objectContaining({
-          method: 'session.tabs.activate',
-          params: expect.objectContaining({ leafId: LEAF })
-        })
-      )
-    )
-    expect(useAppStore.getState().getActiveTab(worktree.id)?.id).toBe('tab-1')
-  })
-})
-
 it('rejects a live terminal row on a different host before workspace activation', () => {
   const worktree = { ...makeCreatedAgentWorktree(), hostId: WORKSPACE_HOST }
   seedAlreadyActiveWorktree(worktree, {
@@ -116,7 +83,7 @@ it('rejects a live terminal row on a different host before workspace activation'
   })
 })
 
-it('opens a paired chat from its physical SSH workspace', () => {
+it('opens a live paired chat from its physical SSH workspace', () => {
   const worktree = {
     ...makeCreatedAgentWorktree(),
     hostId: 'ssh:server' as const,
@@ -145,7 +112,7 @@ it('opens a paired chat from its physical SSH workspace', () => {
       ]
     }
   })
-  activateRetainedAgentRow(
+  activateWorktreeAgentPane(
     worktree.id,
     'native-B',
     structuredAgentSessionPaneKey('native-B', 'session-B'),

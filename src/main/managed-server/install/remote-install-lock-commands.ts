@@ -1,6 +1,6 @@
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { powerShellCommand } from '../../ssh/remote-exec/ssh-remote-powershell'
-import { quotePowerShellLiteral as powerShellLiteral } from '../../../shared/powershell-native-argument'
+import { quotePowerShellLiteral as powerShellLiteral } from '../../../shared/shell/launch/powershell-native-argument'
 import {
   isWindowsRemoteHost,
   type RemoteHostPlatform

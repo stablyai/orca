@@ -1,4 +1,4 @@
-import { resolveRuntimeNavigationTarget } from '../../../../../shared/runtime-navigation'
+import { resolveRuntimeNavigationTarget } from '../../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import { resolveChatTabActivation } from '../../../agent-session/agent-session-tab-identity'
 import { commitLeafMoveAndRekey } from '../../../../ipc/pty/ipc/leaf-move'
 import type { OrcaRuntimeService } from '../../../orca-runtime'

@@ -3,7 +3,7 @@
  * and without touching the source. Reads and writes go through CDP: Electron's cookies API drops
  * the partition key, which would turn a partitioned cookie into a cross-site one.
  */
-import { session } from 'electron'
+import { session, type Session } from 'electron'
 import {
   emptyWslMoveBrowserCookieCopyCounts,
   type WslMoveBrowserCookieCopyCounts
@@ -24,7 +24,9 @@ export type BrowserPartitionCookieCopyPlan = {
 /** Pure: what to write from `source` into a jar that already holds `destination`. */
 export function planBrowserPartitionCookieCopy(
   source: readonly CdpCookie[],
-  destination: readonly CdpCookie[]
+  destination: readonly CdpCookie[],
+  // A jar taking back its own saved cookies is not a transplant.
+  options: { sameJar?: boolean } = {}
 ): BrowserPartitionCookieCopyPlan {
   const counts = emptyWslMoveBrowserCookieCopyCounts()
   const present = new Set<string>()
@@ -42,7 +44,7 @@ export function planBrowserPartitionCookieCopy(
       counts.rejected += 1
       continue
     }
-    if (isNonTransplantableCookieDomain(host)) {
+    if (!options.sameJar && isNonTransplantableCookieDomain(host)) {
       counts.skippedSourceBound += 1
       continue
     }
@@ -78,15 +80,30 @@ export async function copyBrowserPartitionCookies(
   if (sourcePartition === destinationPartition) {
     throw new Error('browser_partition_cookie_copy_same_partition')
   }
-  const destinationSession = session.fromPartition(destinationPartition)
   const source = openCookieClearStore(session.fromPartition(sourcePartition))
+  try {
+    return await mergeCdpCookiesIntoSession(
+      await source.readAllCdpCookies(),
+      session.fromPartition(destinationPartition)
+    )
+  } finally {
+    source.dispose()
+  }
+}
+
+/** Writes the cookies `destinationSession` does not already hold, keeping each one's partition key. */
+export async function mergeCdpCookiesIntoSession(
+  cookies: readonly CdpCookie[],
+  destinationSession: Session,
+  options: { sameJar?: boolean } = {}
+): Promise<WslMoveBrowserCookieCopyCounts> {
   const destination = openCookieClearStore(destinationSession)
   try {
-    const sourceCookies = await source.readAllCdpCookies()
     return await withCookieMutationLock(destinationSession, async () => {
       const plan = planBrowserPartitionCookieCopy(
-        sourceCookies,
-        await destination.readAllCdpCookies()
+        cookies,
+        await destination.readAllCdpCookies(),
+        options
       )
       for (const identity of plan.writes) {
         try {
@@ -103,7 +120,6 @@ export async function copyBrowserPartitionCookies(
       return plan.counts
     })
   } finally {
-    source.dispose()
     destination.dispose()
   }
 }

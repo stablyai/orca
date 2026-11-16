@@ -2,7 +2,7 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   getWslSelectionKey,
   type CodexAccountSelectionTarget
-} from '../../../../shared/codex-selection-lane'
+} from '../../../../shared/agent-accounts/codex/codex-selection-lane'
 import { normalizeCodexRuntimeSelection } from '../../../codex-accounts/account-management/runtime-selection'
 import { getInitialAccountRateLimitTarget } from '../../initial-account-rate-limit-target'
 

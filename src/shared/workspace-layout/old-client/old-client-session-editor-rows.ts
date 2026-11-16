@@ -3,7 +3,7 @@
 import type {
   RuntimeMobileSessionFileTab,
   RuntimeMobileSessionMarkdownTab
-} from '../../runtime-mobile-session-tab-contracts'
+} from '../../remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type { LayoutEditorView } from '../editor-tabs/layout-editor-view'
 import { editorRowHost } from '../../workspace-session/session-tab-file-host'
 import type { DesktopLayoutView } from '../persistence/workspace-layout-beside'

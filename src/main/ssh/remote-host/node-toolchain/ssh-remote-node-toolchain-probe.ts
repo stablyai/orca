@@ -1,6 +1,6 @@
 import { posix as posixPath } from 'node:path'
 import { quotePosixShell } from '../../../../shared/shell/launch/shell-argument-quoting'
-import { quotePowerShellLiteral as powerShellLiteral } from '../../../../shared/powershell-native-argument'
+import { quotePowerShellLiteral as powerShellLiteral } from '../../../../shared/shell/launch/powershell-native-argument'
 
 const MIN_HOST_NODE_MAJOR = 18
 const NODE_VERSION_MARKER = '__ORCA_NODE_VERSION__'

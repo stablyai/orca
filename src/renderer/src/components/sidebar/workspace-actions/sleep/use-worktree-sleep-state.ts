@@ -16,7 +16,7 @@ type TabLike = { id: string }
 
 // Partial store mocks may omit slices; shared predicates treat absence as empty.
 type SleepStateInput = {
-  agentStatusByPaneKey?: Record<string, AgentStatusEntry> | null
+  agentStatusByPaneKey?: ReadonlyMap<string, AgentStatusEntry> | null
   agentStatusEpoch?: number
   tabsByWorktree?: Record<string, readonly TabLike[]> | null
   ptyIdsByTabId?: Record<string, string[]> | null
@@ -59,7 +59,7 @@ export function selectWorktreeIdsWithLiveAgent(state: SleepStateInput): Readonly
   return worktreeIds
 }
 
-/** Use the hide-sleeping predicate; retained done status alone cannot establish whether a workspace is asleep. */
+/** Use the hide-sleeping predicate; done status alone cannot establish whether a workspace is asleep. */
 export function selectIsSleepingWorktree(state: SleepStateInput, worktreeId: string): boolean {
   if (
     hasUnknownStructuredChat(

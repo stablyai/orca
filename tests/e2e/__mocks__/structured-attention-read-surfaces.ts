@@ -1,5 +1,5 @@
 import { vi } from 'vitest'
-import { RUNTIME_CAPABILITIES } from '../../../src/shared/protocol-version'
+import { RUNTIME_CAPABILITIES } from '../../../src/shared/remote-runtime/protocol/protocol-version'
 import type { NotificationsApi } from '../../../src/preload/api/desktop-permissions/os-permission-api'
 
 const transport = vi.hoisted(() => ({

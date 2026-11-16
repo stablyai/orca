@@ -1,10 +1,11 @@
+import '../../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 import { spawn } from 'node:child_process'
 import { chmodSync, mkdirSync, mkdtempSync } from 'node:fs'
 import { createServer, type Server, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeMetadata } from '../../../shared/runtime-bootstrap'
+import type { RuntimeMetadata } from '../../../shared/remote-runtime/bootstrap/runtime-bootstrap'
 import { probeRuntimeListener, RUNTIME_LISTENER_PROBE_TIMEOUT_MS } from './runtime-listener-probe'
 
 const servers = new Set<Server>()

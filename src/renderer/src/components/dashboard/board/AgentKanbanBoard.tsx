@@ -7,7 +7,7 @@ import {
   type DashboardSnapshot,
   type DashboardRevealAgentArgs as AgentRevealArgs
 } from '../../../../../shared/dashboard-snapshot'
-import type { RepoIcon } from '../../../../../shared/repo-icon'
+import type { RepoIcon } from '../../../../../shared/repository/appearance/repo-icon'
 import { cn } from '@/lib/class-names'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'

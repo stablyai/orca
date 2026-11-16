@@ -1,5 +1,5 @@
 import type { TerminalExitCause } from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
-import type { OrcaSessionId } from '../../../../shared/orca-session-address'
+import type { OrcaSessionId } from '../../../../shared/agent-session/identity/orca-session-address'
 export const MESSAGE_TYPES = [
   'status',
   'dispatch',
