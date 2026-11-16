@@ -113,6 +113,7 @@ export function ChatSettingsSection({
             />
           ) : null}
           <ChatBehaviorSetting
+            showDesktopOnlySettings={showDesktopOnlySettings}
             settings={settings}
             updateSettings={updateSettings}
             forceVisible={showAllBehavior}

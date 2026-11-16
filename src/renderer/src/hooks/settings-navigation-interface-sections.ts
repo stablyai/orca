@@ -56,7 +56,9 @@ export function buildInterfaceSettingsSections(
         ...getChatAppearanceSearchEntries(t),
         ...getChatTurnActivitySearchEntries(t),
         ...getChatBehaviorSearchEntries(t).filter(
-          (entry) => hostQueuesMessages || entry.targetSectionId !== 'chat-queue-follow-ups'
+          (entry) =>
+            (hostQueuesMessages || entry.targetSectionId !== 'chat-queue-follow-ups') &&
+            (showDesktopOnlySettings || entry.targetSectionId !== 'chat-auto-expand-tools')
         ),
         ...(showDesktopOnlySettings
           ? [getChatNamingSearchEntry(), getChatInlineVisualsSearchEntry()]

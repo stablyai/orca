@@ -82,6 +82,7 @@ import {
 } from '@/components/native-chat/worker-approvals/NativeChatWorkerApprovals'
 
 export function NativeChatStructuredSession(props: Omit<NativeChatStructuredViewProps, 'mode'>) {
+  const autoExpandTools = useAppStore((s) => s.settings?.nativeChatAutoExpandTools === true)
   const ownerWorktreeId = useNativeChatTabOwnerWorktreeId(props.tabId)
   const fileLinkContext = useNativeChatFileLinkContext(props.tabId)
   const provisionalLaunch = useNativeChatProvisionalLaunch(ownerWorktreeId, props.sessionId)
@@ -323,7 +324,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
                         railOutline={controller.railOutline}
                         isVisible={props.isVisible}
                         isWorking={controller.isWorking}
-                        expandSignal={false}
+                        expandSignal={autoExpandTools}
                         workingStartedAt={controller.workingStartedAt}
                         settledTurns={controller.settledTurns}
                         awaitingInput={prompt === null ? null : 'shown'}

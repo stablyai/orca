@@ -119,7 +119,7 @@ export function NativeChatMessageList({
   railOutline?: readonly NativeChatRailOutlineEntry[] | null
   isVisible?: boolean
   isWorking: boolean
-  /** Toolbar-driven desired open state for every tool run; each flip re-syncs. */
+  /** Default open state for tool runs; explicit reader choices win. */
   expandSignal: boolean
   workingStartedAt?: number | null
   /** Host durations by prompt id; otherwise fall back to a duration observed locally. */

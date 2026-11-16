@@ -78,6 +78,14 @@ export const getChatBehaviorEntriesByKey = createLocalizedCatalog(() => ({
       translate('components.settings.nativeChat.scrollToLatestOnSendSearchPosition', 'position')
     ]
   },
+  autoExpandTools: {
+    targetSectionId: 'chat-auto-expand-tools',
+    title: translate('components.settings.nativeChat.autoExpandToolsTitle', 'Auto expand tools'),
+    description: translate(
+      'components.settings.nativeChat.autoExpandToolsCopy',
+      'Open tool runs as the agent works. Runs you collapse by hand stay collapsed.'
+    )
+  },
   markNewMessages: {
     targetSectionId: 'chat-mark-new-messages',
     title: translate(

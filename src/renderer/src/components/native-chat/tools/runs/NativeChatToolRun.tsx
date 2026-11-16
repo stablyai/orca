@@ -71,7 +71,7 @@ export function NativeChatToolRun({
   backgroundTasks?: NativeChatBackgroundTaskBlock[]
   /** The row draws prose above this run, which the run then sits just under. */
   followsProse?: boolean
-  /** Legacy view-level default; production native-chat entry points pass false. */
+  /** Default open state; remembered reader choices take precedence. */
   expandSignal: boolean
   /** Structured lifecycle state, when available, keeps orphaned running calls from spinning. */
   activeTurnIsWorking?: boolean
@@ -95,11 +95,9 @@ export function NativeChatToolRun({
         : 0,
     [asides]
   )
-  // Key reader overrides by controlling disclosure state so returning restores them without mid-render store writes.
+  // Diff reveals can reopen a run; changing the default preserves reader choices.
   const runKey =
-    disclosureId === undefined
-      ? undefined
-      : `run:${disclosureId}:${expandSignal}:${revealedDiff?.requestId ?? '-'}`
+    disclosureId === undefined ? undefined : `run:${disclosureId}:${revealedDiff?.requestId ?? '-'}`
   const { open, setOpen } = useNativeChatDisclosure(runKey, revealedDiff ? true : expandSignal)
 
   // Share the renderability predicate with slot selection so childless groups cannot create empty margin wrappers.
