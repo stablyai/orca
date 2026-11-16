@@ -47,6 +47,16 @@ function isCodexNoRolloutError(
   )
 }
 
+/** Codex refuses to resume an archived thread until it is unarchived; it is the same conversation. */
+function isCodexArchivedThreadError(error: unknown, threadId: string): boolean {
+  return (
+    isCodexAppServerRequestError(error) &&
+    error.method === 'thread/resume' &&
+    error.code === -32600 &&
+    /\b(?:session|thread)\s+(\S+)\s+is archived\b/i.exec(error.message)?.[1] === threadId
+  )
+}
+
 /** Set keys merge after Codex's inheritance filter, preserving Orca identity under inherit = core. */
 function shellEnvironmentSetConfig(
   env: Record<string, string> | undefined
@@ -97,13 +107,24 @@ export async function openCodexThread(
       threadId: resumeThreadId,
       ...threadSettings
     }
-    try {
+    const resume = (): Promise<unknown> => {
       throwIfSignalAborted(signal)
-      opened = await connection.request(
+      return connection.request(
         'thread/resume',
         { ...resumeParams, excludeTurns: true },
         { timeoutMs }
       )
+    }
+    try {
+      opened = await resume().catch(async (error: unknown) => {
+        if (!isCodexArchivedThreadError(error, resumeThreadId)) {
+          throw error
+        }
+        // Archived outside Orca: unarchive once and reopen the same thread, never a new one.
+        throwIfSignalAborted(signal)
+        await connection.request('thread/unarchive', { threadId: resumeThreadId }, { timeoutMs })
+        return resume()
+      })
     } catch (error) {
       throwIfSignalAborted(signal)
       if (

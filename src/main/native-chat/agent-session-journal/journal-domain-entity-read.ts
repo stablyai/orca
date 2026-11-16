@@ -51,14 +51,28 @@ export function readJournalDomainEntity(
   switch (operation.kind) {
     case 'provider-turn-in-namespace': {
       const prefixKey = `p:${providerTimelineKeyPart(operation.namespace)}:`
+      // Codex rows name their thread in columns; an accepted send proves Codex saw the thread too.
       return {
         kind: operation.kind,
         present:
           db
             .prepare(`SELECT 1 FROM journal_items INDEXED BY journal_items_named_turn
           WHERE session_id=? AND epoch=? AND hidden=0 AND turn_id IS NOT NULL
-          AND turn_id>=? AND turn_id<? LIMIT 1`)
-            .get(...prefix, prefixKey, `${prefixKey.slice(0, -1)};`) !== undefined
+          AND turn_id>=? AND turn_id<?
+          UNION ALL SELECT 1 FROM journal_items INDEXED BY journal_items_codex_turn
+          WHERE session_id=? AND epoch=? AND hidden=0 AND codex_thread_id=? AND codex_turn_id IS NOT NULL
+          UNION ALL SELECT 1 FROM journal_submission_attempts INDEXED BY journal_submission_codex_turn
+          WHERE session_id=? AND epoch=? AND current=1 AND dispatch_state='accepted' AND codex_thread_id=?
+          LIMIT 1`)
+            .get(
+              ...prefix,
+              prefixKey,
+              `${prefixKey.slice(0, -1)};`,
+              ...prefix,
+              operation.namespace,
+              ...prefix,
+              operation.namespace
+            ) !== undefined
       }
     }
     case 'saved-item-ids':

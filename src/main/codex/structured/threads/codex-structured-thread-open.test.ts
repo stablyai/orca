@@ -57,6 +57,38 @@ describe('openCodexThread', () => {
     expect(request).toHaveBeenCalledOnce()
   })
 
+  it('unarchives a thread archived in Codex and reopens that same thread', async () => {
+    let archived = true
+    const request = vi.fn(async (method: string, params?: Record<string, unknown>) => {
+      if (method === 'thread/unarchive') {
+        archived = false
+        return {}
+      }
+      if (method === 'thread/resume' && archived) {
+        throw new CodexAppServerRequestError(
+          'thread/resume',
+          -32600,
+          `session ${String(params?.threadId)} is archived. Run \`codex unarchive ${String(params?.threadId)}\` to unarchive it first.`
+        )
+      }
+      return { thread: { id: params?.threadId ?? 'thread-new' } }
+    })
+
+    await expect(
+      openCodexThread(
+        connectionFor(request),
+        { cwd: '/workspace', resumeThreadId: 'thread-archived', supersedeIfUnsaved: true },
+        2_000
+      )
+    ).resolves.toMatchObject({ threadId: 'thread-archived' })
+    expect(request.mock.calls.map(([method]) => method)).toEqual([
+      'thread/resume',
+      'thread/unarchive',
+      'thread/resume'
+    ])
+    expect(request.mock.calls[1]?.[1]).toEqual({ threadId: 'thread-archived' })
+  })
+
   describe('a thread Codex never saved', () => {
     const noRollout = (threadId: string, code = -32600) =>
       new CodexAppServerRequestError(
