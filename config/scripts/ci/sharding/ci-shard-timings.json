@@ -4372,7 +4372,6 @@
       "src/shared/native-chat/native-chat-visual-directive.test.ts": 78,
       "src/shared/native-chat/native-chat-visual-shell.test.ts": 65,
       "src/shared/native-chat/tools/native-chat-edit-normalize.test.ts": 298,
-      "src/shared/native-chat/tools/native-chat-tool-attribution-allocation.test.ts": 105,
       "src/shared/native-chat/tools/native-chat-tool-identity.test.ts": 73,
       "src/shared/native-chat/transcript/native-chat-image-transcript-markers.test.ts": 94,
       "src/shared/native-chat/transcript/native-chat-transcript-contracts.test.ts": 715,
