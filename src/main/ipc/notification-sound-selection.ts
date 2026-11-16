@@ -11,7 +11,7 @@ import twoToneSoundPath from '../../../resources/notification-sounds/two-tone.mp
 import {
   type NotificationSettings,
   usesCustomNotificationSound
-} from '../../shared/notification-settings-types'
+} from '../../shared/notifications/notification-settings-types'
 
 export const NOTIFICATION_SOUND_MIME_BY_EXTENSION: ReadonlyMap<string, string> = new Map([
   ['.ogg', 'audio/ogg'],

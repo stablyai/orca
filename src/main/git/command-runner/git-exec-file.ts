@@ -138,7 +138,7 @@ async function gitExecFileAsyncUnlocked(
           ) {
             await terminationState.current
             const wasMissing = invalidateMissingDirectWslGit(error, resolved)
-            if (options.canStart?.() === false) {
+            if (options.canStart?.() === false || (await options.beforeStart?.()) === false) {
               throw createAbortError()
             }
             const fallback = resolveGitCommand(args, effectiveOptions, true, true)
@@ -164,7 +164,7 @@ async function gitExecFileAsyncUnlocked(
       }
       try {
         options.admissionSignal?.throwIfAborted()
-        if (options.canStart?.() === false) {
+        if (options.canStart?.() === false || (await options.beforeStart?.()) === false) {
           throw createAbortError()
         }
         return await runCapturedCommand()

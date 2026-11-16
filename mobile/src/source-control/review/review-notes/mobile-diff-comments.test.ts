@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { DiffComment } from '../../../../../src/shared/diff-comment-types'
+import type { DiffComment } from '../../../../../src/shared/file-review/diff-comment-types'
 import { removeDeliveredMobileDiffComments } from './mobile-diff-comments'
 
 function comment(overrides: Partial<DiffComment> & Pick<DiffComment, 'id'>): DiffComment {

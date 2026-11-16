@@ -17,7 +17,7 @@ import {
   markdownMathCloser,
   rejectsSingleDollarClose,
   rejectsSingleDollarOpen
-} from '../../../../shared/markdown-math-rules'
+} from '../../../../shared/markdown/markdown-math-rules'
 import { chatMathFromMarkdown, transformChatMath } from './chat-markdown-math-nodes'
 
 declare module 'micromark-util-types' {

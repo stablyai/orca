@@ -2,11 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   encodeServeSimKeyboardFrame,
   type ServeSimKeyboardFrame
-} from '../../../../../shared/emulator-keyboard-frame'
+} from '../../../../../shared/emulator/emulator-keyboard-frame'
 import {
   encodeServeSimTouchFrame,
   type ServeSimTouchFrame
-} from '../../../../../shared/emulator-touch-frame'
+} from '../../../../../shared/emulator/emulator-touch-frame'
 import { RotateOrientation } from '../../../../../shared/rpc-contract/emulator/emulator-params'
 import type { EmulatorStreamOrientation } from '../frame/emulator-device-frame-layout'
 

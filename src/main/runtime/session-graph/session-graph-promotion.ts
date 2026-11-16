@@ -31,6 +31,18 @@ export abstract class OrcaRuntimeWithAttachWindow extends OrcaRuntimeWithNotifyS
 
   protected abstract mainDecidesLiveness(worktreeId: string): boolean
 
+  // Remounts briefly clear ptyId; retain the live handle paired clients still use (#23759).
+  protected isLeafRemountingLivePty(
+    ptyId: string,
+    incomingPtyIds: ReadonlySet<string | null>
+  ): boolean {
+    return (
+      !incomingPtyIds.has(ptyId) &&
+      this.controllerKnowsPtyIsLive(ptyId) &&
+      this.getPtyLivenessVerdict(ptyId)?.status !== 'exited'
+    )
+  }
+
   /** Main-owned panes do not prove liveness or override certified exits; terminal records decide (L80). */
   protected graphLeafConnected(ptyId: string | null, worktreeId: string): boolean {
     if (ptyId === null || this.getPtyLivenessVerdict(ptyId)?.status === 'exited') {
