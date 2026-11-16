@@ -1,59 +1,17 @@
+import { useEffect } from 'react'
 import type { editor } from 'monaco-editor'
 import type { AppState } from '@/store/types'
-import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import { resolveHostPlatform, targetOnHost } from '@/runtime/hosts/platform/execution-host-facts'
-import { getLocalProjectExecutionRuntimeContext } from '@/runtime/hosts/preflight/local-preflight-context'
-import type { ParsedExecutionHost } from '../../../../../../shared/execution-host/execution-host'
-import { isWslHostRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
+import { useAppStore } from '@/store/index'
 import {
   resolveNewModelLineEnding,
   type EditorLineEnding
 } from '../../../../../../shared/editor/saving/editor-end-of-line'
-import { resolveEditorModelOwner } from '../identity/editor-model-owner'
+import { resolveEditorFileHostPlatform } from '../identity/editor-file-host-platform'
 import {
   beginProgrammaticContentSync,
-  endProgrammaticContentSync
+  endProgrammaticContentSync,
+  isProgrammaticContentSyncInFlight
 } from './monaco-programmatic-sync'
-
-/** OS of the host that owns an open file; null while that host has not reported it. */
-export function resolveEditorFileHostPlatform(
-  state: AppState,
-  file: Pick<
-    OpenFile,
-    | 'worktreeId'
-    | 'filePath'
-    | 'runtimeEnvironmentId'
-    | 'externalSshTargetId'
-    | 'operationProvenance'
-  >
-): NodeJS.Platform | null {
-  const owner = resolveEditorModelOwner(file, state)
-  if (!owner.hostId) {
-    return null
-  }
-  const target = targetOnHost(state, file.worktreeId, owner.hostId)
-  const fact = resolveHostPlatform(state, {
-    ...target,
-    // The owner already names the runtime that reaches an `ssh:` host; null means direct.
-    sshOwnerEnvironmentId: target.host?.kind === 'ssh' ? owner.environmentId : null,
-    // The file path refines local and server WSL namespaces.
-    workspacePath: file.filePath,
-    projectRuntime: () => getLocalProjectExecutionRuntimeContext(state, file.worktreeId)
-  })
-  if (fact.kind === 'known') {
-    return fact.platform
-  }
-  // Why: a WSL host's server always runs inside the distro, even before it reports its OS.
-  return isWslHostRuntime(state, target.host) ? 'linux' : null
-}
-
-function isWslHostRuntime(state: AppState, host: ParsedExecutionHost | null): boolean {
-  if (host?.kind !== 'runtime') {
-    return false
-  }
-  const environment = state.runtimeEnvironments?.find((entry) => entry.id === host.environmentId)
-  return Boolean(environment && isWslHostRuntimeEnvironment(environment))
-}
 
 export function resolveOpenFileNewModelLineEnding(
   state: AppState,
@@ -74,23 +32,94 @@ export function resolveOpenFileNewModelLineEnding(
   })
 }
 
-type LineEndingModel = Pick<editor.ITextModel, 'getLineCount' | 'getEOL' | 'setEOL'>
+type LineEndingModel = Pick<
+  editor.ITextModel,
+  'getLineCount' | 'getEOL' | 'setEOL' | 'onDidChangeContent' | 'isDisposed'
+>
 
-/** Sets the ending of a model that has no line breaks yet; models with breaks keep theirs. */
+// Why per model: retained models outlive editor mounts and are shared by split panes.
+const loadedWithLineBreaks = new WeakMap<LineEndingModel, boolean>()
+
+/** A model is "new" until it holds line breaks the user did not type: loaded or written externally. */
+function isNewModel(model: LineEndingModel): boolean {
+  let loaded = loadedWithLineBreaks.get(model)
+  if (loaded === undefined) {
+    loaded = model.getLineCount() > 1
+    loadedWithLineBreaks.set(model, loaded)
+  }
+  return !loaded
+}
+
+/** Sets a new model's ending; models loaded with line breaks keep theirs. */
 export function applyNewModelLineEnding(
   model: LineEndingModel,
   lineEnding: EditorLineEnding | null,
   modelKey: string
 ): void {
-  if (!lineEnding || model.getLineCount() > 1 || model.getEOL() === lineEnding) {
+  if (!lineEnding || !isNewModel(model) || model.getEOL() === lineEnding) {
     return
   }
-  // An EOL switch emits a content event; keep it from marking the file dirty.
+  // Literal EndOfLineSequence values (LF = 0, CRLF = 1) keep this free of the Monaco runtime.
+  const sequence = lineEnding === '\r\n' ? 1 : 0
+  if (model.getLineCount() > 1) {
+    // Lines typed before the host reported: a real text change the buffer must record.
+    model.setEOL(sequence)
+    return
+  }
+  // A one-line switch changes no text; keep its content event from marking the file dirty.
   beginProgrammaticContentSync(modelKey)
   try {
-    // Literal EndOfLineSequence values (LF = 0, CRLF = 1) keep this free of the Monaco runtime.
-    model.setEOL(lineEnding === '\r\n' ? 1 : 0)
+    model.setEOL(sequence)
   } finally {
     endProgrammaticContentSync(modelKey)
   }
+}
+
+/** Keeps a new model on its ending through undo, late host reports, and setting changes. */
+export function trackNewModelLineEnding(
+  model: LineEndingModel,
+  lineEnding: EditorLineEnding | null,
+  modelKey: string
+): { dispose(): void } {
+  isNewModel(model)
+  applyNewModelLineEnding(model, lineEnding, modelKey)
+  let disposed = false
+  const subscription = model.onDidChangeContent(() => {
+    if (isProgrammaticContentSyncInFlight(modelKey) && model.getLineCount() > 1) {
+      // External text with line breaks makes this an existing file; keep the ending it brought.
+      loadedWithLineBreaks.set(model, true)
+      return
+    }
+    // Why deferred: re-entrant edits would reach later listeners out of order (undo restores old EOLs).
+    queueMicrotask(() => {
+      if (!disposed && !model.isDisposed()) {
+        applyNewModelLineEnding(model, lineEnding, modelKey)
+      }
+    })
+  })
+  return {
+    dispose() {
+      disposed = true
+      subscription.dispose()
+    }
+  }
+}
+
+export function useNewModelLineEnding(
+  mountedEditor: editor.IStandaloneCodeEditor | null,
+  modelUri: string,
+  fileId: string,
+  language: string
+): void {
+  const lineEnding = useAppStore((state) =>
+    resolveOpenFileNewModelLineEnding(state, fileId, language)
+  )
+  useEffect(() => {
+    const model = mountedEditor?.getModel()
+    if (!model || model.uri.toString() !== modelUri) {
+      return
+    }
+    const tracker = trackNewModelLineEnding(model, lineEnding, modelUri)
+    return () => tracker.dispose()
+  }, [mountedEditor, modelUri, lineEnding])
 }

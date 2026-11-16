@@ -245,7 +245,7 @@ export function resolveWorktreeResourceTarget(
   return targetOnHost(state, worktreeId, getResourceExecutionHostIdForWorktree(state, worktreeId))
 }
 
-export function targetOnHost(
+function targetOnHost(
   state: Omit<WorktreeHostFactsState, 'settings'>,
   worktreeId: string,
   hostId: string,

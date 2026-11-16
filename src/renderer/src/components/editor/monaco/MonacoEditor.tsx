@@ -36,10 +36,7 @@ import {
 } from '@/lib/monaco-languages/plugin-syntax-editor-options'
 import { useMonacoTheme } from '@/hooks/use-monaco-theme'
 import { useEditorModelRekeyCarry } from '../model-lifetime/identity/editor-model-rekey-carry'
-import {
-  applyNewModelLineEnding,
-  resolveOpenFileNewModelLineEnding
-} from '../model-lifetime/buffer-text/editor-new-model-line-ending'
+import { useNewModelLineEnding } from '../model-lifetime/buffer-text/editor-new-model-line-ending'
 
 type MonacoEditorProps = {
   fileId: string
@@ -133,15 +130,7 @@ export default function MonacoEditor({
     [filePath, modelOwnerKey]
   )
   useEditorModelRekeyCarry(fileId, modelUri)
-  const newModelLineEnding = useAppStore((state) =>
-    resolveOpenFileNewModelLineEnding(state, fileId, language)
-  )
-  useEffect(() => {
-    const model = mountedEditor?.getModel()
-    if (model && model.uri.toString() === modelUri) {
-      applyNewModelLineEnding(model, newModelLineEnding, modelUri)
-    }
-  }, [mountedEditor, modelUri, newModelLineEnding])
+  useNewModelLineEnding(mountedEditor, modelUri, fileId, language)
   const estimatedAutoHeight = useMemo(() => {
     if (!autoHeight) {
       return null

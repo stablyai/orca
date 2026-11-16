@@ -16,7 +16,7 @@ export function getEndOfLineSearchEntry(t: Translate = translate) {
     title: t('settings.editorEndOfLine.title', 'End of line'),
     description: t(
       'settings.editorEndOfLine.description',
-      'Line ending for new files and files with no line breaks yet. Auto uses LF on Linux and macOS hosts and CRLF on Windows hosts, following where the file lives. Files with line breaks keep theirs.'
+      'Line ending for new files and files with no line breaks yet. Auto follows the system that runs the file’s workspace: LF for Linux, macOS, and WSL, CRLF for Windows. Files with line breaks keep theirs.'
     ),
     keywords: [
       ...translateSearchKeyword(
