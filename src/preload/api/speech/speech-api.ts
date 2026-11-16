@@ -1,6 +1,7 @@
 import type { SecretAtRestProtection } from '../../../shared/secure-storage/secret-at-rest-protection'
 import type { DictationCleanupResult } from '../../../shared/speech/dictation/dictation-cleanup'
 import type {
+  ChatGptSpeechAccount,
   DictationContext,
   OpenAiCompatibleSpeechProvider,
   OpenAiCompatibleSpeechProviderSummary,
@@ -15,6 +16,7 @@ import type {
 export type SpeechApi = {
   getCatalog: () => Promise<SpeechModelManifest[]>
   getModelStates: () => Promise<SpeechModelState[]>
+  getChatGptAccounts: () => Promise<ChatGptSpeechAccount[]>
   getOpenAiApiKeyStatus: () => Promise<{
     configured: boolean
     protection: SecretAtRestProtection | null

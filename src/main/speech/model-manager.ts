@@ -81,12 +81,7 @@ export class ModelManager extends SpeechModelDownloadTransport {
   }
 
   async getModelStates(): Promise<SpeechModelState[]> {
-    const states: SpeechModelState[] = []
-    for (const manifest of SPEECH_MODEL_CATALOG) {
-      const state = await this.getModelState(manifest.id)
-      states.push(state)
-    }
-    return states
+    return Promise.all(SPEECH_MODEL_CATALOG.map((manifest) => this.getModelState(manifest.id)))
   }
 
   async getModelState(modelId: string): Promise<SpeechModelState> {
@@ -102,7 +97,7 @@ export class ModelManager extends SpeechModelDownloadTransport {
     }
 
     if (manifest.provider !== 'local') {
-      const ready = this.hasCloudCredentials(manifest.provider)
+      const ready = await this.hasCloudCredentials(manifest.provider)
       return { id: modelId, status: ready ? 'ready' : 'not-downloaded' }
     }
 

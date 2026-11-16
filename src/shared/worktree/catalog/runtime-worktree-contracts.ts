@@ -1,3 +1,4 @@
+import type { ChatGptSpeechAccount } from '../../speech/speech-types'
 import type { DictationTerm } from '../../speech/dictation/dictation-dictionary'
 import type { SmartTier } from '../../sidebar-list/sorting/sort-stamps'
 import type {
@@ -172,7 +173,7 @@ export type RuntimeGitLocalBranches = {
 export type RuntimeSpeechModelSummary = {
   id: string
   label: string
-  provider: 'local' | 'openai'
+  provider: 'local' | 'openai' | 'chatgpt'
   sizeBytes: number | null
   recommended: boolean
   status: 'ready' | 'not-downloaded' | 'downloading' | 'extracting' | 'error'
@@ -182,6 +183,9 @@ export type RuntimeSpeechModelSummary = {
 export type RuntimeSpeechSetupState = {
   enabled: boolean
   selectedModelId: string
+  /** Host-owned dictation account selection and roster; absent from older hosts. */
+  chatGptAccountId?: string | null
+  chatGptAccounts?: ChatGptSpeechAccount[]
   dictationMode: 'toggle' | 'hold'
   /** Toggle plus hold-to-record is Auto. */
   dictationHoldToRecord: boolean

@@ -72,6 +72,7 @@ export function getDefaultVoiceSettings(): VoiceSettings {
   return {
     enabled: false,
     sttModel: '',
+    chatGptAccountId: null,
     modelsDir: '',
     dictationLanguage: DICTATION_LANGUAGE_AUTO,
     dictationMode: 'toggle' as const,

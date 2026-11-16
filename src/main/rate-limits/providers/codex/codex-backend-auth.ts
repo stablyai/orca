@@ -51,7 +51,10 @@ function getBackendAuthRead(
   return read
 }
 
-async function readBackendAuth(authPath: string, signal: AbortSignal): Promise<string> {
+export async function readCodexBackendAuthContents(
+  authPath: string,
+  signal: AbortSignal
+): Promise<string> {
   const result = await getBackendAuthRead(authPath).wait(signal)
   if ('error' in result) {
     throw result.error
@@ -71,7 +74,7 @@ export async function getCodexBackendAuthHeaders(
     return null
   }
   const authPath = join(getCodexHomePath(options?.codexHomePath), 'auth.json')
-  const auth = JSON.parse(await readBackendAuth(authPath, signal)) as CodexAuthFile
+  const auth: CodexAuthFile = JSON.parse(await readCodexBackendAuthContents(authPath, signal))
   const accessToken = auth.tokens?.access_token
   if (!accessToken) {
     return null

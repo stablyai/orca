@@ -219,6 +219,17 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     streaming: false
   },
   {
+    id: 'chatgpt-subscription-transcribe',
+    label: 'ChatGPT subscription',
+    type: 'chatgpt',
+    provider: 'chatgpt',
+    language: 'multilingual',
+    dictationLanguages: DICTATION_LANGUAGES,
+    languages: DICTATION_LANGUAGES,
+    sampleRate: 16000,
+    streaming: false
+  },
+  {
     id: 'openai-gpt-4o-mini-transcribe',
     label: 'GPT-4o mini Transcribe',
     type: 'openai',

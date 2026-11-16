@@ -1,4 +1,6 @@
-import { defineMethod } from '../../core'
+import { defineMethod, type RpcContext } from '../../core'
+import { CHATGPT_SPEECH_ACCOUNTS_CLIENT_CAPABILITY } from '../../../../../shared/speech/speech-types'
+import type { RuntimeSpeechSetupState } from '../../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import {
   DictationChunk,
   DictationHandle,
@@ -9,12 +11,29 @@ import {
   SpeechSetupRead
 } from '../../../../../shared/rpc-contract/speech/speech-params'
 
+function speechSetupForClient(
+  setup: RuntimeSpeechSetupState,
+  context: Pick<RpcContext, 'clientKind' | 'clientCapabilities'>
+): RuntimeSpeechSetupState {
+  if (
+    context.clientKind !== 'mobile' ||
+    context.clientCapabilities?.includes(CHATGPT_SPEECH_ACCOUNTS_CLIENT_CAPABILITY)
+  ) {
+    return setup
+  }
+  return { ...setup, models: setup.models.filter((model) => model.provider !== 'chatgpt') }
+}
+
 export const SPEECH_METHODS = [
   defineMethod({
     name: 'speech.models.list',
     permission: 'workspace',
     params: SpeechSetupRead,
-    handler: async (params, { runtime }) => runtime.listMobileSpeechModels(params?.worktreeId)
+    handler: async (params, context) =>
+      speechSetupForClient(
+        await context.runtime.listMobileSpeechModels(params?.worktreeId),
+        context
+      )
   }),
   defineMethod({
     name: 'speech.models.download',
@@ -26,21 +45,28 @@ export const SPEECH_METHODS = [
     name: 'speech.models.delete',
     permission: 'workspace',
     params: SpeechModelAction,
-    handler: async (params, { runtime }) => runtime.deleteMobileSpeechModel(params.modelId)
+    handler: async (params, context) =>
+      speechSetupForClient(await context.runtime.deleteMobileSpeechModel(params.modelId), context)
   }),
   defineMethod({
     name: 'speech.dictation.setup',
     permission: 'workspace',
     params: DictationSetup,
-    handler: async (params, { runtime }) =>
-      runtime.configureMobileDictation({
-        ...(params.enabled !== undefined ? { enabled: params.enabled } : {}),
-        ...(params.modelId !== undefined ? { modelId: params.modelId } : {}),
-        ...(params.dictationMode !== undefined ? { dictationMode: params.dictationMode } : {}),
-        ...(params.dictationHoldToRecord !== undefined
-          ? { dictationHoldToRecord: params.dictationHoldToRecord }
-          : {})
-      })
+    handler: async (params, context) =>
+      speechSetupForClient(
+        await context.runtime.configureMobileDictation({
+          ...(params.enabled !== undefined ? { enabled: params.enabled } : {}),
+          ...(params.modelId !== undefined ? { modelId: params.modelId } : {}),
+          ...(params.chatGptAccountId !== undefined
+            ? { chatGptAccountId: params.chatGptAccountId }
+            : {}),
+          ...(params.dictationMode !== undefined ? { dictationMode: params.dictationMode } : {}),
+          ...(params.dictationHoldToRecord !== undefined
+            ? { dictationHoldToRecord: params.dictationHoldToRecord }
+            : {})
+        }),
+        context
+      )
   }),
   defineMethod({
     name: 'speech.dictation.start',

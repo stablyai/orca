@@ -4,6 +4,7 @@ import type { SpeechModelManifest } from '../../shared/speech/speech-types'
 import { getCatalogModel } from './model-catalog'
 import { OpenAiTranscriptionSession } from './openai-transcription-client'
 import { resolveCloudTranscriptionTarget } from './cloud-transcription-target'
+import { captureChatGptSpeechAccount } from './chatgpt-subscription-auth'
 import type { SttEventSink } from './stt-service'
 import {
   MAX_STT_SESSIONS,
@@ -67,6 +68,7 @@ export async function startSttDictation(
     throw new Error('dictation_model_busy')
   }
 
+  const chatGptAccount = manifest.provider === 'chatgpt' ? captureChatGptSpeechAccount() : null
   const session: SttSession = {
     owner,
     streamId: String(state.nextStreamId++),
@@ -94,7 +96,8 @@ export async function startSttDictation(
       await teardownIdleSttEngine(state)
       session.cloud = new OpenAiTranscriptionSession(
         () => resolveCloudTranscriptionTarget(modelId),
-        engineDictationLanguage(manifest, language)
+        engineDictationLanguage(manifest, language),
+        chatGptAccount
       )
     }
     throwIfCanceled(state, session)
@@ -129,7 +132,9 @@ async function requireModelReady(state: SttSessionState, modelId: string): Promi
     throw new Error(
       modelState.needsUpdate
         ? SPEECH_MODEL_NEEDS_UPDATE_ERROR
-        : `Model not ready: ${modelState.status}`
+        : getCatalogModel(modelId)?.provider === 'chatgpt'
+          ? 'Choose a dictation account in Voice settings. Add or sign in to it through AI Provider Accounts on the transcribing host.'
+          : `Model not ready: ${modelState.status}`
     )
   }
 }

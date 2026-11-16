@@ -1,6 +1,11 @@
+import type { CodexManagedAccount } from '../../shared/agent-accounts/managed-account-types'
 import { getMainHttpClient } from '../network/http-client'
 import { resampleToRate } from './stt-audio-resample'
-import type { CloudTranscriptionTarget } from './cloud-transcription-target'
+import {
+  CHATGPT_TRANSCRIPTION_URL,
+  type CloudTranscriptionTarget
+} from './cloud-transcription-target'
+import { readChatGptSubscriptionHeaders } from './chatgpt-subscription-auth'
 import {
   CLOUD_TRANSCRIPTION_SAMPLE_RATE,
   MAX_CLOUD_TRANSCRIPTION_SECONDS,
@@ -105,7 +110,8 @@ export class OpenAiTranscriptionSession {
 
   constructor(
     private readonly readTarget: () => CloudTranscriptionTarget,
-    private readonly language?: string
+    private readonly language: string | undefined,
+    private readonly chatGptAccount: CodexManagedAccount | null
   ) {}
 
   cancel(): void {
@@ -138,7 +144,9 @@ export class OpenAiTranscriptionSession {
     const wav = encodePcm16Wav(chunks, CLOUD_TRANSCRIPTION_SAMPLE_RATE)
     // No response_format: JSON is the default everywhere, and not every provider accepts the field.
     const form = new FormData()
-    form.append('model', target.model)
+    if (target.auth !== 'chatgpt') {
+      form.append('model', target.model)
+    }
     if (this.language) {
       form.append(languageField(target.model), this.language)
     }
@@ -147,7 +155,12 @@ export class OpenAiTranscriptionSession {
 
     const timeout = AbortSignal.timeout(cloudTranscriptionTimeoutMs(this.audioSamples))
     try {
-      return await upload(target, form, AbortSignal.any([this.abortController.signal, timeout]))
+      return await upload(
+        target,
+        form,
+        AbortSignal.any([this.abortController.signal, timeout]),
+        this.chatGptAccount
+      )
     } catch (error) {
       if (timeout.aborted && !this.abortController.signal.aborted) {
         throw new Error(
@@ -159,18 +172,61 @@ export class OpenAiTranscriptionSession {
   }
 }
 
+async function postChatGptTranscription(
+  form: FormData,
+  signal: AbortSignal,
+  account: CodexManagedAccount | null
+): Promise<Response> {
+  signal.throwIfAborted()
+  const headers = await readChatGptSubscriptionHeaders(signal, account)
+  signal.throwIfAborted()
+  try {
+    return await getMainHttpClient().fetch(CHATGPT_TRANSCRIPTION_URL, {
+      method: 'POST',
+      credentials: 'omit',
+      redirect: 'error',
+      signal,
+      headers,
+      body: form
+    })
+  } catch {
+    signal.throwIfAborted()
+    throw new Error(
+      'ChatGPT transcription request failed. Check your connection and try again. No paid API fallback was used.'
+    )
+  }
+}
+
 async function upload(
   target: CloudTranscriptionTarget,
   form: FormData,
-  signal: AbortSignal
+  signal: AbortSignal,
+  account: CodexManagedAccount | null
 ): Promise<string> {
-  const response = await postOpenAiTranscription(target.url, target.apiKey, form, signal)
+  const subscription = target.auth === 'chatgpt'
+  const response = subscription
+    ? await postChatGptTranscription(form, signal, account)
+    : await postOpenAiTranscription(target.url, target.apiKey, form, signal)
+  if (subscription && !response.ok) {
+    await response.body?.cancel().catch(() => {})
+    signal.throwIfAborted()
+    const detail =
+      response.status === 401
+        ? 'Your selected ChatGPT login expired. Sign in again through Accounts settings on this host.'
+        : response.status === 403
+          ? 'ChatGPT rejected subscription dictation for this account or client.'
+          : response.status === 429
+            ? 'Your ChatGPT transcription limit was reached. Try again later.'
+            : `ChatGPT transcription failed (HTTP ${response.status}).`
+    throw new Error(`${detail} No paid API fallback was used.`)
+  }
   const data = (await response.json().catch(() => ({}))) as OpenAiTranscriptionResponse
-  const error = readOpenAiErrorMessage(data, target.apiKey)
+  signal.throwIfAborted()
+  const error = subscription ? undefined : readOpenAiErrorMessage(data, target.apiKey)
   if (!response.ok) {
     throw new Error(`${target.label} transcription failed: ${error ?? response.statusText}`)
   }
-  if (typeof data.text === 'string') {
+  if (typeof data?.text === 'string') {
     return data.text.trim()
   }
   throw new Error(error ?? `${target.label} transcription response did not include text`)

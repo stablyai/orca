@@ -9,7 +9,8 @@ import { normalizeDictationTerms } from '../../../src/shared/speech/dictation/di
 
 export const SPEECH_MODEL_PROVIDERS = hostUnionArms<RuntimeSpeechModelSummary['provider']>({
   local: true,
-  openai: true
+  openai: true,
+  chatgpt: true
 })
 export const SPEECH_MODEL_STATUSES = hostUnionArms<RuntimeSpeechModelSummary['status']>({
   ready: true,
@@ -36,6 +37,11 @@ const speechModelSchema = z.looseObject({
 export const dictationSetupSchema = z.looseObject({
   enabled: salvagedOptional('enabled', z.boolean()),
   selectedModelId: salvagedOptional('selectedModelId', z.string()),
+  chatGptAccountId: salvagedOptional('chatGptAccountId', z.string().nullable()),
+  chatGptAccounts: salvagedOptional(
+    'chatGptAccounts',
+    salvagingArray(z.object({ id: z.string(), label: z.string() }))
+  ),
   dictationMode: salvagedOptional('dictationMode', z.string()),
   // Absent from older hosts, which have no Auto mode; the phone then offers only Toggle and Hold.
   dictationHoldToRecord: salvagedOptional('dictationHoldToRecord', z.boolean()),

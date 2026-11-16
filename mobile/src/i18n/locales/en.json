@@ -547,7 +547,13 @@
       "downloadFailed": "Failed to start download",
       "deleteFailed": "Failed to delete model",
       "updateFailed": "Failed to update dictation settings",
-      "cloudModelNeedsKey": "Needs an OpenAI key"
+      "cloudModelNeedsKey": "Needs an OpenAI key",
+      "chatgptSubscriptionDescription": "ChatGPT subscription · No extra API key. Subscription limits apply.",
+      "chatgptSubscriptionLoginGuidance": "Choose a dictation account from this host. Add or reauthenticate accounts in Settings → AI Provider Accounts on the transcription host.",
+      "chatgptAccount": "ChatGPT dictation account",
+      "chatgptAccountsUpdateRequired": "Update Orca on the transcription host to choose a ChatGPT dictation account here. Manage sign-ins in that host’s Settings → AI Provider Accounts.",
+      "chatgptAccountUnavailable": "{{account}} (unavailable)",
+      "chatgptNoAccount": "No account selected"
     },
     "controls": {
       "start": "Dictate",

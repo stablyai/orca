@@ -1,5 +1,5 @@
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { Check, Download, Trash2 } from 'lucide-react-native'
+import { Check, Cloud, Download, Trash2 } from 'lucide-react-native'
 import { colors, feedback, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
@@ -8,6 +8,8 @@ import type { Translate } from '../../i18n/mobile-i18n'
 import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import {
+  chatgptSubscriptionDescription,
+  chatgptSubscriptionLoginGuidance,
   cloudModelNeedsKey,
   dictationModelRowAction,
   isModelInFlight,
@@ -78,16 +80,31 @@ export function VoiceModelList({
             <ListRow
               key={model.id}
               title={model.label ?? model.id}
-              subtitle={modelMeta(model, t) || undefined}
-              detail={
-                model.recommended ? (
-                  <Text style={styles.recommended}>
-                    {t('components.voiceModelList.recommended', 'Recommended')}
-                  </Text>
+              subtitle={model.provider === 'chatgpt' ? undefined : modelMeta(model, t) || undefined}
+              leading={
+                model.provider === 'chatgpt' ? (
+                  <Cloud size={18} color={colors.textSecondary} />
                 ) : undefined
               }
+              detail={
+                <>
+                  {model.provider === 'chatgpt' ? (
+                    <Text style={styles.modelStateText}>
+                      {chatgptSubscriptionDescription()}
+                      {action === 'needs-subscription-login'
+                        ? ` ${chatgptSubscriptionLoginGuidance()}`
+                        : ''}
+                    </Text>
+                  ) : null}
+                  {model.recommended ? (
+                    <Text style={styles.recommended}>
+                      {t('components.voiceModelList.recommended', 'Recommended')}
+                    </Text>
+                  ) : null}
+                </>
+              }
               accessory={
-                action === 'needs-api-key' ? (
+                action === 'needs-subscription-login' ? null : action === 'needs-api-key' ? (
                   <Text style={styles.modelStateText}>{cloudModelNeedsKey()}</Text>
                 ) : action === 'in-use' || action === 'use' ? (
                   <View style={styles.readyActions}>
@@ -127,7 +144,7 @@ export function VoiceModelList({
                       </Pressable>
                     )}
                     {/* A cloud model has nothing on this computer to delete. */}
-                    {model.provider === 'openai' ? null : (
+                    {model.provider === 'openai' || model.provider === 'chatgpt' ? null : (
                       <Pressable
                         style={({ pressed }) => [
                           styles.iconButton,

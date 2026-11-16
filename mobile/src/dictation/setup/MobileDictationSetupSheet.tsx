@@ -1,6 +1,6 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { Check, Download } from 'lucide-react-native'
+import { Check, Cloud, Download } from 'lucide-react-native'
 import { BottomDrawer } from '../../components/bottom-drawer/BottomDrawer'
 import { MobileSwitch } from '../../components/controls/MobileSwitch'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
@@ -12,8 +12,12 @@ import { getUiIntlLocale } from '../../i18n/ui-intl-locale'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { triggerError, triggerSuccess } from '../../platform/haptics/haptics'
 import { useDictationSetupPoller } from '../use-dictation-setup-poller'
+import { ChatGptAccountPicker } from './ChatGptAccountPicker'
 import {
+  chatgptSubscriptionDescription,
+  chatgptSubscriptionLoginGuidance,
   cloudModelNeedsKey,
+  dictationFailureMessage,
   dictationModelRowAction,
   downloadDictationModel,
   fetchDictationSetup,
@@ -37,7 +41,7 @@ type SetupError = { message: string } | { kind: 'load' | 'download' | 'select' |
 
 function setupErrorMessage(error: SetupError, t: Translate): string {
   if ('message' in error) {
-    return error.message
+    return dictationFailureMessage(error.message)
   }
   switch (error.kind) {
     case 'load':
@@ -61,6 +65,11 @@ function formatSize(bytes: number | null | undefined, t: Translate): string {
 }
 
 function modelMetadata(model: MobileSpeechModel, t: Translate): string {
+  if (model.provider === 'chatgpt') {
+    return model.status === 'ready'
+      ? chatgptSubscriptionDescription()
+      : `${chatgptSubscriptionDescription()} ${chatgptSubscriptionLoginGuidance()}`
+  }
   const details = model.provider === 'openai' ? 'OpenAI API' : formatSize(model.sizeBytes, t)
   if (isModelInFlight(model) && model.progress != null) {
     return t('components.dictationSetupSheet.modelProgress', '{{details}} · {{progress}}%', {
@@ -80,23 +89,33 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
   const [setup, setSetup] = useState<MobileSpeechSetup | null>(null)
   const [error, setError] = useState<SetupError | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
+  const mutationPending = useRef(false)
+  const generation = useRef(0)
   const refresh = useCallback(async (): Promise<boolean | undefined> => {
     if (!client) {
       return false
     }
+    if (mutationPending.current) {
+      return undefined
+    }
+    const requestGeneration = generation.current
     try {
       const next = await fetchDictationSetup(client)
-      setSetup(next)
-      setError(null)
+      if (!mutationPending.current && requestGeneration === generation.current) {
+        setSetup(next)
+        setError(null)
+      }
       return next.models.some(isModelInFlight)
     } catch (err) {
-      setError(err instanceof Error ? { message: err.message } : { kind: 'load' })
+      if (!mutationPending.current && requestGeneration === generation.current) {
+        setError(err instanceof Error ? { message: err.message } : { kind: 'load' })
+      }
       return undefined
     }
   }, [client])
 
   const polling = setup?.models.some(isModelInFlight) ?? false
-  const refreshSetup = useDictationSetupPoller({
+  useDictationSetupPoller({
     visible: visible && client !== null,
     polling,
     refresh,
@@ -113,29 +132,35 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
 
   const handleDownload = useCallback(
     async (model: MobileSpeechModel) => {
-      if (!client) {
+      if (!client || mutationPending.current) {
         return
       }
+      mutationPending.current = true
+      generation.current += 1
       setBusy(model.id)
       setError(null)
       try {
         await downloadDictationModel(client, model.id)
-        await refreshSetup()
+        setSetup(await fetchDictationSetup(client))
       } catch (err) {
         triggerError()
         setError(err instanceof Error ? { message: err.message } : { kind: 'download' })
       } finally {
         setBusy(null)
+        mutationPending.current = false
+        generation.current += 1
       }
     },
-    [client, refreshSetup]
+    [client]
   )
 
   const handleUseModel = useCallback(
     async (model: MobileSpeechModel) => {
-      if (!client) {
+      if (!client || mutationPending.current) {
         return
       }
+      mutationPending.current = true
+      generation.current += 1
       setBusy(model.id)
       setError(null)
       try {
@@ -148,6 +173,8 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
         setError(err instanceof Error ? { message: err.message } : { kind: 'select' })
       } finally {
         setBusy(null)
+        mutationPending.current = false
+        generation.current += 1
       }
     },
     [client, onReady]
@@ -155,18 +182,58 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
 
   const handleToggleEnabled = useCallback(
     async (enabled: boolean) => {
-      if (!client) {
+      if (!client || mutationPending.current) {
         return
       }
+      mutationPending.current = true
+      generation.current += 1
+      setBusy('settings')
       setError(null)
       try {
         setSetup(await setDictationConfig(client, { enabled }))
       } catch (err) {
         setError(err instanceof Error ? { message: err.message } : { kind: 'update' })
+      } finally {
+        mutationPending.current = false
+        generation.current += 1
+        setBusy(null)
       }
     },
     [client]
   )
+
+  const handleAccountChange = async (chatGptAccountId: string | null): Promise<void> => {
+    if (!client || mutationPending.current || setup?.chatGptAccounts === undefined) {
+      return
+    }
+    mutationPending.current = true
+    generation.current += 1
+    setBusy('account')
+    setError(null)
+    try {
+      const next = await setDictationConfig(client, { chatGptAccountId })
+      setSetup(next)
+      if (
+        next.chatGptAccounts === undefined ||
+        (next.chatGptAccountId ?? null) !== chatGptAccountId
+      ) {
+        setError({
+          message: t(
+            'dictation.setup.chatgptAccountsUpdateRequired',
+            'Update Orca on the transcription host to choose a ChatGPT dictation account here. Manage sign-ins in that host’s Settings → AI Provider Accounts.'
+          )
+        })
+      }
+    } catch (err) {
+      setError(err instanceof Error ? { message: err.message } : { kind: 'update' })
+    } finally {
+      mutationPending.current = false
+      generation.current += 1
+      setBusy(null)
+    }
+  }
+
+  const enabledLabel = t('components.dictationSetupSheet.enabled', 'Dictation enabled')
 
   return (
     <BottomDrawer visible={visible} onClose={onClose}>
@@ -189,26 +256,32 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
         ) : (
           <>
             <View style={styles.enableRow}>
-              <Text style={styles.enableLabel}>
-                {t('components.dictationSetupSheet.enabled', 'Dictation enabled')}
-              </Text>
+              <Text style={styles.enableLabel}>{enabledLabel}</Text>
               <MobileSwitch
-                accessibilityLabel={t(
-                  'components.dictationSetupSheet.enabled',
-                  'Dictation enabled'
-                )}
+                accessibilityLabel={enabledLabel}
                 value={setup.enabled === true}
+                disabled={busy !== null}
                 onValueChange={(v) => void handleToggleEnabled(v)}
               />
             </View>
 
+            {setup.models.some((model) => model.provider === 'chatgpt') ? (
+              <ChatGptAccountPicker
+                setup={setup}
+                disabled={busy !== null}
+                onChange={(id) => void handleAccountChange(id)}
+              />
+            ) : null}
             {setup.models.map((model) => {
               const action = dictationModelRowAction(model, setup.selectedModelId)
-              const rowBusy = busy === model.id
+              const rowBusy = busy !== null
               return (
                 <View key={model.id} style={styles.modelRow}>
                   <View style={styles.modelInfo}>
                     <View style={styles.modelTitleRow}>
+                      {model.provider === 'chatgpt' ? (
+                        <Cloud size={16} color={colors.textSecondary} />
+                      ) : null}
                       <Text style={styles.modelLabel}>{model.label}</Text>
                       {model.recommended ? (
                         <Text style={styles.recommended}>
@@ -218,7 +291,7 @@ export function MobileDictationSetupSheet({ visible, client, onClose, onReady }:
                     </View>
                     <Text style={styles.modelMeta}>{modelMetadata(model, t)}</Text>
                   </View>
-                  {action === 'needs-api-key' ? (
+                  {action === 'needs-subscription-login' ? null : action === 'needs-api-key' ? (
                     <Text style={styles.modelStateText}>{cloudModelNeedsKey()}</Text>
                   ) : action === 'in-use' ? (
                     <View style={styles.selectedTag}>

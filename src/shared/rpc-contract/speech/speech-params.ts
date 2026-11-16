@@ -69,6 +69,7 @@ export const SpeechModelAction = z.object({
 export const DictationSetup = z.object({
   enabled: z.boolean().optional(),
   modelId: OptionalString,
+  chatGptAccountId: z.string().trim().min(1).max(256).nullable().optional(),
   dictationMode: z.enum(['toggle', 'hold']).optional(),
   dictationHoldToRecord: z.boolean().optional()
 })

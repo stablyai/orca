@@ -28,6 +28,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { readIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { useLanguageReadiness } from '@/i18n/language-readiness'
 import { speechModelRatingLanguage } from './speech-model-quality'
+import { VoiceChatGptAccountSettings } from './VoiceChatGptAccountSetting'
 import { suggestSpeechModel } from './speech-model-suggestion'
 
 type VoicePaneProps = {
@@ -74,12 +75,9 @@ export function VoicePane({
 
   const updateVoiceSettings = useCallback(
     (updates: Partial<VoiceSettings>): void => {
-      updateSettings({
-        voice: {
-          ...voiceSettingsRef.current,
-          ...updates
-        }
-      })
+      const voice = { ...voiceSettingsRef.current, ...updates }
+      voiceSettingsRef.current = voice
+      updateSettings({ voice })
     },
     [updateSettings]
   )
@@ -152,7 +150,16 @@ export function VoicePane({
   }
 
   const openCloudSetup = (modelId: string): void => {
-    if (catalog.find((m) => m.id === modelId)?.provider === 'openai-compatible') {
+    const provider = catalog.find((m) => m.id === modelId)?.provider
+    if (provider === 'chatgpt') {
+      useAppStore.getState().openSettingsTarget({
+        pane: 'accounts',
+        repoId: null,
+        sectionId: 'accounts-codex',
+        hostScope: { kind: 'local' },
+        intent: 'native-accounts'
+      })
+    } else if (provider === 'openai-compatible') {
       openCompatibleDialog(modelId)
     } else {
       openOpenAiDialog(modelId)
@@ -298,6 +305,26 @@ export function VoicePane({
           onRefreshModelStates={refreshModelStates}
           cloudSettings={
             <>
+              <VoiceChatGptAccountSettings
+                voiceSettings={voiceSettings}
+                onUpdateVoiceSettings={async (updates) => {
+                  const voice = { ...voiceSettingsRef.current, ...updates }
+                  const previousAccountId = voiceSettingsRef.current.chatGptAccountId
+                  voiceSettingsRef.current = voice
+                  try {
+                    await useAppStore.getState().updateSettingsOrThrow({ voice })
+                    await refreshModelStates()
+                  } catch (error) {
+                    if (voiceSettingsRef.current.chatGptAccountId === voice.chatGptAccountId) {
+                      voiceSettingsRef.current = {
+                        ...voiceSettingsRef.current,
+                        chatGptAccountId: previousAccountId
+                      }
+                    }
+                    throw error
+                  }
+                }}
+              />
               {voiceSettings.openAiApiKeyConfigured ? (
                 <>
                   <div data-settings-row="" className="py-3 empty:hidden">

@@ -52,6 +52,9 @@ export function dictationFailureMessage(message: string): string {
   if (isSpeechlessServerError(message)) {
     return speechlessServerMessage()
   }
+  if (message === 'voice_chatgpt_account_unavailable') {
+    return chatgptSubscriptionLoginGuidance()
+  }
   const fallback = hostDictationErrorMessage(message)
   if (fallback === undefined) {
     return message
@@ -191,6 +194,7 @@ export async function setDictationConfig(
   params: {
     enabled?: boolean
     modelId?: string
+    chatGptAccountId?: string | null
     dictationMode?: 'toggle' | 'hold'
     dictationHoldToRecord?: boolean
   }
@@ -225,12 +229,27 @@ export function cloudModelNeedsKey(): string {
   return translate('dictation.setup.cloudModelNeedsKey', 'Needs an OpenAI key')
 }
 
+export function chatgptSubscriptionDescription(): string {
+  return translate(
+    'dictation.setup.chatgptSubscriptionDescription',
+    'ChatGPT subscription · No extra API key. Subscription limits apply.'
+  )
+}
+
+export function chatgptSubscriptionLoginGuidance(): string {
+  return translate(
+    'dictation.setup.chatgptSubscriptionLoginGuidance',
+    'Choose a dictation account from this host. Add or reauthenticate accounts in Settings → AI Provider Accounts on the transcription host.'
+  )
+}
+
 export type DictationModelRowAction =
   | 'in-use'
   | 'use'
   | 'download'
   | 'downloading'
   | 'needs-api-key'
+  | 'needs-subscription-login'
 
 // Windows and managed SSH hosts may offer only cloud models; those rows must remain selectable.
 export function dictationModelRowAction(
@@ -239,6 +258,9 @@ export function dictationModelRowAction(
 ): DictationModelRowAction {
   if (model.status === 'ready') {
     return model.id === selectedModelId ? 'in-use' : 'use'
+  }
+  if (model.provider === 'chatgpt') {
+    return 'needs-subscription-login'
   }
   if (model.provider === 'openai') {
     return 'needs-api-key'

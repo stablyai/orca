@@ -2,6 +2,7 @@ import type { SecretAtRestProtection } from '../../../shared/secure-storage/secr
 import type { DictationCleanupResult } from '../../../shared/speech/dictation/dictation-cleanup'
 import { ipcRenderer } from 'electron'
 import type {
+  ChatGptSpeechAccount,
   DictationContext,
   OpenAiCompatibleSpeechProvider,
   OpenAiCompatibleSpeechProviderSummary,
@@ -21,6 +22,8 @@ const audioPorts = new Map<string, MessagePort>()
 export const speechApi = {
   getCatalog: (): Promise<SpeechModelManifest[]> => ipcRenderer.invoke('speech:getCatalog'),
   getModelStates: (): Promise<SpeechModelState[]> => ipcRenderer.invoke('speech:getModelStates'),
+  getChatGptAccounts: (): Promise<ChatGptSpeechAccount[]> =>
+    ipcRenderer.invoke('speech:getChatGptAccounts'),
   getOpenAiApiKeyStatus: (): Promise<{
     configured: boolean
     protection: SecretAtRestProtection | null
