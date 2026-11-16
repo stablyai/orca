@@ -2926,6 +2926,14 @@ html.native-shell .app-layout {
   background: color-mix(in srgb, var(--destructive) 8%, transparent);
 }
 
+/* Inline git blame after the cursor line; injected text, so selection and copy ignore it. */
+.monaco-editor .orca-git-blame-inline {
+  color: var(--muted-foreground);
+  font-style: normal;
+  opacity: 0.75;
+  margin-left: 3em;
+}
+
 .monaco-editor .orca-conflict-marker-label {
   color: var(--destructive);
   font-family: var(--font-sans, system-ui, sans-serif);

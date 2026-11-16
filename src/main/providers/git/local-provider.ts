@@ -33,6 +33,7 @@ import { getBranchCompare } from '../../git/source-control/comparisons/branch-co
 import { getCommitCompare } from '../../git/source-control/comparisons/commit-compare'
 import { getCommitDiff } from '../../git/source-control/comparisons/commit-diff'
 import { getDiff } from '../../git/source-control/diffs/file-diff'
+import { getBlame } from '../../git/source-control/blame/git-blame-read'
 import { getStagedCommitContext } from '../../git/source-control/mutations/staged-commit-context'
 import { getStatus } from '../../git/source-control/status/status-read'
 import { getSubmoduleStatus } from '../../git/source-control/submodules/submodule-status'
@@ -96,6 +97,7 @@ export function createLocalGitProvider(options: LocalGitProviderOptions = {}): L
         ...interactive,
         ...(oldPath ? { oldPath } : {})
       }),
+    getBlame: (worktreePath, filePath) => getBlame(worktreePath, filePath, base),
     stageFile: (worktreePath, filePath) => stageFile(worktreePath, filePath, interactive),
     resolveConflict: (worktreePath, filePath, resolution) =>
       resolveConflict(worktreePath, filePath, resolution, interactive),

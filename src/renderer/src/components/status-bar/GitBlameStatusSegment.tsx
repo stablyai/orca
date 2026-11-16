@@ -1,0 +1,87 @@
+import { GitCommitHorizontal } from 'lucide-react'
+import { toast } from 'sonner'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { useAppStore } from '@/store/index'
+import { useTranslate } from '@/i18n/use-translate'
+import { getRuntimeGitCommitCompare } from '@/runtime/source-control/git/runtime-git-diff-client'
+import { useFocusedLineBlame, type FocusedLineBlame } from '../editor/blame/git-blame-line-store'
+import {
+  formatBlameCommitDetails,
+  formatLineBlameSummary
+} from '../editor/blame/git-blame-presentation'
+import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from './composition/status-bar-context-menu-policy'
+
+async function openBlamedCommit(blame: FocusedLineBlame, failureMessage: string): Promise<void> {
+  if (blame.line.kind !== 'commit' || !blame.git.worktreeId) {
+    return
+  }
+  const { commit } = blame.line
+  try {
+    const result = await getRuntimeGitCommitCompare(blame.git, commit.oid)
+    if (result.summary.status !== 'ready') {
+      throw new Error(result.summary.errorMessage ?? failureMessage)
+    }
+    useAppStore
+      .getState()
+      .openCommitAllDiffs(
+        blame.git.worktreeId,
+        blame.git.worktreePath,
+        result.summary,
+        result.entries,
+        commit.summary
+      )
+  } catch (error) {
+    toast.error(error instanceof Error ? error.message : failureMessage)
+  }
+}
+
+export function GitBlameStatusSegment({
+  iconOnly
+}: {
+  iconOnly: boolean
+}): React.JSX.Element | null {
+  const t = useTranslate()
+  const blame = useFocusedLineBlame()
+  if (!blame) {
+    return null
+  }
+  const summary = formatLineBlameSummary(blame.line)
+  const details = blame.line.kind === 'commit' ? formatBlameCommitDetails(blame.line.commit) : null
+  const failureMessage = t('editor.gitBlame.openCommitFailed', 'Failed to load commit diff')
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          {...STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS}
+          disabled={!details}
+          onClick={() => void openBlamedCommit(blame, failureMessage)}
+          className="inline-flex min-w-0 cursor-pointer items-center gap-1 rounded px-1 py-0.5 text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground disabled:cursor-default disabled:hover:bg-transparent"
+          aria-label={t('editor.gitBlame.statusAriaLabel', 'Git blame: {{summary}}', { summary })}
+        >
+          <GitCommitHorizontal className="size-3 shrink-0" />
+          {!iconOnly ? (
+            <span className="max-w-64 truncate text-[11px] font-medium">{summary}</span>
+          ) : null}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={6} className="max-w-80">
+        {details ? (
+          <div className="flex flex-col gap-0.5">
+            <span className="font-medium">{details.heading}</span>
+            <span className="text-muted-foreground">
+              {details.date} · <span className="font-mono">{details.shortOid}</span>
+            </span>
+            <span>{details.summary}</span>
+            <span className="text-muted-foreground">
+              {t('editor.gitBlame.openCommitHint', 'Click to open the commit')}
+            </span>
+          </div>
+        ) : (
+          summary
+        )}
+      </TooltipContent>
+    </Tooltip>
+  )
+}

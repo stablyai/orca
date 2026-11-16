@@ -1146,6 +1146,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'git.abortMerge': WorktreeSelectorOfGitParams,
   'git.abortRebase': WorktreeSelectorOfGitParams,
   'git.atRiskLocalFiles': WorktreeSelectorOfGitParams,
+  'git.blame': GitFilePath,
   'git.branchCompare': GitBranchCompare,
   'git.branchDiff': GitBranchDiff,
   'git.bulkDiscard': GitBulkPaths,

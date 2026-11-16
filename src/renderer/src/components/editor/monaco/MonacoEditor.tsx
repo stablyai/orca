@@ -26,6 +26,7 @@ import type { MonacoContentSyncMode } from '../model-lifetime/buffer-text/monaco
 import { useMonacoContentSyncBridge } from '../model-lifetime/buffer-text/use-monaco-content-sync-bridge'
 import { useMonacoMarkdownAnnotations } from '../markdown-source-tools/monaco/use-monaco-markdown-annotations'
 import { useMonacoEditorDecorations } from './use-monaco-editor-decorations'
+import { useMonacoGitBlame } from '../blame/use-monaco-git-blame'
 import { useMonacoEditorMount } from './use-monaco-editor-mount'
 import { snapshotMonacoViewState } from './monaco-view-state-persistence'
 import { MonacoMarkdownAnnotationOverlay } from '../markdown-source-tools/monaco/MonacoMarkdownAnnotationOverlay'
@@ -198,6 +199,13 @@ export default function MonacoEditor({
       readOnly
     })
   }, [typographyOptions, editorWordWrap, readOnly])
+
+  useMonacoGitBlame({
+    mountedEditor,
+    fileId,
+    passiveMirror,
+    inlineEnabled: settings?.editorInlineBlame === true
+  })
 
   const decorations = useMonacoEditorDecorations({
     editorRef,

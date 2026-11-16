@@ -3,7 +3,7 @@ import { toRuntimeWorktreeSelector } from '../../runtime/rpc/targets/runtime-wor
 import { resolveRuntimeWorktreeByPath } from './web-runtime-worktree-catalog'
 import { callRuntimeResult } from './web-runtime-calls'
 
-export function createGitHistoryApi(): Pick<PreloadApi['git'], 'history' | 'refs'> {
+export function createGitHistoryApi(): Pick<PreloadApi['git'], 'history' | 'refs' | 'blame'> {
   return {
     refs: async ({ worktreePath, query }) => {
       const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
@@ -22,6 +22,13 @@ export function createGitHistoryApi(): Pick<PreloadApi['git'], 'history' | 'refs
         refs,
         historyToken,
         skip
+      })
+    },
+    blame: async ({ worktreePath, filePath }) => {
+      const worktree = await resolveRuntimeWorktreeByPath(worktreePath)
+      return callRuntimeResult('git.blame', {
+        worktree: toRuntimeWorktreeSelector(worktree.id),
+        filePath
       })
     }
   }

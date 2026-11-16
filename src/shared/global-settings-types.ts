@@ -84,6 +84,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   updateDelayDays?: number
   editorAutoSaveDelayMs: number
   editorMinimapEnabled: boolean
+  /** Inline git blame after the cursor line; the status-bar item is separate. */
+  editorInlineBlame: boolean
   /** Defaults on for profiles saved before file-editor wrapping became configurable. */
   editorWordWrap?: boolean
   /** Persisted opt-out for browser spellcheck noise in rich Markdown editing surfaces. */

@@ -181,6 +181,25 @@ export function GeneralEditorSettingsSection({
             }
           />
         </SearchableSetting>
+        <SearchableSetting
+          id={GENERAL_SETTING_ANCHORS.inlineBlame}
+          title={t('settings.general.inlineBlameTitle', 'Inline git blame')}
+          description={t(
+            'settings.general.inlineBlameDescription',
+            'Show who last changed the cursor line, and when, at the end of the line.'
+          )}
+          keywords={['blame', 'git', 'author', 'annotation']}
+        >
+          <SettingsSwitchRow
+            label={t('settings.general.inlineBlameTitle', 'Inline git blame')}
+            description={t(
+              'settings.general.inlineBlameDescription',
+              'Show who last changed the cursor line, and when, at the end of the line.'
+            )}
+            checked={settings.editorInlineBlame}
+            onChange={() => updateSettings({ editorInlineBlame: !settings.editorInlineBlame })}
+          />
+        </SearchableSetting>
       </SettingsGroup>
       <SettingsGroup title={t('settings.general.editorGroups.diffs', 'Diffs')}>
         <SearchableSetting
