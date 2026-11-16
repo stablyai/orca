@@ -2,7 +2,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
 import { usePetUrl } from './usePetUrl'
 import type { DetectedSpriteCacheEntry } from './pet-blob-cache'
-import type { CustomPet } from '../../../../shared/pet-types'
+import type { CustomPet } from '../../../../shared/pets/pet-types'
 import { useAppStore } from '../../store'
 import { getAgentStatusEpochNow } from '@/lib/agent-status/evidence/agent-status-epoch-clock'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
@@ -23,13 +23,11 @@ function usePetAnimationName(
 ): PetAnimationName {
   const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
   const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
-  const retainedAgentsByPaneKey = useAppStore((s) => s.retainedAgentsByPaneKey)
   // Scheduler ticks expire animation evidence even without other store updates; read the boundary clock before paint.
   const agentStatusNow = getAgentStatusEpochNow(agentStatusEpoch)
 
   return selectPetAnimationName({
-    entries: Object.values(agentStatusByPaneKey),
-    retainedCount: Object.keys(retainedAgentsByPaneKey).length,
+    entries: Array.from(agentStatusByPaneKey.values()),
     dragging,
     dragAnimation,
     hovering,

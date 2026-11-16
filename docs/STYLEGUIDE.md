@@ -50,7 +50,7 @@ Tokens pair a **surface** with a **foreground** that meets contrast on it; alway
 ## Radius and elevation
 
 - Radii derive from `--radius` in `main.css`. Buttons and inputs use `rounded-md`, `Card` uses `rounded-xl`, badges use `rounded-full`. Match the existing primitive's radius; don't introduce a new one.
-- Three elevation levels, no fourth: (1) `border` hairline, the default for almost everything; (2) `shadow-xs` + single-token border for outline buttons and embedded cards; (3) `shadow-floating`, reserved for popovers and popups that escape the editor surface. Needing more than floating usually means you want the focus `ring`.
+- Three elevation levels, no fourth: (1) `border` hairline, the default for almost everything; (2) `shadow-xs` + single-token border for outline buttons and embedded cards; (3) `shadow-floating`, reserved for popovers and popups that escape the editor surface; toasts and bottom-right notification cards use its notice form (`--notice-surface`, `--notice-border`, `shadow-notice`) so they read over chat, editor and terminal. Needing more than floating usually means you want the focus `ring`.
 
 ## Components
 

@@ -19,7 +19,7 @@ import { tmpdir } from 'node:os'
 import { join, relative, resolve } from 'node:path'
 import { isSharedPackageDir } from '../node-addons/native-build-entry.cjs'
 import { canReusePreparedAddon } from './windows-process-tree-prepared-addon.mjs'
-import { ORCAD_WINDOWS_PROCESS_TREE_FILENAME } from '../../../../src/shared/orcad-artifacts.ts'
+import { ORCAD_WINDOWS_PROCESS_TREE_FILENAME } from '../../../../src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts'
 import {
   ensureWindowsProcessTreeCommandLinePatch,
   inspectWindowsProcessTreeAddon,

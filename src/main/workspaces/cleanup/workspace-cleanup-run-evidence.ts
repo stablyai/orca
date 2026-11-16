@@ -4,14 +4,14 @@ import { worktreeIdentityKey } from '../../../shared/worktree/id'
 import { listClientUnsavedEditorWorktreeIds } from './workspace-cleanup-client-unsaved-editors'
 import { runtimeVisibleRepos } from '../../runtime/workspaces/catalog/runtime-visible-catalog'
 import { scanWorkspaceCleanup } from '../../ipc/workspace-cleanup/workspace-cleanup-scan'
-import { isFolderRepo } from '../../../shared/repo-kind'
-import type { Repo } from '../../../shared/repo-types'
+import { isFolderRepo } from '../../../shared/repository/repo-kind'
+import type { Repo } from '../../../shared/repository/repo-types'
 import {
   isRepoOnCatalogHost,
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId
 } from '../../../shared/execution-host'
-import type { RuntimeWorktreePsSummary } from '../../../shared/runtime-worktree-contracts'
+import type { RuntimeWorktreePsSummary } from '../../../shared/worktree/catalog/runtime-worktree-contracts'
 import {
   getPersistedWorkspaceCleanupActivityAt,
   WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT,
@@ -77,7 +77,13 @@ function needsGitEvidence(
   if (summary.isMainWorktree || summary.isPinned) {
     return false
   }
-  if (rules.merged.enabled || rules.unchanged.enabled) {
+  // These reasons come only from the scan's Git and run/worker evidence.
+  if (
+    rules.merged.enabled ||
+    rules.unchanged.enabled ||
+    rules.automationRuns.enabled ||
+    rules.orchestrationWorkers.enabled
+  ) {
     return true
   }
   // Filesystem activity can only make a workspace newer, so the persisted stamp bounds the inactive rule.
@@ -116,6 +122,7 @@ function dirtyEditorWorktreeIds(store: RuntimeStore, runtime: OrcaRuntimeService
 
 async function scanTargets(
   store: RuntimeStore,
+  runtime: OrcaRuntimeService,
   worktreeIds: string[],
   signal: AbortSignal | undefined
 ): Promise<Map<string, WorkspaceCleanupCandidate>> {
@@ -126,7 +133,8 @@ async function scanTargets(
     const result = await scanWorkspaceCleanup(
       store,
       { worktreeIds: batch, refreshActivity: true },
-      { signal }
+      // Without the orchestration store the scan can't prove a worker was released.
+      { signal, getOrchestrationDb: () => runtime.getExistingOrchestrationDb() }
     )
     for (const candidate of result.candidates) {
       // A same-id repo row on another host scans too; only this host's checkout is evidence here.
@@ -173,21 +181,23 @@ export async function collectWorkspaceCleanupWorkspaces(args: {
 }): Promise<WorkspaceCleanupWorkspace[]> {
   const { store, runtime, globalRules, now, worktreeId, signal } = args
   const repos = listWorkspaceCleanupOwnedRepos(store)
-  const ps = await runtime.getWorktreePs(WORKTREE_PS_LIMIT)
+  // A re-check projects only its target, so M removals don't rebuild the whole host's listing M times.
+  const ps = await runtime.getWorktreePs(WORKTREE_PS_LIMIT, true, false, worktreeId)
   if (ps.truncated) {
     throw new Error('Could not list every workspace on this host.')
   }
-  const summaries = ps.worktrees.filter(
-    (summary) =>
-      isOwnedSummary(summary, repos) &&
-      (worktreeId === undefined || summary.worktreeId === worktreeId)
-  )
+  const summaries = ps.worktrees.filter((summary) => isOwnedSummary(summary, repos))
   const policies = new Map<string, ResolvedWorkspaceCleanupPolicy>()
-  for (const repo of repos.values()) {
-    policies.set(
-      repo.id,
-      resolveWorkspaceCleanupPolicy({ workspaceCleanupPolicy: globalRules }, repo)
-    )
+  for (const summary of summaries) {
+    if (!policies.has(summary.repoId)) {
+      policies.set(
+        summary.repoId,
+        resolveWorkspaceCleanupPolicy(
+          { workspaceCleanupPolicy: globalRules },
+          repos.get(summary.repoId)!
+        )
+      )
+    }
   }
   const gitTargets = summaries
     .filter((summary) => {
@@ -195,7 +205,7 @@ export async function collectWorkspaceCleanupWorkspaces(args: {
       return needsGitEvidence(summary, rules, now)
     })
     .map((summary) => summary.worktreeId)
-  const candidates = await scanTargets(store, gitTargets, signal)
+  const candidates = await scanTargets(store, runtime, gitTargets, signal)
   const dirtyEditors = dirtyEditorWorktreeIds(store, runtime)
   const scanned = new Set(gitTargets)
   return summaries.map((summary) => {

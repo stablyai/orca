@@ -12,7 +12,7 @@ import {
 } from '../../../../../shared/automations/automation-runtime-capabilities'
 import { getRuntimeEnvironmentStatus } from '@/runtime/rpc/compatibility/runtime-compatibility-probe'
 import type { AutomationAuthorityRef } from '../../../../../shared/automations/ownership/automation-owner-ref'
-import type { RuntimeCapability } from '../../../../../shared/protocol-version'
+import type { RuntimeCapability } from '../../../../../shared/remote-runtime/protocol/protocol-version'
 import {
   EXTRA_AGENT_ARGS_HOST_UPDATE_REQUIRED,
   hasExtraAgentArgs

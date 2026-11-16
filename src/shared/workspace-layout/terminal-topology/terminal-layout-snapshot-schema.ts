@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { TerminalPaneLayoutNode } from '../terminal-tab-types'
-import { salvagedOptional, salvagingRecord } from '../../zod-salvage'
+import { salvagedOptional, salvagingRecord } from '../../validation/zod-salvage'
 
 const terminalPaneSplitDirectionSchema = z.enum(['vertical', 'horizontal'])
 

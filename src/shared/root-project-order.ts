@@ -1,10 +1,12 @@
-import type { ProjectGroup } from './project-group-types'
-import type { Repo } from './repo-types'
-import { getEffectiveProjectGroupManualRank } from './project-groups'
-import { getLogicalRepoOrderRankById } from './project-section-order'
-import { compareCodePoints, compareSidebarText } from './sidebar-list/text-order'
+import type { ProjectGroup } from './project/groups/project-group-types'
+import type { Repo } from './repository/repo-types'
+import { getEffectiveProjectGroupManualRank } from './project/groups/project-groups'
+import { getLogicalRepoOrderRankById } from './sidebar-list/sections/project-section-order'
+import { compareCodePoints, compareSidebarText } from './sidebar-list/sorting/text-order'
 
-export type RootProjectEntry = { kind: 'group'; group: ProjectGroup } | { kind: 'repo'; repo: Repo }
+export type RootProjectEntry =
+  | { kind: 'group'; group: ProjectGroup }
+  | { kind: 'repo'; repo: Pick<Repo, 'id' | 'projectGroupOrder'> }
 
 export function getRootProjectEntryKey(entry: RootProjectEntry): string {
   return entry.kind === 'group' ? `group:${entry.group.id}` : `repo:${entry.repo.id}`

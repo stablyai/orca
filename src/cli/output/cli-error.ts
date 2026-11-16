@@ -10,14 +10,16 @@ import {
   ambiguousWorkspaceChoices,
   selectorAmbiguityRecovery
 } from '../workspace-selection/selector-ambiguity-recovery'
-import type { RuntimeRpcFailure } from '../../shared/runtime-rpc-envelope'
-import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/types'
+import type { RuntimeRpcFailure } from '../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/connection/types'
 import { readableWslDistroCliRefusal } from '../hosts/wsl-distro-cli-refusal'
+import { resolveInvokedCliCommand } from '../orchestration/recovery/runtime-compatibility'
 
 type ContextRecovery = { nextSteps: readonly string[] } & Record<string, unknown>
 
-const STALE_HANDLE_SERVER_HINT =
-  'Terminal handles belong to the Orca server that issued them. If this handle came from a paired server (for example `orca terminal list --environment <server>`), pass the same --environment <server> to this command.'
+function staleHandleServerHint(): string {
+  return `Terminal handles belong to the Orca server that issued them. If this handle came from a paired server (for example \`${resolveInvokedCliCommand()} terminal list --environment <server>\`), pass the same --environment <server> to this command.`
+}
 
 function contextRecovery(error: unknown, context: CliErrorContext): ContextRecovery | undefined {
   const code = cliErrorCode(error)
@@ -38,7 +40,7 @@ function contextRecovery(error: unknown, context: CliErrorContext): ContextRecov
     context.commandPath?.[0] === 'terminal' &&
     context.remoteServerSelected === false
   ) {
-    return { nextSteps: [STALE_HANDLE_SERVER_HINT] }
+    return { nextSteps: [staleHandleServerHint()] }
   }
   return undefined
 }
@@ -88,7 +90,7 @@ export function formatCliError(error: unknown, context: CliErrorContext = {}): s
     if (hasOrchestrationRequestId(error.data)) {
       return message
     }
-    return formatRuntimeUnavailableError(message, error.data)
+    return formatRuntimeUnavailableError(message, error)
   }
   // Match before generic recovery; flattened errors may retain only the conflict token.
   const conflict = automationOwnerConflictRecovery(matchAutomationOwnerConflict(error))
@@ -111,12 +113,6 @@ export function formatCliError(error: unknown, context: CliErrorContext = {}): s
       )
     }
   }
-  if (
-    error instanceof RuntimeRpcFailureError &&
-    error.response.error.code === 'runtime_unavailable'
-  ) {
-    return formatRuntimeUnavailableError(message, error.response.error.data)
-  }
   if (error instanceof RuntimeRpcFailureError) {
     return formatMessageWithNextSteps(message, nextStepsFromData(error.response.error.data))
   }
@@ -131,12 +127,16 @@ function hasOrchestrationRequestId(data: unknown): boolean {
   )
 }
 
-function formatRuntimeUnavailableError(message: string, data: unknown): string {
-  const nextSteps = nextStepsFromData(data)
+function formatRuntimeUnavailableError(message: string, error: RuntimeClientError): string {
+  const nextSteps = nextStepsFromData(error.data)
   if (nextSteps.length > 0) {
     return formatMessageWithNextSteps(message, nextSteps)
   }
-  return `${message}\nOrca is not running. Run 'orca open' first.`
+  const command = resolveInvokedCliCommand()
+  if (error instanceof RuntimeRpcFailureError) {
+    return `${message}\nOrca is running but not ready for this yet. Wait a few seconds and retry; do not run '${command} open'. If it keeps failing and '${command} status --json' shows app.desktopWindowStatus "openable", Orca's window is closed: ask the user to reopen it.`
+  }
+  return `${message}\nOrca is not running. Run '${command} open' first.`
 }
 
 // Streaming commands print one JSON object per line with --json, so their failure is one line too.

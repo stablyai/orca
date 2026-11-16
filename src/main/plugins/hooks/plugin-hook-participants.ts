@@ -1,6 +1,9 @@
 import type { PluginHookName } from '../../../shared/plugins/contributions/plugin-hook-contribution'
-import { isInvalidDiscoveredPlugin, type ValidDiscoveredPlugin } from '../plugin-discovery'
-import type { PluginEventDeliveryContext } from '../plugin-event-delivery'
+import {
+  isInvalidDiscoveredPlugin,
+  type ValidDiscoveredPlugin
+} from '../discovery/plugin-discovery'
+import type { PluginEventDeliveryContext } from '../events/plugin-event-delivery'
 import {
   PluginHookParticipantGoneError,
   runPluginHookChain,

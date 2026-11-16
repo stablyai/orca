@@ -1,3 +1,4 @@
+import type { AgentSessionForkNaming } from './agent-session-fork-name'
 import type { AgentSessionUnavailable } from './agent-session-availability'
 import type { AgentSessionFrameFields } from './agent-session-frame-fields'
 import type { AgentSessionUsageLimitContinue } from './agent-session-usage-limit-continue-wire'
@@ -6,7 +7,7 @@ import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskState
 } from './agent-session-background-task-wire'
-import type { AgentSessionRewindReason } from './lifecycle/agent-session-rewind'
+import type { AgentSessionRewindReason } from './lifecycle/rewind/agent-session-rewind-reasons'
 import type { AgentSessionWireRefusal } from './failures/agent-session-wire-refusals'
 import type { AgentChildWorkView } from '../agent-status/child-work/agent-status-child-work-view'
 import type {
@@ -233,6 +234,9 @@ export type AgentSessionStatusSummary = {
   turnOutcome?: AgentTurnOutcome
   /** Host-derived, unpersisted Stop progress while working until its turn ends; clear a settled no-op Stop. Older hosts omit it and older clients ignore it. */
   stopping?: true
+  /** The agent asked a question its turn does not wait on (Codex's async question), and the person
+   *  has not answered it yet. Turn status is unchanged; only the lead state shows it. Older hosts omit it. */
+  awaitsAnswer?: true
   /** Optional live provider tasks let lists show children without journal subscriptions; derive from children when published. */
   backgroundTasks?: AgentSessionBackgroundTask[]
   /** Running/monitoring child views (decodeAgentChildWorkViews); finished children use background tasks only. Omit usage and per-tick freshness here; the background-task channel carries those ticks. Older hosts omit this. */
@@ -240,6 +244,11 @@ export type AgentSessionStatusSummary = {
   providerSession?: AgentProviderSessionMetadata
   /** Retain the saved conversation name beyond tab closure; absent while unnamed or on older hosts. */
   conversationName?: string
+  /** `'user'` once the user named the chat. Absent from older hosts. */
+  conversationNameSource?: 'user'
+  /** The chat's source, null when not a fork; current hosts always send it, making the naming
+   *  fields authoritative even while unnamed. Older hosts omit it. */
+  forkedFrom?: AgentSessionForkNaming | null
   /** Why the host could not name this chat, kept in memory only while the chat still has the
    *  name the failed run would have replaced. Absent from older hosts; older clients ignore it. */
   namingError?: AgentSessionNamingError
@@ -269,7 +278,7 @@ export type AgentSessionConversationName = {
   sessionId: string
   conversationName: string | null
   namingError?: AgentSessionNamingError
-}
+} & Pick<AgentSessionStatusSummary, 'conversationNameSource' | 'forkedFrom'>
 
 /** Retain projections after child eviction; idle remains idle. Tabs decide list membership, never this feed. */
 export type AgentSessionStatusEvent =
@@ -362,26 +371,8 @@ export type AgentSessionOptionChoice = {
   description?: string
 }
 
-export type AgentSessionModelOption = {
-  resolvedModel?: string | null
-  effortsKnown?: false
-  id: string
-  label: string
-  description?: string
-  isDefault: boolean
-  defaultEffort?: string
-  /** Transient display declaration; null is observed unknown, absence supplies no evidence. */
-  declaredDefaultEffort?: string | null
-  efforts: AgentSessionOptionChoice[]
-  /** Additional structured-chat choices; never CLI effort arguments. Older hosts omit this. */
-  chatEfforts?: AgentSessionOptionChoice[]
-  /** Provider catalog fact. Absent means the host could not determine support. */
-  supportsFastMode?: boolean
-  /** Whether the model runs Approve for me; absent is unknown, which neither offers nor launches it. */
-  supportsAutoMode?: boolean
-  /** Provider tier IDs beyond standard; capable clients replace Fast with one speed choice including default. Absence means unknown. */
-  serviceTiers?: AgentSessionOptionChoice[]
-}
+import type { AgentSessionModelOption } from './agent-session-model-option'
+export type { AgentSessionModelOption }
 
 export type AgentSessionFastModeState = 'off' | 'cooldown' | 'on'
 

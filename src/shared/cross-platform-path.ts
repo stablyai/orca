@@ -1,4 +1,4 @@
-import { isWslUncPath, parseWslUncPath, toWindowsWslPath } from './wsl-paths'
+import { isWslUncPath, parseWslUncPath, toWindowsWslPath } from './file-access/wsl-paths'
 
 const SLASH_CHAR_CODE = '/'.charCodeAt(0)
 

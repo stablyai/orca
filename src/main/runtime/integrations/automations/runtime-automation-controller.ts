@@ -7,7 +7,7 @@ import type {
   AutomationUpdateInput
 } from '../../../../shared/automations/automation-definition'
 import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type {
   AutomationListParams,
@@ -21,6 +21,10 @@ import type {
 import { runAutomationNowFenced } from '../../../automations/dispatch/refused-manual-run'
 import { paginateAutomationRuns } from '../../../../shared/automations/history/automation-run-cursor'
 import { hasRuntimeAutomationUpdateValue } from './runtime-automation-update-value'
+import {
+  updateRuntimeAutomations,
+  type RuntimeAutomationBatchUpdate
+} from './runtime-automation-batch-update'
 import {
   assertAutomationRunContextMatchesTarget,
   type RuntimeAutomationTargetResolvers,
@@ -190,6 +194,11 @@ export class RuntimeAutomationController {
     const automation = this.store.updateAutomation(id, patch, { ...options, resolvedRepo })
     await this.store.flushPendingOrThrowAsync?.({ drainToStableGeneration: false })
     return automation
+  }
+
+  /** `update` for many automations with one store write and one flush; moves need `update`. */
+  updateMany(entries: readonly RuntimeAutomationBatchUpdate[]) {
+    return updateRuntimeAutomations(this.store, entries)
   }
 
   async delete(

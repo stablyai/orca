@@ -1,6 +1,6 @@
 import { conversationNameTaskPrompt } from '../../shared/source-control/ai/generation/conversation-name-generation'
 import { textGenerationFailureCodeFields } from '../../shared/text-generation-failure-copy'
-import { runClaudeGenerationAttempts } from '../../shared/claude-background-run-isolation'
+import { runClaudeGenerationAttempts } from '../../shared/text-generation/launch/claude-background-run-isolation'
 import { stripPrefilledReasoningPreamble } from '../../shared/source-control/ai/generation/commit-message-agent-output'
 import type { CommandTemplateBackslash } from '../../shared/source-control/ai/generation/commit-message-prompt'
 import { isCustomAgentId } from '../../shared/source-control/ai/generation/commit-message-agent-spec'
@@ -9,12 +9,12 @@ import {
   type CommitMessagePlan
 } from '../../shared/source-control/ai/generation/commit-message-plan'
 import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control/ai/source-control-ai-operation-resolution'
-import { openCodeVariantRetryPlan } from '../../shared/opencode-generation-command'
-import { copilotUnavailableModelRetryPlan } from './copilot-unavailable-model-retry'
-import { runLocalPlanForAgent } from './source-control-local-generation'
+import { openCodeVariantRetryPlan } from '../../shared/text-generation/launch/opencode-generation-command'
+import { copilotUnavailableModelRetryPlan } from './failures/copilot-unavailable-model-retry'
+import { runLocalPlanForAgent } from './execution/source-control-local-generation'
 import { runOpenCodeTextTask } from '../opencode/text-tasks/opencode-text-task'
-import { cleanAgentAnswer, emptyResultFailure } from './source-control-agent-failure'
-import { runRemoteSourceControlPlan } from './source-control-remote-generation'
+import { cleanAgentAnswer, emptyResultFailure } from './failures/source-control-agent-failure'
+import { runRemoteSourceControlPlan } from './execution/source-control-remote-generation'
 import type {
   CommitMessageGenerationTarget,
   InternalTextGenerationResult,

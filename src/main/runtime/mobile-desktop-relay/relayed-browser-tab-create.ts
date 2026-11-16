@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
-import { BrowserTabCreateParams } from '../../../shared/rpc-contract/browser-tab-create-params'
+import { BrowserTabCreateParams } from '../../../shared/rpc-contract/browser/browser-tab-create-params'
 import {
   RuntimeRpcEnvelopeSchema,
   type RuntimeRpcResponse
-} from '../../../shared/runtime-rpc-envelope'
+} from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { RemoteRuntimePassthroughSocket } from '../../../shared/remote-runtime/remote-runtime-passthrough-socket'
 import type { MobileDesktopRelayHost, MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
 import type { RelayLink } from './mobile-desktop-relay-link'

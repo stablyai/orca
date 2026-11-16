@@ -9,12 +9,13 @@ import type {
 } from '../../../../shared/github/comments/comment-types'
 import type {
   GitHubPRRefreshEvent,
+  PRSnapshotReply,
   GitHubPRRefreshReason
 } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import type { IssueInfo, PRInfo } from '../../../../shared/github/pull-requests/pull-request-types'
 import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
-import type { IssueSourcePreference } from '../../../../shared/repo-types'
+import type { IssueSourcePreference } from '../../../../shared/repository/repo-types'
 import type {
   GitHubProjectFieldMutationValue,
   GitHubProjectTable
@@ -26,7 +27,7 @@ import type {
 import type { GetProjectViewTableArgs } from '../../../../shared/github/projects/project-request-types'
 import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type {
   CacheEntry,
   FetchOptions,
@@ -70,12 +71,15 @@ export type GitHubSlice = {
       fallbackPRSource?: GitHubPRFallbackSource | null
       reason?: GitHubPRRefreshReason
       userRefresh?: boolean
+      selected?: boolean
+      onReadOutcome?: (outcome: PRSnapshotReply) => void
+      signal?: AbortSignal
     }
   ) => Promise<PRInfo | null>
   fetchIssue: (
     repoPath: string,
     number: number,
-    options?: RepoScopedFetchOptions
+    options?: RepoScopedFetchOptions & { ownerRepo?: GitHubOwnerRepo }
   ) => Promise<IssueInfo | null>
   fetchPRChecks: (
     repoPath: string,
@@ -88,6 +92,8 @@ export type GitHubSlice = {
       /** Refresh or a check action: a user act that may start a stopped WSL distro. */
       wakeWslDistro?: boolean
       userRefresh?: boolean
+      /** The checks panel's own timer: a paired host may answer at its PR auto-refresh cadence. */
+      background?: boolean
     }
   ) => Promise<PRCheckDetail[]>
   fetchPRCheckDetails: (

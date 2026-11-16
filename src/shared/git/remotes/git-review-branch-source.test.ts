@@ -40,6 +40,7 @@ it('resolves real Git tracking, triangular publication, local tracking and expli
     expect((await snapshot()).get('dot')).toEqual({
       remoteName: 'origin',
       branchName: 'dot',
+      pushBranchName: null,
       urls: ['https://gitlab.com/team/repo.git']
     })
     await git(['config', 'remote.origin.push', 'HEAD'])
@@ -47,16 +48,32 @@ it('resolves real Git tracking, triangular publication, local tracking and expli
     await git(['config', 'remote.origin.push', 'refs/heads/main:refs/heads/main'])
     expect((await snapshot()).get('feature')).toMatchObject({
       branchName: 'feature',
-      trackedBranchName: 'main'
+      trackedBranchName: 'main',
+      pushBranchName: null
     })
     await git(['config', '--unset', 'remote.origin.push'])
+    await git(['config', 'push.default', 'nothing'])
+    expect((await snapshot()).get('feature')).toMatchObject({
+      branchName: 'feature',
+      pushBranchName: null
+    })
     await git(['config', 'branch.feature.merge', 'refs/tags/v1'])
     await git(['config', 'push.default', 'upstream'])
     expect((await snapshot()).get('feature')).toEqual({
       remoteName: 'origin',
       branchName: 'feature',
+      pushBranchName: null,
       urls: ['https://gitlab.com/team/repo.git']
     })
+    await git(['config', 'branch.feature.merge', 'refs/heads/published'])
+    await git(['config', 'remote.origin.pushurl', 'https://gitlab.com/me/repo.git'])
+    expect((await snapshot()).get('feature')).toMatchObject({
+      remoteName: 'origin',
+      branchName: 'feature',
+      pushBranchName: 'published',
+      urls: ['https://gitlab.com/me/repo.git']
+    })
+    await git(['config', '--unset', 'remote.origin.pushurl'])
     await git(['config', 'push.default', 'simple'])
     await git(['config', 'branch.feature.merge', 'refs/heads/main'])
     await git(['config', 'remote.pushDefault', 'fork'])

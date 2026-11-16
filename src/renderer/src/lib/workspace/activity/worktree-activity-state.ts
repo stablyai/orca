@@ -1,4 +1,5 @@
 import type { AppState } from '@/store/types'
+import { getTabIdToWorktreeId } from '../tabs/tab-worktree-index'
 import { createAgentStatusEpochSelector } from '../../agent-status/evidence/agent-status-epoch-selector'
 import { tabHasLivePty } from '../../../../../shared/tab-has-live-pty'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
@@ -9,7 +10,7 @@ import {
   liveAgentStatusOf,
   strongerLiveAgentStatus,
   type LiveAgentWorktreeStatus
-} from '../../../../../shared/sidebar-list/workspace-activity-facts'
+} from '../../../../../shared/sidebar-list/feed-facts/workspace-activity-facts'
 
 type TerminalLikeTab = Pick<TerminalTab, 'id'>
 type BrowserLikeTab = { id: string }
@@ -22,7 +23,7 @@ const EMPTY_WORKTREE_IDS: ReadonlySet<string> = new Set()
 
 /** Keep only fresh in-progress agents; disconnected SSH/completed headless rows can outlive actual open sessions. */
 export function getWorktreeIdsWithLiveAgent(
-  agentStatusByPaneKey: Record<string, AgentStatusEntry> | null | undefined,
+  agentStatusByPaneKey: ReadonlyMap<string, AgentStatusEntry> | null | undefined,
   tabsByWorktree: TabsByWorktree | null | undefined,
   now: number
 ): Set<string> {
@@ -40,22 +41,17 @@ export const createLiveAgentWorktreeIdsSelector = () =>
   )
 
 export function getLiveAgentStatusByWorktreeId(
-  agentStatusByPaneKey: Record<string, AgentStatusEntry> | null | undefined,
+  agentStatusByPaneKey: ReadonlyMap<string, AgentStatusEntry> | null | undefined,
   tabsByWorktree: TabsByWorktree | null | undefined,
   now: number
 ): Map<string, LiveAgentWorktreeStatus> {
-  const entries = Object.values(agentStatusByPaneKey ?? {}).filter((entry) =>
+  const entries = Array.from(agentStatusByPaneKey?.values() ?? []).filter((entry) =>
     isFreshNonDoneAgentStatus(entry, now)
   )
   if (entries.length === 0) {
     return new Map()
   }
-  const worktreeIdByTabId = new Map<string, string>()
-  for (const [worktreeId, tabs] of Object.entries(tabsByWorktree ?? {})) {
-    for (const tab of tabs) {
-      worktreeIdByTabId.set(tab.id, worktreeId)
-    }
-  }
+  const worktreeIdByTabId = getTabIdToWorktreeId(tabsByWorktree)
   const result = new Map<string, LiveAgentWorktreeStatus>()
   for (const entry of entries) {
     const worktreeId = resolveAgentStatusWorktreeId(entry, worktreeIdByTabId)

@@ -2,16 +2,16 @@ import type { GitHistoryRefs } from './git/history/git-history-types'
 import type { JiraQuickFilterState } from './jira/jira-quick-filters'
 import type { BrowserDevToolsDockLayout } from './browser/devtools/browser-devtools-dock'
 import type { JiraSavedFilterState } from './jira/jira-saved-filters'
-import type { ReleaseChannel } from './release-channel'
+import type { ReleaseChannel } from './updater/release-channel'
 import type { WorkspaceCleanupUIState } from './workspace-cleanup/workspace-cleanup'
-import type { FeatureTipSeenId } from './feature-tips'
-import type { ContextualTourId } from './contextual-tours'
-import type { FeatureInteractionState } from './feature-interactions'
-import type { UsagePercentageDisplay } from './usage-percentage-display'
-import type { StatusBarUsageMode } from './status-bar-usage-mode'
-import type { StatusBarUsageFormat } from './status-bar-usage-format'
+import type { FeatureTipSeenId } from './feature-education/feature-tips'
+import type { ContextualTourId } from './feature-education/contextual-tours/contextual-tours'
+import type { FeatureInteractionState } from './feature-education/interactions/feature-interactions'
+import type { UsagePercentageDisplay } from './agent-usage/display/usage-percentage-display'
+import type { StatusBarUsageMode } from './status-bar/status-bar-usage-mode'
+import type { StatusBarUsageFormat } from './status-bar/status-bar-usage-format'
 import type { PersistedTrustedOrcaHooks } from './orca-yaml-hook-types'
-import type { CustomPet } from './pet-types'
+import type { CustomPet } from './pets/pet-types'
 import type {
   ActivityGroupBy,
   AgentActivityDisplayMode,
@@ -31,7 +31,7 @@ import type {
 } from './ui-chrome-types'
 import type { WorkspaceStatusDefinition } from './worktree/types'
 import type { PersistedAutomationHostFilter } from './automations/ownership/automation-host-filter'
-import type { PendingRuntimeRepoRemoval } from './pending-runtime-repo-removal'
+import type { PendingRuntimeRepoRemoval } from './remote-runtime/host-catalog/pending-runtime-repo-removal'
 
 export type PersistedUIState = {
   gitGraphFiltersByWorktree?: Record<string, GitHistoryRefs>
@@ -204,6 +204,8 @@ export type PersistedUIState = {
   codexTerminalServerIsolationNoticeSeen?: boolean
   /** Windows one-shot toast for Codex moving onto ~/.codex; set when shown, so absent means not yet seen. */
   codexSharedSettingsNoticeSeen?: boolean
+  /** One-shot sidebar note announcing the reworked experimental worktree cards; set on first evaluation, so absent means not yet decided. */
+  worktreeCardsUpdateNoticeSeen?: boolean
   /** Retired launch card for the speech model update; kept because a paired client from that build still sends it. */
   speechModelUpdateNoticeSeen?: boolean
   /** One-shot pane banner explaining Claude Code's own diff panel; set when the user closes it. */

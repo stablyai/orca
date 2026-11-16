@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ProcessTableRow } from './process-table-snapshot'
+import type { ProcessTableRow } from './process-observation/tables/process-table-snapshot'
 import {
   isTmuxPaneShownElsewhere,
   parseTmuxAttachedClients,

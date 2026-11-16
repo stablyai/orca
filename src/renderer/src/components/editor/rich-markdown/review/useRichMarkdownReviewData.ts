@@ -8,7 +8,7 @@ import {
   type MarkdownReviewNote
 } from '@/lib/editor/markdown/review-notes/markdown-review-notes'
 import type { NotesSendMenuScope } from '../../review-note-delivery/NotesSendMenu'
-import type { DiffComment } from '../../../../../../shared/diff-comment-types'
+import type { DiffComment } from '../../../../../../shared/file-review/diff-comment-types'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 

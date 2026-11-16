@@ -3,7 +3,7 @@ import { getConnectionExecutionHostId } from '../../../../../../shared/execution
 import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import type { AppState } from '../../../types'
 import { runtimeTargetForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { GitRuntimeOperationOptions } from '../types/git-runtime-operation'
 import { translate } from '@/i18n/i18n'
 

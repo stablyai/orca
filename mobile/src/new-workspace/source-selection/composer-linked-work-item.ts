@@ -1,4 +1,4 @@
-import { getLinearIssueWorkspaceName } from '../../../../src/shared/workspace-name'
+import { getLinearIssueWorkspaceName } from '../../../../src/shared/workspace/naming/workspace-name'
 import type { JiraIssue } from '../../../../src/shared/jira/jira-types'
 import {
   buildGitHubWorkspaceSource,

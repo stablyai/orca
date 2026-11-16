@@ -8,7 +8,7 @@ import {
   DESKTOP_BROWSER_BRIDGE_UNROUTED_CODE,
   isDesktopBrowserBridgeMethod,
   type DesktopBrowserBridgeRequest
-} from '../../../shared/desktop-browser-bridge-protocol'
+} from '../../../shared/browser/client-hosting/desktop-browser-bridge-protocol'
 import type { RpcResponse } from '../../runtime/rpc/core'
 import { runInRemoteCliBrowserScope } from '../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 import { parseCdpKeyEvent } from '../cdp/input/cdp-keyboard-us-layout'

@@ -1,4 +1,4 @@
-import { normalizeStatusBarUsageFormat } from '../../../../../shared/status-bar-usage-format'
+import { normalizeStatusBarUsageFormat } from '../../../../../shared/status-bar/status-bar-usage-format'
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import type { AppState } from '../../types'
 import { normalizeRightSidebarRoute } from '../right-sidebar/right-sidebar-route'
@@ -12,14 +12,14 @@ import {
   normalizeExecutionHostOrder,
   normalizeVisibleExecutionHostIds
 } from '../../../../../shared/execution-host'
-import { normalizeFeatureInteractions } from '../../../../../shared/feature-interactions'
-import { normalizeContextualTourIds } from '../../../../../shared/contextual-tours'
-import { normalizeFeatureTipIds } from '../../../../../shared/feature-tips'
+import { normalizeFeatureInteractions } from '../../../../../shared/feature-education/interactions/feature-interactions'
+import { normalizeContextualTourIds } from '../../../../../shared/feature-education/contextual-tours/contextual-tours'
+import { normalizeFeatureTipIds } from '../../../../../shared/feature-education/feature-tips'
 import {
   DEFAULT_HIDE_SLEEPING_WORKSPACES,
   normalizeAgentActivityDisplayMode
 } from '../../../../../shared/constants'
-import { normalizeWorktreeCardProperties } from '../../../../../shared/worktree/card-properties'
+import { normalizeWorktreeCardProperties } from '../../../../../shared/worktree/row-display/card-properties'
 import {
   normalizeActivityGroupBy,
   normalizeThreadReadFilter
@@ -28,23 +28,23 @@ import {
   clampWorkspaceBoardColumnWidth,
   clampWorkspaceBoardOpacity,
   normalizeWorkspaceStatuses
-} from '../../../../../shared/workspace-statuses'
-import { PET_SIZE_DEFAULT, PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../../shared/pet-types'
-import { clampMarkdownTocPanelWidth } from '../../../../../shared/markdown-toc-panel-width'
+} from '../../../../../shared/workspace/status/workspace-statuses'
+import { PET_SIZE_DEFAULT, PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../../shared/pets/pet-types'
+import { clampMarkdownTocPanelWidth } from '../../../../../shared/editor/markdown/markdown-toc-panel-width'
 import { normalizeBrowserDevToolsDockLayout } from '../../../../../shared/browser/devtools/browser-devtools-dock'
-import { clampCombinedDiffFileTreeWidth } from '../../../../../shared/combined-diff-file-tree-width'
+import { clampCombinedDiffFileTreeWidth } from '../../../../../shared/source-control/diff/combined-diff-file-tree-width'
 import { parsePersistedAutomationHostFilter } from '../../../../../shared/automations/ownership/automation-host-filter'
-import { normalizeUsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
-import { normalizeStatusBarUsageMode } from '../../../../../shared/status-bar-usage-mode'
-import { normalizeBrowserPageZoomLevel } from '../../../../../shared/browser-page-zoom'
-import { normalizeKagiSessionLink } from '../../../../../shared/browser-url'
-import { isReleaseChannel } from '../../../../../shared/release-channel'
+import { normalizeUsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
+import { normalizeStatusBarUsageMode } from '../../../../../shared/status-bar/status-bar-usage-mode'
+import { normalizeBrowserPageZoomLevel } from '../../../../../shared/browser/site-settings/browser-page-zoom'
+import { normalizeKagiSessionLink } from '../../../../../shared/browser/navigation/browser-url'
+import { isReleaseChannel } from '../../../../../shared/updater/release-channel'
 import {
   filterSetupScriptPromptDismissalsToValidRepos,
   sanitizeSetupScriptPromptDismissals
 } from '../../../runtime/repo-hooks/setup-script-prompt'
 import { isBundledPetId, DEFAULT_PET_ID } from '../../../components/pet/pet-models'
-import { getRepoHostIdentity } from '../../../../../shared/repo-host-identity'
+import { getRepoHostIdentity } from '../../../../../shared/repository/repo-host-identity'
 import {
   withWslMovedRepoIds,
   withWslMovedSetupScriptDismissals
@@ -268,6 +268,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           codexTerminalServerIsolationNoticeSeen:
             ui.codexTerminalServerIsolationNoticeSeen === true,
           codexSharedSettingsNoticeSeen: ui.codexSharedSettingsNoticeSeen === true,
+          worktreeCardsUpdateNoticeSeen: ui.worktreeCardsUpdateNoticeSeen === true,
           claudeDiffPanelNoticeSeen: ui.claudeDiffPanelNoticeSeen === true,
           ...hydrateAgentReadState(ui),
           workspaceCleanupDismissals: sanitizeWorkspaceCleanupDismissals(

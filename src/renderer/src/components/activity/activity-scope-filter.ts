@@ -1,11 +1,11 @@
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { getWorktreeExecutionHostId } from '../../../../shared/execution-host'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import {
   isAutomationGeneratedWorkspace,
   isCliCreatedWorkspace
-} from '../../../../shared/worktree/workspace-kinds'
-import { isWorkspaceOwnedBySomeoneElse } from '../../../../shared/workspace-creator-visibility'
+} from '../../../../shared/worktree/visibility/workspace-kinds'
+import { isWorkspaceOwnedBySomeoneElse } from '../../../../shared/workspace-view/workspace-creator-visibility'
 import type { AgentPaneThread } from './activity-thread-types'
 
 /** Persisted Agents scope, independent of workspace navigation; null hosts and empty repo IDs mean all. */

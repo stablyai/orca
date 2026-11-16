@@ -4,7 +4,7 @@ import {
   hostRouteForAuthority,
   runtimeTargetEnvironmentId
 } from '@/runtime/rpc/targets/runtime-client-target'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { statRuntimePath } from '@/runtime/files/metadata/runtime-file-metadata-client'
 import { isRemoteRuntimeFileOperation } from '@/runtime/files/runtime-file-routing'

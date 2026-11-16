@@ -13,7 +13,7 @@ import {
 } from './web-runtime-environment'
 import { parseWebPairingInput } from './web-pairing'
 import { WebRuntimeClient } from './web-runtime-client'
-import type { RuntimeStatus } from '../../../shared/runtime-types'
+import type { RuntimeStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { useTranslate } from '@/i18n/use-translate'
 import { readWebDeviceKeySupport } from './web-device-key-support'
 import { webSessionPairingGuidance } from './web-pairing-security-guidance'

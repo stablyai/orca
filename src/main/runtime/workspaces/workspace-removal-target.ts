@@ -35,7 +35,10 @@ import {
 import { interruptedLocalWorktreeRemovalJob } from './removal/runtime-interrupted-local-worktree-removal'
 import { retryFailedRemovalUnlessRegistered } from '../../workspaces/removal/worktree-removal-leftover'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
-import { removeWorktreeMetaRow } from '../../persistence/host-qualified-worktree-meta'
+import {
+  readWorktreeMetaForHost,
+  removeWorktreeMetaRow
+} from '../../persistence/host-qualified-worktree-meta'
 import { RuntimeAgentLaunchPreparation } from '../terminal/launch/runtime-agent-launch-preparation'
 import { worktreeHostIdentity } from '../../persistence/worktree-meta-host-identity'
 
@@ -141,7 +144,7 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends Runtim
     }
   }
 
-  // Host state every removal path drops once Git has let go of the checkout.
+  // Host state every removal path drops once Git has let go of the checkout; an archived row keeps its metadata.
   // Resolves after the pretrust deletion so a removal ack cannot precede it.
   protected async purgeRemovedWorktree(
     store: RuntimeStore,
@@ -150,12 +153,18 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends Runtim
     removalHostId?: ExecutionHostId
   ): Promise<void> {
     this.clearOptimisticReconcileToken(worktreeId)
+    const archived = Boolean(
+      (removalHostId
+        ? readWorktreeMetaForHost(store, worktreeId, removalHostId)
+        : store.getWorktreeMeta(worktreeId)
+      )?.archivedCheckout
+    )
     // Only checkout-deleting paths purge here, so the directory itself is gone.
     const metadataAndHistory = this.removeWorktreeMetadataAndHistory(
       store,
       worktreeId,
       removalHostId,
-      { dropAgentTrust: true }
+      { dropAgentTrust: true, keepArchivedMeta: archived }
     )
     this.invalidateResolvedWorktreeCache()
     this.invalidateWorktreeScanCacheForRepo(repoId)
@@ -168,7 +177,7 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends Runtim
     worktreeId: string,
     hostId?: ExecutionHostId,
     // Why: folder sessions and forgotten orphans keep the directory on disk for siblings.
-    options: { dropAgentTrust?: boolean } = {}
+    options: { dropAgentTrust?: boolean; keepArchivedMeta?: boolean } = {}
   ): Promise<void> {
     // Purge history/caches before path-derived ids can name a recreated workspace.
     const persistedHostId = store.getWorktreeMeta(worktreeId)?.hostId
@@ -180,7 +189,9 @@ export abstract class OrcaRuntimeWithResolveWorktreeRemovalTarget extends Runtim
     )
     const acceptedRendererSnapshot = this.acceptedRendererMobileSnapshotByWorktree.get(worktreeId)
     const storedSnapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
-    removeWorktreeMetaRow(store, worktreeId, hostId)
+    if (!options.keepArchivedMeta) {
+      removeWorktreeMetaRow(store, worktreeId, hostId)
+    }
     // Retire only this host's panes even when a same-id owner survives.
     this.dropAgentStatusForRemovedWorktreeFn?.(worktreeId, hostId ?? persistedHostId)
     if (!preservesSameIdOwner) {

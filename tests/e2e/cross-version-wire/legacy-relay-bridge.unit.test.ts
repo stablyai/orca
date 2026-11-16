@@ -4,9 +4,9 @@ import type { ChildProcess } from 'node:child_process'
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import type { SshRemotePtyLease, SshTarget } from '../../../src/shared/ssh-types'
+import type { SshRemotePtyLease, SshTarget } from '../../../src/shared/remote-runtime/ssh/ssh-types'
 import { SshConnection } from '../../../src/main/ssh/connection/ssh-connection'
-import { toAppSshPtyId } from '../../../src/shared/ssh-pty-id'
+import { toAppSshPtyId } from '../../../src/shared/remote-runtime/ssh/ssh-pty-id'
 import {
   LegacyRelayClient,
   LegacyRelayOwnerHeldError

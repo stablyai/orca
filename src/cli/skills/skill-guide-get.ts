@@ -1,5 +1,5 @@
 import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { writeStdoutLine } from '../output/stdout-line'
 import {
   loadCanonicalGuides,

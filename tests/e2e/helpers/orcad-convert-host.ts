@@ -2,7 +2,7 @@
 import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import type { TestInfo } from '@stablyai/playwright-test'
-import type { SshTargetCreateInput } from '../../../src/shared/ssh-types'
+import type { SshTargetCreateInput } from '../../../src/shared/remote-runtime/ssh/ssh-types'
 import { parseWindowsHostCellDescriptor } from '../../../src/main/ssh/hostile-host-test-support/ssh-windows-host-cells'
 import {
   blockDockerSshHostTargetTcpForwarding,

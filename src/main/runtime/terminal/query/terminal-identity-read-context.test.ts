@@ -7,8 +7,8 @@ import { expect, it, vi } from 'vitest'
 import '../../orca-runtime-tests/runtime-test-module-registration.spec'
 import '../../rpc/methods/orchestration/runs/runs'
 import '../../rpc/methods/orchestration/runs/run-scope'
-import '../../../../shared/orca-session-address'
-import '../../../../shared/orca-session-address-test-fixture'
+import '../../../../shared/agent-session/identity/orca-session-address'
+import '../../../../shared/agent-session/identity/orca-session-address-test-fixture'
 
 it('invalidates actual SSH-held facts on register and finally-release with equal and conflicting claims', async () => {
   const f = fixture()

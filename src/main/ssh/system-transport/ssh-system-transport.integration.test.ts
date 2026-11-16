@@ -7,7 +7,7 @@ vi.mock('electron', () => ({
 }))
 
 import { uploadDirectoryViaSystemSsh } from './file-transfer/system-ssh-file-transfer'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { relayArtifactFilenames } from '../legacy-relay/endpoints/relay-install-artifacts'
 
 const RELAY_VERSION = '0.1.0+systemtransport'

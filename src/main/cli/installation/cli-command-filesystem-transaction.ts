@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { lstat, mkdir, readdir, readFile, readlink, rename, rmdir, stat } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
-import type { CliInstallStatus } from '../../../shared/cli-install-types'
+import type { CliInstallStatus } from '../../../shared/cli/cli-install-types'
 import { isPermissionError } from '../../filesystem/permission-errors'
 import { isMissingError } from './cli-install-errors'
 import { quotePosixShellDoubleQuotedApostrophe } from '../../../shared/shell/launch/shell-argument-quoting'

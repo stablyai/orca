@@ -1,11 +1,11 @@
 import type {
   SshConnectionState,
   SshManagedServerLinkedProject
-} from '../../../../shared/ssh-types'
+} from '../../../../shared/remote-runtime/ssh/ssh-types'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import { splitWorktreeId } from '../../../../shared/worktree/id'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
-import type { Repo } from '../../../../shared/repo-types'
+import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import {
   type ExecutionHostId,
   getRepoExecutionHostId,

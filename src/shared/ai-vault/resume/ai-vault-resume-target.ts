@@ -8,10 +8,10 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../execution-host'
-import { isWslUncPath, parseWslUncPath } from '../../wsl-paths'
-import { antigravitySessionOrigin } from '../../antigravity-session-origin'
+import { isWslUncPath, parseWslUncPath } from '../../file-access/wsl-paths'
+import { antigravitySessionOrigin } from '../../agent-session/lifecycle/provider-handles/antigravity-session-origin'
 import { getRepoIdFromWorktreeId } from '../../worktree/id'
-import { parseWorkspaceKey } from '../../workspace-scope'
+import { parseWorkspaceKey } from '../../workspace/identity/workspace-scope'
 import { canResumeAiVaultSessionOnSshHost } from './ai-vault-ssh-resume-target'
 import {
   findFolderWorkspaceCandidateRepos,

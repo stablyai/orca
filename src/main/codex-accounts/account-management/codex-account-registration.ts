@@ -5,11 +5,11 @@ import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absen
 import {
   WINDOWS_RM_MAX_RETRIES,
   WINDOWS_RM_RETRY_DELAY_MS
-} from '../../../shared/windows-transient-lock-removal'
+} from '../../../shared/file-write/windows-transient-lock-removal'
 import type {
   CodexManagedAccount,
   CodexRateLimitAccountsState
-} from '../../../shared/managed-account-types'
+} from '../../../shared/agent-accounts/managed-account-types'
 import type { Store } from '../../persistence/loading-store/store'
 import type { RateLimitService } from '../../rate-limits/service/rate-limit-service'
 import type { CodexRuntimeHomeService } from '../runtime-home-service'
@@ -29,7 +29,7 @@ import {
   normalizeCodexRuntimeSelection,
   setSelectedCodexAccountIdForTarget
 } from './runtime-selection'
-import type { CodexAccountSelectionTarget } from '../../../shared/codex-selection-lane'
+import type { CodexAccountSelectionTarget } from '../../../shared/agent-accounts/codex/codex-selection-lane'
 
 type CodexAccountRegistrationDependencies = {
   store: Store

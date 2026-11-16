@@ -1,3 +1,7 @@
+import {
+  normalizeCodexMessageOptions,
+  type CodexMessageCompilerInputs
+} from '../../../../shared/agent-session/options/codex-message-compiler'
 import type {
   AgentSessionFastModeSupport,
   AgentSessionModelOption,
@@ -7,8 +11,8 @@ import { readRecord } from '../../app-server/codex-item-field-readers'
 import type { CodexOpenedThread } from '../threads/codex-structured-thread-open'
 import type { CodexSession } from '../session-lifecycle/codex-structured-session-state'
 import { codexSessionCapabilities } from './codex-structured-catalog-entry'
-import { effectiveServiceTier } from '../../../../shared/agent-session/options/structured-agent-session-effective-tier'
-import { isFastServiceTier } from '../../../../shared/agent-session/options/structured-agent-session-discovered-model'
+import { effectiveServiceTier } from '../../../../shared/agent-session/options/reconciliation/structured-agent-session-effective-tier'
+import { isFastServiceTier } from '../../../../shared/agent-session/options/model-catalog/structured-agent-session-discovered-model'
 
 export const CODEX_DEFAULT_SERVICE_TIER = 'default'
 
@@ -115,26 +119,7 @@ export function codexTurnRequestOptions(
   session: Parameters<typeof codexSessionCapabilities>[0],
   supplied: Readonly<Record<string, string>> = Object.fromEntries(session.options)
 ): Record<string, string> {
-  const options = { ...supplied }
-  const reportedOptions = session.reportedOptions ?? {}
-  const capabilities = codexSessionCapabilities(session)
-  const models = capabilities.models
-  const model = models.find((entry) => entry.id === codexEffectiveModel(session, options))
-  const tier = options.serviceTier
-  if (
-    tier &&
-    model?.serviceTiers &&
-    !codexOffersServiceTier(
-      { reportedOptions },
-      model,
-      models,
-      tier,
-      capabilities.listedServiceTiers
-    )
-  ) {
-    options.serviceTier = CODEX_DEFAULT_SERVICE_TIER
-  }
-  return options
+  return normalizeCodexMessageOptions(captureCodexMessageCompilerInputs(session), supplied)
 }
 
 export function projectCodexSessionOptions(
@@ -148,5 +133,43 @@ export function projectCodexSessionOptions(
   return {
     models: codexSessionCapabilities(selected).models,
     options: codexTurnRequestOptions(selected)
+  }
+}
+
+/** Capture only the immutable capability fields consumed by the message compiler. */
+export function captureCodexMessageCompilerInputs(
+  session: Parameters<typeof codexSessionCapabilities>[0] &
+    Partial<Pick<CodexSession, 'appliedTurnInputOptions'>>
+): CodexMessageCompilerInputs {
+  const capabilities = codexSessionCapabilities(session)
+  const defaults: Record<string, string> = {}
+  for (const key of [
+    'model',
+    'effort',
+    'personality',
+    'serviceTier',
+    'interactionMode',
+    'fastMode'
+  ]) {
+    const value = session.options.get(key)
+    if (value !== undefined) {
+      defaults[key] = value
+    }
+  }
+  return {
+    active: { ...session.appliedTurnOptions },
+    activeInput: { ...session.appliedTurnInputOptions },
+    defaults,
+    models: capabilities.models.map((model) => ({
+      id: model.id,
+      ...(model.serviceTiers === undefined
+        ? {}
+        : { serviceTiers: model.serviceTiers.map((tier) => tier.value) }),
+      ...(codexFastServiceTier(model) === undefined
+        ? {}
+        : { fastServiceTier: codexFastServiceTier(model) })
+    })),
+    listedServiceTiers: [...capabilities.listedServiceTiers],
+    reportedServiceTier: session.reportedOptions?.serviceTier
   }
 }

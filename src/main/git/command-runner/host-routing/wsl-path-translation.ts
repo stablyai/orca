@@ -2,7 +2,7 @@ import {
   isDrvfsLinuxPath,
   toWindowsWslPath,
   toWindowsWslUncPath
-} from '../../../../shared/wsl-paths'
+} from '../../../../shared/file-access/wsl-paths'
 import { parseWslPath } from '../../../wsl/filesystem/unc-path-access'
 
 /** Windows arguments need Linux spellings for WSL Git: UNC paths become native and drives map under /mnt. */

@@ -1,25 +1,42 @@
 import type {
   WorkspaceCleanupEvaluation,
-  WorkspaceCleanupKeepCause
+  WorkspaceCleanupEvaluationInput
 } from '../../../shared/workspace-cleanup/workspace-cleanup-evaluation'
+import { hasWorktreeAtRiskLocalFiles } from '../../../shared/worktree/removal/at-risk-local-files'
 import {
   WORKSPACE_CLEANUP_REPORT_ROW_LIMIT,
+  WORKSPACE_CLEANUP_ROW_IGNORED_FILE_LIMIT,
+  type WorkspaceCleanupRowDetails,
+  WORKSPACE_CLEANUP_UNWATCHED_CAUSES,
   type WorkspaceCleanupRun,
   type WorkspaceCleanupRunOutcome,
   type WorkspaceCleanupRunRow
 } from '../../../shared/workspace-cleanup/workspace-cleanup-run'
 
-// Workspaces no rule watches are not part of a run's receipt.
-const UNWATCHED_CAUSES: ReadonlySet<WorkspaceCleanupKeepCause> = new Set([
-  'not-removable',
-  'project-off',
-  'rules-off'
-])
-
 export type WorkspaceCleanupKeptOutcome = Pick<
   WorkspaceCleanupRunRow,
   'outcome' | 'reason' | 'keepCause' | 'waiting'
 >
+
+/** What the evidence already says about a row, for its label; no new Git reads. */
+export function workspaceCleanupRowDetails(
+  input: Pick<WorkspaceCleanupEvaluationInput, 'git'>
+): WorkspaceCleanupRowDetails {
+  const review = input.git.merge?.mergedReview
+  const files = input.git.atRiskLocalFiles
+  return {
+    ...(review?.containsHead ? { prNumber: review.number } : {}),
+    ...(files && hasWorktreeAtRiskLocalFiles(files)
+      ? {
+          ignoredFiles: {
+            count: files.count,
+            samplePaths: files.samplePaths.slice(0, WORKSPACE_CLEANUP_ROW_IGNORED_FILE_LIMIT),
+            complete: files.complete
+          }
+        }
+      : {})
+  }
+}
 
 export function keptRunOutcome(
   evaluation: WorkspaceCleanupEvaluation
@@ -56,7 +73,7 @@ export function summarizeWorkspaceCleanupRun(args: {
   error?: string
 }): WorkspaceCleanupRun {
   const rows = args.rows.filter(
-    (row) => row.keepCause === undefined || !UNWATCHED_CAUSES.has(row.keepCause)
+    (row) => row.keepCause === undefined || !WORKSPACE_CLEANUP_UNWATCHED_CAUSES.has(row.keepCause)
   )
   const counts: Record<WorkspaceCleanupRunOutcome, number> = {
     removed: 0,

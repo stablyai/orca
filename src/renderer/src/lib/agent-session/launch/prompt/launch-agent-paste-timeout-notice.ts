@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
 import { track } from '@/diagnostics/telemetry/telemetry'
-import { tuiAgentToAgentKind } from '../../../../../../shared/agent-kind'
+import { tuiAgentToAgentKind } from '../../../../../../shared/agent-status/identity/agent-kind'
 import { translate } from '@/i18n/i18n'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 

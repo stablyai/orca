@@ -6,7 +6,7 @@ import {
 } from '../../daemon/providers/lifecycle/daemon-provider-state'
 import { initDaemonPtyProvider } from '../../daemon/providers/lifecycle/daemon-provider-init'
 import { resolveTerminalSpawnAdmissionMode } from '../../daemon/admission/terminal-spawn-admission-mode'
-import { errorMessage } from '../../../shared/error-message'
+import { errorMessage } from '../../../shared/errors/error-message'
 import {
   OrcadTerminalsNotDurableError,
   takeOrcadServeSupervision

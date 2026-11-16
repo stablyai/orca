@@ -5,7 +5,7 @@ import type { PluginService } from '../plugins/plugin-service'
 import {
   readPluginDeclaredSettings,
   writePluginDeclaredSetting
-} from '../plugins/plugin-declared-settings'
+} from '../plugins/storage/plugin-declared-settings'
 
 const pluginKeySchema = z.string().refine(isQualifiedPluginKey, 'invalid plugin key')
 const readArgsSchema = z.object({ pluginKey: pluginKeySchema }).strict()

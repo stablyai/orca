@@ -1,5 +1,5 @@
 import type { JiraConnectionStatus, JiraSite } from '../../shared/jira/jira-types'
-import type { RuntimeStatus } from '../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { JIRA_AGENT_ACCESS_RUNTIME_CAPABILITY } from '../../shared/jira/jira-agent-capability'
 import {
   getMatchingJiraSites,
@@ -8,7 +8,7 @@ import {
 } from '../../shared/jira/jira-issue-url'
 import type { HandlerContext } from '../dispatch/dispatch'
 import { getOptionalStringFlag } from '../arguments/flags'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 
 export function resolveJiraTarget(
   context: HandlerContext,

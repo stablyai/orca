@@ -1,21 +1,25 @@
 import type { PreloadApi } from '../../../../preload/api-types'
 import {
   findKeybindingConflicts,
-  formatKeybindingList,
+  formatKeybindingList
+} from '../../../../shared/keybindings/formatting'
+import {
   getKeybindingPlatform,
-  getKeybindingResetBindings,
   isKeybindingActionId,
-  getLegacySearchBindings,
-  normalizeKeybindingArrayForAction,
+  getLegacySearchBindings
+} from '../../../../shared/keybindings/definitions'
+import {
+  getKeybindingResetBindings,
   resolveKeybindingOverrides
-} from '../../../../shared/keybindings'
+} from '../../../../shared/keybindings/profile-defaults'
+import { normalizeKeybindingArrayForAction } from '../../../../shared/keybindings/normalization'
 import type {
   KeybindingActionId,
   KeybindingFileDiagnostic,
   KeybindingFileSnapshot,
   KeybindingOverrides,
   KeybindingPlatform
-} from '../../../../shared/keybindings'
+} from '../../../../shared/keybindings/types'
 import {
   isJsonObject,
   normalizeStoredWebOverrides,

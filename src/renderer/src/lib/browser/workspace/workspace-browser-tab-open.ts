@@ -32,7 +32,7 @@ import type {
   BrowserOpenOutcome
 } from '../navigation/browser-link-destination'
 import type { AppState } from '@/store/types'
-import type { SearchEngine } from '../../../../../shared/browser-url'
+import type { SearchEngine } from '../../../../../shared/browser/navigation/browser-url'
 import type { BrowserClientHostPlacementPreference } from '../../../../../shared/browser/client-hosting/browser-client-host-placement'
 import type { TabSplitTarget } from '@/store/slices/tabs/tabs-slice-contract'
 

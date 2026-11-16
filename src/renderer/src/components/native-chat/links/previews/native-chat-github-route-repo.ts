@@ -1,7 +1,7 @@
 import { resolveRepoSlug } from '@/lib/workspace/catalog/repo-slug-index'
 import { readRepoSlugCache, repoSlugCacheKey } from '@/lib/workspace/catalog/repo-slug-cache'
 import type { GitHubIssueOrPRLink } from '../../../../../../shared/github/repositories/links'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import {
   getRepoExecutionHostId,
   getRepoSshConnectionId,
@@ -11,7 +11,7 @@ import {
   authorityKey,
   parseHostAuthorityKey,
   type HostAuthorityKey
-} from '../../../../../../shared/host-authority'
+} from '../../../../../../shared/execution-host/host-authority'
 import {
   githubHostFromIdentityKey,
   githubRepoIdentityKey,
@@ -82,17 +82,34 @@ export function pickGitHubPreviewRouteRepo(
 ): Repo | null {
   const linkKey = githubRepoIdentityKey(link.slug)
   const linkHost = githubHostFromIdentityKey(linkKey)
-  const resolved = candidates.filter((row): row is { repo: Repo; originKey: string } =>
-    Boolean(row.originKey)
-  )
-  const clone =
-    resolved.find(({ originKey }) => originKey === linkKey) ??
-    resolved.find(({ repo, originKey }) => repoUpstreamIdentityKey(repo, originKey) === linkKey)
-  return (
-    clone?.repo ??
-    resolved.find(({ originKey }) => githubHostFromIdentityKey(originKey) === linkHost)?.repo ??
-    null
-  )
+  let selected: Repo | null = null
+  let rank = 3
+  for (const { repo, originKey } of candidates) {
+    const candidateRank = githubPreviewRouteRank(repo, originKey, linkKey, linkHost)
+    if (candidateRank < rank) {
+      selected = repo
+      rank = candidateRank
+    }
+  }
+  return selected
+}
+
+export function githubPreviewRouteRank(
+  repo: Repo,
+  originKey: string | null,
+  linkKey: string,
+  linkHost: string | undefined
+): number {
+  if (!originKey) {
+    return 3
+  }
+  if (originKey === linkKey) {
+    return 0
+  }
+  if (repoUpstreamIdentityKey(repo, originKey) === linkKey) {
+    return 1
+  }
+  return githubHostFromIdentityKey(originKey) === linkHost ? 2 : 3
 }
 
 export async function findGitHubPreviewRouteRepo(

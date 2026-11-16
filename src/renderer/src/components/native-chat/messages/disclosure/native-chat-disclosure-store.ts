@@ -2,8 +2,16 @@
 
 import { createContext, useCallback, useContext, useMemo, useState } from 'react'
 
-/** Where the reader left an opened run's own scroll box. */
-export type NativeChatRunScroll = { top: number; followsEnd: boolean }
+/** A reader's place in an opened run's box: a row, and how far into that row its top edge sits. */
+export type NativeChatRunPosition = { key: string; offset: number }
+
+/** Where the reader left an opened run's own scroll box: a row and offset, or the end. */
+export type NativeChatRunScroll = {
+  position: NativeChatRunPosition | null
+  followsEnd: boolean
+  /** Measured heights of details opened in rows the window no longer draws, so the box keeps their room. */
+  detailHeights: ReadonlyMap<string, number>
+}
 
 export type NativeChatDisclosureStore = {
   read: (key: string) => boolean | undefined

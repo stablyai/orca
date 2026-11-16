@@ -1,4 +1,4 @@
-import type { RuntimeTerminalWaitBlockedReason } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalWaitBlockedReason } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 
 // Match rows by their first ·, before provisional startup mistakes it for a chat footer.
 // Codex 0.157+ cell-diff painting corrupts heading text; fixed key/update rows survive.

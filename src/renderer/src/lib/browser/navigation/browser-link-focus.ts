@@ -1,4 +1,4 @@
-import { requestBrowserFocus } from '@/components/browser-pane/host-guest/browser-focus'
+import { requestBrowserFocus } from '@/components/browser-pane/host-guest/input/browser-focus'
 import { useAppStore } from '@/store/index'
 import { isFloatingWorkspaceId } from '../../../../../shared/floating-workspace-worktree'
 import type { BrowserOpenResult } from './browser-link-destination'

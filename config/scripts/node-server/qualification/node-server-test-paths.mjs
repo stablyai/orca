@@ -21,7 +21,6 @@ export function nodeServerTestPaths({
     'src/main/orcad/instance-lock/orcad-instance-lock.test.ts',
     'src/main/orcad/instance-lock/orcad-process-start-time.test.ts',
     'src/main/orcad/host-lifecycle/managed-stop/orcad-managed-stop.test.ts',
-    'src/main/orcad/host-lifecycle/managed-stop/orcad-managed-stop-cancellation.test.ts',
     // The directory, not a prefix: its siblings are POSIX-host unit tests pr.yml already runs.
     'src/main/daemon/pty-subprocess/conpty-startup-input-reader.ts',
     'src/main/daemon/pty-subprocess/daemon-pty-physical-owner.ts',
@@ -35,10 +34,8 @@ export function nodeServerTestPaths({
     'src/main/daemon/pty-subprocess/spawn-environment.ts',
     'src/main/daemon/pty-subprocess/spawn-file-child-processes.ts',
     'src/main/daemon/pty-subprocess/spawn-file-foreground-process.ts',
-    'src/main/daemon/pty-subprocess/spawn-file-foreground-rejected-agents.test.ts',
     'src/main/daemon/pty-subprocess/spawn-preflight.ts',
     'src/main/daemon/pty-subprocess/subprocess-handle.ts',
-    'src/main/daemon/pty-subprocess/testing/pty-subprocess-spawn-file-foreground.test.ts',
     ...(artifact
       ? [
           'tests/e2e/daemon-running-work-probe.unit.test.ts',

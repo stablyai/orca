@@ -1,5 +1,5 @@
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../../shared/tab-types'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 
 function collectLayoutGroupIds(node: TabGroupLayoutNode, groupIds: Set<string>): void {
   if (node.type === 'leaf') {

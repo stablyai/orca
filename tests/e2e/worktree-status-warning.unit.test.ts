@@ -5,7 +5,8 @@ import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
 import type { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import { WORKTREE_METHODS } from '../../src/main/runtime/rpc/methods/workspaces/worktree'
 import type { WorkspaceStatusDefinition } from '../../src/shared/worktree/types'
-import { DEFAULT_WORKSPACE_STATUSES, getWorkspaceStatus } from '../../src/shared/workspace-statuses'
+import { DEFAULT_WORKSPACE_STATUSES } from '../../src/shared/workspace/status/workspace-status-defaults'
+import { getWorkspaceStatus } from '../../src/shared/workspace/status/workspace-statuses'
 
 const mocks = vi.hoisted(() => ({
   callMock: vi.fn(),
@@ -27,11 +28,11 @@ vi.mock('../../src/cli/runtime/launch', async (importOriginal) => ({
   serveOrcaApp: mocks.serveOrcaAppMock
 }))
 
-vi.mock('../../src/cli/runtime/metadata', async (importOriginal) => ({
+vi.mock('../../src/cli/runtime/profile/metadata', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getDefaultUserDataPath: mocks.getDefaultUserDataPathMock
 }))
-vi.mock('../../src/cli/runtime/environments', () => ({
+vi.mock('../../src/cli/runtime/pairing/environments', () => ({
   addEnvironmentFromPairingCode: mocks.addEnvironmentFromPairingCodeMock,
   removeEnvironment: vi.fn(),
   resolveEnvironment: vi.fn()

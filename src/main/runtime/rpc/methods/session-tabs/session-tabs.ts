@@ -1,14 +1,14 @@
 import { isDeepStrictEqual } from 'node:util'
 import { terminalCreateFeatureRequirement } from '../../startup/agent-launch-feature-requirement'
 import { terminalImageViewerSupported } from '../../../terminal/launch/terminal-image-viewer-env'
-import { resolveRuntimeNavigationTarget } from '../../../../../shared/runtime-navigation'
+import { resolveRuntimeNavigationTarget } from '../../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import { getExplicitWorktreeIdSelector } from '../../../workspaces/catalog/runtime-worktree-selection'
 import { worktreeIdentityKey, worktreeIdsEqual } from '../../../../../shared/worktree/id'
 import { defineMethod, defineStreamingMethod } from '../../core'
 import {
   CreateTerminalTab,
   WorktreeTabSelector
-} from '../../../../../shared/rpc-contract/session-tabs-schemas-params'
+} from '../../../../../shared/rpc-contract/session-tabs/session-tabs-schemas-params'
 import { SESSION_TAB_CLOSE_METHODS } from './session-tab-close-methods'
 import {
   listSessionTabsInventory,
@@ -20,8 +20,8 @@ import { SESSION_TAB_MUTATION_METHODS } from './session-tab-mutation-methods'
 import { createSessionTabsStreamDelta } from './session-tabs-sender-delta'
 import { prepareStructuredTabsIfSupported } from './structured-session-tab-restore'
 import { assertLegacyAiVaultResumeCommandAllowed } from '../../../../ai-vault/structured-sessions/structured-session-ownership'
-import '../../../../../shared/protocol-version'
-import { SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../../shared/session-tabs-runtime-capabilities'
+import '../../../../../shared/remote-runtime/protocol/protocol-version'
+import { SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
 import { createSessionTabsTabDeltaEncoder } from '../../../../../shared/session-tabs-tab-delta'
 import {
   SESSION_TABS_UNSUBSCRIBE_METHOD,

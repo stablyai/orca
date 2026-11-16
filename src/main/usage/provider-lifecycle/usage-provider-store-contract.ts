@@ -1,5 +1,5 @@
 import type { AgentTokenSession } from '../reporting/token-usage/agent-token-usage'
-import type { AgentTokenUsage } from '../../../shared/telemetry-agent-token-usage-schema'
+import type { AgentTokenUsage } from '../../../shared/telemetry/schemas/telemetry-agent-token-usage-schema'
 import type { UsageScanWorktreeRef } from './usage-provider-contract'
 import type {
   UsageCacheSplitRequest,

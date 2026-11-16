@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentBrowserBridge } from '../../../browser/agent-browser/agent-browser-bridge'
+import { AgentBrowserBridge } from '../../../browser/agent-browser/agent-browser-bridge'
 import type { RuntimeBrowserCommandHost } from '../commands/browser-command-contracts'
 import { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
+import { BrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry'
+import { BrowserHostRequestRegistry } from '../../browser-host/leases/browser-host-request-registry'
 
 const {
   ipcMainOnMock,
@@ -13,7 +15,16 @@ const {
   whenBrowserMainWindowReadyMock,
   browserSessionRegistryMock
 } = vi.hoisted(() => ({
-  ipcMainOnMock: vi.fn(),
+  ipcMainOnMock:
+    vi.fn<
+      (
+        channel: string,
+        listener: (
+          event: { sender: unknown },
+          reply: { requestId: string; browserPageId?: string; error?: string }
+        ) => void
+      ) => void
+    >(),
   ipcMainRemoveListenerMock: vi.fn(),
   webContentsFromIdMock: vi.fn(),
   startBrowserScreencastMock: vi.fn(),
@@ -74,34 +85,32 @@ vi.mock('../../../browser/sessions/profiles/browser-session-registry', () => ({
 
 function createHost(overrides: Partial<RuntimeBrowserCommandHost> = {}): RuntimeBrowserCommandHost {
   const runtimeBrowserPages = new RuntimeBrowserPageRegistry()
-  const bridge = overrides.getAgentBrowserBridge
-    ? overrides.getAgentBrowserBridge()
-    : ({
-        getRegisteredTabs: vi.fn(() => new Map([['page-1', 100]])),
-        getActivePageId: vi.fn(() => 'page-1'),
-        tabList: vi.fn(() => ({
-          tabs: [
-            {
-              browserPageId: 'page-1',
-              index: 0,
-              url: 'about:blank',
-              title: 'Browser',
-              active: true
-            }
-          ]
-        }))
-      } as unknown as AgentBrowserBridge)
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial host fake; these tests reach only the methods it defines.
+  const bridge = vi.mockObject(AgentBrowserBridge.prototype)
+  bridge.getRegisteredTabs.mockReturnValue(new Map([['page-1', 100]]))
+  bridge.getRegisteredPageWebContentsId.mockImplementation((page) =>
+    page === 'page-1' ? 100 : undefined
+  )
+  bridge.getActivePageId.mockReturnValue('page-1')
+  bridge.tabList.mockReturnValue({
+    tabs: [
+      { browserPageId: 'page-1', index: 0, url: 'about:blank', title: 'Browser', active: true }
+    ]
+  })
   return {
+    getRuntimeId: () => 'host',
+    resolveBrowserNetworkExecutionHost: () => ({ kind: 'native', runtimeId: 'host', revision: 0 }),
     resolveWorkspaceSelector: async (selector) => ({ id: selector.replace(/^id:/, '') }),
     resolveBrowserWorkspace: async (selector) => ({ id: selector.replace(/^id:/, '') }),
     getRuntimeBrowserPageRegistry: () => runtimeBrowserPages,
-    getAuthoritativeWindow: vi.fn(),
+    // No paired desktop: headless creates stay on this host.
+    getBrowserHostLeaseRegistry: () => new BrowserHostLeaseRegistry({ authorityRuntimeId: 'host' }),
+    getBrowserHostRequestRegistry: () => new BrowserHostRequestRegistry(),
+    getAuthoritativeWindow: vi.fn<RuntimeBrowserCommandHost['getAuthoritativeWindow']>(),
     getAvailableAuthoritativeWindow: vi.fn(() => null),
     getOffscreenBrowserBackend: vi.fn(() => null),
-    ...overrides,
-    getAgentBrowserBridge: () => bridge
-  } as unknown as RuntimeBrowserCommandHost
+    getAgentBrowserBridge: () => bridge,
+    ...overrides
+  }
 }
 
 describe('RuntimeBrowserCommands browser screencast', () => {
@@ -143,33 +152,37 @@ describe('RuntimeBrowserCommands browser screencast', () => {
       expect(channel).toBe('browser:requestTabCreate')
       const handler = ipcMainOnMock.mock.calls.find(
         ([eventName]) => eventName === 'browser:tabCreateReply'
-      )?.[1] as
-        | ((
-            event: unknown,
-            reply: { requestId: string; browserPageId?: string; error?: string }
-          ) => void)
-        | undefined
-      handler?.({ sender: { send: vi.fn() } } as never, {
-        requestId: data.requestId,
-        error: 'spoofed renderer reply'
-      })
-      handler?.({ sender: webContents } as never, {
-        requestId: data.requestId,
-        browserPageId: 'page-new'
-      })
+      )?.[1]
+      handler?.(
+        { sender: { send: vi.fn() } },
+        {
+          requestId: data.requestId,
+          error: 'spoofed renderer reply'
+        }
+      )
+      handler?.(
+        { sender: webContents },
+        {
+          requestId: data.requestId,
+          browserPageId: 'page-new'
+        }
+      )
     })
     webContents.send = send
-    const bridge = {
-      getRegisteredTabs: vi.fn(() => new Map([['page-new', 101]])),
-      getActivePageId: vi.fn(() => 'page-new'),
-      setActiveTab: vi.fn(),
-      tabList: vi.fn(() => ({ tabs: [] }))
-    } as unknown as AgentBrowserBridge
+    const bridge = vi.mockObject(AgentBrowserBridge.prototype)
+    bridge.getRegisteredTabs.mockReturnValue(new Map([['page-new', 101]]))
+    bridge.getRegisteredPageWebContentsId.mockImplementation((page) =>
+      page === 'page-new' ? 101 : undefined
+    )
+    bridge.getActivePageId.mockReturnValue('page-new')
+    bridge.tabList.mockReturnValue({ tabs: [] })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: renderer tab creation reads only webContents.send; native BrowserWindow construction is unavailable in this unit test.
+    const window = { webContents } as unknown as Electron.BrowserWindow
     const commands = new RuntimeBrowserCommands(
       createHost({
         getAgentBrowserBridge: () => bridge,
-        getAvailableAuthoritativeWindow: vi.fn(() => ({}) as never),
-        getAuthoritativeWindow: vi.fn(() => ({ webContents }) as never)
+        getAvailableAuthoritativeWindow: () => window,
+        getAuthoritativeWindow: () => window
       })
     )
 
@@ -190,5 +203,45 @@ describe('RuntimeBrowserCommands browser screencast', () => {
     )
     expect(waitForTabRegistrationMock).toHaveBeenCalledWith('page-new')
     expect(bridge.setActiveTab).toHaveBeenCalledWith(101, 'wt-1')
+  })
+  // Pageless agent commands prefer an active client page; an agent's new server tab must take that over.
+  it('moves the workspace selection off a client page when a server tab is created', async () => {
+    const { RuntimeBrowserCommands } = await import('../commands/browser-commands')
+    const pages = new RuntimeBrowserPageRegistry()
+    pages.publishClientPage({
+      browserPageId: 'user-page',
+      workspaceId: 'wt-1',
+      browserProfileId: 'default',
+      executionHostKey: 'local',
+      placement: {
+        kind: 'client',
+        browserHostClientId: 'desktop-1',
+        browserHostGeneration: 1,
+        pageHostGeneration: 1
+      },
+      url: 'https://user.example/',
+      loading: false,
+      active: true
+    })
+    const bridge = vi.mockObject(AgentBrowserBridge.prototype)
+    bridge.getRegisteredTabs.mockReturnValue(new Map([['agent-page', 102]]))
+    bridge.getRegisteredPageWebContentsId.mockImplementation((page) =>
+      page === 'agent-page' ? 102 : undefined
+    )
+    const host = createHost({
+      getAgentBrowserBridge: () => bridge,
+      getRuntimeBrowserPageRegistry: () => pages,
+      getOffscreenBrowserBackend: () => ({
+        createTab: vi.fn(async () => ({ browserPageId: 'agent-page' })),
+        closeTab: vi.fn(async () => {}),
+        ownsTab: () => false
+      })
+    })
+    const commands = new RuntimeBrowserCommands(host)
+
+    await commands.browserTabCreate({ worktree: 'id:wt-1', url: 'https://agent.example/' })
+
+    expect(bridge.setActiveTab).toHaveBeenCalledWith(102, 'wt-1')
+    expect(pages.listPages('wt-1').find((page) => page.active)).toBeUndefined()
   })
 })

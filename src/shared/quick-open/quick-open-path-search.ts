@@ -2,7 +2,7 @@ import {
   filenameContainsSeparatorVariant,
   matchQuickOpenSeparatorAlternatives
 } from './quick-open-separator-match'
-import { isClipboardTextByteLengthOverLimit } from '../clipboard-text'
+import { isClipboardTextByteLengthOverLimit } from '../clipboard/clipboard-text'
 import { compareFileNames } from '../file-listing/file-name-sort'
 
 export const QUICK_OPEN_RESULT_LIMIT = 50

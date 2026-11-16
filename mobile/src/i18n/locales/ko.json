@@ -136,6 +136,33 @@
       "title": "터미널"
     }
   },
+  "appMove": {
+    "play": {
+      "title": "Orca가 이제 Google Play에 있습니다",
+      "description": "이 앱은 계속 사용할 수 있지만, 앞으로 업데이트는 Google Play를 통해 제공됩니다. 전환은 몇 분이면 끝납니다.",
+      "installTitle": "Google Play에서 Orca 설치",
+      "installDescription": "지금 어디서든 설치할 수 있습니다.",
+      "openGooglePlay": "Google Play 열기",
+      "cantUseGooglePlay": "Google Play를 사용할 수 없어요"
+    },
+    "download": {
+      "title": "새 Orca 앱 받기",
+      "description": "이 앱은 계속 사용할 수 있지만, 앞으로 업데이트와 보안 수정은 새 앱을 통해 제공됩니다. 전환은 몇 분이면 끝납니다.",
+      "installTitle": "새 앱 다운로드",
+      "installDescription": "휴대폰에서 요청하면 브라우저가 앱을 설치하도록 허용하세요.",
+      "download": "다운로드",
+      "keepThisVersion": "이 버전 계속 사용",
+      "keepThisVersionNote": "보안 수정을 받을 수 없습니다. 일주일 후에 다시 알려 드릴게요."
+    },
+    "pairTitle": "컴퓨터와 페어링",
+    "pairDescription": "컴퓨터의 Orca에서 설정 → 모바일로 이동해 코드를 스캔하세요.",
+    "deleteTitle": "이 앱 삭제",
+    "deleteDescription": "새 앱에 에이전트가 표시되면 삭제하세요. 그때까지는 이 앱을 계속 사용하세요.",
+    "dataKept": "에이전트, 채팅, 작업 공간은 컴퓨터에 저장되어 있으므로 새 앱에서도 모두 볼 수 있습니다.",
+    "banner": {
+      "seeHowToSwitch": "전환 방법 보기"
+    }
+  },
   "browser": {
     "addressField": {
       "urlPlaceholder": "URL"
@@ -222,6 +249,7 @@
     "message": {
       "copyMessage": "메시지 복사",
       "forkFromResponse": "이 응답에서 분기",
+      "scrollMessageToTop": "이 메시지를 맨 위로 스크롤",
       "forkFromResponseHint": "이 턴의 끝까지 전체 응답이 포함된 새 채팅"
     },
     "messageActionsSheet": {
@@ -643,7 +671,10 @@
       "busy": "다른 채팅이나 터미널을 여는 중입니다. 기다린 다음 {{agent}} 채팅을 다시 분기하세요.",
       "unconfirmed": "{{agent}}이(가) 분기를 확인하지 못했습니다. 채팅이 열렸을 수 있습니다. 다시 분기하기 전에 세션 기록을 확인하세요.",
       "failed": "{{agent}}이(가) 이 채팅을 분기하지 못했습니다. {{detail}}",
-      "unsupported": "이 호스트에서 이전 버전의 Orca가 실행 중입니다. 호스트의 Orca를 업데이트하고 다시 시도하세요."
+      "unsupported": "이 호스트에서 이전 버전의 Orca가 실행 중입니다. 호스트의 Orca를 업데이트하고 다시 시도하세요.",
+      "mark": "분기 ·",
+      "markedName": "{{mark}} {{name}}",
+      "accessibleName": "분기: {{name}}"
     }
   },
   "common": {
@@ -939,8 +970,10 @@
       "desktopTooOldBody": "페어링된 데스크톱 앱의 버전이 오래되어 현재 Orca 모바일 앱과 호환되지 않습니다. 컴퓨터에서 Orca를 업데이트한 후 이 호스트에 다시 연결하세요.",
       "getVersion": "Orca {{version}} 받기",
       "mobileTooOldAppStore": "이 데스크톱에는 더 최신 버전의 Orca 모바일 앱이 필요합니다. App Store에서 Orca 모바일을 업데이트한 후 이 호스트에 다시 연결하세요.",
+      "mobileTooOldGooglePlay": "이 데스크톱에는 더 최신 버전의 Orca 모바일 앱이 필요합니다. Google Play에서 Orca 모바일을 업데이트한 후 이 호스트에 다시 연결하세요.",
       "mobileTooOldGitHubReleases": "이 데스크톱에는 더 최신 버전의 Orca 모바일 앱이 필요합니다. GitHub Releases에서 Orca 모바일을 업데이트한 후 이 호스트에 다시 연결하세요.",
       "openAppStore": "App Store 열기",
+      "openGooglePlay": "Google Play 열기",
       "openGitHubReleases": "GitHub Releases 열기",
       "refreshRecoveryNote": "이 메시지가 계속 표시되면 이 호스트를 제거한 후 다시 페어링하세요.",
       "refreshWorkspaceBody": "이 호스트용으로 캐시된 워크스페이스가 데스크톱에서 요구하는 버전보다 오래되었습니다. 이 호스트에 다시 연결하여 최신 버전을 다운로드하세요.",
@@ -949,6 +982,7 @@
       "updateMobileTitle": "Orca 모바일 업데이트",
       "updateRecoveryNote": "이미 업데이트하셨습니까? 호스트 화면으로 돌아가 연결을 새로고침하세요. 이 메시지가 계속 표시되면 이 호스트를 제거한 후 다시 페어링하세요.",
       "workspaceNeedsUpdateAppStore": "이 데스크톱의 모바일 워크스페이스에는 더 최신 버전의 Orca 모바일 앱이 필요합니다. App Store에서 Orca 모바일을 업데이트한 후 이 호스트에 다시 연결하세요.",
+      "workspaceNeedsUpdateGooglePlay": "이 데스크톱의 모바일 워크스페이스에는 더 최신 버전의 Orca 모바일 앱이 필요합니다. Google Play에서 Orca 모바일을 업데이트한 후 이 호스트에 다시 연결하세요.",
       "workspaceNeedsUpdateGitHubReleases": "이 데스크톱의 모바일 워크스페이스에는 더 최신 버전의 Orca 모바일 앱이 필요합니다. GitHub Releases에서 Orca 모바일을 업데이트한 후 이 호스트에 다시 연결하세요."
     },
     "richMarkdownEditor": {
@@ -1589,7 +1623,6 @@
       "deleteConfirmMessage": "\"{{name}}\" ({{branch}})을(를) 삭제하시겠습니까?",
       "deleteDestroysEnvironment": "Orca가 이 작업 트리용으로 만든 환경 \"{{environment}}\"도 커밋되지 않은 작업과 실행 중인 터미널과 함께 삭제됩니다.",
       "deleteKeepsEnvironment": "Orca가 이 작업 트리용으로 만든 환경 \"{{environment}}\"은(는) 계속 실행됩니다. 레시피에 삭제 단계가 없습니다.",
-      "deleteWorktree": "작업 트리 삭제",
       "pin": "고정",
       "primaryWorktreeDeleteHint": "기본 작업 트리는 삭제할 수 없습니다. 대신 프로젝트를 제거하세요.",
       "removeHost": "호스트 제거",
@@ -1761,7 +1794,6 @@
       "daysAgo_one": "{{count}}일 전",
       "daysAgo_other": "{{count}}일 전",
       "deleteConfirmMessage": "GitHub에서 댓글이 영구적으로 삭제됩니다.",
-      "deleteConfirmTitle": "댓글을 삭제하시겠습니까?",
       "editPlaceholder": "댓글 수정…",
       "hoursAgo_one": "{{count}}시간 전",
       "hoursAgo_other": "{{count}}시간 전",
@@ -2382,7 +2414,6 @@
       "addTitle": "빠른 명령 추가",
       "chooseAgentTitle": "에이전트 선택",
       "deleteConfirmMessage": "이 빠른 명령은 저장된 목록에서 제거됩니다.",
-      "deleteConfirmTitle": "\"{{label}}\"을(를) 삭제하시겠습니까?",
       "editTitle": "빠른 명령 편집",
       "editorDescription": "터미널 명령이나 에이전트 프롬프트를 저장하여 빠르게 사용하세요.",
       "title": "빠른 명령어",
@@ -2794,12 +2825,14 @@
       "title": "모양"
     },
     "browserSettingsScreen": {
+      "askEachTime": "매번 묻기",
+      "askEachTimeDescription": "Orca 브라우저, 휴대폰 브라우저, 링크 복사 중에서 매번 선택합니다.",
       "desktopBrowser": "데스크톱 Orca 브라우저",
       "desktopBrowserDescription": "페어링된 데스크톱에서 스트리밍되는 브라우저로 엽니다.",
-      "linksDescription": "터미널 출력의 HTTP(S) 링크를 탭했을 때 열 브라우저를 선택하세요.",
+      "terminalAndChatLinksDescription": "터미널 출력과 채팅의 웹 링크를 탭했을 때 열 위치를 선택하세요.",
       "linksHeading": "링크",
       "loadFailed": "브라우저 설정을 불러오지 못했습니다. 다시 시도하세요.",
-      "openTerminalLinks": "터미널 링크 열기",
+      "openLinks": "링크 열기",
       "phoneBrowser": "휴대폰 브라우저",
       "phoneBrowserDescription": "이 휴대폰의 Safari, Chrome 또는 다른 브라우저에서 엽니다.",
       "saveFailed": "브라우저 설정을 저장하지 못했습니다. 다시 시도하세요.",
@@ -4106,7 +4139,6 @@
       "outcome": "결과",
       "allOutcomes": "모든 결과",
       "couldNotStart": "시작하지 못함",
-      "deleteAutomationTitle": "자동화를 삭제할까요?",
       "deleteRetained": "“{{name}}” 및 보관된 실행을 삭제할까요?",
       "couldNotVerifyTheOriginalAgentPaneReconnectAndTryAgain": "원래 에이전트 창을 확인하지 못했습니다. 다시 연결한 후 시도하세요.",
       "theOriginalAgentPaneIsNoLongerAvailableToOpenSavedOutputRemainsHere": "원래 에이전트 창을 더 이상 열 수 없습니다. 저장된 출력은 여기에 유지됩니다.",

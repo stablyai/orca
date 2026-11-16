@@ -7,7 +7,7 @@ import {
 } from '../../../../orchestration/workers/reports/dispatch-report-mailbox'
 import { orchestrationSkillRecoveryData } from '../../../../../../shared/orchestration/orchestration-rpc-contract'
 import { SendParams } from './send-params'
-import { isDispatchMutationMessageType } from '../../../../../../shared/rpc-contract/orchestration-params'
+import { isDispatchMutationMessageType } from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
 import { isWorkerReportOutcome, parseRemoteWorkerPayload } from './message-payload'
 import { resolveMessageRun } from '../routing'
 import {
@@ -20,6 +20,7 @@ import { replayAcceptedSend } from './send-replay'
 import { sendRemoteMessage } from '../../../../orchestration/legacy-remote/send-remote'
 import { withPeerMailSend } from './peer-mail-send'
 import { prepareSessionRecipient } from './session-recipient'
+import { withDispatchPrefixHint } from './dispatch-prefix-hint'
 import { sendPointToPointMessage } from './send-point-to-point'
 import { sendGroupMessage } from './send-group'
 import { sendFederatedControlMail } from '../../../../orchestration/legacy-remote-home/send-control-mail'
@@ -171,7 +172,7 @@ export const ORCHESTRATION_SEND_METHODS = [
             terminalRecipient: terminal
           })
           if (!recipient.ok) {
-            throw new OrchestrationError(recipient.code, recipient.message)
+            throw new OrchestrationError(recipient.code, withDispatchPrefixHint(db, to, recipient))
           }
           // A paired Orca's former worker may since have taken up local work; it is no longer its to reach.
           if (

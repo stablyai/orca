@@ -1,7 +1,10 @@
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { ORCAD_VERSION, orcadArtifactFilenames } from '../../../../src/shared/orcad-artifacts.ts'
+import {
+  ORCAD_VERSION,
+  orcadArtifactFilenames
+} from '../../../../src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts'
 import { readOrcadMobileWebAssetFilenames } from './orcad-mobile-web-bundle.mjs'
 
 /** The runtime enters through `.runtime-node`'s executableSha256 string, never its bytes (design D2). */
@@ -15,7 +18,7 @@ export function computeOrcadFullVersion(artifactDir, { target, agentBrowserFilen
     if (!existsSync(artifactPath)) {
       throw new Error(
         `orcad declares ${filename} in ORCAD_ARTIFACTS but never emitted it. Add the build ` +
-          'step, or drop it from src/shared/orcad-artifacts.ts.'
+          'step, or drop it from src/shared/remote-runtime/orcad-distribution/orcad-artifacts.ts.'
       )
     }
     hash.update(readFileSync(artifactPath))

@@ -1,3 +1,4 @@
+import { composerSetupCardProps } from './composer-setup-card-props'
 import { resolveComposerAttachmentTarget } from './composer-attachment-target'
 import { getAttachmentLabel } from '@/lib/workspace/creation/new-workspace'
 import { getQuickComposerCreateDisabled } from '@/lib/workspace/creation/new-workspace-create-gates'
@@ -66,7 +67,6 @@ export function buildComposerCardProps(state: ComposerModel) {
     handleRepoChange,
     handleReuseSelectedBranchChange,
     handleSelectLinkedItem,
-    handleSetupAgentStartupPolicyChange,
     handleSmartBranchSelect,
     handleSmartGitHubItemSelect,
     handleSmartGitLabItemSelect,
@@ -90,8 +90,6 @@ export function buildComposerCardProps(state: ComposerModel) {
     projectHostSetupOptions,
     projectOptions,
     repoId,
-    requiresExplicitSetupChoice,
-    resolvedSetupDecision,
     reuseEligibleBranch,
     reuseSelectedBranch,
     selectedEphemeralVmRecipeId,
@@ -116,14 +114,9 @@ export function buildComposerCardProps(state: ComposerModel) {
     setNote,
     setParentWorktreeId,
     setSelectedEphemeralVmRecipeId,
-    setSetupDecision,
     setSmartNameMode,
     setTuiAgent,
-    setupAgentStartupPolicy,
-    setupConfig,
-    setupDecision,
     shouldApplyLinkedOnlyTemplate,
-    shouldWaitForSetupCheck,
     workspaceSeedName,
     smartNameJiraSourceContext,
     smartNameMode,
@@ -275,16 +268,7 @@ export function buildComposerCardProps(state: ComposerModel) {
     forkPushWarning: isProjectGroupTarget ? null : forkPushWarning,
     note,
     onNoteChange: setNote,
-    setupConfig: isProjectGroupTarget ? null : setupConfig,
-    requiresExplicitSetupChoice: isProjectGroupTarget ? false : requiresExplicitSetupChoice,
-    setupDecision: isProjectGroupTarget ? null : setupDecision,
-    onSetupDecisionChange: isProjectGroupTarget ? () => {} : setSetupDecision,
-    setupAgentStartupPolicy: isProjectGroupTarget ? 'start-immediately' : setupAgentStartupPolicy,
-    onSetupAgentStartupPolicyChange: isProjectGroupTarget
-      ? () => {}
-      : handleSetupAgentStartupPolicyChange,
-    shouldWaitForSetupCheck: isProjectGroupTarget ? false : shouldWaitForSetupCheck,
-    resolvedSetupDecision: isProjectGroupTarget ? null : resolvedSetupDecision,
+    ...composerSetupCardProps(state),
     createError,
     canUseSparseCheckout: isProjectGroupTarget
       ? false
@@ -293,7 +277,7 @@ export function buildComposerCardProps(state: ComposerModel) {
     sparseSelectedPresetId: isProjectGroupTarget ? null : sparseSelectedPresetId,
     onSparseSelectPreset: isProjectGroupTarget ? () => {} : handleSparseSelectPreset,
     branchesEnabled: !isProjectGroupTarget,
-    setupControlsEnabled: !isProjectGroupTarget,
+    setupControlsEnabled: !isProjectGroupTarget || state.groupSetup.support === 'supported',
     sparseControlsEnabled: !isProjectGroupTarget
   }
 

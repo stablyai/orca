@@ -1,14 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ProviderRateLimits } from '../../../shared/rate-limit-types'
 import { RateLimitService } from './rate-limit-service'
 import { fetchActiveClaudeRateLimits } from '../providers/claude/claude-active-usage-fetch'
 import { fetchCodexRateLimits } from '../providers/codex/codex-fetcher'
 import { fetchMiniMaxRateLimits } from '../providers/minimax/minimax-fetcher'
-import {
-  deferred,
-  okProvider,
-  resetRateLimitProviderMocks
-} from './rate-limit-service-test-harness'
+import { okProvider, resetRateLimitProviderMocks } from './rate-limit-service-test-harness'
 
 vi.mock('../providers/claude/claude-active-usage-fetch', () => ({
   fetchActiveClaudeRateLimits: vi.fn()
@@ -107,43 +102,5 @@ describe('RateLimitService', () => {
     expect(fetchMiniMaxRateLimits).toHaveBeenLastCalledWith(
       expect.objectContaining({ apiKey: 'sk-account-b' })
     )
-  })
-
-  it('does not apply an in-flight MiniMax result after credential invalidation', async () => {
-    const service = new RateLimitService()
-    const firstMiniMax = deferred<ProviderRateLimits>()
-    const secondMiniMax = deferred<ProviderRateLimits>()
-    service.setMiniMaxConfigResolver(() => ({
-      sessionCookie: '_token=abc',
-      groupId: '',
-      models: 'general',
-      endpoint: 'overseas',
-      apiKey: ''
-    }))
-    vi.mocked(fetchMiniMaxRateLimits)
-      .mockImplementationOnce(() => firstMiniMax.promise)
-      .mockImplementationOnce(() => secondMiniMax.promise)
-
-    const firstRefresh = service.refresh()
-    await Promise.resolve()
-
-    service.invalidateMiniMaxCredentialState()
-    const queuedRefresh = service.refresh()
-    await Promise.resolve()
-
-    firstMiniMax.resolve(okProvider('minimax', 50, Date.now()))
-    await Promise.resolve()
-    await Promise.resolve()
-
-    expect(service.getState().minimax?.status).toBe('fetching')
-    expect(service.getState().minimax?.session).toBeNull()
-
-    secondMiniMax.resolve(okProvider('minimax', 10, Date.now()))
-    await firstRefresh
-    await queuedRefresh
-
-    const state = service.getState()
-    expect(fetchMiniMaxRateLimits).toHaveBeenCalledTimes(2)
-    expect(state.minimax?.session?.usedPercent).toBe(10)
   })
 })

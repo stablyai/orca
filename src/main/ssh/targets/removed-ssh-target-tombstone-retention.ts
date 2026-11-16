@@ -1,4 +1,4 @@
-import type { RemovedSshTargetTombstone } from '../../../shared/ssh-types'
+import type { RemovedSshTargetTombstone } from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { PersistedAutomationHostFilter } from '../../../shared/automations/ownership/automation-host-filter'
 import { parseHostStableKey } from '../../../shared/automations/ownership/automation-owner-key'
 import { resolveAutomationWorkspaceSshTargetId } from '../../../shared/automations/ownership/automation-workspace-pin'

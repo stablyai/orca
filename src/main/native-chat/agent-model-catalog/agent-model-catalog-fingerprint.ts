@@ -7,7 +7,7 @@ import type {
 import {
   isLegacyAgentSessionAccountHome,
   type AgentSessionAccountHome
-} from '../../../shared/agent-session/lifecycle/agent-session-account-home'
+} from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 
 /** Key by agent, account, host and optional project scope; later probes repair login/version drift. */
 export type AgentModelCatalogIdentity = {

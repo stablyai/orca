@@ -1,4 +1,4 @@
-import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
+import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 /** Execute terminalOnly on the receiving host with federation's agent-first worktree/background-terminal factories. The dispatch brief is delivered later. */
 
 import type { AgentLaunchPreferences } from '../../../../shared/agent-session/agent-session-host-authority'
@@ -15,7 +15,7 @@ import {
   appendFederationTerminalEffects,
   type FederationEffect
 } from './federation-effects'
-import type { FederationAttachStartInput } from '../../../../shared/rpc-contract/orchestration-federation-start-params'
+import type { FederationAttachStartInput } from '../../../../shared/rpc-contract/orchestration/orchestration-federation-start-params'
 import type { Worktree } from '../../../../shared/worktree/types'
 
 const TERMINAL_ONLY_MESSAGE = 'A federated worker starts a terminal agent only.'

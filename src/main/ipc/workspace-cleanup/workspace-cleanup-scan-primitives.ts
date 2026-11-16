@@ -1,6 +1,6 @@
 import { basename } from 'node:path'
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { WorkspaceCleanupScanError } from '../../../shared/workspace-cleanup/workspace-cleanup'
 
 export const WORKSPACE_CLEANUP_GIT_READ_TIMEOUT_MS = 8_000

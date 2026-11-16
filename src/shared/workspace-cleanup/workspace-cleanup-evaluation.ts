@@ -9,7 +9,12 @@ const DAY_MS = 24 * 60 * 60 * 1000
 export const WORKSPACE_CLEANUP_RULE_GRACE_MS = 60 * 60 * 1000
 
 /** The rule that would remove a workspace. */
-export type WorkspaceCleanupRuleReason = 'merged' | 'unchanged' | 'inactive'
+export type WorkspaceCleanupRuleReason =
+  | 'merged'
+  | 'unchanged'
+  | 'inactive'
+  | 'automation-run'
+  | 'orchestration-worker'
 
 /** Why the runner leaves a workspace alone; one cause per workspace, the first that applies. */
 export type WorkspaceCleanupKeepCause =
@@ -92,6 +97,12 @@ function matchRules(
   const matches: RuleMatch[] = []
   if (rules.merged.enabled && input.reasons.includes('merged')) {
     matches.push({ reason: 'merged' })
+  }
+  if (rules.automationRuns.enabled && input.reasons.includes('automation-run')) {
+    matches.push({ reason: 'automation-run' })
+  }
+  if (rules.orchestrationWorkers.enabled && input.reasons.includes('orchestration-worker')) {
+    matches.push({ reason: 'orchestration-worker' })
   }
   if (rules.unchanged.enabled && input.reasons.includes('unchanged')) {
     matches.push(timeRuleMatch('unchanged', rules.unchanged.afterDays, elapsedMs))

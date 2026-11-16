@@ -1,16 +1,16 @@
 import { Workflow } from 'lucide-react'
 import { useMemo, type JSX } from 'react'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { useAppStore } from '@/store'
 import {
   buildProjectGroupingIndex,
   getProjectGroupingForRepo
-} from '../../../../../../shared/project-section-grouping'
+} from '../../../../../../shared/sidebar-list/sections/project-section-grouping'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { DeleteWorktreeDirtyChangeHint } from './DeleteWorktreeDirtyChangeHint'
 import { DeleteWorktreeLocalFilesHint } from './DeleteWorktreeLocalFilesHint'
-import type { WorktreeAtRiskLocalFiles } from '../../../../../../shared/worktree/at-risk-local-files'
+import type { WorktreeAtRiskLocalFiles } from '../../../../../../shared/worktree/removal/at-risk-local-files'
 import type {
   DeleteWorktreeChangeCheckState,
   DeleteWorktreeDirtyChangePreview

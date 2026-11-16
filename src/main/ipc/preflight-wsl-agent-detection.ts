@@ -1,7 +1,7 @@
 import { quotePosixShell } from '../../shared/shell/launch/shell-argument-quoting'
 import path from 'node:path'
-import { buildPosixFallbackPathPrelude } from '../../shared/posix-version-manager-bin-dirs'
-import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
+import { buildPosixFallbackPathPrelude } from '../../shared/shell/command-resolution/posix-version-manager-bin-dirs'
+import { buildPosixCommandPathLookupScript } from '../../shared/shell/command-resolution/posix-command-path-lookup'
 import { runWslProcess } from '../wsl/execution/wsl-runner'
 
 const WSL_AGENT_DETECTION_TIMEOUT_MS = 10000

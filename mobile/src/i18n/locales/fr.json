@@ -140,6 +140,33 @@
       "title": "Terminal"
     }
   },
+  "appMove": {
+    "play": {
+      "title": "Orca est maintenant sur Google Play",
+      "description": "Cette app fonctionne toujours, mais les mises à jour arrivent désormais par Google Play. Le changement ne prend que quelques minutes.",
+      "installTitle": "Installez Orca depuis Google Play",
+      "installDescription": "Vous pouvez le faire dès maintenant, où que vous soyez.",
+      "openGooglePlay": "Ouvrir Google Play",
+      "cantUseGooglePlay": "Je ne peux pas utiliser Google Play"
+    },
+    "download": {
+      "title": "Installez la nouvelle app Orca",
+      "description": "Cette app fonctionne toujours, mais les mises à jour et correctifs de sécurité arrivent désormais par la nouvelle app. Le changement ne prend que quelques minutes.",
+      "installTitle": "Téléchargez la nouvelle app",
+      "installDescription": "Si votre téléphone le demande, autorisez votre navigateur à installer des apps.",
+      "download": "Télécharger",
+      "keepThisVersion": "Continuer avec cette version",
+      "keepThisVersionNote": "Vous ne recevrez plus les correctifs de sécurité. Nous vous le rappellerons dans une semaine."
+    },
+    "pairTitle": "Appairez-la avec votre ordinateur",
+    "pairDescription": "Dans Orca sur votre ordinateur, allez dans Paramètres → Mobile et scannez le code.",
+    "deleteTitle": "Supprimez cette app",
+    "deleteDescription": "Une fois que la nouvelle app affiche vos agents. D'ici là, continuez d'utiliser celle-ci.",
+    "dataKept": "Vos agents, discussions et espaces de travail sont enregistrés sur votre ordinateur : vous les retrouverez tous dans la nouvelle app.",
+    "banner": {
+      "seeHowToSwitch": "Voir comment changer"
+    }
+  },
   "browser": {
     "addressField": {
       "urlPlaceholder": "URL"
@@ -226,6 +253,7 @@
     "message": {
       "copyMessage": "Copier le message",
       "forkFromResponse": "Créer une branche à partir de cette réponse",
+      "scrollMessageToTop": "Revenir au début du message",
       "forkFromResponseHint": "Une nouvelle conversation avec toute cette réponse, jusqu’à la fin de son tour"
     },
     "messageActionsSheet": {
@@ -682,7 +710,10 @@
       "busy": "Une autre conversation ou un terminal s’ouvre. Patientez, puis créez à nouveau une branche de la conversation {{agent}}.",
       "unconfirmed": "{{agent}} n’a pas pu confirmer la création de la branche. Elle s’est peut-être ouverte malgré tout ; consultez l’historique des sessions avant de réessayer.",
       "failed": "{{agent}} n’a pas pu créer de branche de cette conversation. {{detail}}",
-      "unsupported": "Cet hôte utilise une ancienne version d’Orca. Mettez Orca à jour sur l’hôte, puis réessayez."
+      "unsupported": "Cet hôte utilise une ancienne version d’Orca. Mettez Orca à jour sur l’hôte, puis réessayez.",
+      "mark": "Branche ·",
+      "markedName": "{{mark}} {{name}}",
+      "accessibleName": "Branche : {{name}}"
     }
   },
   "common": {
@@ -981,8 +1012,10 @@
       "desktopTooOldBody": "La version d'Orca sur cet ordinateur appairé est trop ancienne pour votre version actuelle d'Orca Mobile. Mettez Orca à jour sur votre ordinateur, puis réessayez de vous connecter à cet hôte.",
       "getVersion": "Obtenir Orca {{version}}",
       "mobileTooOldAppStore": "Cet ordinateur nécessite une version plus récente d'Orca Mobile. Mettez Orca Mobile à jour depuis l'App Store, puis réessayez de vous connecter à cet hôte.",
+      "mobileTooOldGooglePlay": "Cet ordinateur nécessite une version plus récente d'Orca Mobile. Mettez Orca Mobile à jour depuis Google Play, puis réessayez de vous connecter à cet hôte.",
       "mobileTooOldGitHubReleases": "Cet ordinateur nécessite une version plus récente d'Orca Mobile. Mettez Orca Mobile à jour depuis GitHub Releases, puis réessayez de vous connecter à cet hôte.",
       "openAppStore": "Ouvrir l'App Store",
+      "openGooglePlay": "Ouvrir Google Play",
       "openGitHubReleases": "Ouvrir GitHub Releases",
       "refreshRecoveryNote": "Si ce message persiste, supprimez cet hôte et appairez-le à nouveau.",
       "refreshWorkspaceBody": "La version de l'espace de travail en cache pour cet hôte est antérieure à celle attendue par l'ordinateur. Reconnectez-vous à cet hôte pour télécharger la version actuelle.",
@@ -991,6 +1024,7 @@
       "updateMobileTitle": "Mettre à jour Orca Mobile",
       "updateRecoveryNote": "Déjà à jour ? Revenez à l'écran Hôtes et actualisez la connexion. Si ce message persiste, supprimez cet hôte et appairez-le à nouveau.",
       "workspaceNeedsUpdateAppStore": "L'espace de travail mobile de cet ordinateur nécessite une version plus récente d'Orca Mobile. Mettez Orca Mobile à jour depuis l'App Store, puis réessayez de vous connecter à cet hôte.",
+      "workspaceNeedsUpdateGooglePlay": "L'espace de travail mobile de cet ordinateur nécessite une version plus récente d'Orca Mobile. Mettez Orca Mobile à jour depuis Google Play, puis réessayez de vous connecter à cet hôte.",
       "workspaceNeedsUpdateGitHubReleases": "L'espace de travail mobile de cet ordinateur nécessite une version plus récente d'Orca Mobile. Mettez Orca Mobile à jour depuis GitHub Releases, puis réessayez de vous connecter à cet hôte."
     },
     "richMarkdownEditor": {
@@ -1634,7 +1668,6 @@
       "deleteConfirmMessage": "Supprimer « {{name}} » ({{branch}}) ?",
       "deleteDestroysEnvironment": "Cela détruit aussi l’environnement « {{environment}} » qu’Orca a créé pour lui, avec les modifications non validées et les terminaux en cours qui s’y trouvent.",
       "deleteKeepsEnvironment": "L’environnement « {{environment}} » qu’Orca a créé pour lui continue de tourner : sa recette n’a pas d’étape de destruction.",
-      "deleteWorktree": "Supprimer le worktree",
       "pin": "Épingler",
       "primaryWorktreeDeleteHint": "Worktree principal — impossible à supprimer. Retirez plutôt le projet.",
       "removeHost": "Supprimer l'hôte",
@@ -1807,7 +1840,6 @@
       "daysAgo_one": "il y a {{count}} j",
       "daysAgo_other": "il y a {{count}} j",
       "deleteConfirmMessage": "Cette action supprime définitivement le commentaire sur GitHub.",
-      "deleteConfirmTitle": "Supprimer le commentaire ?",
       "editPlaceholder": "Modifier le commentaire…",
       "hoursAgo_many": "il y a {{count}} h",
       "hoursAgo_one": "il y a {{count}} h",
@@ -2456,7 +2488,6 @@
       "addTitle": "Ajouter une commande rapide",
       "chooseAgentTitle": "Choisir un agent",
       "deleteConfirmMessage": "Cette commande rapide sera retirée de votre liste enregistrée.",
-      "deleteConfirmTitle": "Supprimer « {{label}} » ?",
       "editTitle": "Modifier la commande rapide",
       "editorDescription": "Enregistrez des commandes de terminal ou des prompts d'agent pour y accéder rapidement.",
       "title": "Commandes rapides",
@@ -2871,12 +2902,14 @@
       "title": "Apparence"
     },
     "browserSettingsScreen": {
+      "askEachTime": "Demander à chaque fois",
+      "askEachTimeDescription": "Choisissez à chaque fois le navigateur Orca, celui du téléphone ou la copie du lien.",
       "desktopBrowser": "Navigateur Orca sur l'ordinateur",
       "desktopBrowserDescription": "Ouvrir dans le navigateur diffusé depuis votre ordinateur appairé.",
-      "linksDescription": "Choisissez où ouvrir les liens HTTP(S) que vous touchez dans la sortie du terminal.",
+      "terminalAndChatLinksDescription": "Choisissez où ouvrir les liens web que vous touchez dans la sortie du terminal et dans le chat.",
       "linksHeading": "LIENS",
       "loadFailed": "Impossible de charger les préférences du navigateur. Réessayez.",
-      "openTerminalLinks": "Ouvrir les liens du terminal",
+      "openLinks": "Ouvrir les liens",
       "phoneBrowser": "Navigateur du téléphone",
       "phoneBrowserDescription": "Ouvrir dans Safari, Chrome ou un autre navigateur sur ce téléphone.",
       "saveFailed": "Impossible d'enregistrer les préférences du navigateur. Réessayez.",
@@ -4209,7 +4242,6 @@
       "outcome": "Résultat",
       "allOutcomes": "Tous les résultats",
       "couldNotStart": "Démarrage impossible",
-      "deleteAutomationTitle": "Supprimer l’automatisation ?",
       "deleteRetained": "Supprimer « {{name}} » et ses exécutions conservées ?",
       "couldNotVerifyTheOriginalAgentPaneReconnectAndTryAgain": "Impossible de vérifier le panneau d’origine de l’agent. Reconnectez-vous et réessayez.",
       "theOriginalAgentPaneIsNoLongerAvailableToOpenSavedOutputRemainsHere": "Le panneau d’origine de l’agent ne peut plus être ouvert. La sortie enregistrée reste ici.",

@@ -11,7 +11,7 @@ import {
   AGENT_LAUNCH_RUNTIME_CAPABILITY
 } from '../../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import type { AgentLaunchResult } from '../../../../../shared/agent-launch/contracts/agent-launch-intent'
-import type { AgentSessionOperationRow } from '../../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
+import type { AgentSessionOperationRow } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-operation-ledger'
 import type { AgentSessionRecordStore } from '../../../agent-session/records/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../../agent-session/records/agent-session-record-store-test-harness'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
