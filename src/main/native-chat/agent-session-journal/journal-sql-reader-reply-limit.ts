@@ -1,8 +1,7 @@
 import { serialize } from 'node:v8'
-import {
-  describeWorkerMessage,
-  isLargeWorkerMessage
-} from '../../worker-threads/worker-message-shape'
+import { describeWorkerMessage } from '../../worker-threads/worker-message-shape'
+import { journalSqlFailure } from './journal-sql-failure'
+import type { JournalSqlReaderReply } from './journal-sql-reader-protocol'
 
 /**
  * Main deserializes every reader reply into the ~3.25 GB V8 heap it shares with all workers; a
@@ -13,19 +12,41 @@ import {
 export const JOURNAL_READER_REPLY_BYTE_LIMIT = 64 * 2 ** 20
 
 /**
- * Serialized size is measured only when the bounded walk already finds the reply large. The
- * record set loads the chat store itself: refusing it would leave every chat unopenable, and it
- * grows only with the number of chats (~25 MB at 18k), so it is never refused here.
+ * The bounded walk sizes a reply it saw whole; one it cut short is measured, so rows past the walk
+ * can't hide. The record set loads the chat store itself: refusing it would leave every chat
+ * unopenable, and it grows only with the number of chats (~25 MB at 18k), so it is never refused.
  */
 export function journalReaderReplyExceedsLimit(
   reply: unknown,
   limit = JOURNAL_READER_REPLY_BYTE_LIMIT
 ): boolean {
-  return (
-    !isRecordSetReply(reply) &&
-    isLargeWorkerMessage(describeWorkerMessage(reply)) &&
-    serialize(reply).byteLength > limit
-  )
+  if (isRecordSetReply(reply)) {
+    return false
+  }
+  const shape = describeWorkerMessage(reply)
+  return (shape.truncated || shape.bytes > limit / 4) && serialize(reply).byteLength > limit
+}
+
+/** The reader posts every reply through this: an oversized one becomes its request's failure. */
+export function limitJournalReaderReply<T extends { type: string }>(
+  reply: T,
+  limit = JOURNAL_READER_REPLY_BYTE_LIMIT
+): T | Extract<JournalSqlReaderReply, { type: 'failed' }> {
+  if (
+    reply.type === 'failed' ||
+    !('id' in reply) ||
+    typeof reply.id !== 'number' ||
+    !journalReaderReplyExceedsLimit(reply, limit)
+  ) {
+    return reply
+  }
+  return {
+    type: 'failed',
+    id: reply.id,
+    error: journalSqlFailure(
+      new Error(`journal read reply (${reply.type}) exceeds ${limit} bytes`)
+    )
+  }
 }
 
 function isRecordSetReply(reply: unknown): boolean {
