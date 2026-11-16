@@ -24,7 +24,7 @@ import type {
   RecipeWorkspaceRemoval,
   RecipeWorkspaceRemoveParams
 } from '../../../ephemeral-vm/workspace-removal'
-import type { RecipeEnvironmentDescription } from '../../../../shared/recipe-host-removal'
+import type { RecipeEnvironmentDescription } from '../../../../shared/remote-runtime/ephemeral-vm-recipes/recipe-host-removal'
 /** Desktop-only wiring: removal of a workspace whose recipe environment this host provisioned. */
 export type RecipeWorkspaceRemovalHooks = {
   owns: (params: RecipeWorkspaceRemoveParams) => boolean

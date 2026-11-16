@@ -1,4 +1,4 @@
-import type { PersistedTrustedOrcaHooks } from '../../../../../shared/orca-yaml-hook-types'
+import type { PersistedTrustedOrcaHooks } from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
 import type { FeatureInteractionId } from '../../../../../shared/feature-education/interactions/feature-interaction-catalog'
 import type { FeatureInteractionState } from '../../../../../shared/feature-education/interactions/feature-interactions'
 import type {
@@ -7,7 +7,7 @@ import type {
 } from '../../../../../shared/feature-education/feature-tips'
 import type { ChatUiLaunchTipVariant } from '../../../../../shared/native-chat/chat-ui-launch-tip-audience'
 import type { ContextualTourId } from '../../../../../shared/feature-education/contextual-tours/contextual-tours'
-import type { OrcaHookTrustKind } from '../../../../../shared/orca-hook-trust-entries'
+import type { OrcaHookTrustKind } from '../../../../../shared/workspace-setup/hooks/orca-hook-trust-entries'
 import type { SettingsNavigationTarget } from '../../../components/settings/navigation/settings-navigation-types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 

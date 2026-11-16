@@ -3,8 +3,8 @@ import type { Repo } from '../../repository/repo-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../worktree/types'
 import type { MigrationUnsupportedPtyEntry } from '../../agent-status/contracts/agent-status-ipc-payload'
-import { tabHasLivePty } from '../../tab-has-live-pty'
-import { getRuntimePathBasename } from '../../cross-platform-path'
+import { tabHasLivePty } from '../../workspace-layout/terminal-surfaces/tab-has-live-pty'
+import { getRuntimePathBasename } from '../../file-access/cross-platform-path'
 import {
   buildWorkspaceRowComparator,
   recentActivityWithCreateGrace,

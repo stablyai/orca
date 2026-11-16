@@ -4,12 +4,12 @@ import {
   LOCAL_EXECUTION_HOST_ID
 } from '../../../../shared/execution-host'
 import type { Store } from '../../../persistence/loading-store/store'
-import { PROVIDER_REQUEST_ID_MAX_UTF8_BYTES } from '../../../../shared/detected-worktree-provider-contract'
+import { PROVIDER_REQUEST_ID_MAX_UTF8_BYTES } from '../../../../shared/worktree/catalog/detected-worktree-provider-contract'
 import type {
   ListDetectedWorktreesArgs,
   HostQualifiedDetectedWorktreeResult,
   DirectSshDetectedWorktreeRequest
-} from '../../../../shared/detected-worktree-provider-contract'
+} from '../../../../shared/worktree/catalog/detected-worktree-provider-contract'
 import { isCurrentSshProviderAuthority } from '../../../ssh/connection/authority/ssh-provider-authority'
 import {
   hasValidDirectSshAuthority,

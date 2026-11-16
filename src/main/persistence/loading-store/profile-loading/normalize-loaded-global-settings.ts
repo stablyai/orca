@@ -3,7 +3,7 @@ import { normalizeNativeChatAppearanceSettings } from '../../../../shared/native
 import { getDefaultVoiceSettings } from '../../../../shared/constants'
 import { normalizePRBotAuthorOverrides } from '../../../../shared/source-control/review-comments/pr-bot-author-overrides'
 import { normalizeTerminalQuickCommands } from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
-import { normalizeOpenInApplications } from '../../../../shared/open-in-applications'
+import { normalizeOpenInApplications } from '../../../../shared/editor/launch/open-in-applications'
 
 import { normalizeTerminalShortcutPolicy } from '../../../../shared/keybindings/effective'
 import { normalizeAppIconId } from '../../../../shared/app-lifecycle/identity/app-icon'
@@ -12,7 +12,7 @@ import { normalizePluginOwnedSettings } from '../../../../shared/plugins/capabil
 import {
   hasLegacyMatchTerminalSidebar,
   syncLegacyMatchTerminalSidebar
-} from '../../../../shared/plugin-theme-settings'
+} from '../../../../shared/plugins/appearance/plugin-theme-settings'
 import { normalizeTerminalDefaultShell } from '../../../../shared/shell/launch/terminal-default-shell'
 import { projectSourceControlAiToLegacyCommitMessageAi } from '../../../../shared/source-control/ai/settings/source-control-ai-legacy-projection'
 import { normalizeNativeChatShellEnvironmentVariables } from '../../../../shared/native-chat/native-chat-shell-environment'

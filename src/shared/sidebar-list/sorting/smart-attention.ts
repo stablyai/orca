@@ -12,7 +12,7 @@ import { agentEntryCompletionAt } from '../../agent-status/lifecycle/agent-compl
 import { agentTurnEndedOnPurpose } from '../../agent-status/lifecycle/agent-main-agent-verdict'
 import { migrationUnsupportedToAgentStatusEntry } from '../../migration-unsupported-agent-entry'
 import { resolveDecayedAgentRowState } from '../../agent-status/presentation/agent-row-decay-state'
-import { tabHasLivePty } from '../../tab-has-live-pty'
+import { tabHasLivePty } from '../../workspace-layout/terminal-surfaces/tab-has-live-pty'
 import { isSyntheticAgentPermissionTitle } from '../../agent-status/title/synthetic-agent-title'
 import { resolveRuntimePaneTitleLeafId } from '../../workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
 import type { AgentStatus } from '../../agent-status/title/agent-title-core'

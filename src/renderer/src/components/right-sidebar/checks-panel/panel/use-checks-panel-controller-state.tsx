@@ -23,7 +23,7 @@ import type {
 import type { PRCheckDetail } from '../../../../../../shared/github/checks/check-types'
 import type { PRComment } from '../../../../../../shared/github/comments/comment-types'
 import type { PRRefreshErrorType } from '../../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
-import type { GitLabProjectRef } from '../../../../../../shared/gitlab-types'
+import type { GitLabProjectRef } from '../../../../../../shared/gitlab/gitlab-types'
 import type { PRCommentsListSelectionClearRequest } from '../comments/pr-comments-list-selection'
 import {
   buildChecksPanelGitStatusContextKey,

@@ -1,5 +1,5 @@
 import { isMissingProviderExecutable } from '../../provider-process/provider-executable-missing'
-import { mergeCommandEnvironment } from '../../../shared/command-environment'
+import { mergeCommandEnvironment } from '../../../shared/shell/launch/command-environment'
 import type { CommandTemplateBackslash } from '../../../shared/source-control/ai/generation/commit-message-prompt'
 import {
   getAgentModelProbeSpec,

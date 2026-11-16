@@ -11,7 +11,7 @@ import type { FeatureInteractionId } from '../../feature-education/interactions/
 import {
   ACTIVITY_GROUP_BY_VALUES,
   THREAD_READ_FILTER_VALUES
-} from '../../agents-view-thread-filters'
+} from '../../agent-status/presentation/agents-view-thread-filters'
 import { isReleaseChannel } from '../../updater/release-channel'
 import type { ReleaseChannel } from '../../updater/release-channel'
 import { ClientUiWorkspaceFilterFields } from './client-ui-workspace-filter-fields-params'

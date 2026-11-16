@@ -1,6 +1,6 @@
 import type { ITerminalInitOnlyOptions, ITerminalOptions, ITheme } from '@xterm/xterm'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import type { DashboardCardTerminalInput } from '../../../../../shared/dashboard-snapshot'
+import type { DashboardCardTerminalInput } from '../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import { resolveTerminalFontWeights } from '../../../../../shared/terminal/appearance/terminal-fonts'
 import { normalizeTerminalLineHeight } from '../../../../../shared/terminal/appearance/terminal-line-height-settings'
 import {
@@ -11,7 +11,7 @@ import {
   resolveTerminalScrollOnUserInput
 } from '@/lib/pane-manager/pane-terminal-options'
 import { buildLocalConptyTerminalOptions } from '@/lib/pane-manager/terminal-protocol/windows-pty-compatibility'
-import { buildFontFamily } from '../../../../../shared/monospace-font-family'
+import { buildFontFamily } from '../../../../../shared/styles/monospace-font-family'
 import { pluginFontFamilyWhenLoaded } from '@/store/plugins/appearance/plugin-fonts'
 import { resolveTerminalMinimumContrastRatio } from '../../../../../shared/terminal-themes/terminal-contrast-correction'
 

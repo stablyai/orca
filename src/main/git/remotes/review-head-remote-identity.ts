@@ -1,5 +1,5 @@
 import { gitExecFileAsync } from '../command-runner/git-exec-file'
-import { reviewHeadRemoteRefComponent } from '../../../shared/review-head-tracking-ref'
+import { reviewHeadRemoteRefComponent } from '../../../shared/worktree/hosted-review/review-head-tracking-ref'
 
 type LocalGitExecOptions = {
   cwd: string

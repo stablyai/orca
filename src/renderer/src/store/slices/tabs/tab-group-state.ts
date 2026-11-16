@@ -1,4 +1,4 @@
-import type { Tab, TabGroup } from '../../../../../shared/tab-types'
+import type { Tab, TabGroup } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import { workspaceRootGroupId } from '../../../../../shared/workspace-layout/persistence/workspace-layout-minted-ids'

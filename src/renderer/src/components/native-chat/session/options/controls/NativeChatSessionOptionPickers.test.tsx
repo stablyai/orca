@@ -45,6 +45,7 @@ it('exposes the current selection on keyboard focus and follows the chat snapsho
     </TooltipProvider>
   )
   const view = render(picker([model, effort]))
+  fireEvent.keyDown(window, { key: 'Tab' })
   fireEvent.focus(screen.getByRole('button'))
   const tooltip = await screen.findByRole('tooltip')
   expect(tooltip.textContent).toBe('Chat model · Extra high')
@@ -105,6 +106,7 @@ it('keeps a working model-only picker inspectable without allowing changes', asy
   const view = render(picker(true))
   const informationalTrigger = screen.getByRole('button', { name: 'Model Chat model' })
   expect(informationalTrigger.getAttribute('aria-disabled')).toBe('true')
+  fireEvent.keyDown(window, { key: 'Tab' })
   act(() => informationalTrigger.focus())
   expect(document.activeElement).toBe(informationalTrigger)
   expect((await screen.findByRole('tooltip')).textContent).toBe('Chat model')

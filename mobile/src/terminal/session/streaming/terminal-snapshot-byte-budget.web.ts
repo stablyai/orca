@@ -1,4 +1,4 @@
-import { MOBILE_BRIDGE_MAX_FRAME_BYTES as BRIDGE_MAX_MESSAGE_BYTES } from '../../../../../src/shared/mobile-bridge-frame-bytes'
+import { MOBILE_BRIDGE_MAX_FRAME_BYTES as BRIDGE_MAX_MESSAGE_BYTES } from '../../../../../src/shared/mobile-bridge/mobile-bridge-frame-bytes'
 import { bridgeEventEnvelopeBytes } from '../../../mobile-web-shell/bridge/protocol/bridge-event-envelope-bytes'
 
 // Budget serialized payload bytes after bridge-envelope overhead; ANSI escapes expand in JSON and raw snapshot sizes can overflow the shell’s hard frame cap.

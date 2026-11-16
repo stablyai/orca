@@ -1,6 +1,6 @@
 import { existsSync, statSync } from 'node:fs'
 import { isAbsolute } from 'node:path'
-import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
+import { isDefinitiveAbsence } from '../../shared/errors/definitive-filesystem-absence'
 import { findInErrorChain } from './provider-error-chain'
 
 export { isDefinitiveAbsence }

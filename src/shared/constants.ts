@@ -1,5 +1,5 @@
 import type { GlobalSettings } from './global-settings-types'
-import type { RepoHookSettings } from './orca-yaml-hook-types'
+import type { RepoHookSettings } from './workspace-setup/orca-yaml-hook-types'
 import type { PersistedState } from './persisted-state-types'
 import type { PersistedUIState } from './persisted-ui-state-types'
 import type { AgentActivityDisplayMode } from './ui-chrome-types'
@@ -11,14 +11,17 @@ import { DICTATION_LANGUAGE_AUTO } from './speech/models/dictation-language'
 import { DEFAULT_UNLOAD_MODEL_AFTER_MINUTES } from './speech/models/voice-model-unload'
 import { cloneDefaultWorkspaceStatuses } from './workspace/status/workspace-statuses'
 import { DEFAULT_WORKTREE_CARD_PROPERTIES } from './worktree/row-display/card-properties'
-import { DEFAULT_AGENTS_GROUP_BY, DEFAULT_AGENTS_READ_FILTER } from './agents-view-thread-filters'
+import {
+  DEFAULT_AGENTS_GROUP_BY,
+  DEFAULT_AGENTS_READ_FILTER
+} from './agent-status/presentation/agents-view-thread-filters'
 import { DEFAULT_USAGE_PERCENTAGE_DISPLAY } from './agent-usage/display/usage-percentage-display'
 import { DEFAULT_STATUS_BAR_USAGE_MODE } from './status-bar/status-bar-usage-mode'
 import { DEFAULT_STATUS_BAR_USAGE_FORMAT } from './status-bar/status-bar-usage-format'
 import { buildDefaultSettings } from './default-global-settings'
 import { DEFAULT_SETUP_AGENT_STARTUP_POLICY } from './agent-launch/startup/setup-agent-startup-policy'
 import { DEFAULT_BROWSER_PAGE_ZOOM_LEVEL } from './browser/site-settings/browser-page-zoom'
-import { getDefaultNotificationSettings } from './notification-settings-defaults'
+import { getDefaultNotificationSettings } from './notifications/notification-settings-defaults'
 import { getDefaultOnboardingState } from './onboarding/onboarding-defaults'
 import {
   defaultTerminalFontFamily,

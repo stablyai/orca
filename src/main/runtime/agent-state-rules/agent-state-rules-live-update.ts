@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
-import { readFetchResponseTextWithinLimit } from '../../../shared/fetch-response-body'
+import { readFetchResponseTextWithinLimit } from '../../../shared/network/fetch-response-body'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { getVersionChannel, MAIN_RELEASE_REPO } from '../../../shared/updater/release-channel'
 import { getMainHttpClient } from '../../network/http-client'

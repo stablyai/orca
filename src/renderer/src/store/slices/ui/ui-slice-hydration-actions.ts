@@ -5,7 +5,7 @@ import { normalizeRightSidebarRoute } from '../right-sidebar/right-sidebar-route
 import {
   applyManualRepoOrder,
   normalizeManualRepoOrder
-} from '../../../../../shared/manual-repo-order'
+} from '../../../../../shared/repository/manual-repo-order'
 import { normalizeWorkspaceCleanupBrowseState } from '../../../../../shared/workspace-cleanup/workspace-cleanup-browse-state'
 import {
   normalizeExecutionHostScope,
@@ -23,16 +23,16 @@ import { normalizeWorktreeCardProperties } from '../../../../../shared/worktree/
 import {
   normalizeActivityGroupBy,
   normalizeThreadReadFilter
-} from '../../../../../shared/agents-view-thread-filters'
+} from '../../../../../shared/agent-status/presentation/agents-view-thread-filters'
 import {
   clampWorkspaceBoardColumnWidth,
   clampWorkspaceBoardOpacity,
   normalizeWorkspaceStatuses
 } from '../../../../../shared/workspace/status/workspace-statuses'
-import { PET_SIZE_DEFAULT, PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../../shared/pet-types'
-import { clampMarkdownTocPanelWidth } from '../../../../../shared/markdown-toc-panel-width'
+import { PET_SIZE_DEFAULT, PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../../shared/pets/pet-types'
+import { clampMarkdownTocPanelWidth } from '../../../../../shared/editor/markdown/markdown-toc-panel-width'
 import { normalizeBrowserDevToolsDockLayout } from '../../../../../shared/browser/devtools/browser-devtools-dock'
-import { clampCombinedDiffFileTreeWidth } from '../../../../../shared/combined-diff-file-tree-width'
+import { clampCombinedDiffFileTreeWidth } from '../../../../../shared/source-control/diff/combined-diff-file-tree-width'
 import { parsePersistedAutomationHostFilter } from '../../../../../shared/automations/ownership/automation-host-filter'
 import { normalizeUsagePercentageDisplay } from '../../../../../shared/agent-usage/display/usage-percentage-display'
 import { normalizeStatusBarUsageMode } from '../../../../../shared/status-bar/status-bar-usage-mode'

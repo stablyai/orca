@@ -4,7 +4,7 @@ import { recordWebSessionCloseIntent } from './web-session-close-intent'
 import { isServerFrameDrawnWorkspace } from '../frame-drawn-server-workspace-set'
 import { toHostSessionTabId } from '../../../../../shared/workspace-layout/terminal-surface-id'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import type { Tab } from '../../../../../shared/tab-types'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 
 export type MirroredEditorCloseState = WorktreeOperationRouteState & {
   openFiles: readonly OpenFile[]

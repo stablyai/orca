@@ -3,7 +3,7 @@ import type { RuntimeTerminalCreate } from '../../../../../shared/terminal/runti
  * The executor chooses; setup, default tabs, provenance and lineage use the normal create path. */
 
 import { callerLaunchSource } from '../../../../agent-launch/agent-started-telemetry'
-import { buildCliWorkspaceProvenance } from '../../../../../shared/cli-workspace-provenance'
+import { buildCliWorkspaceProvenance } from '../../../../../shared/worktree/creation/cli-workspace-provenance'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import {

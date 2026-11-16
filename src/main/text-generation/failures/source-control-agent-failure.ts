@@ -23,7 +23,7 @@ import type { CommitMessagePlan } from '../../../shared/source-control/ai/genera
 import {
   textGenerationFailure,
   type TextGenerationFailureFields
-} from '../../../shared/text-generation-failure-copy'
+} from '../../../shared/text-generation/text-generation-failure-copy'
 import { agentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session/failures/agent-session-failure-words'
 

@@ -1,4 +1,4 @@
-import { textGenerationFailure } from '../../../shared/text-generation-failure-copy'
+import { textGenerationFailure } from '../../../shared/text-generation/text-generation-failure-copy'
 import { killSourceControlAgentProcess } from './source-control-agent-termination'
 import { wslDistroForCommand } from '../../../shared/file-access/wsl-paths'
 import { prepareWslPrompt, stageLocalPromptFiles } from '../prompts/source-control-prompt-files'

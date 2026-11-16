@@ -12,7 +12,7 @@ import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/c
 import type { AgentType } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import { formatAgentTypeLabel } from '../../../../../shared/agent-status/presentation/agent-type-label'
 import { structuredChatDisplayName } from '../../../../../shared/agent-session/view/structured-chat-row-name'
-import type { Tab } from '../../../../../shared/tab-types'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type {
   TerminalLayoutSnapshot,
   TerminalTab

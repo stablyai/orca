@@ -10,7 +10,7 @@ import {
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../../../shared/execution-host'
-import { isFloatingWorkspaceId } from '../../../../../shared/floating-workspace-worktree'
+import { isFloatingWorkspaceId } from '../../../../../shared/workspace/identity/floating-workspace-worktree'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import type { TerminalFileContext } from './terminal-file-path-mapping'
 

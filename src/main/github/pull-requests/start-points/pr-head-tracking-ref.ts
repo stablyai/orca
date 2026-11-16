@@ -4,7 +4,7 @@ import {
   isSafeReviewHeadFetchRemote,
   isValidReviewHeadNumber,
   REVIEW_HEAD_FETCH_TIMEOUT_MS
-} from '../../../../shared/review-head-tracking-ref'
+} from '../../../../shared/worktree/hosted-review/review-head-tracking-ref'
 import { getReviewHeadRemoteComponent } from '../../../git/remotes/review-head-remote-identity'
 import {
   SSH_GIT_RECONNECT_MESSAGE,
