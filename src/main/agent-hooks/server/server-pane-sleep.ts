@@ -4,7 +4,7 @@ import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-sta
 
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { AgentHookServerAuthorityFences } from './server-authority-fences'
-import { recordAgentExit } from './agent-exit-evidence'
+import { endedPresenceOf, recordAgentExit } from './agent-exit-evidence'
 
 export abstract class AgentHookServerPaneSleep extends AgentHookServerAuthorityFences {
   abstract dropStatusEntry(paneKey: string, options?: { preserveResumeIdentity?: boolean }): void
@@ -83,11 +83,7 @@ export abstract class AgentHookServerPaneSleep extends AgentHookServerAuthorityF
       ...accepted,
       payload,
       paneSleep: { ptyId, ...(incarnationId ? { incarnationId } : {}) },
-      agentPresence: {
-        agent: previous.payload.agentType ?? 'unknown',
-        ...previous.agentPresence,
-        ended: true
-      }
+      agentPresence: endedPresenceOf(previous)
     }
     this.programStatusFacets.delete(resolved)
     this.hookSilenceRechecks.cancel(resolved)
