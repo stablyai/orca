@@ -84,6 +84,10 @@
     },
     "wslMoved": {
       "movedToHost": "Auf den {{distro}}-Host verschoben",
+      "sectionTitle": "Auf WSL-Hosts verschoben ({{count}})",
+      "hide": "Aus dieser Liste ausblenden",
+      "hiddenToast": "{{name}} aus dieser Liste ausgeblendet",
+      "hiddenToastDescription": "„Wieder auf diesem Computer verwenden“ bleibt in seinem Menü unter dem {{distro}}-Host.",
       "useHere": "Wieder auf diesem Computer verwenden",
       "useHereTitle": "{{name}} wieder auf diesem Computer verwenden?",
       "useHereDescription": "Orca öffnet dieses Projekt hier im Zustand vor dem Verschieben. Der Code ist davon nicht betroffen: Er wurde nie verschoben. Seit dem Verschieben auf dem {{distro}}-Host vorgenommene Änderungen, etwa neue Tabs und Chats, bleiben auf dem Host und werden nicht zurückgeholt. Zusammen mit diesem Projekt verschobene Projekte werden ebenfalls zurückgeholt. Das Projekt bleibt auch auf dem {{distro}}-Host, bis es dort entfernt wird. Dieses Fenster wird neu geladen.",

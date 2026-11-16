@@ -39,3 +39,10 @@ export type WslMoveUseLocallyResult =
       /** Refused after the host's terminals were put to sleep; opening the project there resumes them. */
       hostTerminalsAsleep?: true
     }
+
+/** Names one move of a project, so hiding its sidebar entry does not hide a later move elsewhere. */
+export function wslMovedProjectKey(
+  project: Pick<WslMovedProject, 'kind' | 'id' | 'distro'>
+): string {
+  return `${project.distro}\u0000${project.kind}:${project.id}`
+}

@@ -10,12 +10,21 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
-import type { WslMovedProject } from '../../../../shared/wsl-move/wsl-moved-project'
+import {
+  wslMovedProjectKey,
+  type WslMovedProject
+} from '../../../../shared/wsl-move/wsl-moved-project'
+import {
+  isWslHostRuntimeEnvironment,
+  type PublicKnownRuntimeEnvironment
+} from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 
 import {
   type ExecutionHostId,
+  getRepoExecutionHostId,
   parseExecutionHostId
 } from '../../../../shared/execution-host/execution-host'
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import {
   getRepoIdFromWorktreeId,
@@ -30,7 +39,8 @@ import {
 type MovedCatalog = Pick<AppState, 'wslMovedProjects' | 'worktreesByRepo' | 'folderWorkspaces'>
 
 export async function fetchWslMovedProjects(
-  set: Parameters<StateCreator<AppState>>[0]
+  set: Parameters<StateCreator<AppState>>[0],
+  get: Parameters<StateCreator<AppState>>[1]
 ): Promise<void> {
   const list = window.api?.repos?.listWslMoved
   if (typeof list !== 'function') {
@@ -41,6 +51,8 @@ export async function fetchWslMovedProjects(
     set((state) =>
       sameMovedProjects(state.wslMovedProjects, projects) ? state : { wslMovedProjects: projects }
     )
+    // An undone move's hidden entry must list again if the project moves later.
+    get().retainHiddenWslMovedProjects(projects)
   } catch (error) {
     // Without the list the moved chats stay hidden, as before this entry existed; nothing breaks.
     console.warn('[wsl-move] Could not list moved projects:', error)
@@ -161,6 +173,66 @@ export function selectWslMovedChatWorkspaces(
     project,
     workspaces: byProject.get(project) ?? []
   }))
+}
+
+type WslMovedEntry = ReturnType<typeof selectWslMovedChatWorkspaces>[number]
+type HostRowCatalog = Pick<AppState, 'repos' | 'runtimeEnvironments'> & {
+  folderWorkspaces: readonly Pick<FolderWorkspace, 'id' | 'connectionId' | 'executionHostId'>[]
+}
+
+/** Whether the project's host lists it, so that row's menu still offers "Use on this computer again". */
+export function wslMovedProjectHasHostRow(
+  catalog: HostRowCatalog,
+  project: WslMovedProject
+): boolean {
+  const rows = project.kind === 'repo' ? catalog.repos : catalog.folderWorkspaces
+  return rows.some(
+    (row) =>
+      row.id === project.id &&
+      wslMovedProjectOnHost(project, catalog.runtimeEnvironments, getRepoExecutionHostId(row)) !==
+        null
+  )
+}
+
+/**
+ * Hideable: no chats (the entry is the only way to them) and a host row whose menu keeps undo;
+ * without that row, as after removing the host, the entry is the only way back.
+ */
+export function canHideWslMovedEntry(catalog: HostRowCatalog, entry: WslMovedEntry): boolean {
+  return entry.workspaces.length === 0 && wslMovedProjectHasHostRow(catalog, entry.project)
+}
+
+export function selectListedWslMovedChatWorkspaces(
+  groups: readonly WslMovedEntry[],
+  hiddenKeys: readonly string[],
+  catalog: HostRowCatalog
+): readonly WslMovedEntry[] {
+  if (hiddenKeys.length === 0) {
+    return groups
+  }
+  const hidden = new Set(hiddenKeys)
+  return groups.filter(
+    (entry) =>
+      !hidden.has(wslMovedProjectKey(entry.project)) || !canHideWslMovedEntry(catalog, entry)
+  )
+}
+
+/** The moved project a row on a WSL host stands for: its id, on the host of the distro it moved to. */
+export function wslMovedProjectOnHost(
+  project: WslMovedProject | null,
+  environments: readonly PublicKnownRuntimeEnvironment[],
+  hostId: string | null | undefined
+): WslMovedProject | null {
+  const host = project ? parseExecutionHostId(hostId) : null
+  if (!project || host?.kind !== 'runtime') {
+    return null
+  }
+  const environment = environments.find((candidate) => candidate.id === host.environmentId)
+  return environment &&
+    isWslHostRuntimeEnvironment(environment) &&
+    environment.orcadDeployment.distro.toLowerCase() === project.distro.toLowerCase()
+    ? project
+    : null
 }
 
 export type WslMovedWorkspaceSurface = { id: string; path: string }

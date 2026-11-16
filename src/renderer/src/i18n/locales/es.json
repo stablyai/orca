@@ -21605,6 +21605,10 @@
     },
     "wslMoved": {
       "movedToHost": "Movido al host de {{distro}}",
+      "sectionTitle": "Movidos a hosts de WSL ({{count}})",
+      "hide": "Ocultar de esta lista",
+      "hiddenToast": "{{name}} se ocultó de esta lista",
+      "hiddenToastDescription": "“Usar de nuevo en este equipo” sigue en su menú, bajo el host de {{distro}}.",
       "useHere": "Usar de nuevo en este equipo",
       "useHereTitle": "¿Usar {{name}} de nuevo en este equipo?",
       "useHereDescription": "Orca abrirá este proyecto aquí tal como estaba antes de moverlo. Tu código no se ve afectado: nunca se movió. Los cambios hechos en el host {{distro}} desde el traslado, como pestañas y chats nuevos, se quedan en el host y no vuelven. Los proyectos que se movieron junto con este también vuelven. El proyecto también sigue en el host {{distro}} hasta que lo quites allí. Esta ventana se recargará.",

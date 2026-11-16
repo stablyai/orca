@@ -10,6 +10,7 @@ import type { ContextualTourId } from '../../../../../shared/feature-education/c
 import type { OrcaHookTrustKind } from '../../../../../shared/workspace-setup/hooks/orca-hook-trust-entries'
 import type { SettingsNavigationTarget } from '../../../components/settings/navigation/settings-navigation-types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import type { WslMovedProject } from '../../../../../shared/wsl-move/wsl-moved-project'
 
 export type WorktreeCardsIntroChoice = 'new' | 'classic'
 
@@ -148,4 +149,11 @@ export type UISliceContextual = {
   setWorktreeCardsIntroKeptHintOpen: (open: boolean) => void
   claudeDiffPanelNoticeSeen: boolean
   markClaudeDiffPanelNoticeSeen: () => void
+  wslMovedSectionCollapsed: boolean
+  setWslMovedSectionCollapsed: (collapsed: boolean) => void
+  /** `wslMovedProjectKey`s of moved-project entries hidden from the sidebar. */
+  hiddenWslMovedProjectKeys: readonly string[]
+  hideWslMovedProject: (project: Pick<WslMovedProject, 'kind' | 'id' | 'distro'>) => void
+  /** Drops hidden keys of projects no longer moved, so a later move lists again. */
+  retainHiddenWslMovedProjects: (projects: readonly WslMovedProject[]) => void
 }
