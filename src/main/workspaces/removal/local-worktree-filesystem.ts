@@ -126,7 +126,10 @@ export function getLocalWorktreePathAccess(
       return resolved
     },
     readPath: async (path) => {
-      return inspect(path, guestCommand(path, (target) => `LC_ALL=C cat -- ${target}`))
+      return inspect(
+        path,
+        guestCommand(path, (target) => `LC_ALL=C cat -- ${target}`)
+      )
     }
   }
 }

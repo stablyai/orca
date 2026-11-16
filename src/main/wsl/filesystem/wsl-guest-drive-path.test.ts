@@ -33,7 +33,7 @@ describe.skipIf(process.platform === 'win32')('wslGuestShellPaths', () => {
   }
 
   it('enters a drive path under the mount root the distro reports', () => {
-    const { prelude, words } = wslGuestShellPaths(['C:\\src\\it\'s app', '/plain'], 128)
+    const { prelude, words } = wslGuestShellPaths(["C:\\src\\it's app", '/plain'], 128)
     const result = run(`${prelude}cd ${words[0]} && pwd && echo ${words[1]}`)
     expect(result.status).toBe(0)
     expect(result.stdout).toBe(`${root}/qamnt/c/src/it's app\n/plain\n`)

@@ -7,6 +7,7 @@
  * outside Orca with no wake after it keeps the old root until the next noticed stop or wake.
  */
 import { runProcess } from '@orca/process-host'
+import { waitForPromiseWithSignal } from '../../../shared/concurrency/abort-signal-reason'
 import { buildPosixStdoutFence } from '../../../shared/shell/launch/posix-stdout-fence'
 import { buildWslExecArgs } from '../../../shared/shell/wsl/wsl-login-shell-command'
 import {
@@ -91,19 +92,40 @@ function startRead(distro: string, read: WslAutomountRootReader): Promise<void> 
   return reading
 }
 
+// A failed read refuses Git output for this long before reading again, so polls fail fast.
+const FAILED_READ_RETRY_MS = 10_000
+const failedAt = new Map<string, number>()
+
 /**
- * Reads `distro`'s root before its Git output is read back, when not yet read since its start.
- * Only for a caller about to run Git there, so the distro is already running or being started.
+ * Reads `distro`'s root before its Git output is read back, when not yet read since its start;
+ * rejects when it cannot be read, since output under an unknown root cannot be mapped to a drive.
+ * Only for a caller admitted to run Git there, so the distro is already running or being started.
  */
 export function settleWslAutomountRoot(
   distro: string,
+  signal?: AbortSignal,
   read: WslAutomountRootReader = readWslAutomountRoot
 ): Promise<void> | null {
   const key = distroKey(distro)
   if (readSinceStart.has(key)) {
     return null
   }
-  return pending.get(key) ?? startRead(distro, read)
+  const unreadable = (): Error =>
+    new Error(
+      `Orca couldn't read where WSL distro ${distro} mounts Windows drives. Try again in a moment.`
+    )
+  const failed = failedAt.get(key)
+  if (failed !== undefined && performance.now() - failed < FAILED_READ_RETRY_MS) {
+    return Promise.reject(unreadable())
+  }
+  const reading = pending.get(key) ?? startRead(distro, read)
+  return waitForPromiseWithSignal(reading, signal).then(() => {
+    if (!readSinceStart.has(key)) {
+      failedAt.set(key, performance.now())
+      throw unreadable()
+    }
+    failedAt.delete(key)
+  })
 }
 
 /**
@@ -204,6 +226,7 @@ export function resetWslAutomountRootsForTests(): void {
   readSinceStart.clear()
   readAt.clear()
   pending.clear()
+  failedAt.clear()
   stopCounts.clear()
   changeListeners.clear()
 }

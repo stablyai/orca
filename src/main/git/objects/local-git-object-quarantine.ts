@@ -81,7 +81,10 @@ export function createLocalGitObjectQuarantine(
     if (!commonDir || usesHostGitForWslLinkedWorktree(repoPath, options.wslDistro)) {
       return undefined
     }
-    return { ...(await localGitObjectsDirectory(commonDir, wslDistro, options.signal)), ...inherited }
+    return {
+      ...(await localGitObjectsDirectory(commonDir, wslDistro, options.signal)),
+      ...inherited
+    }
   })
   return {
     run: (command) =>
