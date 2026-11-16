@@ -74,7 +74,7 @@ const GIT_COMPAT_PREFIXES = [
   '.github/actions/prepare-git-compatibility/',
   'src/shared/terminal/pty/lifecycle/git-bash-console-capacity',
   'src/shared/git/',
-  'src/shared/review-head-tracking-ref',
+  'src/shared/worktree/hosted-review/review-head-tracking-ref',
   'src/shared/worktree/base-refs/local-base-branch-fast-forward',
   'src/main/git/',
   'config/scripts/git-binary-compatibility'
@@ -333,7 +333,7 @@ const NATIVE_CACHE_FILES = new Set([
   'config/scripts/electron-installation/platform-layout/install-electron-package-binary.mjs',
   'config/scripts/electron-installation/platform-layout/electron-platform-path.mjs',
   'config/scripts/zip-extractor-command.mjs',
-  'src/shared/zip-extractor-command.ts',
+  'src/shared/archives/zip-extractor-command.ts',
   'config/scripts/artifact-storage/reflink-copy/space-sharing-copy.mjs',
   'config/scripts/native-build/node-addons/native-dependency-lock-digest.mjs',
   'config/scripts/orcad-distribution/prebuilds/orcad-prebuild-node-gyp.mjs',

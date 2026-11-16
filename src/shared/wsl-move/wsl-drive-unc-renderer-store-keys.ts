@@ -3,7 +3,7 @@
  * the entry is not one. Same stores and key shapes as the WSL move's renderer rewrite
  * (renderer/src/lib/wsl-move-renderer-store-keys.ts), but the project stays on this computer.
  */
-import { normalizeRuntimePathForComparison } from '../cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../file-access/cross-platform-path'
 import { LOCAL_EXECUTION_HOST_ID } from '../execution-host'
 import type { PythonEnvironment } from '../editor/notebooks/notebook-kernel-types'
 import { wslUncDrivePathToWindows } from '../file-access/wsl-paths'

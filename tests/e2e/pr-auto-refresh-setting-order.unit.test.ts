@@ -62,7 +62,7 @@ afterEach(async () => {
   act(() => root.unmount())
   document.body.replaceChildren()
   const { _resetPRAutoRefreshCadencesForTests } =
-    await import('../../src/shared/review-refresh-policy')
+    await import('../../src/shared/source-control/hosted-review/review-refresh-policy')
   const { _resetHostPRAutoRefreshCadenceGenerationsForTests } =
     await import('../../src/renderer/src/store/github/refresh/remote-host-pr-auto-refresh-cadence')
   _resetPRAutoRefreshCadencesForTests()
@@ -139,7 +139,7 @@ it('converges after a real late write response revokes a later settings event re
   const { _hostPRAutoRefreshReadsInFlightForTests } =
     await import('../../src/renderer/src/store/github/refresh/remote-host-pr-auto-refresh-cadence-sync')
   const { getKnownPRAutoRefreshCadenceForHost } =
-    await import('../../src/shared/review-refresh-policy')
+    await import('../../src/shared/source-control/hosted-review/review-refresh-policy')
   const { PRAutoRefreshSetting } =
     await import('../../src/renderer/src/components/settings/source-control/PRAutoRefreshSetting')
   const subscription = await subscribeRuntimeClientEvents('env-a', () => {})

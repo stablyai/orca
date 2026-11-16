@@ -3,7 +3,7 @@ import {
   aiVaultSessionInScope,
   createAiVaultScopeCwdMatcher
 } from '../../../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { PLUGIN_AGENT_SESSION_LIST_LIMIT } from '../../../../shared/plugins/workers/plugin-host-api-agent-history'
 import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'

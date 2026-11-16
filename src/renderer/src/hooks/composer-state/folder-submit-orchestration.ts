@@ -4,7 +4,7 @@ import { PROJECT_GROUP_FOLDER_SETUP_RUNTIME_CAPABILITY } from '../../../../share
 import { resolveFolderSetupSupported } from '@/lib/workspace/creation/setup/folder-setup-support'
 import { checkRuntimeGroupHooks } from '@/runtime/repo-hooks/runtime-hooks-client'
 import { deriveWorkspaceSetupState } from '@/lib/workspace/creation/setup/workspace-setup-preparation'
-import { getSetupConfig } from '../../../../shared/orca-hook-setup-config'
+import { getSetupConfig } from '../../../../shared/workspace-setup/hooks/orca-hook-setup-config'
 import { confirmWorkspaceSetupDecision } from '@/lib/workspace/creation/setup/workspace-setup-trust'
 import { useAppStore } from '@/store'
 import type { QuickSubmitOptions } from './quick-creation-request'

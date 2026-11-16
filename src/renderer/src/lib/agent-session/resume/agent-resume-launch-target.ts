@@ -3,7 +3,7 @@ import { REMOTE_RUNTIME_PTY_HONOURS_TAB_SHELL_OVERRIDE } from '@/components/term
 import { parseExecutionHostId } from '../../../../../shared/execution-host'
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { isWslUncPath } from '../../../../../shared/file-access/wsl-paths'
-import { isWindowsAbsolutePathLike } from '../../../../../shared/cross-platform-path'
+import { isWindowsAbsolutePathLike } from '../../../../../shared/file-access/cross-platform-path'
 import { resolveHostAgentStartupShell } from '../../../../../shared/shell/launch/windows-terminal-shell'
 import type { AppState } from '@/store/types'
 import type { ProjectExecutionRuntimeResolution } from '../../../../../shared/execution-host/project-execution-runtime'

@@ -5,7 +5,7 @@ import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/h
 import {
   normalizePRAutoRefreshCadence,
   type PRAutoRefreshCadence
-} from '../../../../../shared/review-refresh-policy'
+} from '../../../../../shared/source-control/hosted-review/review-refresh-policy'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 import { useAppStateValue } from '@/store/retained-views/app-state-view'

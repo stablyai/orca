@@ -4,7 +4,7 @@ import type { AutomationExecutionTargetType } from '../automations/automation-de
 import type { TaskSourceContext } from '../work-items/task-source-context'
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 import type { DiffComment, MobileDiffReviewState } from '../file-review/diff-comment-types'
-import type { EphemeralVmCheckoutMode } from '../orca-yaml-hook-types'
+import type { EphemeralVmCheckoutMode } from '../workspace-setup/orca-yaml-hook-types'
 import type { BuiltInWorktreeVisibilitySourceId } from '../repository/repo-types'
 import type { WorktreeIdentity } from './identity'
 import type { WorktreeScanFailureKind } from './catalog/worktree-scan-failure'

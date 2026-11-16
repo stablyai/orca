@@ -1,6 +1,6 @@
 import { execFile, type ChildProcess, type ExecFileOptions } from 'node:child_process'
 import { recordSubprocessSpawn } from '../../../diagnostics/main-thread-churn-probe'
-import { endSubprocessStdin } from '../../../../shared/subprocess-stdin-write'
+import { endSubprocessStdin } from '../../../../shared/process-streams/subprocess-stdin-write'
 import { createPosixGroupTermination } from '@orca/process-host/posix-group-termination'
 import { nativeExecutableResolver } from '@orca/process-host/native-executable-resolution'
 import { spawnNativeProcess } from '@orca/process-host/native-process-spawn'
