@@ -228,3 +228,80 @@ it('fills in revisions for chats converted before they were kept, then still kee
       .get()
   ).toEqual({ value: '1' })
 })
+
+/** As a build from before revisions were kept left the file: no baselines, receipt without WAL identity. */
+function asOlderChatStore(db: Database.Database): void {
+  db.exec(`DELETE FROM agent_session_store_meta
+    WHERE key LIKE 'journal.legacy-revision%' OR key = 'journal.legacy-revisions-kept.v1'`)
+  db.prepare(`UPDATE agent_session_store_meta SET value=json_remove(value,'$.wal.ino','$.wal.mtimeNs')
+    WHERE key='journal.legacy-source-copy.v1'`).run()
+}
+
+function tabbedChats(db: Database.Database): string[] {
+  return db
+    .prepare('SELECT session_id FROM agent_session_tabs ORDER BY position')
+    .all()
+    .map((row) => String(row.session_id))
+}
+
+it('keeps closed chats closed and adds no copies when a file from before revisions were kept upgrades', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-legacy-reconcile-'))
+  cleanup.push(() => rmSync(root, { recursive: true, force: true }))
+  const { db: original } = openJournalDatabase(journalDatabasePath(root))
+  cleanup.push(() => original.close())
+  for (let index = 0; index < 100; index += 1) {
+    olderOrcaChat(original, `chat-${index}`, rows)
+  }
+  original.prepare("DELETE FROM agent_session_tabs WHERE session_id!='chat-0'").run()
+  const first = await upgrade(root)
+  expect(await first.convert('chat-1')).toBe('epoch')
+  asOlderChatStore(first.db)
+  await first.close()
+
+  // The original stays open with its WAL unchanged: nothing was written since the copy.
+  const unchanged = await upgrade(root)
+  expect(tabbedChats(unchanged.db)).toEqual(['chat-0'])
+  expect(unchanged.db.prepare('SELECT COUNT(*) AS records FROM agent_session_records').get()).toEqual(
+    { records: 100 }
+  )
+  await unchanged.close()
+})
+
+it('takes what a file from before revisions were kept shows as its baseline when the original changed', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-legacy-reconcile-'))
+  cleanup.push(() => rmSync(root, { recursive: true, force: true }))
+  const { db: original } = openJournalDatabase(journalDatabasePath(root))
+  cleanup.push(() => original.close())
+  olderOrcaChat(original, 'open', rows)
+  olderOrcaChat(original, 'closed', rows)
+  olderOrcaChat(original, 'converted', rows)
+  original.prepare("DELETE FROM agent_session_tabs WHERE session_id!='open'").run()
+  const first = await upgrade(root)
+  expect(await first.convert('converted')).toBe('epoch')
+  asOlderChatStore(first.db)
+  await first.close()
+
+  olderOrcaChat(original, 'started-older', [rows[0], turn('started-turn', 2)])
+  const later = await upgrade(root)
+  cleanup.push(later.close)
+  expect(tabbedChats(later.db)).toEqual(['open', 'started-older'])
+  expect(
+    later.db
+      .prepare('SELECT session_id FROM agent_session_records ORDER BY session_id')
+      .all()
+      .map((row) => String(row.session_id))
+  ).toEqual(['closed', 'converted', 'open', 'started-older'])
+
+  // Baselines now exist, so a later write by the older Orca is still kept.
+  insertJournalRow(original, 'converted', turn('older-turn', tip + 1))
+  await later.close()
+  cleanup.pop()
+  const again = await upgrade(root)
+  cleanup.push(again.close)
+  const [copy] = again.db
+    .prepare(`SELECT session_id FROM agent_session_records
+      WHERE session_id NOT IN ('closed','converted','open','started-older')`)
+    .all()
+    .map((row) => String(row.session_id))
+  expect(items(again.db, copy!)).toContain('older-turn')
+})
