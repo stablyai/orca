@@ -5,6 +5,7 @@ import {
   waitForNativeChatPtyIdle
 } from './native-chat-pty-send-queue'
 import { sendNativeChatObservedWrites } from './native-chat-observed-send'
+import { afterNativeChatPasteLands, readNativeChatInputLine } from './native-chat-paste-landed'
 import { sendRuntimePtyInput } from '@/runtime/hosted-terminals/input/runtime-terminal-input-send'
 import { sendRuntimePtyInputVerified } from '@/runtime/hosted-terminals/input/runtime-terminal-verified-input'
 import type { AskAnswerKeyGroup } from '../../../../../../../shared/native-chat/input/questions/native-chat-ask-answer'
@@ -51,7 +52,11 @@ export function sendNativeChatMessage(
       ptyId,
       [
         { data: buildNativeChatPasteBytes(text), delayBeforeMs: 0 },
-        { data: NATIVE_CHAT_SUBMIT, delayBeforeMs: NATIVE_CHAT_SUBMIT_DELAY_MS, afterShown: text }
+        {
+          data: NATIVE_CHAT_SUBMIT,
+          delayBeforeMs: NATIVE_CHAT_SUBMIT_DELAY_MS,
+          afterPasteLands: true
+        }
       ],
       options
     )
@@ -72,12 +77,20 @@ export function sendNativeChatMessage(
             return
           }
           markWriteStarted()
+          const lineWasEmpty = readNativeChatInputLine(options?.readInputLine) === ''
           sendRuntimePtyInput(ptyId, buildNativeChatPasteBytes(text), 'driving')
           // Measure the Enter delay from the actual body write so renderer stalls cannot collapse the gap.
-          delay(NATIVE_CHAT_SUBMIT_DELAY_MS, () => {
-            sendRuntimePtyInput(ptyId, NATIVE_CHAT_SUBMIT, 'driving')
-            markSubmitted()
-          })
+          delay(NATIVE_CHAT_SUBMIT_DELAY_MS, () =>
+            afterNativeChatPasteLands({
+              readInputLine: options?.readInputLine,
+              lineWasEmpty,
+              delay,
+              submit: () => {
+                sendRuntimePtyInput(ptyId, NATIVE_CHAT_SUBMIT, 'driving')
+                markSubmitted()
+              }
+            })
+          )
         },
         () => markSubmitted('not-submitted')
       )

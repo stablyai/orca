@@ -1,6 +1,7 @@
 import { sendRuntimePtyInput } from '@/runtime/hosted-terminals/input/runtime-terminal-input-send'
 import { sendRuntimePtyInputVerified } from '@/runtime/hosted-terminals/input/runtime-terminal-verified-input'
 import { AGENT_TUI_CLEAR_INPUT_MAX } from '../../../../../../../shared/agent-launch/startup/agent-tui-input-clear'
+import { readNativeChatInputLine } from './native-chat-paste-landed'
 
 /** Gap after a clear so the agent reads it on its own and the input line can be re-read. */
 export const NATIVE_CHAT_CLEAR_CONFIRM_MS = 140
@@ -25,14 +26,6 @@ export function clearUnsubmittedAgentInput(ptyId: string, options?: NativeChatSe
   sendRuntimePtyInput(ptyId, options?.clearInput ?? AGENT_TUI_CLEAR_INPUT_MAX, 'driving')
 }
 
-function readInputLineSafely(options: NativeChatSendOptions | undefined): string | null {
-  try {
-    return options?.readInputLine?.() ?? null
-  } catch {
-    return null
-  }
-}
-
 /** Clear before body. Agent TUIs take a clear that arrives with the body as pasted text and drop
  *  it, merging the old line into the message, so the body waits until the clear was read alone. */
 export function clearThenWrite(
@@ -51,7 +44,8 @@ export function clearThenWrite(
     refuse()
     return
   }
-  if (options?.clearInput === '') {
+  // Nothing typed means nothing to clear; cancellation still clears this send's own body.
+  if (options?.clearInput === '' || readNativeChatInputLine(options?.readInputLine) === '') {
     writeBody()
     return
   }
@@ -64,7 +58,7 @@ export function clearThenWrite(
     )
   }
   clearAlone(options?.clearInput ?? AGENT_TUI_CLEAR_INPUT_MAX, () => {
-    const line = readInputLineSafely(options)
+    const line = readNativeChatInputLine(options?.readInputLine)
     // Unreadable is unconfirmed; typed residue means direct TUI edits outgrew the sized clear.
     if (line === null || line === '') {
       writeBody()
@@ -74,7 +68,7 @@ export function clearThenWrite(
   })
 }
 
-/** Time a send spends clearing before its body; the widened retry is not reserved. */
+/** Time a send may spend clearing before its body; the widened retry is not reserved. */
 export function clearConfirmDurationMs(options?: NativeChatSendOptions): number {
   return options?.clearInput === '' ? 0 : NATIVE_CHAT_CLEAR_CONFIRM_MS
 }

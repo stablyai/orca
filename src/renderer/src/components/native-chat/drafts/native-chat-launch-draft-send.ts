@@ -34,7 +34,7 @@ type NativeChatInputLineSendOptions = {
 const tooTallToClear = (text: string | null | undefined): boolean =>
   text != null && countAgentTuiInputLines(text) > AGENT_TUI_CLEAR_MAX_LINES
 
-/** Clear exactly what the agent's input line holds; nothing typed means no clear at all. */
+/** Size the clear to what the agent's input line holds. */
 export function resolveNativeChatInputLineSend(
   /** The user's text on the agent's input line: '' when it is empty, null when unreadable. */
   readInputLine: () => string | null | undefined
@@ -43,7 +43,7 @@ export function resolveNativeChatInputLineSend(
   if (tooTallToClear(draft)) {
     return { clearInput: null, readInputLine }
   }
-  return { clearInput: draft === '' ? '' : buildAgentTuiClearInputForText(draft), readInputLine }
+  return { clearInput: buildAgentTuiClearInputForText(draft), readInputLine }
 }
 
 /** Replace a parked launch draft, otherwise clear whatever the input line holds. */

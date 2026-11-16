@@ -6,14 +6,14 @@ import {
   clearUnsubmittedAgentInput,
   type NativeChatSendOptions
 } from './native-chat-input-clear'
-import {
-  nativeChatInputShowsPastedText,
-  NATIVE_CHAT_PASTE_LANDED_MAX_WAIT_MS,
-  NATIVE_CHAT_PASTE_LANDED_POLL_MS
-} from './native-chat-paste-landed'
+import { afterNativeChatPasteLands, readNativeChatInputLine } from './native-chat-paste-landed'
 
-/** `afterShown`: hold this write until the input line shows that pasted text, if it was empty before. */
-export type NativeChatObservedWrite = { data: string; delayBeforeMs: number; afterShown?: string }
+/** `afterPasteLands`: hold this write (Enter) until the input line shows the earlier writes settled. */
+export type NativeChatObservedWrite = {
+  data: string
+  delayBeforeMs: number
+  afterPasteLands?: boolean
+}
 
 export function sendNativeChatObservedWrites(
   ptyId: string,
@@ -32,34 +32,16 @@ export function sendNativeChatObservedWrites(
     ({ isCancelled, delay, markSubmitted, markWriteStarted }) => {
       let reportedUnconfirmed = false
       let acknowledged = true
-      // Only an empty line proves a later match is this paste rather than text already there.
       let lineWasEmpty = false
-      const readLine = (): string | null => {
-        try {
-          return options.readInputLine?.() ?? null
-        } catch {
-          return null
-        }
-      }
-      const whenShown = (text: string | undefined, send: () => void): void => {
-        if (text === undefined || !lineWasEmpty) {
-          send()
-          return
-        }
-        let waitedMs = 0
-        const check = (): void => {
-          if (
-            waitedMs >= NATIVE_CHAT_PASTE_LANDED_MAX_WAIT_MS ||
-            nativeChatInputShowsPastedText(readLine(), text)
-          ) {
-            send()
-            return
-          }
-          waitedMs += NATIVE_CHAT_PASTE_LANDED_POLL_MS
-          delay(NATIVE_CHAT_PASTE_LANDED_POLL_MS, check)
-        }
-        check()
-      }
+      const whenReady = (write: NativeChatObservedWrite, send: () => void): void =>
+        write.afterPasteLands
+          ? afterNativeChatPasteLands({
+              readInputLine: options.readInputLine,
+              lineWasEmpty,
+              delay,
+              submit: send
+            })
+          : send()
       const writeAt = (index: number): void => {
         if (isCancelled()) {
           return
@@ -114,9 +96,9 @@ export function sendNativeChatObservedWrites(
             })
         }
         if (write.delayBeforeMs > 0) {
-          delay(write.delayBeforeMs, () => whenShown(write.afterShown, send))
+          delay(write.delayBeforeMs, () => whenReady(write, send))
         } else {
-          whenShown(write.afterShown, send)
+          whenReady(write, send)
         }
       }
       clearThenWrite(
@@ -124,7 +106,7 @@ export function sendNativeChatObservedWrites(
         options,
         delay,
         () => {
-          lineWasEmpty = readLine() === ''
+          lineWasEmpty = readNativeChatInputLine(options.readInputLine) === ''
           writeAt(0)
         },
         () => markSubmitted('not-submitted')

@@ -53,18 +53,22 @@ describe('sendNativeChatMessage input line ownership', () => {
   })
 
   // Enter that arrives while the agent is still reading the paste becomes part of it.
-  it('presses Enter once the input line shows the pasted message', async () => {
+  it('presses Enter only once the pasted message stops changing on the input line', async () => {
     let line = ''
     sendNativeChatMessage('pty-1', 'Reply with PONG', {
-      clearInput: '',
       readInputLine: () => line,
       onWriteRejected: () => {}
     })
-    await vi.advanceTimersByTimeAsync(1500)
+    await vi.advanceTimersByTimeAsync(1000)
     expect(writes).toEqual(['Reply with PONG'])
 
+    line = 'Reply with'
+    await vi.advanceTimersByTimeAsync(100)
     line = 'Reply with PONG'
-    await vi.advanceTimersByTimeAsync(150)
+    await vi.advanceTimersByTimeAsync(100)
+    expect(writes).toEqual(['Reply with PONG'])
+
+    await vi.advanceTimersByTimeAsync(100)
     expect(writes).toEqual(['Reply with PONG', '\r'])
   })
 })

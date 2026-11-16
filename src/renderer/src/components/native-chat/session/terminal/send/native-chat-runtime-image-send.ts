@@ -10,6 +10,7 @@ import {
   NATIVE_CHAT_SUBMIT
 } from '../../../../../../../shared/native-chat/input/composer/native-chat-paste-bytes'
 import { enqueueNativeChatPtySend } from './native-chat-pty-send-queue'
+import { afterNativeChatPasteLands, readNativeChatInputLine } from './native-chat-paste-landed'
 import {
   clearConfirmDurationMs,
   clearThenWrite,
@@ -43,7 +44,11 @@ export function sendNativeChatMessageWithImageAttachments(
         delayBeforeMs: NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS
       })
     }
-    writes.push({ data: NATIVE_CHAT_SUBMIT, delayBeforeMs: NATIVE_CHAT_SUBMIT_DELAY_MS })
+    writes.push({
+      data: NATIVE_CHAT_SUBMIT,
+      delayBeforeMs: NATIVE_CHAT_SUBMIT_DELAY_MS,
+      afterPasteLands: true
+    })
     return sendNativeChatObservedWrites(ptyId, writes, options)
   }
   const durationMs =
@@ -66,6 +71,17 @@ export function sendNativeChatMessageWithImageAttachments(
             return
           }
           markWriteStarted()
+          const lineWasEmpty = readNativeChatInputLine(options?.readInputLine) === ''
+          const submitAfterPasteLands = (): void =>
+            afterNativeChatPasteLands({
+              readInputLine: options?.readInputLine,
+              lineWasEmpty,
+              delay,
+              submit: () => {
+                sendRuntimePtyInput(ptyId, NATIVE_CHAT_SUBMIT, 'driving')
+                markSubmitted()
+              }
+            })
           for (const payload of agentImagePasteWrites(
             agent,
             imagePaths.map((path) =>
@@ -78,17 +94,11 @@ export function sendNativeChatMessageWithImageAttachments(
           if (trimmedText.length > 0) {
             delay(NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS, () => {
               sendRuntimePtyInput(ptyId, buildNativeChatPasteBytes(text), 'driving')
-              delay(NATIVE_CHAT_SUBMIT_DELAY_MS, () => {
-                sendRuntimePtyInput(ptyId, NATIVE_CHAT_SUBMIT, 'driving')
-                markSubmitted()
-              })
+              delay(NATIVE_CHAT_SUBMIT_DELAY_MS, submitAfterPasteLands)
             })
             return
           }
-          delay(NATIVE_CHAT_SUBMIT_DELAY_MS, () => {
-            sendRuntimePtyInput(ptyId, NATIVE_CHAT_SUBMIT, 'driving')
-            markSubmitted()
-          })
+          delay(NATIVE_CHAT_SUBMIT_DELAY_MS, submitAfterPasteLands)
         },
         () => markSubmitted('not-submitted')
       )
