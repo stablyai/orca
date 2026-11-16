@@ -1,7 +1,7 @@
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import { addAdditionalValidWorkspaceKeys } from '@/lib/workspace/persistence/workspace-session-hydration-keys'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/workspace/identity/floating-workspace-id'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { buildValidWorktreeIdsForSessionHydration } from '../../../../../../shared/worktree/catalog/degraded-repo-worktree-validity'
 import { migrateHydratedEditorTabsAndGroups } from '../file-ids/hydrated-editor-file-ids'

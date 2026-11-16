@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { partitionHoldsWorktree } from '../workspaces/session-hosts/twin-repo-session-host'

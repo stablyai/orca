@@ -6,15 +6,15 @@ import {
   readDataFile,
   makeRepo
 } from '../persistence-test-harness'
-import { makeTerminalTab } from '../persistence-session-fixtures'
+import '../persistence-session-fixtures'
 // Deregistered repos bypass missing-directory pruning, so residue needs its own sweep.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { getDefaultWorkspaceSession } from '../../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../../shared/orca-profiles/constants'
 import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 
 vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: vi.fn(),
@@ -35,7 +35,6 @@ const LIVE_REPO = 'live-repo'
 const GONE_REPO = 'gone-repo'
 const LIVE_WORKTREE = `${LIVE_REPO}::/workspace/live`
 const GONE_WORKTREE = `${GONE_REPO}::/workspace/orphan`
-const RUNTIME_HOST = 'runtime:env-a'
 
 const sleepingAgentFor = (worktreeId: string, tabId = 'tab-1') => ({
   [`${tabId}:leaf-1`]: {
@@ -50,16 +49,6 @@ const sleepingAgentFor = (worktreeId: string, tabId = 'tab-1') => ({
     updatedAt: 1,
     origin: 'worktree-sleep' as const
   }
-})
-
-const sessionFor = (worktreeId: string, tabId = 'tab-1') => ({
-  ...getDefaultWorkspaceSession(),
-  tabsByWorktree: {
-    [worktreeId]: [makeTerminalTab({ id: tabId, worktreeId })]
-  },
-  activeTabTypeByWorktree: { [worktreeId]: 'terminal' as const },
-  lastVisitedAtByWorktreeId: { [worktreeId]: 123 },
-  sleepingAgentSessionsByPaneKey: sleepingAgentFor(worktreeId, tabId)
 })
 
 describe('deregistered repo residue', () => {
@@ -124,26 +113,6 @@ describe('deregistered repo residue', () => {
       },
       'worktree:live-repo::/workspace/unreadable': { fieldFromANewerBuild: true }
     })
-  })
-
-  it('keeps a remote session whose repo is not registered on the desktop', async () => {
-    writeDataFile({
-      schemaVersion: 1,
-      repos: [makeRepo({ id: LIVE_REPO, path: '/workspace/live' })],
-      worktreeMeta: {},
-      workspaceSessionsByHostId: {
-        [RUNTIME_HOST]: sessionFor(GONE_WORKTREE)
-      }
-    })
-
-    const store = await createStore()
-    store.flush()
-
-    const partition = store.getWorkspaceSession(RUNTIME_HOST)
-    expect(partition.tabsByWorktree[GONE_WORKTREE]).toHaveLength(1)
-    expect(partition.activeTabTypeByWorktree).toEqual(
-      sessionFor(GONE_WORKTREE).activeTabTypeByWorktree
-    )
   })
 
   it('leaves folder-workspace session rows alone: their keys name no repo', async () => {

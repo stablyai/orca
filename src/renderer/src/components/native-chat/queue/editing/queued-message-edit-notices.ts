@@ -23,3 +23,10 @@ const NOTICES: Record<QueuedEditNotice, () => string> = {
 export function queuedEditNotice(key: QueuedEditNotice): string {
   return NOTICES[key]()
 }
+
+export function queuedEditReturnedNotice(): string {
+  return translate(
+    'components.native-chat.queuedMessages.editReturned',
+    'Your edit is in the chat box.'
+  )
+}

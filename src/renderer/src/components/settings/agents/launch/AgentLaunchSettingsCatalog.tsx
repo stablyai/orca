@@ -10,7 +10,7 @@ import type {
   AgentLaunchSettings,
   AgentLaunchSettingsMutation
 } from '../../../../../../shared/agent-launch/choices/agent-launch-settings'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import { AUTO_TUI_AGENT_ARGS } from '../../../../../../shared/agent-launch/permissions/tui-agent-permissions'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import {
@@ -64,7 +64,7 @@ import {
   managedRuntimeChatAgents,
   useHostStructuredAgentsVersion
 } from '@/runtime/native-chat/agent-catalogs/chat-provider-agents'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host/execution-host'
 import { useTranslate } from '@/i18n/use-translate'
 
 export type AgentPermissionsRenderer = (props: AgentPermissionsSettingProps) => React.ReactNode

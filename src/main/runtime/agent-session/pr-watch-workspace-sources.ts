@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../shared/repository/repo-types'
 import type { PRWatchWorkspace } from '../../github/pr-watch/pr-watch-types'
 import { hostedReviewSshConnectionId } from '../../source-control/hosted-review-execution-host'

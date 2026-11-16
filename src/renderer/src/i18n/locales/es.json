@@ -6076,7 +6076,8 @@
           "runtimeHostDisconnectedNamed": "{{hostName}} está desconectado",
           "runtimeHostProject": "Proyecto en servidor de Orca",
           "runtimeHostProjectNamed": "Proyecto en {{hostName}}",
-          "ef18787206": "En cola para eliminación"
+          "ef18787206": "En cola para eliminación",
+          "notificationsMuted": "Notificaciones silenciadas"
         },
         "WorktreeCardAgents": {
           "1b0a156717": "Agents",
@@ -6172,7 +6173,9 @@
           "copyPathOption": "Ruta",
           "copyNameOption": "Nombre del worktree",
           "lineageSubmenu": "Padre e hijos",
-          "projectGroupSubmenu": "Grupo de proyecto"
+          "projectGroupSubmenu": "Grupo de proyecto",
+          "muteNotifications": "Silenciar notificaciones",
+          "unmuteNotifications": "Reactivar notificaciones"
         },
         "WorktreeList": {
           "d880ea0744": "Crea un grupo y mueve este proyecto a él.",
@@ -22871,7 +22874,9 @@
       "chooseTransition": "Elige un cambio de estado:",
       "cancel": "Cancelar",
       "noTransition": "No hay ningún cambio de estado a {{column}} disponible para {{key}}.",
-      "queryTooLong": "La consulta de Jira es demasiado larga. Acorta la consulta o borra los filtros."
+      "queryTooLong": "La consulta de Jira es demasiado larga. Acorta la consulta o borra los filtros.",
+      "reorderColumn": "Reordenar {{column}}",
+      "reorderColumnHint": "Incidencias en esta columna: {{count}}. Usa las flechas izquierda y derecha para moverla."
     },
     "favourites": {
       "activeLabel": "Favoritos de Jira: {{name}}",

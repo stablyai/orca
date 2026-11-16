@@ -1,5 +1,6 @@
 /** Regression for #9872: missed pane teardown must not let heavy live status rows grow unbounded. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { Tab } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { ParsedAgentStatusPayload } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
@@ -169,6 +170,46 @@ describe('agentStatusByPaneKey stays bounded (leak regression #9872)', () => {
     const live = store.getState().agentStatusByPaneKey
     expect(live.get('tab-w:leaf-w')?.state).toBe('waiting')
     expect(live.get('tab-b:leaf-b')?.state).toBe('blocked')
+  })
+
+  it('keeps an unopened native chat visible when orphan statuses exceed capacity', () => {
+    const store = createTestStore()
+    seedWorktree(store)
+    store.setState({
+      unifiedTabsByWorktree: {
+        'wt-1': [
+          {
+            id: 'chat-tab',
+            entityId: 'chat-session',
+            worktreeId: 'wt-1',
+            contentType: 'agent-session',
+            agentSessionAgent: 'claude',
+            label: 'Chat',
+            customLabel: null,
+            color: null,
+            groupId: 'group-1',
+            sortOrder: 0,
+            createdAt: 1
+          } satisfies Tab
+        ]
+      }
+    })
+    setAgentAt(store, 'chat-tab:fa0095aa-0b8f-4e0b-a035-f6c949783135', {
+      state: 'done',
+      prompt: 'Finished',
+      agentType: 'claude'
+    })
+
+    churnFreshUnprovable(store, MAX_LIVE_AGENT_STATUSES + 1)
+
+    expect(
+      store.getState().agentStatusByPaneKey.get('chat-tab:fa0095aa-0b8f-4e0b-a035-f6c949783135')
+        ?.state
+    ).toBe('done')
+    expect(store.getState().agentStatusByPaneKey.projection.keys('wt-1')).toContain(
+      'chat-tab:fa0095aa-0b8f-4e0b-a035-f6c949783135'
+    )
+    expect(store.getState().agentStatusByPaneKey.get('gone-0:leaf-0')).toBeUndefined()
   })
 
   it('bounds the map when fresh unprovable rows dominate, without evicting a live pane', () => {

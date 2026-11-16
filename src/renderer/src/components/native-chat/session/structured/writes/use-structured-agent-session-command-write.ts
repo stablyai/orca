@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useNativeChatPaneLifetimeEffect } from '../../../pane/ownership/native-chat-pane-lifetime'
+import { useCallback, useRef } from 'react'
 import {
   AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS,
   agentSessionConversationCommandFields,
@@ -20,17 +21,19 @@ export function useStructuredAgentSessionCommandWrite(
   delivery?: 'queue-if-active',
   instructions?: string
 ) => Promise<StructuredAgentSessionWriteOutcome<AgentSessionConversationCommandResult>> {
-  // Null once the view left or unmounted, so a reply that lands later releases its hold.
+  // Null once the chat closes, so a reply that lands later releases its hold.
   const shown = useRef<string | null>(sessionId)
   const keptHold = useRef<(() => void) | null>(null)
-  useEffect(() => {
-    shown.current = sessionId
-    return () => {
-      shown.current = null
-      keptHold.current?.()
-      keptHold.current = null
-    }
-  }, [sessionId])
+  useNativeChatPaneLifetimeEffect(
+    useCallback(() => {
+      shown.current = sessionId
+      return () => {
+        shown.current = null
+        keptHold.current?.()
+        keptHold.current = null
+      }
+    }, [sessionId])
+  )
   return useCallback(
     async (command, delivery, instructions) => {
       const send = () =>

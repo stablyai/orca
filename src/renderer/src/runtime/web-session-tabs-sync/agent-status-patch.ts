@@ -1,6 +1,6 @@
 import { recordDraft } from '@/store/keyed-record-transitions'
 import { conversationSessionStartedAt } from '../../store/slices/agent-status/agent-conversation-acceptance'
-import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
+import { toRuntimeExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   classifyAgentPaneConversation,
   projectAgentPaneConversation

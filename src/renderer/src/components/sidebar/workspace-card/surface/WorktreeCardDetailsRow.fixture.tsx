@@ -1,7 +1,7 @@
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { useAppStore } from '@/store'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import type { WorktreeCardProperty } from '../../../../../../shared/ui-chrome-types'
+import type { WorktreeCardProperty } from '../../../../../../shared/ui-chrome/ui-chrome-types'
 import { FIXTURE_REPO, makeWorktree } from '../../worktree-card-slot-fixture-seeds'
 import WorktreeCard from './WorktreeCard'
 

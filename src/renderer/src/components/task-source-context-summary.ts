@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { ExecutionHostScope } from '../../../shared/execution-host'
+import type { ExecutionHostScope } from '../../../shared/execution-host/execution-host'
 import type { ExecutionHostHealth } from '../../../shared/execution-host/execution-host-health'
 import type { SshConnectionStatus } from '../../../shared/remote-runtime/ssh/ssh-types'
 import type { TaskProvider } from '../../../shared/work-items/task-providers'

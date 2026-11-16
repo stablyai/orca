@@ -1,4 +1,4 @@
-import { getDefaultSettings } from '../../../../../../shared/constants'
+import { getDefaultSettings } from '../../../../../../shared/orca-profiles/constants'
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { makeRepo, makeWorktree } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
 import WorktreeCard from '../surface/WorktreeCard'

@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../global-settings-types'
+import type { GlobalSettings } from '../settings/global-settings-types'
 import { normalizeUiLanguage } from './ui-language'
 
 type PortugueseUiLanguageSettings = Pick<

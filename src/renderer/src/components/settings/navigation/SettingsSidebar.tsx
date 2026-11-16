@@ -7,7 +7,7 @@ import type {
   SettingsNavInstallStatus
 } from '@/components/settings/navigation/settings-navigation-types'
 import type { GitHubRepositoryIdentity } from '../../../../../shared/github/repositories/repository-identity'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { cn } from '@/lib/class-names'
 import { RepoIconGlyph } from '../../repo/repo-icon'
 import { RepoForkIndicator } from '../../repo/repo-fork-indicator'

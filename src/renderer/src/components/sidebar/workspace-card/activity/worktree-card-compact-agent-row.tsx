@@ -28,7 +28,6 @@ import {
 } from '../../../../../../shared/program-status/presentation'
 import { resolveRowProgramStatus } from '@/lib/program-status/agent-row-presentation'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { useHasWorktreeCardUnreadRollup } from '../surface/worktree-card-title-status'
 
 function getCompactAgentPrimary(
   agent: DashboardAgentRowData,
@@ -133,7 +132,6 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   isUnvisited = false
 }: CompactAgentRowProps) {
   const t = useTranslate()
-  const hasUnreadRollup = useHasWorktreeCardUnreadRollup()
   const view = useClaudeAgentRowView(agent)
   const highlighted = view ? view.current && view.focused : isFocusedPane
   const hasChildDisclosure =
@@ -244,7 +242,6 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
             tooltipSide="right"
             progress={presentation.progress}
             unread={isUnvisited}
-            unreadDisplay={hasUnreadRollup ? 'label' : 'dot'}
           />
           {!hideIcon && (
             <span className="inline-flex shrink-0" title={formatAgentTypeLabel(agent.agentType)}>

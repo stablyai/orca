@@ -7,10 +7,10 @@ export type BrowserGuestDiscardProtection = {
   reason:
     | 'clean'
     | 'edits'
+    | 'post'
     | 'audio'
     | 'frames'
     | 'capture'
-    | 'history'
     | 'observer'
     | 'gone'
     | 'held'
