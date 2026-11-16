@@ -140,7 +140,7 @@ export function usePickedLocalPathsAutoAdd({
   pickedLocalPaths: readonly string[] | null
   pickedLocalPathsHandledRef: RefObject<readonly string[] | null>
   localAddGenRef: RefObject<number>
-  offerWslHost?: (path: string, source: AddRepoExistingWorkspaceSource) => boolean
+  offerWslHost?: (path: string, source: AddRepoExistingWorkspaceSource) => Promise<boolean>
   addPaths: (
     paths: readonly string[],
     source: AddRepoExistingWorkspaceSource,
@@ -158,22 +158,28 @@ export function usePickedLocalPathsAutoAdd({
       return
     }
     pickedLocalPathsHandledRef.current = pickedLocalPaths
-    if (
-      pickedLocalPaths.length === 1 &&
-      offerWslHost?.(pickedLocalPaths[0], 'local_folder_picker')
-    ) {
-      return
-    }
-    const gen = ++localAddGenRef.current
-    setIsAdding(true)
-    void runPickedLocalPathsBatch({
-      paths: pickedLocalPaths,
-      gen,
-      isCurrentGen: () => gen === localAddGenRef.current,
-      addPaths,
-      onUnsettled,
-      onFinally: onFinishAttempt
-    })
+    const offerGen = localAddGenRef.current
+    void (async () => {
+      if (
+        pickedLocalPaths.length === 1 &&
+        (await offerWslHost?.(pickedLocalPaths[0], 'local_folder_picker'))
+      ) {
+        return
+      }
+      if (offerGen !== localAddGenRef.current) {
+        return
+      }
+      const gen = ++localAddGenRef.current
+      setIsAdding(true)
+      await runPickedLocalPathsBatch({
+        paths: pickedLocalPaths,
+        gen,
+        isCurrentGen: () => gen === localAddGenRef.current,
+        addPaths,
+        onUnsettled,
+        onFinally: onFinishAttempt
+      })
+    })()
   }, [
     addPaths,
     isOpen,

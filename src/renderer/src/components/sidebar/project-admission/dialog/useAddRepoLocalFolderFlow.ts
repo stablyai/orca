@@ -64,7 +64,7 @@ export function useAddRepoLocalFolderFlow({
   setIsAdding: (isAdding: boolean) => void
   setAddProjectBusyLabel: (label: string | null) => void
   /** True when it held this single local path to offer running its WSL distro as a host. */
-  offerWslHost?: (path: string, source: AddRepoExistingWorkspaceSource) => boolean
+  offerWslHost?: (path: string, source: AddRepoExistingWorkspaceSource) => Promise<boolean>
 }): {
   handleBrowse: () => Promise<void>
   resetLocalFolderFlow: () => void
@@ -258,9 +258,13 @@ export function useAddRepoLocalFolderFlow({
       return
     }
     droppedLocalPathHandledRef.current = droppedLocalPath
-    if (!offerWslHost?.(droppedLocalPath, 'local_folder_picker')) {
-      void handleAddLocalPath(droppedLocalPath, 'local_folder_picker')
-    }
+    const gen = localAddGenRef.current
+    void (async () => {
+      const held = (await offerWslHost?.(droppedLocalPath, 'local_folder_picker')) ?? false
+      if (!held && gen === localAddGenRef.current) {
+        await handleAddLocalPath(droppedLocalPath, 'local_folder_picker')
+      }
+    })()
   }, [droppedLocalPath, handleAddLocalPath, isOpen, offerWslHost])
 
   const finishAddAttempt = useCallback((): void => {
@@ -290,7 +294,10 @@ export function useAddRepoLocalFolderFlow({
       if (paths.length === 0 || gen !== localAddGenRef.current) {
         return
       }
-      if (paths.length === 1 && offerWslHost?.(paths[0], 'local_folder_picker')) {
+      if (paths.length === 1 && (await offerWslHost?.(paths[0], 'local_folder_picker'))) {
+        return
+      }
+      if (gen !== localAddGenRef.current) {
         return
       }
       await handleAddLocalPaths(paths, 'local_folder_picker', gen)

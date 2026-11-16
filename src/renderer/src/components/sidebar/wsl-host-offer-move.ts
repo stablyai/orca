@@ -33,7 +33,7 @@ export function wslHostOfferProjectRef(path: string): WslMoveRowRef | null {
 
 /** Opens the move with only the offered project checked; the user's Move is what moves it. */
 export function moveWslHostOfferProject(offer: WslHostOffer): void {
-  const only = wslHostOfferProjectRef(offer.path)
+  const only = wslHostOfferProjectRef(offer.sharePath ?? offer.path)
   if (only) {
     openWslMoveDialogFor(offer.distro, only)
     return

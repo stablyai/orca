@@ -1,4 +1,4 @@
-import { useCallback, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { useAppStore } from '@/store/index'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -12,10 +12,12 @@ import {
   existingWslHostOfferFor,
   readExistingWslHosts,
   readWslHostOfferGate,
+  shouldOfferWslHost,
   wslHostOfferFor,
   type ExistingWslHostOffer
 } from '../../wsl-host-offer'
 import type { WslHostOffer } from '../../wsl-host-offer-actions'
+import { resolveWslMappedDrivePath } from '../../wsl-mapped-drive-path'
 
 type PendingOffer =
   | ({ kind: 'run-host' } & WslHostOffer)
@@ -25,7 +27,7 @@ type PendingOffer =
       source: AddRepoExistingWorkspaceSource
     } & ExistingWslHostOffer)
 
-/** Holds a local `\\wsl.localhost` add to offer its distro as a host; reads only the path (E9). */
+/** Holds a local `\\wsl.localhost` (or distro-mapped drive) add to offer its distro as a host (E9). */
 export function useAddRepoWslHostOffer(
   isOpen: boolean,
   {
@@ -40,7 +42,7 @@ export function useAddRepoWslHostOffer(
   },
   droppedHostPath: DroppedHostPath | null
 ): {
-  offer: (path: string, source: AddRepoExistingWorkspaceSource) => boolean
+  offer: (path: string, source: AddRepoExistingWorkspaceSource) => Promise<boolean>
   notice: (
     addLocalPath: (path: string, source: AddRepoExistingWorkspaceSource) => Promise<unknown>
   ) => ReactNode
@@ -64,23 +66,41 @@ export function useAddRepoWslHostOffer(
     setSeenDrop(droppedHostPath)
     setHostPath(null)
   }
+  const openRef = useRef(isOpen)
+  useEffect(() => {
+    openRef.current = isOpen
+  }, [isOpen])
   const offer = useCallback(
-    (path: string, source: AddRepoExistingWorkspaceSource): boolean => {
+    async (path: string, source: AddRepoExistingWorkspaceSource): Promise<boolean> => {
       if (selectedHostId !== LOCAL_EXECUTION_HOST_ID) {
         return false
       }
-      const state = useAppStore.getState()
+      const before = useAppStore.getState()
+      const hosts = readExistingWslHosts(before)
+      // Only a path an offer could take asks main; ordinary adds never wait on it.
+      const mightOffer = hosts.length > 0 || shouldOfferWslHost(readWslHostOfferGate(before))
+      const sharePath = mightOffer ? await resolveWslMappedDrivePath(path) : null
+      if (sharePath && !openRef.current) {
+        // Closed while main resolved the drive: nothing to offer, and nothing to add either.
+        return true
+      }
+      const offerPath = sharePath ?? path
+      const state = sharePath ? useAppStore.getState() : before
       // A distro that already runs as a host offers that host, not a second one.
-      const existing = existingWslHostOfferFor(path, readExistingWslHosts(state))
+      const existing = existingWslHostOfferFor(
+        offerPath,
+        sharePath ? readExistingWslHosts(state) : hosts
+      )
       if (existing) {
         setPending({ kind: 'existing-host', path, source, ...existing })
         return true
       }
-      const distro = wslHostOfferFor(path, readWslHostOfferGate(state))
+      const distro = wslHostOfferFor(offerPath, readWslHostOfferGate(state))
       if (!distro) {
         return false
       }
-      setPending({ kind: 'run-host', path, distro, source })
+      // Accepting adds the share spelling, the one a move onto the host can take.
+      setPending({ kind: 'run-host', path, distro, source, ...(sharePath ? { sharePath } : {}) })
       return true
     },
     [selectedHostId]

@@ -19,6 +19,7 @@ import { userNamedFileAccess } from '@/lib/files/access/local-file-access'
 import { listWslHostWindowsPathAccess } from '@/lib/files/os-open/windows-path-access'
 import { addOnThisComputerLabel } from '@/lib/workspace/creation/wsl-host-windows-drive-refusal-toast'
 import type { AppState } from '@/store/types'
+import { resolveWslMappedDrivePath } from '../../wsl-mapped-drive-path'
 
 function getWslDropHosts(state: Pick<AppState, 'runtimeEnvironments' | 'settings'>) {
   return listWslHostWindowsPathAccess(
@@ -124,13 +125,24 @@ export function useSidebarProjectDrop(): {
         )
         return
       }
+      // A drive mapped to a host's distro share routes to that host; any other drive as before.
+      const sharePath =
+        getWslDropHosts(useAppStore.getState()).length > 0
+          ? await resolveWslMappedDrivePath(pathResolution.path)
+          : null
       // Why: re-read live state; a runtime can be focused while the drop is prepared.
       const state = useAppStore.getState()
-      const route = routeSidebarProjectDrop({
-        path: pathResolution.path,
+      const routeArgs = {
         focusedRuntimeId: getFocusedDropRuntimeId(state.settings),
         wslHosts: getWslDropHosts(state)
-      })
+      }
+      const shareRoute = sharePath
+        ? routeSidebarProjectDrop({ ...routeArgs, path: sharePath })
+        : null
+      const route =
+        shareRoute?.kind === 'wsl-host'
+          ? shareRoute
+          : routeSidebarProjectDrop({ ...routeArgs, path: pathResolution.path })
       if (refuseSidebarProjectDrop(route)) {
         return
       }

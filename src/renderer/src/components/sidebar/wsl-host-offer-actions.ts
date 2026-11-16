@@ -4,6 +4,8 @@ import type { WslHostAddResult } from '../../../../shared/remote-runtime/wsl-hos
 
 export type WslHostOffer = {
   path: string
+  /** The `\\wsl.localhost` spelling of a path on a distro-mapped drive, which the move takes. */
+  sharePath?: string
   distro: string
   source: AddRepoExistingWorkspaceSource
 }
@@ -42,7 +44,7 @@ export async function acceptWslHostOffer(
     await restore()
     return result
   }
-  await deps.addLocalPath(offer.path, offer.source)
+  await deps.addLocalPath(offer.sharePath ?? offer.path, offer.source)
   deps.moveAddedProject(offer)
   return null
 }
