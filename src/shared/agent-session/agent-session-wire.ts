@@ -222,6 +222,12 @@ export type AgentSessionStatusSummary = {
   serviceTier?: string
   /** Saved next-turn intent; moves clients' option stamps without a turn or model change. */
   interactionMode?: 'default' | 'plan'
+  /** Unpersisted native mode observation; a new child must establish its own report. */
+  runtimeInteractionMode?: {
+    fence: number
+    reportedAgent?: { id: string; name: string }
+    interactionModes?: readonly ('default' | 'plan')[]
+  } | null
   /** The tool the running turn is inside, else the last one it used. Absent unless `status`
    *  is 'working'. */
   toolName?: string

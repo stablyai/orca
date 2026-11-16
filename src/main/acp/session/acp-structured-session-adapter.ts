@@ -14,7 +14,11 @@ import type {
 import { rejectedAcpDispatch } from '../turns/acp-dispatch-rejection'
 import type { AcpStructuredSession } from './acp-structured-session-contract'
 
-import { applyAcpMessageOptions } from '../turns/acp-message-execution-options'
+import {
+  applyAcpMessageOptions,
+  assertAcpMessageInteractionMode
+} from '../turns/acp-message-execution-options'
+import { acpInteractionModeError } from '../options/acp-interaction-mode-error'
 import { AgentSessionOptionRejectedError } from '../../native-chat/agent-session-wire/options/structured-agent-session-option-error'
 import * as stop from '../turns/acp-structured-stop'
 import { acpDispatchPrompt } from '../turns/acp-prompt-content'
@@ -133,13 +137,14 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
       input.signal?.throwIfAborted()
       await input.beforeDispatch?.()
       input.signal?.throwIfAborted()
-      const commit = fallback.admitting(() =>
+      const commit = fallback.admitting(() => {
+        assertAcpMessageInteractionMode(session, input.executionOptions?.interactionMode)
         session.turns.dispatch({
           clientMessageId: input.clientMessageId,
           prompt,
           requestedAt: input.requestedAt ?? this.now()
         })
-      )
+      })
       await admitStructuredAgentSessionInput(input.admitFreshInput, commit)
       // Admission precedes provider confirmation of the send.
       return { state: 'admitted' }
@@ -185,6 +190,9 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
     const session = this.live(input.sessionId)
     const write = session.options.write(input.key, input.value)
     if (!write) {
+      if (input.key === 'interactionMode') {
+        throw acpInteractionModeError(input.value, 'unavailable')
+      }
       throw new AgentSessionOptionRejectedError(
         `${session.spec.agent} offers no session option named ${input.key}`
       )

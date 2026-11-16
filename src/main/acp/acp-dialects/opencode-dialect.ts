@@ -116,6 +116,7 @@ function normalizeToolUpdate(update: ToolCallUpdate): ToolCallUpdate {
 }
 
 export const OPENCODE_ACP_DIALECT: AcpDialect = {
+  interactionModes: { default: 'build', plan: 'plan' },
   clientCapabilities: {
     elicitation: { form: {} },
     _meta: { [OPENCODE_CHILD_SESSION_CAPABILITY]: true }

@@ -20619,6 +20619,9 @@
         "providerResponseFailed": "{{agent}} couldn't finish this response. Open Details for more information.",
         "selectedModel": "the selected model",
         "providerRejected": "{{agent}} didn't accept this message.",
+        "interactionModeUnavailable": "{{agent}} does not offer the {{mode}} agent. Choose an available mode and send again.",
+        "interactionModeUnconfirmed": "{{agent}} did not confirm the {{mode}} agent, so this message was not sent. Try again or choose another mode.",
+        "interactionModeFailed": "Could not switch {{agent}} to the {{mode}} agent, so this message was not sent. Try again or choose another mode.",
         "providerRejectedQuoted": "{{agent}} didn't accept this message: {{detail}}.",
         "attachmentEmpty": "An image on this message is empty, so the message was not sent.",
         "attachmentTooLarge": "An image on this message is too large, so the message was not sent.",
@@ -20838,6 +20841,8 @@
       "composer": {
         "send": "Send",
         "planMode": "Plan",
+        "planNextMessage": "Plan for next message",
+        "activeAgent": "Active: {{agent}}",
         "moreControls": "More chat controls",
         "exitPlanMode": "Exit plan mode",
         "alternateSteerHint": "{{shortcut}} to steer",

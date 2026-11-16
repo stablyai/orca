@@ -76,6 +76,24 @@ export const SEND_FAILURE_COPY = {
     ),
   providerRejected: (values) =>
     translate('session.failure.providerRejected', "{{agent}} didn't accept this message.", values),
+  interactionModeUnavailable: (values) =>
+    translate(
+      'session.failure.interactionModeUnavailable',
+      AGENT_SESSION_FAILURE_COPY.interactionModeUnavailable,
+      values
+    ),
+  interactionModeUnconfirmed: (values) =>
+    translate(
+      'session.failure.interactionModeUnconfirmed',
+      AGENT_SESSION_FAILURE_COPY.interactionModeUnconfirmed,
+      values
+    ),
+  interactionModeFailed: (values) =>
+    translate(
+      'session.failure.interactionModeFailed',
+      AGENT_SESSION_FAILURE_COPY.interactionModeFailed,
+      values
+    ),
   providerRejectedQuoted: (values) =>
     translate(
       'session.failure.providerRejectedQuoted',

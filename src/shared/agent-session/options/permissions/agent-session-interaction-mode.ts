@@ -27,8 +27,13 @@ export function structuredAgentSessionInteractionDescriptor(
       choices: [
         { value: 'default', label: 'Build' },
         { value: 'plan', label: 'Plan' }
-      ]
+      ].filter(
+        (choice) =>
+          state.interactionModes === undefined ||
+          state.interactionModes.some((mode) => mode === choice.value)
+      )
     },
+    ...(state.reportedAgent ? { reportedAgent: state.reportedAgent } : {}),
     valueSource: state.acceptedInputSources?.interactionMode
       ? (tracked?.source ?? 'dispatched')
       : 'default',
@@ -43,8 +48,13 @@ export function agentSessionInteractionCommand(
   draft: string
 ): AgentSessionInteractionMode | null {
   draft = draft.trimEnd()
-  if (draft === '/plan' && (agent === 'claude' || agent === 'codex')) {
+  if (draft === '/plan' && ['claude', 'codex', 'opencode', 'opencode2'].includes(agent)) {
     return 'plan'
   }
   return draft === '/default' && agent === 'codex' ? 'default' : null
+}
+
+export function offersAgentSessionPlanMode(snapshot: readonly SessionOptionDescriptor[]): boolean {
+  const mode = snapshot.find((entry) => entry.id === 'interactionMode')
+  return mode?.kind.type === 'select' && mode.kind.choices.some((choice) => choice.value === 'plan')
 }

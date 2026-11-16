@@ -69,7 +69,8 @@ function revokedLiveSummary(summary: AgentSessionStatusSummary): AgentSessionSta
     !summary.hostExecutionOwned &&
     !summary.stopping &&
     !summary.restartResume &&
-    summary.runtimePermission === null
+    summary.runtimePermission === null &&
+    summary.runtimeInteractionMode == null
   ) {
     return null
   }
@@ -80,7 +81,7 @@ function revokedLiveSummary(summary: AgentSessionStatusSummary): AgentSessionSta
     restartResume: _restartResume,
     ...retained
   } = summary
-  return { ...retained, runtimePermission: null }
+  return { ...retained, runtimePermission: null, runtimeInteractionMode: null }
 }
 
 /** A provider head is a query dependency, never a client-side ownership index. */

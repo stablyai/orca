@@ -1,6 +1,8 @@
 import { abortSignalReason } from '../../../shared/concurrency/abort-signal-reason'
 import type { AcpStructuredConnection } from '../process/acp-structured-connection'
 import type { AcpOptionWrite, AcpStructuredOptions } from './acp-structured-options'
+import { AcpAgentError } from '../transport/acp-errors'
+import { acpInteractionModeError } from './acp-interaction-mode-error'
 
 export type AcpOptionWriteBound = {
   agent: string
@@ -9,23 +11,50 @@ export type AcpOptionWriteBound = {
   onUncertain?: (error: Error) => void
 }
 
-/** A native setter carries its own call deadline, so an unanswered one fails only its send. */
+/** Unanswered mode writes retire their child: cancellation cannot prove the native mode stayed put. */
 export function writeAcpSessionOption(
   connection: Pick<AcpStructuredConnection, 'setConfigOption' | 'setModel'>,
   options: AcpStructuredOptions,
   write: AcpOptionWrite,
-  { onUncertain: _retire, ...bound }: AcpOptionWriteBound & { key: string; value: string }
+  bound: AcpOptionWriteBound & { key: string; value: string }
 ): Promise<void> {
   const { timeoutMs } = bound
-  return boundAcpOptionWrite(options, bound, () =>
-    write.method === 'config'
-      ? connection
-          .setConfigOption(write.configId, write.value, undefined, undefined, timeoutMs)
-          .then((result) => () => options.adoptConfigOptions(result.configOptions))
-      : connection
-          .setModel(write.modelId, undefined, timeoutMs)
-          .then(() => () => options.adoptModel(write.modelId))
-  )
+  const mode = bound.key === 'interactionMode'
+  const guarded = {
+    ...bound,
+    onUncertain: mode
+      ? (error: Error) => {
+          if (!bound.signal?.aborted) {
+            bound.onUncertain?.(error)
+          }
+        }
+      : undefined
+  }
+  return boundAcpOptionWrite(options, guarded, () => {
+    const modeRevision = options.modeObservationRevision
+    const native =
+      write.method === 'config'
+        ? connection
+            .setConfigOption(write.configId, write.value, undefined, undefined, timeoutMs)
+            .then((result) => {
+              options.adoptConfigOptions(result.configOptions, modeRevision)
+              return () => {
+                if (mode && !options.matchesInteractionMode(bound.value)) {
+                  throw acpInteractionModeError(bound.value, 'unconfirmed')
+                }
+              }
+            })
+        : connection.setModel(write.modelId, undefined, timeoutMs).then(() => {
+            options.adoptModel(write.modelId)
+            return () => {}
+          })
+    return native.catch((error: unknown) => {
+      if (mode && !(error instanceof AcpAgentError)) {
+        bound.onUncertain?.(error instanceof Error ? error : new Error(String(error)))
+      }
+      throw error
+    })
+  })
 }
 
 /** Only the current, still-awaited write may establish reusable option proof. */

@@ -9,6 +9,7 @@ import { compareAppVersions } from '../../../shared/app-lifecycle/identity/app-v
 import { AcpAgentError } from '../transport/acp-errors'
 import { AcpModelCommandRefusedError } from './acp-model-command'
 import type { AcpStructuredSession } from '../session/acp-structured-session-contract'
+import { acpInteractionModeError } from '../options/acp-interaction-mode-error'
 import {
   acpAuthenticationRequired,
   acpPromptErrorDetail,
@@ -18,7 +19,10 @@ import {
 export async function applyAcpMessageOptions(
   session: AcpStructuredSession,
   options: AgentSessionExecutionOptions | undefined,
-  setOption: (key: 'model' | 'effort' | 'fastMode', value: string) => Promise<unknown>,
+  setOption: (
+    key: 'interactionMode' | 'model' | 'effort' | 'fastMode',
+    value: string
+  ) => Promise<unknown>,
   isCurrent: () => boolean,
   signal?: AbortSignal,
   /** The agent's own model command when its model option is absent or rejects the value. */
@@ -27,19 +31,26 @@ export async function applyAcpMessageOptions(
   if (!options) {
     return true
   }
-  for (const key of ['model', 'effort', 'fastMode'] as const) {
+  for (const key of ['interactionMode', 'model', 'effort', 'fastMode'] as const) {
     const value = options[key]
     if (
       value === undefined ||
       session.options.appliedInput.get(key) === value ||
       (key === 'fastMode'
         ? !session.options.write(key, value)
-        : session.options.matchesNativeRestoredOption(key, value) ||
+        : (key !== 'interactionMode' && session.options.matchesNativeRestoredOption(key, value)) ||
           (key === 'effort' && !session.options.offersEffort(value)))
     ) {
       continue
     }
     try {
+      if (key === 'interactionMode' && session.turns.running) {
+        await session.turns.whenIdle(signal)
+        signal?.throwIfAborted()
+        if (!isCurrent()) {
+          return false
+        }
+      }
       if (key === 'model' && !session.options.write(key, value)) {
         if (!modelCommand) {
           continue
@@ -58,11 +69,23 @@ export async function applyAcpMessageOptions(
       }
     } catch (error) {
       signal?.throwIfAborted()
-      if (!isCurrent()) {
-        return false
-      }
       if (error instanceof AgentSessionOptionRejectedError) {
         throw error
+      }
+      if (key === 'interactionMode') {
+        throw acpInteractionModeError(
+          value,
+          'failed',
+          error instanceof AcpAgentError
+            ? withProviderDiagnostic(
+                error,
+                providerDiagnostic(acpPromptErrorDetail(session.spec.dialect, error), 'person')
+              )
+            : error
+        )
+      }
+      if (!isCurrent()) {
+        return false
       }
       if (error instanceof AcpModelCommandRefusedError) {
         throw modelCommandRefusal(error, value, await acpAgentUpdate(session))
@@ -83,7 +106,23 @@ export async function applyAcpMessageOptions(
       return false
     }
   }
+  assertAcpMessageInteractionMode(session, options.interactionMode)
   return true
+}
+
+export function assertAcpMessageInteractionMode(
+  session: Pick<AcpStructuredSession, 'options'>,
+  value: string | undefined
+): void {
+  if (value === undefined) {
+    return
+  }
+  if (!session.options.write('interactionMode', value)) {
+    throw acpInteractionModeError(value, 'unavailable')
+  }
+  if (!session.options.matchesInteractionMode(value)) {
+    throw acpInteractionModeError(value, 'unconfirmed')
+  }
 }
 
 /** Orca's own words name the agent and the next step; the agent's reply stays a diagnostic. */

@@ -4,6 +4,7 @@ import { projectRuntimePermission } from '../../../../../../src/shared/agent-ses
 import { useMobileStructuredSelectionController } from './use-mobile-structured-selection-controller'
 import type { AgentSessionRewindSupport } from '../../../../../../src/shared/agent-session/lifecycle/rewind/agent-session-rewind'
 import type { AgentSessionOptionsResult } from '../../../../../../src/shared/agent-session/options/protocol/agent-session-options-result'
+import type { StructuredAgentSessionOptionState } from '../../../../../../src/shared/agent-session/options/structured-agent-session-options'
 import { callAgentSession } from '../../agent-session/mobile-structured-agent-session-rpc'
 import { forgetMobileCreatedStructuredSession } from '../../agent-session/mobile-created-structured-sessions'
 import { createStructuredAgentSessionOptionsReadOwner } from '../../../../../../src/shared/agent-session/options/reconciliation/structured-agent-session-options-read-owner'
@@ -13,7 +14,10 @@ import type { AgentSessionOptionCatalog } from '../../../../../../src/shared/age
 import { usesInstalledAgentModelCatalog } from '../../../../../../src/shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 import { structuredAgentSessionFirstFrameOptionState } from '../../../../../../src/shared/agent-session/options/view/structured-agent-session-first-frame'
 import type { HostModelCatalogCache } from './use-mobile-host-model-catalog-upgrade'
-import { structuredAgentSessionReportsAtFence } from '../../../../../../src/shared/agent-session/options/reconciliation/structured-agent-session-runtime-reports'
+import {
+  structuredAgentSessionReportsAtFence,
+  projectRuntimeInteractionMode
+} from '../../../../../../src/shared/agent-session/options/reconciliation/structured-agent-session-runtime-reports'
 
 // Matches the transcripts this view retains per chat.
 const MAX_RETAINED_CHAT_READERS = 32
@@ -97,13 +101,19 @@ export function useMobileStructuredOptionState(args: {
     T extends {
       reportedPermissionMode?: string | null
       reportedEffort?: string
+      reportedAgent?: StructuredAgentSessionOptionState['reportedAgent']
+      interactionModes?: StructuredAgentSessionOptionState['interactionModes']
       launchPermissionMode?: string
     }
   >(
     state: T
   ): T => ({
     ...projectRuntimePermission(
-      structuredAgentSessionReportsAtFence(state, reader.getSnapshot().support?.fence, fence),
+      projectRuntimeInteractionMode(
+        structuredAgentSessionReportsAtFence(state, reader.getSnapshot().support?.fence, fence),
+        summary?.runtimeInteractionMode,
+        fence
+      ),
       summary,
       fence
     ),

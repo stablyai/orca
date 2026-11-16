@@ -1,4 +1,5 @@
 import { FakeAcpChild } from '../../process/testing/acp-scripted-connection.test-fixture'
+import type { SessionConfigOption } from '../../generated/acp-protocol.generated'
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -53,7 +54,7 @@ export const GROK_CONFIG_OPTIONS = [
       { value: 'low', name: 'Low' }
     ]
   }
-]
+] satisfies SessionConfigOption[]
 
 export type AcpAdapterRig = {
   rig: ProviderTimelineRig

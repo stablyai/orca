@@ -24,6 +24,7 @@ export function useNativeChatPlanMode({
   }
   return {
     disabled: !descriptor.settable || pending !== null,
+    nextMessage: descriptor.reportedAgent !== undefined,
     exit: (): void => {
       runSessionOptionSurfaceCall('default', setPending, () =>
         surface.setOption('interactionMode', 'default')
@@ -47,9 +48,14 @@ export function NativeChatComposerPlanChip({
   return (
     <NativeChatComposerModeChip
       icon={PencilRuler}
-      label={t('components.native-chat.composer.planMode', 'Plan')}
+      label={
+        control.nextMessage
+          ? t('components.native-chat.composer.planNextMessage', 'Plan for next message')
+          : t('components.native-chat.composer.planMode', 'Plan')
+      }
       exitLabel={t('components.native-chat.composer.exitPlanMode', 'Exit plan mode')}
       disabled={control.disabled}
+      keepLabel={control.nextMessage}
       onExit={() => {
         control.exit()
         onExit?.()

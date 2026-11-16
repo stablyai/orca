@@ -128,6 +128,12 @@ export const AGENT_SESSION_FAILURE_COPY = {
   modelUnavailableUpdate:
     "{{agent}} couldn't use {{detail}}. Update {{agent}} to {{minimumVersion}} or later to keep it after a restart, or pick another model and send again.",
   providerRejected: "{{agent}} didn't accept this message.",
+  interactionModeUnavailable:
+    '{{agent}} does not offer the {{mode}} agent. Choose an available mode and send again.',
+  interactionModeUnconfirmed:
+    '{{agent}} did not confirm the {{mode}} agent, so this message was not sent. Try again or choose another mode.',
+  interactionModeFailed:
+    'Could not switch {{agent}} to the {{mode}} agent, so this message was not sent. Try again or choose another mode.',
   pluginInputRequired:
     '{{agent}} stopped because the "{{plugin}}" plugin is waiting for input in a terminal pane. Disable the plugin for chat sessions, or run the task in a {{agent}} terminal.',
   providerRejectedQuoted: "{{agent}} didn't accept this message: {{detail}}.",
@@ -209,6 +215,7 @@ export type AgentSessionFailureCopyValues = {
   installedVersion?: string
   minimumVersion?: string
   agent?: string
+  mode?: string
   plugin?: string
   command?: string
   loginCommand?: string

@@ -82,6 +82,14 @@ export function structuredSessionSlashCommands(
   const offered = new Set(hostOwned.map(({ name }) => name))
   return [
     ...hostOwned,
-    ...sessionSlashCommandSuggestions(agent, reported).filter(({ name }) => !offered.has(name))
+    ...sessionSlashCommandSuggestions(agent, reported).filter(
+      ({ name }) =>
+        !offered.has(name) &&
+        !(
+          name === 'plan' &&
+          (agent === 'opencode' || agent === 'opencode2') &&
+          !interactionModeSupported
+        )
+    )
   ]
 }

@@ -1,5 +1,8 @@
 import { isAgentSessionInteractionMode } from '../../../../shared/agent-session/options/permissions/agent-session-interaction-mode'
-import { structuredAgentSessionRuntimePermission } from '../options/structured-agent-session-ran-options'
+import {
+  structuredAgentSessionRuntimePermission,
+  structuredAgentSessionRuntimeInteractionMode
+} from '../options/structured-agent-session-ran-options'
 import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
 import {
@@ -85,6 +88,9 @@ export function structuredAgentSessionStatusSummary({
       : {}),
     ...(skippedThrough ? { asyncQuestionsSkippedThrough: skippedThrough } : {}),
     runtimePermission: structuredAgentSessionRuntimePermission(session.child ?? undefined),
+    runtimeInteractionMode: structuredAgentSessionRuntimeInteractionMode(
+      session.child ?? undefined
+    ),
     // Only a working session is still being stopped; any other status already ended that work.
     ...(stopping && projected.status === 'working' ? { stopping: true as const } : {}),
     ...(record?.rewind?.phase === 'prepared' || record?.rewind?.phase === 'provider-succeeded'
@@ -203,5 +209,5 @@ export function releasedStructuredStatusSummary(
     reportedModel: _reportedModel,
     ...retained
   } = previous
-  return { ...retained, runtimePermission: null }
+  return { ...retained, runtimePermission: null, runtimeInteractionMode: null }
 }

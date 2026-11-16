@@ -38,6 +38,13 @@ export function structuredStatusSummariesEqual(
     a.fastMode === b.fastMode &&
     a.serviceTier === b.serviceTier &&
     a.interactionMode === b.interactionMode &&
+    a.runtimeInteractionMode?.fence === b.runtimeInteractionMode?.fence &&
+    a.runtimeInteractionMode?.reportedAgent?.id === b.runtimeInteractionMode?.reportedAgent?.id &&
+    a.runtimeInteractionMode?.reportedAgent?.name ===
+      b.runtimeInteractionMode?.reportedAgent?.name &&
+    a.runtimeInteractionMode?.interactionModes?.join('|') ===
+      b.runtimeInteractionMode?.interactionModes?.join('|') &&
+    (a.runtimeInteractionMode === undefined) === (b.runtimeInteractionMode === undefined) &&
     a.toolName === b.toolName &&
     a.toolInput === b.toolInput &&
     a.lastAssistantMessage === b.lastAssistantMessage &&

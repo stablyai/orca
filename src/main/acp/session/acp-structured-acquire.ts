@@ -75,7 +75,20 @@ export async function acquireAcpStructuredSession(input: {
     reattaching: boolean
     history: AcpLoadHistory | null
   } = { lane: null, reattaching: false, history: null }
-  const options = new AcpStructuredOptions(spec.dialect)
+  const options = new AcpStructuredOptions(spec.dialect, () => {
+    if (childState.isAcpReadySession(session) && !session.ended && session.journalClosed === null) {
+      const current = options.read()
+      deps.onEvent?.({
+        type: 'options-reported',
+        sessionId,
+        fence: acquire.fence,
+        acquisitionGeneration: generation,
+        reportedOptions: options.observedCurrent(permissionModes),
+        interactionModes: current.interactionModes,
+        catalogListing: { models: current.models }
+      })
+    }
+  })
   const permissionModes = acpLaunchPermissionModes(spec, launch.fullAccess)
   const prompts = new AcpStructuredPrompts(
     () => slot.lane,
@@ -177,21 +190,6 @@ export async function acquireAcpStructuredSession(input: {
         ) {
           events?.publish()
         }
-      }
-      if (
-        childState.isAcpReadySession(session) &&
-        !session.ended &&
-        event.kind === 'known' &&
-        event.notification.update.sessionUpdate === 'config_option_update'
-      ) {
-        deps.onEvent?.({
-          type: 'options-reported',
-          sessionId,
-          fence: acquire.fence,
-          acquisitionGeneration: generation,
-          reportedOptions: options.observedCurrent(permissionModes),
-          catalogListing: { models: options.read().models }
-        })
       }
     })
   )

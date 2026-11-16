@@ -7,13 +7,15 @@ export function NativeChatComposerModeChip({
   label,
   exitLabel,
   onExit,
-  disabled
+  disabled,
+  keepLabel = false
 }: {
   icon: LucideIcon
   label: string
   exitLabel: string
   onExit: () => void
   disabled?: boolean
+  keepLabel?: boolean
 }): React.JSX.Element {
   return (
     <Tooltip>
@@ -35,7 +37,7 @@ export function NativeChatComposerModeChip({
             aria-hidden
             className="hidden group-hover/mode-chip:block group-focus-visible/mode-chip:block"
           />
-          <span data-composer-label>{label}</span>
+          <span data-composer-label={keepLabel ? undefined : ''}>{label}</span>
         </Button>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>

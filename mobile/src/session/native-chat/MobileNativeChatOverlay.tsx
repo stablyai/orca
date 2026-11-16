@@ -1,4 +1,5 @@
 import { MobileQueuedMessageComposerContext } from './input/queued-messages/mobile-queued-message-composer-context'
+import { offersAgentSessionPlanMode } from '../../../../src/shared/agent-session/options/permissions/agent-session-interaction-mode'
 import { Activity, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { MobileNativeChatView, type MobileNativeChatInputLockReason } from './MobileNativeChatView'
@@ -187,8 +188,8 @@ function MobileNativeChatOverlayContent({
     () => ({
       agent,
       structured: structuredComposer ?? null,
-      interactionModeSupported: controller.nativeChatSessionOptions?.controller.snapshot.some(
-        (entry) => entry.id === 'interactionMode'
+      interactionModeSupported: offersAgentSessionPlanMode(
+        controller.nativeChatSessionOptions?.controller.snapshot ?? []
       ),
       skillDiscovery: controller.nativeChatSkills,
       onNeedSkills: controller.loadNativeChatSkills,

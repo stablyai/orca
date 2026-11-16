@@ -1,4 +1,4 @@
-import { spacing } from '../../../../theme/mobile-theme'
+import { colors, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { composerInputStyles } from '../../../../components/composer-input/composer-input-styles'
 
@@ -14,6 +14,11 @@ export const mobileNativeChatComposerStyles = themedStyleSheet(() => ({
     paddingBottom: spacing.sm
   },
   bar: composerInputStyles.box,
+  activeAgent: {
+    color: colors.textMuted,
+    fontSize: typography.metaSize,
+    paddingHorizontal: spacing.sm
+  },
   leadingControls: {
     flex: 1,
     minWidth: 0,

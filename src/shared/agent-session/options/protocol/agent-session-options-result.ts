@@ -48,6 +48,8 @@ export type AgentSessionOptionsResult = {
   listedModelIds?: string[]
   /** Session/account/transport support. Absent means unknown, never unsupported. */
   fastModeSupport?: AgentSessionFastModeSupport
+  /** Live native choices; absent is unknown, an empty list offers neither Build nor Plan. */
+  interactionModes?: readonly ('default' | 'plan')[]
   current: {
     /** Accepted input origins; an empty map excludes all display-only observations. */
     acceptedInputSources?: AgentSessionAcceptedInputSources
@@ -63,6 +65,8 @@ export type AgentSessionOptionsResult = {
     serviceTier?: string
     /** Present only on hosts offering native Build/Plan; display alone is not accepted intent. */
     interactionMode?: 'default' | 'plan'
+    /** Child-scoped native agent, for display only; never accepted message input. */
+    reportedAgent?: { id: string; name: string }
     /** The permission mode a start runs now; absent from a host or agent with no picker. */
     permissionMode?: string
     /** Current startup report or accepted fresh-turn policy: null means reported but not a named Orca mode. */

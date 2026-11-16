@@ -7,6 +7,7 @@ import type {
 } from '../../../../../../shared/native-chat/input/commands/native-chat-slash-commands'
 import { nativeChatSessionSkills } from '../../../../../../shared/native-chat/input/commands/native-chat-skill-visibility'
 import { structuredSessionSlashCommands } from '../../../../../../shared/agent-session/view/structured-agent-session-slash-menu'
+import { offersAgentSessionPlanMode } from '../../../../../../shared/agent-session/options/permissions/agent-session-interaction-mode'
 import { withNativeChatResumeCommand } from '@/components/native-chat/composer/pickers/use-native-chat-resume-command'
 import { withNativeChatSideChatRows } from '@/components/native-chat/composer/pickers/use-native-chat-side-chat-command'
 import type { NativeChatStructuredComposerTransport } from '@/components/native-chat/composer/submit/native-chat-structured-composer-transport'
@@ -25,8 +26,9 @@ export function useNativeChatComposerCatalog(
   const reported = structuredTransport?.sessionCommands
   const conversationCommands = structuredTransport?.conversationCommands
   const compactInstructions = structuredTransport?.compactInstructions
-  const interactionModeSupported =
-    structuredTransport?.optionSnapshot.some((entry) => entry.id === 'interactionMode') === true
+  const interactionModeSupported = offersAgentSessionPlanMode(
+    structuredTransport?.optionSnapshot ?? []
+  )
   const accountUsage = structuredTransport?.accountUsage !== undefined
   const mcpPanel = structuredTransport?.mcpPanel !== undefined
   const fork = structuredTransport?.fork !== undefined

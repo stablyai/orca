@@ -1,9 +1,8 @@
+import { MobileNativeChatComposerAgentStatus } from './commands/MobileNativeChatComposerAgentStatus'
 import { getNativeChatAgentProfile } from '../../../../../src/shared/native-chat/native-chat-agent-profiles'
+import { offersAgentSessionPlanMode } from '../../../../../src/shared/agent-session/options/permissions/agent-session-interaction-mode'
 import type { NativeChatSendFollowUp } from '../../../../../src/shared/native-chat/input/composer/native-chat-follow-up-behavior'
-import {
-  recordMobileNativeChatSkillPick,
-  useMobileNativeChatDraft
-} from './drafts/mobile-native-chat-draft-store'
+import { recordMobileNativeChatSkillPick } from './drafts/mobile-native-chat-draft-store'
 import { useMobileNativeChatComposerDictation } from './dictation/use-mobile-native-chat-composer-dictation'
 import {
   focusMobileNativeChatTextDestination,
@@ -52,7 +51,7 @@ const NO_FILE_PATHS: string[] = []
 const NO_ATTACHMENTS: PendingNativeChatImage[] = []
 const NO_FILES: PendingNativeChatFile[] = []
 
-type Props = MobileNativeChatMicProps & {
+export type MobileNativeChatComposerProps = MobileNativeChatMicProps & {
   // Applies dictation's edit to the draft this composer shows; false when it can no longer take it.
   insertDictation?: (insert: (draft: string) => string) => boolean | void
   draftScopeKey?: string | null
@@ -104,7 +103,10 @@ type Props = MobileNativeChatMicProps & {
 }
 
 /** What a chat's composer sends through, which the chat view hands down from its route. */
-export type MobileNativeChatSendProps = Pick<Props, 'onSend' | 'sendFollowUp'>
+export type MobileNativeChatSendProps = Pick<
+  MobileNativeChatComposerProps,
+  'onSend' | 'sendFollowUp'
+>
 
 export function MobileNativeChatComposer({
   inputRef,
@@ -145,7 +147,7 @@ export function MobileNativeChatComposer({
   stop = null,
   sendFollowUp = null,
   steerHead
-}: Props): React.JSX.Element {
+}: MobileNativeChatComposerProps): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const fallbackInputRef = useRef<TextInputInstance>(null)
@@ -191,7 +193,7 @@ export function MobileNativeChatComposer({
     structuredCatalog: structured?.catalog,
     interactionModeSupported:
       editSession?.interactionModeSupported ??
-      sessionOptions?.controller.snapshot.some((entry) => entry.id === 'interactionMode'),
+      offersAgentSessionPlanMode(sessionOptions?.controller.snapshot ?? []),
     admitsInteractionMode: (mode) =>
       sessionOptions?.controller.optionSurface?.admits?.('interactionMode', mode) === true,
     onPickInteractionMode: (mode) => sessionOptions?.controller.setOption('interactionMode', mode),
@@ -343,6 +345,7 @@ export function MobileNativeChatComposer({
             // The lock gates sending; the draft survives and rides the next send.
             textAlignVertical="top"
           />
+          <MobileNativeChatComposerAgentStatus options={sessionOptions} />
           <View style={inputStyles.actionRow} testID="native-chat-composer-actions">
             <MobileNativeChatDictationLeading
               {...{ micActive, micStarting, micProcessing, cancelRef, trailing: contextRing.ring }}
@@ -421,11 +424,4 @@ export function MobileNativeChatComposer({
       {content}
     </MobileNativeChatComposerAllocation>
   )
-}
-
-export function MobileNativeChatDraftComposer({
-  draftKey,
-  ...props
-}: Omit<Props, 'value'> & { draftKey: string | null }): React.JSX.Element {
-  return <MobileNativeChatComposer {...props} value={useMobileNativeChatDraft(draftKey)} />
 }

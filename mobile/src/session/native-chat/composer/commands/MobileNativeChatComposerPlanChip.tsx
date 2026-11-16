@@ -26,7 +26,11 @@ export function MobileNativeChatComposerPlanChip({
   return (
     <MobileNativeChatComposerModeChip
       icon={PencilRuler}
-      label={t('components.native-chat.composer.planMode', 'Plan')}
+      label={
+        descriptor.reportedAgent
+          ? t('components.native-chat.composer.planNextMessage', 'Plan for next message')
+          : t('components.native-chat.composer.planMode', 'Plan')
+      }
       exitLabel={t('components.native-chat.composer.exitPlanMode', 'Exit plan mode')}
       testID="native-chat-plan-chip"
       disabled={!descriptor.settable || pending}

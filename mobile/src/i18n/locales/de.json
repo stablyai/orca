@@ -1133,6 +1133,8 @@
     "native-chat": {
       "composer": {
         "planMode": "Planen",
+        "planNextMessage": "Plan für nächste Nachricht",
+        "activeAgent": "Aktiv: {{agent}}",
         "exitPlanMode": "Planungsmodus verlassen"
       }
     }
@@ -2200,6 +2202,9 @@
       "providerResponseFailed": "{{agent}} konnte diese Antwort nicht abschließen. Öffnen Sie die Details für weitere Informationen.",
       "selectedModel": "das ausgewählte Modell",
       "providerRejected": "{{agent}} hat diese Nachricht nicht angenommen.",
+      "interactionModeUnavailable": "{{agent}} bietet den Agenten {{mode}} nicht an. Einen verfügbaren Modus wählen und erneut senden.",
+      "interactionModeUnconfirmed": "{{agent}} hat den Agenten {{mode}} nicht bestätigt. Die Nachricht wurde nicht gesendet. Erneut versuchen oder einen anderen Modus wählen.",
+      "interactionModeFailed": "Der Wechsel von {{agent}} zum Agenten {{mode}} ist fehlgeschlagen. Die Nachricht wurde nicht gesendet. Erneut versuchen oder einen anderen Modus wählen.",
       "providerRejectedQuoted": "{{agent}} hat diese Nachricht nicht angenommen: {{detail}}.",
       "providerRetryLastError": "Letzter Fehler: {{detail}}.",
       "providerRetryNumber": "Wiederholungsversuch {{attempt}}.",

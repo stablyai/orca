@@ -151,7 +151,12 @@ function settleReady(
       )
       const sourceChild = current.child
       context.runtimeState.startupAttempts.ready(event.sessionId, child)
-      noteStructuredAgentSessionRuntimeOptions(current.child, event.reportedOptions, true)
+      noteStructuredAgentSessionRuntimeOptions(
+        current.child,
+        event.reportedOptions,
+        true,
+        event.interactionModes
+      )
       context.publishStatus?.(event.sessionId)
       await noteStructuredAgentSessionReportedOptions(
         context,
@@ -206,7 +211,12 @@ export async function settleStructuredAgentSessionOptionsReported(
   ) {
     return
   }
-  noteStructuredAgentSessionRuntimeOptions(child, event.reportedOptions)
+  noteStructuredAgentSessionRuntimeOptions(
+    child,
+    event.reportedOptions,
+    false,
+    event.interactionModes
+  )
   if (child.phase === 'starting') {
     const readiness = context.runtimeState.startupAttempts.readiness(event.sessionId, {
       generation: event.acquisitionGeneration,

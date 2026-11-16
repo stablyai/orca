@@ -103,6 +103,9 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
     snapshot: sessionOptionsSnapshot,
     focusComposer
   })
+  const reportedAgent = sessionOptionsSnapshot.find(
+    (entry) => entry.id === 'interactionMode'
+  )?.reportedAgent
   // Like Enter, a typed draft sends while the agent works; Esc still stops.
   const stops = isWorking && !hasDraft
   const handleCriticalAction = (event: React.MouseEvent<HTMLButtonElement>): void => {
@@ -261,11 +264,25 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
         />
       )
     },
+    ...(reportedAgent
+      ? [
+          {
+            id: 'active-agent',
+            content: (
+              <span className="max-w-40 truncate text-xs text-chat-foreground-faint">
+                {t('components.native-chat.composer.activeAgent', 'Active: {{agent}}', {
+                  agent: reportedAgent.name
+                })}
+              </span>
+            )
+          }
+        ]
+      : []),
     ...(mode
       ? [
           {
             id: 'plan',
-            priority: 4,
+            priority: mode.nextMessage ? undefined : 4,
             content: <NativeChatComposerPlanChip control={mode} />,
             overflow: (close: () => void) => (
               <NativeChatComposerPlanChip control={mode} onExit={close} />

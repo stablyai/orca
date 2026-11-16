@@ -262,6 +262,7 @@ export async function readStructuredAgentSessionOptions(
       ...current,
       acceptedInputSources,
       reportedModel: undefined,
+      reportedAgent: live ? options.current.reportedAgent : undefined,
       ...(reportedEffort !== undefined ? { reportedEffort } : {}),
       defaulted,
       confirmed,

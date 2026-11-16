@@ -19,6 +19,8 @@ export function routeAcpSessionEvent(
       session.options.adoptCommands(update.availableCommands)
     } else if (update.sessionUpdate === 'config_option_update') {
       session.options.adoptConfigOptions(update.configOptions)
+    } else if (update.sessionUpdate === 'current_mode_update') {
+      session.options.adoptMode(update.currentModeId)
     }
   }
   if (absorbsAcpModelCommandOutput(session.options, event)) {

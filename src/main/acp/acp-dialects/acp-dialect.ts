@@ -1,4 +1,5 @@
 import type { AgentSessionAccountKind } from '../../../shared/agent-session/agent-session-availability'
+import type { AgentSessionInteractionMode } from '../../../shared/agent-session/options/permissions/agent-session-interaction-mode'
 import type { AgentSessionContextUsage } from '../../../shared/agent-session/agent-session-context-usage'
 import type { AgentSessionUsageLimit } from '../../../shared/agent-session/failures/agent-session-usage-limit'
 import type {
@@ -135,6 +136,7 @@ export type AcpModelCommandReply =
 
 /** Hooks interpret extensions; lifecycle and row identity stay shared. */
 export type AcpDialect = {
+  interactionModes?: Readonly<Record<AgentSessionInteractionMode, string>>
   /** Effort replaces part of the native composite model selection. */
   effortChangesModel?: true
   subagentStop?: {

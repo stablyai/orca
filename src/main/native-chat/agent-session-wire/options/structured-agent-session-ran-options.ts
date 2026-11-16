@@ -1,6 +1,7 @@
 // Fill unsaved choices from execution evidence, never startup/config reports or host defaults.
 
 import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/protocol/agent-session-options-result'
+import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import type {
   StructuredAgentSessionHostDeps,
@@ -29,6 +30,7 @@ const childRuns = new WeakMap<
     reported?: RanOptions
     owed?: StructuredAgentSessionHandedOptions
     permission?: string | null
+    interaction?: Omit<NonNullable<AgentSessionStatusSummary['runtimeInteractionMode']>, 'fence'>
   }
 >()
 
@@ -48,15 +50,32 @@ export function structuredAgentSessionRuntimePermission(
 export function noteStructuredAgentSessionRuntimeOptions(
   child: StructuredAgentSessionProviderChild,
   reported: AgentSessionOptionsResult['current'],
-  initial = false
+  initial = false,
+  interactionModes?: AgentSessionOptionsResult['interactionModes']
 ): void {
   const previous = childRuns.get(child)
+  if (
+    (!initial || !previous?.interaction) &&
+    (reported.reportedAgent || interactionModes !== undefined)
+  ) {
+    childRuns.set(child, {
+      ...childRuns.get(child),
+      interaction: { reportedAgent: reported.reportedAgent, interactionModes }
+    })
+  }
   if (
     reported.reportedPermissionMode !== undefined &&
     (!initial || previous?.permission === undefined)
   ) {
     childRuns.set(child, { ...childRuns.get(child), permission: reported.reportedPermissionMode })
   }
+}
+
+export function structuredAgentSessionRuntimeInteractionMode(
+  child: StructuredAgentSessionProviderChild | undefined
+): AgentSessionStatusSummary['runtimeInteractionMode'] {
+  const interaction = child && childRuns.get(child)?.interaction
+  return child?.phase === 'ready' && interaction ? { fence: child.fence, ...interaction } : null
 }
 
 function reportedRan(reported: AgentSessionOptionsResult['current']): RanOptions | null {

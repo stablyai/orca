@@ -1,3 +1,4 @@
+import { interactionModeFailureSentence } from './agent-session-interaction-mode-failure'
 import {
   isSubmissionRejectionFact,
   type AgentSessionFailureFact,
@@ -199,6 +200,7 @@ const FAILURE_SENTENCES = {
   restartFailed: couldNot('couldNotRestart'),
   claudeEffortInvalid: (_context, _fact, _surface, say) => say('claudeEffortInvalid'),
   modelUnavailable: modelUnavailableSentence,
+  interactionModeFailed: interactionModeFailureSentence,
   modelNotSelected: (context, _fact, _surface, say) => say('modelNotSelected', agent(say, context)),
   providerUnavailable: namingAgent('providerUnavailable'),
   providerSafetyStopped: namingAgent('providerSafetyStopped'),
@@ -289,8 +291,7 @@ export function agentSessionFailureSentence(
   /** Desktop and phone pass their translations; the host keeps English. */
   say: AgentSessionFailureSay = sayAgentSessionFailureEnglish
 ): string {
-  const sentence: Sentence = FAILURE_SENTENCES[fact.kind]
-  return sentence(context, fact, surface, say)
+  return FAILURE_SENTENCES[fact.kind](context, fact, surface, say)
 }
 
 /** Preserve markers released clients hide. A write failure keeps the bare marker; its error stays in the log. */

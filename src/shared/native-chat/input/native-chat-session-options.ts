@@ -49,6 +49,8 @@ export type SessionOptionDescriptor = {
   disabledReason?: SessionOptionDisabledReason
   /** Active value when a saved selection intentionally waits for a later input. */
   activeValue?: string
+  /** Observed native agent, separate from the next-turn mode selection. */
+  reportedAgent?: { id: string; name: string }
   /** Picker-only/flip-only PTY commands need action rows rather than invented absolute control states. */
   action?: { type: 'agent-picker' | 'toggle-command' }
 }

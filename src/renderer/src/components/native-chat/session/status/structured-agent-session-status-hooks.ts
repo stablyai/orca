@@ -34,6 +34,7 @@ export function useStructuredAgentSessionPermissionStatus(
   permissionReport: ReturnType<typeof runtimePermissionReport>
   launchPermissionMode: string | undefined
   observation: 'live' | 'unverifiable'
+  runtimeInteractionMode: AgentSessionStatusSummary['runtimeInteractionMode']
 } {
   const { feed, subscribe } = useSessionFeed(sessionId, target)
   const permissionReport = useSyncExternalStore(
@@ -51,7 +52,12 @@ export function useStructuredAgentSessionPermissionStatus(
     () => feed.getSnapshot().get(sessionId)?.launchPermissionMode,
     () => undefined
   )
-  return { permissionReport, launchPermissionMode, observation }
+  const runtimeInteractionMode = useSyncExternalStore(
+    subscribe,
+    () => feed.getSnapshot().get(sessionId)?.runtimeInteractionMode,
+    () => undefined
+  )
+  return { permissionReport, launchPermissionMode, observation, runtimeInteractionMode }
 }
 
 export function useStructuredAgentSessionOptionStamp(

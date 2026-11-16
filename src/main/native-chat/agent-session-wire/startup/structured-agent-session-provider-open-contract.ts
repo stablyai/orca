@@ -14,6 +14,7 @@ export type StructuredAgentSessionProviderOpenResult = {
   newConversation?: boolean
   link?: AgentSessionProviderHandleLink
   reportedOptions: AgentSessionOptionsResult['current']
+  interactionModes?: AgentSessionOptionsResult['interactionModes']
   catalogListing?: AgentModelCatalogLiveListing
 }
 

@@ -16,6 +16,10 @@ import {
   readAgentSessionRequestTimeout,
   type AgentSessionRequestTimeout
 } from '../agent-session-request-timeout'
+import {
+  readInteractionModeFailure,
+  type AgentSessionInteractionModeFailure
+} from './agent-session-interaction-mode-failure'
 import { structuralValuesEqualIgnoringUndefined } from '../../collections/structural-value-equality'
 import {
   readAgentSessionRefusalReference,
@@ -57,6 +61,7 @@ export const AGENT_SESSION_FAILURE_KINDS = [
   'providerResponseFailed',
   'pluginInputRequired',
   'modelUnavailable',
+  'interactionModeFailed',
   /** The agent had no model when the message reached it; why (selection, sign-in) is unknown. */
   'modelNotSelected',
   'claudeEffortInvalid',
@@ -181,6 +186,7 @@ export type AgentSessionFailureFact = {
   usageLimit?: AgentSessionUsageLimit
   /** A safe option name from Orca's saved Arguments parser, never an error message. */
   argumentProblem?: AgentSessionArgumentProblem
+  interactionMode?: AgentSessionInteractionModeFailure
   /** Host-only proof the provider never received the message: Stop owes stopped history and a refused carrier owes history again. Absence means unknown; clients read kind. */
   neverReachedAgent?: true
   /** On `backgroundTaskNotStopped`: one named task, or every task the Stop reached. */
@@ -224,6 +230,7 @@ export function agentSessionFailureFact<TKind extends AgentSessionFailureKind>(
     retry?: AgentSessionProviderRetry
     usageLimit?: AgentSessionUsageLimit
     argumentProblem?: AgentSessionArgumentProblem
+    interactionMode?: AgentSessionFailureFact['interactionMode']
     neverReachedAgent?: true
     backgroundStop?: AgentSessionBackgroundStop
     requestTimeout?: AgentSessionRequestTimeout
@@ -243,6 +250,7 @@ export function agentSessionFailureFact<TKind extends AgentSessionFailureKind>(
     ...(extra.retry ? { retry: extra.retry } : {}),
     ...(extra.usageLimit ? { usageLimit: extra.usageLimit } : {}),
     ...(extra.argumentProblem ? { argumentProblem: extra.argumentProblem } : {}),
+    ...(extra.interactionMode ? { interactionMode: extra.interactionMode } : {}),
     ...(extra.neverReachedAgent ? { neverReachedAgent: true as const } : {}),
     ...(extra.backgroundStop ? { backgroundStop: extra.backgroundStop } : {}),
     ...(extra.requestTimeout ? { requestTimeout: extra.requestTimeout } : {}),
@@ -303,6 +311,7 @@ export function readAgentSessionFailureFact(value: unknown): AgentSessionFailure
   const retry = readProviderRetry(value.retry)
   const usageLimit = readAgentSessionUsageLimit(value.usageLimit)
   const argumentProblem = readAgentSessionArgumentProblem(value.argumentProblem)
+  const interactionMode = readInteractionModeFailure(value.interactionMode)
   const requestTimeout = readAgentSessionRequestTimeout(value.requestTimeout)
   return agentSessionFailureFact(value.kind, {
     ...(value.account === 'managed' || value.account === 'system'
@@ -314,6 +323,7 @@ export function readAgentSessionFailureFact(value: unknown): AgentSessionFailure
     ...(retry ? { retry } : {}),
     ...(usageLimit ? { usageLimit } : {}),
     ...(argumentProblem ? { argumentProblem } : {}),
+    ...(interactionMode ? { interactionMode } : {}),
     ...(value.neverReachedAgent === true ? { neverReachedAgent: true as const } : {}),
     ...(value.backgroundStop === 'task' || value.backgroundStop === 'all'
       ? { backgroundStop: value.backgroundStop }

@@ -1,3 +1,4 @@
+import { INTERACTION_MODE_FAILURE_PIECES } from './agent-session-interaction-mode-words-text'
 // Translate shared failure sentence pieces whole with shared English fallbacks to keep host and desktop wording aligned.
 
 import { translate } from '@/i18n/i18n'
@@ -189,6 +190,7 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
         COPY.providerRejected,
         values
       ),
+    ...INTERACTION_MODE_FAILURE_PIECES,
     providerRejectedQuoted: (values) =>
       translate(
         'components.native-chat.failureWords.providerRejectedQuoted',

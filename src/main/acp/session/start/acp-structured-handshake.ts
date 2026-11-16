@@ -271,6 +271,7 @@ export async function initializeAcpStructuredSession(
   return {
     link,
     reportedOptions: options.observedCurrent(child.permissionModes),
+    interactionModes: options.read().interactionModes,
     catalogListing: options.startListing()
   }
 }

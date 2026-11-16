@@ -12,7 +12,10 @@ import type { AgentSessionOptionCatalog } from '../../../../../../../shared/agen
 import { usesInstalledAgentModelCatalog } from '../../../../../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import type { StructuredAgentSessionOptionState } from '../../../../../../../shared/agent-session/options/structured-agent-session-options'
-import { structuredAgentSessionReportsAtFence } from '../../../../../../../shared/agent-session/options/reconciliation/structured-agent-session-runtime-reports'
+import {
+  structuredAgentSessionReportsAtFence,
+  projectRuntimeInteractionMode
+} from '../../../../../../../shared/agent-session/options/reconciliation/structured-agent-session-runtime-reports'
 import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { structuredAgentSessionOptionView } from '../../../../../../../shared/agent-session/options/view/structured-agent-session-option-view'
 import {
@@ -65,7 +68,7 @@ export function useStructuredAgentSessionOptionState(args: {
     target,
     worktree
   } = args
-  const { permissionReport, launchPermissionMode, observation } =
+  const { permissionReport, launchPermissionMode, observation, runtimeInteractionMode } =
     useStructuredAgentSessionPermissionStatus(sessionId, target, fence)
   const [reader] = useState(() =>
     createStructuredAgentSessionOptionsReadOwner(
@@ -217,7 +220,11 @@ export function useStructuredAgentSessionOptionState(args: {
       ...applyRuntimePermissionReport(
         structuredAgentSessionOptionView(
           // An older fence's report is stale from the render its fence changes in, before re-attach clears it.
-          structuredAgentSessionReportsAtFence(state, reader.supportFor(owner)?.fence, fence),
+          projectRuntimeInteractionMode(
+            structuredAgentSessionReportsAtFence(state, reader.supportFor(owner)?.fence, fence),
+            runtimeInteractionMode,
+            fence
+          ),
           seed,
           controller.overlay(),
           explicit
@@ -232,6 +239,7 @@ export function useStructuredAgentSessionOptionState(args: {
       owner,
       controller,
       permissionReport,
+      runtimeInteractionMode,
       launchPermissionMode,
       fence,
       permissionOwnSupported

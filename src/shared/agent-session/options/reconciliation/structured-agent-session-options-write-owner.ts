@@ -90,11 +90,7 @@ export function structuredAgentSessionOptionAvailability(
           ...descriptor,
           settable:
             descriptor.settable &&
-            admitsStructuredAgentSessionOption(
-              context,
-              descriptor.id,
-              descriptor.kind.currentValue ?? 'default'
-            )
+            admitsStructuredAgentSessionOption(context, descriptor.id, 'default')
         }
       : descriptor
   )

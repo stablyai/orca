@@ -42,6 +42,7 @@ export function acpStructuredAgentDefinition(spec: AcpLaunchSpec): StructuredAge
     restingOptions: {
       acceptsKey: (key) =>
         isAcpStructuredOptionKey(key) ||
+        (spec.dialect.interactionModes !== undefined && key === 'interactionMode') ||
         (spec.dialect.fastConfigId !== undefined && key === 'fastMode'),
       // Populate catalogs from live agents.
       fallbackModels: () => null,
