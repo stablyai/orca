@@ -6,7 +6,7 @@ import {
   SESSION_TAB_CLOSE_FAILED_ERROR,
   SESSION_TAB_NOT_FOUND_ERROR,
   SESSION_TAB_CLOSE_TIMEOUT_ERROR
-} from '../../../../shared/session-tab-close'
+} from '../../../../shared/workspace-layout/client-views/session-tab-close'
 import {
   guardPinnedTabClose,
   isUnifiedTabPinned,

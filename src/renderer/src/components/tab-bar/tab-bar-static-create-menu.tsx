@@ -1,7 +1,6 @@
 import React from 'react'
 import { FilePlus, FileText, Globe, Smartphone, TerminalSquare } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
-import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
 import { MobileEmulatorTabIntroCallout } from '../emulator-pane/tab-intro/MobileEmulatorTabIntroCallout'
 import { ShellIcon } from './shell-icons'
 import { useAppStore } from '@/store'
@@ -14,6 +13,15 @@ import {
 } from './use-tab-bar-runtime-model'
 import type { TabBarProps } from './tab-bar-props'
 import { resolveWindowsShellLaunchTarget } from './windows-shell-launch'
+import { TabBarCreateRow } from './TabBarCreateRow'
+import { NEW_TAB_MENU_LAYOUT_SETTING } from '../../../../shared/new-tab-menu/new-tab-menu-layout'
+import {
+  CREATE_ROW_MOBILE_EMULATOR_ID,
+  CREATE_ROW_TERMINAL_ID,
+  type TabBarCreateRowItem
+} from './tab-bar-create-row-item'
+
+const ICON_CLASS = 'size-4'
 
 export function TabBarStaticCreateMenu({
   groupId,
@@ -27,11 +35,6 @@ export function TabBarStaticCreateMenu({
   windowsShellEntries,
   defaultWindowsPowerShellImplementation,
   pwshAvailable,
-  newTerminalShortcut,
-  newBrowserShortcut,
-  newSimulatorShortcut,
-  newFileShortcut,
-  openMarkdownShortcut,
   queueNewActiveTerminalFocusAfterNewTabMenuClose
 }: {
   props: TabBarProps
@@ -47,16 +50,11 @@ export function TabBarStaticCreateMenu({
     typeof resolveWindowsPowerShellImplementationSetting
   >
   pwshAvailable: boolean
-  newTerminalShortcut: string
-  newBrowserShortcut: string
-  newSimulatorShortcut: string
-  newFileShortcut: string
-  openMarkdownShortcut: string | null
   queueNewActiveTerminalFocusAfterNewTabMenuClose: () => void
 }): React.ReactNode {
   const t = useTranslate()
   const {
-    newTabMenuOrder = 'default',
+    newTabMenuSurface = 'tab-bar',
     onNewTerminalTab,
     onNewTerminalWithShell,
     onNewBrowserTab,
@@ -64,153 +62,152 @@ export function TabBarStaticCreateMenu({
     onNewFileTab,
     onOpenFileTab
   } = props
-  const defaultTerminalMenuItems =
-    windowsShellEntries && onNewTerminalWithShell ? (
-      windowsShellEntries.map((entry, index) => {
-        const isDefault = index === 0
-        return (
-          <DropdownMenuItem
-            key={entry.shell}
-            onSelect={() => {
-              // Why: menu models shell categories not executables; preserve the user's chosen PowerShell 7+ over inbox powershell.exe.
-              queueNewActiveTerminalFocusAfterNewTabMenuClose()
-              onNewTerminalWithShell(
-                resolveWindowsShellLaunchTarget(
-                  entry.shell,
-                  defaultWindowsPowerShellImplementation,
-                  pwshAvailable
-                )
-              )
-            }}
-            className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
-          >
-            <ShellIcon shell={entry.shell} size={14} />
-            <span className="flex-1">
-              {t('auto.components.tab.bar.TabBar.7c1313d237', 'New Terminal:')} {entry.label}
-            </span>
-            {isDefault ? <DropdownMenuShortcut>{newTerminalShortcut}</DropdownMenuShortcut> : null}
-          </DropdownMenuItem>
-        )
-      })
-    ) : (
-      <DropdownMenuItem
-        onSelect={() => {
-          queueNewActiveTerminalFocusAfterNewTabMenuClose()
-          onNewTerminalTab()
-        }}
-        className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
-      >
-        <TerminalSquare className="size-4 text-muted-foreground" />
-        {t('auto.components.tab.bar.TabBar.d364f3c8d4', 'New Terminal')}
-        <DropdownMenuShortcut>{newTerminalShortcut}</DropdownMenuShortcut>
-      </DropdownMenuItem>
-    )
-  const newBrowserMenuItem =
-    !terminalOnly && managedBrowserCreationEnabled ? (
-      <DropdownMenuItem
-        onSelect={onNewBrowserTab}
-        className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
-      >
-        <Globe className="size-4 text-muted-foreground" />
-        {t('auto.components.tab.bar.TabBar.4833fb2cbe', 'New Browser Tab')}
-        <DropdownMenuShortcut>{newBrowserShortcut}</DropdownMenuShortcut>
-      </DropdownMenuItem>
-    ) : null
-  const newSimulatorMenuItem =
-    !terminalOnly && mobileEmulatorEnabled && mobileEmulatorCreationEnabled && onNewSimulatorTab ? (
-      workspaceHasSimulatorTab ? (
-        <DropdownMenuItem
-          onSelect={onNewSimulatorTab}
-          className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
-        >
-          <Smartphone className="size-4 text-muted-foreground" />
-          {t('auto.components.tab.bar.TabBar.b426bb2615', 'Go to Mobile Emulator')}
-          <DropdownMenuShortcut>{newSimulatorShortcut}</DropdownMenuShortcut>
-        </DropdownMenuItem>
-      ) : (
-        <DropdownMenuItem
-          onSelect={onNewSimulatorTab}
-          className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
-        >
-          <Smartphone className="size-4 text-muted-foreground" />
-          {t('auto.components.tab.bar.TabBar.fd2b42aaa3', 'New Mobile Emulator')}
-          <DropdownMenuShortcut>{newSimulatorShortcut}</DropdownMenuShortcut>
-        </DropdownMenuItem>
-      )
-    ) : null
-  const newMarkdownMenuItem =
-    !terminalOnly && onNewFileTab ? (
-      <DropdownMenuItem
-        onSelect={onNewFileTab}
-        className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
-      >
-        <FilePlus className="size-4 text-muted-foreground" />
-        {t('auto.components.tab.bar.TabBar.3d5d6c960d', 'New Markdown')}
-        <DropdownMenuShortcut>{newFileShortcut}</DropdownMenuShortcut>
-      </DropdownMenuItem>
-    ) : null
   const pluginNewFiles = usePluginNewFiles()
-  const pluginNewFileMenuItems =
-    !terminalOnly && onNewFileTab
-      ? pluginNewFiles.map((newFile) => (
-          <DropdownMenuItem
-            key={newFile.key}
-            onSelect={() => {
-              void useAppStore.getState().openNewPluginFileInActiveWorkspace(newFile, groupId)
-            }}
-            className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
-          >
-            <PluginContributionIcon
-              url={newFile.iconUrl}
-              fallback={FilePlus}
-              className="size-4 text-muted-foreground"
-            />
-            {newFile.title}
-          </DropdownMenuItem>
-        ))
-      : null
-  const openMarkdownMenuItem =
-    !terminalOnly && onOpenFileTab ? (
-      <DropdownMenuItem
-        onSelect={onOpenFileTab}
-        className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
-      >
-        <FileText className="size-4 text-muted-foreground" />
-        {t('auto.components.tab.bar.TabBar.4f327c8b3d', 'Open Markdown...')}
-        {openMarkdownShortcut ? (
-          <DropdownMenuShortcut>{openMarkdownShortcut}</DropdownMenuShortcut>
-        ) : null}
-      </DropdownMenuItem>
-    ) : null
-  const mobileEmulatorIntroMenuBlock =
-    showMobileEmulatorIntroCallout &&
-    !terminalOnly &&
-    isMacOs &&
-    mobileEmulatorEnabled &&
-    mobileEmulatorCreationEnabled &&
-    onNewSimulatorTab ? (
-      <MobileEmulatorTabIntroCallout />
-    ) : null
+  const simulatorAvailable = !terminalOnly && mobileEmulatorEnabled && mobileEmulatorCreationEnabled
 
-  return newTabMenuOrder === 'markdown-first' ? (
-    <>
-      {newMarkdownMenuItem}
-      {pluginNewFileMenuItems}
-      {openMarkdownMenuItem}
-      {defaultTerminalMenuItems}
-      {newBrowserMenuItem}
-      {newSimulatorMenuItem}
-      {mobileEmulatorIntroMenuBlock}
-    </>
-  ) : (
-    <>
-      {defaultTerminalMenuItems}
-      {newBrowserMenuItem}
-      {newMarkdownMenuItem}
-      {pluginNewFileMenuItems}
-      {openMarkdownMenuItem}
-      {newSimulatorMenuItem}
-      {mobileEmulatorIntroMenuBlock}
-    </>
+  const terminalItems: TabBarCreateRowItem[] =
+    windowsShellEntries && onNewTerminalWithShell
+      ? windowsShellEntries.map((entry, index) => ({
+          // Why: the first entry is the default shell, which New Terminal's shortcut opens.
+          id: index === 0 ? CREATE_ROW_TERMINAL_ID : `${CREATE_ROW_TERMINAL_ID}:${entry.shell}`,
+          locked: index === 0,
+          label: `${t('auto.components.tab.bar.TabBar.7c1313d237', 'New Terminal:')} ${entry.label}`,
+          icon: <ShellIcon shell={entry.shell} size={16} />,
+          actionId: index === 0 ? 'tab.newTerminal' : undefined,
+          run: () => {
+            // Why: menu models shell categories not executables; preserve the user's chosen PowerShell 7+ over inbox powershell.exe.
+            queueNewActiveTerminalFocusAfterNewTabMenuClose()
+            onNewTerminalWithShell(
+              resolveWindowsShellLaunchTarget(
+                entry.shell,
+                defaultWindowsPowerShellImplementation,
+                pwshAvailable
+              )
+            )
+          }
+        }))
+      : [
+          {
+            id: CREATE_ROW_TERMINAL_ID,
+            locked: true,
+            label: t('auto.components.tab.bar.TabBar.d364f3c8d4', 'New Terminal'),
+            icon: <TerminalSquare className={ICON_CLASS} />,
+            actionId: 'tab.newTerminal',
+            run: () => {
+              queueNewActiveTerminalFocusAfterNewTabMenuClose()
+              onNewTerminalTab()
+            }
+          }
+        ]
+  const browserItems: TabBarCreateRowItem[] =
+    !terminalOnly && managedBrowserCreationEnabled
+      ? [
+          {
+            id: 'browser',
+            label: t('auto.components.tab.bar.TabBar.4833fb2cbe', 'New Browser Tab'),
+            icon: <Globe className={ICON_CLASS} />,
+            actionId: 'tab.newBrowser',
+            run: onNewBrowserTab
+          }
+        ]
+      : []
+  const markdownItems: TabBarCreateRowItem[] =
+    !terminalOnly && onNewFileTab
+      ? [
+          {
+            id: 'markdown',
+            label: t('auto.components.tab.bar.TabBar.3d5d6c960d', 'New Markdown'),
+            icon: <FilePlus className={ICON_CLASS} />,
+            actionId: 'tab.newMarkdown',
+            run: onNewFileTab
+          },
+          // Plugin file types create files the same way, so they travel with New Markdown.
+          ...pluginNewFiles.map((newFile): TabBarCreateRowItem => ({
+            id: `plugin-file:${newFile.key}`,
+            label: newFile.title,
+            detail: newFile.pluginName,
+            icon: (
+              <PluginContributionIcon
+                url={newFile.iconUrl}
+                fallback={FilePlus}
+                className={ICON_CLASS}
+              />
+            ),
+            run: () => {
+              void useAppStore.getState().openNewPluginFileInActiveWorkspace(newFile, groupId)
+            }
+          }))
+        ]
+      : []
+  const openMarkdownItems: TabBarCreateRowItem[] =
+    !terminalOnly && onOpenFileTab
+      ? [
+          {
+            id: 'open-markdown',
+            label: t('auto.components.tab.bar.TabBar.4f327c8b3d', 'Open Markdown...'),
+            icon: <FileText className={ICON_CLASS} />,
+            actionId: 'tab.openMarkdown',
+            run: onOpenFileTab
+          }
+        ]
+      : []
+  const simulatorItems: TabBarCreateRowItem[] =
+    onNewSimulatorTab && simulatorAvailable
+      ? [
+          {
+            id: CREATE_ROW_MOBILE_EMULATOR_ID,
+            label: workspaceHasSimulatorTab
+              ? t('auto.components.tab.bar.TabBar.b426bb2615', 'Go to Mobile Emulator')
+              : t('auto.components.tab.bar.TabBar.fd2b42aaa3', 'New Mobile Emulator'),
+            icon: <Smartphone className={ICON_CLASS} />,
+            actionId: 'tab.newSimulator',
+            run: onNewSimulatorTab
+          }
+        ]
+      : // Only surfaces that can host an emulator offer turning it back on.
+        newTabMenuSurface === 'tab-bar' &&
+          !terminalOnly &&
+          !mobileEmulatorEnabled &&
+          mobileEmulatorCreationEnabled
+        ? [
+            {
+              // Why: the customizer is where people look for a missing icon, so it can turn the feature back on.
+              id: CREATE_ROW_MOBILE_EMULATOR_ID,
+              label: t('auto.components.tab.bar.TabBar.fd2b42aaa3', 'New Mobile Emulator'),
+              icon: <Smartphone className={ICON_CLASS} />,
+              actionId: 'tab.newSimulator',
+              run: () => {},
+              enable: () => useAppStore.getState().updateSettings({ mobileEmulatorEnabled: true })
+            }
+          ]
+        : []
+  const items =
+    newTabMenuSurface === 'floating-panel'
+      ? [
+          ...markdownItems,
+          ...openMarkdownItems,
+          ...terminalItems,
+          ...browserItems,
+          ...simulatorItems
+        ]
+      : [
+          ...terminalItems,
+          ...browserItems,
+          ...markdownItems,
+          ...openMarkdownItems,
+          ...simulatorItems
+        ]
+
+  return (
+    <TabBarCreateRow
+      items={items}
+      customizable={!terminalOnly}
+      layoutSetting={NEW_TAB_MENU_LAYOUT_SETTING[newTabMenuSurface]}
+      renderBelow={(shownIds) =>
+        showMobileEmulatorIntroCallout && isMacOs && shownIds.has(CREATE_ROW_MOBILE_EMULATOR_ID) ? (
+          <MobileEmulatorTabIntroCallout />
+        ) : null
+      }
+    />
   )
 }

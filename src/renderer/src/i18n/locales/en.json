@@ -14052,7 +14052,7 @@
           "catalog": "Catalog",
           "clear": "Clear filters",
           "themes": "Themes",
-          "codeLanguages": "Code languages",
+          "codeLanguages": "Languages",
           "translations": "Translations",
           "icons": "Icons",
           "commands": "Commands & panels",
@@ -14065,7 +14065,6 @@
         },
         "PluginUpdateAllDialog": {
           "previewError": "Couldn’t read this update",
-          "newAccess": "New: {{value0}}",
           "failed": "Couldn’t update {{value0}}. The others were updated.",
           "cancel": "Cancel",
           "updateOne": "Update 1 plugin",
@@ -14076,17 +14075,24 @@
           "updated": "Updated",
           "needsOrca": "Needs Orca {{value0}} or later",
           "current": "Already installed",
-          "sourceMoved": "New source: {{value0}} (was {{value1}})",
           "newShortcuts": "Keyboard shortcuts",
           "newCommands": "Commands",
-          "newPanels": "Panels",
-          "newEvents": "More events",
+          "newPanels": "Adds panels",
+          "newEvents": "Reacts to more Orca events",
           "newRecipes": "Machine recipes",
           "newContributions": "Features that act for you",
           "allAccess": "See all access",
           "update": "Update",
-          "review": "Review",
-          "replacesAction": "{{value0}} runs instead of Orca’s {{value1}}"
+          "replacesAction": "{{value0}} runs instead of Orca’s {{value1}}",
+          "newFileTypes": "Changes which files it opens",
+          "newHooks": "Can change or stop what Orca and your agents do",
+          "newSettings": "A settings page",
+          "newStatusBarItems": "Status bar items",
+          "opensFileTypes": "Opens new file types: {{value0}}",
+          "becomesDefaultEditor": "Becomes the default editor for {{value0}}",
+          "needApproval": "Need your approval",
+          "readyToUpdate": "Ready to update",
+          "movedRepository": "Comes from a different repository"
         },
         "PluginAuthor": {
           "publisher": "Publisher",
@@ -14268,11 +14274,11 @@
         },
         "PluginUpdateReview": {
           "title": "Review update to {{value0}}",
-          "back": "Back",
           "approve": "Approve & update",
-          "explain": "This update asks for more than the version you approved. It installs only if you approve it here.",
-          "before": "Before",
-          "after": "After"
+          "uncompared": "Orca couldn’t compare this version with the one you approved. Check what it can access before you update.",
+          "newInVersion": "New in this version:",
+          "titleMany": "Review {{value0}} updates",
+          "history": "See its changes on GitHub"
         },
         "PluginNotOfficialWarning": {
           "unknownPublisher": "its publisher",
@@ -14280,17 +14286,22 @@
           "update": "Make sure you trust {{value0}} before updating. This plugin runs the publisher’s code inside Orca.",
           "installed": "Make sure you trust {{value0}}. This plugin runs the publisher’s code inside Orca.",
           "label": "Not an official plugin:",
-          "translations": "Translations can change any text in Orca. Make sure you trust {{value0}}."
+          "translations": "Translations can change any text in Orca. Make sure you trust {{value0}}.",
+          "community": "Community plugin"
         },
         "PluginUpdateReviewToast": {
           "movedTitle": "{{value0}} {{value1}} comes from a different repository",
           "accessTitle": "{{value0}} {{value1}} wants more access",
           "manyTitle": "{{value0}} plugin updates need your review",
-          "oneDescription": "Published by {{value0}}. It won’t update until you review it.",
-          "manyDescription": "They won’t update until you review them.",
-          "review": "Review",
           "dismiss": "Dismiss",
-          "movedInstalled": "It stays off until you review it."
+          "movedInstalled": "It stays off until you review it.",
+          "approveAll": "Approve & update all",
+          "approveOne": "Approve & update",
+          "details": "Details",
+          "failed": "Couldn’t update {{value0}}",
+          "morePlugins": "and {{value0}} more plugins",
+          "uncompared": "Orca couldn’t compare it with the version you approved.",
+          "held": "{{value0}} changed after you reviewed it, so it waits for your review in Settings → Plugins."
         },
         "PluginInstallTrustDialog": {
           "titleFolder": "Make sure you trust this folder",
@@ -17035,13 +17046,6 @@
                       "c94ff11e91": "Could not re-check setup status."
                     }
                   }
-                },
-                "tab": {
-                  "intro": {
-                    "actions": {
-                      "68a5dc6604": "Could not hide Mobile Emulator."
-                    }
-                  }
                 }
               }
             }
@@ -17066,17 +17070,6 @@
             "5789936d9a": "Preview iOS simulators while agents drive the screen.",
             "8014b4b80b": "Keep",
             "6e051a40b7": "Hide"
-          },
-          "mobile": {
-            "emulator": {
-              "hidden": {
-                "toast": {
-                  "e8f098a870": "Mobile Emulator hidden",
-                  "c46c979c1d": "Re-enable Mobile Emulator anytime in",
-                  "600f9a745a": "Settings › Mobile Emulator"
-                }
-              }
-            }
           },
           "useEmulatorScreenKeyboard": {
             "pasteTooLarge": "Paste is too large for emulator keyboard input.",
@@ -25901,6 +25894,32 @@
       "summary": "Orca stopped responding",
       "title": "Report a freeze",
       "uncheckAttachments": "Uncheck \"Attach saved freeze report and diagnostic logs\" and try again, or copy the details."
+    }
+  },
+  "tabBar": {
+    "createRow": {
+      "label": "New tab actions. Left and Right choose; the last one customizes this row.",
+      "shownLabel": "In the + menu",
+      "hint": "Drag to reorder, or {{modifier}}↑/↓. Space shows or hides. Hidden items still open from search and their shortcuts.",
+      "reset": "Reset Order",
+      "allShortcuts": "All Keyboard Shortcuts…",
+      "hiddenLabel": "Hidden",
+      "hiddenEmpty": "Drag items here to hide them",
+      "locked": "Always shown",
+      "hide": "Hide",
+      "show": "Show",
+      "customize": "Customize",
+      "featureOff": "Off",
+      "turnOn": "Turned off. Show it to turn it back on.",
+      "moreOptions": "More options"
+    }
+  },
+  "emulatorPane": {
+    "tabIntro": {
+      "hiddenFromMenu": "Mobile Emulator removed from the + menu",
+      "hiddenFromMenuHint": "Bring it back from the gear at the end of the icon row.",
+      "undoHide": "Undo",
+      "saveFailed": "Could not update the + menu."
     }
   }
 }

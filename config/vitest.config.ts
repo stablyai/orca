@@ -27,11 +27,48 @@ const balancedShards = process.env.ORCA_BALANCE_UNIT_SHARDS === '1'
 const gitEnv = { ...gitSigningOffEnv(), ORCA_WSL_HOSTS_GATE_STATE: '' }
 const moduleCachePath = process.env.ORCA_UNIT_MODULE_CACHE_PATH
 const phoneContractPattern = /\/mobile\/src\/.*\.(?:ts|tsx)(?:\?.*)?$/
+const patchedNoTestFoundLoggers = new WeakSet<object>()
 const transforms = {
   // Auto-discovery climbs past the repo for files no in-repo tsconfig owns, into an enclosing checkout.
   tsconfig: resolve(import.meta.dirname, 'tsconfig.vitest-transform.json'),
   oxc: { exclude: [/\.js$/, phoneContractPattern] },
   plugins: [
+    {
+      // Summarize per-file worker routing arrays so filter misses do not dump ~1 MB of paths.
+      name: 'compact-no-test-found-output',
+      configureVitest({ vitest }) {
+        if (patchedNoTestFoundLoggers.has(vitest.logger)) {
+          return
+        }
+        patchedNoTestFoundLoggers.add(vitest.logger)
+        const original = vitest.logger.printNoTestFound.bind(vitest.logger)
+        vitest.logger.printNoTestFound = (filters) => {
+          const restored = vitest.projects.map((project) => {
+            const { include, exclude } = project.config
+            if (include && include.length > UNIT_INCLUDE.length) {
+              project.config.include = [`(${include.length} worker-routed files)`]
+            }
+            if (exclude && exclude.length > testOptions.exclude.length) {
+              project.config.exclude = [
+                ...testOptions.exclude,
+                `(${exclude.length - testOptions.exclude.length} worker-routed files)`
+              ]
+            }
+            return () => {
+              project.config.include = include
+              project.config.exclude = exclude
+            }
+          })
+          try {
+            original(filters)
+          } finally {
+            for (const restore of restored) {
+              restore()
+            }
+          }
+        }
+      }
+    } satisfies Plugin,
     {
       // These plain TS consumers need no Expo app configuration in root-only installs.
       name: 'phone-contract-oxc',

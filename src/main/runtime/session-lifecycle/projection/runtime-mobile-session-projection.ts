@@ -12,7 +12,7 @@ import type {
   RuntimeMobileSessionTabsSnapshot
 } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
+import { resolveTerminalTabTitle } from '../../../../shared/workspace-layout/tab-groups/tab-title-resolution'
 import { indexAgentStatusRowsByPaneKey } from '../../../agent-hooks/runtime/agent-status-pane-index'
 import {
   demoteRuntimeMobileAgentStatus,

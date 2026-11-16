@@ -45,7 +45,7 @@ import {
   indexHiddenProjects,
   isRepoHidden,
   withoutHiddenFilterRepoIds
-} from '../../../../src/shared/hidden-projects'
+} from '../../../../src/shared/project/catalog/hidden-projects'
 import { filterWorktrees } from './workspace-row-filtering'
 import type { ProjectGroup } from '../../../../src/shared/project/groups/project-group-types'
 import {

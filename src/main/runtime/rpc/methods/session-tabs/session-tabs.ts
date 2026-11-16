@@ -22,7 +22,7 @@ import { prepareStructuredTabsIfSupported } from './structured-session-tab-resto
 import { assertLegacyAiVaultResumeCommandAllowed } from '../../../../ai-vault/structured-sessions/structured-session-ownership'
 import '../../../../../shared/remote-runtime/protocol/protocol-version'
 import { SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
-import { createSessionTabsTabDeltaEncoder } from '../../../../../shared/session-tabs-tab-delta'
+import { createSessionTabsTabDeltaEncoder } from '../../../../../shared/remote-runtime/session-graph/session-tabs-tab-delta'
 import {
   SESSION_TABS_UNSUBSCRIBE_METHOD,
   SESSION_TABS_UNSUBSCRIBE_ALL_METHOD

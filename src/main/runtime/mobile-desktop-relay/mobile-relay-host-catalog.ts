@@ -1,4 +1,4 @@
-import type { RecipeEnvironmentDescription } from '../../../shared/recipe-host-removal'
+import type { RecipeEnvironmentDescription } from '../../../shared/remote-runtime/ephemeral-vm-recipes/recipe-host-removal'
 import {
   parseExecutionHostId,
   toRuntimeExecutionHostId,

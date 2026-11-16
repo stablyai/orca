@@ -1,5 +1,5 @@
 import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
-import { indexHiddenProjects } from '../../../../../../shared/hidden-projects'
+import { indexHiddenProjects } from '../../../../../../shared/project/catalog/hidden-projects'
 import { useMemo, useState, useSyncExternalStore } from 'react'
 import { shallow } from 'zustand/shallow'
 import type { AppState } from '@/store/types'

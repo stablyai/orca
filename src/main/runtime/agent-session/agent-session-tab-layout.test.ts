@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { Tab } from '../../../shared/tab-types'
+import type { Tab } from '../../../shared/workspace-layout/tab-groups/tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { withChatTabChanges, type ChatTabChange } from './agent-session-tab-layout'
 
