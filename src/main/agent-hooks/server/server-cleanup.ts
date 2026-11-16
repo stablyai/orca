@@ -143,7 +143,11 @@ export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
             paneKeys.add(aliasKey)
           }
         }
-        recordAgentExit(this.agentExitedAtByPaneKey, paneKeys, endedPresence)
+        const exitedAt = Date.now()
+        recordAgentExit(this.agentExitedAtByPaneKey, paneKeys, endedPresence, exitedAt)
+        for (const key of paneKeys) {
+          this.terminalPaneLifecycle?.retireSavedRecord?.(key, exitedAt)
+        }
         this.scheduleStatusPersist()
       }
       if (!this.hasLiveClaimsForPaneKey(resolvedPaneKey)) {

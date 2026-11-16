@@ -46,21 +46,18 @@ const NEWER_STATUS: AgentStatusIpcPayload = {
 }
 
 describe('main-run sleep of a pane whose hook row is gone', () => {
-  it.each([false, true])(
-    'uses a saved live conversation unless an exit was recorded (exited=%s)',
-    async (exited) => {
+  it.each(['live', 'exited', 'expired exit'] as const)(
+    'uses a saved live conversation unless an exit was recorded (%s)',
+    async (scenario) => {
       const fixture = makeRuntimeStoreWithWorkspaceSession(
         makeWorkspaceSessionWithHeadlessTerminal({
           sleepingAgentSessionsByPaneKey: { [PANE_KEY]: OLDER_CHECKPOINT }
         })
       )
       const server = new AgentHookServer()
-      if (exited) {
-        server.reconcileEndedProcessForPaneKeys([PANE_KEY], {
-          endedPresence: { agent: 'claude', ended: true }
-        })
-      }
       const runtime = new OrcaRuntimeService(fixture.runtimeStore, undefined, {
+        getPaneAgentIdentity: (paneKey, savedRecord) =>
+          server.paneAgentIdentity(paneKey, savedRecord),
         getAgentProviderSessionRowsForPane: () => [],
         checkHookAgentPresence: (paneKey, since) =>
           server.checkAgentPresenceSince(paneKey, since ?? 0)
@@ -99,10 +96,26 @@ describe('main-run sleep of a pane whose hook row is gone', () => {
           }
         ]
       })
+      server.setTerminalPaneLifecycle({
+        ownsProcess: () => true,
+        isStopping: () => false,
+        isReversibleStop: () => false,
+        isPlaced: () => true,
+        retireSavedRecord: (paneKey, at) => runtime.retireExitedPaneResume(paneKey, at)
+      })
+      if (scenario !== 'live') {
+        server.reconcileEndedProcessForPaneKeys([PANE_KEY], {
+          endedPresence: { agent: 'claude', ended: true }
+        })
+        if (scenario === 'expired exit') {
+          // Exit evidence can expire after a week; the saved checkpoint must already be retired.
+          server.forgetAgentExit(PANE_KEY)
+        }
+      }
       try {
         await runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
         const record = fixture.getSession().sleepingAgentSessionsByPaneKey?.[PANE_KEY]
-        if (exited) {
+        if (scenario !== 'live') {
           expect(record).toBeUndefined()
         } else {
           expect(record).toMatchObject({

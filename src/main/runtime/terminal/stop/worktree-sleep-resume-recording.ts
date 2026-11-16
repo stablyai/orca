@@ -41,6 +41,30 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
     )
   }
 
+  /** A confirmed quit retires recovery durably before its exit evidence can expire. */
+  retireExitedPaneResume(paneKey: string, exitedAt: number): void {
+    const worktreeId = this.getTerminalWorktreeIdForPaneKey(paneKey)
+    if (!worktreeId) {
+      return
+    }
+    this.inResumeRecordOrder(() =>
+      this.commitWorkspaceSessionEdit(
+        this.getWorkspaceSessionHostIdForWorktree(worktreeId),
+        (session) => {
+          const saved = session.sleepingAgentSessionsByPaneKey?.[paneKey]
+          if (!saved || saved.updatedAt > exitedAt) {
+            return null
+          }
+          const { [paneKey]: _exited, ...kept } = session.sleepingAgentSessionsByPaneKey ?? {}
+          return { ...session, sleepingAgentSessionsByPaneKey: kept }
+        }
+      )
+    ).catch((error) =>
+      console.warn('[runtime] could not retire an exited agent resume record', error)
+    )
+    this.previousHookStatusByPaneKey.delete(paneKey)
+  }
+
   /** Forgets a pane's saved resume the host refused because a chat is its conversation's home,
    *  as a window does for its own panes; a host with no window has no one else to. */
   async forgetRefusedSavedResume(

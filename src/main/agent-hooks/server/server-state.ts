@@ -49,6 +49,7 @@ import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/l
 
 export abstract class AgentHookServerState extends AgentHookServerStateContract {
   protected terminalPaneLifecycle: {
+    retireSavedRecord?(paneKey: string, exitedAt: number): void
     readSavedRecord?(paneKey: string): SleepingAgentSessionRecord | undefined
     ownsProcess(paneKey: string, ptyId: string, incarnationId?: string): boolean
     isStopping(paneKey: string): boolean

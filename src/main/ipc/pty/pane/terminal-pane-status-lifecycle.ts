@@ -13,6 +13,7 @@ export function bindTerminalPaneStatusLifecycle(
   store: Store | undefined
 ): void {
   agentHookServer.setTerminalPaneLifecycle({
+    retireSavedRecord: (paneKey, exitedAt) => runtime?.retireExitedPaneResume(paneKey, exitedAt),
     readSavedRecord: (paneKey) => {
       try {
         const pane = runtime?.resolveTerminalPane(paneKey)
