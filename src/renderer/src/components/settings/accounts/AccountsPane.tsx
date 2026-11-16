@@ -5,6 +5,8 @@ import type {
   CodexRateLimitAccountsState
 } from '../../../../../shared/agent-accounts/managed-account-types'
 import type { CodexConfigSyncStatus } from '../../../../../shared/agent-accounts/codex/codex-config-sync-types'
+import type { RateLimitState } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { useObservedAccountPlans } from './use-observed-account-plans'
 import { toast } from 'sonner'
 import { useAppStore } from '../../../store/index'
 import { translate } from '@/i18n/i18n'
@@ -146,6 +148,17 @@ export function AccountsPane({
   const [ownerClaudeAccounts, setClaudeAccounts] =
     useState<ClaudeRateLimitAccountsState>(emptyClaudeAccountsState)
   const [claudeAction, setClaudeAction] = useState<ProviderAccountAction>('idle')
+  // A remote host's usage comes only from its own stream; this desktop's polls describe other logins.
+  const [ownerUsage, setOwnerUsage] = useState<{
+    environmentId: string
+    rateLimits: RateLimitState | null
+  } | null>(null)
+  const { claudeAccountPlans, codexAccountPlans } = useObservedAccountPlans(
+    isRemoteAccountScope,
+    scopeEnvironmentId && ownerUsage?.environmentId === scopeEnvironmentId
+      ? ownerUsage.rateLimits
+      : null
+  )
   // This desktop's names change with its settings, e.g. a rename in another window.
   const localNames = isRemoteAccountScope ? undefined : settings.managedAccountDisplayNames
   const codexAccounts = useMemo(
@@ -249,7 +262,11 @@ export function AccountsPane({
         if (!snapshot.failedProviders?.includes('claude')) {
           setClaudeAccounts(snapshot.claude)
         }
+        if (scopeEnvironmentId) {
+          setOwnerUsage({ environmentId: scopeEnvironmentId, rateLimits: snapshot.rateLimits })
+        }
       },
+      onClosedAfterSnapshot: () => setOwnerUsage(null),
       onError: (error) => {
         toast.error(
           translate(
@@ -328,6 +345,8 @@ export function AccountsPane({
     codexConfigSyncWarning,
     codexRateLimits,
     codexRateLimitTarget,
+    claudeAccountPlans,
+    codexAccountPlans,
     setRemoveCodexTarget,
     runCodexAccountAction,
     recordOpenCodeSettingEdit

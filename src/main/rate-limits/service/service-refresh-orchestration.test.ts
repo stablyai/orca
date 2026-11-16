@@ -306,4 +306,44 @@ describe('RateLimitService', () => {
       })
     }
   )
+  it('keeps the read plan and its account on live posts only from that same login', async () => {
+    mockFreshBackgroundProviderFetches()
+    const service = new RateLimitService()
+    let provenance = 'profile:a'
+    service.setClaudeAuthPreparationResolver(async () => ({
+      configDir: '/claude/a',
+      envPatch: { CLAUDE_CONFIG_DIR: '/claude/a' },
+      provenance
+    }))
+    const readingAccount = { accountId: 'a', runtime: 'host', wslDistro: null } as const
+    vi.mocked(fetchActiveClaudeRateLimits).mockResolvedValueOnce({
+      ...okProvider('claude', 10),
+      planType: 'max_20x',
+      usageMetadata: { authProvenance: 'profile:a', readingAccount }
+    })
+    await service.refresh()
+    service.ingestLiveClaudeRateLimits({
+      configDir: '/claude/a',
+      fiveHour: { used_percentage: 30 },
+      sevenDay: null
+    })
+    expect(service.getState().claude).toMatchObject({
+      session: { usedPercent: 30 },
+      planType: 'max_20x',
+      usageMetadata: { source: 'live-session', readingAccount }
+    })
+
+    // The same folder now holds another login: its posts must not inherit a's plan.
+    provenance = 'system'
+    vi.mocked(fetchActiveClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 5))
+    await service.refreshClaudeForTarget()
+    service.ingestLiveClaudeRateLimits({
+      configDir: '/claude/a',
+      fiveHour: { used_percentage: 40 },
+      sevenDay: null
+    })
+    expect(service.getState().claude?.session?.usedPercent).toBe(40)
+    expect(service.getState().claude?.planType).toBeUndefined()
+    expect(service.getState().claude?.usageMetadata?.readingAccount).toBeUndefined()
+  })
 })

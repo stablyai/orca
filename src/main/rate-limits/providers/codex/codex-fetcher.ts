@@ -166,6 +166,16 @@ async function fetchBackendUsage(
 export async function fetchCodexRateLimits(
   options?: CodexRateLimitFetchOptions
 ): Promise<ProviderRateLimits> {
+  const limits = await readCodexRateLimits(options)
+  const readingAccount = options?.readingAccount
+  return readingAccount && limits.status === 'ok'
+    ? { ...limits, usageMetadata: { ...limits.usageMetadata, readingAccount } }
+    : limits
+}
+
+async function readCodexRateLimits(
+  options?: CodexRateLimitFetchOptions
+): Promise<ProviderRateLimits> {
   if (options?.signal?.aborted) {
     return abortedCodexRateLimitResult()
   }

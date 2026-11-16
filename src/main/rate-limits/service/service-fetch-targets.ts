@@ -17,7 +17,8 @@ import type { NormalizedClaudeAccountSelectionTarget } from '../../claude-accoun
 import type {
   ProviderRateLimits,
   RateLimitState,
-  CodexRateLimitResetOutcome
+  CodexRateLimitResetOutcome,
+  UsageReadingAccount
 } from '../../../shared/agent-usage/rate-limits/rate-limit-types'
 import { ApiKeyFileUnreadableError } from '../../credentials/api-key-file-unreadable-error'
 
@@ -51,6 +52,7 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
   protected async resolveCodexHome(target?: CodexAccountSelectionTarget): Promise<{
     skip: boolean
     homePath: string | null
+    readingAccount?: UsageReadingAccount
   }> {
     const resolution = await this.codexHomePathResolver?.(target)
     if (!resolution) {
@@ -58,7 +60,11 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
     }
     return resolution.kind === 'skip'
       ? { skip: true, homePath: null }
-      : { skip: false, homePath: resolution.codexHomePath }
+      : {
+          skip: false,
+          homePath: resolution.codexHomePath,
+          readingAccount: resolution.readingAccount
+        }
   }
 
   // WSL home resolution probes wsl.exe; chain it so other providers start immediately.
