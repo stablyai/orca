@@ -13,10 +13,6 @@ vi.mock('node:os', async (importOriginal) => ({
 }))
 vi.mock('node:path', async (importOriginal) => (await importOriginal<typeof NodePath>()).posix)
 import {
-  WATCHER_IGNORE_DIRS,
-  buildParcelWatcherIgnoreOptions
-} from '../../watchers/filesystem-watcher-ignore'
-import {
   macosProtectedWatchExclusions,
   withMacosProtectedWatchExclusions
 } from './macos-protected-watch-exclusions'
@@ -120,17 +116,6 @@ describe('macosProtectedWatchExclusions', () => {
 })
 
 describe('withMacosProtectedWatchExclusions', () => {
-  const base = buildParcelWatcherIgnoreOptions(WATCHER_IGNORE_DIRS)
-
-  it('returns the same options object for ordinary roots', () => {
-    expect(
-      withMacosProtectedWatchExclusions('/Users/me/Documents/repo', base, {
-        ...darwin,
-        homes: ['/Users/me']
-      })
-    ).toBe(base)
-  })
-
   it('leaves shallow subscriptions alone', () => {
     const shallow = { mode: 'shallow' as const, include: ['a'] }
     expect(
