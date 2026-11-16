@@ -138,7 +138,7 @@ type QuickOpenQueryTerm = { text: string; withoutSeparators: string | undefined 
 const NON_ASCII = /[\u0080-\u{10ffff}]/u
 
 // Why: macOS often stores names decomposed (NFD) while keyboards type composed (NFC), so compare both composed.
-function composeQuickOpenText(text: string): string {
+export function composeQuickOpenText(text: string): string {
   return NON_ASCII.test(text) ? text.normalize('NFC') : text
 }
 

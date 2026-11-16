@@ -1,4 +1,5 @@
 import {
+  composeQuickOpenText,
   QuickOpenPathRanker,
   rankQuickOpenFiles,
   type QuickOpenIndexedFile
@@ -11,7 +12,7 @@ export type ExistingFileMatch = {
 }
 
 function normalizeFileMatchQuery(query: string): string {
-  return query.trim().replace(/\\/g, '/')
+  return composeQuickOpenText(query.trim().replace(/\\/g, '/'))
 }
 
 function hasPathSeparator(query: string): boolean {
