@@ -1,7 +1,7 @@
 import type { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { statSync } from 'node:fs'
-import type { OrcaVmRecipe } from '../../orca-yaml-hook-types'
+import type { OrcaVmRecipe } from '../../workspace-setup/orca-yaml-hook-types'
 import { parseEphemeralVmRecipeResult, type EphemeralVmRecipeResult } from './ephemeral-vm-recipes'
 import { getEphemeralVmRecipeCheckoutModeFailure } from './ephemeral-vm-recipe-checkout-mode'
 import { pickEphemeralVmFailureCode, type EphemeralVmFailure } from './ephemeral-vm-failure-copy'

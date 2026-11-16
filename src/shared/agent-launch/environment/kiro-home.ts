@@ -1,6 +1,6 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { resolveAbsoluteDirOverride } from './absolute-dir-override'
+import { resolveAbsoluteDirOverride } from '../../file-access/absolute-dir-override'
 
 /** Kiro CLI's config root: `$KIRO_HOME` replaces `~/.kiro` outright (verified on kiro-cli 2.28). */
 export function resolveKiroHomeDir(env: NodeJS.ProcessEnv = process.env): string {

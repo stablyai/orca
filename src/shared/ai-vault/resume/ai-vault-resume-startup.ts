@@ -30,7 +30,7 @@ import {
   isTuiAgent,
   TUI_AGENT_CONFIG
 } from '../../agent-launch/catalog/tui-agent-config'
-import { findOptionOccurrence } from '../../command-option-occurrence'
+import { findOptionOccurrence } from '../../cli/command-option-occurrence'
 import { assertOpenCodeCopyUsesLocalStore } from '../../agent-launch/startup/opencode-launch-command'
 import { CLI_CONVERSATION_ADOPTING_AGENTS } from '../../agent-session/view/structured-agent-cli-conversation-adoption'
 import type { GlobalSettings } from '../../global-settings-types'

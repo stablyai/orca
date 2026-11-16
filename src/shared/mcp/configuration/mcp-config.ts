@@ -5,8 +5,6 @@ import {
 } from './mcp-config-inspection-limits'
 import { summarizeMcpServer } from './mcp-server-inspection'
 
-export { maskMcpEnv } from './mcp-server-inspection'
-
 export type McpConfigFormat = 'workspace' | 'cursor' | 'claude'
 
 export type McpConfigCandidate = {

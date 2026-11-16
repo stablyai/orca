@@ -1,4 +1,4 @@
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   isCodexHomeAuthReadyForLaunch,

@@ -2,7 +2,7 @@ import {
   quoteCmdDoubleQuoted,
   quotePosixShellUnlessPlainNoAt
 } from '../../shell/launch/shell-argument-quoting'
-import { isWindowsAbsolutePathLike } from '../../cross-platform-path'
+import { isWindowsAbsolutePathLike } from '../../file-access/cross-platform-path'
 import {
   buildWindowsCmdRunnerDelayedLaunchCommand,
   windowsRunnerPathNeedsCmdGuard

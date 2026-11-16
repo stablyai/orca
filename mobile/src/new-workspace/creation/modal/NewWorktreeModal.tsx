@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Keyboard } from 'react-native'
-import { getComposerRepoWorktreeBranches } from '../../../../../src/shared/composer-branch-selection'
+import { getComposerRepoWorktreeBranches } from '../../../../../src/shared/new-workspace/composer-branch-selection'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId

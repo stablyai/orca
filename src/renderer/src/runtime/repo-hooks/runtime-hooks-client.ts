@@ -1,5 +1,5 @@
 import type { GroupHookCheckResult } from '../../../../shared/project/groups/project-group-hooks'
-import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
+import type { OrcaHooks } from '../../../../shared/workspace-setup/orca-yaml-hook-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { SetupScriptImportCandidate } from '../../../../shared/workspace-setup/setup-script-imports'
 import { callRuntimeRpc } from '../rpc/calls/runtime-rpc-call'

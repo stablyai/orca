@@ -1,7 +1,7 @@
 import {
   normalizeRuntimePathForComparison,
   relativePathInsideRoot
-} from '../../cross-platform-path'
+} from '../../file-access/cross-platform-path'
 import { parseWslUncPath } from '../../file-access/wsl-paths'
 import {
   isRuntimePathAbsoluteForRepo,

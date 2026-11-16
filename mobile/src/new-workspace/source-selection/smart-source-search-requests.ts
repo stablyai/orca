@@ -1,6 +1,6 @@
-import { legacyBaseRefSearchResult } from '../../../../src/shared/base-ref-search-result'
+import { legacyBaseRefSearchResult } from '../../../../src/shared/worktree/base-refs/base-ref-search-result'
 import type { GitHubWorkItem } from '../../../../src/shared/github/work-items/work-item-types'
-import type { GitLabWorkItem } from '../../../../src/shared/gitlab-types'
+import type { GitLabWorkItem } from '../../../../src/shared/gitlab/gitlab-types'
 import type { LinearIssue } from '../../../../src/shared/linear/issue-types'
 import type { BaseRefSearchResult } from '../../../../src/shared/repository/repo-types'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'

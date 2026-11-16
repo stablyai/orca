@@ -1,7 +1,7 @@
 import { isProjectGroupHookTrustKey } from '../../../../../shared/workspace-setup/hooks/workspace-hook-owner'
 import { normalizeExplorerDisplayRootByWorktree } from '../../../../../shared/file-listing/file-explorer-display-root'
 import type { AppState } from '../../types'
-import type { PersistedTrustedOrcaHooks } from '../../../../../shared/orca-yaml-hook-types'
+import type { PersistedTrustedOrcaHooks } from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
 import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'
 import type {
   ActivityBarPosition,

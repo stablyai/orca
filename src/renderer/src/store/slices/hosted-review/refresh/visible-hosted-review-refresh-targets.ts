@@ -6,7 +6,7 @@ import {
   getSettingsFocusedExecutionHostId,
   parseExecutionHostId
 } from '../../../../../../shared/execution-host'
-import { reviewRefreshIntervalMs } from '../../../../../../shared/review-refresh-policy'
+import { reviewRefreshIntervalMs } from '../../../../../../shared/source-control/hosted-review/review-refresh-policy'
 import {
   buildPRRefreshCandidate,
   findWorktreeReviewOwner,
