@@ -4,7 +4,10 @@
  * Empty remote selectors to mask the parent env; explicit flags still work, and login profiles can re-export selectors.
  * Omit pane identity: hooks and mobile status assume a live PTY leaf. Resolve worker identity at every spawn, including recovery and clear. */
 
-import { getAppEnvironment, hasAppEnvironment } from '../../../../shared/app-environment'
+import {
+  getAppEnvironment,
+  hasAppEnvironment
+} from '../../../../shared/app-lifecycle/app-environment'
 import {
   ORCA_AGENT_SESSION_ID_ENV,
   ORCA_AGENT_SESSION_SPAWN_TOKEN_ENV
@@ -14,7 +17,7 @@ import {
   ORCA_SCRUB_SAFE_PANE_ENV
 } from '../../../../shared/agent-hook-listener/transport/agent-hook-scrub-safe-env'
 import { ORCA_STRUCTURED_SESSION_ENV } from '../../../../shared/agent-launch/environment/structured-session-marker'
-import { withCliRuntimeOnPath } from '../../../../shared/node-cli-command-resolution'
+import { withCliRuntimeOnPath } from '../../../../shared/shell/command-resolution/node-cli-command-resolution'
 import { prependOrcaCliDirToChildPath } from '../../../cli/launchers/orca-cli-child-path'
 import { AGENT_HOOK_RUNTIME_ENV_KEYS } from '../../../ipc/pty/host-env/spawn-env-keys'
 import { resolveStructuredWorkerIdentityForSession } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'

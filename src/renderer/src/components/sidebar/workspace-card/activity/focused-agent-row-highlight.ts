@@ -77,7 +77,7 @@ export function getFocusedAgentPaneKeyForWorktree(
   }
 
   // Stale agents remain visible, so their focused rows must still highlight.
-  if (state.agentStatusByPaneKey[activePaneKey]) {
+  if (state.agentStatusByPaneKey.get(activePaneKey)) {
     return activePaneKey
   }
 

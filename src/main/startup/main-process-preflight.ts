@@ -62,11 +62,11 @@ import {
   logSingleInstanceLockBypass,
   logSingleInstanceLockFailure
 } from './profile-startup/single-instance-lock'
-import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from '../../shared/single-instance-exit-code'
-import { setAppEnvironment } from '../../shared/app-environment'
+import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from '../../shared/app-lifecycle/launch/single-instance-exit-code'
+import { setAppEnvironment } from '../../shared/app-lifecycle/app-environment'
 import { ElectronAppEnvironment } from '../host/electron-app-environment'
 import { installMainProcessTreeKillGate } from '../pty/process-retirement/own-chromium-tree-kill-guard'
-import { setSecretStore } from '../../shared/secret-store'
+import { setSecretStore } from '../../shared/secure-storage/secret-store'
 import { ElectronSecretStore } from '../host/electron-secret-store'
 import { selectLinuxKeyringBackend } from './linux-runtime/select-linux-keyring-backend'
 import { initDataPath, getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'

@@ -6,7 +6,7 @@ import {
   resolveEnvironment,
   resolveEnvironmentPairingOffer
 } from '../../../../src/shared/remote-runtime/host-store/runtime-environment-store'
-import type { MemorySnapshot } from '../../../../src/shared/process-stats-types'
+import type { MemorySnapshot } from '../../../../src/shared/diagnostics/process-stats-types'
 import type { RuntimeStatus } from '../../../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
 
 async function main(): Promise<void> {

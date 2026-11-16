@@ -442,9 +442,6 @@
     },
     "followSymlinkedDirectories": "Seguir directorios con enlaces simbólicos",
     "followSymlinkedDirectoriesDescription": "Busca carpetas enlazadas en Apertura rápida y expande las carpetas enlazadas locales en el Explorador de archivos.",
-    "accounts": {
-      "claudeRemoveFolder": "Orca elimina la carpeta de Claude de esta cuenta y su inicio de sesión de este equipo. El historial de chat compartido con Predeterminado del sistema se conserva. Si está seleccionada, el próximo Claude que inicies usará Predeterminado del sistema."
-    },
     "sourceControl": {
       "gitOperationInAnotherWorkspace": "Operación de Git en otro lugar",
       "remoteOperationInAnotherWorkspace": "Otro espacio de trabajo está ejecutando una operación de Git, como push, pull o force push. Espera a que termine antes de usar esta acción para que las operaciones no se solapen.",
@@ -565,6 +562,10 @@
       "saving": "Guardando…",
       "save": "Guardar formateador",
       "710343e374": "Comando de formateo"
+    },
+    "groupHooks": {
+      "invalidSetup": "El archivo existe, pero Orca no encontró un script de configuración válido.",
+      "supportedKeys": "Define solo las claves admitidas: `scripts` y `setup`."
     }
   },
   "menu": {
@@ -914,7 +915,7 @@
             "33290e88ed": "Error al conectar perfil",
             "9fcb07a796": "Perfil conectado",
             "2f6c78a039": "Error al actualizar autenticación del perfil",
-            "a37b5e6d37": "Sesión cerrada del perfil",
+            "a37b5e6d37": "Sesión cerrada en Orca",
             "83600521e7": "Error al cerrar sesión",
             "76deec8f58": "Error al cambiar organización",
             "7d4bc516ee": "Error al cambiar perfil",
@@ -1491,6 +1492,15 @@
       "workspacePortBrowserOpen": {
         "systemBrowserHint": "{{shortcut}}+clic para abrir en el navegador del sistema",
         "tooltip": "{{label}}. {{hint}}"
+      },
+      "worktreePaletteEvidence": {
+        "workspaceComment": "Comentario del espacio de trabajo",
+        "createdByAutomation": "Creado por automatización",
+        "linkedTask": "Tarea vinculada",
+        "pullRequest": "Pull request",
+        "mergeRequest": "Merge request",
+        "linkedIssue": "Issue vinculado",
+        "listeningPort": "Puerto en escucha"
       }
     },
     "hooks": {
@@ -3113,6 +3123,9 @@
           "labelCount_one": "{{count}} etiqueta",
           "labelCount_other": "{{count}} etiquetas",
           "labelCount_many": "{{count}} etiquetas",
+          "authorCount_one": "{{count}} autor",
+          "authorCount_other": "{{count}} autores",
+          "authorCount_many": "{{count}} autores",
           "allStates": "Todos",
           "filterPullRequests": "Filtrar pull requests",
           "filterIssues": "Filtrar issues",
@@ -4426,7 +4439,8 @@
             "footerDetailAria": "Usage footer detail",
             "detailedTooltip": "Uso completo con barras, etiquetas y porcentajes",
             "compactTooltip": "Uso condensado: un resumen por proveedor",
-            "notChecked": "Sin comprobar"
+            "notChecked": "Sin comprobar",
+            "modelWeeklyLimit": "Límite semanal de {{model}}: {{usage}}"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "Updating {{value0}}/{{value1}}",
@@ -6778,24 +6792,24 @@
                 "a3cdd9d9e6_one": "Git mantuvo la rama local {{count}} porque puede contener confirmaciones no fusionadas. Las ramas mantenidas no conservan las carpetas del espacio de trabajo; sus confirmaciones permanecen en el repositorio. Orca puede continuar liberando espacio en el disco del espacio de trabajo en segundo plano.",
                 "a3cdd9d9e6_other": "Git mantuvo {{count}} ramas locales porque pueden contener confirmaciones no fusionadas. Las ramas mantenidas no conservan las carpetas del espacio de trabajo; sus confirmaciones permanecen en el repositorio. Orca puede continuar liberando espacio en el disco del espacio de trabajo en segundo plano.",
                 "a3cdd9d9e6_many": "Git mantuvo {{count}} ramas locales porque pueden contener confirmaciones no fusionadas. Las ramas mantenidas no conservan las carpetas del espacio de trabajo; sus confirmaciones permanecen en el repositorio. Orca puede continuar liberando espacio en el disco del espacio de trabajo en segundo plano.",
-                "6310412304_one": "Revisar sucursal {{count}}",
-                "6310412304_other": "Revisar sucursales {{count}}",
-                "6310412304_many": "Revisar sucursales {{count}}",
+                "6310412304_one": "Revisar {{count}} rama",
+                "6310412304_other": "Revisar {{count}} ramas",
+                "6310412304_many": "Revisar {{count}} ramas",
                 "cea24c2b7d_one": "{{count}} espacio de trabajo eliminado",
                 "cea24c2b7d_other": "{{count}} espacios de trabajo eliminados",
                 "cea24c2b7d_many": "{{count}} espacios de trabajo eliminados",
-                "0e0379f24a_one": "{{count}} sucursal mantenida",
-                "0e0379f24a_other": "{{count}} sucursales mantenidas",
-                "0e0379f24a_many": "{{count}} sucursales mantenidas",
+                "0e0379f24a_one": "{{count}} rama conservada",
+                "0e0379f24a_other": "{{count}} ramas conservadas",
+                "0e0379f24a_many": "{{count}} ramas conservadas",
                 "4cf75caab7": "{{value0}}, {{value1}}",
-                "e61d78054f": "Eliminando sucursales locales: {{value0}}",
-                "1e1a5f6763": "Sucursales locales eliminadas: {{value0}}",
+                "e61d78054f": "Eliminando ramas locales: {{value0}}",
+                "1e1a5f6763": "Ramas locales eliminadas: {{value0}}",
                 "43d9395605": "{{value0}} eliminado, {{value1}} no eliminado",
-                "d42f1f14e0_one": "Reintentar rama {{count}}",
+                "d42f1f14e0_one": "Reintentar {{count}} rama",
                 "d42f1f14e0_other": "Reintentar {{count}} ramas",
                 "d42f1f14e0_many": "Reintentar {{count}} ramas",
-                "0e0379f24a": "{{count}} sucursales mantenidas",
-                "6310412304": "Revisar sucursales {{count}}",
+                "0e0379f24a": "{{count}} ramas conservadas",
+                "6310412304": "Revisar {{count}} ramas",
                 "a3cdd9d9e6": "Git mantuvo {{count}} ramas locales porque pueden contener confirmaciones no fusionadas. Las ramas mantenidas no conservan las carpetas del espacio de trabajo; sus confirmaciones permanecen en el repositorio. Orca puede continuar liberando espacio en el disco del espacio de trabajo en segundo plano.",
                 "cea24c2b7d": "{{count}} espacios de trabajo eliminados",
                 "d42f1f14e0": "Reintentar {{count}} ramas"
@@ -7069,7 +7083,6 @@
           "locationSaveFailed": "No se pudo guardar la ubicación de las cuentas. Inténtalo de nuevo.",
           "dbb9626ed1": "Cancelar",
           "63843e37e2": "¿Eliminar la cuenta de Claude?",
-          "380a7736cc": "Eliminar esta cuenta borra permanentemente su home de Codex gestionado, incluido todo el historial de sesiones de Codex y los inicios de sesión de MCP almacenados dentro. Esto no se puede deshacer. Si la cuenta está activa, Orca vuelve al login predeterminado de Codex del sistema.",
           "0d47394635": "¿Eliminar cuenta de Codex?",
           "ae3b21eb6c": "opencode.ai/workspace/wrk__…/go",
           "51c9104e13": "Encuéntralo en la URL después de iniciar sesión en opencode.ai (p. ej.",
@@ -17286,7 +17299,7 @@
           "2df8970cd5": "Agente",
           "e353ab9516": "verificación previa",
           "15ea446b93": "Sesión",
-          "5405a09b1f": "Ejecutar ubicación",
+          "5405a09b1f": "Ubicación de ejecución",
           "2f8baf5360": "Crear desde",
           "578ff46987": "Próxima ejecución",
           "18763ded26": "Cronograma",
@@ -17296,7 +17309,7 @@
           "221916d93c": "Cree una automatización para comenzar a programar el trabajo de los agentes.",
           "b09b2384fd": "En pausa",
           "eaa02014f8": "Activado",
-          "29baf8f4c2": "Source",
+          "29baf8f4c2": "Origen",
           "lastRunFailed": "La última ejecución falló.",
           "noGrace": "Sin período de gracia",
           "graceMinutes_one": "{{count}} minuto",
@@ -19542,7 +19555,7 @@
         "listLabel": "Mensajes en cola",
         "steer": "Enviar ahora",
         "send": "Enviar",
-        "steerHint": "Enviar sin interrumpir al modelo",
+        "steerHint": "Enviar ahora, mientras el agente sigue trabajando",
         "sendHint": "Enviar este mensaje ahora",
         "delete": "Eliminar",
         "moreActions": "Más acciones",
@@ -20391,7 +20404,8 @@
       "TerminalContextMenu": {
         "copySessionId": "Copiar ID de sesión",
         "copySessionIdSuccess": "ID de sesión copiado",
-        "copySessionIdError": "No se pudo copiar el ID de sesión"
+        "copySessionIdError": "No se pudo copiar el ID de sesión",
+        "copySessionIdUnavailable": "No hay ningún ID de sesión para copiar"
       },
       "hostFile": {
         "updateHostForOutsideFiles": "Actualiza Orca en {{value0}} para abrir archivos fuera de sus espacios de trabajo"
@@ -23013,6 +23027,7 @@
       "tabOpenQuickCommandsMenu": "Alternar menú de comandos rápidos",
       "editorFind": "Buscar en el editor",
       "editorReplace": "Reemplazar en el editor",
+      "editorToggleChangesView": "Alternar vista de cambios",
       "fileExplorerUndo": "Deshacer operación de archivo",
       "fileExplorerRedo": "Rehacer operación de archivo",
       "fileExplorerCopyPath": "Copiar ruta del archivo",
@@ -23030,6 +23045,7 @@
       "chatFind": "Buscar en el chat",
       "terminalToggleNativeChat": "Cambiar entre la interfaz de chat y el terminal",
       "terminalClosePane": "Cerrar panel activo",
+      "terminalCopySessionId": "Copiar ID de sesión",
       "terminalSplitRight": "Dividir terminal a la derecha",
       "terminalSplitDown": "Dividir terminal hacia abajo",
       "terminalSwitchInputSource": "Cambiar fuente de entrada / idioma (nativo)",

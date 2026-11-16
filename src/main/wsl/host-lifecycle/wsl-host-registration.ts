@@ -1,5 +1,5 @@
 /** Admit, refuse duplicate orcad ownership, connect (possibly booting), then persist the environment and WSL record. */
-import { errorMessage } from '../../../shared/error-message'
+import { errorMessage } from '../../../shared/errors/error-message'
 import { addWslHostEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-wsl-host-store'
 import type { WslHostDeploymentRecord } from '../../../shared/remote-runtime/host-store/wsl-host-deployment-store'
 import {

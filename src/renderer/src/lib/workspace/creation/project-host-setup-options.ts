@@ -7,16 +7,16 @@ import {
 } from '../../../../../shared/execution-host'
 import type { ExecutionHostRegistryEntry } from '../../../../../shared/execution-host/execution-host-registry-entry'
 import { getHostHealthUnavailableDetail } from './project-host-health-detail'
-import { isHostLocalProjectId } from '../../../../../shared/project-host-setup-projection'
+import { isHostLocalProjectId } from '../../../../../shared/project/host-setup/project-host-setup-projection'
 import { isEphemeralVmRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { isMergedAwayExecutionHost } from '../../../../../shared/execution-host/managed-orcad-execution-host'
-import '../../../../../shared/protocol-version'
+import '../../../../../shared/remote-runtime/protocol/protocol-version'
 import {
   PROJECT_HOST_SETUP_RUNTIME_CAPABILITY,
   WORKSPACE_RUN_CONTEXT_RUNTIME_CAPABILITY
 } from '../../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
-import type { ProjectHostSetup } from '../../../../../shared/project-types'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { ProjectHostSetup } from '../../../../../shared/project/project-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { translateHostDisplayLabel } from '@/components/sidebar/execution-host-label'

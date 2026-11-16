@@ -28,7 +28,7 @@ import {
 } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
 import { orderHostSectionOptions } from '../../../../../../shared/sidebar-list/hosts/host-section-order'
 import { buildSidebarHostOptions } from '../controls/sidebar-host-options'
-import { getLogicalRepoOrderRankById } from '../../../../../../shared/project-section-order'
+import { getLogicalRepoOrderRankById } from '../../../../../../shared/sidebar-list/sections/project-section-order'
 import { getRenderedWorktreesInSidebarOrder } from '../navigation/worktree-sidebar-row-preference'
 import { selectWorktreeListReviewCacheInputs } from './review-cache-inputs'
 import {

@@ -1,6 +1,6 @@
 import { rm } from 'node:fs/promises'
 import { posix as pathPosix, win32 as pathWin32 } from 'node:path'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type {
   SkillDeletePlan,
   SkillDeletePlanEntry,

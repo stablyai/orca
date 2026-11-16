@@ -1,5 +1,5 @@
-import { rateLimitSpentUntil } from '../../../../shared/rate-limit-spent-windows'
-import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
+import { rateLimitSpentUntil } from '../../../../shared/agent-usage/rate-limits/rate-limit-spent-windows'
+import type { ProviderRateLimits } from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 import {
   isNativeChatUsageLimitCutSchedulable,
   NATIVE_CHAT_USAGE_LIMIT_MAX_OVERDUE_MS,

@@ -3,7 +3,10 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, posix } from 'node:path'
 import { expect } from 'vitest'
-import { NODE_RUNTIME_ASSETS, pinnedNodeRuntimeAsset } from '../../../shared/node-runtime-pin'
+import {
+  NODE_RUNTIME_ASSETS,
+  pinnedNodeRuntimeAsset
+} from '../../../shared/node-runtime/node-runtime-pin'
 import { ORCAD_MANAGED_REMOTE_PORT } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import { ORCAD_RUNTIMES_DIRNAME } from '../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'

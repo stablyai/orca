@@ -696,9 +696,6 @@
     },
     "followSymlinkedDirectories": "Suivre les dossiers liés symboliquement",
     "followSymlinkedDirectoriesDescription": "Recherchez les dossiers liés dans Quick Open et développez les dossiers liés locaux dans l'Explorateur de fichiers.",
-    "accounts": {
-      "claudeRemoveFolder": "Orca supprime le dossier Claude de ce compte et sa connexion de cet ordinateur. L'historique de chat partagé avec Système par défaut est conservé. S'il est sélectionné, le prochain Claude que vous démarrez utilise Système par défaut."
-    },
     "sourceControl": {
       "gitOperationInAnotherWorkspace": "Opération Git en cours ailleurs",
       "remoteOperationInAnotherWorkspace": "Un autre espace de travail exécute une opération Git, par exemple un push, un pull ou un force push. Attendez qu’elle se termine avant d’utiliser cette action pour éviter des opérations simultanées.",
@@ -819,6 +816,10 @@
       "saving": "Enregistrement…",
       "save": "Enregistrer le formateur",
       "710343e374": "Commande de formatage"
+    },
+    "groupHooks": {
+      "invalidSetup": "Le fichier est présent, mais Orca n'a pas trouvé de script de setup valide.",
+      "supportedKeys": "Définissez uniquement les clés prises en charge : `scripts` et `setup`."
     }
   },
   "menu": {
@@ -1168,7 +1169,7 @@
             "33290e88ed": "Échec de la connexion du profil",
             "9fcb07a796": "Profil connecté",
             "2f6c78a039": "Échec de l'actualisation de l'authentification du profil",
-            "a37b5e6d37": "Déconnecté du profil",
+            "a37b5e6d37": "Déconnecté d’Orca",
             "83600521e7": "Échec de la déconnexion",
             "76deec8f58": "Échec du changement d'organisation",
             "7d4bc516ee": "Échec du changement de profil",
@@ -1758,6 +1759,15 @@
       "workspacePortBrowserOpen": {
         "systemBrowserHint": "{{shortcut}}+clic pour ouvrir dans le navigateur système",
         "tooltip": "{{label}}. {{hint}}"
+      },
+      "worktreePaletteEvidence": {
+        "workspaceComment": "Commentaire de l'espace de travail",
+        "createdByAutomation": "Créé par automatisation",
+        "linkedTask": "Tâche liée",
+        "pullRequest": "Pull request",
+        "mergeRequest": "Merge request",
+        "linkedIssue": "Issue liée",
+        "listeningPort": "Port en écoute"
       }
     },
     "hooks": {
@@ -3384,6 +3394,9 @@
           "labelCount_one": "{{count}} étiquette",
           "labelCount_other": "{{count}} étiquettes",
           "labelCount_many": "{{count}} étiquettes",
+          "authorCount_one": "{{count}} auteur",
+          "authorCount_other": "{{count}} auteurs",
+          "authorCount_many": "{{count}} auteurs",
           "allStates": "Tous",
           "filterPullRequests": "Filtrer les pull requests",
           "filterIssues": "Filtrer les issues",
@@ -4702,7 +4715,8 @@
             "detailedTooltip": "Utilisation complète avec barres, libellés et pourcentages",
             "compactTooltip": "Utilisation condensée : un résumé par fournisseur",
             "footerDetailAria": "Détail du pied de page d'utilisation",
-            "notChecked": "Non vérifié"
+            "notChecked": "Non vérifié",
+            "modelWeeklyLimit": "Limite hebdomadaire {{model}} : {{usage}}"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "Mise à jour de {{value0}}/{{value1}}",
@@ -7340,7 +7354,6 @@
           "locationSaveFailed": "Impossible d’enregistrer l’emplacement des comptes. Réessayez.",
           "dbb9626ed1": "Annuler",
           "63843e37e2": "Supprimer le compte Claude ?",
-          "380a7736cc": "La suppression de ce compte efface définitivement son home Codex géré, y compris tout l'historique de sessions Codex et les connexions MCP stockés dedans. Cette action est irréversible. Si le compte est actuellement actif, Orca revient à la connexion Codex par défaut du système.",
           "0d47394635": "Supprimer le compte Codex ?",
           "ae3b21eb6c": "opencode.ai/workspace/wrk_…/go",
           "51c9104e13": "Trouvez-le dans l'URL après connexion à opencode.ai (par ex.",
@@ -20015,7 +20028,7 @@
         "listLabel": "Messages en file d'attente",
         "steer": "Envoyer maintenant",
         "send": "Envoyer",
-        "steerHint": "Envoyer sans interrompre le modèle",
+        "steerHint": "Envoyer maintenant, pendant que l’agent continue de travailler",
         "sendHint": "Envoyer ce message maintenant",
         "delete": "Supprimer",
         "moreActions": "Plus d'actions",
@@ -20742,7 +20755,8 @@
       "TerminalContextMenu": {
         "copySessionId": "Copier l'ID de session",
         "copySessionIdSuccess": "ID de session copié",
-        "copySessionIdError": "Impossible de copier l'ID de session"
+        "copySessionIdError": "Impossible de copier l'ID de session",
+        "copySessionIdUnavailable": "Aucun ID de session à copier"
       },
       "hostFile": {
         "updateHostForOutsideFiles": "Mettez à jour Orca sur {{value0}} pour ouvrir des fichiers en dehors de ses espaces de travail"
@@ -23036,6 +23050,7 @@
       "tabOpenQuickCommandsMenu": "Afficher/masquer le menu des commandes rapides",
       "editorFind": "Rechercher dans l'éditeur",
       "editorReplace": "Remplacer dans l'éditeur",
+      "editorToggleChangesView": "Activer/désactiver la vue des modifications",
       "fileExplorerUndo": "Annuler l'opération sur le fichier",
       "fileExplorerRedo": "Rétablir l'opération sur le fichier",
       "fileExplorerCopyPath": "Copier le chemin du fichier",
@@ -23053,6 +23068,7 @@
       "chatFind": "Rechercher dans le chat",
       "terminalToggleNativeChat": "Basculer entre l'interface de chat et le terminal",
       "terminalClosePane": "Fermer le volet actif",
+      "terminalCopySessionId": "Copier l'ID de session",
       "terminalSplitRight": "Scinder le terminal vers la droite",
       "terminalSplitDown": "Scinder le terminal vers le bas",
       "terminalSwitchInputSource": "Changer de source de saisie / langue (natif)",

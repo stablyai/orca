@@ -80,6 +80,7 @@ export function readWslSkillDiscoveryObservation(
         providers: [...root.providers],
         sourceKind,
         sourceLabel: sourceLabelForSkill(root, sourceKind),
+        ...(root.pluginName ? { pluginName: root.pluginName } : {}),
         rootPath: root.path,
         rootPaths: [root.path],
         directoryPath,

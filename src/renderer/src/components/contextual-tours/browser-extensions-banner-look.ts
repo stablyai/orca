@@ -8,7 +8,7 @@ import {
 import type {
   ContextualTourId,
   ContextualTourStepActionKind
-} from '../../../../shared/contextual-tours'
+} from '../../../../shared/feature-education/contextual-tours/contextual-tours'
 import { trackBrowserExtensionsBannerAction } from '@/diagnostics/telemetry/browser-extensions-telemetry'
 import type { ActiveTourRenderState } from './ContextualTourOverlaySurface'
 

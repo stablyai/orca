@@ -18,7 +18,7 @@ import {
   AgentIdentityWorkerClient,
   type AgentIdentityClient
 } from '../identity/agent-identity-worker-client'
-import { AgentHookServerState } from './server-state'
+import { AgentHookServerStatusQueries } from './server-status-queries'
 import { structuredStatusLegacyEvent } from './server-structured-status-row'
 
 type SleepingAgentSighting = Pick<
@@ -27,7 +27,7 @@ type SleepingAgentSighting = Pick<
 >
 
 /** Terminal agent ids are named when a row is admitted, so walks and publications only copy them. */
-export abstract class AgentHookServerAgentIdentities extends AgentHookServerState {
+export abstract class AgentHookServerAgentIdentities extends AgentHookServerStatusQueries {
   private identityPath: { from: string | null; path: string | null } = { from: null, path: null }
   protected readonly agentIdentities = new PaneAgentIdentities(
     // Read on every admission, so derived once per status path.
@@ -60,6 +60,11 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
   /** Window readers and session.tabs see a row's new id with no hook event attached, so no
    *  transition effect or enriched subscriber runs again. */
   protected abstract publishAgentIdentityProjection(row: EnrichedAgentHookEventPayload): void
+
+  protected abstract replaceTranscriptPollRow(
+    previous: EnrichedAgentHookEventPayload,
+    next: EnrichedAgentHookEventPayload
+  ): void
 
   /** A committed answer, or the end of the authority that gave one, re-stamps the current rows
    *  on its key and republishes each as a projection: status, clocks and order stay as they are. */
@@ -97,6 +102,7 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
           AGENT_STATUS_2A_CURRENT_PRODUCER_MODE
         )
       ) {
+        this.replaceTranscriptPollRow(row, next)
         projections.push(next)
       }
     }
@@ -160,6 +166,7 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
       // Resume seeds, exited agents and unconfirmed restored rows prove no running agent.
       if (
         row &&
+        !('paneSleep' in row && row.paneSleep) &&
         row.providerSessionOnly !== true &&
         row.restoredUnconfirmed !== true &&
         !('agentPresence' in row && row.agentPresence?.ended === true)

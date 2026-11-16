@@ -1,7 +1,7 @@
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { DEFAULT_WORKSPACE_STATUS_ID } from '../../../../shared/workspace-statuses'
-import { worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
+import { DEFAULT_WORKSPACE_STATUS_ID } from '../../../../shared/workspace/status/workspace-statuses'
+import { worktreeWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { folderLineageEdgeOf } from '../../../../shared/worktree/lineage/folder-lineage-parents'
 import type { RuntimeWorktreePsSummary } from '../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
@@ -146,7 +146,7 @@ export function buildRuntimeWorktreePsSummaries(args: {
   )
   for (const folderWorkspace of runtimeVisibleFolderWorkspaces(args.store)) {
     const projectGroup = projectGroupById.get(folderWorkspace.projectGroupId)
-    if (!projectGroup?.parentPath) {
+    if (!projectGroup) {
       continue
     }
     const worktree = folderWorkspaceToWorktree(folderWorkspace)

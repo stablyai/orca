@@ -58,7 +58,7 @@
       "contextSha256": "747ec5af67a0b60890da900a83fa255d3b96e2fa17d9199f8e483ef5051b213c"
     },
     {
-      "file": "src/shared/repo-icon.ts",
+      "file": "src/shared/repository/appearance/repo-icon.ts",
       "inputs": [],
       "emptyEnv": [],
       "sourceClosureSha256": "9ed9b45d83816f7da3d92dc71e66fdf52b60eeda4e19e5652817adfbd4f7090e",
@@ -74,7 +74,7 @@
       "contextSha256": "747ec5af67a0b60890da900a83fa255d3b96e2fa17d9199f8e483ef5051b213c"
     },
     {
-      "file": "src/shared/node-dist-mirror.ts",
+      "file": "src/shared/node-runtime/node-dist-mirror.ts",
       "inputs": [],
       "emptyEnv": [],
       "reason": "Reviewed URL/data projection only; no indirect repository reads. The entire local source closure and dependency/runtime context are fingerprinted.",
@@ -82,7 +82,7 @@
       "sourceClosureSha256": "89a62d9b524eaffb56788bacb0fcee64948d012df5240333293b5be70b77601f"
     },
     {
-      "file": "src/shared/project-host-setup-projection.ts",
+      "file": "src/shared/project/host-setup/project-host-setup-projection.ts",
       "inputs": [],
       "emptyEnv": [],
       "reason": "Reviewed URL/data projection only; no indirect repository reads. The entire local source closure and dependency/runtime context are fingerprinted.",
@@ -98,12 +98,12 @@
       "sourceClosureSha256": "08558478f5a5a6c0aa2e4e4d92d609ff55c11564d04a957f999f2302c478ae80"
     },
     {
-      "file": "src/shared/browser-url.ts",
+      "file": "src/shared/browser/navigation/browser-url.ts",
       "inputs": [],
       "emptyEnv": [],
       "reason": "Reviewed URL/data projection only; no indirect repository reads. The entire local source closure and dependency/runtime context are fingerprinted.",
-      "contextSha256": "747ec5af67a0b60890da900a83fa255d3b96e2fa17d9199f8e483ef5051b213c",
-      "sourceClosureSha256": "08558478f5a5a6c0aa2e4e4d92d609ff55c11564d04a957f999f2302c478ae80"
+      "contextSha256": "3c069468bcb4a681493c94dad98bc2e4d2d56d0cbf641e797684fa307922d9e1",
+      "sourceClosureSha256": "38b77f62aefd7dd361825a98cf2fa9cfac1924c72d9e2a5f21d427e54381c04e"
     },
     {
       "file": "src/main/daemon/emulation/testing/serialize-grid-transcript-replay.test.ts",

@@ -3,7 +3,7 @@ import { isWslShellName } from '../../../../shared/shell/launch/local-windows-te
 import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { agentStartedTelemetry } from '../../../agent-launch/agent-started-telemetry'
 import type { AgentLaunchPreferences } from '../../../../shared/agent-session/agent-session-host-authority'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation/launch-types'
 import { repoIsRemote } from '../../../../shared/agent-launch/startup/agent-launch-remote'
@@ -20,7 +20,7 @@ import {
   buildAgentDraftLaunchPlan,
   buildAgentStartupPlan
 } from '../../../../shared/agent-launch/startup/tui-agent-startup'
-import { planStartupWithPromptCandidate } from '../../../../shared/startup-line-prompt-carry'
+import { planStartupWithPromptCandidate } from '../../../../shared/agent-launch/startup/startup-line-prompt-carry'
 import {
   launchHostProvesAgentInFront,
   nameLocalTypedLineShell

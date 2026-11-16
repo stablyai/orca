@@ -1,7 +1,7 @@
 import { homedir } from 'node:os'
 import { join, win32 as pathWin32 } from 'node:path'
 import { parseWslUncPath } from '../../shared/file-access/wsl-paths'
-import type { LocalAccountRuntimeTarget } from '../../shared/local-account-runtime'
+import type { LocalAccountRuntimeTarget } from '../../shared/agent-accounts/local-account-runtime'
 import { getWslHomeAsync, listWslDistrosAsync } from '../wsl/discovery/distro-catalog'
 import { isWslDistroRunning } from '../wsl/discovery/wsl-background-distro-gate'
 

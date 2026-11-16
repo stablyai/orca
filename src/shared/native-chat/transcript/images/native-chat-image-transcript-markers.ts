@@ -2,7 +2,7 @@ import { unwrapClaudePastedContent } from '../../../agent-hook-listener/provider
 import {
   stripAnsiEscapeSequences,
   TERMINAL_CONTROL_CHARACTER_PATTERN
-} from '../../../ansi-escape-sequences'
+} from '../../../terminal/protocol/escape/ansi-escape-sequences'
 import { isTextBlock, type NativeChatBlock, type NativeChatMessage } from '../../native-chat-types'
 import {
   IMAGE_PROMPT_MARKER,

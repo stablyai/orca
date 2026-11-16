@@ -4,7 +4,7 @@ import {
   providerDiagnostic,
   withProviderDiagnostic
 } from '../../../../shared/agent-session/failures/agent-session-failure'
-import { throwIfSignalAborted } from '../../../../shared/abort-signal-reason'
+import { throwIfSignalAborted } from '../../../../shared/concurrency/abort-signal-reason'
 import {
   isCodexAppServerRequestError,
   type CodexAppServerRequestError

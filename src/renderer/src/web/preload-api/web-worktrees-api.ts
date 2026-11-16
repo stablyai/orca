@@ -30,7 +30,7 @@ import { noopUnsubscribe } from './web-storage'
 import { runApprovedSetupOnWebHost } from './web-approved-setup'
 import { emitWebWorkspaceSleep } from './web-workspace-sleep-notices'
 import { translate } from '@/i18n/i18n'
-import type { WorkspaceSleepOutcome } from '../../../../shared/workspace-sleep'
+import type { WorkspaceSleepOutcome } from '../../../../shared/workspace/lifecycle/workspace-sleep'
 
 // Past the host's two-minute chat stop, so a slow stop answers rather than timing out.
 const WEB_WORKSPACE_SLEEP_TIMEOUT_MS = 150_000

@@ -5,10 +5,10 @@ import { getAiVaultResumeWorkspaceExecutionHostId } from './ai-vault-resume-targ
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
 import { CLIENT_PLATFORM } from '@/lib/workspace/creation/new-workspace'
 import { resolveLocalWindowsTerminalShellOverrideForTab } from '../../../../../../shared/shell/launch/local-windows-terminal-runtime'
-import { resolveWindowsShellStartupFamily } from '../../../../../../shared/windows-terminal-shell'
+import { resolveWindowsShellStartupFamily } from '../../../../../../shared/shell/launch/windows-terminal-shell'
 import { resolveStartupShell } from '../../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import type { AgentStartupShell } from '../../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { parseWslUncPath } from '../../../../../../shared/file-access/wsl-paths'
 import {
   selectFolderWorkspaces,

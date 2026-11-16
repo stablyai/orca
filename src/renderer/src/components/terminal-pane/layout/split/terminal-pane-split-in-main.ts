@@ -1,5 +1,5 @@
 // Main writes/starts splits under the window pane ID; frame reconciliation draws and attaches its terminal.
-import type { TerminalPaneSplitSource } from '../../../../../../shared/feature-education-telemetry'
+import type { TerminalPaneSplitSource } from '../../../../../../shared/feature-education/feature-education-telemetry'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'
 import { mintStablePaneId } from '@/lib/pane-manager/pane-layout/mint-stable-pane-id'
 import { refusalActsAsToday } from '@/runtime/workspace-layout/commands/layout-apply-send'

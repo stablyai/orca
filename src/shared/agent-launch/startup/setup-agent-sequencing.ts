@@ -1,5 +1,5 @@
 import { quotePosixShellUnlessPlainNoAt } from '../../shell/launch/shell-argument-quoting'
-import { encodePowerShellCommand } from '../../powershell-command-encoding'
+import { encodePowerShellCommand } from '../../shell/launch/powershell-command-encoding'
 import { getPosixCodexShellLaunchPreflight } from '../../shell/launch/agents/codex-shell-function'
 import { getPosixClaudeShellFunction } from '../../shell/launch/agents/claude-shell-function'
 import {
@@ -8,8 +8,8 @@ import {
   type SetupRunnerCommandPlatform,
   type SetupRunnerShell
 } from './setup-runner-command'
-import { createNonSecureContextUuid } from '../../non-secure-context-uuid'
-import { quotePowerShellLiteral } from '../../powershell-native-argument'
+import { createNonSecureContextUuid } from '../../identifiers/non-secure-context-uuid'
+import { quotePowerShellLiteral } from '../../shell/launch/powershell-native-argument'
 
 const DEFAULT_WAIT_TIMEOUT_SECONDS = 2 * 60 * 60
 export const SETUP_COMPLETE_MESSAGE = 'Setup finished; starting agent.'

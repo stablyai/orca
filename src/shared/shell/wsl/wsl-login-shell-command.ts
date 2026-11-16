@@ -1,6 +1,6 @@
 import { getFishClaudeShellFunction } from '../launch/agents/claude-shell-function'
-import { FISH_WSL_CWD_REPORT_FUNCTION } from '../../fish-wsl-cwd-report'
-import { buildPosixStdoutFence, type PosixStdoutFence } from '../../posix-stdout-fence'
+import { FISH_WSL_CWD_REPORT_FUNCTION } from './fish-wsl-cwd-report'
+import { buildPosixStdoutFence, type PosixStdoutFence } from '../launch/posix-stdout-fence'
 import { quotePosixShell } from '../launch/shell-argument-quoting'
 
 /** Use --exec to preserve guest argv. WSL’s -- expands $name even without a shell, corrupting scripts such as awk field references; host escaping cannot reliably prevent it. */

@@ -23,7 +23,7 @@ import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translat
 import { getShortcutPlatform } from '@/hooks/useShortcutLabel'
 import { useAppStore } from '@/store/index'
 import { requestBrowserFocus } from '../host-guest/input/browser-focus'
-import type { BrowserPageDocLocation } from '../../../../../shared/browser-workspace-types'
+import type { BrowserPageDocLocation } from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import { startOfLocalDay } from '../../../../../shared/automations/scheduling/automation-cron-occurrence'
 import { formatKeybinding } from '../../../../../shared/keybindings/formatting'
 import type { RemovedBrowserHistory } from '@/store/slices/browser/browser-slice-contract'

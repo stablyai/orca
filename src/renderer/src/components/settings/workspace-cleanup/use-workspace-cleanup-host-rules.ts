@@ -9,7 +9,7 @@ import {
   normalizeWorkspaceCleanupRules,
   type WorkspaceCleanupRules
 } from '../../../../../shared/workspace-cleanup/workspace-cleanup-policy'
-import { errorMessage } from '../../../../../shared/error-message'
+import { errorMessage } from '../../../../../shared/errors/error-message'
 
 /** `unsupported`: a host from before automatic cleanup, which neither reports nor accepts the rules. */
 export type WorkspaceCleanupHostRules =

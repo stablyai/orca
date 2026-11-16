@@ -2,7 +2,7 @@ import { useSupportedGroupHookSettings } from '@/hooks/use-supported-group-hook-
 import type { GeneralSubPage } from '../general/general-sub-pages'
 import { useCallback, useMemo, useState } from 'react'
 import type { OrcaHooks } from '../../../../../shared/orca-yaml-hook-types'
-import type { ProjectHostSetup } from '../../../../../shared/project-types'
+import type { ProjectHostSetup } from '../../../../../shared/project/project-types'
 import { DEFAULT_APP_FONT_FAMILY } from '../../../../../shared/constants'
 import { useAppStore } from '../../../store/index'
 import { useProjectHostSetupProjection } from '@/store/projects/use-project-host-setup-projection'

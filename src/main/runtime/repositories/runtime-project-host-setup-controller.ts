@@ -11,15 +11,15 @@ import type {
   ProjectHostSetupUpdateArgs,
   ProjectHostSetupUpdateResult,
   ProjectUpdateArgs
-} from '../../../shared/project-types'
-import type { Repo } from '../../../shared/repo-types'
+} from '../../../shared/project/project-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import {
   getRepoExecutionHostId,
   getSshTargetIdForExecutionHost,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import { getProjectHostSetupForRepo } from '../../../shared/project-host-setup-lookup'
+import { getProjectHostSetupForRepo } from '../../../shared/project/host-setup/project-host-setup-lookup'
 import {
   linkImportedFolderToProject,
   type RepositoryMetadataOwner
@@ -48,7 +48,7 @@ import {
   findProjectHostSetup,
   SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE,
   type ProjectHostSetupTarget
-} from '../../../shared/project-host-setup-target'
+} from '../../../shared/project/host-setup/project-host-setup-target'
 
 type RuntimeProjectHostSetupDependencies = RepositoryMetadataOwner & {
   getStore: () => RuntimeStore | null

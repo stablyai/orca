@@ -4,7 +4,7 @@ import type { WorkspaceActivityFacts } from '../../../shared/sidebar-list/feed-f
 import { buildWorkspaceRows } from '../../../shared/sidebar-list/feed-facts/workspace-rows'
 import type { RuntimeClientEvent } from '../../../shared/remote-runtime/session-graph/runtime-client-events'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import type {
   MobileDesktopRelayHosts,

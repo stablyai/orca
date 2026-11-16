@@ -25,7 +25,10 @@ import {
 } from '../../wsl/filesystem/wsl-unc-access-gate'
 import { wslDistroHoldMessage } from '../../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
 import type { TerminalWorkspaceLaunchScope } from '../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
-import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
+import {
+  folderWorkspaceKey,
+  parseWorkspaceKey
+} from '../../../shared/workspace/identity/workspace-scope'
 import {
   folderCatalogOf,
   resolveKeyedFolderWorkspace,
@@ -74,6 +77,7 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
     this.clearPtyIncarnationHandles()
     this.terminalWaiters.rejectAll('terminal_handle_stale')
     this.refreshWritableFlags()
+    this.releaseUnseededPhoneFrames()
   }
 
   protected shouldRestoreHeadlessGraph(windowId: number): boolean {
@@ -95,6 +99,7 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
     this.terminalWaiters.rejectAll('terminal_handle_stale')
     this.refreshWritableFlags()
     this.markSessionTabsInventoryPublished()
+    this.releaseUnseededPhoneFrames()
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
       this.headlessGraphFallbackAvailable = true
       startedMainTerminalSurfaces(this)?.republish({ force: true })

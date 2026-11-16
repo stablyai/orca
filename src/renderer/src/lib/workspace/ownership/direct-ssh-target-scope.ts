@@ -5,7 +5,7 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../../../shared/execution-host'
-import { worktreeWorkspaceKey } from '../../../../../shared/workspace-scope'
+import { worktreeWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import type {
   DirectSshRepoOwner as RepoOwner,
   DirectSshTargetScopeInput,

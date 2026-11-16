@@ -1,7 +1,14 @@
-import type { BrowserWindow } from 'electron'
+import {
+  admitBrowserPageAttach,
+  isBrowserPageAttachMarker,
+  associateBrowserPageAttach,
+  closeBrowserMemoryRenderer,
+  startBrowserPageAttach
+} from '../../browser/guest-lifecycle/browser-page-memory'
+import { app, type BrowserWindow } from 'electron'
 import { join } from 'node:path'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../../shared/browser/guest-lifecycle/browser-guest-web-preferences'
-import { normalizeBrowserNavigationUrl } from '../../../shared/browser-url'
+import { normalizeBrowserNavigationUrl } from '../../../shared/browser/navigation/browser-url'
 import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
 import { browserSessionRegistry } from '../../browser/sessions/profiles/browser-session-registry'
 import {
@@ -83,7 +90,13 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
     }
   })
   // These WebContents own every preview and its failure sink; destruction leaves no readers.
+  const associateCreatedGuest = (_event: Electron.Event, guest: Electron.WebContents): void => {
+    associateBrowserPageAttach(guest)
+  }
+  app.on('web-contents-created', associateCreatedGuest)
   mainWindow.webContents.on('destroyed', () => {
+    app.off('web-contents-created', associateCreatedGuest)
+    closeBrowserMemoryRenderer(mainWindow.webContents.id)
     setDocPreviewFailureSink(null)
     revokeAllDocPreviewGrants()
   })
@@ -96,6 +109,7 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
   const pluginFrameGuestPreload = join(__dirname, 'plugin-frame-guest-preload.js')
   mainWindow.webContents.on('will-attach-webview', (event, webPreferences, params) => {
     const src = typeof params.src === 'string' ? params.src : ''
+    let attachArgument: string | null = null
     const normalizedSrc = normalizeBrowserNavigationUrl(src)
     const partition = typeof webPreferences.partition === 'string' ? webPreferences.partition : ''
     // Plugin partitions are their own rule: never a browser guest, never another plugin's origin.
@@ -114,6 +128,14 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
     const isRoutePartition = browserRouteSessionRegistry.isAllowedPartition(partition)
     // Direct-SSH partitions exist only after proxy verification; renderer URLs need no main-side grants, like profile partitions.
     const isLocalSshPartition = isLocalSshBrowserPartition(partition)
+    if (isBrowserPageAttachMarker(src)) {
+      try {
+        attachArgument = admitBrowserPageAttach(src, mainWindow.webContents.id, partition)
+      } catch {
+        event.preventDefault()
+        return
+      }
+    }
     const isDocPreviewAttach = isAdmissibleDocPreviewAttach(partition, src)
     const isExtensionPageAttach = isAdmissibleExtensionPageAttach(profileId, src)
 
@@ -121,9 +143,9 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
     if (
       !isDocPreviewAttach &&
       !isExtensionPageAttach &&
-      (!normalizedSrc ||
+      ((!normalizedSrc && !attachArgument) ||
         (!isProfilePartition && !isRoutePartition && !isLocalSshPartition) ||
-        (isRoutePartition && normalizedSrc !== ORCA_BROWSER_BLANK_URL))
+        (isRoutePartition && normalizedSrc !== ORCA_BROWSER_BLANK_URL && !attachArgument))
     ) {
       event.preventDefault()
       return
@@ -136,6 +158,9 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
     delete (webPreferences as Record<string, unknown>).preloadURL
     // Electron 43 omits inherited arguments; clear defensively so future inheritance cannot leak browser-host identity.
     delete webPreferences.additionalArguments
+    if (attachArgument) {
+      delete params.src
+    }
     webPreferences.nodeIntegration = false
     // Iframes need the passkey watch and framed extension pages; sandboxed, it only runs the preloads per frame.
     webPreferences.nodeIntegrationInSubFrames = !isDocPreviewAttach
@@ -173,10 +198,13 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
     browserManager.attachGuestPolicies(guest)
     installBrowserJavaScriptDialogs(guest, () => browserManager.resolvePagePromptTarget(guest))
     // Route guests stay blank until exact main-owned registration and override generic popup routing.
-    browserRouteWebContentsRegistry.attachGuest(guest)
+    const routeGuest = browserRouteWebContentsRegistry.attachGuest(guest)
     // Proxies cannot block WebRTC UDP; enforce it per WebContents.
     enforceLocalSshWebRtcPolicyForGuest(guest)
     attachBrowserPasswordGuest(guest)
+    if (!routeGuest) {
+      startBrowserPageAttach(guest)
+    }
   })
 }
 

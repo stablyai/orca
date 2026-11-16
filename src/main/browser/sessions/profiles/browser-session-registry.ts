@@ -7,11 +7,11 @@ import {
   DEFAULT_LOCAL_ORCA_PROFILE_ID,
   getOrcaProfileBrowserDefaultPartition,
   getOrcaProfileBrowserSessionPartition
-} from '../../../../shared/orca-profiles'
+} from '../../../../shared/orca-profiles/orca-profiles'
 import type {
   BrowserSessionProfile,
   BrowserSessionProfileScope
-} from '../../../../shared/browser-workspace-types'
+} from '../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   applyPendingBrowserCookieImports,
   clearPendingBrowserCookieImport
@@ -42,6 +42,7 @@ import {
   getBrowserExtensionSessionForProfile
 } from '../../extensions/profile-sessions/browser-extension-session-loader'
 import { isBrowserExtensionSupportEnabled } from '../../extensions/browser-extension-support'
+import { trackBrowserSessionCookies } from '../../cookies/session-restore/browser-session-cookie-restore'
 
 type ExtensionIdListKey = 'enabledExtensionIdsByProfileId' | 'pinnedExtensionIdsByProfileId'
 type ExtensionIdListUpdate = (byProfile: Record<string, string[]>) => Record<string, string[]>
@@ -272,6 +273,7 @@ class BrowserSessionRegistry {
     }
     this.profiles.set(id, profile)
     this.persistProfiles()
+    trackBrowserSessionCookies(profile)
     this.onProfilesChanged?.()
     return profile
   }

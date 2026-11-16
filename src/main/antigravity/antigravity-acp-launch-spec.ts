@@ -9,7 +9,7 @@ import type { StructuredAgentSessionHistory } from '../native-chat/conversation-
 import {
   AntigravityChatAuthConfigSchema,
   resolveAntigravityChatAuthConfig
-} from '../../shared/antigravity-chat-auth-config'
+} from '../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import { ANTIGRAVITY_ACP_COMMAND, ANTIGRAVITY_ACP_RUNTIME } from './antigravity-acp-runtime'
 import { ANTIGRAVITY_ACP_ENV, scrubAntigravityAcpEnvironment } from './antigravity-acp-environment'
@@ -74,6 +74,10 @@ const ANTIGRAVITY_MANAGED_LAUNCH_SPEC = {
   transcriptImport: null,
   sessionHistory: ANTIGRAVITY_SESSION_HISTORY,
   privateTempDirectory: true,
+  // The Windows 1.4.5 server otherwise writes its workflow tool into every chat workspace.
+  ...(process.platform === 'win32'
+    ? { sessionMeta: { antigravity: { disabledTools: ['run_workflow'] } } }
+    : {}),
   // `session/load` replays the whole conversation, which the chat already holds.
   resumePreference: 'resume',
   resolveSessionMeta: antigravityChatRulesMeta,
@@ -81,8 +85,11 @@ const ANTIGRAVITY_MANAGED_LAUNCH_SPEC = {
 } satisfies AcpLaunchSpec
 
 // An inherited Gemini API key switches agy to key auth, which its models reject (401).
-function scrubAgyHostApiKeys(env: Record<string, string>): string[] {
-  const removed = ['GEMINI_API_KEY', 'GOOGLE_API_KEY']
+function scrubAgyHostApiKeys(env: Record<string, string>, inherited: NodeJS.ProcessEnv): string[] {
+  const removed = [...new Set([...Object.keys(env), ...Object.keys(inherited)])].filter((key) => {
+    const normalized = process.platform === 'win32' ? key.toUpperCase() : key
+    return normalized === 'GEMINI_API_KEY' || normalized === 'GOOGLE_API_KEY'
+  })
   for (const key of removed) {
     delete env[key]
   }
@@ -126,7 +133,8 @@ const ANTIGRAVITY_HOST_LAUNCH_SPEC: AcpLaunchSpec = {
     parse: parseAntigravityAcpModels,
     listingNamesConfiguredModel: false
   },
-  keepsEverySession: true
+  keepsEverySession: true,
+  sessionMeta: undefined
 }
 
 // The host's agy ignores Orca's account type, so any other saved choice, a malformed one, or one

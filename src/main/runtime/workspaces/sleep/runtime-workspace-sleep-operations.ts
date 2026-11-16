@@ -4,7 +4,7 @@ import type {
   WorkspaceSleepNotice,
   WorkspaceSleepOutcome,
   WorkspaceSleepRequest
-} from '../../../../shared/workspace-sleep'
+} from '../../../../shared/workspace/lifecycle/workspace-sleep'
 import { WorkspaceSleepCoordinator } from './workspace-sleep-runtime'
 import type { RecipeVmOpening, RecipeVmState } from './recipe-vm-operations'
 import { dropStrandedSleepRecord } from '../../terminal/stop/worktree-sleep-resume-records'

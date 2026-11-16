@@ -1,6 +1,6 @@
 import type { ClassifiedError } from '../../../shared/classified-error'
 import type { GitLabCommentResult, GitLabIssueInfo, MRComment } from '../../../shared/gitlab-types'
-import type { IssueSourcePreference } from '../../../shared/repo-types'
+import type { IssueSourcePreference } from '../../../shared/repository/repo-types'
 import { mapGitLabIssueInfo } from '../requests/gitlab-response-mapping'
 // prettier-ignore
 import { glabApiWithHeaders, acquire, release } from '../requests/glab-request-admission'

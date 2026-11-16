@@ -3,15 +3,15 @@ import { recomputeOn } from '@/lib/recompute-on'
 
 const leaseCountsByPageId = new Map<string, number>()
 const pageIdByToken = new Map<string, string>()
-const listeners = new Set<() => void>()
+const listeners = new Set<(pageId: string) => void>()
 
 let version = 0
 let nextLeaseId = 0
 
-function emitChange(): void {
+function emitChange(pageId: string): void {
   version += 1
   for (const listener of listeners) {
-    listener()
+    listener(pageId)
   }
 }
 
@@ -22,8 +22,11 @@ function subscribe(listener: () => void): () => void {
   }
 }
 
-export function onBrowserAutomationVisibilityChange(listener: () => void): () => void {
-  return subscribe(listener)
+export function onBrowserAutomationVisibilityChange(
+  listener: (pageId: string) => void
+): () => void {
+  listeners.add(listener)
+  return () => listeners.delete(listener)
 }
 
 function getSnapshot(): number {
@@ -66,7 +69,7 @@ export function acquireBrowserAutomationVisibility(browserPageId: string): strin
   const token = `browser-automation-${Date.now()}-${++nextLeaseId}`
   pageIdByToken.set(token, browserPageId)
   leaseCountsByPageId.set(browserPageId, (leaseCountsByPageId.get(browserPageId) ?? 0) + 1)
-  emitChange()
+  emitChange(browserPageId)
   return token
 }
 
@@ -82,6 +85,6 @@ export function releaseBrowserAutomationVisibility(token: string): boolean {
   } else {
     leaseCountsByPageId.delete(browserPageId)
   }
-  emitChange()
+  emitChange(browserPageId)
   return true
 }

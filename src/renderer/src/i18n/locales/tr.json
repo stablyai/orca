@@ -903,9 +903,6 @@
     },
     "followSymlinkedDirectories": "Sembolik bağlantılı dizinleri takip et",
     "followSymlinkedDirectoriesDescription": "Hızlı Aç'ta bağlantılı klasörlerde arama yapın ve Dosya Gezgini'nde yerel bağlantılı klasörleri genişletin.",
-    "accounts": {
-      "claudeRemoveFolder": "Orca, bu hesabın Claude klasörünü ve oturum açma bilgilerini bu bilgisayardan siler. Sistem varsayılanı ile paylaşılan sohbet geçmişi korunur. Bu hesap seçiliyse bir sonraki Claude başlatılışında Sistem varsayılanı kullanılır."
-    },
     "sourceControl": {
       "gitOperationInAnotherWorkspace": "Git işlemi başka yerde çalışıyor",
       "remoteOperationInAnotherWorkspace": "Başka bir çalışma alanında Git işlemi (push, pull veya force push gibi) çalışıyor. İşlemlerin çakışmaması için bitmesini bekleyip bu eylemi kullanın.",
@@ -1025,6 +1022,134 @@
       "include": "Dahil edilecek glob'lar (her satıra bir tane)",
       "includeHelp": "Çalışma alanı köküne göre göreli yollarla eşleşir. Eşleşen glob yoksa biçimlendirme yapılmaz. * ve ** noktayla başlayan adları atlar; bunları açıkça belirtin, ör. .github/**/*.yml. Bu komutu kullanmak için Genel > Düzenleyici bölümünde Kaydederken biçimlendir seçeneğini etkinleştirin.",
       "710343e374": "Biçimlendirici komutu"
+    },
+    "general": {
+      "openInMenu": {
+        "keyword": {
+          "windsurf": "Windsurf",
+          "devin": "Devin",
+          "devinDesktop": "Devin Desktop",
+          "antigravity": "Antigravity"
+        }
+      },
+      "search": {
+        "keywords": {
+          "source": "kaynak",
+          "root": "kök",
+          "custom": "özel",
+          "location": "konum",
+          "claude": "Claude",
+          "gsd": "GSD",
+          "tabs": "sekmeler",
+          "command_line": "komut satırı",
+          "about": "hakkında",
+          "update": "güncelleme",
+          "version": "sürüm",
+          "star": "yıldız",
+          "confirmations": "onaylar",
+          "ask_before": "önce sor",
+          "artifact": "artifact",
+          "share": "paylaş",
+          "link": "bağlantı",
+          "diff": "diff",
+          "whitespace": "boşluk",
+          "spaces": "boşluklar",
+          "trim": "kırp",
+          "indentation": "girinti",
+          "word_wrap": "sözcük kaydırma",
+          "wrap": "kaydırma",
+          "markdown": "Markdown",
+          "long_lines": "uzun satırlar",
+          "auto_save": "otomatik kaydetme"
+        }
+      },
+      "folder": {
+        "perProject": "Proje başına klasör",
+        "oneFolder": "Tek klasör"
+      },
+      "worktrees": {
+        "addFolder": "Klasör ekle…",
+        "cancelAdd": "İptal",
+        "customRules": "Özel kurallar",
+        "shown": "Varsayılan olarak gösterilir",
+        "hidden": "Tümü gizli",
+        "description": "Claude Code, GSD ve diğer konumlar"
+      },
+      "tabs": {
+        "title": "Sekmeler"
+      },
+      "previewTabs": {
+        "title": "Önizleme sekmeleri",
+        "description": "Bir dosyaya tek tıkladığınızda, dosyayı düzenleyene veya sabitleyene kadar aynı önizleme sekmesi kullanılır."
+      },
+      "workspaces": {
+        "title": "Çalışma alanları"
+      },
+      "openIn": {
+        "description": "Çalışma alanının Şununla aç menüsündeki uygulamalar",
+        "none": "Uygulama eklenmedi"
+      },
+      "editor": {
+        "description": "Kaydetme, düzenleyici, diff ve Markdown seçenekleri",
+        "sideBySide": "Yan yana diff görünümü",
+        "inline": "Satır içi diff görünümü"
+      },
+      "confirmations": {
+        "title": "Onaylar",
+        "pinned": "Sabitlenmiş bir sekmeyi kapatma",
+        "running": "Çalışan bir sohbeti veya terminali kapatma",
+        "runningHelp": "Hâlâ çalışan bir ajanı veya komutu durdurmadan önce onay istenir.",
+        "workspace": "Bir çalışma alanını silme",
+        "automation": "Bir otomasyonu silme",
+        "automationHelp": "Çalıştırma geçmişi de silinir.",
+        "artifact": "Bir artifact'i silme",
+        "artifactHelp": "Herkese açık bağlantıya sahip olan herkes erişimini kaybeder."
+      },
+      "pages": {
+        "folder": "Çalışma alanı klasörü",
+        "worktrees": "Diğer araçların worktree'leri",
+        "openIn": "Şununla aç",
+        "editor": "Düzenleyici ve diff'ler"
+      },
+      "editorGroups": {
+        "saving": "Kaydetme",
+        "editor": "Düzenleyici",
+        "diffs": "Diff'ler",
+        "markdown": "Markdown"
+      },
+      "autoSave": {
+        "title": "Otomatik kaydetme",
+        "description": "Düzenlemeler kısa bir duraklamadan sonra kaydedilir."
+      },
+      "cli": {
+        "otherTerminals": "Diğer terminallerde {{command}}",
+        "title": "Komut satırı",
+        "description": "Orca'nın kendi terminallerinde zaten kullanılabilir.",
+        "skillTitle": "Ajanlar için Orca becerisi"
+      },
+      "about": {
+        "title": "Hakkında",
+        "version": "Orca {{version}}"
+      }
+    },
+    "updateDelay": {
+      "keywordDelay": "gecikme",
+      "keywordCooldown": "bekleme süresi",
+      "keywordSecurity": "güvenlik",
+      "upToDateWithHeld": "Güncelsiniz. Daha yeni bir sürüm {{date}} tarihine kadar bekletiliyor.",
+      "heldReleaseReady": "Daha yeni bir sürüm hazır. Almak için güncellemeleri kontrol edin.",
+      "none": "Yok",
+      "ab7e864374": "Güncelleme gecikmesi hakkında",
+      "availableSoon": "{{relative}} kullanımınıza sunulacak",
+      "availableOn": "{{date}} tarihinde ({{relative}}) kullanımınıza sunulacak",
+      "clearedTitle": "Orca {{version}} hazır",
+      "heldTitle": "Orca {{version}} bekletiliyor",
+      "released": "Yayınlanma: {{released}}",
+      "progress": "Orca {{version}} sürümünün kullanımınıza sunulmasına kalan süre",
+      "skipDelayOnceHint": "Bu sürümü şimdi kontrol edin. Gecikme ayarınız değişmez.",
+      "ee1d96f74a": "Gecikmeyi bir kez atla",
+      "1b4d825e0e": "Güncelleme gecikmesi",
+      "description": "Orca bir sürümü sunmadan önce yayınlanmasının üzerinden bu kadar gün geçmesini bekler."
     }
   },
   "menu": {
@@ -1373,7 +1498,7 @@
             "33290e88ed": "Profil bağlanamadı",
             "9fcb07a796": "Profil bağlandı",
             "2f6c78a039": "Profil kimlik doğrulaması yenilenemedi",
-            "a37b5e6d37": "Profilden çıkış yapıldı",
+            "a37b5e6d37": "Orca oturumu kapatıldı",
             "83600521e7": "Çıkış yapılamadı",
             "76deec8f58": "Organizasyon değiştirilemedi",
             "7d4bc516ee": "Profil değiştirilemedi",
@@ -1950,6 +2075,15 @@
       "workspacePortBrowserOpen": {
         "systemBrowserHint": "Sistem tarayıcısında açmak için {{shortcut}}+tıklayın",
         "tooltip": "{{label}}. {{hint}}"
+      },
+      "worktreePaletteEvidence": {
+        "workspaceComment": "Çalışma alanı yorumu",
+        "createdByAutomation": "Otomasyon tarafından oluşturuldu",
+        "linkedTask": "Bağlı görev",
+        "pullRequest": "Pull request",
+        "mergeRequest": "Merge request",
+        "linkedIssue": "Bağlı sorun",
+        "listeningPort": "Dinlenen port"
       }
     },
     "hooks": {
@@ -3594,6 +3728,8 @@
           "draft": "Taslak",
           "labelCount_other": "{{count}} etiket",
           "labelCount_one": "{{count}} etiket",
+          "authorCount_other": "{{count}} yazar",
+          "authorCount_one": "{{count}} yazar",
           "allStates": "Tümü",
           "filterPullRequests": "Pull request'leri filtrele",
           "filterIssues": "Sorunları filtrele",
@@ -4902,7 +5038,8 @@
             "detailedTooltip": "Çubuklar, etiketler ve yüzdelerle tam kullanım",
             "compactTooltip": "Özet kullanım: sağlayıcı başına tek özet",
             "footerDetailAria": "Kullanım altbilgi ayrıntısı",
-            "notChecked": "Kontrol edilmedi"
+            "notChecked": "Kontrol edilmedi",
+            "modelWeeklyLimit": "{{model}} haftalık sınırı: {{usage}}"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "{{value0}}/{{value1}} güncelleniyor",
@@ -7419,6 +7556,9 @@
         }
       },
       "settings": {
+        "FontAutocomplete": {
+          "installedFontsUnavailable": "Yüklü yazı tipleri listelenemedi. Kullanmak için yüklü bir yazı tipinin adını yazın."
+        },
         "keep": {
           "local": {
             "main": {
@@ -7438,7 +7578,6 @@
           "locationSaveFailed": "Hesap konumu kaydedilemedi. Tekrar deneyin.",
           "dbb9626ed1": "İptal",
           "63843e37e2": "Claude Hesabı Kaldırılsın mı?",
-          "380a7736cc": "Bu hesabı kaldırmak, içinde depolanan tüm Codex oturum geçmişi ve MCP girişleri dahil olmak üzere yönetilen Codex ana dizinini kalıcı olarak siler. Bu işlem geri alınamaz. Hesap şu anda etkinse Orca, sistem varsayılan Codex girişine geri döner.",
           "0d47394635": "Codex Hesabı Kaldırılsın mı?",
           "ae3b21eb6c": "opencode.ai/workspace/wrk_…/go",
           "51c9104e13": "opencode.ai'ye giriş yaptıktan sonra bunu URL'de bulun (örn.",
@@ -8078,7 +8217,9 @@
           "b11d620d45": "Varsayılan diff görünümü",
           "0971ef5c63": "Diff'te boşlukları göster",
           "916c5582f2": "Değişmeyen Bölgeleri Daralt",
-          "6f33c2a32f": "Diff satır kaydırma"
+          "6f33c2a32f": "Diff satır kaydırma",
+          "1dd79964bf": "Varsayılan Markdown görünümü",
+          "markdownDefaultViewDesc": "Markdown dosyalarının açılacağı görünüm. Bir Markdown sekmesinden değiştirmek için görünüm değiştiriciye sağ tıklayın."
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "localhost, 127.0.0.1, *.internal",
@@ -10202,6 +10343,10 @@
         },
         "general": {
           "search": {
+            "0f9304f821": "Varsayılan Markdown görünümü",
+            "markdownDefaultViewDesc": "Markdown dosyalarının açılacağı görünüm. Bir Markdown sekmesinden değiştirmek için görünüm değiştiriciye sağ tıklayın.",
+            "markdownSourceKw": "kaynak",
+            "markdownRichKw": "zengin",
             "bdfb6dc21b": "beğen",
             "e6b01c8e30": "geri bildirim",
             "b65665703a": "destek",
@@ -13435,6 +13580,39 @@
           "shownPluginCount_one": "Bu dahil eşleşen {{count}} eklenti gösteriliyor",
           "shownPluginCount_other": "Bu dahil eşleşen {{count}} eklenti gösteriliyor",
           "samePublisher": "{{value0}} olarak listelenen diğerleri"
+        },
+        "editorTypography": {
+          "typographyKw": "tipografi",
+          "253fc29ebb": "Düzenleyici yazı tipi boyutu",
+          "fontSizeDesc": "Dosya düzenleyicileri ve diff görünümleri için temel boyut. Terminal yazı tipi boyutunu kullanmak için boş bırakın.",
+          "sizeKw": "boyut",
+          "09d72edc6f": "Düzenleyici yazı tipi kalınlığı",
+          "fontWeightDesc": "Dosya düzenleyicileri ve diff görünümleri için kalınlık. Normal kalınlık (400) için boş bırakın.",
+          "weightKw": "kalınlık",
+          "boldKw": "kalın",
+          "8e8a87f9ed": "Düzenleyici satır yüksekliği",
+          "lineHeightDesc": "Düzenleyici yazı tipi boyutunun katı olarak satır aralığı; 8 ve üzeri değerler piksel olarak yorumlanır. Otomatik aralık için boş bırakın veya 0 girin.",
+          "lineHeightKw": "satır yüksekliği",
+          "spacingKw": "aralık",
+          "83db4f82b0": "Düzenleyici yazı tipi ligatürleri",
+          "ligaturesDesc": "Dosya düzenleyicilerinde ve diff görünümlerinde => ve !== gibi ligatürleri gösterin.",
+          "ligaturesKw": "ligatürler",
+          "ligatureKw": "ligatür",
+          "fontFeaturesKw": "yazı tipi özellikleri",
+          "d4b7264499": "Yazı tipi yumuşatma",
+          "fontSmoothingDesc": "Terminal ve kod düzenleyicilerinde metnin nasıl yumuşatılacağını belirler. Yerel seçenek, diğer macOS terminallerine benzer şekilde daha kalın karakterler çizer.",
+          "smoothingKw": "yumuşatma",
+          "antialiasingKw": "kenar yumuşatma",
+          "thinKw": "ince metin",
+          "fontSizeUnit": "px",
+          "lineHeightAuto": "Otomatik",
+          "ligaturesAutoEnabled": "Otomatik - \"{{value0}}\" için açık.",
+          "ligaturesAutoDisabled": "Otomatik - \"{{value0}}\" için kapalı.",
+          "ligaturesOff": "Kapalı",
+          "ligaturesAuto": "Otomatik",
+          "ligaturesOn": "Açık",
+          "fontSmoothingGrayscale": "Gri tonlama",
+          "fontSmoothingNative": "Yerel"
         }
       },
       "right": {
@@ -19957,7 +20135,7 @@
       "queuedMessages": {
         "steer": "Yönlendir",
         "send": "Gönder",
-        "steerHint": "Modeli kesintiye uğratmadan gönder",
+        "steerHint": "Ajan çalışmaya devam ederken şimdi gönder",
         "sendHint": "Bu mesajı şimdi gönder",
         "delete": "Sil",
         "moreActions": "Diğer işlemler",
@@ -20575,7 +20753,8 @@
       "TerminalContextMenu": {
         "copySessionId": "Oturum Kimliğini Kopyala",
         "copySessionIdSuccess": "Oturum Kimliği kopyalandı",
-        "copySessionIdError": "Oturum kimliği kopyalanamadı"
+        "copySessionIdError": "Oturum kimliği kopyalanamadı",
+        "copySessionIdUnavailable": "Kopyalanacak oturum kimliği yok"
       },
       "hostFile": {
         "updateHostForOutsideFiles": "Çalışma alanları dışındaki dosyaları açmak için {{value0}} üzerindeki Orca'yı güncelleyin"
@@ -22618,6 +22797,7 @@
       "tabOpenQuickCommandsMenu": "Hızlı komutlar menüsünü aç/kapat",
       "editorFind": "Düzenleyicide bul",
       "editorReplace": "Düzenleyicide değiştir",
+      "editorToggleChangesView": "Değişiklikler görünümünü aç/kapat",
       "fileExplorerUndo": "Dosya işlemini geri al",
       "fileExplorerRedo": "Dosya işlemini yinele",
       "fileExplorerCopyPath": "Dosya yolunu kopyala",
@@ -22635,6 +22815,7 @@
       "chatFind": "Sohbette bul",
       "terminalToggleNativeChat": "Sohbet arayüzü ile terminal arasında geçiş yap",
       "terminalClosePane": "Etkin bölmeyi kapat",
+      "terminalCopySessionId": "Oturum Kimliğini Kopyala",
       "terminalSplitRight": "Terminali sağa böl",
       "terminalSplitDown": "Terminali aşağı böl",
       "terminalSwitchInputSource": "Giriş kaynağını / dilini değiştir (yerel)",

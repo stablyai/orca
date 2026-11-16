@@ -1,4 +1,4 @@
-import type { ForkFallbackValue } from '../../../../shared/daemon-tcc-denial-capture'
+import type { ForkFallbackValue } from '../../../../shared/terminal/daemon/daemon-tcc-denial-capture'
 
 export type MacDaemonForkReason = Exclude<ForkFallbackValue, 'none' | 'unknown'>
 

@@ -1,4 +1,4 @@
-import { useShallow } from 'zustand/react/shallow'
+import { useAgentStatusSelector } from '@/runtime/agent-status/use-agent-status'
 import { useCallback, useSyncExternalStore } from 'react'
 import type { DashboardAgentRow } from './dashboard-agent-row'
 import { useFocusedAgentPaneKey } from '@/components/sidebar/workspace-card/activity/focused-agent-row-highlight'
@@ -13,15 +13,15 @@ import {
 export function useClaudeAgentRowView(agent: DashboardAgentRow) {
   const paneKey = agent.activationPaneKey ?? agent.paneKey
   const focused = useFocusedAgentPaneKey(agent.tab.worktreeId) === paneKey
-  const { agentType, structuredHostOwned, providerSessionId } = useAppStore(
-    useShallow((state) => {
-      const parent = state.agentStatusByPaneKey[paneKey] ?? agent.entry
-      return {
-        agentType: parent.agentType,
-        structuredHostOwned: parent.structuredHostOwned,
-        providerSessionId: parent.providerSession?.id
-      }
-    })
+  // Field reads so a preview or timing update on this pane does not re-render the row.
+  const agentType = useAgentStatusSelector(paneKey, (entry) => (entry ?? agent.entry).agentType)
+  const structuredHostOwned = useAgentStatusSelector(
+    paneKey,
+    (entry) => (entry ?? agent.entry).structuredHostOwned
+  )
+  const providerSessionId = useAgentStatusSelector(
+    paneKey,
+    (entry) => (entry ?? agent.entry).providerSession?.id
   )
   const environmentId = useAppStore((state) =>
     runtimeEnvironmentIdOrLocalUnlessTwin(state, agent.tab.worktreeId)

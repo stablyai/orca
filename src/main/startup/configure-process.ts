@@ -6,13 +6,13 @@ import { existsSync, mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { getVersionManagerBinPaths } from '../codex-cli/command'
-import { isWindowsFnmDefaultAliasDir } from '../../shared/fnm-default-alias-dirs'
+import { isWindowsFnmDefaultAliasDir } from '../../shared/shell/command-resolution/fnm-default-alias-dirs'
 import { getMainE2EConfig } from './testing/e2e-config'
 import { DISABLED_CHROMIUM_FEATURES } from './chromium-policy/disabled-chromium-features'
 import { readHttp1CompatibilityMarker } from './network-compatibility/http1-compatibility-marker'
 import { checkServeUserDataPath } from './serve-launch/serve-user-data-path-guard'
 import { stampRuntimeSourceEnv } from '../../shared/remote-runtime/host-catalog/runtime-source-env'
-import { isLinuxWaylandSession } from '../../shared/linux-wayland-session'
+import { isLinuxWaylandSession } from '../../shared/app-lifecycle/launch/linux-wayland-session'
 import {
   hasMissingProfileStateDatabaseWithRetainedAuthority,
   readActiveProfileId,

@@ -2,7 +2,7 @@ import type {
   AgentSessionModelOption,
   AgentSessionOptionChoice
 } from './agent-session/agent-session-wire'
-import { stripAnsiEscapeSequences } from './ansi-escape-sequences'
+import { stripAnsiEscapeSequences } from './terminal/protocol/escape/ansi-escape-sequences'
 import type {
   CommitMessageModel,
   ThinkingLevel

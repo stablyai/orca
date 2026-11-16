@@ -8,7 +8,7 @@ import {
   toRuntimeExecutionHostId
 } from '../../../../shared/execution-host'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
-import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
 import { getWorkspaceAttachmentSourceContext } from '@/components/sidebar/workspace-card/review/workspace-attachment-source-result'
 import { getWorkspaceReferenceLinearWorkspaceId } from '@/components/sidebar/workspace-card/review/workspace-reference-details'

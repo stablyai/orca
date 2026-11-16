@@ -2,7 +2,7 @@ import React from 'react'
 import { FolderInput } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { openWslMoveDialogFor, useWslMoveTargetForRepo } from './wsl-move-entry'
 
 /** "Move to <distro> host…" for a local WSL project; nothing where no move is offered. */

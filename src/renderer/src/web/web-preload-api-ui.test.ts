@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FeatureInteractionState } from '../../../shared/feature-interactions'
+import type { FeatureInteractionState } from '../../../shared/feature-education/interactions/feature-interactions'
 import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 
 import {

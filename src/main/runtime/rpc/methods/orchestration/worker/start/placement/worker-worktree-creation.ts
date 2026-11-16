@@ -3,12 +3,12 @@ import type { RuntimeTerminalCreate } from '../../../../../../../../shared/termi
 
 import type { AgentLaunchPreferences } from '../../../../../../../../shared/agent-session/agent-session-host-authority'
 import type { TuiAgent } from '../../../../../../../../shared/agent-launch/catalog/tui-agent'
-import { suggestCreatureNameForPaths } from '../../../../../../../../shared/worktree-name-suggestion'
+import { suggestCreatureNameForPaths } from '../../../../../../../../shared/worktree/naming/worktree-name-suggestion'
 import type { OrcaRuntimeService } from '../../../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../../../orchestration/db/orchestration-db'
 import { resolveUnattendedSetupDecision } from '../../../../../../../workspace-hooks/effective-hook-config'
 import { OrchestrationError } from '../../../../../../orchestration/orchestration-error'
-import { parseWorkspaceKey } from '../../../../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../../../../shared/workspace/identity/workspace-scope'
 import type { WorkerEffect, WorkerSetupReceipt } from './worker-placement-topology'
 
 /** The repo a new worker worktree is created in, and its parent for `new-child`. */

@@ -1,5 +1,5 @@
 import type { Automation, AutomationExecutionTargetType } from '../automation-definition'
-import type { Repo } from '../../repo-types'
+import type { Repo } from '../../repository/repo-types'
 import { getRepoSshConnectionId } from '../../execution-host'
 import type { AutomationWorkspaceSshPin } from './automation-workspace-pin'
 

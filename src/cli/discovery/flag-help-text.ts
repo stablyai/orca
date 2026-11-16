@@ -1,6 +1,8 @@
 export const FLAG_HELP_TEXT: Record<string, string> = {
   'external-worktree-visibility':
     '--external-worktree-visibility show|hide|inherit  Override or inherit non-Orca worktree visibility',
+  'browser-profile':
+    '--browser-profile <id>|inherit  Browser profile for new tabs in this repo, or inherit the Browser setting',
   agent: '--agent <id>          Launch a known TUI agent in the first terminal',
   'agent-wait': "--agent-wait           Add each agent row's terminal wait verdict to JSON output",
   'base-branch': '--base-branch <ref>    Base branch/ref to create the worktree from',
@@ -60,6 +62,10 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   name: '--name <name>          Name for the new worktree or automation',
   'no-parent': '--no-parent            Force no parent lineage for unrelated work',
   'no-screenshot': '--no-screenshot       Skip screenshot capture after the operation',
+  'screenshot-format': '--screenshot-format <png|jpeg> Screenshot image format (default png)',
+  'screenshot-scale':
+    '--screenshot-scale <n> At most n screenshot pixels per window point; 1 drops Retina detail',
+  'screenshot-max-edge': '--screenshot-max-edge <px> Shrink the screenshot so its longer side fits',
   pages: '--pages <n>           Number of scroll pages',
   'parent-worktree':
     '--parent-worktree <selector> Parent worktree selector such as identity:<identity>, id:<repo-id>::<path>, folder:<id>, name:<displayName>, branch:<branch>, issue:<number>, path:<path>, or active/current',
