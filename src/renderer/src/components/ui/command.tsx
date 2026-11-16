@@ -6,6 +6,7 @@ import { Command as CommandPrimitive } from 'cmdk'
 import { SearchIcon } from 'lucide-react'
 import * as DialogPrimitive from 'radix-ui/dialog'
 
+import { usePortalContainer } from './portal-container-context'
 import { cn } from '@/lib/class-names'
 import { handleOverlayCloseAutoFocus } from '@/lib/overlay-interaction/overlay-focus-ownership'
 import { getWheelScrollDeltaY } from '@/lib/wheel-scroll-delta'
@@ -97,7 +98,7 @@ function CommandDialog({
 
   return (
     <DialogPrimitive.Root {...props}>
-      <DialogPrimitive.Portal>
+      <DialogPrimitive.Portal container={usePortalContainer() ?? undefined}>
         <DialogOverlay className={overlayClassName} />
         <OverlayFocusScope value={scope}>
           <DialogPrimitive.Content
