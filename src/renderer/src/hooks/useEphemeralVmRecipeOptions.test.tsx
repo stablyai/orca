@@ -328,9 +328,7 @@ describe('useEphemeralVmRecipeOptions', () => {
     const text = (container: HTMLElement, id: string) =>
       container.querySelector(`[data-testid="${id}"]`)?.textContent
     const pick = async (container: HTMLElement, id: string) =>
-      act(async () =>
-        (container.querySelector(`[data-testid="${id}"]`) as HTMLButtonElement).click()
-      )
+      act(async () => container.querySelector<HTMLButtonElement>(`[data-testid="${id}"]`)?.click())
 
     it('stays picked when the new project can use it, without flashing back to this computer', async () => {
       const next = deferred<RecipeListResult>()
