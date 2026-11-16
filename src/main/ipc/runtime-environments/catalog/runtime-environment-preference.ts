@@ -19,10 +19,10 @@ function reconcileRuntimeEnvironmentPreference(
   return store.updateSettings({ activeRuntimeEnvironmentId: null }, { notifyListeners: true })
 }
 
-export function readSettingsWithRuntimeEnvironmentPreference(
+export async function readSettingsWithRuntimeEnvironmentPreference(
   store: PreferenceStore,
   userDataPath: string
-): GlobalSettings {
+): Promise<GlobalSettings> {
   const settings = store.getSettings()
   if (!settings?.activeRuntimeEnvironmentId?.trim()) {
     return settings
@@ -30,7 +30,7 @@ export function readSettingsWithRuntimeEnvironmentPreference(
   let environments: { id: string }[]
   try {
     // An unavailable registry cannot prove the selected host was removed.
-    environments = listEnvironments(userDataPath, { requireStoreFile: true })
+    environments = await listEnvironments(userDataPath, { requireStoreFile: true })
   } catch {
     return settings
   }
@@ -46,9 +46,9 @@ export function watchRuntimeEnvironmentPreference(
   // Renderers cache the catalog; CLI edits reach them only through this watch.
   onRegistryChanged: () => void = () => {}
 ): () => void {
-  const repairPreference = (): void => {
+  const repairPreference = async (): Promise<void> => {
     try {
-      readSettingsWithRuntimeEnvironmentPreference(store, userDataPath)
+      await readSettingsWithRuntimeEnvironmentPreference(store, userDataPath)
     } catch (error) {
       console.warn('[runtime-environments] Active Server preference repair failed:', error)
     }
@@ -57,8 +57,8 @@ export function watchRuntimeEnvironmentPreference(
   const initialCheck = setImmediate(repairPreference)
   const stopRegistryWatch = watchRuntimeEnvironmentRegistry(
     userDataPath,
-    () => {
-      repairPreference()
+    async () => {
+      await repairPreference()
       onRegistryChanged()
     },
     'Active Server preference'

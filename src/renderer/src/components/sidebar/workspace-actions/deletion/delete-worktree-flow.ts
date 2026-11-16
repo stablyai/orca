@@ -12,7 +12,7 @@ import { getWorkspaceDeleteLineage } from './workspace-delete-lineage'
 import { resolveSshWorkspaceForget } from './ssh-workspace-forget-resolution'
 import { resolveWorktreeOperationRouteForHost } from '@/lib/workspace/ownership/worktree-operation-route'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
-import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   resolveWorktreeBatchDeleteTargets,
@@ -96,7 +96,6 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
   const hasLineageChildren = deleteLineage.descendants.length > 0
   // Skip-confirm preferences never authorize discarding unsaved editor text.
   const skipConfirm =
-    options.forceConfirm !== true &&
     (state.settings?.skipDeleteWorktreeConfirm ?? false) &&
     collectRemovalUnsavedFiles(useAppStore.getState, [target]).length === 0
   if (skipConfirm && !hasLineageChildren) {
@@ -115,7 +114,7 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
           ])
         }
       : {}),
-    ...(hasLineageChildren || options.forceConfirm ? { allowSkipConfirm: false } : {})
+    ...(hasLineageChildren ? { allowSkipConfirm: false } : {})
   })
 }
 

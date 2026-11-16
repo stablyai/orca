@@ -6,9 +6,9 @@ import {
   PLUGIN_WORKSPACE_LIST_LIMIT,
   pluginWorkspaceId
 } from '../../../../shared/plugins/workers/plugin-host-api-workspace-methods'
-import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import { isRepoHidden } from '../../../../shared/hidden-projects'
+import { isRepoHidden } from '../../../../shared/project/catalog/hidden-projects'
 import type { PluginRuntimeRpc } from './plugin-host-runtime-call'
 import type { PluginHostServices } from './plugin-host-method-bindings'
 

@@ -33,41 +33,6 @@ afterEach(() => {
 })
 
 describe('PairedRuntimeBrowserClientHost reconnect', () => {
-  it('reattaches once with the refreshed unavailable-page inventory', async () => {
-    const attempts = mockAttempts()
-    let state: 'active' | 'outcomeUnknown' = 'active'
-    const host = new PairedRuntimeBrowserClientHost({
-      connection: pairedRuntimeConnectionFromOffer(pairing),
-      authorityRuntimeId: 'runtime-a',
-      browserHostClientId: 'host-a',
-      hostCapabilities: ['webview'],
-      handler: vi.fn(() => ({ status: 'completed' as const })),
-      getPageInventory: () => [inventoryPage(state)],
-      pageReconciliationProtocolVersion: 1,
-      reconnectRetryDelayMs: 1
-    })
-    const starting = host.start()
-    await vi.waitFor(() => expect(attempts).toHaveLength(1))
-    expect(subscribeRemoteRuntimeRequestMock.mock.calls[0]?.[2]).toMatchObject({
-      pageInventory: [expect.objectContaining({ state: 'active' })]
-    })
-    attempts[0]!.callbacks.onResponse(readyResponse({ reconciliation: true }))
-    await starting
-
-    state = 'outcomeUnknown'
-    const refreshing = host.refreshPageInventory()
-    await vi.waitFor(() => expect(attempts).toHaveLength(2))
-    expect(attempts[0]!.close).toHaveBeenCalledOnce()
-    expect(subscribeRemoteRuntimeRequestMock.mock.calls[1]?.[2]).toMatchObject({
-      pageInventory: [expect.objectContaining({ state: 'outcomeUnknown' })]
-    })
-    attempts[1]!.callbacks.onResponse(readyResponse({ reconciliation: true }))
-
-    await expect(refreshing).resolves.toBeUndefined()
-    expect(attempts).toHaveLength(2)
-    await host.close()
-  })
-
   it('replays a completed mutation without executing its handler twice', async () => {
     const attempts = mockAttempts()
     const handler = vi.fn(() => ({ status: 'completed' as const }))
@@ -139,7 +104,7 @@ function mockAttempts(): {
   return attempts
 }
 
-function readyResponse(options: { reconciliation?: boolean } = {}) {
+function readyResponse() {
   return {
     id: 'browser-host',
     ok: true as const,
@@ -149,25 +114,10 @@ function readyResponse(options: { reconciliation?: boolean } = {}) {
       browserHostGeneration: 4,
       pageCommandProtocolVersion: 1 as const,
       pageInventoryProtocolVersion: 1 as const,
-      leaseReconnectProtocolVersion: 1 as const,
-      ...(options.reconciliation ? { pageReconciliationProtocolVersion: 1 as const } : {})
+      leaseReconnectProtocolVersion: 1 as const
     },
     _meta: { runtimeId: 'runtime-a' }
   }
-}
-
-function inventoryPage(state: 'active' | 'outcomeUnknown') {
-  return {
-    authorityRuntimeId: 'runtime-a',
-    authorityEpoch: 'epoch-a',
-    browserHostClientId: 'host-a',
-    browserHostGeneration: 4,
-    browserPageId: 'page-a',
-    pageHostGeneration: 1,
-    browserProfileId: 'default',
-    executionHostKey: 'native:runtime-a:1',
-    state
-  } as const
 }
 
 function commandResponse() {

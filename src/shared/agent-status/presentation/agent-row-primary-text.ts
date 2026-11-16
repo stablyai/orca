@@ -1,5 +1,5 @@
 import type { AgentStatusEntry } from '../contracts/agent-status-types'
-import { getRuntimePathBasename } from '../../cross-platform-path'
+import { getRuntimePathBasename } from '../../file-access/cross-platform-path'
 import {
   findOrcaDispatchPreambleStart,
   findOrcaDispatchTaskMarkerIndex,

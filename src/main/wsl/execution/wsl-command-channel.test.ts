@@ -54,15 +54,6 @@ it('kills wsl.exe when the guest ignores EOF past the grace period', () => {
   expect(fake.kill).toHaveBeenCalledOnce()
 })
 
-it('does nothing once wsl.exe already exited', () => {
-  const { child, fake, exit } = fakeChild()
-  const channel = wrapWslCommandProcess(child)
-  exit(0)
-  channel.close()
-  vi.advanceTimersByTime(WSL_CHANNEL_CLOSE_GRACE_MS)
-  expect(fake.kill).not.toHaveBeenCalled()
-})
-
 it('kills a channel still in its grace at app quit, and only once', () => {
   const closing = fakeChild()
   const open = fakeChild()

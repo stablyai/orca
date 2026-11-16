@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { BrowserUserAgentMode } from '../../../../shared/browser-user-agent-mode'
+import type { BrowserUserAgentMode } from '../../../../shared/browser/identity/browser-user-agent-mode'
 
 /** Read synchronously before Electron ready: worker identity uses a process-global default. */
 export const BROWSER_IDENTITY_MODE_FILE = 'browser-identity-mode.json'

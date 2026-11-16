@@ -11,15 +11,15 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 // Main-owned closes have no window ack; their counterparts live in acknowledged-terminal-tab-retirement-main-close.test.ts.
 const itSwitchOff = it.skipIf(ORCA_LAYOUT_OWNER_IS_MAIN)
 
-const fixtures: ReturnType<typeof createAcknowledgedTabRetirementFixture>[] = []
+const fixtures: Awaited<ReturnType<typeof createAcknowledgedTabRetirementFixture>>[] = []
 afterEach(async () => {
   for (const fixture of fixtures.splice(0)) {
     await fixture.dispose()
   }
   vi.restoreAllMocks()
 })
-function fixture(bound = false) {
-  const result = createAcknowledgedTabRetirementFixture(bound)
+async function fixture(bound = false) {
+  const result = await createAcknowledgedTabRetirementFixture(bound)
   fixtures.push(result)
   return result
 }
@@ -27,7 +27,7 @@ function fixture(bound = false) {
 itSwitchOff(
   'protects a persisted incarnation replacement on the same leaf and raw PTY ID',
   async () => {
-    const f = fixture(true)
+    const f = await fixture(true)
     const pending = f.close()
     await f.entered.promise
     await f.store.persistPtyBinding({
@@ -44,7 +44,7 @@ itSwitchOff(
 )
 
 itSwitchOff('rechecks current pins after renderer acknowledgement', async () => {
-  const f = fixture()
+  const f = await fixture()
   const pending = f.close()
   await f.entered.promise
   const session = f.store.getWorkspaceSession()
@@ -67,7 +67,7 @@ itSwitchOff('rechecks current pins after renderer acknowledgement', async () => 
 itSwitchOff(
   'never re-issues the renderer close against a successor that took the tab id',
   async () => {
-    const f = fixture()
+    const f = await fixture()
     const pending = f.close()
     await f.entered.promise
     const session = f.store.getWorkspaceSession()

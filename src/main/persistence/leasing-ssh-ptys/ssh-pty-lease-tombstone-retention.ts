@@ -1,5 +1,5 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { SshRemotePtyLease } from '../../../shared/ssh-types'
+import type { SshRemotePtyLease } from '../../../shared/remote-runtime/ssh/ssh-types'
 
 export type SshPtyLeaseTombstoneRetentionOperations = {
   state: PersistedState

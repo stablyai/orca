@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { Mic } from 'lucide-react'
-import type { SpeechModelManifest, VoiceSettings } from '../../../../../shared/speech-types'
+import type { SpeechModelManifest, VoiceSettings } from '../../../../../shared/speech/speech-types'
 import { useAppStore } from '@/store/index'
 import { useVoiceMicrophoneTest } from './use-voice-microphone-test'
 import { VoiceMicrophoneTestPanel } from './VoiceMicrophoneTestPanel'

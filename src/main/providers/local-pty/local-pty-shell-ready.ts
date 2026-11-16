@@ -1,11 +1,11 @@
 import { basename, win32 as pathWin32 } from 'node:path'
-import { encodePowerShellCommand } from '../../../shared/powershell-command-encoding'
+import { encodePowerShellCommand } from '../../../shared/shell/launch/powershell-command-encoding'
 import {
   getPowerShellOsc133Bootstrap,
   isPowerShellExecutableName
 } from '../../pty/shell-startup/powershell-osc133-bootstrap'
-import { getFishCodexShellLaunchPreflight } from '../../../shared/codex-shell-function'
-import { getFishClaudeShellFunction } from '../../../shared/claude-shell-function'
+import { getFishCodexShellLaunchPreflight } from '../../../shared/shell/launch/agents/codex-shell-function'
+import { getFishClaudeShellFunction } from '../../../shared/shell/launch/agents/claude-shell-function'
 import { getFishXdgDataDirsLaunchEnv } from '../../pty/shell-startup/fish-xdg-data-dirs-handoff'
 import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../../pty/shell-startup/posix-shell-startup-command'
 import { getFishShellReadyInitCommand } from '../../pty/shell-startup/shell-templates'

@@ -3,7 +3,7 @@ import { Platform } from 'react-native'
 import { File as FsFile } from 'expo-file-system'
 import { useFocusEffect, useNavigation } from 'expo-router'
 import { presentPdf } from '../../../modules/orca-mobile-web-shell/src/index'
-import { getRuntimePathBasename } from '../../../../src/shared/cross-platform-path'
+import { getRuntimePathBasename } from '../../../../src/shared/file-access/cross-platform-path'
 import { PDF_MIME_TYPE } from '../../files/media/mobile-file-media'
 import {
   downloadMobileFileMedia,
@@ -13,9 +13,9 @@ import {
 import {
   pdfViewParamsSchema,
   type BridgePdfOpenParams
-} from '../../mobile-web-shell/bridge/bridge-native-verbs'
-import { BridgeNativeVerbRefusedError } from '../../mobile-web-shell/bridge-host-errors'
-import { scopeRpcClientToExecutionHost } from '../../worktree/execution-host-scoped-rpc-client'
+} from '../../mobile-web-shell/bridge/native-capabilities/bridge-native-verbs'
+import { BridgeNativeVerbRefusedError } from '../../mobile-web-shell/host-bridge/bridge-host-errors'
+import { scopeRpcClientToExecutionHost } from '../../worktree/execution-hosts/execution-host-scoped-rpc-client'
 import { useHostClient } from '../../transport/connection/host-client-hooks'
 import { discardUnreturnedMediaFile, freshCacheFolder } from '../media-picking/native-media-device'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'

@@ -30,7 +30,7 @@ import type { MacDaemonTccAttributionHealth } from '../../daemon/permissions/dae
 import type { DaemonEndpointIdentity } from '../../daemon/protocol/daemon-hello-protocol'
 import { sameEndpointIdentity } from '../../daemon/endpoint/identity/daemon-endpoint-incarnation'
 import type { DaemonSessionInfo } from '../../daemon/protocol/daemon-session-info'
-import type { DaemonAsyncIoStatus } from '../../../shared/daemon-async-io-health'
+import type { DaemonAsyncIoStatus } from '../../../shared/terminal/daemon/daemon-async-io-health'
 
 // Poll beyond the daemon's 5s SIGTERM-to-SIGKILL ladder to avoid false refusal reports.
 // A window, not an attempt count: a wedged generation fails each listing only after the request timeout.

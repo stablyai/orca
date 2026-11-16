@@ -1,4 +1,4 @@
-import type { RuntimeStatus } from '../../../../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   TERMINAL_LIMIT_RUNTIME_CAPABILITY,
   type TerminalLimitStatus,

@@ -1,4 +1,4 @@
-import { NEWER_DAEMON_HOLD_ERROR } from '../../../../shared/newer-daemon-hold'
+import { NEWER_DAEMON_HOLD_ERROR } from '../../../../shared/terminal/daemon/newer-daemon-hold'
 import type { PtySpawnOptions } from '../../../providers/pty/provider-contract'
 import { isHoldingForNewerProtocolDaemon } from './daemon-newer-protocol-hold'
 import type { DaemonPtyAdapter } from '../adapter/daemon-pty-adapter'

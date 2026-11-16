@@ -6,7 +6,7 @@ import {
   type ExecutionHostId
 } from '../../../../../shared/execution-host'
 import { toRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
-import type { TabContentType } from '../../../../../shared/tab-types'
+import type { TabContentType } from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import {
   isWebTerminalSurfaceTabId,
   toHostSessionTabId,

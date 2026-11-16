@@ -13,6 +13,7 @@ import type {
   BrowserUploadResult
 } from '../../shared/browser/runtime/runtime-browser-contracts'
 import type { CommandHandler } from '../dispatch/dispatch'
+import { getFlagOrStdinPayload } from '../arguments/flag-or-stdin-payload'
 import { resolveRepoPathArgument } from '../projects/repo-path-arguments'
 import { printResult } from '../output/command-result-output'
 import {
@@ -52,7 +53,7 @@ export const BROWSER_INTERACT_HANDLERS: Record<string, CommandHandler> = {
   },
   fill: async ({ flags, client, cwd, json }) => {
     const element = getRequiredStringFlag(flags, 'element')
-    const value = getRequiredStringFlagAllowingEmpty(flags, 'value')
+    const value = await getFlagOrStdinPayload(flags, 'value', { trimTrailingNewline: true })
     const target = await getBrowserCommandTarget(flags, cwd, client)
     const result = await client.call<BrowserFillResult>('browser.fill', {
       element,

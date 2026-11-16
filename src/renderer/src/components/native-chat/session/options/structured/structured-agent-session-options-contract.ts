@@ -4,7 +4,7 @@ import type {
 } from '../../structured/writes/use-structured-agent-session-mutate'
 import type { StructuredAgentSessionLaunchView } from '../../../host-access/use-native-chat-provisional-launch'
 import type { AgentType } from '../../../../../../../shared/agent-status/contracts/agent-status-types'
-import type { RuntimeClientTarget } from '../../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 export type StructuredAgentSessionOptionsArgs = {
   agent: AgentType
@@ -27,8 +27,8 @@ export type StructuredAgentSessionOptionsArgs = {
 }
 
 import type { AgentSessionConversationCommand } from '../../../../../../../shared/agent-session/agent-session-conversation-command'
-import type { AgentSessionRewindSupport } from '../../../../../../../shared/agent-session/lifecycle/agent-session-rewind'
-import type { AgentSessionOptionsResult } from '../../../../../../../shared/agent-session/options/agent-session-options-result'
+import type { AgentSessionRewindSupport } from '../../../../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
+import type { AgentSessionOptionsResult } from '../../../../../../../shared/agent-session/options/protocol/agent-session-options-result'
 
 export type StructuredSessionConversationSupport = {
   sessionId: string

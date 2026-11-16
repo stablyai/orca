@@ -4,14 +4,14 @@ import type {
   SshRemotePtyLease,
   SshRemoteRuntimeResolution,
   SshTarget
-} from '../../../shared/ssh-types'
+} from '../../../shared/remote-runtime/ssh/ssh-types'
 import {
   LEGACY_DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS,
   SSH_REMOTE_RUNTIME_RUNGS,
   SSH_REMOTE_RUNTIMES
-} from '../../../shared/ssh-types'
-import { normalizeSshPendingPtyKill } from '../../../shared/ssh-pending-pty-kill'
-import { getLegacyManagedOrcadOwnerEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
+} from '../../../shared/remote-runtime/ssh/ssh-types'
+import { normalizeSshPendingPtyKill } from '../../../shared/remote-runtime/ssh/ssh-pending-pty-kill'
+import { getLegacyManagedOrcadOwnerEnvironmentId } from '../../../shared/remote-runtime/ssh/managed-orcad-ssh-owner'
 
 export type LegacySshTarget = SshTarget & {
   remoteWorkspaceSyncEnabled?: unknown

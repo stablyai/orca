@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import type { SkillCloudOwnedShare } from '../../../../../shared/skill-cloud-contract'
+import type { SkillCloudOwnedShare } from '../../../../../shared/skills/sharing/skill-cloud-contract'
 import { SkillSharedLinkRow } from './SkillSharedLinkRow'
 
 const share: SkillCloudOwnedShare = {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { requireGitOwnerTarget } from './worktree-git-owner-target'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import { sourceControlConnectionId, useSourceControlScope } from '../panel/worktree-scope'
 import { getRuntimeGitBranchCompare } from '@/runtime/source-control/git/runtime-git-diff-client'

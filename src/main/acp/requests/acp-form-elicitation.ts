@@ -9,7 +9,7 @@ import { pendingAcpResolution, type AcpRequestPresentation } from '../acp-dialec
 import { AcpRpcError } from '../transport/acp-errors'
 
 export const ACP_FORM_ELICITATION_METHOD = 'elicitation/create'
-const OTHER_SUFFIXES = ['__other', '_custom'] as const
+const OTHER_SUFFIXES = ['__other', '_custom', '_other'] as const
 const NOT_SHOWN_ANSWER = `Not shown to the user: Orca shows at most ${MAX_JOURNAL_GROUPED_PROMPT_QUESTIONS} questions at once. Ask again.`
 
 const choiceSchema = z.looseObject({
@@ -110,11 +110,12 @@ export function acpFormElicitationPresentation(params: unknown): AcpRequestPrese
     const otherKey = otherKeys.get(key)
     const choices = fieldChoices(property, otherKey !== undefined)
     const id = `q${index + 1}`
+    const ownText = [property.title, property.description].filter(Boolean)
+    // The form message is shared context, so it opens only the first card (or stands in for a bare field).
+    const shared = message && (index === 0 || ownText.length === 0) ? [message] : []
     const question: AgentJournalQuestion = {
       id,
-      question: [...new Set([message, property.title, property.description].filter(Boolean))].join(
-        '\n\n'
-      ),
+      question: [...new Set([...shared, ...ownText])].join('\n\n'),
       ...(property.title ? { header: property.title } : {}),
       multiSelect: property.type === 'array',
       options: (choices ?? []).map((choice, choiceIndex) => ({
@@ -142,7 +143,7 @@ export function acpFormElicitationPresentation(params: unknown): AcpRequestPrese
   const first = questions.length === 1 && !questions[0]!.multiSelect ? questions[0]! : undefined
   const body = {
     kind: 'question' as const,
-    question: first?.question ?? message,
+    question: first?.question ?? (message || questions[0]!.question),
     options: first?.options ?? [],
     ...(first?.freeTextQuestionId ? { freeTextQuestionId: first.freeTextQuestionId } : {}),
     ...(first?.freeTextInput ? { freeTextInput: first.freeTextInput } : {}),

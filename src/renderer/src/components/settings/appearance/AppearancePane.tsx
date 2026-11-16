@@ -33,7 +33,7 @@ import { TerminalAppearanceSection } from '../terminal/appearance/TerminalAppear
 import type { UseTerminalConfigImportReturn } from '../terminal/configuration/useTerminalConfigImport'
 import type { UseWarpThemeImportReturn } from '../terminal/themes/useWarpThemeImport'
 import { AppIconSelector } from './AppIconSelector'
-import { normalizeAppIconId } from '../../../../../shared/app-icon'
+import { normalizeAppIconId } from '../../../../../shared/app-lifecycle/identity/app-icon'
 import { getRendererAppPlatform } from '@/app-shell/platform/renderer-app-platform'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { SHOW_UI_LANGUAGE_SETTING } from '@/i18n/supported-languages'

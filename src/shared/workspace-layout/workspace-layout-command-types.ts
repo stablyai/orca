@@ -5,7 +5,7 @@ import type { LiveTerminalAdoption } from './commands/workspace-layout-terminal-
 import type { SleepingAgentSessionRecord } from '../agent-session/lifecycle/agent-session-resume'
 import type { AgentType } from '../agent-status/contracts/agent-status-types'
 import type { AiVaultSessionTitle } from '../ai-vault/contracts/ai-vault-session-title'
-import type { TabContentType, TabGroupLayoutNode } from '../tab-types'
+import type { TabContentType, TabGroupLayoutNode } from './tab-groups/tab-types'
 import type {
   TerminalGrid,
   TerminalPaneLayoutNode,

@@ -9,27 +9,37 @@ import {
   View
 } from 'react-native'
 import { ChevronRight, FolderTree, Pin } from 'lucide-react-native'
-import { AuthFailedBanner } from '../../components/AuthFailedBanner'
-import { Presence } from '../../components/AutoHeight'
-import { DisclosureChevron } from '../../components/DisclosureChevron'
-import { HostDiagnosticsLink } from '../../components/HostDiagnosticsLink'
-import { HostOfflineBanner, useHostOfflineBanner } from '../../components/HostOfflineBanner'
+import { AuthFailedBanner } from '../../components/host-connection/AuthFailedBanner'
+import { Presence } from '../../components/motion/AutoHeight'
+import { DisclosureChevron } from '../../components/list/DisclosureChevron'
+import { HostDiagnosticsLink } from '../../components/host-connection/HostDiagnosticsLink'
+import {
+  HostOfflineBanner,
+  useHostOfflineBanner
+} from '../../components/host-connection/HostOfflineBanner'
 import { isConnectionOutage } from '../../transport/connection/connection-health'
-import { HostRouteNoticeBanner } from '../../components/HostRouteNoticeBanner'
-import { MobileRepoIcon } from '../../components/MobileRepoIcon'
+import { HostRouteNoticeBanner } from '../../components/host-connection/HostRouteNoticeBanner'
+import { MobileRepoIcon } from '../../components/icons/MobileRepoIcon'
 import type { CollapsingTitle } from '../../components/nav-bar/PageTitle'
-import { WorktreeListRow } from '../../components/WorktreeListRow'
-import { WORKTREE_ROW_LAYOUT } from '../../components/worktree-list-row-layout'
+import { WorktreeListRow } from '../../worktree/row-presentation/WorktreeListRow'
+import { WORKTREE_ROW_LAYOUT } from '../../worktree/row-presentation/worktree-list-row-layout'
 import { colors, spacing } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { getWorktreeRowIdentity } from '../../worktree/worktree-host-row-identity'
+import { getWorktreeRowIdentity } from '../../worktree/row-presentation/worktree-host-row-identity'
 import {
   HostWorkspaceListReopen,
   HostWorkspaceListStates
-} from '../../worktree/host-workspace-list-states'
-import { getWorktreeDotStatus, hasWorktreeAgentState } from '../../worktree/workspace-list-ordering'
-import type { Section, WorkspaceListItem, Worktree } from '../../worktree/workspace-list-types'
-import { DEFAULT_REPO_BADGE_COLOR } from '../../../../src/shared/repo-badge-color'
+} from '../../worktree/execution-hosts/host-workspace-list-states'
+import {
+  getWorktreeDotStatus,
+  hasWorktreeAgentState
+} from '../../worktree/workspace-list/workspace-list-ordering'
+import type {
+  Section,
+  WorkspaceListItem,
+  Worktree
+} from '../../worktree/workspace-list/workspace-list-types'
+import { DEFAULT_REPO_BADGE_COLOR } from '../../../../src/shared/repository/appearance/repo-badge-color'
 import { getWorktreeCardDetails } from '../../../../src/shared/worktree/row-display/card-properties'
 import { hostScreenStyles as styles } from '../host-screen-styles'
 import { useRepoLookById, type RepoLook } from '../catalog/host-repo-looks'
@@ -37,7 +47,7 @@ import { HostPendingCreationRow } from './host-pending-creation-row'
 import { useSlowPendingKeys } from './use-slow-pending-keys'
 import { useHostMutationDrafts } from '../../query/host-mutation-drafts'
 import { workspaceRenameDraftKey } from '../workspace-actions/workspace-rename-sheet'
-import { projectGroupHeaderIndent } from '../../worktree/project-group-indent'
+import { projectGroupHeaderIndent } from '../../worktree/project-sections/project-group-indent'
 import type { HostScreenController } from '../use-host-screen-controller'
 
 export function HostWorkspaceList({

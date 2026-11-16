@@ -2,8 +2,9 @@ import { BackendSupervisor } from '../backend-desktop/backend-supervisor'
 import { app, powerMonitor } from 'electron'
 import { join } from 'node:path'
 import { AgentAwakeService } from '../power/agent-awake-service'
-import { normalizeComputerAwakeMode } from '../../shared/computer-awake-mode'
+import { normalizeComputerAwakeMode } from '../../shared/app-lifecycle/computer-awake-mode'
 import { registerSystemResumeBroadcast } from '../power/system-resume-broadcast'
+import { recordWakeSignal } from '../power/wake-signal-clock'
 import { readDesktopAwayState } from '../notifications/desktop-away-state'
 import {
   listCapableSharedControlSockets,
@@ -30,12 +31,29 @@ import { runAfterFirstWindowShown } from './main-window/first-window-deferral'
 
 const TELEMETRY_CLIENT_START_FALLBACK_MS = 15_000
 
+function feedWakeSignalClock(): () => void {
+  const onResume = (): void => recordWakeSignal('resume')
+  const onUnlock = (): void => recordWakeSignal('unlock-screen')
+  const onUserActive = (): void => recordWakeSignal('user-did-become-active')
+  powerMonitor.on('resume', onResume)
+  powerMonitor.on('unlock-screen', onUnlock)
+  powerMonitor.on('user-did-become-active', onUserActive)
+  return () => {
+    powerMonitor.off('resume', onResume)
+    powerMonitor.off('unlock-screen', onUnlock)
+    powerMonitor.off('user-did-become-active', onUserActive)
+  }
+}
+
 export function initializeMainProcessObservers(): void {
   const store = state.store
   if (!store) {
     throw new Error('Store must be initialized before observers')
   }
   state.unsubscribeSystemResumeBroadcast = registerSystemResumeBroadcast()
+  if (process.platform === 'darwin') {
+    state.unsubscribeWakeSignalClock = feedWakeSignalClock()
+  }
   state.stopDesktopPresenceReporter = startDesktopPresenceReporter({
     readAway: () => readDesktopAwayState(powerMonitor),
     listTargets: listCapableSharedControlSockets,
@@ -65,9 +83,30 @@ export function initializeMainProcessObservers(): void {
     isQuitting: () => state.isQuitting,
     getWorkingAgentCount: () => state.agentAwakeService?.getWorkingAgentCount() ?? 0
   })
-  const unsubscribeStatusChanges = agentHookServer.subscribeStatusChanges((statuses) => {
-    state.agentAwakeService?.setStatuses(statuses)
-  })
+  const unsubscribeStatusChanges = agentHookServer.subscribeStatusRowMutations(
+    ({ before, after }) => {
+      for (const paneKey of new Set([before?.paneKey, after?.paneKey])) {
+        if (!paneKey) {
+          continue
+        }
+        const row = agentHookServer
+          .getStatusSnapshotForPane(paneKey)
+          .find((row) => !row.providerSessionOnly)
+        state.agentAwakeService?.updateStatus(
+          paneKey,
+          row
+            ? {
+                paneKey,
+                state: row.state,
+                receivedAt: row.receivedAt,
+                observedInCurrentRuntime:
+                  row.isReplay !== true && row.restoredUnconfirmed !== true && !row.paneSleep
+              }
+            : undefined
+        )
+      }
+    }
+  )
   const unsubscribeStatusFreshness = agentHookServer.subscribeStatusFreshness((status) => {
     state.agentAwakeService?.observeStatusFreshness(status)
   })

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
-import { getDefaultNotificationSettings } from '../../../shared/notification-settings-defaults'
+import { getDefaultNotificationSettings } from '../../../shared/notifications/notification-settings-defaults'
 import { createTabsSliceMockApi } from '../store/slices/tabs/tabs-slice-test-harness'
 import { createTestStore } from '../store/testing/app-store-test-fixture'
 import { makeWorktree } from '../store/slices/worktrees/worktree.test-fixture'

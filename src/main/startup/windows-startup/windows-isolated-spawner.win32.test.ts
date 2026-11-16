@@ -10,7 +10,7 @@ import {
   setIsolatedSpawner,
   spawnDetachedWithoutInheritance
 } from '@orca/process-host/isolated-detached-spawn'
-import { loadWindowsSecurity } from '../../../shared/windows-security-addon'
+import { loadWindowsSecurity } from '../../../shared/secure-storage/windows-security-addon'
 
 const describeOnWindows = process.platform === 'win32' ? describe : describe.skip
 const ADDON = resolve(__dirname, '../../../../native/windows-security/index.js')

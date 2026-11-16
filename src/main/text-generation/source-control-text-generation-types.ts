@@ -6,7 +6,7 @@ import type {
   CommitMessageModelCapability
 } from '../../shared/source-control/ai/generation/commit-message-agent-spec'
 import type { CommitMessagePlan } from '../../shared/source-control/ai/generation/commit-message-plan'
-import type { TextGenerationFailureFields } from '../../shared/text-generation-failure-copy'
+import type { TextGenerationFailureFields } from '../../shared/text-generation/text-generation-failure-copy'
 
 export type GenerateCommitMessageResult =
   | { success: true; message: string; agentLabel?: string }

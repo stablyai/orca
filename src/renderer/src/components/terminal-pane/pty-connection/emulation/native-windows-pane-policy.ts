@@ -24,7 +24,7 @@ export function installNativeWindowsPanePolicy(session: ConnectPanePtySession): 
   session.shouldProtectNativeWindowsSynchronizedOutput = session.isNativeWindowsConpty
   session.unsubscribeWindowsDoneTerminalModeReset = null
   if (session.isNativeWindowsConpty) {
-    const initialAgentStatus = session.state.agentStatusByPaneKey[session.cacheKey]
+    const initialAgentStatus = session.state.agentStatusByPaneKey.get(session.cacheKey)
     let lastAgentDoneStartedAt = resolveLatestAgentDoneStartedAt(initialAgentStatus)
     if (
       !initialAgentStatus &&
@@ -40,9 +40,9 @@ export function installNativeWindowsPanePolicy(session: ConnectPanePtySession): 
       session.setFocusReportSuppressionForAgentCompletion(undefined, initialAgentStatus.agentType)
     }
     session.unsubscribeWindowsDoneTerminalModeReset = useAppStore.subscribe((nextState) => {
-      const nextAgentStatus = nextState.agentStatusByPaneKey[session.cacheKey]
+      const nextAgentStatus = nextState.agentStatusByPaneKey.get(session.cacheKey)
       const nextAgentStatusState = nextAgentStatus?.state
-      if (nextAgentStatusState === 'done') {
+      if (nextAgentStatus?.state === 'done') {
         session.setFocusReportSuppressionForAgentCompletion(undefined, nextAgentStatus.agentType)
       } else if (nextAgentStatusState) {
         session.suppressNativeWindowsIdleCodexFocusReports = false

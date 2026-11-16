@@ -1,10 +1,10 @@
-import { readFetchResponseJsonWithinLimit } from '../../shared/fetch-response-body'
+import { readFetchResponseJsonWithinLimit } from '../../shared/network/fetch-response-body'
 import {
   MAX_FEEDBACK_IMAGE_BYTES,
   MAX_FEEDBACK_IMAGE_COUNT,
   MAX_FEEDBACK_IMAGE_TOTAL_BYTES
-} from '../../shared/feedback-image-limits'
-import type { FeedbackImageAttachment } from '../../shared/feedback-submit-contract'
+} from '../../shared/feedback/feedback-image-limits'
+import type { FeedbackImageAttachment } from '../../shared/feedback/feedback-submit-contract'
 
 // Match the server allow-list; Slack selects rendering by filename extension.
 const FEEDBACK_IMAGE_EXTENSIONS: Record<string, string> = {

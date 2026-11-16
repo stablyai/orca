@@ -1,17 +1,18 @@
 import type {
   CodexRateLimitResetOutcome,
   ProviderRateLimits
-} from '../../../../shared/rate-limit-types'
-import { isCodexAuthError } from '../../../../shared/codex-auth-errors'
+} from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
+import { withCodexReadingAccount } from './codex-reading-account'
+import { isCodexAuthError } from '../../../../shared/agent-accounts/codex/codex-auth-errors'
 import {
   buildWslExecArgs,
   buildWslLoginShellCommand
-} from '../../../../shared/wsl-login-shell-command'
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
+} from '../../../../shared/shell/wsl/wsl-login-shell-command'
+import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS } from '../../../codex-cli/codex-read-only-app-server-args'
 import { resolveCodexCommand } from '../../../codex-cli/command'
 // Import the pure helper directly so CLI-command mocks do not replace it.
-import { withCliRuntimeOnPath } from '../../../../shared/node-cli-command-resolution'
+import { withCliRuntimeOnPath } from '../../../../shared/shell/command-resolution/node-cli-command-resolution'
 import {
   resolveCodexHomeProcessLockKey,
   withCodexHomeProcessLock
@@ -27,7 +28,7 @@ import { getMainHttpClient } from '../../../network/http-client'
 import { probeCodexAuthPresence } from './codex-auth-presence'
 import {
   fetchCodexRateLimitsViaBackend,
-  supplementCodexSessionWindow
+  supplementCodexUsageWindows
 } from './codex-backend-usage-client'
 import type { CodexRateLimitFetchOptions } from './codex-rate-limit-fetch-options'
 import { abortedCodexRateLimitResult } from './codex-rate-limit-fetch-result'
@@ -132,8 +133,8 @@ async function supplementBackendMetadata(
   limits: ProviderRateLimits,
   options?: CodexRateLimitFetchOptions
 ): Promise<ProviderRateLimits> {
-  const withSession = await supplementCodexSessionWindow(limits, requestCodexBackend, options)
-  return supplementCodexRateLimitResetCredits(withSession, requestCodexBackend, options)
+  const withWindows = await supplementCodexUsageWindows(limits, requestCodexBackend, options)
+  return supplementCodexRateLimitResetCredits(withWindows, requestCodexBackend, options)
 }
 
 function codexUnavailable(error: string, status: 'error' | 'unavailable'): ProviderRateLimits {
@@ -164,6 +165,12 @@ async function fetchBackendUsage(
 }
 
 export async function fetchCodexRateLimits(
+  options?: CodexRateLimitFetchOptions
+): Promise<ProviderRateLimits> {
+  return withCodexReadingAccount(await readCodexRateLimits(options), options?.readingAccount)
+}
+
+async function readCodexRateLimits(
   options?: CodexRateLimitFetchOptions
 ): Promise<ProviderRateLimits> {
   if (options?.signal?.aborted) {

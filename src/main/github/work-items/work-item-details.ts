@@ -6,7 +6,7 @@ import {
 import type { PRCheckDetail } from '../../../shared/github/checks/check-types'
 
 import type { GitHubWorkItemDetails } from '../../../shared/github/work-items/work-item-types'
-import type { IssueSourcePreference } from '../../../shared/repo-types'
+import type { IssueSourcePreference } from '../../../shared/repository/repo-types'
 import { getPRChecks } from '../client/check/get-pr-checks'
 import { getPRComments } from '../client/fetch/get-pr-comments'
 import { getWorkItemWithRepository, getWorkItemByOwnerRepo } from '../client/fetch/get-work-item'

@@ -255,7 +255,7 @@ export function installCommandInferredPaneAgent(session: ConnectPanePtySession):
     session.handleAgentHookTerminalLifecycle
   )
   session.hasFreshPaneAgentSurface = (): boolean => {
-    const entry = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
+    const entry = useAppStore.getState().agentStatusByPaneKey.get(session.cacheKey)
     if (session.isFreshActivePaneAgentEntry(entry)) {
       return true
     }

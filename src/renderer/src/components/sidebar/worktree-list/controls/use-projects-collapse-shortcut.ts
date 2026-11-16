@@ -5,11 +5,11 @@ import { textFieldClaimsActionKey } from '@/lib/keyboard/text-field-shortcut-pol
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
 import { showTerminalShortcutCaptureNotification } from '@/lib/notifications/terminal-shortcut-capture-notification'
-import { keybindingMatchesAction } from '../../../../../../shared/keybindings'
+import { keybindingMatchesAction } from '../../../../../../shared/keybindings/matching'
 import {
   ModifierDoubleTapDetector,
   toModifierDoubleTapEvent
-} from '../../../../../../shared/modifier-double-tap-detector'
+} from '../../../../../../shared/keybindings/modifier-double-tap-detector'
 
 const ACTION_ID = 'sidebar.projects.toggleCollapse'
 

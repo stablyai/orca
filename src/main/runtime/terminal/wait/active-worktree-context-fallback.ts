@@ -4,7 +4,10 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
-import { getActiveSidebarWorkspaceId, parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import {
+  getActiveSidebarWorkspaceId,
+  parseWorkspaceKey
+} from '../../../../shared/workspace/identity/workspace-scope'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 import { worktreeMetaIdentityKey } from '../../../../shared/worktree/identity'
 

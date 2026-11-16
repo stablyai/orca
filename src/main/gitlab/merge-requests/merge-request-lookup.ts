@@ -12,7 +12,7 @@ import {
 } from '../../source-control/repo-default-branch'
 import { extractExecError } from '../../git/command-runner/process-capture/exec-error'
 import { classifyGlabError } from '../requests/glab-error-classification'
-import type { MRInfo } from '../../../shared/gitlab-types'
+import type { MRInfo } from '../../../shared/gitlab/gitlab-types'
 import { derivePipelineStatus, mapMRInfo } from '../requests/gitlab-response-mapping'
 import { acquire, release } from '../requests/glab-request-admission'
 import { getGlabKnownHosts } from '../projects/gitlab-known-host-probe'

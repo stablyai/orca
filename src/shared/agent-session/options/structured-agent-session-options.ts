@@ -1,36 +1,40 @@
-import type { AgentSessionOptionCatalog, CatalogModel } from './agent-session-option-catalog-types'
-import { discoveredModel } from './structured-agent-session-discovered-model'
+import type {
+  AgentSessionOptionCatalog,
+  CatalogModel
+} from './catalog-providers/agent-session-option-catalog-types'
+import { discoveredModel } from './model-catalog/structured-agent-session-discovered-model'
 import {
   createStructuredAgentSessionOptionRecord,
   replaceStructuredAgentSessionAnsweredValues,
   type StructuredAgentSessionOptionRecord
-} from './structured-agent-session-option-state'
+} from './reconciliation/structured-agent-session-option-state'
 import {
   STRUCTURED_LAUNCH_OPTION_IDS,
   STRUCTURED_LAUNCH_SEED_OPTION_IDS
-} from '../../native-chat/input/native-chat-session-option-defaults'
-import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../agent-launch/permissions/agent-chat-permission-mode'
+} from '../../native-chat/input/session-options/native-chat-session-option-defaults'
+import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../agent-launch/permissions/agent-chat-permission-mode-option-id'
 import {
   usesInstalledAgentModelCatalog,
   usesModelSpecificAcpEfforts
-} from './agent-model-catalog-ownership'
+} from './model-catalog/agent-model-catalog-ownership'
+import { dropStaleReportedFast, unpickedFastPolicy } from './selection/unpicked-fast-mode'
 import {
   fillUnknownCatalogEfforts,
   enrichStructuredAgentEfforts
-} from './agent-session-model-efforts'
-import { structuredAgentSessionRememberedPickModel } from './structured-agent-session-remembered-pick-model'
+} from './model-catalog/agent-session-model-efforts'
+import { structuredAgentSessionRememberedPickModel } from './selection/structured-agent-session-remembered-pick-model'
 import type { SessionOptionValue } from '../../native-chat/input/native-chat-session-options'
 import type {
   AgentSessionAcceptedInputSources,
   AgentSessionOptionsResult
-} from './agent-session-options-result'
-import { labelFromModelId } from '../../model-id-label'
+} from './protocol/agent-session-options-result'
+import { labelFromModelId } from './model-catalog/model-id-label'
 import type { AgentSessionModelCatalogResult } from '../agent-session-wire'
-import { listingVerifiedModelIds } from './structured-agent-session-listing-verified-ids'
+import { listingVerifiedModelIds } from './model-catalog/structured-agent-session-listing-verified-ids'
 import {
   decodeStructuredAgentSessionOptionValue,
   encodeStructuredAgentSessionOptionValue
-} from './structured-agent-session-option-codec'
+} from './selection/structured-agent-session-option-codec'
 
 export function structuredAgentSessionOptionCatalog(
   seed: AgentSessionOptionCatalog,
@@ -72,6 +76,8 @@ export type StructuredAgentSessionOptionState = {
   defaultsUnsent?: true
   /** The permission mode the host or launch last stated; null shows no picker. */
   permissionMode: string | null
+  /** Optional live-host launch choice; absent on older hosts. */
+  launchPermissionMode?: string
   interactionModeSupported?: boolean
   reportedPermissionMode?: string | null
   permissionOwnSupported?: boolean | null
@@ -156,7 +162,7 @@ export function applyStructuredAgentSessionModelCatalog(
     acceptedInputSources: state.optionsAnswerPresent
       ? state.acceptedInputSources
       : {
-          fastMode: 'policy',
+          ...unpickedFastPolicy(state.record.agent),
           ...Object.fromEntries(
             Object.entries(state.acceptedInputSources ?? {}).filter(
               ([, source]) => source !== 'policy'
@@ -262,6 +268,7 @@ export function commitStructuredAgentSessionOption(
   }
   // Keep other picks after a model change; the host reconciles independent values.
   state.record.values[id] = { value: decoded, source: 'dispatched' }
+  dropStaleReportedFast(state, id)
   return {
     ...state,
     acceptedInputSources:

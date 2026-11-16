@@ -1,4 +1,4 @@
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { WorktreeCreateCollisionError } from '../../../../shared/new-workspace/worktree-create-collision'
 import type { CreateWorktreeArgs } from '../../../../shared/worktree/create-types'
 import type { getPRForBranch } from '../../../github/client/lookup/get-pr-for-branch'

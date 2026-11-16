@@ -9,7 +9,7 @@ import {
   agentModelCatalogLaunchAgents,
   agentModelCatalogEntryIsStale
 } from './agent-model-catalog-entry-lifetime'
-import { independentAgentModelCatalog } from '../../../shared/agent-session/options/agent-model-catalog-ownership'
+import { independentAgentModelCatalog } from '../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 export type { AgentModelCatalogProbe } from './agent-model-catalog-discovery'
 import type { AgentModelCatalogPersistence } from './agent-model-catalog-persistence'
 import {

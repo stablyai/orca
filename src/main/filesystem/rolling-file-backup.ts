@@ -3,7 +3,7 @@ import { lstatSync, rmSync } from 'node:fs'
 import {
   copyFileWithWindowsRetry,
   renameFileWithWindowsRetry
-} from '../../shared/windows-retry-file-operations'
+} from '../../shared/file-write/windows-retry-file-operations'
 
 export function writeRollingFileBackup(sourcePath: string, backupPath: string): void {
   try {
