@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 
@@ -105,7 +105,7 @@ describe('main-run sleep of a pane whose hook row is gone', () => {
       })
       if (scenario !== 'live') {
         server.reconcileEndedProcessForPaneKeys([PANE_KEY], {
-          endedPresence: { agent: 'claude', ended: true }
+          confirmedExit: true
         })
         if (scenario === 'expired exit') {
           // Exit evidence can expire after a week; the saved checkpoint must already be retired.
@@ -191,3 +191,18 @@ describe('main-run sleep of a pane whose hook row is gone', () => {
     })
   })
 })
+
+it.each([100, 1000])(
+  'skips durable session transactions for %s exits without recovery records',
+  async (count) => {
+    const fixture = makeRuntimeStoreWithWorkspaceSession(makeWorkspaceSessionWithHeadlessTerminal())
+    const runtime = new OrcaRuntimeService(fixture.runtimeStore)
+    vi.spyOn(runtime, 'getTerminalWorktreeIdForPaneKey').mockReturnValue(TEST_WORKTREE_ID)
+    fixture.runtimeStore.runDurableMutation.mockClear()
+    for (let i = 0; i < count; i++) {
+      runtime.retireExitedPaneResume(`absent-tab-${i}:11111111-1111-4111-8111-111111111111`, 200)
+    }
+    await runtime.readSavedResumeSource(TEST_WORKTREE_ID, PANE_KEY)
+    expect(fixture.runtimeStore.runDurableMutation).not.toHaveBeenCalled()
+  }
+)

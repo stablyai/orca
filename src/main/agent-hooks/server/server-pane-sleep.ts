@@ -8,7 +8,7 @@ import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-sta
 import { pickParsedAgentStatusPayload } from '../../../shared/agent-status/contracts/agent-status-types'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { AgentHookServerAuthorityFences } from './server-authority-fences'
-import { recordAgentExit } from './agent-exit-evidence'
+import { endedPresenceOf, recordAgentExit } from './agent-exit-evidence'
 import type { LaunchResumeIdentityEvent } from './launch-resume-identity-event'
 import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 
@@ -47,8 +47,9 @@ export abstract class AgentHookServerPaneSleep extends AgentHookServerAuthorityF
         paneSleep: _paneSleep,
         agentPresence: _presence,
         terminalHandle: _handle,
-        ...rest
+        ...accepted
       } = row
+      const rest = { ...accepted, evidenceObservedAt: Date.now() }
       admitLegacyAgentStatus(
         this.state,
         'main-status-cleanup',
@@ -74,6 +75,7 @@ export abstract class AgentHookServerPaneSleep extends AgentHookServerAuthorityF
     const identity = this.paneAgentIdentity(resolved)
     const previous: EnrichedAgentHookEventPayload | undefined =
       (this.state.lastStatusByPaneKey.get(resolved) as EnrichedAgentHookEventPayload | undefined) ??
+      this.getTmuxSelectedStatus(resolved) ??
       (identity
         ? {
             paneKey: resolved,
@@ -161,12 +163,17 @@ export abstract class AgentHookServerPaneSleep extends AgentHookServerAuthorityF
     }
     this.programStatusFacets.delete(resolved)
     this.hookSilenceRechecks.cancel(resolved)
-    admitLegacyAgentStatus(
-      this.state,
-      'main-status-cleanup',
-      row,
-      AGENT_STATUS_2A_CURRENT_PRODUCER_MODE
-    )
+    this.clearTmuxInnerSubjects(resolved)
+    if (
+      !admitLegacyAgentStatus(
+        this.state,
+        'main-status-cleanup',
+        row,
+        AGENT_STATUS_2A_CURRENT_PRODUCER_MODE
+      )
+    ) {
+      return false
+    }
     recordAgentExit(this.agentExitedAtByPaneKey, [resolved], row.agentPresence, now)
     this.commitStatusRowMutation(previous, row)
     this.scheduleStatusPersist()

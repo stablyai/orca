@@ -82,7 +82,7 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
       this.agentExitedAtByPaneKey.get(resolved) ?? this.agentExitedAtByPaneKey.get(paneKey)
     return paneAgentIdentity({
       paneKey: resolved,
-      ...(row ? { row: toAgentStatusIpcPayload(row) } : {}),
+      ...(row ? { row: toAgentStatusIpcPayload(this.programStatusFacets.stitch(row)) } : {}),
       ...(savedRecord ? { savedRecord } : {}),
       ...(worktreeId ? { worktreeId } : {}),
       ...(exit ? { exitedAt: exit.at } : {}),

@@ -132,8 +132,13 @@ export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
       const endedPresence =
         options?.endedPresence ??
         // A proved process gets its exit from the presence probe, not a possibly newer row.
-        (options?.confirmedExit && previous && !previous.agentPresence?.process
-          ? endedPresenceOf(previous)
+        (options?.confirmedExit && !previous?.agentPresence?.process
+          ? previous
+            ? endedPresenceOf(previous)
+            : {
+                agent: this.paneAgentIdentity(resolvedPaneKey)?.status.agentType ?? 'unknown',
+                ended: true
+              }
           : undefined)
       if (endedPresence) {
         // Cleanup drops aliases, but readers may still hold either key.

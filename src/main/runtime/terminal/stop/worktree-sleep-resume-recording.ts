@@ -47,8 +47,14 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
     if (!worktreeId) {
       return
     }
-    this.inResumeRecordOrder(() =>
-      this.commitWorkspaceSessionEdit(
+    this.inResumeRecordOrder(() => {
+      const hostId = this.getWorkspaceSessionHostIdForWorktree(worktreeId)
+      const existing =
+        this.store?.getWorkspaceSession?.(hostId)?.sleepingAgentSessionsByPaneKey?.[paneKey]
+      if (!existing || existing.updatedAt > exitedAt) {
+        return Promise.resolve()
+      }
+      return this.commitWorkspaceSessionEdit(
         this.getWorkspaceSessionHostIdForWorktree(worktreeId),
         (session) => {
           const saved = session.sleepingAgentSessionsByPaneKey?.[paneKey]
@@ -59,7 +65,7 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
           return { ...session, sleepingAgentSessionsByPaneKey: kept }
         }
       )
-    ).catch((error) =>
+    }).catch((error) =>
       console.warn('[runtime] could not retire an exited agent resume record', error)
     )
     this.previousHookStatusByPaneKey.delete(paneKey)

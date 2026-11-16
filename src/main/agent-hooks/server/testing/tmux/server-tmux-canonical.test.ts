@@ -58,6 +58,21 @@ describe('main canonical tmux projection', () => {
     expect(server.getCanonicalStatusSnapshot().parents).toHaveLength(0)
     expect(server.getStatusSnapshot()).toHaveLength(0)
   })
+  it('keeps one sleeping row when the canonical selected agent stops with its pane', async () => {
+    await postHookEvent(server, tmuxTestBody(), '/hook/opencode')
+    server.setTerminalPaneLifecycle({
+      ownsProcess: () => true,
+      isStopping: () => true,
+      isReversibleStop: () => true,
+      isPlaced: () => true
+    })
+    expect(server.settleTerminalPaneSleep(TMUX_TEST_PANE, 'pty', 'birth')).toBe(true)
+    server.reconcileEndedProcessForPaneKeys([TMUX_TEST_PANE])
+    expect(server.getStatusSnapshot()).toMatchObject([
+      { paneKey: TMUX_TEST_PANE, state: 'done', paneSleep: { ptyId: 'pty' } }
+    ])
+    expect(server.getStatusSnapshot()).toHaveLength(1)
+  })
   it('removes canonical tmux status on certified retirement', async () => {
     await postHookEvent(server, tmuxTestBody(), '/hook/opencode')
     server.retirePaneAuthority(TMUX_TEST_PANE)
