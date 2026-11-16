@@ -1,4 +1,4 @@
-import type { OrcaVmRecipe } from '../../shared/orca-yaml-hook-types'
+import type { OrcaVmRecipe } from '../../shared/workspace-setup/orca-yaml-hook-types'
 import {
   listEphemeralVmRuntimes,
   updateEphemeralVmRuntimeStatus

@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react'
-import type { OrcaHooks } from '../../../../../shared/orca-yaml-hook-types'
+import type { OrcaHooks } from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
 import { checkRuntimeHooks } from '@/runtime/repo-hooks/runtime-hooks-client'
 import type { AutomationDraft } from './AutomationEditorDialog'
 import {

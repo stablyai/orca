@@ -4,7 +4,7 @@ import type { RuntimeMobileSessionTabsResult } from '../../src/shared/remote-run
 import type {
   RuntimeMarkdownReadTabResult,
   RuntimeMarkdownSaveTabResult
-} from '../../src/shared/mobile-markdown-document'
+} from '../../src/shared/editor/markdown/mobile-markdown-document'
 import { expect, test } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import {

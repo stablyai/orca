@@ -13,7 +13,7 @@ import type { Repo } from '../../../../../shared/repository/repo-types'
 import './new-workspace-composer-repo'
 import { resolveNewWorkspaceDialogRepoId } from '../../../../../shared/new-workspace-dialog-repo'
 import { findSoleHostCopy } from '../../../../../shared/worktree/host-qualified-identity'
-import { normalizeRuntimePathForComparison } from '../../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../../shared/file-access/cross-platform-path'
 
 export type WorkspaceCreationTarget = {
   projectId: string

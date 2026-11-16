@@ -21,7 +21,7 @@ import { writeLocalTextFileWithDiskPrecondition } from './local-disk-write-preco
 import { replaceLocalFileBytesIfUnchanged } from './local-disk-bytes-replace'
 import type { FileBytesWritePrecondition } from '../../../shared/file-write/file-bytes-write'
 import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
-import { TRASH_DELETE_FAILED_MESSAGE } from '../../../shared/trash-delete-failure'
+import { TRASH_DELETE_FAILED_MESSAGE } from '../../../shared/file-access/trash-delete-failure'
 
 export function registerFilesystemWriteHandlers(context: FilesystemHandlerContext): void {
   const { store } = context

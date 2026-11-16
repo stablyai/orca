@@ -1,4 +1,4 @@
-import { isPathInsideOrEqual } from '../../../shared/cross-platform-path'
+import { isPathInsideOrEqual } from '../../../shared/file-access/cross-platform-path'
 import { splitWorktreeId, splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import type { PtyProcessInfo } from './process-info'
 

@@ -27,7 +27,6 @@ export const SHELL_PREFIXES = [
   'src/shared/shell/wsl/fish-wsl-cwd-report',
   'src/shared/shell/testing/fish-binary-requirement',
   'src/shared/terminal/pty/ingress/pty-reply-echo-shapes',
-  'src/shared/shell/launch/startup-shell-portability',
   'src/shared/shell/command-resolution/posix-command-path-lookup',
   'src/shared/agent-launch/startup/readiness/draft-paste-ready-scanner.ts',
   'src/main/wsl/filesystem/wsl-shell-cwd-report',

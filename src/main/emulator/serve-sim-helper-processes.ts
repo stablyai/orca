@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
 import { platform } from 'node:os'
-import { commandContainsToken } from '../../shared/command-token-scanner'
+import { commandContainsToken } from '../../shared/shell/command-resolution/command-token-scanner'
 import { iterateProcessOutputLines } from '../../shared/process-observation/process-output-field-scanner'
 import { PS_MAX_BUFFER_BYTES } from '../../shared/process-observation/tables/process-table-snapshot'
 

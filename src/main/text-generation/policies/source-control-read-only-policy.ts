@@ -4,7 +4,7 @@ import path from 'node:path'
 import { prepareKimiTextTaskPolicy } from './source-control-kimi-policy'
 import { parse as parseJson, type ParseError } from 'jsonc-parser'
 import { z } from 'zod'
-import { findOptionOccurrence } from '../../../shared/command-option-occurrence'
+import { findOptionOccurrence } from '../../../shared/cli/command-option-occurrence'
 import {
   compactRecipeOptions,
   KIMI_VALUE_OPTIONS

@@ -1,6 +1,6 @@
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml'
 import { z } from 'zod'
-import { findOptionOccurrence } from '../../../shared/command-option-occurrence'
+import { findOptionOccurrence } from '../../../shared/cli/command-option-occurrence'
 import {
   compactRecipeOptions,
   KIMI_VALUE_OPTIONS
