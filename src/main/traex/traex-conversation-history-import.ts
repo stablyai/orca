@@ -1,4 +1,3 @@
-import { realpath } from 'node:fs/promises'
 import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import { assertAdoptedSourceIdentity } from '../native-chat/agent-session-journal/history-import/adopted-transcript-source'
 import { createNewestItemWindow } from '../native-chat/agent-session-journal/history-import/journal-newest-item-window'
@@ -41,10 +40,6 @@ export function createTraexConversationHistoryImporter(
             })
           ).thread
         )
-        const path = traexText(thread.path)
-        if (!path || (await realpath(path)) !== (await realpath(input.transcriptPath))) {
-          throw new Error('TRAE CLI read a different conversation transcript')
-        }
         await assertAdoptedSourceIdentity(
           input.source ?? { providerSessionId: input.providerSessionId, workspaceCwd: cwd },
           { sessionId: traexText(thread.id) ?? null, cwd: traexText(thread.cwd) ?? null },
