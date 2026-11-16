@@ -149,15 +149,22 @@ describe('close-migration-reopened-tabs', () => {
     // of L3 holds a reply only an older build saved.
     expect(found.close.map((tab) => tab.session)).toEqual(['L2', copyId('L5')])
     expect(found.kept).toEqual({
-      writtenSince: 1,
+      writtenSince: 0,
       openBefore: 1,
       olderBuildCopy: 1,
       notFromJournal: 0
     })
+    expect(found.leftOpen).toBe(0)
     expect(found.copies.duplicates.map((copy) => copy.original)).toEqual(['L1', 'L5'])
     expect(found.copies.olderBuildTurns).toBe(1)
 
-    // Without a duplicate copy's tab, nothing proves the tabs came from the faulty pass.
+    // A later revision of the item can't show which branch the copy grew from, so it isn't a
+    // duplicate; without a duplicate copy's tab, nothing proves the tabs came from the faulty pass.
+    const revised = select(userData, (domain) =>
+      domain.prepare('UPDATE journal_items SET revision=2 WHERE session_id=?').run('L5')
+    )
+    expect(revised.close).toEqual([])
+
     const unproven = select(userData, (domain) =>
       domain.prepare('DELETE FROM agent_session_tabs WHERE session_id=?').run(copyId('L5'))
     )
@@ -165,13 +172,13 @@ describe('close-migration-reopened-tabs', () => {
   })
 
   it('keeps a tab the user reopened on this desktop after the update', () => {
-    // Reopening from history here reuses the derived tab id, at the end of the list; L7's tab was
-    // closed and reopened after the user opened and closed other tabs.
+    // Reopening from history here reuses the derived tab id, right after the pass's last tab.
     const found = select(writeProfile(), (domain) => {
       domain.prepare('DELETE FROM agent_session_tabs WHERE session_id IN (?, ?)').run('N', 'L7')
-      domain.prepare('INSERT INTO agent_session_tabs VALUES (?, ?, ?)').run(tabId('L7'), 'L7', 20)
+      domain.prepare('INSERT INTO agent_session_tabs VALUES (?, ?, ?)').run(tabId('L7'), 'L7', 8)
     })
     expect(found.close.map((tab) => tab.session)).toEqual(['L2', copyId('L5')])
+    expect(found.leftOpen).toBe(1)
   })
 
   it('dry run changes nothing; apply backs up, closes those tabs, and a rerun is a no-op', () => {

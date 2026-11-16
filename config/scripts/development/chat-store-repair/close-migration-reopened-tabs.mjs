@@ -82,10 +82,11 @@ export function openSnapshot(file) {
  * The tabs the faulty pass opened that nothing was written in since.
  *
  * The pass appended a tab per chat it touched to the end of the tab list, in the older journal's
- * record order, with an id derived from the chat. A copy's tab can only come from the pass, and a
- * tab opened later lands after it, so every tab from the first to the last copy tab is the pass's.
- * Beyond them, the pass's tabs continue while the record order keeps its direction and every gap is
- * a chat in between whose tab was closed since; a tab that was there before stops it.
+ * record order, with an id derived from the chat. A duplicate copy's tab can only come from the
+ * pass, and a tab opened later lands after it, so every tab from the first to the last duplicate
+ * tab is the pass's. Below them, the pass's tabs continue while the record order keeps falling and
+ * every gap is a chat in between whose tab was closed since. Tabs after the last duplicate stay
+ * open: a chat the user reopened from history there can't be told apart.
  */
 export function findMigrationReopenedTabs(legacy, domain) {
   const has = (db, table) =>
@@ -146,8 +147,8 @@ export function findMigrationReopenedTabs(legacy, domain) {
         .all(id)
         .map((row) => [String(row.item_id), row])
     )
-  // A duplicate: its original here holds every item as is, or a later revision of it (a removal
-  // leaves a tombstone), and got as far. A copy of turns an older build saved differs somewhere.
+  // A duplicate: its original here holds every item exactly as is (a removal leaves a tombstone)
+  // and got as far. A later revision can't show which branch it grew from, so that copy is kept.
   const isDuplicate = (copy, id) => {
     const held = items(id)
     const removed = revisions(id, ['journal_item_tombstones'])
@@ -155,9 +156,8 @@ export function findMigrationReopenedTabs(legacy, domain) {
       const theirs = held.get(item)
       const same =
         theirs !== undefined &&
-        (Number(theirs.revision) > Number(row.revision) ||
-          (Number(theirs.revision) === Number(row.revision) &&
-            theirs.payload_json === row.payload_json))
+        Number(theirs.revision) === Number(row.revision) &&
+        theirs.payload_json === row.payload_json
       if (!same && !((removed.get(item) ?? -1) >= Number(row.revision))) {
         return false
       }
@@ -226,13 +226,14 @@ export function findMigrationReopenedTabs(legacy, domain) {
   const openBefore = (tab) =>
     !copyOf.has(tab.session) && (copied.has(tab.session) || legacyTabs.has(tab.session))
 
+  // A duplicate's tab can only come from the faulty pass; a later real downgrade appends its own
+  // copies after tabs the user opened, so only duplicates bound the pass's tabs.
   const anchors = tabs.flatMap((tab, index) =>
-    copyOf.has(tab.session) && derivedId(tab) ? [index] : []
+    duplicates.has(tab.session) && derivedId(tab) ? [index] : []
   )
-  // Without a duplicate's tab, nothing proves the faulty pass ran rather than a real downgrade's.
-  const faulty = anchors.some((index) => duplicates.has(tabs[index].session))
   const pass = []
-  if (faulty) {
+  let leftOpen = 0
+  if (anchors.length > 0) {
     const first = anchors[0]
     const last = anchors.at(-1)
     // Each gap is a tab the pass opened and the user closed since: a chat between these two.
@@ -247,15 +248,19 @@ export function findMigrationReopenedTabs(legacy, domain) {
         upper.position - lower.position - 1 <= b - a - 1
       )
     }
+    // A copied chat was converted before the pass, so its own tab was already there.
     let low = first
-    while (low > 0 && !openBefore(tabs[low - 1]) && follows(tabs[low - 1], tabs[low])) {
+    while (low > 0 && !copied.has(tabs[low - 1].session) && follows(tabs[low - 1], tabs[low])) {
       low -= 1
     }
-    let high = last
-    while (high + 1 < tabs.length && follows(tabs[high], tabs[high + 1])) {
-      high += 1
-    }
-    pass.push(...tabs.slice(low, high + 1).filter(passId))
+    pass.push(...tabs.slice(low, last + 1).filter(passId))
+    // After the last duplicate, a chat reopened from history here looks just like the pass's tab.
+    leftOpen = tabs
+      .slice(last + 1)
+      .filter(
+        (tab) =>
+          passId(tab) && order(tab) !== undefined && !openBefore(tab) && untouched(tab.session)
+      ).length
   }
 
   const close = []
@@ -287,6 +292,7 @@ export function findMigrationReopenedTabs(legacy, domain) {
     tabs: tabs.length,
     close: repaired === undefined ? close : [],
     kept,
+    leftOpen,
     copies: {
       duplicates: [...duplicates].map((id) => ({ id, original: copyOf.get(id), name: name(id) })),
       olderBuildTurns: copyOf.size - duplicates.size
@@ -552,6 +558,11 @@ function printSummary(found, { applied }) {
   if (kept > 0) {
     console.log(
       `Keeping ${kept} other tabs it may have opened: ${writtenSince} you wrote in since, ${openBefore} that may have been open before it, ${olderBuildCopy} copies holding turns an older Orca saved, ${notFromJournal} chats started in this Orca.`
+    )
+  }
+  if (found.leftOpen > 0) {
+    console.log(
+      `Leaving open ${found.leftOpen} tabs after the update's last copy: they may be the update's or ones you reopened. Close them by hand if you don't want them.`
     )
   }
   console.log(
