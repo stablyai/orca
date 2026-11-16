@@ -151,7 +151,7 @@ export function EditorEditFileSurface({
   if (customEditor?.contentKind === 'bytes') {
     return (
       <PluginBytesCustomEditorSurface
-        key={`${activeFile.id}\u0000${customEditor.key}`}
+        key={`${viewStateScopeId}\u0000${activeFile.id}\u0000${customEditor.key}`}
         editor={customEditor}
         file={activeFile}
         fileContent={fileContent}
@@ -297,7 +297,7 @@ export function EditorEditFileSurface({
 
   const editorSurface = customEditor ? (
     <PluginCustomEditorFrame
-      key={`${activeFile.id}\u0000${customEditor.key}`}
+      key={`${viewStateScopeId}\u0000${activeFile.id}\u0000${customEditor.key}`}
       editor={customEditor}
       fileId={activeFile.id}
       viewStateKey={`${editorViewStateKey}:plugin-editor:${customEditor.key}`}

@@ -53,7 +53,13 @@ export const PLUGIN_FRAME_DOCUMENT_SCRIPT = `
       getViewState: function () { return viewState },
       // Why a JSON copy: Orca hands it back to a later frame, which only ever gets plain JSON.
       setViewState: function (state) {
-        viewState = state == null ? null : JSON.parse(JSON.stringify(state))
+        var json = state == null ? 'null' : JSON.stringify(state, function (key, value) {
+          // JSON would store these as null, which silently forgets the view.
+          if (typeof value === 'number' && !isFinite(value)) throw new TypeError('view state must be JSON, got ' + value)
+          return value
+        })
+        if (json === undefined) throw new TypeError('view state must be JSON')
+        viewState = JSON.parse(json)
         post({ kind: 'evt', event: E.editorViewState, payload: viewState })
       }
     })

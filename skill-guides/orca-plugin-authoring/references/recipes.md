@@ -115,7 +115,8 @@ it by relative path; a package's split `.d.ts` files rarely resolve once copied.
 and redo it on `orca.on('theme', ...)`. Orca keeps no undo for editors: the library's own undo
 gets Cmd/Ctrl+Z. Switching tabs reloads the editor's frame, so keep the library's scroll and zoom
 with `orca.document.setViewState(view)` once the canvas rests, and open at
-`orca.document.getViewState()` (in once the first document is; null on a first open).
+`orca.document.getViewState()` (in once the first document is; null on a first open). Below an
+`engines.orca` that has them, guard both with `'setViewState' in orca.document`.
 
 ```ts
 // editor/sync.ts: the only code that talks to Orca; merge by id, never by array position.
