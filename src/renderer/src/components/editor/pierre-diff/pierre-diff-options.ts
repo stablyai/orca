@@ -25,7 +25,9 @@ const PIERRE_GUTTER_BUTTON_CSS = '[data-utility-button] { margin-right: 0; }'
 const PIERRE_SELECTION_CSS =
   ':host { --diffs-editor-selection-bg: var(--orca-diff-selection-bg); }' +
   ':host(:not(:focus-within)) { --diffs-editor-selection-bg: var(--orca-diff-inactive-selection-bg); }' +
-  '[data-code]:not(:has([contenteditable])) ::selection { background-color: var(--diffs-editor-selection-bg); }'
+  // Why not `[data-code]:has([contenteditable])`: every caret, selection or row change under it
+  // then restyles every rendered row. Pierre marks the editable content column itself.
+  '[data-content]:not([contenteditable]) ::selection { background-color: var(--diffs-editor-selection-bg); }'
 
 /** Every field is optional: callers pass partial settings while the store hydrates. */
 export type PierreDiffSettings = Partial<
