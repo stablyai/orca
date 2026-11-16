@@ -1,7 +1,7 @@
 // Derive owed work each tick, independent of viewers; retire quiet children and cached folds,
 // preserving durable conversations for the next send.
 
-import { DEFAULT_NATIVE_CHAT_IDLE_STOP_MINUTES } from '../../../../shared/native-chat/native-chat-idle-stop'
+import { DEFAULT_NATIVE_CHAT_IDLE_STOP_MINUTES } from '../../../../shared/native-chat/settings/native-chat-idle-stop'
 import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { StructuredAgentSessionHostSession } from '../host/structured-agent-session-host-types'
 import type { AgentSessionIdleConfirmation } from '../providers/structured-agent-session-adapter'

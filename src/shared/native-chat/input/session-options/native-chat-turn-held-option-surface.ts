@@ -1,5 +1,5 @@
 import type { SessionOptionDescriptor } from '../native-chat-session-options'
-import { setBoundedScopeCacheEntry } from '../../native-chat-scope-cache'
+import { setBoundedScopeCacheEntry } from '../composer/native-chat-scope-cache'
 import type { NativeChatPtySessionOptionsSurface } from './native-chat-pty-session-options'
 import {
   markNativeChatTurnOptionPicks,

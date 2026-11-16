@@ -1,4 +1,4 @@
-import type { StatusBarItem } from '../../../../../shared/ui-chrome-types'
+import type { StatusBarItem } from '../../../../../shared/ui-chrome/ui-chrome-types'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../search/settings-search-keywords'

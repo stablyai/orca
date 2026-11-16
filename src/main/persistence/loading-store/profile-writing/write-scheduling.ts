@@ -1,7 +1,7 @@
 import type { StoreRuntimeState } from '../store-runtime-state'
 import type { PrimaryStateWriteOperations } from './primary-state-writes'
 import { enqueueWrite } from './primary-state-writes'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   notifyWorkspaceSessionWritten,
   type WorkspaceSessionOperationListener,

@@ -1,7 +1,7 @@
 import { ExternalLink } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
 
 export function workspaceNavigationToastAction({
   workspaceId,

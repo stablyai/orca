@@ -262,7 +262,7 @@ async function runSshPrecheck(
   }
   try {
     const remoteCommand = `cd ${quotePosixShell(target.cwd)} && ${precheck.command}`
-    const channel = await connection.exec(remoteCommand)
+    const channel = await connection.execWithClosedStdin(remoteCommand)
     return await runSshChannelPrecheck({ precheck, channel, startedAt })
   } catch (error) {
     return failedPrecheckResult(precheck, startedAt, errorMessage(error))

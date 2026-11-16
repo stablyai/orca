@@ -2,7 +2,8 @@ import type { WebSessionTabsSyncState } from './state'
 import {
   hostSessionGroupIdByLocalKey,
   hostSessionTabIdByLocalKey,
-  hostSessionTabMappingKeysByEnvironmentAndWorktree
+  hostSessionTabMappingKeysByEnvironmentAndWorktree,
+  markHostSessionTabMappingsChanged
 } from './state'
 import { resolveWebAgentSessionHandoff } from '../hosted-terminals/creation/agent-launch/web-agent-session-handoff'
 
@@ -15,10 +16,36 @@ function hostSessionTabMappingKey(args: {
 }
 
 export function clearHostSessionTabIdMappings(environmentId: string, worktreeId: string): void {
+  if (deleteHostSessionTabIdMappings(environmentId, worktreeId)) {
+    markHostSessionTabMappingsChanged(worktreeId)
+  }
+}
+
+/** Replaces one workspace's mappings; an identical re-application keeps its mapping revision. */
+export function replaceHostSessionTabIdMappings(
+  environmentId: string,
+  worktreeId: string,
+  mappings: Iterable<{ tabId: string; hostTabId: string; hostGroupId?: string }>
+): void {
+  const before = hostSessionTabIdsByLocalTabForWorktree(environmentId, worktreeId)
+  deleteHostSessionTabIdMappings(environmentId, worktreeId)
+  for (const { tabId, hostTabId, hostGroupId } of mappings) {
+    writeHostSessionTabIdMapping({ environmentId, worktreeId, tabId }, hostTabId, hostGroupId)
+  }
+  const after = hostSessionTabIdsByLocalTabForWorktree(environmentId, worktreeId)
+  if (
+    before.size !== after.size ||
+    [...after].some(([tabId, hostTabId]) => before.get(tabId) !== hostTabId)
+  ) {
+    markHostSessionTabMappingsChanged(worktreeId)
+  }
+}
+
+function deleteHostSessionTabIdMappings(environmentId: string, worktreeId: string): boolean {
   const mappingKeysByWorktree = hostSessionTabMappingKeysByEnvironmentAndWorktree.get(environmentId)
   const mappingKeys = mappingKeysByWorktree?.get(worktreeId)
   if (!mappingKeys) {
-    return
+    return false
   }
   for (const mappingKey of mappingKeys) {
     hostSessionTabIdByLocalKey.delete(mappingKey)
@@ -28,9 +55,10 @@ export function clearHostSessionTabIdMappings(environmentId: string, worktreeId:
   if (mappingKeysByWorktree?.size === 0) {
     hostSessionTabMappingKeysByEnvironmentAndWorktree.delete(environmentId)
   }
+  return true
 }
 
-export function setHostSessionTabIdMapping(
+function writeHostSessionTabIdMapping(
   args: { environmentId: string; worktreeId: string; tabId: string },
   hostTabId: string,
   hostGroupId?: string

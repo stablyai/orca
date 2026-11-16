@@ -665,5 +665,40 @@
     "dynamic": false,
     "count": 1,
     "reason": "Internal RPC reply validation diagnostic; the operation reader rejects the reply and the UI renders automationErrorMessage, never the Zod issue text."
+  },
+  {
+    "filePath": "mobile/src/terminal/preferences/settings/TerminalFontSettings.tsx",
+    "kind": "object-property:label",
+    "text": "Menlo",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/terminal/preferences/settings/TerminalFontSettings.tsx",
+    "kind": "object-property:label",
+    "text": "Courier New",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/terminal/preferences/settings/TerminalFontSettings.tsx",
+    "kind": "object-property:label",
+    "text": "JetBrains Mono",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/terminal/preferences/settings/TerminalFontSettings.tsx",
+    "kind": "object-property:label",
+    "text": "Fira Code",
+    "dynamic": false,
+    "count": 1
+  },
+  {
+    "filePath": "mobile/src/terminal/preferences/settings/TerminalFontSettings.tsx",
+    "kind": "object-property:label",
+    "text": "Geist Mono",
+    "dynamic": false,
+    "count": 1
   }
 ]

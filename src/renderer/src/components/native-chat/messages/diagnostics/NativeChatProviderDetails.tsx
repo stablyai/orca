@@ -1,7 +1,7 @@
 import { cn } from '../../../../lib/class-names'
 import { useTranslate } from '../../../../i18n/use-translate'
 import type { NativeChatBlock } from '../../../../../../shared/native-chat/native-chat-types'
-import { nativeChatProviderFrameSummary } from '../../../../../../shared/native-chat/native-chat-provider-frame-summary'
+import { nativeChatProviderFrameSummary } from '../../../../../../shared/native-chat/transcript/notices/native-chat-provider-frame-summary'
 
 export function ProviderFrameRow({
   block,

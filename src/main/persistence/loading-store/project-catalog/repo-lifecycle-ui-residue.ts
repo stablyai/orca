@@ -1,4 +1,4 @@
-import type { PersistedState } from '../../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../../shared/orca-profiles/persisted-state-types'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 
 export function pruneDeregisteredRepoUiResidue(
@@ -17,7 +17,8 @@ export function pruneDeregisteredRepoUiResidue(
   for (const record of [
     ui.explorerDisplayRootByWorktree,
     ui.showDotfilesByWorktree,
-    ui.gitGraphFiltersByWorktree
+    ui.gitGraphFiltersByWorktree,
+    ui.notificationsMutedByWorktree
   ]) {
     for (const worktreeId of Object.keys(record ?? {})) {
       if (isOrphanWorktree(worktreeId)) {

@@ -17,7 +17,7 @@ import {
   useStructuredAgentSessionHostQueuesMessagesState
 } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import { structuredAgentSessionStopControl } from '../../../../../../shared/agent-session/view/structured-agent-session-stop-control'
-import type { AgentSessionPromptResponse } from '../../../../../../shared/agent-session/agent-session-question-answer'
+import type { AgentSessionPromptResponse } from '../../../../../../shared/agent-session/requests/prompts/agent-session-question-answer'
 import {
   respondToStructuredAgentSessionPrompt,
   cancelStructuredAgentSessionPrompt

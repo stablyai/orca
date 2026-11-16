@@ -1,7 +1,7 @@
 import type { AgentType } from '../../../agent-status/contracts/agent-status-types'
 import type { AgentSessionSlashCommand } from '../../../agent-session/agent-session-wire'
 import type { DiscoveredSkill, SkillDiscoveryResult } from '../../../skills/discovery/skills'
-import { getNativeChatAgentProfile, readsSkillSource } from '../../native-chat-agent-profiles'
+import { getNativeChatAgentProfile, readsSkillSource } from './native-chat-agent-profiles'
 import { classifyPickerCommands } from '../composer/native-chat-picker-items'
 import {
   sessionReportedSkills,

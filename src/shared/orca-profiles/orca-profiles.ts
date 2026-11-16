@@ -1,6 +1,6 @@
-import '../constants'
+import './constants'
 import { ORCA_BROWSER_PARTITION } from '../browser/browser-session-partition'
-import type { ExecutionHostId } from '../execution-host'
+import type { ExecutionHostId } from '../execution-host/execution-host'
 
 export const ORCA_PROFILE_INDEX_SCHEMA_VERSION = 1
 export const DEFAULT_LOCAL_ORCA_PROFILE_ID = 'local-default'

@@ -1,4 +1,4 @@
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import { parseWslUncPath } from '../../../../../shared/file-access/wsl-paths'
 import { deriveGlobalWindowsRuntimeDefaultFromLegacySettings } from '../../../../../shared/execution-host/project-runtime-legacy-migration'
 import { getWorkspaceRuntimePreference } from '../../../../../shared/execution-host/project-runtime-preference'
@@ -7,7 +7,7 @@ import type { ProjectExecutionRuntimeResolution } from '../../../../../shared/ex
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { projectMatchesRepo } from '../../../../../shared/project/project-repo-match'
 import { getIndexedRepoMap, getIndexedReposById } from '@/store/repos/repository-catalog-index'

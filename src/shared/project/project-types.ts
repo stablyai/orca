@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../execution-host'
+import type { ExecutionHostId } from '../execution-host/execution-host'
 import type { RepoIcon } from '../repository/appearance/repo-icon'
 import type { GitRemoteIdentity } from '../git/remotes/git-remote-identity'
 import type { LocalWindowsRuntimePreference } from '../execution-host/project-runtime-preference'

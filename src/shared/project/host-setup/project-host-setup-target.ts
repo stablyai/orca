@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../execution-host'
+import type { ExecutionHostId } from '../../execution-host/execution-host'
 
 export const SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE =
   "This Orca server can't add projects on its SSH hosts. Add the SSH host on your computer to open its projects."

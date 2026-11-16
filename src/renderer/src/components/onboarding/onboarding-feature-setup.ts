@@ -1,7 +1,7 @@
 import type {
   ComputerUsePermissionSetupResult,
   ComputerUsePermissionStatusResult
-} from '../../../../shared/computer-use-permissions-types'
+} from '../../../../shared/computer/computer-use-permissions-types'
 import {
   COMPUTER_USE_SKILL_NAME,
   ORCA_LINEAR_SKILL_NAME,

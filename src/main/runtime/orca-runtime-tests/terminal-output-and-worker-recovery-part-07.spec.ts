@@ -2,7 +2,7 @@ import { withDurableRuntimeStore } from './runtime-durable-store-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import './runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
-import { getDefaultWorkspaceSession } from '../../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../../shared/orca-profiles/constants'
 import {
   HEADLESS_LEAF_ID,
   TEST_REPO_ID,

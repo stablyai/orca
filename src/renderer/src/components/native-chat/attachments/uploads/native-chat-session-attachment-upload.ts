@@ -5,7 +5,7 @@ import type {
 } from '../../../../../../shared/agent-session/agent-session-attachments'
 import { callRuntimeRpc } from '../../../../runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeStatus } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import { AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
+import { AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/capabilities/agent-session-runtime-capabilities'
 import { translate } from '../../../../i18n/i18n'
 import { AGENT_SESSION_WRITE_NOTICE_COPY } from '../../../../../../shared/agent-session/failures/agent-session-write-notice-copy'
 import { useAppStore } from '../../../../store/index'

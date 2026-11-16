@@ -3,7 +3,10 @@
  * moves; this only names rows, counts what they hold, and maps blockers back to their project.
  */
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import {
   isWslHostRuntimeEnvironment,

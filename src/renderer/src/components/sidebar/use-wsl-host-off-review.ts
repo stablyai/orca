@@ -1,5 +1,8 @@
 import { useAppStore } from '@/store'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import { isWslHostOffForForge } from '@/store/github/repositories/wsl-host-off-forge'
 

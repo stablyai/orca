@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../../../../src/shared/execution-host'
+import type { ExecutionHostId } from '../../../../src/shared/execution-host/execution-host'
 import type { MobileRelayHost } from '../../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import { useRelayHosts } from './relay-hosts-feed'
 import { serverHostDesktopReach, type ServerHostDesktopReach } from './server-workspaces'

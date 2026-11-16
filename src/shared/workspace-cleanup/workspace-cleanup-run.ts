@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../execution-host'
+import type { ExecutionHostId } from '../execution-host/execution-host'
 import type {
   WorkspaceCleanupEvaluation,
   WorkspaceCleanupKeepCause,
@@ -66,6 +66,8 @@ export type WorkspaceCleanupRun = {
   counts: Record<WorkspaceCleanupRunOutcome, number>
   /** Sum of removed and archived rows' known sizes. */
   freedBytes: number
+  /** Chat history of deleted workspaces this run deleted; absent when the setting was off or on older hosts. */
+  chatHistory?: { deleted: number; failed: number; freedBytes: number }
   /** Removed, archived and failed rows, then kept ones, capped at WORKSPACE_CLEANUP_REPORT_ROW_LIMIT. */
   rows: WorkspaceCleanupRunRow[]
   /** Set when the run itself could not finish, in plain words. */

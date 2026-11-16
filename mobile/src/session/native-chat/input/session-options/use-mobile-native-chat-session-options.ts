@@ -1,4 +1,4 @@
-import type { AgentSessionConversationCommand } from '../../../../../../src/shared/agent-session/agent-session-conversation-command'
+import type { AgentSessionConversationCommand } from '../../../../../../src/shared/agent-session/conversation-context/agent-session-conversation-command'
 import {
   useCallback,
   useEffect,
@@ -34,7 +34,8 @@ import {
   createNativeChatSessionOptionRecord,
   matchNativeChatCatalogModelId
 } from '../../../../../../src/shared/native-chat/input/session-options/native-chat-session-option-state'
-import { setBoundedScopeCacheEntry } from '../../../../../../src/shared/native-chat/native-chat-scope-cache'
+import { setBoundedScopeCacheEntry } from '../../../../../../src/shared/native-chat/input/composer/native-chat-scope-cache'
+import { nativeChatCommandOpensTerminal } from '../../../../../../src/shared/native-chat/input/commands/native-chat-agent-profiles'
 import { sayMobileNativeChatSessionOption } from './native-chat-session-option-copy'
 import { translate } from '../../../../i18n/mobile-i18n'
 
@@ -305,8 +306,19 @@ export function useMobileNativeChatSessionOptions(
     [track]
   )
   const recordCommand = useCallback(
-    (command: string) => surface?.recordOutgoingCommand(command),
-    [surface]
+    (command: string) => {
+      surface?.recordOutgoingCommand(command)
+      // Why: later chat sends would be typed into the TUI screen this command opened; a send that lands after the phone moved to another chat or agent must not switch that one.
+      if (
+        agent &&
+        latest.current.scopeKey === scopeKey &&
+        latest.current.agent === agent &&
+        nativeChatCommandOpensTerminal(agent, command)
+      ) {
+        latest.current.onAgentPicker?.()
+      }
+    },
+    [agent, scopeKey, surface]
   )
   const pendingId =
     pending && pending.identity === identity ? pending.id : (surface?.sendingHeldPick() ?? null)

@@ -6,7 +6,7 @@ import {
   type AgentSessionMcpResult,
   type AgentSessionMcpServer,
   type AgentSessionMcpSignIn
-} from '../../../shared/agent-session/agent-session-mcp'
+} from '../../../shared/agent-session/options/protocol/agent-session-mcp'
 import {
   isClaudeQueryClosed,
   type ClaudeMcpControls

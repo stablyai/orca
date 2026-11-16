@@ -19,7 +19,7 @@ import {
   type NativeChatToolFoldKind
 } from '../../../../../../shared/native-chat/tools/native-chat-tool-fold'
 import { foldSubagentItems } from '../../../../../../shared/native-chat/transcript/subagents/native-chat-subagent-items'
-import { stripNoiseMessages } from '../../../../../../shared/native-chat/native-chat-noise'
+import { stripNoiseMessages } from '../../../../../../shared/native-chat/transcript/messages/native-chat-noise'
 import { agentJournalItemSubagentId } from '../../../../../../shared/agent-session/journal/agent-session-journal-producer'
 import { reuseUnits } from './native-chat-message-list-reuse'
 import { subagentTurnKeys } from './native-chat-message-list-turns'

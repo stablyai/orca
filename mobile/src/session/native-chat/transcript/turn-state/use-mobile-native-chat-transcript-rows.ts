@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import type { NativeChatResolvedPrompt } from '../../../../../../src/shared/native-chat/native-chat-resolution-receipt'
+import type { NativeChatResolvedPrompt } from '../../../../../../src/shared/native-chat/input/questions/native-chat-resolution-receipt'
 import { deriveNativeChatRowContent } from '../../../../../../src/shared/native-chat/transcript/row-content/native-chat-row-content'
 import {
   NATIVE_CHAT_EMPTY_TURN_FOLD,
@@ -10,13 +10,13 @@ import {
 import {
   nativeChatRowRendersProse,
   nativeChatRowSpeaksOrActs
-} from '../../../../../../src/shared/native-chat/native-chat-trailing-run'
+} from '../../../../../../src/shared/native-chat/transcript/folding/native-chat-trailing-run'
 import type { NativeChatTurnStatus } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import {
   nativeChatWorkRunMember,
   nativeChatWorkRunSpans
-} from '../../../../../../src/shared/native-chat/native-chat-work-run'
+} from '../../../../../../src/shared/native-chat/transcript/folding/native-chat-work-run'
 
 type TranscriptRows = {
   rows: readonly NativeChatMessage[]

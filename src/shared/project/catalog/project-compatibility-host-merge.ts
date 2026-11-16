@@ -5,7 +5,7 @@ import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId
-} from '../../execution-host'
+} from '../../execution-host/execution-host'
 import {
   type ProjectCatalogRows,
   getProjectHostSetupOwnerKey,

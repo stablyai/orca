@@ -1,6 +1,6 @@
 /** GitLab-specific types re-export through ./types for import compatibility. */
 import type { ClassifiedError } from '../errors/classified-error'
-import type { ExecutionHostId } from '../execution-host'
+import type { ExecutionHostId } from '../execution-host/execution-host'
 import type {
   CheckStatus,
   PRConflictSummary,

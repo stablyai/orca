@@ -1,6 +1,6 @@
 import { hostQualifiedRepoSelector } from '../../workspaces/catalog/runtime-repo-selector'
 import { RUNTIME_AUTOMATION_PATCH_KEYS } from './runtime-automation-patch-keys'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { AutomationService } from '../../../automations/automation-service'
 import type {
   Automation,

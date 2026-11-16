@@ -3,7 +3,7 @@ import {
   BrowserClientHostPlacementPreparationRequest,
   type BrowserPageCreationPlacement
 } from '../../../../shared/browser/client-hosting/browser-client-host-placement'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { prepareRuntimeEnvironmentBrowserPlacement } from './runtime-environment-browser-placement'
 
 export function registerRuntimeEnvironmentBrowserClientHostHandler(options: {

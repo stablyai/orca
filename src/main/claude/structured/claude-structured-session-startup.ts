@@ -6,7 +6,7 @@ import {
 } from '../../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 // Initialize gates host open after process publication; settings enrichment runs independently.
 
-import type { AgentSessionAccountKind } from '../../../shared/agent-session/agent-session-availability'
+import type { AgentSessionAccountKind } from '../../../shared/agent-session/failures/agent-session-availability'
 import type { StructuredAgentSessionProviderOpenResult } from '../../native-chat/agent-session-wire/startup/structured-agent-session-provider-open-contract'
 import type { ClaudeStreamJsonConnection } from '../claude-stream-json-connection'
 import { ClaudeSlashCommandCatalog } from '../command-catalog/claude-slash-command-catalog'

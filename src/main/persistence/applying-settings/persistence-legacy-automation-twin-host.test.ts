@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { Automation } from '../../../shared/automations/automation-definition'
 import type { Repo } from '../../../shared/repository/repo-types'
-import { getDefaultPersistedState } from '../../../shared/constants'
+import { getDefaultPersistedState } from '../../../shared/orca-profiles/constants'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },

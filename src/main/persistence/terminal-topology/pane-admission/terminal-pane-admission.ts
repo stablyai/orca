@@ -1,7 +1,7 @@
 // Persist runtime pane membership before spawning through the same layout model used by client commands.
 
 import { randomUUID } from 'node:crypto'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import {
   leafIdsOf,
@@ -30,7 +30,7 @@ import {
   followRemoteSessionAfterPaneDetach
 } from '../pane-moves/pane-remote-session-follow'
 import { pruneClosedTerminalTabTombstones } from '../../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import {
   editorViewsOfModel,
   type PartitionEditorViews

@@ -1,5 +1,5 @@
 import { getStoredRepoExecutionHostId } from '../../../workspaces/execution-host/repo-execution-host'
-import type { BranchPrefixStrategy } from '../../../../shared/ui-chrome-types'
+import type { BranchPrefixStrategy } from '../../../../shared/ui-chrome/ui-chrome-types'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import { getPRForBranch } from '../../../github/client/lookup/get-pr-for-branch'
 import type { GitAdmissionTier } from '../../../../shared/rpc-contract/source-control/git-admission-tier-params'
