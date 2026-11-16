@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { ASSIGNMENT_LIMITS } from '@orca-cloud/relay-contract'
-import { RELAY_DEFAULT_REGION, type RelayRegion } from '@orca-cloud/relay-contract/relay-regions'
+import { RELAY_DEFAULT_REGION, RelayRegionSchema, type RelayRegion } from '@orca-cloud/relay-contract/relay-regions'
 import type { RelayAssignment } from './assignment/assignment-store.js'
 import { lockedSelector, registerExistingOnlyCell, requireSelectorMatchesAdmission } from './cell-admission-selector.js'
 import type { RelayDatabase, SqlRow } from './database.js'
@@ -18,6 +18,7 @@ import {
 import {
   EDGE_CONTROL_DEFAULTS,
   edgeAnyRegionRolloutPermille,
+  edgeCohortByHost,
   edgeCountryExcluded,
   edgeFrontDoorListsHost,
   edgeRegionRolloutPermille,
@@ -161,11 +162,12 @@ export const EDGE_MOVE_BUSY_RETRY_AFTER_SECONDS = 2
 // moves). A move that would exceed it is deferred rather than queued behind a slow edge.
 export const EDGE_LOCKED_CALLS_MAX = 8
 
-// The move cannot happen on this ask (old-cell units still held, the edge did not take the push, or
-// this director already has EDGE_LOCKED_CALLS_MAX pushes in flight) and nothing changed: the host
+// The move cannot happen on this ask (old-cell units still held, the edge did not take the push,
+// this director already has EDGE_LOCKED_CALLS_MAX pushes in flight, or a keep-only ask found the
+// row off the edge) and nothing changed: the host
 // stays where it is and moves on a later ask.
 export class EdgeMoveDeferredError extends Error {
-  constructor(readonly reason: 'units_held' | 'push_failed' | 'edge_busy') {
+  constructor(readonly reason: 'units_held' | 'push_failed' | 'edge_busy' | 'not_on_edge') {
     super(`relay_edge_move_deferred:${reason}`)
   }
 }
@@ -200,6 +202,22 @@ type Identity = { userId: string; relayHostId: string }
 // Phones (edgeAssignment) do not finish a pending switch: until the host's next ask does, they are
 // answered the row's epoch and may get WRONG_CELL from an edge already past it, then re-resolve.
 export type EdgeRoute = { frontDoor?: string; byCountry?: boolean; switchable: boolean }
+
+// keepOnly: answer only a host whose row is (under the lock) on the edge; anything else throws
+// EdgeMoveDeferredError('not_on_edge') with nothing written (cohortRegion 'host', regionless asks).
+// It never writes the host's region either.
+export type EdgeMoveOptions = { keepOnly?: boolean }
+
+// How an ask's cohort is judged (EdgeAssignments.judgeCohort).
+// - ask: by the region the ask names (none: RELAY_DEFAULT_REGION), as without cohortRegion.
+// - record: a regionless ask of a host on the edge, by its recorded region; with no valid record
+//   'any' (the highest in-scope rollout, as the evacuation sweep judges it), never the default
+//   region. It may only keep the host there (keepOnly, which writes no record), never move it on.
+// - none: a regionless ask of a host with no edge row: never moved on, and nothing to leave.
+export type EdgeCohortJudgement =
+  | { by: 'ask'; region: RelayRegion | undefined }
+  | { by: 'record'; region: RelayRegion | 'any' }
+  | { by: 'none' }
 
 // Thrown out of the switch's first transaction (nothing written): the pending switch must be
 // committed on its own before any push is sent (EdgeAssignments.moveToEdgeWithFrontDoor).
@@ -349,6 +367,41 @@ export class EdgeAssignments {
     return this.answer(identity, integer(row, 'assignment_epoch'), integer(row, 'lease_expires_at'))
   }
 
+  // How the host's ask is judged (EdgeCohortJudgement). With cohortRegion 'host', a regionless ask
+  // (the shipped desktop's hourly region refresh, and its retry after a refused region) says
+  // nothing about where the host is, so it never moves a host onto the edge nor judges it by the
+  // default region: a host on the edge is judged by the region its last region-naming ask
+  // recorded, and any other host stays where it is. Asks naming a region are judged, and recorded,
+  // exactly as without the flag. Only a regionless ask of a host that may have an edge row reads
+  // (one primary key read); hosts listed by id are judged as before, since region never matters
+  // for them.
+  async judgeCohort(identity: Identity, requestedRegion: RelayRegion | undefined): Promise<EdgeCohortJudgement> {
+    const ask = { by: 'ask', region: requestedRegion } as const
+    const flags = this.config.control?.() ?? EDGE_CONTROL_DEFAULTS
+    if (requestedRegion !== undefined || !this.seeded || flags.mode !== 'on' || !edgeCohortByHost(flags)) { return ask }
+    const { relayHostId, userId } = identity
+    if (
+      this.config.denyHosts.has(relayHostId) ||
+      this.config.allowHosts.has(relayHostId) ||
+      edgeFrontDoorListsHost(flags, this.config.frontDoorUrls, relayHostId)
+    ) {
+      return ask
+    }
+    if (!mayBeOnEdge(this.config, relayHostId, userId)) { return { by: 'none' } }
+    const row = (
+      await this.database.query(
+        `SELECT a.cell_id, r.region
+         FROM relay_assignments a
+         LEFT JOIN relay_edge_host_regions r ON r.user_id = a.user_id AND r.relay_host_id = a.relay_host_id
+         WHERE a.user_id = ? AND a.relay_host_id = ?`,
+        [userId, relayHostId]
+      )
+    )[0]
+    if (!row || text(row, 'cell_id') !== EDGE_CELL_ID) { return { by: 'none' } }
+    const recorded = RelayRegionSchema.safeParse(row.region)
+    return { by: 'record', region: recorded.success ? recorded.data : 'any' }
+  }
+
   // Phone paths again, for a credential Postgres does not hold: devices paired or rotated while the
   // host is on the edge live only in its object (Postgres gets them back when the host leaves). Asks
   // the edge, read-only, and only for a host whose row is on the edge. Any edge failure, including
@@ -443,14 +496,17 @@ export class EdgeAssignments {
     identity: Identity,
     mapFloor: number,
     region?: RelayRegion,
-    route?: EdgeRoute
+    route?: EdgeRoute,
+    options: EdgeMoveOptions = {}
   ): Promise<RelayAssignment> {
     if (this.config.frontDoorUrls !== undefined && route !== undefined) {
-      return await this.moveToEdgeWithFrontDoor(identity, mapFloor, region, route)
+      return await this.moveToEdgeWithFrontDoor(identity, mapFloor, region, route, options)
     }
     const now = this.now()
     const leaseExpiresAt = now + ASSIGNMENT_LIMITS.activityLeaseMs
     const recordRegion = async (transaction: RelayDatabase, onlyIfChanged = false) => {
+      // keepOnly writes no region: the record (or its absence) is what the ask was judged by.
+      if (options.keepOnly === true) { return }
       await transaction.query(
         `INSERT INTO relay_edge_host_regions (user_id, relay_host_id, region, recorded_at)
          VALUES (?, ?, ?, ?)
@@ -473,6 +529,9 @@ export class EdgeAssignments {
         throw error
       }
       const row = rows[0]
+      if (options.keepOnly === true && (!row || text(row, 'cell_id') !== EDGE_CELL_ID)) {
+        throw new EdgeMoveDeferredError('not_on_edge')
+      }
       if (!row) {
         const epoch = mapFloor + 1
         // A missing row locks nothing: a concurrent first ask may insert it first. The loser
@@ -537,10 +596,11 @@ export class EdgeAssignments {
     identity: Identity,
     mapFloor: number,
     region: RelayRegion | undefined,
-    route: EdgeRoute
+    route: EdgeRoute,
+    options: EdgeMoveOptions
   ): Promise<RelayAssignment> {
     try {
-      return await this.frontDoorAttempt(identity, mapFloor, region, route)
+      return await this.frontDoorAttempt(identity, mapFloor, region, route, options)
     } catch (error) {
       if (!(error instanceof FrontDoorSwitchIntent)) { throw error }
       // Write-ahead: the switch's epoch is recorded as pending, committed, before its push is sent.
@@ -548,7 +608,7 @@ export class EdgeAssignments {
       // the director never answers an epoch below one the edge may hold.
       await this.recordPendingSwitch(identity, region, error.epoch, error.cellUrl)
       try {
-        return await this.frontDoorAttempt(identity, mapFloor, region, route)
+        return await this.frontDoorAttempt(identity, mapFloor, region, route, options)
       } catch (retryError) {
         // Nothing was pending to finish (another director moved the row meanwhile, e.g. while
         // directors read different edge.json generations) and this ask wants a switch again:
@@ -600,7 +660,8 @@ export class EdgeAssignments {
     identity: Identity,
     mapFloor: number,
     region: RelayRegion | undefined,
-    route: EdgeRoute
+    route: EdgeRoute,
+    options: EdgeMoveOptions
   ): Promise<RelayAssignment> {
     const now = this.now()
     const leaseExpiresAt = now + ASSIGNMENT_LIMITS.activityLeaseMs
@@ -610,6 +671,18 @@ export class EdgeAssignments {
     const placeApac = viaFrontDoor && route.byCountry === true
     const record = async (transaction: RelayDatabase, cellUrl: string | undefined, onlyIfChanged = false) => {
       // Every committed answer here also clears any pending switch (completed, or left behind).
+      if (options.keepOnly === true) {
+        // keepOnly writes no region (the record, or its absence, is what the ask was judged by)
+        // and inserts nothing: no record already answers the edge's own URL.
+        await transaction.query(
+          `UPDATE relay_edge_host_regions
+           SET recorded_at = ?, cell_url = ?, pending_epoch = NULL, pending_cell_url = NULL
+           WHERE user_id = ? AND relay_host_id = ?
+           ${onlyIfChanged ? 'AND (cell_url IS DISTINCT FROM ? OR pending_epoch IS NOT NULL)' : ''}`,
+          [now, cellUrl ?? null, identity.userId, identity.relayHostId, ...(onlyIfChanged ? [cellUrl ?? null] : [])]
+        )
+        return
+      }
       await transaction.query(
         `INSERT INTO relay_edge_host_regions
          (user_id, relay_host_id, region, recorded_at, cell_url, pending_epoch, pending_cell_url)
@@ -642,6 +715,9 @@ export class EdgeAssignments {
         throw error
       }
       const row = rows[0]
+      if (options.keepOnly === true && (!row || text(row, 'cell_id') !== EDGE_CELL_ID)) {
+        throw new EdgeMoveDeferredError('not_on_edge')
+      }
       if (!row) {
         const epoch = mapFloor + 1
         const inserted = await transaction.query(

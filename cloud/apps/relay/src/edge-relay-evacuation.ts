@@ -7,7 +7,7 @@ import { RelayRegionSchema, type RelayRegion } from '@orca-cloud/relay-contract/
 import type { RelayDatabase, SqlRow } from './database.js'
 import { EdgeAdminUnavailableError, type EdgeAdmin } from './edge-admin-client.js'
 import { inEdgeCohort, mayBeOnEdge, type EdgeRelayConfig } from './edge-relay.js'
-import { EDGE_CONTROL_DEFAULTS, edgeRegionalRollout } from './edge-relay-control.js'
+import { EDGE_CONTROL_DEFAULTS, edgeCohortByHost, edgeRegionalRollout } from './edge-relay-control.js'
 import { forEachBounded, retryPendingFences } from './edge-relay-fence.js'
 
 type Identity = { userId: string; relayHostId: string }
@@ -118,7 +118,9 @@ export class EdgeEvacuation {
   private async leavingHosts(): Promise<Identity[]> {
     const leaving: Identity[] = []
     this.pass ??= this.newPass()
-    const regional = edgeRegionalRollout(this.config.control?.() ?? EDGE_CONTROL_DEFAULTS)
+    const flags = this.config.control?.() ?? EDGE_CONTROL_DEFAULTS
+    // cohortRegion 'host': the assign path judges an edge host by its record, so the sweep does too.
+    const regional = edgeRegionalRollout(flags) || edgeCohortByHost(flags)
     for (let pages = 0; pages < 2 && this.pass !== undefined; pages += 1) {
       const pass: Pass = this.pass
       const rows = await this.readPage(pass, regional)
@@ -131,7 +133,8 @@ export class EdgeEvacuation {
         // lag: judging it drained hosts that the next ask put straight back). With them, a host
         // is judged by the effective share of the region its last edge ask recorded
         // (relay_edge_host_regions), so a regional abort or shrink drains just that region; a
-        // host with no record is judged 'any'. Country exclusion needs the ask's address, so an
+        // host with no record is judged 'any'. With cohortRegion 'host' the record is the region
+        // of the host's last region-naming ask, which its regionless asks are judged by too. Country exclusion needs the ask's address, so an
         // excluded host leaves on its next ask.
         const region = regional ? recordedRegion(row) : 'any'
         if (inEdgeCohort(this.config, identity.relayHostId, region, identity.userId)) { continue }
