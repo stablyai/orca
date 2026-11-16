@@ -36,7 +36,7 @@ export type ClaudeAccountSettings = Pick<
 >
 
 export type ClaudeAccountStore = {
-  getSettings: () => ClaudeAccountSettings
+  getSettings: () => ClaudeAccountSettings & Pick<GlobalSettings, 'claudeOAuthUsageEnabled'>
   updateSettings: (
     patch: Partial<ClaudeAccountSettings>,
     options?: { notifyListeners?: boolean }

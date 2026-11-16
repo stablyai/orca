@@ -46,6 +46,14 @@ Under [Settings → Appearance](/docs/settings), choose **% used** vs **% remain
 
 Rows without live numbers show a short status instead: **Loading usage…**, **not signed in**, **Usage unavailable**, **No usage data**, or a provider-specific error. Claude and Codex rows can drill into account switching; **Manage accounts** opens Settings.
 
+### Claude reset cards
+
+The Claude usage menu shows remaining reset credits and their next expiration alongside the normal usage reading. Choose **Reset now** to confirm spending one credit, using the same confirmation flow as Codex. **Don't ask again** skips future Claude reset confirmations; the Claude and Codex preferences are separate. Orca rechecks the account, grant order, balance, and availability before submitting each reset.
+
+Reset cards require Claude usage polling and an installed Claude Code CLI on the account's host. Orca reads that CLI's version for the request headers. Credentials and operation records stay on that host; local and paired-server menus use the same flow.
+
+A failed query does not mean zero cards. After a reset, Orca queries the balance again. If the provider's outcome is uncertain, Orca retains the operation record and blocks further resets for that organization on this Orca runtime. It never automatically resubmits the reset. This fence does not coordinate independent Orca runtimes or resets made outside Orca.
+
 ### Mobile
 
 On the companion app, open the host **Accounts** screen for the same switcher/usage readout. When Codex has earned **rate-limit reset** credits, spend one from that screen (see [Mobile companion](/docs/mobile)).

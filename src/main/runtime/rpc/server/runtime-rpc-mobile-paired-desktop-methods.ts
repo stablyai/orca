@@ -43,6 +43,8 @@ export const PAIRED_DESKTOP_METHODS = [
   'ui.set',
   // The desktop's accounts pane, Linear and project pickers target its active runtime, not a workspace's host.
   'accounts.consumeCodexResetCredit',
+  'accounts.queryClaudeResetCredits',
+  'accounts.consumeClaudeResetCredit',
   'accounts.list',
   'accounts.selectClaude',
   'accounts.selectCodex',

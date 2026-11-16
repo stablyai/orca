@@ -62,7 +62,8 @@ export function CodexResetConfirmation({
   onSkipChange,
   isRedeemingReset,
   onConfirm,
-  accountLabel
+  accountLabel,
+  provider = 'codex'
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -71,26 +72,38 @@ export function CodexResetConfirmation({
   isRedeemingReset: boolean
   onConfirm: () => void | Promise<void>
   accountLabel?: string
+  provider?: 'codex' | 'claude'
 }): React.JSX.Element {
   const t = useTranslate()
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[420px]" {...STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS}>
+      <DialogContent
+        className="z-[80] sm:max-w-[420px]"
+        overlayClassName="z-[80]"
+        {...STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS}
+      >
         <DialogHeader>
           <DialogTitle>
-            {t('auto.components.status.bar.StatusBar.972a1ff497', 'Reset Codex limits?')}
+            {provider === 'claude'
+              ? t('claude.resetCredits.confirmTitle', 'Reset Claude limits?')
+              : t('auto.components.status.bar.StatusBar.972a1ff497', 'Reset Codex limits?')}
           </DialogTitle>
           <DialogDescription>
-            {accountLabel
+            {provider === 'claude'
               ? t(
-                  'components.native-chat.usage.confirmReset',
-                  'This uses one Codex rate-limit reset credit for {{account}} and resets any eligible usage windows immediately.',
-                  { account: accountLabel }
+                  'claude.resetCredits.confirmDescription',
+                  'This uses one Claude rate-limit reset credit for the active account and resets any eligible usage windows immediately.'
                 )
-              : t(
-                  'auto.components.status.bar.StatusBar.6d1042aa6f',
-                  'This uses one Codex rate-limit reset credit for the active account and resets any eligible usage windows immediately.'
-                )}
+              : accountLabel
+                ? t(
+                    'components.native-chat.usage.confirmReset',
+                    'This uses one Codex rate-limit reset credit for {{account}} and resets any eligible usage windows immediately.',
+                    { account: accountLabel }
+                  )
+                : t(
+                    'auto.components.status.bar.StatusBar.6d1042aa6f',
+                    'This uses one Codex rate-limit reset credit for the active account and resets any eligible usage windows immediately.'
+                  )}
           </DialogDescription>
         </DialogHeader>
         <label className="flex cursor-pointer items-center gap-2 rounded-sm px-1 py-1 text-xs text-foreground/80 transition-colors hover:text-foreground">

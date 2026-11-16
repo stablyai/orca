@@ -1,3 +1,4 @@
+import type { ClaudeResetCreditSettings } from './agent-accounts/claude/claude-reset-credit-types'
 import type { AntigravityChatAuthSettings } from './agent-accounts/antigravity/antigravity-chat-auth-config'
 import type { EmulatorOpeningSettings } from './emulator-opening-preferences'
 import type { BrowserExtensionGlobalSettings } from './browser/extensions/browser-extension-settings'
@@ -38,6 +39,7 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   WorktreeDeletionPreferences &
   WorktreeCardDisplaySettings &
   ClaudeAccountSwitchSettings &
+  ClaudeResetCreditSettings &
   AgentPermissionGlobalSettings &
   ExternalConversationSettings &
   BrowserLinkOpeningSettings &

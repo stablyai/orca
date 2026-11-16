@@ -1,3 +1,4 @@
+import { ClaudeResetCredits } from './ClaudeResetCredits'
 import { useClaudeSwitcherState } from './use-claude-switcher-state'
 import type { ClaudeSwitcherMenuProps } from './ClaudeSwitcherMenu'
 import { useProviderAccountList } from './use-provider-account-list'
@@ -346,6 +347,23 @@ export function ClaudeSwitcherForOwner({
           ? (selectedGroup?.targets.find((target) => target.active)?.label ??
             t('auto.components.status.bar.StatusBar.c676918adc', 'System default'))
           : undefined
+      }
+      panelFooter={
+        selectedGroup && !chatAction ? (
+          <ClaudeResetCredits
+            key={`${selectedGroup.key}:${getClaudeStatusActiveId(accountState, selectedGroup.runtimeTarget) ?? 'system'}`}
+            credits={claude?.claudeResetCredits}
+            owner={runtimeTarget}
+            account={{
+              accountId: getClaudeStatusActiveId(accountState, selectedGroup.runtimeTarget),
+              target: {
+                runtime: selectedGroup.runtimeTarget.runtime,
+                wslDistro: selectedGroup.runtimeTarget.wslDistro ?? null
+              }
+            }}
+            disabled={isSwitching || !accountsLoaded}
+          />
+        ) : undefined
       }
       topContent={
         chatAction ? undefined : (

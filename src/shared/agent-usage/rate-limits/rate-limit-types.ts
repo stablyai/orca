@@ -1,3 +1,5 @@
+import type { ClaudeResetCredits } from '../../agent-accounts/claude/claude-reset-credit-types'
+
 export type RateLimitWindow = {
   /** Percentage of the window consumed (0–100). */
   usedPercent: number
@@ -112,6 +114,7 @@ export type ProviderRateLimits = {
   extraUsage?: ExtraUsageBalance | null
   /** Named per-model buckets (Gemini models, Cursor plan pools). */
   buckets?: RateLimitBucket[]
+  claudeResetCredits?: ClaudeResetCredits | null
   /** Available earned Codex rate-limit reset credits, if reported. */
   rateLimitResetCredits?: {
     availableCount: number

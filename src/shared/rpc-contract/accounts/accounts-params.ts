@@ -67,6 +67,29 @@ export const ConsumeCodexResetCreditParams = z
   })
   .strict()
 
+export const QueryClaudeResetCreditsParams = z
+  .object({
+    account: z
+      .object({ accountId: z.string().min(1).max(512).nullable(), target: CodexResetTarget })
+      .strict(),
+    requestId: z.uuid().optional()
+  })
+  .strict()
+
+export const ConsumeClaudeResetCreditParams = QueryClaudeResetCreditsParams.extend({
+  identity: z
+    .object({
+      email: z.string().min(1).max(320),
+      accountUuid: z.uuid(),
+      organizationUuid: z.uuid()
+    })
+    .strict(),
+  grantId: z.string().min(1).max(200),
+  expectedResetsLeft: z.number().int().positive(),
+  expectedClears: z.array(z.string().min(1).max(120)).max(100),
+  requestId: z.uuid()
+}).strict()
+
 export const AddClaudeFromConfigDirParams = z.object({
   configDir: z.string().min(1, 'Missing configDir'),
   runtime: z.enum(['host', 'wsl']).optional(),

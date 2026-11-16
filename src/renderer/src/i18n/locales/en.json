@@ -25891,5 +25891,18 @@
       "title": "Report a freeze",
       "uncheckAttachments": "Uncheck \"Attach saved freeze report and diagnostic logs\" and try again, or copy the details."
     }
+  },
+  "claude": {
+    "resetCredits": {
+      "updateHost": "Update Orca on this host to use Claude reset cards.",
+      "queryFailed": "Could not query reset cards.",
+      "notUsable": "Not available to use right now.",
+      "pending": "The previous reset is awaiting confirmation. Another reset cannot be submitted yet.",
+      "success": "Reset completed. Remaining uses verified.",
+      "unverified": "Claude reported a reset. The remaining uses could not be verified yet.",
+      "refused": "Claude did not reset the limits: {{reason}}",
+      "confirmTitle": "Reset Claude limits?",
+      "confirmDescription": "This uses one Claude rate-limit reset credit for the active account and resets any eligible usage windows immediately."
+    }
   }
 }

@@ -2,9 +2,13 @@ import type {
   ProviderRateLimits,
   RateLimitWindow
 } from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
-import { ensureElectronProxyFromEnvironment } from '../../../network/proxy-settings'
-import { getMainHttpClient } from '../../../network/http-client'
-import { abortSignalWithTimeout } from '../../../lib/abort-signal-with-timeout'
+import type { ClaudeRuntimeAuthPreparation } from '../../../claude-accounts/runtime-auth/runtime-auth-types'
+import {
+  claudeOAuthHeaders,
+  invalidateClaudeOAuthVersion,
+  requestClaudeOAuth
+} from './claude-oauth-request'
+import { mapClaudeResetCredits } from './claude-reset-credit-response'
 import {
   ClaudeUsageRequestError,
   createOAuthUsageError,
@@ -19,8 +23,8 @@ import {
   type ClaudeOAuthSpend
 } from './claude-usage-credits'
 
-const OAUTH_USAGE_URL = 'https://api.anthropic.com/api/oauth/usage'
-const API_TIMEOUT_MS = 10_000
+// Keep spend in the normal meter; the reset-only query can opt out of it.
+const OAUTH_USAGE_PATH = '/api/oauth/usage?cedar_ember=1'
 
 type OAuthUsageLimit = {
   kind?: string
@@ -31,6 +35,7 @@ type OAuthUsageLimit = {
 }
 
 type OAuthUsageResponse = {
+  cedar_ember?: unknown
   five_hour?: ClaudeUsageWindowInput
   seven_day?: ClaudeUsageWindowInput
   fable_weekly?: ClaudeUsageWindowInput
@@ -39,12 +44,6 @@ type OAuthUsageResponse = {
   spend?: ClaudeOAuthSpend
   extra_usage?: ClaudeOAuthExtraUsage
   limits?: OAuthUsageLimit[] | null
-}
-
-async function ensureProxyFromEnvironment(): Promise<void> {
-  await ensureElectronProxyFromEnvironment({
-    probeUrl: OAUTH_USAGE_URL
-  }).catch(() => {})
 }
 
 function mapFableWeeklyWindow(data: OAuthUsageResponse): RateLimitWindow | null {
@@ -69,28 +68,17 @@ function mapFableWeeklyWindow(data: OAuthUsageResponse): RateLimitWindow | null 
 
 export async function fetchClaudeOAuthUsage(
   token: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  auth?: ClaudeRuntimeAuthPreparation
 ): Promise<ProviderRateLimits> {
   if (signal?.aborted) {
     return abortedClaudeRateLimitResult()
   }
-  await ensureProxyFromEnvironment()
-  if (signal?.aborted) {
-    return abortedClaudeRateLimitResult()
-  }
-
-  const requestSignal = abortSignalWithTimeout(signal, API_TIMEOUT_MS)
+  const headers = await claudeOAuthHeaders(token, auth)
 
   let data: OAuthUsageResponse
   try {
-    const response = await getMainHttpClient().fetch(OAUTH_USAGE_URL, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'anthropic-beta': 'oauth-2025-04-20',
-        'User-Agent': 'claude-code/2.1.0'
-      },
-      signal: requestSignal
-    })
+    const response = await requestClaudeOAuth(OAUTH_USAGE_PATH, headers, { signal })
     if (!response.ok) {
       throw await createOAuthUsageError(response)
     }
@@ -105,6 +93,10 @@ export async function fetchClaudeOAuthUsage(
   if (signal?.aborted) {
     return abortedClaudeRateLimitResult()
   }
+  const resetCredits = mapClaudeResetCredits(data.cedar_ember)
+  if (resetCredits?.ineligibleReason === 'cli_version') {
+    invalidateClaudeOAuthVersion(auth)
+  }
   const session = mapClaudeUsageWindow(data.five_hour, 300)
   const weekly = mapClaudeUsageWindow(data.seven_day, 10080)
   return {
@@ -115,6 +107,7 @@ export async function fetchClaudeOAuthUsage(
     // Why only without plan windows: there, spend is overage after a cap, not the account's limit.
     monthly: session || weekly ? null : mapClaudeSpendLimitWindow(data),
     extraUsage: mapClaudeExtraUsage(data),
+    claudeResetCredits: resetCredits,
     updatedAt: Date.now(),
     error: null,
     status: 'ok'

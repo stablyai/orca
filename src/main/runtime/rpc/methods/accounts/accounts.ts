@@ -1,3 +1,4 @@
+import { CLAUDE_RESET_CREDIT_METHODS } from './claude-reset-credits'
 import { defineMethod, defineStreamingMethod, type RpcContext } from '../../core'
 import type { OrcadFeature } from '../../startup/orcad-readiness'
 import { rpcCallerOperationKey } from '../../callers/rpc-caller-identity'
@@ -181,6 +182,7 @@ const ACCOUNT_METHOD_DEFINITIONS = [
     handler: async (params, { runtime }) =>
       runtime.consumeCodexRateLimitResetCredit(params.idempotencyKey, params.expectedScope)
   }),
+  ...CLAUDE_RESET_CREDIT_METHODS,
   defineMethod({
     name: 'accounts.removeClaude',
     permission: 'accounts-admin',
