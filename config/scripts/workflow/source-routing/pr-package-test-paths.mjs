@@ -100,6 +100,9 @@ export const LINUX_PACKAGE_PREFIXES = [
   'config/scripts/desktop-distribution/appimage/static-appimage-package-contract',
   'native/computer-use-linux/',
   'native/wayland-clipboard/',
+  'native/provider-exec/',
+  'config/provider-exec-resources',
+  'config/scripts/native-build/posix/build-',
   'resources/linux/',
   'config/scripts/run-headless-serve',
   'config/scripts/runtime-verification/daemon-lifecycle/run-headless-serve'
