@@ -43,12 +43,16 @@ export function GitBlameStatusSegment({
 }): React.JSX.Element | null {
   const t = useTranslate()
   const blame = useFocusedLineBlame()
-  if (!blame) {
+  // Derived, not stored: only the visible editor's blame shows, so switching worktrees or tabs hides it.
+  const visible = useAppStore(
+    (state) => !!blame && state.activeTabType === 'editor' && state.activeFileId === blame.fileId
+  )
+  if (!blame || !visible) {
     return null
   }
   const summary = formatLineBlameSummary(blame.line)
   const details = blame.line.kind === 'commit' ? formatBlameCommitDetails(blame.line.commit) : null
-  const canOpen = details !== null && blame.git?.worktreeId != null
+  const canOpen = details !== null && !blame.stale && blame.git?.worktreeId != null
   const failureMessage = t('editor.gitBlame.openCommitFailed', 'Failed to load commit diff')
 
   return (
@@ -62,9 +66,13 @@ export function GitBlameStatusSegment({
           className="inline-flex min-w-0 cursor-pointer items-center gap-1 rounded px-1 py-0.5 text-muted-foreground transition-colors hover:bg-accent/70 hover:text-foreground disabled:cursor-default disabled:hover:bg-transparent"
           aria-label={t('editor.gitBlame.statusAriaLabel', 'Git blame: {{summary}}', { summary })}
         >
-          <GitCommitHorizontal className="size-3 shrink-0" />
+          <GitCommitHorizontal className={`size-3 shrink-0 ${blame.stale ? 'opacity-50' : ''}`} />
           {!iconOnly ? (
-            <span className="max-w-64 truncate text-[11px] font-medium">{summary}</span>
+            <span
+              className={`max-w-64 truncate text-[11px] font-medium ${blame.stale ? 'opacity-50' : ''}`}
+            >
+              {summary}
+            </span>
           ) : null}
         </button>
       </TooltipTrigger>

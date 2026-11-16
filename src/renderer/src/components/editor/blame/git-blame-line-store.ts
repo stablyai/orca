@@ -5,9 +5,18 @@ import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git
 
 export type LineBlame = { kind: 'commit'; commit: GitBlameCommit } | { kind: 'uncommitted' }
 
-/** Blame for the focused editor's cursor line, read by the status bar. */
-/** `git` is null when the commit cannot be opened from this editor. */
-export type FocusedLineBlame = { fileId: string; line: LineBlame; git: RuntimeGitContext | null }
+/**
+ * Blame for the focused editor's cursor line, read by the status bar. `ownerId` is the publishing
+ * editor, so split panes of one file stay distinct; `stale` keeps the last value (dimmed) while
+ * typing or loading so the status bar doesn't shift; `git` is null when the commit can't open.
+ */
+export type FocusedLineBlame = {
+  ownerId: string
+  fileId: string
+  line: LineBlame
+  stale: boolean
+  git: RuntimeGitContext | null
+}
 
 const focusedLineBlameStore = createStore<FocusedLineBlame | null>(() => null)
 
@@ -18,8 +27,17 @@ function sameLineBlame(a: FocusedLineBlame | null, b: FocusedLineBlame | null): 
   const commitA = a.line.kind === 'commit' ? a.line.commit : null
   const commitB = b.line.kind === 'commit' ? b.line.commit : null
   return (
-    a.fileId === b.fileId && a.git === b.git && a.line.kind === b.line.kind && commitA === commitB
+    a.ownerId === b.ownerId &&
+    a.fileId === b.fileId &&
+    a.stale === b.stale &&
+    a.git === b.git &&
+    a.line.kind === b.line.kind &&
+    commitA === commitB
   )
+}
+
+export function getFocusedLineBlame(): FocusedLineBlame | null {
+  return focusedLineBlameStore.getState()
 }
 
 export function publishFocusedLineBlame(next: FocusedLineBlame | null): void {
@@ -28,9 +46,9 @@ export function publishFocusedLineBlame(next: FocusedLineBlame | null): void {
   }
 }
 
-/** Clear only if `fileId` still owns the published blame, so a newly focused editor keeps it. */
-export function clearFocusedLineBlame(fileId: string): void {
-  if (focusedLineBlameStore.getState()?.fileId === fileId) {
+/** Clear only if `ownerId` still owns the published blame, so another pane keeps its own. */
+export function clearFocusedLineBlame(ownerId: string): void {
+  if (focusedLineBlameStore.getState()?.ownerId === ownerId) {
     focusedLineBlameStore.setState(null, true)
   }
 }

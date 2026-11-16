@@ -9,6 +9,7 @@ import {
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { isMaxBufferOverflowError } from '../../command-runner/process-capture/max-buffer-overflow'
 import { blobConversion, readGitBlobAtOidPath } from '../diffs/git-blob-read'
+import { readGitCommandFailureStderr } from '../../../../shared/git/commands/git-command-failure-text'
 import { GitBlameResultCache } from './git-blame-result-cache'
 
 const UNAVAILABLE: GitBlameResult = { kind: 'unavailable' }
@@ -69,6 +70,36 @@ async function resolveHead(
   }
 }
 
+async function runBlame(
+  fileDir: string,
+  fileName: string,
+  oid: string,
+  options: GitRuntimeOptions,
+  withoutGlobalConfig = false
+): Promise<string | 'too-large' | null> {
+  try {
+    const { stdout } = await gitExecFileAsync(
+      ['blame', '--root', '--incremental', oid, '--', fileName],
+      {
+        ...gitReadOptionsForWorktree(fileDir, options),
+        ...(withoutGlobalConfig ? { env: { ...process.env, GIT_CONFIG_GLOBAL: '/dev/null' } } : {})
+      }
+    )
+    return stdout
+  } catch (error) {
+    if (isMaxBufferOverflowError(error)) {
+      return 'too-large'
+    }
+    // A global blame.ignoreRevsFile naming a file this repo lacks fails every blame, and git can't
+    // clear that multi-valued key from the command line, so retry once without global config.
+    const stderr = readGitCommandFailureStderr(error) ?? ''
+    if (!withoutGlobalConfig && stderr.includes('could not open object name list')) {
+      return runBlame(fileDir, fileName, oid, options, true)
+    }
+    return null
+  }
+}
+
 async function readBlame(
   fileDir: string,
   fileName: string,
@@ -86,14 +117,10 @@ async function readBlame(
     readOptions,
     blobConversion(fileDir, fileName, readOptions, 'checkout')
   )
-  const blameRead = gitExecFileAsync(
-    ['blame', '--root', '--incremental', oid, '--', fileName],
-    gitReadOptionsForWorktree(fileDir, readOptions)
-  ).then(
-    ({ stdout }) => stdout,
-    (error: unknown) => (isMaxBufferOverflowError(error) ? ('too-large' as const) : null)
-  )
-  const [blob, blameOutput] = await Promise.all([blobRead, blameRead])
+  const [blob, blameOutput] = await Promise.all([
+    blobRead,
+    runBlame(fileDir, fileName, oid, readOptions)
+  ])
 
   if (blob.tooLarge || blameOutput === 'too-large') {
     return { kind: 'too-large' }

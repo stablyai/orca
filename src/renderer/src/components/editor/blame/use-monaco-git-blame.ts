@@ -1,23 +1,21 @@
 import { useEffect, useRef } from 'react'
 import type { editor } from 'monaco-editor'
 import { useAppStore } from '@/store/index'
-import { getEditorFileReadContext } from '@/lib/editor/file-operations/editor-file-operation-owner'
 import { getRuntimeGitBlame } from '@/runtime/source-control/git/runtime-git-blame-client'
-import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
 import type { GitBlameResult } from '../../../../../shared/git/blame/git-blame-types'
-import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import { canUseChangesModeForFile } from '../view-mode/editor-panel-file-mode'
 import { mapBufferLinesToHead, splitBlameLines, UNCOMMITTED_LINE } from './blame-line-mapping'
 import {
   clearFocusedLineBlame,
+  getFocusedLineBlame,
   publishFocusedLineBlame,
   type LineBlame
 } from './git-blame-line-store'
 import { blameHoverMarkdown, formatLineBlameSummary } from './git-blame-presentation'
+import { openFileById, resolveGitBlameTarget, type GitBlameTarget } from './git-blame-target'
 
 type ReadyBlame = Extract<GitBlameResult, { kind: 'ready' }>
-// `git` is null where the editor's root is not the repo (folder workspaces), so commits can't open.
-type LoadedBlame = { blame: ReadyBlame; headLines: string[]; git: RuntimeGitContext | null }
+type LoadedBlame = { blame: ReadyBlame; headLines: string[]; target: GitBlameTarget }
 
 // monaco.editor.CursorChangeReason.Explicit: arrow keys, clicks, go-to; typing is NotSet.
 const CURSOR_CHANGE_EXPLICIT = 3
@@ -52,43 +50,46 @@ export function useMonacoGitBlame(params: {
 }): void {
   const { mountedEditor, fileId, passiveMirror, inlineEnabled } = params
   const eligible = useAppStore((state) => {
-    const file = state.openFiles.find((entry) => entry.id === fileId)
+    const file = openFileById(state.openFiles, fileId)
     return !!file && canUseChangesModeForFile(file)
   })
-  const statusBarEnabled = useAppStore((state) => state.statusBarItems.includes('git-blame'))
-  const worktreeHead = useAppStore((state) => {
-    const file = state.openFiles.find((entry) => entry.id === fileId)
-    return file ? (state.gitStatusHeadByWorktree[file.worktreeId] ?? '') : ''
-  })
+  const statusBarEnabled = useAppStore(
+    (state) => state.statusBarVisible && state.statusBarItems.includes('git-blame')
+  )
   const enabled = eligible && !passiveMirror && (inlineEnabled || statusBarEnabled)
 
+  // Survives inline-toggle reruns; a different file or HEAD replaces it on the next load.
   const loadedRef = useRef<LoadedBlame | null>(null)
-  const mappingRef = useRef<{ versionId: number; mapping: Int32Array | null } | null>(null)
-  const typingRef = useRef(false)
-  const updateRef = useRef<() => void>(() => {})
 
   useEffect(() => {
     const ed = mountedEditor
     if (!ed || !enabled) {
+      loadedRef.current = null
       return
     }
+    const ownerId = ed.getId()
     const decorations = ed.createDecorationsCollection()
+    let mapping: { versionId: number; lines: Int32Array | null } | null = null
+    let typing = false
+    let loading = true
+    let disposed = false
+    let headKey: string | null = null
 
     const lineBlameAtCursor = (): LineBlame | null => {
       const loaded = loadedRef.current
       const model = ed.getModel()
       const position = ed.getPosition()
-      if (!loaded || !model || !position || typingRef.current) {
+      if (!loaded || !model || !position) {
         return null
       }
       const versionId = model.getAlternativeVersionId()
-      if (mappingRef.current?.versionId !== versionId) {
-        mappingRef.current = {
+      if (mapping?.versionId !== versionId) {
+        mapping = {
           versionId,
-          mapping: mapBufferLinesToHead(loaded.headLines, model.getLinesContent())
+          lines: mapBufferLinesToHead(loaded.headLines, model.getLinesContent())
         }
       }
-      const headLine = mappingRef.current.mapping?.[position.lineNumber - 1]
+      const headLine = mapping.lines?.[position.lineNumber - 1]
       if (headLine === undefined) {
         return null
       }
@@ -99,9 +100,31 @@ export function useMonacoGitBlame(params: {
       return commit ? { kind: 'commit', commit } : null
     }
 
+    const publish = (line: LineBlame | null): void => {
+      const current = getFocusedLineBlame()
+      const owns = current?.ownerId === ownerId
+      // Only the focused pane publishes; on open, the active file claims an empty status bar.
+      if (
+        !ed.hasTextFocus() &&
+        !owns &&
+        (current || useAppStore.getState().activeFileId !== fileId)
+      ) {
+        return
+      }
+      if (line) {
+        const git = loadedRef.current?.target.git ?? null
+        publishFocusedLineBlame({ ownerId, fileId, line, stale: false, git })
+      } else if (current && (typing || loading)) {
+        // Keep the last value, dimmed, so the status bar doesn't shift while typing or loading.
+        publishFocusedLineBlame({ ...current, ownerId, stale: true })
+      } else {
+        publishFocusedLineBlame(null)
+      }
+    }
+
     const update = (): void => {
-      const line = lineBlameAtCursor()
       const position = ed.getPosition()
+      const line = typing ? null : lineBlameAtCursor()
       if (!line || !position || !inlineEnabled) {
         decorations.clear()
       } else {
@@ -125,77 +148,79 @@ export function useMonacoGitBlame(params: {
           }
         ])
       }
-      const focused = ed.hasTextFocus() || useAppStore.getState().activeFileId === fileId
-      if (focused) {
-        publishFocusedLineBlame(line ? { fileId, line, git: loadedRef.current?.git ?? null } : null)
-      }
+      publish(line)
     }
-    updateRef.current = update
+
+    // Main answers from its commit-keyed cache unless HEAD moved, so reloading is one rev-parse.
+    let loadGeneration = 0
+    const load = (): void => {
+      const state = useAppStore.getState()
+      const file = openFileById(state.openFiles, fileId)
+      const target = file ? resolveGitBlameTarget(state, file) : null
+      headKey = target?.git.worktreeId ?? null
+      if (!target) {
+        loading = false
+        loadedRef.current = null
+        update()
+        return
+      }
+      const generation = ++loadGeneration
+      void getRuntimeGitBlame(target.git, target.relativePath).then((result) => {
+        if (disposed || generation !== loadGeneration) {
+          return
+        }
+        loading = false
+        const previous = loadedRef.current
+        if (result.kind === 'ready' && previous?.blame.headOid === result.headOid) {
+          return
+        }
+        loadedRef.current =
+          result.kind === 'ready'
+            ? { blame: result, headLines: splitBlameLines(result.headText), target }
+            : null
+        mapping = null
+        update()
+      })
+    }
 
     const disposables = [
       ed.onDidChangeModelContent(() => {
-        // Hide while typing; the next explicit cursor move shows the remapped line.
-        typingRef.current = true
+        // Only the user's own typing hides blame; agent writes and format-on-save don't.
+        if (ed.hasTextFocus()) {
+          typing = true
+        }
         update()
       }),
       ed.onDidChangeCursorPosition((event) => {
         if (event.reason === CURSOR_CHANGE_EXPLICIT || event.source === 'mouse') {
-          typingRef.current = false
+          typing = false
         }
         update()
       }),
-      ed.onDidFocusEditorText(update)
+      // Commits made in a terminal or in a child repo surface when the user returns to the editor.
+      ed.onDidFocusEditorText(() => {
+        update()
+        load()
+      })
     ]
+    const unsubscribeHead = useAppStore.subscribe((state, previous) => {
+      if (
+        headKey &&
+        state.gitStatusHeadByWorktree[headKey] !== previous.gitStatusHeadByWorktree[headKey]
+      ) {
+        load()
+      }
+    })
     update()
+    load()
     return () => {
+      disposed = true
       for (const disposable of disposables) {
         disposable.dispose()
       }
+      unsubscribeHead()
       decorations.clear()
-      updateRef.current = () => {}
-      clearFocusedLineBlame(fileId)
+      clearFocusedLineBlame(ownerId)
     }
   }, [mountedEditor, enabled, fileId, inlineEnabled])
-
-  // HEAD moving is the only thing that changes blame; main answers repeats from its cache.
-  useEffect(() => {
-    if (!enabled) {
-      loadedRef.current = null
-      mappingRef.current = null
-      return
-    }
-    let cancelled = false
-    const state = useAppStore.getState()
-    const file = state.openFiles.find((entry) => entry.id === fileId)
-    if (!file) {
-      return
-    }
-    const worktreePath = file.filePath.slice(0, file.filePath.length - file.relativePath.length - 1)
-    let context: RuntimeGitContext
-    try {
-      const { target, connectionId } = getEditorFileReadContext(state, file, worktreePath)
-      context = { target, worktreeId: file.worktreeId, worktreePath, connectionId }
-    } catch {
-      // The file's owner is unresolved or changed; blame stays hidden.
-      return
-    }
-    void getRuntimeGitBlame(context, file.relativePath).then((result) => {
-      if (cancelled) {
-        return
-      }
-      loadedRef.current =
-        result.kind === 'ready'
-          ? {
-              blame: result,
-              headLines: splitBlameLines(result.headText),
-              git: parseWorkspaceKey(file.worktreeId)?.type === 'folder' ? null : context
-            }
-          : null
-      mappingRef.current = null
-      updateRef.current()
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [enabled, fileId, worktreeHead])
 }

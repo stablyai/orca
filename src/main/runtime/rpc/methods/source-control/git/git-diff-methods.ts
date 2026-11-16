@@ -63,7 +63,15 @@ export const GIT_DIFF_METHODS = [
     name: 'git.blame',
     permission: 'workspace',
     params: GitFilePath,
-    handler: async (params, { runtime }) =>
-      runtime.getRuntimeGitBlame(params.worktree, params.filePath)
+    handler: async (params, { runtime, clientKind, requestId }) => {
+      const result = await runtime.getRuntimeGitBlame(params.worktree, params.filePath)
+      const budget = remoteDiffContentBudget(clientKind, requestId)
+      // The reply carries the HEAD text; past the remote reply budget it would be refused anyway.
+      return result.kind === 'ready' &&
+        budget !== undefined &&
+        Buffer.byteLength(result.headText) > budget
+        ? { kind: 'too-large' as const }
+        : result
+    }
   })
 ]
