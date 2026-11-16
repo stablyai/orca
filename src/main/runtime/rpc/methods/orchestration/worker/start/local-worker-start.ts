@@ -4,7 +4,7 @@ import { probeWorkerOpenCodeModelLaunchSupport } from './launch/worker-opencode-
 import { resolveWorkerConfiguredAgentParams } from './launch/worker-configured-agent-preflight'
 import { waitForWorkerAgentReady } from '../../../../../terminal/wait/launched-agent-composer-readiness'
 import type { OrcaRuntimeService } from '../../../../../orca-runtime'
-import { describeTerminalWaitBlockedReason } from '../../../../../../../shared/terminal/runtime-policy/terminal-wait-blocked-reason-legacy-alias'
+import { agentStartupBlockedMessage } from '../../../../../terminal/wait/agent-startup-blocked-message'
 import type { OrchestrationDb } from '../../../../../orchestration/db/orchestration-db'
 import type {
   DispatchContextRow,
@@ -225,7 +225,7 @@ export async function startLocalWorker(args: {
         }
         throw new Error(
           wait.blockedReason
-            ? `Agent startup blocked: ${describeTerminalWaitBlockedReason(wait.blockedReason)}`
+            ? await agentStartupBlockedMessage(runtime, terminalHandle, wait.blockedReason)
             : structuredSession
               ? `Setup did not finish before the structured worker started (${wait.status}).`
               : `Agent did not become ready (${wait.status}).`
