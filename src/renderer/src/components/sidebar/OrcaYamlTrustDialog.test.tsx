@@ -13,6 +13,7 @@ import {
 } from '@/runtime/repo-hooks/ensure-hooks-confirmed'
 import {
   approveAutomationSetup,
+  confirmAutomationSaveSetup,
   reviewAutomationSkippedSetup
 } from '../automations/authoring/automation-setup-review'
 import type { Repo } from '../../../../shared/repository/repo-types'
@@ -226,6 +227,26 @@ describe('automation setup approval', () => {
     await expect(approval).resolves.toEqual({ decision: 'run' })
     expect(useAppStore.getState().trustedOrcaHooks['repo-1']).toEqual({
       all: { approvedAt: expect.any(Number) }
+    })
+  })
+
+  it('pins empty setup so commands added later need approval', async () => {
+    useAppStore.setState({ repos: [makeRepo('local')] })
+    serveSetupScript('')
+    await expect(
+      confirmAutomationSaveSetup(
+        { local: { targetEdited: false, editingRowKey: null }, list: { visibleRows: [] } },
+        {
+          prompt: true,
+          repoId: 'repo-1',
+          hostId: 'local',
+          baseBranch: 'origin/main',
+          setupDecision: 'run',
+          automation: null
+        }
+      )
+    ).resolves.toMatchObject({
+      setupTrustHash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
     })
   })
 

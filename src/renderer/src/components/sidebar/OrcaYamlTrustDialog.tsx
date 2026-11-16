@@ -124,6 +124,19 @@ const OrcaYamlTrustDialog = React.memo(function OrcaYamlTrustDialog() {
           </div>
         )}
 
+        {!versionOnly && (
+          <p className="text-xs text-muted-foreground">
+            <Trans
+              i18n={i18n}
+              defaults={t(
+                'worktree.setupTrust.alwaysTrustScope',
+                'Always trust runs future <code>orca.yaml</code> changes in <repo/> without asking.'
+              )}
+              components={{ code: <code />, repo: <>{repoName}</> }}
+            />
+          </p>
+        )}
+
         <DialogFooter>
           <Button variant="ghost" onClick={() => resolveAndClose('skip')}>
             {t('auto.components.sidebar.OrcaYamlTrustDialog.43b7bec4cd', "Don't run")}

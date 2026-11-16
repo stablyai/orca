@@ -24115,7 +24115,8 @@
       "branchDiffersBody": "The workspace was created, but its setup didn't run: its branch's <code>orca.yaml</code> differs from what you approved. Run these for this workspace only if you trust <repo/>.",
       "branchSetupScript": "Branch's setup script",
       "runOnce": "Run once",
-      "alwaysTrust": "Always trust"
+      "alwaysTrust": "Always trust",
+      "alwaysTrustScope": "Always trust runs future <code>orca.yaml</code> changes in <repo/> without asking."
     },
     "nestedRemoval": {
       "refreshFailed": "Could not refresh the workspace list",

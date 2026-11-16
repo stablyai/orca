@@ -1137,6 +1137,7 @@
     "worktree.nestedRemoval.retry",
     "worktree.nestedRemoval.review",
     "worktree.setupTrust.alwaysTrust",
+    "worktree.setupTrust.alwaysTrustScope",
     "worktree.setupTrust.branchDiffersBody",
     "worktree.setupTrust.branchDiffersTitle",
     "worktree.setupTrust.branchSetupScript",

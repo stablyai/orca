@@ -232,7 +232,7 @@ export async function saveOrcaAutomation(
     workspaceId: currentAutomation ? currentAutomation.workspaceId : draft.workspaceId,
     baseBranch: currentAutomation ? currentAutomation.baseBranch : draft.baseBranch.trim() || null,
     setupDecision: currentAutomation ? currentAutomation.setupDecision : setupDecision,
-    setupTrustHash: currentAutomation ? currentAutomation.setupTrustHash : setupTrustHash,
+    setupTrustHash: 'setupDecision' in updates ? setupTrustHash : currentAutomation?.setupTrustHash,
     reuseSession: currentAutomation
       ? currentAutomation.reuseSession
       : draft.workspaceMode === 'existing' && draft.reuseSession,
