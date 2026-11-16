@@ -1,9 +1,9 @@
 import { recordStructuredChatAgentStart } from '../../../telemetry/structured-chat-dispatch'
-import { tuiAgentToAgentKind } from '../../../../shared/agent-kind'
+import { tuiAgentToAgentKind } from '../../../../shared/agent-status/identity/agent-kind'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { isDeepStrictEqual } from 'node:util'
-import { abortSignalReason } from '../../../../shared/abort-signal-reason'
-import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
+import { abortSignalReason } from '../../../../shared/concurrency/abort-signal-reason'
+import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type {
   AgentSessionProcessIdentity,
   AgentSessionRecord

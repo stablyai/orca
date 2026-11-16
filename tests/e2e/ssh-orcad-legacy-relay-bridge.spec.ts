@@ -11,7 +11,7 @@ import { seedRelayEraProfile } from './helpers/orcad-upgrade-profile'
 import { readPersistedProfileState } from './helpers/persisted-profile-state'
 
 import { toSshExecutionHostId } from '../../src/shared/execution-host'
-import { toAppSshPtyId } from '../../src/shared/ssh-pty-id'
+import { toAppSshPtyId } from '../../src/shared/remote-runtime/ssh/ssh-pty-id'
 import {
   cleanupDockerSshHostTarget,
   DOCKER_SSH_HOST_REMOTE_REPO_PATH,

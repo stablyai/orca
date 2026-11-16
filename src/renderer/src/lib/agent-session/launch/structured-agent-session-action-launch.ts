@@ -1,6 +1,6 @@
 import { structuredAgentLabel } from './structured-agent-session-launch-label'
 import { translate } from '@/i18n/i18n'
-import { joinSentences } from '../../../../../shared/sentence-joining'
+import { joinSentences } from '../../../../../shared/text/sentence-joining'
 import { readStructuredChatTabSavedName } from '@/runtime/native-chat/naming/structured-chat-tab-name'
 import {
   getStructuredLaunchStateBySessionId,
@@ -25,7 +25,7 @@ import type { StructuredAgentLaunchSettlement } from './continuation/structured-
 import type { ProvisionalLaunchArgs } from '../structured-agent-session-provisional-tab'
 import type { OpenedAgentSessionTab } from './pane/structured-agent-session-tab-open-through-layout-owner'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 export function openDeclinedTerminal(
   args: ProvisionalLaunchArgs,

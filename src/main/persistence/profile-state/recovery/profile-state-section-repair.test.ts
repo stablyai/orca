@@ -14,7 +14,7 @@ import { writeProfileStateDomains } from '../documents/profile-state-domain-writ
 import { migrateProfileStateToSqlite } from '../startup/profile-state-migration'
 import { rollbackProfileState } from './profile-state-recovery-command'
 import { ProfileStateRecoveryRequiredError } from './profile-state-recovery-required'
-import type { ProfileStateRecoverySelector } from '../../../../shared/profile-state-recovery-command'
+import type { ProfileStateRecoverySelector } from '../../../../shared/orca-profiles/profile-state-recovery-command'
 
 const roots: string[] = []
 const profileId = 'section-repair'

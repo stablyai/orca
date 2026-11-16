@@ -10,19 +10,47 @@ import {
   type ClaudeCurrentTurn,
   type ClaudeTurnEnd
 } from './claude-turn-lifecycle-item'
-import { writeAgentJournalTurnRow } from '../../../native-chat/agent-session-timeline/agent-journal-turn-row-revision'
 import type { ClaudeCommandTurn } from './claude-command-turn'
 import { createClaudeTurnOpener, type ClaudeTurnSource } from './claude-turn-opening'
-import { refineClaudeQuotaTurnEnd } from '../journal/claude-terminal-failure'
+import {
+  claudeQuotaTurnEndResolution,
+  refineClaudeQuotaTurnEnd
+} from '../journal/claude-terminal-failure'
+import { writeClaudeStopReadings, type ClaudeStopCheck } from '../../claude-stop-readings'
+import {
+  agentJournalTurnRowReservedBytes,
+  writeAgentJournalTurnRow
+} from '../../../native-chat/agent-session-timeline/agent-journal-turn-row-revision'
+import type { JournalTimelineItemResolution } from '../../../native-chat/agent-session-journal/writing/journal-timeline-resolution'
 import type { ClaudeUsageLimitEvidence } from '../journal/claude-usage-limits'
 import type { ClaudeStartedSend } from '../claude-structured-session-state'
+
+/** The ending a person's Stop at the write position would record instead. */
+export type ClaudeStoppedTurnEnd = { check: ClaudeStopCheck; end: ClaudeTurnEnd }
+
+function claudeTurnEndResolution(
+  turn: ClaudeCurrentTurn,
+  end: ClaudeTurnEnd,
+  contextUsage: AgentSessionContextUsage | undefined,
+  quotaEnd: boolean
+): { resolution: JournalTimelineItemResolution; reservedBytes: number } {
+  const item = claudeTurnLifecycleItem(turn, end)
+  const write = { lifecycle: item.body, ...(contextUsage ? { contextUsage } : {}) }
+  const target = { identity: item.identity }
+  return {
+    resolution: quotaEnd
+      ? claudeQuotaTurnEndResolution(item.identity, write)
+      : { kind: 'turn-row', target, write },
+    reservedBytes: agentJournalTurnRowReservedBytes(target, write)
+  }
+}
 
 export type ClaudeOpenTurnDeps = {
   sink: StructuredAgentSessionEventSink
   /** The superseded turn's spawn calls get no announcement now. */
   turnSuperseded: () => void
   /** Ends what the ending turn left open, at the instant it ended; no later frame will. */
-  endOpenWork: (completedAt: number) => void
+  endOpenWork: (completedAt: number, settles?: boolean) => void
   onOpen?: () => void
 }
 
@@ -35,6 +63,8 @@ export class ClaudeOpenTurn {
   private cycleWorkObserved = false
   /** Input choices follow actual work; correlation also includes API errors. */
   inputChoiceWorkObserved = false
+  /** The ending of a step a steer cut short, until the steer's own cycle starts. */
+  private steerHandoffEnd: ClaudeTurnEnd | null = null
   private startedSend: ClaudeStartedSend | null = null
   private readonly opener: (
     frame: Record<string, unknown>,
@@ -98,7 +128,13 @@ export class ClaudeOpenTurn {
     this.startedSend = send
   }
 
+  /** Stop or idle before the steer runs ends the turn as that step ended, not as completed. */
+  holdForSteer(end: ClaudeTurnEnd): void {
+    this.steerHandoffEnd = this.current ? end : null
+  }
+
   observeProviderCycleStart(): void {
+    this.steerHandoffEnd = null
     this.cycleWorkObserved = false
     this.inputChoiceWorkObserved = false
   }
@@ -109,6 +145,7 @@ export class ClaudeOpenTurn {
 
   /** Supersede the previous turn before opening another; a missing result must not leave old work live. */
   open(turn: ClaudeCurrentTurn, observedAt: number): void {
+    this.steerHandoffEnd = null
     this.usageLimitEvidence = null
     this.deps.onOpen?.()
     if (this.current) {
@@ -127,6 +164,7 @@ export class ClaudeOpenTurn {
 
   /** The host already wrote the command row; only publish its eventual end. */
   beginCommand(turn: ClaudeCurrentTurn): void {
+    this.steerHandoffEnd = null
     this.usageLimitEvidence = null
     this.deps.onOpen?.()
     if (this.current) {
@@ -167,19 +205,43 @@ export class ClaudeOpenTurn {
   }
 
   /** Settle activity and context facts in the same turn revision. */
-  settle(end: ClaudeTurnEnd, contextUsage?: AgentSessionContextUsage): void {
-    const quotaEnd =
+  settle(
+    settled: ClaudeTurnEnd,
+    contextUsage?: AgentSessionContextUsage,
+    stopped?: ClaudeStoppedTurnEnd
+  ): void {
+    // Only a verdictless end (idle) takes the held verdict, at idle's time; a real result keeps its own.
+    const held = this.steerHandoffEnd
+    const end =
+      held && settled.outcome === undefined && settled.state === 'completed'
+        ? { state: held.state, outcome: held.outcome, completedAt: settled.completedAt }
+        : settled
+    this.steerHandoffEnd = null
+    const quotaEnd = (ending: ClaudeTurnEnd) =>
       this.current !== null &&
-      end.outcome === undefined &&
+      ending.outcome === undefined &&
       this.usageLimitEvidence?.cause === 'quota'
-    this.suppressReopenOnFailure(quotaEnd)
+    const readings = {
+      ran: quotaEnd(end),
+      stopped: stopped !== undefined && quotaEnd(stopped.end)
+    }
+    this.suppressReopenOnFailure(readings.ran || readings.stopped)
     this.cycleWorkObserved = false
     this.inputChoiceWorkObserved = false
     this.usageLimitEvidence = null
-    // End suppressed work even when no turn is open.
-    this.deps.endOpenWork(end.completedAt)
+    // End suppressed work even when no turn is open, at the real settle time.
+    this.deps.endOpenWork(settled.completedAt, true)
     if (this.current) {
-      this.publish(this.current, end, contextUsage, quotaEnd)
+      this.publish(
+        this.current,
+        end,
+        contextUsage,
+        readings.ran,
+        stopped && {
+          ...stopped,
+          quotaEnd: readings.stopped
+        }
+      )
       this.current = null
     }
     this.deps.sink.setActivity?.(null)
@@ -202,10 +264,29 @@ export class ClaudeOpenTurn {
     turn: ClaudeCurrentTurn,
     end?: ClaudeTurnEnd,
     contextUsage?: AgentSessionContextUsage,
-    quotaEnd = false
+    quotaEnd = false,
+    stopped?: ClaudeStoppedTurnEnd & { quotaEnd: boolean }
   ): void {
     const item = claudeTurnLifecycleItem(turn, end)
     const write = { lifecycle: item.body, ...(contextUsage ? { contextUsage } : {}) }
+    if (end && stopped) {
+      const ran = claudeTurnEndResolution(turn, end, contextUsage, quotaEnd)
+      const other = claudeTurnEndResolution(turn, stopped.end, contextUsage, stopped.quotaEnd)
+      const readings = {
+        ran: ran.resolution,
+        stopped: other.resolution,
+        reservedBytes: Math.max(ran.reservedBytes, other.reservedBytes)
+      }
+      const options = { ...item.options, lifecycle: true, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      if (
+        writeClaudeStopReadings(this.deps.sink, stopped.check, readings, options, {
+          publish: false
+        })
+      ) {
+        this.deps.sink.publish({ coalescingKey: item.publishCoalescingKey })
+        return
+      }
+    }
     if (quotaEnd && refineClaudeQuotaTurnEnd(this.deps.sink, item.identity, write)) {
       return
     }

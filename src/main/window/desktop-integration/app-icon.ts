@@ -15,7 +15,7 @@ import {
   CUSTOM_APP_ICON_ID,
   normalizeAppIconId,
   type BuiltInAppIconId
-} from '../../../shared/app-icon'
+} from '../../../shared/app-lifecycle/identity/app-icon'
 import { getCustomAppIconPath, hasCustomAppIcon } from './custom-app-icon'
 
 const APP_ICON_PATHS = {

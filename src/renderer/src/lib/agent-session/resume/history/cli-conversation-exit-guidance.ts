@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import { agentLabel } from '../../../../../../shared/ai-vault/session-display/ai-vault-session-filters'
-import type { CliConversationRowAgent } from '../../../../../../shared/structured-agent-cli-conversation-adoption'
+import type { CliConversationRowAgent } from '../../../../../../shared/agent-session/view/structured-agent-cli-conversation-adoption'
 
 export function cliConversationExitGuidance(
   agent: CliConversationRowAgent,

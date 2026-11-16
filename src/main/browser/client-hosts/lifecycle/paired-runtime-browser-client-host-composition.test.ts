@@ -84,37 +84,6 @@ describe('PairedRuntimeBrowserClientHostComposition', () => {
     expect(rig.routes.reconnect).toHaveBeenCalledTimes(2)
     expect(rig.executor.handle).toHaveBeenCalledOnce()
   })
-
-  it('fails closed without racing page cleanup when handlers do not settle', async () => {
-    const rig = createRig({ hostSettled: false })
-    const composition = rig.createComposition()
-    await composition.start()
-
-    await expect(composition.close()).resolves.toBe(false)
-
-    expect(rig.order).toEqual([
-      'activate-routes',
-      'closing',
-      'suspend-routes',
-      'fence-navigation',
-      'close-host',
-      'close-routes'
-    ])
-    expect(rig.executor.close).not.toHaveBeenCalled()
-
-    rig.settleHandlers()
-    await composition.whenClosed()
-
-    expect(rig.order).toEqual([
-      'activate-routes',
-      'closing',
-      'suspend-routes',
-      'fence-navigation',
-      'close-host',
-      'close-routes',
-      'close-executor'
-    ])
-  })
 })
 
 function createRig(

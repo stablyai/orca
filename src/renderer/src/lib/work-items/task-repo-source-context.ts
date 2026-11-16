@@ -1,10 +1,10 @@
-import type { Repo } from '../../../../shared/repo-types'
-import type { GitLabProjectRef } from '../../../../shared/gitlab-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
+import type { GitLabProjectRef } from '../../../../shared/gitlab/gitlab-types'
 import {
   normalizeTaskSourceContext,
   type TaskSourceContext
 } from '../../../../shared/work-items/task-source-context'
-import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
+import { projectHostSetupProjectionFromRepos } from '../../../../shared/project/host-setup/project-host-setup-projection'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 export function getTaskPageRepoSourceContext(
   repo: Repo | null | undefined,

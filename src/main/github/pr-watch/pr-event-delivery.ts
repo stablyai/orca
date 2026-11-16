@@ -5,16 +5,10 @@ import {
   pullRequestEventClientMessageId,
   pullRequestEventText
 } from '../../../shared/native-chat/native-chat-pull-request-event'
-import type Database from '../../sqlite/sync-database'
-import type { JournalHostDatabase } from '../../native-chat/agent-session-journal/database/journal-host-database'
+import type { PRWatchStorage } from './pr-watch-storage'
 import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
-import {
-  markPRDeliveryDelivered,
-  readOldestPRPendingDelivery,
-  hasPRPendingDelivery,
-  readPRPendingDeliveryChatIds,
-  type PRPendingDelivery
-} from './pr-check-event-tables'
+import type { PRPendingDelivery } from './pr-check-event-tables'
+import type { JournalWriterCommit } from '../../native-chat/agent-session-journal/journal-writer-changes'
 
 const PR_KEY = /^([^/]+)\/([^/]+)\/([^/#]+)#(\d+)$/u
 
@@ -46,12 +40,16 @@ function eventItem(delivery: PRPendingDelivery) {
 }
 
 /** Lines go between turns, never into one: a turn running or about to start waits for its end. */
-function canAppendBetweenTurns(journal: AgentSessionJournal): boolean {
-  return journal.newestTurn()?.state !== 'running' && journal.pendingSubmissions().length === 0
+async function canAppendBetweenTurns(journal: AgentSessionJournal): Promise<boolean> {
+  const [turn, pending] = await Promise.all([
+    journal.reads.newestTurn(),
+    journal.reads.pendingSubmissions()
+  ])
+  return turn?.state !== 'running' && pending.length === 0
 }
 
 type DeliveryInput = {
-  database: JournalHostDatabase
+  database: PRWatchStorage
   journal: AgentSessionJournal
   sessionId: string
   /** The chat's current fence: the line is host bookkeeping in whichever generation is current. */
@@ -91,48 +89,56 @@ async function drain(input: DeliveryInput): Promise<void> {
     return
   }
   for (;;) {
-    if (!canAppendBetweenTurns(journal)) {
+    if (database.isClosed || !(await canAppendBetweenTurns(journal))) {
       return
     }
-    const delivery = readOldestPRPendingDelivery(database.db, sessionId)
+    const delivery = await database.read({ kind: 'oldest-delivery', chatId: sessionId })
     if (!delivery) {
       return
     }
     const item = eventItem(delivery)
-    const markDelivered = {
-      write: (db: Database.Database) =>
-        markPRDeliveryDelivered(db, sessionId, delivery.eventId, item?.itemId ?? ''),
-      committed: () => {}
+    const operation = {
+      kind: 'delivered' as const,
+      chatId: sessionId,
+      eventId: delivery.eventId,
+      itemId: item?.itemId ?? ''
     }
-    // An unreadable row would hold every later line back; one already written is done.
-    if (!item || journal.hasRecordedItem(item.itemId)) {
-      database.transaction(markDelivered.write)
+    if (!item || (await journal.reads.hasRecordedItem(item.itemId))) {
+      await database.write(operation)
       continue
     }
-    await journal.appendItem(
+    const written = await journal.appendItem(
       item.identity,
       item.body,
-      { fence, turnScope: { kind: 'thread' } },
-      markDelivered
+      { fence, turnScope: { kind: 'thread' }, onlyBetweenTurns: true },
+      {
+        stage: async () => ({
+          effects: [{ kind: 'pr-watch', operation }],
+          settle: () => {}
+        })
+      }
     )
+    if (!written) {
+      return
+    }
   }
 }
 
 /** Which chats owe lines, so a journal commit starts a drain only where it can append something. */
 export class PREventDeliveryTrigger {
-  private readonly owed = new Set<string>()
+  private readonly owed = new Map<string, object>()
 
   constructor(
     private readonly deps: {
-      database: JournalHostDatabase
+      database: PRWatchStorage
       chatFence: (chatId: string) => number | null
       logger: Pick<StructuredAgentSessionLogger, 'warn'>
     }
   ) {}
 
-  load(): void {
-    for (const chatId of readPRPendingDeliveryChatIds(this.deps.database.db)) {
-      this.owed.add(chatId)
+  async load(): Promise<void> {
+    for (const chatId of await this.deps.database.read({ kind: 'owed-chats' })) {
+      this.owed.set(chatId, {})
     }
   }
 
@@ -142,15 +148,26 @@ export class PREventDeliveryTrigger {
 
   /** A new line is owed; an open chat may take it now. */
   owe(chatId: string, journal: AgentSessionJournal | null): void {
-    this.owed.add(chatId)
+    this.owed.set(chatId, {})
     if (journal) {
       this.deliver(chatId, journal)
     }
   }
 
   /** Streaming commits during a turn cost one set lookup and a turn check, nothing more. */
-  committed(chatId: string, journal: AgentSessionJournal): void {
-    if (this.owed.has(chatId) && canAppendBetweenTurns(journal)) {
+  committed(
+    chatId: string,
+    journal: AgentSessionJournal,
+    commit: JournalWriterCommit | undefined
+  ): void {
+    if (
+      this.owed.has(chatId) &&
+      (commit?.inputChanged ||
+        commit?.publication?.items.some(
+          ({ body }) =>
+            body.kind === 'turn' || (body.kind === 'status' && body.turnLifecycle !== undefined)
+        ))
+    ) {
       this.deliver(chatId, journal)
     }
   }
@@ -161,10 +178,15 @@ export class PREventDeliveryTrigger {
       return
     }
     const { database } = this.deps
+    const token = this.owed.get(chatId)
     void deliverPendingPullRequestEvents({ database, journal, sessionId: chatId, fence })
-      .then(() => {
+      .then(async () => {
         // The database may be closing during shutdown; that throw is caught below too.
-        if (!database.isClosed && !hasPRPendingDelivery(database.db, chatId)) {
+        if (
+          !database.isClosed &&
+          !(await database.read({ kind: 'has-delivery', chatId })) &&
+          this.owed.get(chatId) === token
+        ) {
           this.owed.delete(chatId)
         }
       })

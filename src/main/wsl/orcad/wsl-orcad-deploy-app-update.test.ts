@@ -44,7 +44,7 @@ vi.mock('../../managed-server/activation/orcad-running-version-adoption', () => 
   adoptRunningOrcadVersion: mocks.adoptRunning
 }))
 
-vi.mock('../../../shared/app-environment', () => ({
+vi.mock('../../../shared/app-lifecycle/app-environment', () => ({
   getAppEnvironment: () => ({ getVersion: () => '1.5.0', getPath: () => '/user-data' })
 }))
 vi.mock('../../ssh/remote-exec/remote-exec-command', () => ({ execCommand: mocks.exec }))

@@ -1,9 +1,9 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { ProjectHostSetup } from '../../../shared/project-types'
-import type { Repo } from '../../../shared/repo-types'
+import type { ProjectHostSetup } from '../../../shared/project/project-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
-import { carryProjectStateThroughIdentityChange } from '../../../shared/project-identity-succession'
+import { projectHostSetupProjectionFromRepos } from '../../../shared/project/host-setup/project-host-setup-projection'
+import { carryProjectStateThroughIdentityChange } from '../../../shared/project/catalog/project-identity-succession'
 import { markWorktreeRouteInputsChanged } from '../../workspaces/catalog/local-worktree-scan-generation'
 
 export function projectHostSetupCompatibilityStateEqual(

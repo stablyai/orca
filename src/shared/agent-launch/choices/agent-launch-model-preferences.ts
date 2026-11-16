@@ -6,8 +6,8 @@ import {
   findCatalogOption,
   getAgentSessionOptionLaunchCatalog
 } from '../../agent-session/options/agent-session-option-catalog'
-import { isPiModelOptionId } from '../../agent-session/options/agent-session-option-catalog-pi'
-import { resolveAgentSessionOptionLaunch } from '../../agent-session/options/agent-session-option-launch'
+import { isPiModelOptionId } from '../../agent-session/options/catalog-providers/agent-session-option-catalog-pi'
+import { resolveAgentSessionOptionLaunch } from '../../agent-session/options/launch/agent-session-option-launch'
 import type { TuiAgent } from '../catalog/tui-agent'
 
 export const OPENCODE_MODEL_VERSION_REFUSAL =

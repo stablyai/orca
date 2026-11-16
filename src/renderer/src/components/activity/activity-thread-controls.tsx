@@ -6,7 +6,7 @@ import { useNow } from '@/hooks/use-now'
 import { cn } from '@/lib/class-names'
 import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import {
   formatAbsoluteDate,
   activityThreadStatusId,

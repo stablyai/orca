@@ -22,7 +22,13 @@ import {
   recordPRLastOutcome,
   startPRLookup
 } from './pr-last-outcome'
-import { prLookupScope, lastOutcomeKey, completeReadKey } from './pr-read-identity'
+import {
+  prLookupScope,
+  lastOutcomeKey,
+  completeReadKey,
+  exactRequestMatcher,
+  snapshotPRLookupOptions
+} from './pr-read-identity'
 import { refreshPRPolicyContext, recordPRPolicyOutcome } from './pr-quiet-policy-evidence'
 import {
   hostedReviewRepoScope,
@@ -30,15 +36,18 @@ import {
 } from '../../../source-control/hosted-review-scope-generations'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import {
-  prBranchReadResource,
+  completePRBranchRead,
   pendingPRBranchRead,
+  prBranchReadProducer,
+  prBranchReadResource,
   retirePRBranchReadResource,
   startPRBranchRead,
+  PRLookupRetentionRefused,
+  throwUnlessRetentionRefused,
   type PRBranchReadResult,
   type PRReadSettlement,
   type PreparedPRBranchRead
 } from './pr-branch-read-resources'
-class PRLookupRetentionRefused extends Error {}
 
 /** A phone read may take the last lookup's open PR; it was already observed when it was looked up. */
 export async function readRecentPhonePROutcome(
@@ -80,21 +89,7 @@ export async function preparePRBranchRead(
   fallbackPRNumber?: number | null,
   options: GitHubPRBranchLookupOptions = {}
 ): Promise<PreparedPRBranchRead> {
-  options = {
-    ...options,
-    ...(options.localGitExecOptions
-      ? {
-          localGitExecOptions: {
-            ...options.localGitExecOptions,
-            ...(options.localGitExecOptions.ghAccount
-              ? { ghAccount: { ...options.localGitExecOptions.ghAccount } }
-              : {})
-          }
-        }
-      : {}),
-    ...(options.sharedLinkPaths ? { sharedLinkPaths: [...options.sharedLinkPaths] } : {}),
-    ...(options.exactRepository ? { exactRepository: { ...options.exactRepository } } : {})
-  }
+  options = snapshotPRLookupOptions(options)
   const reprepare = () =>
     outsideGitHubRepoExecution(() =>
       preparePRBranchRead(repoPath, branch, linkedPRNumber, connectionId, fallbackPRNumber, options)
@@ -114,6 +109,7 @@ export async function preparePRBranchRead(
       ) {
         return {
           key: '',
+          matchesRequest: () => false,
           reprepare,
           cached: () => null,
           isCurrent: () => true,
@@ -121,7 +117,6 @@ export async function preparePRBranchRead(
           didRead: () => false,
           release: () => {},
           hold: () => () => {},
-          readRetained: async () => ({ kind: 'no-pr', fetchedAt: Date.now() }),
           readResult: async () => ({
             outcome: { kind: 'no-pr', fetchedAt: Date.now() },
             sequence: 0,
@@ -136,6 +131,17 @@ export async function preparePRBranchRead(
       }
       const policyRevision = refreshPRPolicyContext()
       const scope = prLookupScope(repoPath, connectionId, options)
+      const matchesRequest = exactRequestMatcher(
+        [
+          repoPath,
+          branch,
+          linkedPRNumber ?? null,
+          connectionId ?? null,
+          fallbackPRNumber ?? null,
+          options
+        ],
+        scope.accountFromProject
+      )
       const { localGitOptions, ghOptions, executionScope } = scope
       const key = completeReadKey(
         repoPath,
@@ -148,12 +154,23 @@ export async function preparePRBranchRead(
       const ownerKey = lastOutcomeKey(repoPath, branchName, scope)
       const coalescingKey = options.resetQuietBackoff || options.userRefresh ? 'fresh' : 'timed'
       const pendingAt = (intent: 'fresh' | 'timed') => pendingPRBranchRead(key, intent)
+      const isCurrent = () =>
+        outsideGitHubRepoExecution(() => {
+          const current = prLookupScope(repoPath, connectionId, options)
+          return (
+            current.accountFromProject === scope.accountFromProject &&
+            lastOutcomeKey(repoPath, branchName, current) === ownerKey
+          )
+        })
       const narrowed =
         options.checkPageLimit !== undefined ||
         options.exactRepository ||
         options.includeDerivedData === false
       let didRead = false
-      const readCore = (requireRetention = false, settle?: PRReadSettlement) =>
+      const readCore = (
+        requireRetention: boolean,
+        settle?: PRReadSettlement
+      ): Promise<PRBranchReadResult> =>
         withExecution(() => {
           const resource = prBranchReadResource(key)
           return (
@@ -174,7 +191,7 @@ export async function preparePRBranchRead(
                 if (requireRetention && !retained) {
                   throw new PRLookupRetentionRefused()
                 }
-                const producer = startPRBranchRead(key, resource, start.sequence)
+                const ended = startPRBranchRead(key, resource, start.sequence)
                 didRead = true
                 try {
                   await acquire()
@@ -215,27 +232,32 @@ export async function preparePRBranchRead(
                       cached: () => readTimedPROutcome(ownerKey, key)
                     })
                   }
-                  if (
-                    settle &&
-                    prepared.isCurrent() &&
-                    producer.current() &&
-                    (retained ? readTimedPROutcome(ownerKey, key)?.outcome === outcome : ownsKey())
-                  ) {
-                    outcome = settle(outcome, { retained })
+                  const producer = prBranchReadProducer(key, resource, start.sequence, isCurrent, {
+                    retained,
+                    full: !narrowed
+                  })
+                  // Settled once, only by the newest read of its request, still in scope, whose
+                  // result the exact record kept or whose probe it still owns. A result the record
+                  // refused (a newer read, or its owner's invalidation) is never current.
+                  const refused = retained && readTimedPROutcome(ownerKey, key)?.outcome !== outcome
+                  if (refused || (!retained && !ownsKey()) || !producer.current?.()) {
+                    return { sequence: start.sequence, current: () => false, outcome }
                   }
+                  const settled = settle
+                    ? settle(outcome, producer)
+                    : completePRBranchRead(outcome, producer, prepared, request)
                   return {
-                    outcome,
                     sequence: start.sequence,
+                    outcome: settled,
                     current: () =>
-                      producer.current() &&
-                      prepared.isCurrent() &&
-                      (!retained || prepared.accepts(outcome))
+                      producer.current!() &&
+                      (!retained || readTimedPROutcome(ownerKey, key)?.outcome === settled)
                   }
                 } finally {
                   if (retained) {
                     releaseExactPRLookup(key, start.sequence)
                   }
-                  producer.finish()
+                  ended()
                 }
               },
               2 * 60_000,
@@ -243,47 +265,29 @@ export async function preparePRBranchRead(
             ).finally(() => retirePRBranchReadResource(key, resource))
           )
         })
-      const readResult = async (
-        settle?: PRReadSettlement,
-        requireRetention = false
-      ): Promise<PRBranchReadResult | null> => {
-        try {
-          return await readCore(requireRetention, settle)
-        } catch (error) {
-          if (!(error instanceof PRLookupRetentionRefused)) {
-            throw error
-          }
+      // A join of a read that had to keep its result, and found no room, reads for itself.
+      const readResult = (settle?: PRReadSettlement, requireRetention = false) =>
+        readCore(requireRetention, settle).catch((error: unknown) => {
+          throwUnlessRetentionRefused(error)
           return requireRetention ? null : readCore(false, settle)
-        }
-      }
-      const read = async (settle?: PRReadSettlement): Promise<PRRefreshOutcome> =>
-        (await readResult(settle))!.outcome
-      const readRetained = async (settle?: PRReadSettlement): Promise<PRRefreshOutcome | null> =>
-        (await readResult(settle, true))?.outcome ?? null
+        })
+      const request = { repoPath, branch, linkedPRNumber, connectionId, localGitOptions }
       const prepared: PreparedPRBranchRead = {
         key,
+        matchesRequest,
         reprepare,
         cached: () => readTimedPROutcome(ownerKey, key),
-        isCurrent: () =>
-          outsideGitHubRepoExecution(
-            () =>
-              lastOutcomeKey(
-                repoPath,
-                branchName,
-                prLookupScope(repoPath, connectionId, options)
-              ) === ownerKey
-          ),
+        isCurrent,
         accepts: (outcome) => readTimedPROutcome(ownerKey, key)?.outcome === outcome,
         didRead: () => didRead,
         release: () => {},
         hold: () => holdExactPROutcome(key),
-        readRetained,
         readResult,
         canRetain: () => canRetainPROutcome(key),
         scheduleError: (expected, outcome) => scheduleExactPRError(key, expected, outcome),
         pending: () => pendingAt('fresh') ?? pendingAt('timed'),
         withExecution,
-        read
+        read: async (settle) => (await readResult(settle))!.outcome
       }
       return prepared
     }

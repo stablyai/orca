@@ -133,6 +133,7 @@ Workspace cleanup: `ORCA workspace cleanup preview --json` shows what the user's
 Use `repo set --external-worktree-visibility show` to show a repo's non-Orca worktrees.
 `hide` hides them; `inherit` clears the repo override and follows the global default.
 Per-worktree visibility rules still apply.
+Use `repo set --browser-profile <id>` (ids from `tab profile list`, `default` for Default) so new browser tabs in that repo open on that profile; `inherit` clears it.
 
 Selectors:
 

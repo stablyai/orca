@@ -2,7 +2,7 @@ import type React from 'react'
 
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import type { StatusBarItem } from '../../../../../shared/ui-chrome-types'
-import type { FeatureInteractionId } from '../../../../../shared/feature-interaction-catalog'
+import type { FeatureInteractionId } from '../../../../../shared/feature-education/interactions/feature-interaction-catalog'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsGroupDisclosure } from '../section-layout/SettingsGroupDisclosure'
 import { SettingsGroupNestedRows, SettingsGroupSubsection } from '../section-layout/SettingsGroup'
@@ -12,7 +12,7 @@ import {
   SettingsSegmentedControl,
   SettingsSwitchRow
 } from '../form-controls/SettingsFormControls'
-import { useAvailableStatusBarToggles } from '../../status-bar/use-available-status-bar-toggles'
+import { useAvailableStatusBarToggles } from '../../status-bar/composition/use-available-status-bar-toggles'
 import { getLayoutEntries, getFollowSymlinkedDirectoriesEntry } from './appearance-search'
 import {
   getSidebarEntries,

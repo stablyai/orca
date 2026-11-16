@@ -1,14 +1,14 @@
 import { rm } from 'node:fs/promises'
 import { posix as pathPosix, win32 as pathWin32 } from 'node:path'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type {
   SkillDeletePlan,
   SkillDeletePlanEntry,
   SkillDeleteRequest,
   SkillDeleteResult,
   SkillDeleteResultEntry
-} from '../../../shared/skill-delete-contract'
-import { nativeSkillPathSemantics } from '../../../shared/skill-path-containment'
+} from '../../../shared/skills/deletion/skill-delete-contract'
+import { nativeSkillPathSemantics } from '../../../shared/skills/paths/skill-path-containment'
 import { buildSkillDeletePlan, type ResolvedSkillDeletePlan } from './skill-delete-plan'
 import {
   recoverSkillDeleteTransaction,

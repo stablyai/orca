@@ -6,8 +6,8 @@ import {
 } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import { homedir } from 'node:os'
 import { z } from 'zod'
-import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
-import type { resolveCliCommand } from '../../../../shared/node-cli-command-resolution'
+import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
+import type { resolveCliCommand } from '../../../../shared/shell/command-resolution/node-cli-command-resolution'
 import {
   readAgentCliVersion,
   type AgentCliVersionReader

@@ -1,5 +1,6 @@
 import { useAppStore } from '@/store/index'
 import { resolveActiveTabOwnerWorktreeId } from '@/store/terminals/ownership/active-tab-owner-worktree'
+import { endSidebarListKeyboardNavigation } from '@/lib/text-input/focus/editable-focus-preservation'
 import { FOCUS_TERMINAL_PANE_EVENT, type FocusTerminalPaneDetail } from '@/constants/terminal'
 
 let pendingFocusPaneFrameId: number | null = null
@@ -33,6 +34,7 @@ export function activateTabAndFocusPane(
   if (leafId === null) {
     return
   }
+  endSidebarListKeyboardNavigation()
   // Wait one frame for the new TerminalPane’s focus-event listener to mount.
   pendingFocusPaneFrameId = requestAnimationFrame(() => {
     pendingFocusPaneFrameId = null

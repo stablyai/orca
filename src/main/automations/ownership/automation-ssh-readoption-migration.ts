@@ -10,7 +10,7 @@ import {
   hostStableKey,
   parseHostStableKey
 } from '../../../shared/automations/ownership/automation-owner-key'
-import { sanitizeSshTargetGeneration } from '../../../shared/ssh-target-generation'
+import { sanitizeSshTargetGeneration } from '../../../shared/remote-runtime/ssh/ssh-target-generation'
 
 // Re-adopt automation references with repos, using the matched registration’s current generation.
 

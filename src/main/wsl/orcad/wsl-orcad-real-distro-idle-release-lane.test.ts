@@ -11,9 +11,9 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({ app: { getAppPath: () => process.cwd() } }))
 
-import { setAppEnvironment } from '../../../shared/app-environment'
-import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
-import { ORCAD_E2E_IDLE_TIMEOUT_ENV } from '../../../shared/orcad-idle-exit'
+import { setAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/remote-runtime/protocol/electron-remote-runtime-client-capabilities'
+import { ORCAD_E2E_IDLE_TIMEOUT_ENV } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-idle-exit'
 import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing'
 import { sendRemoteRuntimeRequestOnSocket } from '../../../shared/remote-runtime/requests/remote-runtime-request-socket'

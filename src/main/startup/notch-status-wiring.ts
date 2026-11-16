@@ -25,13 +25,13 @@ import {
 } from '../../shared/notch/notch-snapshot'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import { getWorktreePathBasenameFromId } from '../../shared/worktree/id'
-import { folderWorkspaceKey } from '../../shared/workspace-scope'
+import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'
 import { mainProcessState as state } from './main-process-state'
 
 // Why main reads agentHookServer directly: the main window's status IPC detaches when the window
 // closes, and the notch exists for exactly that state.
 let notchStatusService: NotchStatusService | null = null
-let openMainWindow: (() => BrowserWindow) | null = null
+let openMainWindow: (() => Promise<BrowserWindow>) | null = null
 // Buffered until the app renderer acks its listener: a freshly opened window drops IPC sent
 // before its React effect attaches.
 let pendingNotchReveal: NotchFocusPaneRequest | null = null
@@ -107,9 +107,9 @@ function flushNotchReveal(): void {
 }
 
 // Why it reopens a closed window: a row click with no app window is the case the notch exists for.
-function revealNotchPane(args: NotchFocusPaneRequest): void {
+async function revealNotchPane(args: NotchFocusPaneRequest): Promise<void> {
   const existing = getTrustedUIRendererWindow()
-  const window = existing ?? openMainWindow?.()
+  const window = existing ?? (await openMainWindow?.())
   if (!window) {
     return
   }
@@ -168,14 +168,16 @@ function installNotchQuitHandlers(): void {
 }
 
 /** Installs the notch's IPC and app listeners once, after the main quit handlers. */
-export function installNotchStatus(options: { openMainWindow: () => BrowserWindow }): void {
+export function installNotchStatus(options: { openMainWindow: () => Promise<BrowserWindow> }): void {
   if (process.platform !== 'darwin') {
     return
   }
   openMainWindow = options.openMainWindow
   registerNotchHandlers({
     getService: () => notchStatusService,
-    revealPane: revealNotchPane,
+    revealPane: (args) => {
+      void revealNotchPane(args).catch((error) => console.error('[notch] reveal failed', error))
+    },
     onRevealRendererReady: flushNotchReveal
   })
   // Why: the panel is non-focusable and never blurs, so close it when attention moves elsewhere.

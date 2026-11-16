@@ -22,22 +22,22 @@ import type {
 } from '../delivery/structured-agent-session-input-admission'
 import type { StructuredAgentSessionStatusObserverOptions } from '../observations/structured-agent-session-status-observation'
 import type { SubmissionRejectionFact } from '../../../../shared/agent-session/failures/agent-session-failure'
-import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { UsageLimitAccountScope } from '../recovery/structured-agent-session-usage-limit-account-hold'
 import type {
   AgentSessionNamingError,
   AgentSessionStatusSummary
 } from '../../../../shared/agent-session/agent-session-wire'
-import type { JournalRow } from '../../agent-session-journal/durable-rows/journal-row-schema'
+import type { JournalWriterCommit } from '../../agent-session-journal/journal-writer-changes'
 import type { AgentSessionWireRefusal } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 import type { AgentSessionUserNameWrite } from '../../../runtime/agent-session/records/agent-session-record-conversation-name'
 import type { AgentSessionRecoveryCapsule } from '../../../runtime/agent-session/records/agent-session-recovery-capsule'
 import type { AgentSessionSpawnTokenScan } from '../../../runtime/agent-session/ownership/agent-session-spawn-token-process-scan'
-import type { JournalHostDatabase } from '../../agent-session-journal/database/journal-host-database'
+import type { JournalSqlDatabase } from '../../agent-session-journal/database/journal-sql-database'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import type { DeferredStructuredAgentSessionEventSink } from '../journal-ingress/structured-agent-session-event-sink'
 import type { JournalStopSettle } from '../../agent-session-journal/queued-messages/queued-message-pause-marks'
@@ -55,7 +55,7 @@ import type { AgentSessionAttachParams } from '../acquisition/structured-agent-s
 import type { StructuredAgentSessionStatusSink } from '../observations/structured-agent-session-status-ownership'
 
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
-import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { StructuredAgentRegistry } from '../providers/structured-agent-registry'
 import type { StructuredAgentSessionStartupLimits } from '../startup/structured-agent-session-startup-attempt-contract'
 import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
@@ -142,6 +142,8 @@ export type StructuredAgentSessionEndedChild = StructuredAgentSessionProviderChi
 
 /** Conversation state outlives its provider children. */
 export type StructuredAgentSessionHostSession = {
+  workChanged?: () => void
+  activityRead?: Promise<void>
   switchCommand?: {
     invocationId: string
     completion: Promise<AgentSessionSwitchResult>
@@ -165,7 +167,7 @@ export type StructuredAgentSessionHostDeps = {
   agents: StructuredAgentRegistry
   /** Advisory recovery storage, independent of conversation backups. */
   recoveryCapsule?: AgentSessionRecoveryCapsule
-  journalDatabase: JournalHostDatabase
+  journalDatabase: JournalSqlDatabase
   claimKeyId: string
   probeOwner?: (record: AgentSessionRecord) => Promise<AgentSessionOwnerProbe>
   probeOwners?: (
@@ -205,13 +207,8 @@ export type StructuredAgentSessionHostDeps = {
   ) => boolean
   /** Explicit switch admission also includes direct chat assignments, even at rest. */
   hasOwedSwitchWork?: (record: AgentSessionRecord) => boolean
-  /** Whether an agent's queued message is still owed to this session at handover; absent: always. */
-  queuedAgentMessageOwed?: (
-    sessionId: string,
-    from: AgentMessageSource,
-    /** Only read, as the queue does choosing its next card; a handover also settles a stale send. */
-    peek?: boolean
-  ) => QueuedMessageOwed
+  /** Read-only custody for an agent's queued mail; absent: always owed. */
+  queuedAgentMessageOwed?: (sessionId: string, from: AgentMessageSource) => QueuedMessageOwed
   /** Advisory tab-hidden notice; failures are logged. */
   onSessionTabHidden?: (sessionId: string, tabId?: string) => void
   /** Throws while a terminal may still write the record's head conversation; run before a spawn. */
@@ -224,7 +221,7 @@ export type StructuredAgentSessionHostDeps = {
   observeCommittedRows?: (
     sessionId: string,
     journal: AgentSessionJournal,
-    rows: readonly JournalRow[] | undefined
+    rows: JournalWriterCommit | undefined
   ) => void
   /** replay distinguishes restored/projected state from fresh journal events. */
   onSessionStatusChanged?: (
@@ -253,10 +250,6 @@ export type SetUserConversationName = StructuredAgentSessionConversationNaming['
 export type StructuredChatNamingFailure = AgentSessionNamingError & { forName: string }
 
 export type StructuredAgentSessionConversationNaming = {
-  captureTitleSourceUnavailable?: (
-    sessionId: string,
-    journal: AgentSessionJournal
-  ) => (() => void) | undefined
   publishName: (workspaceId: string, sessionId: string) => void
   activeSessionIds: () => string[]
   failure: (sessionId: string) => StructuredChatNamingFailure | undefined
@@ -310,3 +303,6 @@ export type StructuredAgentSessionConversationDelivery = {
     opened: OpenedStructuredAgentSessionConversation
   ) => Promise<void>
 }
+
+export type { StructuredAgentSessionLifetimeContext } from '../termination/structured-agent-session-host-lifetime'
+export type { StructuredAgentSessionAttachContext } from '../acquisition/structured-agent-session-attach-context'

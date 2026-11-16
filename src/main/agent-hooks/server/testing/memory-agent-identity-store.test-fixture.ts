@@ -1,5 +1,8 @@
 import { randomUUID } from 'node:crypto'
-import { isOrcaSessionId, type OrcaSessionId } from '../../../../shared/orca-session-address'
+import {
+  isOrcaSessionId,
+  type OrcaSessionId
+} from '../../../../shared/agent-session/identity/orca-session-address'
 import type { AgentProviderKey } from '../../identity/agent-provider-key'
 import type {
   AgentIdentityClient,

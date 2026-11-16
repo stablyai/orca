@@ -2,7 +2,7 @@ import { emulatorDevicePreference } from '../../emulator/emulator-opening-prefer
 import type { BrowserWindow } from 'electron'
 import type { EmulatorBridge } from '../../emulator/emulator-bridge'
 import { EmulatorError } from '../../emulator/emulator-errors'
-import { emulatorFailureText } from '../../../shared/emulator-failure-copy'
+import { emulatorFailureText } from '../../../shared/emulator/emulator-failure-copy'
 import {
   inspectEmulatorAvailability,
   type EmulatorAvailability

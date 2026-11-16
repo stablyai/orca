@@ -5,8 +5,8 @@ import type {
   BrowserLoadError,
   BrowserSessionProfile,
   BrowserSessionProfileSource
-} from '../../browser-workspace-types'
-import type { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../runtime-session-contracts'
+} from '../workspaces/browser-workspace-types'
+import type { BROWSER_UNAVAILABLE_ERROR_CODE } from '../../remote-runtime/session-graph/runtime-session-contracts'
 
 export type BrowserSnapshotRef = { ref: string; role: string; name: string }
 
@@ -105,6 +105,7 @@ export type BrowserScreencastResult =
 export type BrowserEvalResult = { result: string; origin: string }
 
 export type BrowserTabInfo = {
+  generation?: number
   browserPageId: string
   index: number
   url: string

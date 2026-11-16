@@ -1,14 +1,13 @@
 // Fill unsaved choices from execution evidence, never startup/config reports or host defaults.
 
-import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/agent-session-options-result'
-import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/agent-session-execution-options'
+import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/protocol/agent-session-options-result'
+import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession,
   StructuredAgentSessionProviderChild
 } from '../host/structured-agent-session-host-types'
 import { structuredAgentSessionOptionOverridesRefusal } from './structured-agent-session-option-intent'
-import { recordAgentSessionRanOptions } from '../../../runtime/agent-session/records/agent-session-record-options'
 
 type RanOptionsContext = {
   deps: Pick<StructuredAgentSessionHostDeps, 'store' | 'logger' | 'agents' | 'modelCatalog'>
@@ -166,13 +165,16 @@ export async function recordStructuredAgentSessionRanOptions(
     return
   }
   await store
-    .reviseSessionOptions(recordAgentSessionRanOptions, {
-      sessionId,
-      fence: child.fence,
-      model,
-      options: ran,
-      models: undefined,
-      now: context.now()
+    .updateRecord(sessionId, {
+      kind: 'ran-options',
+      args: {
+        sessionId,
+        fence: child.fence,
+        model,
+        options: ran,
+        models: undefined,
+        now: context.now()
+      }
     })
     .catch((error: unknown) =>
       logger.warn('recording the options a turn ran failed', {

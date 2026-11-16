@@ -12,7 +12,7 @@ import {
 } from './native-hang-capture-store'
 import { sanitizeNativeHangReport, type NativeHangArtifact } from './native-hang-report'
 import { readPreviousNativeHangTelemetry } from './previous-native-hang-telemetry'
-import { mainThreadHangDetectedSchema } from '../../shared/telemetry-daemon-event-schemas'
+import { mainThreadHangDetectedSchema } from '../../shared/telemetry/schemas/telemetry-daemon-event-schemas'
 import { getLatestPendingReport } from '../ipc/crash-reporting/crash-reporting-sendable-reports'
 import { collectBundle } from '../observability/bundle'
 

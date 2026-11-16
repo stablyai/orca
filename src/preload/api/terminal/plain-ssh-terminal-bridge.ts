@@ -3,7 +3,7 @@ import {
   PLAIN_SSH_TERMINAL_CHANNELS,
   type PlainSshTerminalEvent,
   type PlainSshTerminalOpenResult
-} from '../../../shared/plain-ssh-terminal'
+} from '../../../shared/terminal/runtime/plain-ssh-terminal'
 
 export type PlainSshTerminalApi = {
   open: (args: {

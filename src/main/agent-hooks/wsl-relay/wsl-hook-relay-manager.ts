@@ -20,7 +20,7 @@ import { wslHookRelayStateKey } from './wsl-hook-relay-state-key'
 import { SshChannelMultiplexer } from '../../ssh/protocol/ssh-channel-multiplexer'
 import type { MultiplexerTransport } from '../../ssh/protocol/ssh-multiplexer-transport-writer'
 import { AGENT_HOOK_REQUEST_REPLAY_METHOD } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
-import { sanitizeWslHookInstanceKey } from '../../../shared/wsl-hook-relay-contract'
+import { sanitizeWslHookInstanceKey } from '../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import {
   recordManagedWslCodexHome,
   wslRuntimeHomePathsEqual

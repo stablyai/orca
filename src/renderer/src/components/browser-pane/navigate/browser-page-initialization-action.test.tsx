@@ -6,11 +6,11 @@ import {
   createSessionTabsTabDeltaEncoder,
   createSessionTabsTabDeltaDecoder
 } from '../../../../../shared/session-tabs-tab-delta'
-import { SESSION_TABS_TAB_DELTA_RUNTIME_CAPABILITY } from '../../../../../shared/session-tabs-runtime-capabilities'
+import { SESSION_TABS_TAB_DELTA_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
 import { buildPersistedBrowserPagesByWorkspace } from '@/lib/workspace/persistence/workspace-session-browser-tabs'
 import { useAppStore } from '@/store'
 import type { RemoteBrowserPageHandle } from '@/store/slices/browser/browser-slice-contract'
-import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { applyWebRuntimeSessionTabsAnswer } from '@/runtime/web-session-tabs-sync/inventory/web-runtime-session-snapshot'
 import { createSessionWriteSubscriber } from '@/lib/workspace/persistence/session-write-subscriber'
 import { installBrowserInitializationPresentationLifetime } from '@/runtime/web-session-tabs-sync/browser-initialization-presentation'

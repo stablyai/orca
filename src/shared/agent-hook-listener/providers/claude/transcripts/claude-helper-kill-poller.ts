@@ -3,7 +3,7 @@ import { AgentTranscriptPollScheduler } from '../../../transcripts/agent-transcr
 import {
   claudeRosterHasRuntimeWorkingSubagent,
   stopClaudeSubagent
-} from '../../../../claude-subagent-roster'
+} from '../lifecycle/claude-subagent-roster'
 import { stopOwingClaudeAgentTaskNotification } from '../background-tasks/claude-owed-task-notifications'
 import type { HookListenerState } from '../../../listener-state'
 import type { AgentHookEventPayload } from '../../../listener-event'

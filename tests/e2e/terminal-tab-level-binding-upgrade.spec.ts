@@ -7,7 +7,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
-import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
+import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles/orca-profiles'
 import type { WorkspaceSessionState } from '../../src/shared/workspace-session/workspace-session-state-types'
 import { openProfileStateDatabaseReadOnly } from '../../src/main/persistence/profile-state/database/profile-state-database'
 import { readProfileStateSnapshot } from '../../src/main/persistence/profile-state/documents/profile-state-documents'
