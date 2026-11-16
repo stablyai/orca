@@ -50,7 +50,11 @@ export abstract class AgentHookServerPaneSleep extends AgentHookServerAuthorityF
         terminalHandle: _handle,
         ...accepted
       } = row
-      const rest = { ...accepted, evidenceObservedAt: Date.now() }
+      const rest = {
+        ...accepted,
+        evidenceObservedAt: Date.now(),
+        observation: this.stampObservation(accepted, 'launch', Date.now())
+      }
       admitLegacyAgentStatus(
         this.state,
         'main-status-cleanup',
@@ -107,6 +111,7 @@ export abstract class AgentHookServerPaneSleep extends AgentHookServerAuthorityF
       !previous ||
       !identity ||
       identity.ended ||
+      identity.processTopology === 'shared' ||
       this.terminalPaneLifecycle?.isReversibleStop(ptyId, incarnationId) !== true ||
       this.terminalPaneLifecycle.isPlaced(previous) !== true
     ) {

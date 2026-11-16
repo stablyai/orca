@@ -35,15 +35,28 @@ export abstract class RuntimeAgentStatusSources extends OrcaRuntimeWithTerminalD
   protected paneAgentStatuses(
     rows: readonly AgentStatusIpcPayload[] = this.getAgentProviderSessionSnapshotFn?.() ??
       this.getAgentStatusSnapshotFn?.() ??
-      []
+      [],
+    savedRecords: Iterable<SleepingAgentSessionRecord> = []
   ): AgentStatusIpcPayload[] {
-    return rows.flatMap((row) => {
+    const paneKeys = new Set(rows.map((row) => row.paneKey))
+    const statuses = rows.flatMap((row) => {
       if (row.structuredHost) {
         return [row]
       }
       const identity = this.readPaneAgentIdentity(row.paneKey, undefined, row)
       return identity && !identity.ended ? [identity.status] : []
     })
+    for (const record of savedRecords) {
+      if (paneKeys.has(record.paneKey)) {
+        continue
+      }
+      const identity = this.readPaneAgentIdentity(record.paneKey, record)
+      if (identity && !identity.ended) {
+        paneKeys.add(record.paneKey)
+        statuses.push(identity.status)
+      }
+    }
+    return statuses
   }
 
   readonly getAgentStatusSnapshotFn!: HostBindings['getAgentStatusSnapshot'] | null

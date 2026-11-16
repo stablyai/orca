@@ -44,6 +44,7 @@ import type {
 import { RevisionedMap } from './revisioned-map'
 import { recordAgentExit, forgetAgentExit, type AgentExitEvidence } from './agent-exit-evidence'
 import { paneAgentIdentity, type PaneAgentIdentity } from './pane-agent-identity'
+import { cliWriterTopology } from './cli-writer-observation'
 import { toAgentStatusIpcPayload } from './server-status-identity'
 import type { AgentProcessPresence } from '../../../shared/agent-status/process/agent-process-presence'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
@@ -82,7 +83,7 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
     worktreeId ??= savedRecord?.worktreeId
     const exit =
       this.agentExitedAtByPaneKey.get(resolved) ?? this.agentExitedAtByPaneKey.get(paneKey)
-    return paneAgentIdentity({
+    const identity = paneAgentIdentity({
       paneKey: resolved,
       ...(row ? { row: toAgentStatusIpcPayload(this.programStatusFacets.stitch(row)) } : {}),
       ...(savedRecord ? { savedRecord } : {}),
@@ -90,6 +91,12 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
       ...(exit ? { exitedAt: exit.at } : {}),
       ended: row?.agentPresence?.ended === true
     })
+    return identity
+      ? {
+          ...identity,
+          processTopology: row ? (legacy ? cliWriterTopology(row) : 'shared') : 'pane-owned'
+        }
+      : null
   }
 
   protected recordPaneAgentExit(paneKey: string, endedPresence: AgentProcessPresence): void {

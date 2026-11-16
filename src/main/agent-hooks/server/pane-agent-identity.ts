@@ -7,10 +7,12 @@ export type PaneAgentIdentity = {
   status: AgentStatusIpcPayload
   /** The agent left the pane; its identity names what to retire, not what to resume. */
   ended: boolean
+  /** Shared servers survive the pane; their conversation must not be launched again on wake. */
+  processTopology?: 'pane-owned' | 'shared' | 'unverifiable'
 }
 
 /** The one rule for which agent conversation a pane holds: its hook row in any at-rest shape,
- *  else its saved live record, minus an exit recorded since that identity was last updated. */
+ *  else its saved resume record, minus an exit recorded since that identity was last updated. */
 export function paneAgentIdentity(args: {
   paneKey: string
   row?: AgentStatusIpcPayload
@@ -46,37 +48,36 @@ export function paneAgentIdentity(args: {
     return { status, ended: endedSince(args, row.receivedAt) }
   }
   const saved = args.savedRecord
-  const promoted =
-    saved && args.worktreeId
-      ? promoteSavedLiveResumeRecord({
-          record: saved,
-          worktreeId: args.worktreeId,
-          capturedAt: saved.capturedAt
-        })
-      : null
-  if (!saved || !promoted || saved.paneKey !== args.paneKey) {
+  if (!saved || !args.worktreeId || saved.paneKey !== args.paneKey) {
+    return null
+  }
+  const recovered = promoteSavedLiveResumeRecord({
+    record: saved,
+    worktreeId: args.worktreeId,
+    capturedAt: saved.capturedAt,
+    includeSleepRecord: true
+  })
+  if (!recovered) {
     return null
   }
   return {
     status: {
       paneKey: args.paneKey,
-      ...(promoted.tabId ? { tabId: promoted.tabId } : {}),
-      worktreeId: promoted.worktreeId,
-      connectionId: promoted.connectionId ?? null,
+      ...(saved.tabId ? { tabId: saved.tabId } : {}),
+      worktreeId: saved.worktreeId,
+      connectionId: saved.connectionId ?? null,
       receivedAt: saved.updatedAt,
-      stateStartedAt: saved.updatedAt,
-      providerSession: promoted.providerSession,
+      stateStartedAt: saved.mainAgent?.stateStartedAt ?? saved.updatedAt,
+      providerSession: saved.providerSession,
       state: saved.state,
       ...(saved.state === 'done' && agentMainAgentVerdict(saved) === null
         ? { sessionBoundary: true }
         : {}),
       ...(saved.interrupted !== undefined ? { interrupted: saved.interrupted } : {}),
       ...(saved.mainAgent ? { mainAgent: saved.mainAgent } : {}),
-      prompt: promoted.prompt,
-      agentType: promoted.agent,
-      ...(promoted.lastAssistantMessage
-        ? { lastAssistantMessage: promoted.lastAssistantMessage }
-        : {})
+      prompt: saved.prompt,
+      agentType: saved.agent,
+      ...(saved.lastAssistantMessage ? { lastAssistantMessage: saved.lastAssistantMessage } : {})
     },
     // The promotion restamps its clock; the exit must postdate the record as saved.
     ended: endedSince(args, saved.updatedAt)

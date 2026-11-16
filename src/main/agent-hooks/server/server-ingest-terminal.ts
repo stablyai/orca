@@ -6,7 +6,11 @@ import {
   parsePaneKey
 } from '../../../shared/workspace-layout/stable-pane-id'
 import { terminalStatusPayloadMatchesHook } from '../../../shared/agent-status/lifecycle/agent-terminal-status-equivalence'
-import type { ParsedAgentStatusPayload } from '../../../shared/agent-status/contracts/agent-status-types'
+import {
+  pickParsedAgentStatusPayload,
+  type ParsedAgentStatusPayload
+} from '../../../shared/agent-status/contracts/agent-status-types'
+import { sameAgentStatusTerminalOwner } from '../../../shared/agent-status/identity/agent-status-terminal-owner'
 import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
@@ -26,8 +30,10 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
     if (!parsedPaneKey || paneKey.length > MAX_PANE_KEY_LEN) {
       return
     }
-    this.forgetAgentExitBefore(paneKey, event.launchedAt)
     const previous = this.state.lastStatusByPaneKey.get(paneKey)
+    // Check saved turn authority before the new process forgets its predecessor's exit.
+    const savedIdentity = !previous ? this.paneAgentIdentity(paneKey) : null
+    this.forgetAgentExitBefore(paneKey, event.launchedAt)
     const sameConversation =
       previous?.payload.agentType === event.agentType &&
       agentProviderSessionsEqual(event.agentType, previous?.providerSession, event.providerSession)
@@ -40,6 +46,38 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
           typeof previous.receivedAt === 'number' &&
           previous.receivedAt >= event.launchedAt))
     ) {
+      return
+    }
+    if (
+      savedIdentity &&
+      !savedIdentity.ended &&
+      savedIdentity.status.agentType === event.agentType &&
+      sameAgentStatusTerminalOwner(savedIdentity.status, { ...event, connectionId: null }) &&
+      agentProviderSessionsEqual(
+        event.agentType,
+        savedIdentity.status.providerSession,
+        event.providerSession
+      )
+    ) {
+      const status = savedIdentity.status
+      const recovered: EnrichedAgentHookEventPayload = {
+        paneKey,
+        tabId: parsedPaneKey.tabId,
+        worktreeId: status.worktreeId,
+        connectionId: status.connectionId,
+        providerSession: event.providerSession,
+        receivedAt: status.receivedAt,
+        stateStartedAt: status.stateStartedAt,
+        evidenceObservedAt: Date.now(),
+        payload: pickParsedAgentStatusPayload(status)
+      }
+      recovered.observation = this.stampObservation(recovered, 'launch', Date.now())
+      if (this.writeLegacyStatusRow(recovered)) {
+        this.commitStatusRowMutation(undefined, recovered)
+        this.scheduleStatusPersist()
+        this.notifyStatusChangeListeners()
+        this.onAgentStatus?.({ ...recovered, isReplay: true })
+      }
       return
     }
     const identity: AgentHookEventPayload &

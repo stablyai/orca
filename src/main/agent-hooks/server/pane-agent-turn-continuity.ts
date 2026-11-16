@@ -9,8 +9,10 @@ export function resumedAcceptedTurn(
   incoming: AgentHookEventPayload
 ): EnrichedAgentHookEventPayload | null {
   const continuesTurn =
-    incoming.payload.agentType === 'claude' &&
+    (incoming.payload.agentType === 'claude' || previous.payload.interrupted === true) &&
     incoming.payload.sessionBoundary === true &&
+    incoming.hasExplicitPrompt !== true &&
+    incoming.toolAgentId === undefined &&
     previous.payload.state === 'done' &&
     previous.payload.sessionBoundary !== true &&
     previous.providerSessionOnly !== true &&

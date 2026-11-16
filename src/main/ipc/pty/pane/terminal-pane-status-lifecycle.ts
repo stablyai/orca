@@ -16,11 +16,11 @@ export function bindTerminalPaneStatusLifecycle(
     retireSavedRecord: (paneKey, exitedAt) => runtime?.retireExitedPaneResume(paneKey, exitedAt),
     readSavedRecord: (paneKey) => {
       try {
-        const pane = runtime?.resolveTerminalPane(paneKey)
-        if (!pane?.worktreeId) {
+        const worktreeId = runtime?.getTerminalWorktreeIdForPaneKey(paneKey)
+        if (!worktreeId) {
           return undefined
         }
-        return runtime?.getWorkspaceSessionForWorktree(pane.worktreeId)
+        return runtime?.getWorkspaceSessionForWorktree(worktreeId)
           ?.sleepingAgentSessionsByPaneKey?.[paneKey]
       } catch {
         return undefined

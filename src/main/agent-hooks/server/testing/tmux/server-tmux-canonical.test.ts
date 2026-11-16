@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer, _internals } from '../../agent-hook-server'
+import { captureWorktreeSleepResumeRecords } from '../../../../runtime/terminal/stop/worktree-sleep-resume-records'
 import { postHookEvent } from '../server.test-fixtures'
 import {
   TMUX_TEST_PANE,
@@ -58,7 +59,7 @@ describe('main canonical tmux projection', () => {
     expect(server.getCanonicalStatusSnapshot().parents).toHaveLength(0)
     expect(server.getStatusSnapshot()).toHaveLength(0)
   })
-  it('keeps one sleeping row when the canonical selected agent stops with its pane', async () => {
+  it('does not resume an inner agent whose tmux server outlives the sleeping pane', async () => {
     await postHookEvent(server, tmuxTestBody(), '/hook/opencode')
     server.setTerminalPaneLifecycle({
       ownsProcess: () => true,
@@ -66,12 +67,22 @@ describe('main canonical tmux projection', () => {
       isReversibleStop: () => true,
       isPlaced: () => true
     })
-    expect(server.settleTerminalPaneSleep(TMUX_TEST_PANE, 'pty', 'birth')).toBe(true)
+    const capture = await captureWorktreeSleepResumeRecords({
+      worktreeId: 'workspace',
+      paneKeysByPtyId: new Map([['pty', [TMUX_TEST_PANE]]]),
+      launchByPtyId: new Map(),
+      readRowsForPane: (key) => server.getStatusSnapshotForPane(key),
+      readIdentity: (key) => server.paneAgentIdentity(key),
+      checkAgentPresence: null,
+      capturedAt: 200
+    })
+    expect(capture.get('pty')).toMatchObject({
+      records: [],
+      retiredPaneKeys: [TMUX_TEST_PANE]
+    })
+    expect(server.settleTerminalPaneSleep(TMUX_TEST_PANE, 'pty', 'birth')).toBe(false)
     server.reconcileEndedProcessForPaneKeys([TMUX_TEST_PANE])
-    expect(server.getStatusSnapshot()).toMatchObject([
-      { paneKey: TMUX_TEST_PANE, state: 'done', paneSleep: { ptyId: 'pty' } }
-    ])
-    expect(server.getStatusSnapshot()).toHaveLength(1)
+    expect(server.getStatusSnapshot()).toHaveLength(0)
   })
   it('removes canonical tmux status on certified retirement', async () => {
     await postHookEvent(server, tmuxTestBody(), '/hook/opencode')
