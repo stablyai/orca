@@ -50,7 +50,7 @@ describe('one action list for every surface (JA-14)', () => {
   })
 
   it('offers no sharing actions', () => {
-    const actions = cloudWorkspaceActionGroups(base).flatMap((g) => g.actions as string[])
+    const actions: string[] = cloudWorkspaceActionGroups(base).flatMap((g) => g.actions)
     expect(actions).not.toContain('share')
     expect(actions).not.toContain('makePrivate')
     expect(actions).not.toContain('copyLink')
