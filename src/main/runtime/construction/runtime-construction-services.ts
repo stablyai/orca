@@ -1,3 +1,4 @@
+import type { WorktreePinnedDisplayName } from '../../../shared/worktree/types'
 import { RuntimeAgentStatusReadContract } from './runtime-agent-status-read-contract'
 import type { TerminalIdentityReadContext as IdentityRead } from '../terminal/query/terminal-identity-read-context'
 import type * as Calls from './runtime-host-service-calls'
@@ -54,7 +55,10 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
   abstract listRepos(): Repo[]
   abstract invalidateResolvedWorktreeCache(): void
   abstract invalidateWorktreeScanCacheForRepo(repoId: string): void
-  abstract notifyWorktreesChanged(repoId: string, options?: { invalidateGitScans?: boolean }): void
+  abstract notifyWorktreesChanged(
+    repoId: string,
+    options?: { invalidateGitScans?: boolean; pinnedDisplayName?: WorktreePinnedDisplayName }
+  ): void
   protected abstract notifyReposChanged(): void
   protected abstract isPtyKnownExited(ptyId: string): boolean
   protected abstract onPtyStopSettled(ptyId: string, stopped: boolean): void

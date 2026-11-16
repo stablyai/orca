@@ -143,12 +143,13 @@ export function firstWorkRenameDeps(
       runtime.notifyBranchRenamed(getRepoIdFromWorktreeId(worktreeId))
     },
     resolveWorktreeIdForTab: (tabId) => store.getWorktreeIdForTab!(tabId),
-    onRenamed: (repoIdOrWorktreeId) => {
+    onRenamed: (repoIdOrWorktreeId, pinnedDisplayName) => {
       if (parseWorkspaceKey(repoIdOrWorktreeId)?.type === 'folder') {
         runtime.notifyFolderWorkspaceChanged()
         return
       }
-      runtime.notifyBranchRenamed(repoIdOrWorktreeId)
+      // The head watcher re-lists nothing, so the pinned title must ride this refresh.
+      runtime.notifyBranchRenamed(repoIdOrWorktreeId, pinnedDisplayName)
     }
   }
 }

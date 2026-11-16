@@ -67,6 +67,15 @@ export type GitWorktreeInfo = {
   removalRecorded?: true
 }
 
+/** A title main just pinned; rides worktrees:changed so the row updates before the re-list. */
+export type WorktreePinnedDisplayName = { worktreeId: string; displayName: string }
+
+export type WorktreesChangedEvent = {
+  repoId: string
+  renamed?: { oldWorktreeId: string; newWorktreeId: string }
+  pinnedDisplayName?: WorktreePinnedDisplayName
+}
+
 /** Read HEAD/branch without spawning Git to refresh background head moves without structural worktrees:changed fanout. */
 export type WorktreeHeadIdentity = {
   worktreePath: string

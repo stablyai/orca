@@ -1,3 +1,4 @@
+import type { WorktreePinnedDisplayName } from '../../../shared/worktree/types'
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import type { Repo } from '../../../shared/repository/repo-types'
 import { isFolderRepo } from '../../../shared/repository/repo-kind'
@@ -71,7 +72,7 @@ export type FirstWorkBranchRenameDeps = {
     failureOutput?: AgentGenerationFailureOutput | null
   ) => void
   resolveWorktreeIdForTab: (tabId: string) => string | undefined
-  onRenamed: (repoId: string) => void
+  onRenamed: (repoId: string, pinnedDisplayName?: WorktreePinnedDisplayName) => void
 }
 
 // Cache only definitive verdicts; transient failures must remain retryable.
@@ -325,7 +326,7 @@ async function runAutoRename(
 
   // A folder move already notified the renderer.
   if (!folderRenamed) {
-    deps.onRenamed(repo.id)
+    deps.onRenamed(repo.id, updateDisplay ? { worktreeId, displayName: newDisplayName } : undefined)
   }
   const displayLog = updateDisplay
     ? `display "${currentDisplayName ?? ''}" -> "${newDisplayName}"`

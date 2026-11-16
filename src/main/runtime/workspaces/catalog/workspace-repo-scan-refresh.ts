@@ -13,7 +13,7 @@ import { getLocalProjectWorktreeGitOptionsForRuntime } from '../../../workspaces
 import { readRepoWorktreeAdminFingerprint } from './repo-worktree-admin-fingerprint'
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
 import { scanLocalRepoWorktreesForResolution } from './repo-worktree-resolution-scan'
-import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
+import type { GitWorktreeInfo, WorktreePinnedDisplayName } from '../../../../shared/worktree/types'
 import { listStoredWorktreeRowsForRepo } from './repo-worktree-row-resolution'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import { getRepoSshConnectionId } from '../../../../shared/execution-host/execution-host'
@@ -182,10 +182,10 @@ export abstract class RuntimeWorkspaceRepoScanRefresh extends RuntimeWorkspaceCa
   }
 
   /** Invalidate the worktree cache and tell the renderer to re-list after an out-of-band branch change so the new name surfaces immediately. */
-  notifyBranchRenamed(repoId: string): void {
+  notifyBranchRenamed(repoId: string, pinnedDisplayName?: WorktreePinnedDisplayName): void {
     this.invalidateResolvedWorktreeCache()
     this.invalidateWorktreeScanCacheForRepo(repoId)
-    this.notifyWorktreesChanged(repoId)
+    this.notifyWorktreesChanged(repoId, pinnedDisplayName ? { pinnedDisplayName } : undefined)
   }
 
   /** Like {@link notifyBranchRenamed} but carries old->new worktree id so the renderer re-keys instead of treating the id change as a deletion. */

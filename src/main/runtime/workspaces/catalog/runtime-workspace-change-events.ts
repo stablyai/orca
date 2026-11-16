@@ -4,6 +4,7 @@ import type { WorkspaceCleanupRunFinishedEvent } from '../../../../shared/worksp
 import { wakeFolderRepoGitUpgradeWatch } from '../../../ipc/folder-repo-git-upgrade-wake'
 import { runWorktreeChangeInvalidators } from '../../../ipc/worktrees/listing/worktree-change-invalidators'
 import type { WorktreeSortOrderUpdate } from '../../../../shared/worktree/metadata/sort-order-update'
+import type { WorktreePinnedDisplayName } from '../../../../shared/worktree/types'
 import type { WorkspaceMetadataSet } from '../../../../shared/worktree/metadata/workspace-metadata-set'
 import { NativeChatLaunchDraftOwner } from '../../agent-session/launch/native-chat-launch-draft-owner'
 
@@ -16,6 +17,7 @@ export abstract class RuntimeWorkspaceChangeEvents extends NativeChatLaunchDraft
       invalidateGitScans?: boolean
       sortOrderOnly?: boolean
       sortOrders?: WorktreeSortOrderUpdate[]
+      pinnedDisplayName?: WorktreePinnedDisplayName
     }
   ): void {
     if (options?.invalidateGitScans !== false) {

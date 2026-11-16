@@ -1,3 +1,4 @@
+import type { WorktreePinnedDisplayName } from '../../../../shared/worktree/types'
 import { ensureStructuredAgentModelCatalogOwner } from '../model-catalog/structured-agent-model-catalog-wiring'
 import type { StructuredAgentModelCatalogDeps } from './structured-agent-runtime-registration-types'
 import { resolveStructuredCodexAccountKind } from '../environment/structured-agent-account-home'
@@ -107,7 +108,7 @@ export abstract class RuntimeStructuredAgentHost extends OrcaRuntimeWithStartTui
 
   abstract notifyFolderWorkspaceChanged(): void
 
-  abstract notifyBranchRenamed(repoId: string): void
+  abstract notifyBranchRenamed(repoId: string, pinnedDisplayName?: WorktreePinnedDisplayName): void
 
   abstract notifyWorktreeFolderRenamed(
     repoId: string,
