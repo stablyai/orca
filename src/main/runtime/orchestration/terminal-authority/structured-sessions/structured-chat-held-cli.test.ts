@@ -133,6 +133,17 @@ it.each([
       expect(initial).toContain(messageId())
       expect(initial).toContain(`dispatch:${dispatchId}`)
       expect(initial).toContain('Build worker')
+      expect(detail().deliveryMessage).toMatch(/ Don't resend\.$/)
+      if (group) {
+        expect(latest.deliveries).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              state: 'queued',
+              deliveryMessage: expect.stringMatching(/ Don't resend\.$/)
+            })
+          ])
+        )
+      }
       if (!group) {
         await execute(
           `orca orchestration send --to dispatch:${dispatchId} --subject continue`,
@@ -191,6 +202,7 @@ it.each([
         )
         expect(process.exitCode).toBe(1)
         expect(latest).toMatchObject({ delivered: false, state: 'held', recoveryUsed: true })
+        expect(latest.deliveryMessage).toMatch(/ Don't resend\.$/)
       }
     } finally {
       clock?.mockRestore()

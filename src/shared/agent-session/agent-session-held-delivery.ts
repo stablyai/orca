@@ -57,7 +57,7 @@ export function heldWorkerDeliveryText(
   const failure = held.reason.failure
   if (held.recoveryUsed && (failure === 'network' || failure === 'provider')) {
     return {
-      message: `Held, not delivered: ${worker} failed again after a ${failure === 'network' ? 'network' : provider} error. Ask ${owner} to resume it.`,
+      message: `Held, not delivered: ${worker} failed again after a ${failure === 'network' ? 'network' : provider} error. Ask ${owner} to resume it. Don't resend.`,
       hint: null
     }
   }
@@ -68,7 +68,7 @@ export function heldWorkerDeliveryText(
     'usage-limit': 'hit its usage limit',
     unknown: 'stopped after an unknown error'
   }[failure]
-  const message = `Held, not delivered: ${worker} ${cause}. Delivers when it's resumed.`
+  const message = `Held, not delivered: ${worker} ${cause}. Delivers when it's resumed. Don't resend.`
   const transient = failure === 'network' || failure === 'provider'
   const hint = transient
     ? names.canResume && held.target.dispatchId

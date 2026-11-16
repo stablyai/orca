@@ -29,7 +29,7 @@ const receipt = {
   target: { sessionId: 'worker-1', dispatchId: 'dispatch-4' },
   waiting: 2,
   deliveryMessage:
-    "Held, not delivered: Worker stopped after a network error. Delivers when it's resumed.",
+    "Held, not delivered: Worker stopped after a network error. Delivers when it's resumed. Don't resend.",
   deliveryHint:
     'Resume once: orca orchestration send --to dispatch:dispatch-4 --resume --failure-id failure-77'
 }

@@ -161,7 +161,7 @@ async function readStoredSendDelivery<T>(
     ...base,
     delivered: false,
     state: 'queued',
-    deliveryMessage: held?.message ?? `Queued: ${worker} is waiting. Delivers when it's ready.`
+    deliveryMessage: `${held?.message ?? `Queued: ${worker} is waiting. Delivers when it's ready.`} Don't resend.`
   }
 }
 

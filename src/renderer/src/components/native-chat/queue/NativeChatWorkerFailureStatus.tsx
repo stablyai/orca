@@ -44,7 +44,9 @@ export function NativeChatWorkerFailureStatus({
   }
   const heading =
     failure === 'sign-in' && signInResolved
-      ? workerName
+      ? t('components.native-chat.workerFailure.stoppedWithoutCause', '{{worker}} stopped', {
+          worker: workerName
+        })
       : delivery.recoveryUsed
         ? t('components.native-chat.workerFailure.again', '{{worker}} failed again: {{cause}}', {
             worker: workerName,
