@@ -216,13 +216,16 @@ it('keeps one indexed copy after a preferred archive appears beside an indexed a
   await rm(real)
   await sweep()
   await writeFile(`${real}.zst`, zstdCompressSync(await readFile(managed)))
+  const archivedAt = new Date(2026, 6, 1)
+  await utimes(managed, archivedAt, archivedAt)
+  await utimes(`${real}.zst`, archivedAt, archivedAt)
   await sweep()
   await sweep()
   expect(matches()).toEqual([{ user_text: 'readablealiasneedle' }])
   expect(index.db.prepare('SELECT path FROM files').all()).toEqual([{ path: `${real}.zst` }])
 })
 
-it('keeps an indexed account copy that grew after the preferred archive', async () => {
+it('keeps an indexed account copy whose mtime differs from the preferred archive', async () => {
   io.failed = ''
   await rm(real)
   const archived = zstdCompressSync(await readFile(managed))

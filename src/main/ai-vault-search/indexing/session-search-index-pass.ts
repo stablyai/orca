@@ -66,15 +66,16 @@ export async function runSessionSearchIndexPass(
           cursor !== null
         ) {
           deferred = false
-          heldRemovals += retireOutrankedAliases(
-            store,
+          for (const path of retirableAliasRows(
             options.rows,
             candidate,
             aliases.slice(position + 1)
-          )
-          if (heldRemovals >= ALIAS_REMOVALS_PER_FLUSH) {
-            heldRemovals = 0
-            await store.flush?.()
+          )) {
+            store.removeFile(path)
+            if (++heldRemovals >= ALIAS_REMOVALS_PER_FLUSH) {
+              heldRemovals = 0
+              await store.flush?.()
+            }
           }
           break
         }
@@ -135,19 +136,13 @@ export async function runSessionSearchIndexPass(
   return { stats, outOfTime, left }
 }
 
-/** A rollout keeps one row; a copy newer than the current preferred one may hold lines it lacks. */
-function retireOutrankedAliases(
-  store: SessionSearchIndexStore,
+/** Only an equal mtime (a move, or Codex's timestamp-keeping archive) proves a copy adds nothing. */
+function retirableAliasRows(
   rows: ReadonlyMap<string, SessionSearchFileRow>,
   preferred: SessionFileCandidate,
   outranked: readonly SessionFileCandidate[]
-): number {
-  let removed = 0
-  for (const alias of outranked) {
-    if (rows.has(alias.file.path) && alias.file.mtimeMs <= preferred.file.mtimeMs) {
-      store.removeFile(alias.file.path)
-      removed += 1
-    }
-  }
-  return removed
+): string[] {
+  return outranked
+    .filter((alias) => rows.has(alias.file.path) && alias.file.mtimeMs === preferred.file.mtimeMs)
+    .map((alias) => alias.file.path)
 }
