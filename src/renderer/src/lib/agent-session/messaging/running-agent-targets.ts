@@ -123,8 +123,11 @@ function deriveTerminalAgentSendTargets(
       liveTitleStatus === 'permission'
     ) {
       disabledReason = 'Agent needs permission'
-    } else if (entry.state !== 'done' && agentHidesApprovalsFromHooks(entry.agentType)) {
-      // Its hooks report working through an approval menu, which a pasted Enter would answer.
+    } else if (
+      (entry.state !== 'done' && agentHidesApprovalsFromHooks(entry.agentType)) ||
+      (tab.launchAgent !== entry.agentType && agentHidesApprovalsFromHooks(tab.launchAgent))
+    ) {
+      // Its hooks report working through an approval menu, which a pasted Enter would answer; another agent's row can't vouch for it.
       disabledReason = 'Agent may be waiting for approval'
     }
 

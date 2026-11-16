@@ -1,9 +1,9 @@
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { resolveTerminalTitleAgentType } from '../../../../../../shared/agent-status/title/terminal-title-agent-type'
+import { agentHidesApprovalsFromHooks } from '../../../../../../shared/agent-status/approval/hook-silent-approval-agents'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import type { RuntimeTerminalWait } from '../../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
-import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { useAppStore } from '@/store/index'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
@@ -191,6 +191,10 @@ function noteTargetAgentType(
   const tab = state.tabsByWorktree[worktreeId]?.find(
     (candidate) => candidate.id === noteTarget.tabId
   )
+  // A launch-owned agent whose hooks hide approvals outranks a row another agent left behind.
+  if (tab?.launchAgent && agentHidesApprovalsFromHooks(tab.launchAgent)) {
+    return tab.launchAgent
+  }
   return (
     row?.agentType ?? tab?.launchAgent ?? (tab ? resolveTerminalTitleAgentType(tab.title) : null)
   )
