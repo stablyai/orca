@@ -20510,8 +20510,8 @@
           "closedToast_other": "{{count}} Dateien mit nicht gespeicherten Änderungen aus {{workspace}} geschlossen",
           "reopen": "Erneut öffnen",
           "reopenFailed": "Einige Dateien konnten nicht erneut geöffnet werden. Einen Arbeitsbereich öffnen und „Erneut öffnen“ noch einmal versuchen.",
-          "line_one": "{{count}} nicht gespeicherte Datei: {{files}}",
-          "line_other": "{{count}} nicht gespeicherte Dateien: {{files}}"
+          "line_one": "Unsaved edits in {{count}} file will be discarded: {{files}}",
+          "line_other": "Unsaved edits in {{count}} files will be discarded: {{files}}"
         }
       }
     },
@@ -23786,7 +23786,8 @@
   },
   "crashReport": {
     "freeze": {
-      "includeRedacted": "Gespeicherten Freeze-Bericht und aktuelle Protokolle anhängen (bereinigt)"
+      "includeRedacted": "Gespeicherten Freeze-Bericht und aktuelle Protokolle anhängen (bereinigt)",
+      "uncheckAttachments": "Uncheck \"Include the saved freeze report and recent logs (redacted)\" and try again, or copy the details."
     },
     "includeRecentLogsRedacted": "Aktuelle Protokolle anhängen (bereinigt)",
     "details": "Details",

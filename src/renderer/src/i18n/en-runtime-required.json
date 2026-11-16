@@ -2234,8 +2234,8 @@
           "closedToast_other": "Closed {{count}} files with unsaved edits from {{workspace}}",
           "discarded_one": "Unsaved edits in {{count}} file will be discarded:",
           "discarded_other": "Unsaved edits in {{count}} files will be discarded:",
-          "line_one": "{{count}} unsaved file: {{files}}",
-          "line_other": "{{count}} unsaved files: {{files}}"
+          "line_one": "Unsaved edits in {{count}} file will be discarded: {{files}}",
+          "line_other": "Unsaved edits in {{count}} files will be discarded: {{files}}"
         }
       }
     }

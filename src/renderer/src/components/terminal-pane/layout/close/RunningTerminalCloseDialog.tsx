@@ -4,6 +4,22 @@ import CloseTerminalDialog from './CloseTerminalDialog'
 import { findWorktreeById } from '@/store/github/refresh/worktree-refresh'
 import { resolveWorktreeDisplayName } from '@/lib/workspace/display/worktree-default-display-name'
 import { runSleepWorktree } from '@/components/sidebar/workspace-actions/sleep/sleep-worktree-flow'
+import { revalidateTerminalCloseSleep } from '@/components/terminal/terminal-close-sleep'
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
+
+async function sleepInstead(worktreeId: string, terminalTabId: string): Promise<void> {
+  if (!(await revalidateTerminalCloseSleep(worktreeId, terminalTabId))) {
+    toast.error(
+      translate(
+        'auto.components.sidebar.sleep.worktree.flow.8bc3fc0671',
+        'Failed to sleep workspace'
+      )
+    )
+    return
+  }
+  await runSleepWorktree(worktreeId)
+}
 
 /** Store-driven running-process confirmation lets tab/group/floating closes share the pane keyboard guard outside React context. */
 export default function RunningTerminalCloseDialog(): React.JSX.Element {
@@ -37,8 +53,9 @@ export default function RunningTerminalCloseDialog(): React.JSX.Element {
       {...(request?.canSleepInstead && worktreeId
         ? {
             onSleepInstead: () => {
-              dismissClose()
-              void runSleepWorktree(worktreeId)
+              if (dismissClose()) {
+                void sleepInstead(worktreeId, request.terminalTabId)
+              }
             }
           }
         : {})}

@@ -21190,10 +21190,10 @@
           "closedToast_other": "В {{workspace}} закрыты файлы с несохранёнными изменениями: {{count}}",
           "reopen": "Открыть снова",
           "reopenFailed": "Некоторые файлы не удалось открыть снова. Откройте рабочее пространство и повторите попытку.",
-          "line_one": "{{count}} несохранённый файл: {{files}}",
-          "line_other": "Несохранённые файлы ({{count}}): {{files}}",
-          "line_few": "Несохранённые файлы ({{count}}): {{files}}",
-          "line_many": "Несохранённые файлы ({{count}}): {{files}}"
+          "line_one": "Unsaved edits in {{count}} file will be discarded: {{files}}",
+          "line_other": "Unsaved edits in {{count}} files will be discarded: {{files}}",
+          "line_few": "Unsaved edits in {{count}} files will be discarded: {{files}}",
+          "line_many": "Unsaved edits in {{count}} files will be discarded: {{files}}"
         }
       }
     },
@@ -24532,7 +24532,8 @@
   },
   "crashReport": {
     "freeze": {
-      "includeRedacted": "Приложить сохранённый отчёт о зависании и недавние журналы (без личных данных)"
+      "includeRedacted": "Приложить сохранённый отчёт о зависании и недавние журналы (без личных данных)",
+      "uncheckAttachments": "Uncheck \"Include the saved freeze report and recent logs (redacted)\" and try again, or copy the details."
     },
     "includeRecentLogsRedacted": "Приложить недавние журналы (без личных данных)",
     "details": "Подробности",

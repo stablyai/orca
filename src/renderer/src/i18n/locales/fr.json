@@ -20573,9 +20573,9 @@
           "closedToast_many": "{{count}} fichiers avec des modifications non enregistrées de {{workspace}} ont été fermés",
           "reopen": "Rouvrir",
           "reopenFailed": "Certains fichiers n’ont pas pu être rouverts. Ouvrez un espace de travail et réessayez avec Rouvrir.",
-          "line_one": "{{count}} fichier non enregistré : {{files}}",
-          "line_other": "{{count}} fichiers non enregistrés : {{files}}",
-          "line_many": "{{count}} fichiers non enregistrés : {{files}}"
+          "line_one": "Unsaved edits in {{count}} file will be discarded: {{files}}",
+          "line_other": "Unsaved edits in {{count}} files will be discarded: {{files}}",
+          "line_many": "Unsaved edits in {{count}} files will be discarded: {{files}}"
         }
       }
     },
@@ -24254,7 +24254,8 @@
   },
   "crashReport": {
     "freeze": {
-      "includeRedacted": "Inclure le rapport de blocage enregistré et les journaux récents (expurgés)"
+      "includeRedacted": "Inclure le rapport de blocage enregistré et les journaux récents (expurgés)",
+      "uncheckAttachments": "Uncheck \"Include the saved freeze report and recent logs (redacted)\" and try again, or copy the details."
     },
     "includeRecentLogsRedacted": "Inclure les journaux récents (expurgés)",
     "details": "Détails",

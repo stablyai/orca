@@ -20192,8 +20192,8 @@
           "closedToast_other": "已關閉 {{workspace}} 中 {{count}} 個含有未儲存變更的檔案",
           "reopen": "重新開啟",
           "reopenFailed": "部分檔案無法重新開啟。請先開啟工作區，再試一次「重新開啟」。",
-          "line_one": "{{count}} 個未儲存的檔案：{{files}}",
-          "line_other": "{{count}} 個未儲存的檔案：{{files}}"
+          "line_one": "Unsaved edits in {{count}} file will be discarded: {{files}}",
+          "line_other": "Unsaved edits in {{count}} files will be discarded: {{files}}"
         }
       }
     },
@@ -23447,7 +23447,8 @@
   },
   "crashReport": {
     "freeze": {
-      "includeRedacted": "包含已儲存的凍結報告與近期記錄（已遮蔽）"
+      "includeRedacted": "包含已儲存的凍結報告與近期記錄（已遮蔽）",
+      "uncheckAttachments": "Uncheck \"Include the saved freeze report and recent logs (redacted)\" and try again, or copy the details."
     },
     "includeRecentLogsRedacted": "包含近期記錄（已遮蔽）",
     "details": "詳情",

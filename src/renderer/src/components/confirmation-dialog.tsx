@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -36,6 +36,8 @@ export function ConfirmationDialogProvider({
   const t = useTranslate()
   const nextIdRef = useRef(0)
   const confirmButtonRef = useRef<HTMLButtonElement>(null)
+  const cancelButtonRef = useRef<HTMLButtonElement>(null)
+  const firstInputRef = useRef<HTMLInputElement>(null)
   const [queue, setQueue] = useState<ConfirmationDialogRequest[]>([])
   const [dontAskAgain, setDontAskAgain] = useState(false)
   const [fieldValues, setFieldValues] = useState<Record<string, string>>({})
@@ -54,6 +56,19 @@ export function ConfirmationDialogProvider({
   const options = displayedRequest?.options
   // Why Cancel: the "Don't ask again" checkbox now comes first, and Enter must not confirm by accident.
   const initialFocus = options?.initialFocus ?? (options?.fields ? undefined : 'cancel')
+  const activeRequestId = activeRequest?.id
+  useLayoutEffect(() => {
+    if (activeRequestId === undefined) {
+      return
+    }
+    const target =
+      initialFocus === 'confirm'
+        ? confirmButtonRef.current
+        : initialFocus === 'cancel'
+          ? (cancelButtonRef.current ?? confirmButtonRef.current)
+          : firstInputRef.current
+    target?.focus()
+  }, [activeRequestId, initialFocus])
   const guarded = displayedRequest?.options.ignoresOpeningGesture === true
   // Why: the gesture that opened the prompt may still be repeating or clicking, and either answer can stick.
   const ignoreRepeatedKey = (event: React.KeyboardEvent): void => {
@@ -167,10 +182,11 @@ export function ConfirmationDialogProvider({
           </DialogHeader>
           {options?.fields ? (
             <div className="space-y-3">
-              {options.fields.inputs.map((field) => (
+              {options.fields.inputs.map((field, index) => (
                 <div key={field.id} className="space-y-2">
                   <Label htmlFor={`confirmation-dialog-field-${field.id}`}>{field.label}</Label>
                   <Input
+                    ref={index === 0 ? firstInputRef : undefined}
                     id={`confirmation-dialog-field-${field.id}`}
                     type={field.type ?? 'text'}
                     autoComplete={field.autoComplete}
@@ -211,6 +227,7 @@ export function ConfirmationDialogProvider({
           >
             {options?.acknowledgeOnly ? null : (
               <DialogCancel
+                ref={cancelButtonRef}
                 onKeyDown={ignoreRepeatedKey}
                 onClick={(event) => {
                   event.preventDefault()

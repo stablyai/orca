@@ -20932,8 +20932,8 @@
           "closedToast_other": "{{workspace}} の未保存の編集がある {{count}} 個のファイルを閉じました",
           "reopen": "再度開く",
           "reopenFailed": "一部のファイルを再度開けませんでした。ワークスペースを開いて、もう一度「再度開く」を試してください。",
-          "line_one": "未保存のファイル {{count}} 個: {{files}}",
-          "line_other": "未保存のファイル {{count}} 個: {{files}}"
+          "line_one": "Unsaved edits in {{count}} file will be discarded: {{files}}",
+          "line_other": "Unsaved edits in {{count}} files will be discarded: {{files}}"
         },
         "ignoredFilesUnchecked": "無視されたファイルを完全には確認できませんでした"
       },
@@ -25168,7 +25168,8 @@
   },
   "crashReport": {
     "freeze": {
-      "includeRedacted": "保存済みのフリーズレポートと最近のログを含める（秘匿化済み）"
+      "includeRedacted": "保存済みのフリーズレポートと最近のログを含める（秘匿化済み）",
+      "uncheckAttachments": "Uncheck \"Include the saved freeze report and recent logs (redacted)\" and try again, or copy the details."
     },
     "includeRecentLogsRedacted": "最近のログを含める（秘匿化済み）",
     "details": "詳細",

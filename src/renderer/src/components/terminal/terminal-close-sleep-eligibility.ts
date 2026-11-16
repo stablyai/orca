@@ -31,7 +31,8 @@ export function canSleepInsteadOfClosingTab(
   const busyLeafIds = Object.entries(ptyIdsByLeafId)
     .filter(([, ptyId]) => typeof ptyId === 'string' && args.busyPtyIds.includes(ptyId))
     .map(([leafId]) => leafId)
-  if (busyLeafIds.length === 0) {
+  const mappedPtyIds = new Set(Object.values(ptyIdsByLeafId))
+  if (busyLeafIds.length === 0 || args.busyPtyIds.some((ptyId) => !mappedPtyIds.has(ptyId))) {
     return false
   }
   // Why every busy pane: sleep stops them all, so one unresumable process would still be lost.

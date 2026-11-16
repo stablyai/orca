@@ -20999,11 +20999,11 @@
           "closedToast_other": "已关闭 {{workspace}} 中 {{count}} 个有未保存编辑的文件",
           "reopen": "重新打开",
           "reopenFailed": "部分文件无法重新打开。请打开工作区，然后再次尝试“重新打开”",
-          "line_one": "{{count}} 个未保存的文件：{{files}}",
-          "line_other": "{{count}} 个未保存的文件：{{files}}"
+          "line_one": "Unsaved edits in {{count}} file will be discarded: {{files}}",
+          "line_other": "Unsaved edits in {{count}} files will be discarded: {{files}}"
         },
-        "ignoredFilesUnchecked": "无法完整检查 Git 忽略的文件",
-        "ignoredFilesLost": "Git 忽略的文件将丢失：{{names}}"
+        "ignoredFilesLost": "Git 忽略的文件将丢失：{{names}}",
+        "ignoredFilesUnchecked": "无法完整检查 Git 忽略的文件"
       },
       "atRiskLocalFiles": {
         "namesWithCount": "{{names}} +{{value0}}",
@@ -25609,7 +25609,7 @@
       "sentWithoutAttachments": "详情已发送，但未附带已保存的卡死报告或诊断日志",
       "summary": "Orca 停止响应",
       "title": "报告卡死",
-      "uncheckAttachments": "取消勾选“附加已保存的卡死报告和诊断日志”并重试，或复制详细信息",
+      "uncheckAttachments": "取消勾选“包含已保存的卡顿报告和近期日志（已脱敏）”并重试，或复制详细信息",
       "includeRedacted": "包含已保存的卡顿报告和近期日志（已脱敏）"
     },
     "copyDetails": "复制详情",

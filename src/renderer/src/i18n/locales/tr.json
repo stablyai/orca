@@ -20655,8 +20655,8 @@
           "closedToast_other": "{{workspace}} çalışma alanında kaydedilmemiş değişiklikler içeren {{count}} dosya kapatıldı",
           "reopen": "Yeniden aç",
           "reopenFailed": "Bazı dosyalar yeniden açılamadı. Bir çalışma alanı açıp Yeniden aç seçeneğini tekrar deneyin.",
-          "line_one": "{{count}} kaydedilmemiş dosya: {{files}}",
-          "line_other": "{{count}} kaydedilmemiş dosya: {{files}}"
+          "line_one": "Unsaved edits in {{count}} file will be discarded: {{files}}",
+          "line_other": "Unsaved edits in {{count}} files will be discarded: {{files}}"
         }
       }
     },
@@ -23923,7 +23923,8 @@
   },
   "crashReport": {
     "freeze": {
-      "includeRedacted": "Kaydedilmiş donma raporunu ve son günlükleri ekle (maskelenmiş)"
+      "includeRedacted": "Kaydedilmiş donma raporunu ve son günlükleri ekle (maskelenmiş)",
+      "uncheckAttachments": "Uncheck \"Include the saved freeze report and recent logs (redacted)\" and try again, or copy the details."
     },
     "includeRecentLogsRedacted": "Son günlükleri ekle (maskelenmiş)",
     "details": "Ayrıntılar",

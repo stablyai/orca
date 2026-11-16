@@ -22116,8 +22116,8 @@
           "closedToast_other": "Closed {{count}} files with unsaved edits from {{workspace}}",
           "reopen": "Reopen",
           "reopenFailed": "Some files couldn't be reopened. Open a workspace and try Reopen again.",
-          "line_one": "{{count}} unsaved file: {{files}}",
-          "line_other": "{{count}} unsaved files: {{files}}"
+          "line_one": "Unsaved edits in {{count}} file will be discarded: {{files}}",
+          "line_other": "Unsaved edits in {{count}} files will be discarded: {{files}}"
         },
         "ignoredFilesUnchecked": "Ignored files could not be fully checked",
         "ignoredFiles": {
@@ -26110,7 +26110,7 @@
       "sentWithoutAttachments": "Details sent without the saved freeze report or diagnostic logs",
       "summary": "Orca stopped responding",
       "title": "Report a freeze",
-      "uncheckAttachments": "Uncheck \"Attach saved freeze report and diagnostic logs\" and try again, or copy the details.",
+      "uncheckAttachments": "Uncheck \"Include the saved freeze report and recent logs (redacted)\" and try again, or copy the details.",
       "includeRedacted": "Include the saved freeze report and recent logs (redacted)"
     },
     "includeRecentLogsRedacted": "Include recent logs (redacted)",

@@ -22039,9 +22039,9 @@
           "closedToast_many": "{{count}} arquivos com alterações não salvas de {{workspace}} foram fechados",
           "reopen": "Reabrir",
           "reopenFailed": "Não foi possível reabrir alguns arquivos. Abra um espaço de trabalho e tente Reabrir novamente.",
-          "line_one": "{{count}} arquivo não salvo: {{files}}",
-          "line_other": "{{count}} arquivos não salvos: {{files}}",
-          "line_many": "{{count}} arquivos não salvos: {{files}}"
+          "line_one": "Unsaved edits in {{count}} file will be discarded: {{files}}",
+          "line_other": "Unsaved edits in {{count}} files will be discarded: {{files}}",
+          "line_many": "Unsaved edits in {{count}} files will be discarded: {{files}}"
         }
       }
     },
@@ -24858,7 +24858,8 @@
   },
   "crashReport": {
     "freeze": {
-      "includeRedacted": "Incluir o relatório de travamento salvo e os logs recentes (anonimizados)"
+      "includeRedacted": "Incluir o relatório de travamento salvo e os logs recentes (anonimizados)",
+      "uncheckAttachments": "Uncheck \"Include the saved freeze report and recent logs (redacted)\" and try again, or copy the details."
     },
     "includeRecentLogsRedacted": "Incluir logs recentes (anonimizados)",
     "details": "Detalhes",

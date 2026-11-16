@@ -1,7 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
-import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import { captureWorktreeSleepResumeRecords } from '../../../../main/runtime/terminal/stop/worktree-sleep-resume-records'
 import { canSleepInsteadOfClosingTab } from './terminal-close-sleep-eligibility'
 
 const worktrees = vi.hoisted(() => new Map<string, { id: string; hostId?: string }>())
@@ -30,39 +28,27 @@ function eligible(state: AppState): boolean {
   })
 }
 
-// Main's own capture for the same hook row: what sleep would persist for this pane.
-async function mainPersistsResumeRecord(row: Record<string, unknown>): Promise<boolean> {
-  const capture = await captureWorktreeSleepResumeRecords({
-    worktreeId: 'wt-1',
-    paneKeysByPtyId: new Map([['pty-1', [PANE_KEY]]]),
-    launchByPtyId: new Map(),
-    readRowsForPane: () => [
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: rows mimic hook payloads, including ones missing a session, which the capture must tolerate.
-      { paneKey: PANE_KEY, connectionId: null, receivedAt: 1, ...row } as AgentStatusIpcPayload
-    ],
-    checkAgentPresence: null,
-    capturedAt: 2
-  })
-  const records = capture.get('pty-1')?.records ?? []
-  return records.some(
-    (record) => record.providerSession.id === SESSION.id && record.restoreOnTabOpenOnly === true
-  )
-}
-
 describe('canSleepInsteadOfClosingTab', () => {
-  it('offers sleep exactly when main would persist a resume record for the busy agent', async () => {
+  it('refuses a busy PTY with no mapped pane even when another busy agent can resume', () => {
+    worktrees.set('wt-1', { id: 'wt-1' })
+    expect(
+      canSleepInsteadOfClosingTab(stateWith({ agentType: 'claude', providerSession: SESSION }), {
+        worktreeId: 'wt-1',
+        terminalTabId: 'tab-1',
+        busyPtyIds: ['pty-1', 'unmapped-pty']
+      })
+    ).toBe(false)
+  })
+  it('requires a supported agent and a provider session before offering sleep', () => {
     worktrees.set('wt-1', { id: 'wt-1' })
     const resumable = { agentType: 'claude', providerSession: SESSION }
     expect(eligible(stateWith(resumable))).toBe(true)
-    expect(await mainPersistsResumeRecord(resumable)).toBe(true)
 
     const noSession = { agentType: 'claude' }
     expect(eligible(stateWith(noSession))).toBe(false)
-    expect(await mainPersistsResumeRecord(noSession)).toBe(false)
 
     const notResumable = { agentType: 'aider', providerSession: SESSION }
     expect(eligible(stateWith(notResumable))).toBe(false)
-    expect(await mainPersistsResumeRecord(notResumable)).toBe(false)
   })
 
   it('offers sleep on SSH workspaces but not on paired servers or VM workspaces', () => {

@@ -20,7 +20,7 @@ export type RunningTerminalCloseConfirmState = {
   confirmRunningTerminalClose: () => void
   /** Opting out accepts visible and queued requests; no disabled confirmation may remain waiting. */
   confirmAllRunningTerminalCloses: () => void
-  dismissRunningTerminalClose: () => void
+  dismissRunningTerminalClose: () => boolean
 }
 
 /** Merge duplicate tab requests so both initiating surfaces receive callbacks. */
@@ -59,9 +59,9 @@ export const useRunningTerminalCloseConfirmStore = create<RunningTerminalCloseCo
   }
 
   const guardNextAction = (revealedNextRequest: boolean): void => {
-    if (revealedNextRequest) {
-      nextRequestActionAllowedAt = Date.now() + INTER_REQUEST_ACTION_GUARD_MS
-    }
+    nextRequestActionAllowedAt = revealedNextRequest
+      ? Date.now() + INTER_REQUEST_ACTION_GUARD_MS
+      : 0
   }
 
   return {
@@ -114,11 +114,12 @@ export const useRunningTerminalCloseConfirmStore = create<RunningTerminalCloseCo
     dismissRunningTerminalClose: () => {
       const request = get().runningTerminalCloseConfirm
       if (!request || Date.now() < nextRequestActionAllowedAt) {
-        return
+        return false
       }
       guardNextAction(advanceRequest())
       // Why: callers such as the tab-group model resume their own cleanup on cancel.
       request.onCancel?.()
+      return true
     }
   }
 })

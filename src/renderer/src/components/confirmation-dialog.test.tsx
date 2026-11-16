@@ -44,6 +44,34 @@ function renderDialog(options: ConfirmationDialogOptions): { onSettled: ReturnTy
 describe('ConfirmationDialogProvider', () => {
   afterEach(cleanup)
 
+  it('focuses Cancel when the next queued question replaces a confirmed one', async () => {
+    const secondSettled = vi.fn()
+    function Queue(): React.JSX.Element {
+      const confirm = useConfirmationDialog()
+      return (
+        <button
+          onClick={() => {
+            void confirm({ title: 'First?', confirmLabel: 'Go' })
+            void confirm({ title: 'Second?', confirmLabel: 'Go' }).then(secondSettled)
+          }}
+        >
+          queue
+        </button>
+      )
+    }
+    render(
+      <ConfirmationDialogProvider>
+        <Queue />
+      </ConfirmationDialogProvider>
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'queue' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Go' }))
+    await screen.findByText('Second?')
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus())
+    await userEvent.keyboard('{Enter}')
+    await waitFor(() => expect(secondSettled).toHaveBeenCalledWith(false))
+  })
+
   it('tells the cancel button apart from Escape', async () => {
     const onCancelClicked = vi.fn()
     const { onSettled } = renderDialog({

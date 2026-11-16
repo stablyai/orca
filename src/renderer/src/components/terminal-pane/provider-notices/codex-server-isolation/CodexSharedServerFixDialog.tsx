@@ -94,11 +94,22 @@ export function CodexSharedServerFixDialog({
   const t = useTranslate()
   const mountedRef = useMountedRef()
   const checkboxId = useId()
-  // Why outside the content: once sharing is off, a reopened dialog retries only the stop.
   const [sharingOff, setSharingOff] = useState(false)
   const [alsoStop, setAlsoStop] = useState(false)
   const [phase, setPhase] = useState<FixPhase>('idle')
   const [failure, setFailure] = useState<FixFailure>(null)
+  const [previousOpen, setPreviousOpen] = useState(open)
+  const [previousPtyId, setPreviousPtyId] = useState(ptyId)
+  if (open !== previousOpen || ptyId !== previousPtyId) {
+    setPreviousOpen(open)
+    setPreviousPtyId(ptyId)
+    if (open) {
+      setSharingOff(false)
+      setAlsoStop(false)
+      setFailure(null)
+      setPhase('idle')
+    }
+  }
   const busy = phase !== 'idle'
 
   const runStop = async (): Promise<void> => {
@@ -215,7 +226,7 @@ export function CodexSharedServerFixDialog({
             <CopyCommandButton command={CODEX_STOP_SHARED_SERVER_COMMAND} />
           </DialogError>
         ) : null}
-        <DialogFooter start={<UndoPopover />}>
+        <DialogFooter start={sharingOff ? undefined : <UndoPopover />}>
           <DialogCancel>{t('terminal.codexSharedServerBanner.cancel', 'Cancel')}</DialogCancel>
           <Button
             type="button"

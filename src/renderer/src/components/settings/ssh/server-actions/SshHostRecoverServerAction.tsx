@@ -153,7 +153,7 @@ function OpenRecoverServerDialog({
   const host = eligible ? check.evidence?.host : undefined
   return (
     <Dialog open onOpenChange={(next) => !next && onOpenChange(false)}>
-      <DialogContent size="confirm" surface="security" busy={busy} initialFocus="cancel">
+      <DialogContent size="confirm" surface="security" busy={busy} initialFocus="cancel" scrollable>
         <DialogHeader>
           <DialogTitle>
             {host

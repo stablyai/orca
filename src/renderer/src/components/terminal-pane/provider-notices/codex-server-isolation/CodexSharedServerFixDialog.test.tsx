@@ -46,6 +46,20 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('CodexSharedServerFixDialog', () => {
+  it('asks to disable sharing again after closing and reopening a partial failure', async () => {
+    disable.mockResolvedValue(true)
+    stop.mockResolvedValue(false)
+    const props = { ptyId: 'pty-1', onOpenChange: vi.fn(), onServerStopped: vi.fn() }
+    const { rerender } = render(<CodexSharedServerFixDialog {...props} open />)
+    await userEvent.click(screen.getByRole('checkbox'))
+    await clickButton('Turn off and stop server')
+    expect(screen.getByRole('button', { name: 'Stop server' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'How to undo' })).not.toBeInTheDocument()
+    rerender(<CodexSharedServerFixDialog {...props} open={false} />)
+    rerender(<CodexSharedServerFixDialog {...props} open />)
+    await clickButton('Turn off sharing')
+    expect(disable).toHaveBeenCalledTimes(2)
+  })
   it('runs nothing else when turning sharing off fails', async () => {
     disable.mockResolvedValue(false)
     const { onOpenChange } = renderFix()

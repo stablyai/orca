@@ -20300,9 +20300,9 @@
           "closedToast_many": "Se cerraron {{count}} archivos con ediciones sin guardar de {{workspace}}",
           "reopen": "Reabrir",
           "reopenFailed": "No se pudieron reabrir algunos archivos. Abre un espacio de trabajo e intenta Reabrir de nuevo.",
-          "line_one": "{{count}} archivo sin guardar: {{files}}",
-          "line_other": "{{count}} archivos sin guardar: {{files}}",
-          "line_many": "{{count}} archivos sin guardar: {{files}}"
+          "line_one": "Unsaved edits in {{count}} file will be discarded: {{files}}",
+          "line_other": "Unsaved edits in {{count}} files will be discarded: {{files}}",
+          "line_many": "Unsaved edits in {{count}} files will be discarded: {{files}}"
         }
       }
     },
@@ -24237,7 +24237,8 @@
   },
   "crashReport": {
     "freeze": {
-      "includeRedacted": "Incluir el informe de bloqueo guardado y los registros recientes (anonimizados)"
+      "includeRedacted": "Incluir el informe de bloqueo guardado y los registros recientes (anonimizados)",
+      "uncheckAttachments": "Uncheck \"Include the saved freeze report and recent logs (redacted)\" and try again, or copy the details."
     },
     "includeRecentLogsRedacted": "Incluir registros recientes (anonimizados)",
     "details": "Detalles",
