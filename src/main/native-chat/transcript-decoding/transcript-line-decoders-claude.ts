@@ -84,7 +84,11 @@ export function decodeClaudeTranscriptLine(
   if (!parsed) {
     return null
   }
-  if (parsed.type === 'system' && parsed.subtype === 'compact_boundary') {
+  if (
+    parsed.type === 'system' &&
+    parsed.subtype === 'compact_boundary' &&
+    parsed.isSidechain !== true
+  ) {
     return {
       id: extractString(parsed.uuid) ?? fallbackId,
       role: 'system',

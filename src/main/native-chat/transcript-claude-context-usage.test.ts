@@ -53,8 +53,12 @@ describe('Claude terminal Chat context usage', () => {
     ).toMatchObject({ usedTokens: 40_000 })
   })
 
-  it('keeps a sidechain response from replacing the main conversation measurement', () => {
-    const messages = transcript([response(4_000), response(900_000, { isSidechain: true })])
+  it('keeps sidechain responses and compaction from changing the main conversation measurement', () => {
+    const messages = transcript([
+      response(4_000),
+      response(900_000, { isSidechain: true }),
+      { type: 'system', subtype: 'compact_boundary', isSidechain: true }
+    ])
     expect(summarizeTranscriptContextUsage(messages, () => null)?.usedTokens).toBe(42_000)
   })
 
