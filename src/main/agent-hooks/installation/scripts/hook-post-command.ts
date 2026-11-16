@@ -9,29 +9,38 @@ export function posixCurlCommand(curlCommand = 'curl'): string {
 
 const PACK_HOOK_METADATA = `printf '%s\\037%s\\037%s\\037%s\\037%s\\037%s' "$ORCA_PANE_KEY" "$ORCA_TAB_ID" "$ORCA_AGENT_LAUNCH_TOKEN" "$ORCA_WORKTREE_ID" "$ORCA_AGENT_HOOK_ENV" "$ORCA_AGENT_HOOK_VERSION" | base64 | tr -d '\\n'`
 
-/** Defines `orca_hook_pack_metadata`, which reuses a pane's packed header while every input matches. */
+/** Defines `orca_hook_cache_file <prefix>` (names this pane's file in the endpoint's metadata cache),
+ *  `orca_hook_cache_write <file> <line>`, and `orca_hook_pack_metadata`, which reuses a pane's packed
+ *  header while every input matches. */
 export function buildPosixHookMetadataCacheLines(): string[] {
   return [
+    'orca_hook_cache_file() {',
+    '  orca_hook_cache_path=',
+    // A stale variable must not create state for an absent Orca installation.
+    '  [ -r "${ORCA_AGENT_HOOK_ENDPOINT:-}" ] || return 1',
+    '  orca_hook_cache_id=$ORCA_PANE_KEY',
+    // Name it like the spool file, which may sit on a Windows drive under WSL.
+    '  while :; do case "$orca_hook_cache_id" in *[/:]*) orca_hook_cache_id="${orca_hook_cache_id%%[/:]*}_${orca_hook_cache_id#*[/:]}" ;; *) break ;; esac; done',
+    `  orca_hook_cache_path="\${ORCA_AGENT_HOOK_ENDPOINT%/*}/${AGENT_HOOK_METADATA_CACHE_DIR}/$1-$orca_hook_cache_id"`,
+    '}',
+    'orca_hook_cache_write() {',
+    '  [ -d "${1%/*}" ] || mkdir -m 700 "${1%/*}" 2>/dev/null || return 0',
+    // Rename so a concurrent event never reads half a line.
+    `  printf '%s\\n' "$2" 2>/dev/null > "$1.$$" && mv -f "$1.$$" "$1" 2>/dev/null`,
+    '}',
     'orca_hook_pack_metadata() {',
     // Length prefixes keep different inputs from forming the same key.
     '  orca_hook_meta_key="${#ORCA_PANE_KEY}:$ORCA_PANE_KEY ${#ORCA_TAB_ID}:$ORCA_TAB_ID ${#ORCA_AGENT_LAUNCH_TOKEN}:$ORCA_AGENT_LAUNCH_TOKEN ${#ORCA_WORKTREE_ID}:$ORCA_WORKTREE_ID ${#ORCA_AGENT_HOOK_ENV}:$ORCA_AGENT_HOOK_ENV ${#ORCA_AGENT_HOOK_VERSION}:$ORCA_AGENT_HOOK_VERSION"',
     '  orca_hook_meta_file=',
-    // A stale variable must not create state for an absent Orca installation.
-    '  if [ -r "${ORCA_AGENT_HOOK_ENDPOINT:-}" ]; then',
-    '    orca_hook_meta_id=$ORCA_PANE_KEY',
-    // Name it like the spool file, which may sit on a Windows drive under WSL.
-    '    while :; do case "$orca_hook_meta_id" in *[/:]*) orca_hook_meta_id="${orca_hook_meta_id%%[/:]*}_${orca_hook_meta_id#*[/:]}" ;; *) break ;; esac; done',
-    `    orca_hook_meta_file="\${ORCA_AGENT_HOOK_ENDPOINT%/*}/${AGENT_HOOK_METADATA_CACHE_DIR}/pane-$orca_hook_meta_id"`,
+    '  if orca_hook_cache_file pane; then',
+    '    orca_hook_meta_file=$orca_hook_cache_path',
     '    orca_hook_meta_line=',
     '    IFS= read -r orca_hook_meta_line 2>/dev/null < "$orca_hook_meta_file"',
     '    orca_hook_metadata=${orca_hook_meta_line%% *}',
     '    [ -z "$orca_hook_metadata" ] || [ "${orca_hook_meta_line#* }" != "$orca_hook_meta_key" ] || return 0',
     '  fi',
     `  orca_hook_metadata=$(${PACK_HOOK_METADATA}) && [ -n "$orca_hook_metadata" ] || return 1`,
-    '  [ -n "$orca_hook_meta_file" ] || return 0',
-    '  [ -d "${orca_hook_meta_file%/*}" ] || mkdir -m 700 "${orca_hook_meta_file%/*}" 2>/dev/null || return 0',
-    // Rename so a concurrent event never reads half a line.
-    `  printf '%s %s\\n' "$orca_hook_metadata" "$orca_hook_meta_key" 2>/dev/null > "$orca_hook_meta_file.$$" && mv -f "$orca_hook_meta_file.$$" "$orca_hook_meta_file" 2>/dev/null`,
+    '  [ -z "$orca_hook_meta_file" ] || orca_hook_cache_write "$orca_hook_meta_file" "$orca_hook_metadata $orca_hook_meta_key"',
     '  return 0',
     '}'
   ]

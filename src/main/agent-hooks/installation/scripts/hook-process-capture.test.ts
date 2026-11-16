@@ -1,10 +1,11 @@
-import { mkdtemp, writeFile, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { runProcess } from '@orca/process-host'
 
 import { buildHookProcessCapture, HOOK_PARENT_CAPTURE } from './hook-process-capture'
+import { buildPosixHookMetadataCacheLines } from './hook-post-command'
 import { quotePosixShell } from '../../../../shared/shell/launch/shell-argument-quoting'
 import { readAgentProcessIdentity } from '../../../../shared/agent-status/process/agent-process-presence'
 import { probeAgentProcessPresence } from '../../../../shared/agent-status/process/agent-process-presence-probe'
@@ -52,6 +53,75 @@ describe('Claude outer hook process capture', () => {
         })
         const caller: { pid: number; out: string } = JSON.parse(direct.stdout)
         expect(readAgentProcessIdentity(caller.out)?.pid).toBe(caller.pid)
+      } finally {
+        await rm(home, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it.skipIf(process.platform !== 'darwin')(
+    'reuses the pane cache on tool events for the same agent and launch, and asks ps again on any other event',
+    async () => {
+      const home = await mkdtemp(join(tmpdir(), 'orca-presence-cache-'))
+      try {
+        const scriptPath = join(home, 'claude-hook.sh')
+        await writeFile(
+          scriptPath,
+          [
+            '#!/bin/sh',
+            'payload=$(cat)',
+            ...buildPosixHookMetadataCacheLines(),
+            ...buildHookProcessCapture({ reuseOnToolEvents: true }),
+            'printf "%s" "$orca_agent_process"'
+          ].join('\n'),
+          { mode: 0o700 }
+        )
+        const endpoint = join(home, 'endpoint.env')
+        await writeFile(endpoint, '')
+        await mkdir(join(home, 'hook-metadata'))
+        const cacheFile = join(home, 'hook-metadata', 'agent-presence-test-pane')
+        const seed = (token: string): Promise<void> =>
+          writeFile(
+            cacheFile,
+            `${process.pid} ${token.length}:${token} {"pid":${process.pid},"platform":"darwin","startTime":"cached"}\n`
+          )
+        const run = async (payload: string): Promise<string | undefined> => {
+          const result = await runProcess({
+            program: '/bin/sh',
+            args: ['-c', `${HOOK_PARENT_CAPTURE}/bin/sh ${quotePosixShell(scriptPath)}`],
+            env: {
+              HOME: home,
+              PATH: '/usr/bin:/bin',
+              ORCA_PANE_KEY: 'presence-test-pane',
+              ORCA_AGENT_LAUNCH_TOKEN: 'launch-1',
+              ORCA_AGENT_HOOK_ENDPOINT: endpoint
+            },
+            input: payload,
+            timeoutMs: 5000
+          })
+          return readAgentProcessIdentity(result.stdout)?.startTime
+        }
+
+        const toolEvent = '{"hook_event_name": "PostToolUse", "tool_name": "Bash"}'
+        await seed('launch-1')
+        expect(await run(toolEvent)).toBe('cached')
+        const fresh = await run('{"hook_event_name":"SessionStart","source":"startup"}')
+        expect(fresh).not.toBe('cached')
+        expect(
+          await probeAgentProcessPresence({
+            pid: process.pid,
+            platform: 'darwin',
+            startTime: fresh!
+          })
+        ).toBe('live')
+        expect(await run(toolEvent)).toBe(fresh)
+
+        await seed('launch-1')
+        expect(await run('{"hook_event_name":"UserPromptSubmit","prompt":"hi"}')).toBe(fresh)
+        expect(await run(toolEvent)).toBe(fresh)
+
+        await seed('launch-0')
+        expect(await run(toolEvent)).toBe(fresh)
       } finally {
         await rm(home, { recursive: true, force: true })
       }
