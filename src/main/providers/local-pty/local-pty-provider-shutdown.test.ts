@@ -131,6 +131,7 @@ vi.mock('../../pty/shell-startup/shell-prompt-readiness-probe', () => ({
   createShellPromptReadinessProbe: createShellPromptReadinessProbeMock
 }))
 import { LocalPtyProvider } from './local-pty-provider'
+import { observeInProcessWorkerExits } from '../../ipc/pty/runtime/in-process-exit-observer'
 import {
   applyLocalPtyProviderMockDefaults,
   createLocalPtyMockProcess,
@@ -193,6 +194,29 @@ describe('LocalPtyProvider', () => {
       exitCb?.({ exitCode: 137 })
       await shutdown
       expect(provider.hasPty(id)).toBe(false)
+    })
+  })
+
+  describe('exit proof for workers it ran', () => {
+    it('reports its exact physical exit once, to the observer installed last', async () => {
+      const replaced = { recordInProcessPtyExit: vi.fn() }
+      const current = { recordInProcessPtyExit: vi.fn() }
+      observeInProcessWorkerExits(replaced)
+      observeInProcessWorkerExits(current)
+      try {
+        const { id } = await provider.spawn({ cols: 80, rows: 24 })
+        const [live] = await provider.listProcesses()
+        expect(live).toMatchObject({ id, incarnationId: expect.any(String) })
+
+        exitCb?.({ exitCode: 0 })
+        await vi.waitFor(() => expect(current.recordInProcessPtyExit).toHaveBeenCalledTimes(1))
+
+        expect(current.recordInProcessPtyExit).toHaveBeenCalledWith(`${id}:${live!.incarnationId}`)
+        expect(replaced.recordInProcessPtyExit).not.toHaveBeenCalled()
+        await expect(provider.listProcesses()).resolves.toEqual([])
+      } finally {
+        observeInProcessWorkerExits(undefined)
+      }
     })
   })
 })
