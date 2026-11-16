@@ -30,8 +30,8 @@ export function useNativeChatRailWake(): {
         return
       }
       timer.current = null
-      if (railRef.current) {
-        delete railRef.current.dataset.awake
+      if (rail) {
+        delete rail.dataset.awake
       }
     }
     timer.current = setTimeout(settle, NATIVE_CHAT_RAIL_WAKE_MS)
