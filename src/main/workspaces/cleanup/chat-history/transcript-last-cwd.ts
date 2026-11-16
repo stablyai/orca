@@ -118,7 +118,8 @@ export async function isChatStillIdleInGoneFolder(
   folderKey: string,
   now: number
 ): Promise<boolean> {
-  if (!(await isStillIdleInGoneFolder(filePath, folderKey, now))) {
+  const before = await fileVersion(filePath)
+  if (before === null || !(await isStillIdleInGoneFolder(filePath, folderKey, now))) {
     return false
   }
   const companions = await companionFiles(filePath)
@@ -136,5 +137,13 @@ export async function isChatStillIdleInGoneFolder(
       return false
     }
   }
-  return true
+  // Checking companions takes a while: the chat itself may have been resumed meanwhile.
+  return (await fileVersion(filePath)) === before
+}
+
+async function fileVersion(filePath: string): Promise<string | null> {
+  return stat(filePath, { bigint: true }).then(
+    (stats) => `${stats.size}:${stats.mtimeNs}`,
+    () => null
+  )
 }
