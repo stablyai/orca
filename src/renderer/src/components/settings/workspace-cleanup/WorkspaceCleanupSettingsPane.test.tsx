@@ -6,10 +6,14 @@ import {
   getDefaultWorkspaceCleanupRules,
   type WorkspaceCleanupRules
 } from '../../../../../shared/workspace-cleanup/workspace-cleanup-policy'
-import type { WorkspaceCleanupPreviewRow } from '../../../../../shared/workspace-cleanup/workspace-cleanup-run'
+import type {
+  WorkspaceCleanupPreviewRow,
+  WorkspaceCleanupRun
+} from '../../../../../shared/workspace-cleanup/workspace-cleanup-run'
 import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { useAppStore } from '@/store'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { emitWorkspaceCleanupRunFinishedWindowEvent } from '@/components/workspace-cleanup/events/workspace-cleanup-run-finished-window-event'
 import { TooltipProvider } from '../../ui/tooltip'
 import type * as RuntimeRpcCall from '@/runtime/rpc/calls/runtime-rpc-call'
 import { WorkspaceCleanupSettingsPane } from './WorkspaceCleanupSettingsPane'
@@ -62,6 +66,8 @@ let includeCandidate = false
 let matchWhenMergedOn = false
 let previewGate: Promise<void> | null = null
 let saveGate: Promise<void> | null = null
+let runNowGate: Promise<void> | null = null
+let reportRuns: WorkspaceCleanupRun[] = []
 
 const LOCAL_TARGET: RuntimeClientTarget = { kind: 'local' }
 
@@ -108,6 +114,10 @@ function merged() {
 function workers() {
   return screen.getByRole('switch', { name: 'Delete released orchestration worker workspaces' })
 }
+// The rule's own checking line, apart from the page's run announcements.
+function mergedCheckingLine() {
+  return merged().closest('[data-settings-row]')?.querySelector('[role="status"]') ?? null
+}
 function tryAgain() {
   return screen.getByRole('button', { name: 'Try again' })
 }
@@ -128,6 +138,8 @@ beforeEach(() => {
   matchWhenMergedOn = false
   previewGate = null
   saveGate = null
+  runNowGate = null
+  reportRuns = []
   environmentCall.settingsGetFails = false
   useAppStore.setState(useAppStore.getInitialState(), true)
   Object.assign(window, {
@@ -141,6 +153,9 @@ beforeEach(() => {
           method: string
           params?: { rules?: WorkspaceCleanupRules }
         }) => {
+          if (method === 'workspaceCleanup.runNow') {
+            await runNowGate
+          }
           if (method === 'workspaceCleanup.preview') {
             await previewGate
             if (failPreview) {
@@ -155,7 +170,7 @@ beforeEach(() => {
             ok: true,
             result:
               method === 'workspaceCleanup.report'
-                ? { runs: [], running: false, nextRunAt: null }
+                ? { runs: reportRuns, running: false, nextRunAt: null }
                 : { evaluatedAt: 0, rows: candidate ? [row] : [] }
           }
         }
@@ -252,7 +267,7 @@ describe('turning a rule on', () => {
     await act(async () => {
       fireEvent.click(merged())
     })
-    expect(screen.getByRole('status')).toBeTruthy()
+    expect(mergedCheckingLine()).not.toBeNull()
     expect(merged().getAttribute('aria-busy')).toBe('true')
     expect(merged().getAttribute('aria-checked')).toBe('false')
     const unchanged = screen.getByRole('switch', { name: 'Delete unchanged workspaces' })
@@ -265,7 +280,7 @@ describe('turning a rule on', () => {
     await act(async () => {
       releasePreview()
     })
-    expect(screen.queryByRole('status')).toBeNull()
+    expect(mergedCheckingLine()).toBeNull()
     expect(merged().getAttribute('aria-busy')).toBe('true')
     expect(merged().getAttribute('aria-checked')).toBe('false')
 
@@ -370,5 +385,70 @@ describe('automatic cleanup search', () => {
     expect(screen.getByRole('button', { name: 'Run rules now' })).toBeTruthy()
     expect(screen.queryAllByRole('switch')).toHaveLength(0)
     expect(screen.queryByRole('button', { name: /Advanced/ })).toBeNull()
+  })
+})
+
+describe('automatic cleanup announcements', () => {
+  function finishedRun(id: string, finishedAt: number): WorkspaceCleanupRun {
+    return {
+      id,
+      trigger: 'hourly',
+      startedAt: finishedAt - 1000,
+      finishedAt,
+      counts: { removed: 0, archived: 0, kept: 0, failed: 0 },
+      freedBytes: 0,
+      rows: []
+    }
+  }
+  function statusLine(): string {
+    return document.querySelector('[data-settings-group-description]')?.textContent ?? ''
+  }
+  // A finished-run event makes the page read the report again, as the host's event does.
+  async function rereadReport(): Promise<void> {
+    const before = statusLine()
+    await act(async () => {
+      const { rows: _rows, ...run } = reportRuns[0]!
+      emitWorkspaceCleanupRunFinishedWindowEvent({ environmentId: null, run })
+    })
+    await waitFor(() => expect(statusLine()).not.toBe(before))
+  }
+
+  it('announces a run starting and its result once, not each refresh of the relative times', async () => {
+    let now = Date.UTC(2026, 10, 15, 12)
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => now)
+    try {
+      reportRuns = [finishedRun('run-1', now - 60 * 60_000)]
+      mount(true)
+      await waitFor(() => expect(statusLine()).not.toBe(''))
+      const region = screen.getByRole('status')
+      expect(region.textContent).toBe('')
+
+      now += 2 * 60 * 60_000
+      await rereadReport()
+      expect(region.textContent).toBe('')
+
+      let finishRun = (): void => {}
+      runNowGate = new Promise((resolve) => (finishRun = resolve))
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Run rules now' }))
+      })
+      const started = region.textContent
+      expect(started).not.toBe('')
+
+      reportRuns = [finishedRun('run-2', now), ...reportRuns]
+      await act(async () => {
+        finishRun()
+      })
+      await rereadReport()
+      const finished = region.textContent
+      expect(finished).not.toBe('')
+      expect(finished).not.toBe(started)
+
+      now += 60 * 60_000
+      await rereadReport()
+      expect(region.textContent).toBe(finished)
+    } finally {
+      clock.mockRestore()
+    }
   })
 })

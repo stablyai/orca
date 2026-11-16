@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
@@ -101,12 +102,45 @@ export function WorkspaceCleanupAutomaticSection({
   showRules: boolean
   /** The rule rows. */
   children: React.ReactNode
-}): React.JSX.Element | null {
+}): React.JSX.Element {
   const t = useTranslate()
   const query = useAppStateValue((state) => state.settingsSearchQuery)
   const search = getWorkspaceCleanupSettingsSearchParts()
   const lastRun = report?.runs[0]
   const running = cleaningUp || report?.running === true
+  const runningText = t(
+    'components.settings.workspaceCleanup.automatic.running',
+    'Removing what your rules match…'
+  )
+  // Screen readers hear a run start and each new run's result once; the visible line's relative
+  // times re-render on every report read and would be read out again.
+  // Undefined until the report is read, so the first read's newest run is not news.
+  const runId = report ? (lastRun?.id ?? null) : undefined
+  const [announcement, setAnnouncement] = useState<{
+    running: boolean
+    runId: string | null | undefined
+    text: string
+  }>({
+    running,
+    runId,
+    text: ''
+  })
+  if (running !== announcement.running || runId !== announcement.runId) {
+    const newRun =
+      announcement.runId !== undefined && lastRun && lastRun.id !== announcement.runId
+        ? lastRun
+        : null
+    setAnnouncement({
+      running,
+      runId,
+      text:
+        running && !announcement.running
+          ? runningText
+          : newRun
+            ? formatLastRun(newRun, readAt, t)
+            : announcement.text
+    })
+  }
   const details: string[] = []
   if (!anyRuleOn) {
     details.push(
@@ -116,9 +150,7 @@ export function WorkspaceCleanupAutomaticSection({
       )
     )
   } else if (running) {
-    details.push(
-      t('components.settings.workspaceCleanup.automatic.running', 'Removing what your rules match…')
-    )
+    details.push(runningText)
   } else {
     if (lastRun) {
       details.push(formatLastRun(lastRun, readAt, t))
@@ -166,24 +198,42 @@ export function WorkspaceCleanupAutomaticSection({
     </Button>
   ) : null
 
+  const announcer = (
+    <span role="status" className="sr-only">
+      {announcement.text}
+    </span>
+  )
   if (!showRules) {
-    return matchesSettingsSearch(query, [search.status]) ? (
-      <SearchableSetting {...search.status}>
-        <SettingsGroupHeader title={title} description={description} action={action} wrapAction />
-      </SearchableSetting>
-    ) : null
+    return (
+      <>
+        {announcer}
+        {matchesSettingsSearch(query, [search.status]) ? (
+          <SearchableSetting {...search.status}>
+            <SettingsGroupHeader
+              title={title}
+              description={description}
+              action={action}
+              wrapAction
+            />
+          </SearchableSetting>
+        ) : null}
+      </>
+    )
   }
   return (
-    <SettingsGroup title={title} description={description} action={action} wrapAction>
-      {children}
-      {query.trim() === '' ? (
-        <p data-settings-row="" className="py-3 text-xs text-muted-foreground">
-          {t(
-            'components.settings.workspaceCleanup.rules.branchNote',
-            'Merged branches are deleted with their workspace. Unmerged branches are kept.'
-          )}
-        </p>
-      ) : null}
-    </SettingsGroup>
+    <>
+      {announcer}
+      <SettingsGroup title={title} description={description} action={action} wrapAction>
+        {children}
+        {query.trim() === '' ? (
+          <p data-settings-row="" className="py-3 text-xs text-muted-foreground">
+            {t(
+              'components.settings.workspaceCleanup.rules.branchNote',
+              'Merged branches are deleted with their workspace. Unmerged branches are kept.'
+            )}
+          </p>
+        ) : null}
+      </SettingsGroup>
+    </>
   )
 }
