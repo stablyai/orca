@@ -52,32 +52,44 @@ export function readJournalDomainEntity(
     case 'provider-turn-in-namespace': {
       const prefixKey = `p:${providerTimelineKeyPart(operation.namespace)}:`
       // Codex rows name their thread in columns and an accepted send proves Codex saw the thread.
-      // A turn row (whose opener may be Orca's own send) counts when written since `sinceFence`.
-      return {
-        kind: operation.kind,
-        present:
-          db
-            .prepare(`SELECT 1 FROM journal_items INDEXED BY journal_items_named_turn
+      const named =
+        db
+          .prepare(`SELECT 1 FROM journal_items INDEXED BY journal_items_named_turn
           WHERE session_id=? AND epoch=? AND hidden=0 AND turn_id IS NOT NULL
           AND turn_id>=? AND turn_id<?
           UNION ALL SELECT 1 FROM journal_items INDEXED BY journal_items_codex_turn
           WHERE session_id=? AND epoch=? AND hidden=0 AND codex_thread_id=? AND codex_turn_id IS NOT NULL
           UNION ALL SELECT 1 FROM journal_submission_attempts INDEXED BY journal_submission_codex_turn
           WHERE session_id=? AND epoch=? AND current=1 AND dispatch_state='accepted' AND codex_thread_id=?
-          UNION ALL SELECT 1 FROM journal_items INDEXED BY journal_items_kind
-          WHERE session_id=? AND epoch=? AND hidden=0 AND kind='turn' AND owner_fence>=?
           LIMIT 1`)
-            .get(
-              ...prefix,
-              prefixKey,
-              `${prefixKey.slice(0, -1)};`,
-              ...prefix,
-              operation.namespace,
-              ...prefix,
-              operation.namespace,
-              ...prefix,
-              operation.sinceFence ?? null
-            ) !== undefined
+          .get(
+            ...prefix,
+            prefixKey,
+            `${prefixKey.slice(0, -1)};`,
+            ...prefix,
+            operation.namespace,
+            ...prefix,
+            operation.namespace
+          ) !== undefined
+      // A provider turn row whose opener is Orca's own send names no thread; fences only grow, so
+      // the newest one shows whether a turn ran since `sinceFence`. Orca's command turns don't count.
+      const { sinceFence } = operation
+      const newestTurn =
+        named || sinceFence === undefined
+          ? undefined
+          : db
+              .prepare(`SELECT owner_fence FROM journal_items INDEXED BY journal_items_kind
+          WHERE session_id=? AND epoch=? AND hidden=0 AND kind='turn'
+          AND NOT (turn_id>='compact:' AND turn_id<'compact;')
+          ORDER BY ordinal DESC LIMIT 1`)
+              .get(...prefix)
+      return {
+        kind: operation.kind,
+        present:
+          named ||
+          (sinceFence !== undefined &&
+            newestTurn !== undefined &&
+            Number(newestTurn.owner_fence) >= sinceFence)
       }
     }
     case 'saved-item-ids':

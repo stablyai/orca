@@ -581,4 +581,16 @@ it('counts a Codex thread as exchanged once it has a turn row or an accepted sen
   expect(await reads.hasProviderTurn('thread-other')).toBe(false)
   expect(await reads.hasProviderTurn('thread-other', 1)).toBe(true)
   expect(await reads.hasProviderTurn('thread-other', 2)).toBe(false)
+  // Orca's own command turn on an empty conversation is not a provider turn.
+  await f.run({
+    kind: 'item',
+    identity: { provider: 'legacy', agent: 'codex', sessionId: 'chat', recordId: 'compact' },
+    body: agentJournalTurnBody({
+      turnId: 'compact:c',
+      state: 'unverifiable',
+      userItemId: 'orca:c'
+    }),
+    options: { ...options, fence: 2 }
+  })
+  expect(await reads.hasProviderTurn('thread-other', 2)).toBe(false)
 })
