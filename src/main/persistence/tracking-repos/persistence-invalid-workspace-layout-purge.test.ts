@@ -19,7 +19,9 @@ import {
 } from '../../workspaces/catalog/local-worktree-scan-generation'
 import { dropWorkspacesTheListingInvalidates } from '../restoring-sessions/invalid-workspace-layout-purge'
 
-vi.mock('../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
+vi.mock('../../../shared/workspace-layout/layout-owner-switch', () => ({
+  ORCA_LAYOUT_OWNER_IS_MAIN: true
+}))
 vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: vi.fn(),
   sshConfigHostsToTargets: vi.fn()

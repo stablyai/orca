@@ -8,15 +8,15 @@ import { decodePairingOffer } from '../../../src/shared/remote-runtime/pairing/p
 import { pairedRuntimeConnectionFromOffer } from '../../../src/shared/remote-runtime/pairing/paired-runtime-connection'
 import '../../../src/shared/remote-runtime/requests/remote-runtime-request-socket'
 import { subscribeRemoteRuntimeTransport } from '../../../src/shared/remote-runtime/requests/remote-runtime-subscription-transport'
-import type { RuntimeMobileSessionTabsResult } from '../../../src/shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
 import { isServeMintedPtySessionId } from '../../../src/shared/terminal/pty/lifecycle/pty-session-id-format'
 import type {
   RuntimeTerminalListResult,
   RuntimeTerminalRead
-} from '../../../src/shared/runtime-terminal-contracts'
+} from '../../../src/shared/terminal/runtime/runtime-terminal-contracts'
 import type { TerminalPaneLayoutNode } from '../../../src/shared/workspace-layout/terminal-tab-types'
-import type { PublishedWorkspaceLayout } from '../../../src/shared/workspace-layout/workspace-layout-published'
-import { readWorkspaceLayoutStreamFrame } from '../../../src/shared/workspace-layout/workspace-layout-stream-frames'
+import type { PublishedWorkspaceLayout } from '../../../src/shared/workspace-layout/published-layout/workspace-layout-published'
+import { readWorkspaceLayoutStreamFrame } from '../../../src/shared/workspace-layout/published-layout/workspace-layout-stream-frames'
 
 const BASELINE_FILE = path.join(process.cwd(), 'tests', 'e2e', 'layout-compat-baselines.json')
 /** Also writes each observation here, one file per scenario and platform, to record a baseline. */

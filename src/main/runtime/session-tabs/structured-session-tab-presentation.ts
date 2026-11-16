@@ -1,8 +1,8 @@
 import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeSessionTabCloseReason
-} from '../../../shared/runtime-session-contracts'
-import type { RuntimeMobileSessionAgentTab } from '../../../shared/runtime-mobile-session-tab-contracts'
+} from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeMobileSessionAgentTab } from '../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import { closeRenderedStructuredSessionTab } from '../agent-session/structured-session-renderer-close'
 import {
   captureInstalledStructuredSessionSurface,

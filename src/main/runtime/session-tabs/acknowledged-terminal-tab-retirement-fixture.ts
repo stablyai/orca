@@ -4,15 +4,15 @@ import { join } from 'node:path'
 import { vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { RuntimeSyncWindowGraph } from '../../../shared/runtime-session-contracts'
+import type { RuntimeSyncWindowGraph } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { closeTerminalTabInWorkspaceSession } from '../../../shared/workspace-session/workspace-session-terminal-tab-close'
 import { ProfileStateSqliteAuthority } from '../../persistence/profile-state/profile-state-sqlite-authority'
-import { DelayedAuthority } from '../../persistence/loading-store/profile-state-delayed-authority-fixture'
+import { DelayedAuthority } from '../../persistence/loading-store/profile-writing/profile-state-delayed-authority-fixture'
 import { Store } from '../../persistence/loading-store/store'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { buildHeadlessMobileSessionTerminalTabs } from '../terminal/surface/mobile-session-terminal-projection'
 import { setRuntimeDesktopSurface } from '../construction/runtime-desktop-surface'
-import { advanceTerminalTopologyRevision } from '../../persistence/terminal-topology/terminal-topology-membership'
+import { advanceTerminalTopologyRevision } from '../../persistence/terminal-topology/pane-ownership/terminal-topology-membership'
 
 export const ACK_WORKTREE = 'repo1::/tmp/worktree'
 export const ACK_TAB = '11111111-1111-4111-8111-111111111111'
@@ -29,7 +29,7 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
   return { promise, resolve }
 }
 
-export function createAcknowledgedTabRetirementFixture(bound = false) {
+export async function createAcknowledgedTabRetirementFixture(bound = false) {
   const directory = mkdtempSync(join(tmpdir(), 'orca-close-ack-'))
   const databasePath = join(directory, 'profile-state.db')
   const authority = new DelayedAuthority(
@@ -111,7 +111,11 @@ export function createAcknowledgedTabRetirementFixture(bound = false) {
       incarnationId: SECOND_INCARNATION
     })
   }
-  function publish(present: boolean, version: number, includedLeaves?: readonly string[]): void {
+  function publish(
+    present: boolean,
+    version: number,
+    includedLeaves?: readonly string[]
+  ): Promise<unknown> {
     const session = store.getWorkspaceSession()
     const projected = present
       ? buildHeadlessMobileSessionTerminalTabs(
@@ -148,9 +152,9 @@ export function createAcknowledgedTabRetirementFixture(bound = false) {
         }
       ]
     }
-    runtime.syncWindowGraph(1, graph)
+    return runtime.syncWindowGraph(1, graph)
   }
-  publish(true, 1)
+  await publish(true, 1)
   store.setWorkspaceSession(
     advanceTerminalTopologyRevision(store.getWorkspaceSession(), ACK_WORKTREE)
   )
@@ -206,7 +210,7 @@ export function createAcknowledgedTabRetirementFixture(bound = false) {
     quit: () => (finalFlush ??= store.flushFinalOrThrowAsync()),
     dispose: async () => {
       runtime.setNotifier(null)
-      runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
+      await runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
       if (finalFlush) {
         await finalFlush
       } else {

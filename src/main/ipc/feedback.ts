@@ -6,7 +6,7 @@ import type {
   FeedbackRequestFailure,
   FeedbackSubmitArgs,
   FeedbackSubmitResult
-} from '../../shared/feedback-submit-contract'
+} from '../../shared/feedback/feedback-submit-contract'
 import {
   errorFailure,
   FEEDBACK_API_URL,

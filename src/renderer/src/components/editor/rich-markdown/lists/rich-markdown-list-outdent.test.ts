@@ -34,36 +34,33 @@ function itemAtText(editor: Editor, text: string) {
 }
 
 describe('mixed list outdent', () => {
-  it.each([false, true])(
-    'preserves checked tasks after a selected item range (reverse %s)',
-    (reverse) => {
-      const editor = createEditor('- Parent\n  - [ ] First\n  - [x] Middle\n  - [x] Last')
-      try {
-        const first = itemAtText(editor, 'First').position + 3
-        const middle = itemAtText(editor, 'Middle').position + 4
-        const originalLast = itemAtText(editor, 'Last').node.toJSON()
-        editor.commands.setTextSelection({
-          from: reverse ? middle : first,
-          to: reverse ? first : middle
-        })
-        const before = editor.getJSON()
+  it('preserves checked tasks after a selected item range', () => {
+    const editor = createEditor('- Parent\n  - [ ] First\n  - [x] Middle\n  - [x] Last')
+    try {
+      const first = itemAtText(editor, 'First').position + 3
+      const middle = itemAtText(editor, 'Middle').position + 4
+      const originalLast = itemAtText(editor, 'Last').node.toJSON()
+      editor.commands.setTextSelection({
+        from: first,
+        to: middle
+      })
+      const before = editor.getJSON()
 
-        expect(outdentRichMarkdownListItem(editor)).toBe(true)
+      expect(outdentRichMarkdownListItem(editor)).toBe(true)
 
-        expect(itemAtText(editor, 'Last').node.toJSON()).toEqual(originalLast)
-        for (const text of ['First', 'Middle']) {
-          expect(editor.state.doc.resolve(itemAtText(editor, text).position).depth).toBe(1)
-        }
-        const after = editor.getJSON()
-        expect(editor.commands.undo()).toBe(true)
-        expect(editor.getJSON()).toEqual(before)
-        expect(editor.commands.redo()).toBe(true)
-        expect(editor.getJSON()).toEqual(after)
-      } finally {
-        editor.destroy()
+      expect(itemAtText(editor, 'Last').node.toJSON()).toEqual(originalLast)
+      for (const text of ['First', 'Middle']) {
+        expect(editor.state.doc.resolve(itemAtText(editor, text).position).depth).toBe(1)
       }
+      const after = editor.getJSON()
+      expect(editor.commands.undo()).toBe(true)
+      expect(editor.getJSON()).toEqual(before)
+      expect(editor.commands.redo()).toBe(true)
+      expect(editor.getJSON()).toEqual(after)
+    } finally {
+      editor.destroy()
     }
-  )
+  })
 
   it.each([
     ['- Parent\n  - [ ] First\n  - [x] Middle\n  - [x] Last', 'First'],

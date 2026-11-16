@@ -1,7 +1,7 @@
 import { join, resolve } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../../../persistence/loading-store/store'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
 
 const mocks = vi.hoisted(() => ({ graph: vi.fn(), runtimes: vi.fn(), realpath: vi.fn() }))

@@ -17,7 +17,7 @@ import type { NativeChatMessage } from '../../native-chat/native-chat-types'
 import {
   isQuestionNeutralAgentJournalItem,
   sameQuestionTurnBoundary
-} from '../../structured-agent-question-projection'
+} from '../../native-chat/transcript/messages/structured-agent-question-projection'
 import { projectStructuredItemsToNativeChat } from './structured-agent-session-projection'
 import {
   projectStructuredAgentSessionMessageRows,

@@ -24,22 +24,22 @@ export function mergeSystemCodexConfigIntoRuntime(
   const runtimeSections = deduplicateProjectTomlSections(getTomlSections(runtimeConfig))
   const runtimeProjectHeaders = new Set(
     runtimeSections
-      .filter((section) => isRuntimeProjectTomlSection(section.header))
-      .map((section) => getTomlSectionHeaderKey(section.header))
+      .filter((section) => isRuntimeProjectTomlSection(section))
+      .map((section) => getTomlSectionHeaderKey(section))
   )
   const systemProjectSections = deduplicateProjectTomlSections(
     getTomlSections(systemConfig)
-  ).filter((section) => isRuntimeProjectTomlSection(section.header))
+  ).filter((section) => isRuntimeProjectTomlSection(section))
   const systemUntrustedProjectHeaders = new Set(
     systemProjectSections
       .filter((section) => getProjectTrustLevel(section.block) === 'untrusted')
-      .map((section) => getRevocationTomlSectionHeaderKey(section.header))
+      .map((section) => getRevocationTomlSectionHeaderKey(section))
   )
   // Exact-cased re-grants must override legacy case-drifted revocations or each mirror reverts trust.
   const systemTrustedProjectHeaders = new Set(
     systemProjectSections
       .filter((section) => getProjectTrustLevel(section.block) === 'trusted')
-      .map((section) => getTomlSectionHeaderKey(section.header))
+      .map((section) => getTomlSectionHeaderKey(section))
   )
   const systemMcpServers = readMcpServerTomlOwnership(systemConfig)
   // Mirror ordinary settings while retaining runtime trust, subject to explicit system project revocations.
@@ -50,10 +50,10 @@ export function mergeSystemCodexConfigIntoRuntime(
     }),
     ...runtimeSections
       .filter((section) => {
-        if (isRuntimePreservedTomlSection(section.header)) {
+        if (isRuntimePreservedTomlSection(section)) {
           return true
         }
-        const mcpServerName = getMcpServerTomlSectionName(section.header)
+        const mcpServerName = getMcpServerTomlSectionName(section)
         return (
           mcpServerName !== null &&
           !systemMcpServers.ownsRoot &&
@@ -64,9 +64,9 @@ export function mergeSystemCodexConfigIntoRuntime(
       })
       .filter(
         (section) =>
-          !isRuntimeProjectTomlSection(section.header) ||
-          !systemUntrustedProjectHeaders.has(getRevocationTomlSectionHeaderKey(section.header)) ||
-          systemTrustedProjectHeaders.has(getTomlSectionHeaderKey(section.header))
+          !isRuntimeProjectTomlSection(section) ||
+          !systemUntrustedProjectHeaders.has(getRevocationTomlSectionHeaderKey(section)) ||
+          systemTrustedProjectHeaders.has(getTomlSectionHeaderKey(section))
       )
       .map((section) => section.block)
   ])

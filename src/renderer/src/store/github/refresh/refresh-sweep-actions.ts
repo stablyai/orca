@@ -2,14 +2,13 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { GitHubSlice } from '../github-slice-contract'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
+import { getWorktreeGitHubIssueRepository } from '../../../../../shared/worktree/github-issue-repository'
 import { buildPRRefreshCandidate, findWorktreeReviewOwner } from './worktree-refresh'
-import { getGitHubRepoLookupIndex } from '../repositories/github-repo-lookup-index'
 import { issueCacheKey } from '../cache/cache-identity'
-import { CACHE_TTL, evictStaleEntries } from '../cache/cache-policy'
+import { evictStaleEntries } from '../cache/cache-policy'
 import { pruneExpiredPRRefreshStates } from './pr-refresh-state'
 import { pruneExpiredPRRefreshStartedEntries } from '../pull-requests/pr-result-cache'
 import { settingsForGitHubRepoOwner } from '../work-items/work-item-routing'
-import { selectWorktreesByRepo } from '../../workspaces/catalog/workspace-record-fields'
 
 export const createRefreshSweepActions = (
   set: Parameters<StateCreator<AppState>>[0],
@@ -41,40 +40,7 @@ export const createRefreshSweepActions = (
     })
 
     // Why: don't prune prRequestGenerations here — deleting a live generation makes its response look stale.
-
-    const state = get()
-    if (!(state.worktreeCardProperties ?? []).includes('issue')) {
-      return
-    }
-
-    const now = Date.now()
-    const repoLookup = getGitHubRepoLookupIndex(state.repos)
-
-    for (const worktrees of Object.values(selectWorktreesByRepo(state))) {
-      for (const wt of worktrees) {
-        const repo = repoLookup.findById(wt.repoId)
-        if (!repo) {
-          continue
-        }
-
-        if (wt.linkedIssue) {
-          const ownerSettings = settingsForGitHubRepoOwner(state.settings, repo)
-          const issueKey = issueCacheKey(
-            repo.path,
-            repo.id,
-            wt.linkedIssue,
-            ownerSettings,
-            repo.connectionId,
-            repo.executionHostId,
-            true
-          )
-          const issueEntry = state.issueCache[issueKey]
-          if (!issueEntry || now - issueEntry.fetchedAt >= CACHE_TTL) {
-            void get().fetchIssue(repo.path, wt.linkedIssue, { repoId: repo.id })
-          }
-        }
-      }
-    }
+    // Each surface that shows a linked issue refreshes it on reveal; no catalog-wide issue reads here.
   },
 
   refreshGitHubForWorktree: (worktreeId, executionHostId) => {
@@ -92,6 +58,7 @@ export const createRefreshSweepActions = (
 
     const branch = candidate.branch
     const ownerSettings = settingsForGitHubRepoOwner(state.settings, repo)
+    const ownerRepo = getWorktreeGitHubIssueRepository(worktree)
     const prKey = candidate.cacheKey
     const issueKey = worktree.linkedIssue
       ? issueCacheKey(
@@ -101,7 +68,8 @@ export const createRefreshSweepActions = (
           ownerSettings,
           repo.connectionId,
           repo.executionHostId,
-          true
+          true,
+          ownerRepo
         )
       : ''
 
@@ -123,7 +91,7 @@ export const createRefreshSweepActions = (
       get().enqueueGitHubPRRefresh(worktreeId, 'post-push', 100, ownerHostId)
     }
     if ((state.worktreeCardProperties ?? []).includes('issue') && worktree.linkedIssue) {
-      void get().fetchIssue(repo.path, worktree.linkedIssue, { repoId: repo.id })
+      void get().fetchIssue(repo.path, worktree.linkedIssue, { repoId: repo.id, ownerRepo })
     }
   }
 })

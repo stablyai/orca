@@ -7,7 +7,7 @@ import {
   useQueryClient,
   type QueryObserverResult
 } from '@tanstack/react-query'
-import { warmUpWebShell } from '../../modules/orca-mobile-web-shell/src'
+import { warmUpWebShell } from '../../modules/orca-mobile-web-shell/src/index'
 import {
   countAgentsNeedingYouByHost,
   selectActiveAgents,
@@ -16,12 +16,12 @@ import {
 } from '../agents/agent-list-rows'
 import { useAgentActivityWrites } from '../agents/use-agent-activity-writes'
 import { accountsSnapshotOptions } from '../accounts/accounts-snapshot-stream'
-import type { AccountsSnapshot } from '../components/AccountUsage'
+import type { AccountsSnapshot } from '../accounts/accounts-snapshot'
 import {
   HOST_LIST_TARGET,
   homeWorktreeCountsKey,
   NO_HOST_LIST_INPUT
-} from '../host-screen/host-list-queries'
+} from '../host-screen/catalog/host-list-queries'
 import { useNow } from '../hooks/use-now'
 import {
   loadMobileOnboardingSteps,
@@ -39,8 +39,8 @@ import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   homeWorktreeCountsQuery,
   type HomeWorktreeCounts
-} from '../worktree/home-host-worktree-fetch'
-import { homeWorktreeInfo, type HostWorktreeInfo } from '../worktree/home-worktree-info'
+} from '../worktree/catalog/home-host-worktree-fetch'
+import { homeWorktreeInfo, type HostWorktreeInfo } from '../worktree/catalog/home-worktree-info'
 import { homeStatsQuery } from '../stats/home-stats-summary-read'
 import { totalHomeStats, type HomeStatsRow } from '../stats/home-stats-total'
 import { projectHomeHostConnections } from './home-host-connection-projection'

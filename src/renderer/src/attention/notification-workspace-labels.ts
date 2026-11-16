@@ -5,7 +5,7 @@ import {
   worktreeHostMatchOptions,
   worktreeMatchesHost
 } from '../store/slices/worktrees/listing/worktree-host-ownership'
-import { getResolvedExecutionHostIdForWorktree } from '../lib/resolved-worktree-execution-host'
+import { getResolvedExecutionHostIdForWorktree } from '../lib/workspace/ownership/resolved-worktree-execution-host'
 import { getActiveWorkspaceExecutionHostId } from '../lib/workspace/ownership/active-workspace-host'
 import {
   findIndexedFolderWorkspaceOwner,
@@ -17,9 +17,9 @@ import {
 } from '../lib/workspace/ownership/repo-owner-index'
 import '../lib/workspace/ownership/workspace-catalog-owner-index'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import {
   selectFolderWorkspaces,
   selectWorktreesByRepo

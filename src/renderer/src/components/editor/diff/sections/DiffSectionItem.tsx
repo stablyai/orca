@@ -10,7 +10,10 @@ import { useDiffCommentDecorator } from '../../../diff-comments/useDiffCommentDe
 import { applyDiffEditorLineNumberOptions } from '../monaco-view/diff-editor-line-number-options'
 import { DiffSectionHeader } from './DiffSectionHeader'
 import { isDiffComment } from '@/lib/source-control/review/comments/diff-comment-compat'
-import { installEditorSaveShortcut, installMonacoEditorFindShortcut } from '../../editor-shortcuts'
+import {
+  installEditorSaveShortcut,
+  installMonacoEditorFindShortcut
+} from '../../commands/editor-shortcuts'
 import { DiffSectionBody } from './DiffSectionBody'
 import { useDiffSectionLayoutMetrics } from './useDiffSectionLayoutMetrics'
 import { getLiveDiffSectionRenderLimit } from './diff-section-live-render-limit'

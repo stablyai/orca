@@ -1,3 +1,4 @@
+import { useAgentStatus } from '@/runtime/agent-status/use-agent-status'
 import { Fragment, useLayoutEffect, useRef, useState } from 'react'
 import { Folder, GitBranch } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
@@ -13,9 +14,9 @@ import {
 import {
   resolveWorktreeBranchLabel,
   resolveWorktreeDisplayName
-} from '@/lib/worktree-default-display-name'
+} from '@/lib/workspace/display/worktree-default-display-name'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
-import { useAppStore } from '../store'
+import { useAppStore } from '../store/index'
 import { ResumeTreeRow } from './native-chat-recovery/tree/NativeChatResumeTreeRow'
 import {
   resumeSelectionState,
@@ -274,7 +275,7 @@ function SessionRow({
     )
     return tab?.customTitle || tab?.title || ''
   })
-  const lastPrompt = useAppStore((store) => store.agentStatusByPaneKey[paneKey]?.prompt?.trim())
+  const lastPrompt = useAgentStatus(paneKey)?.prompt?.trim()
   const busy = useAppStore((store) => isClaudePaneMidTurn(store, paneKey))
   const title =
     lastPrompt || tabTitle || t('accounts.claude.switchSessions.session', 'Claude session')

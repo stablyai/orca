@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
-import type { CodexAccountAddTarget, CodexAccountService } from '../codex-accounts/service'
-import type { CodexAccountSelectionTarget } from '../codex-accounts/runtime-selection'
+import type { CodexAccountService } from '../codex-accounts/service'
+import type { CodexAccountAddTarget } from '../codex-accounts/account-management/codex-account-service-types'
+import type { CodexAccountSelectionTarget } from '../../shared/agent-accounts/codex/codex-selection-lane'
 import { broadcastCodexPendingLoginUrl } from './codex-pending-login-url-broadcast'
 import { openAccountSignInLink } from './account-sign-in-link-opener'
 import { listRecordedCodexPaneLanes } from '../codex/configuration/homes/codex-pane-account-registry'
@@ -56,6 +57,11 @@ export function registerCodexAccountHandlers(
   )
   ipcMain.handle('codexAccounts:remove', (_event, args: { accountId: string }) =>
     codexAccounts.removeAccount(args.accountId)
+  )
+  ipcMain.handle(
+    'codexAccounts:rename',
+    (_event, args: { accountId: string; displayName: string | null }) =>
+      codexAccounts.renameAccount(args.accountId, args.displayName)
   )
   ipcMain.handle(
     'codexAccounts:select',

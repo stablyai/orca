@@ -5,7 +5,7 @@ import type {
   TabContentType,
   TabGroup,
   WorkspaceVisibleTabType
-} from '../../../../../../shared/tab-types'
+} from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { PaneForegroundAgentEntry } from '@/store/slices/agent-status/pane-foreground-agent'
 import type {
   TerminalLayoutSnapshot,
@@ -49,8 +49,6 @@ export type SearchableWorkspaceTab = {
 // Keep terminal type aliases searchable but undisplayed; icons already communicate type.
 export const TERMINAL_TYPE_SEARCH_ALIASES = ['terminal tab', 'terminal'] as const
 
-type WorkspaceTabPaletteActiveTabType = WorkspaceVisibleTabType
-
 export type BuildSearchableWorkspaceTabsOptions = WorkspaceTabAgentMetadataState & {
   worktrees: readonly Worktree[]
   ownershipWorktrees?: readonly Pick<Worktree, 'id'>[]
@@ -64,12 +62,12 @@ export type BuildSearchableWorkspaceTabsOptions = WorkspaceTabAgentMetadataState
   groupsByWorktree: Record<string, readonly TabGroup[] | undefined>
   activeWorktreeId: string | null
   activeWorkspaceExecutionHostId?: ExecutionHostId | null
-  activeTabType: WorkspaceTabPaletteActiveTabType
+  activeTabType: WorkspaceVisibleTabType
   activeTabId: string | null
   activeTabIdByWorktree: Record<string, string | null | undefined>
   activeFileId: string | null
   activeFileIdByWorktree: Record<string, string | null | undefined>
-  activeTabTypeByWorktree: Record<string, WorkspaceTabPaletteActiveTabType | undefined>
+  activeTabTypeByWorktree: Record<string, WorkspaceVisibleTabType | undefined>
   generatedTitlesEnabled: boolean
   /** Chat names as the tab strip shows them, so a renamed chat is found by its new name. */
   chatNames: StructuredChatTabNames

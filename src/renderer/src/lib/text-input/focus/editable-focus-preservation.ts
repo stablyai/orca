@@ -1,3 +1,15 @@
+const SIDEBAR_LIST_KEYBOARD_NAVIGATION = '[data-worktree-sidebar][data-keyboard-navigation]'
+
+/** An explicit pane focus request (CLI, notification, agent row) outranks sidebar list navigation. */
+export function endSidebarListKeyboardNavigation(): void {
+  if (typeof document === 'undefined') {
+    return
+  }
+  document
+    .querySelector(SIDEBAR_LIST_KEYBOARD_NAVIGATION)
+    ?.removeAttribute('data-keyboard-navigation')
+}
+
 export function shouldPreserveEditableFocus(element: Element | null): boolean {
   if (!(element instanceof HTMLElement)) {
     return false
@@ -11,6 +23,7 @@ export function shouldPreserveEditableFocus(element: Element | null): boolean {
   }
   // Deferred layout maintenance must not steal focus from rename or settings edits.
   return (
+    element.matches(SIDEBAR_LIST_KEYBOARD_NAVIGATION) ||
     element.isContentEditable ||
     element.tagName === 'INPUT' ||
     element.tagName === 'TEXTAREA' ||

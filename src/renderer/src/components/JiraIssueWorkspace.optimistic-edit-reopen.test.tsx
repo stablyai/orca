@@ -17,7 +17,7 @@ import {
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import type { JiraIssue } from '../../../shared/jira/jira-types'
-import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 describe('JiraIssueWorkspace reopened issue edits', () => {
   it('keeps a newer reopened-issue edit when an earlier refresh returns late', async () => {

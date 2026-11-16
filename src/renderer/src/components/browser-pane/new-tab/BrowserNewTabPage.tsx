@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { Globe } from 'lucide-react'
 import { toast } from 'sonner'
 import { useTranslate } from '@/i18n/use-translate'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { useRepoById } from '@/store/repos/use-repository-catalog'
 import { useWorktreeById } from '@/store/workspaces/selection/use-selected-worktree'
 import {
@@ -10,18 +10,18 @@ import {
   rankBrowserTopSites
 } from '@/lib/browser/history/browser-history-match'
 import { BrowserFavicon } from '@/components/browser-favicon'
-import type { BrowserHistoryEntry } from '../../../../../shared/browser-workspace-types'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { BrowserHistoryEntry } from '../../../../../shared/browser/workspaces/browser-workspace-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import type { WorkspaceLinkedItemRow } from '../../sidebar/workspace-card/review/workspace-hover-attachments'
 import { BrowserNewTabTile } from './browser-new-tab-tile'
 import { useBrowserNewTabLinkedItems } from './use-browser-new-tab-linked-items'
 import { useBrowserNewTabServers, type BrowserNewTabServers } from './use-browser-new-tab-servers'
 import { BrowserNewTabWorkspaceCard } from './browser-new-tab-workspace-card'
-import { BrowserImportHintButton } from '../assemble-chrome/BrowserImportHintButton'
-import { resolveWorktreeDisplayName } from '@/lib/worktree-default-display-name'
+import { BrowserImportHintButton } from '../assemble-chrome/profile-routing/BrowserImportHintButton'
+import { resolveWorktreeDisplayName } from '@/lib/workspace/display/worktree-default-display-name'
 import { useWorktreeRuntimeTarget } from '@/runtime/rpc/targets/use-worktree-runtime-target'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 const SUGGESTED_TILE_LIMIT = 8
 const NO_LINKED_ITEMS: WorkspaceLinkedItemRow[] = []

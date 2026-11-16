@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { RuntimeAccessGrant } from '../../../../../../shared/runtime-access-grants'
+import type { RuntimeAccessGrant } from '../../../../../../shared/remote-runtime/host-catalog/runtime-access-grants'
 import { usePairingOfferExpiry } from '../../../mobile/use-pairing-offer-expiry'
 
 export type RuntimePairingLinkExpiry = { kind: 'expires'; at: number } | { kind: 'expired' } | null

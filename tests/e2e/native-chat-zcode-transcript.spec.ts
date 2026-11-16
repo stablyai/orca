@@ -81,7 +81,7 @@ test('ZCode native chat reads ordered visible history and follows new messages',
     await expect
       .poll(() =>
         orcaPage.evaluate(
-          (paneKey) => window.__store?.getState().agentStatusByPaneKey[paneKey]?.agentType,
+          (paneKey) => window.__store?.getState().agentStatusByPaneKey.get(paneKey)?.agentType,
           descriptor.paneKey
         )
       )

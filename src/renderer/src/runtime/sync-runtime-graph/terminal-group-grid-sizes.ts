@@ -1,8 +1,8 @@
 import {
   terminalGridSizeForBox,
   type TerminalFitMetrics
-} from '@/lib/pane-manager/terminal-grid-size-for-box'
-import { readTerminalStableCellSize } from '@/lib/pane-manager/terminal-stable-cell-fit-addon'
+} from '@/lib/pane-manager/terminal-fit/terminal-grid-size-for-box'
+import { readTerminalStableCellSize } from '@/lib/pane-manager/terminal-fit/terminal-stable-cell-fit-addon'
 import { mountedTerminalTabEntries } from '../hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 
 type GridSize = { cols: number; rows: number }

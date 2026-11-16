@@ -3,8 +3,8 @@ import {
   notificationExecutionHostForOwner,
   notificationWorkspaceExecutionHostForOwner,
   notificationSourceForOwner
-} from '../../../../../../shared/notification-source'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+} from '../../../../../../shared/notifications/notification-source'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { resolveNotificationTabOwner } from '@/attention/notification-subject-owner'
 import type {
   AgentSessionPromptAttention,
@@ -25,6 +25,7 @@ import {
   readAgentAttentionNotificationSound
 } from '@/attention/agent-attention-notification-delivery'
 import { useAppStore } from '@/store'
+import { isWorktreeNotificationDeliveryMuted } from '@/attention/worktree-notification-mute'
 import { canonicalOrchestrationForRow } from '@/runtime/agent-orchestration/visible-agent-orchestration'
 import { isCoordinatorOnlyChatNews } from '../../../../../../shared/orchestration/workers/dispatched-worker-attention'
 import { getNotificationWorkspaceLabels } from '../../../../attention/notification-workspace-labels'
@@ -93,13 +94,17 @@ function dispatchStructuredAttention(
   if (!decision.admitted) {
     return
   }
-  const row = state.agentStatusByPaneKey[paneKey]
+  const row = state.agentStatusByPaneKey.get(paneKey)
   const sound = readAgentAttentionNotificationSound(state.settings ?? {})
   applyAgentAttention(decision, {
     unread: state.markAgentAttentionUnread,
     requestDelivery: (request) => {
       // Unread writes can synchronously cause a genuine read before delivery.
       if (promptWasRead()) {
+        return
+      }
+      // Per-worktree mute keeps the unread writes above but drops the interruption.
+      if (isWorktreeNotificationDeliveryMuted(useAppStore.getState(), request.workspaceId)) {
         return
       }
       // The receiving subscription identifies the paired source even when tab ownership is ambiguous.

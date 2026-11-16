@@ -1,10 +1,10 @@
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import type { OrchestrationSessionCaller } from '../addressing/orchestration-caller-identity'
+import type { OrchestrationEntryCaller } from '../addressing/orchestration-caller-identity'
 import { OrchestrationError } from '../orchestration-error'
 import { readCallerStoreInstallationId } from '../../hosts/platform-probe/host-descriptor'
 import { getCanonicalUserDataPath } from '../../../persistence/loading-store/user-data-path'
 import type { CrossStoreParentRef } from '../../../../shared/worktree/lineage-types'
-import { supportsCrossStoreLineage } from '../../../../shared/worktree-runtime-capabilities'
+import { supportsCrossStoreLineage } from '../../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import { resolveDispatchCallerWorktreeId } from '../../rpc/methods/orchestration/orchestration-caller-workspace'
 
 /**
@@ -22,7 +22,7 @@ export async function resolveFederatedChildParent(args: {
     | 'getRuntimeId'
   >
   from: string
-  callerSession: OrchestrationSessionCaller | undefined
+  callerSession: OrchestrationEntryCaller | undefined
   serverCapabilities: readonly string[] | undefined
   serverName: string
 }): Promise<

@@ -17,6 +17,7 @@ import {
   sessionTabsInventoryOmissionsByWorktree,
   hostSessionTabIdByLocalKey,
   hostSessionTabMappingKeysByEnvironmentAndWorktree,
+  markHostSessionTabMappingsChanged,
   hostWorkingClientBoundaryByPaneKey,
   resetReceivedSessionTabsFrameSequence,
   sessionTabsFreshnessKey
@@ -53,10 +54,9 @@ import {
   clearWebSessionTerminalPlacementsForEnvironment
 } from '../hosted-terminals/placement/web-session-terminal-placement'
 import { clearHostSessionMirrorHydration } from './hydration/host-session-mirror-hydration'
-import { clearHostMirrorHandleGapVerdictsForEnvironment } from '@/lib/host-mirror-handle-gap-wait'
+import { clearHostMirrorHandleGapVerdictsForEnvironment } from '@/lib/agent-session/resume/host-mirror-handle-gap-wait'
 import { createBoundedGenerationMap } from '@/lib/bounded-generation-map'
 import { clearHostSessionTabIdMappings } from './tracking-mappings'
-
 import { untrackWebSessionTabsWorktree, removeWebSessionTabsEnvironment } from './tracking'
 
 const sessionTabsTrackingGenerations = createBoundedGenerationMap(512)
@@ -98,6 +98,7 @@ export function resetWebSessionTabsSnapshotFreshnessForTests(): void {
   sessionTabsInventoryOmissionsByWorktree.clear()
   hostSessionTabIdByLocalKey.clear()
   hostSessionTabMappingKeysByEnvironmentAndWorktree.clear()
+  markHostSessionTabMappingsChanged()
   hostWorkingClientBoundaryByPaneKey.clear()
   sessionTabsTrackingGenerations.reset()
   resetWebSessionBrowserPlacementsForTests()
@@ -217,6 +218,7 @@ export function clearWebSessionTabsTrackingForEnvironment(environmentId: string)
       }
     }
     hostSessionTabMappingKeysByEnvironmentAndWorktree.delete(trimmedEnvironmentId)
+    markHostSessionTabMappingsChanged()
   }
   clearWebAgentSessionHandoffsForEnvironment(trimmedEnvironmentId)
   clearWebSessionBrowserPlacementsForEnvironment(trimmedEnvironmentId)

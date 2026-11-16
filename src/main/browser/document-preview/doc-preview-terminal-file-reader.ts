@@ -1,6 +1,6 @@
 import type { RuntimeFilePreviewResult } from '../../../shared/file-content/runtime-file-read'
-import { callRuntimeEnvironment } from '../../ipc/runtime-environments/runtime-environment-transport-routing'
-import { getRuntimeEnvironmentRegistryRoot } from '../../ipc/runtime-environments/runtime-environment-registry-root'
+import { callRuntimeEnvironment } from '../../ipc/runtime-environments/requests/runtime-environment-transport-routing'
+import { getRuntimeEnvironmentRegistryRoot } from '../../ipc/runtime-environments/catalog/runtime-environment-registry-root'
 import {
   resolveCanonicalDocPreviewPath,
   resolveDocPreviewAuthorityPaths,
@@ -41,7 +41,7 @@ export async function readDocPreviewTerminalFile(
     throw new Error('Not found')
   }
   const root = getRuntimeEnvironmentRegistryRoot()
-  const environment = resolveEnvironment(root, owner.environmentId)
+  const environment = await resolveEnvironment(root, owner.environmentId)
   const revision = environment.pairingRevision ?? environment.createdAt
   const call = async (method: string, params: unknown): Promise<unknown> => {
     const response = await callRuntimeEnvironment(

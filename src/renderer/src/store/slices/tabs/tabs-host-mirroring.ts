@@ -2,7 +2,7 @@ import type { AppState } from '../../types'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import { findTabAndWorktree } from './tab-group-state'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
-import { locateTerminalTab } from '../../terminals/terminal-tab-location'
+import { locateTerminalTab } from '../../terminals/ownership/terminal-tab-location'
 import { replaceTabBuckets } from '../../keyed-record-transitions'
 
 /** Mirror host-tracked fields onto terminal rows: reconciliation derives unified fields there and recovery reads row ownership, so unified-only writes revert or remount hidden chat. */

@@ -3,19 +3,23 @@ import {
   applyTerminalPaneAttentionToManager,
   subscribeTerminalPaneAttention
 } from './terminal-pane-attention-subscriptions'
-import type { TerminalPaneCloseController } from '../layout/close/use-terminal-pane-close-actions'
+import type { TerminalPaneMountedController } from '../mounting/use-terminal-pane-lifecycle-stage'
 
 export function useTerminalPaneAttention({
   managerRef,
+  terminalManager,
   paneCount,
   tabId
-}: Pick<TerminalPaneCloseController, 'managerRef' | 'paneCount' | 'tabId'>): void {
+}: Pick<
+  TerminalPaneMountedController,
+  'managerRef' | 'terminalManager' | 'paneCount' | 'tabId'
+>): void {
   const applyTerminalPaneAttention = useCallback(() => {
     const manager = managerRef.current
-    if (manager) {
+    if (terminalManager && manager === terminalManager) {
       applyTerminalPaneAttentionToManager(manager, tabId)
     }
-  }, [tabId, managerRef])
+  }, [tabId, managerRef, terminalManager])
   useLayoutEffect(() => {
     applyTerminalPaneAttention()
     return subscribeTerminalPaneAttention(tabId, applyTerminalPaneAttention)

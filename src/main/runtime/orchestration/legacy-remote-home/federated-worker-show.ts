@@ -1,6 +1,6 @@
 import type { OrchestrationFleetWorker } from '../../../../shared/orchestration/fleet/orchestration-fleet-projection'
 import type { OrchestrationDb } from '../db/orchestration-db'
-import { exposeDispatchContext } from '../../rpc/methods/orchestration/worker/dispatch-context-exposure'
+import { exposeDispatchContext } from '../../rpc/methods/orchestration/worker/observation/dispatch-context-exposure'
 import { OrchestrationError } from '../orchestration-error'
 import { liveFederatedHomeAutoReleaseAt } from '../terminal-authority/release/worker-terminal-ownership'
 import type { DispatchContextRow, FederatedDispatchRow } from '../db/orchestration-records'
@@ -10,8 +10,8 @@ import {
   exposeFederatedWorkerObservation,
   exposeWorker,
   projectFleetWorkerPage
-} from '../../rpc/methods/orchestration/worker/worker-observation'
-import { resolvePinnedFederatedServer } from '../../rpc/methods/orchestration/worker/pinned-federated-server'
+} from '../../rpc/methods/orchestration/worker/observation/worker-observation'
+import { resolvePinnedFederatedServer } from './pinned-federated-server'
 import { applyFederatedFleetObservations } from './federated-fleet-snapshot'
 import { applyConfirmedFederatedReleaseHomeProjection } from './federated-worker-release'
 
@@ -76,7 +76,7 @@ export async function showFederatedWorker(args: {
       `Federated Worker Dispatch ${dispatchId} has no observation projection.`
     )
   }
-  const server = resolvePinnedFederatedServer(runtime, args.federated)
+  const server = await resolvePinnedFederatedServer(runtime, args.federated)
   runtime.ensureOrchestrationFederationRelay(args.dispatch.run_id)
   const remote = await callFederatedWorkerShow(runtime, args.federated)
   const attachment = remote.attachment

@@ -47,3 +47,10 @@ export function FolderPathStatusIndicator({
     </Tooltip>
   )
 }
+
+export function isFolderWorkspaceCreateDisabled(status: FolderWorkspacePathStatus | null): boolean {
+  return (
+    status?.exists === false &&
+    (isConfirmedStaleFolderPathStatus(status) || status.reason === 'ambiguous-connection')
+  )
+}

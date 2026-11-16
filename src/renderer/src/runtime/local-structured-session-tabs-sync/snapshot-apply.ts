@@ -1,7 +1,7 @@
 import type {
   RuntimeMobileSessionTabsRemovedResult,
   RuntimeMobileSessionTabsResult
-} from '../../../../shared/runtime-types'
+} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { markStructuredAgentSessionLaunchesPublished } from '../../lib/agent-session/launch/structured-agent-session-launch-publication'
 import type { WorktreeRuntimeOwnerState } from '../../lib/workspace/ownership/worktree-runtime-owner-state'
 import { getExecutionHostIdForWorktree } from '../../lib/workspace/ownership/worktree-runtime-owner'
@@ -30,11 +30,11 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import {
   beginStructuredAgentSessionAuthoritativeInventory,
   startStructuredAgentLaunchCancellationCleanup
-} from '../../lib/launch-cancel-tombstones-compat/structured-agent-session-launch-cancellation'
+} from '../../lib/agent-session/launch/structured-agent-session-launch-cancellation'
 import { suppressCancelledStructuredSessionTabs } from '../native-chat/tab-retirement/structured-agent-session-tab-retirement'
 import { LOCAL_STRUCTURED_SESSION_OWNER } from '../native-chat/local-sessions/local-structured-session-owner'
 import { closeStructuredAgentSession } from '../native-chat/requests/structured-agent-session-close'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 import { useAppStore } from '../../store'
 import { framesDrawWorkspace } from '../workspace-layout/frames/workspace-layout-frame-drawn-workspaces'
 import { drawnChatLabelChanges, type DrawnChatLabel } from './frame-drawn-chat-tabs'

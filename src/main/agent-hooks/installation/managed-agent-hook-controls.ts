@@ -5,14 +5,14 @@ import type {
 import {
   getManagedAgentHookTarget,
   isManagedAgentHookTarget
-} from '../../../shared/managed-agent-hook-targets'
+} from '../../../shared/agent-hook-listener/configuration/managed-agent-hook-targets'
 import { normalizeDisabledTuiAgents } from '../../../shared/agent-launch/catalog/tui-agent-selection'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import {
   isAgentStatusHooksEnabled,
   isAgentStatusHooksEnabledForAgent
 } from '../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
-import { probeClaudeCliVersion } from '../../claude/claude-hook-event-versions'
+import { probeClaudeCliVersion } from '../../claude/cli-capabilities/claude-hook-event-versions'
 import { detectLocalManagedAgentCliPresence } from './local-agent-cli-presence'
 import {
   MANAGED_AGENT_HOOK_ASYNC_REMOVERS,

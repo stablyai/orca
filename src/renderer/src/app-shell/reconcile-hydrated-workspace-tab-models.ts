@@ -1,5 +1,5 @@
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 import { showStartupLayoutFrames } from '../runtime/workspace-layout/frames/workspace-layout-frame-sync'
 import { showServerLayoutFrames } from '../runtime/workspace-layout/server/server-layout-frames'
 import { followSleepingRecordsInLayoutOwner } from '../runtime/workspace-layout/sleep-records/sleeping-records-to-layout-owner'

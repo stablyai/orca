@@ -4,7 +4,7 @@ import type {
   RuntimeLeafRecord,
   RuntimePtyTitleTrackerEntry
 } from '../records/runtime-terminal-state-records'
-import type { RuntimeSyncedLeaf } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeSyncedLeaf } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { OrcaRuntimeWithPreparePtyExecutionContext } from '../launch/terminal-execution-context'
 import { advertisedUrlWatcher } from '../../../ports/advertised-url-watcher'
 import { appendNormalizedToTailBuffer } from './tail/terminal-tail-buffer'
@@ -19,7 +19,7 @@ import {
   computeTerminalTailWaitState,
   tailGainedNewerBlockedReason
 } from '../wait/terminal-wait-tail-state'
-import { extractOscTitleScanTail } from '../../../../shared/osc-title-scan-tail'
+import { extractOscTitleScanTail } from '../../../../shared/agent-status/title/osc-title-scan-tail'
 
 export abstract class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecutionContext {
   protected abstract recordOsc7MetadataForPty(

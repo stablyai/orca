@@ -1,20 +1,21 @@
-import type { EditorGet, EditorSet } from '../types/editor-set-get'
-import type { EditorSlice } from '../types/editor-slice'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
-import { openHttpLink, type HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
+import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 import { getConnectionIdForFileFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import {
   isLocalPathOpenBlocked,
   showLocalPathOpenBlockedToast
 } from '@/lib/files/os-open/local-path-open-guard'
-import { getLinkSourceLocalOpenOwner } from '@/lib/link-source-local-open-owner'
+import { getLinkSourceLocalOpenOwner } from '@/lib/links/ownership/link-source-local-open-owner'
+import { openMarkdownExternalUrl } from '@/components/editor/markdown/link-routing/markdown-external-url-open'
 import { resolveMarkdownLinkTarget } from '@/components/editor/markdown/link-routing/markdown-internal-links'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import { statRuntimePath } from '@/runtime/files/metadata/runtime-file-metadata-client'
 import { getOpenedEditFileIdAfterOpen } from '../file-ids/editor-file-ids'
 import { scheduleEditorLineReveal } from '../focus/editor-focus-reveal'
+import type { EditorGet, EditorSet } from '../types/editor-set-get'
+import type { EditorSlice } from '../types/editor-slice'
 
 export function createMarkdownLinkAction(
   _set: EditorSet,
@@ -78,7 +79,12 @@ export function createMarkdownLinkAction(
         return
       }
       if (target.kind === 'external') {
-        openHttpLink(target.url, { worktreeId: ctx.worktreeId, sourceOwner })
+        openMarkdownExternalUrl(target.url, {
+          state: initialState,
+          worktreeId: ctx.worktreeId,
+          sourceOwner,
+          destination: 'orca'
+        })
         return
       }
       if (target.kind === 'file') {

@@ -33,7 +33,7 @@ export { createNameFilteredFileExplorerProjection } from './src/renderer/src/com
             name: 'baseline-dotfile-predicate',
             setup(builder) {
               builder.onResolve({ filter: /^(?:\.\.\/)+shared\/cross-platform-path$/ }, () => ({
-                path: resolve('src/shared/cross-platform-path.ts')
+                path: resolve('src/shared/file-access/cross-platform-path.ts')
               }))
               builder.onLoad({ filter: /file-explorer-entries\.ts$/ }, () => ({
                 contents: baseline,

@@ -12,20 +12,10 @@ import {
   type AgentStartupShell
 } from '../startup/tui-agent-startup-shell'
 import type { TuiAgent } from '../catalog/tui-agent'
+import type { ChoiceOccurrence } from './agent-launch-choices'
 import { agentChoiceConfigString, agentChoiceConfigValue } from './agent-choice-cli-apply'
 
-export type ChoiceOccurrence = {
-  key: string
-  value: string
-  valueType?: 'string' | 'boolean'
-  source?: boolean
-  words: string[]
-  start: number
-  end: number
-  lift: boolean
-  owned: boolean
-  replacement?: string
-}
+export type { ChoiceOccurrence } from './agent-launch-choices'
 
 /** Every cut uses the original spans and preserves operand roles in its consuming grammar. */
 export function analyzeChoiceArgs(
@@ -137,6 +127,10 @@ export function analyzeChoiceArgs(
             (!inline || name.startsWith('--')) &&
             !!value &&
             !value.startsWith('-')
+          if (form.kind === 'value' && form.recognizes?.(value) === false) {
+            valueType = undefined
+            lift = false
+          }
           if (form.kind === 'settings') {
             const effective = effectiveSettings.get(form)
             if (effective?.index !== index || opaqueKeys.has(key)) {

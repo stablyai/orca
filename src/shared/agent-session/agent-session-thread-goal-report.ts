@@ -1,12 +1,26 @@
 import { currentAgentSessionThreadGoal } from './agent-session-thread-goal'
+import type { AgentSessionThreadGoalChange } from './agent-session-thread-goal-wire'
 import type {
   AgentJournalRenderItem,
   AgentJournalThreadGoal
 } from './journal/agent-session-journal-types'
-import type { AgentSessionOptionsResult } from './options/agent-session-options-result'
+import type { AgentSessionOptionsResult } from './options/protocol/agent-session-options-result'
 
 /** What clears a goal only the agent's own /goal changes. */
 export const AGENT_OWNED_THREAD_GOAL_CLEAR_COMMAND = '/goal clear'
+
+/** The message an agent-owned goal change sends; null when the agent's /goal has no such command. */
+export function agentOwnedThreadGoalCommand(
+  change: AgentSessionThreadGoalChange,
+  agentResumes: boolean
+): string | null {
+  if (change.kind === 'clear') {
+    return AGENT_OWNED_THREAD_GOAL_CLEAR_COMMAND
+  }
+  return agentResumes && change.kind === 'status' && change.status === 'active'
+    ? '/goal resume'
+    : null
+}
 
 export type AgentSessionThreadGoalReport = {
   goal: AgentJournalThreadGoal | null

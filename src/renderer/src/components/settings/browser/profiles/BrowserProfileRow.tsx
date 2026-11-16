@@ -4,7 +4,7 @@ import { emitBrowserCookieImportToast } from '@/lib/browser/cookies/browser-cook
 import type {
   BrowserCookieImportSummary,
   BrowserSessionProfile
-} from '../../../../../../shared/browser-workspace-types'
+} from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import { Button } from '../../../ui/button'
 import {
   DropdownMenu,
@@ -17,6 +17,8 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '../../../ui/dropdown-menu'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
+import { useConfirmationDialog } from '../../../confirmation-dialog-context'
 import { BrowserCookieImportDisclosure } from '../../../BrowserCookieImportDisclosure'
 import { BrowserCookieImportMachineNotice } from '../../../BrowserCookieImportMachineNotice'
 import { useAppStore } from '../../../../store/index'
@@ -24,6 +26,7 @@ import '../../../../../../shared/constants'
 import { BROWSER_FAMILY_LABELS } from '../../../../../../shared/browser/browser-family-labels'
 import { useTranslate } from '@/i18n/use-translate'
 import { browserCookieImportFailureText } from '@/lib/browser/cookies/browser-cookie-import-error-copy'
+import { translateBrowserSessionProfileLabel } from '@/lib/browser/profiles/browser-session-profile-label'
 
 type DetectedBrowser = {
   family: string
@@ -57,6 +60,7 @@ export function BrowserProfileRow({
   const t = useTranslate()
   const isImporting = importState?.profileId === profile.id && importState.status === 'importing'
   const fetchDetectedBrowsers = useAppStore((s) => s.fetchDetectedBrowsers)
+  const confirm = useConfirmationDialog()
 
   const handleImportFromBrowser = async (
     browserFamily: string,
@@ -77,7 +81,7 @@ export function BrowserProfileRow({
                 value0: result.summary.importedCookies,
                 value1: browser?.label ?? browserFamily,
                 value2: browserProfile,
-                value3: profile.label
+                value3: translateBrowserSessionProfileLabel(profile.label, profile.id)
               }
             )
           : t(
@@ -86,7 +90,7 @@ export function BrowserProfileRow({
               {
                 value0: result.summary.importedCookies,
                 value1: browser?.label ?? browserFamily,
-                value2: profile.label
+                value2: translateBrowserSessionProfileLabel(profile.label, profile.id)
               }
             ),
         result
@@ -104,12 +108,44 @@ export function BrowserProfileRow({
         t(
           'auto.components.settings.BrowserProfileRow.b4c167764d',
           'Imported {{value0}} cookies from file into {{value1}}.',
-          { value0: result.summary.importedCookies, value1: profile.label }
+          {
+            value0: result.summary.importedCookies,
+            value1: translateBrowserSessionProfileLabel(profile.label, profile.id)
+          }
         ),
         result
       )
     } else if (result.reason !== 'canceled') {
       toast.error(browserCookieImportFailureText(result))
+    }
+  }
+
+  const clearDefaultCookiesLabel = t(
+    'auto.components.settings.BrowserProfileRow.4054c458e1',
+    'Clear default cookies'
+  )
+
+  const handleClearDefaultCookies = async (): Promise<void> => {
+    const confirmed = await confirm({
+      title: t(
+        'auto.components.settings.BrowserProfileRow.3b662becd5',
+        'Clear cookies in the Default profile?'
+      ),
+      description: t(
+        'auto.components.settings.BrowserProfileRow.f159cf5a3e',
+        'This may sign you out of sites in this profile.'
+      ),
+      confirmLabel: t('browser.googleCookieClear.clear', 'Clear'),
+      confirmVariant: 'destructive'
+    })
+    if (!confirmed) {
+      return
+    }
+    const ok = await useAppStore.getState().clearDefaultSessionCookies()
+    if (ok) {
+      toast.success(
+        t('auto.components.settings.BrowserProfileRow.2d4bea7f35', 'Default cookies cleared.')
+      )
     }
   }
 
@@ -137,7 +173,9 @@ export function BrowserProfileRow({
     >
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="truncate text-sm font-medium">{profile.label}</span>
+          <span className="truncate text-sm font-medium">
+            {translateBrowserSessionProfileLabel(profile.label, profile.id)}
+          </span>
           {isActive ? (
             <span className="shrink-0 rounded border border-border/50 px-1.5 text-[10px] font-medium leading-4 text-foreground/80">
               {t('auto.components.settings.BrowserProfileRow.c29648fe5b', 'Active')}
@@ -214,25 +252,22 @@ export function BrowserProfileRow({
           </DropdownMenuContent>
         </DropdownMenu>
         {isDefault ? (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-7 text-muted-foreground hover:text-destructive"
-            disabled={!profile.source}
-            onClick={async () => {
-              const ok = await useAppStore.getState().clearDefaultSessionCookies()
-              if (ok) {
-                toast.success(
-                  t(
-                    'auto.components.settings.BrowserProfileRow.2d4bea7f35',
-                    'Default cookies cleared.'
-                  )
-                )
-              }
-            }}
-          >
-            <Trash2 className="size-3" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-7 text-muted-foreground hover:text-destructive"
+                aria-label={clearDefaultCookiesLabel}
+                onClick={() => void handleClearDefaultCookies()}
+              >
+                <Trash2 className="size-3" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top" sideOffset={4}>
+              {clearDefaultCookiesLabel}
+            </TooltipContent>
+          </Tooltip>
         ) : (
           <Button
             variant="ghost"
@@ -245,7 +280,7 @@ export function BrowserProfileRow({
                   t(
                     'auto.components.settings.BrowserProfileRow.8e636cae25',
                     'Profile "{{value0}}" removed.',
-                    { value0: profile.label }
+                    { value0: translateBrowserSessionProfileLabel(profile.label, profile.id) }
                   )
                 )
               }

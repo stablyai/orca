@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { isTopLevelView } from './top-level-view'
-import { TopLevelViewSchema } from './rpc-contract/client-ui-params'
+import { TopLevelViewSchema } from './rpc-contract/client-ui/client-ui-params'
 
 describe('isTopLevelView', () => {
   it('accepts canonical plugin routes and rejects malformed or inherited keys', () => {

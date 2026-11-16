@@ -7,13 +7,13 @@ import {
 import {
   getProjectIdentityKey,
   projectHostSetupProjectionFromRepos
-} from '../../../../../shared/project-host-setup-projection'
-import type { Project, ProjectHostSetup } from '../../../../../shared/project-types'
-import type { Repo } from '../../../../../shared/repo-types'
+} from '../../../../../shared/project/host-setup/project-host-setup-projection'
+import type { Project, ProjectHostSetup } from '../../../../../shared/project/project-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import './new-workspace-composer-repo'
-import { resolveNewWorkspaceDialogRepoId } from '../../../../../shared/new-workspace-dialog-repo'
+import { resolveNewWorkspaceDialogRepoId } from '../../../../../shared/new-workspace/new-workspace-dialog-repo'
 import { findSoleHostCopy } from '../../../../../shared/worktree/host-qualified-identity'
-import { normalizeRuntimePathForComparison } from '../../../../../shared/cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../../../shared/file-access/cross-platform-path'
 
 export type WorkspaceCreationTarget = {
   projectId: string

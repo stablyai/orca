@@ -1,6 +1,6 @@
 import { useMemo, useSyncExternalStore } from 'react'
 import { usePageBridgeClientIfPresent } from '../transport/connection/client-context.web'
-import { EMPTY_PAGE_GEOMETRY } from '../mobile-web-shell/bridge/bridge-page-geometry'
+import { EMPTY_PAGE_GEOMETRY } from '../mobile-web-shell/bridge/page-geometry/bridge-page-geometry'
 
 export function usePageGeometry() {
   const client = usePageBridgeClientIfPresent()

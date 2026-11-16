@@ -17,7 +17,7 @@ import { ActivityThreadOptionsMenu } from './activity-thread-controls'
 import type {
   ActivityGroupBy,
   ThreadReadFilter
-} from '../../../../shared/agents-view-thread-filters'
+} from '../../../../shared/agent-status/presentation/agents-view-thread-filters'
 
 export function ActivityThreadListToolbar({
   activityFilterInputRef,

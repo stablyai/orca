@@ -1,3 +1,4 @@
+import { PluginUpdateReviewHost } from './components/plugins/dialogs/PluginUpdateReviewHost'
 import { useCallback, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { Toaster } from '@/components/ui/sonner'
@@ -11,7 +12,6 @@ import { SkillFreshnessNudge } from './components/skills/freshness/SkillFreshnes
 import PinnedTabCloseDialog from './components/terminal-pane/layout/close/PinnedTabCloseDialog'
 import RunningTerminalCloseDialog from './components/terminal-pane/layout/close/RunningTerminalCloseDialog'
 import WorktreeBaseFallbackDialog from './components/WorktreeBaseFallbackDialog'
-import AgentWorkspaceTrustDecisionDialog from './components/agent-workspace-trust/AgentWorkspaceTrustDecisionDialog'
 import ClaudeAccountSwitchDialog from './components/ClaudeAccountSwitchDialog'
 import { useUnreadDockBadge } from './hooks/useUnreadDockBadge'
 import { AppBackgroundServices } from './app-shell/AppBackgroundServices'
@@ -125,10 +125,10 @@ function App(): React.JSX.Element {
         )}
         <PlainSshTerminalPanels />
         <PluginShotReplayMount />
+        <PluginUpdateReviewHost />
       </TooltipProvider>
       <SkillFreshnessNudge />
       <WorktreeBaseFallbackDialog />
-      <AgentWorkspaceTrustDecisionDialog />
       <ClaudeAccountSwitchDialog />
       <PinnedTabCloseDialog />
       <RunningTerminalCloseDialog />

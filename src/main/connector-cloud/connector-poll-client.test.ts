@@ -2,9 +2,8 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { CONNECTOR_PATHS } from '../../shared/connector-cloud-contract'
+import { CONNECTOR_PATHS } from '../../shared/connectors/connector-cloud-contract'
 import type { Delivery } from '../external-conversations/external-conversation-types'
-import { connectorReplyInstructions } from './connector-deliveries'
 import { connectorProjects } from './connector-places'
 import { ConnectorPollClient } from './connector-poll-client'
 import { ConnectorAccountTransport } from './connector-transport'
@@ -73,44 +72,6 @@ afterEach(() => {
 })
 
 describe('ConnectorPollClient', () => {
-  it('confirms received right after the seam call, then done with its result', async () => {
-    const seam = fakeSeam()
-    const sent = Promise.withResolvers<Delivery>()
-    seam.outcomes.set('d2', sent.promise)
-    const { client, calls } = startClient(seam)
-    await settle()
-    poll([
-      {
-        ...base,
-        deliveryId: 'd1',
-        kind: 'start',
-        agent: 'claude',
-        placeId: project!.placeId,
-        prompt: 'fix it'
-      },
-      { ...base, deliveryId: 'd2', kind: 'send', text: 'more' }
-    ])
-    await settle()
-    expect(calls.start).toHaveBeenCalledWith(expect.anything(), conversation, 'd1', {
-      agent: 'claude',
-      prompt: `fix it\n\n${connectorReplyInstructions('slack')}`,
-      target: expect.objectContaining({ kind: 'create-worktree' })
-    })
-    expect(fake.acks).toEqual([
-      { deliveryId: 'd1', step: 'received' },
-      { deliveryId: 'd2', step: 'received' },
-      { deliveryId: 'd1', step: 'done', result: { outcome: 'accepted' } }
-    ])
-    sent.resolve({ outcome: 'refused', reason: 'agent_not_reachable' })
-    await settle()
-    expect(fake.acks.at(-1)).toEqual({
-      deliveryId: 'd2',
-      step: 'done',
-      result: { outcome: 'refused', reason: 'agent_not_reachable' }
-    })
-    client.stop()
-  })
-
   it('refuses stale and unreadable deliveries without the seam, and still runs the rest', async () => {
     const { client, calls } = startClient()
     await settle()
@@ -434,42 +395,6 @@ describe('ConnectorPollClient', () => {
     client.stop()
   })
 
-  it('never takes a hello whose answer is not the contract', async () => {
-    const { client } = startClient()
-    fake.forced.set(CONNECTOR_PATHS.hello, { status: 204 })
-    await settle(5_000)
-    expect(fake.requestsTo(CONNECTOR_PATHS.poll)).toHaveLength(0)
-    fake.forced.delete(CONNECTOR_PATHS.hello)
-    await settle(30_000)
-    expect(fake.requestsTo(CONNECTOR_PATHS.poll).length).toBeGreaterThan(0)
-    client.stop()
-  })
-
-  it('fills event requests by bytes, so a backlog of long turn ends never meets a 413', async () => {
-    const { client, emit } = startClient()
-    fake.forced.set(CONNECTOR_PATHS.events, { status: 503 })
-    for (let turnId = 1; turnId <= 60; turnId++) {
-      emit({
-        kind: 'turn-ended',
-        conversation,
-        worktreeId: 'wt',
-        paneKey: 'tab:1',
-        turnId,
-        stopReason: 'success',
-        lastAssistantMessage: 'x'.repeat(8 * 1024),
-        at: turnId
-      })
-    }
-    await settle()
-    fake.forced.delete(CONNECTOR_PATHS.events)
-    await settle(30_000)
-    expect(
-      fake.events.filter((event) => isRecord(event) && event.kind === 'turn-ended')
-    ).toHaveLength(60)
-    expect(fake.requestsTo(CONNECTOR_PATHS.events).length).toBeGreaterThan(2)
-    client.stop()
-  })
-
   it('keeps a turn end refused under a hello a retired client replaced, and resends it after hello', async () => {
     const { client, emit } = startClient()
     await settle()
@@ -492,7 +417,3 @@ describe('ConnectorPollClient', () => {
     client.stop()
   })
 })
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null
-}

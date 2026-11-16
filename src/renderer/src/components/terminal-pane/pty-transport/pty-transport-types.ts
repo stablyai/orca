@@ -18,11 +18,11 @@ import type {
 } from '../../../../../shared/agent-session/agent-session-host-authority'
 import type { StartupCommandDelivery } from '../../../../../shared/agent-launch/startup/codex-startup-delivery'
 import type { ProjectExecutionRuntimeResolution } from '../../../../../shared/execution-host/project-execution-runtime'
-import type { EventProps } from '../../../../../shared/telemetry-event-classification'
+import type { EventProps } from '../../../../../shared/telemetry/telemetry-event-classification'
 import type { TerminalInputKind } from '../../../../../shared/terminal/input/terminal-input-kind'
 import type { TerminalOscColorQueryReplyColors } from '../../../../../shared/terminal/protocol/queries/terminal-osc-color-reply'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import type { TerminalPanePlacement } from '../../../../../shared/workspace-layout/terminal-pane-placement'
+import type { TerminalPanePlacement } from '../../../../../shared/workspace-layout/terminal-topology/terminal-pane-placement'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { PtyDataMeta } from './delivery/pty-dispatcher'
 import type {
@@ -252,6 +252,8 @@ export type PtyTransport = {
   ownsRecovery?: () => boolean
   /** Typed input the host has not applied yet, which a remount would discard. */
   hasUndeliveredInput?: () => boolean
+  /** Input sent now is held and delivered to this pane's terminal once it connects. */
+  isHoldingInput?: () => boolean
   /** The user dismissed the error surface; the next occurrence of the same message must surface again. */
   notifyErrorSurfaceDismissed?: () => void
   getPtyId: () => string | null

@@ -1,3 +1,4 @@
+import { hasUnsentBrowserNotes } from '@/store/slices/browser/annotations/browser-page-annotation'
 import { isLocalSessionTabCloseOwned } from '@/runtime/web-session-tabs-sync/closing/local-session-tab-close-owner'
 import { closeMobileSessionTabInStore } from '@/runtime/web-session-tabs-sync/closing/mobile-session-tab-close'
 import {
@@ -5,15 +6,15 @@ import {
   SESSION_TAB_CLOSE_FAILED_ERROR,
   SESSION_TAB_NOT_FOUND_ERROR,
   SESSION_TAB_CLOSE_TIMEOUT_ERROR
-} from '../../../../shared/session-tab-close'
+} from '../../../../shared/workspace-layout/client-views/session-tab-close'
 import {
   guardPinnedTabClose,
   isUnifiedTabPinned,
   resolvePinnedTabLabel
 } from '../../store/slices/tabs/closing/pinned-tab-close-guard'
 import { useAppStore } from '../../store'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import type { RuntimeMobileSessionTabMove } from '../../../../shared/runtime-session-contracts'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
+import type { RuntimeMobileSessionTabMove } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   dropTabThroughLayoutOwner,
   type TabDrop
@@ -35,7 +36,8 @@ export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
         guardPinnedTabClose({
           isPinned: isUnifiedTabPinned(store, worktreeId, browserTarget.workspaceId),
           tabLabel: resolvePinnedTabLabel(store, worktreeId, browserTarget.workspaceId),
-          onClose: () => useAppStore.getState().closeBrowserTab(browserTarget.workspaceId)
+          onClose: () => useAppStore.getState().closeBrowserTab(browserTarget.workspaceId),
+          unsentNotes: hasUnsentBrowserNotes(store, browserTarget.workspaceId)
         })
         return
       }
@@ -111,7 +113,8 @@ export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
         isPinned: isUnifiedTabPinned(store, worktreeId, visibleId),
         tabLabel: resolvePinnedTabLabel(store, worktreeId, visibleId),
         onClose: closeAndRespond,
-        onCancel: () => respond(SESSION_TAB_CLOSE_CANCELED_ERROR)
+        onCancel: () => respond(SESSION_TAB_CLOSE_CANCELED_ERROR),
+        unsentNotes: browserTarget ? hasUnsentBrowserNotes(store, browserTarget.workspaceId) : false
       })
     })
   )

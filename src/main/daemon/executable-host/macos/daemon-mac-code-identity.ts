@@ -2,7 +2,7 @@
 // where a running pid's executable lives now. An unresolved image alone does not prove denial.
 
 import { runProcess } from '@orca/process-host'
-import type { DaemonCodeIdentity } from '../../../../shared/daemon-adoption-telemetry'
+import type { DaemonCodeIdentity } from '../../../../shared/telemetry/daemon-adoption-telemetry'
 
 const CODESIGN_TIMEOUT_MS = 3_000
 

@@ -5,7 +5,7 @@ import type {
   OrcadMigrationManifestSource,
   OrcadMigrationSshManifestSource
 } from './orcad-migration-manifest'
-import { ORCAD_MIGRATION_LOCAL_WSL_SOURCE_RUNTIME_CAPABILITY } from '../orcad-runtime-capabilities'
+import { ORCAD_MIGRATION_LOCAL_WSL_SOURCE_RUNTIME_CAPABILITY } from '../remote-runtime/protocol/orcad-runtime-capabilities'
 
 export const ORCAD_MIGRATION_SSH_RELAY_SOURCE_KIND = 'ssh-relay' as const
 

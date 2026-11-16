@@ -12,9 +12,10 @@ import {
   addWorktreeCreatePhaseAttributes,
   withWorktreeSpan
 } from '../../../observability/instrumentation'
-import { workspaceSourceSchema } from '../../../../shared/telemetry-events'
-import type { WorkspaceSource } from '../../../../shared/telemetry-events'
-import { isFolderRepo } from '../../../../shared/repo-kind'
+import { workspaceSourceSchema } from '../../../../shared/telemetry/schemas/telemetry-property-schemas'
+import type { WorkspaceSource } from '../../../../shared/workspace/creation/workspace-source'
+
+import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import { createLocalWorktree, notifyWorktreesChanged } from '../../worktree-remote'
 import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-error'
 import { track } from '../../../telemetry/client'
@@ -29,9 +30,10 @@ import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { workspaceLifecycleKey } from '../../../runtime/workspaces/lifecycle/workspace-lifecycle-commands'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
 import { beginWorkspaceCreateTelemetry } from '../../../workspaces/creation/workspace-create-telemetry'
-import { assertWslMoveRepoWritable } from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+import { assertWslMoveRepoWritable } from '../../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { applyWorkspaceCreatePluginHook } from '../../../plugins/hooks/workspace-create-plugin-hook'
 import { withProjectWorktreeCreate } from '../../../workspaces/creation/worktree-create-in-flight'
+import { createdWorktreeLifecycleIdentity } from '../../../runtime/workspaces/lifecycle/worktree-lifecycle-event'
 
 export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): void {
   const { mainWindow, store, runtime, options } = context
@@ -67,8 +69,8 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
           try {
             // Track operational failures; malformed IPC rejected above is outside the creation funnel.
             if (isFolderRepo(repo)) {
-              // Folder creation only registers metadata, so it needs no filesystem host route.
-              result = createFolderWorkspace(createArgs, repo, store)
+              // Folder creation registers metadata; its setup prep checks ownership itself.
+              result = await createFolderWorkspace(createArgs, repo, store)
             } else {
               // Resolve executionHostId-only SSH ownership before any local Git operation.
               const createRoute = requireWorktreeCreateRoute(repo)
@@ -107,7 +109,8 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
             kind: 'created',
             worktreeId: result.worktree.id,
             path: result.worktree.path,
-            branch: result.worktree.branch
+            branch: result.worktree.branch,
+            ...createdWorktreeLifecycleIdentity(result.worktree)
           })
 
           // Stamp after the create notification bumps generation so the reply names its resulting catalog.
@@ -165,7 +168,8 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
           kind: 'created',
           worktreeId: result.worktree.id,
           path: result.worktree.path,
-          branch: result.worktree.branch
+          branch: result.worktree.branch,
+          ...createdWorktreeLifecycleIdentity(result.worktree)
         })
         return { ...result, catalogVersion: getLocalWorktreeCatalogVersion(repo.id) }
       })

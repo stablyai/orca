@@ -1,20 +1,23 @@
 import { writeNativeChatFontSize } from '@/components/native-chat/appearance/native-chat-font-size-write'
-import { applyUIZoom } from '@/lib/ui-zoom'
+import { applyUIZoom } from '@/app-shell/chrome/ui-zoom'
 import {
   computeEditorFontSize,
   nextEditorFontZoomLevel
 } from '../../../../shared/editor/editor-font-zoom'
 import { resolveEditorBaseFontSize } from '../../../../shared/editor/editor-typography'
-import { zoomLevelToPercent, stepUIZoomLevel } from '../../../../shared/ui-zoom-level'
-import { dispatchZoomLevelChanged } from '@/lib/zoom-events'
+import {
+  zoomLevelToPercent,
+  stepUIZoomLevel
+} from '../../../../shared/app-lifecycle/windows/ui-zoom-level'
+import { dispatchZoomLevelChanged } from '@/app-shell/chrome/zoom-events'
 
-import { useAppStore } from '../../store'
+import { useAppStore } from '../../store/index'
 import { focusedBrowserPageId, resolveZoomTarget } from '../resolve-zoom-target'
-import { dispatchBrowserPageZoom } from '@/components/browser-pane/host-guest/browser-page-zoom'
+import { dispatchBrowserPageZoom } from '@/components/browser-pane/host-guest/viewport/browser-page-zoom'
 import {
   requestFrontDialogViewerZoom,
   requestViewerZoom
-} from '@/components/editor/viewer-zoom-request'
+} from '@/components/editor/viewer-viewport/viewer-zoom-request'
 
 export function registerZoomIpcBridge(unsubs: (() => void)[]): void {
   unsubs.push(

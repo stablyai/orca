@@ -2,10 +2,10 @@ import { mkdirSync } from 'node:fs'
 import {
   buildJcodeRuntimeDirEnv,
   JCODE_RUNTIME_DIR_ENV_KEY
-} from '../../../shared/jcode-runtime-dir'
+} from '../../../shared/agent-launch/startup/jcode-runtime-dir'
 import { applyScrubSafeAgentEnvAliases } from '../../../shared/agent-hook-listener/transport/agent-hook-scrub-safe-env'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
-import { isValidTerminalTabId } from '../../../shared/workspace-layout/terminal-tab-id'
+import { isValidTerminalTabId } from '../../../shared/workspace-layout/terminal-surfaces/terminal-tab-id'
 
 export type PtySpawnPane = {
   paneKey: string

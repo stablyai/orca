@@ -3,8 +3,8 @@ import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import { getAgentRowPrimaryText } from '../../../../shared/agent-status/presentation/agent-row-primary-text'
-import { getActivityThreadWorkspaceTitle } from '@/lib/activity-thread-display'
-import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
+import { getActivityThreadWorkspaceTitle } from '@/lib/workspace/activity/activity-thread-display'
+import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard/clipboard-text'
 import {
   activityThreadStatusId,
   agentMeta,
@@ -13,7 +13,7 @@ import {
   threadAgentStateLabel
 } from './activity-thread-presentation'
 import { AGENT_LIST_STATUS_RANK } from '../../../../shared/agent-status/presentation/agent-list-status'
-import type { ActivityGroupBy } from '../../../../shared/agents-view-thread-filters'
+import type { ActivityGroupBy } from '../../../../shared/agent-status/presentation/agents-view-thread-filters'
 import type { ActivityThreadGroup, AgentPaneThread } from './activity-thread-types'
 
 function activityStatusRank(thread: AgentPaneThread): number {

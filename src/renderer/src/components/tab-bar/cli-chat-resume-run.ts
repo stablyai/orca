@@ -8,14 +8,15 @@ import {
 } from './cli-chat-resume-close-admission'
 import { useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
-import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
+
+import { createNonSecureContextUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
 import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import type { StructuredAgentSessionCreateGate } from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import { supportsStructuredAgentSessionCliSource } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
 import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
-import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
-import { CLI_CONVERSATION_ADOPTING_AGENTS } from '../../../../shared/structured-agent-cli-conversation-adoption'
+import { waitForPromiseWithSignal } from '../../../../shared/concurrency/abort-signal-reason'
+import { CLI_CONVERSATION_ADOPTING_AGENTS } from '../../../../shared/agent-session/view/structured-agent-cli-conversation-adoption'
 import { toHostSessionPaneKey } from '../../../../shared/workspace-layout/terminal-surface-id'
 import { resolveCliChatResumeSource, type CliChatResumeSource } from './cli-chat-resume-source'
 import {
@@ -167,7 +168,7 @@ export async function runCliChatResume(
     const closes = close !== 'keep'
     const verdict = adoptAgentSessionLaunchVerdict({
       route: 'structured-native-chat',
-      requestId: newAgentLaunchRequestId(),
+      requestId: createNonSecureContextUuid(),
       agent,
       worktreeId: source.workspaceId,
       executionHostId: source.executionHostId,

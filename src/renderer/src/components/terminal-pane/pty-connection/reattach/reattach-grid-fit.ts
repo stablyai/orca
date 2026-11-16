@@ -1,6 +1,6 @@
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { safeFitAndThen } from '@/lib/pane-manager/pane-fit'
-import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
+import { safeFitAndThen } from '@/lib/pane-manager/terminal-fit/pane-fit'
+import { getFitOverrideForPty } from '@/lib/pane-manager/terminal-fit/mobile-fit-overrides'
 
 import type { ReattachPayloadContext } from './reattach-payload-context'
 import type { ReattachPayloadSession } from './reattach-payload-session'

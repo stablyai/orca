@@ -8,32 +8,22 @@ import type {
   StructuredAgentSessionResumeSource
 } from '../../../../../shared/agent-session/structured-agent-session-create'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../../shared/execution-host'
-import { hasStructuredAgentLaunchCancellationTombstonePersisted } from './structured-agent-session-launch-persistence'
+import {
+  hasStructuredAgentLaunchCancellationTombstonePersisted,
+  readStructuredAgentLaunchRecord
+} from './structured-agent-session-launch-persistence'
 import {
   resetStructuredAgentLaunchCancellationForTests,
   retireAbsentStructuredAgentLaunchCancellations,
   retireStructuredAgentLaunchCancellation
-} from '../../launch-cancel-tombstones-compat/structured-agent-session-launch-cancellation'
+} from './structured-agent-session-launch-cancellation'
 import { resetStructuredAgentLocalLaunchCancelsForTests } from './structured-agent-session-local-launch-cancel'
 import {
   clearStructuredLaunchStateStoreForTests,
-  getPersistedStructuredAgentLaunchRecord,
   getStructuredLaunchStateBySessionId,
   notifyStructuredLaunchListeners,
   structuredLaunchSessionIds,
   subscribeStructuredAgentLaunchStatus
-} from './structured-agent-session-launch-state-store'
-
-export {
-  deleteStructuredLaunchStateIfCurrent,
-  getPersistedStructuredAgentLaunchRecord,
-  getStructuredLaunchStateBySessionId,
-  notifyStructuredLaunchListeners,
-  publishStructuredLaunchChange,
-  setStructuredLaunchState,
-  structuredLaunchStates,
-  subscribeStructuredAgentLaunchStatus,
-  type StructuredLaunchState
 } from './structured-agent-session-launch-state-store'
 
 export type StructuredAgentLaunchStatus = 'idle' | 'pending' | 'unknown'
@@ -84,14 +74,8 @@ export function getStructuredAgentSessionLaunchLifecycle(
   if (state?.intent.worktreeId === worktreeId) {
     return launchStateLifecycle(state)
   }
-  return getPersistedStructuredAgentLaunchRecord(sessionId)?.lifecycle ?? null
+  return readStructuredAgentLaunchRecord(sessionId)?.lifecycle ?? null
 }
-
-export {
-  getStructuredAgentSessionLaunchResumes,
-  structuredAgentSessionLaunchHasRetainedInput,
-  settleStructuredLaunchFirstMessageFromJournal
-} from './structured-agent-session-launch-input'
 
 /** The host a launch still owed an outcome was sent to, in memory or persisted across a reload. */
 export function getStructuredAgentSessionLaunchOwner(
@@ -99,7 +83,7 @@ export function getStructuredAgentSessionLaunchOwner(
 ): ExecutionHostId | undefined {
   return (
     getStructuredLaunchStateBySessionId(sessionId)?.intent.executionHostId ??
-    getPersistedStructuredAgentLaunchRecord(sessionId)?.executionHostId
+    readStructuredAgentLaunchRecord(sessionId)?.executionHostId
   )
 }
 

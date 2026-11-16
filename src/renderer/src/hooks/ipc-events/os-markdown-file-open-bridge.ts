@@ -1,9 +1,9 @@
 import { toast } from 'sonner'
 import type { FileDocument } from '../../../../shared/file-listing/file-document'
-import { revealFloatingWorkspacePanel } from '@/components/floating-terminal/floating-workspace-panel-reveal'
-import { openDocumentInFloatingWorkspace } from '@/components/floating-terminal/open-document-in-floating-workspace'
+import { revealFloatingWorkspacePanel } from '@/components/floating-terminal/workspace/floating-workspace-panel-reveal'
+import { openDocumentInFloatingWorkspace } from '@/components/floating-terminal/workspace/open-document-in-floating-workspace'
 import { translate } from '@/i18n/i18n'
-import { useAppStore } from '../../store'
+import { useAppStore } from '../../store/index'
 
 /** Open OS shell document requests in the project-independent floating workspace. */
 async function openOsRequestedDocuments(documents: FileDocument[]): Promise<void> {

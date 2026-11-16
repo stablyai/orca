@@ -1,34 +1,35 @@
 import {
   localhostLabelRouteForHttpLink,
-  openLabeledLocalhostLink,
-  type LocalhostLinkRepo,
-  type LocalhostLinkProject,
-  type LocalhostLinkWorktree
+  openLabeledLocalhostLink
 } from './http-link-localhost-route'
-import type { WorkspacePortScanResult } from '../../../../../shared/workspace-ports'
-
-import type { LinkOpenIntent, LinkSourceState } from '../../link-open-intent'
-import { captureLinkOpenIntent, canOpenLinkInSourceGroup } from '../../link-open-intent'
-import type { AppState } from '@/store/types'
-import { translate } from '@/i18n/i18n'
-import { isFloatingWorkspaceId } from '../../../../../shared/floating-workspace-worktree'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import { toast } from 'sonner'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
-import { reselectWorkspaceKeepingHost } from '../../workspace/ownership/active-workspace-host'
+import type {
+  LocalhostLinkRepo,
+  LocalhostLinkProject,
+  LocalhostLinkWorktree
+} from './http-link-localhost-route'
 import {
-  captureBrowserLinkReveal,
-  type BrowserLinkSelectionSubscriber
-} from './browser-link-reveal'
+  captureLinkOpenIntent,
+  canOpenLinkInSourceGroup
+} from '../../links/placement/link-open-intent'
+import type { LinkOpenIntent, LinkSourceState } from '../../links/placement/link-open-intent'
+import { translate } from '@/i18n/i18n'
+import { isFloatingWorkspaceId } from '../../../../../shared/workspace/identity/floating-workspace-worktree'
+import { toast } from 'sonner'
+import { reselectWorkspaceKeepingHost } from '../../workspace/ownership/active-workspace-host'
+import { captureBrowserLinkReveal } from './browser-link-reveal'
+import type { BrowserLinkSelectionSubscriber } from './browser-link-reveal'
 import {
   isHttpLinkBackgroundOpen,
   openLocalHttpLinkTab,
-  prepareRemoteHttpLinkTab,
-  type HttpLinkBrowserTabState
+  prepareRemoteHttpLinkTab
 } from './http-link-browser-placement'
-
-import type { OpenHttpLinkOptions, WorkspaceHttpLinkBrowserOpener } from './http-link-destinations'
+import type { HttpLinkBrowserTabState } from './http-link-browser-placement'
 import { resolveModifierRouting } from './http-link-modifier-routing'
+import type { WorkspacePortScanResult } from '../../../../../shared/workspace/ports/workspace-ports'
+import type { AppState } from '@/store/types'
+import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { OpenHttpLinkOptions, WorkspaceHttpLinkBrowserOpener } from './http-link-destinations'
 
 function settleHttpLinkBrowserOpen(
   opening: Promise<string | null | void>,
@@ -220,6 +221,8 @@ function executeHttpLink(
         ...fields,
         linkContext: { linkIntent: null, ...opts.linkContext, canReveal: reveal.canReveal },
         ...(opts.allowClientBrowserFallback ? { allowClientBrowserFallback: true } : {}),
+        // Why: only links that already open in Orca may use a "This device" SSH host's desktop tab.
+        ...(openLinksInApp ? { allowSshDeviceBrowser: true } : {}),
         ...(effectiveSourceOwner?.kind === 'runtime'
           ? { expectedRuntimeEnvironmentId: effectiveSourceOwner.runtimeEnvironmentId }
           : effectiveSourceOwner?.kind === 'ssh'

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
-import type { Repo } from '../../shared/repo-types'
+import type { Repo } from '../../shared/repository/repo-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { SessionInfo } from '../daemon/protocol/daemon-session-info'
 import type { DaemonPtyAdapter } from '../daemon/providers/adapter/daemon-pty-adapter'

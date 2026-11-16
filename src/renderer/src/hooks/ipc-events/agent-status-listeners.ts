@@ -1,17 +1,20 @@
 import { CLOSE_TERMINAL_PANE_EVENT } from '@/constants/terminal'
+import {
+  resolveLegacyWorkerTerminalRecoveryAction,
+  rollbackLegacyWorkerTerminalSurfaceInStore
+} from '../legacy-worker-terminal-recovery-event'
+import { useAppStore } from '../../store/index'
+import {
+  forgetRefusedPaneResume,
+  namesRefusedResume
+} from '@/lib/agent-session/resume/forget-refused-pane-resume'
+import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-status/agent-pane-authority'
+import { resolvePaneKey } from '../../lib/agent-status/ownership/agent-status-pane-ownership'
 import type {
   AgentStatusClearIpcPayload,
   AgentStatusIpcPayload,
   RefusedPaneResume
 } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import {
-  resolveLegacyWorkerTerminalRecoveryAction,
-  rollbackLegacyWorkerTerminalSurfaceInStore
-} from '../legacy-worker-terminal-recovery-event'
-import { useAppStore } from '../../store'
-import { forgetRefusedPaneResume, namesRefusedResume } from '@/lib/forget-refused-pane-resume'
-import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-status/agent-pane-authority'
-import { resolvePaneKey } from '../../lib/agent-status/ownership/agent-status-pane-ownership'
 import type { PendingAgentStatusEvent } from './agent-status-bridge-types'
 
 /** An already delivered event for the pane naming a refused conversation would restore it. */
@@ -62,6 +65,10 @@ export function registerAgentStatusListeners(args: {
   unsubs.push(
     window.api.agentStatus.onSet((data) => {
       enqueueLiveAgentStatus(data)
+      // A successful stop can resolve before the ordinary burst timer; publish its handoff first.
+      if (data.paneSleep) {
+        drainQueuedLiveAgentStatusesForPane(data.paneKey)
+      }
     })
   )
   const unsubscribeAgentStatusClear = window.api.agentStatus.onClear?.(
@@ -83,6 +90,7 @@ export function registerAgentStatusListeners(args: {
         for (let index = pendingAgentStatusEvents.length - 1; index >= 0; index -= 1) {
           const pending = pendingAgentStatusEvents[index].data
           if (
+            !pending.paneSleep &&
             pending.connectionId === data.connectionId &&
             pending.receivedAt <= effectiveWatermark
           ) {
@@ -92,6 +100,7 @@ export function registerAgentStatusListeners(args: {
         for (let index = liveAgentStatusBurstQueue.length - 1; index >= 0; index -= 1) {
           const queued = liveAgentStatusBurstQueue[index]
           if (
+            !queued.paneSleep &&
             queued.connectionId === data.connectionId &&
             queued.receivedAt <= effectiveWatermark
           ) {
@@ -125,7 +134,8 @@ export function registerAgentStatusListeners(args: {
       if (
         data.statusUnavailable !== true &&
         data.programStatusRemoved !== true &&
-        store.agentStatusByPaneKey[data.paneKey]?.state === 'done'
+        !store.agentStatusByPaneKey.get(data.paneKey)?.paneSleep &&
+        store.agentStatusByPaneKey.get(data.paneKey)?.state === 'done'
       ) {
         return
       }
