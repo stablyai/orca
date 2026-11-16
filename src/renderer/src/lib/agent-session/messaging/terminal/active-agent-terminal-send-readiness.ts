@@ -1,3 +1,5 @@
+import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
+import { agentHidesApprovalsFromHooks } from '../../../../../../shared/agent-status/approval/hook-silent-approval-agents'
 import type { RuntimeTerminalAgentStatus } from '../../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { hasRuntimeRpcErrorCode } from '../../../../../../shared/remote-runtime/rpc/runtime-rpc-error-code'
 import type { ActiveAgentNotesSendFailureCode } from './active-agent-note-send-result'
@@ -16,6 +18,7 @@ export type TerminalAgentSendReadiness =
   | 'no-active-terminal'
   | 'no-agent'
   | 'permission'
+  | 'approval-unseen'
   | 'status-unavailable'
 
 export type TerminalAgentSendReadinessResult = {
@@ -27,7 +30,7 @@ export type TerminalAgentSendReadinessResult = {
 export async function getTerminalAgentSendReadiness(
   runtimeTarget: RuntimeClientTarget,
   terminalHandle: string,
-  options: { allowLegacyFallback: boolean }
+  options: { allowLegacyFallback: boolean; agentType?: AgentType | null }
 ): Promise<TerminalAgentSendReadinessResult> {
   try {
     const { agentStatus } = await callRuntimeRpc<{ agentStatus: RuntimeTerminalAgentStatus }>(
@@ -41,6 +44,10 @@ export async function getTerminalAgentSendReadiness(
     }
     if (agentStatus.status === 'permission') {
       return { status: 'permission', supportsGuardedSend: true }
+    }
+    // Older hosts lack the guard's approval-unseen refusal; a working report must not reach Enter.
+    if (agentStatus.status === 'working' && agentHidesApprovalsFromHooks(options.agentType)) {
+      return { status: 'approval-unseen', supportsGuardedSend: true }
     }
     return { status: 'sendable', supportsGuardedSend: true }
   } catch (error) {

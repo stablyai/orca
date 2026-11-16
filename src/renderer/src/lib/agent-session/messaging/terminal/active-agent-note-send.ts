@@ -1,3 +1,5 @@
+import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
+import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import type { RuntimeTerminalWait } from '../../../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
@@ -67,6 +69,7 @@ async function sendNotesToActiveAgentSessionInternal({
   if (!noteTarget) {
     return reportNoteSendFailure({ status: 'no-active-terminal', code: 'no-note-target' }, null)
   }
+  const agentType = noteTargetAgentType(state, worktreeId, noteTarget)
   const runtimeTarget = runtimeTargetForOwnerEnvironment(
     runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
   )
@@ -84,13 +87,18 @@ async function sendNotesToActiveAgentSessionInternal({
   }
   if (explicitNoteTarget) {
     return reportNoteSendFailure(
-      await sendPromptToExplicitAgentTarget(runtimeTarget, terminal.handle, trimmedPrompt, submit),
+      await sendPromptWithGuardedPasteAndEnter(runtimeTarget, terminal.handle, trimmedPrompt, {
+        allowLegacyFallback: false,
+        submit,
+        agentType
+      }),
       noteTarget
     )
   }
   const effectiveTimeoutMs = timeoutMs ?? ACTIVE_AGENT_SEND_TIMEOUT_MS
   const initialAgentStatus = await getTerminalAgentSendReadiness(runtimeTarget, terminal.handle, {
-    allowLegacyFallback: true
+    allowLegacyFallback: true,
+    agentType
   })
   if (initialAgentStatus.status !== 'sendable') {
     return reportNoteSendFailure(
@@ -142,7 +150,8 @@ async function sendNotesToActiveAgentSessionInternal({
     throw error
   }
   const finalAgentStatus = await getTerminalAgentSendReadiness(runtimeTarget, terminal.handle, {
-    allowLegacyFallback: true
+    allowLegacyFallback: true,
+    agentType
   })
   if (finalAgentStatus.status !== 'sendable') {
     return reportNoteSendFailure(
@@ -158,7 +167,8 @@ async function sendNotesToActiveAgentSessionInternal({
     return reportNoteSendFailure(
       await sendPromptWithGuardedPasteAndEnter(runtimeTarget, terminal.handle, trimmedPrompt, {
         allowLegacyFallback: false,
-        submit
+        submit,
+        agentType
       }),
       noteTarget
     )
@@ -170,14 +180,15 @@ async function sendNotesToActiveAgentSessionInternal({
   )
 }
 
-async function sendPromptToExplicitAgentTarget(
-  runtimeTarget: RuntimeClientTarget,
-  terminalHandle: string,
-  prompt: string,
-  submit: boolean
-): Promise<ActiveAgentNotesSendResult> {
-  return await sendPromptWithGuardedPasteAndEnter(runtimeTarget, terminalHandle, prompt, {
-    allowLegacyFallback: false,
-    submit
-  })
+// The renderer's own row names the agent so an older host's working report can't reach Enter.
+function noteTargetAgentType(
+  state: ReturnType<typeof useAppStore.getState>,
+  worktreeId: string,
+  noteTarget: ActiveTerminalNoteTarget
+): AgentType | null {
+  const row = state.agentStatusByPaneKey.get(makePaneKey(noteTarget.tabId, noteTarget.leafId))
+  const tab = state.tabsByWorktree[worktreeId]?.find(
+    (candidate) => candidate.id === noteTarget.tabId
+  )
+  return row?.agentType ?? tab?.launchAgent ?? null
 }

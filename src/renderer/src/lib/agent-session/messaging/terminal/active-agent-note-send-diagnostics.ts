@@ -30,7 +30,12 @@ export function reportNoteSendFailure(
 }
 
 export function codeForReadinessStatus(
-  status: 'no-active-terminal' | 'no-agent' | 'permission' | 'status-unavailable'
+  status:
+    | 'no-active-terminal'
+    | 'no-agent'
+    | 'permission'
+    | 'approval-unseen'
+    | 'status-unavailable'
 ): ActiveAgentNotesSendFailureCode {
   switch (status) {
     case 'no-active-terminal':
@@ -39,6 +44,8 @@ export function codeForReadinessStatus(
       return 'no-agent'
     case 'permission':
       return 'agent-permission'
+    case 'approval-unseen':
+      return 'terminal-send-approval-unseen'
     case 'status-unavailable':
       return 'status-unavailable'
   }

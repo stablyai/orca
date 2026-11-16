@@ -50,18 +50,22 @@ export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends Orca
   }
 
   /** An agent whose hooks hide approvals may be in one unless its own latest report ended the turn; no report proves nothing. */
-  isTerminalAgentApprovalUnseen(handle: string): boolean {
+  async isTerminalAgentApprovalUnseen(handle: string): Promise<boolean> {
+    const ptyId = this.getTerminalAgentStatusPtyId(handle)
+    const foreground = await this.readPtyForegroundProcessFromController(ptyId)
+    const agent =
+      recognizeAgentProcess(foreground?.process)?.agent ?? this.getPaneTerminalAgent(ptyId)
     const paneKey = this.getPaneKeyForTerminalHandle(handle)
     const row = selectLatestAgentStatusRow({
-      handles: [handle],
-      paneKeys: paneKey ? [paneKey] : [],
+      handles: new Set([handle, ...this.getExistingTerminalHandlesForPtyId(ptyId)]),
+      paneKey,
       hookRows: paneKey ? (this.publicPaneStatusFn?.(paneKey) ?? []) : []
     })
-    if (row) {
+    // A row another agent left on this pane says nothing about the one running now.
+    if (row && (agent === null || row.agentType === agent)) {
       return row.state !== 'done' && agentHidesApprovalsFromHooks(row.agentType)
     }
-    const pty = this.ptysById.get(this.getTerminalAgentStatusPtyId(handle))
-    return agentHidesApprovalsFromHooks(pty?.foregroundAgent ?? pty?.launchAgent)
+    return agentHidesApprovalsFromHooks(agent)
   }
 
   protected getTerminalAgentStatusPtyId(handle: string): string {

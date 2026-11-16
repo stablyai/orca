@@ -29,7 +29,7 @@ export async function assertTerminalAgentSendable(
       if (agentStatus.status === 'permission') {
         throw new Error('terminal_guard_permission')
       }
-      if (options.runtime.isTerminalAgentApprovalUnseen(options.handle)) {
+      if (await options.runtime.isTerminalAgentApprovalUnseen(options.handle)) {
         throw new Error('terminal_guard_approval_unseen')
       }
       return

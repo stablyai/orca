@@ -34,7 +34,8 @@ function state(
   livePtyIds: string[] | undefined,
   tabTitle = 'kiro-cli',
   root: TerminalPaneLayoutNode | null = null
-): RunningAgentTargetState {  const tab: TerminalTab = {
+): RunningAgentTargetState {
+  const tab: TerminalTab = {
     id: 'tab-1',
     ptyId: null,
     worktreeId: 'wt',
@@ -124,9 +125,10 @@ describe('deriveRunningAgentSendTargets terminal liveness', () => {
       status: 'disabled',
       disabledReason: 'Agent may be waiting for approval'
     })
-    expect(
-      onlyTarget(state(entry({ state: 'working', agentType: 'claude' }), ['pty-1']))
-    ).toEqual({ status: 'eligible', disabledReason: undefined })
+    expect(onlyTarget(state(entry({ state: 'working', agentType: 'claude' }), ['pty-1']))).toEqual({
+      status: 'eligible',
+      disabledReason: undefined
+    })
   })
 
   it('disables a pane whose saved PTY is not live', () => {

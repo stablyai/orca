@@ -133,12 +133,11 @@ describe('Interactive wait visibility and terminal admission', () => {
         await expect(guard(pane)).resolves.toBeUndefined()
       })
 
-      it('refuses such an agent when no report of its own exists', async () => {
+      it('refuses such an agent when only another agent has reported on its pane', async () => {
         const pane = await createPane({
           paneTitle: 'amp',
           foregroundProcess: 'amp',
-          launchAgent: 'amp',
-          data: 'Thinking...'
+          data: agentStatusOsc('done', 'claude') + 'Thinking...'
         })
         await expect(guard(pane)).rejects.toThrow('terminal_guard_approval_unseen')
       })
