@@ -137,7 +137,7 @@ describe('Interactive wait visibility and terminal admission', () => {
         const pane = await createPane({
           paneTitle: 'amp',
           foregroundProcess: 'amp',
-          data: agentStatusOsc('done', 'claude') + 'Thinking...'
+          data: `${agentStatusOsc('done', 'claude')}Thinking...`
         })
         await expect(guard(pane)).rejects.toThrow('terminal_guard_approval_unseen')
       })

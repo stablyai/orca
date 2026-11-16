@@ -1,8 +1,4 @@
-import {
-  selectFreshExplicitAgentStatus,
-  selectLatestAgentStatusRow
-} from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
-import { agentHidesApprovalsFromHooks } from '../../../../shared/agent-status/approval/hook-silent-approval-agents'
+import { selectFreshExplicitAgentStatus } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
 import { OrcaRuntimeWithPluginHookedTerminalInput } from './terminal-plugin-hooked-input'
 import type { RuntimeTerminalAgentStatus } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type { RuntimeTerminalAgentStatusSnapshot } from '../query/runtime-terminal-agent-status-query'
@@ -11,7 +7,6 @@ import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state
 import { hasCompatibleAgentTitleIdentity } from '../../../../shared/agent-status/title/agent-title-owner'
 import type { PtyForegroundProcessRead } from '../lifecycle/pty-foreground-observation-state'
 import { recognizeAgentProcess } from '../../../../shared/agent-status/process/agent-process-recognition'
-import { resolveTerminalTitleAgentType } from '../../../../shared/agent-status/title/terminal-title-agent-type'
 import type {
   AgentPromptActivity,
   AgentPromptWaitTextCache
@@ -48,28 +43,6 @@ export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends Orca
     // A restored permission wait reads its screen first, so a dialog answered after the restart lifts it (#35962).
     await this.refreshRestoredWait(handle, this.getTerminalAgentStatusPtyId(handle))
     return this.terminalAgentStatus.getStatus(handle)
-  }
-
-  /** An agent whose hooks hide approvals may be in one unless its own latest report ended the turn; no report proves nothing. */
-  async isTerminalAgentApprovalUnseen(handle: string): Promise<boolean> {
-    const ptyId = this.getTerminalAgentStatusPtyId(handle)
-    const foreground = await this.readPtyForegroundProcessFromController(ptyId)
-    // A wrapper such as node can hide the agent until discovery settles; its title still names it.
-    const agent =
-      recognizeAgentProcess(foreground?.process)?.agent ??
-      this.getPaneTerminalAgent(ptyId) ??
-      resolveTerminalTitleAgentType(this.getTerminalAgentStatusSnapshot(handle, ptyId).title ?? '')
-    const paneKey = this.getPaneKeyForTerminalHandle(handle)
-    const row = selectLatestAgentStatusRow({
-      handles: new Set([handle, ...this.getExistingTerminalHandlesForPtyId(ptyId)]),
-      paneKey,
-      hookRows: paneKey ? (this.publicPaneStatusFn?.(paneKey) ?? []) : []
-    })
-    // A row another agent left on this pane says nothing about the one running now.
-    if (row && (agent === null || row.agentType === agent)) {
-      return row.state !== 'done' && agentHidesApprovalsFromHooks(row.agentType)
-    }
-    return agentHidesApprovalsFromHooks(agent)
   }
 
   protected getTerminalAgentStatusPtyId(handle: string): string {
