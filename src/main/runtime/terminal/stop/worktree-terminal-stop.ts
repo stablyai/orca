@@ -25,6 +25,7 @@ import { withMainBoundLeaves } from '../surface/main-terminal-surfaces'
 import { mainHoldsTerminal } from '../surface/main-pane-verdict'
 import { summarizeWorktreePtyStopVerdict } from '../../workspaces/removal/worktree-pty-stop-verdict'
 import { describeMobileSessionTabCloseRefusal } from '../../session-lifecycle/close/mobile-session-tab-close-refusal-message'
+import type { MobileSessionTabCloseOutcome } from '../../session-lifecycle/close/mobile-session-tab-close-outcome'
 import { clearClosedWorktreeResumeRecords } from './worktree-sleep-resume-records'
 import { anySleepKeyNames, hostSleepKey, resolveSleepScope } from './worktree-terminal-sleep-key'
 import type { WorktreeSleepScope } from './worktree-terminal-sleep-key'
@@ -81,23 +82,32 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
           snapshot.tabs.flatMap((tab) => (tab.type === 'terminal' ? [tab.parentTabId] : []))
         )
       ]
+      const stopWorktreeTerminals = () =>
+        this.stopTerminalsForWorktree(`id:${worktree.id}`, {
+          resolvedWorktreeId: worktree.id,
+          ...hostFence
+        })
       let closed = 0
       for (const parentTabId of parentTabIds) {
-        const result = await this.closeMobileSessionTab(`id:${worktree.id}`, parentTabId, {
-          reason: 'user',
-          force: true,
-          localPtyTeardownOwnedExternally: true
-        })
+        let result: MobileSessionTabCloseOutcome
+        try {
+          result = await this.closeMobileSessionTab(`id:${worktree.id}`, parentTabId, {
+            reason: 'user',
+            force: true,
+            localPtyTeardownOwnedExternally: true
+          })
+        } catch (error) {
+          // Each request left PTY teardown to main; a window that never answered must not orphan them.
+          await stopWorktreeTerminals()
+          throw error
+        }
         if (result.refused) {
           throw new Error(describeMobileSessionTabCloseRefusal(result.refusalReason))
         }
         closed += 1
       }
       await this.clearWorktreeTerminalResumeRecords(worktree.id, sessionHostId, parentTabIds)
-      const { stopped } = await this.stopTerminalsForWorktree(`id:${worktree.id}`, {
-        resolvedWorktreeId: worktree.id,
-        ...hostFence
-      })
+      const { stopped } = await stopWorktreeTerminals()
       const ptyStop = summarizeWorktreePtyStopVerdict(
         targetPtyIds,
         (ptyId) => this.getPtyLivenessVerdict(ptyId),

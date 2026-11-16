@@ -76,7 +76,6 @@ describe('terminal close and handle incarnation continuity', () => {
   })
 })
 
-/** CLI/headless path: PTY-backed tab without a paired-viewer surface. */
 describe('explicit terminal close when the window does not confirm the tab close', () => {
   it('still stops the PTY when the window times out, so it is not left running orphaned', async () => {
     const harness = await createHarness()
@@ -90,16 +89,17 @@ describe('explicit terminal close when the window does not confirm the tab close
     expect(harness.stopAndWait).toHaveBeenCalledWith(PTY_ID, expect.anything())
   })
 
-  it('keeps the PTY running when the window refuses because the tab is pinned', async () => {
+  it('still stops the workspace terminals when closing them all times out on the window', async () => {
     const harness = await createHarness()
-    harness.rejectTerminalTabClose(new Error('terminal_tab_pinned'))
-    const [terminal] = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals
+    harness.rejectTerminalTabClose(new Error('terminal_tab_close_timeout'))
 
-    await expect(harness.runtime.closeTerminal(terminal.handle)).rejects.toThrow(
-      'terminal_tab_pinned'
+    await expect(harness.runtime.closeTerminalsForWorktree(`id:${WORKTREE_ID}`)).rejects.toThrow(
+      'terminal_tab_close_timeout'
     )
 
-    expect(harness.stopAndWait).not.toHaveBeenCalled()
-    expect(harness.kill).not.toHaveBeenCalled()
+    const stoppedPtyIds = [...harness.stopAndWait.mock.calls, ...harness.kill.mock.calls].map(
+      ([ptyId]) => ptyId
+    )
+    expect(stoppedPtyIds).toContain(PTY_ID)
   })
 })
