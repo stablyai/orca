@@ -5,8 +5,8 @@ import {
   BACKEND_CAPABILITIES
 } from '../../shared/backend/backend-service-contract'
 import { BackendPortRpc } from '../../shared/backend/backend-port-rpc'
-import { setAppEnvironment } from '../../shared/app-environment'
-import { agentTokenUsageSchema } from '../../shared/telemetry-agent-token-usage-schema'
+import { setAppEnvironment } from '../../shared/app-lifecycle/app-environment'
+import { agentTokenUsageSchema } from '../../shared/telemetry/schemas/telemetry-agent-token-usage-schema'
 import { backendMessagePort, type BackendNativePort } from './backend-message-port'
 import { createDesktopBackendEnvironment } from './node-service-environment'
 import { BackendServiceLifetime, activateBackendServices } from './service-composition'

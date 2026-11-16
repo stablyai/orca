@@ -46,7 +46,7 @@ import {
 import { startFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade'
 import { scheduleMainWindowAutoUpdaterSetup } from '../updater/lifecycle/main-window-updater'
 import { registerRuntimeWindowLifecycle } from './runtime-window-lifecycle'
-import { ensureStructuredAgentSessionHostUnlessRefused } from '../runtime/agent-session/structured-agent-session-host-refusal'
+import { ensureStructuredAgentSessionHostUnlessRefused } from '../runtime/agent-session/installation/structured-agent-session-host-refusal'
 import { getAgentSessionAttachmentStore } from '../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import { registerDroppedPathPreparation } from './file-drop/dropped-path-preparation-ipc'
 import { isPluginFramePermissionRequest } from './security/host-frame-permission-policy'
@@ -57,7 +57,7 @@ let activeAppReloadHandlerToken: number | null = null
 let tccPromptHandlerTokenCounter = 0
 let activeTccPromptHandlerToken: number | null = null
 
-export function attachMainWindowServices(
+export async function attachMainWindowServices(
   mainWindow: BrowserWindow,
   store: Store,
   runtime: OrcaRuntimeService,
@@ -66,6 +66,8 @@ export function attachMainWindowServices(
     target?: ClaudeAccountSelectionTarget
   ) => Promise<ClaudeRuntimeAuthPreparation>,
   options?: {
+    deferSshInitialization?: boolean
+    hostInitialization?: Promise<void>
     prepareCodexSessionResume?: PrepareCodexSessionResume
     awaitLocalPtyStartup?: () => Promise<void>
     awaitLocalPtyProviderStartup?: () => Promise<void>
@@ -79,7 +81,7 @@ export function attachMainWindowServices(
     updateInstallMode?: UpdateInstallMode
     onWorktreeLifecycle?: (event: RuntimeWorktreeLifecycleEvent) => void
   }
-): void {
+): Promise<void> {
   registerAppReloadHandler(mainWindow, options?.onBeforeRendererReload)
   registerRepoHandlers(mainWindow, store, runtime)
   // Repo IPC mutations must invalidate paired-client catalogs too (#11994).
@@ -115,7 +117,12 @@ export function attachMainWindowServices(
   registerDaemonManagementHandlers()
   // Background git worktree list can trigger protected-folder prompts on macOS; use remembered IDs.
   scheduleHistoryGc(async () => {
-    return getKnownWorktreeIdsForHistoryGc(store)
+    // An unknown daemon inventory keeps every session folder but still runs the rest of the GC.
+    const liveSessionIds = await listLiveDaemonPtyIds().catch(() => null)
+    return {
+      ...getKnownWorktreeIdsForHistoryGc(store),
+      liveSessionIds: liveSessionIds && new Set(liveSessionIds)
+    }
   })
   openCodeHookService.configDirGc.schedule(listLiveDaemonPtyIds)
   openCode2HookService.configDirGc.schedule(listLiveDaemonPtyIds)
@@ -132,7 +139,19 @@ export function attachMainWindowServices(
   } else {
     void hydrateLocalPtyRegistryAtBoot(store)
   }
-  registerSshHandlers(store, () => mainWindow, runtime)
+  const sshReady = registerSshHandlers(
+    store,
+    () => mainWindow,
+    runtime,
+    options?.hostInitialization
+  )
+  if (options?.deferSshInitialization) {
+    void sshReady.catch((error: unknown) =>
+      console.warn('[startup] SSH initialization failed:', error)
+    )
+  } else {
+    await sshReady
+  }
   registerDroppedPathPreparation(mainWindow, async () => {
     await ensureStructuredAgentSessionHostUnlessRefused(() =>
       runtime.ensureStructuredAgentSessionHost()

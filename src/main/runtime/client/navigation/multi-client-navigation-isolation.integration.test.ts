@@ -102,7 +102,7 @@ describe('paired runtime navigation isolation', () => {
       })
       runtime.attachWindow(1)
       runtime.markGraphReady(1)
-      seedSessionTabs(runtime)
+      await seedSessionTabs(runtime)
     }
 
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-navigation-isolation-'))

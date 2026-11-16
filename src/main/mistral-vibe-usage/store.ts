@@ -8,7 +8,7 @@ import type {
   MistralVibeUsageSessionRow,
   MistralVibeUsageSnapshot,
   MistralVibeUsageSummary
-} from '../../shared/mistral-vibe-usage-types'
+} from '../../shared/agent-usage/analytics/mistral-vibe-usage-types'
 import type { UsageStoreHost } from '../usage/usage-store-host'
 import { UsageProviderStoreLifecycle } from '../usage/provider-lifecycle/usage-provider-store-lifecycle'
 import { splitUsageCacheFileViaWorker } from '../usage/scan-worker/usage-scan-worker-spawn'

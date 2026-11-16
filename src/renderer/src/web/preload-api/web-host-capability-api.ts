@@ -6,10 +6,13 @@ import type { PreloadApi } from '../../../../preload/api-types'
 import type {
   ComputerUsePermissionSetupResult,
   ComputerUsePermissionStatusResult
-} from '../../../../shared/computer-use-permissions-types'
-import type { SkillDiscoveryResult } from '../../../../shared/skills'
-import type { SkillDeletePlan, SkillDeleteResult } from '../../../../shared/skill-delete-contract'
-import { SKILL_DELETE_CAPABILITY } from '../../../../shared/skill-install-capability'
+} from '../../../../shared/computer/computer-use-permissions-types'
+import type { SkillDiscoveryResult } from '../../../../shared/skills/discovery/skills'
+import type {
+  SkillDeletePlan,
+  SkillDeleteResult
+} from '../../../../shared/skills/deletion/skill-delete-contract'
+import { SKILL_DELETE_CAPABILITY } from '../../../../shared/skills/capabilities/skill-install-capability'
 import { callRuntimeResult, getRemoteRuntimeStatus } from './web-runtime-calls'
 import { requireActiveEnvironmentOrNull } from './web-runtime-session'
 import { getBrowserPlatform } from './web-storage'

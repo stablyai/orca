@@ -1,4 +1,4 @@
-import { buildDefaultSettings } from '../../../../shared/default-global-settings'
+import { buildDefaultSettings } from '../../../../shared/settings/default-global-settings'
 import { createRoot } from 'react-dom/client'
 import { useAppStore } from '@/store/index'
 import { TooltipProvider } from '@/components/ui/tooltip'

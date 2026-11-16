@@ -1,6 +1,6 @@
 import { getClientCreationActionPolicy } from '@/lib/workspace/creation/surface-policy/client-creation-action-policy'
 import { useAppStore } from '@/store/index'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/workspace/identity/floating-workspace-id'
 import { selectFloatingTerminalPanelInputs } from './floating-terminal-panel-inputs'
 
 export function useFloatingTerminalPanelStoreState() {

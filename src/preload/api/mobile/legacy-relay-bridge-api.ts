@@ -8,7 +8,7 @@ import {
   type LegacyRelayBridgeAttachResult,
   type LegacyRelayBridgeCloseResult,
   type LegacyRelayBridgedPane
-} from '../../../shared/legacy-relay-bridge-contract'
+} from '../../../shared/remote-runtime/relay/legacy-relay-bridge-contract'
 
 export type LegacyRelayBridgeApi = {
   listPanes: () => Promise<LegacyRelayBridgedPane[]>

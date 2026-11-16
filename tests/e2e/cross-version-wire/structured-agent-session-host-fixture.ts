@@ -11,7 +11,7 @@ import { CODEX_STRUCTURED_AGENT } from '../../../src/main/codex/structured/launc
 import {
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
-} from '../../../src/shared/agent-session/agent-session-runtime-capabilities'
+} from '../../../src/shared/agent-session/capabilities/agent-session-runtime-capabilities'
 
 // Use per-method spies so every skew can prove which call reached the host.
 export function structuredHostStub(

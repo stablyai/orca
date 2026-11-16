@@ -1,11 +1,11 @@
-import type { SpeechModelManifest } from '../../shared/speech-types'
+import type { SpeechModelManifest } from '../../shared/speech/speech-types'
 import {
   DICTATION_LANGUAGES,
   NEMOTRON_DICTATION_LANGUAGES,
   PARAKEET_V3_LANGUAGES,
   SENSE_VOICE_DICTATION_LANGUAGES,
   WHISPER_LANGUAGES
-} from '../../shared/dictation-language'
+} from '../../shared/speech/models/dictation-language'
 import { getSpeechModelDownloadMetadata } from './model-download-catalog'
 import { getGgufSpeechModelDownload } from './speech-model-gguf-downloads'
 import { getSpeechModelErrorRates } from './speech-model-error-rates'

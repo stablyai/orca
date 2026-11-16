@@ -42,10 +42,13 @@ function recipeVmOf(
 /** Where the recipe VM behind a phone link's server stands, for a request that opens a workspace
  *  on that link: only while it is up may the link carry it (the server is otherwise going or
  *  gone), and then the open counts as a reopening, so a sleep on its way leaves the VM up. */
-export function recipeVmServerState(userDataPath: string, environmentId: string): RecipeVmState {
+export async function recipeVmServerState(
+  userDataPath: string,
+  environmentId: string
+): Promise<RecipeVmState> {
   let environment: RecipeVmEnvironment
   try {
-    environment = resolveEnvironment(userDataPath, environmentId)
+    environment = await resolveEnvironment(userDataPath, environmentId)
   } catch {
     return 'up'
   }

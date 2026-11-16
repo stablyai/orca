@@ -4,7 +4,7 @@ import './bind-first-pane.test-fixture'
 import './runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
 import '../../ports/advertised-url-watcher'
-import { getDefaultWorkspaceSession } from '../../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../../shared/orca-profiles/constants'
 import {
   HEADLESS_LEAF_ID,
   HEADLESS_SECOND_LEAF_ID,
@@ -186,7 +186,7 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null
     })
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
 
     runtime.markGraphUnavailable(1)
@@ -217,14 +217,14 @@ describe('OrcaRuntimeService', () => {
       getForegroundProcess: async () => null
     })
     runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     const created = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
     const [tabId, leafId] = created.paneKey?.split(':') ?? []
     if (!tabId || !leafId) {
       throw new Error('expected stable pane identity')
     }
-    const syncSurface = (ptyId: string | null): void => {
-      runtime.syncWindowGraph(1, {
+    const syncSurface = async (ptyId: string | null): Promise<void> => {
+      await runtime.syncWindowGraph(1, {
         tabs: [
           {
             tabId,
@@ -247,11 +247,11 @@ describe('OrcaRuntimeService', () => {
       })
     }
 
-    syncSurface('pty-bg')
+    await syncSurface('pty-bg')
     await runtime.listTerminals()
     const before = runtime.getTerminalProcessIncarnation(created.handle)
-    syncSurface(null)
-    syncSurface('pty-bg')
+    await syncSurface(null)
+    await syncSurface('pty-bg')
     await runtime.listTerminals()
 
     expect(runtime.getTerminalProcessIncarnation(created.handle)).toBe(before)

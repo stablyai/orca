@@ -1,9 +1,9 @@
 import { constants as fsConstants, realpathSync } from 'node:fs'
 import { access, mkdir, realpath, stat } from 'node:fs/promises'
 import path from 'node:path'
-import { getAppEnvironment } from '../../shared/app-environment'
-import type { GlobalSettings } from '../../shared/global-settings-types'
-import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
+import { getAppEnvironment } from '../../shared/app-lifecycle/app-environment'
+import type { GlobalSettings } from '../../shared/settings/global-settings-types'
+import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome/ui-chrome-types'
 import type { Store } from '../persistence/loading-store/store'
 import { resolveFloatingWorkspacePath } from '../persistence/restoring-sessions/floating-workspace-normalization'
 

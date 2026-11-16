@@ -2,7 +2,7 @@ import { defineMethod } from '../../core'
 import {
   DELEGATED_MOBILE_DEVICE_SYNC_METHOD,
   DelegatedMobileDeviceSyncParamsSchema
-} from '../../../../../shared/delegated-mobile-device-contract'
+} from '../../../../../shared/remote-runtime/pairing/delegated-mobile-device-contract'
 import {
   ORCAD_DECLARE_CLIENT_METHOD,
   ORCAD_PEER_DESKTOPS_METHOD,

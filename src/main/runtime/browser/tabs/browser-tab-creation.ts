@@ -1,7 +1,7 @@
 import { createBrowserTabInRenderer } from './browser-tab-renderer-create'
 import type { RuntimeNavigationTarget } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import type { BrowserPageCreationPlacement } from '../../../../shared/browser/client-hosting/browser-client-host-placement'
-import type { BrowserTabSplitDirection } from '../../../../shared/browser-tab-split-direction'
+import type { BrowserTabSplitDirection } from '../../../../shared/browser/workspaces/browser-tab-split-direction'
 import {
   publishCreatedBrowserSessionTab,
   resolveBrowserTabCreateFocus,
@@ -150,7 +150,7 @@ export class RuntimeBrowserTabCreation {
     }
 
     const bridge = this.targets.requireAgentBrowserBridge()
-    publishCreatedBrowserSessionTab(this.host, {
+    await publishCreatedBrowserSessionTab(this.host, {
       placementKind: 'renderer',
       browserPageId,
       worktreeId,
@@ -207,7 +207,7 @@ export class RuntimeBrowserTabCreation {
         ...(params.targetGroupId ? { groupId: params.targetGroupId } : {})
       })
     }
-    publishCreatedBrowserSessionTab(this.host, {
+    await publishCreatedBrowserSessionTab(this.host, {
       placementKind: 'offscreen',
       browserPageId: created.browserPageId,
       worktreeId,

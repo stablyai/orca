@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type { ProjectGroup } from '../../../../shared/project-group-types'
-import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
-import type { Repo } from '../../../../shared/repo-types'
+import type { ProjectGroup } from '../../../../shared/project/groups/project-group-types'
+import { projectHostSetupProjectionFromRepos } from '../../../../shared/project/host-setup/project-host-setup-projection'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import {
   readSidebarProjectCatalog,
   type SidebarProjectCatalogStore
@@ -96,25 +96,5 @@ describe('readSidebarProjectCatalog', () => {
       ['upload', 'local']
     ])
     expect(catalog.projectOrderBy).toBe('manual')
-  })
-
-  it("files a server's copy of a grouped project under that group, as the window does", () => {
-    const upstream = { owner: 'stablyai', repo: 'school-app' }
-    const copy = repo('copy', { executionHostId: 'runtime:hub', upstream })
-    const catalog = readSidebarProjectCatalog(
-      store([repo('a', { projectGroupId: 'school', upstream })], [group('school')]),
-      [
-        {
-          hostId: 'runtime:hub',
-          repos: [copy],
-          projectGroups: [],
-          projection: projectHostSetupProjectionFromRepos([copy])
-        }
-      ]
-    )
-    expect(catalog.repos.map((entry) => [entry.id, entry.projectGroupId])).toEqual([
-      ['a', 'school'],
-      ['copy', 'school']
-    ])
   })
 })

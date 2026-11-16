@@ -22,6 +22,7 @@ export async function prepareWorktreeCreationHooks(
     return request
   }
 
+  const trustContext = request.ephemeralVmRecipe ? 'vm' : 'workspace'
   const isCancelled = (): boolean => !useAppStore.getState().pendingWorktreeCreations[creationId]
   const confirmHook = (kind: 'setup' | 'vmRecipe'): Promise<'run' | 'skip'> =>
     ensureHooksConfirmed(
@@ -30,7 +31,10 @@ export async function prepareWorktreeCreationHooks(
       kind,
       preparation.executionHostId,
       undefined,
-      isCancelled
+      isCancelled,
+      undefined,
+      undefined,
+      trustContext
     )
   const confirmed = await confirmWorkspaceSetupDecision(
     useAppStore.getState,
@@ -39,7 +43,8 @@ export async function prepareWorktreeCreationHooks(
     preparation.executionHostId,
     isCancelled,
     undefined,
-    setupHooksCreateSource(request)
+    setupHooksCreateSource(request),
+    trustContext
   )
   if (confirmed === 'cancelled') {
     return null
@@ -52,7 +57,8 @@ export async function prepareWorktreeCreationHooks(
       useAppStore.getState(),
       request.repoId,
       preparation.executionHostId,
-      isCancelled
+      isCancelled,
+      trustContext
     )
     if (isCancelled()) {
       return null
@@ -111,7 +117,14 @@ export function setupHooksCreateSource(
 
 /** Setup fields for the create call; the approved hash lets the host check the created branch. */
 export function setupCreateArgs(
-  request: Pick<WorktreeCreationRequest, 'setupOnly' | keyof ApprovedSetupHashes>
-): { setupOnly?: boolean } & ApprovedSetupHashes {
-  return { setupOnly: request.setupOnly, ...pickApprovedSetupHashes(request) }
+  request: Pick<
+    WorktreeCreationRequest,
+    'setupOnly' | 'ephemeralVmRecipe' | keyof ApprovedSetupHashes
+  >
+): { setupOnly?: boolean; hookTrustContext?: 'vm' } & ApprovedSetupHashes {
+  return {
+    setupOnly: request.setupOnly,
+    ...pickApprovedSetupHashes(request),
+    ...(request.ephemeralVmRecipe ? { hookTrustContext: 'vm' as const } : {})
+  }
 }

@@ -1,5 +1,8 @@
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
-import { isFolderRepo } from '../../../../shared/repo-kind'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
+import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import type { SetupDecision } from '../../../../shared/worktree/create-types'
 import { splitWorktreeId, worktreeIdentityKey } from '../../../../shared/worktree/id'
 import type { Worktree } from '../../../../shared/worktree/types'

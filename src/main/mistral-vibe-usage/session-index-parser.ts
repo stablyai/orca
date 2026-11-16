@@ -1,5 +1,8 @@
-import { record, type JsonRecord } from '../../shared/codex-rollout-jsonl-cursor'
-import { extractString } from '../../shared/trimmed-string'
+import {
+  record,
+  type JsonRecord
+} from '../../shared/agent-hook-listener/providers/codex/codex-rollout-jsonl-cursor'
+import { extractString } from '../../shared/text/trimmed-string'
 import { ensureNumber } from '../usage/source-input/usage-record-coercion'
 import type { MistralVibeUsageParsedEvent } from './types'
 

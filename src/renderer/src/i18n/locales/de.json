@@ -84,6 +84,10 @@
     },
     "wslMoved": {
       "movedToHost": "Auf den {{distro}}-Host verschoben",
+      "sectionTitle": "Auf WSL-Hosts verschoben ({{count}})",
+      "hide": "Aus dieser Liste ausblenden",
+      "hiddenToast": "{{name}} aus dieser Liste ausgeblendet",
+      "hiddenToastDescription": "„Wieder auf diesem Computer verwenden“ bleibt in seinem Menü unter dem {{distro}}-Host.",
       "useHere": "Wieder auf diesem Computer verwenden",
       "useHereTitle": "{{name}} wieder auf diesem Computer verwenden?",
       "useHereDescription": "Orca öffnet dieses Projekt hier im Zustand vor dem Verschieben. Der Code ist davon nicht betroffen: Er wurde nie verschoben. Seit dem Verschieben auf dem {{distro}}-Host vorgenommene Änderungen, etwa neue Tabs und Chats, bleiben auf dem Host und werden nicht zurückgeholt. Zusammen mit diesem Projekt verschobene Projekte werden ebenfalls zurückgeholt. Das Projekt bleibt auch auf dem {{distro}}-Host, bis es dort entfernt wird. Dieses Fenster wird neu geladen.",
@@ -898,7 +902,6 @@
       "defaultSurfaceKeptChat_other": "{{agents}} bleiben wie eingestellt Chats.",
       "defaultSurfaceSetAllChat": "Alle auf Chat setzen",
       "defaultSurfaceSetAllTerminal": "Alle auf Terminal setzen",
-      "sameAsChoice": "Wie {{agent}} · {{choice}}",
       "modelListFallback": "Integrierte Liste. Orca konnte von diesem Host keine Modellliste abrufen.",
       "chatUnavailableOnWindows": "{{value0}} Chat ist unter Windows noch nicht verfügbar, daher öffnet sich {{value0}} auf diesem Host in einem Terminal. Chats auf einem macOS- oder Linux-Host funktionieren weiterhin.",
       "undetectedCommandHint": "Wenn die {{agent}}-CLI außerhalb von PATH installiert ist, gib den vollständigen Pfad zu ihrer ausführbaren Datei auf diesem Host ein."
@@ -911,9 +914,6 @@
     },
     "followSymlinkedDirectories": "Symbolischen Verzeichnislinks folgen",
     "followSymlinkedDirectoriesDescription": "Verknüpfte Ordner beim Schnellöffnen durchsuchen und lokale verknüpfte Ordner im Datei-Explorer aufklappen.",
-    "accounts": {
-      "claudeRemoveFolder": "Orca löscht den Claude-Ordner dieses Kontos und dessen Anmeldung von diesem Computer. Der mit „Systemstandard“ geteilte Chat-Verlauf bleibt erhalten. Falls dieses Konto ausgewählt ist, verwendet der nächste Claude-Start „Systemstandard“."
-    },
     "sourceControl": {
       "gitOperationInAnotherWorkspace": "Git-Vorgang läuft anderswo",
       "remoteOperationInAnotherWorkspace": "In einem anderen Arbeitsbereich läuft ein Git-Vorgang, etwa Push, Pull oder erzwungener Push. Warte, bis er abgeschlossen ist, bevor du diese Aktion verwendest, damit sich die Vorgänge nicht überschneiden.",
@@ -929,9 +929,6 @@
         "extraArgs": "Zusätzliche CLI-Argumente",
         "launchOptions": "Modell und Berechtigungen",
         "savedLaunchOptions": "Gespeicherte Optionen: {{value0}}. Ältere Server verwenden ihre eigenen Berechtigungseinstellungen."
-      },
-      "actionPermissions": {
-        "sameAsAgent": "Wie {{agent}}"
       }
     },
     "general": {
@@ -1397,7 +1394,7 @@
             "33290e88ed": "Profil konnte nicht verbunden werden",
             "9fcb07a796": "Profil verbunden",
             "2f6c78a039": "Profil-Authentifizierung konnte nicht aktualisiert werden",
-            "a37b5e6d37": "Vom Profil abgemeldet",
+            "a37b5e6d37": "Von Orca abgemeldet",
             "83600521e7": "Abmelden fehlgeschlagen",
             "76deec8f58": "Organisation konnte nicht gewechselt werden",
             "7d4bc516ee": "Profil konnte nicht gewechselt werden",
@@ -1981,6 +1978,15 @@
       "workspacePortBrowserOpen": {
         "systemBrowserHint": "{{shortcut}}+Klick zum Öffnen im Systembrowser",
         "tooltip": "{{label}}. {{hint}}"
+      },
+      "worktreePaletteEvidence": {
+        "workspaceComment": "Arbeitsbereich-Kommentar",
+        "createdByAutomation": "Durch Automatisierung erstellt",
+        "linkedTask": "Verknüpfte Aufgabe",
+        "pullRequest": "Pull Request",
+        "mergeRequest": "Merge Request",
+        "linkedIssue": "Verknüpftes Issue",
+        "listeningPort": "Lauschender Port"
       }
     },
     "hooks": {
@@ -3625,6 +3631,8 @@
           "draft": "Entwurf",
           "labelCount_one": "{{count}} Label",
           "labelCount_other": "{{count}} Labels",
+          "authorCount_one": "{{count}} Autor",
+          "authorCount_other": "{{count}} Autoren",
           "allStates": "Alle",
           "filterPullRequests": "Pull Requests filtern",
           "filterIssues": "Issues filtern",
@@ -4042,7 +4050,8 @@
             "remoteTerminalClosed": "Das entfernte Terminal wurde geschlossen.",
             "ptyAllocationLimit": "Das System kann keine weiteren pty-Geräte zuweisen. Einige ungenutzte Terminals in Orca oder einem anderen Programm schließen und anschließend erneut versuchen.",
             "terminalProcessLimit": "Das System kann keinen weiteren Terminal-Prozess starten. Ungenutzte Terminals schließen oder ungenutzte Prozesse beenden und anschließend erneut versuchen.",
-            "hostTerminalCap": "Auf dem Host laufen bereits so viele Terminals, wie Orca zulässt. Ein nicht mehr benötigtes Terminal schließen und anschließend erneut versuchen."
+            "hostTerminalCap": "Auf dem Host laufen bereits so viele Terminals, wie Orca zulässt. Ein nicht mehr benötigtes Terminal schließen und anschließend erneut versuchen.",
+            "copyErrorDetails": "Fehlerdetails kopieren"
           },
           "TerminalProcessExitOverlay": {
             "capacityTitle": "Konsolenlimit von Git Bash erreicht",
@@ -4924,7 +4933,8 @@
             "detailedTooltip": "Vollständige Nutzung mit Balken, Beschriftungen und Prozentwerten",
             "compactTooltip": "Kompakte Nutzung: eine Zusammenfassung pro Anbieter",
             "footerDetailAria": "Detailangabe in der Nutzungsfußzeile",
-            "notChecked": "Nicht geprüft"
+            "notChecked": "Nicht geprüft",
+            "modelWeeklyLimit": "Wöchentliches {{model}}-Limit: {{usage}}"
           },
           "RemoteServerUpdateStatusSegment": {
             "updating": "{{value0}}/{{value1}} werden aktualisiert",
@@ -6168,8 +6178,7 @@
           "issueCommand": "Issue-Befehl",
           "newVmRecipe": "Neues VM-Rezept",
           "vmRecipe": "VM-Rezept",
-          "thisRepository": "dieses Repository",
-          "alwaysTrustRepo": "<code>orca.yaml</code> in <repo/> immer vertrauen"
+          "thisRepository": "dieses Repository"
         },
         "PendingWorktreeRow": {
           "af21e953d1": "Worktree-Erstellung abbrechen",
@@ -7460,7 +7469,6 @@
           "locationSaveFailed": "Der Speicherort der Konten konnte nicht gespeichert werden. Versuche es erneut.",
           "dbb9626ed1": "Abbrechen",
           "63843e37e2": "Claude-Konto entfernen?",
-          "380a7736cc": "Beim Entfernen dieses Kontos wird sein verwaltetes Codex-Home-Verzeichnis dauerhaft gelöscht, einschließlich des gesamten Codex-Sitzungsverlaufs und aller darin gespeicherten MCP-Anmeldungen. Dies kann nicht rückgängig gemacht werden. Falls das Konto gerade aktiv ist, greift Orca auf die systemweite Standardanmeldung für Codex zurück.",
           "0d47394635": "Codex-Konto entfernen?",
           "ae3b21eb6c": "opencode.ai/workspace/wrk_…/go",
           "51c9104e13": "Nach der Anmeldung bei opencode.ai in der URL zu finden (z. B.",
@@ -7794,7 +7802,10 @@
           "b4e9d3f2a1c5": "{{value0}} Cookies aus {{value1}} in {{value2}} importiert.",
           "c5a273a809": "Aus {{value0}}",
           "80bffd32bf": "Cookies importieren",
-          "bd7d68f138": "Aus Datei…"
+          "bd7d68f138": "Aus Datei…",
+          "4054c458e1": "Cookies des Standardprofils löschen",
+          "3b662becd5": "Cookies im Standardprofil löschen?",
+          "f159cf5a3e": "Dadurch wirst du möglicherweise auf Websites in diesem Profil abgemeldet."
         },
         "BrowserUseComputerUseNotice": {
           "79209b37b9": "Falls der Cookie-Import nicht geeignet ist, kann Computer Use lokale Apps steuern und gegebenenfalls bestehende angemeldete Browser-Sitzungen nutzen. Den Orca Computer Use-Skill installieren; unter macOS sind zusätzlich Datenschutzberechtigungen erforderlich.",
@@ -13079,9 +13090,7 @@
           }
         },
         "PluginUpdateAllDialog": {
-          "review": "Prüfen",
           "previewError": "Dieses Update konnte nicht gelesen werden",
-          "newAccess": "Neu: {{value0}}",
           "failed": "{{value0}} konnte nicht aktualisiert werden. Die anderen wurden aktualisiert.",
           "cancel": "Abbrechen",
           "updateOne": "1 Plugin aktualisieren",
@@ -13092,23 +13101,31 @@
           "updated": "Aktualisiert",
           "needsOrca": "Benötigt Orca {{value0}} oder neuer",
           "current": "Bereits installiert",
-          "sourceMoved": "Neue Quelle: {{value0}} (vorher {{value1}})",
           "newShortcuts": "Tastenkürzel",
           "newCommands": "Befehle",
-          "newPanels": "Bereiche",
-          "newEvents": "Weitere Ereignisse",
+          "newPanels": "Fügt Panels hinzu",
+          "newEvents": "Reagiert auf mehr Orca-Ereignisse",
           "newRecipes": "Maschinenrezepte",
           "newContributions": "Funktionen, die für dich handeln",
           "allAccess": "Alle Zugriffe anzeigen",
-          "update": "Aktualisieren"
+          "update": "Aktualisieren",
+          "newFileTypes": "Ändert, welche Dateien es öffnet",
+          "newHooks": "Kann ändern oder stoppen, was Orca und deine Agenten tun",
+          "newSettings": "Eine Einstellungsseite",
+          "newStatusBarItems": "Statusleisten-Elemente",
+          "opensFileTypes": "Öffnet neue Dateitypen: {{value0}}",
+          "becomesDefaultEditor": "Wird der Standardeditor für {{value0}}",
+          "needApproval": "Brauchen deine Zustimmung",
+          "readyToUpdate": "Bereit zum Aktualisieren",
+          "movedRepository": "Stammt aus einem anderen Repository"
         },
         "PluginUpdateReview": {
           "title": "Update für {{value0}} prüfen",
-          "back": "Zurück",
           "approve": "Genehmigen & aktualisieren",
-          "explain": "Dieses Update verlangt mehr als die Version, die du genehmigt hast. Es wird nur installiert, wenn du es hier genehmigst.",
-          "before": "Vorher",
-          "after": "Nachher"
+          "uncompared": "Orca konnte diese Version nicht mit der genehmigten vergleichen. Prüfe vor dem Update, worauf sie zugreifen kann.",
+          "newInVersion": "Neu in dieser Version:",
+          "titleMany": "{{value0}} Updates prüfen",
+          "history": "Änderungen auf GitHub ansehen"
         },
         "PluginNotOfficialWarning": {
           "unknownPublisher": "seinem Herausgeber",
@@ -13116,7 +13133,8 @@
           "update": "Stelle sicher, dass du {{value0}} vertraust, bevor du es aktualisierst. Dieses Plugin führt den Code des Herausgebers in Orca aus.",
           "installed": "Stelle sicher, dass du {{value0}} vertraust. Dieses Plugin führt den Code des Herausgebers in Orca aus.",
           "label": "Kein offizielles Plugin:",
-          "translations": "Übersetzungen können jeden Text in Orca ändern. Stelle sicher, dass du {{value0}} vertraust."
+          "translations": "Übersetzungen können jeden Text in Orca ändern. Stelle sicher, dass du {{value0}} vertraust.",
+          "community": "Community-Plugin"
         },
         "PluginCardAction": {
           "installed": "Installiert",
@@ -13205,7 +13223,8 @@
           "catalog": "Katalog",
           "clear": "Filter zurücksetzen",
           "themes": "Designs",
-          "languages": "Sprachen",
+          "codeLanguages": "Sprachen",
+          "translations": "Übersetzungen",
           "icons": "Symbole",
           "commands": "Befehle & Panels",
           "catalogLabel": "Nach Katalog filtern",
@@ -13319,11 +13338,15 @@
           "movedTitle": "{{value0}} {{value1}} stammt aus einem anderen Repository",
           "accessTitle": "{{value0}} {{value1}} möchte mehr Zugriff",
           "manyTitle": "{{value0}} Plugin-Updates warten auf deine Prüfung",
-          "oneDescription": "Veröffentlicht von {{value0}}. Es wird erst aktualisiert, wenn du es prüfst.",
-          "manyDescription": "Sie werden erst aktualisiert, wenn du sie prüfst.",
-          "review": "Prüfen",
           "dismiss": "Schließen",
-          "movedInstalled": "Es bleibt aus, bis du es prüfst."
+          "movedInstalled": "Es bleibt aus, bis du es prüfst.",
+          "approveAll": "Alle genehmigen und aktualisieren",
+          "approveOne": "Genehmigen und aktualisieren",
+          "details": "Details",
+          "failed": "{{value0}} konnte nicht aktualisiert werden",
+          "morePlugins": "und {{value0}} weitere Plugins",
+          "uncompared": "Orca konnte es nicht mit der genehmigten Version vergleichen.",
+          "held": "{{value0}} hat sich nach deiner Prüfung geändert und wartet daher in Einstellungen → Plugins auf deine Prüfung."
         },
         "PluginThemeUseNow": {
           "assignedLight": "{{value0}} als helles Design festgelegt",
@@ -16020,13 +16043,6 @@
                       "c94ff11e91": "Einrichtungsstatus konnte nicht erneut geprüft werden."
                     }
                   }
-                },
-                "tab": {
-                  "intro": {
-                    "actions": {
-                      "68a5dc6604": "Der mobile Emulator konnte nicht ausgeblendet werden."
-                    }
-                  }
                 }
               }
             }
@@ -16051,17 +16067,6 @@
             "5789936d9a": "iOS-Simulatoren in der Vorschau anzeigen, während Agenten den Bildschirm steuern.",
             "8014b4b80b": "Beibehalten",
             "6e051a40b7": "Ausblenden"
-          },
-          "mobile": {
-            "emulator": {
-              "hidden": {
-                "toast": {
-                  "e8f098a870": "Mobiler Emulator ausgeblendet",
-                  "c46c979c1d": "Der mobile Emulator lässt sich jederzeit wieder aktivieren unter",
-                  "600f9a745a": "Einstellungen › Mobiler Emulator"
-                }
-              }
-            }
           },
           "useEmulatorScreenKeyboard": {
             "pasteTooLarge": "Der einzufügende Text ist für die Tastatureingabe des Emulators zu groß.",
@@ -16551,10 +16556,9 @@
           "725868c75d": "Ordner durchsuchen",
           "5e7f0d8a80": "Ordnerauswahl für entfernte Dateien nicht verfügbar",
           "30099dca46": "Ordner",
-          "2d7d39dc63": ".md",
           "c8ac7868e6": "Dateiname",
           "b6ed807cc6": "Name",
-          "e365f3c638": "Die Markdown-Datei benennen und einen Ordner auswählen.",
+          "description": "Datei benennen und einen Ordner auswählen.",
           "674b046582": "Speichern unter",
           "nameEmpty": "Name darf nicht leer sein",
           "nameHasSeparators": "Name darf keine Pfadtrennzeichen enthalten",
@@ -19975,7 +19979,7 @@
       "queuedMessages": {
         "steer": "Steuern",
         "send": "Senden",
-        "steerHint": "Ohne Unterbrechung des Modells übermitteln",
+        "steerHint": "Jetzt senden, während der Agent weiterarbeitet",
         "sendHint": "Diese Nachricht jetzt senden",
         "delete": "Löschen",
         "moreActions": "Weitere Aktionen",
@@ -20596,7 +20600,8 @@
       "TerminalContextMenu": {
         "copySessionId": "Sitzungs-ID kopieren",
         "copySessionIdSuccess": "Sitzungs-ID kopiert",
-        "copySessionIdError": "Sitzungs-ID konnte nicht kopiert werden"
+        "copySessionIdError": "Sitzungs-ID konnte nicht kopiert werden",
+        "copySessionIdUnavailable": "Keine Sitzungs-ID zum Kopieren"
       },
       "hostFile": {
         "updateHostForOutsideFiles": "Orca auf {{value0}} aktualisieren, um Dateien außerhalb seiner Arbeitsbereiche zu öffnen"
@@ -21912,7 +21917,7 @@
         "busy": "In Arbeit",
         "idle": "Inaktiv",
         "settingTitle": "Bei Kontowechsel, während Claude läuft",
-        "settingDescription": "Ein Neustart setzt jedes laufende Gespräch mit dem neuen Konto fort.",
+        "settingDescription": "Ein Neustart setzt jedes laufende Gespräch mit dem neuen Konto fort. Beschäftigte Sitzungen brechen ihre aktuelle Arbeit ab.",
         "keyword": {
           "restart": "Neustart",
           "running": "laufend"
@@ -21937,13 +21942,15 @@
         "review": "Prüfen",
         "restartCount_one": "{{count}} Sitzung neu starten",
         "restartCount_other": "{{count}} Sitzungen neu starten",
-        "reviewBody_one": "{{count}} weitere Claude-Sitzung wurde nicht zu {{next}} verschoben.",
-        "reviewBody_other": "{{count}} weitere Claude-Sitzungen wurden nicht zu {{next}} verschoben.",
-        "body_one": "{{count}} Claude-Sitzung läuft noch auf {{previous}}. Ein Neustart setzt das Gespräch auf {{next}} fort. Beschäftigte Sitzungen warten vor dem Neustart, bis sie inaktiv sind.",
-        "body_other": "{{count}} Claude-Sitzungen laufen noch auf {{previous}}. Ein Neustart setzt jedes Gespräch auf {{next}} fort. Beschäftigte Sitzungen warten vor dem Neustart, bis sie inaktiv sind.",
+        "reviewBody_one": "{{count}} Claude-Sitzung wurde nicht zu {{next}} verschoben.",
+        "reviewBody_other": "{{count}} Claude-Sitzungen wurden nicht zu {{next}} verschoben.",
+        "body_one": "{{count}} Claude-Sitzung läuft noch auf {{previous}}. Ein Neustart setzt das Gespräch auf {{next}} fort. Beschäftigte Sitzungen brechen ihre aktuelle Arbeit ab und starten sofort neu.",
+        "body_other": "{{count}} Claude-Sitzungen laufen noch auf {{previous}}. Ein Neustart setzt jedes Gespräch auf {{next}} fort. Beschäftigte Sitzungen brechen ihre aktuelle Arbeit ab und starten sofort neu.",
         "reasonSharedSession": "Auch in einem anderen Bereich geöffnet",
         "sharedOne": "1 Claude-Sitzung bleibt auf {{previous}}, weil dieselbe Unterhaltung in einem anderen Bereich geöffnet ist. Ein Neustart könnte die Unterhaltung des anderen Bereichs erneut öffnen.",
-        "sharedOther": "{{count}} Claude-Sitzungen bleiben auf {{previous}}, weil dieselbe Unterhaltung in einem anderen Bereich geöffnet ist. Ein Neustart könnte die Unterhaltung des anderen Bereichs erneut öffnen."
+        "sharedOther": "{{count}} Claude-Sitzungen bleiben auf {{previous}}, weil dieselbe Unterhaltung in einem anderen Bereich geöffnet ist. Ein Neustart könnte die Unterhaltung des anderen Bereichs erneut öffnen.",
+        "strandedOne": "1 Claude-Sitzung läuft möglicherweise noch auf {{previous}}. Starte sie manuell neu, um zu wechseln.",
+        "strandedOther": "{{count}} Claude-Sitzungen laufen möglicherweise noch auf {{previous}}. Starte sie manuell neu, um zu wechseln."
       },
       "oauthUsage": {
         "title": "Claude-Nutzungsabfrage",
@@ -22627,21 +22634,13 @@
     "language": {
       "back": "Sprachen",
       "requestPrompt": "Welche Sprache soll Orca unterstützen?",
-      "requestSuccess": "Sprachwunsch erfasst. Die Einrichtung kann fortgesetzt werden.",
       "requestError": "Die Anfrage konnte nicht erfasst werden. Erneut versuchen.",
       "retry": "Erneut versuchen",
       "requestAction": "Sprache anfragen",
       "title": "Anzeigesprache",
-      "device": "Systemsprache: {{language}}",
-      "unsupported": "Systemsprache: {{language}}. Diese Sprache wird noch nicht unterstützt.",
-      "unknown": "Die Systemsprache konnte nicht erkannt werden. Unten eine Sprache auswählen.",
-      "loadError": "Diese Sprache konnte nicht geladen werden. Erneut versuchen.",
-      "saveError": "Die Spracheinstellung konnte nicht gespeichert werden. Erneut versuchen.",
-      "other": "Andere Sprache…",
       "settingsError": "Die Einstellungen konnten nicht geladen werden.",
       "loadingSettings": "Einstellungen werden geladen…",
-      "loading": "Sprache wird geladen…",
-      "saving": "Sprache wird gespeichert…"
+      "loading": "Sprache wird geladen…"
     }
   },
   "resourceManager": {
@@ -22789,6 +22788,8 @@
       "tabCloseAll": "Alle Editor-Tabs schließen",
       "tabRename": "Aktiven Tab umbenennen",
       "tabReopenClosed": "Geschlossenen Tab erneut öffnen",
+      "tabMoveLeft": "Aktiven Tab nach links verschieben",
+      "tabMoveRight": "Aktiven Tab nach rechts verschieben",
       "tabNextSameType": "Zum nächsten Tab wechseln (gleicher Typ)",
       "tabPreviousSameType": "Zum vorherigen Tab wechseln (gleicher Typ)",
       "tabNextAllTypes": "Zum nächsten Tab wechseln (alle Typen)",
@@ -22799,6 +22800,7 @@
       "tabOpenQuickCommandsMenu": "Menü für Schnellbefehle ein-/ausblenden",
       "editorFind": "Im Editor suchen",
       "editorReplace": "Im Editor ersetzen",
+      "editorToggleChangesView": "Änderungsansicht ein-/ausschalten",
       "fileExplorerUndo": "Dateivorgang rückgängig machen",
       "fileExplorerRedo": "Dateivorgang wiederholen",
       "fileExplorerCopyPath": "Dateipfad kopieren",
@@ -22816,6 +22818,7 @@
       "chatFind": "Im Chat suchen",
       "terminalToggleNativeChat": "Zwischen Chat-Oberfläche und Terminal wechseln",
       "terminalClosePane": "Aktiven Bereich schließen",
+      "terminalCopySessionId": "Sitzungs-ID kopieren",
       "terminalSplitRight": "Terminal nach rechts teilen",
       "terminalSplitDown": "Terminal nach unten teilen",
       "terminalSwitchInputSource": "Eingabequelle / Sprache wechseln (nativ)",
@@ -23249,7 +23252,6 @@
     "setupTrust": {
       "reviewTitle": "Neue Einrichtungsbefehle für diese Automatisierung genehmigen?",
       "reviewBody": "Eine Ausführung hat die Einrichtung übersprungen, weil sich die Einrichtungsbefehle in der <code>orca.yaml</code> ihres Branches geändert haben. Nach der Genehmigung verwenden spätere Ausführungen diese Befehle. Genehmige nur, wenn du <repo/> vertraust.",
-      "approve": "Genehmigen",
       "approved": "Einrichtung genehmigt. Spätere Ausführungen dieser Automatisierung führen sie aus.",
       "skippedSinceApproved": "Die Einrichtung wurde bei dieser Ausführung nicht ausgeführt, weil sich die orca.yaml-Einrichtungsbefehle ihres Branches geändert haben. Sie wurden inzwischen genehmigt, daher führen spätere Ausführungen sie aus.",
       "skippedReview": "Die Einrichtung wurde nicht ausgeführt: Der Branch dieser Ausführung enthält andere orca.yaml-Einrichtungsbefehle als die für diese Automatisierung genehmigten. Prüfe sie, damit spätere Ausführungen die Einrichtung ausführen.",
@@ -23586,7 +23588,6 @@
     "terminalUnverifiable": "Orca konnte nicht prüfen, ob die WSL-Distribution {{distro}} läuft, und hat dieses Terminal daher nicht gestartet. Starte die Distribution und versuche es dann erneut."
   },
   "agentPicker": {
-    "catalogUnsupported": "Modelle für {{agent}} sind auf diesem Host nicht verfügbar. Du kannst deine Auswahl beibehalten oder Argumente verwenden.",
     "catalogUnsupportedLaunch": "Modelle für {{agent}} sind auf diesem Host nicht verfügbar. Deine aktuelle Auswahl gilt weiterhin.",
     "catalogFailed": "Modelle für {{agent}} konnten nicht geladen werden. Schließe die Agentenauswahl und öffne sie erneut.",
     "catalogSignIn": "Melde dich bei {{agent}} an, um die Modelle zu laden, und öffne die Agentenauswahl erneut.",
@@ -23596,7 +23597,6 @@
     "setByArguments": "Durch Argumente festgelegt",
     "searchModels": "Modelle suchen",
     "noModels": "Keine Modelle entsprechen deiner Suche.",
-    "toggleArguments": "Argumente ein-/ausblenden",
     "argumentsTerminalHint": "Gilt nur für Terminalstarts (CLI)",
     "searchAgentModels": "{{agent}}-Modelle suchen…",
     "moreModelsWithCount": "Weitere Modelle ({{total}})",
@@ -23606,7 +23606,6 @@
     "argumentsHint": "Gilt nur für CLI-Starts.",
     "launchChat": "Chat starten",
     "launchTerminal": "Terminal starten",
-    "use": "Verwenden",
     "select": "Agent auswählen",
     "promptPlaceholder": "Prompt hinzufügen (optional): / für Skills, @ für Dateien",
     "promptPlaceholderFilesOnly": "Prompt hinzufügen (optional): @ für Dateien",

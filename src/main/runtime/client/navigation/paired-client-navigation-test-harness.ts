@@ -3,7 +3,7 @@ import WebSocket from 'ws'
 import { parsePairingCode } from '../../../../shared/remote-runtime/pairing/pairing'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { HostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import {
@@ -199,7 +199,7 @@ export function snapshotVersion(response: Record<string, unknown>): number {
   return (response.result as RuntimeMobileSessionTabsResult | undefined)?.snapshotVersion ?? -1
 }
 
-export function seedSessionTabs(runtime: OrcaRuntimeService): void {
+export async function seedSessionTabs(runtime: OrcaRuntimeService): Promise<void> {
   const tabs = ['host-tab', 'client-a-tab', 'client-a2-tab', 'client-b-tab'].map((id, index) => ({
     type: 'terminal' as const,
     id,
@@ -209,7 +209,7 @@ export function seedSessionTabs(runtime: OrcaRuntimeService): void {
     title: id,
     isActive: id === 'host-tab'
   }))
-  runtime.syncWindowGraph(1, {
+  await runtime.syncWindowGraph(1, {
     tabs: [],
     leaves: [],
     mobileSessionTabs: [

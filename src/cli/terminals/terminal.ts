@@ -37,8 +37,8 @@ import { RuntimeClientError } from '../runtime/connection/types'
 import {
   isSupportedWindowsShellOverride,
   listSupportedWindowsShellOverrides
-} from '../../shared/windows-terminal-shell'
-import '../../shared/protocol-version'
+} from '../../shared/shell/launch/windows-terminal-shell'
+import '../../shared/remote-runtime/protocol/protocol-version'
 import {
   TERMINAL_CREATE_SHELL_SELECTION_RUNTIME_CAPABILITY,
   TERMINAL_SPLIT_RETRY_RUNTIME_CAPABILITY

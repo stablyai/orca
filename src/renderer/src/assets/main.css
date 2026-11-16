@@ -105,6 +105,7 @@
   --color-question-option-border: var(--question-option-border);
   --color-chat-focus-ring: var(--chat-focus-ring);
   --color-unread: var(--unread);
+  --color-unread-inverse: var(--unread-inverse);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -274,6 +275,8 @@
   --question-option-border-mix: 16%;
   /* A finished agent result the user hasn't seen; blue so it never reads as a state color. */
   --unread: var(--color-blue-500);
+  /* The unread dot on an inverted surface (tips): blue-500 keeps 3:1 on both the near-black and near-white inverse. */
+  --unread-inverse: var(--color-blue-500);
   /* Keep PR-state hues stable across theme changes. */
   --workspace-status-done: #c7a594;
   --workspace-status-review: #16a34a;
@@ -1638,15 +1641,17 @@ html.native-shell .app-layout {
   color: var(--accent-foreground);
 }
 
-/* Why: the split-pane landing card is a flat surface, so its highlight is a plain fill on
-   --popover with no ring; these out-rank the palette rules above in both themes. */
-.split-pane-landing [data-slot='command-item'].jump-palette-item[data-selected='true'] {
+/* Why: the split-pane landing card and the agent picker's pane are flat surfaces, so their highlight
+   is a plain fill on --popover with no ring; these out-rank the palette rules above in both themes. */
+.split-pane-landing [data-slot='command-item'].jump-palette-item[data-selected='true'],
+[data-agent-launch-setup] [data-slot='command-item'].jump-palette-item[data-selected='true'] {
   --jump-palette-selection-surface: color-mix(in srgb, var(--foreground) 12%, var(--popover));
   background: var(--jump-palette-selection-surface);
   box-shadow: none;
 }
 
-.dark .split-pane-landing [data-slot='command-item'].jump-palette-item[data-selected='true'] {
+.dark .split-pane-landing [data-slot='command-item'].jump-palette-item[data-selected='true'],
+.dark [data-agent-launch-setup] [data-slot='command-item'].jump-palette-item[data-selected='true'] {
   --jump-palette-selection-surface: color-mix(in srgb, var(--foreground) 8%, var(--popover));
   background: var(--jump-palette-selection-surface);
   box-shadow: none;
@@ -2921,6 +2926,14 @@ html.native-shell .app-layout {
 
 .monaco-editor .orca-conflict-margin {
   background: color-mix(in srgb, var(--destructive) 8%, transparent);
+}
+
+/* Inline git blame after the cursor line; injected text, so selection and copy ignore it. */
+.monaco-editor .orca-git-blame-inline {
+  color: var(--muted-foreground);
+  font-style: normal;
+  opacity: 0.75;
+  margin-left: 3em;
 }
 
 .monaco-editor .orca-conflict-marker-label {

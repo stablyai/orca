@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { MemorySnapshot, WorktreeMemory } from '../../../../../../shared/process-stats-types'
+import type {
+  MemorySnapshot,
+  WorktreeMemory
+} from '../../../../../../shared/diagnostics/process-stats-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { MergeContext } from './resource-usage-merge-types'
 import { mergeSnapshotAndSessions } from './merge-snapshot-and-sessions'

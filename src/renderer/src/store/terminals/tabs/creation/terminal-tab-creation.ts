@@ -19,10 +19,10 @@ import {
 } from '../../../slices/tabs/tab-group-state'
 import { pushRecentTabId, sanitizeRecentTabIds } from '../../../slices/tabs/tab-selection-history'
 import { dedupeTabOrder } from '../../../../../../shared/workspace-layout/tab-groups/tab-order'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import { emptySplitGroup, splitGroupEntries } from '../../../slices/tabs/tabs-group-actions'
 import { ownsGlobalSelection } from '../../../workspaces/selection/global-selection-owner'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
 import {
   recordCreatedTerminalTabInLayoutOwner,
   terminalTabCreateCommand,

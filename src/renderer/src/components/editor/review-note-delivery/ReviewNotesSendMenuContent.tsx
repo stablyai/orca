@@ -20,7 +20,7 @@ import {
   useWorktreeStructuredChatTabNames,
   getStructuredChatTabNames
 } from '@/runtime/native-chat/naming/structured-chat-name-observation'
-import { QuickLaunchAgentMenuItems } from '@/components/tab-bar/QuickLaunchButton'
+import { QuickLaunchAgentMenuItems } from '@/components/agent/launch-menu/AgentMenuItems'
 import { AgentStateDot, agentStateLabel } from '@/components/AgentStateDot'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import {
@@ -48,7 +48,7 @@ import { lastEnteredDoneAt } from '@/components/dashboard/rows/agent-finished-ti
 import { useWorktreeAgentRows } from '@/components/sidebar/workspace-card/activity/useWorktreeAgentRows'
 import { useAgentRowConversationName } from '@/components/dashboard/rows/use-agent-row-conversation-name'
 import { getAgentRowPrimaryText } from '../../../../../shared/agent-status/presentation/agent-row-primary-text'
-import type { LaunchSource } from '../../../../../shared/telemetry-property-schemas'
+import type { LaunchSource } from '../../../../../shared/telemetry/schemas/telemetry-property-schemas'
 import { agentRowDisplayDotState } from '@/lib/agent-status/presentation/agent-row-dot-state'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'

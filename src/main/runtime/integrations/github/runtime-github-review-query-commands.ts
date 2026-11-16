@@ -1,13 +1,13 @@
 import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import type { GitHubPRFile } from '../../../../shared/github/pull-requests/pull-request-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { LocalProjectGhExecOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import { getIssue } from '../../../github/issues/issues'
 import { getPRCheckDetails } from '../../../github/client/check/get-pr-check-details'
 import { getPRChecks } from '../../../github/client/check/get-pr-checks'
 import { getPRComments } from '../../../github/client/fetch/get-pr-comments'
 import { getPRFileContents } from '../../../github/pull-requests/files/pull-request-file-contents'
-import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
+import { getRepoRoutingConnectionId } from '../../../../shared/execution-host/execution-host'
 import type { GitHubPRRefreshReason } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 
 type LocalGitArgs = [] | [LocalProjectGhExecOptions]
@@ -22,14 +22,16 @@ export class RuntimeGitHubReviewQueryCommands {
 
   async getRepoIssue(
     repoSelector: string,
-    number: number
+    number: number,
+    ownerRepo?: GitHubOwnerRepo
   ): Promise<Awaited<ReturnType<typeof getIssue>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
     return getIssue(
       repo.path,
       number,
       getRepoRoutingConnectionId(repo),
-      ...this.deps.getLocalGitArgs(repo)
+      this.deps.getLocalGitArgs(repo)[0],
+      ownerRepo
     )
   }
 

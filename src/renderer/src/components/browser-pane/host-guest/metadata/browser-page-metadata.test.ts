@@ -4,7 +4,7 @@ import type { BrowserGuestMetadata } from '../../../../../../shared/browser/gues
 import type {
   BrowserPage,
   BrowserWorkspace
-} from '../../../../../../shared/browser-workspace-types'
+} from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import type { AttachBrowserPageWebviewArgs } from '../lifecycle/attach-browser-page-webview'
 
 const adapters = vi.hoisted(() => ({ ensureViewport: vi.fn(), ensureWebview: vi.fn() }))
@@ -21,6 +21,7 @@ vi.mock('../lifecycle/browser-page-webview-guest-session', () => ({
   })
 }))
 vi.mock('../webview-registry', () => ({
+  webviewRegistry: new Map(),
   isBrowserPageRendererRecoveryPending: () => false,
   moveFocusToRendererBeforeWebviewDetach() {}
 }))
@@ -40,7 +41,8 @@ vi.mock('../../annotate/viewport/browser-annotation-viewport-message', () => ({
   consumeBrowserAnnotationViewportMessage() {}
 }))
 
-import { useAppStore } from '@/store/index'
+import { useAppStore } from '@/store'
+import { webviewRegistry } from '../webview-registry'
 import { bindBrowserPageWebviewListeners } from '../lifecycle/bind-browser-page-webview-listeners'
 import {
   acceptBrowserGuestMetadata,
@@ -52,6 +54,7 @@ beforeEach(clearBrowserGuestMetadata)
 afterEach(() => {
   disposers.splice(0).forEach((dispose) => dispose())
   clearBrowserGuestMetadata()
+  webviewRegistry.clear()
   document.body.replaceChildren()
 })
 
@@ -109,6 +112,7 @@ function mount(state: BrowserGuestMetadata) {
   const webview = Object.assign(document.createElement('webview'), {
     getWebContentsId: () => 42
   }) as Electron.WebviewTag
+  webviewRegistry.set('page-a', webview)
   const container = document.createElement('div')
   container.append(webview)
   document.body.append(container)

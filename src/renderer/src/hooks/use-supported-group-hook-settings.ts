@@ -1,9 +1,12 @@
 import { useShallow } from 'zustand/react/shallow'
 import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { ProjectGroup } from '../../../shared/project-group-types'
-import { projectGroupHookOwner } from '../../../shared/workspace-hook-owner'
-import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
+import type { ProjectGroup } from '../../../shared/project/groups/project-group-types'
+import { projectGroupHookOwner } from '../../../shared/workspace-setup/hooks/workspace-hook-owner'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId
+} from '../../../shared/execution-host/execution-host'
 import {
   PROJECT_GROUP_FOLDER_SETUP_RUNTIME_CAPABILITY,
   PROJECT_GROUP_FOLDER_ARCHIVE_RUNTIME_CAPABILITY

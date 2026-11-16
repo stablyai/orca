@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   RuntimeMobileSessionTabsResult,
@@ -43,7 +44,7 @@ function makeViewerState(): WebSessionTabsSyncState {
     activeTabType: 'terminal',
     activeTabTypeByWorktree: {},
     activeWorktreeId: 'workspace-0',
-    agentStatusByPaneKey: {},
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
     agentStatusEpoch: 0,
     browserCertificateFailuresByPageId: {},
     browserPagesByWorkspace: {},
@@ -97,6 +98,12 @@ function seedWorktree(runtime: OrcaRuntimeService, index: number): string {
   return ptyId
 }
 
+// Desktop frames prepare sender identity first; wait for the scheduled pass to deliver.
+async function senderFramesDelivered(runtime: OrcaRuntimeService): Promise<void> {
+  await new Promise<void>((resolve) => queueMicrotask(resolve))
+  await runtime['agentProjections'].senders.withPreparedPublication(() => undefined, false)
+}
+
 describe('real PTY decorative session-tabs fanout', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -107,7 +114,7 @@ describe('real PTY decorative session-tabs fanout', () => {
     vi.useRealTimers()
   })
 
-  it('renews retained hook status without resetting its state start', () => {
+  it('renews retained hook status without resetting its state start', async () => {
     const statusWiring = makeAgentStatusStoreWiring()
     const runtime = new OrcaRuntimeService(null, undefined, statusWiring.deps)
     const uninstallStatusRepublish = statusWiring.attach(runtime)
@@ -140,6 +147,7 @@ describe('real PTY decorative session-tabs fanout', () => {
       Date.now()
     )
     vi.advanceTimersByTime(50)
+    await senderFramesDelivered(runtime)
     expect(publications).toHaveLength(1)
     const initialTerminal = publications[0]?.tabs[0]
     const initialStatus =
@@ -150,6 +158,7 @@ describe('real PTY decorative session-tabs fanout', () => {
     vi.advanceTimersByTime(10)
     runtime.onPtyData(ptyId, '\x1b]0;⠋ Codex working\x07', Date.now())
     vi.advanceTimersByTime(50)
+    await senderFramesDelivered(runtime)
     expect(publications).toHaveLength(1)
     const titledTerminal = publications[0]?.tabs[0]
     const titledStatus =
@@ -161,6 +170,7 @@ describe('real PTY decorative session-tabs fanout', () => {
     vi.advanceTimersByTime(SESSION_TABS_AGENT_STATUS_HEARTBEAT_INTERVAL_MS)
     runtime.onPtyData(ptyId, '\x1b]0;⠙ Codex working\x07', Date.now())
     vi.advanceTimersByTime(50)
+    await senderFramesDelivered(runtime)
 
     expect(publications).toHaveLength(1)
     const refreshedTerminal = publications[0]?.tabs[0]
@@ -175,6 +185,7 @@ describe('real PTY decorative session-tabs fanout', () => {
     vi.advanceTimersByTime(SESSION_TABS_AGENT_STATUS_HEARTBEAT_INTERVAL_MS)
     runtime.onPtyData(ptyId, '\x1b]0;⠹ Codex working\x07', Date.now())
     vi.advanceTimersByTime(50)
+    await senderFramesDelivered(runtime)
 
     expect(publications).toHaveLength(1)
     const expiredHookTerminal = publications[0]?.tabs[0]
@@ -184,7 +195,7 @@ describe('real PTY decorative session-tabs fanout', () => {
     expect(titleOnlyStatus?.updatedAt).toBeGreaterThan(refreshedStatus!.updatedAt)
     expect(titleOnlyStatus?.stateStartedAt).toBe(initialStatus?.stateStartedAt)
     expect(Date.now() - initialStatus!.updatedAt).toBeGreaterThan(AGENT_STATUS_STALE_AFTER_MS)
-    const viewerStatus = Object.values(viewerState.agentStatusByPaneKey)[0]
+    const viewerStatus = Array.from(viewerState.agentStatusByPaneKey.values())[0]
     expect(viewerStatus?.prompt).toBe('')
     expect(isAgentStatusFresh(viewerStatus!, Date.now(), AGENT_STATUS_STALE_AFTER_MS)).toBe(true)
     unsubscribe()

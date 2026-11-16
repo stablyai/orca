@@ -1,14 +1,14 @@
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { DetectedWorktreeListResult } from '../../../../shared/worktree/types'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import {
   classifyWorktreeScanFailure,
   type WorktreeScanFailureKind
-} from '../../../../shared/worktree-scan-failure'
+} from '../../../../shared/worktree/catalog/worktree-scan-failure'
 
 export type RepoScanFailure = {
   kind: WorktreeScanFailureKind

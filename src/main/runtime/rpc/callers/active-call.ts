@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
-import { isOrcaSessionId } from '../../../../shared/orca-session-address'
+import { isOrcaSessionId } from '../../../../shared/agent-session/identity/orca-session-address'
 import type { RpcCallerIdentity } from './rpc-caller-identity'
 
 type ActiveRpcCall = {

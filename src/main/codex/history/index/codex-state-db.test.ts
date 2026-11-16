@@ -1,14 +1,13 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import SyncDatabase from '../../../sqlite/sync-database'
 import {
   findNewestCodexStateDbPath,
   isCodexStateDbBackfillPending,
   readCodexStateDbBackfillPendingState,
-  readCodexStateDbBackfillStatus,
-  readIndexedCodexThreadIds
+  readCodexStateDbBackfillStatus
 } from './codex-state-db'
 
 const temporaryHomes: string[] = []
@@ -78,29 +77,5 @@ describe('readCodexStateDbBackfillPendingState', () => {
     expect(readCodexStateDbBackfillStatus(home).kind).toBe('unreadable')
     expect(readCodexStateDbBackfillPendingState(home)).toBe('unreadable')
     expect(isCodexStateDbBackfillPending(home)).toBe(false)
-  })
-})
-
-describe('readIndexedCodexThreadIds', () => {
-  it('returns lower-cased thread ids from the newest state DB', async () => {
-    const home = await createHome()
-    const path = createBackfillDb(home, 5, 'complete')
-    const db = new SyncDatabase(path)
-    db.exec(
-      "CREATE TABLE threads (id TEXT PRIMARY KEY); INSERT INTO threads (id) VALUES ('ABC'), ('def')"
-    )
-    db.close()
-
-    expect(readIndexedCodexThreadIds(home)).toEqual(new Set(['abc', 'def']))
-  })
-
-  it('returns null when there is no state DB or no threads table', async () => {
-    const home = await createHome()
-    expect(readIndexedCodexThreadIds(home)).toBeNull()
-
-    createBackfillDb(home, 5, 'complete')
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    expect(readIndexedCodexThreadIds(home)).toBeNull()
-    warn.mockRestore()
   })
 })

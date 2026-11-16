@@ -4,7 +4,7 @@ import type { AgentSessionOptionsResult } from '../../../../../shared/agent-sess
 import {
   selectStructuredAgentSessionContextUsage,
   type StructuredAgentContextUsage
-} from '../../../../../shared/agent-session/structured-agent-session-context-usage'
+} from '../../../../../shared/agent-session/conversation-context/structured-agent-session-context-usage'
 
 /** Older hosts send no whole-journal answer, which leaves the loaded window's facts unchanged. */
 export function useStructuredAgentSessionContextUsage(

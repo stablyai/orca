@@ -2,12 +2,12 @@
  * Every SSH target's legacy relay bridge, and the one seam the rest of main calls.
  * COMPAT(legacy-relay-bridge): revisit 2027-01-15.
  */
-import type { EventProps } from '../../../../shared/telemetry-event-classification'
+import type { EventProps } from '../../../../shared/telemetry/telemetry-event-classification'
 import type {
   LegacyRelayBridgeAttachResult,
   LegacyRelayBridgeCloseResult,
   LegacyRelayBridgedPane
-} from '../../../../shared/legacy-relay-bridge-contract'
+} from '../../../../shared/remote-runtime/relay/legacy-relay-bridge-contract'
 import { parseAppSshPtyId } from '../../../../shared/remote-runtime/ssh/ssh-pty-id'
 import type { SshPendingPtyKill } from '../../../../shared/remote-runtime/ssh/ssh-pending-pty-kill'
 import type { SshRemotePtyLease } from '../../../../shared/remote-runtime/ssh/ssh-types'

@@ -1,5 +1,5 @@
 import type { AgentBrowserBridge } from '../../../browser/agent-browser/agent-browser-bridge'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { BrowserNetworkExecutionHost } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
 import type { BrowserHostLeaseRegistry } from '../../browser-host/leases/browser-host-lease-registry'
 import type { RuntimeBrowserPageRegistry } from '../client-pages/runtime-browser-page-registry'
@@ -21,6 +21,10 @@ export type ResolvedBrowserCommandTarget = {
   worktreeId?: string
   browserPageId?: string
 }
+
+export type BrowserAnswerAdmission = (
+  target: ResolvedBrowserCommandTarget
+) => ResolvedBrowserCommandTarget
 
 export type ResolvedBrowserPageWebContents = {
   browserPageId: string
@@ -59,7 +63,7 @@ export type RuntimeBrowserCommandHost = {
     worktreeId: string | undefined,
     browserPageId: string,
     options?: BrowserSessionTabSelectionOptions
-  ): void
+  ): Promise<void>
   notifyHeadlessBrowserSessionTabsChanged?(worktreeId: string): void
   /** A page's unsent notes; see readSavedBrowserPageAnnotations. */
   readBrowserPageAnnotations?(browserPageId: string): BrowserPageAnnotation[]
@@ -67,5 +71,5 @@ export type RuntimeBrowserCommandHost = {
   readBrowserTabBar?(worktreeId: string | undefined): BrowserTabBarEntry[]
   retireRuntimeOwnedBrowserSessionTab?(worktreeId: string, browserPageId: string): boolean | void
   /** Persist/start only when no host window exists; hasStartable reads saved tabs either way. */
-  serveBrowserTabs?: Pick<ServeBrowserTabs, 'opened' | 'start' | 'hasStartable'>
+  serveBrowserTabs?: Pick<ServeBrowserTabs, 'opened' | 'start' | 'hasStartable' | 'savedWorktreeOf'>
 }

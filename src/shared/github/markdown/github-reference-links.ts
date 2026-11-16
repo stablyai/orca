@@ -1,4 +1,4 @@
-import type { Repo } from '../../repo-types'
+import type { Repo } from '../../repository/repo-types'
 import {
   githubHostFromIdentityKey,
   repoUpstreamIdentityKey

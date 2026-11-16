@@ -9,7 +9,7 @@ import {
 } from '../../orca-runtime-tests/agent-transcript-pane-test-harness'
 import { waitForLaunchedAgentComposer } from './launched-agent-composer-readiness'
 
-import type { ProcessTableRow } from '../../../../shared/process-table-snapshot'
+import type { ProcessTableRow } from '../../../../shared/process-observation/tables/process-table-snapshot'
 import type * as TerminalForegroundGroup from '../../../pty/process-retirement/terminal-process-rows'
 
 const paneTerminal = vi.hoisted(() => {

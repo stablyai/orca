@@ -11,7 +11,7 @@ import {
   evaluateProcessGrowth,
   type ProcessGrowthLimits,
   type ProcessGrowthTrip
-} from '../../../shared/process-growth-breaker'
+} from './process-growth-breaker'
 
 type ProcessRow = { pid: number; ppid: number }
 

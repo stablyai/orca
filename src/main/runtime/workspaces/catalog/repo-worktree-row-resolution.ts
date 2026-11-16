@@ -5,22 +5,23 @@ import {
   splitWorktreeIdForFilesystem,
   worktreeIdentityKey
 } from '../../../../shared/worktree/id'
-import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+// oxfmt-ignore
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import {
   readAllWorktreeMetaForHost,
   readWorktreeMetaForHost
 } from '../../../persistence/host-qualified-worktree-meta'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
-import { isFolderRepo } from '../../../../shared/repo-kind'
+import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import {
   getConnectedWorktreeLineageIds,
   projectResolvedWorktreeLineage
-} from '../../../../shared/resolved-worktree-lineage'
-import { withTimeout } from '../../../../shared/promise-timeout-fallback'
+} from '../../../../shared/worktree/lineage/resolved-worktree-lineage'
+import { withTimeout } from '../../../../shared/concurrency/promise-timeout-fallback'
 import type { GitWorktreeInfo, Worktree } from '../../../../shared/worktree/types'
 import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'

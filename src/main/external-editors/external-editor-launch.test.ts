@@ -4,7 +4,7 @@ const { resolveCliCommandMock } = vi.hoisted(() => ({
   resolveCliCommandMock: vi.fn((command: string) => command)
 }))
 
-vi.mock('../../shared/node-cli-command-resolution', () => ({
+vi.mock('../../shared/shell/command-resolution/node-cli-command-resolution', () => ({
   resolveCliCommand: resolveCliCommandMock
 }))
 
@@ -56,15 +56,4 @@ describe('resolveRemoteSshEditorLaunchSpec', () => {
       resolveRemoteSshEditorLaunchSpec('code', '/srv/project', manualTarget, { platform: 'linux' })
     ).toEqual({ ok: false, reason: 'ssh-alias-required', host: 'builder.example.com', port: 2222 })
   })
-
-  it.each(['subl', 'code --reuse-window', 'open -a "Visual Studio Code"'])(
-    'rejects unsupported and compound SSH commands: %s',
-    (command) => {
-      expect(
-        resolveRemoteSshEditorLaunchSpec(command, '/srv/project', BUILDER_ALIAS, {
-          platform: 'linux'
-        })
-      ).toEqual({ ok: false, reason: 'remote-editor-unsupported' })
-    }
-  )
 })

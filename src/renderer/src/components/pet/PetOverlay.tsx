@@ -2,7 +2,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
 import { usePetUrl } from './usePetUrl'
 import type { DetectedSpriteCacheEntry } from './pet-blob-cache'
-import type { CustomPet } from '../../../../shared/pet-types'
+import type { CustomPet } from '../../../../shared/pets/pet-types'
 import { useAppStore } from '../../store'
 import { getAgentStatusEpochNow } from '@/lib/agent-status/evidence/agent-status-epoch-clock'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
@@ -27,7 +27,7 @@ function usePetAnimationName(
   const agentStatusNow = getAgentStatusEpochNow(agentStatusEpoch)
 
   return selectPetAnimationName({
-    entries: Object.values(agentStatusByPaneKey),
+    entries: Array.from(agentStatusByPaneKey.values()),
     dragging,
     dragAnimation,
     hovering,

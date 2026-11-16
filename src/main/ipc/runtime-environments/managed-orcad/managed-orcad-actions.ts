@@ -102,7 +102,7 @@ export function createManagedOrcadActions(
       }
       return result
     },
-    cancelStop: (selector) => cancelManagedOrcadStop(userDataPath(), { selector }),
+    cancelStop: async (selector) => await cancelManagedOrcadStop(userDataPath(), { selector }),
     forget: async (selector) => {
       const result = await forgetManagedOrcadEnvironment(userDataPath(), { selector }, unlinkPolicy)
       if (result.outcome === 'forgotten') {
@@ -155,7 +155,7 @@ async function reconnectRestartedManagedOrcad(
   environmentId: string
 ): Promise<void> {
   await options.invalidateTransport(environmentId)
-  const environment = resolveEnvironment(options.getUserDataPath(), environmentId)
+  const environment = await resolveEnvironment(options.getUserDataPath(), environmentId)
   const targetId = getOrcadSshDeployment(environment)?.sshTargetId
   if (targetId) {
     options.clearHostServerNotes(targetId, environmentId)
@@ -172,9 +172,9 @@ async function asExplicitServerAction<T>(
 ): Promise<T> {
   let lifted: string[] = []
   try {
-    const environment = resolveEnvironment(userDataPath, selector)
+    const environment = await resolveEnvironment(userDataPath, selector)
     forgetManagedOrcadAutomaticFailures(userDataPath, environment.id)
-    lifted = liftUserHoldsForServerAction(environment)
+    lifted = await liftUserHoldsForServerAction(environment)
   } catch {
     // An unknown selector fails in the action itself with its own error.
   }
@@ -182,13 +182,13 @@ async function asExplicitServerAction<T>(
     // `action` includes its transport invalidation, so resumed status never probes the old transport.
     return await action()
   } finally {
-    resumeLiftedStatus(lifted)
+    await resumeLiftedStatus(lifted)
   }
 }
 
-function resumeLiftedStatus(environmentIds: readonly string[]): void {
+async function resumeLiftedStatus(environmentIds: readonly string[]): Promise<void> {
   try {
-    resumeRuntimeEnvironmentStatus(environmentIds)
+    await resumeRuntimeEnvironmentStatus(environmentIds)
   } catch (error) {
     // A server removed during the action has no status to resume; keep the action's own result.
     console.warn('[managed-orcad] Could not resume status after an explicit action:', error)

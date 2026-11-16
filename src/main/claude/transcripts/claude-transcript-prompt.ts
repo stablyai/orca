@@ -1,8 +1,8 @@
-import { isClaudeToolResultContent } from '../../../shared/claude-tool-content'
+import { isClaudeToolResultContent } from '../../../shared/agent-hook-listener/providers/claude/transcripts/claude-tool-content'
 import { decodeClaudeTranscriptLine } from '../../native-chat/transcript-decoding/transcript-line-decoders-claude'
 import { claudeEnvelopeStopHookFeedbackRow } from '../structured/journal/claude-stop-hook-feedback'
+import { isClaudeTaskNotificationTurnStart } from '../structured/journal/claude-internal-message-content'
 import {
-  claudeRecord,
   claudeOutputEnvelope,
   type ClaudeMessageEnvelope
 } from '../structured/journal/claude-structured-item-translation'
@@ -30,13 +30,7 @@ export function claudeTranscriptPrompt(
   return {
     decoded,
     ignored: prompt && (!decoded || decoded.role === 'system'),
-    internalTurnStart:
-      candidate &&
-      row.type === 'user' &&
-      claudeRecord(row.origin)?.kind === 'task-notification' &&
-      row.isMeta !== true &&
-      row.isSynthetic !== true &&
-      row.isCompactSummary !== true,
+    internalTurnStart: candidate && isClaudeTaskNotificationTurnStart(row),
     hasWork: Boolean(envelope && (claudeOutputEnvelope(envelope).content.length || feedback))
   }
 }

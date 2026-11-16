@@ -17,7 +17,7 @@ import {
 } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import type { RepoSourceControlAiOverrides } from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import { withRepoTextModelEdits } from '../../source-control/text-actions/source-control-text-action-model-replay'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import { SOURCE_CONTROL_TEXT_ACTION_ID_SET } from '../../source-control/source-control-action-recipe-options'
 
 export function hasOwnActionOverride(

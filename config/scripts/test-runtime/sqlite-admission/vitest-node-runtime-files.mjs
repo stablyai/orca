@@ -4,41 +4,36 @@ import { findSqliteRuntimeTests } from './vitest-sqlite-runtime-scan.mjs'
 const NODE_RUNTIME_INCLUDE = [
   // Exercise the native fetch error and abort contracts used by the Linear SDK in Electron.
   'tests/e2e/linear-cli-recovery.unit.test.ts',
-  'src/main/runtime/agent-session/lifecycle/structured-agent-cli-writers.test.ts',
+  // Exercises a real peer reset through Node's native Socket.setTypeOfService.
+  'src/main/network/best-effort-socket-type-of-service.test.ts',
   'config/scripts/ci/workflow-contracts/cloud-security-history-workflow.test.mjs',
   'src/main/ssh/legacy-relay/endpoints/ssh-relay-endpoint-incumbent-shell.integration.test.ts',
   'src/main/ssh/remote-exec/ssh-remote-commands.test.ts',
   'src/packages/process-host/src/run-process.test.ts',
   'tests/e2e/cursor-quota-transport.unit.test.ts',
   'tests/e2e/helpers/electron-process-shutdown.unit.test.ts',
-  'src/main/ai-vault-search/storage/session-search-index-writer.test.ts',
   // The parse cache persists through node:sqlite.
-  'src/main/ai-vault/parse-cache/session-parse-cache-antigravity-upgrade.test.ts',
   'src/main/ai-vault/parse-cache/session-parse-cache-persistence.test.ts',
   'src/main/ai-vault/scope/session-scanner-scope-walk.test.ts',
   // The forced-probe handoff race opens only under V8's promise scheduling, which Electron main uses.
   'src/main/github/api/rate-limit.test.ts',
   // Electron main bridges streams with Node's implementation.
-  'src/main/host/electron-http-client.test.ts',
   'src/main/browser/extensions/native-messaging/browser-extension-native-host-process-backpressure.test.ts',
   'src/main/daemon/providers/lifecycle/testing/daemon-init-provider-installation.test.ts',
   'src/renderer/src/components/terminal-pane/pty-transport/input/pty-input-write-queue.test.ts',
   // Asserts payloads are collected; Bun's GC scans the stack conservatively and may keep one alive.
-  'src/shared/ws-inbound-message-queue.test.ts',
+  'src/shared/network/websocket/ws-inbound-message-queue.test.ts',
   'src/renderer/src/lib/agent-session/history/title-sync/ai-vault-tab-title-sync-inputs.test.ts',
   'src/renderer/src/components/sidebar/HostRemoveDialog.test.tsx',
   // Asserts an observer survives a forced collection; conservative retention would hide a lost one.
   'config/scripts/test-runtime/dom/happy-dom-mutation-observer-retention.test.ts',
   // These reach Node SQLite through a shared helper or a dynamic import, which the scan skips.
   'src/main/agent-hooks/server/testing/providers/codex/server-codex-session-start.test.ts',
-  'src/main/claude/transcripts/claude-transcript-catch-up.test.ts',
-  'tests/e2e/native-chat-startup-option-pickers.unit.test.ts',
   'src/main/ai-vault/transcripts/session-document-consumer-replacement.test.ts',
-  'src/main/ai-vault-search/indexing/session-search-list-reparse.test.ts',
   'src/main/runtime/rpc/server/orchestration-cli-subprocess.test.ts',
   'src/main/runtime/orchestration/mailbox/terminal-pointer/orchestration-mailbox-delivery.test.ts',
   'src/main/runtime/orchestration/mailbox/routing/orchestration-mailbox-routing.test.ts',
-  'tests/e2e/cross-version-wire/agent-session-clear-old-client.unit.test.ts',
+
   'tests/e2e/cross-version-wire/agent-session-clear-old-tab-mirror.unit.test.ts',
   'src/main/pi/rpc/rpc-session-startup.test.ts',
   'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-clear-queued-command.test.ts',
@@ -46,9 +41,8 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/acp/session/acp-structured-session-adapter-resume.test.ts',
   'src/main/pi/rpc/rpc-turn-races.test.ts',
   'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-background-stop-unreadable.test.ts',
-  'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-exit-delivery.test.ts',
+
   'src/main/runtime/construction/orca-runtime.test.ts',
-  'src/main/runtime/workspaces/startup/worktree-agent-first-surface.test.ts',
   'src/main/runtime/client/settings/runtime-client-agent-launch-settings-durability.test.ts',
   'src/cli/**/*.test.ts',
   'src/main/persistence/**/*.test.ts',
@@ -71,7 +65,7 @@ const NODE_RUNTIME_INCLUDE = [
   'src/**/*memory*.test.ts',
   'src/**/*allocation*.test.ts',
   'src/**/*expiry*.test.ts',
-  'src/shared/own-retained-string.test.ts',
+  'src/shared/text/own-retained-string.test.ts',
   'src/main/agent-hooks/server/testing/http/server-transport-interference.test.ts',
   'src/main/plugins/workers/plugin-worker-supervision.integration.test.ts',
   'src/main/plugins/workers/plugin-worker-dev-restart-storage.integration.test.ts',
@@ -106,19 +100,14 @@ const NODE_RUNTIME_INCLUDE = [
   'src/shared/workspace-session/workspace-session-salvage.test.ts',
   'src/main/git/repositories/discovery/repo-detection.test.ts',
   'src/main/native-chat/paste-files/native-chat-paste-files.test.ts',
-  'src/main/computer/desktop-script/runtime-host/desktop-script-serve-channel.test.ts',
-  'src/main/providers/working-directory/validation.test.ts',
   'src/main/pty/process-retirement/posix-pty-process-groups.integration.test.ts',
   'src/shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-output-capture.test.ts',
   'src/main/native-chat/agent-session-journal/**/*.test.ts',
-  'src/main/runtime/agent-session/records/agent-session-conversation-name-store.test.ts',
   'src/main/runtime/rpc/methods/structured-sessions/attachments/structured-agent-session-visual.test.ts',
   // Bun resolves 'ws' to its built-in client, which bypasses the patched package.
   'src/main/runtime/rpc/transports/websocket/ws-empty-payload-frame-write.test.ts',
   'src/shared/remote-runtime/remote-runtime-client.test.ts',
   'src/shared/remote-runtime/remote-runtime-connect-bound.test.ts',
-  // Bun's built-in ws client ignores maxPayload; the product opener only runs on Node.
-  'src/shared/remote-runtime/requests/remote-runtime-request-websocket.test.ts',
   'src/shared/remote-runtime/requests/remote-runtime-subscription-connect-bound.test.ts',
   'src/main/codex/configuration/shared-server/codex-shared-server-probe.test.ts',
   'src/main/opencode/model-launch/opencode-launch-model-context-supervision.test.ts',
@@ -127,7 +116,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/ipc/settings-delayed-response.test.ts',
   'src/main/ipc/session-window-view-save.test.ts',
   'src/main/ipc/renderer-shutdown-checkpoint-sleep-records.test.ts',
-  'src/main/runtime/agent-session/records/structured-agent-session-startup-tab-restore.test.ts',
   'src/shared/remote-runtime/control/remote-runtime-shared-control-connection.test.ts',
   'src/main/runtime/mobile-cloud-relay/control-channel/relay-control-client.test.ts',
   'src/main/ipc/filesystem/watchers/filesystem-watcher-ignore-real.test.ts',
@@ -137,8 +125,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/agent-hooks/server/testing/identity/server-hook-session-binding.test.ts',
   'tests/e2e/helpers/persisted-profile-state.unit.test.ts',
   'src/main/runtime/push/notifications/mobile-notification-dismissal-store.test.ts',
-  'src/main/runtime/push/notifications/mobile-notification-dismissal-read-failure.test.ts',
-  'src/main/ipc/notifications-subject-retirement.test.ts',
   'src/main/ipc/notifications-external-acknowledgement.test.ts'
 ]
 

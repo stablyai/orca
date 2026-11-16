@@ -4,7 +4,7 @@ import { Activity, Coins, DatabaseZap, FolderKanban, Sigma, Sparkles } from 'luc
 import type {
   MistralVibeUsageRange,
   MistralVibeUsageScope
-} from '../../../../shared/mistral-vibe-usage-types'
+} from '../../../../shared/agent-usage/analytics/mistral-vibe-usage-types'
 import { useAppStore } from '../../store'
 import { ClaudeUsageLoadingState } from './ClaudeUsageLoadingState'
 import { MistralVibeUsageDetails } from './MistralVibeUsageDetails'

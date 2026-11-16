@@ -1,14 +1,15 @@
+import { reportBrowserGuestVisibility } from '../browser-guest-activity'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import { refreshBrowserGuestMetadata } from '../metadata/browser-guest-metadata-cache'
-import { redactKagiSessionToken } from '../../../../../../shared/browser-url'
+import { redactKagiSessionToken } from '../../../../../../shared/browser/navigation/browser-url'
 import {
   browserViewportPresetToOverride,
   getBrowserViewportPreset
-} from '../../../../../../shared/browser-viewport-presets'
+} from '../../../../../../shared/browser/guest-lifecycle/browser-viewport-presets'
 import type {
   BrowserLoadError,
   BrowserViewportPresetId
-} from '../../../../../../shared/browser-workspace-types'
+} from '../../../../../../shared/browser/workspaces/browser-workspace-types'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import { findWorkspace } from '@/store/slices/browser/pages/browser-page-records'
@@ -17,11 +18,8 @@ import {
   createBrowserPageGuestRecovery,
   type BrowserPageGuestRecovery
 } from '../recovery/browser-page-guest-recovery'
-import {
-  registeredWebContentsIds,
-  replacePersistentWebview,
-  webviewRegistry
-} from '../webview-registry'
+import { registeredWebContentsIds, webviewRegistry } from '../webview-registry'
+import { replacePersistentWebview } from '../browser-webview-disposal'
 import { browserPageExists } from '../../describe-page/browser-page-load-error'
 import {
   setBrowserPageAgentViewportSize,
@@ -118,6 +116,7 @@ export function createBrowserPageWebviewGuestSession({
         }
         if (registered) {
           registeredWebContentsIds.set(browserTabId, webContentsId)
+          reportBrowserGuestVisibility(browserTabId)
           publishActiveBrowserPageIfCurrent(browserTabId)
           return true
         }
@@ -184,6 +183,9 @@ export function createBrowserPageWebviewGuestSession({
         sessionProfileId,
         webContentsId
       })
+      if (repaired && ownsGuest(webContentsId)) {
+        reportBrowserGuestVisibility(browserTabId)
+      }
       return ownsGuest(webContentsId) ? repaired : null
     },
     replaceGuest: () => replacePersistentWebview(browserTabId),

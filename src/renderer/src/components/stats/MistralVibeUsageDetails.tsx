@@ -3,7 +3,7 @@ import type {
   MistralVibeUsageDailyPoint,
   MistralVibeUsageSessionRow,
   MistralVibeUsageSummary
-} from '../../../../shared/mistral-vibe-usage-types'
+} from '../../../../shared/agent-usage/analytics/mistral-vibe-usage-types'
 import { CodexUsageDailyChart } from './CodexUsageDailyChart'
 import { UsageBreakdownSection, type UsageBreakdownRow } from './UsageBreakdownSection'
 import { UsageRecentSessionsTable } from './UsageRecentSessionsTable'

@@ -1,6 +1,6 @@
 import { posix, win32 } from 'node:path'
-import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
-import { RepoRefMaintenance } from '../../../../shared/repo-ref-maintenance'
+import { isWindowsAbsolutePathLike } from '../../../../shared/file-access/cross-platform-path'
+import { RepoRefMaintenance } from '../../../../shared/git/maintenance/repo-ref-maintenance'
 import {
   PACK_REFS_ARGS,
   PACK_REFS_TIMEOUT_MS,
@@ -8,7 +8,7 @@ import {
   type PackedRefsLockReporter,
   type RepoRefMaintenanceOptions,
   type RepoRefMaintenanceTarget
-} from '../../../../shared/repo-ref-maintenance-policy'
+} from '../../../../shared/git/maintenance/repo-ref-maintenance-policy'
 import { isWslUncPath, toWindowsWslPath } from '../../../../shared/file-access/wsl-paths'
 import { withSpan } from '../../../observability/tracer'
 import { PackRefsLockOwnership } from './pack-refs-lock-ownership'

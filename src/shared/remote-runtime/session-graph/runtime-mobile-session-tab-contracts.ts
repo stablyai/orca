@@ -1,5 +1,8 @@
 import type { AgentStatusEntry } from '../../agent-status/contracts/agent-status-types'
-import type { BrowserCertificateFailure, BrowserLoadError } from '../../browser-workspace-types'
+import type {
+  BrowserCertificateFailure,
+  BrowserLoadError
+} from '../../browser/workspaces/browser-workspace-types'
 import type { RuntimeBrowserPlacement } from '../../browser/client-hosting/runtime-browser-placement'
 import type { TerminalColorOverrides } from '../../terminal-themes/terminal-color-overrides'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../workspace-layout/terminal-tab-types'
@@ -24,6 +27,8 @@ export type RuntimeMobileSessionTerminalTab = {
   /** Host-owned PTY incarnation used to fence remote identity observations. */
   incarnationId?: string | null
   terminalTheme?: RuntimeMobileTerminalTheme
+  /** Same-build renderer graph input; main never returns this in client frames. */
+  statusSuppressionTitle?: string
   agentStatus?: AgentStatusEntry | null
   /** Event-only lead-turn end time for paired clients; never persisted in AgentStatusEntry. */
   turnCompletedAt?: number

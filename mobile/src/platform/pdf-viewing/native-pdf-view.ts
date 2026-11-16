@@ -3,7 +3,7 @@ import { Platform } from 'react-native'
 import { File as FsFile } from 'expo-file-system'
 import { useFocusEffect, useNavigation } from 'expo-router'
 import { presentPdf } from '../../../modules/orca-mobile-web-shell/src/index'
-import { getRuntimePathBasename } from '../../../../src/shared/cross-platform-path'
+import { getRuntimePathBasename } from '../../../../src/shared/file-access/cross-platform-path'
 import { PDF_MIME_TYPE } from '../../files/media/mobile-file-media'
 import {
   downloadMobileFileMedia,

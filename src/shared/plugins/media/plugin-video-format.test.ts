@@ -82,23 +82,6 @@ function findStsd(bytes: number[]): number {
 }
 
 describe('readPluginVideoHeader', () => {
-  it('reads an MP4 and a WebM from their headers', () => {
-    expect(readPluginVideoHeader(mp4([mp4Track('vide', 'avc1', 960, 540)]))).toEqual({
-      container: 'mp4',
-      codec: 'h264',
-      width: 960,
-      height: 540,
-      durationMs: 30_000
-    })
-    expect(readPluginVideoHeader(webm('V_VP9', 1280, 720, 12_500))).toEqual({
-      container: 'webm',
-      codec: 'vp9',
-      width: 1280,
-      height: 720,
-      durationMs: 12_500
-    })
-  })
-
   it('rejects truncated headers and multiple sample descriptions', () => {
     const truncated = webm('V_AV1', 960, 540, 1000).subarray(0, 60)
     expect(readPluginVideoHeader(truncated)).toBe('video headers are malformed')

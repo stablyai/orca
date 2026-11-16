@@ -1,5 +1,5 @@
 import { clearGoogleCookiesForRuntimeProfile } from '../../../browser/cookies/browser-google-cookie-clear'
-import { browserCookieImportFailure } from '../../../../shared/browser-cookie-import-failure-copy'
+import { browserCookieImportFailure } from '../../../../shared/browser/cookies/browser-cookie-import-failure-copy'
 import { createBrowserTabInRenderer } from '../tabs/browser-tab-renderer-create'
 import type {
   BrowserDetectProfilesResult,

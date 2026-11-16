@@ -1,11 +1,11 @@
-import type { Repo } from '../../../../src/shared/repo-types'
-import type { ProjectGroup } from '../../../../src/shared/project-group-types'
+import type { Repo } from '../../../../src/shared/repository/repo-types'
+import type { ProjectGroup } from '../../../../src/shared/project/groups/project-group-types'
 import { getFolderSourceRepos } from '../../../../src/shared/folder-workspaces/folder-workspace-source-repos'
 import {
   LOCAL_EXECUTION_HOST_ID,
   getRepoExecutionHostId,
   getSshTargetIdForExecutionHost
-} from '../../../../src/shared/execution-host'
+} from '../../../../src/shared/execution-host/execution-host'
 import { defineHostQuery } from '../../query/host-query'
 import type { HostQueryTarget } from '../../query/host-query-key'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'

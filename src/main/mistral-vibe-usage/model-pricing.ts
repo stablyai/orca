@@ -1,5 +1,5 @@
-import { record } from '../../shared/codex-rollout-jsonl-cursor'
-import { extractString } from '../../shared/trimmed-string'
+import { record } from '../../shared/agent-hook-listener/providers/codex/codex-rollout-jsonl-cursor'
+import { extractString } from '../../shared/text/trimmed-string'
 import { parse as parseToml } from 'smol-toml'
 
 /** Per-million-token rates, as Vibe writes them in config.toml. */

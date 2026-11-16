@@ -3,7 +3,7 @@ import {
   renderTmuxFormat,
   tmuxSendKeysText,
   tmuxValue
-} from '../../../../shared/claude-agent-teams-tmux-compat'
+} from '../../../../shared/agent-launch/startup/claude-agent-teams-tmux-compat'
 import { describeUnconfirmedAgentStop } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import {
   formatContext,

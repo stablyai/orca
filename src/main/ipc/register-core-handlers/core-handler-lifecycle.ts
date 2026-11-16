@@ -20,6 +20,8 @@ export async function closeNotificationDismissalsBeforeRelaunch(
 }
 
 export type CoreHandlerLifecycleOptions = {
+  deferHostInitialization?: boolean
+  hostInitialization?: Promise<void>
   onBeforeRelaunch?: () => void | Promise<void>
   onOrcaProfileAuthMutation?: () => void
   onBeforeOrcaProfileSignOut?: () => void

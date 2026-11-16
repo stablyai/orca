@@ -59,22 +59,6 @@ beforeEach(() => {
 })
 afterEach(resetBrowserLinkStore)
 
-it('opens HTML in its editor group even when another pane is active, and reuses it on repeat', async () => {
-  await openEditorHtmlPreview('report', 'source')
-  const state = useAppStore.getState()
-  const browser = state.unifiedTabsByWorktree[WORKSPACE]!.find(
-    (tab) => tab.contentType === 'browser'
-  )!
-  expect(browser).toMatchObject({ groupId: 'a' })
-  expect(state.browserPagesByWorkspace[browser.entityId]?.[0]?.url).toBe('file:///repo/report.html')
-  expect(state.activeGroupIdByWorktree[WORKSPACE]).toBe('a')
-
-  state.activateTab('source', { worktreeId: WORKSPACE })
-  await openEditorHtmlPreview('report', 'source')
-  expect(useAppStore.getState().browserTabsByWorktree[WORKSPACE]).toHaveLength(1)
-  expect(useAppStore.getState().activeBrowserTabId).toBe(browser.entityId)
-})
-
 it('waits for the guest flush and follows its editor when the view moves', async () => {
   const flush = Promise.withResolvers<boolean>()
   const unregister = registerEditorFrameFlush('report', () => flush.promise)

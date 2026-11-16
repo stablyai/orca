@@ -12,17 +12,17 @@ import {
 } from '../../../skills/install/skill-install-preview'
 import { removeSharedSkillInstall } from '../../../skills/managed-remove/skill-managed-remove-request'
 import { toLinuxPath } from '../../../../shared/file-access/wsl-paths'
-import type { SkillBundleInstallPreviewRequest } from '../../../../shared/skill-bundle-install-contract'
+import type { SkillBundleInstallPreviewRequest } from '../../../../shared/skills/installation/skill-bundle-install-contract'
 import type {
   SkillInstallPreviewRequest,
   SkillInstallRequest,
   SkillRemoveRequest,
   ManagedSkillInstall
-} from '../../../../shared/skill-install-contract'
+} from '../../../../shared/skills/installation/skill-install-contract'
 import type {
   SkillUploadBeginRequest,
   SkillUploadChunkRequest
-} from '../../../../shared/skill-upload-session-contract'
+} from '../../../../shared/skills/sharing/skill-upload-session-contract'
 import {
   RuntimeSkillInstallCommands,
   SKILL_SSH_UNAVAILABLE

@@ -5,7 +5,7 @@ import { currentRunCoordinatorOrcaSessionId } from '../db/runs/run-coordinator-o
 import {
   formatOrcaSessionAddress,
   type OrcaSessionId
-} from '../../../../shared/orca-session-address'
+} from '../../../../shared/agent-session/identity/orca-session-address'
 import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../shared/orchestration/mailbox/orchestration-party-identity'
 
 /** The part of a caller a Run binding stores and matches. */

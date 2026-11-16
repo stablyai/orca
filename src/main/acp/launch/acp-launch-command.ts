@@ -3,7 +3,7 @@
 import { delimiter, isAbsolute } from 'node:path'
 import { homedir } from 'node:os'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
-import type { resolveCliCommand } from '../../../shared/node-cli-command-resolution'
+import type { resolveCliCommand } from '../../../shared/shell/command-resolution/node-cli-command-resolution'
 import { hasExplicitTuiLaunchCommand } from '../../../shared/agent-launch/startup/tui-agent-launch-command-override'
 import {
   resolveStructuredAgentCommand,
@@ -27,7 +27,7 @@ export function resolveAcpLaunchCommand(
     homePath?: string
     dataDirectory: string | null
   }
-): StructuredAgentCommand {
+): StructuredAgentCommand & { version?: string } {
   const homePath = env.HOME ?? env.USERPROFILE ?? options.homePath ?? homedir()
   const pathEnv = [env.PATH ?? env.Path, ...spec.installDirectories({ env, homePath })]
     .filter((entry): entry is string => Boolean(entry))
@@ -51,7 +51,7 @@ export function resolveAcpLaunchCommand(
   const root = options.dataDirectory && managedRuntime.root(options.dataDirectory)
   const release = root ? resolveInstalledRuntimeRelease(root, pin).release : null
   if (release) {
-    return resolve(release.folder)
+    return { ...resolve(release.folder), version: release.version }
   }
   const { command } = resolve(pathEnv)
   const pinned = command !== spec.command && copyBesidePinnedMembers(command, pin)

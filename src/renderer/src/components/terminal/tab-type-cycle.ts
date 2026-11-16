@@ -1,4 +1,4 @@
-import type { WorkspaceVisibleTabType } from '../../../../shared/tab-types'
+import type { WorkspaceVisibleTabType } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import { sanitizeRecentTabIds } from '../../store/slices/tabs/tab-selection-history'
 
 export type TabCycleType = WorkspaceVisibleTabType

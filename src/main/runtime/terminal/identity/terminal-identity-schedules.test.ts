@@ -3,7 +3,7 @@ import { identityFixture, identityGraph, LEAF, PANE } from '../query/terminal-id
 import { TEST_WORKTREE_ID } from '../../orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 
-it('retains pane-issued process identity across reload with exact first-match and SSH precedence in either context', () => {
+it('retains pane-issued process identity across reload with exact first-match and SSH precedence in either context', async () => {
   for (const captured of [false, true]) {
     const f = identityFixture()
     f.runtime.registerPty('retained-process', TEST_WORKTREE_ID, null, {
@@ -12,7 +12,7 @@ it('retains pane-issued process identity across reload with exact first-match an
       incarnationId: 'original'
     })
     f.runtime.attachWindow(1)
-    f.runtime.syncWindowGraph(1, identityGraph('retained-process'))
+    await f.runtime.syncWindowGraph(1, identityGraph('retained-process'))
     const handle = f.runtime.getTerminalHandleForPaneKey(PANE)!
     expect(handle).toMatch(/^term_/)
     expect(f.owner.handleByPtyId.has('retained-process')).toBe(false)
@@ -85,7 +85,7 @@ it('retains pane-issued process identity across reload with exact first-match an
   }
 })
 
-it('keeps the displayed leaf worker ahead of retained PTYs after a dispatch refresh', () => {
+it('keeps the displayed leaf worker ahead of retained PTYs after a dispatch refresh', async () => {
   const f = identityFixture()
   const db = new OrchestrationDb(':memory:')
   try {
@@ -97,7 +97,7 @@ it('keeps the displayed leaf worker ahead of retained PTYs after a dispatch refr
       incarnationId: 'current'
     })
     f.runtime.attachWindow(1)
-    f.runtime.syncWindowGraph(1, identityGraph('current'))
+    await f.runtime.syncWindowGraph(1, identityGraph('current'))
     const current = f.runtime.getTerminalHandleForPaneKey(PANE)!
     const run = db.createRun({
       objective: 'Displayed worker',
@@ -123,14 +123,16 @@ it('keeps the displayed leaf worker ahead of retained PTYs after a dispatch refr
       .run(PANE, retained.id)
     f.runtime.setOrchestrationDb(db)
     expect(
-      f.runtime.syncWindowGraph(1, identityGraph('current')).agentOrchestrationByPaneKey?.[PANE]
-        ?.dispatchId
+      (await f.runtime.syncWindowGraph(1, identityGraph('current'))).agentOrchestrationByPaneKey?.[
+        PANE
+      ]?.dispatchId
     ).toBe(displayed.id)
     f.owner.source.setPtyConnected(f.owner.ptysById.get('current')!, false)
     db.db.prepare('UPDATE dispatch_contexts SET failure_count = 1 WHERE id = ?').run(retained.id)
     expect(
-      f.runtime.syncWindowGraph(1, identityGraph('current')).agentOrchestrationByPaneKey?.[PANE]
-        ?.dispatchId
+      (await f.runtime.syncWindowGraph(1, identityGraph('current'))).agentOrchestrationByPaneKey?.[
+        PANE
+      ]?.dispatchId
     ).toBe(displayed.id)
     expect(f.runtime.getAgentStatusOrchestrationContextForPaneKey(PANE)?.dispatchId).toBe(
       displayed.id
