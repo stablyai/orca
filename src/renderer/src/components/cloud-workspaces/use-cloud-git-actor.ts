@@ -4,6 +4,7 @@
 // another member sending also changes it.
 import { useEffect, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
+import { installWindowVisibilityInterval } from '@/lib/window-activity/window-visibility-interval'
 import type { CloudWorkspaceGitActor } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 import { sandboxIdForWorktree, useCloudWorkspaceIdentities } from './cloud-workspace-identity'
 
@@ -61,10 +62,14 @@ export function useCloudGitActor(worktreeId: string | null): CloudWorkspaceGitAc
     void refreshCloudGitActor(sandboxId)
     const onFocus = (): void => void refreshCloudGitActor(sandboxId)
     window.addEventListener('focus', onFocus)
-    const tick = setInterval(() => void refreshCloudGitActor(sandboxId), REFRESH_MS)
+    // Paused while this window can't be seen; focus re-reads on the way back.
+    const stopTicking = installWindowVisibilityInterval({
+      run: () => void refreshCloudGitActor(sandboxId),
+      intervalMs: REFRESH_MS
+    })
     return () => {
       window.removeEventListener('focus', onFocus)
-      clearInterval(tick)
+      stopTicking()
     }
   }, [sandboxId])
   useEffect(() => {
