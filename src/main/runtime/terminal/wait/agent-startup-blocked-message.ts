@@ -4,9 +4,9 @@ import type { OrcaRuntimeService } from '../../orca-runtime'
 
 const CLAUDE_BYPASS_WARNING_RE = /running\s*in\s*bypass\s*permissions\s*mode/
 
-export const CLAUDE_BYPASS_WARNING_HINT =
-  "Claude is asking to confirm Bypass Permissions mode, which this host's Full access permission turns on. " +
-  'Accept it once in that terminal, or set this host\'s Settings > Agents > Permissions to "Each agent\'s own settings".'
+const CLAUDE_BYPASS_WARNING_HINT =
+  'Claude is asking to confirm Bypass Permissions mode. Accept it once in that terminal, ' +
+  "or change Claude's permission in this host's Settings > Agents > Permissions."
 
 /** Keeps the parsed `Agent startup blocked: <reason>` prefix, then names the dialog when it is one the user can fix in Settings. */
 export async function agentStartupBlockedMessage(

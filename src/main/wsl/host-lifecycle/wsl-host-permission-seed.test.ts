@@ -1,111 +1,69 @@
 import { describe, expect, it } from 'vitest'
 import type { RuntimeRpcResponse } from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
-import { AGENT_LAUNCH_PERMISSION_CHOICE_CAPABILITY } from '../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
+import { AGENT_LAUNCH_PERMISSION_SEED_CAPABILITY } from '../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
+import { AgentLaunchSettingsMutation } from '../../../shared/rpc-contract/agent-launch/agent-launch-settings-params'
 import { seedWslHostAgentPermission, type WslHostPermissionSeed } from './wsl-host-permission-seed'
 import type { WslOrcadHostCapabilityVerdict } from '../orcad/wsl-orcad-host-environments'
 
-type HostPermission = { default: string; overrides: Record<string, string> } | undefined
-
-function fakeHost(args: {
-  permission: HostPermission
-  verdict?: WslOrcadHostCapabilityVerdict
-  failMutation?: boolean
-}) {
+function fakeHost(verdict: WslOrcadHostCapabilityVerdict = 'supported', fail = false) {
   const calls: { method: string; params: unknown }[] = []
-  const ok = (result: unknown): RuntimeRpcResponse<unknown> => ({
-    id: 'req',
-    ok: true,
-    result,
-    _meta: { runtimeId: 'wsl-runtime' }
-  })
   const seed: Pick<WslHostPermissionSeed, 'call' | 'hostSupports'> = {
     hostSupports: async (capability) =>
-      capability === AGENT_LAUNCH_PERMISSION_CHOICE_CAPABILITY
-        ? (args.verdict ?? 'supported')
-        : 'unsupported',
-    call: async (method, params) => {
+      capability === AGENT_LAUNCH_PERMISSION_SEED_CAPABILITY ? verdict : 'unsupported',
+    call: async (method, params): Promise<RuntimeRpcResponse<unknown>> => {
       calls.push({ method, params })
-      if (method === 'settings.getAgentLaunch') {
-        return ok({
-          settings: {
-            permissionMode: 'yolo',
-            ...(args.permission ? { agentPermission: { ...args.permission, userArgs: {} } } : {})
+      return fail
+        ? {
+            id: 'req',
+            ok: false,
+            error: { code: 'runtime_error', message: 'write failed' },
+            _meta: { runtimeId: 'wsl-runtime' }
           }
-        })
-      }
-      if (args.failMutation) {
-        return {
-          id: 'req',
-          ok: false,
-          error: { code: 'runtime_error', message: 'write failed' },
-          _meta: { runtimeId: 'wsl-runtime' }
-        }
-      }
-      return ok({ settings: {} })
+        : { id: 'req', ok: true, result: { settings: {} }, _meta: { runtimeId: 'wsl-runtime' } }
     }
   }
-  const mutations = () =>
-    calls.filter((call) => call.method === 'settings.mutateAgentLaunch').map((call) => call.params)
-  return { seed, calls, mutations }
+  return { seed, calls }
 }
 
-const UNTOUCHED: HostPermission = { default: 'full-access', overrides: {} }
-
 describe('seedWslHostAgentPermission', () => {
-  it('copies the local all-agents choice onto a host still at the product default', async () => {
-    const host = fakeHost({ permission: UNTOUCHED })
+  it('sends one conditional write the host contract accepts, never a read-then-write', async () => {
+    const host = fakeHost()
     await expect(
-      seedWslHostAgentPermission({ ...host.seed, local: { agentPermissionDefault: 'own' } })
+      seedWslHostAgentPermission({
+        ...host.seed,
+        local: { agentPermissionDefault: 'own', agentPermissionOverrides: { claude: 'ask' } }
+      })
     ).resolves.toBe(true)
-    expect(host.mutations()).toEqual([{ type: 'permission', choice: 'own' }])
+    expect(host.calls).toEqual([
+      {
+        method: 'settings.mutateAgentLaunch',
+        params: { type: 'seed-permission', choice: 'own', overrides: { claude: 'ask' } }
+      }
+    ])
+    expect(AgentLaunchSettingsMutation.safeParse(host.calls[0].params).success).toBe(true)
   })
 
-  it('copies per-agent choices too', async () => {
-    const host = fakeHost({ permission: UNTOUCHED })
-    await seedWslHostAgentPermission({
-      ...host.seed,
-      local: { agentPermissionDefault: 'full-access', agentPermissionOverrides: { claude: 'ask' } }
-    })
-    expect(host.mutations()).toEqual([{ type: 'permission', choice: 'ask', agent: 'claude' }])
-  })
-
-  it('touches nothing when local is also at the product default', async () => {
-    const host = fakeHost({ permission: UNTOUCHED })
+  it('sends nothing when local is also at the product default', async () => {
+    const host = fakeHost()
     await expect(seedWslHostAgentPermission({ ...host.seed, local: {} })).resolves.toBe(false)
+    await expect(
+      seedWslHostAgentPermission({ ...host.seed, local: { agentPermissionDefault: 'full-access' } })
+    ).resolves.toBe(false)
     expect(host.calls).toEqual([])
   })
 
-  it('keeps a choice someone already made on the host', async () => {
-    const chosen: HostPermission[] = [
-      { default: 'ask', overrides: {} },
-      { default: 'full-access', overrides: { codex: 'own' } }
-    ]
-    for (const permission of chosen) {
-      const host = fakeHost({ permission })
-      await expect(
-        seedWslHostAgentPermission({ ...host.seed, local: { agentPermissionDefault: 'own' } })
-      ).resolves.toBe(false)
-      expect(host.mutations()).toEqual([])
-    }
-  })
-
-  it('leaves older hosts alone', async () => {
+  it('leaves hosts without the conditional write alone', async () => {
     for (const verdict of ['unsupported', 'unknown'] as const) {
-      const host = fakeHost({ permission: UNTOUCHED, verdict })
+      const host = fakeHost(verdict)
       await expect(
         seedWslHostAgentPermission({ ...host.seed, local: { agentPermissionDefault: 'own' } })
       ).resolves.toBe(false)
       expect(host.calls).toEqual([])
     }
-    const textHost = fakeHost({ permission: undefined })
-    await expect(
-      seedWslHostAgentPermission({ ...textHost.seed, local: { agentPermissionDefault: 'own' } })
-    ).resolves.toBe(false)
-    expect(textHost.mutations()).toEqual([])
   })
 
   it('reports a failed write', async () => {
-    const host = fakeHost({ permission: UNTOUCHED, failMutation: true })
+    const host = fakeHost('supported', true)
     await expect(
       seedWslHostAgentPermission({ ...host.seed, local: { agentPermissionDefault: 'own' } })
     ).rejects.toThrow('write failed')

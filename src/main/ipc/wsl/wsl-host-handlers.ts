@@ -46,7 +46,11 @@ import { getPreferredPairedRuntimeConnection } from '../../../shared/remote-runt
 import { requestOrcadTerminalCensus } from '../../managed-server/lifecycle/orcad-terminal-census-client'
 import type { WslHostRuntimeAccess } from '../../wsl/host-lifecycle/wsl-host-server-stop'
 import { changesWslHostAccounts } from '../../wsl/orcad/wsl-orcad-host-account-push'
-import { pushHostAccounts, seedHostPermission } from './wsl-host-desktop-settings-push'
+import {
+  addWslHostThenSeedPermission,
+  pushHostAccounts,
+  seedHostPermission
+} from './wsl-host-desktop-settings-push'
 import { wslHostConnectOptions } from '../../wsl/host-lifecycle/wsl-host-connect-request'
 import { wireWslNodeRuntimePrefetch } from '../../wsl/execution/wsl-node-runtime-prefetch'
 
@@ -246,15 +250,13 @@ export async function registerWslHostHandlers(args: WslHostHandlerArgs): Promise
       if (!wslHostsAcceptNewWork()) {
         return wslHostAddRefusal('disabled', 'newWorkPaused')
       }
-      const result = await wsl.add(request)
+      const result = await addWslHostThenSeedPermission(
+        () => wsl.add(request),
+        (environmentId) =>
+          seedHostPermission(args.getUserDataPath(), args.store.getSettings(), environmentId)
+      )
       if (result.ok) {
         noteWslHostUserAction({ kind: 'added', distro: request.distro })
-        // Awaited so a worker started right after Add already launches with the copied choice.
-        await seedHostPermission(
-          args.getUserDataPath(),
-          args.store.getSettings(),
-          result.environmentId
-        )
       }
       return result
     }

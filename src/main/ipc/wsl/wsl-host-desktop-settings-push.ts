@@ -1,9 +1,13 @@
 /** Desktop state a WSL host is given: the selected agent accounts, and the permission choice at Add. */
+import type { WslHostAddResult } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import { pushWslOrcadHostAccountEnv } from '../../wsl/orcad/wsl-orcad-host-account-push'
 import { seedWslHostAgentPermission } from '../../wsl/host-lifecycle/wsl-host-permission-seed'
 import { wslOrcadHostSupports } from '../../wsl/orcad/wsl-orcad-host-environments'
 import { callRuntimeEnvironment } from '../runtime-environments/requests/runtime-environment-transport-routing'
+
+// Add waits for the seed, so a slow host must not hold the dialog for the default RPC timeout.
+export const SEED_DEADLINE_MS = 5_000
 
 /** Best-effort: a failed seed leaves the host at its own default, which Settings can still change. */
 export async function seedHostPermission(
@@ -12,18 +16,42 @@ export async function seedHostPermission(
   environmentId: string
 ): Promise<void> {
   const call = (method: string, params: unknown) =>
-    callRuntimeEnvironment(userDataPath, environmentId, method, params)
+    callRuntimeEnvironment(userDataPath, environmentId, method, params, SEED_DEADLINE_MS)
   await seedWslHostAgentPermission({
-    local: {
-      agentPermissionDefault: local.agentPermissionDefault,
-      agentPermissionOverrides: local.agentPermissionOverrides
-    },
+    local,
     call,
     hostSupports: (capability) =>
       wslOrcadHostSupports(environmentId, capability, () => call('status.get', undefined))
   }).catch((error) => {
     console.warn(`[wsl-hosts] Could not copy agent permissions to ${environmentId}:`, error)
   })
+}
+
+/**
+ * Add, then the permission seed: awaited so a worker started right after Add launches with the copied
+ * choice, but bounded by one deadline and never able to fail an Add that succeeded.
+ */
+export async function addWslHostThenSeedPermission(
+  add: () => Promise<WslHostAddResult>,
+  seed: (environmentId: string) => Promise<void>,
+  deadlineMs = SEED_DEADLINE_MS
+): Promise<WslHostAddResult> {
+  const result = await add()
+  if (!result.ok) {
+    return result
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const deadline = new Promise<void>((resolve) => {
+    timer = setTimeout(() => {
+      console.warn(
+        `[wsl-hosts] Gave up waiting to copy agent permissions to ${result.environmentId}.`
+      )
+      resolve()
+    }, deadlineMs)
+  })
+  await Promise.race([seed(result.environmentId).catch(() => {}), deadline])
+  clearTimeout(timer)
+  return result
 }
 
 export function pushHostAccounts(

@@ -1,74 +1,72 @@
-import { describe, expect, it } from 'vitest'
+import { readFileSync } from 'node:fs'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { agentStartupBlockedMessage } from './agent-startup-blocked-message'
 import {
-  agentStartupBlockedMessage,
-  CLAUDE_BYPASS_WARNING_HINT
-} from './agent-startup-blocked-message'
+  createTranscriptPane,
+  TRANSCRIPT_PANE_PTY_ID
+} from '../../orca-runtime-tests/agent-transcript-pane-test-harness'
 
-function runtimeShowing(tail: string[]) {
-  return {
-    readTerminal: async (handle: string) => ({
-      handle,
-      status: 'running' as const,
-      tail,
-      truncated: false,
-      nextCursor: null
-    })
-  }
+function fixture(name: string): { recording: string; cols: number; rows: number } {
+  const url = (ext: string) => new URL(`../../__fixtures__/${name}.${ext}`, import.meta.url)
+  const meta: { cols: number; rows: number } = JSON.parse(readFileSync(url('meta.json'), 'utf8'))
+  return { recording: readFileSync(url('txt'), 'utf8'), cols: meta.cols, rows: meta.rows }
 }
 
-// Claude 2.1.316's warning, as Orca's startup-dialog matcher reads it.
-const BYPASS_SCREEN = [
-  '────────────────────────',
-  ' WARNING: Claude Code running in Bypass Permissions mode',
-  '',
-  '  ❯ 1. No, exit',
-  '    2. Yes, I accept',
-  '',
-  ' Enter to confirm · Esc to cancel'
-]
-
 describe('agentStartupBlockedMessage', () => {
-  it('names the bypass warning and the setting that avoids it, keeping the parsed reason first', async () => {
-    const message = await agentStartupBlockedMessage(
-      runtimeShowing(BYPASS_SCREEN),
-      'term_1',
-      'agent-startup-menu-prompt'
+  const cleanups: (() => Promise<void>)[] = []
+  afterEach(async () => {
+    for (const cleanup of cleanups.splice(0)) {
+      await cleanup()
+    }
+    vi.useRealTimers()
+  })
+
+  async function replay(name: string) {
+    vi.useFakeTimers()
+    const { recording, cols, rows } = fixture(name)
+    const { runtime, handle } = await createTranscriptPane({
+      paneTitle: 'Terminal',
+      foregroundProcess: '2.1.316',
+      launchAgent: 'claude',
+      size: { cols, rows },
+      data: ''
+    })
+    cleanups.push(async () => {
+      await runtime.onPtyExit(TRANSCRIPT_PANE_PTY_ID, 0)
+    })
+    runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, recording, 1)
+    await vi.advanceTimersByTimeAsync(100)
+    return { runtime, handle }
+  }
+
+  it("names Claude's captured Bypass Permissions warning and the setting, keeping the parsed reason first", async () => {
+    const { runtime, handle } = await replay('claude-2-1-316-startup-bypass-permissions')
+    await expect(
+      agentStartupBlockedMessage(runtime, handle, 'agent-startup-menu-prompt')
+    ).resolves.toBe(
+      'Agent startup blocked: agent-startup-menu-prompt. ' +
+        'Claude is asking to confirm Bypass Permissions mode. Accept it once in that terminal, ' +
+        "or change Claude's permission in this host's Settings > Agents > Permissions."
     )
-    expect(message).toBe(
-      `Agent startup blocked: agent-startup-menu-prompt. ${CLAUDE_BYPASS_WARNING_HINT}`
-    )
-    expect(message).toContain("Each agent's own settings")
   })
 
   it('leaves other startup menus as the bare reason', async () => {
-    const message = await agentStartupBlockedMessage(
-      runtimeShowing([
-        ' New MCP server found in .mcp.json: docs',
-        ' Enter to confirm · Esc to cancel'
-      ]),
-      'term_1',
-      'agent-startup-menu-prompt'
-    )
-    expect(message).toBe('Agent startup blocked: agent-startup-menu-prompt')
+    const { runtime, handle } = await replay('claude-2-1-316-startup-mcp-server')
+    await expect(
+      agentStartupBlockedMessage(runtime, handle, 'agent-startup-menu-prompt')
+    ).resolves.toBe('Agent startup blocked: agent-startup-menu-prompt')
   })
 
   it('does not read the screen for other reasons and keeps the legacy alias', async () => {
-    const runtime = {
-      readTerminal: async () => {
-        throw new Error('should not read')
-      }
-    }
+    const runtime = { readTerminal: vi.fn() }
     await expect(
       agentStartupBlockedMessage(runtime, 'term_1', 'codex-interactive-prompt')
     ).resolves.toBe('Agent startup blocked: codex-interactive-prompt (agent-interactive-prompt)')
+    expect(runtime.readTerminal).not.toHaveBeenCalled()
   })
 
   it('falls back to the bare reason when the pane is gone', async () => {
-    const runtime = {
-      readTerminal: async () => {
-        throw new Error('terminal_not_found')
-      }
-    }
+    const runtime = { readTerminal: vi.fn().mockRejectedValue(new Error('terminal_not_found')) }
     await expect(
       agentStartupBlockedMessage(runtime, 'term_1', 'agent-startup-menu-prompt')
     ).resolves.toBe('Agent startup blocked: agent-startup-menu-prompt')
