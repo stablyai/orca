@@ -64,7 +64,7 @@ afterEach(async () => {
   await rm(stateDirectory, { recursive: true, force: true })
 })
 
-it('discovers saved SQL chats after restart and consults the old store only before conversion', async () => {
+it('discovers saved SQL chats after restart, including ones an older Orca saved beside an empty store', async () => {
   expect(hasPersistedStructuredAgentSessionStore(stateDirectory)).toBe(false)
   const oldPath = journalDatabasePath(stateDirectory)
   const { db: old } = openJournalDatabase(oldPath)
@@ -76,7 +76,7 @@ it('discovers saved SQL chats after restart and consults the old store only befo
   expect(hasPersistedStructuredAgentSessionStore(stateDirectory)).toBe(true)
   const { db } = openJournalDomainDatabase(journalDomainDatabasePath(stateDirectory))
   try {
-    expect(hasPersistedStructuredAgentSessionStore(stateDirectory)).toBe(false)
+    expect(hasPersistedStructuredAgentSessionStore(stateDirectory)).toBe(true)
     db.prepare('INSERT INTO agent_session_records VALUES(?,?)').run('new-chat', '{}')
   } finally {
     db.close()
