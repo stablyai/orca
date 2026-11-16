@@ -89,6 +89,12 @@
       "queuedCount_one": "{{count}} queued message",
       "queuedCount_other": "{{count}} queued messages"
     },
+    "restartNote": {
+      "continued": "Orca asked this agent to continue after a restart. Your own prompt was not re-sent.",
+      "notConnected": "Orca couldn't reconnect this chat after the restart, so it didn't ask the agent to continue.",
+      "refused": "Orca couldn't continue this chat after the restart. Send a message to continue it.",
+      "unconfirmed": "Orca asked this agent to continue after the restart but couldn't confirm it did. Check its latest reply before sending another message."
+    },
     "subagentGroup": {
       "ran_one": "Ran {{count}} subagent",
       "ran_other": "Ran {{count}} subagents",
