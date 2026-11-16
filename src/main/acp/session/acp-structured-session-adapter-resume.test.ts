@@ -8,6 +8,7 @@ import {
   messageText,
   SESSION
 } from '../../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
+import { tick } from '../process/testing/acp-scripted-agent.test-support'
 import type { AcpScriptedAgent } from '../process/testing/acp-scripted-agent.test-support'
 import { acpLaunchSpecFor } from '../launch/acp-launch-registry'
 import {
@@ -16,6 +17,7 @@ import {
   PROVIDER_SESSION,
   replyChunk,
   sendHello,
+  GROK,
   type AcpAdapterRig
 } from './testing/acp-structured-adapter.test-support'
 
@@ -273,5 +275,111 @@ describe('reopening an OpenCode chat whose conversation the agent moved to anoth
     })
     expect(rig.started().link?.replaces).toBeUndefined()
     expect(await notRestoredRows(rig)).toHaveLength(0)
+  })
+})
+
+describe('temporary saved-session restore failures', () => {
+  it.each(['load', 'resume'] as const)(
+    'keeps the saved session after exhausted %s retries and restores options and sending on retry',
+    async (method) => {
+      let recovering = false
+      let failedRecovery = false
+      const requests: string[] = []
+      const rig = await openAcpAdapterRig({
+        ...resume,
+        spec: { ...GROK, resumePreference: method },
+        initialize: RESUMES,
+        script: (agent) => {
+          agent.on('session/new', (frame) => {
+            requests.push('session/new')
+            agent.reply(frame, { sessionId: 'replacement' })
+          })
+          agent.on(`session/${method}`, (frame) => {
+            requests.push(`session/${method}`)
+            if (method === 'load') {
+              agent.notify('session/update', {
+                sessionId: PROVIDER_SESSION,
+                update: {
+                  sessionUpdate: 'user_message_chunk',
+                  content: { type: 'text', text: 'saved question' }
+                },
+                _meta: { promptId: 'saved-turn', isReplay: true }
+              })
+              agent.notify(
+                'session/update',
+                replyChunk('saved-turn', 'saved answer', { isReplay: true })
+              )
+            }
+            if (!recovering || !failedRecovery) {
+              failedRecovery = recovering
+              agent.fail(frame, -32603, 'Internal service failure', {
+                errorName: 'ServiceUnavailableError'
+              })
+            } else {
+              agent.reply(frame, { configOptions: GROK_CONFIG_OPTIONS })
+            }
+          })
+        }
+      })
+      await rig.acquire()
+      expect(rig.openVerdict()).toMatchObject({ retry: 'safe', fact: { kind: 'startFailed' } })
+      expect(requests).toEqual([`session/${method}`, `session/${method}`, `session/${method}`])
+      expect(await texts(rig)).toEqual([])
+      expect(await notRestoredRows(rig)).toEqual([])
+
+      recovering = true
+      await rig.acquire({ fence: 2 })
+      expect(rig.openVerdict()).toBeUndefined()
+      expect(rig.started().link).toMatchObject({
+        origin: 'resumed',
+        handle: { nativeId: 'acp-session-1' }
+      })
+      expect(rig.started().link?.replaces).toBeUndefined()
+      expect(rig.started().catalogListing?.models.map((model) => model.id)).toEqual([
+        'grok-4.7',
+        'grok-4.6'
+      ])
+      expect(await texts(rig)).toEqual(method === 'load' ? ['saved question', 'saved answer'] : [])
+      expect(requests).toEqual([
+        `session/${method}`,
+        `session/${method}`,
+        `session/${method}`,
+        `session/${method}`,
+        `session/${method}`
+      ])
+      expect(await sendHello(rig, 'after-retry', 2)).toMatchObject({ state: 'admitted' })
+      const prompt = await rig.frame('session/prompt')
+      expect(prompt.params).toMatchObject({ sessionId: 'acp-session-1' })
+      rig.child().agent.reply(prompt, { stopReason: 'end_turn' })
+      await rig.settle()
+      expect(await notRestoredRows(rig)).toEqual([])
+    }
+  )
+
+  it('sends no further restore or new-session request after abort during backoff', async () => {
+    const controller = new AbortController()
+    const requests: string[] = []
+    const rig = await openAcpAdapterRig({
+      ...resume,
+      script: (agent) => {
+        agent.on('session/new', (frame) => {
+          requests.push('session/new')
+          agent.reply(frame, { sessionId: 'replacement' })
+        })
+        agent.on('session/load', (frame) => {
+          requests.push('session/load')
+          agent.fail(frame, -32603, 'Internal service failure', {
+            errorName: 'ServiceUnavailableError'
+          })
+        })
+      }
+    })
+    const opening = rig.acquire({ signal: controller.signal })
+    await rig.frame('session/load')
+    await tick()
+    controller.abort()
+    await opening
+    expect(requests).toEqual(['session/load'])
+    expect(await texts(rig)).toEqual([])
   })
 })
