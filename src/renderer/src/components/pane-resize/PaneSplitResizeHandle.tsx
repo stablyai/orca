@@ -5,6 +5,9 @@ import { getDraggedSplitRatio, measureSplitRatio, readSplitRatio } from './pane-
 
 // Matches the .tab-group-split-resize-handle box in main.css.
 const HANDLE_THICKNESS_PX = 6
+const FAR_OVERHANG_STYLE: React.CSSProperties & Record<`--${string}`, string> = {
+  '--divider-far-overhang': `${getDividerFarOverhangPx(HANDLE_THICKNESS_PX)}px`
+}
 
 export function ResizeHandle({
   direction,
@@ -182,13 +185,7 @@ export function ResizeHandle({
       className={`tab-group-split-resize-handle ${
         isHorizontal ? 'is-vertical' : 'is-horizontal'
       }${growHitArea ? ' has-far-overhang' : ''}${dragging ? ' is-dragging' : ''}`}
-      style={
-        growHitArea
-          ? ({
-              '--divider-far-overhang': `${getDividerFarOverhangPx(HANDLE_THICKNESS_PX)}px`
-            } as React.CSSProperties)
-          : undefined
-      }
+      style={growHitArea ? FAR_OVERHANG_STYLE : undefined}
       onPointerDown={onPointerDown}
     />
   )
