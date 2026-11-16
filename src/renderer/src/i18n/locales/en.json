@@ -28213,6 +28213,14 @@
       "copied": "Copied",
       "copy": "Copy request for an owner"
     },
+    "createGitHubIdentity": {
+      "ask": "Connect your GitHub so PRs show as you.",
+      "connect": "Connect GitHub",
+      "notNow": "Not now",
+      "waiting": "Waiting for GitHub… Finish connecting in your browser.",
+      "cancel": "Cancel",
+      "connected": "PRs from this workspace show as @{{login}}."
+    },
     "createGitHubAccess": {
       "label": "GitHub access",
       "checking": "Checking…",

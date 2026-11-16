@@ -13,6 +13,7 @@ import {
 import { useCloudCreateGitHubAccess } from '@/lib/orca-cloud/cloud-create-github-access-registry'
 import { ownerRequestLabel, useOwnerRequestCopy } from '@/lib/orca-cloud/owner-request'
 import { StepIcon } from './WorktreeSetupSteps'
+import { VmBuildGitHubIdentityLine } from './VmBuildGitHubIdentityLine'
 
 export type VmBuildGitHubAccessActions = {
   open: () => void
@@ -74,10 +75,13 @@ function askLine(access: CloudCreateGitHubAccess, t: Translate): string {
  */
 export function VmBuildGitHubAccessRowView({
   access,
-  actions
+  actions,
+  identityLine = null
 }: {
   access: CloudCreateGitHubAccess
   actions: VmBuildGitHubAccessActions
+  /** CREATE-GH-IDENTITY: "Connect your GitHub so PRs show as you", once access is settled. */
+  identityLine?: React.ReactNode
 }): React.JSX.Element | null {
   const t = useTranslate()
   const labelId = React.useId()
@@ -140,6 +144,9 @@ export function VmBuildGitHubAccessRowView({
         ) : null}
       </div>
       {detail ? <p className="ml-6 text-xs text-muted-foreground">{detail}</p> : null}
+      {access.phase === 'ok' || access.phase === 'granted' || access.phase === 'skipped'
+        ? identityLine
+        : null}
       {needed ? (
         <div className="ml-6 flex flex-col gap-2 pb-1">
           <p className="text-xs text-muted-foreground">{askLine(access, t)}</p>
@@ -217,6 +224,7 @@ export function VmBuildGitHubAccessRow({
   return (
     <VmBuildGitHubAccessRowView
       access={access}
+      identityLine={<VmBuildGitHubIdentityLine />}
       actions={{
         open: () => openCloudCreateGitHubAccess(creationId),
         skip: () => skipCloudCreateGitHubAccess(creationId),
