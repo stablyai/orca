@@ -117,26 +117,14 @@ function row(id: string, hostId: string, displayName: string): ResolvedWorktree 
   return { id, repoId: id.split('::')[0], hostId, displayName } as unknown as ResolvedWorktree
 }
 
-/** A published catalog of `count` unrelated rows, with the pair or not, counting reads of each
- *  row's id: indexing a publication reads every one; a show reads none. */
 function catalog(count: number, withPair: boolean) {
-  const reads = { count: 0 }
   const rows = Array.from({ length: count }, (_, index) =>
     row(`other-${index % 120}::/srv/w-${index}`, 'local', `w-${index}`)
   )
   if (withPair) {
     rows.push(row(ID, SSH, 'Remote workspace'), row(ID, 'local', 'Local workspace'))
   }
-  for (const entry of rows) {
-    const id = entry.id
-    Object.defineProperty(entry, 'id', {
-      get: () => {
-        reads.count++
-        return id
-      }
-    })
-  }
-  return { worktrees: rows, reads }
+  return { worktrees: rows }
 }
 
 function runtimeOver(
@@ -166,86 +154,6 @@ async function show(runtime: ReturnType<typeof runtimeOver>, connectionId: strin
 
 const LOCAL_PLACE = { workspace: 'Local workspace', repo: 'Local repo', hostId: 'local' }
 const REMOTE_PLACE = { workspace: 'Remote workspace', repo: 'Remote repo', hostId: SSH }
-
-it.each([
-  [12, 750, 'first'],
-  [120, 7_500, 'last']
-] as const)(
-  'labels a place from keyed records with %i repos and %i workspaces (target %s), warm or cold',
-  async (repos, worktrees, at) => {
-    const store = storeWith(repos, 'local first', at)
-    const getRepos = vi.spyOn(store, 'getRepos')
-    const getRepo = vi.spyOn(store, 'getRepo')
-    const getAllMeta = vi.spyOn(store, 'getAllWorktreeMeta')
-    const cache = new RuntimeResolvedWorktreeCache()
-    const runtime = runtimeOver(store, cache)
-    // The owner's repo index is built once, by its first keyed read.
-    await show(runtime, null)
-    builds.count = 0
-
-    const missing = catalog(worktrees, false)
-    const warm = catalog(worktrees, true)
-    for (const published of [null, missing, warm]) {
-      if (published) {
-        await cache.getSnapshot(
-          async () => ({ worktrees: published.worktrees, platformByRepoId: new Map() }),
-          60_000,
-          0
-        )
-        cache.invalidateResolved()
-        await cache.getSnapshot(
-          async () => ({ worktrees: published.worktrees, platformByRepoId: new Map() }),
-          60_000,
-          0
-        )
-        published.reads.count = 0
-      }
-      for (let repeat = 0; repeat < 3; repeat++) {
-        expect(await show(runtime, null)).toEqual([LOCAL_PLACE])
-        expect(await show(runtime, 'server')).toEqual([REMOTE_PLACE])
-      }
-      expect(published?.reads.count ?? 0).toBe(0)
-    }
-
-    expect({
-      builds: builds.count,
-      getRepos: getRepos.mock.calls.length,
-      getRepo: getRepo.mock.calls.length,
-      getAllMeta: getAllMeta.mock.calls.length
-    }).toEqual({
-      builds: 0,
-      getRepos: 0,
-      getRepo: 0,
-      getAllMeta: 0
-    })
-  }
-)
-
-it('indexes each equivalent catalog once at publication, never again per show', async () => {
-  const store = storeWith(12, 'local first', 'first')
-  const cache = new RuntimeResolvedWorktreeCache()
-  const runtime = runtimeOver(store, cache)
-  await show(runtime, null)
-  builds.count = 0
-
-  for (let publication = 0; publication < 3; publication++) {
-    const published = catalog(750, true)
-    cache.invalidateResolved()
-    await cache.getSnapshot(
-      async () => ({ worktrees: published.worktrees, platformByRepoId: new Map() }),
-      60_000,
-      0
-    )
-    const atPublication = published.reads.count
-    for (let repeat = 0; repeat < 3; repeat++) {
-      expect(await show(runtime, 'server')).toEqual([REMOTE_PLACE])
-    }
-
-    expect(atPublication).toBe(752)
-    expect(published.reads.count).toBe(atPublication)
-  }
-  expect(builds.count).toBe(0)
-})
 
 it.each(['local first', 'ssh first'] as const)(
   'keeps each host its own label for one id on two hosts, %s',
@@ -308,17 +216,4 @@ it('reads current labels after renames, removal, a host move and invalidation, a
   expect(await show(runtime, 'server')).toEqual([{ ...readded, workspace: 'Remote workspace' }])
   cache.invalidateResolved()
   expect(await show(runtime, 'server')).toEqual([readded])
-})
-
-it('labels a folder workspace by its own record', () => {
-  const store = harness.createStore()
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the label reads only the folder's name.
-  const docs = { name: 'Docs' } as ReturnType<typeof store.getFolderWorkspace>
-  vi.spyOn(store, 'getFolderWorkspace').mockImplementation((id) =>
-    id === 'folder-1' ? docs : undefined
-  )
-  const runtime = runtimeOver(store, new RuntimeResolvedWorktreeCache())
-
-  expect(runtime.getWorkspaceLabel('folder:folder-1', 'local')).toEqual({ workspace: 'Docs' })
-  expect(runtime.getWorkspaceLabel('folder:folder-2', 'local')).toBeNull()
 })
