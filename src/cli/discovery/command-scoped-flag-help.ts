@@ -5,6 +5,15 @@ const FILE_OPEN_FOCUS_HELP =
   "--focus                Bring the user to the file (switches Orca's window to its worktree)"
 
 const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
+  'host add': {
+    name: '--name <label>         Display name for the saved SSH target',
+    hostname: '--hostname <address>   SSH hostname or IP address, not a --host selector',
+    user: '--user <username>      SSH login username',
+    port: '--port <port>          SSH port (1-65535; default 22)',
+    'identity-file': '--identity-file <path> Private key path on the selected Orca runtime',
+    'jump-host': '--jump-host <host>     SSH jump host, as in ProxyJump',
+    'proxy-command': '--proxy-command <cmd>  SSH ProxyCommand on the selected Orca runtime'
+  },
   'extension reload': {
     'extension-id':
       '--extension-id <id>   Installed unpacked extension ID; also accepted positionally',
