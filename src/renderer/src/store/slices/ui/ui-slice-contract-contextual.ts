@@ -13,6 +13,13 @@ import type { ExecutionHostId } from '../../../../../shared/execution-host/execu
 
 export type WorktreeCardsIntroChoice = 'new' | 'classic'
 
+export type WorkspaceComposerPaneRequest = {
+  /** Stable per open; a reopen gets a new id so the composer reseeds. */
+  id: number
+  data: Record<string, unknown>
+  origin: { worktreeId: string | null; pendingCreationId: string | null }
+}
+
 export type UISliceContextual = {
   openSettingsPage: () => void
   closeSettingsPage: () => void
@@ -60,8 +67,15 @@ export type UISliceContextual = {
     | 'chat-account-usage'
     | 'node-dist-mirror'
   modalData: Record<string, unknown>
+  /** The prompt-first composer hosted in the center pane; independent of the modal slot. */
+  workspaceComposerPaneRequest: WorkspaceComposerPaneRequest | null
+  /** Routes the composer to the center pane when the prompt-first context permits it. */
   openModal: (modal: UISliceContextual['activeModal'], data?: Record<string, unknown>) => void
   closeModal: () => void
+  /** Settles this pane request; a no-op once a newer request replaced it. */
+  closeWorkspaceComposerPane: (request: WorkspaceComposerPaneRequest) => void
+  /** Hands this pane request's data, unsettled, to the dialog composer. */
+  moveWorkspaceComposerPaneToDialog: (request: WorkspaceComposerPaneRequest) => void
   featureTipsSeenIds: FeatureTipSeenId[]
   markFeatureTipsSeen: (ids: FeatureTipId[]) => void
   /** Main's once-decided Chat UI launch tip variant; null until read. */

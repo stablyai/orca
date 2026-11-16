@@ -6,7 +6,8 @@ import { WORKTREE_CREATE_AGENT_OPTIONS_RUNTIME_CAPABILITY } from '../../../../sh
 import { terminalSessionOptionInputs } from '../../../../shared/agent-launch/startup/tui-agent-launch-command'
 import { resolveStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { useAppStore } from '@/store/index'
-import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/work-items/linked-work-item-context'
+import type { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/work-items/linked-work-item-context'
+import { resolveQuickCreatePrompt } from '@/lib/workspace/creation/quick-create-prompt'
 import type { ComposerModel } from './composer-model'
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
@@ -118,6 +119,7 @@ export async function prepareQuickComposerStartup(
     executionHostId: ComposerModel['selectedRepoExecutionHostId']
     linkedWorkItem: Parameters<typeof resolveQuickCreateLinkedWorkItemPrompt>[0]
     note: string
+    typedPrompt?: string
     legacyLaunchInputs?: WorktreeCreationRequest['legacyLaunchInputs']
     ephemeralVm?: boolean
   }
@@ -129,10 +131,11 @@ export async function prepareQuickComposerStartup(
         executionHostId: input.executionHostId ?? undefined
       })
     : undefined
-  const { prompt, draftPrompt } = resolveQuickCreateLinkedWorkItemPrompt(
-    input.agent ? input.linkedWorkItem : null,
-    input.note
-  )
+  const { prompt, draftPrompt } = resolveQuickCreatePrompt({
+    typedPrompt: input.agent ? (input.typedPrompt ?? '') : '',
+    linkedWorkItem: input.agent ? input.linkedWorkItem : null,
+    note: input.note
+  })
   const settings = input.settings
     ? {
         ...input.settings,

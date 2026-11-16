@@ -10,6 +10,7 @@ import { HiddenExperimentalGroup } from './HiddenExperimentalGroup'
 import { NumberField, SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
 import { useTranslate } from '@/i18n/use-translate'
 import { AgentDashboardExperimentalSetting } from '../../dashboard/settings/AgentDashboardExperimentalSetting'
+import { PromptFirstComposerExperimentalSetting } from './PromptFirstComposerExperimentalSetting'
 import { EphemeralVmsExperimentalSetting } from '../virtual-machines/recipes/EphemeralVmsExperimentalSetting'
 import { WslHostsExperimentalSetting } from '../wsl/hosts/WslHostsExperimentalSetting'
 import { wslHostsAvailable } from '../../sidebar/use-wsl-hosts-enabled'
@@ -39,6 +40,9 @@ export function ExperimentalPane({
   const showPet = matchesSettingsSearch(searchQuery, [getExperimentalSearchEntry().pet])
   const showAgentDashboard = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().agentDashboard
+  ])
+  const showPromptFirstComposer = matchesSettingsSearch(searchQuery, [
+    getExperimentalSearchEntry().promptFirstComposer
   ])
   const showTerminalAttention = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().terminalAttention
@@ -92,6 +96,13 @@ export function ExperimentalPane({
               />
             </div>
           </SearchableSetting>
+        ) : null}
+
+        {showPromptFirstComposer ? (
+          <PromptFirstComposerExperimentalSetting
+            settings={settings}
+            updateSettings={updateSettings}
+          />
         ) : null}
 
         {showTerminalAttention ? (

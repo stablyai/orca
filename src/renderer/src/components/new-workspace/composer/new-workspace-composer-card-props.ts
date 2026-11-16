@@ -23,6 +23,7 @@ import type { TaskSourceContext } from '../../../../../shared/work-items/task-so
 import type { AddRepoDialogEntryRequest } from '@/components/sidebar/project-admission/dialog/add-repo-dialog-types'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import type { NativeChatComposerHandle } from '@/components/native-chat/composer/native-chat-composer-types'
 
 import type { EphemeralVmRecipeOption } from '../run-target/run-target-options'
 
@@ -79,6 +80,8 @@ export type NewWorkspaceComposerCardProps = {
   showAddProjectButton?: boolean
   name: string
   onNameValueChange: (value: string) => void
+  agentPrompt?: string
+  onAgentPromptChange?: (value: string) => void
   branchNameOverride: string | undefined
   onBranchNameOverrideChange: (value: string | undefined) => void
   baseBranch?: string
@@ -120,6 +123,10 @@ export type NewWorkspaceComposerCardProps = {
   projectError: string | null
   creating: boolean
   onCreate: () => void
+  /** Prompt-first only: the shared prompt editor, whose submit is the create. */
+  promptEditorRef?: React.RefObject<NativeChatComposerHandle | null>
+  /** Prompt-first only: create with this prompt; resolves true once the creation took it. */
+  onPromptLaunch?: (prompt: string) => Promise<boolean>
   note: string
   onNoteChange: (value: string) => void
   setupConfig: SetupConfig | null

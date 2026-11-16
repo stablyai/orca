@@ -14,6 +14,7 @@ import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../
 import { buildAgentStartupPlan } from '../../../../../../shared/agent-launch/startup/tui-agent-startup'
 import '@/diagnostics/telemetry/telemetry'
 import { activateAndRevealFolderWorkspace } from '@/lib/workspace/activation/worktree-activation'
+import { resolveFolderWorkspaceSubmitPrompt } from './folder-workspace-submit-prompt'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import './folder-workspace-source-repos'
 import {
@@ -50,6 +51,7 @@ export async function submitFolderWorkspaceCreate({
   linkedWorkItem,
   linkedTaskSourceContext,
   note,
+  typedPrompt = '',
   quickAgent,
   launchChoice,
   launchInputs,
@@ -84,6 +86,10 @@ export async function submitFolderWorkspaceCreate({
   // SSH folders use the plain orca relay shim; keep the Linux-only local executable rename out of remote launches.
   const launchIsRemote = Boolean(projectGroup.connectionId)
   const launchShell = resolveExecutionHostAgentStartupShell(launchHost, terminalWindowsShell)
+  // Why: a typed prompt auto-submits even with a linked item; draft-paste is for context-only launches.
+  const hasTypedPrompt = typedPrompt.trim().length > 0
+  const submitPrompt = resolveFolderWorkspaceSubmitPrompt({ typedPrompt, linkedWorkItem, note })
+  const useLinkedDraftLaunch = Boolean(quickAgent && linkedWorkItem && !hasTypedPrompt)
   const preferences =
     quickAgent && settings
       ? await ensureAgentLaunchPreferences(useAppStore.getState(), {
@@ -101,7 +107,7 @@ export async function submitFolderWorkspaceCreate({
       }
     : settings
   const startupPlan =
-    quickAgent && launchPlatform && linkedWorkItem
+    quickAgent && launchPlatform && linkedWorkItem && useLinkedDraftLaunch
       ? buildFolderWorkspaceLinkedStartupPlan({
           agent: quickAgent,
           settings: effectiveSettings,
@@ -127,13 +133,15 @@ export async function submitFolderWorkspaceCreate({
               isRemote: launchIsRemote
             }),
             ...(agentEnv ? { agentEnv } : {}),
-            prompt: note,
+            prompt: submitPrompt,
             allowEmptyPromptLaunch: true
           })
         : null
   // Argv prefill embeds the draft in launchCommand, so draftPrompt alone cannot detect it.
   const launchDraftPrompt =
-    quickAgent && linkedWorkItem ? resolveFolderWorkspaceLaunchDraft(linkedWorkItem, note) : null
+    linkedWorkItem && useLinkedDraftLaunch
+      ? resolveFolderWorkspaceLaunchDraft(linkedWorkItem, note)
+      : null
   const launchRequest = quickAgent
     ? {
         requestId: createBrowserUuid(),
@@ -145,7 +153,7 @@ export async function submitFolderWorkspaceCreate({
           runtimeEnvironmentId,
           executionHostId: getRepoExecutionHostId(projectGroup)
         },
-        prompt: launchDraftPrompt ?? note,
+        prompt: launchDraftPrompt ?? submitPrompt,
         promptDelivery: launchDraftPrompt ? ('draft' as const) : ('auto-submit' as const)
       }
     : null
@@ -180,7 +188,7 @@ export async function submitFolderWorkspaceCreate({
     !name.trim() &&
     !linkedWorkItem &&
     Boolean(quickAgent) &&
-    note.trim().length > 0
+    submitPrompt.trim().length > 0
 
   if (startupPlan && !startupPlan.launchToken) {
     startupPlan.launchToken = createBrowserUuid()
@@ -192,7 +200,8 @@ export async function submitFolderWorkspaceCreate({
       ? {
           ...buildFolderWorkspaceHostStartupPayload({
             quickAgent,
-            note,
+            // The startup payload sends `note` as the prompt; carry the typed prompt in it.
+            note: submitPrompt,
             launchDraftPrompt,
             agentArgs,
             sessionOptions,
@@ -231,7 +240,7 @@ export async function submitFolderWorkspaceCreate({
     requestedAgentArgs,
     sessionOptions,
     launchDraftPrompt,
-    note,
+    note: submitPrompt,
     launchSource
   })
   if (result.warning) {

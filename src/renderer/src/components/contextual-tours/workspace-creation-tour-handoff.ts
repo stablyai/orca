@@ -1,6 +1,7 @@
 import { useAppStore } from '@/store'
 import { getContextualTour } from '../../../../shared/feature-education/contextual-tours/contextual-tours'
 import { requestContextualTourWhenReady } from './request-contextual-tour-when-ready'
+import { selectOpenWorkspaceComposerData } from '@/lib/workspace/creation/workspace-composer-pane-surface'
 
 export function openWorkspaceCreationComposerWithTourHandoff(): void {
   const state = useAppStore.getState()
@@ -38,6 +39,6 @@ export function openWorkspaceCreationComposerWithTourHandoff(): void {
     source: 'workspace_creation_modal',
     wasFeaturePreviouslyInteracted: false,
     waitForActiveTourToClear: true,
-    shouldContinue: () => useAppStore.getState().activeModal === 'new-workspace-composer'
+    shouldContinue: () => selectOpenWorkspaceComposerData(useAppStore.getState()) !== null
   })
 }

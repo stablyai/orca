@@ -10,6 +10,7 @@ import { isGitRepoKind } from '../../../../../shared/repository/repo-kind'
 import type { RepoHookSettings } from '../../../../../shared/workspace-setup/orca-yaml-hook-types'
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
+import { selectOpenWorkspaceComposerData } from '@/lib/workspace/creation/workspace-composer-pane-surface'
 import { getRepositoryLocalCommandsSectionId } from '../../settings/repository/repository-settings-targets'
 import {
   requestContextualTourWhenReady,
@@ -251,9 +252,5 @@ export function requestSetupGuideTourWhenReady(args: RequestContextualTourWhenRe
 
 export function isSetupGuideWorkspaceComposerRequestCurrent(requestId: string): boolean {
   const state = useAppStore.getState()
-  const modalData = state.modalData as { setupGuideTourRequestId?: unknown }
-  return (
-    state.activeModal === 'new-workspace-composer' &&
-    modalData.setupGuideTourRequestId === requestId
-  )
+  return selectOpenWorkspaceComposerData(state)?.setupGuideTourRequestId === requestId
 }

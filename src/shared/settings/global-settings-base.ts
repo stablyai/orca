@@ -26,6 +26,7 @@ import type { SshRemoteControlSettings } from '../remote-runtime/ssh/ssh-remote-
 import type { AgentWorkspaceTrustSettings } from '../agent-launch/permissions/agent-workspace-trust-decision'
 import type { KeybindingGlobalSettings } from '../keybindings/global-settings'
 import type { WorkspaceCleanupPolicySettings } from '../workspace-cleanup/workspace-cleanup-policy'
+import type { PromptFirstComposerSettings } from '../new-workspace/prompt-first-composer-settings'
 import type { PRAutoRefreshSettings } from '../source-control/hosted-review/review-refresh-policy'
 import type { ManagedAccountNameSettings } from '../agent-accounts/managed-account-display-names'
 import type { NewTabMenuSettings } from '../new-tab-menu/new-tab-menu-layout'
@@ -63,4 +64,5 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   PRAutoRefreshSettings &
   ManagedAccountNameSettings &
   NewTabMenuSettings &
-  UiLanguageSettings
+  UiLanguageSettings &
+  PromptFirstComposerSettings

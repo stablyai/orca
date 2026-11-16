@@ -1,6 +1,6 @@
 import type { QuickCreationExecutionInput } from './composer-model'
 
-import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/work-items/linked-work-item-context'
+import { resolveQuickCreatePrompt } from '@/lib/workspace/creation/quick-create-prompt'
 import { useCallback } from 'react'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
@@ -92,8 +92,11 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
 
       const promptLinkedWorkItem = agent === null ? null : submitLinkedWorkItem
 
-      const { prompt: quickPrompt, draftPrompt: quickDraftPrompt } =
-        resolveQuickCreateLinkedWorkItemPrompt(promptLinkedWorkItem, trimmedNote)
+      const { prompt: quickPrompt, draftPrompt: quickDraftPrompt } = resolveQuickCreatePrompt({
+        typedPrompt: agent === null ? '' : (options?.typedPrompt ?? ''),
+        linkedWorkItem: promptLinkedWorkItem,
+        note: trimmedNote
+      })
 
       const startupPolicySettlement = await settleComposerSubmit(
         persistSetupAgentStartupPolicy(),
@@ -152,6 +155,7 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         agent,
         linkedWorkItem: submitLinkedWorkItem,
         note: trimmedNote,
+        typedPrompt: options?.typedPrompt,
         repoId,
         executionHostId: selectedRepoExecutionHostId,
         settings,
@@ -245,14 +249,14 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         return
       }
 
-      if (persistDraft) {
-        clearNewWorkspaceDraft()
-      }
-
-      if (handoff) {
-        handoff.start(request)
-      } else {
-        runBackgroundWorktreeCreation(request)
+      const accepted = handoff
+        ? handoff.start(request)
+        : Boolean(runBackgroundWorktreeCreation(request))
+      if (accepted) {
+        if (persistDraft) {
+          clearNewWorkspaceDraft()
+        }
+        options?.onAccepted?.()
       }
 
       // The composer already closed at handoff; closing again could dismiss a newer modal.

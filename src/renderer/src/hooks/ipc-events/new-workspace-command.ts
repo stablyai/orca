@@ -2,6 +2,7 @@ import { buildLinearWorkspaceSource } from '../../../../shared/new-workspace/wor
 import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 import { getLinearIssueWorkspaceName } from '../../../../shared/workspace/naming/workspace-name'
 import type { AppState } from '../../store/types'
+import { selectOpenWorkspaceComposerData } from '@/lib/workspace/creation/workspace-composer-pane-surface'
 
 type NewWorkspaceShortcutModalData = {
   telemetrySource: 'shortcut'
@@ -27,9 +28,17 @@ export function buildNewWorkspaceShortcutModalData(
 }
 
 export function openNewWorkspaceFromShortcut(
-  state: Pick<AppState, 'activeModal' | 'activeView' | 'taskPageData' | 'openModal'>
+  state: Pick<
+    AppState,
+    | 'activeModal'
+    | 'modalData'
+    | 'workspaceComposerPaneRequest'
+    | 'activeView'
+    | 'taskPageData'
+    | 'openModal'
+  >
 ): void {
-  if (state.activeModal === 'new-workspace-composer') {
+  if (selectOpenWorkspaceComposerData(state)) {
     return
   }
   state.openModal('new-workspace-composer', buildNewWorkspaceShortcutModalData(state))

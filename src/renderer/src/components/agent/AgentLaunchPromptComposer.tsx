@@ -16,6 +16,7 @@ import {
 import { getNativeChatAgentProfile } from '../../../../shared/native-chat/native-chat-agent-profiles'
 import type { SessionOptionsSurface } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
+import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 
 const NO_OPTIONS_SURFACE: SessionOptionsSurface = {
   getSnapshot: () => [],
@@ -31,6 +32,13 @@ const NO_COMMAND_CAUSES = {
   retry: false
 } as const
 
+/** What a launch prompt is written for: its draft scope, its agent, and the checkout its file references resolve in. */
+export type AgentLaunchPromptTarget = {
+  scopeKey: string
+  agent: AgentType
+  worktreeId?: string | null
+}
+
 /** One prompt per agent and workspace owner, kept while the panel closes and reopens. */
 export function agentLaunchPromptScopeKey(entry: AgentPickerEntry): string {
   return nativeChatLaunchPromptDraftScopeKey(
@@ -42,18 +50,22 @@ export function agentLaunchPromptScopeKey(entry: AgentPickerEntry): string {
 
 /** The chat composer as a launch's first prompt: sending it is the launch, so nothing reaches a session. */
 export function AgentLaunchPromptComposer({
-  entry,
+  target,
   composerRef,
   disabled,
+  unavailableHint,
+  placeholder,
   onLaunch
 }: {
-  entry: AgentPickerEntry
+  target: AgentLaunchPromptTarget
   composerRef: Ref<NativeChatComposerHandle>
   disabled?: boolean
+  unavailableHint?: string
+  placeholder?: string
   onLaunch: (prompt: string) => boolean | void | Promise<boolean>
 }): React.JSX.Element {
-  const scopeKey = agentLaunchPromptScopeKey(entry)
-  const { worktreeId } = entry
+  const { scopeKey, agent } = target
+  const worktreeId = target.worktreeId ?? undefined
   const runtimeEnvironmentId = useAppStore((state) =>
     runtimeEnvironmentIdOrLocalUnlessTwin(state, worktreeId)
   )
@@ -101,17 +113,19 @@ export function AgentLaunchPromptComposer({
           clearNativeChatComposerDraftIfUnchanged(scopeKey, submitted)
         }
       },
-      placeholder: getNativeChatAgentProfile(entry.agent)
-        ? translate(
-            'agentPicker.promptPlaceholder',
-            'Add a prompt (optional): / for skills, @ for files'
-          )
-        : translate(
-            'agentPicker.promptPlaceholderFilesOnly',
-            'Add a prompt (optional): @ for files'
-          )
+      placeholder:
+        placeholder ??
+        (getNativeChatAgentProfile(agent)
+          ? translate(
+              'agentPicker.promptPlaceholder',
+              'Add a prompt (optional): / for skills, @ for files'
+            )
+          : translate(
+              'agentPicker.promptPlaceholderFilesOnly',
+              'Add a prompt (optional): @ for files'
+            ))
     }),
-    [entry.agent, onLaunch, scopeKey]
+    [agent, onLaunch, placeholder, scopeKey]
   )
   return (
     <NativeChatComposer
@@ -120,8 +134,9 @@ export function AgentLaunchPromptComposer({
       paneKey={scopeKey}
       draftScopeKey={scopeKey}
       targetPtyId={null}
-      agent={entry.agent}
+      agent={agent}
       canSend={!disabled}
+      unavailableHint={unavailableHint}
       structuredTransport={transport}
       notices={notices}
       launchPrompt={launchPrompt}

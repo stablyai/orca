@@ -1,6 +1,7 @@
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import { selectOpenWorkspaceComposerData } from '@/lib/workspace/creation/workspace-composer-pane-surface'
 import { useAppStore } from '@/store/index'
 import { cn } from '@/lib/class-names'
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
@@ -26,10 +27,8 @@ import type { RuntimeStatus } from '../../../shared/remote-runtime/session-graph
 import type { AddRepoDialogEntryRequest } from '@/components/sidebar/project-admission/dialog/add-repo-dialog-types'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import { NewWorkspaceComposerAdvancedSection } from './new-workspace/composer/NewWorkspaceComposerAdvancedSection'
-import { NewWorkspaceComposerAgentSection } from './new-workspace/composer/NewWorkspaceComposerAgentSection'
 import { NewWorkspaceComposerFooter } from './new-workspace/composer/NewWorkspaceComposerFooter'
-import { NewWorkspaceComposerNameSection } from './new-workspace/composer/NewWorkspaceComposerNameSection'
-import { NewWorkspaceComposerProjectSection } from './new-workspace/composer/NewWorkspaceComposerProjectSection'
+import { NewWorkspaceComposerPrimaryFields } from './new-workspace/composer/NewWorkspaceComposerPrimaryFields'
 import {
   EMPTY_EPHEMERAL_VM_RECIPES,
   EMPTY_PROJECT_HOST_SETUP_OPTIONS,
@@ -81,20 +80,23 @@ export default function NewWorkspaceComposerCard(
     activeFolderWorkspaceId,
     onAddProjectOverride,
     onAddProjectEntryRequest,
-    onNestedDialogOpenChange
+    onNestedDialogOpenChange,
+    promptEditorRef
   } = props
   const projectOptions = props.projectOptions ?? EMPTY_PROJECT_OPTIONS
   const projectHostSetupOptions = props.projectHostSetupOptions ?? EMPTY_PROJECT_HOST_SETUP_OPTIONS
   const ephemeralVmRecipes = props.ephemeralVmRecipes ?? EMPTY_EPHEMERAL_VM_RECIPES
   const { isFileDragOver, dragHandlers } = useComposerFileDragOver()
+  const promptFirst = useAppStore((state) => state.settings?.promptFirstComposer === true)
   const attachDropOwner = useNewWorkspaceComposerFileDrop({
     projectPath: props.selectedRepoPath,
     hostId: selectedRepoExecutionHostId,
     connectionId: props.selectedRepoConnectionId,
-    applyDrop: props.onNativeFileDrop
+    // Why: prompt-first drops belong to the prompt editor's own drop target, not the hidden prompt field.
+    applyDrop: promptFirst ? undefined : props.onNativeFileDrop
   })
   const openModal = useAppStore((state) => state.openModal)
-  const activeModal = useAppStore((state) => state.activeModal)
+  const composerOpen = useAppStore((state) => selectOpenWorkspaceComposerData(state) !== null)
   const defaultTuiAgent = useAppStore((state) => state.settings?.defaultTuiAgent ?? null)
   const disabledTuiAgents = useAppStore(
     (state) => state.settings?.disabledTuiAgents ?? DEFAULT_DISABLED_TUI_AGENTS
@@ -191,13 +193,19 @@ export default function NewWorkspaceComposerCard(
     },
     [attachDropOwner, cancelNameInputFocusFrame, composerRef, onComposerNodeChange]
   )
-  const focusNameInput = React.useCallback((): void => {
+  // Why: picking a project hands focus to whatever gets typed next: the prompt
+  // in the prompt-first layout, the name/source field in the classic one.
+  const focusNextInput = React.useCallback((): void => {
     cancelNameInputFocusFrame()
     nameInputFocusFrameRef.current = requestAnimationFrame(() => {
       nameInputFocusFrameRef.current = null
+      if (promptFirst) {
+        promptEditorRef?.current?.focus()
+        return
+      }
       nameInputRef?.current?.focus()
     })
-  }, [cancelNameInputFocusFrame, nameInputRef])
+  }, [cancelNameInputFocusFrame, nameInputRef, promptFirst, promptEditorRef])
   const handleAddProject = React.useCallback((): void => {
     if (onAddProjectOverride) {
       onAddProjectOverride()
@@ -285,13 +293,31 @@ export default function NewWorkspaceComposerCard(
     agentTrigger?.focus()
   }, [composerRef])
 
+  const targetPickerProps = {
+    projectOptions,
+    projectHostSetupOptions,
+    ephemeralVmRecipes,
+    projectDescriptionId,
+    onAddProject: handleAddProject,
+    onAddProjectEntryRequest: handleAddProjectEntryRequest,
+    handleOpenRemoteHostDialog: handleRemoteHostModeChange,
+    shouldShowRunTargetPicker,
+    handleProjectHostSetupChange: (setupId: string) => onProjectHostSetupChange?.(setupId),
+    handleAddSshHost: () => handleRemoteHostModeChange('ssh'),
+    handleAddRemoteServer: () => handleRemoteHostModeChange('server'),
+    handleConnectRunTargetHost,
+    handleSetLocation
+  }
+  const agentPickerProps = {
+    visibleQuickAgents,
+    defaultTuiAgent,
+    handleSetDefaultAgent
+  }
   useContextualTour(
     'workspace-creation',
     projectOptions.length > 0 && Boolean(selectedProjectId),
     contextualTourSource ??
-      (activeModal === 'new-workspace-composer'
-        ? 'workspace_creation_modal'
-        : 'workspace_creation_visible')
+      (composerOpen ? 'workspace_creation_modal' : 'workspace_creation_visible')
   )
 
   return (
@@ -304,6 +330,7 @@ export default function NewWorkspaceComposerCard(
       className={cn(
         'flex min-h-0 min-w-0 flex-1 flex-col gap-1 rounded-md transition',
         isFileDragOver &&
+          !promptFirst &&
           props.selectedRepoPath &&
           selectedRepoExecutionHostId &&
           props.onNativeFileDrop &&
@@ -312,35 +339,17 @@ export default function NewWorkspaceComposerCard(
       )}
     >
       <div className={cn('min-h-0 min-w-0 space-y-4 pt-3', contentClassName)}>
-        <NewWorkspaceComposerProjectSection
+        <NewWorkspaceComposerPrimaryFields
           {...props}
-          disabled={sparseEditing}
-          projectOptions={projectOptions}
-          projectHostSetupOptions={projectHostSetupOptions}
-          ephemeralVmRecipes={ephemeralVmRecipes}
-          projectDescriptionId={projectDescriptionId}
-          onAddProject={handleAddProject}
-          onAddProjectEntryRequest={handleAddProjectEntryRequest}
-          handleOpenRemoteHostDialog={handleRemoteHostModeChange}
-          focusNameInput={focusNameInput}
-          shouldShowRunTargetPicker={shouldShowRunTargetPicker}
-          handleProjectHostSetupChange={(setupId) => onProjectHostSetupChange?.(setupId)}
-          handleAddSshHost={() => handleRemoteHostModeChange('ssh')}
-          handleAddRemoteServer={() => handleRemoteHostModeChange('server')}
-          handleConnectRunTargetHost={handleConnectRunTargetHost}
-          handleSetLocation={handleSetLocation}
+          {...targetPickerProps}
+          {...agentPickerProps}
+          promptFirst={promptFirst}
+          sparseEditing={sparseEditing}
+          focusNextInput={focusNextInput}
           sshStatusLabel={sshStatusLabel}
           connectButtonLabel={connectButtonLabel}
           selectedProjectName={selectedProjectName}
-        />
-        <NewWorkspaceComposerNameSection {...props} onNamePlainEnter={handleNamePlainEnter} />
-        <NewWorkspaceComposerAgentSection
-          {...props}
-          createDisabled={props.createDisabled || sparseEditing}
-          advancedLocked={sparseEditing}
-          visibleQuickAgents={visibleQuickAgents}
-          defaultTuiAgent={defaultTuiAgent}
-          handleSetDefaultAgent={handleSetDefaultAgent}
+          onNamePlainEnter={handleNamePlainEnter}
         />
         <NewWorkspaceComposerAdvancedSection
           {...props}
@@ -360,6 +369,7 @@ export default function NewWorkspaceComposerCard(
           <NewWorkspaceComposerFooter
             {...props}
             submitShortcutModifierLabel={getScreenSubmitModifierLabel()}
+            hidePrimaryAction={promptFirst}
           />
         </div>
       ) : null}

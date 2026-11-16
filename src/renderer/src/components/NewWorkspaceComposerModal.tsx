@@ -1,9 +1,4 @@
 import type { ComposerModalData } from './new-workspace/composer/composer-modal-data'
-import { toast } from 'sonner'
-import {
-  formatWorkspaceCreateError,
-  getWorkspaceCreateErrorToastMessage
-} from '@/lib/workspace/creation/workspace-create-error-format'
 import type {
   AgentPickerDraft,
   AgentPickerEntry
@@ -13,14 +8,9 @@ import { agentChoicePending } from '@/lib/agent-session/launch/inventory/host-ch
 import type { AgentLaunchSurface } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import React, { Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store/index'
+import { cn } from '@/lib/class-names'
 import { lazyWithRetry } from '@/app-shell/startup/lazy-with-retry'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle
-} from '@/components/ui/dialog'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
 import NewWorkspaceComposerCard from '@/components/NewWorkspaceComposerCard'
 import AgentSettingsDialog, {
   restoreAgentSettingsInvoker
@@ -37,13 +27,19 @@ import { useAgentsOfferedForLaunch } from '@/lib/agent-session/launch/inventory/
 import { shouldAllowComposerEnterSubmitTarget } from '@/lib/workspace/creation/new-workspace-enter-guard'
 import { isScreenSubmitShortcut } from '@/lib/keyboard/screen-submit-shortcut'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
-import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { getWorkspaceComposerInitialFocusTarget } from '@/lib/workspace/creation/workspace-composer-initial-focus'
+import { DialogComposerHeading } from '@/components/new-workspace/composer/DialogComposerHeading'
 import '@/components/sidebar/workspace-creation/folder/folder-workspace-source-repos'
 import { getFolderWorkspacePrimaryActionLabel } from '@/components/sidebar/workspace-creation/folder/folder-workspace-source-selection'
 import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
+import type { NativeChatComposerHandle } from '@/components/native-chat/composer/native-chat-composer-types'
+import { captureWorkspaceComposerPromptRecovery } from '@/components/new-workspace/composer/workspace-composer-prompt-recovery'
+import {
+  buildComposerRecoverySnapshot,
+  showComposerRecoveryError
+} from '@/components/new-workspace/composer/composer-recovery-snapshot'
 
 // Keep Add Project’s clone/SSH machinery outside the composer entry render, matching App loading.
 const HostedAddRepoDialog = lazyWithRetry(
@@ -78,6 +74,7 @@ function ComposerModalBody({
   modalData: ComposerModalData
   onClose: () => void
 }): React.JSX.Element {
+  const promptFirst = useAppStore((s) => s.settings?.promptFirstComposer === true)
   const dialogRef = useRef<HTMLDivElement>(null)
   const submitCancelledRef = useRef(false)
   const handleDismiss = useCallback(() => {
@@ -90,7 +87,10 @@ function ComposerModalBody({
     <Dialog open onOpenChange={(open) => !open && handleDismiss()}>
       <DialogContent
         ref={dialogRef}
-        className="flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden sm:max-w-lg"
+        className={cn(
+          'flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden',
+          promptFirst ? 'sm:max-w-2xl' : 'sm:max-w-lg'
+        )}
         onEscapeKeyDown={(event) => {
           if (dialogRef.current?.querySelector('[data-sparse-preset-editor]')) {
             event.preventDefault()
@@ -103,30 +103,38 @@ function ComposerModalBody({
           getWorkspaceComposerInitialFocusTarget(content)?.focus({ preventScroll: true })
         }}
       >
-        <QuickTabBody
+        <WorkspaceComposerBody
           modalData={modalData}
           onClose={onClose}
           isSubmissionCancelled={isSubmissionCancelled}
           active
+          heading={DialogComposerHeading}
         />
       </DialogContent>
     </Dialog>
   )
 }
 
-function QuickTabBody({
+/** Composer state and card, hosted by the dialog or the center pane; `heading` renders the host's title. */
+export function WorkspaceComposerBody({
   modalData,
   onClose,
   isSubmissionCancelled,
-  active
+  active,
+  heading: Heading,
+  cardContentClassName = '-mx-2 flex-1 overflow-y-auto px-2 pb-1 scrollbar-sleek'
 }: {
   modalData: ComposerModalData
   onClose: () => void
   isSubmissionCancelled: () => boolean
   active: boolean
+  heading: React.ComponentType<{ title: string; description: string }>
+  /** The dialog scrolls the card body; the pane lets it size to content. */
+  cardContentClassName?: string
 }): React.JSX.Element {
   const t = useTranslate()
   const settings = useAppStore((s) => s.settings)
+  const promptFirst = settings?.promptFirstComposer === true
   const {
     cardProps,
     composerRef,
@@ -227,62 +235,63 @@ function QuickTabBody({
     [observation.contextKey]
   )
 
-  const handleCreate = useCallback(async (): Promise<void> => {
-    if (createDisabled) {
+  const handleCreate = useCallback(
+    async (typedPrompt: string): Promise<boolean> => {
+      if (createDisabled) {
+        return false
+      }
+      const restorePrompt = promptFirst ? captureWorkspaceComposerPromptRecovery() : undefined
+      let accepted = false
+      await submitQuick(quickAgent, {
+        // Blank Terminal is the setup-only create: no agent, and no extra shell beside setup.
+        setupOnly: quickAgent === null,
+        launchChoice: launchSelection.choice,
+        typedPrompt,
+        onAccepted: () => {
+          accepted = true
+        },
+        onLegacyPreparationFailure: (error) => {
+          if (isSubmissionCancelled()) {
+            return
+          }
+          const snapshot = buildComposerRecoverySnapshot(modalData, cardProps, {
+            ...quickAgentPick,
+            agent: quickAgent,
+            note: cardProps.note
+          })
+          showComposerRecoveryError(error, snapshot, isSubmissionCancelled, restorePrompt)
+        },
+        ...quickWorkspacePickerInputs(
+          pickerDraft,
+          quickAgentPick.entry,
+          launchSelection.choice?.executionHostId
+        )
+      })
+      return accepted
+    },
+    [
+      createDisabled,
+      promptFirst,
+      quickAgent,
+      launchSelection.choice,
+      submitQuick,
+      pickerDraft,
+      quickAgentPick,
+      isSubmissionCancelled,
+      modalData,
+      cardProps
+    ]
+  )
+  const promptEditorRef = useRef<NativeChatComposerHandle | null>(null)
+  // Why: prompt-first, the editor owns the draft, so an agent create goes through its submit; Blank Terminal creates empty.
+  const requestCreate = useCallback((): void => {
+    const promptEditor = promptFirst && quickAgent !== null ? promptEditorRef.current : null
+    if (promptEditor?.submit) {
+      promptEditor.submit()
       return
     }
-    await submitQuick(quickAgent, {
-      // Blank Terminal is the setup-only create: no agent, and no extra shell beside setup.
-      setupOnly: quickAgent === null,
-      launchChoice: launchSelection.choice,
-      onLegacyPreparationFailure: (error) => {
-        if (isSubmissionCancelled()) {
-          return
-        }
-        const snapshot = {
-          ...modalData,
-          prefilledName: cardProps.name,
-          initialRepoId: cardProps.repoId,
-          initialBaseBranch: cardProps.baseBranch,
-          initialWorkspaceTarget:
-            cardProps.selectedProjectId && cardProps.selectedRepoExecutionHostId
-              ? {
-                  projectId: cardProps.selectedProjectId,
-                  hostId: cardProps.selectedRepoExecutionHostId,
-                  projectHostSetupId: cardProps.selectedProjectHostSetupId ?? null
-                }
-              : modalData.initialWorkspaceTarget,
-          linkedWorkItem: cardProps.linkedWorkItem,
-          recovery: { ...quickAgentPick, agent: quickAgent, note: cardProps.note }
-        }
-        toast.error(getWorkspaceCreateErrorToastMessage(formatWorkspaceCreateError(error)), {
-          action: {
-            label: translate('auto.lib.composerCreateHandoff.reopen', 'Reopen'),
-            onClick: () => {
-              if (!isSubmissionCancelled() && useAppStore.getState().activeModal === 'none') {
-                useAppStore.getState().openModal('new-workspace-composer', snapshot)
-              }
-            }
-          }
-        })
-      },
-      ...quickWorkspacePickerInputs(
-        pickerDraft,
-        quickAgentPick.entry,
-        launchSelection.choice?.executionHostId
-      )
-    })
-  }, [
-    createDisabled,
-    quickAgent,
-    launchSelection.choice,
-    submitQuick,
-    pickerDraft,
-    quickAgentPick,
-    isSubmissionCancelled,
-    modalData,
-    cardProps
-  ])
+    void handleCreate(promptFirst ? '' : cardProps.agentPrompt)
+  }, [cardProps.agentPrompt, handleCreate, promptFirst, quickAgent])
   const {
     addProjectOpen,
     addProjectMounted,
@@ -329,35 +338,33 @@ function QuickTabBody({
         return
       }
       event.preventDefault()
-      void handleCreate()
+      requestCreate()
     }
     addAppKeyListener('keydown', onKeyDown)
     return () => removeAppKeyListener('keydown', onKeyDown)
-  }, [active, composerRef, createDisabled, handleCreate, nestedDialogOpen])
+  }, [active, composerRef, createDisabled, requestCreate, nestedDialogOpen])
 
   return (
     <>
-      <DialogHeader className="gap-1">
-        <DialogTitle className="text-base font-semibold">
-          {isFolderWorkspaceTarget
+      <Heading
+        title={
+          isFolderWorkspaceTarget
             ? t(
                 'auto.components.sidebar.FolderWorkspaceComposerDialog.title',
                 'Create Folder Workspace'
               )
-            : primaryActionLabel}
-        </DialogTitle>
-        <DialogDescription className="sr-only">
-          {t(
-            'components.newWorkspace.createDescription',
-            'Choose the project and workspace name. Select an agent if you want to start one.'
-          )}
-        </DialogDescription>
-      </DialogHeader>
+            : primaryActionLabel
+        }
+        description={t(
+          'components.newWorkspace.createDescription',
+          'Choose the project and workspace name. Select an agent if you want to start one.'
+        )}
+      />
       <NewWorkspaceComposerCard
         contextualTourSource={modalData.contextualTourSource}
         // Keep focus rings and the Advanced hover highlight inside the scroll padding.
         containerClassName="px-2"
-        contentClassName="-mx-2 flex-1 overflow-y-auto px-2 pb-1 scrollbar-sleek"
+        contentClassName={cardContentClassName}
         composerRef={composerRef}
         onComposerNodeChange={onComposerNodeChange}
         nameInputRef={nameInputRef}
@@ -388,7 +395,9 @@ function QuickTabBody({
           agentSettingsInvoker.current = invoker
           setAgentSettingsOpen(true)
         }}
-        onCreate={() => void handleCreate()}
+        onCreate={requestCreate}
+        promptEditorRef={promptEditorRef}
+        onPromptLaunch={handleCreate}
         onAddProjectOverride={handleOpenAddProject}
         onAddProjectEntryRequest={handleOpenAddProjectEntryRequest}
         onNestedDialogOpenChange={handleNestedDialogOpenChange}

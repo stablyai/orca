@@ -42,6 +42,7 @@ export const AgentLaunchPicker = memo(
     model,
     entries: suppliedEntries,
     triggerLabel,
+    pillTrigger,
     draftScope,
     worktreeId,
     value,
@@ -66,6 +67,7 @@ export const AgentLaunchPicker = memo(
     model: NewTabAgentMenuModel
     entries?: AgentPickerEntry[]
     triggerLabel?: string
+    pillTrigger?: boolean
     draftScope?: object
     worktreeId?: string
     value?: AgentPickerDraft
@@ -191,8 +193,9 @@ export const AgentLaunchPicker = memo(
               type="button"
               data-agent-launch-picker-trigger="true"
               aria-label={t('agentPicker.select', 'Select agent')}
-              variant="outline"
-              className="w-full min-w-0"
+              variant={pillTrigger ? 'ghost' : 'outline'}
+              size={pillTrigger ? 'xs' : 'default'}
+              className={pillTrigger ? 'w-auto min-w-0' : 'w-full min-w-0'}
               disabled={disabled || model.state !== 'settled'}
               onKeyDown={(event) => {
                 if (open) {
