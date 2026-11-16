@@ -1,3 +1,7 @@
+import {
+  agentStatusValues,
+  type AgentStatusRows
+} from '../../agent-status/contracts/agent-status-rows'
 import { detectAgentStatusFromTitle } from '../../agent-status/title/agent-title-status'
 import {
   isAgentStatusFresh,
@@ -10,7 +14,7 @@ import { migrationUnsupportedToAgentStatusEntry } from '../../migration-unsuppor
 import { resolveDecayedAgentRowState } from '../../agent-status/presentation/agent-row-decay-state'
 import { tabHasLivePty } from '../../tab-has-live-pty'
 import { isSyntheticAgentPermissionTitle } from '../../agent-status/title/synthetic-agent-title'
-import { resolveRuntimePaneTitleLeafId } from '../../runtime-pane-title-leaf-id'
+import { resolveRuntimePaneTitleLeafId } from '../../workspace-layout/terminal-topology/runtime-pane-title-leaf-id'
 import type { AgentStatus } from '../../agent-status/title/agent-title-core'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../worktree/types'
@@ -38,12 +42,12 @@ export const IDLE: WorktreeAttention = { cls: 5, attentionTimestamp: 0 }
 export type SmartAttentionTab = Pick<TerminalTab, 'id' | 'title'>
 
 export function hasFreshAttributedAgentStatus(
-  agentStatusByPaneKey: Record<string, AgentStatusEntry> | undefined,
+  agentStatusByPaneKey: AgentStatusRows | undefined,
   now: number,
   tabsByWorktree: Record<string, readonly SmartAttentionTab[]>
 ): boolean {
   const freshUnstampedTabIds = new Set<string>()
-  for (const entry of Object.values(agentStatusByPaneKey ?? {})) {
+  for (const entry of agentStatusValues(agentStatusByPaneKey)) {
     const parsed = parsePaneKey(entry.paneKey)
     if (parsed === null || !isAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
       continue
@@ -172,7 +176,7 @@ export function resolveAttention(panes: PaneInput[], now: number): WorktreeAtten
 
 /** Index entries by parsed tab ID once per sort, avoiding a full agent-map scan for each worktree. */
 export function buildExplicitEntriesByTabId(
-  agentStatusByPaneKey: Record<string, AgentStatusEntry> | undefined,
+  agentStatusByPaneKey: AgentStatusRows | undefined,
   migrationUnsupportedByPtyId?: Record<string, MigrationUnsupportedPtyEntry>
 ): Map<string, AgentStatusEntry[]> {
   const byTab = new Map<string, AgentStatusEntry[]>()
@@ -189,7 +193,7 @@ export function buildExplicitEntriesByTabId(
       byTab.set(parsed.tabId, [entry])
     }
   }
-  for (const entry of Object.values(agentStatusByPaneKey ?? {})) {
+  for (const entry of agentStatusValues(agentStatusByPaneKey)) {
     pushEntry(entry)
   }
   for (const entry of Object.values(migrationUnsupportedByPtyId ?? {})) {
@@ -202,10 +206,10 @@ export function buildExplicitEntriesByTabId(
 }
 
 function buildExplicitEntriesByWorktreeId(
-  agentStatusByPaneKey: Record<string, AgentStatusEntry> | undefined
+  agentStatusByPaneKey: AgentStatusRows | undefined
 ): Map<string, AgentStatusEntry[]> {
   const byWorktree = new Map<string, AgentStatusEntry[]>()
-  for (const entry of Object.values(agentStatusByPaneKey ?? {})) {
+  for (const entry of agentStatusValues(agentStatusByPaneKey)) {
     if (!entry.worktreeId || !parsePaneKey(entry.paneKey)) {
       continue
     }
@@ -305,7 +309,7 @@ export function collectTabPaneInputs(
 export function buildAttentionByWorktree(
   worktrees: readonly Pick<Worktree, 'id' | 'lastActivityAt'>[],
   tabsByWorktree: Record<string, readonly SmartAttentionTab[]> | null,
-  agentStatusByPaneKey: Record<string, AgentStatusEntry> | undefined,
+  agentStatusByPaneKey: AgentStatusRows | undefined,
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>,
   ptyIdsByTabId: Record<string, string[]>,
   now: number,

@@ -1,7 +1,7 @@
 import { Extension, type Editor } from '@tiptap/core'
 import { DOMSerializer } from '@tiptap/pm/model'
 import { Plugin } from '@tiptap/pm/state'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/identifiers/non-secure-context-uuid'
 import {
   readRichMarkdownImageRuntimeContext,
   type RichMarkdownImageRuntimeContext

@@ -1,5 +1,5 @@
 /** Keep interactive OpenSSH login unmanaged: omit -T, BatchMode and Orca ControlMaster so the saved alias uses user ssh_config and terminal prompts/TTY. */
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import {
   appendSshTargetDestinationArgs,
   type SystemSshBuildArgsOptions

@@ -7,7 +7,7 @@ import type { AppStoreApi, EditorSaveQueue } from '../save/queue/editor-save-que
 import type {
   EditorPrepareHotExitDetail,
   EditorSaveDirtyFilesDetail
-} from '../../../../../shared/editor-save-events'
+} from '../../../../../shared/editor/saving/editor-save-events'
 
 type EditorRestartSaveHandlerOptions = {
   store: AppStoreApi

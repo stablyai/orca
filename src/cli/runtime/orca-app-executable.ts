@@ -1,5 +1,5 @@
 import { resolve } from 'node:path'
-import { ELECTRON_NO_SANDBOX_REQUEST_ENV } from '../../shared/electron-no-sandbox-request'
+import { ELECTRON_NO_SANDBOX_REQUEST_ENV } from '../../shared/app-lifecycle/launch/electron-no-sandbox-request'
 import { needsElectronNoSandbox } from './app-launch/electron-sandbox-switch'
 import { serverOnlyServeMessage } from './app-launch/serve-app-launcher'
 import { SERVE_SUPERVISOR_APP_ROOT_ENV } from './serve/supervision/serve-supervisor-relocation'

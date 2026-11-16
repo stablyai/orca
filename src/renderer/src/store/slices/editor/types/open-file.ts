@@ -16,7 +16,7 @@ import type {
   DiffSource,
   OpenCheckRunDetailsState,
   OpenConflictMetadata
-} from '../../../../../../shared/editor-tab-view-types'
+} from '../../../../../../shared/editor/views/editor-tab-view-types'
 
 export type BranchCompareLike = Pick<
   GitBranchCompareSummary,

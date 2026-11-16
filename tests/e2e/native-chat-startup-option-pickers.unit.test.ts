@@ -154,7 +154,7 @@ it('picks model then effort through the menus during startup and uses both in th
         })
       )
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Model opus, Effort High' }))
+    fireEvent.click(screen.getByRole('button', { name: /^Model opus\b/ }))
     fireEvent.click(await screen.findByRole('option', { name: 'sonnet' }))
     fireEvent.keyDown(await screen.findByRole('slider', { name: 'Effort' }), { key: 'Home' })
     fireEvent.keyDown(screen.getByRole('slider', { name: 'Effort' }), { key: 'Enter' })

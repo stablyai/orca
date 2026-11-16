@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import type { AppState } from '@/store/types'
 import { findRepoForHost } from '@/store/repos/repo-host-identity'
-import { getRepoHostIdentity } from '../../../../../../shared/repo-host-identity'
+import { getRepoHostIdentity } from '../../../../../../shared/repository/repo-host-identity'
 import {
   getWorktreeExecutionHostId,
   parseExecutionHostId,

@@ -1,11 +1,10 @@
 import { useEffect } from 'react'
 import * as z from 'zod'
-import type { ProjectGroup } from '../../../../src/shared/project-group-types'
+import type { ProjectGroup } from '../../../../src/shared/project/groups/project-group-types'
 import {
   ProjectSectionCatalogSchema,
   type ServedProjectSections
-} from '../../../../src/shared/project-section-catalog-schema'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../src/shared/sidebar-inputs-switch'
+} from '../../../../src/shared/sidebar-list/catalog/project-section-catalog-schema'
 import { defineHostQuery, useHostQuery } from '../../query/host-query'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import {
@@ -19,7 +18,7 @@ import type { HostScreenState } from '../use-host-screen-state'
 
 type HostProjectSections = {
   sections: ServedProjectSections | null
-  // Read only by a feed-built list whose window catalog carries no groups.
+  // Read only when the desktop's catalog carries no groups (older desktops).
   groups: readonly ProjectGroup[] | null
 }
 
@@ -35,8 +34,8 @@ export const hostProjectSectionsQuery = defineHostQuery({
     if (sections.kind !== 'answered') {
       throw new Error('project sections unavailable')
     }
-    // Switch point: with no window catalog's groups, a feed-built list reads the host's own.
-    if (!ORCA_SIDEBAR_INPUTS_IS_MAIN || sections.value?.projectGroups) {
+    // An older desktop's catalog carries no groups; the list then reads the host's own.
+    if (sections.value?.projectGroups) {
       return { sections: sections.value, groups: null }
     }
     const groupReply = await hostProjectGroupsRead.request(client).catch(() => null)

@@ -2,11 +2,9 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import {
-  findKeybindingConflicts,
-  getEffectiveKeybindingsForAction,
-  keybindingMatchesAction
-} from '../../shared/keybindings'
+import { findKeybindingConflicts } from '../../shared/keybindings/formatting'
+import { getEffectiveKeybindingsForAction } from '../../shared/keybindings/effective'
+import { keybindingMatchesAction } from '../../shared/keybindings/matching'
 import { getUserKeybindingsPath } from './keybinding-file'
 import { KeybindingService } from './keybinding-service'
 

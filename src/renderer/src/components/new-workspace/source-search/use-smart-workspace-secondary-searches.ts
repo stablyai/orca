@@ -14,7 +14,7 @@ import { searchRuntimeRepoBaseRefDetails } from '@/runtime/source-control/refere
 import { lookupLinearIssueUrl } from '@/lib/work-items/linear/linear-issue-url-lookup'
 import { searchJiraIssuesByKeyOrText } from '@/components/jira-key-or-text-search'
 import { linearWorkspaceScopeSignature } from '../../../../../shared/linear/workspace-types'
-import { isIntegrationCredentialDecryptionError } from '../../../../../shared/integration-credential-errors'
+import { isIntegrationCredentialDecryptionError } from '../../../../../shared/secure-storage/integration-credential-errors'
 import { getSmartWorkspaceLinearSearchQuery } from '../../../../../shared/new-workspace/smart-workspace-linear-intent'
 import { RESULT_LIMIT } from '../name-field/smart-workspace-name-field-model'
 import { restrictJiraQueryToProject } from '../../../../../shared/jira/jira-project-reference'

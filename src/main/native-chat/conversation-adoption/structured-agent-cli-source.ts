@@ -6,8 +6,8 @@ import {
   adoptsCliConversations,
   chatAgentsShareConversations,
   CLI_CONVERSATION_ADOPTING_AGENTS
-} from '../../../shared/structured-agent-cli-conversation-adoption'
-import { isWslUncPath } from '../../../shared/wsl-paths'
+} from '../../../shared/agent-session/view/structured-agent-cli-conversation-adoption'
+import { isWslUncPath } from '../../../shared/file-access/wsl-paths'
 import { needsWslHostResolution } from '../transcript-discovery/host-readable-transcript-path'
 import { parseSshTranscriptPath } from '../transcript-filesystem/ssh-transcript-path'
 

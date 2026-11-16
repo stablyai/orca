@@ -1,8 +1,11 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { RepoSlice } from '../repos/repo-state'
-import type { ProjectGroup, ProjectGroupMutation } from '../../../../shared/project-group-types'
-import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type {
+  ProjectGroup,
+  ProjectGroupMutation
+} from '../../../../shared/project/groups/project-group-types'
+import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   catalogOwnsHost,
   resolveProjectGroupOwnerHostId,

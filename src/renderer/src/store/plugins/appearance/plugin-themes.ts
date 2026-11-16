@@ -15,7 +15,7 @@ import {
 } from '../../../app-shell/appearance/document-theme'
 import { useAppStore } from '../../index'
 import { useSettingsDarkTheme } from '@/hooks/use-document-dark-theme'
-import { pluginAppThemeSlotUpdate } from '../../../../../shared/plugin-theme-settings'
+import { pluginAppThemeSlotUpdate } from '../../../../../shared/plugins/appearance/plugin-theme-settings'
 import { isPluginContentSwitchedOff } from '../../../../../shared/plugins/plugin-system-settings'
 
 const appThemes = createPluginContentListStore<PluginThemeRegistration>({

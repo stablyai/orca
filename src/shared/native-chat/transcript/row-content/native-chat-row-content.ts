@@ -6,6 +6,7 @@ import {
   withoutBackgroundTaskRows
 } from '../../input/task-lists/native-chat-background-task-row'
 import { isWordlessProviderFrameBlock } from '../../native-chat-provider-frame-summary'
+import { isNativeChatProviderTurnStartBlock } from '../turns/native-chat-provider-turn-start'
 import {
   isReplacedSubagentGroupTwin,
   subagentGroupBlocks
@@ -27,7 +28,9 @@ function readMarkdown(this: { prose: NativeChatBlock[] }): string {
 
 function derive(blocks: readonly NativeChatBlock[]) {
   const split = splitNativeChatBlocks(
-    blocks.filter((block) => !isWordlessProviderFrameBlock(block))
+    blocks.filter(
+      (block) => !isWordlessProviderFrameBlock(block) && !isNativeChatProviderTurnStartBlock(block)
+    )
   )
   const groups = subagentGroupBlocks(split.prose)
   const tasks = backgroundTaskBlocks(split.prose)

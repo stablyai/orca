@@ -1,7 +1,7 @@
 import { resolveOwner } from '@/lib/workspace/ownership/resolve-owner'
 import type { WorktreeOperationRouteState } from '@/lib/workspace/ownership/worktree-operation-route'
 import { hostRouteForAuthority, type HostRoute } from '@/runtime/rpc/targets/runtime-client-target'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import {
   getOrcadSshDeployment,
   type OrcadDeploymentLink
@@ -14,7 +14,7 @@ import {
   authorityKey,
   parseHostAuthorityKey,
   type HostAuthorityKey
-} from '../../../../../shared/host-authority'
+} from '../../../../../shared/execution-host/host-authority'
 
 /** Where the Ports panel looks for the active workspace's listeners. */
 export type PortsPanelHost =

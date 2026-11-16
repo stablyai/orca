@@ -60,10 +60,17 @@ export function useNativeChatComposerEditSession({
   const hostSetsGoals = structuredTransport?.threadGoal !== undefined
   const hostSetsInteractionMode =
     structuredTransport?.optionSnapshot.some((entry) => entry.id === 'interactionMode') === true
+  const opensMcpPanel = structuredTransport?.mcpPanel !== undefined
   const acceptsText = useMemo(
     () =>
-      prepareQueuedMessageEditText(agent, sessionCommands, hostSetsGoals, hostSetsInteractionMode),
-    [agent, sessionCommands, hostSetsGoals, hostSetsInteractionMode]
+      prepareQueuedMessageEditText(
+        agent,
+        sessionCommands,
+        hostSetsGoals,
+        hostSetsInteractionMode,
+        opensMcpPanel
+      ),
+    [agent, sessionCommands, hostSetsGoals, hostSetsInteractionMode, opensMcpPanel]
   )
   const isEditing = editSession !== undefined
   useLayoutEffect(() => {

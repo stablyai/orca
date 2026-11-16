@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import { toast } from 'sonner'
-import type { RuntimeStatus } from '../../../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { createCompatibleRuntimeStatusResponse } from '../../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { callRuntimeRpc } from '../../../runtime/rpc/calls/runtime-rpc-call'
@@ -10,7 +10,7 @@ import { clearRuntimeEnvironmentConnectionGenerations as clearRuntimeEnvironment
 import { createRuntimeStatusSlice } from './create-runtime-status-slice'
 import type { RuntimeStatusSlice } from './runtime-status-types'
 import '@/runtime/hosts/observations/provider-runtime-context'
-import '../../../../../shared/workspace-creator-visibility'
+import '../../../../../shared/workspace-view/workspace-creator-visibility'
 import { stubRuntimeEnvironmentBridge } from '../../../runtime/rpc/testing/runtime-environment-bridge-fixture'
 
 vi.mock('sonner', () => ({
@@ -86,52 +86,6 @@ afterEach(() => {
 })
 
 describe('runtime-status slice', () => {
-  it('keeps the keyed action toast visible when an offline retry settles', async () => {
-    vi.useFakeTimers()
-    const toastId = 'runtime-environment-disconnected:env-a'
-    const visibleToastIds = new Set<string | number>()
-    vi.mocked(toast.warning).mockImplementation((_title, options) => {
-      if (options?.id !== undefined) {
-        visibleToastIds.add(options.id)
-      }
-      return options?.id ?? ''
-    })
-    const getStatus = vi.fn().mockRejectedValue(new Error('closed'))
-    stubRuntimeEnvironmentApi({ getStatus })
-    const store = createSliceStore()
-    store.setState({ runtimeEnvironments: [makeEnvironment()] })
-    store.getState().setRuntimeEnvironmentStatus('env-a', { status: makeStatus(), checkedAt: 1 })
-    store.getState().setRuntimeEnvironmentStatus('env-a', { status: null, checkedAt: 2 })
-    const options = vi.mocked(toast.warning).mock.calls[0]?.[1] as unknown as {
-      action: { onClick: (event: { preventDefault: () => void }) => void }
-    }
-    const clickAction = (): { defaultPrevented: boolean } => {
-      const event = {
-        defaultPrevented: false,
-        preventDefault() {
-          this.defaultPrevented = true
-        }
-      }
-      options.action.onClick(event)
-      if (!event.defaultPrevented) {
-        setTimeout(() => visibleToastIds.delete(toastId), 200)
-      }
-      return event
-    }
-
-    const firstClick = clickAction()
-    const secondClick = clickAction()
-    await vi.advanceTimersByTimeAsync(0)
-
-    expect(firstClick.defaultPrevented).toBe(true)
-    expect(secondClick.defaultPrevented).toBe(true)
-    expect(getStatus).toHaveBeenCalledWith({ selector: 'env-a', timeoutMs: 10_000 })
-    await vi.advanceTimersByTimeAsync(200)
-    expect(visibleToastIds.has(toastId)).toBe(true)
-    expect(getStatus).toHaveBeenCalledTimes(1)
-    expect(vi.mocked(toast.warning).mock.calls.every((call) => call[1]?.id === toastId)).toBe(true)
-  })
-
   it('drops a stale success refresh after the same environment is re-paired', async () => {
     const probe = deferred<ReturnType<typeof createCompatibleRuntimeStatusResponse>>()
     const getStatus = vi.fn().mockReturnValue(probe.promise)

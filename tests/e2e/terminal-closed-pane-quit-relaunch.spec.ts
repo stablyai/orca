@@ -15,7 +15,7 @@ import { bootstrapFirstLaunch, seededRepoPathOrSkip } from './helpers/terminal-r
 import { ensureTerminalVisible, getActiveWorktreeId, waitForSessionReady } from './helpers/store'
 import { SORTABLE_TAB } from './helpers/terminal-tab-menu'
 import { RuntimeClient } from '../../src/cli/runtime/client'
-import type { RuntimeTerminalListResult } from '../../src/shared/runtime-types'
+import type { RuntimeTerminalListResult } from '../../src/shared/terminal/runtime/runtime-terminal-contracts'
 
 test.describe.configure({ mode: 'serial' })
 

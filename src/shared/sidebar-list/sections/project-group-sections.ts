@@ -1,24 +1,15 @@
-import type { OccurrenceSectionPath } from '../../worktree-occurrence-plan'
-import {
-  compareFolderWorkspacesForDisplay,
-  type RenderableFolderWorkspace
-} from '../folders/folder-workspace-lanes'
-import type { ProjectGroup } from '../../project-group-types'
+import type { OccurrenceSectionPath } from '../lineage/worktree-occurrence-plan'
+import type { RenderableFolderWorkspace } from '../folders/folder-workspace-lanes'
+import type { ProjectGroup } from '../../project/groups/project-group-types'
 import type { ProjectOrderBy } from '../../ui-chrome-types'
-import { getDistinctProjectGroups, getEffectiveProjectGroupManualRank } from '../../project-groups'
+import { getDistinctProjectGroups } from '../../project/groups/project-groups'
 import { getProjectGroupHeaderKey } from './group-keys'
 import { appendOrderedGroups } from './group-sections'
-import { compareCodePoints, compareSidebarText } from '../sorting/text-order'
 import type { SectionAppendContext } from './group-sections'
 import type { OrderedGroupEntry } from './worktree-group-entry'
-import {
-  compareRecentRank,
-  createRecentRankLookup,
-  withRepoSectionDisplayLabels
-} from '../../project-section-order'
 import { appendWorktreeRows } from './row-builders'
 import { getFolderLaneSectionKey } from '../folders/folder-workspace-occurrences'
-import { compareRootProjectEntries } from '../../root-project-order'
+import { walkProjectGroupTree } from './project-group-tree'
 
 export function appendProjectGroupSections(
   ctx: SectionAppendContext,
@@ -30,149 +21,49 @@ export function appendProjectGroupSections(
     repoOrder: Map<string, number> | undefined
   }
 ): void {
-  const { orderedGroups, projectGroups, folderWorkspaces, projectOrderBy, repoOrder } = args
   const { result, collapsedGroups } = ctx
-
-  const groupByProjectGroupId = new Map<string | null, OrderedGroupEntry[]>()
-  for (const entry of orderedGroups) {
-    const repo = entry[1].repo
-    const projectGroupId = repo?.projectGroupId ?? null
-    const list = groupByProjectGroupId.get(projectGroupId) ?? []
-    list.push(entry)
-    groupByProjectGroupId.set(projectGroupId, list)
-  }
-
-  const sortRepoEntriesWithinGroup = (entries: OrderedGroupEntry[]): OrderedGroupEntry[] => {
-    if (projectOrderBy === 'recent') {
-      if (entries.length < 2) {
-        return [...entries]
-      }
-      const getRecentRank = createRecentRankLookup()
-      return [...entries].sort((left, right) =>
-        compareRecentRank(getRecentRank(left), getRecentRank(right))
-      )
-    }
-    // Use projectGroupOrder with repoOrder fallback so drag midpoint ranks match rendered order.
-    return [...entries].sort((left, right) => {
-      const leftRank = getEffectiveProjectGroupManualRank(left[1].repo, repoOrder)
-      const rightRank = getEffectiveProjectGroupManualRank(right[1].repo, repoOrder)
-      return leftRank - rightRank
-    })
-  }
-
-  const projectGroupsById = new Map(projectGroups.map((group) => [group.id, group]))
-  // Folder membership is already resolved above grouping; only group/order here (#15362).
-  const folderWorkspacesByProjectGroupId = new Map<string, RenderableFolderWorkspace[]>()
-  for (const pair of folderWorkspaces) {
+  // Folder membership is already resolved above grouping; only count here (#15362).
+  const folderCountByGroupId = new Map<string, number>()
+  for (const pair of args.folderWorkspaces) {
     const groupId = pair.folderWorkspace.projectGroupId
-    const list = folderWorkspacesByProjectGroupId.get(groupId) ?? []
-    list.push(pair)
-    folderWorkspacesByProjectGroupId.set(groupId, list)
+    folderCountByGroupId.set(groupId, (folderCountByGroupId.get(groupId) ?? 0) + 1)
   }
-  for (const list of folderWorkspacesByProjectGroupId.values()) {
-    list.sort((left, right) =>
-      compareFolderWorkspacesForDisplay(left.folderWorkspace, right.folderWorkspace)
-    )
-  }
-  const childGroupsByParentId = new Map<string | null, ProjectGroup[]>()
-  // Why distinct: membership is id-keyed, so a same-id copy's header would sit empty (#30045).
-  for (const group of getDistinctProjectGroups(projectGroups)) {
-    const parentId =
-      group.parentGroupId && projectGroupsById.has(group.parentGroupId) ? group.parentGroupId : null
-    const children = childGroupsByParentId.get(parentId) ?? []
-    children.push(group)
-    childGroupsByParentId.set(parentId, children)
-  }
-  for (const groups of childGroupsByParentId.values()) {
-    groups.sort(
-      (left, right) =>
-        left.tabOrder - right.tabOrder ||
-        compareSidebarText(left.name, right.name) ||
-        compareCodePoints(left.executionHostId ?? '', right.executionHostId ?? '') ||
-        compareCodePoints(left.id, right.id)
-    )
-  }
-
-  const getProjectGroupSubtreeCount = (groupId: string): number => {
-    const directCount = groupByProjectGroupId.get(groupId)?.length ?? 0
-    const folderWorkspaceCount = folderWorkspacesByProjectGroupId.get(groupId)?.length ?? 0
-    const children = childGroupsByParentId.get(groupId) ?? []
-    return children.reduce(
-      (count, child) => count + getProjectGroupSubtreeCount(child.id),
-      directCount + folderWorkspaceCount
-    )
-  }
-
-  const appendProjectGroup = (projectGroup: ProjectGroup, depth: number): void => {
-    const repoEntries = sortRepoEntriesWithinGroup(groupByProjectGroupId.get(projectGroup.id) ?? [])
-    const childGroups = childGroupsByParentId.get(projectGroup.id) ?? []
-    const key = getProjectGroupHeaderKey(projectGroup.id)
-    result.push({
-      type: 'header',
-      key,
-      label: projectGroup.name,
-      count: getProjectGroupSubtreeCount(projectGroup.id),
-      icon: { kind: 'project' },
-      projectGroup,
-      projectGroupDepth: depth
-    })
-    if (!collapsedGroups.has(key)) {
-      // The group's folders, with whatever is nested under them, precede its projects.
-      appendWorktreeRows(result, ctx.repoOf, ctx.occurrencePlan, {
-        collapsedGroups,
-        groupDepth: depth + 1,
-        sectionKey: getFolderLaneSectionKey(projectGroup.id),
-        hostContextLabelByWorktreeIdentity: ctx.mixedWorktreeHostContextLabels,
-        folderPairByIdentity: ctx.folderPairByIdentity
-      })
-      appendOrderedGroups(ctx, withRepoSectionDisplayLabels(repoEntries), depth + 1)
-      for (const childGroup of childGroups) {
-        appendProjectGroup(childGroup, depth + 1)
-      }
+  walkProjectGroupTree(
+    {
+      entries: args.orderedGroups,
+      projectGroups: args.projectGroups,
+      folderCountByGroupId,
+      projectOrderBy: args.projectOrderBy,
+      repoOrder: args.repoOrder
+    },
+    {
+      group: (projectGroup, depth, count) => {
+        const key = getProjectGroupHeaderKey(projectGroup.id)
+        result.push({
+          type: 'header',
+          key,
+          label: projectGroup.name,
+          count,
+          icon: { kind: 'project' },
+          projectGroup,
+          projectGroupDepth: depth
+        })
+        if (collapsedGroups.has(key)) {
+          return false
+        }
+        // The group's folders, with whatever is nested under them, precede its projects.
+        appendWorktreeRows(result, ctx.repoOf, ctx.occurrencePlan, {
+          collapsedGroups,
+          groupDepth: depth + 1,
+          sectionKey: getFolderLaneSectionKey(projectGroup.id),
+          hostContextLabelByWorktreeIdentity: ctx.mixedWorktreeHostContextLabels,
+          folderPairByIdentity: ctx.folderPairByIdentity
+        })
+        return true
+      },
+      projects: (entries, depth) => appendOrderedGroups(ctx, entries, depth)
     }
-    groupByProjectGroupId.delete(projectGroup.id)
-  }
-
-  const remainingRepoEntries = [...(groupByProjectGroupId.get(null) ?? [])]
-  for (const [projectGroupId, entries] of groupByProjectGroupId) {
-    if (projectGroupId === null || projectGroupsById.has(projectGroupId)) {
-      continue
-    }
-    // Keep repos visible while host project-group metadata is still loading.
-    remainingRepoEntries.push(...entries)
-  }
-  const rootEntries: ({ projectGroup: ProjectGroup } | { repoEntry: OrderedGroupEntry })[] = [
-    ...(childGroupsByParentId.get(null) ?? []).map((projectGroup) => ({ projectGroup })),
-    ...withRepoSectionDisplayLabels(sortRepoEntriesWithinGroup(remainingRepoEntries)).map(
-      (repoEntry) => ({ repoEntry })
-    )
-  ]
-  if (projectOrderBy === 'manual') {
-    rootEntries.sort((left, right) => {
-      const leftEntry =
-        'projectGroup' in left
-          ? { kind: 'group' as const, group: left.projectGroup }
-          : left.repoEntry[1].repo
-            ? { kind: 'repo' as const, repo: left.repoEntry[1].repo }
-            : null
-      const rightEntry =
-        'projectGroup' in right
-          ? { kind: 'group' as const, group: right.projectGroup }
-          : right.repoEntry[1].repo
-            ? { kind: 'repo' as const, repo: right.repoEntry[1].repo }
-            : null
-      return leftEntry && rightEntry
-        ? compareRootProjectEntries(leftEntry, rightEntry, repoOrder)
-        : 0
-    })
-  }
-  for (const entry of rootEntries) {
-    if ('projectGroup' in entry) {
-      appendProjectGroup(entry.projectGroup, 0)
-    } else {
-      appendOrderedGroups(ctx, [entry.repoEntry], 0)
-    }
-  }
+  )
 }
 
 /** The same group parents used by section emission, including missing-parent roots. */

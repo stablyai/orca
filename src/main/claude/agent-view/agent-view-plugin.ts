@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 import { writeHooksJson } from '../../agent-hooks/installation/configuration/hooks-json-write'
 import { writeManagedScript } from '../../agent-hooks/installation/scripts/managed-hook-script-write'
 import { writeHooksJsonAsync } from '../../agent-hooks/installation/configuration/hooks-json-write-async'
-import { CLAUDE_AGENT_VIEW_PLUGIN } from '../../../shared/claude-agent-view'
+import { CLAUDE_AGENT_VIEW_PLUGIN } from '../../../shared/agent-hook-listener/providers/claude/view/claude-agent-view'
 import { CLAUDE_AGENT_VIEW_MOD_SOURCE } from './agent-view-mod-source'
 
 export const CLAUDE_AGENT_VIEW_PLUGIN_FILES: Record<string, string> = {

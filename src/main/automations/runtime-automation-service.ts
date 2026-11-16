@@ -1,4 +1,4 @@
-import type { AutomationUsageClient } from '../../shared/backend-service-contract'
+import type { AutomationUsageClient } from '../../shared/backend/backend-service-contract'
 import { observeAutomationChatRun } from './observation/runtime-chat-run-observer'
 import { readAutomationRunReceipt } from './launch/automation-run-receipt'
 import { publishedLaunchTarget } from './launch/automation-agent-run-result'

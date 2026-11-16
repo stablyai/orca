@@ -1,7 +1,7 @@
 import type { WorktreeLineage } from '../../worktree/lineage-types'
 import type { Worktree } from '../../worktree/types'
 import { getWorktreeHostIdentity } from '../../worktree/host-qualified-identity'
-import { getLineagePlacementRows } from '../../worktree-occurrence-plan'
+import { getLineagePlacementRows } from './worktree-occurrence-plan'
 import {
   getSidebarLineageParentsByIdentity,
   type SidebarLineageParentIdentities

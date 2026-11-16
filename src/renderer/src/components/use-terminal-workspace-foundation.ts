@@ -1,6 +1,6 @@
 import { useMemo, useRef } from 'react'
 import { MountedTerminalWorktrees } from './terminal/split-group-mount'
-import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { parseWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import { useAppStore } from '../store/index'
 import { useWorktreeMap } from '../store/slices/worktrees/listing/use-worktree-catalog'
@@ -24,7 +24,6 @@ export function useTerminalWorkspaceFoundation() {
   > | null>(null)
   terminalTopologyProjectionRef.current ??= createTerminalWorktreeTopologyProjection()
   const mountedWorktreeIdsRef = useRef<Set<string>>(new MountedTerminalWorktrees())
-  const browserGuestWorktreeRecencyRef = useRef<string[]>([])
   const measurableBackgroundWorktreeIdsRef = useRef(new Set<string>())
   const terminalWorktreeHiddenSinceRef = useRef(new Map<string, number>())
   const measuringTerminalWorktreeIdsRef = useRef(new Set<string>())
@@ -86,9 +85,6 @@ export function useTerminalWorkspaceFoundation() {
   const terminalRetentionBudgetEnabled = useAppStore(
     (state) => state.settings?.terminalHiddenWorktreeRetentionBudget !== false
   )
-  const browserGuestRetentionBudgetEnabled = useAppStore(
-    (state) => state.settings?.browserGuestWorktreeRetentionBudget !== false
-  )
   const terminalTitleSnapshotAuthorityEnabled = useAppStore((state) =>
     isMainTerminalSideEffectAuthorityForPty({
       settings: state.settings,
@@ -98,7 +94,6 @@ export function useTerminalWorkspaceFoundation() {
 
   return {
     mountedWorktreeIdsRef,
-    browserGuestWorktreeRecencyRef,
     measurableBackgroundWorktreeIdsRef,
     terminalWorktreeHiddenSinceRef,
     measuringTerminalWorktreeIdsRef,
@@ -118,7 +113,6 @@ export function useTerminalWorkspaceFoundation() {
     terminalSshParkingEnabled,
     pairedRuntimeParkingEnvironmentIds,
     terminalRetentionBudgetEnabled,
-    browserGuestRetentionBudgetEnabled,
     terminalTitleSnapshotAuthorityEnabled
   }
 }

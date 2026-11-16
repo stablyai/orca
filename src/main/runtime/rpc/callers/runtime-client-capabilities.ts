@@ -1,4 +1,4 @@
-import type { RuntimeCapability } from '../../../../shared/protocol-version'
+import type { RuntimeCapability } from '../../../../shared/remote-runtime/protocol/protocol-version'
 
 export function parseRuntimeClientCapabilities(value: unknown): readonly RuntimeCapability[] {
   if (!Array.isArray(value) || value.length > 64) {

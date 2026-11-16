@@ -1,4 +1,4 @@
-import { stripAnsiEscapeSequences } from '../../../shared/ansi-escape-sequences'
+import { stripAnsiEscapeSequences } from '../../../shared/terminal/protocol/escape/ansi-escape-sequences'
 import { runCoalescedProbe, type CoalescedProbes } from '../../git/remotes/coalesced-probe'
 import { extractExecError } from '../../git/command-runner/process-capture/exec-error'
 import { NEGATIVE_ENTRY_TTL_MS } from '../../git/remotes/remote-ref-probe-cache'

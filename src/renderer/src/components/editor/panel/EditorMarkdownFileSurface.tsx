@@ -3,7 +3,7 @@ import { useAppStore } from '@/store/index'
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor/types/open-file'
 import { Button } from '@/components/ui/button'
 import { RICH_MARKDOWN_MAX_SIZE_BYTES } from '../../../../../shared/constants'
-import { formatBytes } from '../../../../../shared/format-bytes'
+import { formatBytes } from '../../../../../shared/text/format-bytes'
 import { MarkdownPreview, RichMarkdownEditor } from '../editor-lazy-views'
 import {
   extractFrontMatter,

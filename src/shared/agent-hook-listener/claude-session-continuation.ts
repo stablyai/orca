@@ -7,7 +7,7 @@ import {
 import type { AgentHookEventPayload } from './listener-event'
 import { scanFileRegionsBackward } from './reverse-file-region-scan'
 import { TRANSCRIPT_CHUNK_BYTES } from './transcript-reader'
-import { isClaudeToolResultContent } from '../claude-tool-content'
+import { isClaudeToolResultContent } from './providers/claude/transcripts/claude-tool-content'
 
 const FIRST_SCAN_BYTES = 1024 * 1024
 // Why: a rescan reads only what was appended, plus enough to re-read a line split at the old end.

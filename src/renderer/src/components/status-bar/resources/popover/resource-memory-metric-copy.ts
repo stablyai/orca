@@ -1,4 +1,4 @@
-import type { ProcessMemoryMetric } from '../../../../../../shared/process-stats-types'
+import type { ProcessMemoryMetric } from '../../../../../../shared/diagnostics/process-stats-types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 

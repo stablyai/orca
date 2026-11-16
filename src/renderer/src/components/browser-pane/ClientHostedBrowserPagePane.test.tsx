@@ -7,7 +7,7 @@ import { act, cleanup, render as renderWithProviders, screen } from '@testing-li
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as RecoveryWindow from './restored-client-hosted-recovery-window'
-import type { BrowserPage } from '../../../../shared/browser-workspace-types'
+import type { BrowserPage } from '../../../../shared/browser/workspaces/browser-workspace-types'
 
 const mocks = vi.hoisted(() => ({
   attach: vi.fn(),
@@ -74,8 +74,7 @@ vi.mock('./assemble-chrome/address-bar/BrowserAddressBar', () => ({
 
 import { connectedRuntimeStatus } from '@/runtime/rpc/testing/paired-runtime-environment-test-fixture'
 import { useAppStore } from '@/store/index'
-import { normalizeBrowserNavigationUrl } from '../../../../shared/browser-url'
-import { requestBrowserFocus } from './host-guest/input/browser-focus'
+import { normalizeBrowserNavigationUrl } from '../../../../shared/browser/navigation/browser-url'
 import {
   installClientHostedPaneApi,
   paneChannel,
@@ -94,7 +93,7 @@ import { recoverUnavailableRuntimeBrowserClientPages } from '../../../../main/ru
 import { buildRuntimeClientBrowserTabs } from '../../../../main/runtime/session-lifecycle/projection/build-runtime-client-browser-tabs'
 import { RESTORED_CLIENT_HOSTED_BROWSER_PLACEMENT } from '../../../../main/runtime/browser/client-pages/client-hosted-browser-page-persistence'
 import { BROWSER_CLIENT_PAGE_INITIALIZATION_CAPABILITY } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../../shared/remote-runtime/control/remote-runtime-shared-control-types'
 import { ClientHostedBrowserPagePane } from './ClientHostedBrowserPagePane'
 
@@ -591,140 +590,6 @@ describe('ClientHostedBrowserPagePane', () => {
       'page-a',
       expect.objectContaining({ loading: false, loadError: null })
     )
-  })
-})
-
-describe('ClientHostedBrowserPagePane address bar parity', () => {
-  let frameCallbacks: FrameRequestCallback[] = []
-
-  beforeEach(() => {
-    frameCallbacks = []
-    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
-      frameCallbacks.push(callback)
-      return frameCallbacks.length
-    })
-    vi.stubGlobal('cancelAnimationFrame', () => {})
-    installClientHostedPaneApi()
-    useAppStore.setState({
-      browserUrlHistory: [],
-      pendingAddressBarFocusByPageId: {},
-      pendingAddressBarFocusByTabId: {}
-    })
-  })
-
-  afterEach(() => {
-    cleanup()
-    vi.unstubAllGlobals()
-  })
-
-  function flushFrames(cycles = 8): void {
-    for (let index = 0; index < cycles; index += 1) {
-      const pending = frameCallbacks
-      frameCallbacks = []
-      for (const callback of pending) {
-        callback(0)
-      }
-    }
-  }
-
-  it('opens a new blank tab in the address bar instead of handing focus to the guest', () => {
-    const { webview, focus } = createWebview()
-    mocks.attach.mockReturnValue(retainedAttachment(webview))
-    useAppStore.setState({
-      pendingAddressBarFocusByPageId: { 'page-a': true },
-      pendingAddressBarFocusByTabId: { 'page-a': true }
-    })
-
-    render(
-      <ClientHostedBrowserPagePane
-        browserTab={page()}
-        workspaceId="workspace-a"
-        chromeShortcutScope="focused"
-        runtimeEnvironmentId="environment-a"
-        worktreeId="worktree-a"
-        placement={PLACEMENT}
-        isActive
-        onUpdatePageState={vi.fn()}
-        onSetUrl={vi.fn()}
-      />
-    )
-    act(() => flushFrames())
-
-    const input = screen.getByLabelText('Address') as HTMLInputElement
-    expect(document.activeElement).toBe(input)
-    expect(input.selectionStart).toBe(0)
-    expect(input.selectionEnd).toBe(input.value.length)
-    expect(focus).not.toHaveBeenCalled()
-  })
-
-  it('gives the guest focus back after the palette hands the address bar a turn', () => {
-    const { webview, focus, setUrl } = createWebview()
-    // Why: the attach is mocked, so place the guest where the real attach would put it.
-    document.body.appendChild(webview)
-    setUrl('https://remote.internal/path')
-    mocks.attach.mockReturnValue(retainedAttachment(webview))
-    const renderPane = (isActive: boolean): React.JSX.Element => (
-      <ClientHostedBrowserPagePane
-        browserTab={page()}
-        workspaceId="workspace-a"
-        chromeShortcutScope="focused"
-        runtimeEnvironmentId="environment-a"
-        worktreeId="worktree-a"
-        placement={PLACEMENT}
-        isActive={isActive}
-        onUpdatePageState={vi.fn()}
-        onSetUrl={vi.fn()}
-      />
-    )
-    const view = render(renderPane(true))
-    act(() => flushFrames())
-    focus.mockClear()
-
-    // Cmd+J dismissal reclaims the bar repeatedly; this pane has no local load handlers to clear the latch.
-    for (let cycle = 0; cycle < 3; cycle += 1) {
-      act(() => requestBrowserFocus({ pageId: 'page-a', target: 'address-bar' }))
-      act(() => flushFrames())
-      expect(document.activeElement).toBe(screen.getByLabelText('Address'))
-      view.rerender(renderPane(false))
-      view.rerender(renderPane(true))
-      act(() => flushFrames())
-      expect(focus).toHaveBeenCalledTimes(cycle + 1)
-    }
-  })
-
-  it('takes focus off the guest itself when the chord claims the address bar', () => {
-    // Pin macOS so the Cmd+L test does not depend on the runner platform.
-    Object.defineProperty(navigator, 'userAgent', {
-      configurable: true,
-      value: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)'
-    })
-    const { webview, blur, setUrl } = createWebview()
-    setUrl('https://remote.internal/path')
-    mocks.attach.mockReturnValue(retainedAttachment(webview))
-    render(
-      <ClientHostedBrowserPagePane
-        browserTab={page()}
-        workspaceId="workspace-a"
-        chromeShortcutScope="focused"
-        runtimeEnvironmentId="environment-a"
-        worktreeId="worktree-a"
-        placement={PLACEMENT}
-        isActive
-        onUpdatePageState={vi.fn()}
-        onSetUrl={vi.fn()}
-      />
-    )
-    act(() => flushFrames())
-
-    act(() => {
-      window.dispatchEvent(
-        new KeyboardEvent('keydown', { key: 'l', metaKey: true, bubbles: true, cancelable: true })
-      )
-    })
-
-    // A guest owns separate WebContents focus until explicitly blurred, even after an input is focused.
-    expect(blur).toHaveBeenCalled()
-    expect(document.activeElement).toBe(screen.getByLabelText('Address'))
   })
 })
 

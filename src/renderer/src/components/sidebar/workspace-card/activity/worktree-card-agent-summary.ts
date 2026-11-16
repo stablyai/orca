@@ -7,7 +7,7 @@ import type { Translate } from '@/i18n/use-translate'
 
 export type SummaryAgentGroup = {
   state: AgentDotState
-  /** Done agents the user has not read yet; drawn as the unread dot ahead of every other group. */
+  /** Unread completions, split out only for cards without a status-lane unread rollup. */
   unread?: boolean
   agents: DashboardAgentRowData[]
 }
@@ -121,7 +121,7 @@ export function formatStateCount(
 }
 
 // The _one form drops "All" because a lone agent reads "1 agent done".
-function formatAllAgentsInState(
+export function formatAllAgentsInState(
   state: AgentDotState,
   count: number,
   t: Translate = translate
@@ -193,6 +193,18 @@ function formatAllAgentsInState(
   }
 }
 
+/** Unread means an acknowledged-pending completion; live agents are never announced as unread. */
+export function isUnreadDoneAgent(
+  agent: DashboardAgentRowData,
+  isUnread: ((agent: DashboardAgentRowData) => boolean) | undefined
+): boolean {
+  return isUnread !== undefined && getAgentDotState(agent) === 'done' && isUnread(agent)
+}
+
+/**
+ * One group per state for the folded pill. Pass `isUnread` only when the card has no status-lane
+ * unread rollup: then unread completions lead as their own group so the folded pill still shows it.
+ */
 export function buildSummaryAgentGroups(
   agents: DashboardAgentRowData[],
   isUnread?: (agent: DashboardAgentRowData) => boolean
@@ -200,12 +212,11 @@ export function buildSummaryAgentGroups(
   const groups = new Map<AgentDotState, DashboardAgentRowData[]>()
   const unreadDone: DashboardAgentRowData[] = []
   for (const agent of agents) {
-    const dotState = getAgentDotState(agent)
-    // Split unread completions out so the collapsed pill names which agent holds the card's unread.
-    if (dotState === 'done' && isUnread?.(agent)) {
+    if (isUnreadDoneAgent(agent, isUnread)) {
       unreadDone.push(agent)
       continue
     }
+    const dotState = getAgentDotState(agent)
     const group = groups.get(dotState)
     if (group) {
       group.push(agent)

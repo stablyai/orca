@@ -1,4 +1,4 @@
-import { normalizeRuntimePathForComparison } from '../../../cross-platform-path'
+import { normalizeRuntimePathForComparison } from '../../../file-access/cross-platform-path'
 import { routeNativeChatHref } from '../../native-chat-href-routing'
 import {
   isGeneratedImageOperation,

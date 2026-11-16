@@ -1,6 +1,6 @@
 /** R39: names this Orca installation to a WSL host's server, so desktops sharing one server tell apart. */
 import { createHash } from 'node:crypto'
-import { getAppEnvironment } from '../../../shared/app-environment'
+import { getAppEnvironment } from '../../../shared/app-lifecycle/app-environment'
 
 let cached: string | null = null
 

@@ -1,6 +1,6 @@
 import { runStandalonePreparation } from './worktree-preparation-standalone'
 import { performPreparedWorktreeFinalization } from './worktree-preparation-finalization-work'
-import { windowsLongPathGitArgs } from '../../../../shared/windows-long-path-git-args'
+import { windowsLongPathGitArgs } from '../../../../shared/git/compatibility/windows-long-path-git-args'
 import { checkoutWorkersGitArgs } from './checkout-workers-git-args'
 import { resolveWorktreeAddBaseRef } from '../../../../shared/worktree/base-refs/base-ref'
 import type {

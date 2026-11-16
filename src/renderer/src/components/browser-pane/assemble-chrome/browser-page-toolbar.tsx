@@ -20,7 +20,6 @@ import {
 import { useBrowserExtensionToolbar } from './extensions/use-browser-extension-toolbar'
 import { useBrowserExtensionsTour } from '../use-browser-extensions-tour'
 import { SshEgressIndicator } from './feedback/browser-egress-indicator'
-import { destroyPersistentWebview } from '../host-guest/webview-registry'
 import {
   getShareableBrowserArtifactFile,
   readBrowserHtmlArtifactRequest
@@ -33,7 +32,7 @@ import type { GrabModeHook } from '../annotate/grab/useGrabMode'
 import type {
   BrowserPageConversionOrigin,
   BrowserViewportPresetId
-} from '../../../../../shared/browser-workspace-types'
+} from '../../../../../shared/browser/workspaces/browser-workspace-types'
 import {
   advanceAcrossBrowserPageConversion,
   returnAcrossBrowserPageConversion
@@ -267,7 +266,6 @@ export function BrowserPageToolbar({
           workspaceId={workspaceId}
           browserPageId={browserPageId}
           viewportPresetId={viewportPresetId}
-          onDestroyWebview={() => destroyPersistentWebview(browserPageId)}
           isActive={isActive}
           isBlankTab={isBlankTab}
           pageActions={{

@@ -92,7 +92,7 @@ type MobileTab = {
   isActive: boolean
 }
 
-function buildLoadedRuntime(): OrcaRuntimeService {
+async function buildLoadedRuntime(): Promise<OrcaRuntimeService> {
   const runtime = new OrcaRuntimeService(makeStore() as never)
   const tabs: GraphTab[] = []
   const leaves: GraphLeaf[] = []
@@ -149,7 +149,7 @@ function buildLoadedRuntime(): OrcaRuntimeService {
 
   const groupIds = [groupIdFor(0), groupIdFor(1)]
   runtime.attachWindow(1)
-  runtime.syncWindowGraph(1, {
+  await runtime.syncWindowGraph(1, {
     tabs,
     leaves,
     mobileSessionTabs: [
@@ -190,7 +190,7 @@ function buildLoadedRuntime(): OrcaRuntimeService {
 
 describe('terminal.list payload size', () => {
   it('drops ~30% of the wire payload when a caller opts out of visualLayouts', async () => {
-    const runtime = buildLoadedRuntime()
+    const runtime = await buildLoadedRuntime()
 
     const withLayouts = await runtime.listTerminals(`id:${WORKTREE_ID}`, 10_000)
     const layoutBuilder = vi.fn(() => [])

@@ -18,16 +18,13 @@ import {
 } from '../components/right-sidebar/file-explorer/content-search/file-search-include-pattern'
 import { usePluginCommands } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { useAppStore } from '../store/index'
-import {
-  keybindingMatchesAction,
-  type KeybindingActionId,
-  type PhysicalModifierToken
-} from '../../../shared/keybindings'
+import { keybindingMatchesAction } from '../../../shared/keybindings/matching'
+import type { KeybindingActionId, PhysicalModifierToken } from '../../../shared/keybindings/types'
 import { PLUGIN_COMMAND_ALIAS_ACTION_IDS } from '../../../shared/plugins/contributions/plugin-command-actions'
 import {
   ModifierDoubleTapDetector,
   toModifierDoubleTapEvent
-} from '../../../shared/modifier-double-tap-detector'
+} from '../../../shared/keybindings/modifier-double-tap-detector'
 import { shortcutPlatform } from './app-window-chrome'
 import {
   createAppCommandHandlers,
@@ -39,7 +36,7 @@ import {
 import type { AppChromeLayout } from './use-app-chrome-layout'
 import type { FloatingWorkspacePanelState } from './use-floating-workspace-panel'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
-import { textInputOwnsComposition } from '../../../shared/text-input-shortcut-policy'
+import { textInputOwnsComposition } from '../../../shared/keybindings/text-input-shortcut-policy'
 import { isAgentTerminalPreviewTarget } from '../components/dashboard/terminal-preview/agent-terminal-preview-target'
 
 /** Register window listeners once; each key event reads the latest committed shortcut state through a ref. */

@@ -2,7 +2,7 @@ import type { AgentSessionConversationView } from '../../../../../shared/agent-s
 import {
   formatOrcaSessionAddress,
   type OrcaSessionId
-} from '../../../../../shared/orca-session-address'
+} from '../../../../../shared/agent-session/identity/orca-session-address'
 import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../../shared/orchestration/orchestration-session-caller-codes'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../shared/agent-launch/contracts/agent-launch-intent'

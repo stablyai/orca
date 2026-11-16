@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type { AgentWorkspaceTrustDecision } from '../../../../../shared/agent-launch/permissions/agent-workspace-trust-decision'
 import { agentWorkspaceTrustDecisionCopy as copy } from '../../agent-workspace-trust/agent-workspace-trust-decision-copy'
 import { SearchableSetting } from '../section-layout/SearchableSetting'

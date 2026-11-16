@@ -1,4 +1,4 @@
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
@@ -13,7 +13,7 @@ import { workspaceSessionPartitionHostId } from '../../../../../shared/workspace
 import {
   parseWorkspaceKey,
   normalizeWorkspaceSessionKeyToWorkspaceId as normalizeWorkspaceSessionKeyToWorktreeId
-} from '../../../../../shared/workspace-scope'
+} from '../../../../../shared/workspace/identity/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'
 import {
   attachHostSessionShadow,

@@ -1,4 +1,4 @@
-import { buildPosixFallbackPathPrelude } from '../../shared/posix-version-manager-bin-dirs'
+import { buildPosixFallbackPathPrelude } from '../../shared/shell/command-resolution/posix-version-manager-bin-dirs'
 import { runWslProcess } from '../wsl/execution/wsl-runner'
 import type { WslPreflightTarget } from './preflight-wsl-agent-detection'
 

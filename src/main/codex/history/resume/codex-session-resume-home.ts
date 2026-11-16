@@ -4,7 +4,7 @@ import {
   getRuntimePathBasename,
   normalizeRuntimePathForComparison,
   relativePathInsideRoot
-} from '../../../../shared/cross-platform-path'
+} from '../../../../shared/file-access/cross-platform-path'
 import { listCodexSessionRolloutFilesIncrementally } from '../rollouts/codex-session-file-listing'
 import { ManagedCodexHomeTemporarilyUnavailableError } from '../../../codex-accounts/managed-homes/host-codex-managed-home-ownership'
 

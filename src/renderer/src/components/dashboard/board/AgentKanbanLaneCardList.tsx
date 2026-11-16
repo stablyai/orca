@@ -1,6 +1,6 @@
 import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { DashboardCard } from '../../../../../shared/dashboard-snapshot'
-import type { RepoIcon } from '../../../../../shared/repo-icon'
+import type { RepoIcon } from '../../../../../shared/repository/appearance/repo-icon'
 import { AgentKanbanCard } from './AgentKanbanCard'
 import {
   focusAgentKanbanCardEdge,

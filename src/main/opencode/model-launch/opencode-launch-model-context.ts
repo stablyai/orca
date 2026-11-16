@@ -6,7 +6,7 @@ import {
   forceTerminateProcessTree,
   signalProcessTree
 } from '@orca/process-host/process-tree-termination'
-import { withTimeout } from '../../../shared/promise-timeout-fallback'
+import { withTimeout } from '../../../shared/concurrency/promise-timeout-fallback'
 import { createOutputSink } from '@orca/process-host/bounded-output-sink'
 import { readFetchResponseJsonWithinLimit } from '../../../shared/fetch-response-body'
 import { cancelUnreadResponseBody } from '../../lib/unread-response-body'

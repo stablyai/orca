@@ -17,7 +17,7 @@ import {
   getTabIdFromPaneKey,
   isRecentlyClosedAgentStatusTab
 } from './agent-status-pane-key-tab-binding'
-import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/identifiers/non-secure-context-uuid'
 import {
   movePaneAttention,
   removePanesAttention
@@ -59,7 +59,9 @@ export function createAgentStatusAuthorityActions(
       let hadLive = false
       settleAttentionRemovedBy(set, get, () =>
         set((s, changedPaneKeys) => {
-          const retiredLivePaneKeys = retiredPaneKeys.filter((key) => key in s.agentStatusByPaneKey)
+          const retiredLivePaneKeys = retiredPaneKeys.filter((key) =>
+            s.agentStatusByPaneKey.has(key)
+          )
           for (const key of retiredLivePaneKeys) {
             changedPaneKeys.add(key)
           }
@@ -191,7 +193,7 @@ export function createAgentStatusAuthorityActions(
             (identity) => ({ ...identity, paneKey: to })
           ),
           // Bump epoch on live pane-key moves so sidebar consumers observe the remap.
-          ...(from in s.agentStatusByPaneKey
+          ...(s.agentStatusByPaneKey.has(from)
             ? { agentStatusEpoch: s.agentStatusEpoch + 1, sortEpoch: s.sortEpoch + 1 }
             : {}),
           runtimeAgentOrchestrationByPaneKey: movePaneKeyedRecord(

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store/index'
 import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { persistWorktreeSortOrderByHost } from '@/lib/workspace/persistence/worktree-sort-order-persistence'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import {
   NO_LIVE_SMART_SORT_SOURCES,
   rankWorktreesForSort
@@ -50,7 +50,16 @@ function useSettledSidebarWorktreeSortOrder(args: {
       latched: sessionHasHadLiveSmartSignal.current,
       repoMap,
       now: Date.now(),
-      sources: state
+      sources: {
+        ...state,
+        attentionForWorktree: (worktree, now) =>
+          state.agentStatusByPaneKey.projection.attention(
+            worktree.id,
+            worktree.lastActivityAt,
+            now
+          ),
+        hasFreshAttributedStatus: () => state.agentStatusByPaneKey.projection.hasFreshEvidence()
+      }
     })
     return {
       // Why host identity: same-id copies on two machines are separate cards with their own ranks.

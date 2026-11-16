@@ -62,7 +62,7 @@ describe('OrcaRuntimeService', () => {
         ]
       })
       runtime.attachWindow(1)
-      runtime.syncWindowGraph(1, {
+      await runtime.syncWindowGraph(1, {
         tabs: [],
         leaves: [],
         mobileSessionTabs: [

@@ -1,8 +1,8 @@
 import type { AgentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
-import { parseOrcaSessionAddress } from '../../../../../shared/orca-session-address'
-import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/orca-session-address-prefix'
+import { parseOrcaSessionAddress } from '../../../../../shared/agent-session/identity/orca-session-address'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../../../shared/agent-session/identity/orca-session-address-prefix'
 
-import type { OrcaSessionId } from '../../../../../shared/orca-session-address'
+import type { OrcaSessionId } from '../../../../../shared/agent-session/identity/orca-session-address'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import { DISPATCH_CONTEXT_COLUMN_LIST } from '../../db/row-column-lists'
 import type { DispatchContextRow } from '../../db/orchestration-records'

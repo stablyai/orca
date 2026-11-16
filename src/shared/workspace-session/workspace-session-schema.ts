@@ -14,7 +14,7 @@ import { terminalTabIdSchema } from '../workspace-layout/terminal-surfaces/termi
 import { terminalSurfaceTombstoneSchema } from '../workspace-layout/terminal-surfaces/terminal-surface-tombstone-schema'
 import { parseExecutionHostId, type ExecutionHostId } from '../execution-host'
 import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
-import { type WorkspaceKey, isWorkspaceKey } from '../workspace-scope'
+import { type WorkspaceKey, isWorkspaceKey } from '../workspace/identity/workspace-scope'
 import {
   browserHistoryEntriesSchema,
   workspaceDocHistoryEntriesSchema,
@@ -29,7 +29,12 @@ import {
   tabContentTypeSchema,
   workspaceVisibleTabTypeSchema
 } from './workspace-session-tab-type-schema'
-import { salvagedField, salvagedOptional, salvagingArray, salvagingRecord } from '../zod-salvage'
+import {
+  salvagedField,
+  salvagedOptional,
+  salvagingArray,
+  salvagingRecord
+} from '../validation/zod-salvage'
 import { isStructuredAgentId } from '../agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 const workspaceKeySchema = z.custom<WorkspaceKey>(

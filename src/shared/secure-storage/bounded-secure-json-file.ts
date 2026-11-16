@@ -5,7 +5,7 @@ export function writeSecureJsonFileWithinLimit(
   targetPath: string,
   value: unknown,
   maxBytes: number,
-  options: { durable?: boolean } = {}
+  options: { durable?: boolean; onPublished?: () => void } = {}
 ): void {
   writeSecureFile(targetPath, stringifyJsonWithinByteLimit(value, maxBytes).serialized, options)
 }

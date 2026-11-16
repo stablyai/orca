@@ -114,7 +114,7 @@ describe('NativeChatSessionOptionPickers', () => {
     await waitFor(() =>
       expect(screen.getByRole('slider', { name: 'Effort' }).getAttribute('aria-valuenow')).toBe('0')
     )
-    expect(pill('Model Opus 4.8, Effort Low')).not.toBeNull()
+    expect(pill('Model Opus 4.8 · Low, Effort Low')).not.toBeNull()
     expect(held()).toEqual(['false', 'true'])
     screen.getByRole('option', { name: 'Sonnet 5' }).click()
     expect(setOption.mock.calls).toEqual([

@@ -1,5 +1,9 @@
 import { posix, win32 } from 'node:path'
-import { parseWslUncPath, toWindowsWslDrivePath, toWindowsWslPath } from '../../wsl-paths'
+import {
+  parseWslUncPath,
+  toWindowsWslDrivePath,
+  toWindowsWslPath
+} from '../../file-access/wsl-paths'
 
 // Only /x is guest-rooted; //x is already host UNC syntax. Match resolveWslRepoWorktreeBasePath to avoid double shares.
 const GUEST_ROOTED_PATH = /^\/(?!\/)/

@@ -1,5 +1,5 @@
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import { batchAgentPaneKeysForTabs, isMirroredAgentStatusOwnedBy } from './agent-status-primitives'
+import { agentPaneKeysForTabs, isMirroredAgentStatusOwnedBy } from './agent-status-primitives'
 import { isMirroredTerminalSurfaceId } from './terminal-surfaces'
 import type { WebSessionTabsBatchContext, WebSessionTabsSyncState } from './state'
 
@@ -53,7 +53,7 @@ export function collectCollidingRetractionPaneKeys(
   if (tabIds.size === 0) {
     return collisions
   }
-  const keys = new Set(batchAgentPaneKeysForTabs(state, tabIds, batchContext))
+  const keys = new Set(agentPaneKeysForTabs(state, tabIds))
   for (const record of [
     state.acknowledgedAgentsByPaneKey,
     state.agentLaunchConfigByPaneKey,
@@ -78,7 +78,7 @@ export function collectCollidingRetractionPaneKeys(
     if (!tabId || !tabIds.has(tabId)) {
       continue
     }
-    const entry = state.agentStatusByPaneKey[paneKey]
+    const entry = state.agentStatusByPaneKey.get(paneKey)
     if (entry && isMirroredAgentStatusOwnedBy(entry, environmentId, worktreeId)) {
       const panes = owned.get(tabId) ?? new Set<string>()
       panes.add(paneKey)
