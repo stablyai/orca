@@ -194,7 +194,7 @@ export function wslMovedProjectHasHostRow(
   const hostIds =
     project.kind === 'repo'
       ? catalog.repos.filter((row) => row.id === project.id).map(getRepoExecutionHostId)
-      : catalog.folderWorkspaces
+      : selectFolderWorkspaces(catalog)
           .filter((row) => row.id === project.id)
           .map((row) => getFolderWorkspaceHostId(row, catalog.projectGroups))
   return hostIds.some(
@@ -214,7 +214,7 @@ export function wslMovedRowOwnerHostId(
   if (scope?.type !== 'folder') {
     return row.hostId ?? null
   }
-  const folder = catalog.folderWorkspaces.find(
+  const folder = selectFolderWorkspaces(catalog).find(
     (candidate) =>
       candidate.id === scope.folderWorkspaceId &&
       (!row.hostId || getFolderWorkspaceWorktreeHostId(candidate) === row.hostId)
