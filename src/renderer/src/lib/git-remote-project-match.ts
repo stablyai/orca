@@ -9,8 +9,8 @@ import {
   splitGitRemoteKey,
   type GitRemoteKeyParts
 } from '../../../shared/git/remotes/git-remote-identity'
-import { isGitRepoKind } from '../../../shared/repo-kind'
-import type { Repo } from '../../../shared/repo-types'
+import { isGitRepoKind } from '../../../shared/repository/repo-kind'
+import type { Repo } from '../../../shared/repository/repo-types'
 import { pickBestProjectMatch, type ProjectSourceMatcher } from './project-source-match'
 
 // Why both folds: each maps only its own forge's alias hosts, so together they suit any host.

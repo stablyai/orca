@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getDefaultSettings } from '../../../../shared/constants'
+import { getDefaultSettings } from '../../../../shared/orca-profiles/constants'
 import { buildQuickComposerStartup, type QuickComposerStartupInput } from './quick-startup-plan'
 
 function input(overrides: Partial<QuickComposerStartupInput>): QuickComposerStartupInput {

@@ -1,9 +1,9 @@
 import { translate } from '@/i18n/i18n'
 import { findGitProjectForSource } from '@/lib/git-remote-project-match'
-import { getNewWorkspaceDialogEligibleRepos } from '../../../../../shared/new-workspace-dialog-repo'
+import { getNewWorkspaceDialogEligibleRepos } from '../../../../../shared/new-workspace/new-workspace-dialog-repo'
 import type { ProjectSourceMatcher } from '@/lib/project-source-match'
 import type { PluginTaskStartRecipe } from '../../../../../shared/plugins/tasks/plugin-task-source'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 
 function normalizeProjectPath(value: string): string {
   return value.replace(/\\/g, '/').replace(/\/+$/, '')

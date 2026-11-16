@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Repo } from '../../../../../shared/repo-types'
+import type { Repo } from '../../../../../shared/repository/repo-types'
 import { findRepoIdForProjectPath, resolvePluginTaskProject } from './plugin-task-project'
 
 const pathRepos = [

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import { WORKTREE_META_PERSISTED_DEFAULTS } from '../../../shared/worktree/metadata/meta-persisted-defaults'
-import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import { normalizeWorktreeLinkedItemMetadata } from './worktree-metadata-normalization'
 
 // Surviving rows must restore the defaults omitted by serialization.

@@ -1,4 +1,4 @@
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 
 /** What a caller knows about the project it wants: where its files come from, and the ref to start on. */
 export type ProjectSourceHint = { projectSource?: string; baseRef?: string }
