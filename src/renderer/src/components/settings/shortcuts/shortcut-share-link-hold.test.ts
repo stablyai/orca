@@ -3,9 +3,9 @@
 import { describe, expect, it, vi } from 'vitest'
 
 const shareLinks = vi.hoisted(() => ({ on: false }))
-vi.mock('@/lib/orca-cloud/cloud-share-links-flag', () => ({
+vi.mock('@/lib/orca-cloud/cloud-team-sharing-flag', () => ({
   CLOUD_SHARE_LINK_ACTION_ID: 'cloudWorkspace.copyLink',
-  cloudShareLinksEnabled: () => shareLinks.on
+  cloudTeamSharingEnabled: () => shareLinks.on
 }))
 
 import { groupDefinitions } from './shortcut-groups'

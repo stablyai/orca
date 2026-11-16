@@ -1,4 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+const teamSharing = vi.hoisted(() => ({ on: true }))
+vi.mock('@/lib/orca-cloud/cloud-team-sharing-flag', () => ({
+  CLOUD_SHARE_LINK_ACTION_ID: 'cloudWorkspace.copyLink',
+  cloudTeamSharingEnabled: () => teamSharing.on,
+  useCloudTeamSharingEnabled: () => teamSharing.on
+}))
 import {
   cloudWorkspaceActionGroups,
   type CloudWorkspaceActionInput
@@ -50,5 +56,21 @@ describe('one action list for every surface (JA-14)', () => {
 
   it('a teammate who cannot manage it only opens and copies links', () => {
     expect(flat({ canManage: false })).toEqual(['open:open,copyLink,copyWorkspaceLink'])
+  })
+
+  it('TEAM-SHARING-HOLD: no Share with team or Make private while sharing is held', () => {
+    teamSharing.on = false
+    try {
+      for (const visibility of ['private', 'team'] as const) {
+        const actions = cloudWorkspaceActionGroups({ ...base, visibility }).flatMap(
+          (g) => g.actions
+        )
+        expect(actions).not.toContain('share')
+        expect(actions).not.toContain('makePrivate')
+        expect(actions).toContain('archive')
+      }
+    } finally {
+      teamSharing.on = true
+    }
   })
 })

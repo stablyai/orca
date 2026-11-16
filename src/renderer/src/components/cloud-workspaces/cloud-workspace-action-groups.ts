@@ -2,6 +2,7 @@
 // workspace…" list's ⋯ menu and the sidebar's context menu both render these groups, in this order:
 // Open, Share, Lifecycle, Danger. Each surface leaves out only what it already shows elsewhere (the
 // sidebar row *is* the open workspace; the list has no local-only items) and never invents its own.
+import { cloudTeamSharingEnabled } from '@/lib/orca-cloud/cloud-team-sharing-flag'
 import type { CloudWorkspace } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 
 export type CloudWorkspaceAction =
@@ -37,6 +38,8 @@ export type CloudWorkspaceActionInput = Pick<
   canRestart: boolean
   /** Teammates to hand it to (the list only). */
   hasMembers?: boolean
+  /** TEAM-SHARING-HOLD: Share with team / Make private offered (default: the account's capability). */
+  teamSharing?: boolean
 }
 
 export function cloudWorkspaceActionGroups(
@@ -54,8 +57,10 @@ export function cloudWorkspaceActionGroups(
   open.push('copyWorkspaceLink')
 
   const share: CloudWorkspaceAction[] = []
-  if (input.canManage) {
+  if (input.canManage && (input.teamSharing ?? cloudTeamSharingEnabled())) {
     share.push(input.visibility === 'private' ? 'share' : 'makePrivate')
+  }
+  if (input.canManage) {
     if (list && input.hasMembers) {
       share.push('reassignOwner')
     }

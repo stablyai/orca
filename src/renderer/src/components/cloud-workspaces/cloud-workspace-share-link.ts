@@ -1,5 +1,5 @@
 // A cloud workspace's share link: the org slug + W-number link when known, else the sandbox-id form.
-import { cloudShareLinksEnabled } from '@/lib/orca-cloud/cloud-share-links-flag'
+import { cloudTeamSharingEnabled } from '@/lib/orca-cloud/cloud-team-sharing-flag'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import {
@@ -49,7 +49,7 @@ export async function copyCloudWorkspaceLink(
   options: { quiet?: boolean } = {}
 ): Promise<boolean> {
   // SHARE-LINKS-HOLD: nothing is copied while share links are held.
-  if (!cloudShareLinksEnabled()) {
+  if (!cloudTeamSharingEnabled()) {
     return false
   }
   const link = await shareLinkFor(id, chatId)

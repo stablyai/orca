@@ -1,5 +1,5 @@
 import React, { useContext } from 'react'
-import { useCloudShareLinksEnabled } from '@/lib/orca-cloud/cloud-share-links-flag'
+import { useCloudTeamSharingEnabled } from '@/lib/orca-cloud/cloud-team-sharing-flag'
 import { ArchiveSnapshotTooltip } from './ArchiveSnapshotTooltip'
 import { toast } from 'sonner'
 import {
@@ -204,7 +204,7 @@ export function CloudCopyWorkspaceLinkItem({
   const t = useTranslate()
   const { workspace } = useCloudWorkspaceRecord(worktreeId, hostId ?? null)
   // SHARE-LINKS-HOLD: no way to produce a share link while it's held.
-  const shareLinks = useCloudShareLinksEnabled()
+  const shareLinks = useCloudTeamSharingEnabled()
   if (!workspace || !shareLinks) {
     return null
   }

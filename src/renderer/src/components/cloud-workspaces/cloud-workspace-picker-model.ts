@@ -1,5 +1,6 @@
 // What "Open cloud workspace…" reads and lists for each focus. Pure, so the rules are tested apart
 // from the dialog.
+import { cloudTeamSharingEnabled } from '@/lib/orca-cloud/cloud-team-sharing-flag'
 import type {
   CloudWorkspace,
   CloudWorkspaceListQuery
@@ -14,14 +15,22 @@ export type CloudWorkspacePickerControls = {
   search: string
 }
 
+/**
+ * TEAM-SHARING-HOLD: with sharing held there is nothing of a teammate's to open, so "Open cloud
+ * workspace…" has no Team scope and lists your own.
+ */
+function teamScope(hasOrg: boolean): boolean {
+  return hasOrg && cloudTeamSharingEnabled()
+}
+
 export function initialPickerControls(hasOrg: boolean): CloudWorkspacePickerControls {
   // On a team, what you can't open from the sidebar is mostly what teammates shared.
-  return { scope: hasOrg ? 'team' : 'mine', archived: false, search: '' }
+  return { scope: teamScope(hasOrg) ? 'team' : 'mine', archived: false, search: '' }
 }
 
 /** Which controls the picker offers: a focused list (limit, teammate, team delete) is fixed. */
 export function pickerShowsScope(focus: CloudWorkspacePickerFocus, hasOrg: boolean): boolean {
-  return focus.kind === 'open' && hasOrg
+  return focus.kind === 'open' && teamScope(hasOrg)
 }
 
 export function pickerShowsArchived(focus: CloudWorkspacePickerFocus): boolean {
@@ -36,7 +45,7 @@ export function pickerListQuery(
   switch (focus.kind) {
     case 'open':
       return {
-        scope: hasOrg ? controls.scope : 'mine',
+        scope: teamScope(hasOrg) ? controls.scope : 'mine',
         archived: controls.archived ? 'only' : 'exclude'
       }
     case 'teammate':

@@ -29,6 +29,12 @@ const mocks = vi.hoisted(() => {
   return { state, open: vi.fn(), sleep: vi.fn(), archive: vi.fn() }
 })
 
+const teamSharing = vi.hoisted(() => ({ on: true }))
+vi.mock('@/lib/orca-cloud/cloud-team-sharing-flag', () => ({
+  CLOUD_SHARE_LINK_ACTION_ID: 'cloudWorkspace.copyLink',
+  cloudTeamSharingEnabled: () => teamSharing.on,
+  useCloudTeamSharingEnabled: () => teamSharing.on
+}))
 vi.mock('@/store', () => ({
   useAppStore: Object.assign(
     (selector: (s: typeof mocks.state) => unknown) => selector(mocks.state),

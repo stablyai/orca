@@ -24143,6 +24143,7 @@
       "picker": {
         "title": "Open cloud workspace",
         "description": "Cloud workspaces that aren’t in your sidebar: shared by teammates, or started on another computer.",
+        "descriptionOwn": "Your cloud workspaces that aren’t in your sidebar, such as ones started on another computer.",
         "teammateTitle": "{{name}}’s cloud workspaces",
         "teammateDescription": "The ones they own or started that you can see.",
         "runningTitle": "Your running cloud workspaces",
