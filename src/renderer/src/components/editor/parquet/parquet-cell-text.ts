@@ -31,7 +31,33 @@ function parquetValueText(value: unknown): string {
   )
 }
 
+const strictUtf8 = new TextDecoder('utf-8', { fatal: true })
+
+/** Legacy writers store strings as unannotated BYTE_ARRAY, so show valid printable UTF-8 as text. */
 function parquetBytesText(bytes: Uint8Array): string {
+  try {
+    const text = strictUtf8.decode(bytes)
+    if (!hasBinaryControlCharacter(text)) {
+      return text
+    }
+  } catch {
+    // Not UTF-8: fall through to hex.
+  }
+  return parquetBytesHex(bytes)
+}
+
+/** Control characters other than tab, newline and carriage return mark the bytes as binary. */
+function hasBinaryControlCharacter(text: string): boolean {
+  for (let index = 0; index < text.length; index++) {
+    const code = text.charCodeAt(index)
+    if ((code < 0x20 && code !== 0x09 && code !== 0x0a && code !== 0x0d) || code === 0x7f) {
+      return true
+    }
+  }
+  return false
+}
+
+function parquetBytesHex(bytes: Uint8Array): string {
   const shown = Array.from(bytes.subarray(0, 64), (byte) => byte.toString(16).padStart(2, '0'))
   return `0x${shown.join('')}${bytes.length > 64 ? '…' : ''}`
 }

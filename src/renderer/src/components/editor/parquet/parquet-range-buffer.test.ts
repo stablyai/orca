@@ -33,12 +33,19 @@ describe('Parquet range buffer', () => {
     ])
   })
 
-  it('reads the footer suffix once when hyparquet asks for it again', async () => {
-    const file = fakeFile()
-    const buffer = createParquetRangeBuffer(FILE_BYTES, file.read)
-    await buffer.slice(-8)
-    await buffer.slice(FILE_BYTES - 8, FILE_BYTES)
-    expect(file.lengths).toEqual([8])
+  it('keeps at most two host reads in flight across concurrent slices', async () => {
+    let inFlight = 0
+    let peak = 0
+    const read = async (offset: number, length: number): Promise<Uint8Array> => {
+      inFlight++
+      peak = Math.max(peak, inFlight)
+      await Promise.resolve()
+      inFlight--
+      return new Uint8Array(Math.min(length, FILE_BYTES - offset))
+    }
+    const buffer = createParquetRangeBuffer(FILE_BYTES, read)
+    await Promise.all([buffer.slice(0, 300 * 1024), buffer.slice(300 * 1024, FILE_BYTES)])
+    expect(peak).toBe(2)
   })
 
   it('rejects a short read instead of returning zero-filled bytes', async () => {

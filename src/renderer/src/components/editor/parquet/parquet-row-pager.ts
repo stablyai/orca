@@ -125,6 +125,8 @@ export class ParquetRowPager {
         rowStart,
         rowEnd: Math.min(this.rowCount, rowStart + PAGE_ROWS),
         rowFormat: 'array',
+        // Why: unannotated BYTE_ARRAY may be binary; parquetCellText decides text vs hex per value.
+        utf8: false,
         useOffsetIndex: true,
         onComplete: (rows) => resolve(rows.map((row) => row.map(parquetCellText)))
       }).catch(reject)

@@ -12,15 +12,24 @@ export function createParquetRangeBuffer(
   byteLength: number,
   readRange: ReadFileRange
 ): AsyncBuffer {
+  // Why: hyparquet requests several slices at once, so the host-read limit spans every slice.
+  const limit = createReadLimiter(MAX_CONCURRENT_RANGE_READS)
   const cache = new Map<string, Promise<ArrayBuffer>>()
   const cachedBytes = new Map<string, number>()
   let totalCachedBytes = 0
   const remember = (key: string, size: number): void => {
+    if (size > SLICE_CACHE_BYTES) {
+      cache.delete(key)
+      return
+    }
     cachedBytes.set(key, size)
     totalCachedBytes += size
     for (const [oldest, oldestSize] of cachedBytes) {
-      if (totalCachedBytes <= SLICE_CACHE_BYTES || oldest === key) {
+      if (totalCachedBytes <= SLICE_CACHE_BYTES) {
         break
+      }
+      if (oldest === key) {
+        continue
       }
       cache.delete(oldest)
       cachedBytes.delete(oldest)
@@ -37,12 +46,14 @@ export function createParquetRangeBuffer(
       if (cached) {
         cache.delete(key)
         cache.set(key, cached)
-        const size = cachedBytes.get(key) ?? 0
-        cachedBytes.delete(key)
-        cachedBytes.set(key, size)
+        const size = cachedBytes.get(key)
+        if (size !== undefined) {
+          cachedBytes.delete(key)
+          cachedBytes.set(key, size)
+        }
         return cached
       }
-      const read = readByteRange(from, to, readRange)
+      const read = readByteRange(from, to, readRange, limit)
       cache.set(key, read)
       read.then(
         (buffer) => {
@@ -57,30 +68,65 @@ export function createParquetRangeBuffer(
   }
 }
 
+type ReadLimiter = <T>(task: () => Promise<T>) => Promise<T>
+
+/** Runs at most `limit` tasks at once; a finished task hands its slot straight to the next waiter. */
+function createReadLimiter(limit: number): ReadLimiter {
+  let active = 0
+  const waiting: (() => void)[] = []
+  const acquire = (): Promise<void> => {
+    if (active < limit) {
+      active++
+      return Promise.resolve()
+    }
+    return new Promise((resolve) => waiting.push(resolve))
+  }
+  const release = (): void => {
+    const next = waiting.shift()
+    if (next) {
+      next()
+    } else {
+      active--
+    }
+  }
+  return async (task) => {
+    await acquire()
+    try {
+      return await task()
+    } finally {
+      release()
+    }
+  }
+}
+
 async function readByteRange(
   start: number,
   end: number,
-  readRange: ReadFileRange
+  readRange: ReadFileRange,
+  limit: ReadLimiter
 ): Promise<ArrayBuffer> {
   const output = new Uint8Array(Math.max(0, end - start))
-  const offsets: number[] = []
+  let failed = false
+  const reads: Promise<void>[] = []
   for (let offset = start; offset < end; offset += MAX_FILE_RANGE_READ_BYTES) {
-    offsets.push(offset)
+    const length = Math.min(MAX_FILE_RANGE_READ_BYTES, end - offset)
+    reads.push(
+      limit(async () => {
+        // Why: a failed slice rejects once; its queued reads should not keep the relay busy.
+        if (failed) {
+          return
+        }
+        const bytes = await readRange(offset, length)
+        if (bytes.length !== length) {
+          throw new Error('Parquet file changed while it was being read. Reload the preview.')
+        }
+        output.set(bytes, offset - start)
+      }).catch((error: unknown) => {
+        failed = true
+        throw error
+      })
+    )
   }
-  let next = 0
-  const worker = async (): Promise<void> => {
-    while (next < offsets.length) {
-      const offset = offsets[next++]!
-      const length = Math.min(MAX_FILE_RANGE_READ_BYTES, end - offset)
-      const bytes = await readRange(offset, length)
-      if (bytes.length !== length) {
-        throw new Error('Parquet file changed while it was being read. Reload the preview.')
-      }
-      output.set(bytes, offset - start)
-    }
-  }
-  await Promise.all(
-    Array.from({ length: Math.min(MAX_CONCURRENT_RANGE_READS, offsets.length) }, worker)
-  )
+  await Promise.all(reads)
   return output.buffer
 }
