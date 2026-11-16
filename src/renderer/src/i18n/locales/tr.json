@@ -890,7 +890,6 @@
       "defaultSurfaceKeptChat_other": "{{agents}} ayarladığınız gibi sohbet olarak kalıyor.",
       "defaultSurfaceSetAllChat": "Tümünü Sohbet yap",
       "defaultSurfaceSetAllTerminal": "Tümünü Terminal yap",
-      "sameAsChoice": "{{agent}} ile aynı · {{choice}}",
       "modelListFallback": "Yerleşik liste. Orca bu ana makineden model listesi alamadı.",
       "chatUnavailableOnWindows": "{{value0}} Chat henüz Windows'ta kullanılamıyor, bu nedenle {{value0}} bu ana makinede bir terminalde açılır. macOS veya Linux ana makinesindeki sohbetler çalışmaya devam eder.",
       "undetectedCommandHint": "{{agent}} CLI, PATH dışında kuruluysa bu ana makinedeki yürütülebilir dosyanın tam yolunu girin."
@@ -918,9 +917,6 @@
         "extraArgs": "Ek CLI argümanları",
         "launchOptions": "Model ve izinler",
         "savedLaunchOptions": "Kaydedilen seçenekler: {{value0}}. Eski sunucular kendi izin ayarlarını kullanır."
-      },
-      "actionPermissions": {
-        "sameAsAgent": "{{agent}} ile aynı"
       }
     },
     "mcp": {
@@ -23728,7 +23724,6 @@
     "terminalUnverifiable": "Orca, WSL dağıtımı {{distro}} öğesinin çalışıp çalışmadığını denetleyemediği için bu terminali başlatmadı. Dağıtımı başlatıp yeniden deneyin."
   },
   "agentPicker": {
-    "catalogUnsupported": "{{agent}} modelleri bu sunucuda kullanılamıyor. Geçerli seçimlerinizi koruyabilir veya bağımsız değişkenleri kullanabilirsiniz.",
     "catalogUnsupportedLaunch": "{{agent}} modelleri bu sunucuda kullanılamıyor. Geçerli seçimleriniz uygulanmaya devam eder.",
     "catalogFailed": "{{agent}} modelleri yüklenemedi. Yeniden denemek için ajan seçiciyi kapatıp açın.",
     "catalogSignIn": "Modelleri yüklemek için {{agent}} oturumu açın, ardından ajan seçiciyi yeniden açın.",
@@ -23738,7 +23733,6 @@
     "setByArguments": "Argümanlarınızla ayarlandı",
     "searchModels": "Modelleri ara",
     "noModels": "Aramanızla eşleşen model yok.",
-    "toggleArguments": "Argümanları göster veya gizle",
     "argumentsTerminalHint": "Yalnızca terminal (CLI) başlatmaları için geçerlidir",
     "searchAgentModels": "{{agent}} modellerini ara…",
     "moreModelsWithCount": "Daha fazla model ({{total}})",
@@ -23748,7 +23742,6 @@
     "argumentsHint": "Yalnızca CLI başlatmaları için geçerlidir.",
     "launchChat": "Sohbet başlat",
     "launchTerminal": "Terminal başlat",
-    "use": "Kullan",
     "select": "Aracı seç",
     "promptPlaceholder": "İstem ekleyin (isteğe bağlı): beceriler için /, dosyalar için @",
     "promptPlaceholderFilesOnly": "İstem ekleyin (isteğe bağlı): dosyalar için @",

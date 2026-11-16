@@ -24,8 +24,46 @@ import {
 } from '../../../../shared/agent-launch/picker/agent-launch-picker-search'
 import type {
   AgentPickerDraft,
+  AgentPickerDraftOwner,
   AgentPickerEntry
 } from '../../../../shared/agent-launch/picker/agent-launch-picker'
+
+/** Drops kept setups whose workspace, repo or host is gone. */
+export function useRetiredAgentPickerDrafts(
+  entries: readonly AgentPickerEntry[],
+  draftScope: AgentPickerDraftOwner | undefined,
+  mode: 'launch' | 'select' | undefined,
+  setupDisabled?: boolean
+) {
+  useEffect(() => {
+    if (setupDisabled) {
+      return
+    }
+    const state = useAppStore.getState()
+    const workspaces = new Set([
+      ...Object.values(selectWorktreesByRepo(state) ?? {})
+        .flat()
+        .map((row) => row.id),
+      ...(selectFolderWorkspaces(state) ?? []).map((row) => `folder:${row.id}`)
+    ])
+    const repos = new Set((state.repos ?? []).map((repo) => repo.id))
+    retireAgentPickerDrafts(
+      entries,
+      draftScope,
+      (target) => {
+        const host = parseExecutionHostId(target.executionHostId)
+        return (
+          !(
+            host?.kind === 'runtime' && state.removedRuntimeEnvironmentIds?.has(host.environmentId)
+          ) &&
+          (!target.worktreeId || workspaces.has(target.worktreeId)) &&
+          (!target.repoId || repos.has(target.repoId))
+        )
+      },
+      mode
+    )
+  }, [entries, draftScope, mode, setupDisabled])
+}
 
 export function AgentLaunchPickerMenu({
   model,
@@ -69,34 +107,7 @@ export function AgentLaunchPickerMenu({
   leadingItems?: ReactNode
 }) {
   const t = useTranslate()
-  useEffect(() => {
-    if (setupDisabled) {
-      return
-    }
-    const state = useAppStore.getState()
-    const workspaces = new Set([
-      ...Object.values(selectWorktreesByRepo(state) ?? {})
-        .flat()
-        .map((row) => row.id),
-      ...(selectFolderWorkspaces(state) ?? []).map((row) => `folder:${row.id}`)
-    ])
-    const repos = new Set((state.repos ?? []).map((repo) => repo.id))
-    retireAgentPickerDrafts(
-      entries,
-      draftScope,
-      (target) => {
-        const host = parseExecutionHostId(target.executionHostId)
-        return (
-          !(
-            host?.kind === 'runtime' && state.removedRuntimeEnvironmentIds?.has(host.environmentId)
-          ) &&
-          (!target.worktreeId || workspaces.has(target.worktreeId)) &&
-          (!target.repoId || repos.has(target.repoId))
-        )
-      },
-      mode
-    )
-  }, [entries, draftScope, mode, setupDisabled])
+  useRetiredAgentPickerDrafts(entries, draftScope, mode, setupDisabled)
   const terminalBlocked = mode !== 'select' && model?.state === 'settled' && model.terminalPending
   const [query, setQuery] = useState(initialQuery)
   const [searchFocused, setSearchFocused] = useState(false)

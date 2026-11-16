@@ -1798,7 +1798,6 @@
       "defaultSurfaceKeptChat_other": "{{agents}} continuam como chats, como você definiu.",
       "defaultSurfaceSetAllChat": "Definir todos como Chat",
       "defaultSurfaceSetAllTerminal": "Definir todos como Terminal",
-      "sameAsChoice": "Igual a {{agent}} · {{choice}}",
       "modelListFallback": "Lista integrada. O Orca não conseguiu obter uma lista de modelos deste host.",
       "chatUnavailableOnWindows": "O {{value0}} Chat ainda não está disponível no Windows, então o {{value0}} abre em um terminal neste host. Chats em um host macOS ou Linux continuam funcionando.",
       "undetectedCommandHint": "Se a CLI do {{agent}} estiver instalada fora do PATH, informe o caminho completo do executável neste host.",
@@ -1830,9 +1829,6 @@
         "launchOptions": "Modelo e permissões",
         "savedLaunchOptions": "Opções salvas: {{value0}}. Servidores mais antigos usam as próprias configurações de permissão.",
         "effort": "Esforço"
-      },
-      "actionPermissions": {
-        "sameAsAgent": "Igual a {{agent}}"
       }
     },
     "ssh": {
@@ -24046,7 +24042,6 @@
     }
   },
   "agentPicker": {
-    "catalogUnsupported": "Os modelos de {{agent}} não estão disponíveis neste host. Você pode manter suas escolhas ou usar argumentos.",
     "catalogUnsupportedLaunch": "Os modelos de {{agent}} não estão disponíveis neste host. Suas escolhas atuais continuam valendo.",
     "catalogFailed": "Não foi possível carregar os modelos de {{agent}}. Feche e reabra o seletor de agentes para tentar novamente.",
     "catalogSignIn": "Entre em {{agent}} para carregar seus modelos e reabra o seletor de agentes.",
@@ -24062,11 +24057,9 @@
     "setByArguments": "Definido pelos seus argumentos",
     "searchModels": "Pesquisar modelos",
     "noModels": "Nenhum modelo corresponde à pesquisa.",
-    "toggleArguments": "Mostrar ou ocultar argumentos",
     "argumentsTerminalHint": "Aplica-se apenas a inicializações no terminal (CLI)",
     "searchAgentModels": "Pesquisar modelos de {{agent}}…",
     "moreModelsWithCount": "Mais modelos ({{total}})",
-    "use": "Usar",
     "select": "Selecionar agente",
     "promptPlaceholder": "Adicione um prompt (opcional): / para skills, @ para arquivos",
     "promptPlaceholderFilesOnly": "Adicione um prompt (opcional): @ para arquivos",

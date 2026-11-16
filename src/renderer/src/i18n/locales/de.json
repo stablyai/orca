@@ -898,7 +898,6 @@
       "defaultSurfaceKeptChat_other": "{{agents}} bleiben wie eingestellt Chats.",
       "defaultSurfaceSetAllChat": "Alle auf Chat setzen",
       "defaultSurfaceSetAllTerminal": "Alle auf Terminal setzen",
-      "sameAsChoice": "Wie {{agent}} · {{choice}}",
       "modelListFallback": "Integrierte Liste. Orca konnte von diesem Host keine Modellliste abrufen.",
       "chatUnavailableOnWindows": "{{value0}} Chat ist unter Windows noch nicht verfügbar, daher öffnet sich {{value0}} auf diesem Host in einem Terminal. Chats auf einem macOS- oder Linux-Host funktionieren weiterhin.",
       "undetectedCommandHint": "Wenn die {{agent}}-CLI außerhalb von PATH installiert ist, gib den vollständigen Pfad zu ihrer ausführbaren Datei auf diesem Host ein."
@@ -926,9 +925,6 @@
         "extraArgs": "Zusätzliche CLI-Argumente",
         "launchOptions": "Modell und Berechtigungen",
         "savedLaunchOptions": "Gespeicherte Optionen: {{value0}}. Ältere Server verwenden ihre eigenen Berechtigungseinstellungen."
-      },
-      "actionPermissions": {
-        "sameAsAgent": "Wie {{agent}}"
       }
     },
     "general": {
@@ -23588,7 +23584,6 @@
     "terminalUnverifiable": "Orca konnte nicht prüfen, ob die WSL-Distribution {{distro}} läuft, und hat dieses Terminal daher nicht gestartet. Starte die Distribution und versuche es dann erneut."
   },
   "agentPicker": {
-    "catalogUnsupported": "Modelle für {{agent}} sind auf diesem Host nicht verfügbar. Du kannst deine Auswahl beibehalten oder Argumente verwenden.",
     "catalogUnsupportedLaunch": "Modelle für {{agent}} sind auf diesem Host nicht verfügbar. Deine aktuelle Auswahl gilt weiterhin.",
     "catalogFailed": "Modelle für {{agent}} konnten nicht geladen werden. Schließe die Agentenauswahl und öffne sie erneut.",
     "catalogSignIn": "Melde dich bei {{agent}} an, um die Modelle zu laden, und öffne die Agentenauswahl erneut.",
@@ -23598,7 +23593,6 @@
     "setByArguments": "Durch Argumente festgelegt",
     "searchModels": "Modelle suchen",
     "noModels": "Keine Modelle entsprechen deiner Suche.",
-    "toggleArguments": "Argumente ein-/ausblenden",
     "argumentsTerminalHint": "Gilt nur für Terminalstarts (CLI)",
     "searchAgentModels": "{{agent}}-Modelle suchen…",
     "moreModelsWithCount": "Weitere Modelle ({{total}})",
@@ -23608,7 +23602,6 @@
     "argumentsHint": "Gilt nur für CLI-Starts.",
     "launchChat": "Chat starten",
     "launchTerminal": "Terminal starten",
-    "use": "Verwenden",
     "select": "Agent auswählen",
     "promptPlaceholder": "Prompt hinzufügen (optional): / für Skills, @ für Dateien",
     "promptPlaceholderFilesOnly": "Prompt hinzufügen (optional): @ für Dateien",

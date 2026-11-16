@@ -1137,7 +1137,6 @@
       "defaultSurfaceKeptChat_other": "{{agents}} stay as chats, as you set.",
       "defaultSurfaceSetAllChat": "Set all to Chat",
       "defaultSurfaceSetAllTerminal": "Set all to Terminal",
-      "sameAsChoice": "Same as {{agent}} · {{choice}}",
       "modelListFallback": "Built-in list. Orca could not get a model list from this host.",
       "chatUnavailableOnWindows": "{{value0}} Chat isn't available on Windows yet, so {{value0}} opens in a terminal on this host. Chats on a macOS or Linux host still work.",
       "undetectedCommandHint": "If the {{agent}} CLI is installed outside PATH, enter the full path to its executable on this host.",
@@ -1173,9 +1172,6 @@
         "extraArgs": "Extra CLI arguments",
         "launchOptions": "Model and permissions",
         "savedLaunchOptions": "Saved options: {{value0}}. Older servers use their own permission settings."
-      },
-      "actionPermissions": {
-        "sameAsAgent": "Same as {{agent}}"
       }
     },
     "ssh": {
@@ -25371,7 +25367,6 @@
     "waitForImageUploads": "Wait for images to finish uploading, then retry Create PR."
   },
   "agentPicker": {
-    "catalogUnsupported": "{{agent}} models are unavailable on this host. You can keep your current choices or use Arguments.",
     "catalogUnsupportedLaunch": "{{agent}} models are unavailable on this host. Your current choices still apply.",
     "catalogFailed": "Could not load {{agent}} models. Close and reopen the agent picker to try again.",
     "catalogSignIn": "Sign in to {{agent}} to load its models, then close and reopen the agent picker.",
@@ -25390,16 +25385,23 @@
     "setByArguments": "Set by your Arguments",
     "searchModels": "Search models",
     "noModels": "No models match your search.",
-    "toggleArguments": "Toggle Arguments",
     "argumentsTerminalHint": "Only applies to terminal (CLI) launches",
     "chatChoicesNote": "{{agent}} model or effort choices without a CLI flag apply to chats.",
     "composedChoicesNote": "{{agent}} effort and speed choices are included in the model argument.",
     "searchAgentModels": "Search {{agent}} models…",
     "moreModelsWithCount": "More models ({{total}})",
-    "use": "Use",
     "select": "Select agent",
     "promptPlaceholder": "Add a prompt (optional): / for skills, @ for files",
-    "promptPlaceholderFilesOnly": "Add a prompt (optional): @ for files"
+    "promptPlaceholderFilesOnly": "Add a prompt (optional): @ for files",
+    "agentNotInstalled": "{{agent}} isn't installed on this machine.",
+    "agentNotInstalledOnHost": "{{agent}} isn't installed on this host.",
+    "installAgent": "Install {{agent}}",
+    "chatTag": "(Chat)",
+    "agents": "Agents",
+    "noChat": "No chat for {{agent}}",
+    "openIn": "Open in",
+    "chat": "Chat",
+    "cli": "CLI"
   },
   "automations": {
     "runFailures": {

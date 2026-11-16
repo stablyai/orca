@@ -31,6 +31,8 @@ import { useTranslate } from '@/i18n/use-translate'
 type PickerProps = {
   agent: TuiAgent | null
   draftScope?: object
+  /** Where the recipe's Permissions and Arguments fields render. */
+  launchDefaultsContainer?: HTMLElement | null
   surface?: SourceControlActionRecipe['surface']
   repoId?: string
   disabled?: boolean
@@ -175,6 +177,8 @@ const SelectedSourceControlActionAgentPicker = memo(
             preview.status === 'ready' ? preview.agent : null
           )
         }
+        launchDefaults
+        launchDefaultsContainer={props.launchDefaultsContainer}
         onPick={onSelection}
       >
         <DropdownMenuItem onSelect={onDefault}>
@@ -192,6 +196,7 @@ const SelectedSourceControlActionAgentPicker = memo(
     a.cli === b.cli &&
     a.disabled === b.disabled &&
     a.draftScope === b.draftScope &&
+    a.launchDefaultsContainer === b.launchDefaultsContainer &&
     a.canSaveSurface === b.canSaveSurface &&
     ((!a.selection && !b.selection) ||
       (!!a.selection &&
