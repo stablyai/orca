@@ -21,17 +21,6 @@ export function clearHostSessionTabIdMappings(environmentId: string, worktreeId:
   }
 }
 
-export function setHostSessionTabIdMapping(
-  args: { environmentId: string; worktreeId: string; tabId: string },
-  hostTabId: string,
-  hostGroupId?: string
-): void {
-  if (hostSessionTabIdByLocalKey.get(hostSessionTabMappingKey(args)) !== hostTabId) {
-    markHostSessionTabMappingsChanged(args.worktreeId)
-  }
-  writeHostSessionTabIdMapping(args, hostTabId, hostGroupId)
-}
-
 /** Replaces one workspace's mappings; an identical re-application keeps its mapping revision. */
 export function replaceHostSessionTabIdMappings(
   environmentId: string,
