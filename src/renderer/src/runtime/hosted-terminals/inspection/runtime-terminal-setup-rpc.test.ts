@@ -31,7 +31,12 @@ describe('Setup status RPC outage recovery', () => {
     const subscribe = vi.fn(async (_args, callbacks: Callbacks) => {
       readers.push(callbacks)
       if (readers.length < failedRead) {
-        callbacks.onResponse({ id: 'read', ok: true, result: pending })
+        callbacks.onResponse({
+          id: 'read',
+          _meta: { runtimeId: 'runtime-a' },
+          ok: true,
+          result: pending
+        })
       }
       if (invoke && readers.length === failedRead) {
         return handshake.promise
@@ -78,7 +83,14 @@ describe('Setup status RPC outage recovery', () => {
       await vi.advanceTimersByTimeAsync(0)
       stream.callbacks.onReady()
       await vi.advanceTimersByTimeAsync(0)
-      readers.at(-1)?.onResponse({ id: 'read', ok: true, result: { ...pending, state: 'ready' } })
+      readers
+        .at(-1)
+        ?.onResponse({
+          id: 'read',
+          _meta: { runtimeId: 'runtime-a' },
+          ok: true,
+          result: { ...pending, state: 'ready' }
+        })
       await expect(result).resolves.toBe('delivered')
     } finally {
       abort.abort()
@@ -111,7 +123,12 @@ it.each(['runtime_unavailable', 'runtime_timeout', 'runtime_busy', 'invoke-admis
                     ok: false,
                     error: { code, message: 'Could not connect to the remote Orca runtime.' }
                   }
-                : { id: 'read', ok: true, result: { ...pending, state: 'ready' } }
+                : {
+                    id: 'read',
+                    _meta: { runtimeId: 'runtime-a' },
+                    ok: true,
+                    result: { ...pending, state: 'ready' }
+                  }
             )
             return { unsubscribe: () => {} }
           }
@@ -187,7 +204,14 @@ it('ignores a late failed subscription from the read aborted by reconnect', asyn
     })
     readers[0].onClose?.()
     await vi.advanceTimersByTimeAsync(0)
-    readers.at(-1)?.onResponse({ id: 'read', ok: true, result: { ...pending, state: 'ready' } })
+    readers
+      .at(-1)
+      ?.onResponse({
+        id: 'read',
+        _meta: { runtimeId: 'runtime-a' },
+        ok: true,
+        result: { ...pending, state: 'ready' }
+      })
     await expect(result).resolves.toBe('delivered')
   } finally {
     abort.abort()
