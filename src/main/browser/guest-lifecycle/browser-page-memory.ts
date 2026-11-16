@@ -256,6 +256,7 @@ export function closeBrowserMemoryPage(pageId: string): void {
   }
   page.releaseThrottle?.()
   forgetBrowserPageAttach(page)
+  page.history = null
   pages.delete(pageId)
   for (const retired of page.retired.values()) {
     if (!retired.guest.isDestroyed()) {

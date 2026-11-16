@@ -57,7 +57,7 @@ export function readBrowserGuestDiscardProtection(
   if (owner.dirty) {
     return result('protected', 'edits')
   }
-  // A freed page keeps only its URL, so reopening a POST result would silently GET another page.
+  // Restore reloads a POST entry as a plain GET, so reopening a POST result would show another page.
   if (owner.currentPost) {
     return result('protected', 'post')
   }
