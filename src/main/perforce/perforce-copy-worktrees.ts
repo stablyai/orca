@@ -17,7 +17,7 @@ import type {
 import { splitWorktreeId } from '../../shared/worktree/id'
 import {
   getPerforceCopyName,
-  getPerforceCopySourcePath,
+  getPerforceCopySourcePaths,
   getPerforceCopyWorktreeId,
   isPerforceCopyWorktreeIdForRepo
 } from '../../shared/worktree/perforce-copy-worktree'
@@ -132,17 +132,17 @@ export async function adoptCopyAtPath(
     syncCopies: (repo: Repo) => Promise<WorkspaceCopyListResult>
   }
 ): Promise<boolean> {
-  const source = getPerforceCopySourcePath(path)
+  const key = normalizeRuntimePathForComparison
+  const sources = new Set(getPerforceCopySourcePaths(path).map(key))
   // Why: a mistyped or deleted copy would otherwise pay a full p4 listing on every lookup.
-  if (!source || !host.folderExists(path)) {
+  if (sources.size === 0 || !host.folderExists(path)) {
     return false
   }
-  const key = normalizeRuntimePathForComparison
   let adopted = false
   for (const repo of repos) {
     const onHost =
       host.requiredHostId === undefined || getRepoExecutionHostId(repo) === host.requiredHostId
-    if (!onHost || !isFolderRepo(repo) || key(repo.path) !== key(source)) {
+    if (!onHost || !isFolderRepo(repo) || !sources.has(key(repo.path))) {
       continue
     }
     try {
@@ -189,7 +189,7 @@ export function copyWorktreeIdForName(
     if (
       path &&
       isPerforceCopyWorktreeIdForRepo(repo, worktreeId) &&
-      getPerforceCopyName(path)?.toLowerCase() === name.toLowerCase()
+      getPerforceCopyName(path, repo.path)?.toLowerCase() === name.toLowerCase()
     ) {
       return { worktreeId, path }
     }

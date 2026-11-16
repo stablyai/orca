@@ -28,7 +28,7 @@ function copyTargetForRepo(
   if (!repo || !isFolderRepo(repo) || !isPerforceCopyWorktreeIdForRepo(repo, worktree.id)) {
     return null
   }
-  const copyName = getPerforceCopyName(worktree.path)
+  const copyName = getPerforceCopyName(worktree.path, repo.path)
   return copyName
     ? { repoId: repo.id, hostId: getRepoExecutionHostId(repo), sourcePath: repo.path, copyName }
     : null

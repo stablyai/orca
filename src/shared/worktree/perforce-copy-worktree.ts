@@ -1,5 +1,6 @@
 import type { Repo } from '../repository/repo-types'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR, splitWorktreeId } from './id'
+import { normalizeRuntimePathForComparison } from '../file-access/cross-platform-path'
 import { WORKTREE_ID_SEPARATOR } from '../terminal/pty/lifecycle/pty-session-id-format'
 
 // A Perforce workspace copy lives in its own folder, `<workspace>.wt\<name>` beside the source, and is
@@ -42,24 +43,33 @@ export function getPerforceCopyWorktreeId(
   return `${repo.id}${WORKTREE_ID_SEPARATOR}${copyWorktreePath}`
 }
 
-/** The copy name (`copy-1`) from a copy worktree path, or null when the path is not a copy. */
-export function getPerforceCopyName(path: string): string | null {
-  const match = /[\\/][^\\/]+\.wt[\\/]([A-Za-z0-9-]{1,24})(?:[\\/]|$)/i.exec(
-    trimTrailingSeparators(path)
+type CopyPathSplit = { name: string; source: string }
+
+/** Each way to read `path` as `<root>.wt\<name>[\<inside>]`, one per `.wt` ancestor, outermost first. */
+function copyPathSplits(path: string): CopyPathSplit[] {
+  const trimmed = trimTrailingSeparators(path)
+  return [...trimmed.matchAll(/[^\\/]\.wt([\\/])([A-Za-z0-9-]{1,24})(?=[\\/]|$)/gi)].map(
+    (match) => {
+      const sourceRoot = trimmed.slice(0, match.index + 1)
+      const inside = trimmed.slice(match.index + match[0].length + 1)
+      return { name: match[2], source: inside ? `${sourceRoot}${match[1]}${inside}` : sourceRoot }
+    }
   )
-  return match?.[1] ?? null
 }
 
-/** The folder a copy worktree path mirrors (`D:\ws.wt\copy-1\Game` → `D:\ws\Game`), or null. */
-export function getPerforceCopySourcePath(path: string): string | null {
-  const match = /^(.*?[^\\/])\.wt([\\/])[A-Za-z0-9-]{1,24}(?:[\\/](.*))?$/i.exec(
-    trimTrailingSeparators(path)
-  )
-  if (!match) {
-    return null
-  }
-  const [, sourceRoot, separator, inside] = match
-  return inside ? `${sourceRoot}${separator}${inside}` : sourceRoot
+/**
+ * The copy name (`copy-1`) from a copy worktree path of folder project `projectPath`, or null when the
+ * path is not a copy. Why the project: a `.wt` folder above the workspace would otherwise read as the copy.
+ */
+export function getPerforceCopyName(path: string, projectPath: string): string | null {
+  const splits = copyPathSplits(path)
+  const key = normalizeRuntimePathForComparison
+  return (splits.find((split) => key(split.source) === key(projectPath)) ?? splits[0])?.name ?? null
+}
+
+/** The folders a copy worktree path may mirror (`D:\ws.wt\copy-1\Game` → `D:\ws\Game`), one per `.wt` ancestor. */
+export function getPerforceCopySourcePaths(path: string): string[] {
+  return copyPathSplits(path).map((split) => split.source)
 }
 
 // Why: deleting a copy also deletes its Perforce client, changelists and possibly shelves, so it goes

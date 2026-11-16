@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   getPerforceCopyName,
-  getPerforceCopySourcePath,
+  getPerforceCopySourcePaths,
   getPerforceCopyWorktreeId,
   isPerforceCopyPath,
   isPerforceCopyWorktreeIdForRepo
@@ -33,14 +33,20 @@ describe('Perforce copy worktree ids', () => {
   })
 
   it('reads the copy name from the copy path', () => {
-    expect(getPerforceCopyName('D:\\ws.wt\\copy-1\\Game')).toBe('copy-1')
-    expect(getPerforceCopyName('D:\\ws')).toBeNull()
+    expect(getPerforceCopyName('D:\\ws.wt\\copy-1\\Game', 'D:\\ws\\Game')).toBe('copy-1')
+    expect(getPerforceCopyName('D:\\ws', 'D:\\ws')).toBeNull()
   })
 
   it('maps a copy path back to the folder it mirrors', () => {
-    expect(getPerforceCopySourcePath('D:\\ws.wt\\copy-1')).toBe('D:\\ws')
-    expect(getPerforceCopySourcePath('D:\\ws.wt\\copy-1\\Game\\')).toBe('D:\\ws\\Game')
-    expect(getPerforceCopySourcePath('/home/me/ws.wt/copy-1/Game')).toBe('/home/me/ws/Game')
-    expect(getPerforceCopySourcePath('D:\\ws\\Game')).toBeNull()
+    expect(getPerforceCopySourcePaths('D:\\ws.wt\\copy-1')).toEqual(['D:\\ws'])
+    expect(getPerforceCopySourcePaths('D:\\ws.wt\\copy-1\\Game\\')).toEqual(['D:\\ws\\Game'])
+    expect(getPerforceCopySourcePaths('/home/me/ws.wt/copy-1/Game')).toEqual(['/home/me/ws/Game'])
+    expect(getPerforceCopySourcePaths('D:\\ws\\Game')).toEqual([])
+  })
+
+  it('finds the copy beside the project when a folder above it also ends in .wt', () => {
+    const copy = '/work/cache.wt/team/project.wt/one'
+    expect(getPerforceCopyName(copy, '/work/cache.wt/team/project')).toBe('one')
+    expect(getPerforceCopySourcePaths(copy)).toContain('/work/cache.wt/team/project')
   })
 })
