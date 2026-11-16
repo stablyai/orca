@@ -28,6 +28,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId
 } from '../../shared/execution-host/execution-host'
+import { pruneClosedOpenFileAcrossPartitions } from '../persistence/closed-open-file-partition-prune'
 import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
@@ -208,6 +209,36 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
     // Lifecycle success requires durable writes; Store.flush only logs failures.
     return store.flushPendingOrThrowAsync()
   })
+
+  // A closed editor file must not survive in superseded partitions; their stale open-file rows
+  // re-materialize the tab at the next hydration (#42761). One main-side call keeps each
+  // read-and-remove atomic against concurrent closes from any window.
+  ipcMain.handle(
+    'session:prune-closed-open-file',
+    (_event, args: { worktreeId?: unknown; filePath?: unknown } | undefined) => {
+      if (typeof args?.worktreeId !== 'string' || typeof args?.filePath !== 'string') {
+        return
+      }
+      pruneClosedOpenFileAcrossPartitions(
+        {
+          // Mirror session:list-host-ids visibility: migration-hidden partitions are not user state.
+          hostIds: [
+            LOCAL_EXECUTION_HOST_ID,
+            ...visibleSessionHostIds(store, store.getWorkspaceSessionHostIds()).filter(
+              (hostId) => hostId !== LOCAL_EXECUTION_HOST_ID
+            )
+          ],
+          read: (hostId) => store.getWorkspaceSession(hostId),
+          write: (slice, hostId) => {
+            if (!isFenced(hostId)) {
+              store.setWorkspaceSession(slice, hostId)
+            }
+          }
+        },
+        { worktreeId: args.worktreeId, filePath: args.filePath }
+      )
+    }
+  )
 
   ipcMain.handle(
     'session:read-terminal-scrollback',

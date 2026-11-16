@@ -10,6 +10,7 @@ import type {
   WorkspaceSessionState
 } from '../../../../../shared/workspace-session/workspace-session-state-types'
 import { sanitizeWebRuntimeWorkspaceSession } from './web-workspace-session'
+import { pruneClosedOpenFileFromSlice } from '../../../../../shared/workspace-session/closed-open-file-partition-prune'
 import { readLocalWebUIState } from '../preferences/web-ui-state'
 import { requireActiveEnvironmentOrNull } from '../../runtime/client/web-runtime-session'
 import { SESSION_STORAGE_KEY, readJson, writeJson } from '../web-storage'
@@ -81,6 +82,18 @@ export function createWebWorkspaceSessionApi(): Partial<PreloadApi> {
       },
       // Why a no-op: web closes reach the host through its session-tab and terminal close RPCs.
       closeTerminalSurface: async () => {},
+      // localStorage writes synchronously, so each partition's read-and-remove is atomic (#42761).
+      pruneClosedOpenFile: async ({ worktreeId, filePath }) => {
+        for (const hostId of listStoredWorkspaceSessionHostIds()) {
+          const pruned = pruneClosedOpenFileFromSlice(getStoredWorkspaceSession(hostId), {
+            worktreeId,
+            filePath
+          })
+          if (pruned) {
+            writeJson(sessionStorageKeyForHost(hostId), sanitizeWebRuntimeWorkspaceSession(pruned))
+          }
+        }
+      },
       // localStorage writes synchronously, so there is no deferred web flush.
       flush: async () => {},
       // No local snapshot store: host-run panes read theirs from the host (host-terminal-scrollback-hydration).

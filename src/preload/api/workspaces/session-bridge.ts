@@ -10,6 +10,7 @@ export const sessionApi = {
     ipcRenderer.invoke('session:patch-entries', args, hostId, relays),
   desktopRelaysVersion: () => ipcRenderer.invoke('session:desktop-relays-version'),
   applyDesktopRelays: (args) => ipcRenderer.invoke('session:apply-desktop-relays', args),
+  pruneClosedOpenFile: (args) => ipcRenderer.invoke('session:prune-closed-open-file', args),
   closeTerminalSurface: (args) => ipcRenderer.invoke('session:close-terminal-surface', args),
   flush: () => ipcRenderer.invoke('session:flush'),
   readTerminalScrollback: (args) => ipcRenderer.invoke('session:read-terminal-scrollback', args)

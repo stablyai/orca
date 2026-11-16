@@ -41,6 +41,8 @@ export type WorkspaceSessionApi = {
     desktopRelaysVersion?: () => Promise<number>
     /** The window's relay ids per host, applied by main to the keys the window owns. */
     applyDesktopRelays?: (args: DesktopRelayWrite) => Promise<DesktopRelayWriteResult>
+    /** Drops a closed editor file's open-file row from every non-fenced partition, atomically in main (#42761). */
+    pruneClosedOpenFile: (args: { worktreeId: string; filePath: string }) => Promise<void>
     /** Commits a terminal tab or split-pane close into main's membership. */
     closeTerminalSurface: (args: {
       worktreeId: string
