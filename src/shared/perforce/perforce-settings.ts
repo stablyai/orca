@@ -213,14 +213,16 @@ export function perforceSettingsOnHost(
 
 /**
  * How long a transport (SSH relay, Orca server) waits for Perforce operation `operation`. p4 stops
- * each command at its own limit, so this outlasts that limit: a status scan plus one command, or
- * p4's longer limit for submit and sync.
+ * each command at its own limit, so this outlasts that limit: one command, then the longer of the
+ * status scan and the changelist chain (changes, describe, where) beside it, or p4's longer limit
+ * for submit and sync.
  */
 export function perforceRequestTimeoutMs(settings: PerforceSettings, operation: string): number {
   const p4Limit =
     operation === 'sync' ? P4_SYNC_TIMEOUT_MS : operation === 'submit' ? P4_SUBMIT_TIMEOUT_MS : 0
-  const scanAndCommand = (settings.statusScanTimeoutSeconds + settings.commandTimeoutSeconds) * 1000
-  return Math.max(p4Limit, scanAndCommand) + 30_000
+  const command = settings.commandTimeoutSeconds
+  const status = (command + Math.max(settings.statusScanTimeoutSeconds, 3 * command)) * 1000
+  return Math.max(p4Limit, status) + 30_000
 }
 
 /** The copy-excluded folders setting as a list (one per line or comma-separated). */

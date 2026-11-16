@@ -222,6 +222,8 @@ describe('settings on an Orca server', () => {
   it('waits for a status scan and one command, or for p4 itself on submit and sync', () => {
     const settings = DEFAULT_PERFORCE_SETTINGS
     expect(perforceRequestTimeoutMs(settings, 'status')).toBe((180 + 60) * 1000 + 30_000)
+    const quickScan = { ...settings, statusScanTimeoutSeconds: 10 }
+    expect(perforceRequestTimeoutMs(quickScan, 'status')).toBe(4 * 60 * 1000 + 30_000)
     expect(perforceRequestTimeoutMs(settings, 'submit')).toBe(10 * 60_000 + 30_000)
     expect(perforceRequestTimeoutMs(settings, 'sync')).toBe(30 * 60_000 + 30_000)
   })
