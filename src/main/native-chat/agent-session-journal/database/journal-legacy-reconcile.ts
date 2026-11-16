@@ -8,20 +8,21 @@ import { journalDatabasePath } from './journal-host-database'
 import {
   journalLegacyChatRevision,
   journalLegacyChatRevisionKey,
-  journalLegacyCopySourceKey,
   openJournalLegacySource,
-  recordJournalLegacyChatRevision
+  recordJournalLegacyChatRevision,
+  settleJournalLegacyCopy
 } from './journal-legacy-source'
 import {
-  deleteMeta,
-  JOURNAL_LEGACY_COMPARE,
+  keepContinuedChat,
+  keepForcedCopy,
+  type JournalLegacyForcedCopy
+} from './journal-legacy-copies'
+import {
   JOURNAL_LEGACY_COPY_DUE,
-  awaitsConversion,
-  continuedCopyId,
   metaKeys,
   readMeta,
   recordJournalLegacyFailure,
-  revisionHoldsHistory,
+  strandedCopies,
   writeMeta,
   type JournalLegacyFailure
 } from './journal-legacy-reconcile-marks'
@@ -52,12 +53,17 @@ export function reconcileJournalLegacySource(stateDirectory: string, db: Databas
   const saved = readMeta(db, JOURNAL_LEGACY_SOURCE_RECEIPT)
   const unchanged = sameJournalLegacySource(saved, captured)
   const kept = readMeta(db, JOURNAL_LEGACY_REVISIONS_KEPT) !== undefined
-  const due = metaKeys(db, JOURNAL_LEGACY_COPY_DUE)
-  if (unchanged && kept && due.length === 0) {
+  const forced = new Map<string, JournalLegacyForcedCopy>(
+    metaKeys(db, JOURNAL_LEGACY_COPY_DUE).map((id) => [id, {}])
+  )
+  for (const [id, copy] of strandedCopies(db)) {
+    forced.set(id, { stranded: copy })
+  }
+  if (unchanged && kept && forced.size === 0) {
     return
   }
   const receipt = JSON.stringify(captured)
-  const pass: Pass = { changed: !unchanged, kept, due, baselines: [], failures: [] }
+  const pass: Pass = { changed: !unchanged, kept, forced, baselines: [], failures: [] }
   const source = openJournalLegacySource(sourcePath)
   let complete: boolean
   try {
@@ -79,9 +85,10 @@ export function reconcileJournalLegacySource(stateDirectory: string, db: Databas
     }
     for (const failure of pass.failures) {
       recordJournalLegacyFailure(db, failure)
-    }
-    for (const id of pass.due) {
-      deleteMeta(db, `${JOURNAL_LEGACY_COPY_DUE}${id}`)
+      const { stranded } = pass.forced.get(failure.sessionId) ?? {}
+      if (stranded !== undefined) {
+        settleJournalLegacyCopy(db, stranded)
+      }
     }
     // A storage failure leaves the original unabsorbed; the next launch retries it.
     if (complete) {
@@ -96,8 +103,8 @@ type Pass = {
   changed: boolean
   /** Every chat in the original at the copy was given a revision here. */
   kept: boolean
-  /** Converted chats a background compare found holding turns this file lacks. */
-  due: readonly string[]
+  /** Chats that get a copy whatever their revision shows. */
+  forced: ReadonlyMap<string, JournalLegacyForcedCopy>
   baselines: [string, string][]
   failures: JournalLegacyFailure[]
 }
@@ -137,7 +144,7 @@ function absorbChats(
         .prepare('SELECT session_id FROM agent_session_records ORDER BY rowid')
         .all()
         .map((row) => String(row.session_id))
-    : pass.due
+    : [...pass.forced.keys()]
   for (const id of chats) {
     let revision: string | undefined
     const added = adoption.added.length
@@ -199,16 +206,18 @@ function absorbChat(
   adoption: Adoption,
   pass: Pass
 ): void {
+  const adopt = (copy: string) => adoptChat(source, db, id, copy, adoption)
+  const forced = pass.forced.get(id)
+  if (forced) {
+    runJournalTransaction(db, () => keepForcedCopy(db, id, revision, forced, adopt))
+    return
+  }
   const shown = readMeta(db, journalLegacyChatRevisionKey(id))
   if (revision === shown) {
     return
   }
   const chat = db.prepare('SELECT epoch FROM journal_chat_state WHERE session_id=?').get(id)
   const converted = chat?.epoch !== null && chat?.epoch !== undefined
-  if (pass.due.includes(id)) {
-    runJournalTransaction(db, () => keepCopy(source, db, id, revision, adoption))
-    return
-  }
   // A file copied before revisions were kept has none to compare. An original as copied wrote
   // nothing since; otherwise a chat this file cataloged but hasn't converted converts from the
   // current original, so nothing is hidden. The copy cataloged every chat with history, so one it
@@ -221,7 +230,7 @@ function absorbChat(
     return
   }
   if (converted) {
-    keepContinuedChat(source, db, id, revision, shown, adoption, pass)
+    keepContinuedChat(db, id, revision, shown, adopt, pass.baselines)
     return
   }
   // Not converted here yet: its conversion reads the current original, so it joins as itself.
@@ -300,49 +309,6 @@ function addTab(db: Database.Database, adoption: Adoption, sessionId: string, ta
   adoption.tabbed.add(sessionId)
   adoption.takenTabs.add(tab)
   adoption.added.push([sessionId, tab])
-}
-
-/**
- * The original's version of a converted chat it moved past becomes a second chat beside it. Only
- * its record is made here; its history converts from the original chat when opened or idle. With
- * no revision to compare (files copied before revisions were kept), a background compare decides.
- */
-function keepContinuedChat(
-  source: Database.Database,
-  db: Database.Database,
-  id: string,
-  revision: string,
-  shown: string | undefined,
-  adoption: Adoption,
-  pass: Pass
-): void {
-  if (shown === undefined && revisionHoldsHistory(revision)) {
-    writeMeta(db, `${JOURNAL_LEGACY_COMPARE}${id}`, revision)
-    return
-  }
-  // A copy still waiting to convert reads the current original, so it already holds this write.
-  if (shown !== undefined && awaitsConversion(db, id, continuedCopyId(id, shown))) {
-    pass.baselines.push([id, revision])
-    return
-  }
-  runJournalTransaction(db, () => keepCopy(source, db, id, revision, adoption))
-}
-
-function keepCopy(
-  source: Database.Database,
-  db: Database.Database,
-  id: string,
-  revision: string,
-  adoption: Adoption
-): void {
-  if (!revisionHoldsHistory(revision)) {
-    recordJournalLegacyChatRevision(db, id, revision)
-    return
-  }
-  const copy = continuedCopyId(id, revision)
-  adoptChat(source, db, id, copy, adoption)
-  writeMeta(db, journalLegacyCopySourceKey(copy), id)
-  recordJournalLegacyChatRevision(db, id, revision)
 }
 
 /** Uploads the older Orca attached stay claimed, so the sweeper never removes them. */

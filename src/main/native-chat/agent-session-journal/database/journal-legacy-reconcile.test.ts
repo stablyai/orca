@@ -218,11 +218,16 @@ it('fills in revisions for chats converted before they were kept, then still kee
   original.pragma('wal_checkpoint(TRUNCATE)')
   await (await upgrade(root)).close()
 
-  // Written again before the copy converted: that copy reads the current original, so no second.
-  runJournalTransaction(original, () => {
-    insertJournalRow(original, 'converted', turn('older-turn-2', tip + 2))
-  })
-  original.pragma('wal_checkpoint(TRUNCATE)')
+  // Written twice more before the copy converted: that copy reads the current original, so no second.
+  for (const [index, itemId] of ['older-turn-2', 'older-turn-3'].entries()) {
+    runJournalTransaction(original, () => {
+      insertJournalRow(original, 'converted', turn(itemId, tip + 2 + index))
+    })
+    original.pragma('wal_checkpoint(TRUNCATE)')
+    if (index === 0) {
+      await (await upgrade(root)).close()
+    }
+  }
   const later = await upgrade(root)
   cleanup.push(later.close)
   const copies = later.db
@@ -232,7 +237,7 @@ it('fills in revisions for chats converted before they were kept, then still kee
   expect(copies).toHaveLength(1)
   expect(await later.convert(copies[0]!)).toBe('epoch')
   expect(items(later.db, copies[0]!)).toEqual(
-    expect.arrayContaining(['older-turn', 'older-turn-2'])
+    expect.arrayContaining(['older-turn', 'older-turn-2', 'older-turn-3'])
   )
   expect(
     later.db
@@ -385,4 +390,39 @@ it('records a chat it cannot keep and does not retry it until the older Orca wri
   const retried = await upgrade(root)
   cleanup.push(retried.close)
   expect(refusedRecord(retried.db)).toEqual({ 1: 1 })
+})
+
+it('keeps a fresh copy when another build readied a copy before its history converted here', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-legacy-reconcile-'))
+  cleanup.push(() => rmSync(root, { recursive: true, force: true }))
+  const { db: original } = openJournalDatabase(journalDatabasePath(root))
+  cleanup.push(() => original.close())
+  olderOrcaChat(original, 'converted', rows)
+  const first = await upgrade(root)
+  expect(await first.convert('converted')).toBe('epoch')
+  await first.close()
+  insertJournalRow(original, 'converted', turn('older-turn', tip + 1))
+  original.pragma('wal_checkpoint(TRUNCATE)')
+
+  const copied = await upgrade(root)
+  const copies = (db: Database.Database) =>
+    db
+      .prepare("SELECT session_id FROM agent_session_records WHERE session_id!='converted'")
+      .all()
+      .map((row) => String(row.session_id))
+  const [stranded] = copies(copied.db)
+  // An older build that can't read the copy's source founds it empty, as a new chat.
+  copied.db
+    .prepare(
+      "INSERT INTO journal_chat_state(workspace_id,session_id,epoch) VALUES('workspace',?,'founded') ON CONFLICT(session_id) DO UPDATE SET epoch='founded'"
+    )
+    .run(stranded!)
+  await copied.close()
+
+  const again = await upgrade(root)
+  cleanup.push(again.close)
+  const kept = copies(again.db).find((id) => id !== stranded)
+  expect(copies(again.db)).toHaveLength(2)
+  expect(await again.convert(kept!)).toBe('epoch')
+  expect(items(again.db, kept!)).toContain('older-turn')
 })

@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import type Database from '../../../sqlite/sync-database'
 import {
   journalLegacyCopySourceKey,
+  journalLegacyPendingCopyKey,
   recordJournalLegacyChatRevision
 } from './journal-legacy-source'
 
@@ -33,6 +34,7 @@ export function recordJournalLegacyFailure(
   if (failure.revision !== undefined) {
     recordJournalLegacyChatRevision(db, failure.sessionId, failure.revision)
   }
+  deleteMeta(db, `${JOURNAL_LEGACY_COPY_DUE}${failure.sessionId}`)
 }
 
 export function readMeta(db: Database.Database, key: string): string | undefined {
@@ -68,14 +70,31 @@ export function continuedCopyId(id: string, revision: string): string {
   return createHash('sha256').update(`${id}\0${revision}`).digest('hex').slice(0, 32)
 }
 
-export function awaitsConversion(db: Database.Database, id: string, copy: string): boolean {
+/** A copy of this original chat still waiting to convert reads the current original. */
+export function holdsPendingCopy(db: Database.Database, id: string): boolean {
+  const copy = readMeta(db, journalLegacyPendingCopyKey(id))
   return (
-    readMeta(db, journalLegacyCopySourceKey(copy)) === id &&
+    copy !== undefined &&
     db
       .prepare(`SELECT 1 FROM agent_session_records WHERE session_id=?1 AND NOT EXISTS (
         SELECT 1 FROM journal_chat_state WHERE session_id=?1 AND epoch IS NOT NULL)`)
       .get(copy) !== undefined
   )
+}
+
+const COPY_SOURCE = journalLegacyCopySourceKey('')
+
+/**
+ * Copies another build readied before this one converted them: an older build that can't read
+ * the mapping founds them empty. Conversion here clears the mapping, so only those remain.
+ */
+export function strandedCopies(db: Database.Database): [original: string, copy: string][] {
+  return db
+    .prepare(`SELECT m.value AS original, substr(m.key, ?3) AS copy FROM agent_session_store_meta m
+      JOIN journal_chat_state s ON s.session_id=substr(m.key, ?3) AND s.epoch IS NOT NULL
+      WHERE m.key>?1 AND m.key<?2`)
+    .all(COPY_SOURCE, prefixEnd(COPY_SOURCE), COPY_SOURCE.length + 1)
+    .map((row) => [String(row.original), String(row.copy)])
 }
 
 /** An original chat whose current epoch saved no row has nothing to keep. */

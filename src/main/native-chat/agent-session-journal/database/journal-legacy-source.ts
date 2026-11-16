@@ -113,3 +113,22 @@ export function journalLegacyConversionSource(db: Database.Database, sessionId: 
     .get(journalLegacyCopySourceKey(sessionId))
   return row === undefined ? sessionId : String(row.value)
 }
+
+/** The copy kept for an original chat that hasn't converted here yet. */
+export function journalLegacyPendingCopyKey(sessionId: string): string {
+  return `journal.legacy-pending-copy:${sessionId}`
+}
+
+/** Once a copy is ready here its history no longer reads from the original. */
+export function settleJournalLegacyCopy(db: Database.Database, copyId: string): void {
+  const key = journalLegacyCopySourceKey(copyId)
+  const original = db.prepare('SELECT value FROM agent_session_store_meta WHERE key=?').get(key)
+  if (original === undefined) {
+    return
+  }
+  db.prepare('DELETE FROM agent_session_store_meta WHERE key=?').run(key)
+  db.prepare('DELETE FROM agent_session_store_meta WHERE key=? AND value=?').run(
+    journalLegacyPendingCopyKey(String(original.value)),
+    copyId
+  )
+}
