@@ -37,18 +37,16 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
     startupOverride?: PendingStartupCommand | null,
     options: FreshSpawnOptions = {}
   ): Promise<string | null> => {
+    const effectiveStartup = startupOverride === undefined ? session.paneStartup : startupOverride
     if (
+      effectiveStartup?.resumeSource?.cancelled ||
       hasWorktreeTeardownStarted(
         useAppStore.getState().deleteStateByWorktreeId?.[session.deps.worktreeId]
       )
     ) {
-      // Worktree deletion already killed its PTYs; skip respawn into the directory being removed instead of racing main’s fence.
+      // Cancelled starts and removed workspaces must release ownership without reconnecting.
       releaseDeferredCwdFence(session)
-      return Promise.resolve(null)
-    }
-    const effectiveStartup = startupOverride === undefined ? session.paneStartup : startupOverride
-    if (effectiveStartup?.resumeSource?.cancelled) {
-      releaseDeferredCwdFence(session)
+      session.deps.releaseResumeInPlace?.()
       return Promise.resolve(null)
     }
     session.authoritativeReattachGeneration += 1
@@ -281,6 +279,7 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
         return null
       })
       .finally(() => {
+        session.deps.releaseResumeInPlace?.()
         if (pendingSpawnByPaneKey.get(session.pendingSpawnKey) === trackedPromise) {
           pendingSpawnByPaneKey.delete(session.pendingSpawnKey)
           pendingSpawnGenerationByPaneKey.delete(session.pendingSpawnKey)
