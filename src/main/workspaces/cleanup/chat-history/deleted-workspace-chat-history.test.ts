@@ -152,7 +152,15 @@ describe('sweepDeletedWorkspaceChatHistory', () => {
     } as unknown as RuntimeStore
     const deleted: ChatHistoryTarget[] = []
 
+    // A subagent of this chat still writes from a live workspace; deleting the chat would take it too.
+    const withLiveSubagent = session('live-subagent.jsonl', join(appWorkspaces, 'gone-five'))
+    mkdirSync(join(root, 'transcripts', 'live-subagent', 'subagents'), { recursive: true })
+    writeFileSync(
+      join(root, 'transcripts', 'live-subagent', 'subagents', 'agent-1.jsonl'),
+      `${JSON.stringify({ cwd: join(appWorkspaces, 'live') })}\n`
+    )
     const sessionsToList = [
+      withLiveSubagent,
       session('gone.jsonl', gone),
       session('gone-subfolder.jsonl', join(gone, 'packages', 'web')),
       session('live.jsonl', join(appWorkspaces, 'live')),

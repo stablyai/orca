@@ -19,7 +19,7 @@ import {
   readWorkspaceParents,
   type GoneFolder
 } from './deleted-workspace-folders'
-import { isStillIdleInGoneFolder } from './transcript-last-cwd'
+import { isChatStillIdleInGoneFolder } from './transcript-last-cwd'
 
 export type ChatHistorySweepResult = { deleted: number; failed: number; freedBytes: number }
 
@@ -83,9 +83,6 @@ export async function sweepDeletedWorkspaceChatHistory(
     return result
   }
   const sessions = await listInScope(deps, parents.scopePaths)
-  // The scan can take minutes: a workspace archived or a folder project added meanwhile still protects.
-  const listedNow = await readListedFolders(deps.store)
-  const parentsNow = await readWorkspaceParents(deps.store, listedNow)
   const goneByCwd = new Map<string, Promise<GoneFolder | null>>()
 
   const byFolder = new Map<string, { folder: GoneFolder; targets: ChatHistoryTarget[] }>()
@@ -106,11 +103,11 @@ export async function sweepDeletedWorkspaceChatHistory(
     const folder = await pending
     // Deleted means: the first missing folder sits directly in an Orca workspace parent, and Orca no
     // longer lists it or anything inside it. A missing parent (unmounted volume) never qualifies.
-    if (!folder || !parents.ids.has(folder.ancestorId) || !parentsNow.ids.has(folder.ancestorId)) {
+    if (!folder || !parents.ids.has(folder.ancestorId)) {
       continue
     }
     const key = goneFolderKey(folder)
-    if (listed.gone.has(key) || listedNow.gone.has(key)) {
+    if (listed.gone.has(key)) {
       continue
     }
     const group = byFolder.get(key) ?? { folder, targets: [] }
@@ -118,12 +115,19 @@ export async function sweepDeletedWorkspaceChatHistory(
     byFolder.set(key, group)
   }
 
-  for (const { folder, targets } of byFolder.values()) {
-    // Earlier deletions took time: the volume may be gone, the folder recreated, the setting off.
+  for (const [key, { folder, targets }] of byFolder) {
     if (deps.signal?.aborted || !deps.isEnabled() || !(await isStillGone(folder))) {
       continue
     }
-    const key = goneFolderKey(folder)
+    // Read Orca's rows after the folder was seen gone: a workspace archived or renamed during the
+    // scan, the grouping or earlier deletions keeps its row, and that row protects its chats.
+    const listedNow = await readListedFolders(deps.store)
+    if (
+      listedNow.gone.has(key) ||
+      !(await readWorkspaceParents(deps.store, listedNow)).ids.has(folder.ancestorId)
+    ) {
+      continue
+    }
     // Reading one transcript can take a while, so each is checked right before its own removal.
     const deleted = await deps.deleteSessions(
       targets,
@@ -131,7 +135,7 @@ export async function sweepDeletedWorkspaceChatHistory(
         !deps.signal?.aborted &&
         deps.isEnabled() &&
         (await isStillGone(folder)) &&
-        (await isStillIdleInGoneFolder(target.filePath, key, Date.now()))
+        (await isChatStillIdleInGoneFolder(target.filePath, key, Date.now()))
     )
     result.deleted += deleted.deleted
     result.failed += deleted.failed

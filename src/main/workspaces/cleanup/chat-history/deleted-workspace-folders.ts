@@ -1,5 +1,5 @@
 import { lstat, readdir, readlink, realpath, stat } from 'node:fs/promises'
-import { basename, dirname, join, resolve } from 'node:path'
+import { basename, dirname, isAbsolute, join, sep } from 'node:path'
 import type { RuntimeStore } from '../../../runtime/construction/runtime-store-contract'
 import { getRuntimePathBasename } from '../../../../shared/cross-platform-path'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
@@ -116,9 +116,10 @@ async function linkTargets(path: string): Promise<string[]> {
     if (link === null) {
       break
     }
-    // A relative link resolves from its real folder, which an earlier link may have moved.
+    // A relative link resolves from its real folder. Joined unnormalized: `..` after a symlink
+    // in the target is the OS's to resolve, not a string operation's.
     const linkFolder = await realpath(dirname(existing)).catch(() => dirname(existing))
-    current = join(resolve(linkFolder, link), ...rest)
+    current = [isAbsolute(link) ? link : `${linkFolder}${sep}${link}`, ...rest].join(sep)
     targets.push(current)
   }
   return targets

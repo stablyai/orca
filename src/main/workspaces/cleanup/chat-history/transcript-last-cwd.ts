@@ -1,4 +1,5 @@
-import { open, stat } from 'node:fs/promises'
+import { open, readdir, stat } from 'node:fs/promises'
+import { basename, dirname, extname, join } from 'node:path'
 import { WORKSPACE_CLEANUP_RULE_GRACE_MS } from '../../../../shared/workspace-cleanup/workspace-cleanup-evaluation'
 import { goneFolderKey, goneFolderOf } from './deleted-workspace-folders'
 
@@ -80,4 +81,60 @@ export async function isStillIdleInGoneFolder(
   } catch {
     return false
   }
+}
+
+const COMPANION_FILE_LIMIT = 2000
+
+/** Files the chat's removal also deletes: Claude keeps subagent transcripts in `<dir>/<session id>/`. Null when unreadable. */
+async function companionFiles(filePath: string): Promise<string[] | null> {
+  const files: string[] = []
+  const pending = [join(dirname(filePath), basename(filePath, extname(filePath)))]
+  for (let directory = pending.pop(); directory !== undefined; directory = pending.pop()) {
+    const entries = await readdir(directory, { withFileTypes: true }).catch(
+      (error: NodeJS.ErrnoException) => (error.code === 'ENOENT' ? [] : null)
+    )
+    // An unreadable folder may hold a live subagent's transcript: keep the chat.
+    if (entries === null) {
+      return null
+    }
+    for (const entry of entries) {
+      const path = join(directory, entry.name)
+      if (entry.isDirectory()) {
+        pending.push(path)
+      } else {
+        files.push(path)
+      }
+    }
+    if (files.length > COMPANION_FILE_LIMIT) {
+      return null
+    }
+  }
+  return files
+}
+
+/** The chat and every companion it deletes with it: all idle, all last written in the gone folder. */
+export async function isChatStillIdleInGoneFolder(
+  filePath: string,
+  folderKey: string,
+  now: number
+): Promise<boolean> {
+  if (!(await isStillIdleInGoneFolder(filePath, folderKey, now))) {
+    return false
+  }
+  const companions = await companionFiles(filePath)
+  if (companions === null) {
+    return false
+  }
+  for (const companion of companions) {
+    const idle = companion.endsWith('.jsonl')
+      ? await isStillIdleInGoneFolder(companion, folderKey, now)
+      : await stat(companion).then(
+          (stats) => now - stats.mtimeMs >= WORKSPACE_CLEANUP_RULE_GRACE_MS,
+          () => false
+        )
+    if (!idle) {
+      return false
+    }
+  }
+  return true
 }
