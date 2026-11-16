@@ -13,6 +13,18 @@ export function bindTerminalPaneStatusLifecycle(
   store: Store | undefined
 ): void {
   agentHookServer.setTerminalPaneLifecycle({
+    readSavedRecord: (paneKey) => {
+      try {
+        const pane = runtime?.resolveTerminalPane(paneKey)
+        if (!pane?.worktreeId) {
+          return undefined
+        }
+        return runtime?.getWorkspaceSessionForWorktree(pane.worktreeId)
+          ?.sleepingAgentSessionsByPaneKey?.[paneKey]
+      } catch {
+        return undefined
+      }
+    },
     ownsProcess: (paneKey, ptyId, incarnationId) => {
       const current = paneKeyPtyId.get(paneKey)
       if (current) {

@@ -1,3 +1,4 @@
+import { paneAgentIdentity } from '../../../agent-hooks/server/pane-agent-identity'
 import {
   isResumableTuiAgent,
   normalizeAgentProviderSession,
@@ -41,6 +42,11 @@ export async function captureWorktreeSleepResumeRecords(args: {
   launchByPtyId: ReadonlyMap<string, PtyLaunchFacts | undefined>
   /** Read after each presence probe, so a conversation started during it is the one captured. */
   readRowsForPane: (paneKey: string) => readonly AgentStatusIpcPayload[]
+  readSavedRecord?: (paneKey: string) => Promise<SleepingAgentSessionRecord | undefined>
+  readIdentity?: (
+    paneKey: string,
+    savedRecord?: SleepingAgentSessionRecord
+  ) => ReturnType<typeof paneAgentIdentity>
   checkAgentPresence:
     | ((paneKey: string, exitedSince?: number) => Promise<AgentProcessVerdict | null>)
     | null
@@ -57,19 +63,31 @@ export async function captureWorktreeSleepResumeRecords(args: {
     const launch = args.launchByPtyId.get(ptyId)
     let launchUnknown = false
     for (const { paneKey, tabId } of panes) {
-      // Why: the one holder rule — an agent the hook store proved exited left a plain shell.
-      if ((await args.checkAgentPresence?.(paneKey, 0).catch(() => null)) === 'exited') {
+      const savedBeforeProbe = await args.readSavedRecord?.(paneKey)
+      const presence = await args
+        .checkAgentPresence?.(paneKey, savedBeforeProbe?.updatedAt ?? 0)
+        .catch(() => null)
+      const savedRecord = await args.readSavedRecord?.(paneKey)
+      const identity = args.readIdentity
+        ? args.readIdentity(paneKey, savedRecord)
+        : paneAgentIdentity({
+            paneKey,
+            row: args.readRowsForPane(paneKey).find((candidate) => candidate.paneKey === paneKey),
+            savedRecord,
+            worktreeId: args.worktreeId,
+            ended: presence === 'exited'
+          })
+      if (identity?.ended || (presence === 'exited' && !identity?.status.paneSleep)) {
         retiredPaneKeys.push(paneKey)
         continue
       }
-      const row = args.readRowsForPane(paneKey).find((candidate) => candidate.paneKey === paneKey)
+      const row = identity?.status
       const agent = row?.agentType
       const providerSession = normalizeAgentProviderSession(row?.providerSession)
       if (!row) {
         continue
       }
       if (!isResumableTuiAgent(agent) || !providerSession) {
-        // Why: the hook store names another agent here now, so an older capture no longer applies.
         retiredPaneKeys.push(paneKey)
         continue
       }

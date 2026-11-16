@@ -99,6 +99,8 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
         paneKeysByPtyId,
         launchByPtyId: new Map([...ptyIds].map((ptyId) => [ptyId, this.ptysById.get(ptyId)])),
         readRowsForPane: (paneKey) => this.getAgentProviderSessionRowsForPaneFn?.(paneKey) ?? [],
+        readSavedRecord: (paneKey) => this.readSavedResumeSource(worktreeId, paneKey),
+        readIdentity: (paneKey, savedRecord) => this.readPaneAgentIdentity(paneKey, savedRecord),
         checkAgentPresence: this.checkHookAgentPresenceFn,
         capturedAt: Date.now()
       })
@@ -207,8 +209,22 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
 
   /** A layout-owner build's quit capture of the agents of the panes one partition holds. */
   quitResumeRecordsFor(session: WorkspaceSessionState): SleepingAgentSessionRecord[] {
-    const statuses = (this.getAgentProviderSessionSnapshotFn?.() ?? []).flatMap((row) => {
-      const status = resumeStatusFromHookRow(row, this.previousHookStatusByPaneKey.get(row.paneKey))
+    const paneKeys = new Set([
+      ...(this.getAgentProviderSessionSnapshotFn?.() ?? []).map((row) => row.paneKey),
+      ...Object.keys(session.sleepingAgentSessionsByPaneKey ?? {})
+    ])
+    const statuses = [...paneKeys].flatMap((paneKey) => {
+      const identity = this.readPaneAgentIdentity(
+        paneKey,
+        session.sleepingAgentSessionsByPaneKey?.[paneKey]
+      )
+      if (!identity || identity.ended) {
+        return []
+      }
+      const status = resumeStatusFromHookRow(
+        identity.status,
+        this.previousHookStatusByPaneKey.get(paneKey)
+      )
       return status ? [status] : []
     })
     return quitResumeRecords({

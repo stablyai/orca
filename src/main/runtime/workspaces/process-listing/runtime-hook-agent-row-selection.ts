@@ -1,3 +1,4 @@
+import { paneAgentIdentity } from '../../../agent-hooks/server/pane-agent-identity'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import {
   pickHostTurnEnd,
@@ -32,8 +33,11 @@ export type RuntimeAgentRowSnapshot = {
 }
 
 function isLiveObservation(row: AgentStatusIpcPayload): boolean {
-  // Restored rows cannot prove current liveness; resume-identity rows carry no status.
-  return row.restoredUnconfirmed !== true && row.providerSessionOnly !== true
+  if (row.structuredHost) {
+    return row.restoredUnconfirmed !== true
+  }
+  const identity = paneAgentIdentity({ paneKey: row.paneKey, row })
+  return row.restoredUnconfirmed !== true && identity !== null && !identity.ended
 }
 
 type HookRowJoin = {
@@ -52,7 +56,6 @@ function isPermissionState(state: AgentStatusEntry['state']): boolean {
 function isHeldRestoredPermission(row: AgentStatusIpcPayload, join: HookRowJoin): boolean {
   return (
     row.restoredUnconfirmed === true &&
-    row.providerSessionOnly !== true &&
     isPermissionState(row.state) &&
     join.screenMayHoldDialog?.() === true
   )

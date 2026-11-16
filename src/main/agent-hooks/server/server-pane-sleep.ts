@@ -1,10 +1,16 @@
-import { admitLegacyAgentStatus } from '../../../shared/agent-hook-listener/listener-state'
+import {
+  admitLegacyAgentStatus,
+  clearPaneProcessCacheState
+} from '../../../shared/agent-hook-listener/listener-state'
 
 import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status/transport/agent-status-legacy-adapter'
 
+import { pickParsedAgentStatusPayload } from '../../../shared/agent-status/contracts/agent-status-types'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { AgentHookServerAuthorityFences } from './server-authority-fences'
 import { recordAgentExit } from './agent-exit-evidence'
+import type { LaunchResumeIdentityEvent } from './launch-resume-identity-event'
+import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 
 export abstract class AgentHookServerPaneSleep extends AgentHookServerAuthorityFences {
   abstract dropStatusEntry(paneKey: string, options?: { preserveResumeIdentity?: boolean }): void
@@ -20,25 +26,60 @@ export abstract class AgentHookServerPaneSleep extends AgentHookServerAuthorityF
     }
   }
 
-  retireSleepingPaneOnSpawn(paneKey: string): void {
-    const row = this.state.lastStatusByPaneKey.get(paneKey) as
+  retireSleepingPaneOnSpawn(
+    paneKey: string,
+    resumed?: Pick<LaunchResumeIdentityEvent, 'agentType' | 'providerSession'>
+  ): void {
+    const resolved = this.resolvePaneKeyAlias(paneKey)
+    const row = this.state.lastStatusByPaneKey.get(resolved) as
       | EnrichedAgentHookEventPayload
       | undefined
-    if (row?.paneSleep) {
-      this.dropStatusEntry(paneKey, { preserveResumeIdentity: false })
-      // The sleep-time exit belongs to the process that the spawn replaces.
-      this.forgetAgentExit(paneKey)
-      this.emitPaneStatusCleared({ paneKey })
+    if (!row?.paneSleep) {
+      return
     }
+    // A dropped resume leaves a shell; only the same conversation keeps its accepted turn.
+    if (
+      resumed &&
+      row.payload.agentType === resumed.agentType &&
+      agentProviderSessionsEqual(resumed.agentType, row.providerSession, resumed.providerSession)
+    ) {
+      const {
+        paneSleep: _paneSleep,
+        agentPresence: _presence,
+        terminalHandle: _handle,
+        ...rest
+      } = row
+      admitLegacyAgentStatus(
+        this.state,
+        'main-status-cleanup',
+        rest,
+        AGENT_STATUS_2A_CURRENT_PRODUCER_MODE
+      )
+      this.commitStatusRowMutation(row, rest)
+      this.scheduleStatusPersist()
+      this.notifyStatusChangeListeners()
+      this.onAgentStatus?.({ ...rest, isReplay: true })
+    } else {
+      this.dropStatusEntry(resolved, { preserveResumeIdentity: false })
+      this.emitPaneStatusCleared({ paneKey: resolved })
+    }
+    // The sleep-time exit belongs to the process that the spawn replaces.
+    this.forgetAgentExit(resolved)
   }
 
   /** The physical stop changes presence, never the accepted completion or its clocks. */
   settleTerminalPaneSleep(paneKey: string, ptyId: string, incarnationId?: string): boolean {
     const resolved = this.resolvePaneKeyAlias(paneKey)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this server stores enriched accepted rows in the listener's base-typed cache.
-    const previous = this.state.lastStatusByPaneKey.get(resolved) as
-      | EnrichedAgentHookEventPayload
-      | undefined
+    const identity = this.paneAgentIdentity(resolved)
+    const previous =
+      (this.state.lastStatusByPaneKey.get(resolved) as EnrichedAgentHookEventPayload | undefined) ??
+      (identity
+        ? {
+            ...identity.status,
+            payload: pickParsedAgentStatusPayload(identity.status)
+          }
+        : undefined)
     if (
       previous?.paneSleep?.ptyId === ptyId &&
       (!previous.paneSleep.incarnationId ||
@@ -52,11 +93,8 @@ export abstract class AgentHookServerPaneSleep extends AgentHookServerAuthorityF
     }
     if (
       !previous ||
-      previous.payload.state !== 'done' ||
-      previous.payload.sessionBoundary === true ||
-      previous.providerSessionOnly ||
-      previous.structuredHost ||
-      previous.observation?.origin === 'launch' ||
+      !identity ||
+      identity.ended ||
       this.terminalPaneLifecycle?.isReversibleStop(ptyId, incarnationId) !== true ||
       this.terminalPaneLifecycle.isPlaced(previous) !== true
     ) {
@@ -69,6 +107,8 @@ export abstract class AgentHookServerPaneSleep extends AgentHookServerAuthorityF
       toolUseId: _toolUseId,
       toolAgentId: _toolAgentId,
       terminalHandle: _terminalHandle,
+      providerSessionOnly: _providerSessionOnly,
+      retainedForLiveness: _retainedForLiveness,
       ...accepted
     } = previous
     const {
@@ -77,17 +117,41 @@ export abstract class AgentHookServerPaneSleep extends AgentHookServerAuthorityF
       interactivePrompt: _interactivePrompt,
       subagents: _subagents,
       claudeTaskWakeupPending: _wakeup,
+      workingMode: _workingMode,
       ...payload
     } = previous.payload
+    // Sleep cut an unfinished turn short; that reads Interrupted, never a completion.
+    const now = Date.now()
+    const midTurn = previous.payload.state !== 'done' && previous.providerSessionOnly !== true
     const row: EnrichedAgentHookEventPayload = {
       ...accepted,
-      payload,
+      ...(midTurn ? { stateStartedAt: now } : {}),
+      payload: midTurn
+        ? {
+            ...payload,
+            state: 'done',
+            interrupted: true,
+            ...(payload.mainAgent
+              ? {
+                  mainAgent: {
+                    state: 'done' as const,
+                    outcome: 'cancellation' as const,
+                    stateStartedAt: now
+                  }
+                }
+              : {})
+          }
+        : { ...payload, state: identity.status.state },
       paneSleep: { ptyId, ...(incarnationId ? { incarnationId } : {}) },
       agentPresence: {
         agent: previous.payload.agentType ?? 'unknown',
         ...previous.agentPresence,
         ended: true
       }
+    }
+    if (midTurn) {
+      // The cut-off turn's producer records belong to the stopped process.
+      clearPaneProcessCacheState(this.state, resolved)
     }
     this.programStatusFacets.delete(resolved)
     this.hookSilenceRechecks.cancel(resolved)
@@ -97,7 +161,7 @@ export abstract class AgentHookServerPaneSleep extends AgentHookServerAuthorityF
       row,
       AGENT_STATUS_2A_CURRENT_PRODUCER_MODE
     )
-    recordAgentExit(this.agentExitedAtByPaneKey, [resolved], row.agentPresence)
+    recordAgentExit(this.agentExitedAtByPaneKey, [resolved], row.agentPresence, now)
     this.commitStatusRowMutation(previous, row)
     this.scheduleStatusPersist()
     this.notifyStatusChangeListeners()

@@ -27,6 +27,31 @@ import { isForeignTurnHook } from './server-foreign-turn-hook'
 import { resolveCancelVerdictLatch } from '../../../shared/agent-hook-listener/state/agent-hook-cancel-verdict-latch'
 
 import { claimsPaneAfterExit } from './agent-exit-evidence'
+import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
+import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
+import { sameAgentStatusTerminalOwner } from '../../../shared/agent-status/identity/agent-status-terminal-owner'
+
+/** A boundary for the conversation whose turn the pane last accepted keeps that turn's verdict. */
+function resumesAcceptedDone(
+  previous: EnrichedAgentHookEventPayload,
+  incoming: AgentHookEventPayload
+): boolean {
+  return (
+    incoming.payload.sessionBoundary === true &&
+    previous.payload.state === 'done' &&
+    previous.payload.sessionBoundary !== true &&
+    previous.providerSessionOnly !== true &&
+    previous.paneSleep === undefined &&
+    previous.providerSession !== undefined &&
+    previous.payload.agentType === incoming.payload.agentType &&
+    sameAgentStatusTerminalOwner(previous, incoming) &&
+    agentProviderSessionsEqual(
+      incoming.payload.agentType,
+      previous.providerSession,
+      incoming.providerSession
+    )
+  )
+}
 
 export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusRowMutation {
   protected applyNormalizedStatus(
@@ -104,7 +129,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusR
       payload.payload.sessionBoundary === true &&
       !rootContext.acquired &&
       this.sameTerminalOwner(previous, payload) &&
-      this.preservesStoppingDone(previous.paneKey)
+      this.preservesStoppingAgent(previous.paneKey)
     ) {
       return previous
     }
@@ -194,6 +219,26 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusR
     }
     if (previous && stateReconciledPayload === previous) {
       return previous
+    }
+    if (previous && resumesAcceptedDone(previous, stateReconciledPayload)) {
+      // The resumed process owns the conversation's last verdict; the slept one's identity stays behind.
+      const { agentPresence: _sleptOwner, restoredUnconfirmed: _restored, ...accepted } = previous
+      const resumed: EnrichedAgentHookEventPayload = {
+        ...accepted,
+        ...(stateReconciledPayload.providerSession
+          ? { providerSession: stateReconciledPayload.providerSession }
+          : {}),
+        ...(stateReconciledPayload.agentPresence
+          ? { agentPresence: stateReconciledPayload.agentPresence }
+          : {})
+      }
+      if (!this.writeLegacyStatusRow(resumed)) {
+        return undefined
+      }
+      this.runtimeObservedStatusPaneKeys.add(resumed.paneKey)
+      this.commitStatusRowMutation(rowBefore, resumed)
+      this.scheduleStatusPersist()
+      return resumed
     }
     // Relay restart loses root context; child hooks must not erase persisted resume/model identity.
     const rootContextPreservingPayload = retainHookRootContext(

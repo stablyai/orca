@@ -24,6 +24,7 @@ let home: string
 let server: AgentHookServer
 let stopping: boolean
 let placed: boolean
+let pty: { id: string; birth: string }
 const read = () => server.getStatusSnapshotForPane(PANE)[0]
 
 beforeEach(async () => {
@@ -31,11 +32,13 @@ beforeEach(async () => {
   home = mkdtempSync(join(tmpdir(), 'orca-sleep-status-'))
   stopping = false
   placed = true
+  pty = { id: 'pty', birth: 'birth' }
   server = new AgentHookServer()
+  const owns = (id: string, incarnation?: string) => id === pty.id && incarnation === pty.birth
   server.setTerminalPaneLifecycle({
-    ownsProcess: (_key, pty, incarnation) => pty === 'pty' && incarnation === 'birth',
+    ownsProcess: (_key, id, incarnation) => owns(id, incarnation),
     isStopping: () => stopping,
-    isReversibleStop: (pty, incarnation) => stopping && pty === 'pty' && incarnation === 'birth',
+    isReversibleStop: (id, incarnation) => stopping && owns(id, incarnation),
     isPlaced: () => placed
   })
   await server.start({ env: 'production', userDataPath: home })
@@ -103,7 +106,6 @@ it('accepts a genuine providerless completion after stop intent and preserves it
     })
   publish('working')
   stopping = true
-  expect(server.settleTerminalPaneSleep(PANE, 'pty', 'birth')).toBe(false)
   publish('done')
   expect(server.settleTerminalPaneSleep(PANE, 'pty', 'other-birth')).toBe(false)
   expect(server.settleTerminalPaneSleep(PANE, 'pty', 'birth')).toBe(true)
@@ -171,7 +173,12 @@ it.each(['idle Codex', 'Claude hook', 'failed resume', 'ordinary exit'] as const
     expect(await server.checkAgentPresenceSince(PANE, 0)).toBe('exited')
 
     stopping = false
-    server.retireSleepingPaneOnSpawn(PANE)
+    server.retireSleepingPaneOnSpawn(
+      PANE,
+      wake === 'idle Codex' || wake === 'Claude hook'
+        ? { agentType: agent, providerSession: { key: 'session_id', id: 'sleep-session' } }
+        : undefined
+    )
     if (wake === 'idle Codex' || wake === 'Claude hook') {
       server.recordLaunchResumeIdentity({
         paneKey: PANE,
@@ -180,7 +187,7 @@ it.each(['idle Codex', 'Claude hook', 'failed resume', 'ordinary exit'] as const
         providerSession: { key: 'session_id', id: 'sleep-session' },
         launchedAt: Date.now()
       })
-      expect(read()).toMatchObject({ providerSessionOnly: true })
+      expect(read()).toMatchObject({ state: 'done', prompt: 'Finished work' })
     }
     if (wake === 'Claude hook') {
       await hook('SessionStart', 4002)
@@ -210,6 +217,99 @@ it.each(['idle Codex', 'Claude hook', 'failed resume', 'ordinary exit'] as const
         expect(next.sleepingAgentSessionsByPaneKey?.[PANE]).toEqual(saved)
       }
     }
+  }
+)
+
+const agentHook = (agent: 'claude' | 'codex', event: string, pid: number, source = 'resume') =>
+  postHookEvent(
+    server,
+    buildBody(
+      { hook_event_name: event, session_id: `${agent}-session`, source, prompt: 'Finished work' },
+      {
+        agentProcess: JSON.stringify({ pid, platform: process.platform, startTime: `birth-${pid}` })
+      }
+    ),
+    `/hook/${agent}`
+  )
+
+async function sleepPane(agent: 'claude' | 'codex', id: string, pid: number): Promise<void> {
+  pty = { id, birth: `birth-${id}` }
+  stopping = true
+  if (agent === 'claude') {
+    await agentHook(agent, 'SessionEnd', pid)
+  }
+  expect(server.settleTerminalPaneSleep(PANE, pty.id, pty.birth)).toBe(true)
+  stopping = false
+}
+
+it.each(['claude', 'codex'] as const)(
+  'keeps %s Done through sleep, idle wake and sleep again',
+  async (agent) => {
+    await agentHook(agent, 'UserPromptSubmit', 4001)
+    await agentHook(agent, 'Stop', 4001)
+    await sleepPane(agent, 'pty-1', 4001)
+    server.retireSleepingPaneOnSpawn(PANE, {
+      agentType: agent,
+      providerSession: { key: 'session_id', id: `${agent}-session` }
+    })
+    server.recordLaunchResumeIdentity({
+      paneKey: PANE,
+      worktreeId: 'wt-1',
+      agentType: agent,
+      providerSession: { key: 'session_id', id: `${agent}-session` },
+      launchedAt: Date.now()
+    })
+    if (agent === 'claude') {
+      await agentHook(agent, 'SessionStart', 4002)
+    }
+    expect(read()).toMatchObject({ state: 'done', prompt: 'Finished work' })
+    expect(read()).not.toHaveProperty('paneSleep')
+    await sleepPane(agent, 'pty-2', 4002)
+    expect(read()).toMatchObject({
+      state: 'done',
+      prompt: 'Finished work',
+      paneSleep: { ptyId: 'pty-2' }
+    })
+  }
+)
+
+it.each(['claude', 'codex'] as const)(
+  'keeps a mid-turn %s through sleep as Interrupted without a completion',
+  async (agent) => {
+    await agentHook(agent, 'UserPromptSubmit', 4001)
+    const emitted = vi.fn()
+    server.setListener(emitted)
+    emitted.mockClear()
+    await sleepPane(agent, 'pty-1', 4001)
+    expect(read()).toMatchObject({
+      state: 'done',
+      interrupted: true,
+      prompt: 'Finished work',
+      paneSleep: { ptyId: 'pty-1' }
+    })
+    expect(emitted.mock.calls.filter(([row]) => !row.isReplay)).toHaveLength(0)
+  }
+)
+
+it.each(['claude', 'codex'] as const)(
+  'keeps a %s that never had a turn through sleep',
+  async (agent) => {
+    if (agent === 'claude') {
+      await agentHook(agent, 'SessionStart', 4001, 'startup')
+    } else {
+      server.recordLaunchResumeIdentity({
+        paneKey: PANE,
+        worktreeId: 'wt-1',
+        agentType: agent,
+        providerSession: { key: 'session_id', id: `${agent}-session` },
+        launchedAt: Date.now()
+      })
+    }
+    await sleepPane(agent, 'pty-1', 4001)
+    expect(server.paneAgentIdentity(PANE)).toMatchObject({
+      status: { agentType: agent, state: 'done', paneSleep: { ptyId: 'pty-1' } },
+      ended: false
+    })
   }
 )
 

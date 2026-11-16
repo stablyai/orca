@@ -29,15 +29,16 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
     const previous = this.state.lastStatusByPaneKey.get(paneKey)
     if (
       previous &&
-      (previous.providerSessionOnly === true
-        ? agentProviderSessionsEqual(
-            event.agentType,
-            previous.providerSession,
-            event.providerSession
-          )
-        : 'receivedAt' in previous &&
+      ((previous.payload.agentType === event.agentType &&
+        agentProviderSessionsEqual(
+          event.agentType,
+          previous.providerSession,
+          event.providerSession
+        )) ||
+        (previous.providerSessionOnly !== true &&
+          'receivedAt' in previous &&
           typeof previous.receivedAt === 'number' &&
-          previous.receivedAt >= event.launchedAt)
+          previous.receivedAt >= event.launchedAt))
     ) {
       return
     }
@@ -199,7 +200,7 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
         ? this.programStatusFacets.noteState(paneKey, payload, now)
         : undefined
     if (event.removesProgramStatusRow === true) {
-      if (this.preservesStoppingDone(paneKey)) {
+      if (this.preservesStoppingAgent(paneKey)) {
         return
       }
       this.hookSilenceRechecks.cancel(paneKey)

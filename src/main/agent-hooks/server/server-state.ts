@@ -43,9 +43,13 @@ import type {
 } from './server-types'
 import { RevisionedMap } from './revisioned-map'
 import { forgetAgentExit, type AgentExitEvidence } from './agent-exit-evidence'
+import { paneAgentIdentity, type PaneAgentIdentity } from './pane-agent-identity'
+import { toAgentStatusIpcPayload } from './server-status-identity'
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 
 export abstract class AgentHookServerState extends AgentHookServerStateContract {
   protected terminalPaneLifecycle: {
+    readSavedRecord?(paneKey: string): SleepingAgentSessionRecord | undefined
     ownsProcess(paneKey: string, ptyId: string, incarnationId?: string): boolean
     isStopping(paneKey: string): boolean
     isReversibleStop(ptyId: string, incarnationId?: string): boolean
@@ -58,15 +62,41 @@ export abstract class AgentHookServerState extends AgentHookServerStateContract 
     this.terminalPaneLifecycle = lifecycle
   }
 
-  protected preservesStoppingDone(paneKey: string): boolean {
-    const row = this.state.lastStatusByPaneKey.get(paneKey) as
+  /** Which agent conversation this pane holds; see paneAgentIdentity. */
+  paneAgentIdentity(
+    paneKey: string,
+    savedRecord?: SleepingAgentSessionRecord,
+    worktreeId = savedRecord?.worktreeId
+  ): PaneAgentIdentity | null {
+    const resolved = this.resolvePaneKeyAlias(paneKey)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this server stores enriched accepted rows in the listener's base-typed cache.
+    const row = this.state.lastStatusByPaneKey.get(resolved) as
       | EnrichedAgentHookEventPayload
       | undefined
+    if (!row) {
+      savedRecord ??= this.terminalPaneLifecycle?.readSavedRecord?.(resolved)
+    }
+    worktreeId ??= savedRecord?.worktreeId
+    const exit =
+      this.agentExitedAtByPaneKey.get(resolved) ?? this.agentExitedAtByPaneKey.get(paneKey)
+    return paneAgentIdentity({
+      paneKey: resolved,
+      ...(row ? { row: toAgentStatusIpcPayload(row) } : {}),
+      ...(savedRecord ? { savedRecord } : {}),
+      ...(worktreeId ? { worktreeId } : {}),
+      ...(exit ? { exitedAt: exit.at } : {}),
+      ended: row?.agentPresence?.ended === true
+    })
+  }
+
+  /** A stopping pane's agent keeps its row for the sleep gate, whatever shape it rests in. */
+  protected preservesStoppingAgent(paneKey: string): boolean {
+    const identity = this.paneAgentIdentity(paneKey)
     return (
-      row?.payload.state === 'done' &&
-      row.payload.sessionBoundary !== true &&
-      row.providerSessionOnly !== true &&
-      (row.paneSleep !== undefined || this.terminalPaneLifecycle?.isStopping(paneKey) === true)
+      identity !== null &&
+      !identity.ended &&
+      (identity.status.paneSleep !== undefined ||
+        this.terminalPaneLifecycle?.isStopping(paneKey) === true)
     )
   }
   protected canWriteLegacyStatusRow(entry: AgentHookEventPayload): boolean {

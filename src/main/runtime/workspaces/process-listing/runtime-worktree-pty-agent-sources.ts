@@ -1,3 +1,4 @@
+import { paneAgentIdentity } from '../../../agent-hooks/server/pane-agent-identity'
 import {
   pickParsedAgentStatusPayload,
   type ParsedAgentStatusPayload
@@ -49,8 +50,12 @@ export function collectRuntimeWorktreePtyAgentSources(args: {
     string,
     RuntimeWorktreeAgentSource & { payload: ParsedAgentStatusPayload }
   >()
-  for (const entry of args.hookSnapshots) {
-    if (entry.restoredUnconfirmed === true || entry.providerSessionOnly === true) {
+  for (const source of args.hookSnapshots) {
+    const identity = source.structuredHost
+      ? null
+      : paneAgentIdentity({ paneKey: source.paneKey, row: source })
+    const entry = source.structuredHost ? source : identity?.status
+    if (!entry || identity?.ended || entry.restoredUnconfirmed === true) {
       continue
     }
     const hookPayload = pickParsedAgentStatusPayload(entry)

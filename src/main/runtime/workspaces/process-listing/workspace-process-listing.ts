@@ -132,7 +132,17 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
     const rowSources = collectRuntimeWorktreeAgentSources({
       mirroredWorktreeIdByTabId,
       connectedPtyEvidence,
-      hookSnapshots: this.getAgentStatusSnapshotFn?.() ?? [],
+      hookSnapshots: (
+        this.getAgentProviderSessionSnapshotFn?.() ??
+        this.getAgentStatusSnapshotFn?.() ??
+        []
+      ).flatMap((row) => {
+        if (row.structuredHost) {
+          return [row]
+        }
+        const identity = this.readPaneAgentIdentity(row.paneKey, undefined, row)
+        return identity && !identity.ended ? [identity.status] : []
+      }),
       readStructuredSummary: getStructuredAgentSessionHost()?.readStatusSummary
     })
     attachRuntimeWorktreeAgentRows({

@@ -16,8 +16,15 @@ export function agentHookRuntimeDeps(
     onTerminalProgramStatusFacet: (event) => server.ingestProgramStatusFacet(event),
     onClaudeTerminalEvidence: (paneKey, evidence) =>
       server.observeClaudeTerminalEvidence(paneKey, evidence),
+    getPaneAgentIdentity: (paneKey, savedRecord) => server.paneAgentIdentity(paneKey, savedRecord),
     getAgentStatusSnapshot: () =>
-      server.getStatusSnapshot().filter((entry) => entry.providerSessionOnly !== true),
+      server.getStatusSnapshot().flatMap((row) => {
+        if (row.structuredHost) {
+          return [row]
+        }
+        const identity = server.paneAgentIdentity(row.paneKey)
+        return identity && !identity.ended ? [identity.status] : []
+      }),
     getAgentStatusSnapshotForPane: (paneKey) => server.getStatusSnapshotForPane(paneKey),
     getPublicAgentStatusSnapshotForPane: (paneKey: string, terminalHandle?: string | null) =>
       server.getPublicStatusSnapshotForPane(paneKey, terminalHandle),

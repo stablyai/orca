@@ -120,7 +120,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerPaneSleep {
     let cleared = 0
     for (const paneKey of paneKeys) {
       const resolvedPaneKey = this.resolvePaneKeyAlias(paneKey)
-      if (this.preservesStoppingDone(resolvedPaneKey)) {
+      if (this.preservesStoppingAgent(resolvedPaneKey)) {
         untouched.push(resolvedPaneKey)
         continue
       }
