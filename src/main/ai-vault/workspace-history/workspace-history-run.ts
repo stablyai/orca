@@ -175,24 +175,15 @@ export async function runWorkspaceHistory(
     }
     await yieldToEventLoop()
     throwIfAiVaultScanCancelled(signal)
-    const sessionIds: string[] = []
-    for (const [sessionId, session] of rows) {
-      if (await ownsNow(session)) {
-        sessionIds.push(sessionId)
-      } else {
-        result.failed++
-      }
-    }
-    if (sessionIds.length === 0) {
-      continue
-    }
     const outcome = await deleteWorkspaceHistorySqliteSessions(
       dbPath,
-      sessionIds,
+      [...rows.keys()],
       request.inUseSince,
+      (sessionId) => ownsNow(rows.get(sessionId)!),
       signal
     )
     result.inUse += outcome.busy.length
+    result.failed += outcome.kept.length
     for (const sessionId of outcome.deleted) {
       const rowPath = buildOpenCodeSqliteCandidatePath(dbPath, sessionId)
       result.deleted++

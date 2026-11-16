@@ -4,7 +4,8 @@ import { yieldToEventLoop } from '../../../shared/concurrency/event-loop-yield'
 import { throwIfAiVaultScanCancelled } from '../scan-lifecycle/ai-vault-scan-cancellation'
 import { OPENCODE_SQLITE_BUSY_TIMEOUT_MS } from '../scanners/opencode/sqlite/session-scanner-opencode-sqlite-open'
 
-export type WorkspaceHistorySqliteOutcome = { deleted: string[]; busy: string[] }
+/** kept: sessions whose ownership no longer held when their turn came. */
+export type WorkspaceHistorySqliteOutcome = { deleted: string[]; busy: string[]; kept: string[] }
 
 // OpenCode, OpenCode 2 and ZCode keep sessions as rows; the session tables are the ones scanners read.
 const SESSION_TABLES = ['session', 'session_v2'] as const
@@ -14,18 +15,19 @@ export async function deleteWorkspaceHistorySqliteSessions(
   dbPath: string,
   sessionIds: readonly string[],
   inUseSince: number,
+  owns: (sessionId: string) => Promise<boolean>,
   signal: AbortSignal
 ): Promise<WorkspaceHistorySqliteOutcome> {
   // WSL-share locks are unreliable, so a write there could race the agent inside the distro.
   if (isWslUncPath(dbPath) || sessionIds.length === 0) {
-    return { deleted: [], busy: [...sessionIds] }
+    return { deleted: [], busy: [...sessionIds], kept: [] }
   }
   let db: SyncDatabase
   let plan: SessionRowPlan
   try {
     db = new SyncDatabase(dbPath, { fileMustExist: true, timeout: OPENCODE_SQLITE_BUSY_TIMEOUT_MS })
   } catch {
-    return { deleted: [], busy: [...sessionIds] }
+    return { deleted: [], busy: [...sessionIds], kept: [] }
   }
   try {
     // Explicit per-table deletes; cascades would reach child sessions nobody checked.
@@ -33,13 +35,18 @@ export async function deleteWorkspaceHistorySqliteSessions(
     plan = sessionRowPlan(db)
   } catch {
     db.close()
-    return { deleted: [], busy: [...sessionIds] }
+    return { deleted: [], busy: [...sessionIds], kept: [] }
   }
-  const outcome: WorkspaceHistorySqliteOutcome = { deleted: [], busy: [] }
+  const outcome: WorkspaceHistorySqliteOutcome = { deleted: [], busy: [], kept: [] }
   try {
     for (const [index, sessionId] of sessionIds.entries()) {
       await yieldToEventLoop()
       throwIfAiVaultScanCancelled(signal)
+      // A long batch outlives the earlier proof: the workspace folder can come back meanwhile.
+      if (!(await owns(sessionId))) {
+        outcome.kept.push(sessionId)
+        continue
+      }
       try {
         db.exec('BEGIN IMMEDIATE')
       } catch {

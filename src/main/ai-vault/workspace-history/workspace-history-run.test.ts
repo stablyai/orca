@@ -151,7 +151,11 @@ describe('runWorkspaceHistory', () => {
   ])('deletes an OpenCode session whose path %s', async (_name, folder, rowSuffix) => {
     const dbPath = join(root, folder, 'opencode.db')
     const workspace = join(root, 'workspaces', 'gone')
-    deleteWorkspaceHistorySqliteSessions.mockResolvedValue({ deleted: ['ses_1'], busy: [] })
+    deleteWorkspaceHistorySqliteSessions.mockResolvedValue({
+      deleted: ['ses_1'],
+      busy: [],
+      kept: []
+    })
     scanAiVaultSessions.mockResolvedValue({
       sessions: [
         {
@@ -178,6 +182,7 @@ describe('runWorkspaceHistory', () => {
       dbPath,
       ['ses_1'],
       Date.parse('2026-11-10T00:00:00.000Z'),
+      expect.any(Function),
       expect.anything()
     )
     expect(result).toMatchObject({ deleted: 1, failed: 0 })
