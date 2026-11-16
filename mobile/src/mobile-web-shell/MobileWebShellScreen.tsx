@@ -4,55 +4,66 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation, useNavigationContainerRef, useRouter } from 'expo-router'
 import {
   clearRetainedNativeWebShellSlot,
-  OrcaMobileWebShellView,
-  parseMobileWebShellLoadState
-} from '../../modules/orca-mobile-web-shell/src'
+  OrcaMobileWebShellView
+} from '../../modules/orca-mobile-web-shell/src/index'
+import { parseMobileWebShellLoadState } from '../../modules/orca-mobile-web-shell/src/load-state'
 import { registerRetainedNativeWebShellClearer } from './retained-shell-session-store'
-import { HostRouteNoticeBanner } from '../components/HostRouteNoticeBanner'
+import { HostRouteNoticeBanner } from '../components/host-connection/HostRouteNoticeBanner'
 import { colors } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileUiLocale } from '../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import type { BridgeInitRoute } from './bridge/bridge-envelope'
-import type { BridgeClearableRouteParam } from './bridge/bridge-route-update'
-import type { MobileWebShellUpdateNotice } from './mobile-web-shell-session-contract'
-import { useMobileWebShellDroppedFrames } from './mobile-web-shell-dev-facts'
-import { ShellDevFacts } from './ShellDevFacts'
-import { cancelledShellNavigationTarget } from './cancelled-navigation-target'
-import { playPageHaptic } from './page-haptics'
-import { useMobileWebShellBridge } from './use-mobile-web-shell-bridge'
-import type { MobileWebShellRuntime } from './mobile-web-shell-runtime'
-import { useKeyboardOcclusion } from '../platform/keyboard-occlusion'
+import type { BridgeInitRoute } from './bridge/protocol/bridge-init-route'
+import type { BridgeClearableRouteParam } from './bridge/page-lifecycle/bridge-route-update'
+import type { MobileWebShellUpdateNotice } from './session/mobile-web-shell-session-contract'
+import { useMobileWebShellDroppedFrames } from './diagnostics/mobile-web-shell-dev-facts'
+import { ShellDevFacts } from './presentation/ShellDevFacts'
+import { cancelledShellNavigationTarget } from './routing/cancelled-navigation-target'
+import { playPageHaptic } from './native-capabilities/page-haptics'
+import { useMobileWebShellBridge } from './page-document/use-mobile-web-shell-bridge'
+import type { MobileWebShellRuntime } from './session/mobile-web-shell-runtime'
+import { useKeyboardOcclusion } from '../platform/keyboard/keyboard-occlusion'
 import { useNativeDeviceVerbs } from '../platform/use-native-device-verbs'
-import { useNativePdfViewer } from '../platform/native-pdf-view'
-import { useNativeImageActions } from '../platform/native-image-actions'
+import { useNativePdfViewer } from '../platform/pdf-viewing/native-pdf-view'
+import { useNativeImageActions } from '../platform/image-actions/native-image-actions'
 import { processDeviceStore } from '../device-store/device-store'
-import { serveDeviceStoreVerb } from './device-store-verb-server'
-import { BRIDGE_STORE_VERB } from './bridge/bridge-store-verb'
-import { useShellPageBack } from './use-shell-page-back'
-import { useShellStackPop } from './use-shell-stack-pop'
-import { usePageLocationOnFold } from './page-location-on-fold'
-import { usePageOpenTarget } from './page-open-target'
-import { useMobileWebShellSession } from './use-mobile-web-shell-session'
-import { useShellPageStorageRefresh } from './use-shell-page-storage-refresh'
-import { usePageHostSnapshot } from './use-page-host-snapshot'
-import { useReportedHostAreaServing } from './host-area-serving'
-import { isHostRouteOf } from './page-route-policy'
-import { nativeStackReturn } from './native-stack-return'
+import { serveDeviceStoreVerb } from './native-capabilities/device-store-verb-server'
+import { BRIDGE_STORE_VERB } from './bridge/native-capabilities/bridge-store-verb'
+import { useAppLeavesForeground } from './session/use-app-leaves-foreground'
+import { useShellPageBack } from './routing/use-shell-page-back'
+import { useShellStackPop } from './routing/use-shell-stack-pop'
+import { usePageLocationOnFold } from './page-geometry/page-location-on-fold'
+import { usePageOpenTarget } from './routing/page-open-target'
+import { useMobileWebShellSession } from './session/use-mobile-web-shell-session'
+import { useShellPageStorageRefresh } from './page-storage/use-shell-page-storage-refresh'
+import { usePageHostSnapshot } from './host-gates/use-page-host-snapshot'
+import { useReportedHostAreaServing } from './host-gates/host-area-serving'
+import { isHostRouteOf } from './routing/page-route-policy'
+import { isStandaloneSessionHref } from '../navigation/host-stack-navigation'
+import { hrefQuery, nativeSessionReturn, nativeStackReturn } from './routing/native-stack-return'
 import { useResponsiveLayout } from '../layout/responsive-layout'
-import { storageReadParamsSchema, type BridgeNativeVerb } from './bridge/bridge-native-verbs'
+import {
+  storageReadParamsSchema,
+  type BridgeNativeVerb
+} from './bridge/native-capabilities/bridge-native-verbs'
 import {
   SHELL_HOST_OPENING_LABEL,
   SHELL_OPENING_LABEL,
   ShellPageCover
-} from './ShellWaitingFrame'
-import { ShellStateScreen } from './ShellStateScreen'
-import { useReportedShellOverlayLoad, type ShellOverlayLoad } from './shell-overlay-load'
-import { pageSafeAreaInsets, usePublishedSafeAreaInsets } from './page-safe-area-insets'
-import { usePageFoldDivision, usePublishedFoldDivision } from './page-fold-division'
-import { usePublishedShellKeyRail, useShellKeyRail } from './use-shell-key-rail'
-import { hostProfileUnreadableLine, pageFaultLine } from './shell-lifecycle-log'
-import { recordShellLifecycleLine } from './shell-lifecycle-line-recorder'
+} from './presentation/ShellWaitingFrame'
+import { ShellStateScreen } from './presentation/ShellStateScreen'
+import {
+  useReportedShellOverlayLoad,
+  type ShellOverlayLoad
+} from './presentation/shell-overlay-load'
+import {
+  pageSafeAreaInsets,
+  usePublishedSafeAreaInsets
+} from './page-geometry/page-safe-area-insets'
+import { usePageFoldDivision, usePublishedFoldDivision } from './page-geometry/page-fold-division'
+import { usePublishedShellKeyRail, useShellKeyRail } from './terminal-controls/use-shell-key-rail'
+import { hostProfileUnreadableLine, pageFaultLine } from './diagnostics/shell-lifecycle-log'
+import { recordShellLifecycleLine } from './diagnostics/shell-lifecycle-line-recorder'
 
 registerRetainedNativeWebShellClearer(clearRetainedNativeWebShellSlot)
 
@@ -177,6 +188,22 @@ export function MobileWebShellScreen({
     }
     // Return to an existing screen rather than pushing a duplicate over the live one.
     const rootState = navigationContainer.getRootState()
+    // A pane request goes to the session's existing entry, whose spent paneKey no longer equals the href's.
+    const paneKey = hrefQuery(href).get('paneKey')
+    const session = rootState && paneKey ? nativeSessionReturn(rootState, href) : null
+    if (session && paneKey) {
+      const { target, source, count, routeKey } = session
+      if (count > 0) {
+        navigation.dispatch({ type: 'POP', payload: { count }, target, source })
+      }
+      navigation.dispatch({
+        type: 'SET_PARAMS',
+        target,
+        source: routeKey,
+        payload: { params: { paneKey } }
+      })
+      return
+    }
     const onStack = rootState ? nativeStackReturn(rootState, href) : null
     if (onStack === 'current') {
       return
@@ -195,7 +222,10 @@ export function MobileWebShellScreen({
       router.dismissTo(href)
       return
     }
-    return void (replace ? router.replace(href) : router.push(href))
+    // A standalone session takes the host list's place, so Back leaves the host.
+    return void (replace || isStandaloneSessionHref(href)
+      ? router.replace(href)
+      : router.push(href))
   }
   const openTarget = usePageOpenTarget({
     route,
@@ -271,6 +301,7 @@ export function MobileWebShellScreen({
     // The stream survives dropped frames; keep a count because diagnostics print only once per host.
     onBinaryFramesDropped: reportDroppedBinaryFrames
   })
+  useAppLeavesForeground(bridge.sendAppInactive)
 
   // paneKey changes keep the session mounted; the host deduplicates routes and preserves in-flight frames.
   useShellPageStorageRefresh(refreshStorage, bridge.publishStorage)

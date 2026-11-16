@@ -3,7 +3,7 @@ import type {
   ClaudeUsageDailyPoint,
   ClaudeUsageSessionRow,
   ClaudeUsageSummary
-} from '../../../../shared/claude-usage-types'
+} from '../../../../shared/agent-usage/analytics/claude-usage-types'
 import { ClaudeUsageDailyChart } from './ClaudeUsageDailyChart'
 import { UsageBreakdownSection } from './UsageBreakdownSection'
 import { UsageRecentSessionsTable } from './UsageRecentSessionsTable'

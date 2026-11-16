@@ -1,4 +1,4 @@
-import { isCompletePRCheckOwner } from '../../../../../../shared/github/complete-pr-check-owner'
+import { isCompletePRCheckOwner } from '../../../../../../shared/github/checks/complete-pr-check-owner'
 import React from 'react'
 import {
   AlertTriangle,
@@ -10,14 +10,14 @@ import {
   Sparkles
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import type { PRCheckDetail } from '../../../../../../shared/github/check-types'
+import type { PRCheckDetail } from '../../../../../../shared/github/checks/check-types'
 import type { ConflictReview } from './conflict-summary'
 import {
   summarizeProviderChecks,
   getProviderChecksOutcome
 } from '../../../../../../shared/source-control/checks/provider-check-summary'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { CHECK_COLOR } from './check-presentation'
 import {
   getBrokenChecks,

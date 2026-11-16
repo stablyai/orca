@@ -1,16 +1,12 @@
-import { isAgentSessionInteractionMode } from '../../../../shared/agent-session/options/agent-session-interaction-mode'
-import {
-  structuredAgentSessionRuntimeModel,
-  structuredAgentSessionRuntimePermission
-} from '../options/structured-agent-session-ran-options'
-import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { isAgentSessionInteractionMode } from '../../../../shared/agent-session/options/permissions/agent-session-interaction-mode'
+import { structuredAgentSessionRuntimePermission } from '../options/structured-agent-session-ran-options'
+import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
 import {
   normalizeOptionalField,
   AGENT_MODEL_MAX_LENGTH
 } from '../../../../shared/agent-status/contracts/agent-status-field-normalization'
 
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import type { StructuredAgentSessionStatusState } from './structured-agent-session-status-journal-projection'
 import type {
   StructuredAgentSessionProviderChild,
@@ -29,7 +25,7 @@ import { structuredAgentRuntimeMetadata } from '../../../runtime/agent-session/i
 export function structuredAgentSessionStatusSummary({
   sessionId,
   session,
-  journal,
+  lastActivityAt,
   record,
   state,
   stopping,
@@ -48,7 +44,7 @@ export function structuredAgentSessionStatusSummary({
     child?: StructuredAgentSessionProviderChild | null
     restartResume?: AgentSessionStatusSummary['restartResume']
   }
-  journal: AgentSessionJournal
+  lastActivityAt: number
   record: AgentSessionConversationView | null
   state: StructuredAgentSessionStatusState
   starting?: boolean
@@ -89,10 +85,10 @@ export function structuredAgentSessionStatusSummary({
       ? { rewindBlockedReason: 'outcome-unknown' as const }
       : {}),
     ...(model ? { model } : {}),
-    ...(session.params.provider === 'claude' && session.child
-      ? { reportedModel: structuredAgentSessionRuntimeModel(session.child) }
-      : {}),
     ...(isAgentChatPermissionMode(permissionMode) ? { permissionMode } : {}),
+    ...(session.child?.permissionMode
+      ? { launchPermissionMode: session.child.permissionMode }
+      : {}),
     ...(effort ? { effort } : {}),
     ...(fastMode ? { fastMode } : {}),
     ...(serviceTier ? { serviceTier } : {}),
@@ -103,7 +99,7 @@ export function structuredAgentSessionStatusSummary({
     ...structuredSummaryHostProgram(record),
     ...structuredSummaryConversationNaming(record, namingFailure),
     ...(typeof record?.sleptAt === 'number' ? { sleptAt: record.sleptAt } : {}),
-    updatedAt: journal.lastActivityAt() || now()
+    updatedAt: lastActivityAt || now()
   }
 }
 
@@ -119,25 +115,44 @@ export function structuredSummaryHostProgram(
     : {}
 }
 
-/** The record's name, and the failure to replace it only while that is still the name. */
+type StructuredSummaryNaming = Pick<
+  AgentSessionStatusSummary,
+  'conversationName' | 'namingError' | 'conversationNameSource' | 'forkedFrom'
+>
+
+/** The record's name, its provenance, and the failure to replace it only while that is still the
+ *  name. `forkedFrom` is always present for a record, so clients read the frame as authoritative. */
 export function structuredSummaryConversationNaming(
   record: AgentSessionConversationView | null,
   failure: StructuredChatNamingFailure | undefined
-): Pick<AgentSessionStatusSummary, 'conversationName' | 'namingError'> {
-  const name = record?.conversationName
-  if (!name) {
+): StructuredSummaryNaming {
+  if (!record) {
     return {}
+  }
+  const name = record.conversationName
+  const provenance: StructuredSummaryNaming = {
+    forkedFrom: record.forkedFrom
+      ? {
+          sessionId: record.forkedFrom.sessionId,
+          ...(record.forkedFrom.plainName ? { plainName: true as const } : {})
+        }
+      : null,
+    ...(record.conversationNameSource === 'user' ? { conversationNameSource: 'user' as const } : {})
+  }
+  if (!name) {
+    return provenance
   }
   return failure?.forName === name
     ? {
         conversationName: name,
+        ...provenance,
         namingError: {
           message: failure.message,
           failedAt: failure.failedAt,
           ...(failure.messageCode ? { messageCode: failure.messageCode } : {})
         }
       }
-    : { conversationName: name }
+    : { conversationName: name, ...provenance }
 }
 
 export function renamedStructuredStatusSummary(
@@ -146,7 +161,14 @@ export function renamedStructuredStatusSummary(
   sessionId: string
 ): AgentSessionStatusSummary | null {
   const record = deps.getConversation(sessionId)
-  const { conversationName: _name, namingError: _error, sleptAt: _sleptAt, ...rest } = previous
+  const {
+    conversationName: _name,
+    namingError: _error,
+    conversationNameSource: _source,
+    forkedFrom: _forkedFrom,
+    sleptAt: _sleptAt,
+    ...rest
+  } = previous
   const summary = {
     ...rest,
     ...structuredSummaryConversationNaming(record, deps.namingFailure?.(sessionId)),

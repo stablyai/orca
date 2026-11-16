@@ -1,14 +1,14 @@
 import { posix as pathPosix, win32 as pathWin32 } from 'node:path'
-import { skillFileMaxDepth } from '../../../shared/skill-discovery-depth'
+import { skillFileMaxDepth } from '../../../shared/skills/discovery/skill-discovery-depth'
 import type {
   SkillDeleteBlockReason,
   SkillDeletePlacement
-} from '../../../shared/skill-delete-contract'
+} from '../../../shared/skills/deletion/skill-delete-contract'
 import {
   skillPathDepthBelow,
   skillPathsEqual,
   type SkillPathSemantics
-} from '../../../shared/skill-path-containment'
+} from '../../../shared/skills/paths/skill-path-containment'
 import type { SkillScanRoot } from '../discovery/skill-discovery-sources'
 import type { SkillPlacementCandidate } from './skill-delete-placement-enumeration'
 

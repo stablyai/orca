@@ -2,12 +2,12 @@ import { Loader2, RefreshCw } from 'lucide-react'
 import type React from 'react'
 import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import type { EphemeralVmRuntimeRecord } from '../../../../../../shared/ephemeral-vm-runtimes'
-import { EPHEMERAL_VM_CLEANUP_STOPPED_ERROR } from '../../../../../../shared/ephemeral-vm-recipe-destroy-result'
+import type { EphemeralVmRuntimeRecord } from '../../../../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
+import { EPHEMERAL_VM_CLEANUP_STOPPED_ERROR } from '../../../../../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-destroy-result'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { ephemeralVmCleanupErrorText } from '@/lib/ephemeral-vm-error-copy'
+import { ephemeralVmCleanupErrorText } from '@/runtime/ephemeral-vm/ephemeral-vm-error-copy'
 import { Button } from '../../../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
 import { EphemeralVmCleanupStopDialog } from './EphemeralVmCleanupStopDialog'
@@ -304,8 +304,8 @@ export function EphemeralVmRuntimesSection(): React.JSX.Element | null {
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={4}>
                 {t(
-                  'auto.components.settings.EphemeralVmRuntimesSection.cloudVmRefreshLabel',
-                  'Refresh Cloud VMs'
+                  'auto.components.settings.EphemeralVmRuntimesSection.cca21fb369',
+                  'Refresh cloud VMs'
                 )}
               </TooltipContent>
             </Tooltip>

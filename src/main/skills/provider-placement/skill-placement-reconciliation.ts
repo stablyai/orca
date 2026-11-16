@@ -2,7 +2,7 @@ import { createNativeSkillAlias } from '../filesystem/skill-native-alias'
 
 import { lstat, realpath } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
-import type { SkillPlacementResult } from '../../../shared/skill-install-contract'
+import type { SkillPlacementResult } from '../../../shared/skills/installation/skill-install-contract'
 import type { SkillInstallReceiptV1 } from '../transaction-state/skill-install-provenance'
 import type { SkillProviderDestination } from '../providers/skill-provider-destinations'
 import {

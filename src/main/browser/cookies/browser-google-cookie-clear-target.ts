@@ -1,8 +1,8 @@
 import type {
   BrowserCookieImportResult,
   BrowserSessionProfile
-} from '../../../shared/browser-workspace-types'
-import type { GoogleCookieClearLocalTarget } from '../../../shared/browser-google-cookie-clear'
+} from '../../../shared/browser/workspaces/browser-workspace-types'
+import type { GoogleCookieClearLocalTarget } from '../../../shared/browser/cookies/browser-google-cookie-clear'
 import { bindRoutePartition } from './client-route/browser-client-route-cookie-import'
 import { browserSessionRegistry } from '../sessions/profiles/browser-session-registry'
 import { getPairedRuntimeBrowserClientRouteIdentity } from '../client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'

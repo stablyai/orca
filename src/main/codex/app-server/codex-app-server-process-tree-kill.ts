@@ -1,5 +1,6 @@
 import { spawnProcess } from '@orca/process-host'
-import type { ChildProcessHandle, ProcessSpec } from '@orca/process-host/process-spec'
+import type { ChildProcess } from 'node:child_process'
+import type { ProcessSpec } from '@orca/process-host/process-spec'
 import { admitProcessTreeKill } from '@orca/process-host/process-tree-kill-gate'
 
 /** Spawn seam for tests; production always goes through the hardened spawnProcess wrapper. */
@@ -7,13 +8,13 @@ export type CodexAppServerSpawn = (
   program: string,
   args: string[],
   options: Record<string, unknown>
-) => ChildProcessHandle
+) => ChildProcess
 
 export const spawnCodexAppServerProcess: CodexAppServerSpawn = (program, args, options) =>
   spawnProcess({ program, args, ...options } as ProcessSpec)
 
 export function killCodexAppServerProcessTree(
-  child: Pick<ChildProcessHandle, 'pid' | 'kill'>,
+  child: Pick<ChildProcess, 'pid' | 'kill'>,
   options: { platform?: NodeJS.Platform; spawnImpl?: CodexAppServerSpawn } = {}
 ): void {
   const platform = options.platform ?? process.platform

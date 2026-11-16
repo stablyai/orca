@@ -5,8 +5,8 @@ import { shouldResetFileExplorerForVisibleWorktree } from '../navigation/file-ex
 import { decideExpandedDirLoad } from '../watching/file-explorer-stale-dir-cache'
 import { clearFileExplorerUndoHistory } from '../mutations/fileExplorerUndoRedo'
 import type { DirCache } from './file-explorer-types'
-import { splitPathSegments } from '../../../../../../shared/cross-platform-path'
-import { takeRecentWorkspaceSwitchWake } from '@/lib/workspace-switch-user-act'
+import { splitPathSegments } from '../../../../../../shared/file-access/cross-platform-path'
+import { takeRecentWorkspaceSwitchWake } from '@/lib/workspace/activation/workspace-switch-user-act'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { subscribeRuntimeHostContactRegained } from '@/runtime/hosts/connections/runtime-host-contact-regained'
 

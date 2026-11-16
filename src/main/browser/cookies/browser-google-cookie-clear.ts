@@ -1,7 +1,7 @@
 import { BrowserError } from '../browser-error'
 import { browserSessionRegistry } from '../sessions/profiles/browser-session-registry'
 import { session, type Cookies } from 'electron'
-import type { GoogleCookieClearResult } from '../../../shared/browser-google-cookie-clear'
+import type { GoogleCookieClearResult } from '../../../shared/browser/cookies/browser-google-cookie-clear'
 import { withCookieMutationLock } from './mutation/cookie-mutation-lock'
 import { cookieRemovalUrl } from './storage/cookie-removal-url'
 import { isNonTransplantableCookieDomain } from './policy/cookie-import-exclusions'

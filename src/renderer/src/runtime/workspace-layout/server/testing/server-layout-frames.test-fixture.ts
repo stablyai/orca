@@ -5,17 +5,17 @@ import type { RuntimeEnvironmentStatus } from '../../../../../../shared/remote-r
 import type {
   RuntimeMobileSessionTabsResult,
   RuntimeStatus
-} from '../../../../../../shared/runtime-session-contracts'
+} from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import {
   LAYOUT_INTENTS_RUNTIME_CAPABILITY,
   LAYOUT_REOPEN_HELD_PANES_CAPABILITY
-} from '../../../../../../shared/workspace-layout/layout-intents-capability'
+} from '../../../../../../shared/workspace-layout/published-layout/layout-intents-capability'
 import type {
   PublishedTab,
   PublishedWorkspaceLayout
-} from '../../../../../../shared/workspace-layout/workspace-layout-published'
-import type { WorkspaceLayoutChangeFrame } from '../../../../../../shared/workspace-layout/workspace-layout-stream-frames'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+} from '../../../../../../shared/workspace-layout/published-layout/workspace-layout-published'
+import type { WorkspaceLayoutChangeFrame } from '../../../../../../shared/workspace-layout/published-layout/workspace-layout-stream-frames'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import type { AppState } from '@/store/types'
 import type { RuntimeLayoutStreamStatus } from '../../frames/runtime-layout-client'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'

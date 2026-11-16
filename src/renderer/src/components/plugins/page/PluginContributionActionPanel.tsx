@@ -1,4 +1,4 @@
-import type { PluginHostPanel } from '../../../../../preload/api-types'
+import type { PluginHostPanel } from '../../../../../shared/plugins/plugin-list-entry'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { Button } from '../../ui/button'

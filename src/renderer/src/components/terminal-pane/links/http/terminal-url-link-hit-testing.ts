@@ -10,7 +10,7 @@ import {
 } from '../gestures/terminal-link-pty-mouse-suppression'
 import { getTerminalBufferPositionForMouseEvent } from '../../input/pointer/terminal-mouse-buffer-position'
 import { findTerminalHttpLinkAtBufferPosition } from '../../../../../../shared/terminal/links/terminal-link-buffer-hit-testing'
-import { isTerminalLinkifierHoverActive } from '@/lib/pane-manager/terminal-linkifier-hover-reset'
+import { isTerminalLinkifierHoverActive } from '@/lib/pane-manager/terminal-input/terminal-linkifier-hover-reset'
 import {
   buildHttpLinkActions,
   httpLinkDirectClickDestination,
@@ -120,20 +120,23 @@ export function findHttpLinkAtTerminalMouseEvent(
     : null
 }
 
+export function isTerminalLinkAtMouseEvent(terminal: Terminal, event: MouseEvent): boolean {
+  if (isTerminalLinkifierHoverActive(terminal)) {
+    return true
+  }
+  const position = getTerminalBufferPositionForMouseEvent(terminal, event)
+  return Boolean(
+    position &&
+    findTerminalHttpLinkAtBufferPosition(terminal.buffer.active, position, terminal.cols)
+  )
+}
+
 export function installHttpLinkClickFallback(
   terminal: Terminal,
   deps: UrlLinkClickFallbackDeps
 ): HttpLinkClickFallbackBinding {
-  const isLinkMouseEvent = (event: MouseEvent): boolean => {
-    if (isTerminalLinkifierHoverActive(terminal)) {
-      return true
-    }
-    const position = getTerminalBufferPositionForMouseEvent(terminal, event)
-    return Boolean(
-      position &&
-      findTerminalHttpLinkAtBufferPosition(terminal.buffer.active, position, terminal.cols)
-    )
-  }
+  const isLinkMouseEvent = (event: MouseEvent): boolean =>
+    isTerminalLinkAtMouseEvent(terminal, event)
   const ptyMouseSuppression = installTerminalLinkPtyMouseSuppression(
     terminal,
     isLinkMouseEvent,

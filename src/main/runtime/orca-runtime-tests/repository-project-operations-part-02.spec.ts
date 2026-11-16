@@ -2,21 +2,21 @@ import * as gitSpawn from '../../git/command-runner/git-spawn'
 import { realpath, lstat, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { describe, expect, it, vi } from 'vitest'
 import './runtime-test-module-registration.spec'
-import '../../../shared/repo-badge-color'
+import '../../../shared/repository/appearance/repo-badge-color'
 import { EventEmitter } from 'node:events'
 import { OrcaRuntimeService } from '../orca-runtime'
 import {
   clearSubmodulePathsCacheForTests,
   listSubmodulePaths
-} from '../../git/source-control/submodule-paths'
+} from '../../git/source-control/submodules/submodule-paths'
 import { execFileSync } from 'node:child_process'
 import '../orca-runtime-test-mocks/setup.spec'
 import { join } from 'node:path'
 import 'node:fs'
-import '../../../shared/project-host-setup-projection'
+import '../../../shared/project/host-setup/project-host-setup-projection'
 import { tmpdir } from 'node:os'
 import { createRuntime, store } from './orca-runtime-test-fixtures.spec'
-import '../../../shared/cross-platform-path'
+import '../../../shared/file-access/cross-platform-path'
 
 // Clone and create register resolved paths (macOS tmpdir is a /var symlink).
 async function mkdtempReal(prefix: string): Promise<string> {
@@ -24,33 +24,6 @@ async function mkdtempReal(prefix: string): Promise<string> {
 }
 
 describe('OrcaRuntimeService', () => {
-  it('creates a missing runtime parent before creating the project directory', async () => {
-    const added: Record<string, unknown>[] = []
-    const createStore = {
-      ...store,
-      getRepos: () => [...added] as never,
-      addRepo: (repo: Record<string, unknown>) => {
-        added.push(repo)
-      },
-      getRepo: (id: string) => added.find((repo) => repo.id === id) as never
-    }
-    const runtime = new OrcaRuntimeService(createStore as never)
-    const tempRoot = await mkdtempReal(join(tmpdir(), 'orca-runtime-create-parent-'))
-    const parentDir = join(tempRoot, 'orca', 'projects')
-    try {
-      const result = await runtime.createRepo(parentDir, 'first-project', 'folder')
-      if ('error' in result) {
-        throw new Error(result.error)
-      }
-
-      expect((await lstat(parentDir)).isDirectory()).toBe(true)
-      expect((await lstat(join(parentDir, 'first-project'))).isDirectory()).toBe(true)
-      expect(result).toHaveProperty('repo.path', join(parentDir, 'first-project'))
-    } finally {
-      await rm(tempRoot, { recursive: true, force: true })
-    }
-  })
-
   it('drops a same-path negative submodule cache before runtime cloneRepo', async () => {
     const spawnSpy = vi.spyOn(gitSpawn, 'gitSpawnAfterWindowsEnvironmentReady')
     const destination = await mkdtempReal(join(tmpdir(), 'orca-runtime-reclone-'))

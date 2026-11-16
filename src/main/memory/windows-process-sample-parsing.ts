@@ -1,7 +1,7 @@
 import {
   iterateProcessOutputLines,
   PROCESS_OUTPUT_FIELD_SCAN_MAX_CHARS
-} from '../../shared/process-output-field-scanner'
+} from '../../shared/process-observation/process-output-field-scanner'
 
 export const TYPEPERF_COUNTERS = [
   '\\Process(*)\\ID Process',

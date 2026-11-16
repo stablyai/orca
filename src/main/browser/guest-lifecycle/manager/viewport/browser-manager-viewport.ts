@@ -2,10 +2,10 @@ import { webContents } from 'electron'
 import {
   BROWSER_ANNOTATION_VIEWPORT_BRIDGE_WORLD_ID,
   buildBrowserAnnotationViewportBridgeScript
-} from '../../../../../shared/browser-annotation-viewport-bridge'
-import type { BrowserAnnotationViewportBridgeOptions } from '../../../../../shared/browser-annotation-viewport-bridge'
-import type { BrowserViewportOverride } from '../../../../../shared/browser-workspace-types'
-import { BROWSER_AGENT_VIEWPORT_CHANNEL } from '../../../../../shared/browser-agent-activity-contract'
+} from '../../../../../shared/browser/annotations/browser-annotation-viewport-bridge'
+import type { BrowserAnnotationViewportBridgeOptions } from '../../../../../shared/browser/annotations/browser-annotation-viewport-bridge'
+import type { BrowserViewportOverride } from '../../../../../shared/browser/workspaces/browser-workspace-types'
+import { BROWSER_AGENT_VIEWPORT_CHANNEL } from '../../../../../shared/browser/automation/browser-agent-activity-contract'
 import { sendGuestCdpCommand } from '../../../cdp/debugger/guest-cdp-command'
 import { touchEmulationParams } from '../../../cdp/input/guest-touch-emulation'
 import { BrowserManagerDevTools } from '../devtools/browser-manager-devtools'
@@ -134,7 +134,14 @@ export abstract class BrowserManagerViewport extends BrowserManagerDevTools {
 
     try {
       if (!guest.debugger.isAttached()) {
+        if (override === null) {
+          this.recordAppliedViewportOverride(browserTabId, webContentsId, null)
+          if (!this.hasTabIdentityOverrideWork(guest, this.resolveTabNavigationUrl(guest))) {
+            return true
+          }
+        }
         guest.debugger.attach('1.3')
+        this.invalidateGuestMemoryProtection(guest)
       }
     } catch (err) {
       console.warn('[browser-manager] setViewportOverride: failed to attach debugger', {

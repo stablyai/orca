@@ -19,10 +19,23 @@ export function paneHasStartupWork(session: ConnectPanePtySession): boolean {
   return paneHasKnownStartupWork(session) || mainStartsPane(session)
 }
 
+/** Spawn env alone is not post-bind work; a plain paired terminal types as a plain shell does (#39852). */
+function startupPlansPostBindWork(startup: ConnectPanePtySession['paneStartup']): boolean {
+  return Boolean(
+    startup &&
+    (startup.command !== undefined ||
+      startup.agentLaunch !== undefined ||
+      startup.freshAgentLaunch !== undefined ||
+      startup.resumeProviderSession !== undefined ||
+      startup.launchConfig !== undefined ||
+      startup.draftPrompt !== undefined)
+  )
+}
+
 function paneHasKnownStartupWork(session: ConnectPanePtySession): boolean {
   const state = useAppStore.getState()
   return Boolean(
-    session.paneStartup ||
+    startupPlansPostBindWork(session.paneStartup) ||
     session.getSleepingRecordForPane(state) ||
     findColdRestoreResumeSource(session, state)
   )
@@ -134,6 +147,9 @@ export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPt
       : {}),
     ...(session.paneStartup?.resumeOrigin
       ? { resumeOrigin: session.paneStartup.resumeOrigin }
+      : {}),
+    ...(session.paneStartup?.resumeSource?.record?.paneKey
+      ? { resumeSourcePaneKey: session.paneStartup.resumeSource.record.paneKey }
       : {}),
     ...((session.paneStartup?.initialAgentStatus?.prompt ?? session.paneStartup?.draftPrompt)
       ? {

@@ -1,4 +1,4 @@
-import type { PublishedWorkspaceLayout } from '../../../../shared/workspace-layout/workspace-layout-published'
+import type { PublishedWorkspaceLayout } from '../../../../shared/workspace-layout/published-layout/workspace-layout-published'
 
 /** `titles` in tab and pane order, null for a pane with none; the same layout when all are null. */
 export function withLiveTitles(

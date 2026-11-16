@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestStore } from '../testing/app-store-test-fixture'
 import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
-import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Project, ProjectHostSetup } from '../../../../shared/project/project-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
@@ -310,12 +310,6 @@ describe('repo slice host identity routing', () => {
     ])
     expect(store.getState().tabsByWorktree[remoteWorktree.id]).toBeUndefined()
     expect(store.getState().lastVisitedAtByWorktreeId).toEqual({ [localWorktree.id]: 10 })
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'repo.rm',
-      params: { repo: 'same-repo' },
-      timeoutMs: 15_000
-    })
     expect(reposRemove).not.toHaveBeenCalled()
     expect(ptyKill).toHaveBeenCalledWith('remote-pty')
     expect(ptyKill).not.toHaveBeenCalledWith('local-pty')

@@ -1,10 +1,10 @@
-import type { Repo } from '../../repo-types'
+import type { Repo } from '../../repository/repo-types'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId,
   type ParsedExecutionHost
 } from '../../execution-host'
-import { isWslUncPath } from '../../wsl-paths'
+import { isWslUncPath } from '../../file-access/wsl-paths'
 
 /** SSH relays and Orca servers put plain `orca` on PATH; the Linux `orca-ide` rename is for local desktops and WSL. */
 export function launchHostIsRemote(

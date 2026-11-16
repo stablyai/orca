@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../../../shared/repo-types'
+import type { Repo } from '../../../../shared/repository/repo-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import type { Store } from '../../../persistence/loading-store/store'
@@ -20,7 +20,7 @@ import { seedWslMoveCutover } from '../../../persistence/__fixtures__/wsl-mover/
 import {
   loadWslMoveFence,
   resetWslMoveFenceForTests
-} from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+} from '../../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import type { ResolvedWorktreeSnapshot } from './runtime-resolved-worktree-cache'

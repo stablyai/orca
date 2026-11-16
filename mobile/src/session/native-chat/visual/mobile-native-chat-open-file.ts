@@ -1,4 +1,4 @@
-import { splitFilePathLineSuffix } from '../../../components/markdown-file-path-detection'
+import { splitFilePathLineSuffix } from '../../../components/markdown/links/markdown-file-path-detection'
 import {
   openMobileFileTap,
   type FileTapSessionTab,

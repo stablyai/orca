@@ -5,8 +5,8 @@ import {
   SkillDeleteRequestSchema,
   type SkillDeletePlan,
   type SkillDeleteResult
-} from '../../../shared/skill-delete-contract'
-import { SkillDiscoveryTargetSchema } from '../../../shared/skills'
+} from '../../../shared/skills/deletion/skill-delete-contract'
+import { SkillDiscoveryTargetSchema } from '../../../shared/skills/discovery/skills'
 import {
   previewSkillDeleteRequest,
   runSkillDeleteRequest,

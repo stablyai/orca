@@ -2,13 +2,13 @@ import type { AgentSessionJournal } from '../../../agent-session-journal/journal
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+} from '../../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import type { StructuredAgentSessionDeadGenerationInput } from '../structured-agent-session-dead-generation-settlement'
 import { settleStructuredAgentSessionLeftovers } from '../structured-agent-session-leftover-settlement'
 
 /** ownerFence defaults to all fences for a single-generation chat. */
 export function settleObservedExitForTest(
-  input: StructuredAgentSessionDeadGenerationInput & {
+  input: Omit<StructuredAgentSessionDeadGenerationInput, 'journal'> & {
     journal: AgentSessionJournal
     ownerFence?: number
   }

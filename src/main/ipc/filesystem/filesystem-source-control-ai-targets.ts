@@ -1,11 +1,11 @@
-import type { Repo } from '../../../shared/repo-types'
+import type { Repo } from '../../../shared/repository/repo-types'
 import type { Store } from '../../persistence/loading-store/store'
 import {
   getLocalProjectWorktreeGitOptions,
   type LocalProjectWorktreeGitOptions
 } from '../../workspaces/execution-host/project-runtime-git-options'
-import type { CommitMessageAgentRuntimeTarget } from '../../text-generation/commit-message-agent-environment'
-import type { CommitMessageGenerationTarget } from '../../text-generation/commit-message-text-generation'
+import type { CommitMessageAgentRuntimeTarget } from '../../text-generation/execution/commit-message-agent-environment'
+import type { CommitMessageGenerationTarget } from '../../text-generation/source-control-text-generation-types'
 import { resolve } from 'node:path'
 import { listRepoWorktreeGraph } from '../../workspaces/catalog/repo-worktrees'
 import { resolveAuthorizedPath } from './access/filesystem-auth'

@@ -8,7 +8,7 @@ import { RuntimeMobileNotificationController } from './notifications/runtime-mob
 import { setRuntimeDesktopSurface } from '../construction/runtime-desktop-surface'
 import { RuntimeSubscriptionRegistry } from '../client/runtime-subscription-registry'
 import { reportDesktopPresence } from '../rpc/methods/notifications/notifications'
-import { DESKTOP_PRESENCE_TTL_MS } from '../../../shared/desktop-client-presence'
+import { DESKTOP_PRESENCE_TTL_MS } from '../../../shared/app-lifecycle/presence/desktop-client-presence'
 import { DesktopPushService } from './desktop-push-service'
 import { PushUnregisterOutbox } from './push-unregister-outbox'
 import { createPushHostKeypair } from './push-host-challenge-fixtures'

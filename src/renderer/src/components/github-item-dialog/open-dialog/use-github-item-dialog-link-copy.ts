@@ -7,7 +7,7 @@ import {
   resolveGitHubLinkCopyState
 } from '@/components/github-link-copy-state'
 import { translate } from '@/i18n/i18n'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 
 export function useGitHubItemDialogLinkCopy(workItem: GitHubWorkItem | null): {
   linkCopied: boolean

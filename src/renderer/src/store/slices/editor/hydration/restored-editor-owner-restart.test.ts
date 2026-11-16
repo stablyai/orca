@@ -2,7 +2,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
-import { captureEditorFileOperationProvenance } from '@/lib/editor-file-operation-provenance'
+import { captureEditorFileOperationProvenance } from '@/lib/editor/file-operations/editor-file-operation-provenance'
 import type { AppState } from '@/store/types'
 import { buildWorkspaceSessionPayload } from '../../../../lib/workspace/persistence/workspace-session'
 import {

@@ -1,6 +1,6 @@
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { safeFitAndThen } from '@/lib/pane-manager/pane-fit'
-import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
+import { safeFitAndThen } from '@/lib/pane-manager/terminal-fit/pane-fit'
+import { getFitOverrideForPty } from '@/lib/pane-manager/terminal-fit/mobile-fit-overrides'
 import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
 import { getAppliedSizeReadE2eDelayMs } from './pty-applied-size-read-e2e-delay'
 import { createPtySizeReassertion } from '../../viewport/pty-size-reassertion'
@@ -8,7 +8,7 @@ import {
   PANE_PTY_RESIZE_HOLD_FLUSH_EVENT,
   queuePanePtyResizeIfHeld,
   type PanePtyResizeHoldFlushDetail
-} from '@/lib/pane-manager/pane-pty-resize-hold'
+} from '@/lib/pane-manager/pane-layout/pane-pty-resize-hold'
 import { installForegroundGridDriftProbe } from './foreground-grid-drift-probe'
 import { initializePaneGeometry, readPaneSize } from './read-pane-size'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'

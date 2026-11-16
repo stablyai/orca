@@ -1,4 +1,4 @@
-import type { AntigravityChatAuthConfig } from '../../../shared/antigravity-chat-auth-config'
+import type { AntigravityChatAuthConfig } from '../../../shared/agent-accounts/antigravity/antigravity-chat-auth-config'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { AcpHistoryTurnIdentity } from '../history/acp-history-replay'
 import type { AcpDialect } from '../acp-dialects/acp-dialect'
@@ -10,12 +10,13 @@ import type { AcpVisualsSkillLoader } from './acp-visuals-skill'
 import type {
   StructuredAgentSessionHistory,
   StructuredAgentTranscriptImport
-} from '../../native-chat/structured-agent-cli-conversations'
+} from '../../native-chat/conversation-adoption/structured-agent-cli-conversations'
 
 import type { AcpSignInWatch } from '../process/acp-agent-connection'
 import type { AcpLaunchGate } from './acp-launch-gate'
-import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { AcpModelDiscovery } from '../discovery/acp-model-discovery-policy'
+import type { InitializeResponse } from '../generated/acp-protocol.generated'
 
 export type AcpLaunchSpec = {
   agent: TuiAgent
@@ -71,6 +72,15 @@ export type AcpLaunchSpec = {
   privateTempDirectory?: true
   /** Prefer session/resume even when loading is supported. */
   resumePreference?: 'resume'
+  /** Extra ACP session metadata required by this provider's protocol implementation. */
+  sessionMeta?: Readonly<Record<string, unknown>>
+  /** Conversation-only configuration, resolved again when a process reopens its session. */
+  resolveSessionMeta?(input: {
+    initialized: InitializeResponse
+    cwd: string
+    env: Readonly<Record<string, string>>
+    signal?: AbortSignal
+  }): Promise<Readonly<Record<string, unknown>> | undefined>
   launchGate?: AcpLaunchGate
   /** Writes sessions it cannot delete into the user's own history, so it runs no naming tasks. */
   keepsEverySession?: true

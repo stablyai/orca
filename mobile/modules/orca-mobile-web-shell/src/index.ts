@@ -18,7 +18,7 @@ export type OrcaMobileWebShellViewProps = ViewProps & {
   generationDirectory: string
   /** `[A-Za-z0-9_-]{1,128}`. Scopes the private origin, so every mount must mint a fresh one. */
   sessionId: string
-  // Bridge is off by default with nothing registered. Opt-in on Android below WEB_MESSAGE_LISTENER/Chromium 88 fails isolation-unavailable instead of loading unfenced.
+  // Bridge is off by default with nothing registered. Opt-in on Android below WEB_MESSAGE_LISTENER/Chromium 83 fails isolation-unavailable instead of loading unfenced.
   bridgeEnabled?: boolean
   /** False on every shell route except the host page, so a child route cannot evict the parked WebView. */
   retainsSlot?: boolean
@@ -91,6 +91,23 @@ export function warmUpWebShell(): void {
   const shell = requireOptionalNativeModule<{ warmUp?: () => void }>('OrcaMobileWebShell')
   if (typeof shell?.warmUp === 'function') {
     shell.warmUp()
+  }
+}
+
+export type WebViewProvider = { name: string; version: string; hasShellFeatures: boolean }
+
+// Android only: the WebView provider and whether it has the shell's fences. Null when unknown.
+export function currentWebViewProvider(): WebViewProvider | null {
+  if (Platform.OS !== 'android') {
+    return null
+  }
+  const shell = requireOptionalNativeModule<{
+    currentWebViewProvider?: () => WebViewProvider | null
+  }>('OrcaMobileWebShell')
+  try {
+    return shell?.currentWebViewProvider?.() ?? null
+  } catch {
+    return null
   }
 }
 

@@ -3,7 +3,7 @@
 
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady, waitForActiveWorktree } from './helpers/store'
-import { RuntimeClient } from '../../src/cli/runtime-client'
+import { RuntimeClient } from '../../src/cli/runtime/client'
 
 test.describe('worktree visibility with a remote runtime active', () => {
   test('a CLI-created worktree appears in the sidebar while a remote runtime is active', async ({

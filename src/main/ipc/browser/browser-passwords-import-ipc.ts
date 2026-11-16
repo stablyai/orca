@@ -1,6 +1,6 @@
 import { BrowserWindow, dialog } from 'electron'
 import { readFile, stat } from 'node:fs/promises'
-import type { BrowserPasswordImportResult } from '../../../shared/browser-passwords-types'
+import type { BrowserPasswordImportResult } from '../../../shared/browser/passwords/browser-passwords-types'
 import { CHROMIUM_BROWSERS } from '../../browser/cookies/sources/browser-cookie-source-profiles'
 import { readChromiumBrowserPasswords } from '../../browser-passwords/browser-password-chromium-import'
 import { parseBrowserPasswordCsv } from '../../browser-passwords/browser-password-csv-import'

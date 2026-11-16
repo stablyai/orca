@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { createPtySubprocess } from '../../pty-subprocess/pty-subprocess'
 import { Session } from '../session'
-import { buildStartupCommandSubmission } from '../../../../shared/startup-command-submission'
+import { buildStartupCommandSubmission } from '../../../../shared/shell/launch/startup-command-submission'
 
 const STARTUP_OUTPUT = 'ORCA_STARTUP_COMMAND_RAN'
 const SECRET = 'hunter2'

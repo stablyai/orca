@@ -1,5 +1,5 @@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
-import type { ClaudeUsageDailyPoint } from '../../../../shared/claude-usage-types'
+import type { ClaudeUsageDailyPoint } from '../../../../shared/agent-usage/analytics/claude-usage-types'
 import { getIntlLocale } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 
@@ -87,7 +87,7 @@ export function ClaudeUsageDailyChart({ daily }: ClaudeUsageDailyChartProps): Re
                   <div className="flex h-full w-full flex-col justify-end">
                     {segments.map((segment) =>
                       segment.value > 0 ? (
-                        <TooltipProvider key={segment.key} delayDuration={120}>
+                        <TooltipProvider key={segment.key}>
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <div

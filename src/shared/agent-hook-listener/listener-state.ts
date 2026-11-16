@@ -3,19 +3,19 @@ import type { AgentChildWorkKind } from '../agent-status/child-work/agent-status
 import type { ClaudeLeadTurnState, CodexLeadTurnState } from './main-agent-turn-state'
 
 import {
-  AGENT_STATUS_2A_CURRENT_PRODUCER_MODE,
   createAgentStatusLegacyAdapter,
   type AgentStatusLegacyAdapter,
   type AgentStatusLegacyAdapterOptions,
   type AgentStatusLegacyAdmissionMode
 } from '../agent-status/transport/agent-status-legacy-adapter'
 import type { AgentStatusLegacyIngressCaller } from '../agent-status/transport/agent-status-legacy-ingress-manifest'
-import type { ClaudeLaunchedBackgroundTasks } from './providers/claude-owed-task-notifications'
-import type { ClaudeSubagentRoster } from '../claude-subagent-roster'
+import type { ClaudeLaunchedBackgroundTasks } from './providers/claude/background-tasks/claude-owed-task-notifications'
+import type { ClaudeSubagentRoster } from './providers/claude/lifecycle/claude-subagent-roster'
 import type { ClaudeToolRequest } from './claude-tool-request-identity'
-import type { CodexSubagentRoster } from '../codex-subagent-roster'
-import type { CodexSubagentTranscriptState } from '../codex-subagent-transcript'
-import type { MuseSessionLogState } from '../muse-session-log'
+import type { CodexSubagentRoster } from './providers/codex/codex-subagent-roster'
+import type { CodexSubagentTranscriptState } from './providers/codex/codex-subagent-transcript'
+import type { CodexAsyncQuestions } from './providers/codex/codex-async-questions'
+import type { MusePaneState } from './providers/muse/muse-pane-state'
 import type { AgentHookEventPayload, ToolSnapshot } from './listener-event'
 import {
   deletePaneScopedCacheEntry,
@@ -23,7 +23,8 @@ import {
   movePaneScopedMapEntries,
   movePaneScopedSetEntries
 } from './pane-scoped-cache-entries'
-import type { JcodeUserPromptEvidence } from '../jcode-session-files'
+import type { JcodeUserPromptEvidence } from './providers/jcode/jcode-session-files'
+import type { JcodeHelperPermissionWait } from './providers/jcode/jcode-helper-permission-wait'
 import type { HookRootAttempt } from './presence/hook-process-root-evidence'
 import {
   moveOpenCodeSessionBindings,
@@ -47,6 +48,8 @@ export type HookListenerState = {
   antigravityChildWorkByPaneKey: Map<string, { subagentParent?: string; commands?: Set<string> }>
   /** Journal-backed prompt for each jcode pane's current turn; see readJcodeTurnPrompt. */
   jcodeTurnPromptByPaneKey: Map<string, JcodeUserPromptEvidence | null>
+  /** Open swarm-helper permission requests per jcode pane; see routeJcodeHelperHook. */
+  jcodeHelperPermissionWaitByPaneKey: Map<string, JcodeHelperPermissionWait>
   ampCompletedCacheKeys: Set<string>
   /** Live subagents/teammates per Claude pane; survives turn boundaries since background children outlive the lead turn. */
   claudeSubagentRosterByPaneKey: Map<string, ClaudeSubagentRoster>
@@ -74,6 +77,8 @@ export type HookListenerState = {
   codexSubagentTranscriptByPaneKey: Map<string, CodexSubagentTranscriptState>
   /** Root Codex state/model, kept separate from child hook traffic. */
   codexLeadStateByPaneKey: Map<string, CodexLeadTurnState>
+  /** Mid-turn async questions Codex's TUI holds open; its own status keeps saying working. */
+  codexAsyncQuestionsByPaneKey: Map<string, CodexAsyncQuestions>
   /** Ephemeral forked Codex threads (/side) per pane; they never own the pane's status. */
   codexEphemeralForkSessionsByPaneKey: Map<string, string[]>
   /** A rollout-less Codex start held until its prompt shows a new conversation or the hidden title thread. */
@@ -92,6 +97,8 @@ export type HookListenerState = {
   lastLaunchTokenByPaneKey: Map<string, string>
   /** Hermes turn per pane, so tool hooks from its post-turn background review can be ignored. */
   hermesTurnByPaneKey: Map<string, HermesPaneTurn>
+  /** DSH child sessions named by SubagentStart; the bridge stamps their hooks with their own session_id. */
+  dshChildSessionIdsByPaneKey: Map<string, Set<string>>
 }
 
 export type HermesPaneTurn = {
@@ -100,18 +107,6 @@ export type HermesPaneTurn = {
   childSessionIds: Set<string>
   /** The pane's own session, which its children's hooks must not replace. */
   sessionId: string
-}
-
-export type MusePaneState = {
-  /** Internal reminder/subagent sessions; their hooks inherit the pane env and fire even after Stop. */
-  childSessionIds: Set<string>
-  /** Spawned subagents between SubagentStart and SubagentStop, by child session id, with their last hook time. */
-  runningChildren: Map<string, number>
-  /** Main-agent status as last derived, so restatements keep its clock. */
-  mainAgent?: AgentMainAgentStatus
-  log?: MuseSessionLogState
-  /** Muse emits PermissionRequest for auto-approved calls too; only Notification confirms a visible prompt. */
-  pendingApproval?: { toolName?: string; toolInput?: unknown }
 }
 
 export type GrokActiveTurn = {
@@ -143,6 +138,7 @@ export function createHookListenerState(
     antigravityCompletedTranscriptByPaneKey: new Map(),
     antigravityChildWorkByPaneKey: new Map(),
     jcodeTurnPromptByPaneKey: new Map(),
+    jcodeHelperPermissionWaitByPaneKey: new Map(),
     ampCompletedCacheKeys: new Set(),
     claudeSubagentRosterByPaneKey: new Map(),
     claudeLeadStateByPaneKey: new Map(),
@@ -157,6 +153,7 @@ export function createHookListenerState(
     codexSubagentRosterByPaneKey: new Map(),
     codexSubagentTranscriptByPaneKey: new Map(),
     codexLeadStateByPaneKey: new Map(),
+    codexAsyncQuestionsByPaneKey: new Map(),
     codexEphemeralForkSessionsByPaneKey: new Map(),
     codexHeldEphemeralStartByPaneKey: new Map(),
     grokActiveTurnByPaneKey: new Map(),
@@ -165,7 +162,8 @@ export function createHookListenerState(
     musePaneStateByPaneKey: new Map(),
     opencodeSessionPaneBySessionId: new Map(),
     lastLaunchTokenByPaneKey: new Map(),
-    hermesTurnByPaneKey: new Map()
+    hermesTurnByPaneKey: new Map(),
+    dshChildSessionIdsByPaneKey: new Map()
   }
   legacyStatusAdapterByState.set(state, adapter)
   return state
@@ -213,33 +211,11 @@ export function getLegacyStatusListingOrder(
   return legacyStatusAdapter(state).listingOrder(paneKey)
 }
 
-/** Test harnesses seed the same compatibility region without exposing a mutable Map. */
-export function seedLegacyAgentStatusForTests(
-  state: HookListenerState,
-  entry: AgentHookEventPayload
-): void {
-  if (
-    !admitLegacyAgentStatus(
-      state,
-      'main-status-update',
-      entry,
-      AGENT_STATUS_2A_CURRENT_PRODUCER_MODE
-    )
-  ) {
-    throw new Error('Test legacy agent-status seed was refused')
-  }
-}
-
-export function clearPaneCacheState(state: HookListenerState, paneKey: string): void {
+export function clearPaneProcessCacheState(state: HookListenerState, paneKey: string): void {
   deletePaneScopedCacheEntry(state.lastPromptByPaneKey, paneKey)
   deletePaneScopedCacheEntry(state.lastToolByPaneKey, paneKey)
   deletePaneScopedCacheEntry(state.jcodeTurnPromptByPaneKey, paneKey)
-  deleteLegacyAgentStatus(state, paneKey)
-  for (const key of state.lastStatusByPaneKey.keys()) {
-    if (key.startsWith(`${paneKey}\0`)) {
-      deleteLegacyAgentStatus(state, key)
-    }
-  }
+  deletePaneScopedCacheEntry(state.jcodeHelperPermissionWaitByPaneKey, paneKey)
   deletePaneScopedCacheEntry(state.antigravityCompletedTranscriptByPaneKey, paneKey)
   deletePaneScopedCacheEntry(state.antigravityChildWorkByPaneKey, paneKey)
   deletePaneScopedSetEntry(state.ampCompletedCacheKeys, paneKey)
@@ -255,6 +231,7 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   state.codexSubagentRosterByPaneKey.delete(paneKey)
   state.codexSubagentTranscriptByPaneKey.delete(paneKey)
   state.codexLeadStateByPaneKey.delete(paneKey)
+  state.codexAsyncQuestionsByPaneKey.delete(paneKey)
   state.codexEphemeralForkSessionsByPaneKey.delete(paneKey)
   state.codexHeldEphemeralStartByPaneKey.delete(paneKey)
   state.grokActiveTurnByPaneKey.delete(paneKey)
@@ -264,8 +241,23 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   unbindOpenCodeSessionsOfPane(state, paneKey)
   deletePaneScopedCacheEntry(state.lastLaunchTokenByPaneKey, paneKey)
   state.hermesTurnByPaneKey.delete(paneKey)
-  // A disposed pane's unfinished evidence and exit intent die with it.
+  state.dshChildSessionIdsByPaneKey.delete(paneKey)
+  // Unfinished evidence and exit intent belong to the ended process.
   deletePaneScopedCacheEntry(state.hookRootAttempts, paneKey)
+}
+
+export function clearPaneCacheState(state: HookListenerState, paneKey: string): void {
+  clearPaneProcessCacheState(state, paneKey)
+  clearPaneStatusCacheState(state, paneKey)
+}
+
+export function clearPaneStatusCacheState(state: HookListenerState, paneKey: string): void {
+  deleteLegacyAgentStatus(state, paneKey)
+  for (const key of state.lastStatusByPaneKey.keys()) {
+    if (key.startsWith(`${paneKey}\0`)) {
+      deleteLegacyAgentStatus(state, key)
+    }
+  }
 }
 
 export function movePaneCacheState(
@@ -282,6 +274,7 @@ export function movePaneCacheState(
   movePaneScopedMapEntries(state.antigravityCompletedTranscriptByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.antigravityChildWorkByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.jcodeTurnPromptByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.jcodeHelperPermissionWaitByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedSetEntries(state.ampCompletedCacheKeys, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeConsumedCompactPromptIdByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeSubagentRosterByPaneKey, fromPaneKey, toPaneKey)
@@ -295,6 +288,7 @@ export function movePaneCacheState(
   movePaneScopedMapEntries(state.codexSubagentRosterByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.codexSubagentTranscriptByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.codexLeadStateByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.codexAsyncQuestionsByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.codexEphemeralForkSessionsByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.codexHeldEphemeralStartByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.grokActiveTurnByPaneKey, fromPaneKey, toPaneKey)
@@ -304,6 +298,7 @@ export function movePaneCacheState(
   moveOpenCodeSessionBindings(state, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.lastLaunchTokenByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.hermesTurnByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.dshChildSessionIdsByPaneKey, fromPaneKey, toPaneKey)
 }
 
 export function clearPaneTurnCacheState(state: HookListenerState, paneKey: string): void {
@@ -325,6 +320,7 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.antigravityCompletedTranscriptByPaneKey.clear()
   state.antigravityChildWorkByPaneKey.clear()
   state.jcodeTurnPromptByPaneKey.clear()
+  state.jcodeHelperPermissionWaitByPaneKey.clear()
   state.ampCompletedCacheKeys.clear()
   state.claudeConsumedCompactPromptIdByPaneKey.clear()
   state.warnedVersions.clear()
@@ -340,6 +336,7 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.codexSubagentRosterByPaneKey.clear()
   state.codexSubagentTranscriptByPaneKey.clear()
   state.codexLeadStateByPaneKey.clear()
+  state.codexAsyncQuestionsByPaneKey.clear()
   state.codexEphemeralForkSessionsByPaneKey.clear()
   state.codexHeldEphemeralStartByPaneKey.clear()
   state.grokActiveTurnByPaneKey.clear()
@@ -349,5 +346,6 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.opencodeSessionPaneBySessionId.clear()
   state.lastLaunchTokenByPaneKey.clear()
   state.hermesTurnByPaneKey.clear()
+  state.dshChildSessionIdsByPaneKey.clear()
   state.hookRootAttempts.clear()
 }

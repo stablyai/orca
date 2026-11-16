@@ -40,7 +40,7 @@ export const DURABLE_EXIT_PROOF = {
 }
 
 /** Worker states that carry an outcome; anything else is still supposed to be running. */
-const SETTLED_WORKER_STATES = new Set(['succeeded', 'failed', 'stopped', 'abandoned'])
+export const SETTLED_WORKER_STATES = new Set(['succeeded', 'failed', 'stopped', 'abandoned'])
 
 /** Any certified termination reason proves exit independently of settlement state. */
 function hasCertifiedExit(worker: FleetLivenessSubject): boolean {

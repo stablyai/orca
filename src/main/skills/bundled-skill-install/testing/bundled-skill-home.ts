@@ -15,8 +15,8 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect } from 'vitest'
-import type { BundledSkillPlan } from '../../../../shared/bundled-skill-plan'
-import type { SkillInstallProviderId } from '../../../../shared/skill-install-providers'
+import type { BundledSkillPlan } from '../../../../shared/skills/bundled/bundled-skill-plan'
+import type { SkillInstallProviderId } from '../../../../shared/skills/installation/skill-install-providers'
 import type { BundledSkillSource } from '../bundled-skill-sources'
 import type { BundledSkillFilesystem } from '../bundled-skill-filesystem'
 import {

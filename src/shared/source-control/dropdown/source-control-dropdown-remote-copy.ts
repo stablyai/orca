@@ -64,6 +64,14 @@ export type RemoteDropdownCopy = {
   forcePushWithLease: (branchCommitsAhead: number | undefined, upstreamName?: string) => string
   manualForcePush: (ahead: number, behind: number, upstreamName?: string) => string
   unpublishedForcePush: (branchCommitsAhead: number | undefined) => string
+  statusUpToDate: string
+  statusSetsUpstream: string
+  statusNotPublished: string
+  statusNoBranch: string
+  statusMayFail: string
+  statusPublished: string
+  statusStashFirst: string
+  statusReplaces: (behind: number) => string
 }
 
 export const ENGLISH_REMOTE_DROPDOWN_COPY: RemoteDropdownCopy = {
@@ -121,5 +129,13 @@ export const ENGLISH_REMOTE_DROPDOWN_COPY: RemoteDropdownCopy = {
   syncCounts: describeSyncCounts,
   forcePushWithLease: formatForcePushTitle,
   manualForcePush: formatManualForcePushTitle,
-  unpublishedForcePush: formatUnpublishedForcePushTitle
+  unpublishedForcePush: formatUnpublishedForcePushTitle,
+  statusUpToDate: 'Up to date',
+  statusSetsUpstream: 'Sets upstream',
+  statusNotPublished: 'Not published',
+  statusNoBranch: 'No branch',
+  statusMayFail: 'May fail',
+  statusPublished: 'Published',
+  statusStashFirst: 'Stash first',
+  statusReplaces: (behind) => `Replaces ↓${behind}`
 }

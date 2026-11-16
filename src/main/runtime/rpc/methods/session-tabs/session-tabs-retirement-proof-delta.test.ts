@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
-import '../../../../../shared/protocol-version'
-import { SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY } from '../../../../../shared/session-tabs-runtime-capabilities'
+import '../../../../../shared/remote-runtime/protocol/protocol-version'
+import { SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY } from '../../../../../shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
 import type {
   RuntimeMobileSessionRetiredTerminalSurface,
   RuntimeMobileSessionTabsResult
-} from '../../../../../shared/runtime-session-contracts'
+} from '../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import { RpcDispatcher } from '../../dispatcher'
 import { SESSION_TAB_METHODS } from './session-tabs'
 import './session-tabs-retirement-proof-delta'

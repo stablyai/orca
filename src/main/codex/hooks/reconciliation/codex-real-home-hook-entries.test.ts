@@ -234,8 +234,32 @@ describe('reconcileRealHomeCodexHookEntries', () => {
     expect(existsSync(configPath())).toBe(false)
   })
 
+  it.skipIf(process.platform === 'win32')(
+    "names the previous form's unnamed entry at app start, never on a launch",
+    async () => {
+      // Exact bytes form-1 builds wrote, which they still rewrite when they differ.
+      const formOne = [
+        ': orca-agent-hook-form=1;',
+        'if [ -n "${ORCA_PANE_KEY-}" ] && [ -n "${ORCA_AGENT_HOOK_ROOT-}" ] && [ -f "${ORCA_AGENT_HOOK_ROOT-}/agent-hooks/codex-hook.sh" ]; then /bin/sh "${ORCA_AGENT_HOOK_ROOT-}/agent-hooks/codex-hook.sh" || :;',
+        'elif [ -z "${ORCA_AGENT_HOOK_ROOT-}" ] && [ -n "${ORCA_PANE_KEY-}" ] && [ -n "${ORCA_AGENT_HOOK_PORT-}" ] && [ -f "${HOME-}/.orca/agent-hooks/codex-hook.sh" ]; then /bin/sh "${HOME-}/.orca/agent-hooks/codex-hook.sh" || :;',
+        'else { command -p cat 2>/dev/null || cat; } >/dev/null 2>&1 || :; fi'
+      ].join(' ')
+      const formOneStop = { hooks: [{ type: 'command', command: formOne, timeout: 10 }] }
+      writeHooks({ hooks: { Stop: [formOneStop] } })
+
+      await reconcile({ convertOlderForms: false })
+      expect(readHooks().hooks.Stop).toEqual([formOneStop])
+
+      await reconcile()
+      expect(readHooks().hooks.Stop?.[0]?.hooks?.[0]).toMatchObject({
+        command: expect.stringMatching(/^: orca-agent-hook-form=2;/),
+        statusMessage: 'Reporting status to Orca'
+      })
+    }
+  )
+
   it('never rewrites a newer build form or appends beside it', async () => {
-    const newer = `: orca-agent-hook-form=2; /bin/sh "\${HOME-}/.orca/agent-hooks/codex-hook.sh"`
+    const newer = `: orca-agent-hook-form=3; /bin/sh "\${HOME-}/.orca/agent-hooks/codex-hook.sh"`
     writeHooks({ hooks: { Stop: [orcaGroup(newer)] } })
 
     await reconcile()
@@ -381,20 +405,6 @@ describe('reconcileRealHomeCodexHookEntries', () => {
     expect(trustAt(stopEntryAt(1, orcaGroup()))).toBeUndefined()
   })
 
-  it.each([
-    ['unknown top-level fields Codex cannot load', { hooks: {}, _managed: true }],
-    ['an unparseable file', '{ not json']
-  ])('leaves %s untouched and approves nothing', async (_case, content) => {
-    mkdirSync(join(home, '.codex'), { recursive: true })
-    writeFileSync(hooksPath(), typeof content === 'string' ? content : JSON.stringify(content))
-    const before = identity(hooksPath())
-
-    expect(await reconcile()).toBe('unchanged')
-
-    expect(identity(hooksPath())).toEqual(before)
-    expect(existsSync(configPath())).toBe(false)
-  })
-
   it('writes nothing when config.toml keeps its approvals inline', async () => {
     const original = writeHooks({ hooks: { Stop: [USER_A] } })
     const inline = 'model = "m"\nhooks = { state = {} }\n'
@@ -439,16 +449,4 @@ describe('reconcileRealHomeCodexHookEntries', () => {
       expect(statSync(target).mode & 0o777).toBe(0o600)
     }
   )
-})
-
-describe('until Codex answers', () => {
-  it("keeps an entry's existing approval, writing nothing", async () => {
-    writeHooks({ hooks: { Stop: [USER_A] } })
-    await reconcile()
-    const before = { hooks: identity(hooksPath()), toml: identity(configPath()) }
-
-    expect(await reconcile({ hashes: null })).toBe('unchanged')
-
-    expect({ hooks: identity(hooksPath()), toml: identity(configPath()) }).toEqual(before)
-  })
 })

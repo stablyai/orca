@@ -2,7 +2,7 @@ import { NativeChatExpandable } from '../../messages/disclosure/NativeChatExpand
 import { useLayoutEffect, useMemo, useRef } from 'react'
 import { useNativeChatDisclosure } from '../../messages/disclosure/native-chat-disclosure-store'
 import { ChevronRight, FilePlus2, FileMinus2, FilePen } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { DiffLineCounts } from '../../../right-sidebar/source-control/listing/diff-line-counts'
 import { NativeChatCopyButton } from '../../messages/actions/NativeChatCopyButton'

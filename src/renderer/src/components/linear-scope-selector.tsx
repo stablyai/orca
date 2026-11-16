@@ -5,11 +5,11 @@ import type {
   LinearWorkspace,
   LinearWorkspaceSelection
 } from '../../../shared/linear/workspace-types'
-import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
+import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard/clipboard-text'
 import { Command, CommandInput, CommandItem, CommandList } from '@/components/ui/command'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 

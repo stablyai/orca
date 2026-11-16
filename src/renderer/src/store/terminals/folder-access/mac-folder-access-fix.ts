@@ -2,7 +2,7 @@
 
 import { toast } from 'sonner'
 import { create } from 'zustand'
-import type { PtyManagementFolderAccessMismatch } from '../../../../../preload/api/pty-management-api'
+import type { PtyManagementFolderAccessMismatch } from '../../../../../preload/api/terminal/pty-management-api'
 
 export const FOLDER_ACCESS_MISMATCH_NOTICE_ID = 'mac-daemon-folder-access-mismatch'
 

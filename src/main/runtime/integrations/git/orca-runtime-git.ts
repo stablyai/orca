@@ -13,6 +13,7 @@ export class RuntimeGitCommands {
   readonly getRuntimeGitHistory: RuntimeGitStatusCommands['getRuntimeGitHistory']
   readonly getRuntimeGitConflictOperation: RuntimeGitStatusCommands['getRuntimeGitConflictOperation']
   readonly getRuntimeGitMutationInFlight: RuntimeGitStatusCommands['getRuntimeGitMutationInFlight']
+  readonly readRuntimeWorktreeAtRiskLocalFiles: RuntimeGitStatusCommands['readRuntimeWorktreeAtRiskLocalFiles']
   readonly switchRuntimeGitBranch: RuntimeGitStatusCommands['switchRuntimeGitBranch']
   readonly checkoutRuntimeGitBranch: RuntimeGitStatusCommands['checkoutRuntimeGitBranch']
   readonly listRuntimeGitLocalBranches: RuntimeGitStatusCommands['listRuntimeGitLocalBranches']
@@ -66,6 +67,8 @@ export class RuntimeGitCommands {
     this.getRuntimeGitHistory = status.getRuntimeGitHistory.bind(status)
     this.getRuntimeGitConflictOperation = status.getRuntimeGitConflictOperation.bind(status)
     this.getRuntimeGitMutationInFlight = status.getRuntimeGitMutationInFlight.bind(status)
+    this.readRuntimeWorktreeAtRiskLocalFiles =
+      status.readRuntimeWorktreeAtRiskLocalFiles.bind(status)
     this.switchRuntimeGitBranch = status.switchRuntimeGitBranch.bind(status)
     this.checkoutRuntimeGitBranch = status.checkoutRuntimeGitBranch.bind(status)
     this.listRuntimeGitLocalBranches = status.listRuntimeGitLocalBranches.bind(status)

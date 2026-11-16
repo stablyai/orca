@@ -142,6 +142,9 @@ export const noChatsRuntimeMembers = () => ({
 export const agentHookServerModuleMock = () => ({
   agentHookServer: {
     buildPtyEnv: buildAgentHookEnvMock,
+    setTerminalPaneLifecycle: () => {},
+    pruneUnplacedSleepingPanes: () => {},
+    retireSleepingPaneOnSpawn: () => {},
     clearPaneState: clearAgentHookPaneStateMock,
     registerPaneKeyAlias: registerPaneKeyAliasMock,
     forgetRefusedPaneResume: forgetRefusedPaneResumeMock,

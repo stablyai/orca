@@ -1,5 +1,5 @@
 import type { Store } from '../../../persistence/loading-store/store'
-import { resolveGitStatusUpstreamRef } from '../../../git/source-control/status-upstream-ref'
+import { resolveGitStatusUpstreamRef } from '../../../git/source-control/upstream/status-upstream-ref'
 import { gitExecFileAsync } from '../../../git/command-runner/git-exec-file'
 import { abortSignalWithTimeout } from '../../../lib/abort-signal-with-timeout'
 import { resolveRegisteredWorktreePath } from '../removal/registered-worktree-roots-cache'

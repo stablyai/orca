@@ -3,7 +3,7 @@ import type { TerminalSnapshotUnavailableReason } from '../../../../../shared/te
 import type {
   TerminalOutputFrameChunk,
   TerminalOutputMeta
-} from '../../terminal-output-frame-chunks'
+} from '../../terminal/terminal-output-frame-chunks'
 import type { TerminalOutputBatcher } from './terminal-output-batcher'
 import type { TerminalReplyQueryScanState } from '../../../../../shared/terminal/protocol/queries/terminal-reply-query-scan'
 import type { YieldedTerminalQuery } from './terminal-multiplex-yielded-queries'

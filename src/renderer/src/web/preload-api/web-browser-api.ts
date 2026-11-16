@@ -15,10 +15,18 @@ function desktopOnlyExtensionsResult(): { ok: false; error: string } {
 export function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial stub; withFallback in web-preload-api answers every browser member it omits.
   return {
+    preparePageAttach: () => Promise.reject(new Error('Browser pages require desktop')),
+    reportGuestVisibility: () => {},
+    refuseGuestIdleDiscard: () => {},
+    onGuestIdleDiscardDue: () => () => {},
+    reserveGuestDiscard: () => false,
+    acknowledgeGuestRemoval: async () => false,
     registerGuest: () => Promise.resolve(false),
     isGuestRegistered: () => Promise.resolve(false),
     repairGuestRegistration: () => Promise.resolve(false),
     unregisterGuest: () => Promise.resolve(),
+    getGuestDiscardProtection: () => Promise.resolve(null),
+    onGuestDiscardProtectionChanged: () => () => {},
     openDevTools: () => Promise.resolve(false),
     setViewportOverride: () => Promise.resolve(false),
     reportViewportScrollState: () => {},
@@ -141,11 +149,14 @@ export function createBrowserApi(): NonNullable<Partial<PreloadApi>['browser']> 
 }
 
 export function createEmulatorApi(): NonNullable<Partial<PreloadApi>['emulator']> {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial stub; withFallback in web-preload-api answers every emulator member it omits.
   return {
     onPaneFocus: () => noopUnsubscribe,
     onAutoAttach: () => noopUnsubscribe,
     startFrameStream: () => Promise.reject(new Error('Mobile emulator is unavailable on web.')),
     stopFrameStream: () => Promise.resolve(),
+    startVideoStream: () => Promise.reject(new Error('Mobile emulator is unavailable on web.')),
+    stopVideoStream: () => Promise.resolve(),
     onFrameStreamFrame: () => noopUnsubscribe,
     onFrameStreamError: () => noopUnsubscribe
   } as unknown as NonNullable<Partial<PreloadApi>['emulator']>

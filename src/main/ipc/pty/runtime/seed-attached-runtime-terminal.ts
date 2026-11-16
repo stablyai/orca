@@ -1,4 +1,4 @@
-import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
+import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { commitRuntimeAttachedPtySize, type PtyGrid } from '../delivery/attached-pty-size'
 import { ptySizes } from '../delivery/visibility-state'

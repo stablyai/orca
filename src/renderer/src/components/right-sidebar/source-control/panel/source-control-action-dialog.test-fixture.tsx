@@ -8,7 +8,7 @@ import {
   type SourceControlAgentActionDialogProps
 } from '../ai/SourceControlAgentActionDialog'
 import type { RunSourceControlAgentActionStartArgs } from '../ai/runSourceControlAgentActionStart'
-import type { Repo } from '../../../../../../shared/repo-types'
+import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { normalizeRepoSourceControlAiOverrides } from '../../../../../../shared/source-control/ai/settings/source-control-ai-repo-settings'
 import { saveSourceControlAiActionRecipeForTarget } from '../ai/recipe-persistence'
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'

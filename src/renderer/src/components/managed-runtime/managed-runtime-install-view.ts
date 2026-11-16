@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { ManagedRuntimeInstallState } from '../../../../shared/managed-runtime-install'
+import type { ManagedRuntimeInstallState } from '../../../../shared/agent-launch/installation/managed-runtime-install'
 import type { ManagedRuntimeInstallSnapshot } from '@/runtime/hosts/installation/managed-runtime-install-status'
 
 export type ManagedRuntimeInstallAction =
@@ -190,4 +190,20 @@ export function managedRuntimeInstallView(
     (operation ? runningView(operation, agent, cancelling, t) : null) ??
     settledView(snapshot.state, agent, t)
   )
+}
+
+/** Whether Orca's copy still needs the user: missing, outdated, damaged, failed, installing, or unreadable. */
+export function managedRuntimeInstallPending(snapshot: ManagedRuntimeInstallSnapshot): boolean {
+  if (snapshot.kind === 'readFailed') {
+    return true
+  }
+  if (snapshot.kind !== 'known') {
+    return false
+  }
+  const view = managedRuntimeInstallView(snapshot, '')
+  // A working external copy needs nothing unless Orca's own install is running or failed.
+  if (snapshot.state.source === 'external') {
+    return view.action?.kind === 'cancel' || view.removing || view.error !== null
+  }
+  return view.action !== null || view.error !== null || view.removing
 }
