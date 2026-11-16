@@ -1,15 +1,20 @@
 #!/usr/bin/env bash
-# gh for agents in Orca Cloud workspaces (first on orcad's PATH, like git): GitHub actions an agent takes
-# in a teammate's turn (gh pr create, comments, reviews) act as that teammate, through their own
-# placeholder, swapped at egress for their GitHub user token (never in the VM). Orcad attests the sender
-# exactly as for git (orca-git-identity). With no attested teammate, or before the control plane turns this
-# on (ORCA_GH_AS_MEMBER=on), gh runs as before: the workspace identity.
-self="$(cd "$(dirname "$0")" && pwd)"
+# gh for agents in Orca Cloud workspaces: GitHub actions an agent takes in a teammate's turn (gh pr create,
+# comments, reviews) act as that teammate, through their own placeholder, swapped at egress for their GitHub
+# user token (never in the VM). Orcad attests the sender exactly as for git (orca-git-identity). With no
+# attested teammate, or before the control plane turns this on (ORCA_GH_AS_MEMBER=on), gh runs as before:
+# the workspace identity.
+# Layout: the real gh is /opt/orca/tools/gh/bin/gh (off PATH); /opt/orca/tools/bin/gh, first on every agent
+# PATH, is a link to this script. Symlinks are resolved so the link never finds itself.
+self="$(readlink -f "$0" 2>/dev/null || echo "$0")"
 real="${ORCA_REAL_GH:-}"
+if [ -z "$real" ] && [ -x "${ORCA_HOME:-/opt/orca}/tools/gh/bin/gh" ]; then
+  real="${ORCA_HOME:-/opt/orca}/tools/gh/bin/gh"
+fi
 if [ -z "$real" ]; then
   IFS=: read -r -a dirs <<<"${PATH:-/usr/bin:/bin}"
   for dir in "${dirs[@]}" /usr/local/bin /usr/bin; do
-    if [ "$dir" != "$self" ] && [ -x "$dir/gh" ] && [ "$(cd "$dir" && pwd)" != "$self" ]; then
+    if [ -x "$dir/gh" ] && [ "$(readlink -f "$dir/gh" 2>/dev/null || echo "$dir/gh")" != "$self" ]; then
       real="$dir/gh"
       break
     fi

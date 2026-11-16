@@ -70,8 +70,10 @@ if [ -n "${GH_VERSION:-}" ]; then
   fetch_verified "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_amd64.tar.gz" \
     "$GH_SHA256" /tmp/gh.tgz
   tar -xzf /tmp/gh.tgz -C /tmp
-  mkdir -p "$ORCA_HOME/tools/bin"
-  install -m 0755 "/tmp/gh_${GH_VERSION}_linux_amd64/bin/gh" "$ORCA_HOME/tools/bin/gh"
+  # The real gh lives off PATH; tools/bin/gh (first on agent PATHs) is the GH-AS-MEMBER wrapper (bin/gh).
+  mkdir -p "$ORCA_HOME/tools/bin" "$ORCA_HOME/tools/gh/bin"
+  install -m 0755 "/tmp/gh_${GH_VERSION}_linux_amd64/bin/gh" "$ORCA_HOME/tools/gh/bin/gh"
+  ln -sfn ../../bin/gh "$ORCA_HOME/tools/bin/gh"
   rm -rf /tmp/gh.tgz "/tmp/gh_${GH_VERSION}_linux_amd64"
 fi
 
