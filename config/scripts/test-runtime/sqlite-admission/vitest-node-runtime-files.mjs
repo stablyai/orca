@@ -15,6 +15,8 @@ const NODE_RUNTIME_INCLUDE = [
   // The parse cache persists through node:sqlite.
   'src/main/ai-vault/parse-cache/session-parse-cache-persistence.test.ts',
   'src/main/ai-vault/scope/session-scanner-scope-walk.test.ts',
+  // Opens WAL-mode stores read-only with no -wal beside them, which Bun's macOS SQLite refuses.
+  'config/scripts/development/chat-store-repair/close-migration-reopened-tabs.test.mjs',
   // The forced-probe handoff race opens only under V8's promise scheduling, which Electron main uses.
   'src/main/github/api/rate-limit.test.ts',
   // Electron main bridges streams with Node's implementation.
