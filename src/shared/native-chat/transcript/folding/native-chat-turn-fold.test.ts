@@ -160,9 +160,15 @@ describe('replies a settled turn keeps visible', () => {
     }
     const messages = [PROMPT, note, PREAMBLE, WORK, narration, ANSWER]
     expect(answersAndFolded(messages)).toEqual({ answers: [1, 5], folded: [2, 3, 4] })
-    // An image operation whose preview moved into the answer is work, not a reply.
-    const imageOperation = message('image', 'assistant', 'Generated image', 'generated-image')
-    expect(answersAndFolded([PROMPT, PREAMBLE, imageOperation, ANSWER])).toEqual({
+  })
+
+  it.each([
+    ['a generation whose preview moved into the answer', 'Generated image', 'generated-image'],
+    ['an image view', 'Viewed image', 'image-operation'],
+    ['a failed generation', 'Image generation failed', 'image-operation']
+  ] as const)('folds %s as work, not a reply', (_name, text, presentation) => {
+    const operation = message('image', 'assistant', text, presentation)
+    expect(answersAndFolded([PROMPT, PREAMBLE, operation, ANSWER])).toEqual({
       answers: [3],
       folded: [1, 2]
     })

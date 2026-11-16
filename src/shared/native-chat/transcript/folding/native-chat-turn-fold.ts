@@ -12,7 +12,7 @@ import {
 } from '../row-content/native-chat-row-content'
 import { isStoppedBeforeStartBlock } from '../../native-chat-stopped-before-start'
 import { nativeChatRowRendersProse } from '../../native-chat-trailing-run'
-import { isGeneratedImageOperation } from '../../native-chat-generated-image'
+import { isGeneratedImageOperation, isImageOperation } from '../../native-chat-generated-image'
 import {
   isBackgroundTaskBlock,
   isSubagentGroupBlock,
@@ -78,8 +78,7 @@ function deriveTurnFoldRow(
   const facts = {
     turnKey,
     role: message.role,
-    rendersProse:
-      nativeChatRowRendersProse(message) && !message.blocks.some(isGeneratedImageOperation),
+    rendersProse: nativeChatRowRendersProse(message) && !message.blocks.some(isImageOperation),
     draws: hasReceipt || message.agentStart === true || nativeChatRowRendersContent(message.blocks),
     // Use raw roster blocks: empty rosters render no block, making their plain-text twin the sole spawn record.
     outlivesTurn:
