@@ -218,7 +218,6 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/agent-launch/contracts/agent-launch-intent',
   'src/shared/rpc-contract/agent-launch/agent-launch-params',
   'src/shared/agent-session/agent-session-wire',
-  'src/shared/agent-session/view/structured-agent-session-projection.test.ts',
   'src/shared/agent-session/view/structured-agent-session-projection.ts',
   'src/shared/agent-session/lifecycle/records/agent-session-record-stored-form.test.ts',
   'src/shared/agent-session/lifecycle/records/agent-session-record-stored-form.ts',
