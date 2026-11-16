@@ -80,7 +80,6 @@ export function createWorkspaceTerminalHydrationActions(
             ? (pickFallbackActiveWorktree({
                 candidates: runtimeSessionPlaceholders.worktreesByRepo[session.activeRepoId] ?? [],
                 session,
-                sleepingAgentSessionsByPaneKey,
                 tabsByWorktree
               })?.id ?? null)
             : null

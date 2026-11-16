@@ -8,23 +8,17 @@ import { getWorktreeVisitTimestamp } from '@/lib/workspace/activation/worktree-v
 export function pickFallbackActiveWorktree({
   candidates,
   session,
-  sleepingAgentSessionsByPaneKey,
   tabsByWorktree
 }: {
   candidates: readonly Worktree[]
   session: WorkspaceSessionState
-  sleepingAgentSessionsByPaneKey: NonNullable<WorkspaceSessionState['sleepingAgentSessionsByPaneKey']>
   tabsByWorktree: Record<string, TerminalTab[]>
 }): Worktree | null {
   // Selecting a slept workspace wakes it and resumes its agents; a startup fallback is not a click.
+  // Resume records are no sleep signal here: running agents keep live/quit ones too.
   const live = liveAtShutdown(session)
-  const sleepingIds = new Set(
-    Object.values(sleepingAgentSessionsByPaneKey).map((record) => record.worktreeId)
-  )
   const awake = candidates.filter(
-    (worktree) =>
-      !sleepingIds.has(worktree.id) &&
-      ((tabsByWorktree[worktree.id]?.length ?? 0) === 0 || live(worktree.id))
+    (worktree) => (tabsByWorktree[worktree.id]?.length ?? 0) === 0 || live(worktree.id)
   )
   const lastVisited = session.lastVisitedAtByWorktreeId
   return (

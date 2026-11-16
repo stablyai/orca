@@ -52,11 +52,26 @@ describe('startup fallback selection', () => {
     expect(store.getState().everActivatedWorktreeIds.has(MAIN_ID)).toBe(false)
   })
 
-  it('still falls back to an awake main worktree', () => {
+  it('still falls back to an awake main worktree running an agent', () => {
     const store = seedStore()
-    store
-      .getState()
-      .hydrateWorkspaceSession(sessionAfterSleepingMain([MAIN_ID, OLDER_ID, RECENT_ID]))
+    store.getState().hydrateWorkspaceSession({
+      ...sessionAfterSleepingMain([MAIN_ID, OLDER_ID, RECENT_ID]),
+      // Running agents keep resume records too; they are not sleep.
+      sleepingAgentSessionsByPaneKey: {
+        'tab-main:leaf-1': {
+          paneKey: 'tab-main:leaf-1',
+          tabId: 'tab-main',
+          worktreeId: MAIN_ID,
+          agent: 'claude',
+          providerSession: { key: 'session_id', id: 'session-1' },
+          prompt: '',
+          state: 'working',
+          capturedAt: 1,
+          updatedAt: 1,
+          origin: 'live'
+        }
+      }
+    })
 
     expect(store.getState().activeWorktreeId).toBe(MAIN_ID)
   })
