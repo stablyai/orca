@@ -4,7 +4,7 @@ import { installFatalSignalListenerGuard } from './fatal-signal-listener-guard'
 
 describe('installFatalSignalListenerGuard', () => {
   it('never holds a fault-signal listener, before or after install, keeping others', () => {
-    const target = new EventEmitter() as unknown as NodeJS.Process
+    const target = new EventEmitter()
     const noop = (): void => {}
     target.on('SIGABRT', noop)
     installFatalSignalListenerGuard(target)

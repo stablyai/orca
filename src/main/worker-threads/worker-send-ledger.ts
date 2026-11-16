@@ -1,4 +1,3 @@
-import { appendFileSync, renameSync, statSync } from 'node:fs'
 import { getHeapStatistics } from 'node:v8'
 import {
   getEnvironmentData,
@@ -7,6 +6,7 @@ import {
   setEnvironmentData,
   threadId
 } from 'node:worker_threads'
+import { appendWorkerLargeSend } from './worker-large-send-log'
 import { describeWorkerMessage, type WorkerMessageShape } from './worker-message-shape'
 import type { WorkerThreadRole } from './worker-thread-roles'
 
@@ -37,7 +37,6 @@ const MAX_KIND = LAST_KIND + TEXT_BYTES
 const LARGE_SEND_BYTES = 16 * 2 ** 20
 const LARGE_SEND_ITEMS = 50_000
 const LARGE_SEND_DEPTH = 100
-const LARGE_SEND_LOG_MAX_BYTES = 256 * 1024
 
 export type WorkerSendLedgerEntry = {
   role: string
@@ -96,8 +95,7 @@ function readText(view: DataView, offset: number): string {
   return text
 }
 
-/** A free slot, else the one idle longest: a parent killed before freeing its children's slots
- * must not exhaust the ledger. An evicted worker stops writing once it sees the new owner. */
+/** A full ledger records nothing more rather than share or steal a slot. */
 function claimSlot(ledger: SharedArrayBuffer, owner: number): number | undefined {
   const owners = new Int32Array(ledger)
   for (let slot = 0; slot < SLOTS; slot += 1) {
@@ -105,19 +103,7 @@ function claimSlot(ledger: SharedArrayBuffer, owner: number): number | undefined
       return slot
     }
   }
-  let stalest = 0
-  let stalestAt = Infinity
-  for (let slot = 0; slot < SLOTS; slot += 1) {
-    const at = new DataView(ledger, slot * SLOT_BYTES, SLOT_BYTES).getFloat64(LAST_AT, true)
-    if (at < stalestAt) {
-      stalest = slot
-      stalestAt = at
-    }
-  }
-  const previous = Atomics.load(owners, ownerIndex(stalest))
-  return Atomics.compareExchange(owners, ownerIndex(stalest), previous, owner) === previous
-    ? stalest
-    : undefined
+  return undefined
 }
 
 /** Worker side, once at startup. Recording never blocks or fails the post itself. */
@@ -131,27 +117,29 @@ export function installWorkerSendLedger(role: WorkerThreadRole): void {
   if (slot === undefined) {
     return
   }
-  const owners = new Int32Array(ledger)
   const view = new DataView(ledger, slot * SLOT_BYTES, SLOT_BYTES)
-  new Uint8Array(ledger, slot * SLOT_BYTES + 4, SLOT_BYTES - 4).fill(0)
   writeText(view, ROLE, role)
-  view.setFloat64(LAST_AT, Date.now(), true)
   const largeSendLog = getEnvironmentData(LARGE_SEND_LOG_KEY)
-  const post = port.postMessage.bind(port) as (value: unknown, transfer?: unknown) => void
-  port.postMessage = ((value: unknown, transfer?: unknown) => {
-    try {
-      if (Atomics.load(owners, ownerIndex(slot)) === threadId) {
-        const shape = describeWorkerMessage(value)
+  const post: unknown = Reflect.get(port, 'postMessage')
+  if (typeof post !== 'function') {
+    return
+  }
+  Object.defineProperty(port, 'postMessage', {
+    configurable: true,
+    writable: true,
+    value: (...args: unknown[]): unknown => {
+      try {
+        const shape = describeWorkerMessage(args[0])
         recordSend(view, shape)
         if (typeof largeSendLog === 'string' && isLargeSend(shape)) {
           logLargeSend(largeSendLog, role, shape)
         }
+      } catch {
+        // Diagnostics only.
       }
-    } catch {
-      // Diagnostics only.
+      return Reflect.apply(post, port, args)
     }
-    post(value, transfer)
-  }) as typeof port.postMessage
+  })
 }
 
 function recordSend(view: DataView, shape: WorkerMessageShape): void {
@@ -177,22 +165,15 @@ function isLargeSend(shape: WorkerMessageShape): boolean {
   )
 }
 
-/** Written before posting, so it survives the receiver aborting or hanging on this message. */
 function logLargeSend(path: string, role: string, shape: WorkerMessageShape): void {
-  if ((statSync(path, { throwIfNoEntry: false })?.size ?? 0) > LARGE_SEND_LOG_MAX_BYTES) {
-    renameSync(path, `${path}.1`)
-  }
-  appendFileSync(
-    path,
-    `${JSON.stringify({
-      at: new Date().toISOString(),
-      pid: process.pid,
-      role,
-      threadId,
-      ...shape,
-      heapUsedMB: Math.round(getHeapStatistics().used_heap_size / 2 ** 20)
-    })}\n`
-  )
+  appendWorkerLargeSend(path, {
+    at: new Date().toISOString(),
+    pid: process.pid,
+    role,
+    threadId,
+    ...shape,
+    heapUsedMB: Math.round(getHeapStatistics().used_heap_size / 2 ** 20)
+  })
 }
 
 /** Readers may see a slot mid-write; every field is independently meaningful. */
@@ -227,7 +208,10 @@ export function readWorkerSendLedger(): WorkerSendLedgerEntry[] {
   return entries
 }
 
-/** The parent frees an exited worker's slot; thread ids are never reused in a process. */
+/**
+ * The parent frees an exited worker's slot; thread ids are never reused in a process. A worker
+ * whose parent was killed first keeps its slot until the process ends (only nested workers).
+ */
 export function releaseWorkerSendLedgerSlot(owner: number): void {
   const ledger = sharedLedger()
   if (!ledger) {
