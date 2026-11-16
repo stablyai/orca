@@ -49,6 +49,7 @@ function createWatch(
     kind: 'git-common',
     path: commonDir,
     repos: new Map([[REPO_ID, { repoId: REPO_ID, repoName: 'repo', nestWorkspaces: false }]]),
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the watcher only calls isDestroyed and webContents.send.
     mainWindow: {
       isDestroyed: () => false,
       webContents: { send: (channel: string, payload: unknown) => sent.push({ channel, payload }) }

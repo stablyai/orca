@@ -7,6 +7,7 @@ import type { AppState } from '../../../types'
 import { findWorktreeByPath } from '../../../../hooks/worktree-head-identity-apply'
 import { deriveGitIdentityDisplayName } from '../metadata/detached-head-display-name'
 import { worktreeHostMatchOptions, worktreeMatchesHost } from './worktree-host-ownership'
+import { selectDetectedWorktreesByRepo } from '../../../workspaces/catalog/workspace-record-fields'
 
 /** Head-only watcher bursts no longer re-list, so local detected rows take the same head patch as visible rows. */
 export function patchDetectedWorktreeHeadIdentities(
@@ -14,7 +15,8 @@ export function patchDetectedWorktreeHeadIdentities(
   repoId: string,
   identities: readonly WorktreeHeadIdentity[]
 ): Pick<AppState, 'detectedWorktreesByRepo'> | null {
-  const detected = state.detectedWorktreesByRepo[repoId]
+  const detectedByRepo = selectDetectedWorktreesByRepo(state)
+  const detected = detectedByRepo[repoId]
   if (!detected) {
     return null
   }
