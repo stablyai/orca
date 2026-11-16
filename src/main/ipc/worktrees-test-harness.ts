@@ -10,7 +10,7 @@ import { resetSshProviderAuthorities } from '../ssh/connection/authority/ssh-pro
 import { createWorktreeRuntimeStub, type WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
 import { handlers, mainWindow, store } from './worktrees-test-ipc-surface'
 import { configureMetadataPruningStoreMocks } from './worktrees-test-metadata-pruning-store'
-import { getDefaultWorkspaceSession } from '../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../shared/orca-profiles/constants'
 import {
   ORIGINAL_PLATFORM,
   setPlatform,

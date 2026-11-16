@@ -20,7 +20,7 @@ import {
   useWorktreeStructuredChatTabNames,
   getStructuredChatTabNames
 } from '@/runtime/native-chat/naming/structured-chat-name-observation'
-import { QuickLaunchAgentMenuItems } from '@/components/tab-bar/QuickLaunchButton'
+import { QuickLaunchAgentMenuItems } from '@/components/agent/launch-menu/AgentMenuItems'
 import { AgentStateDot, agentStateLabel } from '@/components/AgentStateDot'
 import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import {

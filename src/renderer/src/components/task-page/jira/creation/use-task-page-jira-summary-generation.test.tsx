@@ -6,7 +6,7 @@ import type { JiraIssueSummaryGenerationResult } from '../../../../../../shared/
 import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { useTaskPageJiraSummaryGeneration } from './use-task-page-jira-summary-generation'
 
 const mocks = vi.hoisted(() => ({ generate: vi.fn(), cancel: vi.fn(), error: vi.fn() }))

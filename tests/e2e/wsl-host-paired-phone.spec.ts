@@ -15,7 +15,7 @@ import {
   createRuntimeDesktopPairingOffer
 } from './helpers/paired-electron-client'
 import { pairMobileClient, type PairedMobileSocket } from './helpers/paired-mobile-client'
-import { toRuntimeExecutionHostId } from '../../src/shared/execution-host'
+import { toRuntimeExecutionHostId } from '../../src/shared/execution-host/execution-host'
 import { notificationExecutionHostForOwner } from '../../src/shared/notifications/notification-source'
 import { waitForSessionReady } from './helpers/store'
 import {

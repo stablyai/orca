@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron'
 import type { GitHubPrStartPoint, GitPushTarget } from '../../../../shared/worktree/types'
 import { isFolderRepo } from '../../../../shared/repository/repo-kind'
-import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
+import { getRepoRoutingConnectionId } from '../../../../shared/execution-host/execution-host'
 import { gitExecFileAsync } from '../../../git/command-runner/git-exec-file'
 import {
   getLocalProjectGhExecOptions,

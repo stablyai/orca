@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getDefaultPersistedState } from '../../../../../shared/constants'
+import { getDefaultPersistedState } from '../../../../../shared/orca-profiles/constants'
 import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../shared/project/groups/project-group-types'
 import type { Repo } from '../../../../../shared/repository/repo-types'

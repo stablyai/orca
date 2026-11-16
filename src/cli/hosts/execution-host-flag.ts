@@ -4,7 +4,7 @@ import {
   parseExecutionHostId,
   toSshExecutionHostId,
   type ParsedExecutionHost
-} from '../../shared/execution-host'
+} from '../../shared/execution-host/execution-host'
 import {
   ambiguousEnvironments,
   ambiguousSshTargets,

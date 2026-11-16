@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { GlobalSettings } from '../../shared/settings/global-settings-types'
 import { syncMacMenuBarIcon } from './main-window/main-window-actions'
 import { syncNotchStatus } from './notch-status-wiring'
 

@@ -1,4 +1,4 @@
-import type { TopLevelView } from '../../../shared/ui-chrome-types'
+import type { TopLevelView } from '../../../shared/ui-chrome/ui-chrome-types'
 import type { WorkspaceVisibleTabType } from '../../../shared/workspace-layout/tab-groups/tab-types'
 
 function closestFocusedElement(element: unknown, selector: string): unknown {
