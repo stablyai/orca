@@ -206,52 +206,61 @@ describe('close-migration-reopened-tabs', () => {
   })
 
   // Chromium's SingletonLock symlink is how macOS and Linux show a running Orca.
-  it.skipIf(process.platform === 'win32')('refuses to apply while Orca holds the profile', () => {
-    const userData = writeProfile()
-    // A live node process stands in for Orca's main process; test workers may rename themselves.
-    const holder = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
-      stdio: 'ignore'
-    })
-    try {
-      symlinkSync(`${hostname()}-${holder.pid}`, path.join(userData, 'SingletonLock'))
-      expect(findRunningOrca(userData)).toContain(String(holder.pid))
-      expect(findRunningOrca(userData, { processName: () => 'launchd' })).toBeNull()
+  it.skipIf(process.platform === 'win32')(
+    'refuses to apply while Orca holds the profile',
+    async () => {
+      const userData = writeProfile()
+      // A live node process stands in for Orca's main process; test workers may rename themselves.
+      const holder = spawn(
+        process.execPath,
+        ['-e', 'console.log(1); setInterval(() => {}, 1000)'],
+        {
+          stdio: ['ignore', 'pipe', 'ignore']
+        }
+      )
+      try {
+        // Until it prints, the child may still carry the test worker's name.
+        await new Promise((resolve) => holder.stdout.once('data', resolve))
+        symlinkSync(`${hostname()}-${holder.pid}`, path.join(userData, 'SingletonLock'))
+        expect(findRunningOrca(userData)).toContain(String(holder.pid))
+        expect(findRunningOrca(userData, { processName: () => 'launchd' })).toBeNull()
 
-      const before = snapshot(userData)
-      const refused = run(userData, '--apply')
-      expect(refused.status).toBe(1)
-      expect(snapshot(userData)).toEqual(before)
-      expect(
-        readdirSync(path.dirname(userData)).some((name) =>
-          name.startsWith(`${path.basename(userData)}-chat-backup-`)
-        )
-      ).toBe(false)
-    } finally {
-      holder.kill()
+        const before = snapshot(userData)
+        const refused = run(userData, '--apply')
+        expect(refused.status).toBe(1)
+        expect(snapshot(userData)).toEqual(before)
+        expect(
+          readdirSync(path.dirname(userData)).some((name) =>
+            name.startsWith(`${path.basename(userData)}-chat-backup-`)
+          )
+        ).toBe(false)
+      } finally {
+        holder.kill()
+      }
+
+      // orcad.lock outlives Orca; a reused PID or another machine's record must not read as this one.
+      const lockDir = mkdtempSync(path.join(tmpdir(), 'orca-tab-repair-lock-'))
+      roots.push(lockDir)
+      const lock = { pid: process.pid, startedAtMs: 1_000_000, machineIdentity: 'here', host: 'h' }
+      writeFileSync(path.join(lockDir, 'orcad.lock'), JSON.stringify(lock))
+      const probe = { processName: () => 'Orca', machineIdentity: () => 'here', platform: 'darwin' }
+      expect(findRunningOrca(lockDir, { ...probe, processStartedAtMs: () => 1_000_000 })).toContain(
+        'running'
+      )
+      expect(findRunningOrca(lockDir, { ...probe, processStartedAtMs: () => 9_000_000 })).toBeNull()
+      expect(findRunningOrca(lockDir, { ...probe, machineIdentity: () => 'there' })).toContain(
+        'delete that file'
+      )
+      // Linux records carry start ticks: wall time drifting there doesn't make a live orcad stale.
+      const linux = { ...lock, linuxStartTicks: '42', bootId: 'b' }
+      writeFileSync(path.join(lockDir, 'orcad.lock'), JSON.stringify(linux))
+      const onLinux = { ...probe, platform: 'linux', processStartedAtMs: () => 9_000_000 }
+      const ticks = (startTicks) => ({
+        ...onLinux,
+        linuxIncarnation: () => ({ startTicks, bootId: 'b' })
+      })
+      expect(findRunningOrca(lockDir, ticks('42'))).toContain('running')
+      expect(findRunningOrca(lockDir, ticks('43'))).toBeNull()
     }
-
-    // orcad.lock outlives Orca; a reused PID or another machine's record must not read as this one.
-    const lockDir = mkdtempSync(path.join(tmpdir(), 'orca-tab-repair-lock-'))
-    roots.push(lockDir)
-    const lock = { pid: process.pid, startedAtMs: 1_000_000, machineIdentity: 'here', host: 'h' }
-    writeFileSync(path.join(lockDir, 'orcad.lock'), JSON.stringify(lock))
-    const probe = { processName: () => 'Orca', machineIdentity: () => 'here', platform: 'darwin' }
-    expect(findRunningOrca(lockDir, { ...probe, processStartedAtMs: () => 1_000_000 })).toContain(
-      'running'
-    )
-    expect(findRunningOrca(lockDir, { ...probe, processStartedAtMs: () => 9_000_000 })).toBeNull()
-    expect(findRunningOrca(lockDir, { ...probe, machineIdentity: () => 'there' })).toContain(
-      'delete that file'
-    )
-    // Linux records carry start ticks: wall time drifting there doesn't make a live orcad stale.
-    const linux = { ...lock, linuxStartTicks: '42', bootId: 'b' }
-    writeFileSync(path.join(lockDir, 'orcad.lock'), JSON.stringify(linux))
-    const onLinux = { ...probe, platform: 'linux', processStartedAtMs: () => 9_000_000 }
-    const ticks = (startTicks) => ({
-      ...onLinux,
-      linuxIncarnation: () => ({ startTicks, bootId: 'b' })
-    })
-    expect(findRunningOrca(lockDir, ticks('42'))).toContain('running')
-    expect(findRunningOrca(lockDir, ticks('43'))).toBeNull()
-  })
+  )
 })
