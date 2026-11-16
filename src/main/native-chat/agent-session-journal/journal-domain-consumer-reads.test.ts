@@ -9,6 +9,7 @@ import { readJournalSqlPoint } from './journal-sql-point-read'
 import { journalSqlReads } from './journal-sql-reads'
 import { insertJournalDomainQueueRow } from './journal-domain-queue-rows'
 import { resolveChatAutomationRun } from '../../automations/observation/automation-chat-run-observation'
+import { agentJournalTurnBody } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 const cleanup: (() => void)[] = []
@@ -559,7 +560,23 @@ it('counts a Codex thread as exchanged once it has a turn row or an accepted sen
       providerIdentity: { provider: 'codex', threadId: 'thread-sent', turnId: 'turn-2', ordinal: 0 }
     }
   })
+  await f.run({
+    kind: 'item',
+    identity: {
+      provider: 'legacy',
+      agent: 'codex',
+      sessionId: 'chat',
+      recordId: 'turn-lifecycle:turn-3'
+    },
+    body: agentJournalTurnBody({
+      turnId: 'turn-3',
+      state: 'running',
+      userItemId: 'codex:thread-started:turn-3:0'
+    }),
+    options
+  })
   expect(await reads.hasProviderTurn('thread-replied')).toBe(true)
   expect(await reads.hasProviderTurn('thread-sent')).toBe(true)
+  expect(await reads.hasProviderTurn('thread-started')).toBe(true)
   expect(await reads.hasProviderTurn('thread-other')).toBe(false)
 })

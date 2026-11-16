@@ -11,6 +11,7 @@ import { readJournalDomainSubmissionBody } from './journal-domain-submission-rec
 import type { JournalHistoryOrigin } from './context-epochs/journal-history-origin'
 import type { JournalLatestStop } from './context-epochs/journal-stop-turn-end'
 import { providerTimelineKeyPart } from '../agent-session-timeline/provider-timeline-identity'
+import { codexJournalThreadKeyPrefix } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 
 export type JournalDomainEntityRead = Extract<
   JournalSqlPointRead['operation'],
@@ -51,7 +52,9 @@ export function readJournalDomainEntity(
   switch (operation.kind) {
     case 'provider-turn-in-namespace': {
       const prefixKey = `p:${providerTimelineKeyPart(operation.namespace)}:`
-      // Codex rows name their thread in columns; an accepted send proves Codex saw the thread too.
+      // Codex rows name their thread in columns, a turn row through its opening user item; an
+      // accepted send proves Codex saw the thread too.
+      const codexPrefix = codexJournalThreadKeyPrefix(operation.namespace)
       return {
         kind: operation.kind,
         present:
@@ -63,6 +66,8 @@ export function readJournalDomainEntity(
           WHERE session_id=? AND epoch=? AND hidden=0 AND codex_thread_id=? AND codex_turn_id IS NOT NULL
           UNION ALL SELECT 1 FROM journal_submission_attempts INDEXED BY journal_submission_codex_turn
           WHERE session_id=? AND epoch=? AND current=1 AND dispatch_state='accepted' AND codex_thread_id=?
+          UNION ALL SELECT 1 FROM journal_items INDEXED BY journal_items_opener
+          WHERE session_id=? AND epoch=? AND hidden=0 AND opener_item_id>=? AND opener_item_id<?
           LIMIT 1`)
             .get(
               ...prefix,
@@ -71,7 +76,10 @@ export function readJournalDomainEntity(
               ...prefix,
               operation.namespace,
               ...prefix,
-              operation.namespace
+              operation.namespace,
+              ...prefix,
+              codexPrefix,
+              `${codexPrefix.slice(0, -1)};`
             ) !== undefined
       }
     }
