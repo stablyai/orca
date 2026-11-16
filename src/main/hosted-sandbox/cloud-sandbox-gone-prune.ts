@@ -26,7 +26,7 @@ export function createCloudSandboxGonePrune(deps: {
   retire: (runtime: EphemeralVmRuntimeRecord) => Promise<void>
   log?: (line: string) => void
 }): CloudSandboxGonePrune {
-  // The app log by default: each prune is one timestamped line (LC-2).
+  // The app log by default: each prune is one timestamped line.
   const log = deps.log ?? ((line: string) => console.log(line))
   // Sandboxes one list has missed; a second miss in a row confirms them.
   let missedOnce = new Set<string>()

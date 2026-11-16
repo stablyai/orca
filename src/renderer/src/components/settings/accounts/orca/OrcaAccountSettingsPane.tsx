@@ -156,7 +156,7 @@ export function OrcaAccountSettingsPane(): React.JSX.Element {
         {/* Team, billing and admin are managed in the web console; this row is the way there. */}
         {connected && cloudAvailable ? <AccountTeamAdminRow /> : null}
 
-        {/* JA-16: with Orca Cloud the page is identity + Sign out (and the console row); agents and
+        {/* With Orca Cloud the page is identity + Sign out (and the console row); agents and
             the rest of Orca Cloud have their own entries in the group right beside it. */}
         {cloudAvailable ? null : (
           <div className="space-y-4 border-t border-border/60 pt-5">

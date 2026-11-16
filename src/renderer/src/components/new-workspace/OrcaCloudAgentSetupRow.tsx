@@ -1,4 +1,4 @@
-// The "Set up Orca Cloud" panel's Agent row (cloud-start G). It replaces the old "Add an agent /
+// The "Set up Orca Cloud" panel's Agent row. It replaces the old "Add an agent /
 // Later" hint: it says how the composer's agent will sign in, links to the one-time setup in
 // Settings → Cloud agent sign-ins, and never blocks Start or signs in per sandbox.
 import { useEffect } from 'react'
@@ -19,7 +19,7 @@ import { noteComposerAgentCoverage } from '@/lib/orca-cloud/cloud-first-start-ag
 import type { OrcaCloudRunTargetAccess } from './orca-cloud-run-target-access'
 import { agentName, keySourceLabel } from '../settings/agent-accounts/orca-cloud-accounts-copy'
 
-/** The focused Orca Cloud sign-in sheet (JA-04), over the composer, which stays open. */
+/** The focused Orca Cloud sign-in sheet, over the composer, which stays open. */
 export function openOrcaCloudAgentAccounts(): void {
   openOrcaCloudSignInSheet()
 }
@@ -133,7 +133,7 @@ export function OrcaCloudAgentSetupRowView({
     return null
   }
   if (row.kind === 'covered') {
-    // Collapsed: one quiet line, like the returning-user composer (cloud-start E).
+    // Collapsed: one quiet line, like the returning-user composer.
     const text = orcaCloudAgentCoveredLabel(row, t)
     return (
       <p

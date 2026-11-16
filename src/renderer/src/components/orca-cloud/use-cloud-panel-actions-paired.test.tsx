@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
-// PAIRED-CHROME: a paired row's hovercard offers only what main can do for it today (Sleep, Delete);
-// Wake, Restart, Archive, Unarchive and Move here wait for PAIRED-WAKE / PAIRED-ARCHIVE.
+// A paired row's hovercard offers only what main can do for it today (Sleep, Delete);
+// Wake, Restart, Archive, Unarchive and Move here wait until main supports them for paired rows.
 import { renderHook } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -58,7 +58,7 @@ describe('the hovercard actions on a paired row', () => {
     ])
   })
 
-  it('PAIRED-ARCHIVE: a paired row of its creator also offers Archive and Unarchive; never Move', () => {
+  it('a paired row of its creator also offers Archive and Unarchive; never Move', () => {
     mocks.paired = true
     for (const known of [null, 'owner']) {
       access.value = known

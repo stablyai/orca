@@ -80,7 +80,7 @@ describe('useTerminalQuickCommandHosts', () => {
     document.body.replaceChildren()
   })
 
-  it('an Orca Cloud workspace offers only its sandbox, even before its commands load (JA-31)', async () => {
+  it('an Orca Cloud workspace offers only its sandbox, even before its commands load', async () => {
     testState.runtimeEnvironments = [{ id: 'build', name: 'Hello-World sandbox abcd1234' }]
     Object.assign(testState.runtimeEnvironments[0], { source: 'ephemeral-vm' })
     await act(async () => root.render(createElement(Probe)))

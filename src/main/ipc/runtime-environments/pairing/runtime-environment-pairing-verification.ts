@@ -131,7 +131,7 @@ export async function verifyAndAddRuntimeEnvironmentFromPairingCode(
 export async function verifyAndRepairRuntimeEnvironmentFromPairingCode(
   userDataPath: string,
   args: { selector: string; pairingCode: string },
-  /** EP-8: a fresh Orca Cloud grant for this computer may repair a cloud workspace's own server. */
+  /** A fresh Orca Cloud grant for this computer may repair a cloud workspace's own server. */
   options: { allowCloudWorkspace?: boolean } = {}
 ): Promise<VerifyAndAddRuntimeEnvironmentResult> {
   const existing = await resolveEnvironment(userDataPath, args.selector)

@@ -10,7 +10,7 @@ import { openOrcaCloudAgentAccounts } from '@/components/new-workspace/OrcaCloud
 /** What the status shows: its label, the agent's catalog name, and the tooltip naming the fix. */
 export type CloudAgentRowStatusText = { label: string; agentName: string; tooltip: string | null }
 
-/** The sidebar row's "Set up once": the focused Orca Cloud sign-in sheet (JA-04). */
+/** The sidebar row's "Set up once": the focused Orca Cloud sign-in sheet. */
 export function openCloudAgentAccountsSettings(): void {
   openOrcaCloudAgentAccounts()
 }

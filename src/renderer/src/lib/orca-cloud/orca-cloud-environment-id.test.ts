@@ -45,7 +45,7 @@ describe('isOrcaCloudExecutionHostId', () => {
   })
 })
 
-describe('isOrcaCloudEnvironmentForLaunch (FAIL-CLOSED, #568)', () => {
+describe('isOrcaCloudEnvironmentForLaunch', () => {
   it('a fresh pairing whose catalog flag has not arrived yet is still Orca Cloud (main says so)', async () => {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the check reads only id, name and source
     const runtimeEnvironments = [

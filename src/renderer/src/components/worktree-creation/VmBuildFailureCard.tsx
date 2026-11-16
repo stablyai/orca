@@ -59,7 +59,7 @@ export function VmBuildFailureCard({
     setShown(failure)
   }
   const visible = failure ?? shown
-  // CLONE-ACCESS-ERROR: GitHub refused the clone; name the cause and offer to fix access.
+  // GitHub refused the clone; name the cause and offer to fix access.
   const accessFix =
     cloud &&
     visible?.kind === 'cloneFailed' &&
@@ -118,7 +118,7 @@ export function VmBuildFailureCard({
             tone={
               isAccountGate(visible)
                 ? 'neutral'
-                : // CLONE-ACCESS-ERROR: missing access is a precondition to fix, not a crash.
+                : // missing access is a precondition to fix, not a crash.
                   accessFix && cloneAccess.phase !== 'reachable'
                   ? 'warning'
                   : 'error'

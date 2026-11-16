@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// AUTH-ONLY-COPY-LINK: "Copy link" (the split's chevron) is for sign-in pages only, where people paste
+// "Copy link" (the split's chevron) is for sign-in pages only, where people paste
 // the URL into an incognito window. Billing, help, support and the GitHub App install keep a plain
 // button, and nothing adds a "Copy … link" row next to them.
 import { cleanup, render, screen, within } from '@testing-library/react'

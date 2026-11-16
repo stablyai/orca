@@ -184,7 +184,7 @@ describe('golden image rotation', () => {
     expect(appCalls).toEqual(['GET /repos/acme/orca-private/installation', 'POST /app/installations/9/access_tokens'])
     t.commands.set([...t.commands.keys()][0]!, 0)
     expect(await advanceGoldenImages(t.deps)).toBe('built')
-    // Exit codes come only to waiting readers (W1/W9): every poll is a bounded wait=true read.
+    // Exit codes come only to waiting readers: every poll is a bounded wait=true read.
     expect(t.commandReads.length).toBeGreaterThan(0)
     expect(t.commandReads.every((read) => read.wait === true && (read.waitMs ?? 0) > 0)).toBe(true)
     expect(await advanceGoldenImages(t.deps)).toBe('activated')

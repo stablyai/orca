@@ -30,7 +30,7 @@ function accounts(
   }
 }
 
-describe('orcaCloudAgentPickerStatus (JA-22)', () => {
+describe('orcaCloudAgentPickerStatus', () => {
   it('shows nothing until the account is read', () => {
     expect(orcaCloudAgentPickerStatus('claude', accounts({ kind: 'loading' }))).toBeNull()
     expect(orcaCloudAgentPickerStatus('gemini', accounts({ kind: 'loading' }, null))).toBeNull()
@@ -72,7 +72,7 @@ describe('orcaCloudAgentPickerStatus (JA-22)', () => {
   })
 })
 
-describe('orcaCloudAgentPickerStatusLabel (JA-22)', () => {
+describe('orcaCloudAgentPickerStatusLabel', () => {
   const t: Translate = (_key, fallback) => fallback
   it('says nothing for ready and names the state otherwise', () => {
     expect(orcaCloudAgentPickerStatusLabel('ready', t)).toBeNull()

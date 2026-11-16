@@ -1,7 +1,7 @@
-// PAIRED-HELD-STRIPS (#568): the first agent of a GitHub-only Orca Cloud create, once the build sheet
-// has handed off to the opened workspace (GH-CREATE-SHEET). The chosen agent starts even with no
+// The first agent of a GitHub-only Orca Cloud create, once the build sheet
+// has handed off to the opened workspace. The chosen agent starts even with no
 // prompt: its launch is what shows "isn't set up · Set up once" when it can't run yet. A repo still
-// cloning is waited for, and the host must be confirmed Orca Cloud first (FAIL-CLOSED), so the launch
+// cloning is waited for, and the host must be confirmed Orca Cloud first, so the launch
 // always goes through the account hold; a wait that runs out says so instead of launching.
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
@@ -26,7 +26,7 @@ export type FirstCloudAgentRequest = {
   fullName: string
   /**
    * The composer's pick; null is Blank terminal and starts nothing. It starts with no prompt: the
-   * composer's name field only names the workspace (CLOUD-ONLY-NAME-AS-PROMPT).
+   * composer's name field only names the workspace.
    */
   agent: string | null
   worktreeId: string | null
@@ -48,9 +48,9 @@ export async function launchFirstCloudAgent(request: FirstCloudAgentRequest): Pr
     request.worktreeId ?? (request.hostId ? await waitForFirstWorktree(request.hostId) : null)
   const host = parseExecutionHostId(request.hostId)
   const environmentId = host?.kind === 'runtime' ? host.environmentId : null
-  // PAIRED-HELD-ACTIVE: the agent's tab (or its held placeholder) is this workspace's first terminal.
+  // The agent's tab (or its held placeholder) is this workspace's first terminal.
   // Without the claim, the mirror's first empty frame seeds a plain shell too, activated, which hides
-  // the held placeholder and its "Set up once" strip behind a bare prompt (n39).
+  // the held placeholder and its "Set up once" strip behind a bare prompt.
   const claimed =
     worktreeId && environmentId
       ? beginWebRuntimeInitialTerminalBootstrap(environmentId, worktreeId)
@@ -217,8 +217,8 @@ function waitForFirstWorktree(
 }
 
 /**
- * Never silent: the workspace opened, but its agent couldn't start in time. Not over Settings (N-03;
- * with no worktree there is no workspace to scope it to), and gone once the workspace is ready.
+ * Never silent: the workspace opened, but its agent couldn't start in time. Not over Settings
+ * (with no worktree there is no workspace to scope it to), and gone once the workspace is ready.
  */
 export function agentNotStartedNotice(
   agent: string | null,

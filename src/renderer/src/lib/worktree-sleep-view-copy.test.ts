@@ -1,4 +1,4 @@
-// SLEEP-IN-PROGRESS: a sleeping workspace's read-only copy is "saving" from the Sleep press until a
+// A sleeping workspace's read-only copy is "saving" from the Sleep press until a
 // copy at least that new is read back, and "failed" if none arrives in time.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {

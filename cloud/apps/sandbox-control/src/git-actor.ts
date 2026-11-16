@@ -1,4 +1,4 @@
-// GIT-ACTOR: who a workspace's GitHub actions (pushes, PRs, comments) go out as right now, on the workspace view
+// Who a workspace's GitHub actions (pushes, PRs, comments) go out as right now, on the workspace view
 // (`githubActing`, plus the viewer's own connection as `you`). The owner always acts (member-git.ts memberMayAct):
 // as themselves once connected, else as the Orca bot. Approvals always go out as the bot.
 import { parseGitHubRepo } from './github-app'
@@ -9,7 +9,7 @@ export type GithubActing =
   | { actingAs: 'member'; userId: string; login: string }
   | { actingAs: 'bot'; reason: 'not_github' | 'off' | 'transferred' | 'sender_not_connected' | 'reconnect' }
 
-/** The env side: whether GH-AS-MEMBER applies to an account. */
+/** The env side: whether GH_AS_MEMBER applies to an account. */
 export type GithubActingOptions = { enabled: (accountId: string) => boolean }
 
 /** Usable without a reconnect: an access token still valid, or a refresh token that can renew it. */
@@ -78,7 +78,7 @@ function decide(row: SandboxRow, owner: GitHubUserTokenRow | null, now: number, 
   if (!options.enabled(row.account_id)) {
     return { actingAs: 'bot', reason: 'off' }
   }
-  // OWNER-TRANSFER: never the new owner on GitHub (member-git.ts memberMayAct).
+  // Never the new owner on GitHub (member-git.ts memberMayAct).
   if (row.ownership_transferred_at != null) {
     return { actingAs: 'bot', reason: 'transferred' }
   }

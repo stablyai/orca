@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { settledCache } from '../src/settled-cache'
 
-describe('settledCache (WORKER-XREQ-PROMISE)', () => {
+describe('settledCache', () => {
   it('never hands a request another request’s in-flight load; shares the value once settled', async () => {
     const cache = settledCache<number>(1000)
     let loads = 0

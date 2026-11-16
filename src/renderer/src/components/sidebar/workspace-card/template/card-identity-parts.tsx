@@ -69,7 +69,7 @@ function CardTitle({
           affiliateListMode ? undefined : () => card.setRenamingWorktreeId(null)
         }
       />
-      {/* N-03: the agent waits on its pane's strip (Orca Cloud): this mark is the signal away. */}
+      {/* The agent waits on its pane's strip (Orca Cloud): this mark is the signal away. */}
       {card.titleRenaming ? null : <CloudAgentHeldMark worktreeId={worktree.id} />}
       {/* MEMGUARD: the cloud VM is short of memory. */}
       {card.titleRenaming ? null : <CloudMemoryPressureMark worktreeId={worktree.id} />}
@@ -118,7 +118,7 @@ function sidebarLabel(text: string, tooltip: unknown): React.ReactNode {
 
 /**
  * An Orca Cloud workspace's own checkout (owned or PAIRED) IS the workspace, not a repo's primary
- * checkout: no "primary" badge or star on it (CLOUD-PRIMARY-DELETE, PAIRED-BADGE).
+ * checkout: no "primary" badge or star on it.
  */
 function NotOnCloudRow({
   worktree,

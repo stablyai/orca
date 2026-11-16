@@ -6,7 +6,7 @@ function write(terminal: Terminal, data: string): Promise<void> {
   return new Promise((resolve) => terminal.write(data, resolve))
 }
 
-describe('sanitizeRestoredText (WAKE-SCROLLBACK)', () => {
+describe('sanitizeRestoredText', () => {
   it('keeps text and SGR, and drops every other escape', () => {
     const dirty = [
       'plain ',
@@ -32,7 +32,7 @@ describe('sanitizeRestoredText (WAKE-SCROLLBACK)', () => {
   })
 })
 
-describe('renderBufferRows (WAKE-SCROLLBACK)', () => {
+describe('renderBufferRows', () => {
   it('renders text with its colours and attributes, joins wrapped rows, trims padding', async () => {
     const terminal = new Terminal({ cols: 10, rows: 4, allowProposedApi: true })
     await write(terminal, '\x1b[1;31mbold red\x1b[0m\r\nabcdefghijKLM\r\nplain   ')

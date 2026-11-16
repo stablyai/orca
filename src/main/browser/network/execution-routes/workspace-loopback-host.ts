@@ -1,4 +1,4 @@
-// CLOUD-BROWSER-DIRECT: an Orca Cloud sandbox's egress terminates TLS for hosts that carry credential rules
+// An Orca Cloud sandbox's egress terminates TLS for hosts that carry credential rules
 // (github.com, model APIs), so a public site browsed through it would present the sandbox provider's CA,
 // which the desktop must never trust (seen: ERR_CERT_AUTHORITY_INVALID on github.com). An Orca Cloud browser
 // route therefore sends only the workspace's own loopback through the sandbox (its dev servers and forwarded

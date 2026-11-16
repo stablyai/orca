@@ -17,7 +17,7 @@ export type MemberGitDeps = {
   db: D1Database
   identity: (row: SandboxRow, userId: string) => Promise<MemberGitIdentity | null>
   /**
-   * GH-AS-MEMBER: the App's installation token for this workspace (`Bearer …`), for what the owner's gh sends
+   * Member gh: the App's installation token for this workspace (`Bearer …`), for what the owner's gh sends
    * that isn't theirs to sign (queries, other API calls), and to check where a mutation's targets live.
    */
   appAuthorization?: (row: SandboxRow) => Promise<string | null>
@@ -26,7 +26,7 @@ export type MemberGitDeps = {
 
 /**
  * The identity rule: the owner always acts as themselves, and no one else ever does. Except a workspace that ever
- * changed hands (OWNER-TRANSFER): its disk is the previous owner's, and whatever they left there runs at every
+ * changed hands: its disk is the previous owner's, and whatever they left there runs at every
  * boot, so it never acts as the new owner on GitHub either; git and gh go out as the App (the same reasoning as
  * shared credential mode, shared-workspace.ts).
  */
@@ -109,7 +109,7 @@ export async function memberGitConfigs(deps: MemberGitDeps, row: SandboxRow) {
         name: identity.name,
         email: identity.email,
         authorization: gitBasicAuthorization(await memberPlaceholder(row.id, userId)),
-        // GH-AS-MEMBER: the same placeholder for gh (GH_TOKEN), swapped at egress on api.github.com.
+        // Member gh: the same placeholder for gh (GH_TOKEN), swapped at egress on api.github.com.
         ghToken: await memberPlaceholder(row.id, userId),
         // The member's paired orcad devices: orca-git-identity maps orcad's attested sender to a member.
         deviceIds: await memberDeviceIds(deps.db, row.id, userId)
@@ -120,7 +120,7 @@ export async function memberGitConfigs(deps: MemberGitDeps, row: SandboxRow) {
 }
 
 /**
- * GIT-COAUTHOR: an owner who connected GitHub but whose identity can't be used right now (token expired and
+ * An owner who connected GitHub but whose identity can't be used right now (token expired and
  * not refreshable, or member git off for the account). Their commits fall back to the workspace identity, so
  * the VM adds a `Co-authored-by` trailer with their GitHub noreply address: attribution survives, no token.
  */
@@ -159,7 +159,7 @@ async function memberDeviceIds(db: D1Database, sandboxId: string, userId: string
 }
 
 /**
- * GH-AS-MEMBER, api.github.com with a member's placeholder (their gh): the member's own token only where it
+ * Member gh on api.github.com with a member's placeholder (their gh): the member's own token only where it
  * is pinned to the workspace repository (REST under /repos/<owner>/<repo>, and allowlisted GraphQL mutations
  * whose every target resolves to that repository); everything else goes out on the App's installation token,
  * exactly as before the member's gh carried their placeholder. A pinned mutation aimed elsewhere is refused.
@@ -171,8 +171,8 @@ async function memberApiCredential(
   allowed: (method: string, path: string) => boolean,
   request: { method: string; path: string; body: string | null }
 ): ReturnType<ProxiedRoute['credential']> {
-  // APPROVALS-REFUSED (github-approval-guard.ts): never from a workspace, on any identity. A write whose path GitHub
-  // would normalize differently than this check reads it is refused first (review G2).
+  // No approval ever leaves a workspace, on any identity (github-approval-guard.ts). A write whose path GitHub
+  // would normalize differently than this check reads it is refused first.
   if (unnormalizedWrite(request.method, request.path)) {
     return UNNORMALIZED_WRITE_REFUSAL
   }
@@ -237,7 +237,7 @@ async function targetsInWorkspaceRepo(deps: MemberGitDeps, row: SandboxRow, appT
       }
       continue
     }
-    // Review L1: keyed by this workspace's repository (what its installation token can see), and a failed lookup
+    // Keyed by this workspace's repository (what its installation token can see), and a failed lookup
     // isn't cached. A node's repository rarely changes (an issue can be transferred: the cache bounds that to 10 min).
     const owner: string | null = await nodeRepositories
       .get(`${repoId}:${target.id}`, now, async () => {

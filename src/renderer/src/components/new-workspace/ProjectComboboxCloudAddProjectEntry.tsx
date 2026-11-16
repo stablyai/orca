@@ -1,4 +1,4 @@
-// PROJ-MENU part 2: "Give Orca Cloud access to more repositories" moves out of the project list into
+// "Give Orca Cloud access to more repositories" moves out of the project list into
 // the Add project menu, in its own "Orca Cloud" group: "Add a GitHub repository…".
 import React from 'react'
 import { Github } from 'lucide-react'

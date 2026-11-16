@@ -15,7 +15,7 @@ type RowState =
   | { kind: 'failed'; error: CloudSecretsErrorCode }
 
 /**
- * This computer's Agent API keys are never sent to a cloud workspace (DS-02). Each one can be saved
+ * This computer's Agent API keys are never sent to a cloud workspace. Each one can be saved
  * to the user's Orca account (a personal Cloud secret) with its own click; the workspace then only
  * holds a stand-in that the network swaps.
  */

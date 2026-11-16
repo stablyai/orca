@@ -6,9 +6,9 @@ import type { CloudDotState } from '@/lib/orca-cloud/orca-cloud-workspace-state'
 export type CloudGlyphState = CloudDotState | 'goingToSleep' | 'restarting'
 
 /**
- * Status is the colour of the whole cloud (Neil's pick, option A): every state fills the cloud
+ * Status is the colour of the whole cloud: every state fills the cloud
  * with a fine dot texture tinted by state; no badge and no shape change. Archived alone is a hollow
- * dashed outline (option B's), and a state not yet known is a paler fill with a dotted edge.
+ * dashed outline, and a state not yet known is a paler fill with a dotted edge.
  * The state is also named in the row and in the accessible label, so colour is never the only signal.
  */
 type GlyphShape = {

@@ -120,7 +120,7 @@ export type BrowserCookieImportExecutionResult = BrowserCookieImportResult & {
 
 export type BrowserSlice = {
   browserTabsByWorktree: Record<string, BrowserWorkspace[]>
-  /** Workspaces whose tabs Sleep put to rest (when): kept in the layout, not activity (NEW-01). */
+  /** Workspaces whose tabs Sleep put to rest (when): kept in the layout, not activity. */
   asleepBrowserWorktreeIds: Record<string, number>
   browserPagesByWorkspace: Record<string, BrowserPage[]>
   browserCertificateFailuresByPageId: Record<string, BrowserCertificateFailure>

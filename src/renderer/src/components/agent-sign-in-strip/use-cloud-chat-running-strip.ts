@@ -1,4 +1,4 @@
-// CHAT-BANNERS B2: RA-11's running strip for a structured chat on Orca Cloud. When the person's
+// The running-agent strip for a structured chat on Orca Cloud. When the person's
 // Orca-account sign-in expires while the chat's agent runs, the chat shows "sign-in expired · Renew";
 // after Renew it confirms and dismisses. A structured chat needs no Restart: its next message goes out
 // with the renewed sign-in.
@@ -28,7 +28,7 @@ import type { CloudHeldStrip } from './use-cloud-held-strip'
 import { cloudChatRunningStripModel } from './cloud-running-strip-model'
 import { openOrcaCloudAccountsSettings, withRenewInPlace } from './cloud-renew-in-place'
 
-/** The Orca Cloud environment a structured chat's tab runs on (END-PASS CHAT-RENEW: shared rule). */
+/** The Orca Cloud environment a structured chat's tab runs on (the rule every chat-side check shares). */
 function useChatEnvironmentId(tabId: string): string | null {
   return useAppStore((state) => chatCloudEnvironmentId(state, tabId))
 }
@@ -42,7 +42,7 @@ type ChatAccountArgs = {
 }
 
 /**
- * The RA-11 decision for a structured chat: expired / renewed / none. An idle chat with no status
+ * The running-strip decision for a structured chat: expired / renewed / none. An idle chat with no status
  * entry is decided from its own agent, so the strip shows as soon as the account expires, before a
  * first message could fail. A held launch wins (null here).
  */
@@ -60,7 +60,7 @@ export function useCloudChatAccountStrip(args: ChatAccountArgs): CloudRunningStr
   // Focus and the 30 s poll keep the account read fresh for any open cloud chat of an account agent.
   useCloudRunningAccountReads(watched)
   const accounts = useOrcaCloudAgentAccounts(watched)
-  // D13: only a workspace that runs the agent on the person's own account (never shared or keyed).
+  // Only a workspace that runs the agent on the person's own account (never shared or keyed).
   const credential =
     agent && accounts.load.kind === 'ready' ? accounts.load.status.credentials[agent] : null
   const expired =
@@ -109,7 +109,7 @@ export function useCloudChatRunningStrip(args: ChatAccountArgs): CloudHeldStrip 
     cancel: () => (strip.phase === 'renewed' ? clearCloudRunningSignout(args.statusKey) : undefined)
   }
   const model = cloudChatRunningStripModel(strip, t)
-  // CHAT-RENEW-INPLACE: the chat's "sign-in expired · Renew" renews right here.
+  // The chat's "sign-in expired · Renew" renews right here.
   const shown =
     strip.phase === 'expired'
       ? withRenewInPlace({

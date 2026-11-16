@@ -77,7 +77,7 @@ export type NewWorkspaceComposerCardProps = {
   ephemeralVmRecipeError?: string | null
   /** Orca Cloud for the selected project, from main; drives the picker's sign-in/upsell row. */
   orcaCloudAvailability?: OrcaCloudAvailability
-  /** RUNON-STICKY: a picked Orca Cloud didn't carry over to this project; Run on says why. */
+  /** A picked Orca Cloud didn't carry over to this project; Run on says why. */
   orcaCloudDropped?: OrcaCloudDropReason | null
   repoBackedSearchRepos?: readonly RepoOption[]
   repoBackedSourcesDisabled?: boolean

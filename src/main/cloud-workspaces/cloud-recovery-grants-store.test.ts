@@ -16,7 +16,7 @@ afterEach(() => {
   }
 })
 
-describe('cloud recovery grants store (GRANT-ID-TRACKING)', () => {
+describe('cloud recovery grants store', () => {
   it('remembers a grant per sandbox across instances (a restart), and forgets it', async () => {
     const d = dir()
     await createCloudRecoveryGrantsStore(d).set('sbx_1', 'grt_a')

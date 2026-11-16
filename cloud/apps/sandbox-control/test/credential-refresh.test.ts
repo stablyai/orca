@@ -1,4 +1,4 @@
-// EGRESS-REFRESH: the central refresher (GitHub user tokens under a lease), the push outbox, expiry pushes and
+// The central refresher (GitHub user tokens under a lease), the push outbox, expiry pushes and
 // the scheduled Claude revocation checks. Pure modules over the fake D1; no Worker harness.
 import { describe, expect, it, vi } from 'vitest'
 import { putAgentCredential } from '../src/agent-credentials'

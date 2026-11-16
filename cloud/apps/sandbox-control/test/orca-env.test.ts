@@ -123,7 +123,7 @@ describe('orca-env', () => {
     const prefixes = quoted(source.match(/const RESERVED_PREFIXES = \[([^\]]*)\]/)?.[1])
     expect(names.length).toBeGreaterThan(30)
     expect(prefixes.length).toBeGreaterThan(3)
-    // The control plane's own account placeholder rides this name (D10); users can't store it.
+    // The control plane's own account placeholder rides this name; users can't store it.
     const blocked = [...names.filter((name) => name !== 'CLAUDE_CODE_OAUTH_TOKEN'), ...prefixes.map((prefix) => `${prefix}X`)]
     writeSessionEnv({ GOOD: 'x', ...Object.fromEntries(blocked.map((name) => [name, 'evil'])) })
     const out = orcaEnv([], blocked.join(' '))

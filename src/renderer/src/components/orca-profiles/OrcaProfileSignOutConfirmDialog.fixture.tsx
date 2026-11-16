@@ -1,4 +1,4 @@
-// JA-33: sign-out names what matters, cloud workspaces.
+// Sign-out names what matters: cloud workspaces.
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { OrcaProfileSignOutConfirmDialog } from './OrcaProfileSignOutConfirmDialog'
 

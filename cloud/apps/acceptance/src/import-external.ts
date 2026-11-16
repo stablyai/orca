@@ -1,5 +1,5 @@
 // Records a result reported by another workstream (not run by this harness) as its own run file, so
-// the report shows its source plainly. Pair it with an auditCap until W9 re-runs it independently.
+// the report shows its source plainly. Pair it with an auditCap until this harness re-runs it independently.
 //   tsx src/import-external.ts <catalogId> <pass|partial|fail> <source> <detail> [evidencePath...]
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -18,7 +18,7 @@ const run: RunFile = {
     {
       id,
       status,
-      detail: `Reported by ${source} (not run by the W9 harness): ${detail}`,
+      detail: `Reported by ${source} (not run by the eval harness): ${detail}`,
       evidence: paths.map((path) => ({ kind: 'log' as const, label: path.split('/').at(-1)!, path })),
       startedAt: at,
       durationMs: 0

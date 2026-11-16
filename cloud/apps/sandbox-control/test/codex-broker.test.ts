@@ -1,4 +1,4 @@
-// Codex via the person's Orca account (contract D11, flag S2): the broker sandbox login, the lease refresher,
+// Codex via the person's Orca account (AGENT_ACCOUNTS_CODEX): the broker sandbox login, the lease refresher,
 // the placeholder auth.json and the chatgpt.com egress swap. Fake provider; no real OpenAI call.
 import { SignJWT, createLocalJWKSet, exportJWK, exportPKCS8, generateKeyPair } from 'jose'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -73,7 +73,7 @@ async function setup(overrides: Record<string, string> = {}) {
   const upstream: { url: string; headers: Headers }[] = []
   const tokenCalls: Record<string, unknown>[] = []
   const upstreamStatus = { value: 200 }
-  // CODEX-EGRESS-BLOCKED: chatgpt.com's edge answering Workers' egress (what dev saw, 2026-11-15).
+  // chatgpt.com's edge answering Workers' egress (what dev saw, 2026-11-15).
   const edgeBlock = { on: false }
   let tokenReply: () => Response = () =>
     Response.json({ access_token: ACCESS_2, refresh_token: REFRESH_2, id_token: ID })
@@ -84,7 +84,7 @@ async function setup(overrides: Record<string, string> = {}) {
       credentials: { authorizationFor: async () => null },
       egressFetch: async (input, init) => {
         if (String(input) === 'https://oauth2.googleapis.com/token') {
-          // CODEX-RELAY: Google's ID token for the relay (only asked when a relay is configured).
+          // Google's ID token for the relay (only asked when a relay is configured).
           const enc = (o: unknown) => Buffer.from(JSON.stringify(o)).toString('base64url')
           return Response.json({ id_token: `${enc({ alg: 'RS256' })}.${enc({ exp: 4e9 })}.sig` })
         }
@@ -174,7 +174,7 @@ describe('device code parsing', () => {
   })
 })
 
-describe('Codex broker (flag S2)', () => {
+describe('Codex broker', () => {
   it('is off without the flag and under the kill switch', async () => {
     for (const env of [{ AGENT_ACCOUNTS_CODEX: '' }, { AGENT_ACCOUNTS_CODEX_DISABLED: '1' }] as Record<string, string>[]) {
       const { h, as } = await setup(env)
@@ -316,7 +316,7 @@ describe('Codex broker (flag S2)', () => {
   })
 })
 
-describe('Codex account in workspaces (D10, D13)', () => {
+describe('Codex account in workspaces', () => {
   it('writes a placeholder login into the workspace and swaps the real access token on chatgpt.com only', async () => {
     const { h, as, signIn, lastEnv, proxied, upstream } = await setup()
     const mia = await as('mia', 'acme', 'member')
@@ -352,7 +352,7 @@ describe('Codex account in workspaces (D10, D13)', () => {
     ]) {
       expect((await proxied(id, 'chatgpt.com', auth, path!, method!)).body).toBe('path_not_allowed')
     }
-    // Another sandbox's placeholder (a clone's, D14) is not this one's.
+    // Another sandbox's placeholder (a clone's) is not this one's.
     expect((await proxied(id, 'chatgpt.com', { authorization: `Bearer ${codexPlaceholder({ id: 'sbx_other' })}` })).status).toBe(403)
   })
 
@@ -375,7 +375,7 @@ describe('Codex account in workspaces (D10, D13)', () => {
     expect(tokenCalls).toHaveLength(1)
   })
 
-  it('never swaps a personal Codex login into a workspace in shared mode (ever transferred, D13)', async () => {
+  it('never swaps a personal Codex login into a workspace in shared mode (ever transferred)', async () => {
     const { h, as, signIn, lastEnv, proxied } = await setup()
     const mia = await as('mia', 'acme', 'member')
     await signIn(mia)
@@ -383,7 +383,7 @@ describe('Codex account in workspaces (D10, D13)', () => {
     const id: string = created.body.sandbox.id
     await h.env.SANDBOX_DB.prepare(`UPDATE sandboxes SET ownership_transferred_at = 1 WHERE id = ?`).bind(id).run()
     const refused = await proxied(id, 'chatgpt.com', { authorization: `Bearer ${codexPlaceholder({ id })}` })
-    // RS-4: still a 403 (a 401 would start Codex's own token refresh), now with words Codex prints.
+    // Still a 403 (a 401 would start Codex's own token refresh), now with words Codex prints.
     expect(refused.status).toBe(403)
     expect(JSON.parse(refused.body)).toEqual({
       detail: 'Orca Cloud can’t use your ChatGPT sign-in here. Check it in Orca: Settings → Cloud agent sign-ins.'
@@ -475,7 +475,7 @@ describe('Codex lease refresher', () => {
   })
 })
 
-describe('CODEX-EGRESS-BLOCKED: chatgpt.com refuses the proxy itself', () => {
+describe('chatgpt.com refuses the proxy itself', () => {
   it('answers with a message Codex prints, never the HTML page, and leaves the login alone', async () => {
     const { h, as, signIn, proxied, upstream, edgeBlock, tokenCalls } = await setup()
     const mia = await as('mia', 'acme', 'member')
@@ -497,7 +497,7 @@ describe('CODEX-EGRESS-BLOCKED: chatgpt.com refuses the proxy itself', () => {
   })
 })
 
-describe('CODEX-RELAY: chatgpt.com through the Cloud Run relay', () => {
+describe('chatgpt.com through the Cloud Run relay', () => {
   it('sends the swapped request to the relay with a Google ID token; the path and the ChatGPT credential are unchanged', async () => {
     const { privateKey } = await generateKeyPair('RS256', { extractable: true })
     const RELAY = 'https://orca-chatgpt-relay-x.us-central1.run.app'
@@ -519,7 +519,7 @@ describe('CODEX-RELAY: chatgpt.com through the Cloud Run relay', () => {
   })
 })
 
-describe('CODEX-FIREWALL-SWAP: the hot Codex calls are swapped at the sandbox firewall', () => {
+describe('the hot Codex calls are swapped at the sandbox firewall', () => {
   async function firewallSetup() {
     const t = await setup({ CODEX_EGRESS_SWAP: 'firewall' })
     const mia = await t.as('mia', 'acme', 'member')
@@ -593,7 +593,7 @@ describe('CODEX-FIREWALL-SWAP: the hot Codex calls are swapped at the sandbox fi
   })
 })
 
-describe('EGRESS firewall mode: Codex entirely at the firewall (A3)', () => {
+describe('firewall swap mode: Codex entirely at the firewall', () => {
   it('every Codex path is an exact firewall swap, nothing forwards to the proxy, and the placeholder refresh is answered by the firewall', async () => {
     const t = await setup({ EGRESS_SWAP_MODE: 'firewall' })
     const mia = await t.as('mia', 'acme', 'member')

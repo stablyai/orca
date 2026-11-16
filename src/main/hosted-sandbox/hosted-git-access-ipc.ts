@@ -1,4 +1,4 @@
-// LIVE-GIT-ACCESS: a GitHub App install made after an Orca Cloud workspace started, applied to the running
+// A GitHub App install made after an Orca Cloud workspace started, applied to the running
 // VM (POST /v1/sandboxes/:id/git/access): the repo token goes into its live egress policy and its git gets
 // the placeholder header, so pulls and pushes work without a restart. `applied` false says why not.
 import { ipcMain } from 'electron'
@@ -26,7 +26,7 @@ export function registerCloudWorkspaceRequestHandlers(
 }
 
 /**
- * A sidebar workspace (owned or paired), or for the create wizard (CREATE-GH-STEP) before it has
+ * A sidebar workspace (owned or paired), or for the create wizard before it has
  * one: the create's server environment (owned runtime record) or a GitHub-only create's sandbox id.
  */
 type CloudGitAccessTarget =

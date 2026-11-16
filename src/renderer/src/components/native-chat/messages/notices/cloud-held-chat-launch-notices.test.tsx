@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// CHAT-CANCEL-ERROR / CHAT-RESTORE-RECONFIRM: a structured chat held on its Orca Cloud strip has
+// A structured chat held on its Orca Cloud strip has
 // created nothing, so it never shows "Chat could not be started" or "Chat connection could not be
 // confirmed" (nor a session error card). Once the hold is gone, a real start's failure still says so.
 import { renderHook } from '@testing-library/react'

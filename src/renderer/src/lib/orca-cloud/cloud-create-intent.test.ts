@@ -13,7 +13,7 @@ import {
 } from './cloud-setup-page-store'
 
 // One Create press makes exactly one server create, across sign-in, the setup page, its auto-start,
-// a reveal, Exit, Back and a re-open (P0, JA-01/PC-8). `create` stands in for the server create.
+// a reveal, Exit, Back and a re-open. `create` stands in for the server create.
 function press(create: (id: string) => void, setupNeeded: boolean): void {
   startCloudCreate({
     setupOpen: getCloudSetupPageRequest() !== null,

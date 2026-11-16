@@ -1,4 +1,4 @@
-// RA-11 copy (design-squad): the strip over an Orca Cloud pane whose agent was already running when
+// Copy for the strip over an Orca Cloud pane whose agent was already running when
 // its Orca-account sign-in expired. Same words as #315's pre-launch strip, then the per-pane restart.
 import type { Translate } from '@/i18n/use-translate'
 import type { CloudRunningStrip } from '@/lib/orca-cloud/cloud-running-agent-signout'
@@ -63,7 +63,7 @@ export function cloudRestartAttemptModel(
       ...base,
       status: 'busy',
       title,
-      // Neutral while it runs: a recorded session may turn out to have no conversation (RA-11e).
+      // Neutral while it runs: a recorded session may turn out to have no conversation.
       detail: attempt.resumable
         ? ''
         : t('agentSignInStrip.renewedFresh', 'Starts a new conversation.'),
@@ -98,7 +98,7 @@ export function cloudRestartAttemptModel(
   }
 }
 
-/** RA-11e: the resume found no conversation, so the agent started a new one. Shown briefly. */
+/** The resume found no conversation, so the agent started a new one. Shown briefly. */
 export function cloudRestartFreshModel(
   agent: CloudAgentRestartAttempt['agent'],
   t: Translate
@@ -122,7 +122,7 @@ export function cloudRestartFreshModel(
 }
 
 /**
- * CHAT-BANNERS B2: a structured chat needs no restart after a renewal. Its next message goes out with
+ * A structured chat needs no restart after a renewal. Its next message goes out with
  * the renewed sign-in (the proxy swaps it in per request), so "renewed" only confirms and dismisses.
  */
 export function cloudChatRunningStripModel(

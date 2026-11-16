@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test'
 
-// DS-40: a failed environment build offers Try again, plus Fix with agent when the install script
+// A failed environment build offers Try again, plus Fix with agent when the install script
 // failed, to admins on the latest build only.
 
 async function open(page: Page, id: string): Promise<void> {

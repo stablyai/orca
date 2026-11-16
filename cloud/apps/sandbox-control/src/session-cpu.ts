@@ -1,4 +1,4 @@
-// U22: internal-only CPU tracking. Customers keep flat sandbox hours; this records each session's
+// Internal-only CPU tracking. Customers keep flat sandbox hours; this records each session's
 // measured active CPU (Vercel reports it after the VM stops) so operators can spot fair-use outliers.
 // Never touches usage_outbox, billing or a customer route, and never blocks a stop: every entry
 // point swallows its own failures, and the cron sweep fills in what the stop couldn't read.

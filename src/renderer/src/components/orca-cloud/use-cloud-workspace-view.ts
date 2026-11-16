@@ -49,7 +49,7 @@ export function useCloudWorkspaceView(
   const pending = useCloudWorkspace((s) => s.pending[workspaceId])
   const sleeping = useIsSleepingWorktree(workspaceId)
   // The local VM record flips the moment this computer puts it to sleep; the last status read can
-  // still say "ready" for a while, which dropped "Asleep ·" from the row (RA-13).
+  // still say "ready" for a while, which dropped "Asleep ·" from the row.
   const vmSuspended = useAppStore(
     (state) => state.ephemeralVmRuntimesByWorkspaceId?.[workspaceId]?.status === 'suspended'
   )

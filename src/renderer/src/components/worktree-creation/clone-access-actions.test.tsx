@@ -11,7 +11,7 @@ function row(phase: CloneAccessPhase) {
   return { actions: cloneAccessActions(access, handlers, translate), handlers, access }
 }
 
-describe('CLONE-ACCESS-ERROR card', () => {
+describe('clone access card', () => {
   it('names the cause and offers to fix access, with another repository as the way around', () => {
     expect(cloneAccessCopy('missing', REPO, translate).title).toBe(
       'Orca can’t access stablyai/orca-plugins'
@@ -21,7 +21,7 @@ describe('CLONE-ACCESS-ERROR card', () => {
       'Give Orca access',
       'Choose another repository'
     ])
-    // The App's install page is a plain button: no Copy link (AUTH-ONLY-COPY-LINK).
+    // The App's install page is a plain button: no Copy link.
     expect(actions[0]).not.toHaveProperty('link')
     actions[0]?.onClick()
     expect(access.giveAccess).toHaveBeenCalledOnce()

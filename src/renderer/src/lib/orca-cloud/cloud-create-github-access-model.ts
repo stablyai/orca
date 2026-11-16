@@ -1,4 +1,4 @@
-// CREATE-GH-STEP: what the create wizard's GitHub access step shows, from the control plane's
+// What the create wizard's GitHub access step shows, from the control plane's
 // repo-access answer (its `push` reason) and, where it decides the button, the person's install rights.
 import type { HostedGithubRepoAccessResponse } from '../../../../shared/hosted-sandbox/hosted-github-wire'
 import { fetchCloudPushAccess } from './cloud-push-access'

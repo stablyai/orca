@@ -29,7 +29,7 @@ describe('sandbox control plane lifecycle', () => {
       ports: [6768, 6769],
       tags: { orcaSandbox: ready.sandbox.id, orcaEnv: 'test' }
     })
-    // Open egress by default (E3): the wildcard is present.
+    // Open egress by default: the wildcard is present.
     expect(box!.policy.allow['*']).toEqual([])
     const start = h.vercel.commands.find((c) => c.command === START_COMMAND)
     expect(start!.env.ORCA_PUBLIC_WSS).toBe(box!.route.replace('https:', 'wss:'))

@@ -1,4 +1,4 @@
-// SANDBOX-CONTROL-TYPECHECK: `pnpm typecheck` for this Worker. tsc checks every file the program reaches, and
+// `pnpm typecheck` for this Worker. tsc checks every file the program reaches, and
 // the Worker imports desktop code from src/shared (wire types, parsers). Those files are written for the
 // desktop's compiler options (no noUncheckedIndexedAccess) and globals (window, MessageChannel), and the
 // desktop's own typecheck covers them; TypeScript has no per-file options. So this fails on any diagnostic in

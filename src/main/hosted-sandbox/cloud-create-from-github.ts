@@ -1,5 +1,5 @@
-// "Start in Orca Cloud" for a GitHub repository with no clone here (cloud-start D4), with the same
-// build sheet as an owned create (GH-CREATE-SHEET): the same progress lines (boot plan, start,
+// "Start in Orca Cloud" for a GitHub repository with no clone here, with the same
+// build sheet as an owned create: the same progress lines (boot plan, start,
 // clone or update with git's percent) and the same failure lines and codes, so the window's sheet
 // reads both alike.
 import { createHash, randomBytes } from 'node:crypto'
@@ -72,7 +72,7 @@ function createSpec(input: CreateFromGitHubInput): EnvironmentCreateSpec {
   }
 }
 
-/** EP-5: cancelled creates whose sandbox wasn't confirmed deleted, by creation id, for Try again. */
+/** Cancelled creates whose sandbox wasn't confirmed deleted, by creation id, for Try again. */
 const unconfirmedCancels = new Map<string, CreateFromGitHubInput>()
 
 /**

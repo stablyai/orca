@@ -393,7 +393,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       type: 'close'
     })
   })
-  // RESTART-ABORT-BANNER: a Restart invalidates the transport on purpose. A stream still being set
+  // A Restart invalidates the transport on purpose. A stream still being set
   // up must fail as recoverable (the pane resubscribes), never "This operation was aborted".
   it('a stream set up while its transport is invalidated fails as recoverable, not aborted', async () => {
     await registerRuntimeEnvironmentHandlers(store as never)

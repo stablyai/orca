@@ -188,7 +188,7 @@ describe('cloud workspaces client: routine runs on Home', () => {
   })
 })
 
-describe('cloud workspaces client: owner change (OWNER-TRANSFER)', () => {
+describe('cloud workspaces client: owner change', () => {
   const row = {
     id: SBX,
     workspaceId: 'ws_1',

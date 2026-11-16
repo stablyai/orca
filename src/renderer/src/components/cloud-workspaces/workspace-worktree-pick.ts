@@ -1,4 +1,4 @@
-// EP-6: which of a cloud workspace's server rows is the workspace itself. A paired (shared)
+// Which of a cloud workspace's server rows is the workspace itself. A paired (shared)
 // workspace's server lists the sandbox's base checkout (its primary, the repo cloned at boot) next to
 // the workspace's own linked worktree; opening the workspace must land on the latter.
 

@@ -76,7 +76,7 @@ export async function cloudSandboxSkipsServer(
 /**
  * forget-local touches no remote/archive hooks; otherwise read current trust so concurrent
  * same-repo deletes share one approval. An asleep Orca Cloud sandbox can't run archive hooks, and
- * asking it would only wait out request timeouts (W9 measured 31 s), so its archive is skipped.
+ * asking it would only wait out request timeouts (31 s measured), so its archive is skipped.
  */
 export async function shouldSkipArchiveHooks(
   get: WorktreeSliceGet,
@@ -125,7 +125,7 @@ export async function prepareCloudSandboxDelete(args: {
   if (!result.ok) {
     throw new Error(ephemeralVmErrorText(result))
   }
-  // EP-8: running, but its server won't answer this computer (a revoked pairing): asking it would
+  // Running, but its server won't answer this computer (a revoked pairing): asking it would
   // wait forever, so Delete goes through Orca Cloud like an asleep one, and says so.
   const unreachable = result.unreachable !== undefined
   if (!result.asleep && !result.gone && !unreachable) {
@@ -146,7 +146,7 @@ export async function prepareCloudSandboxDelete(args: {
 }
 
 /**
- * ARCHIVE-HOOK: Delete through Orca Cloud never reaches the workspace's server, so its worktree
+ * Delete through Orca Cloud never reaches the workspace's server, so its worktree
  * removal can't run the repo's archive hook. The control plane runs it instead: woken for it when
  * the workspace sleeps and its repo has one. A failure refuses like any archive-hook failure, so
  * the failure toast offers "Delete anyway" (allowFailedArchiveHook).

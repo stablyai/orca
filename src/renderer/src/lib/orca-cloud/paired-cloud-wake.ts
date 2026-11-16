@@ -1,4 +1,4 @@
-// PAIRED-WAKE: wakes a PAIRED cloud workspace (a "<name> (cloud)" server bound to a sandbox; this
+// Wakes a PAIRED cloud workspace (a "<name> (cloud)" server bound to a sandbox; this
 // desktop has no VM record to resume) through the control plane, with the same wake progress an
 // owned workspace reports, so the waking overlay, predictive wake and billing refusals behave alike.
 import { translate } from '@/i18n/i18n'
@@ -116,9 +116,9 @@ export async function wakePairedCloudWorkspace(
       })
     }
   }
-  // PAIRED-WAKE-TYPE-THROUGH: waking from the press, before the bindings read below. The waking
+  // Waking from the press, before the bindings read below. The waking
   // layer is what lets typing through to the pane (the asleep cover makes it inert) and holds it;
-  // reporting only after that read lost the keys typed in its first second (n49/n51).
+  // reporting only after that read lost the keys typed in its first second.
   report('waking')
   const sandboxId = await resolveCloudRowSandboxId({
     id: workspaceId,
@@ -136,7 +136,7 @@ export async function wakePairedCloudWorkspace(
   if (result.ok) {
     sleptHere.delete(workspaceId)
     // The control plane accepts the wake before the VM runs (it takes seconds more): "ready" only
-    // once its status says so, or the overlay never outlasts its show delay (PAIRED-WAKING-OVERLAY).
+    // once its status says so, or the overlay never outlasts its show delay.
     report('connecting')
     if (options.quiet) {
       await refreshCloudWorkspaceStatus(workspaceId)
@@ -162,7 +162,7 @@ export async function wakePairedCloudWorkspaceIfAsleep(
   workspaceId: string
 ): Promise<{ ok: true } | { ok: false; reason: string }> {
   // Always a fresh read: a cached "ready" from before its Sleep (up to a poll old) made the first
-  // open after Sleep skip the wake and sit in the dropped-connection retry (n38 GATE).
+  // open after Sleep skip the wake and sit in the dropped-connection retry.
   await refreshCloudWorkspaceStatus(workspaceId)
   const entry = getCloudWorkspaceSnapshot().status[workspaceId]
   const state = entry?.error ? null : entry?.status?.state

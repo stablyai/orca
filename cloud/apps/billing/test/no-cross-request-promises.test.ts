@@ -1,4 +1,4 @@
-// WORKER-XREQ-PROMISE guard: an isolate serves many requests, and a promise is bound to the request that
+// Guard: an isolate serves many requests, and a promise is bound to the request that
 // started it. Module-level state must never hold an in-flight promise (a cancelled request's promise never
 // settles and hangs everyone awaiting it), and jose's createRemoteJWKSet (which shares its fetch) is banned:
 // use settledRemoteJWKSet. A line that is genuinely safe (e.g. a WebCrypto import, not request I/O) says so
@@ -24,7 +24,7 @@ const RULES: { name: string; pattern: RegExp }[] = [
   { name: 'module-level object holding a promise', pattern: /^(?:export )?let \w+\s*:\s*\{[^}]*:\s*Promise</ }
 ]
 
-describe('no cross-request promises (WORKER-XREQ-PROMISE)', () => {
+describe('no cross-request promises', () => {
   it('src never caches an in-flight promise at module level, nor uses createRemoteJWKSet', () => {
     const found: string[] = []
     for (const file of files(SRC)) {

@@ -29,7 +29,7 @@ export type CloudAgentsPanelLoad =
 
 export type CloudAgentsPanelActions = {
   chooseSource: (agent: OrcaCloudAccountAgent, source: Exclude<AgentSource, null>) => void
-  /** Settings › Orca Cloud › Cloud agent sign-ins (S0): set up once, or renew. */
+  /** Settings › Orca Cloud › Cloud agent sign-ins: set up once, or renew. */
   manage: () => void
   signIn: () => void
   retry: () => void

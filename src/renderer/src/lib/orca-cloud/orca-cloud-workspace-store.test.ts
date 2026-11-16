@@ -143,7 +143,7 @@ describe('orca cloud workspace store', () => {
     expect(getCloudWorkspaceSnapshot().pending.a).toBeUndefined()
   })
 
-  it('ARCHIVE-HOOK: a declined hook failure neither sleeps nor archives the workspace', async () => {
+  it('a declined hook failure neither sleeps nor archives the workspace', async () => {
     const bridge = stubApi()
     const sleep = vi.fn(async () => [{ completed: true }])
     const result = await archiveCloudWorkspace('a', { sleep, beforeSleep: async () => false })

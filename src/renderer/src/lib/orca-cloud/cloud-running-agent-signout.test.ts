@@ -49,7 +49,7 @@ const strip = (
     revision: 0
   })
 
-describe('cloudRunningStrip (RA-11)', () => {
+describe('cloudRunningStrip', () => {
   beforeEach(resetCloudRunningSignoutForTest)
 
   it('shows nothing while the account works, and state 1 once it expires or is revoked', () => {
@@ -159,7 +159,7 @@ describe('cloudRunningStrip (RA-11)', () => {
   })
 })
 
-describe('D13: only workspaces that run the agent on the person’s own account', () => {
+describe('only workspaces that run the agent on the person’s own account', () => {
   beforeEach(resetCloudRunningSignoutForTest)
   const view = (extra: Record<string, unknown> = {}) => ({
     defaults: {},
@@ -192,7 +192,7 @@ describe('D13: only workspaces that run the agent on the person’s own account'
   })
 })
 
-describe('running-pane live read (RA-11f)', () => {
+describe('running-pane live read', () => {
   it('re-reads about every 30 s, so a revoke reaches the strip within ~30 s', () => {
     expect(CLOUD_RUNNING_LIVE_READ_MS).toBe(30_000)
     // A read from any caller within the last ~29 s counts; the poll skips.

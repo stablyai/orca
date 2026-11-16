@@ -22,7 +22,7 @@ describe('cloud status glyph', () => {
       const key = `${shape.fill}/${shape.outline}`
       groups.set(key, [...(groups.get(key) ?? []), state])
     }
-    // Option A: colour carries state (and the row and accessible name say it); Archived is B's.
+    // Colour carries state (and the row and accessible name say it); Archived is a hollow outline.
     expect(Object.fromEntries(groups)).toEqual({
       'full/solid': [
         'running',

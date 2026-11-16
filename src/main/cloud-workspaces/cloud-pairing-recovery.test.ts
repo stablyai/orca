@@ -46,7 +46,7 @@ function deps(overrides: Partial<CloudPairingRecoveryDeps> = {}) {
 const transient = () =>
   vi.fn(async () => ({ ok: false as const, status: 503, error: 'unavailable' }))
 
-describe('cloud pairing recovery (EP-8)', () => {
+describe('cloud pairing recovery', () => {
   it('re-grants only on a real refusal of the pairing', () => {
     expect(isPairingRejection('unauthorized', '')).toBe(true)
     expect(isPairingRejection('device_revoked', '')).toBe(true)
@@ -124,7 +124,7 @@ describe('cloud pairing recovery (EP-8)', () => {
   })
 })
 
-describe('grant tracking (GRANT-ID-TRACKING)', () => {
+describe('grant tracking', () => {
   it('an owned workspace remembers its re-grant, and the next recovery revokes the previous one', async () => {
     let revision = 1
     let next = 'grt_a'

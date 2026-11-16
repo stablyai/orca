@@ -51,7 +51,7 @@ type LaunchStructuredWorktreeSessionArgs = {
 export async function launchStructuredWorktreeSession(
   args: LaunchStructuredWorktreeSessionArgs
 ): Promise<WorktreeCreationStructuredSessionResult> {
-  // CLOUD-CHAT-FIRST-TAB: no seeded shell in front of the chat while it opens.
+  // No seeded shell in front of the chat while it opens.
   const releaseFirstSurface = claimFirstSurfaceForStructuredCreate(args.worktreeId)
   try {
     return await launchClaimedStructuredWorktreeSession(args)

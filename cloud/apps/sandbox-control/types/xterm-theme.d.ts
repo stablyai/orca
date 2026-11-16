@@ -1,4 +1,4 @@
-// SANDBOX-CONTROL-TYPECHECK: desktop shared settings types reach `import type { ITheme } from '@xterm/xterm'`, and
+// Desktop shared settings types reach `import type { ITheme } from '@xterm/xterm'`, and
 // xterm's typings pull in `/// <reference lib="dom" />`. DOM's Headers, streams and crypto then clash with
 // @cloudflare/workers-types across this Worker. tsconfig `paths` maps the import here: the theme shape only (copied
 // from @xterm/xterm's ITheme), no DOM.

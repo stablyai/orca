@@ -296,7 +296,7 @@ function QuickTabBody({
   const isFolderWorkspaceTarget =
     cardProps.projectOptions.find((option) => option.id === cardProps.selectedProjectId)?.kind ===
     'project-group'
-  // Run on never changes the button, and it matches the title for every target (design-squad).
+  // Run on never changes the button, and it matches the title for every target.
   const primaryActionLabel = isFolderWorkspaceTarget
     ? getFolderWorkspacePrimaryActionLabel(t)
     : t('auto.components.NewWorkspaceComposerModal.createWorkspace', 'Create workspace')

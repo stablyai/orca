@@ -4,7 +4,7 @@ import { z } from 'zod'
 
 /**
  * GET /v1/github/repo-access?repo=: can Orca Cloud clone this repository for the account?
- * `requested`: an owner of the org on GitHub has been asked to approve the App (D2).
+ * `requested`: an owner of the org on GitHub has been asked to approve the App.
  */
 export const HostedGithubRepoAccessResponseSchema = z.object({
   access: z.enum(['public', 'granted', 'missing', 'requested']),
@@ -16,7 +16,7 @@ export const HostedGithubRepoAccessResponseSchema = z.object({
   // false: another user's account, or a non-admin org member; null: unknown (no connected GitHub
   // user, membership unreadable, or GitHub didn't answer).
   canInstall: z.boolean().nullable().optional(),
-  // CREATE-GH-STEP: can a workspace on this repository push? `ok`: granted. `not_installed`: the
+  // Can a workspace on this repository push? `ok`: granted. `not_installed`: the
   // App isn't on the owner. `repo_not_selected`: it is, without this repository (configureUrl is
   // the installation's settings page). `not_connected`: the App reaches the repository through an
   // installation this Orca account isn't bound to. Absent from an older control plane.

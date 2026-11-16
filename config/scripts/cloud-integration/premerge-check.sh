@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Gate for merging into cloud/integration (no CI on nwparker/orca-private). Run from your branch, before merging:
 #   config/scripts/cloud-integration/premerge-check.sh
-# Merges the current private/cloud/integration into a throwaway worktree with your branch, then requires
+# Merges the current private/cloud/integration into a throwaway worktree with your branch, then requires pnpm typecheck,
+#   pnpm lint and the touched (and src/shared-importing) cloud packages' typechecks. Tests run only with PREMERGE_TESTS=1
+#   (or PREMERGE_FULL=1), and then it also requires
 #   pnpm typecheck, the full pnpm lint suite (pre-commit hooks only lint staged files), and vitest for the tests your
 #   branch touched: changed *.test.ts(x), every test in the folder of each changed source, every test that imports a
 #   changed module, every test Vitest's module graph relates to the change (vitest --changed), and each touched cloud/apps/* package's own suite, plus the own `pnpm typecheck` of each touched cloud/ package listed
@@ -96,7 +98,13 @@ pnpm typecheck
 pnpm lint
 
 tests=()
-if [[ "${PREMERGE_FULL:-}" == 1 ]]; then
+# Typecheck and lint only by default (Neil, 2026-11-16: no test runs per PR; testing happens in the final landing pass).
+# PREMERGE_TESTS=1 runs the targeted vitest selection, cloud app suites and the image boot check; PREMERGE_FULL=1 implies it.
+run_tests=0
+if [[ "${PREMERGE_TESTS:-}" == 1 || "${PREMERGE_FULL:-}" == 1 ]]; then run_tests=1; fi
+if ((!run_tests)); then
+  echo "premerge: tests skipped (typecheck and lint only; PREMERGE_TESTS=1 runs the targeted tests)"
+elif [[ "${PREMERGE_FULL:-}" == 1 ]]; then
   # Full suite via the repo's own runner (what every build cut runs before its smoke). Slow; use for wide changes.
   pnpm test
 else
@@ -142,7 +150,7 @@ else
       done < <(printf "%s\n" "$all_tests" | xargs grep -lE "['\"][^'\"]*/(${names})(\\.tsx?)?['\"]" 2>/dev/null || true)
     fi
     # (c) Vitest's own module graph: every test that transitively imports a changed file (`vitest list --changed`).
-    # Name matching alone missed #462's REG-5: the multiplex tests import an aggregator (methods/terminal/terminal) that
+    # Name matching alone misses cases like the multiplex tests: they import an aggregator (methods/terminal/terminal) that
     # imports the changed modules, one folder up.
     node config/scripts/workspace-package-build/build-workspace-packages.mjs >/dev/null
     node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --runtime=node >/dev/null
@@ -224,9 +232,11 @@ fi
 if [[ -n "$cloud_pkgs" ]]; then
   (cd cloud && pnpm install --frozen-lockfile >/dev/null && pnpm -r --filter "./packages/**" build >/dev/null)
 fi
-for app in $cloud_apps; do
-  if [[ -d "$app" ]]; then (cd "$app" && npx vitest run); fi
-done
+if ((run_tests)); then
+  for app in $cloud_apps; do
+    if [[ -d "$app" ]]; then (cd "$app" && npx vitest run); fi
+  done
+fi
 # The root `pnpm typecheck` above covers no cloud/ package, and vitest strips types, so cloud packages' own type errors
 # went unseen (261 in sandbox-control by 2026-11-13). Typecheck each touched cloud package that is listed as clean.
 # The cloud workspace was installed and built above.
@@ -242,8 +252,9 @@ if ((${#tc_pkgs[@]})); then
   done
 fi
 # Image or VM-script changes: boot the image twice (Docker); the second boot must be clean. Fails open without Docker.
-if [[ -n "$(git diff --name-only "$base"...HEAD -- cloud/apps/sandbox-control/image)" ]]; then
+if ((run_tests)) && [[ -n "$(git diff --name-only "$base"...HEAD -- cloud/apps/sandbox-control/image)" ]]; then
   bash config/scripts/cloud-integration/boot-twice-check.sh
 fi
-if [[ "${PREMERGE_FULL:-}" == 1 ]]; then scope="the full vitest suite"; else scope="${#tests[@]} targeted test file(s)"; fi
+if ((!run_tests)); then scope="no tests (PREMERGE_TESTS=1 runs them)"
+elif [[ "${PREMERGE_FULL:-}" == 1 ]]; then scope="the full vitest suite"; else scope="${#tests[@]} targeted test file(s)"; fi
 echo "premerge OK: $branch merges cleanly into cloud/integration with typecheck, lint and $scope green."

@@ -16,7 +16,7 @@ export function setupActionFor(
   }
   if (availability === 'needs-capability' && access.state !== 'no-plan') {
     // The team has a plan; only turning Orca Cloud on for it helps. Checkout would refuse
-    // (already_subscribed) and loop (CAP-GATE-DESKTOP).
+    // (already_subscribed) and loop.
     return null
   }
   const effective: OrcaCloudRunTargetAccess = access

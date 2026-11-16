@@ -46,7 +46,7 @@ describe('startCodexBrokerSession', () => {
     expect(updates.at(-1)).toEqual({ phase: 'failed', error: 'not_a_chatgpt_login' })
   })
 
-  it('RS-3: device-code sign-in turned off on the ChatGPT account keeps its own reason', async () => {
+  it('device-code sign-in turned off on the ChatGPT account keeps its own reason', async () => {
     const { session, updates } = harness([{ status: 'failed', error: 'device_auth_disabled' }])
     await session.done
     expect(updates.at(-1)).toEqual({ phase: 'failed', error: 'device_auth_disabled' })

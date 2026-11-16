@@ -49,7 +49,7 @@ export type OrcaCloudRunTargetAccess =
   | {
       state: 'entitled'
       remainingSeconds: number
-      /** Set only during the trial, whose low-hours warning names who can choose a plan (T1). */
+      /** Set only during the trial, whose low-hours warning names who can choose a plan. */
       trial?: boolean
       canManageBilling?: boolean
     }
@@ -147,7 +147,7 @@ function openBillingInBrowser(): void {
 
 /** Hours left in tenths, rounded down: the one rule shared with Plan & billing. */
 export function getOrcaCloudHoursLeft(remainingSeconds: number): number {
-  // Why: the same rounding as Plan & billing and the account menu, so every surface agrees (JA-07).
+  // Why: the same rounding as Plan & billing and the account menu, so every surface agrees.
   return sandboxHoursLeft(remainingSeconds)
 }
 

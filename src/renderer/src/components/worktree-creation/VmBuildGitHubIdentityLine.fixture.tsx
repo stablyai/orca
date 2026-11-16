@@ -1,4 +1,4 @@
-// CREATE-GH-IDENTITY: the "Connect your GitHub so PRs show as you" line under the wizard's GitHub
+// The "Connect your GitHub so PRs show as you" line under the wizard's GitHub
 // access step, in each state, inside the step list the way the build sheet draws it.
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import type { GitHubIdentityState } from '@/components/settings/accounts/orca/github-identity-model'

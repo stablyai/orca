@@ -43,12 +43,12 @@ export type CloudSetupNeed =
   | 'spend-cap'
   | 'payment'
   | 'github'
-  /** The team can still get its one-time trial; setup grants it with no card (O7). */
+  /** The team can still get its one-time trial; setup grants it with no card. */
   | 'trial'
-  /** The team's trial hours are used up: a plan is next (T2). */
+  /** The team's trial hours are used up: a plan is next. */
   | 'trial-used-up'
   /**
-   * CAP-GATE: the team has a plan or trial, but Orca Cloud isn't turned on for it (auth's `sandbox`
+   * The team has a plan or trial, but Orca Cloud isn't turned on for it (auth's `sandbox`
    * capability). Buying can't fix it (checkout says already_subscribed): wait or contact us.
    */
   | 'capability'
@@ -70,13 +70,13 @@ export type CloudSetupStep = {
   status?: string
   /** Second line under the detail. */
   note?: string
-  /** In-row button, e.g. D3 "How to push" or the agent row's "Set up once". */
+  /** In-row button, e.g. the no-remote row's "How to push" or the agent row's "Set up once". */
   action?: { label: string; onClick: () => void }
 }
 
 /**
  * Rows derived from today's billing access and the build's availability, until the setup session
- * (N1) reports them itself. Done rows are kept so the panel can show progress; the panel hides when
+ * reports them itself. Done rows are kept so the panel can show progress; the panel hides when
  * every required row is done.
  */
 export function deriveCloudSetupSteps({
@@ -86,7 +86,7 @@ export function deriveCloudSetupSteps({
 }: {
   availability: OrcaCloudAvailability
   access: OrcaCloudRunTargetAccess
-  /** The GitHub row from the repository-access check (D1–D3); null while it can't be known. */
+  /** The GitHub row from the repository-access check; null while it can't be known. */
   github?: CloudSetupStep | null
 }): CloudSetupStep[] {
   const signedOut = availability === 'needs-sign-in' || access.state === 'signed-out'
@@ -94,11 +94,11 @@ export function deriveCloudSetupSteps({
     ? { id: 'account', state: 'needed', need: 'sign-in', canFix: true }
     : { id: 'account', state: 'done' }
   const plan = derivePlanStep(signedOut, availability, access)
-  // D3: no GitHub remote outranks account and plan rows, because buying can't fix it.
+  // No GitHub remote outranks account and plan rows, because buying can't fix it.
   if (github?.blocksStart && github.state === 'failed') {
     return [github]
   }
-  // The agent row never blocks a start; it is hidden while a member can't start at all (C1).
+  // The agent row never blocks a start; it is hidden while a member can't start at all.
   const memberBlocked = plan.state === 'needed' && plan.canFix === false
   if (memberBlocked) {
     return [account, plan]
@@ -112,11 +112,11 @@ function derivePlanStep(
   access: OrcaCloudRunTargetAccess
 ): CloudSetupStep {
   if (signedOut) {
-    // A new account's team gets the trial in the same trip (A1); setup says if it can't.
+    // A new account's team gets the trial in the same trip; setup says if it can't.
     return { id: 'plan', state: 'pending', need: 'trial' }
   }
   if (availability === 'needs-capability' && access.state !== 'no-plan') {
-    // Never "Choose a Team plan" here: the team has one, and checkout refuses (CAP-GATE-DESKTOP).
+    // Never "Choose a Team plan" here: the team has one, and checkout refuses.
     return access.state === 'loading'
       ? { id: 'plan', state: 'loading' }
       : { id: 'plan', state: 'needed', need: 'capability' }
@@ -132,7 +132,7 @@ function derivePlanStep(
       return { id: 'plan', state: 'pending' }
     case 'no-plan':
       if (access.trialOfferSeconds) {
-        // Anyone on the team can start its trial; no card, so members aren't blocked (B1).
+        // Anyone on the team can start its trial; no card, so members aren't blocked.
         return {
           id: 'plan',
           state: 'needed',
@@ -141,7 +141,7 @@ function derivePlanStep(
           trialSeconds: access.trialOfferSeconds
         }
       }
-      // JA-21 (Neil): billing is progressive. A plan, hours, cap or payment problem isn't a setup
+      // Billing is progressive. A plan, hours, cap or payment problem isn't a setup
       // step; Create goes ahead and the creating sheet shows the blocker with its fix.
       return { id: 'plan', state: 'done' }
     case 'out-of-hours':
@@ -155,7 +155,7 @@ export type RunOnPreference = 'last' | 'local' | 'orca-cloud'
 /**
  * The target a new composer opens on: the project's "Default run on" setting, else its last
  * successful start target, else the global last choice, else this computer. A blocked Orca Cloud
- * is never preselected (spec D7); `cloudBlockedReason` lets the hint say why.
+ * is never preselected; `cloudBlockedReason` lets the hint say why.
  */
 export function resolveDefaultRunOn({
   preference,

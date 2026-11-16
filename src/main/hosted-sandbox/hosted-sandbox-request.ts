@@ -69,7 +69,7 @@ export function createHostedSandboxRequest(
             'archive',
             'idle-minutes',
             'wake-hints',
-            // The sandbox view may carry `gitSetup: 'failed'` (GIT-SETUP strip).
+            // The sandbox view may carry `gitSetup: 'failed'` (the git setup strip).
             'git-setup',
             ...(init.features ?? [])
           ].join(','),

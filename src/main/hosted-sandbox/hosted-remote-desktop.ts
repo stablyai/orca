@@ -60,7 +60,7 @@ export function cloudSandboxesByEnvironment(userDataPath: string): Map<string, s
       sandboxes.set(runtime.runtimeEnvironmentId, sandboxId)
     }
   }
-  // Paired workspaces (opened here, created elsewhere) are Orca Cloud sandboxes too (PAIRED-AWARE).
+  // Paired workspaces (opened here, created elsewhere) are Orca Cloud sandboxes too.
   for (const [environmentId, sandboxId] of cloudPairedSandboxesByEnvironment()) {
     if (!sandboxes.has(environmentId)) {
       sandboxes.set(environmentId, sandboxId)

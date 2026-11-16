@@ -2,7 +2,7 @@
 // person pastes it into Orca: the bare `code#state`, or the whole callback URL copied from the address
 // bar. Normalized here before it is typed into the waiting `claude setup-token`; never logged or kept.
 
-// Anthropic's codes and states are URL-safe base64 joined by '#'. RS-1: Claude Code (2.1.323, its
+// Anthropic's codes and states are URL-safe base64 joined by '#'. Claude Code (2.1.323, its
 // pasted-code prompt) trims the line, splits it on '#', and refuses anything without both halves
 // ("Invalid code. Please make sure the full code was copied."), so a code without its state is refused
 // here, before it reaches the CLI.

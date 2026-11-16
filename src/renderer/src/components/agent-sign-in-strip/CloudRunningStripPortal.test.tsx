@@ -86,7 +86,7 @@ const { CloudRunningStripPortal } = await import('./CloudRunningStripPortal')
 const { CloudChatBannerSlot } = await import('./CloudChatBannerSlot')
 const { resetCloudChatBannerSlotsForTest } = await import('./cloud-chat-banner-slot')
 
-/** chatOpen: the tab's chat view covers the pane, so the strip shows in its column (CHAT-BANNERS). */
+/** chatOpen: the tab's chat view covers the pane, so the strip shows in its column. */
 function mount(chatOpen = false): HTMLElement {
   const container = document.createElement('div')
   document.body.appendChild(container)
@@ -145,7 +145,7 @@ describe('CloudRunningStripPortal renders every state', () => {
   })
 })
 
-describe('CloudRunningStripPortal in the chat view (CHAT-BANNERS)', () => {
+describe('CloudRunningStripPortal in the chat view', () => {
   const chatColumn = (): HTMLElement => {
     const container = mount(true)
     expect(container.textContent).toBe('')
@@ -188,7 +188,7 @@ describe('CloudRunningStripPortal in the chat view (CHAT-BANNERS)', () => {
   })
 })
 
-describe('DUP-EXPIRED-STRIP', () => {
+describe('one expired strip per tab', () => {
   it('a launch held on the whole tab shows only its own strip, never this one beside it', () => {
     stub.strip = { phase: 'expired', agent: 'claude' }
     stub.tabHeld = true

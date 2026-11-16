@@ -1,4 +1,4 @@
-// B2: the setup panel's Team row when the user is on their personal account and a team they're on
+// The setup panel's Team row when the user is on their personal account and a team they're on
 // already has a plan. Switching uses the account menu's switcher (no browser trip); several planned
 // teams become a menu. The panel renders `step` as its Team row and `action` in that row's slot.
 import React from 'react'
@@ -88,7 +88,7 @@ export function CloudSetupSwitchTeamAction({
 }
 
 export type CloudSetupSwitchTeam = {
-  /** The Team row (state 'needed') with B2's wording as its detail. */
+  /** The Team row (state 'needed') with the switch wording as its detail. */
   step: CloudSetupStep
   /** The row's action: "Switch to <team>", or a menu of teams. */
   action: React.ReactNode
@@ -96,7 +96,7 @@ export type CloudSetupSwitchTeam = {
   startHeldReason: string
 }
 
-/** Copy and pieces for B2 once the planned teams are known; null when B2 doesn't apply. */
+/** Copy and pieces for the switch once the planned teams are known; null when it doesn't apply. */
 export function useCloudSetupSwitchTeamFor(
   teams: readonly PlannedTeam[],
   onSwitch?: (team: PlannedTeam) => void
@@ -135,7 +135,7 @@ export function useCloudSetupSwitchTeamFor(
 }
 
 /**
- * The setup rows with B2's Team row in place of the plan row, or null when B2 doesn't apply:
+ * The setup rows with the switch Team row in place of the plan row, or null when it doesn't apply:
  * only a signed-in account whose own plan row is still open (switching is the fix, not buying).
  */
 export function applySwitchTeamStep(
@@ -151,8 +151,8 @@ export function applySwitchTeamStep(
 }
 
 /**
- * B2 for the composer: pass `enabled` while Orca Cloud is picked. Null until a planned team is
- * known (or when signed out, already on a team, or billing can't say).
+ * The team switch for the composer: pass `enabled` while Orca Cloud is picked. Null until a
+ * planned team is known (or when signed out, already on a team, or billing can't say).
  */
 export function useCloudSetupSwitchTeam(enabled: boolean): CloudSetupSwitchTeam | null {
   return useCloudSetupSwitchTeamFor(useSwitchToPlannedTeam(enabled))

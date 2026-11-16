@@ -1,4 +1,4 @@
-// PAIRED-SLEEP (PAIRED-AWARE): Sleep on a paired cloud workspace (opened here, created elsewhere: a
+// Sleep on a paired cloud workspace (opened here, created elsewhere: a
 // GitHub-only repo, another device, a teammate's, a link) must put its SANDBOX to sleep. This desktop
 // has no runtime record of it, so the ordinary Sleep only closed panels here while the sandbox kept
 // running and using sandbox hours. The control plane sleeps it, like Home's Sleep does.
@@ -17,7 +17,7 @@ function rowFor(worktreeId: string): Row | null {
 
 /**
  * A paired cloud workspace's own row: its Sleep must reach the sandbox through the control plane.
- * SHARED-MEMBER-SLEEP-HANG: the row the paired registry names (a teammate's shared workspace is its
+ * The row the paired registry names (a teammate's shared workspace is its
  * linked worktree since #690, not the main checkout); a main checkout still counts before it loads.
  */
 export function isPairedCloudSleepTarget(worktreeId: string): boolean {
@@ -70,7 +70,7 @@ export async function sleepPairedCloudSandboxes(
         outcome.refused.push(id)
       }
     } else {
-      // The row says Asleep (not Active) now, and opening it wakes it (n38 GATE).
+      // The row says Asleep (not Active) now, and opening it wakes it.
       await notePairedCloudSlept(id)
     }
   }

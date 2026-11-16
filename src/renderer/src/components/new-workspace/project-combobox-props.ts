@@ -19,7 +19,7 @@ export type ProjectComboboxProps = {
    */
   invalidTone?: 'error' | 'warning'
   describedBy?: string
-  /** D4: GitHub repositories with no clone here, listed while Orca Cloud is the Run on target. */
+  /** GitHub repositories with no clone here, listed while Orca Cloud is the Run on target. */
   cloudRepos?: readonly OrcaCloudGitHubRepository[] | null
   /** The picked cloud-only repository (owner/name); it replaces the project in the field. */
   cloudRepoValue?: string | null
@@ -27,12 +27,12 @@ export type ProjectComboboxProps = {
   onMoreCloudAccess?: () => void
   /** Present while GitHub has more repositories than are listed. */
   onShowMoreCloudRepos?: (() => void) | null
-  /** GH-LIST-MISSING: GitHub's list couldn't be read; the section says so with Retry. */
+  /** GitHub's list couldn't be read; the section says so with Retry. */
   cloudReposRetry?: CloudReposRetry | null
   /** Bumped to open the list at its cloud-only section ("Choose a GitHub repository"). */
   openSignal?: number
   /**
-   * Bumped to move focus here quietly (RR-c1: a stopped Create points at the field's error): no
+   * Bumped to move focus here quietly (a stopped Create points at the field's error): no
    * path tooltip on that focus, since the error is already speaking. Hover and Tab still show it.
    */
   focusSignal?: number

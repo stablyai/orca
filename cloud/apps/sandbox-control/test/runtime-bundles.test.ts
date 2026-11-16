@@ -35,7 +35,7 @@ function memoryStore(): RuntimeBundleStore & { objects: Map<string, { bytes: Uin
 
 const sha = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex')
 
-describe('runtime bundle route (ENV-STALE)', () => {
+describe('runtime bundle route', () => {
   it('stores what a signed PUT uploads, keyed by commit, with the hash it computed itself', async () => {
     const store = memoryStore()
     const bytes = new TextEncoder().encode('bundle-bytes')

@@ -5,8 +5,8 @@ import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { SettingsRenderContext } from './settings-render-context'
 
-/** Settings → Agent accounts, after "This computer": Hosts (S3). The page titles each part and
- *  lists it in its jump row. Orca Cloud's own sign-ins (S0) are Settings › Orca Cloud › Cloud agent
+/** Settings → Agent accounts, after "This computer": Hosts. The page titles each part and
+ *  lists it in its jump row. Orca Cloud's own sign-ins are Settings › Orca Cloud › Cloud agent
  *  sign-ins; see orcaCloudAgentAccountsLead. Desktop only, and only in builds with an Orca Cloud
  *  control plane. */
 export function orcaCloudAgentAccountsParts(

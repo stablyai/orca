@@ -1,4 +1,4 @@
-// RA-11: the strip over an Orca Cloud pane whose agent is already running when its Orca-account
+// The strip over an Orca Cloud pane whose agent is already running when its Orca-account
 // sign-in expires. Same component, place and height as #315's pre-launch strip; the terminal keeps
 // running and refits below it, so its scrollback stays readable and selectable.
 import type React from 'react'
@@ -83,7 +83,7 @@ export function CloudRunningStripPortal({
   const agentType = entry?.agentType
   const agent: HostAgentSignInAgent | null =
     agentType === 'claude' ? 'claude' : agentType === 'codex' ? 'codex' : null
-  // D13: only a workspace that runs the agent on the person's own account (never shared or keyed).
+  // Only a workspace that runs the agent on the person's own account (never shared or keyed).
   const expired =
     agent !== null &&
     accounts.load.kind === 'ready' &&
@@ -96,7 +96,7 @@ export function CloudRunningStripPortal({
     expired,
     orcaCloudAgentAccountsLoadedAt()
   )
-  // DUP-EXPIRED-STRIP: a host-published launch holds its whole tab (cloudTabHoldKey); its strip
+  // A host-published launch holds its whole tab (cloudTabHoldKey); its strip
   // is the one to show, never this one stacked beside it.
   const paneHold = useCloudAgentHold(paneKey)
   const tabHold = useCloudAgentHold(cloudTabHoldKey(tabId))
@@ -120,7 +120,7 @@ export function CloudRunningStripPortal({
     // The pane's own session resumes when it has one.
     startCloudPaneAgentRestart({ paneKey, worktreeId, ptyId, ...args })
   }
-  // RA-11e: a resume that found no conversation started fresh; say so for a moment, then clear.
+  // A resume that found no conversation started fresh; say so for a moment, then clear.
   if (cloud && cloudAgentRestartStartedFresh(paneKey, revision)) {
     return (
       <CloudPaneBannerPortal
@@ -199,7 +199,7 @@ export function CloudRunningStripPortal({
     // State 2's ×; state 1 has none (Renew is the action) and Escape leaves it showing.
     cancel: () => (strip.phase === 'renewed' ? clearCloudRunningSignout(paneKey) : undefined)
   }
-  // CHAT-RENEW-INPLACE: "sign-in expired · Renew" renews right here; renewed keeps RA-11's Restart.
+  // "sign-in expired · Renew" renews right here; renewed keeps the running strip's Restart.
   const model = cloudRunningStripModel(strip, t)
   const shown =
     strip.phase === 'expired'

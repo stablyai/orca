@@ -1,4 +1,4 @@
-// OWNER-TRANSFER: changing a workspace's owner and the previous owner's notices, on the same
+// Changing a workspace's owner and the previous owner's notices, on the same
 // authenticated call as the rest of the team registry client.
 import type { z } from 'zod'
 import {

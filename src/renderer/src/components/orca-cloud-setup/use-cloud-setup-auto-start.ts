@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 
 /**
- * When setup finishes (RR-b, team-lead + design-squad):
+ * When setup finishes:
  * - Visible page: "All set" holds for `settleMs`, then the workspace starts (Start was already
  *   pressed once; a second click adds friction, not consent).
  * - Hidden page (under another view or workspace): never auto-start, so no sandbox appears the user

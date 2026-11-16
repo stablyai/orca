@@ -25,7 +25,7 @@ const SMALL_SAMPLE = 10
  */
 export type CloudStartKind = 'clone' | 'update'
 
-// JA-11: the hint used the control plane's create_ms (write-ahead row to orcad ready, ~2-3 s), while
+// The hint used the control plane's create_ms (write-ahead row to orcad ready, ~2-3 s), while
 // "Start sandbox" on this sheet runs end to end (token, entitlement, VM, orcad, network: ~6 s). A
 // normal start read as "Taking longer than usual". So the hint is this computer's own measurement of
 // the very step it labels: the last starts' durations per kind, kept locally (durations only).

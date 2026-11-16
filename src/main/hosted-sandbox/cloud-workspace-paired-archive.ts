@@ -1,4 +1,4 @@
-// PAIRED-ARCHIVE: Archive and Unarchive for a PAIRED cloud workspace (a "<name> (cloud)" server bound
+// Archive and Unarchive for a PAIRED cloud workspace (a "<name> (cloud)" server bound
 // to a sandbox; no runtime record here). The same control-plane calls as an owned archive, minus
 // what only an owned workspace has on this computer: its runtime record (no status to flip), its
 // synced copy (none is kept for a paired one) and its cached checkouts (main never captures them).
@@ -76,7 +76,7 @@ export async function unarchivePairedOrNotCloud(
         await invalidate(environmentId).catch(() => undefined)
       }
     }
-    // ARCHIVE-MENU-DISABLED: the control plane answers once the VM is ready. Settle this wake now:
+    // The control plane answers once the VM is ready. Settle this wake now:
     // the window's open then finds it running and starts no wake of its own, so nothing else would,
     // leaving the row "waking" (Archive disabled) until the overlay called it stalled.
     emit({ workspaceId, phase: 'ready', source: 'unarchive', startedAt })

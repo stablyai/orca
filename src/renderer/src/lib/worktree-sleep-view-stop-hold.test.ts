@@ -9,7 +9,7 @@ import {
 
 afterEach(() => resetWorktreeSleepViewForTests())
 
-// END-PASS n64 P3: "Reattaching terminal · Down for 10 sec" during a deliberate Sleep or Archive.
+// "Reattaching terminal · Down for 10 sec" must not show during a deliberate Sleep or Archive.
 describe('deliberate Sleep/Archive hold for the reconnect notices', () => {
   it('holds from the press until it runs out', () => {
     const at = 1_000_000

@@ -338,7 +338,7 @@ describe('orca cloud routine', () => {
       'The run waited too long to start and was skipped.'
     )
     expect(routineRunErrorCopy('weird')).toBe('The run failed.')
-    // END-PASS n64 P3: Claude's own "Please run /login" becomes how to set Claude up.
+    // Claude's own "Please run /login" becomes how to set Claude up.
     const login = routineRunErrorCopy('agent_exit_1', 'Not logged in · Please run /login')
     expect(login).toContain('Claude isn’t set up for Orca Cloud')
     expect(login).not.toContain('/login')

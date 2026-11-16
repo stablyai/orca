@@ -1,4 +1,4 @@
-// The Cloud workspace status panel's door into the A16 panel: "Agents and secrets · {{summary}}".
+// The Cloud workspace status panel's door into the agent accounts panel: "Agents and secrets · {{summary}}".
 // The summary reads the Orca account only (never the sandbox), like the panel's section 1.
 import React from 'react'
 import { ChevronRight, KeyRound } from 'lucide-react'
@@ -21,7 +21,7 @@ import { agentName, keyPhrase } from '../settings/agent-accounts/orca-cloud-acco
 import { openAgentHostPanel } from './agent-host-panel-store'
 
 /**
- * The NP-3 ready-line wording, grouped by source: "Claude from your Orca account · Codex with the
+ * The ready-line wording, grouped by source: "Claude from your Orca account · Codex with the
  * team key"; agents nothing covers say so after the groups.
  */
 export function agentsSummary(

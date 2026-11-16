@@ -16,7 +16,7 @@ type CloudAccountBackfill = {
   /**
    * Lists the active team's sandboxes when a live record is unfiled, the team changed, or the last
    * list is older than `relistMs` (the first run, at startup, always lists). `force` lists now
-   * (a cloud list refreshed, or a sandbox read said not found: LC-2).
+   * (a cloud list refreshed, or a sandbox read said not found).
    */
   run(options?: { force?: boolean }): Promise<void>
 }

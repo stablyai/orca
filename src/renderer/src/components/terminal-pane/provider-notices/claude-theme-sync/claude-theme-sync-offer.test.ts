@@ -38,7 +38,7 @@ afterEach(() => {
   useAppStore.setState(initial, true)
 })
 
-describe('Claude Code theme-sync offer (RA-6)', () => {
+describe('Claude Code theme-sync offer', () => {
   it('holds the offer while Claude runs in an Orca Cloud workspace, then makes it on a local one', () => {
     seedCloudWorkspaceSnapshot({ ids: new Set(['cloud-ws']), idsLoaded: true })
     seed({ id: 'cloud-ws', host: 'runtime:env-a' })

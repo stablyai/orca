@@ -1,5 +1,5 @@
 // Agent Source per person (agent-sources contract §2): "Your sign-in" or "API key", per agent, as a
-// default plus an optional per-workspace override, and the one-time "Use my sign-in" offer answer (D8).
+// default plus an optional per-workspace override, and the one-time "Use my sign-in" offer answer.
 // A default can also be "Sign in inside this workspace" ('in-workspace'): Orca stores and injects nothing
 // for that agent (no account placeholder, no key), and its own login inside each sandbox wins.
 //   GET /v1/agent-sources[?workspaceId=<sandbox id>]
@@ -157,7 +157,7 @@ export async function agentSourcesView(
     const names = await memberNamesFor(db, caller.accountId, [row.user_id])
     owner = { userId: row.user_id, displayName: names.get(row.user_id) ?? null, isCaller: row.user_id === caller.userId }
   }
-  // D13: personal accounts never apply in a workspace shared with teammates.
+  // Personal accounts never apply in a workspace shared with teammates.
   const sharedWorkspace = row ? isSharedWorkspace(row) : false
   return { defaults, inWorkspace, workspace, effective: resolved, coveredByKey: covered, signInOffer, owner, sharedWorkspace }
 }
@@ -185,7 +185,7 @@ export async function putAgentSource(db: D1Database, caller: SandboxCaller, body
       throw new AgentSourceError(403, 'forbidden', 'owner_only')
     }
   }
-  // D9: accepted while the sandbox is still starting; its first boot reads the row.
+  // Accepted while the sandbox is still starting; its first boot reads the row.
   await upsert(db, caller, row ? row.id : DEFAULT_SCOPE, body.agent, body.source, now)
   return row
 }
@@ -212,7 +212,7 @@ export async function deleteAgentSourcesForSandbox(db: D1Database, sandboxId: st
 }
 
 /**
- * How each agent authenticates in this session (D10):
+ * How each agent authenticates in this session:
  * - 'account': the owner's Orca-account credential through an egress placeholder (keys for that agent dropped);
  * - 'inside':  the owner signs in inside each workspace ('in-workspace'): keys dropped, the agent's own login;
  * - 'omit':    kill-switch fallback (Source sign-in, provider off): keys dropped, the agent's own login in the sandbox;
@@ -260,7 +260,7 @@ export async function agentModesFor(
     } else if (usable && options.accountsUsable && !shared) {
       modes[agent] = 'account'
     } else {
-      // Expired/revoked, placeholders off, or a shared workspace (D13): the winning key, if any.
+      // Expired/revoked, placeholders off, or a shared workspace: the winning key, if any.
       modes[agent] = 'keep'
     }
   }

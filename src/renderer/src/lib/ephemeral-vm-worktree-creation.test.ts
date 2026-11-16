@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// JA-01 tail: Delete sandbox on a create stopped by its environment check must delete THAT sandbox
+// Delete sandbox on a create stopped by its environment check must delete THAT sandbox
 // (its runtime, hence its control-plane record), and the restart path must delete it before retrying.
 
 const { state, gate, cleanup, retry } = vi.hoisted(() => {
@@ -22,7 +22,7 @@ const { state, gate, cleanup, retry } = vi.hoisted(() => {
   }
 })
 
-// CREATE-GH-STEP has its own tests; here it never holds the create.
+// The GitHub access step has its own tests; here it never holds the create.
 vi.mock('@/lib/orca-cloud/cloud-create-github-access', () => ({
   beginCloudCreateGitHubAccess: () => undefined,
   gateCloudCreateOnGitHubAccess: async () => ({ proceed: true, grantedDuringCreate: false })

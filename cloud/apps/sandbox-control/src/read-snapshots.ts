@@ -5,7 +5,7 @@
 //   GET    /v1/team/workspaces/:id/read-snapshot?keyId=rk_…        the body + only that key's wrapped key
 // At every drain the control plane asks the VM (image/vm/orca-sandbox-read-snapshot) to seal a
 // compact snapshot to the reader keys allowed to open the workspace, and stores the ciphertext.
-// D1, backups and logs hold only ciphertext and never a reader secret. Trust model: like W4 grants,
+// D1, backups and logs hold only ciphertext and never a reader secret. Trust model: like member grants,
 // the control plane at runtime chooses the recipient keys and drives the VM, so it is trusted not to
 // add its own key (same as relaying grant keys). Access mirrors canOpen at read time, and pruning
 // (removal, private, revoke) deletes wrapped keys at once, without the VM.

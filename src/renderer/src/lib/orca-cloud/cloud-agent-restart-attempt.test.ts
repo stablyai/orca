@@ -1,4 +1,4 @@
-// RA-11 Restart feedback: "Restarting…" until the relaunched agent reports, "Couldn't restart" when
+// Restart feedback: "Restarting…" until the relaunched agent reports, "Couldn't restart" when
 // nothing relaunched within the timeout. The strip never vanishes without a result.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { resetCloudRunningSignoutForTest } from './cloud-running-agent-signout'
@@ -21,7 +21,7 @@ function begin(queue: () => void = () => undefined): void {
   beginCloudAgentRestart(PANE, { agent: 'claude', resumable: true, ptyId: PTY }, queue)
 }
 
-describe('Restart attempt (RA-11)', () => {
+describe('Restart attempt', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     resetCloudRunningSignoutForTest()

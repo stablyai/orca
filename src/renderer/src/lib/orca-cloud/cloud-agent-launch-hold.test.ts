@@ -80,7 +80,7 @@ describe('cloud agent launch hold', () => {
     expect(cloudAgentLaunchNeedsHold('claude')).toBe(true)
   })
 
-  it('CHAT-RENEW-INPLACE (B): a renewal never launches; every held pane waits for its own Start', async () => {
+  it('a renewal never launches; every held pane waits for its own Start', async () => {
     setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'expired' }))
     let firstOutcome = 'pending'
     let secondOutcome = 'pending'
@@ -119,7 +119,7 @@ describe('cloud agent launch hold', () => {
     await expect(held).resolves.toBe('cancel')
   })
 
-  it('holds a launch whose agent is not set up (PC-3b), and waits for Start, never starting unasked', async () => {
+  it('holds a launch whose agent is not set up, and waits for Start, never starting unasked', async () => {
     setOrcaCloudAgentAccountsStateForTest(accounts({ state: 'none' }))
     expect(cloudAgentHoldReason('claude', accounts({ state: 'none' }))).toBe('notSetUp')
     expect(cloudAgentLaunchHoldReason('claude')).toBe('notSetUp')

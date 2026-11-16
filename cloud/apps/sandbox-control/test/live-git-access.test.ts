@@ -1,4 +1,4 @@
-// LIVE-GIT-ACCESS: the GitHub App installed after a workspace booted reaches the running VM without a
+// The GitHub App installed after a workspace booted reaches the running VM without a
 // restart: POST /v1/sandboxes/:id/git/access mints the repo token, swaps it into the live egress policy
 // and gives the VM's git the placeholder header boot would have set.
 import { describe, expect, it } from 'vitest'
@@ -37,7 +37,7 @@ async function setup() {
   return { h, alice, id, box, installed, gitConfigRuns }
 }
 
-describe('LIVE-GIT-ACCESS', () => {
+describe('GitHub App access reaches a running VM', () => {
   it('not installed yet: says so and changes nothing', async () => {
     const t = await setup()
     const res = await t.h.call('POST', `/v1/sandboxes/${t.id}/git/access`, { bearer: t.alice })

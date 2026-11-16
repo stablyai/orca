@@ -1,4 +1,4 @@
-// The setup session's view of the one-time trial (N11, owned by src/trial.ts). Kept behind this
+// The setup session's view of the one-time trial (owned by src/trial.ts). Kept behind this
 // port so the setup flow reads one shape whatever the trial module returns.
 import type { Env } from './env'
 import { grantTrial, trialIncludedSeconds, trialRow, trialState } from './trial'
@@ -31,7 +31,7 @@ export const noTrialPort: TrialPort = {
   grant: async () => ({ ok: false, reason: 'trial_unavailable' })
 }
 
-/** The trial module (N11) as the setup session sees it. */
+/** The trial module as the setup session sees it. */
 export const billingTrialPort: TrialPort = {
   offeredSeconds: (env, now) => trialIncludedSeconds(env, now),
   async current(env, accountId) {

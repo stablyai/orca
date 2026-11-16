@@ -53,7 +53,7 @@ describe('trial grant', () => {
     expect(again.body.trial.grantedAt).toBe(granted.body.trial.grantedAt)
   })
 
-  it('needs a team (O1): a personal account is offered it but cannot claim it', async () => {
+  it('needs a team: a personal account is offered it but cannot claim it', async () => {
     const h = await createHarness()
     const solo = await as(h, { sub: 'u1', email: 'dana@acme.dev' })
     const view = await h.call('GET', '/v1/billing/entitlements', { headers: solo })

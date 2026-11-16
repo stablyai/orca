@@ -8,7 +8,7 @@ import type { TerminalPaneController } from '../terminal-pane/controller/use-ter
 import { SecretRequestPanePortals } from './SecretRequestPanePortals'
 
 /**
- * Prompts an agent's host can raise over its pane: sign-in and secret requests (S4-b). Orca Cloud
+ * Prompts an agent's host can raise over its pane: sign-in and secret requests. Orca Cloud
  * panes use the private sign-in strip; every other host keeps #40228's card.
  */
 export function AgentPanePortals({

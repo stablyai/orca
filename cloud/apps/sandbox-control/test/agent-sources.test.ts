@@ -122,7 +122,7 @@ describe('/v1/agent-sources', () => {
     expect((await h.call('GET', `/v1/agent-sources?workspaceId=${id}`, { bearer: await as('zed', 'other', 'admin') })).status).toBe(404)
   })
 
-  it('a workspace source set while the sandbox is still starting applies at its first boot (D9)', async () => {
+  it('a workspace source set while the sandbox is still starting applies at its first boot', async () => {
     const { h, as, put, lastEnv } = await setup()
     const mia = await as('mia')
     await put('personal', 'ANTHROPIC_API_KEY', TEAM_KEY, mia)

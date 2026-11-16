@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { recheckCloudCapability } from './cloud-capability-recheck'
 
-describe('recheckCloudCapability (PAID-TEAM-CHOOSE-PLAN)', () => {
+describe('recheckCloudCapability', () => {
   it('asks auth for fresh capabilities before re-reading availability', async () => {
     const order: string[] = []
     let resolveAuth: () => void = () => undefined

@@ -137,7 +137,7 @@ function setWorktrees(
   )
 }
 
-describe('Delete from Home of a workspace this desktop runs (REG-8)', () => {
+describe('Delete from Home of a workspace this desktop runs', () => {
   beforeEach(() => {
     mocks.state.settings = { skipDeleteWorktreeConfirm: false }
     mocks.state.openModal.mockClear()
@@ -205,7 +205,7 @@ describe('Delete from Home of a workspace this desktop runs (REG-8)', () => {
   })
 })
 
-describe('Delete from Home with a runtime record but no sidebar row (REG-8b)', () => {
+describe('Delete from Home with a runtime record but no sidebar row', () => {
   beforeEach(() => {
     mocks.state.openModal.mockClear()
     vi.mocked(toast.error).mockClear()
@@ -269,7 +269,7 @@ vi.mock('@/lib/orca-cloud/cloud-primary-delete-request', () => ({
   requestCloudPrimaryDelete: vi.fn()
 }))
 
-describe('Delete on a cloud workspace on its default branch (CLOUD-PRIMARY-DELETE)', () => {
+describe('Delete on a cloud workspace on its default branch', () => {
   beforeEach(async () => {
     mocks.state.settings = { skipDeleteWorktreeConfirm: false }
     mocks.state.openModal.mockClear()

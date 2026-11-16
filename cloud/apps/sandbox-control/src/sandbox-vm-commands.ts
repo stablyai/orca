@@ -38,7 +38,7 @@ export type StartInputs = {
   repo?: { url: string; ref?: string }
   /** Token the VM's GitHub clients send; the egress layer swaps it for a real short-lived one. */
   githubPlaceholder?: string
-  /** GH-AS-MEMBER (GH_AS_MEMBER=on): gh in the VM uses the attested sender's own placeholder. */
+  /** GH_AS_MEMBER=on: gh in the VM uses the attested sender's own placeholder. */
   ghAsMember?: boolean
   /** git `http.https://github.com/.extraheader` carrying the placeholder, so every git request is claimable. */
   gitExtraHeader?: string
@@ -53,17 +53,17 @@ export type StartInputs = {
   shareProxyKey?: string
   /**
    * The VM's hostname for this boot (workspaceHostname): terminal prompts read `ubuntu@<workspace>`
-   * instead of the provider's VM id, which changes on every wake (JA-27). Set before orcad starts, so
+   * instead of the provider's VM id, which changes on every wake. Set before orcad starts, so
    * every shell it opens sees it. Best effort: a failure keeps the provider's name.
    */
   hostname?: string
   /**
-   * PARITY-DOCKER: whether the VM's `docker` shim may start dockerd (SANDBOX_DOCKER). Absent (a
+   * Whether the VM's `docker` shim may start dockerd (SANDBOX_DOCKER). Absent (a
    * retried or repair start) leaves the VM's last answer.
    */
   docker?: boolean
   /**
-   * A create that installs member git identities after it answers (CREATE-GIT-ASYNC): the start script
+   * A create that installs member git identities after it answers: the start script
    * marks git setup pending, and the VM's `git` holds commits and pushes until it is ready.
    */
   gitSetupPending?: boolean
@@ -132,7 +132,7 @@ export async function startOrcad(
     env.ORCA_GITHUB_PLACEHOLDER = inputs.githubPlaceholder
   }
   if (inputs.githubPlaceholder && inputs.ghAsMember) {
-    // GH-AS-MEMBER: the Worker answers member placeholders on api.github.com (member-git.ts), so gh may use them.
+    // The Worker answers member placeholders on api.github.com (member-git.ts), so gh may use them.
     env.ORCA_GH_AS_MEMBER = 'on'
   }
   if (inputs.secretEnv && Object.keys(inputs.secretEnv).length > 0) {

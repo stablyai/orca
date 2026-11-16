@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// GH-CREATE-SHEET: a GitHub-only Orca Cloud create runs on the same build sheet as any cloud
+// A GitHub-only Orca Cloud create runs on the same build sheet as any cloud
 // create (a pending creation with the Orca Cloud recipe), streams its build log there, and its Retry
 // never makes a second sandbox: after a lost answer it resends the same Idempotency-Key, and after a
 // failed open it only opens the sandbox it already has.
@@ -165,7 +165,7 @@ describe('GitHub-only create on the build sheet', () => {
   })
 })
 
-// CLOUD-ONLY-NAME-AS-PROMPT (n64): the composer's name field names the workspace and is never the
+// The composer's name field names the workspace and is never the
 // agent's first message; Blank terminal starts no agent at all.
 describe('the name field is only the workspace name', () => {
   beforeEach(() => {
@@ -174,11 +174,13 @@ describe('the name field is only the workspace name', () => {
   })
 
   it('Blank terminal + a name: titled by the name, no agent and no prompt', async () => {
-    const started = startCloudWorkspaceFromGitHub({ ...REQUEST, name: 'endpass-c64', agent: null })
+    const started = startCloudWorkspaceFromGitHub({ ...REQUEST, name: 'my-workspace', agent: null })
     const entry = onlyCreation()
-    expect(entry.request).toMatchObject({ displayName: 'endpass-c64', quickPrompt: '' })
+    expect(entry.request).toMatchObject({ displayName: 'my-workspace', quickPrompt: '' })
     expect(await started).toBe(true)
-    expect(createFromGitHub).toHaveBeenCalledWith(expect.objectContaining({ title: 'endpass-c64' }))
+    expect(createFromGitHub).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'my-workspace' })
+    )
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(mocks.launch).not.toHaveBeenCalled()
   })
@@ -186,12 +188,14 @@ describe('the name field is only the workspace name', () => {
   it('Claude + a name: Claude starts with no prompt, titled by the name', async () => {
     const started = startCloudWorkspaceFromGitHub({
       ...REQUEST,
-      name: 'endpass-c64',
+      name: 'my-workspace',
       agent: 'claude'
     })
-    expect(onlyCreation().request).toMatchObject({ displayName: 'endpass-c64', quickPrompt: '' })
+    expect(onlyCreation().request).toMatchObject({ displayName: 'my-workspace', quickPrompt: '' })
     expect(await started).toBe(true)
-    expect(createFromGitHub).toHaveBeenCalledWith(expect.objectContaining({ title: 'endpass-c64' }))
+    expect(createFromGitHub).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'my-workspace' })
+    )
     await vi.waitFor(() => expect(mocks.launch).toHaveBeenCalledTimes(1))
     const args = mocks.launch.mock.calls[0]![0]
     expect(args).toMatchObject({ agent: 'claude', worktreeId: 'wt-1' })

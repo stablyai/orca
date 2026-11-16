@@ -10,7 +10,7 @@ import type { HostedSandboxControlPlaneClient } from './hosted-sandbox-control-p
 /**
  * `asleep`: no running server to remove its checkout; destroying the sandbox takes the disk.
  * `gone`: Orca Cloud already destroyed it (or it never started); only the row is left.
- * `unreachable` (EP-8): running, but this computer can't reach its server (its pairing was revoked,
+ * `unreachable`: running, but this computer can't reach its server (its pairing was revoked,
  * e.g. by an owner change, or it doesn't answer). Like asleep: Delete goes through Orca Cloud.
  */
 export type CloudDeletePreflight =

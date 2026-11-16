@@ -18,7 +18,7 @@ export type GitHubConnectConfig = {
   clientSecret: string
   stateSecret: string
   fetch?: typeof fetch
-  // N5: checks a just-installed installation against the GitHub identity carried in the state,
+  // Checks a just-installed installation against the GitHub identity carried in the state,
   // with the App's own credentials. Null (or absent): fall back to GitHub's Authorize page.
   verifyInstaller?: (installationId: number, user: { id: number; login: string }) => Promise<GitHubInstallation | null>
 }
@@ -127,7 +127,7 @@ const StatePayload = z.object({
   r: z.string().regex(/^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/).max(200).optional(),
   // GitHub sent the browser back with setup_action=request: a non-owner asked an org owner to install.
   q: z.literal(1).optional(),
-  // N5: the GitHub identity Orca Cloud auth verified from the user's GitHub sign-in (billing's setup
+  // The GitHub identity Orca Cloud auth verified from the user's GitHub sign-in (billing's setup
   // chain passes it). Lets the install bind without GitHub's separate Authorize page.
   g: z.object({ id: z.number().int().positive(), l: z.string().regex(/^[A-Za-z0-9-]{1,39}$/) }).optional()
 })
@@ -518,7 +518,7 @@ export async function handleGitHubReturn(
   const code = url.searchParams.get('code') ?? ''
   const hasCode = /^[A-Za-z0-9_-]{8,128}$/.test(code)
   if (!hasCode && state.g && installationId && !requested && state.k !== 'user' && config.verifyInstaller) {
-    // N5: the user signed in to Orca with GitHub; check that identity against the installation with
+    // The user signed in to Orca with GitHub; check that identity against the installation with
     // the App's credentials and skip GitHub's Authorize page. Any doubt falls through to OAuth.
     const installation = await config.verifyInstaller(installationId, { id: state.g.id, login: state.g.l }).catch(() => null)
     if (installation) {

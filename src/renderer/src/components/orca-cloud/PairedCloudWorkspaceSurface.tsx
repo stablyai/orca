@@ -1,4 +1,4 @@
-// SLEEP-IN-PROGRESS (2/2): the Orca Cloud layer over a PAIRED workspace (a "<name> (cloud)" server
+// The Orca Cloud layer over a PAIRED workspace (a "<name> (cloud)" server
 // bound to a sandbox; this desktop has no runtime record for it). Same waking overlay as an owned
 // workspace; asleep, the read-only copy is the control plane's SEALED snapshot (the only copy a
 // paired workspace has), with the saving and failed states after a Sleep pressed here.
@@ -116,7 +116,7 @@ export function PairedCloudWorkspaceSurface({
   const view = useCloudWorkspaceView(workspaceId, { pairedRows: true })
   const name = useAppStore((state) => findWorktreeById(state, workspaceId)?.displayName ?? null)
   const now = useNow(1_000, view.wake !== undefined)
-  // PAIRED-WAKE-TYPE-THROUGH: typing is held while it wakes and delivered to the woken terminal,
+  // Typing is held while it wakes and delivered to the woken terminal,
   // exactly as for an owned workspace (the store begins and ends the hold on wake progress).
   const wakeInput = useWakeInput(workspaceId)
   useWakeInputNotices(workspaceId)

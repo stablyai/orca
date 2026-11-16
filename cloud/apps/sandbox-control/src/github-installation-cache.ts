@@ -1,4 +1,4 @@
-// CREATE-GH-STEP: GitHub's installation lookups for repo-access, cached in D1 so every isolate shares
+// GitHub's installation lookups for repo-access, cached in D1 so every isolate shares
 // them and the create wizard's 2 s poll doesn't spend an app-JWT call each time. A found installation
 // is kept a minute, a 404 for 15 s. The installation webhooks and the setup return drop the owner's
 // entries (forgetOwner/forgetInstallation), so an install is seen on the next poll, not after the TTL.

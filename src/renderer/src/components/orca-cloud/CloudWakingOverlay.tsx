@@ -119,9 +119,9 @@ export function CloudWakingOverlay({
   const stuck = !failed && seconds >= WAKE_STUCK_S
   const retryRef = useRef<HTMLButtonElement | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
-  // PAIRED-WAKE-TYPE-THROUGH: while typing goes through to the terminal, the pill never takes focus.
+  // While typing goes through to the terminal, the pill never takes focus.
   // Taking it as the overlay mounted (~0.3 s in) moved the keys typed after the first one onto the
-  // overlay, where they were lost (n53: "e" held, 22 lost).
+  // overlay, where they were lost ("e" held, 22 lost).
   const typingThrough = typeThrough && !failed
   useEffect(() => {
     if (!autoFocus || typingThrough) {

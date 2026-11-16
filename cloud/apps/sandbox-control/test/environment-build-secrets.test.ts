@@ -1,4 +1,4 @@
-// SEC-2: an environment build's snapshot is the team's saved environment, booted by every member's
+// An environment build's snapshot is the team's saved environment, booted by every member's
 // workspace. A build gets only the team secrets an admin named, never a model key, and cannot succeed
 // with one of their values left on disk.
 import { execFileSync } from 'node:child_process'
@@ -74,7 +74,7 @@ async function setup(envVarNames: string[]) {
   return { h, call, envId, build }
 }
 
-describe('team secrets in environment builds (SEC-2)', () => {
+describe('team secrets in environment builds', () => {
   it('splits the named secrets: model keys are withheld, the rest injected', () => {
     expect(buildSecretNames(['NPM_TOKEN', 'ANTHROPIC_API_KEY', 'NPM_TOKEN', 'AI_GATEWAY_API_KEY', 'GEMINI_API_KEY', 'DATABASE_URL'])).toEqual({
       injected: ['NPM_TOKEN', 'DATABASE_URL'],
@@ -141,7 +141,7 @@ describe('team secrets in environment builds (SEC-2)', () => {
 })
 
 // The real script's functions, run by a real bash against a scratch tree.
-describe('environment-build.sh secret handling (SEC-2)', () => {
+describe('environment-build.sh secret handling', () => {
   const script = readFileSync(fileURLToPath(new URL('../image/env/environment-build.sh', import.meta.url).href), 'utf8')
   const take = /^take_secrets\(\) \{\n[\s\S]*?\n\}\n/m.exec(script)?.[0]
   const scan = /^scan_secrets\(\) \{\n[\s\S]*?\n\}\n/m.exec(script)?.[0]

@@ -1,4 +1,4 @@
-// IPC for owner changes (OWNER-TRANSFER), registered with the other cloud workspace handlers.
+// IPC for owner changes, registered with the other cloud workspace handlers.
 import { z } from 'zod'
 import type { ServeCloudWorkspaces } from './cloud-workspaces'
 

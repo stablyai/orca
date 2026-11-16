@@ -25,7 +25,7 @@ function createTerminal({ viewportY, baseY }: { viewportY: number; baseY: number
   return terminal
 }
 
-// WAKE-SCROLLBACK-SCROLL: the wake restore pins the person's line; that pin must not be for good.
+// The wake restore pins the person's line; that pin must not be for good.
 describe('a pinned wake scroll', () => {
   it('stays put while new output arrives, and follows output again once back at the bottom', () => {
     const terminal = createTerminal({ viewportY: 12, baseY: 50 })

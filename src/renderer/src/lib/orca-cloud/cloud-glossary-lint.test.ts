@@ -1,4 +1,4 @@
-// Cloud glossary lint (design-squad spec, JA-25): user-visible strings on Orca Cloud surfaces must
+// Cloud glossary lint: user-visible strings on Orca Cloud surfaces must
 // use the glossary's words (.context/cloud/specs/glossary.md). Scans translate()/t() fallbacks,
 // i18n plural defaults, JSX text and user-facing JSX attributes; never identifiers or imports.
 import { readFileSync } from 'node:fs'
@@ -21,7 +21,7 @@ const SCOPE = [
   'src/renderer/src/components/settings/**/{OrcaCloud,Cloud,PlanBilling,AgentAccounts,Accounts}*.tsx',
   'src/renderer/src/components/worktree-creation/Vm*.tsx',
   'src/renderer/src/components/worktree-creation/*Cloud*.tsx',
-  // Copy tables behind the Vm* components (design-squad scope fix).
+  // Copy tables behind the Vm* components.
   'src/renderer/src/components/worktree-creation/vm-*.ts',
   'src/renderer/src/lib/*cloud*.ts',
   // Settings nav copy for the Orca Cloud group (missed by the component globs).

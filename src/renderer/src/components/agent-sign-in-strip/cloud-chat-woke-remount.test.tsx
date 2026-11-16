@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
-// CHAT-BANNERS: toggling a pane's chat view moves (remounts) its woke-up bar, which restarts the
+// Toggling a pane's chat view moves (remounts) its woke-up bar, which restarts the
 // bar's relaunch grace. A remount must never show the bar over an agent that has already
-// relaunched: that is decided from the agent's evidence, never from the grace (design-squad).
+// relaunched: that is decided from the agent's evidence, never from the grace.
 import { act } from 'react'
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -47,7 +47,9 @@ function setEvidence(evidenceObservedAt: number): void {
     evidenceObservedAt,
     updatedAt: evidenceObservedAt
   }
-  useAppStore.setState({ agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({ [paneKey]: entry })) })
+  useAppStore.setState({
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({ [paneKey]: entry }))
+  })
 }
 
 /** The pane's woke bar, with the chat view open (its column's slot) or closed. */

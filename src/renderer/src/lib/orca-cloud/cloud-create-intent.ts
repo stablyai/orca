@@ -1,5 +1,5 @@
-// One Create press on Orca Cloud is one intent, and one intent makes at most one server create, ever
-// (P0, JA-01/PC-8). The intent travels from the composer through the setup page to the hidden
+// One Create press on Orca Cloud is one intent, and one intent makes at most one server create, ever.
+// The intent travels from the composer through the setup page to the hidden
 // auto-start; whichever path creates first consumes it, and every later attempt is dropped. Exit,
 // Back and Cancel consume it without creating. The id doubles as the create's idempotency key.
 

@@ -35,7 +35,7 @@ export function useCloudPanelActions(workspaceId: string, close: () => void): Cl
   const confirm = useContext(ConfirmationDialogContext)
   const agentsRunning = useWorktreeActivityStatus(workspaceId) === 'working'
   const name = useAppStore((state) => findWorktreeById(state, workspaceId)?.displayName ?? null)
-  // PAIRED rows: Wake and Restart (PAIRED-WAKE), Archive and Unarchive (PAIRED-ARCHIVE) reach the
+  // PAIRED rows: Wake and Restart, Archive and Unarchive reach the
   // bound sandbox. Only its creator can archive one, so a teammate's paired row known not to be
   // theirs offers neither. Move here stays off: it moves through this desktop's own runtime record
   // and synced copy (cloud-transfer), which a paired workspace doesn't have on this computer.

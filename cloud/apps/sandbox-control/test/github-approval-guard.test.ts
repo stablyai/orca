@@ -1,4 +1,4 @@
-// APPROVALS-REFUSED: what counts as an approval on api.github.com, fail-closed on anything unclear.
+// What counts as an approval on api.github.com, fail-closed on anything unclear.
 import { describe, expect, it } from 'vitest'
 import { graphqlApproves, requestApproves, unnormalizedWrite } from '../src/github-approval-guard'
 
@@ -25,7 +25,7 @@ describe('GraphQL approvals', () => {
       gql('mutation { submitPullRequestReview(input: { pullRequestReviewId: "R" }) { clientMutationId } }'),
       gql('mutation { addPullRequestReview(input: { pullRequestId: "P", event: APPROVE }'),
       'not json addPullRequestReview APPROVE',
-      // Review G3: unreadable is refused (a gzip body never parses); an unparsable query naming a review mutation too,
+      // Unreadable is refused (a gzip body never parses); an unparsable query naming a review mutation too,
       // its event may be in the variables.
       '\u001f\u008b\u0008binary',
       gql('mutation M($i: X!) { addPullRequestReview(input: $i) { clientMutationId } ', { i: { pullRequestId: 'P', event: 'APPROVE' } }),
@@ -36,7 +36,7 @@ describe('GraphQL approvals', () => {
       // Branch protection and rulesets.
       gql('mutation { updateBranchProtectionRule(input: { branchProtectionRuleId: "B", requiredApprovingReviewCount: 0 }) { clientMutationId } }'),
       gql('mutation { deleteRepositoryRuleset(input: { repositoryRulesetId: "R" }) { clientMutationId } }'),
-      // Review G4: dismissing a review unblocks a merge.
+      // Dismissing a review unblocks a merge.
       gql('mutation { dismissPullRequestReview(input: { pullRequestReviewId: "R", message: "x" }) { clientMutationId } }')
     ]) {
       expect(graphqlApproves(body), body).toBe(true)
@@ -73,7 +73,7 @@ describe('REST approvals', () => {
   })
 })
 
-describe('review G2 and G4: unnormalized write paths; approval-shaped REST actions', () => {
+describe('unnormalized write paths; approval-shaped REST actions', () => {
   it('a write with escapes, empty or dot segments is refused before any check; reads are untouched', () => {
     for (const path of ['/repos/o/r/pulls/7/reviews;x', '/repos/o/r/pulls/7/%72eviews', '/x/%2e%2e/repos/o/r/pulls/7/reviews', '//repos/o/r/pulls/7/reviews', '/repos/o/r/./pulls/7/reviews', '/repos/o/r/../r/pulls/7/reviews']) {
       expect(unnormalizedWrite('POST', path), path).toBe(true)

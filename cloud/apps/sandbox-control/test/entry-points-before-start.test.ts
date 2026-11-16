@@ -1,4 +1,4 @@
-// ENTRY-POINTS-BEFORE-START: a boot from an environment build made on an older golden ran that golden's
+// A boot from an environment build made on an older golden ran that golden's
 // orca-sandbox-start (no agent prefetch, no OpenCode first run) until the environment was rebuilt.
 // refreshRuntime's one command also probes the entry points; older ones are installed before the start.
 import { describe, expect, it, vi } from 'vitest'
@@ -24,7 +24,7 @@ function setup(probe: string, plan: boolean) {
   return { calls, deps, row }
 }
 
-describe('ENTRY-POINTS-BEFORE-START', () => {
+describe('entry points refreshed before orcad starts', () => {
   it('installs older entry points before the start, in the same round trip as the runtime check', async () => {
     const t = setup(`stamp=${VM_SCRIPTS_STAMP - 1}\nmarker=0`, true)
     await expect(refreshRuntime(t.deps, t.row, 'sess')).resolves.toBe('current abc')

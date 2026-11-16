@@ -42,12 +42,12 @@ export type CloudSecretBatchResult = z.infer<typeof CloudSecretBatchResponseSche
 
 const OrgRole = z.enum(['owner', 'admin', 'member']).nullable()
 
-/** Which workspace the effective view answers for: a shared one gets no personal secrets (SEC-5). */
+/** Which workspace the effective view answers for: a shared one gets no personal secrets. */
 export const CLOUD_SECRET_WORKSPACE_MODES = ['private', 'shared'] as const
 export type CloudSecretWorkspaceMode = (typeof CLOUD_SECRET_WORKSPACE_MODES)[number]
 
 export const CloudSecretsEffectiveResponseSchema = z.object({
-  /** Absent from servers before SECRETS-EFFECTIVE-SHARED (they always answer for an unshared workspace). */
+  /** Absent from older servers (they always answer for an unshared workspace). */
   workspace: z.enum(CLOUD_SECRET_WORKSPACE_MODES).optional(),
   caller: z.object({
     userId: z.string().max(256),
@@ -137,7 +137,7 @@ export type CloudSecretsStatus = { available: boolean }
 
 /**
  * GET /v1/agent-sources?workspaceId= (contract §2), read for who a workspace's values belong to. Loose:
- * the panel needs only the owner and the shared flag (D13); the rest belongs to the Agents slice.
+ * the panel needs only the owner and the shared flag; the rest belongs to the Agents slice.
  */
 export const CloudAgentSourcesResponseSchema = z.looseObject({
   owner: z
@@ -148,7 +148,7 @@ export const CloudAgentSourcesResponseSchema = z.looseObject({
     })
     .nullable()
     .optional(),
-  /** D13: more than one member, so personal accounts aren't used there. */
+  /** More than one member, so personal accounts aren't used there. */
   sharedWorkspace: z.boolean().optional()
 })
 

@@ -1,4 +1,4 @@
-// PAIRED-AWARE: a paired Orca Cloud workspace's server is Orca Cloud for every check, like this
+// A paired Orca Cloud workspace's server is Orca Cloud for every check, like this
 // desktop's own sandboxes (opened elsewhere, a teammate's, a link, or started from a GitHub-only repo).
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -52,7 +52,7 @@ describe('paired Orca Cloud servers', () => {
   })
 })
 
-describe('paired servers by account (PAIRED-ACCOUNT-FILTER)', () => {
+describe('paired servers by account', () => {
   const bindings = {
     sbx_mine: { environmentId: 'env-mine', accountId: 'org:team-one' },
     sbx_theirs: { environmentId: 'env-theirs', accountId: 'org:team-two' },

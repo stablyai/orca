@@ -443,7 +443,7 @@ describe.each([
     expect(focusTooltip(text)?.textContent).toBe('Renew for Orca Cloud')
   })
 
-  // JA-04 (#349): "Set up once" opens the focused "Agents in Orca Cloud" sheet, not Settings.
+  // "Set up once" opens the focused "Agents in Orca Cloud" sheet, not Settings.
   it('clicking the text opens the Orca Cloud sign-in sheet (the composer\'s "Set up once" target), not the pane', () => {
     closeOrcaCloudSignInSheet()
     const onActivate = vi.fn()

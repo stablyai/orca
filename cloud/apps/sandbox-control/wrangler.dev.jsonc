@@ -5,7 +5,7 @@
   // Secrets (wrangler secret put -c wrangler.dev.jsonc, never here): VERCEL_TOKEN, SANDBOX_DEV_JWKS,
   // EGRESS_DEV_STATIC_AUTHORIZATION, CONTROL_PLANE_TOKEN (same value as on
   // orca-billing-dev), GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY (PKCS#8), SECRETS_KMS_SERVICE_ACCOUNT and
-  // SECRETS_KEK_WRAPPED (SEC-3 KMS, see the vars below; no plaintext SECRETS_KEK), OPERATOR_TOKEN (/v1/internal/*), GITHUB_STATE_SECRET; for the GitHub connect flow also
+  // SECRETS_KEK_WRAPPED (KMS-wrapped, see the vars below; no plaintext SECRETS_KEK), OPERATOR_TOKEN (/v1/internal/*), GITHUB_STATE_SECRET; for the GitHub connect flow also
   // GITHUB_APP_CLIENT_ID + GITHUB_APP_CLIENT_SECRET (app settings → generate a client secret).
   "name": "orca-sandbox-control-dev",
   "main": "src/index.ts",
@@ -23,7 +23,7 @@
       "migrations_dir": "migrations"
     }
   ],
-  // ENV-STALE: each golden build's orcad bundle; booting sandboxes behind the active golden install it.
+  // Each golden build's orcad bundle; booting sandboxes behind the active golden install it.
   "r2_buckets": [{ "binding": "RUNTIME_BUNDLES", "bucket_name": "orca-sandbox-runtime-dev" }],
   // Same-account Workers cannot call each other over workers.dev (error 1042); BILLING_URL names the origin.
   "services": [{ "binding": "BILLING", "service": "orca-billing-dev" }],
@@ -44,12 +44,12 @@
   "triggers": { "crons": ["* * * * *"] },
   "vars": {
     "SANDBOX_ENV": "dev",
-    // ENV-BUILD-CHURN: goldens rotate per merge on dev; refresh one environment at most every 6 h.
+    // Goldens rotate per merge on dev; refresh one environment at most every 6 h.
     "ENV_REFRESH_MIN_INTERVAL_HOURS": "6",
-    // Flag S1 (contract D10/D11): Claude via the person's Orca account. Dev only until Neil's S1 sign-off.
+    // Claude via the person's Orca account. Dev only until it is signed off.
     "AGENT_ACCOUNTS_CLAUDE": "on",
-    // Flag S2: Codex via the account broker (broker sandbox, lease refresher, placeholder auth.json). Dev only
-    // until Neil's S2 sign-off; the kill switch is AGENT_ACCOUNTS_CODEX_DISABLED=1.
+    // Codex via the account broker (broker sandbox, lease refresher, placeholder auth.json). Dev only
+    // until it is signed off; the kill switch is AGENT_ACCOUNTS_CODEX_DISABLED=1.
     "AGENT_ACCOUNTS_CODEX": "on",
     "SANDBOX_POOL_SIZE": "2",
     // Dev only (ignored unless SANDBOX_ENV is dev): these dev accounts hit the real billing gate.
@@ -78,15 +78,15 @@
     // person in the team" check before a workspace changes owner. Unset = hand-offs refused.
     "AUTH_INTERNAL_ORIGIN": "https://auth-staging.onorca.dev",
     "EGRESS_PROXY_URL": "https://orca-sandbox-control-dev.lovecast.workers.dev/v1/egress/proxy",
-    // CODEX-RELAY: chatgpt.com refuses Workers' egress; its requests go through this Cloud Run relay
+    // chatgpt.com refuses Workers' egress; its requests go through this Cloud Run relay
     // (cloud/infra/chatgpt-relay, staging). Secret CHATGPT_RELAY_SERVICE_ACCOUNT holds its invoker key.
     "CHATGPT_RELAY_URL": "https://orca-chatgpt-relay-gjzz5mc7ka-uc.a.run.app",
-    // CODEX-FIREWALL-SWAP: off on dev until the transform-hijack (Host/SNI binding) probe passes: a real
+    // Off on dev until the transform-hijack (Host/SNI binding) probe passes: a real
     // ChatGPT token lives here. `firewall` swaps Codex's hot calls at the sandbox firewall.
     "CODEX_EGRESS_SWAP": "proxy",
-    // GH-AS-MEMBER: gh in workspaces acts as the attested sender; the Worker pins what it may sign (member-git.ts).
+    // gh in workspaces acts as the attested sender; the Worker pins what it may sign (member-git.ts).
     "GH_AS_MEMBER": "on",
-    // SEC-3 phase 1: the secret store's KEK comes out of Cloud KMS (src/secrets-kms.ts); the Worker
+    // Phase 1: the secret store's KEK comes out of Cloud KMS (src/secrets-kms.ts); the Worker
     // holds only the KMS-wrapped KEK (secret SECRETS_KEK_WRAPPED, AAD orca-secrets-kek:<SECRETS_KEK_ID>)
     // and a service account that can only decrypt with this key (secret SECRETS_KMS_SERVICE_ACCOUNT).
     // KMS down or denied = 503 secrets_unavailable, no fallback. Key, SA and escrow: cloud/infra/secrets-kms.

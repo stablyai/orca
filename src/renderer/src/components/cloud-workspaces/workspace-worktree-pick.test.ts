@@ -3,8 +3,8 @@ import { pickWorkspaceWorktree } from './workspace-worktree-pick'
 
 const base = { id: 'r::/vercel/sandbox/project', branch: 'refs/heads/master', isMainWorktree: true }
 const own = {
-  id: 'r::/home/ubuntu/orca/workspaces/Hello-World/endpass-n44',
-  branch: 'refs/heads/endpass-n44',
+  id: 'r::/home/ubuntu/orca/workspaces/Hello-World/fix-login',
+  branch: 'refs/heads/fix-login',
   isMainWorktree: false
 }
 const other = {
@@ -13,10 +13,10 @@ const other = {
   isMainWorktree: false
 }
 
-describe('pickWorkspaceWorktree (EP-6)', () => {
+describe('pickWorkspaceWorktree', () => {
   it("opens a shared workspace on its own worktree, not the sandbox's base checkout", () => {
-    expect(pickWorkspaceWorktree([base, own], 'endpass-n44')).toBe(own.id)
-    expect(pickWorkspaceWorktree([base, other, own], 'refs/heads/endpass-n44')).toBe(own.id)
+    expect(pickWorkspaceWorktree([base, own], 'fix-login')).toBe(own.id)
+    expect(pickWorkspaceWorktree([base, other, own], 'refs/heads/fix-login')).toBe(own.id)
   })
 
   it('without a known branch, still prefers a linked worktree over the base checkout', () => {

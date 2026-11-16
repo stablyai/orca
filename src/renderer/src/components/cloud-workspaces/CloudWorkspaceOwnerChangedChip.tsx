@@ -1,4 +1,4 @@
-// OWNER-TRANSFER: "Owner changed" in the top bar when the cloud workspace in front has had more
+// "Owner changed" in the top bar when the cloud workspace in front has had more
 // than one owner. It says why personal secrets and sign-ins are not used there; nothing to click.
 import React from 'react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'

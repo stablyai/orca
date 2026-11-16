@@ -1,5 +1,5 @@
-// CHAT-RENEW-INPLACE: the in-place renewal, step by step, on all three surfaces (a launch held on the
-// expired sign-in, a running terminal, a structured chat). design-squad's per-step copy.
+// The in-place renewal, step by step, on all three surfaces (a launch held on the
+// expired sign-in, a running terminal, a structured chat), with each step's copy.
 import React from 'react'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { translate } from '@/i18n/i18n'
@@ -69,8 +69,8 @@ function stepModel(surface: Surface, step: Step): CloudStripModel {
     })
   }
   const renewed = { phase: 'renewed' as const, agent: 'claude' as const, resumable: true }
-  // Step 5 is each surface's own: held waits for Start (team-lead B), the terminal offers Restart
-  // (RA-11), the chat's next message uses the renewed sign-in.
+  // Step 5 is each surface's own: held waits for Start, the terminal offers Restart, and the
+  // chat's next message uses the renewed sign-in.
   return surface === 'held'
     ? cloudAgentAwaitingStartStripModel({
         agent: 'claude',

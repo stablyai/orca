@@ -18,7 +18,7 @@ const base: CloudWorkspaceActionInput = {
 const flat = (input: Partial<CloudWorkspaceActionInput>) =>
   cloudWorkspaceActionGroups({ ...base, ...input }).map((g) => `${g.id}:${g.actions.join(',')}`)
 
-describe('one action list for every surface (JA-14)', () => {
+describe('one action list for every surface', () => {
   it('the list: Open, Owner, Lifecycle, Danger in that order, with Restart', () => {
     expect(flat({})).toEqual([
       'open:open',

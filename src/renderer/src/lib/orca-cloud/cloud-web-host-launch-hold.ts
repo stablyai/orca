@@ -1,4 +1,4 @@
-// Private layer, Orca Cloud only (RA-1, PC-3b). An Orca Cloud workspace is a paired web host, so
+// Private layer, Orca Cloud only. An Orca Cloud workspace is a paired web host, so
 // every Claude/Codex launch the desktop asks it for becomes one host terminal create. This is the
 // single hold for all of them: a new tab, a create's first agent, an agent restarted after a wake.
 // When the agent's Orca account is expired (or not set up) and no key covers it, the host opens a
@@ -36,11 +36,11 @@ async function heldAgent(
   if (agent !== 'claude' && agent !== 'codex') {
     return null
   }
-  // A resume continues a conversation the account already started; #315/RA-11 own that path.
+  // A resume continues a conversation the account already started; the account restart path owns it.
   if (args.agentSessionKind === 'resume' || args.providerSession) {
     return null
   }
-  // FAIL-CLOSED (#568): asks main when the catalog flag isn't here yet (a fresh pairing).
+  // Asks main when the catalog flag isn't here yet (a fresh pairing).
   return args.environmentId && (await isOrcaCloudEnvironmentForLaunch(args.environmentId))
     ? agent
     : null
@@ -63,8 +63,8 @@ function placeholderArgs(
 
 /**
  * Creates the host terminal at once unless it launches Claude/Codex on Orca Cloud and the account
- * hold applies; then it holds in a plain shell first. Never throws past `create`. FAIL-CLOSED
- * (#568): when the placeholder can't be created, the agent is not launched unheld either; the
+ * hold applies; then it holds in a plain shell first. Never throws past `create`. Fails
+ * closed: when the placeholder can't be created, the agent is not launched unheld either; the
  * failed create is returned as is.
  */
 export async function createWithCloudAgentHold(
@@ -80,7 +80,7 @@ export async function createWithCloudAgentHold(
     return placeholder
   }
   const tabId = toWebTerminalSurfaceTabId(webTerminalPlacementParentTabId(placeholder.hostTabId))
-  // V3-01: the hold is in memory; this record lets a restart put it back in the same placeholder.
+  // The hold is in memory; this record lets a restart put it back in the same placeholder.
   if (args.environmentId) {
     rememberHeldCloudLaunch({
       environmentId: args.environmentId,
@@ -121,7 +121,7 @@ export async function settleHeldPlaceholder({
   let outcome: 'proceed' | 'cancel'
   try {
     outcome = await holdCloudAgentLaunch({ paneKey, agent, prompt, decided, restored })
-    // V3-01-DOUBLE-SHELL: the agent's create below goes through the account hold too, so a launch
+    // The agent's create below goes through the account hold too, so a launch
     // released while its account still can't run it (a restored 'unread' hold on an account that
     // isn't set up) would hold again in a SECOND placeholder. Hold again in this one instead, on the
     // same read that decided it (decided: the hold takes the cached reason, so this can't spin).
@@ -133,10 +133,10 @@ export async function settleHeldPlaceholder({
     forgetHeldCloudLaunch(tabId)
   }
   if (outcome === 'cancel') {
-    // NOACCT-MISLABEL: the confirmation answers the person's own Cancel, while the shell is still
+    // The confirmation answers the person's own Cancel, while the shell is still
     // there. A hold that ended because its tab or workspace went away (deleted, archived, closed)
     // says nothing: there is no shell left, and nothing failed to start.
-    // Defense in depth (N-03): only over its own workspace, never over another one or Settings.
+    // Defense in depth: only over its own workspace, never over another one or Settings.
     if (isTabOpen(args.worktreeId, tabId) && workspaceOnScreen(args.worktreeId)) {
       toast(
         translate(

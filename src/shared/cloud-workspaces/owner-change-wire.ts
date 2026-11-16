@@ -1,4 +1,4 @@
-// OWNER-TRANSFER wire types: what the control plane answers when a workspace changes owner, and
+// Owner change wire types: what the control plane answers when a workspace changes owner, and
 // the notices it keeps for the previous owner (GET /v1/team/notices). Mirrors
 // cloud/apps/sandbox-control/src/owner-transfer-notices.ts.
 import { z } from 'zod'

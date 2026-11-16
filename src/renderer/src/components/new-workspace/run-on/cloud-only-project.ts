@@ -1,6 +1,6 @@
-// RUNON-NO-NEW-SANDBOX: a project with no clone on this computer, only on a remote Orca server (a
+// A project with no clone on this computer, only on a remote Orca server (a
 // paired cloud workspace's, or a server added by hand), can still start a new Orca Cloud sandbox.
-// A sandbox clones from GitHub, so it starts like a GitHub-only repository (D4), with the project's
+// A sandbox clones from GitHub, so it starts like a GitHub-only repository, with the project's
 // own GitHub repository picked for the person.
 import type { Repo } from '../../../../../shared/repository/repo-types'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../../shared/execution-host'

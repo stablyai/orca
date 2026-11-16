@@ -1,4 +1,4 @@
-// ARCHIVE-HOOK: the window asks the control plane to run the repo's orca.yaml `scripts.archive` in
+// The window asks the control plane to run the repo's orca.yaml `scripts.archive` in
 // the VM before an archive or a delete, and what it knows about the hook while the VM sleeps.
 // Every outcome is logged here; the window shows it and decides whether to go on.
 import { ipcMain } from 'electron'

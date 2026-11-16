@@ -1,4 +1,4 @@
-// ORG-TOKEN-STALE (Worker backstop): the desktop names the team it is acting for (`x-orca-org`), and a token
+// Worker backstop: the desktop names the team it is acting for (`x-orca-org`), and a token
 // minted for another team is refused with 409 org_mismatch instead of acting on the wrong team. A token minted
 // before a role change is refused (401 stale_token) where it would create, read secrets, or reach GitHub.
 import { describe, expect, it } from 'vitest'

@@ -7,7 +7,7 @@ async function harness() {
   return { ...h, settle: () => Promise.all(pending.splice(0)) }
 }
 
-describe('per-member workspace access (W4 rule) on the public API', () => {
+describe('per-member workspace access on the public API', () => {
   it('keeps a teammate out of a private workspace via session, API key and listing', async () => {
     const h = await harness()
     const ada = await h.token('ada', 'acme', 'sandbox', { orgRole: 'member' })

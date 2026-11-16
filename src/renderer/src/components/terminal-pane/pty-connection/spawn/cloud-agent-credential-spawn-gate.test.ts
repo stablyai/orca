@@ -54,7 +54,7 @@ function session() {
   return { value, start, ungated }
 }
 
-describe('cloud agent credential spawn gate (FAIL-CLOSED, #568)', () => {
+describe('cloud agent credential spawn gate', () => {
   beforeEach(() => {
     state.needsHold = true
     state.mainSays = true

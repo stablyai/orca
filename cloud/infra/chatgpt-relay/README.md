@@ -1,4 +1,4 @@
-# ChatGPT relay (CODEX-RELAY)
+# ChatGPT relay
 
 chatgpt.com answers Cloudflare Workers' egress with a 403 "Unable to load site" page, so Codex via the
 Orca account can't reach it through the sandbox-control egress proxy directly. The proxy sends its
@@ -29,7 +29,7 @@ file, piped into `wrangler secret put`, then deleted. Without both, chatgpt.com 
 too while the relay is in use (cost: one idle 1 vCPU / 512 MiB instance). Firewall mode (EGRESS_SWAP_MODE)
 removes the relay from Codex's path; then it can go back to 0, or be retired.
 
-## Production (runbook, at Neil's go)
+## Production (runbook, on owner sign-off)
 
 1. Add `backend/production.hcl` (bucket `onorca-cloud-terraform-state`, prefix `terraform/chatgpt-relay`) and
    `environments/production.tfvars` (`project_id = "onorca-cloud"`, `environment = "production"`).

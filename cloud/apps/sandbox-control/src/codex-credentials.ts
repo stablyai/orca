@@ -1,4 +1,4 @@
-// Codex "via your Orca account" (agent-accounts spec A2, contract D11, flag S2): the ChatGPT login a broker
+// Codex "via your Orca account" (behind AGENT_ACCOUNTS_CODEX): the ChatGPT login a broker
 // sandbox made (codex-broker.ts) lives here, Personal only, and a lease refresher keeps it fresh centrally.
 //
 // - Storage: agent_credentials (agent 'codex'), value = JSON {access_token, refresh_token, id_token, account_id},
@@ -30,7 +30,7 @@ export const CODEX_PLACEHOLDER_ENV = 'ORCA_CODEX_AUTH_PLACEHOLDER'
 /** Refresh this long before the access token expires (ChatGPT access tokens last about 10 days). */
 export const REFRESH_AHEAD_MS = 3 * 24 * 60 * 60_000
 /**
- * And at least this often, whatever the token says. EGRESS-REFRESH: daily, because a refresh is also the
+ * And at least this often, whatever the token says. Daily, because a refresh is also the
  * revocation check (the Worker can't call chatgpt.com, and the firewall swap means no 401 reaches us): a
  * login signed out at ChatGPT ends here within a day instead of at its access token's expiry.
  */
@@ -99,7 +99,7 @@ export function accessExpiry(tokens: Pick<CodexTokens, 'access_token'>): number 
   return typeof exp === 'number' && Number.isFinite(exp) ? exp * 1000 : null
 }
 
-/** What the person sees for this login: the ChatGPT email (from the id token). Never a plan name (Q4). */
+/** What the person sees for this login: the ChatGPT email (from the id token). Never a plan name. */
 export function codexLabel(tokens: Pick<CodexTokens, 'id_token'>): string | null {
   const c = claims(tokens.id_token)
   const profile = c?.['https://api.openai.com/profile'] as Record<string, unknown> | undefined
@@ -111,7 +111,7 @@ const b64url = (value: string) => btoa(value).replaceAll('+', '-').replaceAll('/
 
 /**
  * The sandbox's placeholder access token: JWT-shaped (Codex reads `exp` and the auth claims from it) but
- * unsigned and bound to the sandbox id, so a clone or rollover gets its own (D14). Not a secret: the proxy
+ * unsigned and bound to the sandbox id, so a clone or rollover gets its own. Not a secret: the proxy
  * authenticates the sandbox by Vercel's OIDC token; the placeholder only marks the header to swap.
  */
 export function codexPlaceholder(row: Pick<SandboxRow, 'id'>): string {
@@ -156,7 +156,7 @@ export const codexAccount: AccountProvider = {
     log('codex_token_unauthorized', { userId })
     waitUntil(refreshCodexCredential({ db, keyring, now: () => now, ...(onChanged ? { onChanged } : {}) }, userId))
   },
-  // RS-4: a request still carrying this sandbox's placeholder once the account no longer applies gets a
+  // A request still carrying this sandbox's placeholder once the account no longer applies gets a
   // message saying what to do, not a bare proxy 403. Still a 403, never a 401: on a 401 from chatgpt.com
   // Codex runs its own token refresh (against auth.openai.com, with a placeholder refresh token) and
   // retries, so a 401 would only cost refresh attempts. On any other status Codex prints
@@ -168,7 +168,7 @@ export const codexAccount: AccountProvider = {
       detail: 'Orca Cloud can’t use your ChatGPT sign-in here. Check it in Orca: Settings → Cloud agent sign-ins.'
     })
   },
-  // CODEX-EGRESS-BLOCKED: chatgpt.com answers Cloudflare Workers' egress with a 403 "Unable to load
+  // chatgpt.com answers Cloudflare Workers' egress with a 403 "Unable to load
   // site" page, whatever the token. Same shape as signedOut, so Codex prints it and stops.
   upstreamBlocked: {
     status: 403,

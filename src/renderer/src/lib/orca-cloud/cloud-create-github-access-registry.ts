@@ -1,4 +1,4 @@
-// CREATE-GH-STEP: the GitHub access step's per-create state, read by the build sheet's row.
+// The create wizard's GitHub access step: per-create state, read by the build sheet's row.
 import { useSyncExternalStore } from 'react'
 import type {
   CloudCreateGitHubAccess,

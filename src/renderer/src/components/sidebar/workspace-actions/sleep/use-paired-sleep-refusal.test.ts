@@ -1,4 +1,4 @@
-// SHARED-MEMBER-SLEEP-HANG: Sleep is disabled only when this account is known not to be the owner and
+// Sleep is disabled only when this account is known not to be the owner and
 // known not to be a team admin; anything unknown leaves it enabled.
 import { describe, expect, it, vi } from 'vitest'
 

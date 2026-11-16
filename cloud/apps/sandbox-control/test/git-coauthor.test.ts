@@ -1,4 +1,4 @@
-// GIT-COAUTHOR: a commit that falls back to the workspace identity while a known member drove it carries a
+// A commit that falls back to the workspace identity while a known member drove it carries a
 // Co-authored-by trailer for them (their GitHub noreply address), so attribution survives. No token involved.
 import { execFileSync, spawnSync } from 'node:child_process'
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'

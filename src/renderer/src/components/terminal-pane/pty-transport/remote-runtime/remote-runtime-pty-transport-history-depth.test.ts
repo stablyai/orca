@@ -69,7 +69,7 @@ async function connectedTransport() {
   return transport
 }
 
-// N-02: only a pane with no local copy of the host's history asks for full depth.
+// Only a pane with no local copy of the host's history asks for full depth.
 describe('remote pane subscribe history depth', () => {
   it('a fresh pane (mount or app reopen) asks for full depth', async () => {
     const transport = await connectedTransport()

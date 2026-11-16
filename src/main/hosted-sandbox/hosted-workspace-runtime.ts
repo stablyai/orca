@@ -164,7 +164,7 @@ export function createOomTracker(announce: (event: CloudOomEvent) => void) {
   }
 }
 
-/** The window's status read: the panel's status plus the sandbox's failed git setup (GIT-SETUP). */
+/** The window's status read: the panel's status plus the sandbox's failed git setup. */
 export function withGitSetup(
   status: HostedWorkspaceStatus,
   sandbox: Pick<HostedSandboxView, 'gitSetup'>

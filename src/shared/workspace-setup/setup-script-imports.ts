@@ -33,7 +33,7 @@ export type SetupScriptImportCandidate = {
   autoRunAfterSetup?: boolean | string
   unsupportedFields?: string[]
   /**
-   * PARITY-DNF: the setup came from an Amazon Linux tool (Conductor). `translated` dnf/yum install
+   * The setup came from an Amazon Linux tool (Conductor). `translated` dnf/yum install
    * lines now use apt-get; `checkLines` still use dnf or yum (in the setup or a script it runs).
    */
   ubuntuNote?: UbuntuNote

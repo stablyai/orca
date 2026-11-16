@@ -119,7 +119,7 @@ export function ensureWebRuntimeWorktreeTerminalAfterWake(
     return false
   }
   // This terminal is the workspace's first surface too: hold the session-tabs seeder off until the
-  // host lists it, or an empty first answer seeds a second, plain terminal beside it (GA-P3t).
+  // host lists it, or an empty first answer seeds a second, plain terminal beside it.
   const claimedInitialBootstrap = beginWebRuntimeInitialTerminalBootstrap(
     runtimeEnvironmentId,
     worktreeId

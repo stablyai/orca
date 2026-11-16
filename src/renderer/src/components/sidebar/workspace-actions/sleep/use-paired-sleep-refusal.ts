@@ -1,4 +1,4 @@
-// SHARED-MEMBER-SLEEP-HANG: Sleep on a teammate's shared (paired) workspace is the owner's or a team
+// Sleep on a teammate's shared (paired) workspace is the owner's or a team
 // admin's. A member sees it disabled with the reason (design: where they look for the control),
 // only when both are known: their access to it is not the owner's, and the roster says they are not
 // an admin. Unknown either way leaves Sleep enabled; a refusal then says so (paired-sleep-refused).

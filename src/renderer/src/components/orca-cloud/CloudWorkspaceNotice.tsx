@@ -46,7 +46,7 @@ function CloudNoticeCard({
 }): React.JSX.Element {
   const t = useTranslate()
   const titleId = useId()
-  // GA-P3t: trouble now reads as a warning; news from a background check as info.
+  // Trouble now reads as a warning; news from a background check as info.
   const tone = BANNER_TONE[role === 'alert' ? 'warning' : 'info']
   return (
     <div

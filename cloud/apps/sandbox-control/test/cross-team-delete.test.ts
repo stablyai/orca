@@ -10,7 +10,7 @@ describe('deleting a sandbox after a team switch', () => {
     const { sandbox } = HostedSandboxReadyResponseSchema.parse(
       (await h.call('POST', '/v1/sandboxes', { body: create })).body
     )
-    // Same user, different active team (W9 D-2: create on personal, switch to a team, Delete).
+    // Same user, different active team (create on personal, switch to a team, Delete).
     const team = await h.token('alice', 'acme')
     expect((await h.call('GET', `/v1/sandboxes/${sandbox.id}`, { bearer: team })).status).toBe(200)
     const deleted = await h.call('DELETE', `/v1/sandboxes/${sandbox.id}`, { bearer: team })

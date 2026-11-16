@@ -1,4 +1,4 @@
-// EGRESS-REFRESH against a running sandbox (harness + fake Vercel): the GitHub App token in the live policy
+// Against a running sandbox (harness + fake Vercel): the GitHub App token in the live policy
 // rotates every hour with no gap, and a recorded credential change reaches the policy on the next tick.
 import { describe, expect, it } from 'vitest'
 import { codexTick, credentialTick } from '../src/index'
@@ -90,7 +90,7 @@ describe('credential tick', () => {
     expect(row!.pushed_at).toBe(row!.changed_at)
   })
 
-  it('a narrowing push Vercel keeps refusing puts the sandbox to sleep (fail closed, A1)', async () => {
+  it('a narrowing push Vercel keeps refusing puts the sandbox to sleep (fail closed)', async () => {
     const h = await createHarness({}, {
       github: { tokenForRepo: async () => ({ token: 'ghs_x', expiresAt: h.now() + 60 * MIN }), getInstallation: async () => null, getRepoInstallation: async () => null }
     })

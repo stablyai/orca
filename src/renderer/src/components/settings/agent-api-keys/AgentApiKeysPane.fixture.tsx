@@ -108,7 +108,7 @@ export const keychainUnavailable = defineFixture({
   )
 })
 
-// D12: keys saved while signed in to Orca also live in the Orca account.
+// Keys saved while signed in to Orca also live in the Orca account.
 const CLOUD_KEYS: AgentApiKeysState['keys'] = [
   {
     id: 'synced',

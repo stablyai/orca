@@ -40,7 +40,7 @@ const INPUT = {
   idempotencyKey: 'create:c-1234'
 }
 
-describe('GitHub-only create on the build sheet (GH-CREATE-SHEET)', () => {
+describe('GitHub-only create on the build sheet', () => {
   it('reports the same steps as an owned create: start, boot plan, clone, connecting', async () => {
     const statuses = [
       { state: 'running' as const, percent: 40, stage: 'download' as const },
@@ -133,7 +133,7 @@ describe('GitHub-only create on the build sheet (GH-CREATE-SHEET)', () => {
   })
 })
 
-describe('EP-5: a cancel whose sandbox was not confirmed deleted', () => {
+describe('a cancel whose sandbox was not confirmed deleted', () => {
   it('answers reason cancelCleanupUnconfirmed (never a plain cancel), and Try again deletes it', async () => {
     const controller = new AbortController()
     let down = true

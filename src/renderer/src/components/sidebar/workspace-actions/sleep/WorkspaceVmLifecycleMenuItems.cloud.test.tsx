@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// Neil: an asleep cloud workspace's menu showed "Sleep" (the local close-panels item) beside "Wake".
+// An asleep cloud workspace's menu showed "Sleep" (the local close-panels item) beside "Wake".
 // A cloud row gets one lifecycle item for its state; local VM workspaces are unchanged.
 import { cleanup, render, screen } from '@testing-library/react'
 import React from 'react'
@@ -10,7 +10,7 @@ type MenuState = {
   waking: boolean
   ownedCloud: boolean
   archived: boolean
-  /** PAIRED-LIFECYCLE: a paired row and the state its sidebar line shows (CloudDotState). */
+  /** A paired row and the state its sidebar line shows (CloudDotState). */
   paired: boolean
   cloudDot: string
 }
@@ -143,7 +143,7 @@ describe('a cloud workspace has one lifecycle item for its state', () => {
     expect(items()).toEqual(['Close panels sleep'])
   })
 
-  // PAIRED-LIFECYCLE (n79/n80): a workspace created from a GitHub-only project is a paired row; asleep
+  // A workspace created from a GitHub-only project is a paired row; asleep
   // it offered Sleep and never Wake, and the menu must read the same state as the sidebar line.
   it('paired and running: the Sleep that reaches the sandbox', () => {
     set({ paired: true, cloudDot: 'running' })

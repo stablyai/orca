@@ -93,7 +93,7 @@ export function CloudWorkspaceRowMenu({
   const t = useTranslate()
   // Focus returns to ⋯ on close; after a mouse open that would leave a ring nobody asked for.
   const openedByPointer = useRef(false)
-  // The same action list the sidebar menu renders (JA-14).
+  // The same action list the sidebar menu renders.
   const groups = cloudWorkspaceActionGroups({
     surface: 'list',
     status: w.status,

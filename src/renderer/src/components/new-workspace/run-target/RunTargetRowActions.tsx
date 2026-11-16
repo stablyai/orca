@@ -34,7 +34,7 @@ export function ConnectHostButton({
   onConnect: () => void
 }): React.JSX.Element {
   const t = useTranslate()
-  // A row inside role="option" can't hold a focusable button (axe nested-interactive, DS-22): a
+  // A row inside role="option" can't hold a focusable button (axe nested-interactive): a
   // button-styled span keeps the pointer action; the option itself is what the keyboard reaches.
   return (
     <span

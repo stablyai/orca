@@ -1,4 +1,4 @@
-// SEC-6: (a) a demoted admin can't write team secrets with an old token, and admin writes need a token
+// (a) a demoted admin can't write team secrets with an old token, and admin writes need a token
 // under a minute old; (b) last-4 hints are shown only to people who can write the scope; (c) secret
 // handling code logs through secretLog, which redacts, and no planted value reaches the log sink.
 import { readFileSync } from 'node:fs'
@@ -43,7 +43,7 @@ async function setup() {
   return { h, put, rows }
 }
 
-describe('SEC-6a: role changes reach secret writes within a minute', () => {
+describe('role changes reach secret writes within a minute', () => {
   it('a demoted admin’s earlier token can’t put, delete or batch team secrets once auth reports the change', async () => {
     const { h, put, rows } = await setup()
     const admin = await h.token('ada', 'acme', 'sandbox', { org_role: 'admin' })
@@ -95,7 +95,7 @@ describe('SEC-6a: role changes reach secret writes within a minute', () => {
   })
 })
 
-describe('SEC-6b: last-4 hints only for people who can write the scope', () => {
+describe('last-4 hints only for people who can write the scope', () => {
   it('team members get no hints for Shared or team Repository secrets; admins and owners of personal ones do', async () => {
     const { h, put } = await setup()
     const admin = await h.token('ada', 'acme', 'sandbox', { org_role: 'admin' })
@@ -119,7 +119,7 @@ describe('SEC-6b: last-4 hints only for people who can write the scope', () => {
   })
 })
 
-describe('SEC-6c: secret-handling code logs only through the redacting sink', () => {
+describe('secret-handling code logs only through the redacting sink', () => {
   const FILES = ['secrets.ts', 'session-env.ts', 'env-refresh.ts', 'egress-proxy.ts', 'secret-egress.ts', 'secrets-crypto.ts', 'secret-events.ts']
 
   it('the secret-handling modules never call console directly', () => {

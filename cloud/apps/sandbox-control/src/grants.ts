@@ -262,7 +262,7 @@ export async function revokeForAccessChange(
   return revokeGrants(deps, row, results, { by, reason: mode === 'non_owner' ? 'workspace_private' : 'owner_changed' })
 }
 
-/** A member left the org (auth push) or a phone session ended (W8): revoke everywhere. */
+/** A member left the org (auth push) or a phone session ended: revoke everywhere. */
 async function revokeWhere(deps: LifecycleDeps, where: string, binds: (string | number)[], audit: { by: string; reason: string }) {
   const { results } = await deps.db
     .prepare(`SELECT * FROM workspace_grants WHERE ${where} AND status IN ('issuing', 'active')`)
@@ -328,7 +328,7 @@ export async function recordOwnerDeviceAndSync(deps: LifecycleDeps, row: Sandbox
 }
 
 /**
- * A create's owner device (CREATE-GIT-ASYNC): records it now and, when the VM was told member setup
+ * A create's owner device: records it now and, when the VM was told member setup
  * is pending, installs the identities after the response (`deps.background`), so the create answers
  * at ready. The VM's `git` holds commits and pushes until this settles. Otherwise as before.
  */

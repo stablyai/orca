@@ -30,7 +30,7 @@ export function orcaCloudSandboxIdFor(
   const handle = runtime?.recipeResult
     ? environmentHandleFromRecipeResult(runtime.recipeResult, HOSTED_SANDBOX_DRIVER_ID)
     : null
-  // PAIRED-HELD-STRIPS: a paired workspace (opened here, created elsewhere or from a GitHub-only
+  // A paired workspace (opened here, created elsewhere or from a GitHub-only
   // repo) has no local runtime record; its pairing binding names the same sandbox.
   return (
     handle?.environmentId ?? cloudPairedSandboxesByEnvironment().get(runtimeEnvironmentId) ?? null

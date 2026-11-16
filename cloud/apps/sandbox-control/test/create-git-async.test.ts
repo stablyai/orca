@@ -1,4 +1,4 @@
-// CREATE-GIT-ASYNC: a create answers once orcad is ready and installs member git identities after
+// A create answers once orcad is ready and installs member git identities after
 // (ctx.waitUntil). The VM is told the setup is pending so its `git` holds commits and pushes; fetches
 // use the workspace credential the boot already put in the egress policy. Wake, resume and restart
 // still install identities before they answer.

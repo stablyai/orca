@@ -1,4 +1,4 @@
-// A9: agents are signed out of a running sandbox before Orca deletes it. This covers logins made
+// Agents are signed out of a running sandbox before Orca deletes it. This covers logins made
 // inside the sandbox itself (the kill-switch fallback path); egress-swapped keys never live there.
 //
 // Runs the image's orca-agent-signout by source (`bash -c`), not by its installed path, so

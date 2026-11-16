@@ -94,7 +94,7 @@ export function isWorktreeKeptAwake(worktreeId: string): boolean {
 }
 
 /**
- * SLEEP-IN-PROGRESS: the read-only copy a sleeping cloud workspace shows, from the Sleep press until
+ * The read-only copy a sleeping cloud workspace shows, from the Sleep press until
  * a copy at least that new has been read back ("saved", the entry goes), or it never came ("failed").
  * The sleep call returns before the asleep view has read the copy, so `goingToSleep` alone left the
  * panes on their "nothing was saved" lines until a later poll.
@@ -167,7 +167,7 @@ export function useIsWorktreeGoingToSleep(worktreeId: string | null): boolean {
 }
 
 /**
- * SLEEP-REATTACH-BANNER (END-PASS n64 P3): a Sleep or Archive the person chose drops the terminal
+ * A Sleep or Archive the person chose drops the terminal
  * streams on purpose. `goingToSleep` ends when the sleep call returns, but a paired workspace's
  * status poll says "sleeping" only seconds later, and in that gap a pane said "Reattaching terminal
  * · Down for 10 sec". This hold keeps the reconnect notices quiet from the press until the status

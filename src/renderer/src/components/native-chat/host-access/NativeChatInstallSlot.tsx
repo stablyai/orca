@@ -56,7 +56,7 @@ export function useNativeChatInstallSlot(
   signIn: NativeChatSignInStripState | null
   sendBlockedReason: string | null
   unavailableHint: string | undefined
-  /** END-PASS CHAT-RENEW: typing stays open; the empty field says why Send is held. */
+  /** Typing stays open; the empty field says why Send is held. */
   heldHint: string | undefined
 } {
   const t = useTranslate()
@@ -79,7 +79,7 @@ export function useNativeChatInstallSlot(
   const prompt = signsIn ? antigravityChatSignInPrompt(signInView) : null
   const signIn =
     prompt === null ? null : { prompt, view: signInView, agent: props.agent, host: props.target }
-  // CHAT-BANNERS: an Orca Cloud launch held on the chat's strip has no agent to send to yet.
+  // An Orca Cloud launch held on the chat's strip has no agent to send to yet.
   const cloudHoldKey = structuredCloudHoldKey(props.sessionId)
   const cloudHoldHint = useCloudChatHoldHint(cloudHoldKey, '')
   // While its Orca Cloud account is expired, the chat takes typing but holds Send (draft kept).

@@ -163,7 +163,7 @@ export function createStripeClient(env: Env, fetchImpl: typeof fetch = fetch) {
       )
     },
     /**
-     * Cancels a subscription now (EP-10, deleting a team whose plan is already set to end):
+     * Cancels a subscription now (deleting a team whose plan is already set to end):
      * metered usage already reported is invoiced (invoice_now), the unused time isn't refunded
      * (prorate false). DELETE is idempotent in Stripe; an already canceled one answers 404/400.
      */

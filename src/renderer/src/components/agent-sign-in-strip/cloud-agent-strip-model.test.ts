@@ -5,7 +5,7 @@ import { cloudAgentStripModel } from './cloud-agent-strip-model'
 const base = { agent: 'claude' as const, hostLabel: 'the sandbox', t: translate }
 
 describe('cloudAgentStripModel', () => {
-  it('account recovery (S4-c), held: Renew, "Renew to start Claude." (CHAT-RENEW-INPLACE copy)', () => {
+  it('account recovery, held: Renew, "Renew to start Claude." (renew-in-place copy)', () => {
     const model = cloudAgentStripModel({ ...base, reason: 'accountExpired', view: null })
     expect(model).toMatchObject({
       title: 'Your Claude sign-in expired',

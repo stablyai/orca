@@ -1,4 +1,4 @@
-// PARITY-AUTO-ENV-DEPS: an automatic environment installs the first repo's JavaScript dependencies
+// An automatic environment installs the first repo's JavaScript dependencies
 // from its lockfile, so creates start warm, and never fails its build over it. The real script's
 // auto_install, run by a real bash against a scratch repo with stub package managers on PATH.
 import { execFileSync } from 'node:child_process'
@@ -60,7 +60,7 @@ afterEach(() => rmSync(dir, { recursive: true, force: true }))
 
 const file = (path: string, content = ''): void => writeFileSync(join(repo, path), content)
 
-describe('environment-build.sh auto_install (PARITY-AUTO-ENV-DEPS)', () => {
+describe('environment-build.sh auto_install', () => {
   it('is in the build script, runs only for automatic environments without an install script, and ships in the Worker', () => {
     expect(autoInstall).toBeDefined()
     expect(script).toMatch(/elif \[ "\$\{ORCA_AUTO_INSTALL:-\}" = 1 \] && \[ -n "\$first" \]; then\n {2}auto_install "\$first"\n/)

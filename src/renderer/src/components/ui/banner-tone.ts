@@ -1,4 +1,4 @@
-// GA-P3t (Neil): one look for strips, banners and notices by severity, so none blends into a white
+// One look for strips, banners and notices by severity, so none blends into a white
 // pane. The colours live in main.css (--banner-*), measured for contrast in light and dark.
 export type BannerSeverity = 'warning' | 'error' | 'info'
 

@@ -402,7 +402,7 @@ function cloneFailedPanel(reason: 'submodule' | 'access') {
   })
 }
 
-/** DS-40 (b): a submodule broke the clone, so an agent can fix the repo. */
+/** A submodule broke the clone, so an agent can fix the repo. */
 export const panelCloneFailedContent = cloneFailedPanel('submodule')
-/** DS-40 (b): the clone was refused; access goes to GitHub, never to an agent. */
+/** The clone was refused; access goes to GitHub, never to an agent. */
 export const panelCloneFailedAccess = cloneFailedPanel('access')

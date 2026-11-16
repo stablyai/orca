@@ -1,5 +1,5 @@
-// S3 "Sign-ins by host": a real table, hosts as rows, Claude and Codex as columns. A row opens that
-// host's A16 panel (click or Enter); the one inline action still works without opening it.
+// "Sign-ins by host": a real table, hosts as rows, Claude and Codex as columns. A row opens that
+// host's agent accounts panel (click or Enter); the one inline action still works without opening it.
 import React, { useState } from 'react'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { Badge } from '@/components/ui/badge'
@@ -101,7 +101,7 @@ function HostHeader({ row }: { row: OverviewRow }): React.JSX.Element {
   return (
     <span className="flex min-w-0 items-start gap-2">
       <HostGlyph kind={GLYPH[row.kind]} size={14} className="mt-0.5 shrink-0" />
-      {/* Name and detail stack, so neither truncates at Settings width (RA-5, JA-23). */}
+      {/* Name and detail stack, so neither truncates at Settings width. */}
       <span className="flex min-w-[6rem] flex-col">
         <span className="break-words text-foreground">{name}</span>
         {detail ? (

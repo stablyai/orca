@@ -49,7 +49,7 @@ export function restoreTerminalPaneLayout(args: {
     refs.restoredViewportBlankingPanesRef,
     liveAltScreenLeafIds
   )
-  // WAKE-SCROLLBACK: waking remounts a cloud pane with a fresh, empty xterm; paint its kept pre-sleep
+  // Waking remounts a cloud pane with a fresh, empty xterm; paint its kept pre-sleep
   // output now (client-side, text + SGR) so it never shows blank before the woken snapshot's restore.
   for (const pane of manager.getPanes()) {
     // A pane whose saved output was just replayed already shows it; a second copy would double it.

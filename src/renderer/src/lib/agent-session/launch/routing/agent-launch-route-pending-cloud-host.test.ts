@@ -1,4 +1,4 @@
-// CLOUD-HELD-SURFACE: the composer decides an Orca Cloud create's route before its VM exists. With
+// The composer decides an Orca Cloud create's route before its VM exists. With
 // chat preferred, the image's capabilities stand in for the unverified pending host, so the create
 // opens a chat; without them (or with Terminal preferred) it stays a terminal, and a decided
 // launch logs a chat preference it could not honour.
@@ -50,7 +50,7 @@ afterEach(() => {
   warn.mockRestore()
 })
 
-describe('an Orca Cloud create decided before its VM exists (CLOUD-HELD-SURFACE)', () => {
+describe('an Orca Cloud create decided before its VM exists', () => {
   it('chat preferred: the image capabilities make it a chat, with nothing logged', () => {
     expect(
       resolveAgentSessionLaunchRoute(store('chat'), cloudCreate(true), {

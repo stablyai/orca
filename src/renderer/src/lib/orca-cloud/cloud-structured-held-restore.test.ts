@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// V3-01b: a held structured chat on Orca Cloud keeps its hold across a quit. Its record (per profile)
+// A held structured chat on Orca Cloud keeps its hold across a quit. Its record (per profile)
 // lets startup put the hold back as soon as the chat's tab returns, whatever becomes of the launch's
 // retry; the retry joins that hold; Start launches once, Cancel abandons; nothing is created on a
 // failed or covered read after restart; in-session launches are unchanged.

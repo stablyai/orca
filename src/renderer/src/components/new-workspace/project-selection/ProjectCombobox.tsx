@@ -65,7 +65,7 @@ export default function ProjectCombobox({
   const contentRef = useRef<HTMLDivElement>(null)
   const recentIds = useRecentProjectIds()
   const hasAddProjectRow = Boolean(onAddProject || addProjectMenu)
-  // PROJ-MENU: with the Add project menu, "give Orca Cloud access" lives there, not in the list.
+  // With the Add project menu, "give Orca Cloud access" lives there, not in the list.
   const { addProjectMenu: addProjectMenuWithCloud, listMoreAccess: onMoreCloudAccess } =
     withCloudAddProjectEntry(addProjectMenu, onMoreCloudAccessProp)
   const cloud = useCloudRows({
@@ -130,7 +130,7 @@ export default function ProjectCombobox({
     () => sectionProjectOptions(matches, query, recentIds),
     [matches, query, recentIds]
   )
-  // RR-c1: a stopped Create focuses the field without its path tooltip.
+  // A stopped Create focuses the field without its path tooltip.
   useEffect(() => {
     if (focusSignal > 0) {
       quietFocus.current = true
@@ -147,7 +147,7 @@ export default function ProjectCombobox({
   })
   const ambiguous = useMemo(() => getAmbiguousProjectOptionIds(options), [options])
   const cloudMatches = useMemo(() => cloud.matches(query), [cloud, query])
-  // A picked cloud-only repository stands in for the project in the field (D4).
+  // A picked cloud-only repository stands in for the project in the field.
   const selected = cloudRepoValue ? null : (options.find((option) => option.id === value) ?? null)
   const committed = (selected !== null || cloudRepoValue !== null) && query.length === 0
   const committedName = cloudRepoValue ?? selected?.displayName ?? ''

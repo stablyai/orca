@@ -1,7 +1,7 @@
-// CREATE-BUILD-SNAPSHOT-404: on dev a VM create from an environment build's snapshot answered 404
+// On dev a VM create from an environment build's snapshot answered 404
 // shortly after the build (the same snapshot booted seconds before and after). One retry, after a
 // short wait, for a build under 15 min old; never for goldens, older builds or other errors.
-// CREATE-FAIL-LABELS: a create that broke in orcad's start with an error of no known kind is named
+// A create that broke in orcad's start with an error of no known kind is named
 // by that step (orcad_start_timeout past the 120 s budget), not the generic create_failed.
 import { describe, expect, it } from 'vitest'
 import { createFailureReason, phaseTimer } from '../src/lifecycle'
@@ -55,7 +55,7 @@ async function setup() {
   return { h, build, failures, snapshotsTried, sleeps, create, lastError }
 }
 
-describe('CREATE-BUILD-SNAPSHOT-404', () => {
+describe('a create from a build snapshot that answers 404', () => {
   it('a just-built snapshot that answers 404 is retried once after ~5 s, and the create succeeds', async () => {
     const t = await setup()
     t.failures.push(404)
@@ -117,7 +117,7 @@ describe('CREATE-BUILD-SNAPSHOT-404', () => {
   })
 })
 
-describe('CREATE-FAIL-LABELS', () => {
+describe('create failure labels', () => {
   const failIn = async (phase: string, ms: number) => {
     let clock = 0
     const timer = phaseTimer(() => clock)

@@ -1,6 +1,6 @@
-// GH-LIST-MISSING: when GitHub's list couldn't be read, the Project picker's GitHub section says so
+// When GitHub's list couldn't be read, the Project picker's GitHub section says so
 // with Retry instead of disappearing, which read as "no repositories". Retry is a row like the
-// others: the arrow keys land on it and Enter runs it (design-squad).
+// others: the arrow keys land on it and Enter runs it.
 import React from 'react'
 import { LoaderCircle, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/class-names'

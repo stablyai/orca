@@ -1,11 +1,11 @@
-// EP-8: a cloud workspace's server refuses this computer's saved pairing (an owner change revoked
+// A cloud workspace's server refuses this computer's saved pairing (an owner change revoked
 // its device, or a teammate's grant was revoked). Retrying the old token forever ("Reconnecting…",
 // "rejected the pairing token") never recovers, so ask Orca Cloud for a fresh grant for this
 // computer and swap it in on the same server. The server's own access check decides: the current
 // owner or a member who can still see the workspace gets one; anyone else is refused and told so.
 // A refusal is final for that pairing; a transient failure (the network, a 5xx) may try again a
 // couple of times, spaced out, so a blip self-heals without a revoked device hammering the control
-// plane (GRANT-ID-TRACKING). Every grant a recovery leaves this computer holding is remembered, so
+// plane. Every grant a recovery leaves this computer holding is remembered, so
 // the next recovery revokes it instead of letting stray device grants pile up.
 
 /** Only a real refusal of this computer's pairing re-grants; never timeouts or other errors. */

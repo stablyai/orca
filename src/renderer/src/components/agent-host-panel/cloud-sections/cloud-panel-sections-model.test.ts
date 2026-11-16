@@ -83,7 +83,7 @@ describe('cloudEnvRows', () => {
   })
 })
 
-describe('shared workspaces (D13)', () => {
+describe('shared workspaces', () => {
   const values = effective([
     secret({ name: 'NPM_TOKEN', scope: 'personal' }),
     secret({ name: 'SENTRY_DSN', scope: 'personal', shadowed: [{ scope: 'org', hint: null }] }),
@@ -97,7 +97,7 @@ describe('shared workspaces (D13)', () => {
     ])
   })
 
-  it('applies in every shared workspace, the owner’s too (SEC-5), and never in an unshared one', () => {
+  it('applies in every shared workspace, the owner’s too, and never in an unshared one', () => {
     const declared = ['NPM_TOKEN', 'SENTRY_DSN', 'DATABASE_URL']
     const base = { effective: values, envVarNames: declared, repoKey: null, asleep: false }
     expect(
@@ -120,7 +120,7 @@ describe('shared workspaces (D13)', () => {
     ).toEqual([])
   })
 
-  it('fails closed when the workspace sharing could not be read (D13)', () => {
+  it('fails closed when the workspace sharing could not be read', () => {
     const declared = ['NPM_TOKEN', 'SENTRY_DSN', 'DATABASE_URL']
     const data = cloudPanelSectionsData({
       effective: values,

@@ -1,4 +1,4 @@
-// N-01: per-create phase timing in the main app log, so a slow "Start sandbox" can be localised from
+// Per-create phase timing in the main app log, so a slow "Start sandbox" can be localised from
 // app.log alone: `[orca-cloud] create <creationId> <phase> +<ms>`. Ids and phase names only, never
 // tokens, URLs or pairing codes.
 import { ipcMain } from 'electron'

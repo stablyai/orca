@@ -79,7 +79,7 @@ export const noSnapshot = defineFixture({
   )
 })
 
-/** SLEEP-IN-PROGRESS: Sleep just pressed, its copy still saving. Never "Files aren't available" yet. */
+/** Sleep just pressed, its copy still saving. Never "Files aren't available" yet. */
 export const savingCopy = defineFixture({
   width: 380,
   setup: () => {
@@ -94,7 +94,7 @@ export const savingCopy = defineFixture({
   )
 })
 
-/** SLEEP-IN-PROGRESS: no copy arrived in time. Says so; Wake. */
+/** No copy arrived in time. Says so; Wake. */
 export const copySaveFailed = defineFixture({
   width: 380,
   setup: () => {

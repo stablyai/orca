@@ -1,4 +1,4 @@
-// ENV-BUILD-CHURN: goldens rotate per merge; rebuilding every environment on every rotation cost every
+// Goldens rotate per merge; rebuilding every environment on every rotation cost every
 // team build hours. Eager refresh only for recently used environments, at most once per interval;
 // the rest refresh when next used; a security golden reaches every environment, and no workspace
 // boots from a build below the security floor. Refresh builds are never charged to the team.
@@ -75,7 +75,7 @@ async function setup() {
   return { h, call, envId, build, finishNewest, rotate, refresh, setLastUsed, lastUsed, create, settle }
 }
 
-describe('golden refresh churn (ENV-BUILD-CHURN)', () => {
+describe('golden refresh churn', () => {
   it('an environment idle for 30 days waits for a normal golden, and a security golden rebuilds it anyway', async () => {
     const { h, build, rotate, refresh, setLastUsed } = await setup()
     await build()

@@ -95,7 +95,7 @@ export function useHostStateWord(
       : null
   )
   const goingToSleep = useIsWorktreeGoingToSleep(worktreeId)
-  // SLEEP-IN-PROGRESS: still saving its read-only copy after the sleep call returned.
+  // Still saving its read-only copy after the sleep call returned.
   const savingCopy = useSleepCopySave(worktreeId)?.state === 'saving'
   const state = cloud.isCloud ? cloud.state : vmDot
   // Sleep chosen and not ended: "Going to sleep…" until the sleep ends, driven by the same flag as

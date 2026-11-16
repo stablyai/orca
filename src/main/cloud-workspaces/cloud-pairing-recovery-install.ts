@@ -1,4 +1,4 @@
-// EP-8: wires the pairing recovery (cloud-pairing-recovery.ts) to this process: which environments
+// Wires the pairing recovery (cloud-pairing-recovery.ts) to this process: which environments
 // are cloud workspaces, the grant call, the same-server repair and the window notice.
 import { app, BrowserWindow } from 'electron'
 import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'

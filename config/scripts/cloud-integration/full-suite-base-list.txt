@@ -1,6 +1,6 @@
 # Test files that fail identically on upstream stablyai/orca at cloud/integration's merge base (e295b0d37c3) on the
 # integration Mac under run-vitest.mjs. premerge-check.sh skips these in its targeted run (logging each skip), and
-# Neil e2e cuts gate the full suite on "no failing file beyond this list". Re-derive at each upstream sync.
+# e2e cuts gate the full suite on "no failing file beyond this list". Re-derive at each upstream sync.
 config/scripts/cli-build/verify-cli-bin.test.mjs
 config/scripts/desktop-build/output-contracts/main-entry-facade.test.ts
 config/scripts/desktop-distribution/runtime-verification/process-host-dev-rebuild.test.ts

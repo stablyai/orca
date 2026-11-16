@@ -105,7 +105,7 @@ describe('planAutoForwards', () => {
       ...workspace(port),
       processName
     })
-    // Neil's toast: "Forwarded :34719 to localhost:34719 · codex · sand23".
+    // The toast a real run showed: "Forwarded :34719 to localhost:34719 · codex · sand23".
     const plan = planAutoForwards({
       ...base,
       ports: [

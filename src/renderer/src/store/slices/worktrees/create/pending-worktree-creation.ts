@@ -22,7 +22,7 @@ import {
 } from '@/components/worktree-creation/vm-build-failure'
 
 /**
- * REFUSED-CREATE-ROW-STICKY: an Orca Cloud create refused before anything started (an account
+ * An Orca Cloud create refused before anything started (an account
  * limit such as running sandboxes, a plan, sign-in). Its row keeps the prompt with Retry and
  * Dismiss until the person starts another create, which replaces it. A slot freeing up alone
  * never clears it: that would lose the prompt.

@@ -1,4 +1,4 @@
-// CREATE-GIT-ASYNC: the VM's `git` shim (image/vm/git) holds commits and pushes while a new
+// The VM's `git` shim (image/vm/git) holds commits and pushes while a new
 // workspace's member identities are still being installed, and stops them with what to do when that
 // setup failed or stalled. Read-only git never waits.
 import { spawn, spawnSync } from 'node:child_process'

@@ -89,7 +89,7 @@ export const AgentLaunchPicker = memo(
     /** The saved default; with onSetDefault, right-clicking an agent row offers "Set as default". */
     defaultAgent?: AgentPickerEntry['agent'] | 'blank' | null
     onSetDefault?: (agent: AgentPickerEntry['agent'] | 'blank') => void
-    /** A muted status per agent row, shown only inside the open menu (Orca Cloud: JA-22). */
+    /** A muted status per agent row, shown only inside the open menu (Orca Cloud). */
     statusLabels?: ReadonlyMap<AgentPickerEntry['agent'], string>
     onPick: (
       agent: AgentPickerEntry['agent'],

@@ -226,7 +226,7 @@ function SecretRequestPaneSlot({
   )
 }
 
-/** S4-b: a pane whose agent asked for a secret shows the request card over its top edge. */
+/** A pane whose agent asked for a secret shows the request card over its top edge. */
 export function SecretRequestPanePortals({
   controller
 }: {

@@ -46,7 +46,7 @@ function branchProps(): React.ComponentProps<typeof NewWorkspaceComposerNameSect
 afterEach(cleanup)
 
 describe('NewWorkspaceComposerNameSection branch choice title', () => {
-  it('titles the branch choice for a workspace only when Run on is Orca Cloud (JA-25)', () => {
+  it('titles the branch choice for a workspace only when Run on is Orca Cloud', () => {
     const props = branchProps()
     const cloudRecipe: EphemeralVmRecipeOption = {
       id: 'cloud',

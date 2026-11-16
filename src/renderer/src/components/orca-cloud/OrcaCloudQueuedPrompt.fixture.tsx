@@ -29,9 +29,9 @@ export const empty = promptFixture('', true)
 export const queued = promptFixture(PROMPT, true)
 /** Provisioning finished; the prompt is handed to the agent launch. */
 export const sending = promptFixture(PROMPT, false)
-/** N-04: the agent isn't set up for Orca Cloud, so the hint waits for that, not the workspace. */
+/** The agent isn't set up for Orca Cloud, so the hint waits for that, not the workspace. */
 export const emptyHeld = promptFixture('', true, true)
-/** N-04: a queued prompt while the agent isn't set up. */
+/** A queued prompt while the agent isn't set up. */
 export const queuedHeld = promptFixture(PROMPT, true, true)
 
 function BuildOutrunsTyping(): React.JSX.Element {
