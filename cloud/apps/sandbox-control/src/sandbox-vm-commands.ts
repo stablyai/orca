@@ -38,6 +38,8 @@ export type StartInputs = {
   repo?: { url: string; ref?: string }
   /** Token the VM's GitHub clients send; the egress layer swaps it for a real short-lived one. */
   githubPlaceholder?: string
+  /** GH-AS-MEMBER (GH_AS_MEMBER=on): gh in the VM uses the attested sender's own placeholder. */
+  ghAsMember?: boolean
   /** git `http.https://github.com/.extraheader` carrying the placeholder, so every git request is claimable. */
   gitExtraHeader?: string
   /** Secrets for orcad's (and so every agent's) process env. Never written to disk in the VM. */
@@ -128,6 +130,10 @@ export async function startOrcad(
   }
   if (inputs.githubPlaceholder) {
     env.ORCA_GITHUB_PLACEHOLDER = inputs.githubPlaceholder
+  }
+  if (inputs.githubPlaceholder && inputs.ghAsMember) {
+    // GH-AS-MEMBER: the Worker answers member placeholders on api.github.com (member-git.ts), so gh may use them.
+    env.ORCA_GH_AS_MEMBER = 'on'
   }
   if (inputs.secretEnv && Object.keys(inputs.secretEnv).length > 0) {
     env.ORCA_SECRET_ENV = encodeSecretEnv(inputs.secretEnv)

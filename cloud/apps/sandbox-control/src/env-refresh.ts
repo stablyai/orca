@@ -4,7 +4,7 @@
 // values they started with. Egress routes and the allowlist follow the new env first, so a new
 // model key is reachable before any shell can see its placeholder.
 import type { CredentialChange } from './credential-outbox'
-import { applySandboxPolicy, firewallClasses, type LifecycleDeps } from './lifecycle'
+import { applySandboxPolicy, syncMemberGit, firewallClasses, type LifecycleDeps } from './lifecycle'
 import { ProviderError } from './sandbox-provider'
 import { refreshSessionEnv } from './sandbox-vm-commands'
 import { normalizeRepo, type SecretChange } from './secrets'
@@ -145,6 +145,11 @@ export async function pushCredentialToSandbox(deps: LifecycleDeps, sandboxId: st
   }
   const current = (await deps.db.prepare('SELECT * FROM sandboxes WHERE id = ?').bind(sandboxId).first<SandboxRow>()) ?? row
   const applied = await applySandboxPolicy(deps, current, await reasonFor(deps, change), { sessionId: current.session_id ?? row.session_id })
+  if (change.kind !== 'account' && current.session_id) {
+    // GH-AS-MEMBER: a member who connected (or disconnected) GitHub mid-session gets (or loses) their identity in
+    // the running VM now, not on its next boot.
+    await syncMemberGit(deps, current, current.session_id)
+  }
   if (applied.gitExpiresAt !== null) {
     await transition(deps.db, current, { github_token_expires_at: applied.gitExpiresAt }, deps.now())
   }

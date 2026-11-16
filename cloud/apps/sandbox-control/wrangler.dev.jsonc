@@ -84,6 +84,8 @@
     // CODEX-FIREWALL-SWAP: off on dev until the transform-hijack (Host/SNI binding) probe passes: a real
     // ChatGPT token lives here. `firewall` swaps Codex's hot calls at the sandbox firewall.
     "CODEX_EGRESS_SWAP": "proxy",
+    // GH-AS-MEMBER: gh in workspaces acts as the attested sender; the Worker pins what it may sign (member-git.ts).
+    "GH_AS_MEMBER": "on",
     // SEC-3 phase 1: the secret store's KEK comes out of Cloud KMS (src/secrets-kms.ts); the Worker
     // holds only the KMS-wrapped KEK (secret SECRETS_KEK_WRAPPED, AAD orca-secrets-kek:<SECRETS_KEK_ID>)
     // and a service account that can only decrypt with this key (secret SECRETS_KMS_SERVICE_ACCOUNT).

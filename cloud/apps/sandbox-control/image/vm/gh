@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# gh for agents in Orca Cloud workspaces (first on orcad's PATH, like git): GitHub actions an agent takes
+# in a teammate's turn (gh pr create, comments, reviews) act as that teammate, through their own
+# placeholder, swapped at egress for their GitHub user token (never in the VM). Orcad attests the sender
+# exactly as for git (orca-git-identity). With no attested teammate, or before the control plane turns this
+# on (ORCA_GH_AS_MEMBER=on), gh runs as before: the workspace identity.
+self="$(cd "$(dirname "$0")" && pwd)"
+real="${ORCA_REAL_GH:-}"
+if [ -z "$real" ]; then
+  IFS=: read -r -a dirs <<<"${PATH:-/usr/bin:/bin}"
+  for dir in "${dirs[@]}" /usr/local/bin /usr/bin; do
+    if [ "$dir" != "$self" ] && [ -x "$dir/gh" ] && [ "$(cd "$dir" && pwd)" != "$self" ]; then
+      real="$dir/gh"
+      break
+    fi
+  done
+fi
+[ -n "$real" ] || { echo 'gh: not installed in this sandbox' >&2; exit 127; }
+if [ "${ORCA_GH_AS_MEMBER:-}" = on ] && [ -n "${ORCA_TERMINAL_HANDLE:-}${ORCA_AGENT_SESSION_ID:-}" ]; then
+  file="$(sudo -n --preserve-env=ORCA_TERMINAL_HANDLE,ORCA_PANE_KEY,ORCA_AGENT_LAUNCH_TOKEN,ORCA_AGENT_SESSION_ID \
+    /opt/orca/bin/orca-git-identity 2>/dev/null)" && [ -n "$file" ] && {
+    token="$(git config -f "$file" orca.ghtoken 2>/dev/null || true)"
+    rm -f "$file"
+    case "$token" in
+      orca-ph-* | orca-mph-*) exec env GH_TOKEN="$token" GITHUB_TOKEN="$token" "$real" "$@" ;;
+    esac
+  }
+fi
+exec "$real" "$@"

@@ -177,6 +177,8 @@ fi
 if [ -n "${ORCA_GITHUB_PLACEHOLDER:-}" ]; then
   # The egress layer swaps the placeholder for a short-lived GitHub token; none lives in the VM.
   agent_env+=("GH_TOKEN=$ORCA_GITHUB_PLACEHOLDER" "GITHUB_TOKEN=$ORCA_GITHUB_PLACEHOLDER")
+  # GH-AS-MEMBER: gh (image/vm/gh) acts as the attested sender with their own placeholder.
+  [ "${ORCA_GH_AS_MEMBER:-}" = on ] && agent_env+=("ORCA_GH_AS_MEMBER=on")
 fi
 
 secret_names=()

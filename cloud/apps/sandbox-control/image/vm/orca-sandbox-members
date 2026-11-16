@@ -27,6 +27,9 @@ while IFS= read -r row; do
   git config -f "$file" --add http.https://github.com/.extraheader "Authorization: $(jq -r '.authorization' <<<"$row")"
   git config -f "$file" user.name "$(jq -r '.name' <<<"$row")"
   git config -f "$file" user.email "$(jq -r '.email' <<<"$row")"
+  # GH-AS-MEMBER: the member's placeholder for gh (a placeholder, never a token).
+  gh_token="$(jq -r '.ghToken // empty' <<<"$row")"
+  case "$gh_token" in orca-ph-* | orca-mph-*) git config -f "$file" orca.ghtoken "$gh_token" ;; esac
   count=$((count + 1))
 done < <(jq -c '.[]' <<<"$json")
 jq -c '[.[] | select(.userId | test("^[A-Za-z0-9_.:-]+$")) | .userId as $u | (.deviceIds // [])[] | select(test("^[A-Za-z0-9_-]{1,128}$")) | {key: ., value: $u}] | from_entries' <<<"$json" >"$tmp/devices.json"
