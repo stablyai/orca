@@ -113,6 +113,7 @@ export function nativeChatComposerSendState(
       input.imageAttachments.length === 0 &&
       !input.isWorking &&
       !input.disabled &&
+      transport?.sendOut !== true &&
       !input.editSession &&
       input.goalMode !== true
         ? (transport?.promptSuggestion?.text ?? undefined)
