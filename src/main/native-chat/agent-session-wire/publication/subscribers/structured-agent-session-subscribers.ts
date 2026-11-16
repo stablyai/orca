@@ -30,13 +30,19 @@ import { emptyAgentSessionBatch } from './agent-session-empty-batch'
 import { rememberSessionActivity } from './structured-agent-session-activity-retention'
 import { resumeSubscriber } from './agent-session-stop-note-refresh'
 import { SubscriberFrameSuperseded } from './agent-session-subscriber-frame-capture'
+import {
+  SubscriberDeliveryLane,
+  type SubscriberCatchUp,
+  type SubscriberDeliveryRetention
+} from './agent-session-subscriber-delivery-lane'
+import { trackSubscriberRetention } from './agent-session-subscriber-retention'
 
 // Advance subscriber cursors independently, sending resets or reducer-projected batches as needed.
 
 export type { AgentSessionSubscribersHooks } from './agent-session-subscribe-input'
 
 export class AgentSessionSubscribers {
-  private readonly deliveries = new WeakMap<Subscriber, Promise<void>>()
+  private readonly lanes = new WeakMap<Subscriber, SubscriberDeliveryLane>()
   private readonly bySession = new Map<string, Map<string, Subscriber>>()
   private readonly forkMarkers = new ForkMarkerSubscriptions(
     () => this.deliveryPort(),
@@ -48,7 +54,24 @@ export class AgentSessionSubscribers {
   )
   private readonly activityBySession = new Map<string, AgentSessionTurnActivity>()
 
-  constructor(private readonly hooks: AgentSessionSubscribersHooks = {}) {}
+  constructor(private readonly hooks: AgentSessionSubscribersHooks = {}) {
+    trackSubscriberRetention(this)
+  }
+
+  /** What waits behind each subscriber's active delivery, for memory diagnostics. */
+  retention(): SubscriberDeliveryRetention[] {
+    const now = this.now()
+    const lanes: SubscriberDeliveryRetention[] = []
+    for (const session of this.bySession.values()) {
+      for (const subscriber of session.values()) {
+        const lane = this.lanes.get(subscriber)
+        if (lane && !lane.idle) {
+          lanes.push(lane.retention(now))
+        }
+      }
+    }
+    return lanes
+  }
 
   subscriberCountForTests(sessionId: string): number {
     return this.bySession.get(sessionId)?.size ?? 0
@@ -137,16 +160,9 @@ export class AgentSessionSubscribers {
   ): void => {
     const hostNow = this.now()
     for (const subscriber of targets) {
-      this.enqueue(subscriber, () =>
-        publishSubscriberLiveText(this.deliveryPort(), {
-          sessionId,
-          journal,
-          fence,
-          items,
-          subscribers: [subscriber],
-          hostNow
-        })
-      )
+      if (this.isActive(subscriber)) {
+        this.lane(subscriber).liveText({ journal, fence, items, hostNow })
+      }
     }
   }
 
@@ -167,9 +183,13 @@ export class AgentSessionSubscribers {
     const hostNow = this.now()
     const port = this.deliveryPort(sessionId, journal, queueChanged)
     for (const subscriber of this.subscribers(sessionId)) {
-      this.enqueue(subscriber, () =>
-        deliverToSubscriber(port, { subscriber, journal, hostNow, emitCheckpoint: false, activity })
-      )
+      this.lane(subscriber).catchUp({
+        journal,
+        port,
+        queueChanged,
+        hostNow,
+        ...(activity !== undefined ? { activity } : {})
+      })
     }
   }
 
@@ -194,15 +214,7 @@ export class AgentSessionSubscribers {
 
   republishBackgroundTasks(sessionId: string, fence: number): void {
     for (const subscriber of this.subscribers(sessionId)) {
-      this.enqueue(subscriber, () =>
-        republishSubscriberBackgroundTasks(
-          this.deliveryPort(),
-          [subscriber],
-          sessionId,
-          fence,
-          this.now()
-        )
-      )
+      this.lane(subscriber).backgroundTasks(fence)
     }
   }
 
@@ -289,24 +301,68 @@ export class AgentSessionSubscribers {
   }
 
   private enqueue(subscriber: Subscriber, deliver: () => Promise<unknown>): void {
-    const previous = this.deliveries.get(subscriber) ?? Promise.resolve()
-    const next = previous
-      .then(async () => {
-        if (this.isActive(subscriber)) {
-          await deliver()
-        }
+    this.lane(subscriber).ordered(deliver)
+  }
+
+  private lane(subscriber: Subscriber): SubscriberDeliveryLane {
+    let lane = this.lanes.get(subscriber)
+    if (!lane) {
+      const { sessionId } = subscriber
+      lane = new SubscriberDeliveryLane({
+        catchUp: ({ journal, port, hostNow, activity }) =>
+          deliverToSubscriber(port, { subscriber, journal, hostNow, emitCheckpoint: false, activity }),
+        backgroundTasks: (fence) =>
+          republishSubscriberBackgroundTasks(
+            this.deliveryPort(),
+            [subscriber],
+            sessionId,
+            fence,
+            this.now()
+          ),
+        liveText: ({ journal, fence, items, hostNow }) =>
+          publishSubscriberLiveText(this.deliveryPort(), {
+            sessionId,
+            journal,
+            fence,
+            items,
+            subscribers: [subscriber],
+            hostNow
+          }),
+        mergeCatchUp: (pending, next) => this.mergeCatchUp(sessionId, pending, next),
+        runnable: () => this.isActive(subscriber),
+        failed: (error) => {
+          if (!(error instanceof SubscriberFrameSuperseded)) {
+            this.fail(subscriber, error)
+          }
+        },
+        now: this.now
       })
-      .catch((error: unknown) => {
-        if (!(error instanceof SubscriberFrameSuperseded)) {
-          this.fail(subscriber, error)
-        }
-      })
-    this.deliveries.set(subscriber, next)
-    void next.finally(() => {
-      if (this.deliveries.get(subscriber) === next) {
-        this.deliveries.delete(subscriber)
-      }
-    })
+      this.lanes.set(subscriber, lane)
+    }
+    return lane
+  }
+
+  /** The newer fan-out's reads are fresher; a text-only commit never hides an owed queue read. */
+  private mergeCatchUp(
+    sessionId: string,
+    pending: SubscriberCatchUp,
+    next: SubscriberCatchUp
+  ): SubscriberCatchUp | undefined {
+    if (pending.journal !== next.journal) {
+      return undefined
+    }
+    const queueChanged = pending.queueChanged || next.queueChanged
+    const activity = next.activity !== undefined ? next.activity : pending.activity
+    return {
+      journal: next.journal,
+      port:
+        queueChanged === next.queueChanged
+          ? next.port
+          : this.deliveryPort(sessionId, next.journal, queueChanged),
+      queueChanged,
+      hostNow: next.hostNow,
+      ...(activity !== undefined ? { activity } : {})
+    }
   }
 
   /**
@@ -322,6 +378,7 @@ export class AgentSessionSubscribers {
   }
 
   private drop(subscriber: Subscriber): void {
+    this.lanes.get(subscriber)?.clear()
     const session = this.bySession.get(subscriber.sessionId)
     session?.delete(subscriber.id)
     if (session?.size === 0) {
