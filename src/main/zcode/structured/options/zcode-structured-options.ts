@@ -1,4 +1,4 @@
-import type { AgentSessionModelOption } from '../../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionModelOption } from '../../../../shared/agent-session/options/model-catalog/agent-session-model-option'
 import { contextUsageField, readAvailabilityRow } from './zcode-options-wire-shapes'
 import type { ZcodeAppServerConnection } from '../../../zcode/app-server/zcode-app-server-connection-types'
 import type { ZcodeStructuredSessionLiveOptions } from './zcode-live-options'

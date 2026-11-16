@@ -1,4 +1,4 @@
-import type { AgentSessionModelOption } from '../../../../shared/agent-session/agent-session-wire'
+import type { AgentSessionModelOption } from '../../../../shared/agent-session/options/model-catalog/agent-session-model-option'
 
 // The snapshot → catalog-row conversion: the backend's `model.available` names only the live
 // selection, so the account push's declared ids join the rows to form the plan's real menu.
