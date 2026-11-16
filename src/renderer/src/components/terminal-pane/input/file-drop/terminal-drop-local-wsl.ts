@@ -1,6 +1,6 @@
 import { getLocalProjectExecutionRuntimeContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import { CLIENT_PLATFORM } from '@/lib/workspace/creation/new-workspace'
-import { isWindowsAbsolutePathLike } from '../../../../../../shared/cross-platform-path'
+import { isWindowsAbsolutePathLike } from '../../../../../../shared/file-access/cross-platform-path'
 import { parseWslUncPath } from '../../../../../../shared/file-access/wsl-paths'
 import type { useAppStore } from '@/store/index'
 

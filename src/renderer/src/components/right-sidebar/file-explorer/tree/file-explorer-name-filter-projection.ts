@@ -2,7 +2,7 @@ import { getRelativePathInsideRoot, joinPath } from '@/lib/path'
 import {
   normalizeRelativePath,
   splitPathSegments
-} from '../../../../../../shared/cross-platform-path'
+} from '../../../../../../shared/file-access/cross-platform-path'
 import { compareFileNames } from '../../../../../../shared/file-listing/file-name-sort'
 import {
   FILE_NAME_FILTER_QUERY_MAX_BYTES,

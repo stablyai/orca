@@ -195,6 +195,19 @@ export function createProviderAccountServices(
       .filter((account) => !activeIds.has(account.id))
       .map((account) => ({
         id: account.id,
+        ...(account.managedHomeRuntime === 'wsl'
+          ? account.wslDistro
+            ? {
+                readingAccount: {
+                  accountId: account.id,
+                  runtime: 'wsl' as const,
+                  wslDistro: account.wslDistro
+                }
+              }
+            : {}
+          : {
+              readingAccount: { accountId: account.id, runtime: 'host' as const, wslDistro: null }
+            }),
         resolveHome: () =>
           inactiveCodexHomeUnlessStopped(
             codexRuntimeHome.resolveCodexManagedAccountHomeForInactiveFetch(account)

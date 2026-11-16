@@ -1,4 +1,4 @@
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../shared/sidebar-inputs-switch'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../../shared/execution-host'
 import type { FolderWorkspace } from '../../../../../shared/folder-workspaces/folder-workspace-types'
 import { folderWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'

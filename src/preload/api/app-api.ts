@@ -2,7 +2,7 @@ import type { UiLanguageDetection } from '../../shared/i18n/ui-locale'
 import type { WindowMaterial } from '../../shared/app-lifecycle/windows/window-material'
 import type { AppIdentity } from '../../shared/app-lifecycle/identity/app-identity'
 import type { MacosUpgradeSupport } from '../../shared/updater/requirements/macos-upgrade-support'
-import type { E2EConfig } from '../../shared/e2e-config'
+import type { E2EConfig } from '../../shared/app-lifecycle/launch/e2e-config'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type {
   WriteTerminalRenderDesyncEvidenceArgs,

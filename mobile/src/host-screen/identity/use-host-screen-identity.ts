@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { translate } from '../../i18n/mobile-i18n'
-import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../src/shared/sidebar-inputs-switch'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../src/shared/sidebar-list/feed/sidebar-inputs-switch'
 import { loadPinnedIds } from '../../storage/preferences'
 import { loadHosts, peekHosts } from '../../host-catalog/host-store'
 import { updateLastConnected } from '../../host-catalog/host-connection-history'

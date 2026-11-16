@@ -18,7 +18,7 @@ import {
 import './orca-runtime-test-scenario-builders.spec'
 import '../../agent-launch/agent-launch-pane-attachment'
 import '../../../shared/workspace-layout/stable-pane-id'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 
 describe('OrcaRuntimeService', () => {
   it('publishes a recovered SSH pane when its relay becomes ready after an empty restart replay', async () => {

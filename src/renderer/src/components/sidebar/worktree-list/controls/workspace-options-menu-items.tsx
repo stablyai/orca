@@ -35,7 +35,7 @@ import {
 } from '../../../../../../shared/workspace-view/workspace-view-options'
 import { useTranslate } from '@/i18n/use-translate'
 import { SidebarGroupByToggle } from './SidebarGroupByToggle'
-import { withoutHiddenRepos } from '../../../../../../shared/hidden-projects'
+import { withoutHiddenRepos } from '../../../../../../shared/project/catalog/hidden-projects'
 
 export function useWorkspaceOptionsFilterBadge(): {
   hasAnyFilter: boolean

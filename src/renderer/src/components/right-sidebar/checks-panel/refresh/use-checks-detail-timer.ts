@@ -3,7 +3,7 @@ import {
   REVIEW_REFRESH_COOLDOWN_MS,
   subscribePRAutoRefreshCadence,
   type PRAutoRefreshCadence
-} from '../../../../../../shared/review-refresh-policy'
+} from '../../../../../../shared/source-control/hosted-review/review-refresh-policy'
 import { installWindowVisibilityTimeoutPoller } from '@/lib/window-activity/window-visibility-timeout-poller'
 import { getPRRefreshOwnerRuntimeEnvironmentId } from '@/store/github/repositories/repository-routing'
 import { hostPRAutoRefreshCadence } from '@/store/github/refresh/remote-host-pr-auto-refresh-cadence'

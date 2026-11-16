@@ -13,7 +13,7 @@ import { isFrozenOrcadSourceSessionPartition } from '../persistence/migrating-or
 import { isWslMoveWindowWriteHeld } from '../persistence/moving-wsl-projects/quiescence/wsl-move-window-write-hold'
 import { windowViewSaveForMain, type ReconnectFactsFor } from '../persistence/window-save-view'
 import { reportWindowSaveDrift } from '../persistence/window-save-divergence'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/workspace-layout/layout-owner-switch'
 import { formatShutdownCheckpointFailureReason } from '../../shared/app-lifecycle/shutdown/renderer-shutdown-events'
 
 type StageBeforeUnloadSyncArgs = {

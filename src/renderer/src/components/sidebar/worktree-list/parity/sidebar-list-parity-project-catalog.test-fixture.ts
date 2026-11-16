@@ -4,8 +4,8 @@ import {
   parseExecutionHostId,
   toRuntimeExecutionHostId
 } from '../../../../../../shared/execution-host'
-import { adoptEndpointRepo } from '../../../../../../shared/endpoint-catalog-adoption'
-import { applyManualRepoOrder } from '../../../../../../shared/manual-repo-order'
+import { adoptEndpointRepo } from '../../../../../../shared/project/catalog/endpoint-catalog-adoption'
+import { applyManualRepoOrder } from '../../../../../../shared/repository/manual-repo-order'
 import { mergeFetchedHostProjectCatalog } from '../../../../../../shared/project/catalog/project-compatibility-host-merge'
 import { projectHostSetupProjectionFromRepos } from '../../../../../../shared/project/host-setup/project-host-setup-projection'
 import type { RuntimeRpcResponse } from '../../../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'

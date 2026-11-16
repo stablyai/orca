@@ -1,4 +1,4 @@
-import { isPathInsideOrEqual } from '../cross-platform-path'
+import { isPathInsideOrEqual } from '../file-access/cross-platform-path'
 import {
   getConnectionExecutionHostId,
   getRepoExecutionHostId,

@@ -5,7 +5,7 @@ import {
   announceSessionWrites
 } from '../terminal/layout/profile-session-store.test-fixture'
 
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 import { createHash } from 'node:crypto'
 import { HeadlessEmulator } from '../../daemon/emulation/headless-emulator'
 import { OrcaRuntimeService } from '../orca-runtime'

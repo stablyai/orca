@@ -1,5 +1,8 @@
 import type { KeybindingContext } from '../../../../../shared/keybindings/types'
-import { toVisibleTabType, type Tab } from '../../../../../shared/tab-types'
+import {
+  toVisibleTabType,
+  type Tab
+} from '../../../../../shared/workspace-layout/tab-groups/tab-types'
 import { useAppStore } from '@/store/index'
 import {
   guardPinnedTabClose,

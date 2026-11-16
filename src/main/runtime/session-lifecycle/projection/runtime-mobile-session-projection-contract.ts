@@ -11,7 +11,7 @@ import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeSyncedTab
 } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
+import type { TabGroupLayoutNode } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { RuntimeAgentRowSnapshot } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
 import type {
   RuntimeLeafRecord,

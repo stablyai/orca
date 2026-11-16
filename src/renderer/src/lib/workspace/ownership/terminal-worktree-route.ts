@@ -1,5 +1,5 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
-import { isEphemeralSetupTerminalWorktreeId } from '../../../../../shared/ephemeral-setup-terminal-worktree-id'
+import { isEphemeralSetupTerminalWorktreeId } from '../../../../../shared/workspace-setup/ephemeral-setup-terminal-worktree-id'
 import { parseExecutionHostId } from '../../../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/workspace-scope'
 import type { AppState } from '@/store/types'

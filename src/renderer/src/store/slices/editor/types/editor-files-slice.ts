@@ -13,7 +13,7 @@ import type {
   GitCommitCompareSummary
 } from '../../../../../../shared/git/diff/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
-import type { WorkspaceVisibleTabType } from '../../../../../../shared/tab-types'
+import type { WorkspaceVisibleTabType } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type {
   BranchCompareLike,
   ClosedEditorTabSnapshot,

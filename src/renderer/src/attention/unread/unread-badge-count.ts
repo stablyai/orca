@@ -15,7 +15,7 @@ import type { Repo } from '../../../../shared/repository/repo-types'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import type { StoredAgentAttentionUnread } from '@/attention/agent-attention-contract'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
-import type { Tab } from '../../../../shared/tab-types'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { hasLiveTabMarker } from '@/store/slices/workspace-attention/workspace-live-markers'
 

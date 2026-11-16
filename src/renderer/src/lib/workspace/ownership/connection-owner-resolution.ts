@@ -13,7 +13,7 @@ import { parseWorkspaceKey } from '../../../../../shared/workspace/identity/work
 import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
-} from '../../../../../shared/cross-platform-path'
+} from '../../../../../shared/file-access/cross-platform-path'
 import { getFolderWorkspaceConnectionId } from './folder-workspace-connection'
 import { findFolderWorkspaceCandidateRepos } from '../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import {

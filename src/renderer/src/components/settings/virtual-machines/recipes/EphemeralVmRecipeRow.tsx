@@ -1,6 +1,6 @@
 import { KeyRound, Play } from 'lucide-react'
 import type React from 'react'
-import type { OrcaHooks } from '../../../../../../shared/orca-yaml-hook-types'
+import type { OrcaHooks } from '../../../../../../shared/workspace-setup/orca-yaml-hook-types'
 import { isRecipeEnvNamePassed } from '../../../../../../shared/remote-runtime/ephemeral-vm-recipes/ephemeral-vm-recipe-env'
 import { Button } from '../../../ui/button'
 import { useTranslate } from '@/i18n/use-translate'

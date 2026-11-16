@@ -310,27 +310,40 @@ it('signs in from the address a browser on another computer ended on', async () 
   }
 })
 
-it('fails, and drops the token, when a new server cannot use the saved sign-in', async () => {
-  vi.spyOn(console, 'warn').mockImplementation(() => {})
-  const { flowId, folder, host, finishBrowser, openSession } = await signInAgainst(
-    printed(GOOGLE_LINK),
-    { savedSignInUnusable: true }
-  )
-  expect(await stateAfter(flowId, 'starting')).toMatchObject({ phase: 'waiting' })
-  const token = join(folder, 'antigravity-acp', 'acp_token.json')
-  await mkdir(join(folder, 'antigravity-acp'), { recursive: true })
-  await writeFile(token, '{}')
-  const ended = Promise.withResolvers<AntigravityChatSignInStatus['flow']>()
-  const { close } = await follow(({ flow }) => {
-    if (flow?.flowId === flowId && (flow.phase === 'failed' || flow.phase === 'signedIn')) {
-      ended.resolve(flow)
-    }
-  })
-  finishBrowser()
-  openSession()
-  expect(await ended.promise.finally(close)).toMatchObject({ phase: 'failed' })
-  expect(existsSync(token)).toBe(false)
-  // Each server's exit removes its own temp folder, so the verifier must not share the first's.
-  const temps = host.connect.mock.calls.map(([launch]) => launch.env?.TMPDIR)
-  expect(new Set(temps).size).toBe(2)
-})
+it.each([
+  [{ method: 'oauth-personal' } as const, 'acp_token.json', 'acp_business_token.json'],
+  [
+    { method: 'oauth-business', gcpProject: 'p', gcpLocation: 'global' } as const,
+    'acp_business_token.json',
+    'acp_token.json'
+  ]
+])(
+  'fails, and drops only its own token, when a new server cannot use the saved %j sign-in',
+  async (authConfig, dropped, kept) => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { flowId, folder, host, finishBrowser, openSession } = await signInAgainst(
+      printed(GOOGLE_LINK),
+      { savedSignInUnusable: true, authConfig }
+    )
+    expect(await stateAfter(flowId, 'starting')).toMatchObject({ phase: 'waiting' })
+    const token = join(folder, 'antigravity-acp', dropped)
+    const other = join(folder, 'antigravity-acp', kept)
+    await mkdir(join(folder, 'antigravity-acp'), { recursive: true })
+    await writeFile(token, '{}')
+    await writeFile(other, '{}')
+    const ended = Promise.withResolvers<AntigravityChatSignInStatus['flow']>()
+    const { close } = await follow(({ flow }) => {
+      if (flow?.flowId === flowId && (flow.phase === 'failed' || flow.phase === 'signedIn')) {
+        ended.resolve(flow)
+      }
+    })
+    finishBrowser()
+    openSession()
+    expect(await ended.promise.finally(close)).toMatchObject({ phase: 'failed' })
+    expect(existsSync(token)).toBe(false)
+    expect(existsSync(other)).toBe(true)
+    // Each server's exit removes its own temp folder, so the verifier must not share the first's.
+    const temps = host.connect.mock.calls.map(([launch]) => launch.env?.TMPDIR)
+    expect(new Set(temps).size).toBe(2)
+  }
+)
