@@ -70,9 +70,9 @@ export type EditorFilesSlice = {
   releaseKeptEditorBuffers: (notice: number) => void
   /** A write landed `content` for kept records of `viewIds`: drop one it saved, else move its baseline. */
   settleKeptEditorBuffers: (viewIds: readonly string[], content: string, signature: string) => void
-  /** Unsaved drafts of workspaces gone at startup; kept until recovered, never dropped on dismiss. */
+  /** Unsaved drafts of workspaces gone at startup; kept until a live untitled tab holds them. */
   strandedEditorDrafts: StrandedEditorDrafts
-  /** Forget stranded drafts whose text now lives in a recovered file. */
+  /** Forget stranded drafts whose text a recovered tab now holds. */
   settleRecoveredStrandedEditorDrafts: (recovered: ReadonlySet<PersistedOpenFile>) => void
   /** Bumped when runtime revisions change, so the record middleware re-resolves identities. */
   editorBufferIdentityRevision: number

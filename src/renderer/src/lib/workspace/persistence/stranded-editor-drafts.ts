@@ -8,11 +8,8 @@ export function strandedDraftFiles(files: readonly PersistedOpenFile[]): Persist
   return files.filter((file) => file.readOnly !== true && file.dirtyDraftContent !== undefined)
 }
 
-function sameFileOwner(a: PersistedOpenFile, b: PersistedOpenFile): boolean {
-  return (
-    a.filePath === b.filePath &&
-    (a.runtimeEnvironmentId ?? null) === (b.runtimeEnvironmentId ?? null)
-  )
+function fileOwnerKey(file: PersistedOpenFile): string {
+  return `${file.runtimeEnvironmentId ?? ''}\n${file.filePath}`
 }
 
 /** A live tab's own draft wins; a clean live tab yields to the stranded draft the user never saw. */
@@ -26,21 +23,19 @@ export function withStrandedEditorDrafts(
       byWorktree[ownerKey] = drafts
       continue
     }
-    const unheld = drafts.filter((draft) => !live.some((file) => sameFileOwner(file, draft)))
-    byWorktree[ownerKey] = [
-      ...live.map(
-        (file) =>
-          (file.dirtyDraftContent === undefined &&
-            drafts.find((draft) => sameFileOwner(file, draft))) ||
-          file
-      ),
-      ...unheld
-    ]
+    const unheld = new Map(drafts.map((draft) => [fileOwnerKey(draft), draft]))
+    const merged = live.map((file) => {
+      const key = fileOwnerKey(file)
+      const draft = unheld.get(key)
+      unheld.delete(key)
+      return (file.dirtyDraftContent === undefined && file.readOnly !== true && draft) || file
+    })
+    byWorktree[ownerKey] = [...merged, ...unheld.values()]
   }
   return byWorktree
 }
 
-/** Drops drafts whose text now lives in a recovered file. */
+/** Drops drafts whose text a recovered tab now holds. */
 export function withoutRecoveredStrandedDrafts(
   stranded: StrandedEditorDrafts,
   recovered: ReadonlySet<PersistedOpenFile>
