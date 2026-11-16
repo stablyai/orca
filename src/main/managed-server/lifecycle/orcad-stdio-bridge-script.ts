@@ -1,6 +1,7 @@
 // Sentinels skip noisy login profiles; base64 framing prevents PowerShell text decoding from corrupting bytes.
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { orcadPosixNodeRuntimeGlobs } from '../install/orcad-node-runtime-globs'
+import { ORCAD_REMOTE_ROOT_SHELL } from '../host-state/orcad-remote-home-override'
 
 export type OrcadStdioBridgeMode = 'raw' | 'base64'
 
@@ -62,7 +63,7 @@ export const ORCAD_STDIO_BRIDGE_FUNCTION = `function orcadStdioBridge(port, mode
 /** Shared machine homes may contain other architectures' runtimes; self-test before exec. */
 export function orcadPosixStdioBridgeCommand(port: number): string {
   const script = `${ORCAD_STDIO_BRIDGE_FUNCTION}\norcadStdioBridge(Number(process.argv[1]), 'raw')`
-  const [runtimeStore, machineRuntimeStores] = orcadPosixNodeRuntimeGlobs()
+  const [runtimeStore, machineRuntimeStores] = orcadPosixNodeRuntimeGlobs(ORCAD_REMOTE_ROOT_SHELL)
   return [
     `for runtime in ${runtimeStore}`,
     `${machineRuntimeStores}; do`,

@@ -103,6 +103,15 @@ describe.runIf(POSIX)('the POSIX stdio bridge command', () => {
     )
     expect((await roundTrip(channel, 'raw')).equals(PAYLOAD)).toBe(true)
   })
+
+  it('runs on the Node in ORCA_REMOTE_HOME when the host moved the server there', async () => {
+    const channel = spawnLocalBridgeChannel(
+      '/bin/sh',
+      ['-c', orcadPosixStdioBridgeCommand(echo.port)],
+      { ...process.env, HOME: posixHome(false), ORCA_REMOTE_HOME: posixHome(true) }
+    )
+    expect((await roundTrip(channel, 'raw')).equals(PAYLOAD)).toBe(true)
+  })
 })
 
 describe('the Windows host script’s stdio-bridge op', () => {
