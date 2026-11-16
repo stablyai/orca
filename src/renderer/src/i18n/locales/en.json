@@ -4705,7 +4705,8 @@
             "titleVm": "Delete this VM?",
             "bodyCloud": "The sandbox and anything on it are deleted, and the workspace isn’t created.",
             "bodyVm": "The VM and anything on it are destroyed, and the workspace isn’t created.",
-            "keep": "Keep it"
+            "keep": "Keep",
+            "delete": "Delete"
           },
           "VmBuildErrorDetails": {
             "copyFailed": "Couldn’t copy the details.",
@@ -6501,13 +6502,13 @@
           "preparing": "Preparing preview…",
           "ready": "Skill link ready",
           "title": "Share skill",
-          "0f07fa2a79": "Publish skill",
-          "7aa4ba0dba": "Publish new version",
+          "0f07fa2a79": "Publish",
+          "7aa4ba0dba": "Publish",
           "3a51d0f34f": "Cancel upload",
           "e9d652ae3d": "Cancelling…",
           "30985d4fc0": "Cancel",
           "3af85f6add": "Done",
-          "publishBundle": "Publish bundle",
+          "publishBundle": "Publish",
           "cancelRequestFailed": "Orca could not send the cancellation request. The upload may still finish."
         },
         "SkillCard": {
@@ -7119,7 +7120,7 @@
           "sshConnectionUnavailable": "SSH connection \"{{connection}}\" not found or not connected"
         },
         "OrcaYamlTrustDialog": {
-          "f3e2b868fb": "Run hooks",
+          "f3e2b868fb": "Run",
           "43b7bec4cd": "Don't run",
           "setupChangedTitle": "{{repo}}'s setup script changed — run the new version?",
           "archiveChangedTitle": "{{repo}}'s archive script changed — run the new version?",
@@ -7259,7 +7260,7 @@
           "description": "Saving runs this whenever Orca creates a worktree for {{repo}}.",
           "setupScript": "Setup script",
           "archiveScript": "Archive script",
-          "save": "Save local setup",
+          "save": "Save",
           "descriptionWithSource": "From <file>{{source}}</file>. Saving runs this whenever Orca creates a worktree for {{repo}}.",
           "notImported": "Not imported",
           "notImportedHint": "These settings have no Orca equivalent and won't be saved.",
@@ -9033,8 +9034,8 @@
             "readHint": "List workspaces, projects and routines. It cannot start, change or delete anything.",
             "fullHint": "Start, sleep, wake and delete workspaces, message agents and manage routines as you.",
             "close": "Close",
-            "regenerate": "Generate a new code",
-            "generate": "Generate code"
+            "regenerate": "Regenerate",
+            "generate": "Generate"
           },
           "create": {
             "readOnly": "Read only",
@@ -9054,7 +9055,7 @@
             "expiryNever": "Never",
             "expiryDays": "In {{days}} days",
             "expiryYear": "In 1 year",
-            "submit": "Create key"
+            "submit": "Create"
           },
           "cancel": "Cancel",
           "links": {
@@ -9084,7 +9085,7 @@
             "createdByOther": "<person></person> created this key and may still be using it.",
             "appsCount_one": "An app approved with this key is disconnected too.",
             "appsCount_other": "{{count}} apps approved with this key are disconnected too.",
-            "confirm": "Revoke key",
+            "confirm": "Revoke",
             "done": "Revoked “{{keyName}}”"
           },
           "signedOut": {
@@ -9214,7 +9215,7 @@
           "delete": {
             "title": "Delete “{{routineName}}”?",
             "body": "It stops running and its run history is deleted. Workspaces it already started are not affected.",
-            "confirm": "Delete routine",
+            "confirm": "Delete",
             "done": "Deleted “{{routineName}}”"
           },
           "editor": {
@@ -9249,8 +9250,8 @@
             "name": "Name",
             "namePlaceholder": "e.g. Triage new issues",
             "when": "When it runs",
-            "save": "Save changes",
-            "create": "Create routine",
+            "save": "Save",
+            "create": "Create",
             "where": "Where it runs",
             "project": "Project",
             "repo": "Repository URL",
@@ -16844,9 +16845,9 @@
             "copy": "Copy",
             "copyFailed": "Couldn’t copy the link.",
             "copyLink": "Copy link",
-            "create": "Create link",
+            "create": "Create",
             "createFailed": "Couldn’t create the link.",
-            "createPublic": "Create public link",
+            "createPublic": "Create",
             "createdCopied": "Your link is ready and copied.",
             "createdNotCopied": "Your link is ready. Copy it below.",
             "description": "Get a link that opens port {{value0}} in a browser.",
@@ -27319,7 +27320,7 @@
     "activate": {
       "title": "Use build #{{number}}?",
       "description": "New workspaces will start from build #{{number}}. Existing workspaces keep theirs.",
-      "confirm": "Use this build"
+      "confirm": "Use"
     },
     "form": {
       "script": "Install script",
@@ -27373,7 +27374,7 @@
       "added": "added: ",
       "removed": "removed: ",
       "cancel": "Cancel",
-      "apply": "Apply to draft"
+      "apply": "Apply"
     },
     "readOnlyAsk": "Ask an owner or admin to change the environment or start a build.",
     "size": {
@@ -28037,7 +28038,7 @@
       "changes": "Uncommitted changes and untracked files",
       "branchTaken": "{{branch}} is already checked out on this computer",
       "branchTakenDetail": "It will be {{newName}}. Chats already on this computer are kept.",
-      "action": "Move to this computer",
+      "action": "Move",
       "branchNamed": "Branch {{branch}} and its commits",
       "changesCount_one": "{{count}} uncommitted change, plus untracked files",
       "changesCount_other": "{{count}} uncommitted changes, plus untracked files",
@@ -28564,7 +28565,7 @@
       "unreachableDetail": "Showing the last known state. Keys you save now go to your Orca account when Orca is back."
     },
     "remove": {
-      "confirmLabel": "Remove {{name}}",
+      "confirmLabel": "Remove",
       "fromAccountQuestion": "Also remove it from your Orca account? Cloud workspaces will stop using it.",
       "thisComputerOnly": "Remove from this computer only",
       "both": "Remove from both",
@@ -29127,7 +29128,7 @@
       "waiting": "{{count}} more waiting",
       "turnOff": "Turn off for this workspace",
       "deny": "Deny",
-      "alwaysAllow": "Always allow this command",
+      "alwaysAllow": "Always allow",
       "alwaysAllowScope": "Runs without asking again, only this exact command in this workspace and folder. What it runs can still change, such as a script the agent edits.",
       "allowOnce": "Allow once",
       "turnOffFailed": "Couldn’t turn off local commands. Turn them off in Settings → Orca Cloud → Commands on this computer."
@@ -29211,7 +29212,7 @@
     "removeConfirmTitle": "Remove the copy on this computer?",
     "removalEdited_one": "{{count}} changed file on this computer will be removed.",
     "removalEdited_other": "{{count}} changed files on this computer will be removed.",
-    "removeCopy": "Remove copy",
+    "removeCopy": "Remove",
     "title": "On this computer",
     "syncedEmpty": "Synced · {{ago}}",
     "contextLabel": ".context folder",

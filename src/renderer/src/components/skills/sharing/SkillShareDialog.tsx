@@ -352,10 +352,10 @@ export function SkillShareDialog({
                 >
                   <Share2 className="size-4" />
                   {publishingNewVersion
-                    ? t('auto.components.skills.SkillShareDialog.7aa4ba0dba', 'Publish new version')
+                    ? t('auto.components.skills.SkillShareDialog.7aa4ba0dba', 'Publish')
                     : selectedSkills.length > 1
-                      ? t('auto.components.skills.SkillShareDialog.publishBundle', 'Publish bundle')
-                      : t('auto.components.skills.SkillShareDialog.0f07fa2a79', 'Publish skill')}
+                      ? t('auto.components.skills.SkillShareDialog.publishBundle', 'Publish')
+                      : t('auto.components.skills.SkillShareDialog.0f07fa2a79', 'Publish')}
                 </Button>
               )
             ) : null}

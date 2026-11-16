@@ -155,7 +155,7 @@ export function CloudMoveToComputerView({
           </Button>
           <Button ref={primary} size="sm" onClick={onConfirm}>
             <Monitor />
-            {t('orcaCloudMove.confirm.action', 'Move to this computer')}
+            {t('orcaCloudMove.confirm.action', 'Move')}
           </Button>
         </div>
       </div>

@@ -144,7 +144,7 @@ export function SetupScriptReviewDialog({
               <Download className="size-3.5" />
             )}
             <span className={cn(isSaving && 'text-muted-foreground')}>
-              {t('auto.components.sidebar.SetupScriptReviewDialog.save', 'Save local setup')}
+              {t('auto.components.sidebar.SetupScriptReviewDialog.save', 'Save')}
             </span>
           </Button>
         </DialogFooter>

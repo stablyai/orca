@@ -310,7 +310,7 @@ function FormStep({
           ) : (
             <KeyRound />
           )}
-          {t('auto.components.settings.cloudApi.create.submit', 'Create key')}
+          {t('auto.components.settings.cloudApi.create.submit', 'Create')}
         </Button>
       </DialogFooter>
     </form>
