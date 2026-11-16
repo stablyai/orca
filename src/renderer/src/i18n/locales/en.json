@@ -4846,6 +4846,9 @@
             "copyLinkFailed": "Failed to copy link",
             "copyFilePathFailed": "Failed to copy file path",
             "downloadOpenWithDefaultApp": "Download & open with default app",
+            "download": "Download…",
+            "downloadAlreadyLocal": "'{{value0}}' is already on this computer.",
+            "downloadFolderUnsupported": "Folder '{{value0}}' can't be downloaded from this host.",
             "downloadOpenFailed": "Failed to download '{{value0}}'.",
             "openInNewTab": "Open in new tab",
             "openInThisGroupRefused": "Couldn't open {{value0}} in this group"
