@@ -3,12 +3,20 @@ import type {
   UsageReadingAccount
 } from '../../../../shared/agent-usage/rate-limits/rate-limit-types'
 
-/** Names the saved account on a successful reading of its own home; failures never carry it. */
+/** Names the account slot on a successful reading of its own home; every result names the attempt. */
 export function withCodexReadingAccount(
   limits: ProviderRateLimits,
   readingAccount: UsageReadingAccount | undefined
 ): ProviderRateLimits {
-  return readingAccount && limits.status === 'ok'
-    ? { ...limits, usageMetadata: { ...limits.usageMetadata, readingAccount } }
-    : limits
+  if (!readingAccount) {
+    return limits
+  }
+  return {
+    ...limits,
+    usageMetadata: {
+      ...limits.usageMetadata,
+      attemptedAccount: readingAccount,
+      ...(limits.status === 'ok' ? { readingAccount } : {})
+    }
+  }
 }

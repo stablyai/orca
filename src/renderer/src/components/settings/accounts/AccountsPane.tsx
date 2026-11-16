@@ -6,7 +6,7 @@ import type {
 } from '../../../../../shared/agent-accounts/managed-account-types'
 import type { CodexConfigSyncStatus } from '../../../../../shared/agent-accounts/codex/codex-config-sync-types'
 import type { RateLimitState } from '../../../../../shared/agent-usage/rate-limits/rate-limit-types'
-import { useObservedAccountPlans } from './use-observed-account-plans'
+import { useObservedAccountUsage } from './use-observed-account-usage'
 import { toast } from 'sonner'
 import { useAppStore } from '../../../store/index'
 import { translate } from '@/i18n/i18n'
@@ -155,7 +155,7 @@ export function AccountsPane({
   } | null>(null)
   const claudeSectionShown = matchesSettingsSearch(searchQuery, getAccountsClaudeSearchEntries())
   const codexSectionShown = matchesSettingsSearch(searchQuery, getAccountsCodexSearchEntries())
-  const { claudeAccountPlans, codexAccountPlans } = useObservedAccountPlans({
+  const { claudeAccountUsage, codexAccountUsage } = useObservedAccountUsage({
     isRemoteAccountScope,
     ownerUsage:
       scopeEnvironmentId && ownerUsage?.environmentId === scopeEnvironmentId
@@ -350,8 +350,8 @@ export function AccountsPane({
     codexConfigSyncWarning,
     codexRateLimits,
     codexRateLimitTarget,
-    claudeAccountPlans,
-    codexAccountPlans,
+    claudeAccountUsage,
+    codexAccountUsage,
     setRemoveCodexTarget,
     runCodexAccountAction,
     recordOpenCodeSettingEdit

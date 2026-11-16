@@ -8,7 +8,7 @@ export type ClaudeRuntimeAuthPreparation = {
   wslLinuxConfigDir?: string | null
   envPatch: ClaudeEnvPatch
   provenance: string
-  /** The saved account whose login this reads; absent for System default and covered accounts. */
+  /** The account slot whose login this reads (null id: System default, including covered accounts). */
   readingAccount?: UsageReadingAccount
   /** Report unavailable usage without throwing out the entire polling cycle. */
   usageError?: string

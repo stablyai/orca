@@ -1,4 +1,5 @@
 import {
+  getAccountUsageReadings,
   getActiveProviderRateLimits,
   getInactiveProviderUsage,
   hasActiveProviderUsage,
@@ -51,7 +52,9 @@ function managedAccounts(snapshot: AccountsSnapshot, provider: ProviderKey) {
         id: account.id,
         email: account.email,
         displayName: account.displayName,
-        subtitle: account.workspaceLabel ?? null
+        subtitle: account.workspaceLabel ?? null,
+        managedHomeRuntime: account.managedHomeRuntime,
+        wslDistro: account.wslDistro
       }))
 }
 
@@ -61,23 +64,25 @@ export function selectHomeUsageCards(
   provider: ProviderKey
 ): HomeUsageCard[] {
   const activeId = activeAccountId(snapshot, provider)
-  const activeLimits = getActiveProviderRateLimits(snapshot, provider)
+  const activeFetching = getActiveProviderRateLimits(snapshot, provider)?.status === 'fetching'
+  const readingFor = getAccountUsageReadings(snapshot, provider)
   const cards: HomeUsageCard[] = []
   if (activeId === null) {
+    const limits = readingFor(null)
     cards.push({
       accountId: null,
       email: null,
       subtitle: null,
       active: true,
-      limits: activeLimits,
-      fetching: activeLimits?.status === 'fetching',
-      metered: hasActiveProviderUsage(activeLimits)
+      limits,
+      fetching: activeFetching,
+      metered: hasActiveProviderUsage(limits)
     })
   }
   for (const account of managedAccounts(snapshot, provider)) {
     const active = account.id === activeId
     const inactive = active ? null : getInactiveProviderUsage(snapshot, provider, account.id)
-    const limits = active ? activeLimits : (inactive?.rateLimits ?? null)
+    const limits = readingFor(account)
     cards.push({
       accountId: account.id,
       email: account.email,
@@ -85,7 +90,7 @@ export function selectHomeUsageCards(
       subtitle: account.subtitle,
       active,
       limits,
-      fetching: active ? limits?.status === 'fetching' : inactive?.isFetching === true,
+      fetching: active ? activeFetching : inactive?.isFetching === true,
       metered: true
     })
   }

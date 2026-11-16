@@ -86,8 +86,9 @@ export abstract class RateLimitServiceResultPolicy extends RateLimitServiceFetch
       usageMetadata: {
         ...previous.usageMetadata,
         ...fresh.usageMetadata,
-        // Error kind belongs to this failure, not an older snapshot.
+        // Error kind and attempt belong to this failure, not an older snapshot.
         failureKind: fresh.usageMetadata?.failureKind,
+        attemptedAccount: fresh.usageMetadata?.attemptedAccount,
         lastSuccessfulSource:
           previous.usageMetadata?.lastSuccessfulSource ?? previous.usageMetadata?.source
       }

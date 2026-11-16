@@ -11,7 +11,9 @@ export function claudeAccountUsagePreparation(
     return {
       configDir: router.systemDefaultHome(),
       envPatch: {},
-      provenance: 'system'
+      provenance: 'system',
+      // An email-only login match is not proof this is the saved account's own reading.
+      readingAccount: { accountId: null, runtime: 'host', wslDistro: null }
     }
   }
   const home = router.accountHome(accountId)

@@ -219,9 +219,7 @@ export class ClaudeWslProfileRouter {
           : {})
       },
       provenance: profile ? `profile:${profile.accountId}:wsl:${distro}` : `wsl:${distro}:system`,
-      ...(profile
-        ? { readingAccount: { accountId: profile.accountId, runtime: 'wsl', wslDistro: distro } }
-        : {})
+      readingAccount: { accountId: profile?.accountId ?? null, runtime: 'wsl', wslDistro: distro }
     }
   }
 

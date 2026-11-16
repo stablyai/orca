@@ -49,5 +49,9 @@ export function getCodexAccountAuthWarning(args: {
   if (args.limits?.status !== 'error' || !isCodexAuthError(args.limits.error)) {
     return null
   }
-  return 'stale-sign-in'
+  // Another window can switch accounts mid-fetch; only the account the fetch tried failed to sign in.
+  const attempted = args.limits.usageMetadata?.attemptedAccount
+  return attempted?.accountId === args.accountId && attempted.runtime === args.target.runtime
+    ? 'stale-sign-in'
+    : null
 }

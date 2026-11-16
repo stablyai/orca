@@ -30,6 +30,7 @@ vi.mock(import('node:os'), async (importOriginal) => {
   }
 })
 
+const SYSTEM_DEFAULT_READING = { accountId: null, runtime: 'host', wslDistro: null }
 describe('CodexRuntimeHomeService', () => {
   beforeEach(() => {
     setupRuntimeHomeTest()
@@ -137,7 +138,8 @@ describe('CodexRuntimeHomeService', () => {
 
     expect(service.prepareForRateLimitFetch()).toEqual({
       kind: 'ready',
-      codexHomePath: getSystemCodexHomePath()
+      codexHomePath: getSystemCodexHomePath(),
+      readingAccount: SYSTEM_DEFAULT_READING
     })
     expect(readFileSync(join(managedHomePath, 'auth.json'), 'utf-8')).toBe(managedAuth)
     expect(readFileSync(getSystemCodexAuthPath(), 'utf-8')).toBe(systemAuth)
@@ -145,7 +147,8 @@ describe('CodexRuntimeHomeService', () => {
 
     expect(service.prepareForRateLimitFetch()).toEqual({
       kind: 'ready',
-      codexHomePath: getSystemCodexHomePath()
+      codexHomePath: getSystemCodexHomePath(),
+      readingAccount: SYSTEM_DEFAULT_READING
     })
     expect(service.prepareForCodexLaunch()).toBeNull()
     expect(syncSpy).not.toHaveBeenCalled()

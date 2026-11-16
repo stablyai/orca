@@ -36,7 +36,7 @@ export function renderClaudeAccountRow(
     accountRuntime,
     accountRuntimeUnavailable,
     accountVisibilityOptions,
-    claudeAccountPlans,
+    claudeAccountUsage,
     claudeAccounts,
     claudeAction,
     isRemoteAccountScope,
@@ -55,7 +55,7 @@ export function renderClaudeAccountRow(
   const isBusy = claudeAction !== 'idle' || accountRuntimeUnavailable
   const accountRuntimeView = getProviderAccountRuntime(account)
   const accountLabel = getManagedAccountPrimaryLabel(account)
-  const plan = getObservedAccountPlan(claudeAccountPlans, account.id, accountRuntimeView)
+  const plan = getObservedAccountPlan(claudeAccountUsage, account.id, accountRuntimeView)
   // A named row keeps its sign-in email visible, most of all when it needs signing in.
   const namedEmail = account.displayName ? account.email : null
   const reauthenticate = (copyLink: boolean): Promise<void> =>
