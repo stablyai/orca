@@ -135,8 +135,6 @@ export class TraexChildWork {
       agent.state = 'done'
       agent.outcome = 'cancelled'
       agent.operation = null
-    } else if (method === 'queue/status' && agent && agent.state !== 'done') {
-      agent.state = params.state === 'ready' ? 'working' : 'waiting'
     } else if (method === 'thread/status/changed' && agent && agent.state !== 'done') {
       const flags = traexRecord(params.status).activeFlags
       if (Array.isArray(flags)) {

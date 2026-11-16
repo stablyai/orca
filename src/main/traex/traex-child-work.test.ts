@@ -1,6 +1,19 @@
 import { expect, it } from 'vitest'
 import { TraexChildWork } from './traex-child-work'
 
+it('keeps a model-queued child working rather than waiting for approval', () => {
+  const work = new TraexChildWork('thread-root')
+  work.register('thread-child', 'thread-root', 'Hypatia')
+  work.drain()
+  work.observe('queue/status', {
+    threadId: 'thread-child',
+    turnId: 'turn-child',
+    state: 'queued',
+    position: 12
+  })
+  expect(work.drain()).toMatchObject([{ type: 'live', child: { state: 'working' } }])
+})
+
 it('keeps a backgrounded command labelled and stoppable after its turn finishes', () => {
   const work = new TraexChildWork('thread-label')
   work.observe('item/started', {
