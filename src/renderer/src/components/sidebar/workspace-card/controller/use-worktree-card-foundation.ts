@@ -20,6 +20,7 @@ import {
 } from '@/store/slices/ssh/runtime-environment-ssh-selectors'
 import { EMPTY_WORKSPACE_PORTS, type WorktreeCardProps } from './worktree-card-model'
 import { getDeleteStateForWorktreeHost } from '../../workspace-actions/deletion/worktree-delete-state-host-match'
+import { selectDrawsNewWorktreeCards } from '@/store/appearance/worktree-card-style'
 
 export function useWorktreeCardFoundation({
   worktree,
@@ -43,7 +44,7 @@ export function useWorktreeCardFoundation({
   const agentActivityDisplayMode =
     useAppStore((s) => s.agentActivityDisplayMode) ?? DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE
   const projectGroups = useAppStore((s) => s.projectGroups)
-  const newCardStyle = settings?.experimentalNewWorktreeCardStyle === true
+  const newCardStyle = useAppStore(selectDrawsNewWorktreeCards)
   const compactWorktreeCards = settings?.compactWorktreeCards === true
   const cardDetails = useMemo(
     () => getWorktreeCardDetails(cardProps, { compactWorktreeCards, newCardStyle }),

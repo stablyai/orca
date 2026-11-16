@@ -268,7 +268,6 @@
 2 src/renderer/src/components/onboarding/AgentStep.tsx
 2 src/renderer/src/components/onboarding/NotificationStep.tsx
 8 src/renderer/src/components/onboarding/OnboardingFlow.tsx
-3 src/renderer/src/components/onboarding/OnboardingLanguageSwitcher.tsx
 1 src/renderer/src/components/onboarding/ThemeLookCarousel.tsx
 1 src/renderer/src/components/onboarding/ThemeLookGallery.tsx
 1 src/renderer/src/components/onboarding/ThemeStep.tsx

@@ -5,7 +5,7 @@ import type {
   HostQualifiedKnownWorktreeResult,
   ForgetRemovedWorktreesForExecutionHostArgs,
   ForgetRemovedWorktreesForExecutionHostResult
-} from '../../../../shared/detected-worktree-provider-contract'
+} from '../../../../shared/worktree/catalog/detected-worktree-provider-contract'
 import type { DetectedWorktree } from '../../../../shared/worktree/types'
 import { isFolderRepo } from '../../../../shared/repository/repo-kind'
 import { projectWorktreeLineageWithHostPeers } from '../../../workspaces/catalog/worktree-lineage-host-peers'

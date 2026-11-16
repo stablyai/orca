@@ -11,6 +11,8 @@ import type { OrcaHookTrustKind } from '../../../../../shared/workspace-setup/ho
 import type { SettingsNavigationTarget } from '../../../components/settings/navigation/settings-navigation-types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 
+export type WorktreeCardsIntroChoice = 'new' | 'classic'
+
 export type UISliceContextual = {
   openSettingsPage: () => void
   closeSettingsPage: () => void
@@ -136,6 +138,14 @@ export type UISliceContextual = {
   markCodexSharedSettingsNoticeSeen: () => void
   worktreeCardsUpdateNoticeSeen: boolean
   markWorktreeCardsUpdateNoticeSeen: () => void
+  worktreeCardsIntroNoticeSeen: boolean
+  markWorktreeCardsIntroNoticeSeen: () => void
+  /** Open intro note's switch position; 'new' previews the new cards without saving. Not persisted. */
+  worktreeCardsIntroChoice: WorktreeCardsIntroChoice | null
+  setWorktreeCardsIntroChoice: (choice: WorktreeCardsIntroChoice | null) => void
+  /** One-shot pointer at the options button after someone keeps the new cards. Not persisted. */
+  worktreeCardsIntroKeptHintOpen: boolean
+  setWorktreeCardsIntroKeptHintOpen: (open: boolean) => void
   claudeDiffPanelNoticeSeen: boolean
   markClaudeDiffPanelNoticeSeen: () => void
 }

@@ -17,7 +17,9 @@ import {
 } from '../../../persistence/terminal-topology/testing/terminal-topology-profile-fixture'
 import { OrcaRuntimeService } from '../../orca-runtime'
 
-vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
+vi.mock('../../../../shared/workspace-layout/layout-owner-switch', () => ({
+  ORCA_LAYOUT_OWNER_IS_MAIN: true
+}))
 vi.mock('../../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: () => ({ hosts: [] }),

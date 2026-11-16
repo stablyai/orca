@@ -13,7 +13,7 @@ import { refreshMobileNewWorkspaceDialogSelectedRepo } from '../../../worktree/r
 import {
   getNewWorkspaceDialogEligibleRepos,
   resolveNewWorkspaceDialogRepoId
-} from '../../../../../src/shared/new-workspace-dialog-repo'
+} from '../../../../../src/shared/new-workspace/new-workspace-dialog-repo'
 import type { MobileWorkspaceRepo } from '../forms/new-worktree-modal-types'
 
 const NO_SERVER_CLIENTS: ReadonlyMap<ExecutionHostId, RpcClient> = new Map()

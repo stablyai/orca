@@ -28,7 +28,7 @@
 1 src/main/browser/cookies/chromium/prepare-import.ts
 5 src/main/browser/cookies/sources/browser-cookie-firefox-import.ts
 25 src/main/browser/cookies/staging/browser-cookie-staged-import.ts
-8 src/main/codex/history/index/codex-state-db.ts
+5 src/main/codex/history/index/codex-state-db.ts
 3 src/main/foreign-sqlite-readers/readers/cursor-profile.ts
 44 src/main/github/pr-watch/pr-check-event-tables.ts
 14 src/main/github/pr-watch/pr-pending-actions.ts

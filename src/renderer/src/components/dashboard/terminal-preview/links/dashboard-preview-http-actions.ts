@@ -24,7 +24,7 @@ import type {
   HttpLinkDestination,
   HttpLinkActionDestinations
 } from '@/lib/browser/navigation/http-link-destinations'
-import type { DashboardCard } from '../../../../../../shared/dashboard-snapshot'
+import type { DashboardCard } from '../../../../../../shared/agent-status/presentation/dashboard-snapshot'
 import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 
 export type DashboardPreviewLinkSource = Pick<

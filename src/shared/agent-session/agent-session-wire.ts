@@ -235,6 +235,9 @@ export type AgentSessionStatusSummary = {
   /** The agent asked a question its turn does not wait on (Codex's async question), and the person
    *  has not answered it yet. Turn status is unchanged; only the lead state shows it. Older hosts omit it. */
   awaitsAnswer?: true
+  /** The newest async question row the person skipped: clients hide it and every earlier question.
+   *  Older hosts omit it, and their clients hide a skipped card on that screen only. */
+  asyncQuestionsSkippedThrough?: string
   /** Optional live provider tasks let lists show children without journal subscriptions; derive from children when published. */
   backgroundTasks?: AgentSessionBackgroundTask[]
   /** Running/monitoring child views (decodeAgentChildWorkViews); finished children use background tasks only. Omit usage and per-tick freshness here; the background-task channel carries those ticks. Older hosts omit this. */

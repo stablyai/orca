@@ -179,6 +179,8 @@ export type RuntimeStore = {
     sourceControlCompareAgainstUpstream?: GlobalSettings['sourceControlCompareAgainstUpstream']
     prAutoRefresh?: GlobalSettings['prAutoRefresh']
     diffShowWhitespace?: GlobalSettings['diffShowWhitespace']
+    newTabMenuLayout?: GlobalSettings['newTabMenuLayout']
+    floatingTerminalNewTabMenuLayout?: GlobalSettings['floatingTerminalNewTabMenuLayout']
     artifactSharingEnabled?: GlobalSettings['artifactSharingEnabled']
     terminalQuickCommands?: GlobalSettings['terminalQuickCommands']
     gitlabProjects?: GlobalSettings['gitlabProjects']

@@ -12,7 +12,7 @@ import type { RuntimeWorktreeListResult } from '../../../../../../shared/worktre
 import type {
   HostQualifiedDetectedWorktreeResult,
   ListDetectedWorktreesArgs
-} from '../../../../../../shared/detected-worktree-provider-contract'
+} from '../../../../../../shared/worktree/catalog/detected-worktree-provider-contract'
 import { REMOTE_WORKTREE_LIST_PARITY_LIMIT } from './worktree-slice-constants'
 import type {
   BackgroundRuntimeRefreshOptions,

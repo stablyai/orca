@@ -16,7 +16,7 @@ import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/e
 import { assertRuntimeEnvironmentCapability } from '../../runtime/rpc/compatibility/runtime-capability-proof'
 import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../shared/remote-runtime/host-catalog/runtime-client-target'
-import { adoptEndpointProjectCatalog } from '../../../../shared/endpoint-catalog-adoption'
+import { adoptEndpointProjectCatalog } from '../../../../shared/project/catalog/endpoint-catalog-adoption'
 import {
   SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE,
   sshHostWithoutServerMessage,

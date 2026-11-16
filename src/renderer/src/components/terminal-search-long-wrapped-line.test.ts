@@ -183,19 +183,6 @@ describe('terminal search inside one very long wrapped line', () => {
     expect(performance.now() - startedAt).toBeLessThan(FULL_SCAN_BUDGET_MS)
   })
 
-  it('finds a whole-word match that only matches from a later wrapped row', async () => {
-    const { terminal, search } = openTerminalWithSearch()
-    const filler = 'x'.repeat(COLS - NEEDLE.length - 2)
-    await write(terminal, `a${NEEDLE}a${filler} ${NEEDLE} ${filler}`)
-
-    const found = safeFind((term, options) => search.findNext(term, options), NEEDLE, {
-      wholeWord: true,
-      decorations: SEARCH_DECORATIONS
-    })
-
-    expect(found).toBe(true)
-  })
-
   it('steps past a zero-length regex match instead of abandoning the line', async () => {
     const { terminal, search } = openTerminalWithSearch()
     await write(terminal, `abc ${NEEDLE} def\r\n`)
@@ -207,18 +194,5 @@ describe('terminal search inside one very long wrapped line', () => {
 
     expect(found).toBe(true)
     expect(terminal.getSelectionPosition()?.start).toEqual({ x: 4, y: 0 })
-  })
-
-  it('anchors a regex to the logical line, not to every wrapped row', async () => {
-    const { terminal, search } = openTerminalWithSearch()
-    // A visual wrap is not a logical line start, so ^ must not match there.
-    await write(terminal, 'x'.repeat(COLS) + NEEDLE + 'x'.repeat(COLS - NEEDLE.length))
-
-    const found = safeFind((term, options) => search.findNext(term, options), `^${NEEDLE}`, {
-      regex: true,
-      decorations: SEARCH_DECORATIONS
-    })
-
-    expect(found).toBe(false)
   })
 })

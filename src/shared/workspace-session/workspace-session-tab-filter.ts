@@ -4,7 +4,7 @@
  * removed tab or group moves to what is left. Terminal rows and layouts are left to the caller.
  */
 
-import { type Tab, type TabGroup, toVisibleTabType } from '../tab-types'
+import { type Tab, type TabGroup, toVisibleTabType } from '../workspace-layout/tab-groups/tab-types'
 import type { WorkspaceSessionState } from './workspace-session-state-types'
 import { pruneGroupLayout } from './workspace-session-terminal-tab-close'
 

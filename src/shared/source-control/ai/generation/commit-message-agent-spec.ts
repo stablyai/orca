@@ -7,6 +7,7 @@ import { isTuiAgentEnabled } from '../../../agent-launch/catalog/tui-agent-selec
 import { labelFromModelId } from '../../../agent-session/options/model-catalog/model-id-label'
 import { buildPrimaryCommitMessageAgentSpecs } from './commit-message-agent-specs-primary'
 import { buildSecondaryCommitMessageAgentSpecs } from './commit-message-agent-specs-secondary'
+import type { AiTextActionId } from '../recipes/source-control-ai-actions'
 import {
   BASIC_THINKING_LEVELS,
   CLAUDE_THINKING_LEVELS,
@@ -158,6 +159,13 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
 
 export const DEFAULT_COMMIT_MESSAGE_AGENT_ID: TuiAgent = 'claude'
 
+// Their CLIs can't take the read-only tool policy, so they run only chat naming (source-control-read-only-policy.ts).
+const NAMING_ONLY_AGENT_IDS: ReadonlySet<string> = new Set<TuiAgent>(['amp', 'muse'])
+
+export function isNamingOnlyTextAgent(agentId: string): boolean {
+  return NAMING_ONLY_AGENT_IDS.has(agentId)
+}
+
 // Keep custom-command sentinel separate from TuiAgent, whose PTY/workspace flows do not accept user templates.
 export const CUSTOM_AGENT_ID = 'custom' as const
 export type CustomAgentId = typeof CUSTOM_AGENT_ID
@@ -240,8 +248,11 @@ export function listCommitMessageAgentIds(): TuiAgent[] {
   return Object.keys(COMMIT_MESSAGE_AGENT_SPECS) as TuiAgent[]
 }
 
-export function listCommitMessageAgentCapabilities(): CommitMessageAgentCapability[] {
+export function listCommitMessageAgentCapabilities(
+  actionId: AiTextActionId
+): CommitMessageAgentCapability[] {
   return listCommitMessageAgentIds()
+    .filter((id) => actionId === 'conversationName' || !isNamingOnlyTextAgent(id))
     .map((id) => getCommitMessageAgentCapability(id))
     .filter((capability): capability is CommitMessageAgentCapability => Boolean(capability))
 }

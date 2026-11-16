@@ -5,7 +5,7 @@ import { normalizeRightSidebarRoute } from '../right-sidebar/right-sidebar-route
 import {
   applyManualRepoOrder,
   normalizeManualRepoOrder
-} from '../../../../../shared/manual-repo-order'
+} from '../../../../../shared/repository/manual-repo-order'
 import { normalizeWorkspaceCleanupBrowseState } from '../../../../../shared/workspace-cleanup/workspace-cleanup-browse-state'
 import {
   normalizeExecutionHostScope,
@@ -23,7 +23,7 @@ import { normalizeWorktreeCardProperties } from '../../../../../shared/worktree/
 import {
   normalizeActivityGroupBy,
   normalizeThreadReadFilter
-} from '../../../../../shared/agents-view-thread-filters'
+} from '../../../../../shared/agent-status/presentation/agents-view-thread-filters'
 import {
   clampWorkspaceBoardColumnWidth,
   clampWorkspaceBoardOpacity,
@@ -69,7 +69,11 @@ import {
   hydratedUIPartialMatchesState,
   clampPetSize
 } from './ui-slice-hydration-sanitizers'
-import { hydrateAgentReadState, sanitizeTaskResumeState } from './ui-slice-hydration-values'
+import {
+  hydrateAgentReadState,
+  hydrateOneShotNoticesSeen,
+  sanitizeTaskResumeState
+} from './ui-slice-hydration-values'
 import { hydrateStatusBarItems } from './ui-slice-hydration-status-bar-items'
 
 const MAX_LEFT_SIDEBAR_WIDTH = 500
@@ -265,11 +269,7 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           // Why: default false so existing users still see the CTA; only explicit dismissal persists true.
           usageEmptyStateDismissed: ui.usageEmptyStateDismissed === true,
           pluginsAlphaNoticeDismissed: ui.pluginsAlphaNoticeDismissed === true,
-          codexTerminalServerIsolationNoticeSeen:
-            ui.codexTerminalServerIsolationNoticeSeen === true,
-          codexSharedSettingsNoticeSeen: ui.codexSharedSettingsNoticeSeen === true,
-          worktreeCardsUpdateNoticeSeen: ui.worktreeCardsUpdateNoticeSeen === true,
-          claudeDiffPanelNoticeSeen: ui.claudeDiffPanelNoticeSeen === true,
+          ...hydrateOneShotNoticesSeen(ui),
           ...hydrateAgentReadState(ui),
           workspaceCleanupDismissals: sanitizeWorkspaceCleanupDismissals(
             ui.workspaceCleanup?.dismissals

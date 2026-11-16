@@ -6,7 +6,7 @@ import {
   createAcknowledgedTabRetirementFixture
 } from './acknowledged-terminal-tab-retirement-fixture'
 import { advanceTerminalTopologyRevision } from '../../persistence/terminal-topology/pane-ownership/terminal-topology-membership'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 
 // Main-owned closes have no window ack; their counterparts live in acknowledged-terminal-tab-retirement-main-close.test.ts.
 const itSwitchOff = it.skipIf(ORCA_LAYOUT_OWNER_IS_MAIN)
