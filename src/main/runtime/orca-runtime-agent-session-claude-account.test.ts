@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { RuntimeCreateAgentSessionRequest } from '../../shared/agent-session/agent-session-host-authority'
+import type { RuntimeCreateAgentSessionRequest } from '../../shared/agent-session/lifecycle/operations/agent-session-host-authority'
 import { OrcaRuntimeService } from './orca-runtime'
 
 function operationId(): string {
