@@ -2142,6 +2142,12 @@
     "settings": {
       "workspaceCleanup": {
         "activity": {
+          "chatsDeletedCount_one": "1 chat deleted",
+          "chatsDeletedCount_other": "{{count}} chats deleted",
+          "chatsDeleted_one": "Deleted 1 chat from a deleted workspace",
+          "chatsDeleted_other": "Deleted {{count}} chats from deleted workspaces",
+          "chatsFailed_one": "1 chat couldn't be deleted",
+          "chatsFailed_other": "{{count}} chats couldn't be deleted",
           "notListed_one": "1 more kept workspace is not listed.",
           "notListed_other": "{{count}} more kept workspaces are not listed."
         },
@@ -2166,6 +2172,8 @@
           "matchesCount_other": "Matches {{count}} workspaces now"
         },
         "status": {
+          "lastRunChats_one": "Last run {{when}} deleted 1 chat from a deleted workspace.",
+          "lastRunChats_other": "Last run {{when}} deleted {{count}} chats from deleted workspaces.",
           "lastRunFreed_one": "Last run {{when}} removed 1 workspace and freed {{size}}.",
           "lastRunFreed_other": "Last run {{when}} removed {{count}} workspaces and freed {{size}}.",
           "lastRunRemoved_one": "Last run {{when}} removed 1 workspace.",
