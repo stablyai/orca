@@ -1,5 +1,6 @@
 import * as React from 'react'
 import * as SwitchPrimitive from 'radix-ui/switch'
+import { Loader2 } from 'lucide-react'
 
 import { cn } from '@/lib/class-names'
 
@@ -13,15 +14,18 @@ const compactThumbClassName = 'size-2.5 data-[state=checked]:translate-x-2.5'
 type SwitchProps = React.ComponentProps<typeof SwitchPrimitive.Root> & {
   size?: 'default' | 'compact'
   thumbClassName?: string
-  /** Drawn inside the thumb, such as a pending spinner. */
-  thumbContent?: React.ReactNode
+  /**
+   * A change waiting to finish: a spinner in the thumb. `turning-on` also shows the track half on,
+   * for a switch shown On before that value is saved.
+   */
+  pending?: 'turning-on' | 'saving'
 }
 
 function Switch({
   className,
   size = 'default',
   thumbClassName: thumbClasses,
-  thumbContent,
+  pending,
   ...props
 }: SwitchProps) {
   return (
@@ -30,16 +34,31 @@ function Switch({
       className={cn(
         trackClassName,
         size === 'compact' && compactTrackClassName,
-        'cursor-pointer outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50',
+        'cursor-pointer outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50',
+        pending === 'turning-on' && 'data-[state=checked]:bg-foreground/45',
         className
       )}
+      aria-busy={pending ? true : undefined}
       {...props}
     >
       <SwitchPrimitive.Thumb
         data-slot="switch-thumb"
-        className={cn(thumbClassName, size === 'compact' && compactThumbClassName, thumbClasses)}
+        className={cn(
+          thumbClassName,
+          size === 'compact' && compactThumbClassName,
+          pending && 'flex items-center justify-center',
+          thumbClasses
+        )}
       >
-        {thumbContent}
+        {pending ? (
+          <Loader2
+            aria-hidden="true"
+            className={cn(
+              'animate-spin text-muted-foreground motion-reduce:animate-none',
+              size === 'compact' ? 'size-2' : 'size-2.5'
+            )}
+          />
+        ) : null}
       </SwitchPrimitive.Thumb>
     </SwitchPrimitive.Root>
   )

@@ -14,10 +14,12 @@ import { TooltipProvider } from '../../ui/tooltip'
 import type * as RuntimeRpcCall from '@/runtime/rpc/calls/runtime-rpc-call'
 import { WorkspaceCleanupSettingsPane } from './WorkspaceCleanupSettingsPane'
 
-const environmentCall = vi.hoisted(() => ({
-  settingsGetFails: false,
-  rules: null as WorkspaceCleanupRules | null
-}))
+const environmentCall = vi.hoisted(
+  (): { settingsGetFails: boolean; rules: WorkspaceCleanupRules | null } => ({
+    settingsGetFails: false,
+    rules: null
+  })
+)
 
 // A remote host's calls skip the pairing transport; local calls use window.api as the app does.
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => {

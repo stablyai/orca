@@ -2,7 +2,6 @@ import { useId, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
-import { cn } from '@/lib/class-names'
 import { formatBytes } from '../../../../../shared/text/format-bytes'
 import {
   WORKSPACE_ARCHIVE_SUPPORTED,
@@ -76,9 +75,6 @@ const ADVANCED_RULES: ReadonlySet<WorkspaceCleanupRuleKey> = new Set([
 function isAdvancedRule(key: WorkspaceCleanupRuleKey | null): boolean {
   return key !== null && ADVANCED_RULES.has(key)
 }
-
-const PENDING_ON_TRACK_CLASS =
-  'data-[state=checked]:bg-[color-mix(in_srgb,var(--foreground)_45%,color-mix(in_srgb,var(--muted-foreground)_30%,transparent))]'
 
 /** The rule switches, shared by the Workspace Cleanup page and a project's custom rules. */
 export function WorkspaceCleanupRuleRows({
@@ -164,19 +160,15 @@ export function WorkspaceCleanupRuleRows({
               // Shown On while its turn-on is checked or saved; screen readers hear the saved value.
               checked={shownOn}
               aria-checked={rules[key].enabled}
-              aria-busy={phase ? true : undefined}
               aria-disabled={blocked ? true : undefined}
               aria-describedby={failed ? errorId : undefined}
               disabled={disabled}
-              className={cn(
-                phase && shownOn && !rules[key].enabled && PENDING_ON_TRACK_CLASS,
-                blocked && 'cursor-not-allowed opacity-50'
-              )}
-              thumbClassName={phase ? 'flex items-center justify-center' : undefined}
-              thumbContent={
-                phase ? (
-                  <Loader2 className="size-2.5 animate-spin text-muted-foreground motion-reduce:animate-none" />
-                ) : null
+              pending={
+                phase === null
+                  ? undefined
+                  : shownOn && !rules[key].enabled
+                    ? 'turning-on'
+                    : 'saving'
               }
               onCheckedChange={() => {
                 if (!operation?.busy) {

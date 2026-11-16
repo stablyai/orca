@@ -133,8 +133,10 @@ export function WorkspaceCleanupAutomaticSection({
   }
 
   const title = (
-    <span className="inline-flex items-center gap-2">
-      {t('components.settings.workspaceCleanup.automatic.title', 'Automatic cleanup')}
+    <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
+      <span className="whitespace-nowrap">
+        {t('components.settings.workspaceCleanup.automatic.title', 'Automatic cleanup')}
+      </span>
       <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2 text-[11.5px] font-medium leading-5 text-muted-foreground">
         <span
           aria-hidden="true"
