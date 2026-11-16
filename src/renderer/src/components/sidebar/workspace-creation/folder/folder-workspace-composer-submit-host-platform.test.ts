@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makeProjectGroup, makeFolderWorkspace } from './folder-workspace-composer-submit-fixtures'
 
 const mocks = vi.hoisted(() => ({ activateAndRevealFolderWorkspace: vi.fn(), seedDraft: vi.fn() }))
@@ -29,6 +29,39 @@ import {
 import { prepareGroupFolderCreation } from '../../../../../../main/runtime/workspaces/creation/runtime-group-folder-setup'
 import { useAppStore } from '@/store/index'
 import { submitFolderWorkspaceCreate } from './folder-workspace-composer-submit'
+
+// The owning server’s OS determines agent command quoting.
+describe('submitFolderWorkspaceCreate on an Orca server', () => {
+  beforeEach(() => {
+    mocks.activateAndRevealFolderWorkspace.mockReturnValue({ primaryTabId: 'tab-1' })
+  })
+
+  afterEach(() => {
+    mocks.activateAndRevealFolderWorkspace.mockReset()
+    useAppStore.setState({ runtimeStatusByEnvironmentId: new Map() })
+  })
+
+  it('refuses an agent launch on an Orca server that never reported its OS', async () => {
+    const createFolderWorkspace = vi.fn(async () => ({ folderWorkspace: makeFolderWorkspace() }))
+    useAppStore.setState({ runtimeStatusByEnvironmentId: new Map() })
+
+    await expect(
+      submitFolderWorkspaceCreate({
+        projectGroup: { ...makeProjectGroup(), executionHostId: 'runtime:silent-box' },
+        name: 'Server folder',
+        lastAutoName: '',
+        linkedWorkItem: null,
+        note: '',
+        quickAgent: 'claude',
+        autoRenameBranchFromWork: false,
+        agentCmdOverrides: {},
+        createFolderWorkspace,
+        onOpenChange: vi.fn()
+      })
+    ).rejects.toThrow('has not reported its operating system')
+    expect(createFolderWorkspace).not.toHaveBeenCalled()
+  })
+})
 
 it.each(
   (
