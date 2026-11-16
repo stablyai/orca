@@ -1,6 +1,6 @@
 import { createAiVaultScopeCwdMatcher } from './ai-vault/scanning/ai-vault-scope-cwd-match'
 import { normalizeRuntimePathForComparison } from './file-access/cross-platform-path'
-import type { ExecutionHostId } from './execution-host'
+import type { ExecutionHostId } from './execution-host/execution-host'
 
 type Workspace = { id: string; path: string; hostId?: ExecutionHostId }
 type Conversation = {

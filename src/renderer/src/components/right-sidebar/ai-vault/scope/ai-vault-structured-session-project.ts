@@ -5,7 +5,7 @@ import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/
 import {
   normalizeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { toAiVaultProjectKey } from '../../../../../../shared/ai-vault/scanning/ai-vault-project-key'
 import {
   folderGroupKey,

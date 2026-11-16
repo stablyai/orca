@@ -13,14 +13,17 @@ import {
   getFolderWorkspaceWorktreeHostId
 } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
 import type { ProjectHostSetupProjection } from '../../../../shared/project/host-setup/project-host-setup-projection'
-import type { ProjectOrderBy, ManualRepoOrderEntry } from '../../../../shared/ui-chrome-types'
+import type {
+  ProjectOrderBy,
+  ManualRepoOrderEntry
+} from '../../../../shared/ui-chrome/ui-chrome-types'
 import {
   getRepoExecutionHostId,
   getExecutionHostLabel,
   normalizeExecutionHostId,
   type ExecutionHostId,
   type ExecutionHostScope
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import { applyManualRepoOrder } from '../../../../shared/repository/manual-repo-order'
 import {
   buildProjectGroupingIndex,

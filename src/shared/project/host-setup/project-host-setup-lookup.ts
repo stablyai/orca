@@ -2,7 +2,7 @@ import {
   getRepoExecutionHostId,
   normalizeExecutionHostId,
   toRuntimeExecutionHostId
-} from '../../execution-host'
+} from '../../execution-host/execution-host'
 import {
   getRepoHostIdentityForParts,
   getRepoSetupOwnerScope

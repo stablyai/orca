@@ -2,8 +2,11 @@ import {
   notifyAgentLaunchFailure,
   agentLaunchRecoveryMessage
 } from '@/lib/agent-session/launch/failure/agent-launch-failure'
-import { isLocalExecutionHost, parseExecutionHostId } from '../../../../../../shared/execution-host'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import {
+  isLocalExecutionHost,
+  parseExecutionHostId
+} from '../../../../../../shared/execution-host/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import '../structured-agent-session-launch-intent'
 import { StructuredAgentSessionOwnerUnresolvedError } from '../structured-agent-session-launch-errors'

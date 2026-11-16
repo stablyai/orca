@@ -1,4 +1,4 @@
-import { getDefaultRepoHookSettings } from '../../../../shared/constants'
+import { getDefaultRepoHookSettings } from '../../../../shared/orca-profiles/constants'
 import { resolveHookCommandSourcePolicy } from '../../../../shared/workspace-setup/hooks/hook-command-source-policy'
 import type { SetupScriptImportCandidate } from '../../../../shared/workspace-setup/setup-script-imports'
 import type { RepoHookSettings } from '../../../../shared/workspace-setup/orca-yaml-hook-types'

@@ -4,7 +4,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,
   type ExecutionHostId
-} from '../../../src/shared/execution-host'
+} from '../../../src/shared/execution-host/execution-host'
 import { readPersistedProfileState } from './persisted-profile-state'
 import type { RuntimeMobileSessionTabsResult } from '../../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RuntimeTerminalListResult } from '../../../src/shared/terminal/runtime/runtime-terminal-contracts'

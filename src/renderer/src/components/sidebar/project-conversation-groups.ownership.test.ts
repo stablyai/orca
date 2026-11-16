@@ -10,7 +10,7 @@ import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspaces/
 import { projectHostSetupProjectionFromRepos } from '../../../../shared/project/host-setup/project-host-setup-projection'
 import { buildAiVaultSessionProjectById } from '../right-sidebar/ai-vault/scope/ai-vault-session-projects'
 import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 
 const localFolder = {
   ...MIXED_FOLDER,

@@ -9,7 +9,7 @@ import {
   type BrowserMemorySaverGlobalSettings,
   type BrowserMemorySaverPolicy
 } from '../../../shared/browser/guest-lifecycle/browser-memory-saver'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../shared/settings/global-settings-types'
 import { getSystemAwakeClock } from '../../power/awake-clock'
 import {
   getSystemPowerState,

@@ -3,7 +3,7 @@ import {
   snapshotPendingWorktreeRemovals,
   withUnregisteredRemovalCheckouts
 } from '../../../workspaces/removal/worktree-removal-listing'
-import { getRepoDialableSshTargetId } from '../../../../shared/execution-host'
+import { getRepoDialableSshTargetId } from '../../../../shared/execution-host/execution-host'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import type { DetectedWorktreeListResult } from '../../../../shared/worktree/types'

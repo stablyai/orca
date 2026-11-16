@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import type { AiVaultSearchHit } from '../../../../../../shared/ai-vault/search/ai-vault-search-types'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { withAiVaultSessionCwdAliases } from '../../../../../../shared/ai-vault/scanning/ai-vault-session-cwd-aliases'
 import type { AiVaultPanelListMode } from '../session-list/ai-vault-session-filters'
 

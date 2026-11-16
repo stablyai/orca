@@ -7,7 +7,7 @@ import {
   parseRoutableExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostScope
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { lastVerifiedRuntimeStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { loadHostStructuredAgents } from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
 import {

@@ -9,7 +9,7 @@ import {
   type AiVaultListResult,
   type AiVaultSession
 } from '../../shared/ai-vault/contracts/ai-vault-types'
-import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host/execution-host'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import { structuredAgentRuntimeMetadata } from '../runtime/agent-session/installation/structured-agent-runtime-metadata'
 import type { StructuredChatOpener } from './structured-sessions/structured-session-ownership'

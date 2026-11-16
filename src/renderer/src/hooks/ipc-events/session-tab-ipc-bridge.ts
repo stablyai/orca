@@ -18,7 +18,7 @@ import type { RuntimeMobileSessionTabMove } from '../../../../shared/remote-runt
 import {
   dropTabThroughLayoutOwner,
   type TabDrop
-} from '@/components/tab-group/tab-group-layout-owner-commands'
+} from '@/runtime/workspace-layout/commands/tab-group-layout-owner-commands'
 import { resolveBrowserSessionTabTarget } from './browser-session-tab-target'
 import { resolveWindowTabIdForHostTab } from './host-session-tab-target'
 import { moveTerminalPaneToNewTabForClient } from '@/components/terminal-pane/layout/detach/terminal-pane-move-request-routing'

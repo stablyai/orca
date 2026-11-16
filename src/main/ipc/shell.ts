@@ -24,7 +24,7 @@ import {
 import { resolveRemoteSshEditorLaunchSpec } from '../external-editors/remote-ssh-editor-launch'
 import { resolveOpenInEditorCommand } from '../external-editors/open-in-editor-command'
 import { openPathInDefaultApp } from '../external-editors/default-app-location-open'
-import { toSshExecutionHostId } from '../../shared/execution-host'
+import { toSshExecutionHostId } from '../../shared/execution-host/execution-host'
 import {
   isEditorSshHostForOwner,
   listAppRuntimeEnvironments,

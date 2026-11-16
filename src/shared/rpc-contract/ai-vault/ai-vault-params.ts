@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { parseExecutionHostId } from '../../execution-host'
+import { parseExecutionHostId } from '../../execution-host/execution-host'
 import { AI_VAULT_AGENTS, boundedAiVaultScopeArgs } from '../../ai-vault/contracts/ai-vault-types'
 import { OptionalBoolean } from '../rpc-param-primitives'
 import { AI_VAULT_SESSION_TITLE_REQUEST_MAX_COUNT } from '../../ai-vault/contracts/ai-vault-session-title'

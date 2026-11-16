@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { useAppStore } from '@/store/index'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 
 /**
  * Whether this window can give plugin frames an isolated guest. Browser clients never can; the

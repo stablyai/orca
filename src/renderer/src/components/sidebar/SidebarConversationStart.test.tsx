@@ -13,8 +13,8 @@ import type * as AgentLaunchPlanModule from '@/lib/agent-session/launch/routing/
 import type { ProvisionalLaunchArgs } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import { SidebarConversationStart } from './SidebarConversationStart'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { AgentMenuRowsTarget } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
+import type { AgentMenuRowsTarget } from '@/components/agent/launch-menu/use-new-tab-agent-menu-rows'
 import { folderWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>

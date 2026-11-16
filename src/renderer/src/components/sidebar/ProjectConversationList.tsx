@@ -4,7 +4,10 @@ import { Archive, ChevronDown, ArrowUp, ArrowDown } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
-import { getRepoExecutionHostId, type ExecutionHostScope } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostScope
+} from '../../../../shared/execution-host/execution-host'
 import { getManualRepoOrder } from '../../../../shared/repository/manual-repo-order'
 import { useRepos } from '@/store/repos/use-repository-catalog'
 import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'

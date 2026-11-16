@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { setPRAutoRefreshCadence } from '../../../../../shared/source-control/hosted-review/review-refresh-policy'
 
 type CadenceState = { settings: Pick<GlobalSettings, 'prAutoRefresh'> | null }

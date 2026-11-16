@@ -20,7 +20,10 @@ import {
   type IssueCommandReadResult
 } from '@/runtime/repo-hooks/runtime-hooks-client'
 import { MODAL_DISMISSED_KEY } from '@/store/slices/ui/modal-slot-dismissal'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 
 const NEVER_CANCEL_TRUST_CHECK = (): boolean => false
 

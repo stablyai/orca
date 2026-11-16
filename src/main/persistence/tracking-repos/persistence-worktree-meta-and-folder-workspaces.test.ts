@@ -11,8 +11,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { rmSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import type { PersistedState } from '../../../shared/persisted-state-types'
-import { getDefaultWorkspaceSession } from '../../../shared/constants'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
+import { getDefaultWorkspaceSession } from '../../../shared/orca-profiles/constants'
 import { folderWorkspaceKey } from '../../../shared/workspace/identity/workspace-scope'
 
 const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => ({

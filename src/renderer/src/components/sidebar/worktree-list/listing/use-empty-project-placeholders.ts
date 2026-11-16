@@ -1,6 +1,6 @@
 import { useMemo, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store/index'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { indexHiddenProjects } from '../../../../../../shared/project/catalog/hidden-projects'
 import type { Repo } from '../../../../../../shared/repository/repo-types'
 import { getEmptyProjectPlaceholderRepoIds } from '../../../../../../shared/sidebar-list/catalog/empty-project-placeholder-repos'

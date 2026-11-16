@@ -2,7 +2,7 @@ import {
   getRepoHostIdentity,
   getRepoHostIdentityForParts
 } from '../../../../../../shared/repository/repo-host-identity'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../../shared/settings/global-settings-types'
 import { managedWorktreeDirectories } from '../../../../../../shared/worktree/visibility/ownership'
 import { splitWorktreeIdForFilesystem } from '../../../../../../shared/worktree/id'
 import { resolveActiveProjectKey } from './ai-vault-project-key'
@@ -11,7 +11,7 @@ import {
   getRepoExecutionHostId,
   normalizeExecutionHostId,
   type ExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import type { ProjectHostSetupProjection } from '../../../../../../shared/project/host-setup/project-host-setup-projection'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { getProjectHostSetupLookup } from '../../../../../../shared/project/host-setup/project-host-setup-lookup'

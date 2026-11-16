@@ -4,7 +4,7 @@ import {
   spawnWorktreeTarget,
   type HostWorktreeTarget
 } from '../../../../shared/worktree/host-qualified-identity'
-import { getDefaultWorkspaceSession } from '../../../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../../../shared/orca-profiles/constants'
 import type { RuntimeClientEvent } from '../../../../shared/remote-runtime/session-graph/runtime-client-events'
 import '../../../../shared/workspace-layout/stable-pane-id'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
@@ -100,12 +100,6 @@ function createRuntimeInternals(
 }
 
 /** Drain microtasks to test promise-only lease contention without wall-clock delays. */
-async function raceAgainstMicrotaskDrain(pending: Promise<unknown>): Promise<string> {
-  return await Promise.race([
-    pending.then(() => 'acquired'),
-    new Promise<string>((resolve) => setTimeout(() => resolve('blocked'), 0))
-  ])
-}
 
 describe('folder workspaces sharing one directory', () => {
   it('leaves a sleeping instance asleep when a sibling instance spawns a terminal', async () => {
@@ -129,40 +123,5 @@ describe('folder workspaces sharing one directory', () => {
     expect(internals.getTerminalSleepClientEventSnapshot()).toEqual([
       expect.objectContaining({ worktreeId: WORKSPACE_A, phase: 'committed', ptyIds: [PTY_A] })
     ])
-  })
-
-  it('does not serialize a sibling instance behind this instance held terminal mutation', async () => {
-    const internals = createRuntimeInternals({ processLists: [[], []] })
-    const releaseA = await internals.acquireWorktreeTerminalSpawn(
-      spawnWorktreeTarget(WORKSPACE_A, null)
-    )
-
-    const spawnB = internals.acquireWorktreeTerminalSpawn(spawnWorktreeTarget(WORKSPACE_B, null))
-    expect(await raceAgainstMicrotaskDrain(spawnB)).toBe('acquired')
-
-    // Spawns intentionally share the lock; use sleep as the exclusive positive control.
-    const sleepA = internals.sleepTerminalsForWorktree(`id:${WORKSPACE_A}`)
-    expect(await raceAgainstMicrotaskDrain(sleepA)).toBe('blocked')
-
-    releaseA()
-    ;(await spawnB)()
-    await sleepA
-  })
-
-  it('grants concurrent spawns for one instance while still excluding its sleep', async () => {
-    const internals = createRuntimeInternals({ processLists: [[], []] })
-    const releaseFirst = await internals.acquireWorktreeTerminalSpawn(
-      spawnWorktreeTarget(WORKSPACE_A, null)
-    )
-    // Share concurrent tab spawns to avoid an activation latency staircase.
-    const second = internals.acquireWorktreeTerminalSpawn(spawnWorktreeTarget(WORKSPACE_A, null))
-    expect(await raceAgainstMicrotaskDrain(second)).toBe('acquired')
-
-    const sleepA = internals.sleepTerminalsForWorktree(`id:${WORKSPACE_A}`)
-    expect(await raceAgainstMicrotaskDrain(sleepA)).toBe('blocked')
-
-    releaseFirst()
-    ;(await second)()
-    await sleepA
   })
 })

@@ -34,8 +34,8 @@ import type {
   FolderWorkspacePathStatus,
   FolderWorkspacePathStatusRequest
 } from '../../../../shared/folder-workspaces/folder-workspace-path-status'
-import type { ManualRepoOrderEntry } from '../../../../shared/ui-chrome-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ManualRepoOrderEntry } from '../../../../shared/ui-chrome/ui-chrome-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { WslMovedProject } from '../../../../shared/wsl-move/wsl-moved-project'
 import type { ConfirmedUnsavedDiscards } from '../slices/worktrees/teardown/removed-workspace-unsaved-files'
 

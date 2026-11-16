@@ -8,7 +8,7 @@ import type {
   WorkspaceSpaceWorktree
 } from '../../../shared/workspace-disk-space/workspace-space-types'
 import type { WorkspaceSpaceEntryScan } from '../../../shared/workspace-disk-space/workspace-space-directory-frame'
-import { getWorktreeExecutionHostId } from '../../../shared/execution-host'
+import { getWorktreeExecutionHostId } from '../../../shared/execution-host/execution-host'
 
 export function basenameWorkspaceFilesystemPath(pathValue: string): string {
   return looksLikeWindowsPath(pathValue) ? win32.basename(pathValue) : posix.basename(pathValue)

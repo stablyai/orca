@@ -7,9 +7,9 @@ import { workspaceHostScopeForVisibleHosts } from '../../../../../shared/workspa
 import { createAgentsViewPreferenceActions } from './ui-slice-agents-view-preference-actions'
 import {
   DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE,
-  DEFAULT_SHOW_SLEEPING_WORKSPACES,
   normalizeAgentActivityDisplayMode
-} from '../../../../../shared/constants'
+} from '../../../../../shared/agent-status/presentation/agent-activity-display-mode'
+import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../../../../../shared/workspace-view/sleeping-workspace-visibility'
 import { DEFAULT_STATUS_BAR_ITEMS } from '../../../../../shared/status-bar/status-bar-defaults'
 import {
   DEFAULT_WORKTREE_CARD_PROPERTIES,
@@ -28,7 +28,7 @@ import {
   normalizeExecutionHostOrder,
   normalizeExecutionHostScope,
   normalizeVisibleExecutionHostIds
-} from '../../../../../shared/execution-host'
+} from '../../../../../shared/execution-host/execution-host'
 import {
   ALL_AUTOMATION_HOSTS_FILTER,
   toPersistedAutomationHostFilter
@@ -157,6 +157,23 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
           next[worktreeId] = false
         }
         return { showDotfilesByWorktree: next }
+      }),
+
+    notificationsMutedByWorktree: {},
+    toggleWorktreeNotificationsMuted: (worktreeId) =>
+      set((s) => {
+        if (!worktreeId) {
+          return s
+        }
+        const nextMuted = s.notificationsMutedByWorktree[worktreeId] !== true
+        const next = { ...s.notificationsMutedByWorktree }
+        // Why: not muted is the default; only persist worktree-level opt-ins.
+        if (nextMuted) {
+          next[worktreeId] = true
+        } else {
+          delete next[worktreeId]
+        }
+        return { notificationsMutedByWorktree: next }
       }),
 
     filterRepoIds: [],

@@ -9,7 +9,7 @@ import type {
   AiVaultListResult,
   AiVaultSession
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
-import type { ExecutionHostScope } from '../../../../../../shared/execution-host'
+import type { ExecutionHostScope } from '../../../../../../shared/execution-host/execution-host'
 import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { useAppStore } from '@/store'
 import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
