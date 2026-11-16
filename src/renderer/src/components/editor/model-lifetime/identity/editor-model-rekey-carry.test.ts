@@ -4,12 +4,6 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { trackNewModelLineEnding } from '../buffer-text/editor-new-model-line-ending'
 import { resetProgrammaticContentSyncForTests } from '../buffer-text/monaco-programmatic-sync'
 import { carryEditorModelText } from './editor-model-rekey-carry'
-import {
-  handOffRenamedEditorModels,
-  takeRenamedEditorModelUri
-} from './editor-model-rename-handoff'
-import { toEditorModelUri } from './editor-model-uri'
-import { getEditorModelOwnerKey } from './editor-model-owner'
 
 const models: monaco.editor.ITextModel[] = []
 const trackers: { dispose(): void }[] = []
@@ -93,28 +87,5 @@ describe('model rekey keeps an existing file on its line ending', () => {
     track(taken, to)
     type(taken, 'x\ny')
     expect(taken.getValue()).toBe('x\r\ny')
-  })
-})
-
-describe('rename handoff', () => {
-  it('hands the old model to the renamed tab once, following a second rename', () => {
-    const file = {
-      id: 'old-id',
-      worktreeId: 'wt',
-      filePath: '/repo/before.txt',
-      relativePath: 'before.txt',
-      mode: 'edit' as const,
-      language: 'plaintext',
-      isDirty: true
-    }
-    handOffRenamedEditorModels({ openFiles: [file] }, [{ oldFileId: 'old-id', newFileId: 'mid' }])
-    handOffRenamedEditorModels({ openFiles: [{ ...file, id: 'mid' }] }, [
-      { oldFileId: 'mid', newFileId: 'new-id' }
-    ])
-    expect(takeRenamedEditorModelUri('mid')).toBeUndefined()
-    expect(takeRenamedEditorModelUri('new-id')).toBe(
-      toEditorModelUri(file.filePath, getEditorModelOwnerKey(file, {}))
-    )
-    expect(takeRenamedEditorModelUri('new-id')).toBeUndefined()
   })
 })

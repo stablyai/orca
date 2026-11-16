@@ -7,6 +7,7 @@ import {
   type EditorLineEnding
 } from '../../../../../../shared/editor/saving/editor-end-of-line'
 import { resolveEditorFileHostPlatform } from '../identity/editor-file-host-platform'
+import { isExistingFileModel, markExistingFileModel } from './existing-file-line-ending'
 import {
   beginProgrammaticContentSync,
   endProgrammaticContentSync,
@@ -37,10 +38,6 @@ type LineEndingModel = Pick<
   'getLineCount' | 'getEOL' | 'setEOL' | 'onDidChangeContent' | 'isDisposed'
 >
 
-// Models that held line breaks the user did not type (loaded or written in); their ending is the file's.
-// Why per model: retained models outlive editor mounts and are shared by split panes.
-const existingFileModels = new WeakMap<Pick<editor.ITextModel, 'getEOL'>, true>()
-
 /**
  * Sets the ending of a model that has at most one line. A model with line breaks is never
  * converted: its text and undo history already carry its ending.
@@ -52,7 +49,7 @@ export function applyNewModelLineEnding(
 ): void {
   if (
     !lineEnding ||
-    existingFileModels.has(model) ||
+    isExistingFileModel(model) ||
     model.getLineCount() > 1 ||
     model.getEOL() === lineEnding
   ) {
@@ -68,21 +65,6 @@ export function applyNewModelLineEnding(
   }
 }
 
-/** A replacement model for the same buffer keeps its ending and existing-file status. */
-export function carryNewModelLineEndingState(
-  from: Pick<editor.ITextModel, 'getEOL'>,
-  to: Pick<editor.ITextModel, 'getLineCount' | 'getEOL' | 'setEOL'>
-): void {
-  // Why one line only: a multi-line replacement already carries its text's ending.
-  if (to.getLineCount() <= 1 && to.getEOL() !== from.getEOL()) {
-    // Literal EndOfLineSequence values (LF = 0, CRLF = 1) keep this free of the Monaco runtime.
-    to.setEOL(from.getEOL() === '\r\n' ? 1 : 0)
-  }
-  if (existingFileModels.has(from)) {
-    existingFileModels.set(to, true)
-  }
-}
-
 /** Applies the ending now and again whenever an edit (such as Undo) leaves one line. */
 export function trackNewModelLineEnding(
   model: LineEndingModel,
@@ -91,13 +73,13 @@ export function trackNewModelLineEnding(
 ): { dispose(): void } {
   // Mount-time breaks came from disk or an outside write; emptying the file must not switch them.
   if (model.getLineCount() > 1) {
-    existingFileModels.set(model, true)
+    markExistingFileModel(model)
   }
   applyNewModelLineEnding(model, lineEnding, modelKey)
   let disposed = false
   const subscription = model.onDidChangeContent(() => {
     if (isProgrammaticContentSyncInFlight(modelKey) && model.getLineCount() > 1) {
-      existingFileModels.set(model, true)
+      markExistingFileModel(model)
       return
     }
     // Why deferred: re-entrant edits would reach later listeners out of order.

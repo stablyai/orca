@@ -1,8 +1,11 @@
 import { useLayoutEffect, useRef } from 'react'
 import { useAppStore } from '@/store/index'
 import { editorModelRegistry } from '@/lib/editor/monaco/editor-model-registry'
-import { carryNewModelLineEndingState } from '../buffer-text/editor-new-model-line-ending'
-import { takeRenamedEditorModelUri } from './editor-model-rename-handoff'
+import {
+  applyBufferLineEnding,
+  snapshotBufferLineEnding
+} from '../buffer-text/existing-file-line-ending'
+import { takeRenamedBufferLineEnding } from './editor-model-rename-handoff'
 
 type ModelRegistry = NonNullable<ReturnType<typeof editorModelRegistry.get>>
 
@@ -19,7 +22,7 @@ export function carryEditorModelText(
     return false
   }
   const to = registry.editor.createModel(draft ?? from.getValue(), from.getLanguageId(), target)
-  carryNewModelLineEndingState(from, to)
+  applyBufferLineEnding(to, snapshotBufferLineEnding(from))
   return true
 }
 
@@ -30,12 +33,16 @@ export function useEditorModelRekeyCarry(viewId: string, modelUri: string): void
     const from = previous.current
     previous.current = { viewId, modelUri }
     const registry = editorModelRegistry.get()
-    // A rename remounts the editor under a new view id; its old model is handed off by the rename.
-    // Only an unsaved draft continues the buffer; a clean tab reloads from disk as usual.
-    const renamedFrom = takeRenamedEditorModelUri(viewId)
-    const renamedDraft = renamedFrom ? useAppStore.getState().editorDrafts[viewId] : undefined
-    if (renamedFrom && renamedDraft !== undefined && renamedFrom !== modelUri && registry) {
-      carryEditorModelText(registry, renamedFrom, modelUri, renamedDraft)
+    // A rename remounts the editor under a new view id; the rename left its unsaved buffer's ending.
+    const renamed = takeRenamedBufferLineEnding(viewId)
+    const renamedDraft = renamed ? useAppStore.getState().editorDrafts[viewId] : undefined
+    if (renamed && renamedDraft !== undefined && registry) {
+      const target = registry.Uri.parse(modelUri)
+      // An existing model at the destination is the file's own; only a model built here takes it.
+      if (!registry.editor.getModel(target)) {
+        // Language is left to the editor, which applies the file's language on mount.
+        applyBufferLineEnding(registry.editor.createModel(renamedDraft, undefined, target), renamed)
+      }
       return
     }
     // Carry only within one view; reused mounts must not transfer text between files.
