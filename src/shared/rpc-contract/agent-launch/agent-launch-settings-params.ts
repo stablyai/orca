@@ -59,6 +59,7 @@ export const AgentLaunchSettingsMutation = z.discriminatedUnion('type', [
       withoutAuto: z.literal(true).optional()
     })
     .strict(),
+  // A new permission choice value needs seed.v2: an unknown choice rejects the whole seed on older hosts.
   z
     .object({
       type: z.literal('seed-permission'),

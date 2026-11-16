@@ -37,6 +37,17 @@ describe('addWslHostThenSeedPermission', () => {
     ).resolves.toBe(ADDED)
   })
 
+  it('still reports the Add when the seed throws synchronously', async () => {
+    await expect(
+      addWslHostThenSeedPermission(
+        async () => ADDED,
+        () => {
+          throw new Error('settings unavailable')
+        }
+      )
+    ).resolves.toBe(ADDED)
+  })
+
   it('stops waiting for a slow seed at the deadline', async () => {
     vi.useFakeTimers()
     vi.spyOn(console, 'warn').mockImplementation(() => {})

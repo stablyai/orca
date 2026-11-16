@@ -49,7 +49,11 @@ export async function addWslHostThenSeedPermission(
       resolve()
     }, deadlineMs)
   })
-  await Promise.race([seed(result.environmentId).catch(() => {}), deadline])
+  // A seed that throws before returning a promise must not fail the Add either.
+  const seeded = Promise.resolve()
+    .then(() => seed(result.environmentId))
+    .catch(() => {})
+  await Promise.race([seeded, deadline])
   clearTimeout(timer)
   return result
 }
