@@ -1,7 +1,7 @@
 import { readStreamedSessionDocument } from '../../transcripts/session-document-stream'
 import { openTranscriptReadStream } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { FileWithMtime, SessionAccumulator } from '../../session-scanner-types'
 import type { TranscriptMessageSink } from '../../transcripts/session-transcript-consumers'
 import {

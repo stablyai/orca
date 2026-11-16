@@ -2,7 +2,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   toRuntimeExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { requestsCwdOutsideWorkspaceRootForWorkspace } from '../../../../../../shared/shell/launch/terminal-startup-cwd'
 import { workspaceKindForWorktreeId } from '../../../../../../shared/agent-launch/contracts/workspace-launch-kind'

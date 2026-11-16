@@ -16,8 +16,8 @@ import {
   type StoreDomains,
   type StoreDomainOperations
 } from './store-domain-composition'
-import type { PersistedState } from '../../../shared/persisted-state-types'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/workspace-layout/layout-owner-switch'
 import { dropInvalidWorkspaceLayoutsAtLoad } from '../restoring-sessions/invalid-workspace-layout-purge'
 import {
   bindPersistedTabTerminalPanes,

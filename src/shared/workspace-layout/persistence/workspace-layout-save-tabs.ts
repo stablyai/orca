@@ -1,6 +1,6 @@
 // Derive legacy terminal rows, tab-bar entries and all order fields from the canonical layout order.
 
-import type { ExecutionHostId } from '../../execution-host'
+import type { ExecutionHostId } from '../../execution-host/execution-host'
 import type { Tab } from '../tab-groups/tab-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../terminal-tab-types'
 import { pickStoredFields } from './stored-record-fields'

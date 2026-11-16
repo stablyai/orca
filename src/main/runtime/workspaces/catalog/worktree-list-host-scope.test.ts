@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import type { Repo } from '../../../../shared/repository/repo-types'
 
 import { RuntimeManagedWorktreeQueries } from './runtime-managed-worktree-queries'

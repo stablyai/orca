@@ -18,7 +18,7 @@ import {
 import {
   LOCAL_EXECUTION_HOST_ID,
   getConnectionExecutionHostId
-} from '../../../../../../shared/execution-host'
+} from '../../../../../../shared/execution-host/execution-host'
 import { statUserOpenedPath } from '@/lib/files/access/user-opened-local-path'
 import {
   CLIENT_LOCAL_FILE_TARGET,

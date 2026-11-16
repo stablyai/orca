@@ -1,5 +1,5 @@
 import type { AppState } from '@/store/types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace/identity/workspace-scope'
 import { blockRemovalForUnsavedFiles } from './removal-unsaved-files'
 import { getExecutionHostIdForFolderWorkspace } from '@/lib/workspace/ownership/folder-workspace-runtime-owner'

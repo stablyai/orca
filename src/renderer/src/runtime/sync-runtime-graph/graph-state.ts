@@ -1,6 +1,8 @@
-import type { MobileProjectSectionCatalog } from '../../../../shared/mobile-project-sections-contract'
+import type { MobileProjectSectionCatalog } from '../../../../shared/sidebar-list/catalog/mobile-project-sections-contract'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/identifiers/non-secure-context-uuid'
 import type { AppState } from '@/store/types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
+import type { MobileSessionPublicationSources } from './mobile-session-dirty-workspaces'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { RuntimeMobileSessionSnapshotTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'
 import type {
@@ -33,6 +35,10 @@ function noPublishedProjectSectionCatalog(): MobileProjectSectionCatalog | null 
   return null
 }
 
+function noMobileSessionPublicationSources(): MobileSessionPublicationSources | null {
+  return null
+}
+
 const NO_PUBLISHED_ACTIVE_GROUPS: Readonly<Record<string, string>> = {}
 
 export const graphState = {
@@ -45,11 +51,14 @@ export const graphState = {
   mobileSessionSnapshotCacheByWorktree: new Map<
     string,
     {
+      /** Workspace-keyed source references the inputs were built from. */
+      sources: readonly unknown[]
       inputs: MobileSessionWorktreeInputs
       content: MobileSessionContent
       snapshot: RuntimeMobileSessionTabsSnapshot
     }
   >(),
+  mobileSessionPublicationSources: noMobileSessionPublicationSources(),
   publishedMobileSessionSnapshotByWorktree: new Map<string, RuntimeMobileSessionTabsSnapshot>(),
   cachedTabsProjection: null as TabsProjectionCache | null,
   cachedOpenFilesProjection: null as OpenFilesProjectionCache | null,
@@ -71,6 +80,22 @@ export const graphState = {
 export function collectAmbiguousTerminalTabIds(
   tabsByWorktree: AppState['tabsByWorktree']
 ): ReadonlySet<string> {
+  let ambiguous = ambiguousTerminalTabIdsBySource.get(tabsByWorktree)
+  if (!ambiguous) {
+    ambiguous = scanAmbiguousTerminalTabIds(tabsByWorktree)
+    ambiguousTerminalTabIdsBySource.set(tabsByWorktree, ambiguous)
+  }
+  return ambiguous
+}
+
+const ambiguousTerminalTabIdsBySource = new WeakMap<
+  AppState['tabsByWorktree'],
+  ReadonlySet<string>
+>()
+
+function scanAmbiguousTerminalTabIds(
+  tabsByWorktree: AppState['tabsByWorktree']
+): ReadonlySet<string> {
   const seen = new Set<string>()
   const ambiguous = new Set<string>()
   for (const tabs of Object.values(tabsByWorktree)) {
@@ -83,6 +108,36 @@ export function collectAmbiguousTerminalTabIds(
     }
   }
   return ambiguous
+}
+
+const terminalTabsByWorktreeBySource = new WeakMap<
+  AppState['tabsByWorktree'],
+  ReadonlyMap<string, ReadonlyMap<string, TerminalTab>>
+>()
+
+/** Tabs by id per workspace; a duplicated id in one workspace cannot prove mounted PTY ownership. */
+export function indexTerminalTabsByWorktree(
+  tabsByWorktree: AppState['tabsByWorktree']
+): ReadonlyMap<string, ReadonlyMap<string, TerminalTab>> {
+  const cached = terminalTabsByWorktreeBySource.get(tabsByWorktree)
+  if (cached) {
+    return cached
+  }
+  const terminalTabsByWorktree = new Map<string, Map<string, TerminalTab>>()
+  for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
+    const tabsById = new Map<string, TerminalTab>()
+    for (const tab of tabs) {
+      // Duplicate persisted tab IDs cannot prove mounted PTY ownership.
+      if (tabsById.has(tab.id)) {
+        tabsById.delete(tab.id)
+        continue
+      }
+      tabsById.set(tab.id, tab)
+    }
+    terminalTabsByWorktree.set(worktreeId, tabsById)
+  }
+  terminalTabsByWorktreeBySource.set(tabsByWorktree, terminalTabsByWorktree)
+  return terminalTabsByWorktree
 }
 
 // Structural equality under JSON-serialization semantics (undefined-valued keys are absent).

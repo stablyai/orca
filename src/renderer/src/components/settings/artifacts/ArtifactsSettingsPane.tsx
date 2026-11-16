@@ -1,5 +1,5 @@
 import { ArrowRight, Files } from 'lucide-react'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../../shared/settings/global-settings-types'
 import { Button } from '@/components/ui/button'
 import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import { SettingsGroup } from '../section-layout/SettingsGroup'

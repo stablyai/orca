@@ -76,7 +76,7 @@ export function stageProjectionRows(
     changedKeys.add(key)
   }
   const prepared = new Map<string, PreparedRow>(),
-    classifier = classifyPaneKeyLiveness(state.terminalLayoutsByTabId)
+    classifier = classifyPaneKeyLiveness(state.terminalLayoutsByTabId, represented)
   for (const key of changedKeys) {
     const accepted = state.agentStatusByPaneKey.get(key),
       entry = sourceEntry(key)

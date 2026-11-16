@@ -1,7 +1,7 @@
 import { stat } from 'node:fs/promises'
 import { isAbsolute, normalize, win32 } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { parseRoutableExecutionHostId } from '../../shared/execution-host'
+import { parseRoutableExecutionHostId } from '../../shared/execution-host/execution-host'
 import type { ShellOpenLocalPathFailureReason } from '../../shared/shell/opening/shell-open-types'
 import { resolveWindowsPathAccess } from '../windows/windows-path-access-host'
 

@@ -9,7 +9,7 @@ import { buildTitleDerivedAgentRows } from '@/components/sidebar/workspace-card/
 import { isStructuredTab } from '../../../../../shared/agent-session/view/structured-agent-session-tab'
 import { AgentStatusStoreDraftTable } from '../../../../../shared/agent-status/store/agent-status-store-table'
 import { readRecordChanges, readTabMapChanges } from '../../keyed-record-change-reads'
-import { migrationUnsupportedToAgentStatusEntry } from '../../../../../shared/migration-unsupported-agent-entry'
+import { migrationUnsupportedToAgentStatusEntry } from '../../../../../shared/agent-status/presentation/migration-unsupported-agent-entry'
 import type { AgentStatusProjectionState } from './agent-status-projection-state'
 
 const SEAM_AGENT_PRESENTATION_FIELDS = [

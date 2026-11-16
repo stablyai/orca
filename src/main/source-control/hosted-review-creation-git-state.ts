@@ -17,7 +17,7 @@ import { resolveDefaultBaseRefViaExec } from '../../shared/git/refs/git-default-
 import { getUpstreamStatus } from '../git/source-control/upstream/upstream'
 import { findExistingWorktreeSymlinkPaths } from '../git/worktrees/content-paths/worktree-symlink-detection'
 import { requireReachableGitRoute } from '../providers/execution-host-provider-dispatch'
-import type { ExecutionHostId } from '../../shared/execution-host'
+import type { ExecutionHostId } from '../../shared/execution-host/execution-host'
 import {
   getHostedReviewLocalGitOptions,
   type HostedReviewExecutionOptions

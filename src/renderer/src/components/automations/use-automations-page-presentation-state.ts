@@ -1,10 +1,9 @@
 import { capturedAutomationOwner } from './hosts/automation-captured-owner'
 import { useCallback, useEffect, useMemo } from 'react'
 import {
-  getLocalExecutionHostLabel,
   getRepoExecutionHostId,
   parseExecutionHostId
-} from '../../../../shared/execution-host'
+} from '../../../../shared/execution-host/execution-host'
 import { getHostDisplayLabelOverrides } from '../../../../shared/execution-host/host-setting-overrides'
 import type { Repo } from '../../../../shared/repository/repo-types'
 import { getAutomationTargetAvailability } from './hosts/automation-target-availability'
@@ -14,6 +13,7 @@ import type { AutomationsPageListState } from './listing/use-automations-page-li
 import type { AutomationsPageLocalState } from './use-automations-page-local-state'
 import type { AutomationsPageStoreState } from './use-automations-page-store-state'
 import { useTranslate } from '../../i18n/use-translate'
+import { translateLocalExecutionHostLabel } from '../sidebar/execution-host-label'
 
 /** Display labels and action availability derived from the selected host row. */
 export function useAutomationsPagePresentationState({
@@ -85,13 +85,15 @@ export function useAutomationsPagePresentationState({
             ?.name ?? parsed.environmentId
         )
       }
-      return getLocalExecutionHostLabel()
+      return translateLocalExecutionHostLabel(undefined, t)
     },
-    [runtimeEnvironments, sshTargetLabels]
+    [runtimeEnvironments, sshTargetLabels, t]
   )
   const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
   const hostLabelById = useMemo(() => {
-    const labels = new Map<string, string>([['local', getLocalExecutionHostLabel()]])
+    const labels = new Map<string, string>([
+      ['local', translateLocalExecutionHostLabel(undefined, t)]
+    ])
     for (const [targetId, label] of sshTargetLabels) {
       labels.set(`ssh:${encodeURIComponent(targetId)}`, label)
     }
@@ -102,7 +104,7 @@ export function useAutomationsPagePresentationState({
       labels.set(hostId, label)
     }
     return labels
-  }, [hostLabelOverrides, runtimeEnvironments, sshTargetLabels])
+  }, [hostLabelOverrides, runtimeEnvironments, sshTargetLabels, t])
   useEffect(() => {
     if ((!selected || list.selectedExternal) && activePaneTab === 'runs') {
       setActivePaneTab('overview')

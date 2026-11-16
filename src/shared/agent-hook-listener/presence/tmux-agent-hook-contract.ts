@@ -4,7 +4,7 @@ import type {
   AgentStatusExecutionScope,
   AgentStatusPtySubject
 } from '../../agent-status/contracts/agent-status-subject'
-import type { probeTmuxHostAttachments } from '../../tmux-host-attachment-probe'
+import type { probeTmuxHostAttachments } from './tmux-host-attachment-probe'
 
 export type TmuxManagedPty = {
   pid: number

@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import type { StoredWebRuntimeEnvironment } from '../web-runtime-environment'
 import { webRuntimeState } from './web-runtime-session'
 

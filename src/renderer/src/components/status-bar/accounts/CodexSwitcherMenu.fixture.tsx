@@ -1,5 +1,5 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
-import { getDefaultSettings } from '../../../../../shared/constants'
+import { getDefaultSettings } from '../../../../../shared/orca-profiles/constants'
 import type { CodexManagedAccount } from '../../../../../shared/agent-accounts/managed-account-types'
 import { createEmptyRateLimitState } from '../../../../../shared/agent-usage/rate-limits/rate-limit-state-factory'
 import type {

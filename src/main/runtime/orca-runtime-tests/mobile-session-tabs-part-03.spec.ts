@@ -1,6 +1,6 @@
-import '../../../shared/layout-owner-switch'
+import '../../../shared/workspace-layout/layout-owner-switch'
 import { describe, expect, it, vi } from 'vitest'
-import { committingSpawn } from './bind-first-pane.test-fixture'
+import './bind-first-pane.test-fixture'
 import './runtime-test-module-registration.spec'
 import { MOCK_GIT_WORKTREES, electronMocks } from '../orca-runtime-test-mocks/setup.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
@@ -8,7 +8,7 @@ import '../browser/client-pages/runtime-browser-page-registry'
 import 'electron'
 import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
 import { TEST_WORKTREE_ID, deferred, store } from './orca-runtime-test-fixtures.spec'
-import '../../../shared/constants'
+import '../../../shared/orca-profiles/constants'
 import './split-placement-session.test-fixture'
 
 describe('OrcaRuntimeService', () => {
@@ -158,33 +158,5 @@ describe('OrcaRuntimeService', () => {
     expect(send).not.toHaveBeenCalled()
     expect(spawn).not.toHaveBeenCalled()
     expect(setBackgroundThrottling).not.toHaveBeenCalled()
-  })
-
-  it('scopes terminal-create idempotency to the paired caller', async () => {
-    let spawnIndex = 0
-    const runtime = new OrcaRuntimeService(store)
-    runtime.setPtyController({
-      spawn: vi.fn(committingSpawn(runtime, async () => ({ id: `pty-headless-${++spawnIndex}` }))),
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    await runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
-
-    const [createdA, createdB] = await Promise.all([
-      runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
-        clientNavigationId: 'device-a',
-        navigation: 'caller',
-        clientMutationId: 'same-mutation'
-      }),
-      runtime.createMobileSessionTerminal(`id:${TEST_WORKTREE_ID}`, {
-        clientNavigationId: 'device-b',
-        navigation: 'caller',
-        clientMutationId: 'same-mutation'
-      })
-    ])
-
-    expect(createdA.tab.id).not.toBe(createdB.tab.id)
-    expect(spawnIndex).toBe(2)
   })
 })

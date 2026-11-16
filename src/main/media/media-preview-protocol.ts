@@ -21,7 +21,7 @@ import { openLocalPreviewGrantFile } from './local-preview-grant-file'
 import type { RemoteFilePreviewAddress } from '../../shared/file-preview/remote-file-preview-address'
 import { remoteFilePath } from '../../shared/file-access/remote-file-locator'
 import { resolveLocalFileRequestPath } from '../ipc/filesystem/access/local-file-access-resolution'
-import { openLocalRegularFile } from '../ipc/filesystem/local-regular-file-read'
+import { openLocalRegularFile } from '../filesystem/local-file-io/local-regular-file-read'
 import { abortWhenRendererGone } from '../ipc/renderer-lifetime-abort'
 import { createMediaRangeResponse } from './media-range-response'
 import {

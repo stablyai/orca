@@ -1,12 +1,12 @@
 // One task row's words for every transcript surface, so desktop and mobile report a task the same way.
 
-import type { BackgroundTaskSay } from '../../../background-task-copy'
+import type { BackgroundTaskSay } from '../../../agent-status/presentation/background-tasks/background-task-copy'
 import {
   backgroundTaskStateReason,
   backgroundTaskStateWord,
   formatBackgroundTaskTokens,
   resolveBackgroundTaskName
-} from '../../../background-task-roster'
+} from '../../../agent-status/presentation/background-tasks/background-task-roster'
 import {
   isSettledBackgroundTaskState,
   normalizeBackgroundTaskKind,

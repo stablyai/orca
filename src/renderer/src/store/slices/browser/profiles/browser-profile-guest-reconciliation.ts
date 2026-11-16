@@ -1,6 +1,6 @@
 import type { BrowserSliceGet } from '../browser-slice-contract'
 import { findWorkspace } from '../pages/browser-page-records'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host/execution-host'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { resolveSshWorkspaceBrowserRouteEligibility } from '@/lib/browser/workspace/ssh-workspace-browser-route-eligibility'
 import { resolveBrowserPagePartition } from '@/components/browser-pane/host-guest/browser-page-partition'

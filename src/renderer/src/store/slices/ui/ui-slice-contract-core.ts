@@ -12,8 +12,8 @@ import type { TaskProvider } from '../../../../../shared/work-items/task-provide
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import type { LaunchSource } from '../../../../../shared/telemetry/schemas/telemetry-property-schemas'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
-import type { TaskResumeState, TopLevelView } from '../../../../../shared/ui-chrome-types'
+import type { ExecutionHostId } from '../../../../../shared/execution-host/execution-host'
+import type { TaskResumeState, TopLevelView } from '../../../../../shared/ui-chrome/ui-chrome-types'
 import type {
   AutomationRunPageOrigin,
   AutomationsPageLocation,
