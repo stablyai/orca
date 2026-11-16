@@ -220,7 +220,7 @@ import {
   userAuthorizeUrl
 } from './github-user-tokens'
 import { memberGitRoutes, memberMayAct, recordMemberSend } from './member-git'
-import { gitActorView } from './git-actor'
+import type { GithubActingOptions } from './git-actor'
 import { egressAllowlistSetting, PlatformHostSuffixesConfigError } from './network-policy'
 import { getWorkspacePrefs, putWorkspacePrefs } from './workspace-prefs'
 import { getOrgSlug, putOrgSlug } from './org-slugs'
@@ -1241,12 +1241,13 @@ export function egressPlaceholderMode(value: string | undefined): boolean | Read
  * orca-git-identity hands an agent only that member's identity. Residual risk: members share the VM
  * user, so a member with a shell could subvert orcad itself; agents and prompts cannot.
  */
-/** GIT-ACTOR (git-actor.ts): null when GH-AS-MEMBER or member git is off for the account, or on any error. */
-function gitActorFor(env: Env, row: SandboxRow, caller: SandboxCaller, now: number) {
-  return gitActorView(env.SANDBOX_DB, row, caller.userId, now, {
-    enabled: env.GH_AS_MEMBER === 'on' && env.MEMBER_GIT_IDENTITY !== 'off' && memberGitEnabled(env)(row.account_id),
+/** GIT-ACTOR (git-actor.ts): GH-AS-MEMBER on, and member git on for the account. */
+function githubActingOptions(env: Env): GithubActingOptions {
+  const memberGit = memberGitEnabled(env)
+  return {
+    enabled: (accountId) => env.GH_AS_MEMBER === 'on' && env.MEMBER_GIT_IDENTITY !== 'off' && memberGit(accountId),
     sharedMaxMs: memberGitSharedMaxMs(env)
-  }).catch(() => null)
+  }
 }
 
 /** Shared workspaces: how long the latest sender keeps acting after their last send. Default 60 min; `0` = no cap. */
@@ -1943,8 +1944,6 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
     const idleMinutesAware = features.includes('idle-minutes')
     // Predictive wake: the last deliberate sleep and the seat's running count, for clients that ask.
     const wakeHintsAware = features.includes('wake-hints')
-    // GIT-ACTOR: who pushes and PRs go out as right now (git-actor.ts), for clients that ask.
-    const gitActorAware = features.includes('git-actor')
     const view = (row: SandboxRow) => sandboxView(row, archivedAware, features.includes('git-setup'))
     if (!id) {
       if (request.method === 'GET') {
@@ -2105,14 +2104,13 @@ async function routeRequest(request: Request, env: Env, deps: Deps): Promise<Res
         return json({ clone: await readCloneStatus(life, row) })
       case 'GET status':
       {
-        const [{ idleSleepMinutes, ...status }, hints, actor] = await Promise.all([
+        const [{ idleSleepMinutes, ...status }, hints] = await Promise.all([
           workspaceStatus(life, row, workspaceConfig(env, deps)),
-          wakeHintsAware ? wakeHints(life.db, row, life.now()) : null,
-          gitActorAware ? gitActorFor(env, row, caller, life.now()) : null
+          wakeHintsAware ? wakeHints(life.db, row, life.now()) : null
         ])
         return json({
           sandbox: view(row),
-          status: { ...status, ...(idleMinutesAware ? { idleSleepMinutes } : {}), ...(hints ?? {}), ...(actor ?? {}) }
+          status: { ...status, ...(idleMinutesAware ? { idleSleepMinutes } : {}), ...(hints ?? {}) }
         })
       }
       case 'POST archive': {
@@ -2406,7 +2404,7 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
     return (await dismissNotice(db, caller, noticeDismiss[1]!, now)) ? json({ dismissed: true }) : fail('not_found', 404)
   }
   if (url.pathname === '/v1/team/workspaces') {
-    return request.method === 'GET' ? json(await listWorkspaces(db, caller, url, now)) : fail('not_found', 404)
+    return request.method === 'GET' ? json(await listWorkspaces(db, caller, url, now, githubActingOptions(env))) : fail('not_found', 404)
   }
   if (url.pathname.startsWith('/v1/team/members/') || url.pathname.startsWith('/v1/team/pokes')) {
     try {
@@ -2435,12 +2433,9 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
   const [, id, action, grantId] = match
   const row = await requireVisible(db, caller, id!)
   const route = `${request.method} ${action ?? ''}${grantId ? ' :grant' : ''}`
-  const view = async (r = row) => (await workspaceViews(db, caller, [r], clock()))[0]
+  const view = async (r = row) => (await workspaceViews(db, caller, [r], clock(), githubActingOptions(env)))[0]
   if (route === 'GET ') {
-    // GIT-ACTOR: for clients that ask, and only to those who may open it (members see who acts for them).
-    const features = (request.headers.get(FEATURES_HEADER) ?? '').split(',').map((f) => f.trim())
-    const actor = features.includes('git-actor') && canOpen(caller, row) ? await gitActorFor(env, row, caller, now) : null
-    return json({ workspace: await view(), ...(actor ?? {}) })
+    return json({ workspace: await view() })
   }
   if (route === 'GET read-snapshot') {
     try {

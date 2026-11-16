@@ -182,26 +182,29 @@ describe('git as the sender', () => {
   })
 })
 
-describe('GIT-ACTOR: who pushes and PRs go out as (owner: GET status; members: GET team workspace)', () => {
-  const status = async (t: Awaited<ReturnType<typeof setup>>, user: string, features = 'git-actor') =>
-    user === 'alice'
-      ? (await t.h.call('GET', `/v1/sandboxes/${t.id}/status`, { bearer: await t.as(user), headers: { 'x-orca-sandbox-features': features } })).body.status
-      : (await t.h.call('GET', `/v1/team/workspaces/${t.id}`, { bearer: await t.as(user), headers: { 'x-orca-sandbox-features': features } })).body
+describe('GIT-ACTOR: githubActing and you on the workspace view (list and detail)', () => {
+  const detail = async (t: Awaited<ReturnType<typeof setup>>, user: string) =>
+    (await t.h.call('GET', `/v1/team/workspaces/${t.id}`, { bearer: await t.as(user) })).body.workspace
+  const listed = async (t: Awaited<ReturnType<typeof setup>>, user: string) =>
+    (await t.h.call('GET', '/v1/team/workspaces', { bearer: await t.as(user) })).body.workspaces.find((w: { id: string }) => w.id === t.id)
 
-  it('solo: the owner once connected, uncapped; nothing for clients that do not ask, or with GH_AS_MEMBER off', async () => {
+  it('solo: the owner once connected, uncapped; "off" with GH_AS_MEMBER off', async () => {
     const t = await setup(undefined, { GH_AS_MEMBER: 'on' })
-    expect(await status(t, 'alice')).toMatchObject({ gitActor: { kind: 'bot', reason: 'no_connected_member' }, viewerConnected: false })
+    expect(await detail(t, 'alice')).toMatchObject({ githubActing: { actingAs: 'bot', reason: 'sender_not_connected' }, you: { connected: false } })
     await t.seed('alice', 'alice-gh', 11, false)
-    const solo = await status(t, 'alice')
-    expect(solo.gitActor).toEqual({ kind: 'member', userId: 'alice', login: 'alice-gh' })
-    expect(solo.viewerConnected).toBe(true)
-    expect((await status(t, 'alice', '')).gitActor).toBeUndefined()
+    const solo = await detail(t, 'alice')
+    expect(solo.githubActing).toEqual({ actingAs: 'member', userId: 'alice', login: 'alice-gh' })
+    expect(solo.you).toEqual({ connected: true, login: 'alice-gh' })
+    expect((await listed(t, 'alice')).githubActing).toEqual(solo.githubActing)
+    // Expired with no refresh token: reconnect.
+    t.h.advance(2 * 60 * 60_000)
+    expect((await detail(t, 'alice')).githubActing).toEqual({ actingAs: 'bot', reason: 'reconnect' })
     const off = await setup()
     await off.seed('alice', 'alice-gh', 11, false)
-    expect((await status(off, 'alice')).gitActor).toBeUndefined()
+    expect((await detail(off, 'alice')).githubActing).toEqual({ actingAs: 'bot', reason: 'off' })
   })
 
-  it('shared: the latest sender until the 60 min window lapses, then the bot ("stale")', async () => {
+  it('shared: the latest sender until the 60 min window lapses (until), then window_expired', async () => {
     const t = await setup(undefined, { GH_AS_MEMBER: 'on' })
     await t.seed('alice', 'alice-gh', 11, false)
     const bob = await t.as('bob')
@@ -210,21 +213,19 @@ describe('GIT-ACTOR: who pushes and PRs go out as (owner: GET status; members: G
       body: { recipientPublicKeyB64: generateGrantRecipientKey().publicKeyB64, deviceLabel: 'b', deviceKind: 'desktop' }
     })
     expect(issued.status).toBe(200)
-    expect((await status(t, 'bob')).gitActor).toEqual({ kind: 'bot', reason: 'no_connected_member' })
+    expect((await detail(t, 'bob')).githubActing).toEqual({ actingAs: 'bot', reason: 'no_sender_yet' })
     await t.sent('alice')
     const sentAt = t.h.now()
-    const shared = await status(t, 'bob')
-    expect(shared.gitActor).toEqual({ kind: 'member', userId: 'alice', login: 'alice-gh', until: sentAt + 60 * 60_000 })
-    // Bob isn't connected: only he sees the connect prompt.
-    expect(shared.viewerConnected).toBe(false)
-    // Bob sends but has no GitHub: the bot.
+    const shared = await detail(t, 'bob')
+    expect(shared.githubActing).toEqual({ actingAs: 'member', userId: 'alice', login: 'alice-gh', until: sentAt + 60 * 60_000 })
+    // Bob isn't connected: only he is shown the connect prompt.
+    expect(shared.you).toEqual({ connected: false })
     t.h.advance(1_000)
     await t.sent('bob')
-    expect((await status(t, 'alice')).gitActor).toEqual({ kind: 'bot', reason: 'no_connected_member' })
+    expect((await detail(t, 'alice')).githubActing).toEqual({ actingAs: 'bot', reason: 'sender_not_connected' })
     t.h.advance(1_000)
     await t.sent('alice')
     t.h.advance(61 * 60_000)
-    expect((await status(t, 'alice')).gitActor).toEqual({ kind: 'bot', reason: 'stale' })
+    expect((await detail(t, 'alice')).githubActing).toEqual({ actingAs: 'bot', reason: 'window_expired' })
   })
 })
-
