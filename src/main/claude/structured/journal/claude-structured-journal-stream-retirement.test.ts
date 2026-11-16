@@ -31,7 +31,7 @@ function journal() {
       type: 'message',
       sessionId: 'orca-session',
       observedAt: 1_000,
-      startsTurn,
+      ...(startsTurn ? { startsTurn: true } : {}),
       message: { session_id: 'claude-session', parent_tool_use_id: null, ...message }
     })
   const send = (uuid: string) =>
