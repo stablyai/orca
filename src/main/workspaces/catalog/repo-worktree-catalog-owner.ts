@@ -40,6 +40,7 @@ type Entry = {
 }
 
 const entries = new Map<string, Entry>()
+const COMPLETED_OBSERVATION_REUSE_MS = 5_000
 
 onWorktreeScanGenerationBump((repoPath) => invalidateWorktreeCatalogForRepoPath(repoPath))
 // Route-changing writes and WSL discovery answers retire obsolete owners even when no reader follows.
@@ -147,6 +148,7 @@ function startFlight(
                 }
               : outcome,
           startedAt,
+          completedAt: Date.now(),
           generation,
           revision,
           adminFingerprint,
@@ -203,9 +205,15 @@ function acceptable(
   if (requirement.needsHygieneClaim?.() && !observation.witness?.hygieneDue) {
     return false
   }
+  if (requirement.verifier && now - observation.startedAt >= requirement.verifier.ceilingMs) {
+    return false
+  }
   // Verifier confirmations are a runtime admission; other readers need a full observation that young.
   const basis = requirement.verifier ? observation.confirmedAt : observation.startedAt
-  return now - basis <= requirement.maxAgeMs
+  return (
+    now - basis <= requirement.maxAgeMs ||
+    now - observation.completedAt <= Math.min(requirement.maxAgeMs, COMPLETED_OBSERVATION_REUSE_MS)
+  )
 }
 
 /** The sole owner of a repo's raw worktree rows: readers state what they accept and share its one flight. */

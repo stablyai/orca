@@ -26,7 +26,10 @@ import {
   normalizeLocalBranchRef
 } from '../worktree-operation-options'
 import { areWorktreePathsEqual, translateWorktreePath } from './worktree-path-comparison'
-import { detectSparseCheckoutCached } from '../sparse-checkout/worktree-sparse-checkout-cache'
+import {
+  detectSparseCheckoutCached,
+  retainSparseCheckoutWorkingSet
+} from '../sparse-checkout/worktree-sparse-checkout-cache'
 
 const SPARSE_CHECKOUT_DETECTION_CONCURRENCY = 8
 
@@ -101,6 +104,11 @@ export async function annotateSparseCheckoutStatus(
   worktrees: GitWorktreeInfo[],
   options: GitWorktreeExecOptions = {}
 ): Promise<GitWorktreeInfo[]> {
+  retainSparseCheckoutWorkingSet(
+    repoPath,
+    worktrees.filter((worktree) => !worktree.isBare).map((worktree) => worktree.path),
+    options
+  )
   const annotated = [...worktrees]
   let nextIndex = 0
 
@@ -266,18 +274,15 @@ export async function describeCreatedWorktree(
       return undefined
     }
   }
-  const [described] = await annotateSparseCheckoutStatus(
-    repoPath,
-    [
-      {
-        path: translateWorktreePath(created.topLevel, repoPath, options),
-        head,
-        branch: expectedRef,
-        isBare: false,
-        isMainWorktree: false
-      }
-    ],
-    options
-  )
-  return described
+  const path = translateWorktreePath(created.topLevel, repoPath, options)
+  const isSparse = await detectSparseCheckoutCached(repoPath, path, options)
+  throwIfSignalAborted(options.signal)
+  return {
+    path,
+    head,
+    branch: expectedRef,
+    isBare: false,
+    isMainWorktree: false,
+    ...(isSparse ? { isSparse } : {})
+  }
 }
