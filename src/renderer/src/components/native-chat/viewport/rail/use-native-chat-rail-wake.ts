@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useRef } from 'react'
+import { useNativeChatPaneLifetimeEffect } from '../../pane/ownership/native-chat-pane-lifetime'
 const NATIVE_CHAT_RAIL_WAKE_MS = 300
 const NATIVE_CHAT_RAIL_SUSTAIN_MS = 1500
 export function useNativeChatRailWake(): {
@@ -46,13 +47,15 @@ export function useNativeChatRailWake(): {
     }
   }, [])
 
-  useEffect(
-    () => () => {
-      if (timer.current !== null) {
-        clearTimeout(timer.current)
-      }
-    },
-    []
+  useNativeChatPaneLifetimeEffect(
+    useCallback(
+      () => () => {
+        if (timer.current !== null) {
+          clearTimeout(timer.current)
+        }
+      },
+      []
+    )
   )
 
   return { railRef, wake, sustain }
