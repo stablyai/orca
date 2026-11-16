@@ -24,6 +24,13 @@ async function readKeptAssets(
   hostRoot: string,
   fetching: MobileWebBundleManifestRead
 ): Promise<ActiveGeneration> {
+  // Filtering to files on disk would hide case-aliased paths from the reuse guard, so such a build keeps nothing.
+  if (
+    new Set(fetching.assets.map((asset) => asset.path.toLowerCase())).size !==
+    fetching.assets.length
+  ) {
+    throw new Error(`build ${fetching.buildId} has case-aliased asset paths`)
+  }
   const keptRoot = joinUri(hostRoot, KEPT_DIRECTORY_NAME)
   for (const entry of await fs.list(keptRoot)) {
     if (entry.name !== fetching.buildId) {
