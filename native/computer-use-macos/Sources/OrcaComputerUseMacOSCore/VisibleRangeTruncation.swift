@@ -19,7 +19,8 @@ public enum VisibleRangeTruncation {
             return nil
         }
         let start = min(visibleRange.location, full.length)
-        let end = min(start + visibleRange.length, full.length)
+        // Why: clamp the length first so a huge reported length cannot overflow the addition.
+        let end = start + min(visibleRange.length, full.length - start)
         guard start > 0 || end < full.length else { return nil }
         guard end > start else {
             return "[truncated to visible range: no characters visible of \(full.length)]"

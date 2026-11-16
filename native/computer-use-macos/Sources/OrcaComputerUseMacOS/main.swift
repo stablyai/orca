@@ -3249,6 +3249,11 @@ private final class AXSnapshotReader {
             let role = stringAttribute(node, kAXRoleAttribute as String) ?? "AXUnknown"
             guard allowedContainerRoles.contains(role) else { return false }
             if role == kAXStaticTextRole as String || role == "AXLink" {
+                // Why: a summary keeps only the start of each text; a long one must render on its own line,
+                // where the visible-range substitution shows the part the window displays.
+                if let value = stringAttribute(node, kAXValueAttribute as String), VisibleRangeTruncation.isLong(value) {
+                    return false
+                }
                 sawText = true
             }
             guard SnapshotRenderHeuristics.meaningfulActions(actions(node), role: role).isEmpty else { return false }

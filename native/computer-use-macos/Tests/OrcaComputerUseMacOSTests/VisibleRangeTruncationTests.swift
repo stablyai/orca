@@ -23,6 +23,11 @@ final class VisibleRangeTruncationTests: XCTestCase {
         XCTAssertNil(VisibleRangeTruncation.visibleValue(longValue, visibleRange: CFRange(location: -1, length: 10)))
     }
 
+    func testHugeReportedLengthClampsInsteadOfOverflowing() {
+        let visible = VisibleRangeTruncation.visibleValue(longValue, visibleRange: CFRange(location: 1, length: Int.max))
+        XCTAssertEqual(visible?.hasPrefix("[truncated to visible range: chars 2-3999 of 3999] "), true)
+    }
+
     func testEmptyVisibleRangeSaysNothingIsVisible() {
         XCTAssertEqual(
             VisibleRangeTruncation.visibleValue(longValue, visibleRange: CFRange(location: 50, length: 0)),
