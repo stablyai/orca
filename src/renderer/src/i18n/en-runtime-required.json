@@ -330,10 +330,10 @@
       },
       "github": {
         "PRFilterSections": {
-          "labelCount_one": "{{count}} label",
-          "labelCount_other": "{{count}} labels",
           "authorCount_one": "{{count}} author",
-          "authorCount_other": "{{count}} authors"
+          "authorCount_other": "{{count}} authors",
+          "labelCount_one": "{{count}} label",
+          "labelCount_other": "{{count}} labels"
         },
         "project": {
           "ProjectPicker": {
