@@ -7,6 +7,8 @@ export const SHELL_PREFIXES = [
   'src/main/daemon/shell-readiness/daemon-bash-shell-ready-rcfile.ts',
   'src/main/daemon/shell-readiness/daemon-shell-ready-wrapper-fileset.ts',
   'src/main/daemon/pty-subprocess/testing/node-pty-fd-leak.test.ts',
+  'src/main/daemon/pty-subprocess/testing/node-pty-process-limit.test.ts',
+  'src/main/daemon/pty-subprocess/node-pty-error-hints',
   'src/main/providers/local-pty/local-pty-shell-ready',
   'src/main/pty/',
   'src/main/runtime/agent-session/environment/structured-session-cli-login-shell',
