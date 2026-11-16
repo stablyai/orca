@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { captureWorktreeSleepResumeRecords } from '../../../../runtime/terminal/stop/worktree-sleep-resume-records'
 import { AgentHookServer } from '../../agent-hook-server'
@@ -6,6 +6,12 @@ import { PANE } from '../server.test-fixtures'
 import { resumeStatusFromHookRow } from '../../../../runtime/terminal/stop/hook-status-resume-records'
 import { liveResumeRecord } from '../../../../../shared/agent-session/lifecycle/resume/agent-resume-record-from-status'
 import { agentEntryCompletionAt } from '../../../../../shared/agent-status/lifecycle/agent-completion-time'
+
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(1_000)
+})
+afterEach(() => vi.useRealTimers())
 
 it.each(['claude', 'codex'] as const)(
   'settles %s saved-only turns without inventing a completion',
@@ -111,7 +117,7 @@ it.each(['claude', 'codex'] as const)(
           worktreeId: 'wt-1',
           agentType: agent,
           providerSession: saved.providerSession,
-          launchedAt: Date.now()
+          launchedAt: 1_000
         })
       const publish = (newTurn: boolean) =>
         server.ingestRemote(
@@ -152,7 +158,7 @@ it.each(['claude', 'codex'] as const)(
           launchByPtyId: new Map(),
           readRowsForPane: (paneKey) => server.getStatusSnapshotForPane(paneKey),
           checkAgentPresence: null,
-          capturedAt: Date.now()
+          capturedAt: 1_000
         })
         saved = capture.get('pty')!.records[0]!
         expect(saved).toMatchObject({
@@ -160,6 +166,11 @@ it.each(['claude', 'codex'] as const)(
           state: 'done',
           interrupted: true,
           providerSession: { key: 'session_id', id: `${agent}-saved-session` }
+        })
+        server.dropStatusEntry(PANE, { preserveResumeIdentity: false })
+        expect(server.paneAgentIdentity(PANE)).toMatchObject({
+          ended: false,
+          status: { state: 'done', interrupted: true }
         })
         server.retireSleepingPaneOnSpawn(PANE, {
           agentType: agent,
@@ -214,7 +225,7 @@ it('does not recover a saved Interrupted turn after its conversation exited', ()
       worktreeId: 'wt-1',
       agentType: 'codex',
       providerSession: saved.providerSession,
-      launchedAt: Date.now() + 1
+      launchedAt: 1_001
     })
     expect(server.getPublicStatusSnapshotForPane(PANE)).toEqual([])
     expect(server.paneAgentIdentity(PANE)?.status.interrupted).not.toBe(true)

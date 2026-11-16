@@ -5,6 +5,8 @@ import {
   type LocalPtyInventoryReader
 } from './local-tmux-managed-pty'
 import { createLocalHookRootEvidenceReader } from '../../../shared/agent-hook-listener/presence/hook-process-root-evidence-reader'
+import { readPaneTmuxHost } from '../../../shared/agent-hook-listener/presence/hook-process-root-evidence'
+import { readSelectedRows, readTerminalRows } from '../../../shared/tmux-host-attachment-probe'
 import { getPtyIdForPaneKey } from '../../ipc/pty/pane/key-state'
 import { getLocalPtyProvider } from '../../ipc/pty/provider/registry'
 
@@ -16,8 +18,16 @@ export function installLocalHookRootEvidence(server: AgentHookServer): LocalPtyI
     listProcesses: () => getLocalPtyProvider().listProcesses()
   })
   if (process.platform !== 'win32') {
-    server.setHookRootEvidenceReader(
-      createLocalHookRootEvidenceReader(createLocalHookPaneRootResolver(readInventory))
+    const resolveRoot = createLocalHookPaneRootResolver(readInventory)
+    server.setHookRootEvidenceReader(createLocalHookRootEvidenceReader(resolveRoot), (request) =>
+      readPaneTmuxHost(
+        {
+          resolveRoot,
+          readProcesses: (pids) => readSelectedRows(pids).catch(() => []),
+          readTerminal: (tty) => readTerminalRows(tty).catch(() => [])
+        },
+        request
+      )
     )
   }
   return readInventory

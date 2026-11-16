@@ -196,7 +196,12 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusR
     if (previous && stateReconciledPayload === previous) {
       return previous
     }
-    const resumed = this.preserveResumedAcceptedTurn(previous, stateReconciledPayload, rowBefore)
+    const resumed = this.preserveResumedAcceptedTurn(
+      previous,
+      stateReconciledPayload,
+      rowBefore,
+      origin
+    )
     if (resumed !== null) {
       return resumed
     }

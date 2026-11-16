@@ -8,7 +8,10 @@ import {
   checkHookOwnerPresence,
   restateHookRoot
 } from '../../../shared/agent-hook-listener/presence/agent-hook-owner-presence'
-import type { HookRootEvidenceReader } from '../../../shared/agent-hook-listener/presence/hook-process-root-evidence'
+import type {
+  HookRootEvidenceReader,
+  PaneTmuxHostReader
+} from '../../../shared/agent-hook-listener/presence/hook-process-root-evidence'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener/normalization/normalize-hook-payload'
 import {
   isAgentHookSource,
@@ -26,9 +29,11 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
   protected readonly attributionDiagnostics = new AgentHookAttributionDiagnostics()
   /** Unset in tests and embedders without a process table: every acquisition reads as unknown. */
   protected readHookRootEvidence: HookRootEvidenceReader | undefined
+  protected readPaneTmuxHost: PaneTmuxHostReader | undefined
 
-  setHookRootEvidenceReader(reader: HookRootEvidenceReader): void {
+  setHookRootEvidenceReader(reader: HookRootEvidenceReader, tmuxHost?: PaneTmuxHostReader): void {
     this.readHookRootEvidence = reader
+    this.readPaneTmuxHost = tmuxHost
   }
 
   /** Panes whose owner an undecided hook challenged: until that hook is admitted or refused, the

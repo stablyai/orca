@@ -173,7 +173,6 @@ it.each(['idle Codex', 'Claude hook', 'failed resume', 'ordinary exit'] as const
       stopping = true
       expect(server.settleTerminalPaneSleep(PANE, 'pty', 'birth')).toBe(true)
     }
-    expect(await server.checkAgentPresenceSince(PANE, 0)).toBe('exited')
 
     stopping = false
     server.retireSleepingPaneOnSpawn(
@@ -306,6 +305,16 @@ it.each(['claude', 'codex'] as const)(
       await agentHook(agent, 'SessionStart', 4002)
     }
     expect(read()).toMatchObject({ state: 'done', interrupted: true })
+    // Startup bytes restate the session before a new prompt; they do not finish another turn.
+    for (const sessionBoundary of [true, undefined]) {
+      server.ingestTerminalStatus({
+        paneKey: PANE,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        payload: { state: 'done', prompt: '', agentType: agent, sessionBoundary }
+      })
+      expect(read()).toMatchObject({ state: 'done', interrupted: true })
+    }
     emitted.mockClear()
     await sleepPane(agent, 'pty-2', 4002)
     expect(read()).toMatchObject({

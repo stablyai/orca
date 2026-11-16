@@ -4,7 +4,11 @@ import { normalizeHookPayload } from '../../../shared/agent-hook-listener/normal
 import { parseFormEncodedBody } from '../../../shared/agent-hook-listener/request-body'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'
-import { cliWriterTopology, type CliWriterObservation } from './cli-writer-observation'
+import {
+  cliWriterTopology,
+  retainTmuxWriterTopology,
+  type CliWriterObservation
+} from './cli-writer-observation'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status/contracts/agent-status-types'
 import {
@@ -114,7 +118,10 @@ export class AgentHookServer extends AgentHookServerLifecycle {
     paneKey: string,
     exitedSince: number
   ): Promise<AgentProcessVerdict | null> {
-    const verdict = await this.checkAgentPresence(paneKey)
+    const [verdict] = await Promise.all([
+      this.checkAgentPresence(paneKey),
+      this.observeTmuxHostedWriter(paneKey)
+    ])
     // A replaced owner's probe result counts only if its exit was retained.
     if (verdict !== null && verdict !== 'exited') {
       return verdict
@@ -128,6 +135,33 @@ export class AgentHookServer extends AgentHookServerLifecycle {
       this.agentExitedAtByPaneKey.get(this.resolvePaneKeyAlias(paneKey)) ??
       this.agentExitedAtByPaneKey.get(paneKey)
     return exit !== undefined && exit.at >= exitedSince ? 'exited' : null
+  }
+
+  /** Legacy hooks cannot say a tmux server hosts them; the pane's foreground client can, before
+   *  a sleep or adoption captures the conversation as the pane's own. */
+  private async observeTmuxHostedWriter(paneKey: string): Promise<void> {
+    const resolved = this.resolvePaneKeyAlias(paneKey)
+    const row = this.state.lastStatusByPaneKey.get(resolved)
+    const binding = row?.providerSession
+    const read = this.readPaneTmuxHost
+    if (
+      !read ||
+      !row ||
+      !binding ||
+      row.connectionId !== null ||
+      cliWriterTopology(row) !== 'pane-owned'
+    ) {
+      return
+    }
+    const presence = row.agentPresence
+    const hosted = await read({
+      paneKey: resolved,
+      worktreeId: row.worktreeId,
+      ...(presence?.process && !presence.ended ? { process: presence.process } : {})
+    }).catch(() => false)
+    if (hosted && this.state.lastStatusByPaneKey.get(resolved)?.providerSession === binding) {
+      retainTmuxWriterTopology(binding)
+    }
   }
 
   checkAgentPresence(paneKey: string): Promise<AgentProcessVerdict | null> {

@@ -68,8 +68,17 @@ export function tmuxCliWriterEvent<T extends AgentHookEventPayload>(row: T): T {
     return row
   }
   const providerSession = { ...row.providerSession }
-  Object.defineProperty(providerSession, OPEN_CODE_WRITER_TOPOLOGY, { value: 'shared' })
+  retainTmuxWriterTopology(providerSession)
   return { ...row, providerSession }
+}
+
+/** A binding the pane reaches through a tmux client; a decided binding keeps its topology. */
+export function retainTmuxWriterTopology(
+  binding: NonNullable<AgentHookEventPayload['providerSession']>
+): void {
+  if (!(OPEN_CODE_WRITER_TOPOLOGY in binding) && Object.isExtensible(binding)) {
+    Object.defineProperty(binding, OPEN_CODE_WRITER_TOPOLOGY, { value: 'shared' })
+  }
 }
 
 export type CliWriterExecutionMatches = (

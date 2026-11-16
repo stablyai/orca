@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer, _internals } from '../../agent-hook-server'
 import { captureWorktreeSleepResumeRecords } from '../../../../runtime/terminal/stop/worktree-sleep-resume-records'
+import { TerminalIntentionalStops } from '../../../../runtime/terminal/stop/terminal-intentional-stops'
 import { postHookEvent } from '../server.test-fixtures'
 import {
   TMUX_TEST_PANE,
@@ -61,10 +62,13 @@ describe('main canonical tmux projection', () => {
   })
   it('does not resume an inner agent whose tmux server outlives the sleeping pane', async () => {
     await postHookEvent(server, tmuxTestBody(), '/hook/opencode')
+    const stops = new TerminalIntentionalStops()
+    const settle = stops.mark('pty', 'reversible', 'birth')
+    let bound = true
     server.setTerminalPaneLifecycle({
-      ownsProcess: () => true,
-      isStopping: () => true,
-      isReversibleStop: () => true,
+      ownsProcess: () => bound,
+      isStopping: () => bound && stops.claimExit('pty', 'birth').includes('reversible'),
+      isReversibleStop: (pty, birth) => stops.claimExit(pty, birth).includes('reversible'),
       isPlaced: () => true
     })
     const capture = await captureWorktreeSleepResumeRecords({
@@ -81,6 +85,10 @@ describe('main canonical tmux projection', () => {
       retiredPaneKeys: [TMUX_TEST_PANE]
     })
     expect(server.settleTerminalPaneSleep(TMUX_TEST_PANE, 'pty', 'birth')).toBe(false)
+    server.reconcileEndedProcessForPaneKeys([TMUX_TEST_PANE])
+    expect(server.getStatusSnapshot()).toHaveLength(1)
+    bound = false
+    settle(true)
     server.reconcileEndedProcessForPaneKeys([TMUX_TEST_PANE])
     expect(server.getStatusSnapshot()).toHaveLength(0)
   })

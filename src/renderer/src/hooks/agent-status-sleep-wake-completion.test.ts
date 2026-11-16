@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { AgentStatusSetData } from './ipc-events-agent-status-store-test-fixtures'
 import { buildWindowApi } from './ipc-events-agent-status-window-test-fixtures'
 import { makeTab } from '../store/terminals/testing/terminal-tab.test-fixture'
@@ -19,6 +20,9 @@ vi.mock('../store', async () => {
 vi.mock('./agent-hook-completion-notifications', () => ({
   observeAgentHookCompletionForNotification: vi.fn(),
   syncAgentHookCompletionNotificationsForStoreUpdate: () => {}
+}))
+vi.mock('../store/github/refresh/stale-worktree-refresh-actions', () => ({
+  refreshGitHubForWorktreeIfStale: vi.fn()
 }))
 vi.mock('@/lib/notifications/desktop-notification-sound', () => ({
   playDesktopNotificationSound: vi.fn()
@@ -109,7 +113,7 @@ describe('waking a pane slept mid-turn', () => {
   it.each(['claude', 'codex'] as const)(
     'announces no %s finish until the pane runs a new turn',
     async (agentType) => {
-      const working: AgentStatusSetData = {
+      const working: AgentStatusIpcPayload = {
         paneKey: PANE,
         connectionId: null,
         tabId: 'tab-1',
@@ -132,7 +136,7 @@ describe('waking a pane slept mid-turn', () => {
       vi.setSystemTime(NOW + 30_000)
       bindPty('pty-2')
       // Main hands the slept turn back to the resumed process.
-      send({
+      const resumed: AgentStatusIpcPayload = {
         ...slept,
         isReplay: true,
         observation: {
@@ -143,7 +147,8 @@ describe('waking a pane slept mid-turn', () => {
           observedAt: NOW + 30_000,
           kind: 'snapshot'
         }
-      })
+      }
+      send(resumed)
       vi.advanceTimersByTime(40)
 
       // The title lane reads the resumed agent's startup spinner; the hook lane re-sees the verdict.

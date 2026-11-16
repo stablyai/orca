@@ -1,3 +1,4 @@
+import type { AgentStatusObservationOrigin } from '../../../shared/agent-status/contracts/agent-status-observation'
 import { resumedAcceptedTurn } from './pane-agent-turn-continuity'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import { RelaySessionGenerations } from './server-relay-sessions'
@@ -12,9 +13,10 @@ export abstract class AgentHookServerStatusRowMutation extends AgentHookServerSt
   protected preserveResumedAcceptedTurn(
     previous: EnrichedAgentHookEventPayload | undefined,
     incoming: AgentHookEventPayload,
-    before: EnrichedAgentHookEventPayload | undefined
+    before: EnrichedAgentHookEventPayload | undefined,
+    origin: AgentStatusObservationOrigin
   ): EnrichedAgentHookEventPayload | null | undefined {
-    const resumed = previous && resumedAcceptedTurn(previous, incoming)
+    const resumed = previous && resumedAcceptedTurn(previous, incoming, origin)
     if (!resumed) {
       return null
     }

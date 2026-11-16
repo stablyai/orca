@@ -8,7 +8,7 @@ import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-sta
 import { pickParsedAgentStatusPayload } from '../../../shared/agent-status/contracts/agent-status-types'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { AgentHookServerAuthorityFences } from './server-authority-fences'
-import { endedPresenceOf, recordAgentExit } from './agent-exit-evidence'
+import { endedPresenceOf } from './agent-exit-evidence'
 import type { LaunchResumeIdentityEvent } from './launch-resume-identity-event'
 import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import { agentPaneSleepStatus } from '../../../shared/agent-status/lifecycle/agent-pane-sleep-status'
@@ -171,7 +171,6 @@ export abstract class AgentHookServerPaneSleep extends AgentHookServerAuthorityF
     ) {
       return false
     }
-    recordAgentExit(this.agentExitedAtByPaneKey, [resolved], row.agentPresence, now)
     this.commitStatusRowMutation(previous, row)
     this.scheduleStatusPersist()
     this.notifyStatusChangeListeners()
