@@ -1,3 +1,4 @@
+// @protected-copy: preserve workspace cleanup rule and confirmation copy.
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import { WORKSPACE_ARCHIVE_SUPPORTED } from '../../../../../shared/workspace-cleanup/workspace-cleanup-policy'
