@@ -173,3 +173,40 @@ describe('saved browser inventory publication scope', () => {
     }
   )
 })
+
+describe('orchestration graph reply', () => {
+  it('keeps the applied projection when main answers unchanged, and resends after a local edit', async () => {
+    const context = { taskId: 'task-1', dispatchId: 'dispatch-1', dispatchStatus: 'dispatched' }
+    let current = makeState('orchestration', 1)
+    const setRuntimeAgentOrchestrationByPaneKey = vi.fn((next: Record<string, unknown>) => {
+      current = { ...current, runtimeAgentOrchestrationByPaneKey: next } as AppState
+    })
+    current = {
+      ...current,
+      runtimeAgentOrchestrationByPaneKey: {},
+      setRuntimeAgentOrchestrationByPaneKey
+    } as unknown as AppState
+    const syncWindowGraph = vi
+      .fn()
+      .mockResolvedValueOnce({
+        agentOrchestrationRevision: 4,
+        agentOrchestrationByPaneKey: { 'tab:leaf': context }
+      })
+      .mockResolvedValue({ agentOrchestrationRevision: 4 })
+    vi.useFakeTimers()
+    vi.stubGlobal('window', { api: { runtime: { syncWindowGraph } } })
+    vi.stubGlobal('HTMLElement', class HTMLElement {})
+    setRuntimeGraphStoreStateGetter(() => current)
+    setRuntimeGraphSyncEnabled(true)
+    await flushSync()
+    scheduleRuntimeGraphSync()
+    await flushSync()
+    expect(graphOf(syncWindowGraph.mock.calls[1]).agentOrchestrationBase).toBe(4)
+    expect(current.runtimeAgentOrchestrationByPaneKey).toEqual({ 'tab:leaf': context })
+
+    current = { ...current, runtimeAgentOrchestrationByPaneKey: {} }
+    scheduleRuntimeGraphSync()
+    await flushSync()
+    expect(graphOf(syncWindowGraph.mock.calls[2]).agentOrchestrationBase).toBeUndefined()
+  })
+})
