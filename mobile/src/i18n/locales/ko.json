@@ -898,7 +898,8 @@
       "copyCode": "코드 복사",
       "openImage": "이미지 열기",
       "wrapLines": "줄 바꿈",
-      "disableLineWrap": "줄 바꿈 끄기"
+      "disableLineWrap": "줄 바꿈 끄기",
+      "codeLabel": "코드"
     },
     "markdownCallout": {
       "note": "참고",

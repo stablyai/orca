@@ -1,7 +1,7 @@
 import { claudeProviderFrameActivity } from '../../../native-chat/agent-session-wire/providers/provider-frame-activity'
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { claudeProviderFrameKind } from '../launch/claude-structured-provider-fallback'
-import type { ClaudeStructuredSessionEvent } from '../claude-structured-session-event'
+import type { ClaudeStructuredSessionEvent } from '../lifecycle/claude-structured-session-event'
 import type { ClaudeOpenTurn } from './claude-open-turn'
 import { claudeStreamTurnSource, isRootClaudeFrame } from './claude-turn-opening'
 

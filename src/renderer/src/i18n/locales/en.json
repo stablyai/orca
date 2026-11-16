@@ -107,6 +107,10 @@
     },
     "wslMoved": {
       "movedToHost": "Moved to {{distro}} host",
+      "sectionTitle": "Moved to WSL hosts ({{count}})",
+      "hide": "Hide from this list",
+      "hiddenToast": "{{name}} hidden from this list",
+      "hiddenToastDescription": "“Use on this computer again” stays in its menu under the {{distro}} host.",
       "useHere": "Use on this computer again",
       "useHereTitle": "Use {{name}} on this computer again?",
       "useHereDescription": "Orca will open this project here as it was before the move. Your code is not affected: it never moved. Changes made on the {{distro}} host since the move, such as new tabs and chats, stay on the host and do not come back. Projects moved with it come back too. The project also stays on the {{distro}} host until you remove it there. This window reloads.",
@@ -599,6 +603,13 @@
         "noContent": "No content to export",
         "timedOut": "Export timed out"
       }
+    },
+    "gitBlame": {
+      "uncommitted": "Uncommitted changes",
+      "openCommitFailed": "Failed to load commit diff",
+      "statusAriaLabel": "Git blame: {{summary}}",
+      "openCommitHint": "Click to open the commit",
+      "statusBarItem": "Git Blame"
     }
   },
   "githubChecks": {
@@ -752,7 +763,13 @@
         "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI.",
         "cursorToggleDescription": "Show Cursor plan usage when signed in through cursor-agent or Cursor IDE.",
         "zcodeToggleDescription": "Show ZCode Coding Plan quota usage.",
-        "museToggleDescription": "Show Muse subscription quota from the Muse CLI."
+        "museToggleDescription": "Show Muse subscription quota from the Muse CLI.",
+        "gitBlameTitle": "Git blame",
+        "gitBlameDescription": "Show who last changed the cursor line in the status bar.",
+        "gitBlameKeywordBlame": "blame",
+        "gitBlameKeywordAuthor": "author",
+        "gitBlameKeywordCommit": "commit",
+        "gitBlameToggleDescription": "Show the author and age of the cursor line. Click it to open the commit."
       },
       "menuBarIcon": {
         "description": "Keep an Orca shortcut and activity indicator in the macOS menu bar.",
@@ -1136,7 +1153,6 @@
       "defaultSurfaceKeptChat_other": "{{agents}} stay as chats, as you set.",
       "defaultSurfaceSetAllChat": "Set all to Chat",
       "defaultSurfaceSetAllTerminal": "Set all to Terminal",
-      "sameAsChoice": "Same as {{agent}} · {{choice}}",
       "modelListFallback": "Built-in list. Orca could not get a model list from this host.",
       "chatUnavailableOnWindows": "{{value0}} Chat isn't available on Windows yet, so {{value0}} opens in a terminal on this host. Chats on a macOS or Linux host still work.",
       "undetectedCommandHint": "If the {{agent}} CLI is installed outside PATH, enter the full path to its executable on this host.",
@@ -1172,9 +1188,6 @@
         "extraArgs": "Extra CLI arguments",
         "launchOptions": "Model and permissions",
         "savedLaunchOptions": "Saved options: {{value0}}. Older servers use their own permission settings."
-      },
-      "actionPermissions": {
-        "sameAsAgent": "Same as {{agent}}"
       }
     },
     "ssh": {
@@ -1374,7 +1387,13 @@
       "about": {
         "title": "About",
         "version": "Orca {{version}}"
-      }
+      },
+      "inlineBlameTitle": "Inline git blame",
+      "inlineBlameDescription": "Show who last changed the cursor line, and when, at the end of the line.",
+      "inlineBlameKeywordBlame": "blame",
+      "inlineBlameKeywordGit": "git",
+      "inlineBlameKeywordAuthor": "author",
+      "inlineBlameKeywordAnnotation": "annotation"
     },
     "openInApp": {
       "preset": {
@@ -1458,6 +1477,14 @@
       "keywordNewline": "newline",
       "keywordEndOfFile": "end of file",
       "62aa3336d9": "Insert final newline"
+    },
+    "editorEndOfLine": {
+      "title": "End of line",
+      "description": "Line ending for new files and files with no line breaks yet. Auto follows the system that runs the file’s workspace: LF for Linux, macOS, and WSL, CRLF for Windows. Files with line breaks keep theirs.",
+      "keywordLineEnding": "line ending",
+      "auto": "Auto",
+      "lf": "LF",
+      "crlf": "CRLF"
     },
     "repositoryFormatter": {
       "description": "Use this project’s formatter for Format on Save.",
@@ -21462,6 +21489,8 @@
       "thoughtForDuration": "Thought for {{duration}}",
       "explicitChatWsl": "Chat is not available in WSL. Open the agent in a terminal instead.",
       "explicitChatWslAddHost": "Chat is not available in a WSL folder opened from Windows. Add the distro as a WSL host (Add a project → Add remote host → Add WSL distro) to chat there, or open the agent in a terminal.",
+      "explicitChatWslMoveToHost": "Chat is not available in a WSL folder opened from Windows. Run the project on a WSL host to chat there, or open the agent in a terminal.",
+      "explicitChatWslRunAsHost": "Run {{distro}} as a host",
       "explicitChatSsh": "Chat is not available over SSH. Open the agent in a terminal instead.",
       "explicitChatUnavailable": "This workspace cannot run the chat. Check the agent installation or open it in a terminal.",
       "structuredSessionHostDeclined": "Opened {{value0}} in a terminal",
@@ -25513,7 +25542,6 @@
     "waitForImageUploads": "Wait for images to finish uploading, then retry Create PR."
   },
   "agentPicker": {
-    "catalogUnsupported": "{{agent}} models are unavailable on this host. You can keep your current choices or use Arguments.",
     "catalogUnsupportedLaunch": "{{agent}} models are unavailable on this host. Your current choices still apply.",
     "catalogFailed": "Could not load {{agent}} models. Close and reopen the agent picker to try again.",
     "catalogSignIn": "Sign in to {{agent}} to load its models, then close and reopen the agent picker.",
@@ -25532,16 +25560,23 @@
     "setByArguments": "Set by your Arguments",
     "searchModels": "Search models",
     "noModels": "No models match your search.",
-    "toggleArguments": "Toggle Arguments",
     "argumentsTerminalHint": "Only applies to terminal (CLI) launches",
     "chatChoicesNote": "{{agent}} model or effort choices without a CLI flag apply to chats.",
     "composedChoicesNote": "{{agent}} effort and speed choices are included in the model argument.",
     "searchAgentModels": "Search {{agent}} models…",
     "moreModelsWithCount": "More models ({{total}})",
-    "use": "Use",
     "select": "Select agent",
     "promptPlaceholder": "Add a prompt (optional): / for skills, @ for files",
-    "promptPlaceholderFilesOnly": "Add a prompt (optional): @ for files"
+    "promptPlaceholderFilesOnly": "Add a prompt (optional): @ for files",
+    "agentNotInstalled": "{{agent}} isn't installed on this machine.",
+    "agentNotInstalledOnHost": "{{agent}} isn't installed on this host.",
+    "installAgent": "Install {{agent}}",
+    "chatTag": "(Chat)",
+    "agents": "Agents",
+    "noChat": "No chat for {{agent}}",
+    "openIn": "Open as",
+    "chat": "Chat",
+    "cli": "CLI"
   },
   "automations": {
     "runFailures": {

@@ -424,7 +424,6 @@
       "defaultSurfaceKeptChat_other": "{{agents}}은(는) 설정한 대로 채팅으로 열립니다.",
       "defaultSurfaceSetAllChat": "모두 채팅으로 설정",
       "defaultSurfaceSetAllTerminal": "모두 터미널로 설정",
-      "sameAsChoice": "{{agent}}와 동일 · {{choice}}",
       "modelListFallback": "기본 제공 목록입니다. Orca가 이 호스트에서 모델 목록을 가져오지 못했습니다.",
       "chatUnavailableOnWindows": "{{value0}} Chat은 아직 Windows에서 사용할 수 없으므로 이 호스트에서는 {{value0}}이(가) 터미널에서 열립니다. macOS 또는 Linux 호스트의 채팅은 계속 사용할 수 있습니다.",
       "undetectedCommandHint": "{{agent}} CLI가 PATH 외부에 설치되어 있다면 이 호스트의 실행 파일 전체 경로를 입력하세요."
@@ -452,9 +451,6 @@
         "extraArgs": "추가 CLI 인수",
         "launchOptions": "모델 및 권한",
         "savedLaunchOptions": "저장된 옵션: {{value0}}. 이전 서버는 서버의 권한 설정을 사용합니다."
-      },
-      "actionPermissions": {
-        "sameAsAgent": "{{agent}}와(과) 동일"
       }
     },
     "ssh": {
@@ -20680,6 +20676,10 @@
     },
     "wslMoved": {
       "movedToHost": "{{distro}} 호스트로 이동됨",
+      "sectionTitle": "WSL 호스트로 이동됨 ({{count}})",
+      "hide": "이 목록에서 숨기기",
+      "hiddenToast": "{{name}}을(를) 이 목록에서 숨겼습니다",
+      "hiddenToastDescription": "‘이 컴퓨터에서 다시 사용’은 {{distro}} 호스트 아래 메뉴에 남아 있습니다.",
       "useHere": "이 컴퓨터에서 다시 사용",
       "useHereTitle": "{{name}}을(를) 이 컴퓨터에서 다시 사용할까요?",
       "useHereDescription": "Orca가 이 프로젝트를 이동 전 상태 그대로 여기에서 엽니다. 코드에는 영향이 없습니다. 코드는 이동되지 않았습니다. 이동 후 {{distro}} 호스트에서 만든 새 탭이나 채팅 같은 변경 사항은 호스트에 남고 돌아오지 않습니다. 함께 이동한 프로젝트도 함께 돌아옵니다. 프로젝트는 {{distro}} 호스트에서 제거할 때까지 그곳에도 남아 있습니다. 이 창이 다시 로드됩니다.",
@@ -22796,7 +22796,6 @@
     }
   },
   "agentPicker": {
-    "catalogUnsupported": "이 호스트에서는 {{agent}} 모델을 사용할 수 없습니다. 현재 선택을 유지하거나 인수를 사용할 수 있습니다.",
     "catalogUnsupportedLaunch": "이 호스트에서는 {{agent}} 모델을 사용할 수 없습니다. 현재 선택은 그대로 적용됩니다.",
     "catalogFailed": "{{agent}} 모델을 불러오지 못했습니다. 에이전트 선택기를 닫았다가 다시 열어 보세요.",
     "catalogSignIn": "{{agent}}에 로그인하여 모델을 불러온 후 에이전트 선택기를 다시 여세요.",
@@ -22812,11 +22811,9 @@
     "setByArguments": "인수로 설정됨",
     "searchModels": "모델 검색",
     "noModels": "검색과 일치하는 모델이 없습니다.",
-    "toggleArguments": "인수 표시 전환",
     "argumentsTerminalHint": "터미널(CLI) 실행에만 적용",
     "searchAgentModels": "{{agent}} 모델 검색…",
     "moreModelsWithCount": "모델 더 보기 ({{total}})",
-    "use": "사용",
     "select": "에이전트 선택",
     "promptPlaceholder": "프롬프트 추가(선택사항): 스킬은 /, 파일은 @",
     "promptPlaceholderFilesOnly": "프롬프트 추가(선택사항): 파일은 @",

@@ -5,6 +5,8 @@ export type SessionOptionValue = string | boolean
 export type SessionOptionSelectChoice = {
   value: string
   label: string
+  /** Text for a compact segment; `label` stays its accessible name. */
+  shortLabel?: string
   description?: string
   /** Folded under More models; a matching search still lists it. */
   legacy?: true

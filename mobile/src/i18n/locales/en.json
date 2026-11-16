@@ -1471,7 +1471,8 @@
       "copyCode": "Copy code",
       "openImage": "Open image",
       "wrapLines": "Wrap lines",
-      "disableLineWrap": "Disable line wrap"
+      "disableLineWrap": "Disable line wrap",
+      "codeLabel": "Code"
     },
     "markdownCallout": {
       "note": "Note",

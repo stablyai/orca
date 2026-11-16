@@ -1,3 +1,5 @@
+import { removeChromiumDisabledSessionBus } from '../../../pty/shell-startup/chromium-session-bus-env'
+
 // Allowlist worker environment to exclude shell/CI credentials from third-party code.
 
 const WORKER_ENV_ALLOWLIST = [
@@ -11,6 +13,10 @@ const WORKER_ENV_ALLOWLIST = [
   'TMPDIR',
   'TEMP',
   'TMP',
+  // Session socket pointers (not credentials) so git credential helpers and ssh-agent can connect.
+  'XDG_RUNTIME_DIR',
+  'DBUS_SESSION_BUS_ADDRESS',
+  'SSH_AUTH_SOCK',
   // Windows Node/libuv need DLL and system-root lookup variables.
   'SYSTEMROOT',
   'SYSTEMDRIVE',
@@ -41,6 +47,7 @@ export function buildPluginWorkerEnv(
       env[key === 'SYSTEMROOT' ? 'SystemRoot' : key] = value
     }
   }
+  removeChromiumDisabledSessionBus(env)
   env.ELECTRON_RUN_AS_NODE = '1'
   return env
 }

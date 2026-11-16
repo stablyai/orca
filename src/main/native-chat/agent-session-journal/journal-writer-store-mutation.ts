@@ -25,7 +25,7 @@ import { readJournalSqlUsageLimitContinueIdentity } from './journal-sql-status-c
 import {
   attributeAgentSessionRuntimeRecord,
   type AgentSessionRuntimeFacts
-} from '../../runtime/agent-session/agent-session-runtime-attribution'
+} from '../../runtime/agent-session/records/agent-session-runtime-attribution'
 
 export function emptyJournalWriterStoreRows(): AgentSessionStoreRowWrites {
   return {
