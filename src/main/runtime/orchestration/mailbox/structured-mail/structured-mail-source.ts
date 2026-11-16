@@ -58,7 +58,8 @@ export function structuredMailSource(input: {
         input.db,
         input.senderSnapshot,
         reported?.kind === 'valid' ? reported.dispatchId : undefined,
-        group[0]!.message.created_at
+        // The oldest message decides, so mail sent before a rebind never takes the new coordinator.
+        group.map(({ message }) => message.created_at).toSorted()[0]
       )
     const relations = new Map<string, AgentMessageSender['relation']>()
     const values = group.map(({ message, report }) => {
