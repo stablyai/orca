@@ -12,7 +12,10 @@ import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-typ
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { WslMovedProject } from '../../../../shared/wsl-move/wsl-moved-project'
 
-import { type ExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
+import {
+  type ExecutionHostId,
+  parseExecutionHostId
+} from '../../../../shared/execution-host/execution-host'
 import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import {
   getRepoIdFromWorktreeId,

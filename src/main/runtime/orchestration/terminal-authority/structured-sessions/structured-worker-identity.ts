@@ -6,7 +6,7 @@ import { randomUUID } from 'node:crypto'
 import { isDeepStrictEqual } from 'node:util'
 import { sessionCrewChanges } from '../../crew/crew-changes'
 import type { AgentSessionExecutionLocation } from '../../../../../shared/agent-session/lifecycle/agent-session-record'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host/execution-host'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId

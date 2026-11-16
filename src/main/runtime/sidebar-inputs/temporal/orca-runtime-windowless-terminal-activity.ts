@@ -3,7 +3,7 @@ import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/remote-runtime/se
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-list/feed/sidebar-inputs-switch'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { RuntimeTerminalSplit } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
-import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { parseExecutionHostId } from '../../../../shared/execution-host/execution-host'
 import { isRestoreSpawnIntent } from '../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import { parseWorkspaceKey } from '../../../../shared/workspace/identity/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'

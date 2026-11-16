@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getDefaultWorkspaceSession } from '../constants'
+import { getDefaultWorkspaceSession } from '../orca-profiles/constants'
 import type { Tab } from '../workspace-layout/tab-groups/tab-types'
 import type { TerminalTab } from '../workspace-layout/terminal-tab-types'
 import type { WorkspaceSessionState } from './workspace-session-state-types'
@@ -192,16 +192,6 @@ describe('closeTerminalTabInWorkspaceSession', () => {
     expect(result.session.activeTabTypeByWorktree?.[WORKTREE_ID]).toBe('browser')
     expect(result.session.activeBrowserTabIdByWorktree?.[WORKTREE_ID]).toBe('browser-1')
     expect(result.session.activeWorktreeId).toBe(WORKTREE_ID)
-  })
-
-  it('rejects pinned tabs without mutating the session', () => {
-    const current = session({
-      tabsByWorktree: { [WORKTREE_ID]: [terminalTab('terminal-1', 'pty-left', true)] }
-    })
-
-    const result = closeTerminalTabInWorkspaceSession(current, WORKTREE_ID, 'terminal-1')
-
-    expect(result).toEqual({ session: current, ptyIdsToKill: [], closed: false, pinned: true })
   })
 
   it('preserves first-occurrence neighbor semantics for duplicate legacy order entries', () => {

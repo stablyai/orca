@@ -29,7 +29,7 @@ import {
   type AiVaultGroup,
   type AiVaultScope
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
-import type { ExecutionHostScope } from '../../../../../../shared/execution-host'
+import type { ExecutionHostScope } from '../../../../../../shared/execution-host/execution-host'
 import '../session-list/ai-vault-session-filters'
 import {
   agentLabel,

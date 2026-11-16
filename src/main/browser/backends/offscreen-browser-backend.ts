@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { BrowserWindow } from 'electron'
-import '../../../shared/constants'
+import '../../../shared/orca-profiles/constants'
 import { ORCA_BROWSER_PARTITION } from '../../../shared/browser/browser-session-partition'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../../shared/browser/guest-lifecycle/browser-guest-web-preferences'
 import { mapSettledWithConcurrency } from '../../../shared/concurrency/map-with-concurrency'

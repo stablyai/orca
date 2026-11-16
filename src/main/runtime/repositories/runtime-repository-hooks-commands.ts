@@ -1,4 +1,7 @@
-import { getRepoDialableSshTargetId, isRepoOnCatalogHost } from '../../../shared/execution-host'
+import {
+  getRepoDialableSshTargetId,
+  isRepoOnCatalogHost
+} from '../../../shared/execution-host/execution-host'
 import { scopeHooksToRepoKind } from '../../../shared/folder-workspaces/folder-workspace-hooks'
 import { windowsFsPath } from '../../wsl/filesystem/wsl-unc-drive-fs-path'
 import { readFile } from 'node:fs/promises'

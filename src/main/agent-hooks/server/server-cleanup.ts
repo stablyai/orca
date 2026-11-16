@@ -11,7 +11,7 @@ import {
   ALL_EXECUTION_HOSTS_SCOPE,
   parseExecutionHostId,
   type ExecutionHostScope
-} from '../../../shared/execution-host'
+} from '../../../shared/execution-host/execution-host'
 import { worktreeIdsEqual } from '../../../shared/worktree/id'
 import { isLocalHookConnectionId } from '../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import type { EnrichedAgentHookEventPayload } from './server-types'

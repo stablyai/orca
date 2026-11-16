@@ -1,7 +1,7 @@
 import React from 'react'
 import { DetachedHeadBadge } from '@/components/DetachedHeadBadge'
 import { useWslHostDistro, WslHostMark } from '@/components/wsl-host-mark/WslHostMark'
-import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host'
+import { getWorktreeExecutionHostId } from '../../../../../../shared/execution-host/execution-host'
 import CacheTimer from '../activity/CacheTimer'
 import { TruncatedSidebarLabel } from '../../truncated-sidebar-label'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'

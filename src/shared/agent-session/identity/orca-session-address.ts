@@ -18,6 +18,16 @@ export function isOrcaSessionId(id: string): id is OrcaSessionId {
   return isAgentSessionId(id) && !isTerminalHandle(id)
 }
 
+/** A plain random UUID; the agent is on the record, never in the ID. */
+export function createOrcaSessionId(randomUuid: () => string): OrcaSessionId {
+  const id = randomUuid()
+  // Always true for a UUID; the check brands the id without a type assertion.
+  if (!isOrcaSessionId(id)) {
+    throw new Error(`Not an Orca session id: ${id}`)
+  }
+  return id
+}
+
 export function formatOrcaSessionAddress(orcaSessionId: OrcaSessionId): OrcaSessionAddress {
   const address = `${ORCA_SESSION_ADDRESS_PREFIX}${orcaSessionId}`
   // Always true for a checked id; the check brands the address without a type assertion.

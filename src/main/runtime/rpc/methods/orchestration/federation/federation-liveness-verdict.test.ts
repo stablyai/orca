@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { getDefaultWorkspaceSession } from '../../../../../../shared/constants'
+import { getDefaultWorkspaceSession } from '../../../../../../shared/orca-profiles/constants'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'

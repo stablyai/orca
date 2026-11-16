@@ -8,7 +8,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   normalizeExecutionHostId,
   type ExecutionHostId
-} from '../../shared/execution-host'
+} from '../../shared/execution-host/execution-host'
 import { normalizeAgentProviderSession } from '../../shared/agent-session/lifecycle/agent-session-resume'
 import { readAllWorktreeMetaForHost } from '../persistence/host-qualified-worktree-meta'
 import { folderWorkspaceKey } from '../../shared/workspace/identity/workspace-scope'

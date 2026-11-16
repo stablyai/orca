@@ -8,7 +8,7 @@ import {
 } from './access/filesystem-path-containment'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
 import { requireReachableGitRoute } from '../../providers/execution-host-provider-dispatch'
-import { getConnectionExecutionHostId } from '../../../shared/execution-host'
+import { getConnectionExecutionHostId } from '../../../shared/execution-host/execution-host'
 import { readWorktreeGitUnlessWslStopped } from './wsl-gated-worktree-git-read'
 
 export function registerFilesystemGitDiffHandlers(context: FilesystemHandlerContext): void {

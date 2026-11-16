@@ -16,7 +16,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   type ExecutionHostId
-} from '../../../../src/shared/execution-host'
+} from '../../../../src/shared/execution-host/execution-host'
 import {
   getShownWorkspaceViewSections,
   type WorkspaceViewOptionKey,

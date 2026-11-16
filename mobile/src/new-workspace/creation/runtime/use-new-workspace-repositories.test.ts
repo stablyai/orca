@@ -1,6 +1,6 @@
 import { act } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ExecutionHostId } from '../../../../../src/shared/execution-host'
+import type { ExecutionHostId } from '../../../../../src/shared/execution-host/execution-host'
 import { FakeSession } from '../../../transport/connection/mobile-endpoint-supervisor-test-fakes'
 import {
   hookMount,
