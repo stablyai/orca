@@ -1,5 +1,7 @@
+// @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest'
 import {
+  clearPairingInputFromAddressBar,
   decideWebPairingStartup,
   parseWebPairingInput,
   readPairingInputFromLocation,
@@ -77,3 +79,20 @@ function base64Alias(character: string): string {
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
   return alphabet[alphabet.indexOf(character) + 1]!
 }
+
+it('clears fragment and legacy query credentials while retaining the proxy route', () => {
+  const previous = window.location.href
+  try {
+    window.history.replaceState(
+      null,
+      '',
+      '/proxy/web-index.html?route=%72ed&code=legacy#pairing=current'
+    )
+    clearPairingInputFromAddressBar()
+    expect(window.location.pathname + window.location.search + window.location.hash).toBe(
+      '/proxy/web-index.html?route=%72ed'
+    )
+  } finally {
+    window.history.replaceState(null, '', previous)
+  }
+})
