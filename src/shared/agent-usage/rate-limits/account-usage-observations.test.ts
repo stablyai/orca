@@ -71,21 +71,31 @@ describe('indexAccountUsageObservations', () => {
       { accountId: 'b', rateLimits: failure }
     ])
 
-    expect(getObservedAccountUsage(observations, { accountId: 'b', ...host })).toBe(failure)
+    expect(getObservedAccountUsage(observations, { accountId: 'b', ...host })).toMatchObject({
+      status: 'error',
+      error: 'Sign in again to use this account.'
+    })
     expect(getObservedAccountUsage(observations, { accountId: 'a', ...host })).toBeNull()
   })
 
-  it('never lets a failed attempt claim windows kept from an unnamed reading', () => {
-    // An unattributed reading's windows were kept through b's failure.
+  it("keeps b's failure but not the windows or plan kept from an unnamed reading", () => {
+    // An unattributed reading's windows and plan were kept through b's failure.
     const kept: ProviderRateLimits = {
       ...reading(),
+      planType: 'pro',
       status: 'error',
       error: 'Sign in again.',
       usageMetadata: { attemptedAccount: { accountId: 'b', ...host } }
     }
     const observations = indexAccountUsageObservations(kept, [])
 
-    expect(getObservedAccountUsage(observations, { accountId: 'b', ...host })).toBeNull()
+    expect(getObservedAccountUsage(observations, { accountId: 'b', ...host })).toMatchObject({
+      status: 'error',
+      error: 'Sign in again.',
+      session: null,
+      planType: null
+    })
+    expect(getObservedAccountUsage(observations, { accountId: 'a', ...host })).toBeNull()
   })
 
   it('ignores a cached entry whose reading names another account', () => {

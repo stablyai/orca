@@ -1,7 +1,8 @@
 import type { UsageReadingAccount } from './rate-limit-types'
-import { hasUsageData } from '../display/usage-provider-windows'
 
-type StampedReading = Parameters<typeof hasUsageData>[0] & {
+type StampedReading = {
+  session: unknown
+  weekly: unknown
   status: string
   updatedAt: number
   usageMetadata?: {
@@ -31,13 +32,32 @@ export function isSameUsageSlot(
   return key !== null && right !== null && right !== undefined && key === slotKey(right)
 }
 
-// A failure is still the tried account's state, but windows kept from an unnamed reading are not its.
-function readingSlot(reading: StampedReading): UsageReadingAccount | undefined {
+// Windows and plan kept from an unnamed reading through a failed attempt belong to no one;
+// the failure itself is still the tried account's state.
+function readingSlot<T extends StampedReading>(
+  reading: T
+): { account: UsageReadingAccount; reading: T } | undefined {
   const metadata = reading.usageMetadata
   if (metadata?.readingAccount) {
-    return metadata.readingAccount
+    return { account: metadata.readingAccount, reading }
   }
-  return reading.status === 'ok' || hasUsageData(reading) ? undefined : metadata?.attemptedAccount
+  if (reading.status === 'ok' || !metadata?.attemptedAccount) {
+    return undefined
+  }
+  return {
+    account: metadata.attemptedAccount,
+    reading: {
+      ...reading,
+      session: null,
+      weekly: null,
+      fableWeekly: null,
+      monthly: null,
+      buckets: [],
+      planType: null,
+      extraUsage: null,
+      rateLimitResetCredits: null
+    } as T
+  }
 }
 
 /** Index by the slot each reading names, never by which row a roster marks selected: the
@@ -47,21 +67,16 @@ export function indexAccountUsageObservations<T extends StampedReading>(
   inactive: readonly { accountId: string; rateLimits: T | null }[] | null | undefined
 ): AccountUsageObservations<T> {
   const readings = new Map<string, T>()
-  const add = (reading: T | null | undefined, cacheId?: string): void => {
-    const account = reading ? readingSlot(reading) : undefined
-    const key = account ? slotKey(account) : null
+  const add = (stored: T | null | undefined, cacheId?: string): void => {
+    const slot = stored ? readingSlot(stored) : undefined
+    const key = slot ? slotKey(slot.account) : null
     // A cached entry must name the account it is cached under.
-    if (
-      !reading ||
-      !account ||
-      key === null ||
-      (cacheId !== undefined && cacheId !== account.accountId)
-    ) {
+    if (!slot || key === null || (cacheId !== undefined && cacheId !== slot.account.accountId)) {
       return
     }
     const current = readings.get(key)
-    if (!current || current.updatedAt < reading.updatedAt) {
-      readings.set(key, reading)
+    if (!current || current.updatedAt < slot.reading.updatedAt) {
+      readings.set(key, slot.reading)
     }
   }
   add(active)
