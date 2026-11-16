@@ -114,7 +114,8 @@ it.skipIf(process.platform === 'win32').each([
     prompt: String.raw`C:\reference\instructions.md '$HOME'; $(exit 91)`
   },
   { agentId: 'kimi' as const, prompt: String.raw`\\wsl$\Foreign\private\instructions.md` },
-  { agentId: 'custom' as const, prompt: String.raw`\\wsl$\Foreign\private\instructions.md` }
+  { agentId: 'custom' as const, prompt: String.raw`\\wsl$\Foreign\private\instructions.md` },
+  { agentId: 'copilot' as const, prompt: String.raw`C:\reference\instructions.md` }
 ])(
   'preserves $agentId prompt argv ($prompt) while translating separate path operands',
   async ({ agentId, prompt }) => {
@@ -139,7 +140,7 @@ it.skipIf(process.platform === 'win32').each([
     )
     writeFileSync(
       reader,
-      `const fs=require('node:fs'); fs.writeFileSync(${JSON.stringify(report)}, JSON.stringify(process.argv.slice(2))); console.log(${JSON.stringify(agentId === 'kimi' ? JSON.stringify({ role: 'assistant', content: 'Preserve task text' }) : 'Preserve task text')});`
+      `const fs=require('node:fs'); const args=process.argv.slice(2); if (${agentId === 'copilot'} && args.includes('--model')) { console.error('Error: Model "auto" from --model flag is not available.'); process.exit(1); } fs.writeFileSync(${JSON.stringify(report)}, JSON.stringify(args)); console.log(${JSON.stringify(agentId === 'kimi' ? JSON.stringify({ role: 'assistant', content: 'Preserve task text' }) : 'Preserve task text')});`
     )
     const artifacts: string[] = []
     // Exercise the real planner, policy, file staging and login command; replace only wsl.exe.
@@ -156,7 +157,7 @@ it.skipIf(process.platform === 'win32').each([
       const result = await runGenerationRequest({
         params: {
           agentId,
-          model: 'default',
+          model: agentId === 'copilot' ? 'auto' : 'default',
           ...(agentId === 'custom'
             ? {
                 customAgentCommand: String.raw`TASK_ARGV=1 ${quotePosixShell(process.execPath)} ${quotePosixShell(reader)} C:/wrappers/agent.cjs '{prompt}' 'C:/{prompt}:{prompt}'`,
@@ -164,7 +165,10 @@ it.skipIf(process.platform === 'win32').each([
               }
             : {
                 agentCommandOverride: 'review_agent C:/wrappers/agent.cjs',
-                agentArgs: '--add-dir C:/reference/instructions.md'
+                agentArgs:
+                  agentId === 'copilot'
+                    ? '--effort low --reasoning-effort medium --effort high --add-dir C:/reference/instructions.md'
+                    : '--add-dir C:/reference/instructions.md'
               })
         },
         prompt,
@@ -179,6 +183,11 @@ it.skipIf(process.platform === 'win32').each([
       })
       expect(result).toMatchObject({ success: true, rawOutput: 'Preserve task text' })
       const args = JSON.parse(readFileSync(report, 'utf8'))
+      if (agentId === 'copilot') {
+        expect(args).not.toContain('--model')
+        expect(args).not.toContain('--effort')
+        expect(args).not.toContain('--reasoning-effort')
+      }
       expect(args[0]).toBe('/mnt/c/wrappers/agent.cjs')
       if (agentId === 'custom') {
         expect(args.slice(1)).toEqual([prompt, `C:/${prompt}:${prompt}`, '--model', 'default'])
