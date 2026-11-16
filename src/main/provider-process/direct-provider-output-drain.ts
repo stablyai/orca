@@ -30,8 +30,8 @@ export function pipeDirectProviderOutput(
 }
 
 export function drainDirectProviderOutput(
-  stdout: Readable | null,
-  stderr: Readable | null,
+  stdout: Readable | null | undefined,
+  stderr: Readable | null | undefined,
   outputStdout: PassThrough,
   outputStderr: PassThrough
 ): Promise<void> {
@@ -54,7 +54,9 @@ export function drainDirectProviderOutput(
       })
     }
   }
-  const sources = [stdout, stderr].filter((stream): stream is Readable => stream !== null)
+  const sources = [stdout, stderr].filter(
+    (stream): stream is Readable => stream !== null && stream !== undefined
+  )
   return drainOutput(sources, [outputStdout, outputStderr]).finally(async () => {
     const finalReaders: (() => void)[] = []
     for (const [source, output] of [

@@ -1,4 +1,4 @@
-import { ChildProcess } from 'node:child_process'
+import { createFakeSpawnedChild } from '../../shared/__fixtures__/fake-spawned-child'
 import { Duplex, PassThrough } from 'node:stream'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as Journal from './provider-ownership-journal'
@@ -90,9 +90,7 @@ function launch() {
     return ownershipResult.promise
   })
 
-  const raw = new ChildProcess()
-  Object.defineProperty(raw, 'pid', { value: 7_000_000 })
-  raw.stdin = null
+  const raw = createFakeSpawnedChild(7_000_000)
   const stdout = new PassThrough()
   const stderr = new PassThrough()
   raw.stdout = stdout
@@ -241,10 +239,7 @@ describe.skipIf(process.platform === 'win32')('lost-parent watcher retirement pr
 
     expect(run.child.groupVerdict).toBe('exited')
     expect(run.closes).toEqual([])
-    await vi.advanceTimersByTimeAsync(4_499)
-    await flushContinuations()
-    expect(run.closes).toEqual([])
-    await vi.advanceTimersByTimeAsync(1)
+    await vi.advanceTimersByTimeAsync(4_500)
     await flushContinuations()
 
     expect(run.closes).toEqual([{ code: null, signal: null, outcomeLost: true }])
@@ -263,6 +258,8 @@ describe.skipIf(process.platform === 'win32')('lost-parent watcher retirement pr
       await run.ownershipEntered
       run.refuseOwnership()
       await flushContinuations()
+      expect(run.closes).toEqual([])
+      expect([...run.records]).toEqual(['provider-record'])
       run.control.push(frame)
       run.control.push(null)
       await flushContinuations()

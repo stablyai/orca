@@ -68,7 +68,7 @@ export class DirectProviderChild extends EventEmitter implements ProviderChild {
   ) {
     super()
     this.stop = new DirectProviderStop(spec, () => this.control, this.forceReap.bind(this))
-    const [control, gate, rawStatus, , destination] = raw.stdio.slice(3)
+    const [control, gate, rawStatus, , destination] = raw.stdio?.slice(3) ?? []
     const status = destination instanceof Writable ? rawStatus : null
     this.control = control instanceof Duplex ? control : undefined
     this.gate = gate instanceof Writable ? gate : undefined

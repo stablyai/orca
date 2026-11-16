@@ -1,4 +1,4 @@
-import { ChildProcess } from 'node:child_process'
+import { createFakeSpawnedChild } from '../../shared/__fixtures__/fake-spawned-child'
 import { Duplex, PassThrough } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
 import { DirectProviderChild } from './direct-provider-child'
@@ -43,10 +43,8 @@ function createControl() {
 }
 
 function launch(index: number) {
-  const raw = new ChildProcess()
   const parentPid = 7_000_000 + index * 3
-  Object.defineProperty(raw, 'pid', { value: parentPid })
-  raw.stdin = null
+  const raw = createFakeSpawnedChild(parentPid)
   const destination = new PassThrough()
   const stdout = new PassThrough()
   const stderr = new PassThrough()
@@ -141,4 +139,33 @@ it('closes public input as soon as its native destination closes', async () => {
   run.stderr.end()
   run.outcome.end('{"code":0,"signal":null}\n')
   await run.closed
+})
+
+it.each(['EMFILE', 'ENFILE'])('reports a processless %s launch without throwing', async (code) => {
+  const raw = createFakeSpawnedChild()
+  for (const stream of [raw.stdin, raw.stdout, raw.stderr]) {
+    stream.destroy()
+  }
+  // EMFILE/ENFILE return before Node assigns any PID or stdio properties.
+  for (const name of ['pid', 'stdin', 'stdout', 'stderr', 'stdio']) {
+    Object.defineProperty(raw, name, { value: undefined })
+  }
+  const child = new DirectProviderChild(raw, spec, 'test-boot')
+  const errors: Error[] = []
+  child.on('error', (error) => errors.push(error))
+  const closed = new Promise<void>((resolve) => child.once('close', () => resolve()))
+  const failure = Object.assign(new Error(`spawn native-parent ${code}`), { code })
+  process.nextTick(() => {
+    raw.emit('error', failure)
+    raw.emit('close', -1, null)
+  })
+
+  await expect(child.ready).rejects.toMatchObject({ code, providerLaunchFailed: true })
+  await closed
+  expect(errors).toEqual([failure])
+  expect(child.exitCode).toBe(-1)
+  expect(child.stdin.destroyed).toBe(true)
+  // A subsequent transport error must remain handled after retirement.
+  raw.emit('error', new Error('late parent error'))
+  expect(errors).toEqual([failure])
 })
