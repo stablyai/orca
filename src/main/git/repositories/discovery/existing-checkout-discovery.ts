@@ -23,6 +23,7 @@ const HOME_CHECKOUT_ROOTS = ['git', 'orca', 'src', 'code', 'projects', 'repos', 
 const ROOT_SCAN_DEPTH = 3
 const ROOT_SCAN_TIMEOUT_MS = 5_000
 const ROOT_SCAN_MAX_CANDIDATES = 300
+const ROOT_SCAN_DEADLINE_MS = ROOT_SCAN_TIMEOUT_MS + 1_000
 const MAX_REMOTE_PROBES = 60
 const REMOTE_PROBE_CONCURRENCY = 6
 const REMOTE_PROBE_TIMEOUT_MS = 3_000
@@ -48,26 +49,43 @@ async function scanRoot(
   root: string,
   isCandidate: (path: string) => Promise<boolean>
 ): Promise<NestedRepoCandidate[]> {
+  const controller = new AbortController()
+  let latest: NestedRepoCandidate[] = []
+  let timer: ReturnType<typeof setTimeout> | undefined
+  // The scanner checks its own timeout only between awaits; a hung mount must not hold the dialog.
+  const deadline = new Promise<NestedRepoCandidate[]>((resolveDeadline) => {
+    timer = setTimeout(() => {
+      controller.abort()
+      resolveDeadline(latest)
+    }, ROOT_SCAN_DEADLINE_MS)
+  })
+  const scan = scanNestedRepos({
+    path: root,
+    signal: controller.signal,
+    options: {
+      maxDepth: ROOT_SCAN_DEPTH,
+      maxRepos: ROOT_SCAN_MAX_CANDIDATES,
+      timeoutMs: ROOT_SCAN_TIMEOUT_MS
+    },
+    onProgress: (progress) => {
+      latest = progress.repos
+    },
+    filesystem: {
+      readDirectory: readLocalDirectory,
+      joinPath: join,
+      basename,
+      hasGitMarker: isCandidate,
+      // A dotfiles repo at home would otherwise make every root look like one checkout.
+      isSelectedPathGitRepo: () => false
+    }
+  }).then(
+    (result) => result.repos,
+    () => latest
+  )
   try {
-    const scan = await scanNestedRepos({
-      path: root,
-      options: {
-        maxDepth: ROOT_SCAN_DEPTH,
-        maxRepos: ROOT_SCAN_MAX_CANDIDATES,
-        timeoutMs: ROOT_SCAN_TIMEOUT_MS
-      },
-      filesystem: {
-        readDirectory: readLocalDirectory,
-        joinPath: join,
-        basename,
-        hasGitMarker: isCandidate,
-        // A dotfiles repo at home would otherwise make every root look like one checkout.
-        isSelectedPathGitRepo: () => false
-      }
-    })
-    return scan.repos
-  } catch {
-    return []
+    return await Promise.race([scan, deadline])
+  } finally {
+    clearTimeout(timer)
   }
 }
 
@@ -115,8 +133,11 @@ export async function findExistingCheckouts(
 ): Promise<ExistingCheckoutSuggestion[]> {
   const names = existingCheckoutFolderNames(args.projectName, args.remoteUrl)
   const isNamed = (path: string): boolean => names.has(basename(path).toLowerCase())
-  // Any git marker stops descent so worktrees are not walked; only primary checkouts are kept.
-  const isCandidate = args.kind === 'git' ? hasGitMarker : async (path: string) => isNamed(path)
+  // Any git marker stops descent so checkouts and worktrees are never walked.
+  const isCandidate =
+    args.kind === 'git'
+      ? hasGitMarker
+      : async (path: string) => isNamed(path) || (await hasGitMarker(path))
   const roots = checkoutRootsFor(args.workspaceDir, args.extraRoots ?? [])
   const found = (await Promise.all(roots.map((root) => scanRoot(root, isCandidate)))).flat()
   const deduped = [...new Map(found.map((repo) => [repo.path, repo])).values()]
@@ -127,7 +148,7 @@ export async function findExistingCheckouts(
             (await isPrimaryCheckout(repo.path)) ? repo : null
           )
         ).filter((repo): repo is NestedRepoCandidate => repo !== null)
-      : deduped
+      : deduped.filter((repo) => isNamed(repo.path))
   const probeRemotes = args.kind === 'git' && Boolean(args.remoteUrl)
   // Same-named checkouts are the likeliest remote matches, so they are probed first.
   const ordered = unique.sort(
