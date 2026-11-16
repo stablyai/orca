@@ -44,7 +44,10 @@ export function antigravitySignInServers({
     body: (server: AcpAgentConnection) => Promise<T>
   ): Promise<T> => {
     const connect = await connectServer()
-    const server = connect(launch, { clientInfo: acpClientInfo(launch.spec, launch.version ?? null), signIn: watch })
+    const server = connect(launch, {
+      clientInfo: acpClientInfo(launch.spec, launch.version ?? null),
+      signIn: watch
+    })
     spawned(server)
     const stop = (): void => void server.close().catch(() => false)
     signal.addEventListener('abort', stop, { once: true })
