@@ -232,11 +232,15 @@ it('protects active page features from the private observer and at idle admissio
     // Showing the page does not clear the background activity latch.
     setBrowserGuestSemanticVisibility(guest, true)
     expect(admission()).toBe('background-activity')
-    // A new document starts clean; its first title is a baseline, not activity.
+    // A new document starts clean, and its later background updates still count.
     setBrowserGuestSemanticVisibility(guest, false)
     guest.emit('did-navigate')
+    loading = true
     guest.emit('page-title-updated', {}, 'Other page')
+    loading = false
     expect(admission()).toBe('clean')
+    guest.emit('page-favicon-updated', {}, ['https://example.test/a.ico'])
+    expect(admission()).toBe('background-activity')
   } finally {
     stop()
     vi.useRealTimers()
