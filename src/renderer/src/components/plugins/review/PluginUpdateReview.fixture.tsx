@@ -278,3 +278,22 @@ export const toastMany = defineFixture({
     </div>
   )
 })
+
+// The community badge's trust advice, shown on hover.
+export const communityHover = defineFixture({
+  width: 560,
+  setup,
+  render: () => (
+    <Frame title="Review update to Mermaid Live">
+      <PluginUpdateReview
+        entry={mermaidEntry}
+        preview={mermaidNext}
+        installedManifest={mermaidManifest('0.4.0')}
+      />
+    </Frame>
+  ),
+  interact: async (frame) => {
+    frame.querySelector<HTMLElement>('[data-plugin-not-official]')?.focus()
+    await new Promise((resolve) => setTimeout(resolve, 400))
+  }
+})

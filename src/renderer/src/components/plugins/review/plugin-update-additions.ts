@@ -1,9 +1,8 @@
 import type { PluginMarketplaceHostInstallPreview } from '../../../../../preload/api/plugins/plugin-host-api'
 import type { PluginManifest } from '../../../../../shared/plugins/manifest/plugin-manifest'
-import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
 import type { Translate } from '@/i18n/use-translate'
 import { pluginCapabilityDescription } from '../presentation/plugin-capability-presentation'
-import { movedFromSource, sourceLabel, updateChanges } from './PluginUpdateCandidate'
+import { updateChanges } from './PluginUpdateCandidate'
 
 /**
  * What an update that needs approval adds, one named line each, as the review dialog and the
@@ -11,22 +10,20 @@ import { movedFromSource, sourceLabel, updateChanges } from './PluginUpdateCandi
  * "Approve & update" must have every line in hand before the button exists.
  */
 export function pluginUpdateAdditions(
-  installed: PluginHostListEntry | null | undefined,
   preview: PluginMarketplaceHostInstallPreview,
   installedManifest: PluginManifest | null,
   t: Translate
 ): { lines: string[]; compared: boolean } {
   // Why main's list: it compares whole grants, so a wider scope of a held kind is new too.
   const { capabilities, warnings } = updateChanges(preview, t, installedManifest)
-  const movedFrom = movedFromSource(installed, preview)
   return {
     lines: [
-      ...(movedFrom !== null
+      // Why no URLs: the version link opens the new repository's history, and "Source" names it.
+      ...(preview.repositoryMoved
         ? [
             t(
-              'auto.components.settings.PluginUpdateAllDialog.sourceMoved',
-              'New source: {{value0}} (was {{value1}})',
-              { value0: sourceLabel(preview.source), value1: movedFrom }
+              'auto.components.settings.PluginUpdateAllDialog.movedRepository',
+              'Comes from a different repository'
             )
           ]
         : []),

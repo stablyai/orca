@@ -14075,7 +14075,6 @@
           "updated": "Updated",
           "needsOrca": "Needs Orca {{value0}} or later",
           "current": "Already installed",
-          "sourceMoved": "New source: {{value0}} (was {{value1}})",
           "newShortcuts": "Keyboard shortcuts",
           "newCommands": "Commands",
           "newPanels": "Adds panels",
@@ -14092,7 +14091,8 @@
           "opensFileTypes": "Opens new file types: {{value0}}",
           "becomesDefaultEditor": "Becomes the default editor for {{value0}}",
           "needApproval": "Need your approval",
-          "readyToUpdate": "Ready to update"
+          "readyToUpdate": "Ready to update",
+          "movedRepository": "Comes from a different repository"
         },
         "PluginAuthor": {
           "publisher": "Publisher",
@@ -14277,7 +14277,8 @@
           "approve": "Approve & update",
           "uncompared": "Orca couldn’t compare this version with the one you approved. Check what it can access before you update.",
           "newInVersion": "New in this version:",
-          "titleMany": "Review {{value0}} updates"
+          "titleMany": "Review {{value0}} updates",
+          "history": "See its changes on GitHub"
         },
         "PluginNotOfficialWarning": {
           "unknownPublisher": "its publisher",
@@ -14285,7 +14286,8 @@
           "update": "Make sure you trust {{value0}} before updating. This plugin runs the publisher’s code inside Orca.",
           "installed": "Make sure you trust {{value0}}. This plugin runs the publisher’s code inside Orca.",
           "label": "Not an official plugin:",
-          "translations": "Translations can change any text in Orca. Make sure you trust {{value0}}."
+          "translations": "Translations can change any text in Orca. Make sure you trust {{value0}}.",
+          "community": "Community plugin"
         },
         "PluginUpdateReviewToast": {
           "movedTitle": "{{value0}} {{value1}} comes from a different repository",

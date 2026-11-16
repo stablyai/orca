@@ -12924,7 +12924,6 @@
           "updated": "已更新",
           "needsOrca": "需要 Orca {{value0}} 或更新版本",
           "current": "已安裝",
-          "sourceMoved": "新來源：{{value0}}（原為 {{value1}}）",
           "newShortcuts": "鍵盤快速鍵",
           "newCommands": "命令",
           "newPanels": "新增面板",
@@ -12940,14 +12939,16 @@
           "opensFileTypes": "開啟新的檔案類型：{{value0}}",
           "becomesDefaultEditor": "成為 {{value0}} 的預設編輯器",
           "needApproval": "需要你的核准",
-          "readyToUpdate": "可以更新"
+          "readyToUpdate": "可以更新",
+          "movedRepository": "來自另一個存放庫"
         },
         "PluginUpdateReview": {
           "title": "檢視 {{value0}} 的更新",
           "approve": "核准並更新",
           "uncompared": "Orca 無法將此版本與你核准的版本比較。更新前請檢查它可以存取的內容。",
           "newInVersion": "此版本新增：",
-          "titleMany": "審核 {{value0}} 個更新"
+          "titleMany": "審核 {{value0}} 個更新",
+          "history": "在 GitHub 上查看變更"
         },
         "PluginNotOfficialWarning": {
           "unknownPublisher": "其發布者",
@@ -12955,7 +12956,8 @@
           "update": "更新前請確認你信任 {{value0}}。此外掛會在 Orca 中執行發布者的程式碼。",
           "installed": "請確認你信任 {{value0}}。此外掛會在 Orca 中執行發布者的程式碼。",
           "label": "非官方外掛：",
-          "translations": "翻譯可以變更 Orca 中的任何文字。請確認你信任 {{value0}}。"
+          "translations": "翻譯可以變更 Orca 中的任何文字。請確認你信任 {{value0}}。",
+          "community": "社群外掛程式"
         },
         "PluginCardAction": {
           "installed": "已安裝",

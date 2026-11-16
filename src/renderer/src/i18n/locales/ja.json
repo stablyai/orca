@@ -13314,7 +13314,6 @@
           "newPanels": "パネルを追加します",
           "newRecipes": "マシンレシピ",
           "newShortcuts": "キーボードショートカット",
-          "sourceMoved": "新しいソース: {{value0}} (以前: {{value1}})",
           "update": "アップデート",
           "replacesAction": "Orca の {{value1}} の代わりに {{value0}} が実行されます",
           "newFileTypes": "開くファイルが変わります",
@@ -13324,7 +13323,8 @@
           "opensFileTypes": "新しいファイル形式を開きます: {{value0}}",
           "becomesDefaultEditor": "{{value0}} の既定のエディターになります",
           "needApproval": "承認が必要",
-          "readyToUpdate": "更新の準備完了"
+          "readyToUpdate": "更新の準備完了",
+          "movedRepository": "別のリポジトリから提供されます"
         },
         "PluginDetailInfo": {
           "previous": "以前のバージョン",
@@ -13442,7 +13442,8 @@
           "approve": "承認してアップデート",
           "uncompared": "Orca はこのバージョンを承認済みのバージョンと比較できませんでした。更新する前にアクセス内容を確認してください。",
           "newInVersion": "このバージョンの新機能:",
-          "titleMany": "{{value0}} 件の更新を確認"
+          "titleMany": "{{value0}} 件の更新を確認",
+          "history": "GitHub で変更を見る"
         },
         "PluginNotOfficialWarning": {
           "unknownPublisher": "公開元",
@@ -13450,7 +13451,8 @@
           "update": "アップデートする前に、{{value0}} を信頼できることを確認してください。このプラグインは公開元のコードを Orca 内で実行します。",
           "installed": "{{value0}} を信頼できることを確認してください。このプラグインは公開元のコードを Orca 内で実行します。",
           "label": "公式プラグインではありません:",
-          "translations": "翻訳は Orca 内のあらゆるテキストを変更できます。{{value0}} を信頼できることを確認してください。"
+          "translations": "翻訳は Orca 内のあらゆるテキストを変更できます。{{value0}} を信頼できることを確認してください。",
+          "community": "コミュニティプラグイン"
         },
         "pluginConsentCopy": {
           "addsCommands": "コマンドを追加します",

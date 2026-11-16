@@ -1,21 +1,14 @@
 import { Plus } from 'lucide-react'
 import type { PluginMarketplaceHostInstallPreview } from '../../../../../preload/api/plugins/plugin-host-api'
-import { splitQualifiedPluginKey } from '../../../../../shared/plugins/catalog/plugin-marketplace'
 import type { PluginManifest } from '../../../../../shared/plugins/manifest/plugin-manifest'
 import { pluginExecutionProfile } from '../../../../../shared/plugins/contributions/plugin-execution-profile'
 import { useTranslate } from '@/i18n/use-translate'
 import { Checkbox } from '../../ui/checkbox'
 import type { PluginListEntry } from '../list/plugin-list-entries'
 import { PluginRowArt } from '../list/PluginRowArt'
-import { pluginPublisherNotice } from '../presentation/plugin-publisher-trust'
-import { PluginNotOfficialWarning } from './PluginNotOfficialWarning'
-import { PluginPublisherBadge } from './PluginConsentProvenance'
+import { PluginUpdatePublisher, PluginUpdateVersions } from './PluginUpdateIdentity'
 import { AllAccess } from './PluginUpdateCandidate'
 import { pluginUpdateAdditions } from './plugin-update-additions'
-
-/** The publisher from the catalog key, never the manifest's own claim. */
-export const pluginKeyOwner = (pluginKey: string): string =>
-  splitQualifiedPluginKey(pluginKey)?.publisher ?? ''
 
 /** One "+" line per addition; shared by the review dialog and the toast. */
 export function PluginUpdateAdditionList({
@@ -57,20 +50,12 @@ export function PluginUpdateReview({
   const t = useTranslate()
   const installed = entry.installed
   const execution = pluginExecutionProfile(preview.manifest)
-  const { lines, compared } = pluginUpdateAdditions(installed, preview, installedManifest, t)
-  const notice = pluginPublisherNotice({
-    official: preview.official,
-    execution,
-    manifest: preview.manifest,
-    types: null
-  })
+  const { lines, compared } = pluginUpdateAdditions(preview, installedManifest, t)
   const checkboxId = `plugin-update-approve-${entry.pluginKey}`
   const name = (
     <>
       {entry.name}
-      <span className="ml-1.5 text-xs font-normal text-muted-foreground">
-        {installed?.version} → {preview.manifest.version}
-      </span>
+      <PluginUpdateVersions from={installed?.version} preview={preview} />
     </>
   )
 
@@ -86,11 +71,7 @@ export function PluginUpdateReview({
           ) : (
             <p className="truncate text-sm font-medium">{name}</p>
           )}
-          {/* Why the key's owner: it comes from the catalog, never the manifest's own claim. */}
-          <PluginPublisherBadge
-            official={preview.official}
-            publisher={pluginKeyOwner(entry.pluginKey)}
-          />
+          <PluginUpdatePublisher pluginKey={entry.pluginKey} preview={preview} />
         </div>
         {selection ? (
           <Checkbox
@@ -101,13 +82,6 @@ export function PluginUpdateReview({
           />
         ) : null}
       </div>
-      {notice !== 'none' ? (
-        <PluginNotOfficialWarning
-          notice={notice}
-          publisher={pluginKeyOwner(entry.pluginKey)}
-          moment="update"
-        />
-      ) : null}
       {compared ? null : (
         <p className="text-sm text-muted-foreground">
           {t(

@@ -15,11 +15,8 @@ import { pluginListEntryFromInstalled } from '../list/plugin-list-entries'
 import { PluginRowArt } from '../list/PluginRowArt'
 import { installReviewedUpdate, requiredNewerOrca } from '../state/plugin-update-approval'
 import { useOrcaVersion } from '../state/use-plugin-page-navigation'
-import { pluginExecutionProfile } from '../../../../../shared/plugins/contributions/plugin-execution-profile'
-import { pluginPublisherNotice } from '../presentation/plugin-publisher-trust'
-import { PluginNotOfficialWarning } from './PluginNotOfficialWarning'
-import { PluginPublisherBadge } from './PluginConsentProvenance'
-import { PluginUpdateAdditionList, pluginKeyOwner } from './PluginUpdateReview'
+import { PluginUpdatePublisher, PluginUpdateVersions } from './PluginUpdateIdentity'
+import { PluginUpdateAdditionList } from './PluginUpdateReview'
 import { pluginUpdateAdditions, readInstalledManifest } from './plugin-update-additions'
 
 /** Plugins the toast shows; more than this goes to the dialog, with no approval in the toast. */
@@ -60,16 +57,8 @@ function ToastPlugin({
 }): React.JSX.Element {
   const t = useTranslate()
   const { lines, compared } = preview
-    ? pluginUpdateAdditions(installed, preview, installedManifest, t)
+    ? pluginUpdateAdditions(preview, installedManifest, t)
     : { lines: [], compared: true }
-  const publisherNotice = preview
-    ? pluginPublisherNotice({
-        official: preview.official,
-        execution: pluginExecutionProfile(preview.manifest),
-        manifest: preview.manifest,
-        types: null
-      })
-    : 'none'
   return (
     <div data-plugin-update-toast={notice.pluginKey} className="space-y-1.5">
       <div className="flex items-center gap-2">
@@ -77,25 +66,19 @@ function ToastPlugin({
         <div className="min-w-0 flex-1 space-y-0.5">
           <p className="truncate text-sm font-medium">
             {notice.name}
-            <span className="ml-1.5 text-xs font-normal text-muted-foreground">
-              {installed?.version ? `${installed.version} → ` : ''}
-              {notice.version}
-            </span>
+            {preview ? (
+              <PluginUpdateVersions from={installed?.version} preview={preview} />
+            ) : (
+              <span className="ml-1.5 text-xs font-normal text-muted-foreground">
+                {notice.version}
+              </span>
+            )}
           </p>
-          <PluginPublisherBadge
-            official={preview?.official ?? false}
-            publisher={pluginKeyOwner(notice.pluginKey)}
-          />
+          {preview ? (
+            <PluginUpdatePublisher pluginKey={notice.pluginKey} preview={preview} />
+          ) : null}
         </div>
       </div>
-      {/* Why here too: approving in the toast must not skip the dialog's publisher warning. */}
-      {publisherNotice !== 'none' ? (
-        <PluginNotOfficialWarning
-          notice={publisherNotice}
-          publisher={pluginKeyOwner(notice.pluginKey)}
-          moment="update"
-        />
-      ) : null}
       {preview && !compared ? (
         <p className="text-xs text-muted-foreground">
           {t(

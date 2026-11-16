@@ -13347,7 +13347,6 @@
           "newPanels": "添加面板",
           "newRecipes": "机器配方",
           "newShortcuts": "键盘快捷键",
-          "sourceMoved": "新来源：{{value0}}（原为 {{value1}}）",
           "update": "更新",
           "replacesAction": "{{value0}} 代替 Orca 自带的 {{value1}} 运行",
           "newFileTypes": "更改它打开的文件",
@@ -13357,7 +13356,8 @@
           "opensFileTypes": "打开新的文件类型：{{value0}}",
           "becomesDefaultEditor": "成为 {{value0}} 的默认编辑器",
           "needApproval": "需要你的批准",
-          "readyToUpdate": "可以更新"
+          "readyToUpdate": "可以更新",
+          "movedRepository": "来自另一个仓库"
         },
         "PluginDetailInfo": {
           "previous": "上一版本",
@@ -13442,7 +13442,8 @@
           "approve": "批准并更新",
           "uncompared": "Orca 无法将此版本与你批准的版本进行比较。更新前请检查它可以访问的内容。",
           "newInVersion": "此版本新增：",
-          "titleMany": "审核 {{value0}} 个更新"
+          "titleMany": "审核 {{value0}} 个更新",
+          "history": "在 GitHub 上查看更改"
         },
         "PluginNotOfficialWarning": {
           "unknownPublisher": "其发布者",
@@ -13450,7 +13451,8 @@
           "update": "更新前请确认你信任 {{value0}}。此插件会在 Orca 中运行发布者的代码。",
           "installed": "请确认你信任 {{value0}}。此插件会在 Orca 中运行发布者的代码。",
           "label": "非官方插件：",
-          "translations": "翻译可以更改 Orca 中的任何文字。请确认你信任 {{value0}}。"
+          "translations": "翻译可以更改 Orca 中的任何文字。请确认你信任 {{value0}}。",
+          "community": "社区插件"
         },
         "pluginConsentCopy": {
           "addsCommands": "添加命令",

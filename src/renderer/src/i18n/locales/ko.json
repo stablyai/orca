@@ -12614,7 +12614,6 @@
           "newPanels": "패널을 추가합니다",
           "newRecipes": "머신 레시피",
           "newShortcuts": "키보드 단축키",
-          "sourceMoved": "새 소스: {{value0}} (이전 {{value1}})",
           "update": "업데이트",
           "newFileTypes": "여는 파일이 바뀝니다",
           "newHooks": "Orca와 에이전트의 동작을 변경하거나 중지할 수 있습니다",
@@ -12623,7 +12622,8 @@
           "opensFileTypes": "새 파일 형식을 엽니다: {{value0}}",
           "becomesDefaultEditor": "{{value0}}의 기본 편집기가 됩니다",
           "needApproval": "승인 필요",
-          "readyToUpdate": "업데이트 준비됨"
+          "readyToUpdate": "업데이트 준비됨",
+          "movedRepository": "다른 저장소에서 제공됩니다"
         },
         "PluginDetailInfo": {
           "previous": "이전 버전",
@@ -12738,7 +12738,8 @@
           "approve": "승인 후 업데이트",
           "uncompared": "Orca가 이 버전을 승인한 버전과 비교하지 못했습니다. 업데이트하기 전에 접근 범위를 확인하세요.",
           "newInVersion": "이 버전의 새로운 점:",
-          "titleMany": "업데이트 {{value0}}개 검토"
+          "titleMany": "업데이트 {{value0}}개 검토",
+          "history": "GitHub에서 변경 사항 보기"
         },
         "PluginNotOfficialWarning": {
           "unknownPublisher": "게시자",
@@ -12746,7 +12747,8 @@
           "update": "업데이트하기 전에 {{value0}}을(를) 신뢰할 수 있는지 확인하세요. 이 플러그인은 게시자의 코드를 Orca 안에서 실행합니다.",
           "installed": "{{value0}}을(를) 신뢰할 수 있는지 확인하세요. 이 플러그인은 게시자의 코드를 Orca 안에서 실행합니다.",
           "label": "공식 플러그인이 아닙니다:",
-          "translations": "번역은 Orca의 모든 텍스트를 바꿀 수 있습니다. {{value0}}을(를) 신뢰할 수 있는지 확인하세요."
+          "translations": "번역은 Orca의 모든 텍스트를 바꿀 수 있습니다. {{value0}}을(를) 신뢰할 수 있는지 확인하세요.",
+          "community": "커뮤니티 플러그인"
         },
         "pluginConsentCopy": {
           "addsCommands": "명령을 추가합니다",

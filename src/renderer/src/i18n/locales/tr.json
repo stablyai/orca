@@ -13216,7 +13216,6 @@
           "updated": "Güncellendi",
           "needsOrca": "Orca {{value0}} veya üzeri gerekir",
           "current": "Zaten yüklü",
-          "sourceMoved": "Yeni kaynak: {{value0}} (önceki: {{value1}})",
           "newShortcuts": "Klavye kısayolları",
           "newCommands": "Komutlar",
           "newPanels": "Paneller ekler",
@@ -13232,14 +13231,16 @@
           "opensFileTypes": "Yeni dosya türlerini açar: {{value0}}",
           "becomesDefaultEditor": "{{value0}} için varsayılan düzenleyici olur",
           "needApproval": "Onayınızı bekliyor",
-          "readyToUpdate": "Güncellemeye hazır"
+          "readyToUpdate": "Güncellemeye hazır",
+          "movedRepository": "Farklı bir depodan geliyor"
         },
         "PluginUpdateReview": {
           "title": "{{value0}} güncellemesini incele",
           "approve": "Onayla ve güncelle",
           "uncompared": "Orca bu sürümü onayladığınız sürümle karşılaştıramadı. Güncellemeden önce nelere erişebildiğini kontrol edin.",
           "newInVersion": "Bu sürümde yeni:",
-          "titleMany": "{{value0}} güncellemeyi incele"
+          "titleMany": "{{value0}} güncellemeyi incele",
+          "history": "Değişiklikleri GitHub’da gör"
         },
         "PluginNotOfficialWarning": {
           "unknownPublisher": "yayıncı",
@@ -13247,7 +13248,8 @@
           "update": "Güncellemeden önce {{value0}} tarafına güvendiğinizden emin olun. Bu eklenti, yayıncının kodunu Orca içinde çalıştırır.",
           "installed": "{{value0}} tarafına güvendiğinizden emin olun. Bu eklenti, yayıncının kodunu Orca içinde çalıştırır.",
           "label": "Resmi bir eklenti değil:",
-          "translations": "Çeviriler Orca içindeki her metni değiştirebilir. {{value0}} tarafına güvendiğinizden emin olun."
+          "translations": "Çeviriler Orca içindeki her metni değiştirebilir. {{value0}} tarafına güvendiğinizden emin olun.",
+          "community": "Topluluk eklentisi"
         },
         "PluginCardAction": {
           "installed": "Yüklendi",

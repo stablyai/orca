@@ -1,6 +1,5 @@
 import { Check, ChevronDown } from 'lucide-react'
 import type { PluginMarketplaceHostInstallPreview } from '../../../../../preload/api/plugins/plugin-host-api'
-import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
 import type { PluginManifest } from '../../../../../shared/plugins/manifest/plugin-manifest'
 import type { pluginExecutionProfile } from '../../../../../shared/plugins/contributions/plugin-execution-profile'
 import { reachablePluginCapabilities } from '../../../../../shared/plugins/capabilities/plugin-capability-reach'
@@ -28,18 +27,6 @@ export type UpdateCandidate = {
   needsOrca: string | null
   /** Read with the preview, so a review's lines are complete before it can be approved. */
   installedManifest: PluginManifest | null
-}
-
-/** The installed repository when main found the catalog now points the update somewhere else. */
-export function movedFromSource(
-  installed: Pick<PluginHostListEntry, 'source'> | null | undefined,
-  preview: PluginMarketplaceHostInstallPreview
-): string | null {
-  if (!preview.repositoryMoved) {
-    return null
-  }
-  const source = installed?.source
-  return source?.kind === 'marketplace' ? source.reference : ''
 }
 
 /**

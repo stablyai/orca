@@ -9679,7 +9679,6 @@
           "newRecipes": "Receitas de máquina",
           "newShortcuts": "Atalhos de teclado",
           "previewError": "Não foi possível ler esta atualização",
-          "sourceMoved": "Nova fonte: {{value0}} (antes {{value1}})",
           "update": "Atualizar",
           "failed": "Não foi possível atualizar {{value0}}. Os outros foram atualizados.",
           "cancel": "Cancelar",
@@ -9697,7 +9696,8 @@
           "opensFileTypes": "Abre novos tipos de arquivo: {{value0}}",
           "becomesDefaultEditor": "Passa a ser o editor padrão para {{value0}}",
           "needApproval": "Precisam da sua aprovação",
-          "readyToUpdate": "Prontas para atualizar"
+          "readyToUpdate": "Prontas para atualizar",
+          "movedRepository": "Vem de outro repositório"
         },
         "PluginThemeUseNow": {
           "useForLight": "Usar no claro:",
@@ -9790,7 +9790,8 @@
           "approve": "Aprovar e atualizar",
           "uncompared": "O Orca não conseguiu comparar esta versão com a que você aprovou. Confira o que ela pode acessar antes de atualizar.",
           "newInVersion": "Novidades nesta versão:",
-          "titleMany": "Revisar {{value0}} atualizações"
+          "titleMany": "Revisar {{value0}} atualizações",
+          "history": "Ver as alterações no GitHub"
         },
         "PluginNotOfficialWarning": {
           "unknownPublisher": "seu editor",
@@ -9798,7 +9799,8 @@
           "update": "Confirme que você confia em {{value0}} antes de atualizar. Este plugin executa o código do editor dentro do Orca.",
           "installed": "Confirme que você confia em {{value0}}. Este plugin executa o código do editor dentro do Orca.",
           "label": "Não é um plugin oficial:",
-          "translations": "Traduções podem alterar qualquer texto do Orca. Confirme que você confia em {{value0}}."
+          "translations": "Traduções podem alterar qualquer texto do Orca. Confirme que você confia em {{value0}}.",
+          "community": "Plugin da comunidade"
         },
         "PluginCardAction": {
           "installed": "Instalado",
