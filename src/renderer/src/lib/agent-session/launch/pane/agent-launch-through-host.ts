@@ -9,7 +9,7 @@ import { awaitAgentLaunchPaneStart } from '@/lib/agent-session/launch/pane/agent
 import { seedNativeChatAppliedSessionOptions } from '../../../../../../shared/native-chat/input/session-options/native-chat-session-option-cache'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { LaunchSource } from '../../../../../../shared/telemetry/schemas/telemetry-property-schemas'
-import type { Tab } from '../../../../../../shared/tab-types'
+import type { Tab } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { SessionOptionValue } from '../../../../../../shared/native-chat/input/native-chat-session-options'
 
 export type HostAgentLaunchArgs = {

@@ -4,7 +4,7 @@ import { useAppStore } from '../../store/index'
 import { isWebRuntimeSessionActive } from '../../runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import { moveWebRuntimeSessionTab } from '../../runtime/web-session-tabs-sync/actions/web-runtime-session-tab-move'
 import { isDesktopCreatedTabInFrameDrawnServerWorkspace } from '@/store/workspace-layout/frames/frame-drawn-desktop-created-tabs'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/workspace-layout/layout-owner-switch'
 
 export function mirrorWebRuntimeTabMove(
   args: RuntimeMobileSessionTabMove & {

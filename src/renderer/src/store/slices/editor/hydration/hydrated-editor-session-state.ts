@@ -1,5 +1,5 @@
 import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
-import type { WorkspaceVisibleTabType } from '../../../../../../shared/tab-types'
+import type { WorkspaceVisibleTabType } from '../../../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { WorkspaceSessionState } from '../../../../../../shared/workspace-session/workspace-session-state-types'
 import type { AppState } from '../../../types'
 import type { OpenFile } from '../types/open-file'

@@ -21,7 +21,7 @@ import '../persistence/workspace-layout-save'
 import { emptySession, GIT_KEY } from '../persistence/workspace-layout-session.test-fixture'
 
 const mocks = vi.hoisted(() => ({ layoutOwnerIsMain: true }))
-vi.mock('../../layout-owner-switch', () => ({
+vi.mock('../layout-owner-switch', () => ({
   get ORCA_LAYOUT_OWNER_IS_MAIN() {
     return mocks.layoutOwnerIsMain
   }

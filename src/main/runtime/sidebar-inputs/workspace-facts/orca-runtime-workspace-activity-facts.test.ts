@@ -4,7 +4,9 @@ import type { RuntimeMobileSessionTabsSnapshot } from '../../../../shared/remote
 import { AgentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import { OrcaRuntimeService } from '../../orca-runtime'
 
-vi.mock('../../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
+vi.mock('../../../../shared/sidebar-list/feed/sidebar-inputs-switch', () => ({
+  ORCA_SIDEBAR_INPUTS_IS_MAIN: true
+}))
 
 const WT = 'repo-1::/tmp/worktree-a'
 const LEAF = '22222222-2222-4222-8222-222222222222'

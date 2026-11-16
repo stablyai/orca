@@ -3,13 +3,16 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../execution-host'
-import { adoptEndpointProjectCatalog, adoptEndpointRepo } from '../../endpoint-catalog-adoption'
-import { applyManualRepoOrder } from '../../manual-repo-order'
+import {
+  adoptEndpointProjectCatalog,
+  adoptEndpointRepo
+} from '../../project/catalog/endpoint-catalog-adoption'
+import { applyManualRepoOrder } from '../../repository/manual-repo-order'
 import { applyInheritedProjectGroups } from '../../project/groups/project-group-inheritance'
 import {
   buildMobileProjectSectionCatalog,
   type MobileProjectSectionCatalog
-} from '../../mobile-project-sections-contract'
+} from './mobile-project-sections-contract'
 import type { ProjectCatalogRows } from '../../project/catalog/project-compatibility-merge'
 import { mergeFetchedHostProjectCatalog } from '../../project/catalog/project-compatibility-host-merge'
 import type { ProjectGroup } from '../../project/groups/project-group-types'

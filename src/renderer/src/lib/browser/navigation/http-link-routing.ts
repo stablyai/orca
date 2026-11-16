@@ -13,7 +13,7 @@ import {
 } from '../../links/placement/link-open-intent'
 import type { LinkOpenIntent, LinkSourceState } from '../../links/placement/link-open-intent'
 import { translate } from '@/i18n/i18n'
-import { isFloatingWorkspaceId } from '../../../../../shared/floating-workspace-worktree'
+import { isFloatingWorkspaceId } from '../../../../../shared/workspace/identity/floating-workspace-worktree'
 import { toast } from 'sonner'
 import { reselectWorkspaceKeepingHost } from '../../workspace/ownership/active-workspace-host'
 import { captureBrowserLinkReveal } from './browser-link-reveal'

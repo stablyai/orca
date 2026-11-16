@@ -7,7 +7,7 @@ import { remapOpenEditorTabsForPathChange } from '@/lib/editor/file-operations/r
 import type { AppState } from '@/store/types'
 import type { LayoutCommand } from '../../../../../../shared/workspace-layout/workspace-layout-command-types'
 import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/workspace-layout/layout-owner-switch'
 import {
   editorMoveOwnerFromContext,
   type EditorMoveOwner
