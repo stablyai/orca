@@ -21,10 +21,10 @@ export async function cleanupLocalOrphanedWorktreeDirectory(
 ): Promise<void> {
   throwIfSignalAborted(signal)
   const access = getLocalWorktreePathAccess(options)
-  const runtimePath = toLocalWorktreeRuntimePath(path, options)
+  const runtimePath = await toLocalWorktreeRuntimePath(path, options, signal)
   const safe = await canSafelyRemoveOrphanedWorktreeDirectory(
     runtimePath,
-    toLocalWorktreeRuntimePath(repoPath, options),
+    await toLocalWorktreeRuntimePath(repoPath, options, signal),
     CLIENT_REMOVAL_HOME,
     access
   )

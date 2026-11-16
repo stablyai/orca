@@ -46,6 +46,11 @@ export function knownWslAutomountRoots(): string[] {
   return [...new Set([DEFAULT_WSL_AUTOMOUNT_ROOT, ...roots.values()])]
 }
 
+/** The root `distro` last reported since it started, `/mnt/` until read. */
+export function wslAutomountRootFor(distro: string): string {
+  return roots.get(distroKey(distro)) ?? DEFAULT_WSL_AUTOMOUNT_ROOT
+}
+
 export function onWslAutomountRootsChanged(listener: () => void): () => void {
   changeListeners.add(listener)
   return () => changeListeners.delete(listener)

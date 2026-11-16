@@ -59,8 +59,8 @@ export async function removeUnregisteredWorktree(
     canCleanOrphanedDirectory =
       !isDangerousWorktreeRemovalPath(worktreePath, repo.path, removalHome) &&
       (await canSafelyRemoveOrphanedWorktreeDirectory(
-        toLocalWorktreeRuntimePath(worktreePath, localWorktreeGitOptions),
-        toLocalWorktreeRuntimePath(repo.path, localWorktreeGitOptions),
+        await toLocalWorktreeRuntimePath(worktreePath, localWorktreeGitOptions),
+        await toLocalWorktreeRuntimePath(repo.path, localWorktreeGitOptions),
         removalHome,
         access
       ))
