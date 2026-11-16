@@ -215,6 +215,25 @@ describe('Claude account retained history', () => {
     }
   )
 
+  // Windows ignores the mode, and root reads anything.
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'still removes the sign-in when System default cannot be read',
+    async () => {
+      const f = fixture()
+      chmodSync(f.systemDefault, 0o000)
+      try {
+        await removeClaudeProfileFolder(f.folder, {
+          deleteRetainedHistory: false,
+          sharedHome: f.systemDefault
+        })
+      } finally {
+        chmodSync(f.systemDefault, 0o700)
+      }
+      expect(existsSync(join(f.home, '.credentials.json'))).toBe(false)
+      expect(existsSync(join(f.home, 'projects.orca-profile-merge'))).toBe(true)
+    }
+  )
+
   // The guest scripts need GNU find.
   describe.skipIf(process.platform !== 'linux')('in a WSL guest', () => {
     it('measures the same bytes', () => {

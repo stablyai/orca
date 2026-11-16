@@ -30,8 +30,9 @@ function absentAsNull(error: unknown): null {
 // replaced, the old link holds only this account's prompts.
 async function isLinkedPromptHistory(home: string, sharedHome: string): Promise<boolean> {
   const [own, shared] = await Promise.all(
+    // Unreadable reads as not linked: the file is then kept, never deleted.
     [home, sharedHome].map((dir) =>
-      lstat(join(dir, PROMPT_HISTORY), { bigint: true }).catch(absentAsNull)
+      lstat(join(dir, PROMPT_HISTORY), { bigint: true }).catch(() => null)
     )
   )
   return own?.isFile() === true && shared !== null && fileIdentity(own) === fileIdentity(shared)
@@ -175,11 +176,13 @@ export async function removeClaudeProfileFolder(
   const home = join(folder, 'home')
   const homeIsReal = await isRealDirectory(home)
   if (homeIsReal) {
-    const retained = await retainedHistoryFilter(home, options.sharedHome)
+    const retained = options.deleteRetainedHistory
+      ? () => false
+      : await retainedHistoryFilter(home, options.sharedHome)
     // Decided per entry as it is removed, so history a writer adds meanwhile is never swept up.
     for (const entry of await readdir(home, { withFileTypes: true })) {
       const path = join(home, entry.name)
-      if (options.deleteRetainedHistory || !retained(entry)) {
+      if (!retained(entry)) {
         await removeWithoutFollowingLinks(path)
       } else if (entry.isDirectory()) {
         await pruneEmptyDirectories(path).catch(() => {})

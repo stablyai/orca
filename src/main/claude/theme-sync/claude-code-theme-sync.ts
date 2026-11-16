@@ -264,7 +264,7 @@ export async function syncClaudeCodeThemeConfigDirs(
   }
   const published = new Set<string>()
   for (const [dir, entry] of owned) {
-    if (entry.owner !== userDataPath) {
+    if (entry.owner !== userDataPath || !(await isConfigurableClaudeHome(userDataPath, dir))) {
       continue
     }
     const restore = await restoreConfigDir(dir, entry, target.terminalBase, published).catch(
