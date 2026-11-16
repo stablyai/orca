@@ -23,7 +23,10 @@ import {
   type AcpStructuredSessionAdapterDeps
 } from './acp-structured-session-adapter-deps'
 import { readAcpLiveOptions } from '../options/acp-live-options'
-import { applyAcpLivePermissionMode } from '../options/acp-live-permission-mode'
+import {
+  acpRunningPermission,
+  applyAcpLivePermissionMode
+} from '../options/acp-live-permission-mode'
 import { acpControlsSettled, writeAcpSessionOption } from '../options/acp-session-option-write'
 import { acpOptionWriteBound, withAcpModelFallback } from '../turns/acp-model-command'
 import {
@@ -182,13 +185,17 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
   permissionModeRequiresAcquisition: NonNullable<
     SessionAdapter['permissionModeRequiresAcquisition']
   > = (sessionId, mode) => {
-    const running = this.runningPermissionMode(sessionId)
-    return running === undefined ? undefined : running !== mode
+    const session = this.children.sessions.get(sessionId)
+    return childState.isAcpReadySession(session)
+      ? acpRunningPermission(session) !== mode
+      : undefined
   }
 
   runningPermissionMode: NonNullable<SessionAdapter['runningPermissionMode']> = (sessionId) => {
     const session = this.children.sessions.get(sessionId)
-    return childState.isAcpReadySession(session) ? session.permission : undefined
+    return childState.isAcpReadySession(session)
+      ? (acpRunningPermission(session) ?? undefined)
+      : undefined
   }
 
   applyPermissionMode: NonNullable<SessionAdapter['applyPermissionMode']> = async (input) => {
