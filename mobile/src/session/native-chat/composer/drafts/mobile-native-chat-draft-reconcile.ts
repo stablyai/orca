@@ -4,6 +4,7 @@ import {
 } from '../../../../../../src/shared/native-chat/native-chat-types'
 import {
   hasImagePromptMarker,
+  imageTranscriptUnitPrompt,
   isImageSourceUserTurn,
   nativeChatImageTranscriptUnits,
   normalizeImageTranscriptMessages,
@@ -63,7 +64,7 @@ export function mergeSentImagePreviews(
 function imageSourceFoldTargets(messages: readonly NativeChatMessage[]): Map<string, string> {
   const targets = new Map<string, string>()
   for (const unit of nativeChatImageTranscriptUnits(messages)) {
-    const prompt = unit.find((message) => !isImageSourceUserTurn(message))
+    const prompt = imageTranscriptUnitPrompt(unit)
     if (!prompt) {
       continue
     }
@@ -102,7 +103,7 @@ export function migrateImagePreviewMessageIds(
 
 // A boundary on an image-source row lives on in the prompt row it folded into.
 function foldedBoundaryIndex(
-  messages: readonly NativeChatMessage[],
+  foldTargets: () => ReadonlyMap<string, string>,
   normalizedIndexById: ReadonlyMap<string, number>,
   boundaryId: string | null | undefined
 ): number | undefined {
@@ -113,7 +114,7 @@ function foldedBoundaryIndex(
   if (direct !== undefined) {
     return direct
   }
-  const promptId = imageSourceFoldTargets(messages).get(boundaryId)
+  const promptId = foldTargets().get(boundaryId)
   return promptId ? normalizedIndexById.get(promptId) : undefined
 }
 
@@ -136,6 +137,8 @@ export function findLandedImagePreviewEchoes(
       )
       .map((message) => message.id)
   )
+  let foldTargets: Map<string, string> | undefined
+  const readFoldTargets = () => (foldTargets ??= imageSourceFoldTargets(messages))
   const claimedMessageIds = new Set<string>()
   const landed: LandedImagePreviewEcho[] = []
 
@@ -161,7 +164,7 @@ export function findLandedImagePreviewEchoes(
       const imageCount = message.blocks.filter(isImageRefBlock).length
       return message.blocks.length === 0 || imageCount >= entry.images!.length
     })
-    const tailIndex = foldedBoundaryIndex(messages, messageIndexById, entry.afterMessageId)
+    const tailIndex = foldedBoundaryIndex(readFoldTargets, messageIndexById, entry.afterMessageId)
     // Same boundary-relative occurrence as the shared pending rule, so older identical rows cannot bind.
     const candidate = candidates.filter(
       (message) => tailIndex === undefined || (messageIndexById.get(message.id) ?? -1) > tailIndex

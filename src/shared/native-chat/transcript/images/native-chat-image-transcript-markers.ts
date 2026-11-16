@@ -132,11 +132,11 @@ export function nativeChatImageTranscriptUnits(
   for (let index = 0; index < messages.length; index += 1) {
     const first = messages[index]!
     const members = [first]
-    const sourceFirst = imageSourcePathsFromMessage(first).length > 0
+    const sourceFirst = isImageSourceUserTurn(first)
     if (sourceFirst || isImagePromptTurn(first)) {
       while (index + 1 < messages.length) {
         const next = messages[index + 1]!
-        if (next.source !== first.source || imageSourcePathsFromMessage(next).length === 0) {
+        if (next.source !== first.source || !isImageSourceUserTurn(next)) {
           break
         }
         members.push(next)
@@ -164,11 +164,18 @@ export function normalizeImageTranscriptMessages(
     : rows
 }
 
+/** The unit's one non-source row, wherever Claude wrote it relative to its sources. */
+export function imageTranscriptUnitPrompt(
+  unit: readonly NativeChatMessage[]
+): NativeChatMessage | undefined {
+  return unit.find((message) => !isImageSourceUserTurn(message))
+}
+
 export function normalizeImageTranscriptUnit(
   messages: readonly NativeChatMessage[]
 ): NativeChatMessage[] {
-  const sources = messages.filter((message) => imageSourcePathsFromMessage(message).length > 0)
-  const prompt = messages.find((message) => imageSourcePathsFromMessage(message).length === 0)
+  const prompt = imageTranscriptUnitPrompt(messages)
+  const sources = messages.filter((message) => message !== prompt)
   if (sources.length > 0) {
     const images = (source: NativeChatMessage) =>
       imageSourcePathsFromMessage(source).map((path) => ({ type: 'image-ref' as const, path }))

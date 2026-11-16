@@ -12,7 +12,7 @@ import {
   orderNativeChatDisplayMessages as orderMessages
 } from '../../../../../../../shared/native-chat/transcript/messages/native-chat-message-order'
 import {
-  isImageSourceUserTurn,
+  imageTranscriptUnitPrompt,
   nativeChatImageTranscriptUnits,
   normalizeImageTranscriptMessages
 } from '../../../../../../../shared/native-chat/transcript/images/native-chat-image-transcript-markers'
@@ -125,7 +125,7 @@ export function sortForImageNormalization(
   const units: ImageNormalizationUnit[] = nativeChatImageTranscriptUnits(sourceOrdered).map(
     (members) => ({
       messages: members,
-      sortKey: members.find((message) => !isImageSourceUserTurn(message)) ?? members[0]!
+      sortKey: imageTranscriptUnitPrompt(members) ?? members[0]!
     })
   )
 
