@@ -12,9 +12,8 @@ import {
 import type { HostedSandboxDesktop } from '../../shared/hosted-sandbox/hosted-sandbox-wire'
 import type { RuntimePortForwardOpenRequest } from '../../shared/runtime-port-forwards'
 import { isEnvironmentProviderError } from '../environment-providers/environment-provider-driver'
-import { environmentHandleFromRecipeResult } from '../environment-providers/environment-provider-recipe-adapter'
 import type { HostedSandboxControlPlaneClient } from './hosted-sandbox-control-plane-client'
-import { HOSTED_SANDBOX_DRIVER_ID } from './hosted-sandbox-driver'
+import { cloudSandboxIdOfRuntime } from './orca-cloud-sandbox-id'
 import {
   registerRemoteDesktopSession,
   type RemoteDesktopMintFailure,
@@ -56,9 +55,8 @@ export function cloudSandboxesByEnvironment(userDataPath: string): Map<string, s
     ) {
       continue
     }
-    const handle = environmentHandleFromRecipeResult(runtime.recipeResult, HOSTED_SANDBOX_DRIVER_ID)
-    const sandboxId = handle?.driverState.sandboxId
-    if (typeof sandboxId === 'string' && sandboxId) {
+    const sandboxId = cloudSandboxIdOfRuntime(runtime)
+    if (sandboxId) {
       sandboxes.set(runtime.runtimeEnvironmentId, sandboxId)
     }
   }

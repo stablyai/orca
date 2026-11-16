@@ -102,10 +102,6 @@ export class LocalCommandBroker {
     }
   }
 
-  hasAttachedDesktop(): boolean {
-    return this.attachments.size > 0
-  }
-
   request(input: LocalCommandRequestInput): LocalCommandRequestResult {
     if (this.attachments.size === 0) {
       throw new LocalCommandError(LOCAL_COMMAND_ERRORS.noDesktop)

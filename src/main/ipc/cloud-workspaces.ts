@@ -118,7 +118,7 @@ export async function readCloudWorkspaceSnapshot(
 }
 
 /** The team registry service, for main-process readers (null when this build has no control plane). */
-export const getCloudWorkspacesService = (): Promise<CloudWorkspacesService | null> => getService()
+export const getCloudWorkspacesService = getService
 
 /** Stable per-install id (one per device, not per window), sent with synced sidebar prefs writes. */
 async function clientIdFor(userDataPath: string): Promise<string> {
@@ -144,6 +144,14 @@ let quitHookInstalled = false
 
 const NOT_CONFIGURED = { ok: false as const, error: 'not_configured' }
 const INVALID = { ok: false as const, error: 'invalid_request' }
+const IdArgs = z.object({ id: Id })
+
+/** Registers a handler that answers `not_configured` without a control plane and `invalid_request` for bad args. */
+export type ServeCloudWorkspaces = <S extends z.ZodType>(
+  channel: string,
+  schema: S,
+  fn: (service: CloudWorkspacesService, args: z.output<S>) => unknown
+) => void
 
 export function registerCloudWorkspacesHandlers(
   options: { removedServerStore?: RemovedServerStore } = {}
@@ -156,90 +164,48 @@ export function registerCloudWorkspacesHandlers(
     ipcMain.removeHandler(channel)
     ipcMain.handle(channel, (_event, args: unknown) => fn(args))
   }
+  const serve: ServeCloudWorkspaces = (channel, schema, fn) =>
+    handle(channel, async (args) => {
+      const parsed = schema.safeParse(args)
+      const s = await getService()
+      return !s ? NOT_CONFIGURED : parsed.success ? fn(s, parsed.data) : INVALID
+    })
   handle('cloudWorkspaces:available', async () => (await getService()) !== null)
-  handle('cloudWorkspaces:list', async (args) => {
-    const query = ListQuery.safeParse(args ?? {})
-    const s = await getService()
-    if (!s || !query.success) {
-      return !s ? NOT_CONFIGURED : INVALID
+  serve(
+    'cloudWorkspaces:list',
+    z.preprocess((args) => args ?? {}, ListQuery),
+    async (s, query) => {
+      const result = await s.list(query)
+      // Each successful refresh also checks this device's pairings and own records (throttled).
+      if (result.ok) {
+        void prune.run()
+        void requestCloudGonePrune()
+      }
+      return result
     }
-    const result = await s.list(query.data)
-    // Each successful refresh also checks this device's pairings and own records (throttled).
-    if (result.ok) {
-      void prune.run()
-      void requestCloudGonePrune()
-    }
-    return result
-  })
-  handle('cloudWorkspaces:get', async (args) => {
-    const parsed = z.object({ id: Id }).safeParse(args)
-    const s = await getService()
-    return !s ? NOT_CONFIGURED : parsed.success ? s.get(parsed.data.id) : INVALID
-  })
-  handle('cloudWorkspaces:patch', async (args) => {
-    const parsed = z.object({ id: Id, patch: Patch }).safeParse(args)
-    const s = await getService()
-    return !s
-      ? NOT_CONFIGURED
-      : parsed.success
-        ? s.patch(parsed.data.id, parsed.data.patch)
-        : INVALID
-  })
-  handle('cloudWorkspaces:resolveLink', async (args) => {
-    const parsed = z
-      .object({ target: LinkTarget, chatId: ChatId.nullable().optional() })
-      .safeParse(args)
-    const s = await getService()
-    return !s
-      ? NOT_CONFIGURED
-      : parsed.success
-        ? s.resolveLink(parsed.data.target, parsed.data.chatId)
-        : INVALID
-  })
-  handle('cloudWorkspaces:openGrant', async (args) => {
-    const parsed = z.object({ id: Id }).safeParse(args)
-    const s = await getService()
-    return !s ? NOT_CONFIGURED : parsed.success ? s.openGrant(parsed.data.id) : INVALID
-  })
-  handle('cloudWorkspaces:readSnapshot', async (args) => {
-    const parsed = z.object({ id: Id }).safeParse(args)
-    const s = await getService()
-    return !s ? NOT_CONFIGURED : parsed.success ? s.readSnapshot(parsed.data.id) : INVALID
-  })
-  handle('cloudWorkspaces:listGrants', async (args) => {
-    const parsed = z.object({ id: Id }).safeParse(args)
-    const s = await getService()
-    return !s ? NOT_CONFIGURED : parsed.success ? s.listGrants(parsed.data.id) : INVALID
-  })
-  handle('cloudWorkspaces:revokeGrant', async (args) => {
-    const parsed = z.object({ id: Id, grantId: GrantId }).safeParse(args)
-    const s = await getService()
-    return !s
-      ? NOT_CONFIGURED
-      : parsed.success
-        ? s.revokeGrant(parsed.data.id, parsed.data.grantId)
-        : INVALID
-  })
-  handle('cloudWorkspaces:wake', async (args) => {
-    const parsed = z.object({ id: Id }).safeParse(args)
-    const s = await getService()
-    return !s ? NOT_CONFIGURED : parsed.success ? wakePairedSandbox(s, parsed.data.id) : INVALID
-  })
-  handle('cloudWorkspaces:sleep', async (args) => {
-    const parsed = z.object({ id: Id }).safeParse(args)
-    const s = await getService()
-    return !s ? NOT_CONFIGURED : parsed.success ? s.sleep(parsed.data.id) : INVALID
-  })
-  handle('cloudWorkspaces:destroy', async (args) => {
-    const parsed = z.object({ id: Id }).safeParse(args)
-    const s = await getService()
-    if (!s || !parsed.success) {
-      return !s ? NOT_CONFIGURED : INVALID
-    }
-    const result = await s.destroy(parsed.data.id)
+  )
+  serve('cloudWorkspaces:get', IdArgs, (s, { id }) => s.get(id))
+  serve('cloudWorkspaces:patch', z.object({ id: Id, patch: Patch }), (s, { id, patch }) =>
+    s.patch(id, patch)
+  )
+  serve(
+    'cloudWorkspaces:resolveLink',
+    z.object({ target: LinkTarget, chatId: ChatId.nullable().optional() }),
+    (s, { target, chatId }) => s.resolveLink(target, chatId)
+  )
+  serve('cloudWorkspaces:openGrant', IdArgs, (s, { id }) => s.openGrant(id))
+  serve('cloudWorkspaces:readSnapshot', IdArgs, (s, { id }) => s.readSnapshot(id))
+  serve('cloudWorkspaces:listGrants', IdArgs, (s, { id }) => s.listGrants(id))
+  serve('cloudWorkspaces:revokeGrant', z.object({ id: Id, grantId: GrantId }), (s, a) =>
+    s.revokeGrant(a.id, a.grantId)
+  )
+  serve('cloudWorkspaces:wake', IdArgs, (s, { id }) => wakePairedSandbox(s, id))
+  serve('cloudWorkspaces:sleep', IdArgs, (s, { id }) => s.sleep(id))
+  serve('cloudWorkspaces:destroy', IdArgs, async (s, { id }) => {
+    const result = await s.destroy(id)
     // Deleted from here: its pairing or own record, server and projects go now (LC-1, LC-2).
     if (result.ok) {
-      await settleDeleted(parsed.data.id)
+      await settleDeleted(id)
     }
     return result
   })
@@ -275,23 +241,14 @@ export function registerCloudWorkspacesHandlers(
       s?.setActive(parsed.data)
     }
   })
-  handle(
-    'cloudWorkspaces:getOrgPrompts',
-    async () => (await getService())?.getOrgPrompts() ?? NOT_CONFIGURED
+  serve('cloudWorkspaces:getOrgPrompts', z.unknown(), (s) => s.getOrgPrompts())
+  serve(
+    'cloudWorkspaces:putOrgPrompts',
+    z.object({ document: Prompts, revision: z.number().int().min(0) }),
+    (s, { document, revision }) => s.putOrgPrompts(document, revision)
   )
-  handle('cloudWorkspaces:putOrgPrompts', async (args) => {
-    const parsed = z
-      .object({ document: Prompts, revision: z.number().int().min(0) })
-      .safeParse(args)
-    const s = await getService()
-    return !s
-      ? NOT_CONFIGURED
-      : parsed.success
-        ? s.putOrgPrompts(parsed.data.document, parsed.data.revision)
-        : INVALID
-  })
-  registerCloudWorkspacePrefsHandlers(handle, getService)
-  registerOwnerChangeHandlers(handle, getService)
+  registerCloudWorkspacePrefsHandlers(serve)
+  registerOwnerChangeHandlers(serve)
   // Handlers are re-registered per main window; the quit hook must only be added once.
   if (!quitHookInstalled) {
     quitHookInstalled = true

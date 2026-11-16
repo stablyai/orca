@@ -2,7 +2,7 @@
 // are cloud workspaces, the grant call, the same-server repair and the window notice.
 import { app, BrowserWindow } from 'electron'
 import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
-import { cloudSandboxIdForEnvironment } from '../hosted-sandbox/cloud-delete-preflight'
+import { cloudSandboxIdForEnvironment } from '../hosted-sandbox/hosted-remote-desktop'
 import { verifyAndRepairRuntimeEnvironmentFromPairingCode } from '../ipc/runtime-environments/pairing/runtime-environment-pairing-verification'
 import { invalidateRuntimeEnvironmentTransport } from '../ipc/runtime-environments/runtime-environments'
 import { setRuntimeEnvironmentRejectionObserver } from '../ipc/runtime-environments/runtime-environment-rejection-observer'

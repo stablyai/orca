@@ -8,18 +8,9 @@ import {
 } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
 import type { EphemeralVmRuntimeRecord } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import type { HostedSandboxView } from '../../shared/hosted-sandbox/hosted-sandbox-wire'
-import { environmentHandleFromRecipeResult } from '../environment-providers/environment-provider-recipe-adapter'
-import { HOSTED_SANDBOX_DRIVER_ID } from './hosted-sandbox-driver'
+import { cloudSandboxIdOfRuntime } from './orca-cloud-sandbox-id'
 
 const RETIRED = new Set<EphemeralVmRuntimeRecord['status']>(['cleaned', 'cleanup_pending'])
-
-function sandboxIdOf(runtime: EphemeralVmRuntimeRecord): string | null {
-  const handle = runtime.recipeResult
-    ? environmentHandleFromRecipeResult(runtime.recipeResult, HOSTED_SANDBOX_DRIVER_ID)
-    : null
-  const id = handle?.driverState.sandboxId
-  return typeof id === 'string' && id ? id : null
-}
 
 type CloudAccountBackfill = {
   /**
@@ -70,7 +61,7 @@ export function createCloudAccountBackfill(deps: {
         return
       }
       for (const runtime of readCloud(deps.userDataPath)) {
-        const sandboxId = sandboxIdOf(runtime)
+        const sandboxId = cloudSandboxIdOfRuntime(runtime)
         if (sandboxId && listed.has(sandboxId) && runtime.cloudAccountId !== account) {
           updateEphemeralVmRuntimeStatus(deps.userDataPath, runtime.id, {
             cloudAccountId: account,
@@ -92,7 +83,7 @@ function readCloud(userDataPath: string): EphemeralVmRuntimeRecord[] {
     (runtime) =>
       runtime.recipe?.provider === 'orca-cloud' &&
       !RETIRED.has(runtime.status) &&
-      sandboxIdOf(runtime) !== null
+      cloudSandboxIdOfRuntime(runtime) !== null
   )
 }
 

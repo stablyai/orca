@@ -8,19 +8,10 @@ import { listEphemeralVmRuntimes } from '../../shared/remote-runtime/ephemeral-v
 import type { EphemeralVmRuntimeRecord } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import type { HostedSandboxView } from '../../shared/hosted-sandbox/hosted-sandbox-wire'
 import { isEnvironmentProviderError } from '../environment-providers/environment-provider-driver'
-import { environmentHandleFromRecipeResult } from '../environment-providers/environment-provider-recipe-adapter'
 import { isEphemeralVmProvisionLive } from '../ephemeral-vm/runtime-provisioning-persistence'
-import { HOSTED_SANDBOX_DRIVER_ID } from './hosted-sandbox-driver'
+import { cloudSandboxIdOfRuntime } from './orca-cloud-sandbox-id'
 
 const RETIRED = new Set<EphemeralVmRuntimeRecord['status']>(['cleaned', 'cleanup_pending'])
-
-function sandboxIdOf(runtime: EphemeralVmRuntimeRecord): string | null {
-  const handle = runtime.recipeResult
-    ? environmentHandleFromRecipeResult(runtime.recipeResult, HOSTED_SANDBOX_DRIVER_ID)
-    : null
-  const id = handle?.driverState.sandboxId
-  return typeof id === 'string' && id ? id : null
-}
 
 type CloudSandboxGonePrune = {
   /** After a successful list of `account`'s sandboxes: retire that team's records it confirms gone. */
@@ -52,7 +43,8 @@ export function createCloudSandboxGonePrune(deps: {
   return {
     async observeList(account, listed) {
       const missing = listEphemeralVmRuntimes(deps.userDataPath).flatMap((runtime) => {
-        const sandboxId = runtime.recipe?.provider === 'orca-cloud' ? sandboxIdOf(runtime) : null
+        const sandboxId =
+          runtime.recipe?.provider === 'orca-cloud' ? cloudSandboxIdOfRuntime(runtime) : null
         // A create in flight is not listed yet; its own outcome settles the record.
         const creating = runtime.status === 'provisioning' || isEphemeralVmProvisionLive(runtime.id)
         return sandboxId &&

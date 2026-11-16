@@ -13,12 +13,11 @@ import {
   type ShareCreateRequest,
   type ShareLink
 } from '../../shared/hosted-sandbox/hosted-sandbox-share-wire'
-import { environmentHandleFromRecipeResult } from '../environment-providers/environment-provider-recipe-adapter'
 import { isEnvironmentProviderError } from '../environment-providers/environment-provider-driver'
 import { translateMain } from '../i18n/main-i18n'
 import type { HostedSandboxConfig } from './hosted-sandbox-config'
 import { createHostedSandboxRequest } from './hosted-sandbox-control-plane-client'
-import { HOSTED_SANDBOX_DRIVER_ID } from './hosted-sandbox-driver'
+import { cloudSandboxIdOfRuntime } from './orca-cloud-sandbox-id'
 import {
   createHostedSandboxShareClient,
   shareToken,
@@ -31,12 +30,9 @@ export function hostedSandboxIdForEnvironment(
   environmentId: string
 ): string | null {
   for (const runtime of listEphemeralVmRuntimes(userDataPath)) {
-    if (runtime.runtimeEnvironmentId !== environmentId || !runtime.recipeResult) {
-      continue
-    }
-    const handle = environmentHandleFromRecipeResult(runtime.recipeResult, HOSTED_SANDBOX_DRIVER_ID)
-    const id = handle?.driverState.sandboxId
-    if (typeof id === 'string' && id) {
+    const id =
+      runtime.runtimeEnvironmentId === environmentId ? cloudSandboxIdOfRuntime(runtime) : null
+    if (id) {
       return id
     }
   }

@@ -18,6 +18,7 @@ import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/ru
 import { getPreferredPairedRuntimeConnection } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { ensureOrcadManagedTunnel } from '../../managed-server/lifecycle/orcad-managed-tunnel'
 import { prepareRecipeVm } from './managed-orcad/runtime-environment-recipe-vm-wake'
+import { field } from './auth-callback-forward-requests'
 
 function createPairedRuntimePortForwardConnector(
   getUserDataPath: () => string
@@ -31,7 +32,9 @@ function createPairedRuntimePortForwardConnector(
       wake ? 'wake' : 'none'
     )
     await ensureOrcadManagedTunnel(userDataPath, environmentId)
-    return getPreferredPairedRuntimeConnection(await resolveEnvironment(userDataPath, environmentId))
+    return getPreferredPairedRuntimeConnection(
+      await resolveEnvironment(userDataPath, environmentId)
+    )
   })
 }
 
@@ -46,12 +49,6 @@ function broadcast(forwards: RuntimePortForward[]): void {
       // A renderer can disappear between isDestroyed() and send().
     }
   }
-}
-
-function field(value: unknown, name: string): unknown {
-  return value && typeof value === 'object'
-    ? Object.getOwnPropertyDescriptor(value, name)?.value
-    : undefined
 }
 
 // The renderer may ask for user or auto forwards; SSH forwards belong to main-process callers.

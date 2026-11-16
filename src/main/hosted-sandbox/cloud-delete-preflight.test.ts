@@ -24,7 +24,7 @@ const failing = (error: unknown) => ({
 
 describe('preflightCloudWorkspaceDelete', () => {
   it('passes non-cloud workspaces straight through', async () => {
-    expect(await preflightCloudWorkspaceDelete(undefined, null)).toEqual({ ok: true })
+    expect(await preflightCloudWorkspaceDelete(null, null)).toEqual({ ok: true })
   })
 
   it('keeps the row when the signed-in identity cannot see the sandbox (W9 D-2)', async () => {

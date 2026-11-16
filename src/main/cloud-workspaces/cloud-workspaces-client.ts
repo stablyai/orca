@@ -149,7 +149,7 @@ export function createCloudWorkspacesClient(options: CloudWorkspacesClientOption
       return (await call('GET', ws(id), CloudWorkspaceResponseSchema)).workspace
     },
     async patch(id: string, patch: CloudWorkspacePatch) {
-      return call('PATCH', ws(id), CloudWorkspaceResponseSchema.extend({}).passthrough(), patch)
+      return call('PATCH', ws(id), CloudWorkspaceResponseSchema.passthrough(), patch)
     },
     async wake(id: string) {
       return (

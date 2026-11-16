@@ -46,14 +46,12 @@ const TeamPlansArgs = z
   })
   .strict()
 
-function billingTeamPlansArgsFromUnknown(args: unknown): {
-  orgIds: string[]
-} {
+function billingTeamPlanOrgIds(args: unknown): string[] {
   const parsed = TeamPlansArgs.safeParse(args)
   if (!parsed.success) {
     throw new Error('invalid_orca_billing_team_plans')
   }
-  return { orgIds: [...new Set(parsed.data.orgIds)] }
+  return [...new Set(parsed.data.orgIds)]
 }
 
 const CloudSetupStart = z
@@ -104,10 +102,7 @@ export function registerOrcaProfileBillingHandlers(store: Store): void {
   ipcMain.handle(
     'orcaProfiles:billingTeamPlans',
     async (_event, rawArgs: unknown): Promise<OrcaBillingTeamPlansResult> =>
-      getOrcaBillingTeamPlans(
-        getProfileUserDataPath(),
-        billingTeamPlansArgsFromUnknown(rawArgs).orgIds
-      )
+      getOrcaBillingTeamPlans(getProfileUserDataPath(), billingTeamPlanOrgIds(rawArgs))
   )
   ipcMain.handle(
     'orcaProfiles:cloudSetupStart',

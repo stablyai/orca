@@ -7,6 +7,7 @@ import {
   EnvironmentProviderError,
   type EnvironmentProviderErrorCode
 } from '../environment-providers/environment-provider-driver'
+import { parseBaseUrl } from './environments/hosted-environment-http'
 
 export type HostedSandboxControlPlaneClientOptions = {
   baseUrl: string
@@ -21,17 +22,21 @@ export type HostedSandboxControlPlaneClientOptions = {
 const DEFAULT_TIMEOUTS = { boot: 180_000, control: 60_000, hook: 300_000 }
 const MAX_RESPONSE_BYTES = 256 * 1024
 
+type HostedSandboxRequestInit = {
+  body?: unknown
+  kind: 'boot' | 'control' | 'hook'
+  signal?: AbortSignal
+  /** Per-call opt-ins on top of the features every call sends. */
+  features?: readonly string[]
+  /** Extra request headers (Idempotency-Key); the fixed ones below always win. */
+  headers?: Record<string, string>
+}
+
 export type HostedSandboxRequest = <T>(
   method: 'GET' | 'POST' | 'PUT' | 'DELETE',
   path: string,
   schema: z.ZodType<T>,
-  init: {
-    body?: unknown
-    kind: 'boot' | 'control' | 'hook'
-    signal?: AbortSignal
-    features?: readonly string[]
-    headers?: Record<string, string>
-  }
+  init: HostedSandboxRequestInit
 ) => Promise<T>
 
 /** One authenticated, schema-checked control-plane call; shared by every desktop client of it. */
@@ -46,15 +51,7 @@ export function createHostedSandboxRequest(
     method: 'GET' | 'POST' | 'PUT' | 'DELETE',
     path: string,
     schema: z.ZodType<T>,
-    init: {
-      body?: unknown
-      kind: 'boot' | 'control' | 'hook'
-      signal?: AbortSignal
-      /** Per-call opt-ins on top of the features every call sends. */
-      features?: readonly string[]
-      /** Extra request headers (Idempotency-Key); the fixed ones below always win. */
-      headers?: Record<string, string>
-    }
+    init: HostedSandboxRequestInit
   ): Promise<T> {
     const timeoutSignal = AbortSignal.timeout(timeouts[init.kind])
     const signal = init.signal ? AbortSignal.any([init.signal, timeoutSignal]) : timeoutSignal
@@ -99,18 +96,6 @@ export function createHostedSandboxRequest(
     }
     return parsed.data
   }
-}
-
-function parseBaseUrl(value: string): URL {
-  const url = new URL(value.endsWith('/') ? value : `${value}/`)
-  const loopback = url.hostname === '127.0.0.1' || url.hostname === 'localhost'
-  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback)) {
-    throw new Error('Orca Cloud control plane must be HTTPS.')
-  }
-  if (url.username || url.password || url.search || url.hash) {
-    throw new Error('Orca Cloud control plane URL must not carry credentials, query or fragment.')
-  }
-  return url
 }
 
 async function readJson(response: Response): Promise<unknown> {
