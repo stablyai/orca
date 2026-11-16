@@ -16,7 +16,7 @@ import type { AcpSignInWatch } from '../process/acp-agent-connection'
 import type { AcpLaunchGate } from './acp-launch-gate'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { AcpModelDiscovery } from '../discovery/acp-model-discovery-policy'
-import type { InitializeResponse } from '../generated/acp-protocol.generated'
+import type { Implementation, InitializeResponse } from '../generated/acp-protocol.generated'
 
 export type AcpLaunchSpec = {
   agent: TuiAgent
@@ -32,6 +32,8 @@ export type AcpLaunchSpec = {
   /** Scrubs inherited Orca plumbing and returns keys to omit entirely. */
   scrubEnvironment?(env: Record<string, string>, inherited: NodeJS.ProcessEnv): string[]
   dialect: AcpDialect
+  /** Sent by initialize when the agent grants features by client name; Orca's otherwise. */
+  clientInfo?: Implementation
   loginCommand: readonly string[]
   /** Selects authentication from the execution host's resolved launch inputs. */
   authMethod?(input: {
