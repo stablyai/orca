@@ -16,6 +16,7 @@ import { CommitActionMenu } from './commit-action-menu'
 import type { CommitAreaProps } from './commit-area-types'
 import { CommitMessageComposer } from './commit-message-composer'
 import { CommitNotices } from './commit-notices'
+import { CloudGitActingNotice } from './cloud-git-acting-notice'
 import { getCommitMessageTextareaRows } from './commit-message-rows'
 import type { PrimaryAction } from '../review/source-control-primary-action-types'
 import { getSourceControlRecoveryFailureKindLabel } from '../sync/push-recovery'
@@ -243,6 +244,7 @@ export function CommitArea({
         dropdownMenuContent={dropdownMenuContent}
         onPrimaryAction={onPrimaryAction}
       />
+      <CloudGitActingNotice worktreeId={worktreeId} />
       <CommitNotices
         worktreeId={worktreeId}
         groupId={groupId}

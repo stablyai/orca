@@ -15,6 +15,7 @@ import {
   CloudWorkspaceListResponseSchema,
   CloudWorkspacePresenceResponseSchema,
   CloudWorkspaceResponseSchema,
+  CloudWorkspaceGitActorSchema,
   CloudWorkspaceFollowSchema,
   OrgPromptsSchema,
   type CloudWorkspaceLinkTarget,
@@ -78,7 +79,8 @@ export function createCloudWorkspacesClient(options: CloudWorkspacesClientOption
     schema: z.ZodType<T>,
     body?: unknown,
     timeoutMs = CONTROL_TIMEOUT_MS,
-    maxBytes = MAX_RESPONSE_BYTES
+    maxBytes = MAX_RESPONSE_BYTES,
+    features?: string
   ): Promise<T> {
     const signal = AbortSignal.timeout(timeoutMs)
     let token: string
@@ -95,6 +97,7 @@ export function createCloudWorkspacesClient(options: CloudWorkspacesClientOption
         headers: {
           authorization: `Bearer ${token}`,
           accept: 'application/json',
+          ...(features ? { 'x-orca-sandbox-features': features } : {}),
           ...(body === undefined ? {} : { 'content-type': 'application/json' })
         },
         body: body === undefined ? undefined : JSON.stringify(body),
@@ -156,6 +159,11 @@ export function createCloudWorkspacesClient(options: CloudWorkspacesClientOption
     },
     async get(id: string) {
       return (await call('GET', ws(id), CloudWorkspaceResponseSchema)).workspace
+    },
+    /** GH-ACTING-LINE: the detail read, asking for who git acts as. */
+    async gitActor(id: string) {
+      const read = CloudWorkspaceGitActorSchema
+      return call('GET', ws(id), read, undefined, undefined, undefined, 'git-actor')
     },
     async patch(id: string, patch: CloudWorkspacePatch) {
       return call('PATCH', ws(id), CloudWorkspaceResponseSchema.extend({}).passthrough(), patch)

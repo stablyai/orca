@@ -80,6 +80,7 @@ export function CloudWorkspaceFollowers({
   busy = false,
   onToggleFollow,
   onOpenMember,
+  acting = null,
   max = 3
 }: {
   entries: WorkspaceFollowerEntry[]
@@ -91,6 +92,11 @@ export function CloudWorkspaceFollowers({
   onToggleFollow?: () => void
   /** Opens the teammate's profile. */
   onOpenMember?: (userId: string) => void
+  /**
+   * GH-ACTING-LINE: who pushes and PRs go out as, said in the acting member's tooltip (or the first
+   * avatar's when it's Orca's bot). Words only: no action here.
+   */
+  acting?: { text: string; userId: string | null } | null
   max?: number
 }): React.JSX.Element | null {
   const t = useTranslate()
@@ -107,7 +113,11 @@ export function CloudWorkspaceFollowers({
         aria-label={t('cloudFollow.stackLabel', 'People on this workspace')}
         className="flex items-center -space-x-1"
       >
-        {shown.map((entry) => {
+        {shown.map((entry, index) => {
+          const actingHere =
+            acting !== null &&
+            (acting.userId === entry.userId ||
+              (index === 0 && !shown.some((e) => e.userId === acting.userId)))
           const name = memberName(directory, entry.userId, selfId, t)
           const label = entryLabel(entry, name, t)
           const ring: React.CSSProperties & { '--avatar-hue': string } = {
@@ -139,6 +149,7 @@ export function CloudWorkspaceFollowers({
               </TooltipTrigger>
               <TooltipContent side="bottom" sideOffset={6}>
                 {label}
+                {actingHere ? <div className="text-muted-foreground">{acting.text}</div> : null}
               </TooltipContent>
             </Tooltip>
           )
