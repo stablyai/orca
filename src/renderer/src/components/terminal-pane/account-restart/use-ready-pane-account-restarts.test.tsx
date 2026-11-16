@@ -302,8 +302,8 @@ describe('on-screen restart of a Claude pane no hook named', () => {
     Reflect.deleteProperty(window, 'api')
   })
 
-  async function switchWorkThenRestart(): Promise<void> {
-    renderReadyPaneAccountRestarts(realBuild)
+  async function switchWorkThenRestart(build: typeof realBuild = realBuild): Promise<void> {
+    renderReadyPaneAccountRestarts(build)
     await act(async () => {
       expect(await switchAccount()).toBe('handled')
     })
@@ -482,4 +482,45 @@ describe('on-screen restart of a Claude pane no hook named', () => {
     expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({})
     expect(toast.warning).toHaveBeenCalledWith('accounts.claude.switchSessions.notMovedToOne')
   })
+
+  it.each([
+    {
+      pane: 'took another terminal',
+      move: () => {
+        attachedPtyId = 'pty-new'
+        useAppStore.getState().updateTabPtyId('tab-1', 'pty-new', OLD_PTY)
+      },
+      kept: false,
+      restarts: 1
+    },
+    {
+      pane: 'closed',
+      move: () =>
+        useAppStore.setState({
+          terminalLayoutsByTabId: { 'tab-1': { ...LAYOUT, ptyIdsByLeafId: {} } }
+        }),
+      kept: false,
+      restarts: 0
+    },
+    { pane: 'was unmounted', move: () => undefined, kept: true, restarts: 0 }
+  ])(
+    'puts the restart on the terminal a pane holds when it $pane after the lookup',
+    async ({ move, kept, restarts }) => {
+      let moved = false
+      await switchWorkThenRestart((...args) => {
+        if (args[2] && !moved) {
+          moved = true
+          attachedPtyId = null
+          move()
+        }
+        return realBuild(...args)
+      })
+
+      expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual(
+        kept ? { [OLD_PTY]: 'claude' } : {}
+      )
+      expect(takeQueuedClaudeRestart(OLD_PTY) !== undefined).toBe(kept)
+      expect(handleRestartPane).toHaveBeenCalledTimes(restarts)
+    }
+  )
 })

@@ -72,10 +72,12 @@ export function useReadyPaneAccountRestarts({
         void lookUpDiscoveredClaudeRestart(agent, { ptyId, tabId, leafId }, queued, (session) =>
           buildAccountRestartStartup(agent, leafId, session, queued?.restartAll)
         ).then((found) => {
+          const bound =
+            useAppStore.getState().terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId?.[leafId]
           if (found && paneTransportsRef.current.get(id)?.getPtyId() === ptyId) {
             handleRestartPane(id, found, { focus: false })
-          } else if (found) {
-            requeueRestart(ptyId, agent, queued)
+          } else if (found && bound) {
+            requeueRestart(bound, agent, queued)
           }
         })
       }
