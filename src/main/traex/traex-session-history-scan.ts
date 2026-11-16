@@ -20,6 +20,7 @@ import type {
 } from '../ai-vault/session-scanner-types'
 import type { TranscriptMessageSink } from '../ai-vault/transcripts/session-transcript-consumers'
 import { openTranscriptReadStream } from '../native-chat/transcript-filesystem/wsl-transcript-fs-access'
+import { readSessionIndexTitles } from '../ai-vault/scanners/codex/session-scanner-codex-title-index'
 import { traexRecord } from './traex-protocol'
 
 type TraexHistoryScanState = {
@@ -142,15 +143,21 @@ function resumeTraexHistoryState(state: TraexHistoryScanState): ResumableSession
     touchFile: (file) => {
       state.accumulator.modifiedAt = file.modifiedAt
     },
-    finalize: (platform, options) => {
+    finalize: async (platform, options) => {
       if (!state.metadata || state.excluded) {
         return null
       }
       const session = finalizeSession(cloneSessionAccumulator(state.accumulator), platform, options)
       const home = traexHistoryHome(state.accumulator.filePath)
-      return session && home
-        ? { ...session, accountHome: { variable: 'TRAECLI_HOME', path: home } }
-        : session
+      if (!session || !home) {
+        return session
+      }
+      const title = (await readSessionIndexTitles(home)).get(session.sessionId)
+      return {
+        ...session,
+        accountHome: { variable: 'TRAECLI_HOME', path: home },
+        ...(title ? { title, titleKind: 'named' as const } : {})
+      }
     }
   }
 }

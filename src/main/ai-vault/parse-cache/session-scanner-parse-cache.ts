@@ -18,7 +18,8 @@ import { createCursorSessionResumeState } from '../scanners/cursor/session-scann
 import { countSubagentTranscripts } from '../scanners/claude/session-scanner-subagent-transcripts'
 import { countOmpSubagentTranscripts } from '../scanners/omp/session-scanner-omp-subagent-transcripts'
 import type { ResumableSessionParseState, SessionFileCandidate } from '../session-scanner-types'
-import { refreshCachedCodexTitle } from '../scanners/codex/session-scanner-codex-cached-title'
+import { refreshSessionTitleFromIndex } from '../scanners/session-index-title-refresh'
+import { readSessionIndexTitle } from '../scanners/codex/session-scanner-codex-title-index'
 import {
   getSessionParseCacheEntry,
   noteSessionParseCacheListed,
@@ -287,8 +288,13 @@ async function reuseCachedSession(
     }
   }
   // Index titles can change independently of the transcript signature.
-  if (session && candidate.agent === 'codex') {
-    session = await waitForAiVaultScan(refreshCachedCodexTitle(candidate, session), signal)
+  if (session && (candidate.agent === 'codex' || candidate.agent === 'trae')) {
+    session = await waitForAiVaultScan(
+      refreshSessionTitleFromIndex(session, (sessionId) =>
+        readSessionIndexTitle(candidate.file.path, candidate.codexHome, sessionId)
+      ),
+      signal
+    )
   }
   throwIfAiVaultScanCancelled(signal)
   storeSessionParseCacheEntry(key, { ...entry, session })

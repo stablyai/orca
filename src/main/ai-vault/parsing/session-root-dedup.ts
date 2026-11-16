@@ -14,6 +14,10 @@ function sessionAliasKey(session: AiVaultSession): string | null {
       .join('/')
     return `antigravity\0${session.executionHostId}\0${antigravitySessionOrigin(session.filePath) ?? 'cli'}\0${root}\0${session.sessionId}`
   }
+  // Paginated Trae history spans several rollout files that share one conversation id.
+  if (session.agent === 'trae') {
+    return `trae\0${session.executionHostId}\0${session.sessionId}`
+  }
   if (session.agent !== 'devin') {
     const codexKey = codexSessionAliasKey(session)
     return codexKey ? `codex\0${codexKey}` : null
@@ -33,6 +37,13 @@ function sessionAliasBeats(candidate: AiVaultSession, best: AiVaultSession): boo
       return full(candidate.filePath)
     }
     return sessionSortTime(candidate) > sessionSortTime(best)
+  }
+  if (candidate.agent === 'trae') {
+    const candidateTime = sessionSortTime(candidate)
+    const bestTime = sessionSortTime(best)
+    return candidateTime !== bestTime
+      ? candidateTime > bestTime
+      : candidate.filePath < best.filePath
   }
   if (candidate.agent !== 'devin') {
     return codexSessionAliasBeats(candidate, best)
