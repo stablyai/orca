@@ -115,7 +115,7 @@ function supportsBareAutolink(value: string): boolean {
   const authority = /^(?:https?:\/\/|www\.)([^/?#]*)/i.exec(value)?.[1]
   if (authority === undefined) {
     // GFM's bare-email grammar is narrower than the angle-autolink local part the scanner accepts.
-    return /^[-.\w+]+@[-\w]+(?:\.[-\w]+)+$/.test(value) && !/[-\d_]$/.test(value)
+    return /^[-.\w+]+@[-\w]+(?:\.[A-Za-z0-9][-\w]*)+$/.test(value) && !/[-\d_]$/.test(value)
   }
   return /^[\p{L}\p{N}][\p{L}\p{N}.-]*(?::[0-9]+)?$/u.test(authority)
 }

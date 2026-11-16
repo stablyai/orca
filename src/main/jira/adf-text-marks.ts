@@ -160,7 +160,11 @@ function joinedTextRuns(children: unknown[]): Record<string, unknown>[] {
     const previous = runs.at(-1)
     const marks = typeof node.text === 'string' ? JSON.stringify(node.marks ?? []) : ''
     if (marks && typeof previous?.text === 'string' && marks === previousMarks) {
-      runs[runs.length - 1] = { ...previous, text: previous.text + node.text }
+      runs[runs.length - 1] = {
+        type: 'text',
+        text: previous.text + node.text,
+        marks: previous.marks
+      }
     } else {
       runs.push(node)
     }
