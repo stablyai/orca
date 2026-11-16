@@ -2,7 +2,10 @@ import { useDeferredValue, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { useStructuredChatTabNames } from '@/runtime/native-chat/naming/structured-chat-name-observation'
 import { buildActivityEvents } from './activity-event-builder'
-import { createActivityEventBuildCache } from '@/components/activity/activity-event-build-cache'
+import {
+  createActivityEventBuildCache,
+  resetActivityEventBuildCache
+} from '@/components/activity/activity-event-build-cache'
 import { freshActivityLiveAgentState, isRunningActivityState } from './activity-event-state'
 import {
   useAgentPaneThreadsDefaultHostId,
@@ -67,8 +70,7 @@ export function useAllAgentPaneThreads({ badgeOnly = false }: { badgeOnly?: bool
           freshActivityLiveAgentState(entry, now)
         )
       ) {
-        eventBuildCacheRef.current.panes.clear()
-        eventBuildCacheRef.current.tabs = undefined
+        resetActivityEventBuildCache(eventBuildCacheRef.current)
         return EMPTY_ACTIVITY_BUILD
       }
       // Global history caps affect live-thread unread and search state.
@@ -85,6 +87,14 @@ export function useAllAgentPaneThreads({ badgeOnly = false }: { badgeOnly?: bool
           repoMap: storeData.repoMap,
           repos: storeData.repos,
           resolveWorktree: storeData.getKnownWorktreeById,
+          resolveWorktreeInputs: [
+            storeData.worktreesByRepo,
+            storeData.folderWorkspaces,
+            storeData.projectGroups,
+            storeData.repos,
+            storeData.detectedWorktreesByRepo,
+            storeData.floatingWorkspacePath
+          ],
           acknowledgedAgentsByPaneKey: storeData.acknowledgedAgentsByPaneKey,
           activityClearedAtByPaneKey: storeData.activityClearedAtByPaneKey,
           // Why: Date.now() is read in the memo body (not a dep) so stale-decay recomputes when agentStatusEpoch ticks, not on wall-clock time.
