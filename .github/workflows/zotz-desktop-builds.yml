@@ -1,0 +1,175 @@
+name: Zotz desktop builds
+
+# Builds unsigned Zotz installers for Windows, macOS (Apple silicon) and Linux and publishes them as the rolling `desktop-latest` prerelease of the fork.
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '**/*.md'
+  pull_request:
+    paths:
+      - '.github/workflows/zotz-desktop-builds.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: zotz-desktop-builds-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    if: github.repository == 'HugoRodriguezDEV/zotz'
+    name: build (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows
+            runner: windows-2022
+            builder-args: --win nsis --x64
+            app-dir: dist/win-unpacked
+            assets: |
+              dist/orca-windows-setup.exe=zotz-windows-x64-setup.exe
+          - platform: macos
+            runner: macos-15
+            builder-args: --mac dmg --arm64
+            app-dir: dist/mac-arm64/Zotz.app
+            assets: |
+              dist/orca-macos-arm64.dmg=zotz-macos-arm64.dmg
+          - platform: linux
+            runner: ubuntu-24.04
+            builder-args: --linux AppImage deb --x64
+            app-dir: dist/linux-unpacked
+            assets: |
+              dist/orca-linux.AppImage=zotz-linux-x64.AppImage
+              dist/orca-ide_*_amd64.deb=zotz-linux-amd64.deb
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    env:
+      ORCA_BACKGROUND_LAUNCH: '1'
+      # No Apple Developer certificate: the app is ad-hoc signed and Gatekeeper asks once.
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      # pnpm must be on PATH before setup-node so setup-node can locate the store.
+      - name: Setup pnpm
+        uses: pnpm/setup@v2
+        with:
+          install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          check-latest: true
+          cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            mobile/pnpm-lock.yaml
+
+      - name: Install dependencies
+        uses: nick-fields/retry@v4
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 30
+          command: pnpm install --frozen-lockfile
+
+      - uses: ./.github/actions/install-mobile-dependencies
+
+      - name: Ensure the Rust toolchain for the Windows CLI launcher
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
+            rustup toolchain install stable --profile minimal
+            rustup default stable
+          }
+          cargo --version
+
+      - name: Build the Windows agent hook and CLI launcher
+        if: matrix.platform == 'windows'
+        run: |
+          node config/scripts/native-build/windows/build-windows-agent-hook.mjs
+          node config/scripts/native-build/windows/build-windows-cli-launcher.mjs
+
+      - name: Build app
+        run: pnpm build:release
+
+      - name: Package
+        shell: bash
+        env:
+          ORCA_BUILD_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --runtime=electron
+          pnpm exec electron-builder --config config/electron-builder.config.cjs ${{ matrix.builder-args }} --publish never
+
+      - name: Smoke the packaged CLI
+        run: node config/scripts/desktop-distribution/runtime-verification/smoke-packaged-cli.mjs --app-dir=${{ matrix.app-dir }}
+
+      - name: Stage release assets
+        shell: bash
+        env:
+          ASSETS: ${{ matrix.assets }}
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          while IFS='=' read -r pattern name; do
+            [[ -z "$pattern" ]] && continue
+            matches=( $pattern )
+            [[ -s "${matches[0]}" ]] || { echo "::error::Missing build output: $pattern"; ls -la dist; exit 1; }
+            cp "${matches[0]}" "release/$name"
+          done <<< "$ASSETS"
+          ls -la release
+
+      - name: Upload release assets
+        uses: actions/upload-artifact@v7
+        with:
+          name: zotz-${{ matrix.platform }}
+          path: release/*
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    if: ${{ !cancelled() && github.event_name != 'pull_request' && github.repository == 'HugoRodriguezDEV/zotz' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download release assets
+        uses: actions/download-artifact@v8
+        with:
+          pattern: zotz-*
+          path: release
+          merge-multiple: true
+
+      - name: Publish the desktop-latest prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUILD_RESULT: ${{ needs.build.result }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(release/*)
+          if (( ${#files[@]} == 0 )); then
+            echo "::error::No platform produced an installer."
+            exit 1
+          fi
+          notes="Instaladores sin firmar de Zotz (commit ${GITHUB_SHA::10}, run ${GITHUB_RUN_ID}).
+          - Windows: SmartScreen → Más información → Ejecutar de todas formas.
+          - macOS (Apple silicon): clic derecho → Abrir, o xattr -dr com.apple.quarantine /Applications/Zotz.app.
+          - Linux: chmod +x al AppImage, o instala el .deb."
+          if [[ "$BUILD_RESULT" != success ]]; then
+            notes="$notes
+          Aviso: al menos una plataforma falló en este build; revisa el run."
+          fi
+          gh release delete desktop-latest --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes || true
+          gh release delete windows-latest --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes || true
+          gh release create desktop-latest "${files[@]}" \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
+            --title "Zotz (último build de main)" --notes "$notes"
