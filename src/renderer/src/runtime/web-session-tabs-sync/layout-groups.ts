@@ -1,5 +1,5 @@
 import type { RuntimeMobileSessionTabGroup } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
-import type { TabGroup } from '../../../../shared/tab-types'
+import type { TabGroup } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { MirroredAgentTab, MirroredBrowserTab, MirroredEditorTab } from './state'
 import type { RuntimeMobileSessionTerminalClientTab } from '../../../../shared/remote-runtime/session-graph/runtime-mobile-session-tab-contracts'

@@ -16,7 +16,7 @@ import type {
   WorkspacePortKillResult,
   WorkspacePortScanResult
 } from '../../../../shared/workspace/ports/workspace-ports'
-import type { LocalhostWorktreeLabelRoute } from '../../../../shared/localhost-worktree-labels'
+import type { LocalhostWorktreeLabelRoute } from '../../../../shared/workspace/ports/localhost-worktree-labels'
 
 const WORKSPACE_PORT_STOP_SETTLE_MS = 500
 const WORKSPACE_PORT_TARGET_UNAVAILABLE_REASON =

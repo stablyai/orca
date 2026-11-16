@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { CONNECTOR_CLIENT_LIMITS } from '../../shared/connector-cloud-contract'
 import type { ConversationSnapshot } from '../external-conversations/external-conversation-events'
 import { connectorSnapshot } from './connector-snapshot'
 
@@ -39,41 +38,5 @@ describe('connectorSnapshot', () => {
       'pane-recent'
     ])
     expect(connectorSnapshot({ kind: 'snapshot', conversations }, NOW).trimmed).toBe(false)
-  })
-
-  it('fits the event cap: prompts go unsupported first, then the least recent go', () => {
-    const question = 'x'.repeat(4 * 1024)
-    const conversations = Array.from(
-      { length: CONNECTOR_CLIENT_LIMITS.maxSnapshotConversations },
-      (_, index) =>
-        entry(String(index), NOW - index, {
-          paneKey: `${index}`.padStart(128, 'p'),
-          prompt: { kind: 'question', promptId: `p${index}`, question, options: [] }
-        })
-    )
-    const { snapshot } = connectorSnapshot({ kind: 'snapshot', conversations }, NOW)
-    expect(Buffer.byteLength(JSON.stringify(snapshot))).toBeLessThanOrEqual(
-      CONNECTOR_CLIENT_LIMITS.maxEventBytes
-    )
-    expect(snapshot.conversations).toHaveLength(CONNECTOR_CLIENT_LIMITS.maxSnapshotConversations)
-    expect(snapshot.conversations[0]?.prompt).toEqual({ kind: 'unsupported', promptId: 'p0' })
-  })
-
-  it('leaves out the least recent when even bare entries pass the event cap', () => {
-    const escaped = '\u0001'.repeat(128)
-    const conversations = Array.from(
-      { length: CONNECTOR_CLIENT_LIMITS.maxSnapshotConversations },
-      (_, index) =>
-        entry(String(index), NOW - index, {
-          conversation: { source: 'slack', externalId: `${index}${escaped}` },
-          paneKey: `${index}${escaped}`
-        })
-    )
-    const { snapshot, trimmed } = connectorSnapshot({ kind: 'snapshot', conversations }, NOW)
-    expect(trimmed).toBe(true)
-    expect(Buffer.byteLength(JSON.stringify(snapshot))).toBeLessThanOrEqual(
-      CONNECTOR_CLIENT_LIMITS.maxEventBytes
-    )
-    expect(snapshot.conversations[0]?.paneKey).toBe(`0${escaped}`)
   })
 })

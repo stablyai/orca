@@ -24,7 +24,7 @@ import { getClientCreationActionPolicy } from '@/lib/workspace/creation/surface-
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { GitFileStatus } from '../../../../shared/git/status/git-status-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { Tab } from '../../../../shared/tab-types'
+import type { Tab } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
 import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
 

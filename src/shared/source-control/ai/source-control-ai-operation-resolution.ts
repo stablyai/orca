@@ -12,7 +12,7 @@ import {
   textGenerationFailure,
   type TextGenerationFailureCode,
   type TextGenerationFailureFields
-} from '../../text-generation-failure-copy'
+} from '../../text-generation/text-generation-failure-copy'
 import type { GlobalSettings } from '../../global-settings-types'
 import type { Repo } from '../../repository/repo-types'
 import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'

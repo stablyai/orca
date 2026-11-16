@@ -4,7 +4,7 @@ import {
   RECIPE_VM_REFUSAL_CODES,
   RecipeVmWakeUnavailableError
 } from '../../../../shared/remote-runtime/recipe-vm-wake'
-import { RecipeWorkspaceRemovalError } from '../../../../shared/recipe-host-removal'
+import { RecipeWorkspaceRemovalError } from '../../../../shared/remote-runtime/ephemeral-vm-recipes/recipe-host-removal'
 import { formatTerminalStartFailure } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 // Centralize the runtimeId envelope and error-code contracts that clients use for decisions and display.
 import { AGENT_LAUNCH_SURFACE_UNAVAILABLE_CODE } from '../../../../shared/agent-launch/contracts/agent-launch-surface'
@@ -26,7 +26,7 @@ import { LINEAR_ERROR_CODES } from '../../../../shared/linear/agent-access'
 import { AGENT_SESSION_RPC_ERROR_CODES } from '../../../../shared/agent-session/agent-session-host-authority'
 import { ARTIFACT_SHARING_DISABLED_CODE } from '../../../../shared/artifacts/artifact-sharing-gate'
 import { AGENT_SKILL_SHARING_DISABLED_CODE } from '../../../../shared/skills/sharing/agent-skill-sharing-gate'
-import { SHARING_UNAVAILABLE_ON_HOST_CODE } from '../../../../shared/sharing-unavailable-on-host'
+import { SHARING_UNAVAILABLE_ON_HOST_CODE } from '../../../../shared/remote-runtime/host-status/sharing-unavailable-on-host'
 import {
   AGENT_SKILL_NOT_SHAREABLE_CODE,
   AGENT_SKILL_SELECTOR_AMBIGUOUS_CODE,

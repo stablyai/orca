@@ -1,9 +1,9 @@
 import { useMemo } from 'react'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { BrowserWorkspace } from '../../../../shared/browser/workspaces/browser-workspace-types'
-import type { Tab, TabGroup } from '../../../../shared/tab-types'
+import type { Tab, TabGroup } from '../../../../shared/workspace-layout/tab-groups/tab-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
-import { resolveUnifiedTabLabel } from '../../../../shared/tab-title-resolution'
+import { resolveUnifiedTabLabel } from '../../../../shared/workspace-layout/tab-groups/tab-title-resolution'
 import type { useAppStore } from '../../store'
 import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
 

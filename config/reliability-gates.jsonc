@@ -4607,8 +4607,8 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/client-pages/lifecycle/browser-client-page-reconciliation-adapters.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/network/tunnels/browser-network-tunnel-session.test.ts src/main/browser/network/tunnels/remote-browser-socks-server.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/network/tunnels/browser-network-tunnel-client.test.ts src/main/browser/network/execution-routes/paired-runtime-browser-network-route.test.ts src/main/runtime/rpc/methods/browser/browser-network-tunnel.test.ts src/main/runtime/browser/network/browser-network-tunnel-paired-runtime.integration.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/network/tunnels/browser-network-tunnel-outbound-memory-budget.test.ts src/main/browser/network/tunnels/browser-network-tunnel-session-aggregate-memory.test.ts src/shared/ws-outbound-backpressure-queue.test.ts src/shared/remote-runtime/remote-runtime-client.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/shared/ws-outbound-backpressure-queue.test.ts src/shared/remote-runtime/remote-runtime-client.test.ts src/main/runtime/browser-host/leases/browser-host-lease-registry.test.ts src/main/runtime/rpc/methods/browser/browser-client-host.test.ts src/main/runtime/rpc/methods/browser/browser-network-tunnel.test.ts src/main/browser/network/execution-routes/paired-runtime-browser-network-route.test.ts src/main/runtime/browser/network/browser-network-tunnel-paired-runtime.integration.test.ts src/main/browser/network/tunnels/browser-network-tunnel-client.test.ts src/main/browser/network/tunnels/browser-network-tunnel-session.test.ts src/main/browser/network/tunnels/browser-network-tunnel-session-aggregate-memory.test.ts src/main/browser/network/tunnels/browser-network-tunnel-outbound-memory-budget.test.ts src/main/browser/network/tunnels/remote-browser-socks-server.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/network/tunnels/browser-network-tunnel-outbound-memory-budget.test.ts src/main/browser/network/tunnels/browser-network-tunnel-session-aggregate-memory.test.ts src/shared/network/websocket/ws-outbound-backpressure-queue.test.ts src/shared/remote-runtime/remote-runtime-client.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/network/websocket/ws-outbound-backpressure-queue.test.ts src/shared/remote-runtime/remote-runtime-client.test.ts src/main/runtime/browser-host/leases/browser-host-lease-registry.test.ts src/main/runtime/rpc/methods/browser/browser-client-host.test.ts src/main/runtime/rpc/methods/browser/browser-network-tunnel.test.ts src/main/browser/network/execution-routes/paired-runtime-browser-network-route.test.ts src/main/runtime/browser/network/browser-network-tunnel-paired-runtime.integration.test.ts src/main/browser/network/tunnels/browser-network-tunnel-client.test.ts src/main/browser/network/tunnels/browser-network-tunnel-session.test.ts src/main/browser/network/tunnels/browser-network-tunnel-session-aggregate-memory.test.ts src/main/browser/network/tunnels/browser-network-tunnel-outbound-memory-budget.test.ts src/main/browser/network/tunnels/remote-browser-socks-server.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/browser-host/leases/browser-host-lease-registry.test.ts src/main/runtime/rpc/methods/browser/browser-client-host.test.ts src/main/runtime/rpc/methods/browser/browser-network-tunnel.test.ts src/main/browser/network/execution-routes/paired-runtime-browser-network-route.test.ts src/main/runtime/browser/network/browser-network-tunnel-paired-runtime.integration.test.ts src/main/browser/network/tunnels/browser-network-tunnel-client.test.ts src/main/browser/network/tunnels/browser-network-tunnel-session.test.ts src/main/browser/network/tunnels/remote-browser-socks-server.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/remote-runtime/remote-runtime-client.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/remote-runtime/requests/remote-runtime-subscription-request.test.ts",
@@ -4652,7 +4652,7 @@
         "src/main/runtime/browser/network/browser-network-tunnel-paired-runtime.integration.test.ts",
         "src/shared/remote-runtime/remote-runtime-client.test.ts",
         "src/shared/remote-runtime/requests/remote-runtime-subscription-request.test.ts",
-        "src/shared/ws-outbound-backpressure-queue.test.ts",
+        "src/shared/network/websocket/ws-outbound-backpressure-queue.test.ts",
         "tests/e2e/ssh-browser-network-execution-route.docker.unit.test.ts"
       ],
       "assertionRefs": [
@@ -4841,7 +4841,7 @@
           ]
         },
         {
-          "file": "src/shared/ws-outbound-backpressure-queue.test.ts",
+          "file": "src/shared/network/websocket/ws-outbound-backpressure-queue.test.ts",
           "assertions": [
             "direct and already-retained queued frames use distinct aggregate admission semantics"
           ]
