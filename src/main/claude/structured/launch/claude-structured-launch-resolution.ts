@@ -1,7 +1,7 @@
 import type { ClaudeAccountRecipe } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-acquired-account'
 import { prepareClaudeLaunchAccount } from './claude-launch-account'
 import { assertStructuredAgentResolutionCurrent } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
-import { activeProviderContext } from '../../../../shared/agent-session/agent-session-provider-context'
+import { activeProviderContext } from '../../../../shared/agent-session/conversation-context/agent-session-provider-context'
 import { getClaudeProfileRouter } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type {
@@ -34,7 +34,7 @@ import { resolveClaudeLaunchFlags } from './claude-structured-launch-flags'
 import { withNativeChatVisualsEnv } from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
 import { claudeLaunchResumesTranscript } from './claude-structured-launch-home'
 import type { StructuredAgentLaunchPartResolver } from '../../../runtime/agent-session/launch/structured-agent-launch-composition'
-import { claudeSessionIdForOrcaSession } from '../claude-structured-session-id'
+import { claudeSessionIdForOrcaSession } from '../lifecycle/claude-structured-session-id'
 import {
   pendingAgentSessionRewindFork,
   type AgentSessionRewindFork

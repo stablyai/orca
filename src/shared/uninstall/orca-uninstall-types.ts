@@ -29,10 +29,18 @@ export const ORCA_UNINSTALL_STEPS: readonly OrcaUninstallStep[] = [
  */
 export type OrcaUninstallEntryState = 'present' | 'removed' | 'kept-shared' | 'needs-user' | 'error'
 
+/** A file Orca changes; `orcaData` is set when it sits in Orca's own data folder. */
+export type OrcaUninstallPath = {
+  /** The full path, with the home folder shown as `~`. */
+  path: string
+  /** `relative` is the part after the account home or the data folder. */
+  orcaData: { kind: 'codex-account' | 'app-data'; relative: string } | null
+}
+
 export type OrcaUninstallAgentEntry = {
   agent: string
   /** Every file Orca changes or deletes for this agent. */
-  paths: string[]
+  paths: OrcaUninstallPath[]
   state: OrcaUninstallEntryState
   /** One short line, e.g. "Permission denied". */
   detail: string | null

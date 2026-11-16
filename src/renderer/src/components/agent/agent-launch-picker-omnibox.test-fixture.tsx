@@ -5,9 +5,9 @@ import { useAppStore } from '@/store'
 import { getDefaultSettings } from '../../../../shared/orca-profiles/constants'
 import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { TEST_REPO } from '@/store/repos/repo.test-fixture'
-import { useNewTabAgentMenuRows } from '../tab-bar/use-new-tab-agent-menu-rows'
+import { useNewTabAgentMenuRows } from './launch-menu/use-new-tab-agent-menu-rows'
 import { useAgentLaunchPickerInventory } from './use-agent-launch-picker-inventory'
-import TabBarCreateEntry from '../tab-bar/TabBarCreateEntry'
+import TabBarCreateEntry from '../tab-bar/create-entry/TabBarCreateEntry'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import {
   DropdownMenu,

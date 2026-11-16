@@ -2,7 +2,7 @@ import type { GenerationArgument } from '../../shared/source-control/ai/generati
 import type { ProviderChild } from '../provider-process/provider-child'
 import type { ChildProcess } from 'node:child_process'
 import type { EventEmitter } from 'node:events'
-import type { AgentSessionUnavailable } from '../../shared/agent-session/agent-session-availability'
+import type { AgentSessionUnavailable } from '../../shared/agent-session/failures/agent-session-availability'
 import type { AgentGenerationFailureOutput } from './failures/agent-failure-output'
 import type {
   CommitMessageAgentCapability,

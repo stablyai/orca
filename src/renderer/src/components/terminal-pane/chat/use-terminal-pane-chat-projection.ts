@@ -14,7 +14,7 @@ import {
   resolvePaneAgentSessionId
 } from '../../../lib/agent-session/identity/pane-agent-session-id'
 import { canOwnerResolveSleepingAgentId } from '../../../lib/agent-session/identity/sleeping-agent-id-owner'
-import { canPaneOfferResumeInNewChat } from '../../tab-bar/tab-session-history-switch'
+import { canPaneOfferResumeInNewChat } from '../../tab-bar/session-actions/tab-session-history-switch'
 
 export function useTerminalPaneChatProjection({
   applyNativeChatLeafRoute,

@@ -1,6 +1,6 @@
 import type { AgentJournalRenderItem } from '../journal/agent-session-journal-types'
 import { isRootAgentJournalItem } from '../journal/agent-session-journal-producer'
-import { isStructuredAgentSessionCommandEntry } from '../structured-agent-session-command-entry'
+import { isStructuredAgentSessionCommandEntry } from './structured-agent-session-command-entry'
 import { sliceAtCodeUnitLimit } from '../../text/surrogate-safe-text-slice'
 import { stripSentImagePromptMarkers } from '../../native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 

@@ -130,6 +130,27 @@ export const getWorkspaceCleanupSettingsSearchParts = createLocalizedCatalog(
           })
         ]
       },
+      deleteChatHistory: {
+        title: translate(
+          'components.settings.workspaceCleanup.chatHistory.deleteWithWorkspace',
+          'Delete chat history with the workspace'
+        ),
+        description: translate(
+          'components.settings.workspaceCleanup.chatHistory.deleteWithWorkspaceDescription',
+          "Claude Code chats from deleted workspaces are removed automatically to free disk space. They can't be recovered."
+        ),
+        keywords: [
+          ...translateSearchKeyword('components.settings.workspaceCleanup.search.chat', 'chat'),
+          ...translateSearchKeyword(
+            'components.settings.workspaceCleanup.search.transcripts',
+            'transcripts'
+          ),
+          ...translateSearchKeyword(
+            'components.settings.workspaceCleanup.search.diskSpace',
+            'disk space'
+          )
+        ]
+      },
       activity: {
         title: translate('components.settings.workspaceCleanup.activity.title', 'Activity'),
         description: translate(

@@ -1,7 +1,7 @@
 import {
   readClaudeModelFallback,
   claudeModelFallbackText
-} from '../../../../shared/native-chat/claude-model-fallback'
+} from '../../../../shared/native-chat/transcript/notices/claude-model-fallback'
 import { AGENT_SESSION_TURN_NOTICE_PRESENTATION } from '../../../../shared/agent-session/journal/agent-session-turn-notice'
 import type {
   AgentJournalPlainStatusItem,

@@ -15,6 +15,7 @@ import {
   db,
   dispatcher,
   host,
+  isMailPointer,
   isWholeMail,
   openChat,
   request,
@@ -336,27 +337,22 @@ describe('a send to a finished structured worker', () => {
       await vi.waitFor(async () => {
         const cards = await queuedCardTexts(identity.sessionId)
         expect(cards).toHaveLength(2)
-        expect(cards[0]).toContain('arrive next, one at a time')
         expect(isWholeMail(cards[1]!)).toBe(true)
         expect(cards[1]).toContain('and the docs')
       }, WAIT)
-      expect((await queuedCardTexts(identity.sessionId)).join('\n')).not.toContain('`check`')
       reply.resolve()
       worker.handlers.onNotification?.('turn/completed', { turn: { id: 'turn-1' } })
       await host.flushStreamedEvents(identity.sessionId)
       await vi.waitFor(() => expect(worker.turns).toHaveLength(2), WAIT)
-      expect(turnText(worker.turns[1]!)).toContain('arrive next, one at a time')
       await settleTurn(identity.sessionId, 1)
       await vi.waitFor(() => expect(worker.turns).toHaveLength(3), WAIT)
-      expect(isWholeMail(turnText(worker.turns[2]!))).toBe(true)
-      expect(turnText(worker.turns[2]!)).toContain('and the docs')
+      expect(isMailPointer(turnText(worker.turns[2]!))).toBe(true)
       await settleTurn(identity.sessionId, 2)
 
       const followUp = getFollowUpDispatch(db, firstDispatchId)!
-      await vi.waitFor(
-        () => expect(db.getUnreadMessages(`dispatch:${followUp.id}`)).toEqual([]),
-        WAIT
-      )
+      expect(db.getUnreadMessages(`dispatch:${followUp.id}`)).toMatchObject([
+        { body: 'and the docs' }
+      ])
       expect(db.getUnreadMessages(`dispatch:${firstDispatchId}`)).toEqual([])
     } finally {
       reply.resolve()

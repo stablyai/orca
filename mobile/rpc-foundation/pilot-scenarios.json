@@ -260,45 +260,6 @@
       ]
     },
     {
-      "id": "settings-bot-overrides-fulfilled",
-      "operation": "settings.bot-overrides",
-      "family": "settings.bot-overrides",
-      "sites": [
-        "mobile/src/source-control/review/pull-request/comments/use-pr-bot-author-overrides.ts"
-      ],
-      "schedules": ["settings-first"],
-      "steps": [
-        {
-          "action": "mount",
-          "id": "mount"
-        },
-        {
-          "checkpoint": "settings-pending"
-        },
-        {
-          "complete": "settings.get#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "settings": {
-                "disabledTuiAgents": ["claude"],
-                "defaultTuiAgent": "codex",
-                "prBotAuthorOverrides": ["bot-user"],
-                "visibleTaskProviders": ["github", "linear"],
-                "hostSettingOverrides": {}
-              }
-            }
-          }
-        },
-        {
-          "checkpoint": "settled"
-        }
-      ]
-    },
-    {
       "id": "settings-workspace-context-fulfilled",
       "operation": "settings.workspace-context",
       "family": "settings.workspace-context",

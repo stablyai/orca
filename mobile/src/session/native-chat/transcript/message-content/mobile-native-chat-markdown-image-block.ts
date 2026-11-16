@@ -1,5 +1,5 @@
 import type { NativeChatImageRefBlock } from '../../../../../../src/shared/native-chat/native-chat-types'
-import { routeNativeChatHref } from '../../../../../../src/shared/native-chat/native-chat-href-routing'
+import { routeNativeChatHref } from '../../../../../../src/shared/native-chat/file-access/native-chat-href-routing'
 import { isRuntimePathAbsolute } from '../../../../../../src/shared/file-access/cross-platform-path'
 import { isRasterImagePath } from '../../../../../../src/shared/file-preview/file-preview-kind'
 import { isKnownRasterImageMimeType } from '../../../../../../src/shared/file-preview/raster-image-preview-limits'
